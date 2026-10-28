@@ -122,6 +122,11 @@
             "splitMoveAtPlayhead": "Split the move at the playhead",
             "tapBeats": "Add {count} temporary beats",
             "toggleKeepOnPage": "Keep the selected marchers where they hold on this page (on the next page if they move here), or let them follow again",
+            "unsetHere": "Remove keyframe",
+            "unsetHereAndFollowing": "Remove keyframe, later pages follow back",
+            "unsetHereAndPage": "Remove keyframe, Page {page} follows back",
+            "unsetHereAndPages": "Remove keyframe, Pages {first}–{last} follow back",
+            "unsetHereKeywords": "keyframe diamond unset set following remove clear take back coordinate position delete",
             "splitSelectedIntoNewMove": "Split selected marchers into a new move",
             "mergeMoveIntoPage": "Merge this move into its page"
         },
@@ -129,6 +134,7 @@
             "exitTimelineFocus": "Done editing timeline",
             "focusCanvas": "Focus canvas",
             "focusTimeline": "Edit timeline",
+            "openFieldMenu": "Open the field menu",
             "hideNextPaths": "Hide next page paths",
             "openCommandPalette": "Command palette",
             "openCommandBar": "Command bar",
@@ -289,7 +295,10 @@
             "restart": "Restart"
         },
         "tapTempo": {
-            "label": "Tap Tempo"
+            "beatsPerTap": "Beats per tap",
+            "label": "Tap Tempo",
+            "tap": "Tap",
+            "tapButton": "Tap to add {count} temporary beats at the current audio time"
         }
     },
     "auth": {
@@ -503,7 +512,19 @@
         "videoOverlayTempo": "Tempo",
         "videoPreviewLoading": "Loading preview…",
         "videoRendering": "Rendering video... This may take several minutes.",
-        "videoResolution": "Resolution"
+        "videoResolution": "Resolution",
+        "exportVideoButton": "Export video",
+        "videoWebChecking": "Checking what this browser can make…",
+        "videoWebInMemory": "This browser can't save the video as it's made, so it's kept in memory. A long show may not fit: choose 720p, or use another browser.",
+        "videoWebKeepOpen": "Keep OpenMarch open and the screen on until the video is done. Switching apps or locking the screen may stop it.",
+        "videoWebReady": "Your video is ready: {name}",
+        "videoWebReadySilent": "It has no sound, because this browser can't add music to videos.",
+        "videoWebSave": "Save video",
+        "videoWebSaveHintApple": "Choose “Save Video” to put it in Photos, or “Save to Files”.",
+        "videoWebSaveMissing": "This video is no longer available. Export it again.",
+        "videoWebSaved": "Video saved",
+        "videoWebSilent": "This browser can't add the music to videos, so the video will be silent.",
+        "videoWebUnsupported": "This browser can't make videos. Use Safari 16.4 or later, Chrome or Edge."
     },
     "field": {
         "benchmark": {
@@ -792,10 +813,37 @@
                 "pagesFollowSome": "Pages {first}–{last} follow some of these marchers",
                 "someHoldHere": "Some of these marchers hold here",
                 "someKeptOnThisPage": "Some of these marchers are kept on this page",
-                "theseMarchers": "these marchers"
+                "theseMarchers": "these marchers",
+                "unsetHere": "Remove keyframe",
+                "unsetHereAndFollowingHint": "Remove their keyframe on this count, and {pages} follow back to the keyframe before it",
+                "unsetHereAndFollowingHintSome": "Remove the keyframe of the {count} of the {total} selected that have one on this count, and {pages} follow back to the keyframe before it",
+                "unsetHereHint": "Remove their keyframe on this count, so they follow from earlier. Later pages stay where they are",
+                "unsetHereHintSome": "Remove the keyframe of the {count} of the {total} selected that have one on this count, so they follow from earlier. Later pages stay where they are",
+                "unsetHereNone": "None of the selected marchers has a keyframe on this count"
             },
             "title": "{count} Marchers",
-            "titleSingle": "Marcher {drillNumber}"
+            "titleSingle": "Marcher {drillNumber}",
+            "addToTagCaption": "Add to tag",
+            "alignHorizontallyCaption": "Horizontal",
+            "alignVerticallyCaption": "Vertical",
+            "flipHorizontalCaption": "Flip ↔",
+            "flipVerticalCaption": "Flip ↕",
+            "move": {
+                "back": "Back",
+                "fourSteps": "4 steps",
+                "front": "Front",
+                "oneStep": "1 step",
+                "quarterStep": "¼ step",
+                "side1": "Side 1",
+                "side2": "Side 2",
+                "stepSize": "Step size",
+                "title": "Move",
+                "towardBack": "Move toward the back sideline",
+                "towardFront": "Move toward the front sideline",
+                "towardSide": "Move toward {side}"
+            },
+            "newTagCaption": "New tag",
+            "removeFromTagCaption": "Remove"
         },
         "page": {
             "counts": "Counts",
@@ -1378,9 +1426,12 @@
             "deleteButton": "Delete",
             "deleteSectionStyle": "Delete this section style",
             "discardChanges": "Discard Changes",
+            "dragToReorder": "Drag to reorder",
             "drillNumberTitle": "#",
             "editButton": "Edit",
             "fillColor": "Fill Color",
+            "moveDown": "Move down (lower priority)",
+            "moveUp": "Move up (higher priority)",
             "nameTitle": "Name",
             "noMarchers": "No marchers created yet. Why not create one?",
             "none": "None",
@@ -1595,13 +1646,17 @@
         "timeSignature": "Time signature: {timeSignature}",
         "title": "Music",
         "undoWithCtrlZ": "This action is undoable with Ctrl + Z",
-        "volume": "Volume"
+        "volume": "Volume",
+        "addAfterCaption": "Add after",
+        "deleteTempoGroup": "Delete tempo group",
+        "editTempoGroup": "Edit tempo group"
     },
     "pages": {
         "createFailed": "Failed to create page - {error}",
         "createLastPageFailed": "Failed to create last page - {error}",
         "deletedSuccessfully": "Page deleted successfully",
         "deleteFailed": "Failed to delete page - {error}",
+        "undoDeleteUnavailable": "Can't undo the delete: something changed since. Use Undo in the toolbar to step back.",
         "updateFailed": "Failed to update page - {error}"
     },
     "props": {
@@ -1861,7 +1916,14 @@
         "view3d.resolution.sharp": "Sharp",
         "view3d.resolution.sharp.description": "Full detail on high-resolution screens.",
         "view3d.saveOnBattery": "Save power on battery",
-        "view3d.saveOnBattery.description": "On battery, draws at most 30 frames a second at standard resolution."
+        "view3d.saveOnBattery.description": "On battery, draws at most 30 frames a second at standard resolution.",
+        "input": "Touch & Input",
+        "input.description": "Choose the tablet layout (for fingers and pen) or the desktop layout (for mouse and trackpad).",
+        "input.interface": "Layout",
+        "input.interface.auto": "Automatic",
+        "input.interface.description": "Automatic uses the tablet layout on a tablet and the desktop layout on a computer. Choose Tablet to use the tablet layout on a touch-screen laptop.",
+        "input.interface.mouse": "Desktop",
+        "input.interface.touch": "Tablet"
     },
     "shapes": {
         "box": {
@@ -1884,53 +1946,12 @@
             }
         },
         "circle": "Circle",
-        "command": {
-            "fill": "Fill: {modes}",
-            "layout": "Layout: {layouts}"
-        },
-        "distribute": {
-            "hint": {
-                "add": "add {count}",
-                "remove": "remove {count}"
-            },
-            "layout": {
-                "full": "Full",
-                "notched": "Notched",
-                "rounded": "Rounded",
-                "shortBack": "Short back",
-                "stagger": "Stagger"
-            },
-            "version": {
-                "frontToBack": "{counts}, front to back",
-                "leftToRight": "{counts}, left to right",
-                "short": "{across} × {deep}, {short} short",
-                "staggered": "{across} × {deep} staggered",
-                "straight": "{across} × {deep} straight"
-            }
-        },
         "edit": {
-            "away": {
-                "dismiss": "Dismiss",
-                "dismissTip": "Dismiss the shape (undo brings it back)",
-                "goBack": "Go back",
-                "text": "Shape open at {moment}"
-            },
             "closeUp": {
                 "label": "Close up",
                 "title": "Close up: fill the {count, plural, one {# empty spot} other {# empty spots}} with the marchers left"
             },
-            "drawHint": "Drag on the field to draw a {shape} · Esc to cancel",
-            "drawnOn": "from {page}",
-            "edge": {
-                "label": "Edge",
-                "tip": "Edge: {edge} evenly along the outline, {inside} spread inside",
-                "tipEdgeOnly": "Edge: too few marchers for an inside, so all {edge} stand on the edge"
-            },
-            "empty": "{count} empty",
-            "flipAcross": "Flip side to side",
-            "flipDeep": "Flip front to back",
             "gap": {
-                "menu": "Leftover",
                 "side": {
                     "back": "Back",
                     "front": "Front",
@@ -1943,9 +1964,36 @@
                     "spread": "Spreads evenly"
                 },
                 "styleLabel": "That side",
+                "menu": "Leftover",
                 "tipGap": "Click a marcher on the outline (not a corner) to move the gap there.",
                 "tipSpread": "Click a marcher on another side (not a corner) to spread that side instead."
             },
+            "mode": {
+                "files": "Grid",
+                "label": "Fill",
+                "outline": "Outline",
+                "spread": "Spread"
+            },
+            "reshuffle": {
+                "label": "Reshuffle",
+                "title": "Reshuffle: a new layout"
+            },
+            "away": {
+                "dismiss": "Dismiss",
+                "dismissTip": "Dismiss the shape (undo brings it back)",
+                "goBack": "Go back",
+                "text": "Shape open at {moment}"
+            },
+            "drawHint": "Drag on the field to draw a {shape} · Esc to cancel",
+            "drawnOn": "from {page}",
+            "edge": {
+                "label": "Edge",
+                "tip": "Edge: {edge} evenly along the outline, {inside} spread inside",
+                "tipEdgeOnly": "Edge: too few marchers for an inside, so all {edge} stand on the edge"
+            },
+            "empty": "{count} empty",
+            "flipAcross": "Flip side to side",
+            "flipDeep": "Flip front to back",
             "layout": {
                 "aria": "Layout: {label}",
                 "cantMake": "{label} can't make {count}",
@@ -1953,12 +2001,6 @@
                 "needs": "{label} needs {count, plural, one {# marcher} other {# marchers}}: {hint}",
                 "needsEither": "{label} needs {a} or {b} marchers: {hint}",
                 "showVersions": "Show the {label} versions"
-            },
-            "mode": {
-                "files": "Grid",
-                "label": "Fill",
-                "outline": "Outline",
-                "spread": "Spread"
             },
             "pathways": {
                 "hide": "Hide the pathways from the start flag",
@@ -1993,10 +2035,6 @@
                 "label": "Recalculate",
                 "title": "Recalculate who goes where, by least travel"
             },
-            "reshuffle": {
-                "label": "Reshuffle",
-                "title": "Reshuffle: a new layout"
-            },
             "scrubTip": "{label}: click to type, drag to change",
             "seed": {
                 "copied": "Copied",
@@ -2009,6 +2047,61 @@
             "steps": "steps",
             "turn": "Turn, in degrees clockwise",
             "followsShape": "{label}: {value}, following the shape. {action}"
+        },
+        "placed": {
+            "label": "{name} · {interval} steps",
+            "left": {
+                "many": "{count} left the {shape}",
+                "one": "{name} left the {shape}"
+            },
+            "editError": "Error editing the shape",
+            "fillError": "Error filling the shape",
+            "selectWhole": "Select {shape}",
+            "summary": {
+                "empty": "{count, plural, other {# empty}}",
+                "steps": "{interval} steps"
+            }
+        },
+        "save": {
+            "descriptionLabel": "Description of the saved shape (optional)",
+            "descriptionPlaceholder": "Description (optional)",
+            "ariaLabel": "Save this shape to your library",
+            "button": "Save",
+            "cancel": "Cancel",
+            "nameLabel": "Name of the saved shape",
+            "savedAs": "Saved as {name}",
+            "tip": "Save this shape to your library, starred"
+        },
+        "saved": {
+            "copyFailed": "Couldn't copy the saved shape into the show",
+            "deleteFailed": "Couldn't delete the saved shape from the show"
+        },
+        "square": "Square",
+        "triangle": "Triangle",
+        "x": "X",
+        "command": {
+            "fill": "Fill: {modes}",
+            "layout": "Layout: {layouts}"
+        },
+        "distribute": {
+            "hint": {
+                "add": "add {count}",
+                "remove": "remove {count}"
+            },
+            "layout": {
+                "full": "Full",
+                "notched": "Notched",
+                "rounded": "Rounded",
+                "shortBack": "Short back",
+                "stagger": "Stagger"
+            },
+            "version": {
+                "frontToBack": "{counts}, front to back",
+                "leftToRight": "{counts}, left to right",
+                "short": "{across} × {deep}, {short} short",
+                "staggered": "{across} × {deep} staggered",
+                "straight": "{across} × {deep} straight"
+            }
         },
         "field": {
             "stepLimit": "{steps} to 5"
@@ -2165,34 +2258,6 @@
             "unstar": "Unstar",
             "unstarNamed": "Unstar {name}"
         },
-        "placed": {
-            "editError": "Error editing the shape",
-            "fillError": "Error filling the shape",
-            "label": "{name} · {interval} steps",
-            "left": {
-                "many": "{count} left the {shape}",
-                "one": "{name} left the {shape}"
-            },
-            "selectWhole": "Select {shape}",
-            "summary": {
-                "empty": "{count, plural, other {# empty}}",
-                "steps": "{interval} steps"
-            }
-        },
-        "save": {
-            "ariaLabel": "Save this shape to your library",
-            "button": "Save",
-            "cancel": "Cancel",
-            "descriptionLabel": "Description of the saved shape (optional)",
-            "descriptionPlaceholder": "Description (optional)",
-            "nameLabel": "Name of the saved shape",
-            "savedAs": "Saved as {name}",
-            "tip": "Save this shape to your library, starred"
-        },
-        "saved": {
-            "copyFailed": "Couldn't copy the saved shape into the show",
-            "deleteFailed": "Couldn't delete the saved shape from the show"
-        },
         "spacing": {
             "empty": "Enter an interval in steps",
             "noGaps": "A run needs at least 1 gap",
@@ -2201,7 +2266,6 @@
             "repeating": "{needed, plural, one {# gap} other {# gaps}} needed, {given} typed: repeating from the first",
             "unused": "{needed, plural, one {# gap} other {# gaps}} needed, {given} typed: the last {unused} unused"
         },
-        "square": "Square",
         "tool": {
             "moment": {
                 "count": "count {count}",
@@ -2232,15 +2296,13 @@
             "flipDeepTip": "Flip front to back around the pivot",
             "title": "Transform"
         },
-        "triangle": "Triangle",
         "validate": {
             "noPosition": "The shape has a spot with no position",
             "offField": "{count, plural, one {# marcher would stand} other {# marchers would stand}} off the field",
             "sameSpot": "{count, plural, one {# marcher would stand} other {# marchers would stand}} on the same spot",
             "stepsTooLong": "{count, plural, one {# marcher needs steps longer than the {limit} limit ({longest}, drawn in orange).} other {# marchers need steps longer than the {limit} limit (longest {longest}, drawn in orange).}} Set the limit in Field › Customize.",
             "tooClose": "{count, plural, one {# marcher is} other {# marchers are}} closer than {min, plural, one {# step} other {# steps}}"
-        },
-        "x": "X"
+        }
     },
     "showChecks": {
         "carryCue": "a Carry cue",
@@ -2291,14 +2353,14 @@
             "passThrough": {
                 "catchUp": "Now catches up to the set at the end of {caughtUp}",
                 "keepStops": {
-                    "many": "Keep Pages {first}–{last} as stops",
-                    "one": "Keep Page {page} as a stop",
-                    "unnamed": "Keep them as stops"
+                    "many": "Keep Pages {first}–{last} as keyframes",
+                    "one": "Keep Page {page} as a keyframe",
+                    "unnamed": "Keep them as keyframes"
                 },
                 "noLongerStop": {
-                    "many": "Pages {first}–{last} are no longer stops",
-                    "one": "Page {page} is no longer a stop",
-                    "unnamed": "The sets inside this move are no longer stops"
+                    "many": "Pages {first}–{last} are no longer keyframes",
+                    "one": "Page {page} is no longer a keyframe",
+                    "unnamed": "The pages inside this move are no longer keyframes"
                 },
                 "through": "Now moves straight through {through}",
                 "throughAndCatchUp": "Now moves straight through {through}, then catches up to the set at the end of {caughtUp}"
@@ -2323,22 +2385,6 @@
             "slotOutOfRange": "That slot doesn't exist. A transition's slots are numbered from 0 up to one less than its slot count.",
             "transitionSpansTimeline": "A transition must span its whole timeline, starting and ending with it. Change the timeline's range instead, and its transitions move with it.",
             "unknown": "The timeline couldn't make that change."
-        },
-        "holdMarks": {
-            "holds": "Selected marchers hold from Page {page}",
-            "holdsFromStart": "Selected marchers hold from the start",
-            "holdsFromStartHint": "They stand where they started",
-            "holdsHere": "Selected marchers hold on this page",
-            "holdsHereHint": "They stand where their last move left them",
-            "holdsHint": "They stand where Page {page} left them",
-            "kept": "Selected marchers are kept here",
-            "keptHint": "They stay here when earlier pages change",
-            "mixed": "Some selected marchers hold from Page {page}",
-            "mixedFromStart": "Some selected marchers hold from the start",
-            "mixedHere": "Some selected marchers hold on this page",
-            "mixedHint": "Some have their own move here",
-            "moves": "Selected marchers move on this page",
-            "movesHint": "They have their own move here"
         },
         "keep": {
             "chain": {
@@ -2388,6 +2434,14 @@
                 "two": "{first} and {second}"
             }
         },
+        "keyframes": {
+            "detail": "{set} of {total} selected",
+            "detailNames": "{set} of {total} selected: {names}",
+            "removeError": "Couldn't remove the keyframes",
+            "removeLocked": "{count, plural, one {One marcher uses Expert moves on this page, so its keyframe wasn't removed. Switch to Expert to edit it.} other {# marchers use Expert moves on this page, so their keyframes weren't removed. Switch to Expert to edit them.}}",
+            "removeLockedAll": "{count, plural, one {One marcher uses Expert moves on this page. Switch to Expert to edit it.} other {# marchers use Expert moves on this page. Switch to Expert to edit them.}}",
+            "title": "Keyframe · Page {page}, count {count}"
+        },
         "label": "Timeline",
         "masterVolume": "Master Volume",
         "moveDeleted": {
@@ -2422,7 +2476,13 @@
             "deleteFailed": "Failed to delete page",
             "firstPage": "First page",
             "label": "Page {pageName}",
-            "subset": "Subset"
+            "subset": "Subset",
+            "add": "New page",
+            "addAtEnd": "New page at the end",
+            "added": "Page {pageName} added",
+            "countsLabel": "Page {pageName}: {counts}",
+            "menuButton": "Page {pageName} options",
+            "resizeHandle": "Drag to change the counts of page {pageName}"
         },
         "pages": "Pages",
         "rangeMenu": {
@@ -2475,9 +2535,25 @@
             "title": "{counts, plural, one {Add a page of # count, from the last page to the playhead} other {Add a page of # counts, from the last page to the playhead}}",
             "subsetLabel": "Add {counts}-Count Subset",
             "subsetTitle": "{counts, plural, one {Add a subset page of # count, from the last page to the playhead} other {Add a subset page of # counts, from the last page to the playhead}}"
-        }
+        },
+        "compact": {
+            "collapse": "Make the timeline compact",
+            "expand": "Show the full timeline",
+            "fullscreen": "Fullscreen",
+            "hideAudio": "Hide the music waveform",
+            "metronome": "Metronome",
+            "more": "More timeline controls",
+            "showAudio": "Show the music waveform",
+            "zoom": "Timeline zoom"
+        },
+        "volumeSlider": "Timeline volume slider",
+        "zoomIn": "Zoom timeline in",
+        "zoomOut": "Zoom timeline out",
+        "zoomReset": "Reset timeline zoom"
     },
     "titlebar": {
+        "menu": "Menu",
+        "reload": "Reload",
         "bugReport": "Submit bug or feedback",
         "bugReport.placeholder": "What went wrong?\nWhat did you expect?\nHow can we reproduce the issue?",
         "databasePathError": "Database Path Error",
@@ -2486,6 +2562,9 @@
     },
     "toolbar": {
         "alignment": {
+            "lockXCaption": "Lock X",
+            "lockYCaption": "Lock Y",
+            "snapCaption": "Snap",
             "alignMarchersAriaLabel": "Align marchers",
             "lockMarchersAriaLabel": "Cursor movement and marcher snap",
             "placeAllMarchers": "Place all marchers",
@@ -2494,6 +2573,12 @@
             "toPreviousPagePositions": "...to previous page positions"
         },
         "select": {
+            "drillPrefixesLabel": "Select drill prefixes",
+            "sectionsLabel": "Select sections",
+            "tagsLabel": "Select tags",
+            "tapMode.add": "Add",
+            "tapMode.ariaLabel": "Choosing a group",
+            "tapMode.replace": "Replace",
             "noDrillPrefixesToSelect": "No drill prefixes to select found",
             "noResultsFound": "No results found",
             "noSectionsToSelect": "No sections to select found",
@@ -2521,7 +2606,9 @@
             "shapesOff": "Off",
             "shapesSelected": "When selected",
             "uiSettingsToolbar": "Ui Settings Toolbar"
-        }
+        },
+        "hideToolbar": "Hide toolbar",
+        "showToolbar": "Show toolbar"
     },
     "versionCheck": {
         "error": {
@@ -2754,10 +2841,97 @@
         }
     },
     "web": {
+        "actionFailed": "That didn't work: {message}",
+        "backUp": "Back up",
+        "backUpDone": "Backed up “{name}”",
+        "backUpReady": "“{name}” is ready to back up",
+        "backUpSave": "Save backup",
+        "backUpFailed": "Couldn't back up “{name}”: {message}",
+        "backUpNow": "Back up now",
+        "backedUpAgo": "Last backed up: {ago}",
+        "backupReminder": "“{name}” has changes from several days that aren't backed up anywhere else.",
+        "cantKeepForReload": "This browser window can't open a show, because it won't let OpenMarch keep anything even for a moment. Try a normal (not private) window.",
+        "close": "Close",
         "download": "Download .dots",
         "downloaded": "Downloaded {name}",
         "fileMenu": "File",
-        "notDownloadedYet": "Changes since your last download are only in this browser"
+        "fileNotOpened": "The file wasn't opened, so your show stays open: {message}",
+        "gotIt": "Got it",
+        "homeScreen.note": "Already made shows in Safari? The Home Screen app keeps its own shows. Back each one up here first (Share → Save to Files), then open the file in the Home Screen app.",
+        "homeScreen.step1": "Tap the Share button in Safari's toolbar",
+        "homeScreen.step2": "Choose “Add to Home Screen”, then tap Add.",
+        "homeScreen.step3": "From now on, open OpenMarch from your Home Screen.",
+        "homeScreen.title": "Welcome to OpenMarch on iPad",
+        "homeScreen.why": "Before you start, add OpenMarch to your Home Screen. That's where your shows are kept safely.",
+        "homeScreen.whyTitle": "Why the Home Screen?",
+        "homeScreen.why1": "Your shows are saved on this iPad, not online.",
+        "homeScreen.why2": "In a Safari tab, Safari can delete them if you don't visit for about a week. The Home Screen app keeps them.",
+        "homeScreen.why3": "It opens full screen, like any other app.",
+        "homeScreen.howTitle": "How to add it",
+        "keptHereNote": "Your shows are saved here as you work. Back up to keep a copy somewhere else, such as Files, Google Drive or email.",
+        "leave.memory": "Your changes since the last download will be lost. Download the show first to keep them.\n\nContinue without downloading?",
+        "leave.noAnswer": "The browser didn't answer.",
+        "leave.unsaved": "Your latest changes aren't saved on this device ({error}). If you continue, they are lost. Back up the show first to keep them.\n\nContinue anyway?",
+        "library.backedUpAgo": "Backed up {ago}",
+        "library.cancel": "Cancel",
+        "library.copyName": "{name} copy",
+        "library.delete": "Delete…",
+        "library.deleteConfirm": "Delete",
+        "library.deleteDescription": "It's removed from here, with its versions. Back it up first if you might need it again. This can't be undone.",
+        "library.deleteTitle": "Delete “{name}”?",
+        "library.duplicate": "Duplicate",
+        "library.edited": "Edited {ago}",
+        "library.empty": "No shows here yet. Create a new show, or open a .dots file.",
+        "library.more": "More for “{name}”",
+        "library.nameLabel": "Name",
+        "library.newerFormat": "Your shows here were saved by a newer version of OpenMarch, so this version leaves them as they are. Use the newer version to open them.",
+        "library.notKept": "This browser won't keep your shows (for example, in Private Browsing). Download your work before you close the tab.",
+        "library.open": "Open “{name}”",
+        "library.openFailed": "Couldn't open “{name}”. It's still in the list: try again, or back it up and report the problem.",
+        "library.otherTab": "OpenMarch is open in another tab, which keeps the shows. Use that tab, or close it and reload this one.",
+        "library.rename": "Rename…",
+        "library.renameTitle": "Rename show",
+        "library.save": "Save",
+        "library.tab": "Your shows",
+        "library.titleBrowser": "Shows in this browser",
+        "library.titleIpad": "Shows on this iPad",
+        "memoryNote": "This tab doesn't keep shows (for example, in Private Browsing, or while another tab has OpenMarch open). Download your work before you close it.",
+        "neverBackedUp": "Never backed up",
+        "notAudioFile": "\"{name}\" isn't an audio file. Choose an MP3, WAV, M4A or similar.",
+        "notDownloadedYet": "Changes since your last download are only in this browser",
+        "notKept": "Not kept",
+        "notPersistedNote": "The browser may remove shows if space runs low or the site isn't used for a while. Back up often.",
+        "notSaved": "Not saved",
+        "notSavedFull": "Not saved: storage for OpenMarch is full. Back up your shows, then delete ones you don't need.",
+        "notSavedOther": "Not saved: {message}. Back up now to keep a copy.",
+        "notShowFile": "\"{name}\" isn't an OpenMarch show. Choose a file that ends in .dots.",
+        "persistedNote": "This browser has agreed to keep your shows when space runs low.",
+        "reopenFailed": "OpenMarch couldn't reopen your show after reloading. Reload the page to try again.",
+        "restore": "Restore",
+        "restored": "Restored the version from {when}. The state before it is kept in Versions.",
+        "savedInBrowser": "Saved in this browser",
+        "savedOnIpad": "Saved on this iPad",
+        "saving": "Saving…",
+        "showStaysOpen": "The show stays open: {message}",
+        "statusDetailsLabel": "Saving and backups",
+        "storageNotice.newerFormat": "Your shows here were saved by a newer version of OpenMarch, so this version leaves them as they are. Use the newer version to open them. Anything you do in this tab is only kept until you close it.",
+        "storageNotice.notKept": "This browser won't keep your shows (for example, in Private Browsing). Your work is lost when you close this tab unless you download it. Use a normal Safari tab, or add OpenMarch to your Home Screen.",
+        "storageNotice.otherTab": "OpenMarch is open in another tab. In this tab, your show is only kept until you close or reload it. Download it to keep your changes.",
+        "versionReason.beforeRestore": "Before a restore",
+        "versionReason.edit": "While editing",
+        "versionReason.opened": "When opened",
+        "versions": "Versions",
+        "versionsDescription": "A version is kept every couple of minutes while you edit, and when you open a show. Restoring one keeps the current state as a version too, so nothing is lost.",
+        "versionsEmpty": "No versions yet. One is kept after your first change.",
+        "versionsMenu": "Versions…",
+        "versionsTitle": "Versions of “{name}”",
+        "welcome.backUpBody": "File → Back up (or {save}) saves a copy of the show to Files, Google Drive or email. If this device's data is cleared or the device is lost, only your backups remain.",
+        "welcome.backUpTitle": "Back up regularly",
+        "welcome.desktopBody": "PDF export and some file tools need the desktop app. Video export works here.",
+        "welcome.desktopTitle": "A few desktop features aren't here yet",
+        "welcome.intro": "OpenMarch runs right here on this device. There's no account, and nothing is uploaded.",
+        "welcome.savedBody": "Every change is saved as you work, and the last 20 versions of each show are kept. Find your shows on the start page.",
+        "welcome.savedTitle": "Your shows are saved on this device"
     },
     "welcome": {
         "description": "No files found. Create one, and make sure to check out the guides. Customize your theme and navigation in Settings.",
@@ -2798,7 +2972,7 @@
         "pageNumberOffset": "Page Number Offset",
         "resetToDefaults": "Reset to Defaults",
         "saveChanges": "Save Changes",
-        "title": "Workspace Settings",
+        "title": "Show settings",
         "units": {
             "beats": "beats",
             "bpm": "BPM",
@@ -2807,7 +2981,9 @@
         },
         "unsavedChanges": "You have unsaved changes",
         "warnPropMovesWithoutCrew": "Warn when a prop moves without a crew",
-        "warnPropMovesWithoutCrewHelp": "Show checks names a placed prop that moves with nobody on its crew."
+        "warnPropMovesWithoutCrewHelp": "Show checks names a placed prop that moves with nobody on its crew.",
+        "close": "Close",
+        "saved": "Show settings saved"
     },
     "visuals": {
         "workspace": {
@@ -2922,6 +3098,93 @@
             "kind_not_allowed": "a phrase on a channel that takes states only",
             "transition_cut": "its transition starts before the cue before it lands"
         }
+    },
+    "canvas": {
+        "zoom": {
+            "group": "Zoom",
+            "in": "Zoom in",
+            "out": "Zoom out",
+            "reset": "Zoom {zoom}%, reset zoom and center"
+        }
+    },
+    "errorBoundary": {
+        "copyErrorMessage": "Copy error message"
+    },
+    "sidebar": {
+        "appearance": "Appearance",
+        "field": "Field",
+        "marchers": "Marchers",
+        "metronome": "Metronome",
+        "mobile": "Mobile app",
+        "music": "Music",
+        "settings": "Show settings"
+    },
+    "infoTip": {
+        "moreInfo": "More info"
+    },
+    "layout": {
+        "closeSettings": "Close settings",
+        "hideInspector": "Hide inspector",
+        "showInspector": "Show inspector"
+    },
+    "touch": {
+        "dragMode": {
+            "auto": "Auto",
+            "autoDescribe": "{device, select, pencil {finger moves, Pencil selects} other {finger moves, pen selects}}",
+            "autoSentence": "{device, select, pencil {One finger moves the view. Pencil, or hold then drag, selects.} other {One finger moves the view. A pen, or hold then drag, selects.}}",
+            "box": "Box",
+            "boxDescribe": "drag a box to select",
+            "button": "Drag from empty field: {label}, {describe}. Tap to change",
+            "lasso": "Lasso",
+            "lassoDescribe": "draw around to select",
+            "menu": "Drag from empty field",
+            "pan": "Pan",
+            "panDescribe": "drag moves the view",
+            "prefix": "Drag:"
+        },
+        "gestures": {
+            "fingers": "<b>1 finger</b> moves · <b>2</b> zoom",
+            "holdMarcher": "<b>Hold a marcher</b> adds it",
+            "modifiers": "<b>Add</b> taps to add · <b>No snap</b> moves freely",
+            "penSelects": "{device, select, pencil {<b>Pencil</b>} other {<b>Pen</b>}} or <b>hold + drag</b> selects",
+            "undoRedo": "<b>2-finger tap</b> undo · <b>3</b> redo"
+        },
+        "layoutHint": "Tablet layout has bigger controls",
+        "marcherAdded": "Added {name}",
+        "marcherRemoved": "Removed {name}",
+        "modifiers": {
+            "add": "Add",
+            "addOff": "Add: hold, or tap to keep on. Tapping marchers adds them to the selection",
+            "addOn": "Add, on. Tap to turn off",
+            "addOnNote": "Add on: tap marchers to add or remove.",
+            "clearLine": "Clear line",
+            "explain": {
+                "alt": "Move and turn without snapping.",
+                "drag": "What dragging on empty field does.",
+                "grip": "Drag to move.",
+                "help": "Gestures.",
+                "shift": "Tap marchers to add or remove them."
+            },
+            "grip": "Move these buttons",
+            "gripTitle": "Drag to move",
+            "help": "What these buttons do",
+            "noSnap": "No snap",
+            "noSnapOff": "No snap: hold, or tap to keep on. Moving and turning don't snap to steps",
+            "noSnapOn": "No snap, on. Tap to turn off",
+            "noSnapOnNote": "No snap on."
+        },
+        "openSettings": "Open Settings",
+        "readout": {
+            "both": "{side} · {frontBack}",
+            "noFrontToBack": "0 steps front to back",
+            "noSideToSide": "0 steps side to side",
+            "toSide": "{count, plural, one {{steps} step} other {{steps} steps}} to {side}",
+            "towardBack": "{count, plural, one {{steps} step} other {{steps} steps}} toward the back",
+            "towardFront": "{count, plural, one {{steps} step} other {{steps} steps}} toward the front"
+        },
+        "redone": "Redone",
+        "theMarcher": "the marcher",
+        "undone": "Undone"
     },
     "shortcutsDialog": {
         "shape": {

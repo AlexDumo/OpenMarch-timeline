@@ -388,5 +388,7 @@ export const shapeToolMode: FieldMode = {
     // The tool's handles move the shape; the marchers stay put until Place
     ownsSelectionBox: true,
     locksSelection: true,
+    // The field's menu acts on the selection, not the shape being edited
+    blocksFieldMenu: true,
     gesture: { kind: "shape", always: true },
 };

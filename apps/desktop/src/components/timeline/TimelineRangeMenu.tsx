@@ -40,7 +40,7 @@ import type { TimelineBeatRange } from "./TimelineViewModel";
  * The menus' entry style; `data-[disabled]` dims a Radix-disabled one (Keep here, Follow again).
  * Entries with a reason dim themselves (`MenuItemWithReason`).
  */
-const ITEM_CLASS =
+export const TIMELINE_MENU_ITEM_CLASS =
     "rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50";
 
 /** A shortcut after an entry's words, as the transport's popover shows Ctrl+M */
@@ -77,7 +77,7 @@ function MenuItemWithReason({
     reason,
     reasonTestId,
     onSelect,
-    className = ITEM_CLASS,
+    className = TIMELINE_MENU_ITEM_CLASS,
     children,
 }: {
     testId: string;
@@ -301,7 +301,7 @@ export function TimelineMoveMenuItems({
             <DropdownMenu.Item
                 data-testid="timeline-move-menu-rename"
                 onSelect={actions.onRename}
-                className={ITEM_CLASS}
+                className={TIMELINE_MENU_ITEM_CLASS}
             >
                 <CursorTextIcon size={14} />
                 Rename move…
@@ -329,7 +329,7 @@ export function TimelineMoveMenuItems({
                 reason={reason}
                 reasonTestId="timeline-move-menu-delete-reason"
                 onSelect={actions.onDelete}
-                className={`${ITEM_CLASS} text-red`}
+                className={`${TIMELINE_MENU_ITEM_CLASS} text-red`}
             >
                 <TrashIcon size={14} />
                 Delete move
@@ -556,7 +556,7 @@ export function useTimelineRangeMenu({
                                             open.target.pageId!,
                                         )
                                     }
-                                    className={ITEM_CLASS}
+                                    className={TIMELINE_MENU_ITEM_CLASS}
                                 >
                                     <LinkBreakIcon size={14} />
                                     {tolgee.t(
@@ -576,7 +576,7 @@ export function useTimelineRangeMenu({
                                             open.target.pageId!,
                                         )
                                     }
-                                    className={ITEM_CLASS}
+                                    className={TIMELINE_MENU_ITEM_CLASS}
                                 >
                                     <LinkSimpleIcon size={14} />
                                     {tolgee.t(
@@ -603,7 +603,7 @@ export function useTimelineRangeMenu({
                                             checked,
                                         )
                                     }
-                                    className={`${ITEM_CLASS} group`}
+                                    className={`${TIMELINE_MENU_ITEM_CLASS} group`}
                                 >
                                     <MenuSwitch />
                                     {tolgee.t(
@@ -621,7 +621,7 @@ export function useTimelineRangeMenu({
                                     onSelect={() =>
                                         menu.onDeleteFlag?.(open.target.pageId!)
                                     }
-                                    className={`${ITEM_CLASS} text-red`}
+                                    className={`${TIMELINE_MENU_ITEM_CLASS} text-red`}
                                 >
                                     <FlagIcon size={14} />
                                     Delete page
@@ -636,7 +636,7 @@ export function useTimelineRangeMenu({
                                             open.target.pageId!,
                                         )
                                     }
-                                    className={`${ITEM_CLASS} text-red`}
+                                    className={`${TIMELINE_MENU_ITEM_CLASS} text-red`}
                                 >
                                     <TrashIcon size={14} />
                                     {tolgee.t(

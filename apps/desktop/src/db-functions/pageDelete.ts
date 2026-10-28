@@ -18,7 +18,7 @@ import {
 import {
     deletePageYankInTransaction,
     deletePagesInTransaction,
-    ensureSecondBeatHasPage,
+    keepSecondBeatPageInTransaction,
     FIRST_PAGE_ID,
     type DatabasePage,
 } from "./page";
@@ -242,14 +242,12 @@ export async function deletePagesWithMoves({
         async (tx) =>
             await deleteAndCompare(
                 tx,
-                async () => {
-                    const deleted = await deletePagesInTransaction({
-                        pageIds: ids,
+                () =>
+                    keepSecondBeatPageInTransaction({
                         tx,
-                    });
-                    await ensureSecondBeatHasPage({ tx });
-                    return deleted;
-                },
+                        operation: () =>
+                            deletePagesInTransaction({ pageIds: ids, tx }),
+                    }),
                 flagOfSamePage,
             ),
     );

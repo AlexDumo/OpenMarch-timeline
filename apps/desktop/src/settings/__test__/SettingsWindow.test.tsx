@@ -52,6 +52,7 @@ describe("SettingsWindow", () => {
         expect(SETTINGS_SECTIONS.map((section) => section.id)).toEqual([
             "general",
             "appearance",
+            "input",
             "mouse",
             "timeline",
             "field",

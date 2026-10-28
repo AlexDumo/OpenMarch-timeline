@@ -177,3 +177,31 @@ describe("ShortcutDispatcher", () => {
         expect(run).toHaveBeenCalledTimes(1);
     });
 });
+
+describe("ShortcutDispatcher, the field's menu (#315)", () => {
+    it("opens it with the context-menu key or Shift+F10 while the field has focus", () => {
+        const run = handle("openFieldMenu");
+        render(<ShortcutDispatcher />);
+        fireEvent.keyDown(window, { key: "ContextMenu", code: "ContextMenu" });
+        fireEvent.keyDown(window, { key: "F10", code: "F10", shiftKey: true });
+        expect(run).toHaveBeenCalledTimes(2);
+        // Plain F10 doesn't
+        fireEvent.keyDown(window, { key: "F10", code: "F10" });
+        expect(run).toHaveBeenCalledTimes(2);
+    });
+
+    it("leaves the keys alone while the timeline has focus", () => {
+        const run = handle("openFieldMenu");
+        const { uiSettings, setUiSettings } = useUiSettingsStore.getState();
+        act(() => {
+            void setUiSettings({
+                ...uiSettings,
+                focussedComponent: "timeline",
+            });
+        });
+        render(<ShortcutDispatcher />);
+        fireEvent.keyDown(window, { key: "ContextMenu", code: "ContextMenu" });
+        fireEvent.keyDown(window, { key: "F10", code: "F10", shiftKey: true });
+        expect(run).not.toHaveBeenCalled();
+    });
+});

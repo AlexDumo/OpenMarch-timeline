@@ -8,10 +8,14 @@ import { T } from "@tolgee/react";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { InspectorPageProvider } from "./InspectorPageContext";
 import { ShowChecksSection } from "@/components/notes/ShowNotesList";
+import { useCompactInspector } from "./useCompactInspector";
 
 function Inspector() {
     // UI-19: Basic has no move cards (range, delete move): they make moves Basic can't edit
     const basic = useIsBasicMode();
+    // On a tablet or a short screen the fixed notes footer leaves too little
+    // room above it, so the notes scroll with everything else
+    const compact = useCompactInspector();
     return (
         <InspectorPageProvider>
             <div className="rounded-6 border-stroke bg-fg-1 flex h-full w-xs min-w-0 flex-col border p-12">
@@ -32,12 +36,15 @@ function Inspector() {
                     <MarcherEditor />
                     {/* ADR 0002 D-22: the show's one quiet list, in both modes */}
                     <ShowChecksSection />
+                    {compact && <PageNotesSection />}
                 </div>
 
                 {/* Fixed notes footer at the bottom of the inspector */}
-                <div className="mt-12">
-                    <PageNotesSection />
-                </div>
+                {!compact && (
+                    <div className="mt-12">
+                        <PageNotesSection />
+                    </div>
+                )}
             </div>
         </InspectorPageProvider>
     );

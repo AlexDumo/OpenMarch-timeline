@@ -130,11 +130,10 @@ jobs:
           path: apps/desktop/playwright-report/
           retention-days: 30
 
-  # Browser scenarios for the shape work: the renderer in headless Chromium.
-  # Only on PRs into shapes/host, so CI for main is unchanged.
+  # Browser scenarios: the renderer in headless Chromium.
   desktop-browser-e2e:
     needs: check-changes
-    if: needs.check-changes.outputs.desktop == 'true' && github.base_ref == 'shapes/host'
+    if: needs.check-changes.outputs.desktop == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -174,10 +173,12 @@ jobs:
         working-directory: apps/desktop
         run: pnpm run build:browser
 
-      - name: Run shape browser scenarios
+      # The shape scenarios and the field and timeline ones the shape work rewrote; the whole
+      # suite takes about 16 minutes, over this job's budget
+      - name: Run browser scenarios
         working-directory: apps/desktop
         run: |
-          specs=$(ls e2e/browser/tests/box-tool.spec.mts e2e/browser/tests/*circle*.spec.mts e2e/browser/tests/*shape*.spec.mts 2>/dev/null | sort -u)
+          specs=$(ls e2e/browser/tests/box-tool.spec.mts e2e/browser/tests/*circle*.spec.mts e2e/browser/tests/*shape*.spec.mts e2e/browser/tests/timeline-interactions.spec.mts e2e/browser/tests/field-actions.spec.mts 2>/dev/null | sort -u)
           echo "Specs: $specs"
           pnpm run e2e:browser $specs
 

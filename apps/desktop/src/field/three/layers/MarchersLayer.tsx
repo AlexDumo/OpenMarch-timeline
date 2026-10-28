@@ -11,6 +11,11 @@ import {
 } from "three";
 import type { FieldTheme } from "@openmarch/core";
 import type { FieldMarchers } from "../fieldMarchers";
+import {
+    FOLLOWING_LOOK,
+    followingAmount,
+    type FieldFollowing,
+} from "../fieldFollowing";
 import type { FieldDimming } from "../fieldDimming";
 import { useFieldDraw } from "../fieldDrawContext";
 import { MARCHER_SHAPE, writeMarcherLooks } from "../marcherLooks";
@@ -37,6 +42,7 @@ attribute vec4 aFill;
 attribute vec4 aOutline;
 attribute float aShape;
 attribute float aOpacity;
+attribute float aFollowing;
 attribute float aSelected;
 uniform float uScale;
 uniform float uMargin;
@@ -46,9 +52,11 @@ varying vec4 vFill;
 varying vec4 vOutline;
 varying float vShape;
 varying float vOpacity;
+varying float vFollowing;
 varying float vSelected;
 void main() {
     vSelected = aSelected;
+    vFollowing = aFollowing;
     vFill = aFill;
     vOutline = aOutline;
     vOpacity = aOpacity;
@@ -63,28 +71,47 @@ void main() {
     gl_Position = projectionMatrix * viewMatrix * vec4(aPos + vLocal * uScale, 0.0, 1.0);
 }`;
 
+const L = FOLLOWING_LOOK;
 const FRAGMENT = /* glsl */ `
 #define DOT_R 5.0
+#define PI 3.14159265
+#define FOLLOWING_FILL ${L.fillOpacity.toFixed(3)}
+#define EDGE_WIDTH ${L.edgeWidth.toFixed(3)}
+#define MIN_EDGE_PX ${L.minEdgePx.toFixed(3)}
+#define CIRCLE_DASHES ${L.circleDashes.toFixed(1)}
+#define SIDE_DASHES ${L.sideDashes.toFixed(1)}
+#define SMALL_CIRCLE_DASHES ${L.smallCircleDashes.toFixed(1)}
+#define SMALL_SIDE_DASHES ${L.smallSideDashes.toFixed(1)}
+#define FEW_DASHES_BELOW_PX ${L.fewDashesBelowPx.toFixed(3)}
+#define MIN_GAP_PX ${L.minGapPx.toFixed(3)}
+#define GAP ${L.gap.toFixed(3)}
 varying vec2 vLocal;
 varying vec4 vFill;
 varying vec4 vOutline;
 varying float vShape;
 varying float vOpacity;
+varying float vFollowing;
 varying float vSelected;
 uniform vec4 uRing;
 uniform float uRingInner;
 uniform float uRingOuter;
+uniform float uMargin;
 
+float squareHalf() { return DOT_R * sqrt(PI) * 0.6; }
 float square(vec2 p) {
     vec2 q = abs(p);
-    return max(q.x, q.y) - DOT_R * sqrt(3.14159265) * 0.6;
+    return max(q.x, q.y) - squareHalf();
+}
+// Corners (-hw, hh), (0, -hh), (hw, hh), y down
+float triangleHw() { return DOT_R * 1.2; }
+float triangleHh() { return triangleHw() * sqrt(3.0) * 0.5; }
+float triangleSlant(vec2 p) {
+    float hw = triangleHw();
+    float hh = triangleHh();
+    return dot(vec2(abs(p.x), p.y + hh), normalize(vec2(2.0 * hh, -hw)));
 }
 float triangle(vec2 p) {
-    // Corners (-hw, hh), (0, -hh), (hw, hh), y down
-    float hw = DOT_R * 1.2;
-    float hh = hw * sqrt(3.0) * 0.5;
-    float side = dot(vec2(abs(p.x), p.y + hh), normalize(vec2(2.0 * hh, -hw)));
-    return max(side, p.y - hh);
+    return max(triangleSlant(p), p.y - triangleHh());
 }
 float xMark(vec2 p) {
     // Both lines folded onto one: from the center out to (s, s), 1 unit either side
@@ -95,6 +122,46 @@ float xMark(vec2 p) {
     return max(along - s * 1.41421356, across - 1.0);
 }
 
+/**
+ * Where a point on the shape's edge (or an X's arm) falls among its dashes, in
+ * dashes: a gap is centered on each whole number between them. A circle has
+ * 'circle' dashes all round; a square's or triangle's side, and an X's arm,
+ * has 'side' from corner to corner, so corners stay solid.
+ */
+float dashPosition(vec2 p, float shape, float circle, float side) {
+    if (shape < 0.5) return (atan(p.y, p.x) / (2.0 * PI) + 0.5) * circle;
+    float u;
+    if (shape < 1.5) {
+        vec2 q = abs(p);
+        u = (q.x > q.y ? p.y : p.x) / squareHalf();
+    } else if (shape < 2.5) {
+        float hh = triangleHh();
+        u = triangleSlant(p) > p.y - hh ? p.y / hh : p.x / triangleHw();
+    } else {
+        vec2 q = abs(p);
+        u = (q.x + q.y) / (DOT_R * 1.2 * 2.0) * 2.0 - 1.0;
+    }
+    return (u * 0.5 + 0.5) * side;
+}
+
+/**
+ * 1 on a dash, 0 in a gap, for a look 'amount' of the way to Following (0 is
+ * solid). A shape too small on screen for its usual dashes gets fewer, longer
+ * ones, and a gap is never under MIN_GAP_PX, so the gaps always show.
+ */
+float dashed(vec2 p, float shape, float amount) {
+    if (amount < 0.001) return 1.0;
+    bool small = DOT_R / uMargin < FEW_DASHES_BELOW_PX;
+    float side = small ? SMALL_SIDE_DASHES : SIDE_DASHES;
+    float k = dashPosition(p, shape, small ? SMALL_CIRCLE_DASHES : CIRCLE_DASHES, side);
+    float center = shape < 0.5 ? floor(k + 0.5) : clamp(floor(k + 0.5), 1.0, side - 1.0);
+    float off = abs(k - center);
+    // fwidth(k) is a pixel, in dashes
+    float fw = fwidth(k);
+    float gapHalf = amount * min(max(0.5 * GAP, 0.5 * MIN_GAP_PX * fw), 0.35);
+    return smoothstep(gapHalf - 0.5 * fw, gapHalf + 0.5 * fw, off);
+}
+
 void main() {
     float d;
     if (vShape < 0.5) d = length(vLocal) - DOT_R;
@@ -103,21 +170,47 @@ void main() {
     else d = xMark(vLocal);
     float aa = 0.5 * fwidth(d);
     float fill = 1.0 - smoothstep(-aa, aa, d);
+    float fillA = vFill.a * fill;
     // An X is its lines only; the others are a fill with the outline drawn over it
     float stroke = vShape > 2.5 ? 0.0 : 1.0 - smoothstep(0.5 - aa, 0.5 + aa, abs(d));
-    float fillA = vFill.a * fill;
     float strokeA = vOutline.a * stroke;
+    vec3 strokeRgb = vOutline.rgb;
+
+    // Following (#300): the edge dashed at full strength, at any size. The
+    // amount eases 0 to 1 on Stop (#302): the gaps open from a solid edge
+    float amount = vFollowing;
+    if (amount > 0.0) {
+        float on = dashed(vLocal, vShape, amount);
+        float width = mix(1.0, max(EDGE_WIDTH, MIN_EDGE_PX * uMargin), amount);
+        if (vShape > 2.5) {
+            // An X dashes its own lines, at full strength
+            fillA *= on;
+        } else if (vOutline.a >= 0.1) {
+            // The outline, widened inward and dashed, round the fill at 60%
+            fillA *= mix(1.0, FOLLOWING_FILL, amount);
+            float band = 1.0 - smoothstep(0.5 * width - aa, 0.5 * width + aa, abs(d - 0.5 + 0.5 * width));
+            strokeA = vOutline.a * band * on;
+        } else {
+            // No outline: only the edge, dashed in the fill's color, with nothing inside
+            fillA *= 1.0 - amount;
+            float band = 1.0 - smoothstep(0.5 * width - aa, 0.5 * width + aa, abs(d + 0.5 * width));
+            strokeRgb = vFill.rgb;
+            strokeA = vFill.a * band * on;
+        }
+    }
     float dotA = strokeA + fillA * (1.0 - strokeA);
-    vec3 dotRgb = vOutline.rgb * strokeA + vFill.rgb * fillA * (1.0 - strokeA);
+    vec3 dotRgb = strokeRgb * strokeA + vFill.rgb * fillA * (1.0 - strokeA);
     // The selection ring, between uRingInner and uRingOuter outside the shape's edge
     float ringA = vSelected * uRing.a
         * (smoothstep(uRingInner - aa, uRingInner + aa, d)
             - smoothstep(uRingOuter - aa, uRingOuter + aa, d));
+    // A dimmed marcher's dot (#201) fades; a selection ring stays full strength
+    dotA *= vOpacity;
+    dotRgb *= vOpacity;
     float a = dotA + ringA * (1.0 - dotA);
-    if (a * vOpacity < 0.004) discard;
+    if (a < 0.004) discard;
     vec3 rgb = dotRgb + uRing.rgb * ringA * (1.0 - dotA);
-    // A dimmed marcher (#201) fades as a whole
-    gl_FragColor = vec4(rgb / a, a * vOpacity);
+    gl_FragColor = vec4(rgb / a, a);
 }`;
 
 type Drawn = {
@@ -125,6 +218,7 @@ type Drawn = {
     idsVersion: number;
     appearanceVersion: number;
     dimVersion: number;
+    followingVersion: number;
     selectionVersion: number;
     theme: FieldTheme | null;
 };
@@ -133,11 +227,14 @@ type Drawn = {
 export default function MarchersLayer({
     marchers,
     dimming,
+    following,
     theme,
 }: {
     marchers: FieldMarchers;
     /** Marchers drawn dimmed (#201). */
     dimming: FieldDimming;
+    /** Marchers drawn as Following (#300, `FOLLOWING_LOOK`); dimming wins. */
+    following: FieldFollowing;
     theme: FieldTheme;
 }) {
     const invalidate = useThree((s) => s.invalidate);
@@ -147,6 +244,7 @@ export default function MarchersLayer({
         idsVersion: -1,
         appearanceVersion: -1,
         dimVersion: -1,
+        followingVersion: -1,
         selectionVersion: -1,
         theme: null,
     });
@@ -189,6 +287,7 @@ export default function MarchersLayer({
     useEffect(() => invalidate(), [theme, invalidate]);
     // New dimming redraws them on the next frame
     useEffect(() => dimming.subscribe(invalidate), [dimming, invalidate]);
+    useEffect(() => following.subscribe(invalidate), [following, invalidate]);
 
     useEffect(
         () => () => {
@@ -215,7 +314,10 @@ export default function MarchersLayer({
             resized ||
             marchers.appearanceVersion !== last.appearanceVersion ||
             theme !== last.theme;
-        const dimChanged = resized || dimming.version !== last.dimVersion;
+        const dimChanged =
+            resized ||
+            dimming.version !== last.dimVersion ||
+            following.version !== last.followingVersion;
         const reselected =
             resized || marchers.selectionVersion !== last.selectionVersion;
         if (
@@ -244,6 +346,10 @@ export default function MarchersLayer({
             );
             geometry.setAttribute("aShape", dynamic(new Float32Array(n), 1));
             geometry.setAttribute("aOpacity", dynamic(new Float32Array(n), 1));
+            geometry.setAttribute(
+                "aFollowing",
+                dynamic(new Float32Array(n), 1),
+            );
             geometry.setAttribute("aSelected", dynamic(new Float32Array(n), 1));
             geometry.instanceCount = n;
         }
@@ -269,11 +375,15 @@ export default function MarchersLayer({
         }
         if (dimChanged) {
             const opacity = instanced("aOpacity");
-            const array = opacity.array as Float32Array;
+            const followingLook = instanced("aFollowing");
+            const opacities = opacity.array as Float32Array;
+            const amounts = followingLook.array as Float32Array;
             marchers.ids.forEach((id, i) => {
-                array[i] = dimming.opacityOf(id);
+                opacities[i] = dimming.opacityOf(id);
+                amounts[i] = followingAmount(dimming, following, id);
             });
             opacity.needsUpdate = true;
+            followingLook.needsUpdate = true;
         }
         if (reselected) {
             const selected = instanced("aSelected");
@@ -288,6 +398,7 @@ export default function MarchersLayer({
             idsVersion: marchers.idsVersion,
             appearanceVersion: marchers.appearanceVersion,
             dimVersion: dimming.version,
+            followingVersion: following.version,
             selectionVersion: marchers.selectionVersion,
             theme,
         };

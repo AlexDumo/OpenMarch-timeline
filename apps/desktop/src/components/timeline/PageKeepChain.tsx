@@ -189,9 +189,9 @@ export interface ChainFit {
 
 /**
  * Where a box's chain fits (owner, 2026-10-12: chains on narrow boxes covered the page numbers and
- * each other): at the bottom left, on the start of the hold bar, `CHAIN_INSET` in from the flag
- * before it, at the largest size that leaves the label and the box's right flag clear. Null where
- * neither size fits, however narrow the box: it shows a dot instead (`keepDotFit`).
+ * each other): at the bottom left, `CHAIN_INSET` in from the flag before it, at the largest size
+ * that leaves the label and the box's right flag clear. Null where neither size fits, however
+ * narrow the box: it shows a dot instead (`keepDotFit`).
  *
  * @param labelChars the box's label length, 0 when the box is too narrow to show it
  */
@@ -253,7 +253,7 @@ const KIND_CLASS: Record<PageKeepChain["kind"], string> = {
 /**
  * A linked chain shows only on the selected page, the page **K** works on, and the box under the
  * pointer (its own box, drawn just before it); everywhere else the
- * hold bar says they hold, and the box's menu keeps them. Simulated users, 2026-10-12: a chain on
+ * inspector's hold line says they hold, and the box's menu keeps them. Simulated users, 2026-10-12: a chain on
  * every following page drowned out the kept ones; with none they couldn't find keep.
  *
  * Hidden, it takes no pointer (review, 2026-10-12): a press there goes to the box under it
@@ -275,7 +275,7 @@ const KIND_WEIGHT: Record<PageKeepChain["kind"], "regular" | "bold"> = {
 
 /**
  * A page box's chain (UI-18 keep later pages), a sibling drawn right after the box, at its bottom
- * left where the hold bar starts: an outlined link where the selected marchers follow into the
+ * left: an outlined link where the selected marchers follow into the
  * page, broken on a filled accent chip where they were kept, and broken in an accent outline
  * where some were. Its tooltip names whom a click changes, and (K) where **K** does the same.
  * The press never reaches the box, so it doesn't select, scrub or drag it; a right-click opens
@@ -374,7 +374,7 @@ export function PageKeepChainButton({
 }
 
 /**
- * A kept or mixed chain in a box too narrow for it (`chainFit`): a dot on the hold bar, filled
+ * A kept or mixed chain in a box too narrow for it (`chainFit`): a dot at the box's bottom, filled
  * where kept, a ring where some are, where `keepDotFit` puts it. The box's tooltip carries the
  * chain's words.
  */

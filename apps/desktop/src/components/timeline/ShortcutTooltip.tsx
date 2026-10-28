@@ -6,8 +6,9 @@ import { TooltipClassName } from "@openmarch/ui";
 /**
  * The transport's tooltips (UI-17): the control's name with its shortcut as muted keycaps, as
  * Figma and Linear show them. Shown after a short hover, and straight away on keyboard focus.
- * The page boxes' hold marks and keep chains and the inspector's hold line use them too (UI-18),
- * with `disableHoverableContent` so a tooltip above a page box never holds the pointer.
+ * The page boxes' keep chains, the keyframe diamonds (#303) and the inspector's hold line use
+ * them too (UI-18), with `disableHoverableContent` so a tooltip above a page box never holds the
+ * pointer.
  */
 export function TransportTooltipProvider({
     children,

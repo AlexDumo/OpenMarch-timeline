@@ -72,12 +72,20 @@ export function resetShapePointer(): void {
 
 /**
  * Whether the shape's controls are calm: the pointer away from it, no gesture under way and no
- * keyboard focus in its editor (#403, #430)
+ * keyboard focus in its editor (#403, #430). Never on a screen that can't hover (fingers, an
+ * Apple Pencil): the pointer is only "over" mid-press there, so the controls stay solid, as the
+ * floating editor does (ShapeEditorSurface.css).
  */
 export function shapeCalm(gesture: boolean): boolean {
+    if (!canHover()) return false;
     const { over, dragging, editorFocus } = useShapePointerStore.getState();
     return !over && !gesture && !dragging && !editorFocus;
 }
+
+const canHover = () =>
+    typeof window === "undefined" ||
+    typeof window.matchMedia !== "function" ||
+    window.matchMedia("(hover: hover)").matches;
 
 /** Keyboard focus as `ShapeEditorSurface.css` has it: not focus a click left on a button */
 function editorHasKeyFocus(doc: Document): boolean {

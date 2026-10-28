@@ -1,7 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTolgee } from "@tolgee/react";
 import * as RadixDialog from "@radix-ui/react-dialog";
-import { CaretRightIcon, MagnifyingGlassIcon } from "@phosphor-icons/react";
+import {
+    CaretRightIcon,
+    MagnifyingGlassIcon,
+    XIcon,
+} from "@phosphor-icons/react";
+import { useIsTouchMode } from "@/stores/InputModeStore";
+import { useShowShortcutHints } from "@/stores/KeyboardSeenStore";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { bindingFromEvent, platformBinding } from "../bindings";
 import { getEffectiveBindings } from "../keymap";
@@ -149,6 +155,9 @@ export default function CommandPalette() {
     const open = palette !== null;
     const path = useMemo(() => palette?.path ?? [], [palette]);
     const [query, setQuery] = useState("");
+    const isTouch = useIsTouchMode();
+    // Shortcut keycaps only once a keyboard has been used (or with a mouse layout)
+    const showHints = useShowShortcutHints();
     const [activeIndex, setActiveIndex] = useState(0);
     const [sourcesVersion, setSourcesVersion] = useState(0);
     const pendingRun = useRef<(() => void) | null>(null);
@@ -235,7 +244,10 @@ export default function CommandPalette() {
         highlight.dataset.animate = String(animateHighlight.current);
         highlight.style.transform = `translateY(${row.offsetTop}px)`;
         animateHighlight.current = true;
-        row.scrollIntoView?.({ block: "nearest" });
+        // Opening (or new results) starts at the top, group heading included
+        if (activeIndex === selectable[0]) {
+            if (listRef.current) listRef.current.scrollTop = 0;
+        } else row.scrollIntoView?.({ block: "nearest" });
     }, [activeIndex, items, selectable, inner]);
 
     // Animate the list height as results change (heights can't transition from `auto`).
@@ -377,6 +389,14 @@ export default function CommandPalette() {
                                 onKeyDown={onKeyDown}
                                 className="palette-input"
                             />
+                            {isTouch && (
+                                <RadixDialog.Close
+                                    aria-label={t("commandPalette.close")}
+                                    className="hover:text-text flex size-44 shrink-0 items-center justify-center rounded-full"
+                                >
+                                    <XIcon size={22} />
+                                </RadixDialog.Close>
+                            )}
                         </div>
                         <div ref={listRef} className="palette-list">
                             <div
@@ -472,11 +492,14 @@ export default function CommandPalette() {
                                                             {item.group}
                                                         </span>
                                                     )}
-                                                    {item.shortcut && (
-                                                        <Keycaps
-                                                            keys={item.shortcut}
-                                                        />
-                                                    )}
+                                                    {showHints &&
+                                                        item.shortcut && (
+                                                            <Keycaps
+                                                                keys={
+                                                                    item.shortcut
+                                                                }
+                                                            />
+                                                        )}
                                                 </div>
                                             ),
                                         )}
@@ -484,21 +507,24 @@ export default function CommandPalette() {
                                 ))}
                             </div>
                         </div>
-                        <div className="palette-footer" aria-hidden>
-                            <span className="palette-footer-hint">
-                                <kbd className="keycap">↑</kbd>
-                                <kbd className="keycap">↓</kbd>
-                                {t("commandPalette.navigate")}
-                            </span>
-                            <span className="palette-footer-hint">
-                                <kbd className="keycap">↵</kbd>
-                                {t("commandPalette.run")}
-                            </span>
-                            <span className="palette-footer-hint">
-                                <kbd className="keycap">Esc</kbd>
-                                {t("commandPalette.close")}
-                            </span>
-                        </div>
+                        {/* Keyboard hints mean nothing without a keyboard */}
+                        {!isTouch && (
+                            <div className="palette-footer" aria-hidden>
+                                <span className="palette-footer-hint">
+                                    <kbd className="keycap">↑</kbd>
+                                    <kbd className="keycap">↓</kbd>
+                                    {t("commandPalette.navigate")}
+                                </span>
+                                <span className="palette-footer-hint">
+                                    <kbd className="keycap">↵</kbd>
+                                    {t("commandPalette.run")}
+                                </span>
+                                <span className="palette-footer-hint">
+                                    <kbd className="keycap">Esc</kbd>
+                                    {t("commandPalette.close")}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </RadixDialog.Content>
             </RadixDialog.Portal>
