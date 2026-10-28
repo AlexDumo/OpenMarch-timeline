@@ -87,7 +87,12 @@ function useShapeWaits(isPlaying: boolean, open: boolean): void {
         if (discarded && !same) forgetDiscardedShape();
     }, [selected]);
 
+    const discarded = useShapeToolStore((s) => s.discarded !== null);
+    // Only while a shape is open or waits on undo: moving the playhead changes the window, and the
+    // field calls this, so it would re-render for nothing (#455)
+    const watching = open || discarded;
     const windowKey = useTimelineSelectionStore((s) => {
+        if (!watching) return "";
         const sel = s.selection;
         const iso = s.isolation;
         return [
@@ -104,7 +109,6 @@ function useShapeWaits(isPlaying: boolean, open: boolean): void {
     }, [windowKey, open]);
     // Undo after Escape opens the shape at the moment it was discarded, so a new moment ends it
     const discardedAt = useRef(windowKey);
-    const discarded = useShapeToolStore((s) => s.discarded !== null);
     useEffect(() => {
         if (discarded) discardedAt.current = windowKey;
         // Only the discarding: a later change of window is handled below

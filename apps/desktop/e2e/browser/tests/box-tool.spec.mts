@@ -1686,6 +1686,41 @@ test("change: Close up shows only with holes, lays a box that lost two out for s
     await expectCanvasMatchesShow(show);
 });
 
+test("change: Close up after an edit in the editor keeps the edit: the spacing typed stays (#455)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+    await dragOutOfBox(page, 7, { x: 0, y: 160 });
+    await page.keyboard.press("Escape");
+    await expect.poll(async () => (await latestRecipe(show)).members).toBe(7);
+
+    const t2 = await marcherScreen(page, 2);
+    await page.mouse.click(t2.x, t2.y);
+    const editor = page.getByTestId("placed-box-readout");
+    await expect(editor).toContainText("1 empty");
+    const deep = editor.getByTestId("shape-editor-deep");
+    const before = await deep.innerText();
+    const typed = before === "3" ? "4" : "3";
+    // A new front-to-back spacing, saved on Enter
+    await deep.click();
+    await page.getByTestId("shape-editor-deep-input").fill(typed);
+    await page.getByTestId("shape-editor-deep-input").press("Enter");
+    await expect(deep).toHaveText(typed);
+    await waitForIdle(page);
+    // Past the save's hold, so Close up writes rather than waiting on the spacing's save
+    await page.waitForTimeout(1500);
+
+    // Close up lays out the box as it is now, the new spacing included
+    await editor.getByTestId("shape-editor-close-up").click();
+    await expect
+        .poll(async () => (await latestRecipe(show)).params.spots)
+        .toBe(7);
+    await waitForIdle(page);
+    await expect(editor).not.toContainText("empty");
+    await expect(deep).toHaveText(typed);
+});
+
 test("the View tab's numbers-only labels draw drill order, not drill numbers", async ({
     show,
 }) => {
@@ -3011,6 +3046,63 @@ test("change: Edge on a Spread box stands marchers along its outline, the box st
     expect(sameSpots((await shapeOverlay(page))!.spots, before.spots)).toBe(
         true,
     );
+});
+
+test("change: every mode switch keeps the box drawn: its center exactly, each side within half a step, and no drift however often it switches (#449)", async ({
+    show,
+}) => {
+    const { page } = show;
+    const { grid: field } = await drawBox(show);
+    const half = field.pixelsPerStep / 2;
+    const bounds = async () => {
+        const o = (await shapeOverlay(page))!.outline!;
+        const xs = o.map((p) => p.x);
+        const ys = o.map((p) => p.y);
+        return {
+            left: Math.min(...xs),
+            right: Math.max(...xs),
+            top: Math.min(...ys),
+            bottom: Math.max(...ys),
+        };
+    };
+    const drawn = await bounds();
+    // Each mode's box on its first visit: every later visit is that box exactly, no drift
+    const first = new Map<string, Awaited<ReturnType<typeof bounds>>>([
+        ["files", drawn],
+    ]);
+    const modes = [
+        "outline",
+        "files",
+        "spread",
+        "outline",
+        "spread",
+        "files",
+    ] as const;
+    for (const mode of [...modes, ...modes]) {
+        await pickMode(page, mode);
+        const now = await bounds();
+        for (const side of ["left", "right", "top", "bottom"] as const)
+            expect(
+                Math.abs(now[side] - drawn[side]),
+                `${mode}: ${side}`,
+            ).toBeLessThanOrEqual(half + 0.01);
+        expect((now.left + now.right) / 2).toBeCloseTo(
+            (drawn.left + drawn.right) / 2,
+            6,
+        );
+        expect((now.top + now.bottom) / 2).toBeCloseTo(
+            (drawn.top + drawn.bottom) / 2,
+            6,
+        );
+        const seen = first.get(mode);
+        if (!seen) first.set(mode, now);
+        else
+            for (const side of ["left", "right", "top", "bottom"] as const)
+                expect(now[side], `${mode} again: ${side}`).toBeCloseTo(
+                    seen[side],
+                    6,
+                );
+    }
 });
 
 test("change: Reshuffle's caret opens the spread's seed, and typing an earlier seed brings that spread back as one undo step (#437)", async ({

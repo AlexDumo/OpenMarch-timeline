@@ -349,7 +349,8 @@ export async function moveMarchersAndOfferFollowUp({
     });
     const mark = editHistoryMark();
     toastLockedMarchers(editable.locked.length, true);
-    invalidatePlacedBoxes();
+    // The resolver's change re-reads them (`PlacedBoxesOverlay`), except where nobody moves (#455)
+    if (writesShapes) invalidatePlacedBoxes();
     if (membership && membership.leaves.length > 0)
         showLeftBoxToast(membership.leaves, (refill, save) =>
             moveMarchersAndOfferFollowUp({

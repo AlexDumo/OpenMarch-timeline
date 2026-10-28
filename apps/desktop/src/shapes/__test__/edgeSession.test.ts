@@ -150,6 +150,46 @@ it("moves a generator 1 spread to generator 2 when Edge is pressed, as Reshuffle
     });
 });
 
+it("keeps what the box remembers of Grid through an Edge toggle (#449 + #450)", () => {
+    let t = openTool(boxTool, marchers(24));
+    t = press(t, { x: 0, y: 0 }, env);
+    t = pointerMove(t, { x: 120, y: 50 }, env);
+    const grid = release(t, ctx);
+    const spread = edit(
+        grid,
+        withMode(grid.kind, grid.params, grid.spots, "spread", env),
+        ctx,
+    );
+    const on = toggled(spread, true);
+    expectSameFrame(
+        on.kind.frameOf(on.params, 24),
+        grid.kind.frameOf(grid.params, 24),
+    );
+    const back = edit(
+        on,
+        withMode(on.kind, on.params, on.spots, "files", env),
+        ctx,
+    );
+    const { files, across, deep, center } = back.params as {
+        files: number;
+        across: number;
+        deep: number;
+        center: XY;
+    };
+    const was = grid.params as typeof back.params & {
+        files: number;
+        across: number;
+        deep: number;
+        center: XY;
+    };
+    expect({ files, across, deep, center }).toEqual({
+        files: was.files,
+        across: was.across,
+        deep: was.deep,
+        center: was.center,
+    });
+});
+
 it("has no Edge outside Spread", () => {
     let t = openTool(boxTool, marchers(12));
     t = press(t, { x: 0, y: 0 }, env);

@@ -10,7 +10,8 @@ import type { PlacedBox } from "./placedBox";
 
 /** "Page 3" for the page a shape was placed at the end of, when that is before `beat` */
 export function useDrawnOnPage(box: PlacedBox | null): string | null {
-    const beat = useTimelineSelectionStore(displayedBeat);
+    // Only with a box, so scrubbing doesn't re-render the editor for nothing (#455)
+    const beat = useTimelineSelectionStore((s) => (box ? displayedBeat(s) : 0));
     const pages = useTimelineSelectionStore((s) => s.pageBoxes);
     if (!box || box.endBeat >= beat - 1e-9) return null;
     const page = pages.find((p) => Math.abs(p.end - box.endBeat) < 1e-9);

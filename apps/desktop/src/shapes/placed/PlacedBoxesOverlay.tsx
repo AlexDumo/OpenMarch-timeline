@@ -4,10 +4,7 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import tolgee from "@/global/singletons/Tolgee";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
-import {
-    displayedBeat,
-    useTimelineSelectionStore,
-} from "@/stores/TimelineSelectionStore";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { frameCorners } from "../frame/frame";
 import { shapeOutline } from "../frame/gestures";
@@ -20,6 +17,7 @@ import {
     invalidatePlacedBoxes,
     placedBoxesAt,
     usePlacedBoxStore,
+    usePlacedBoxBeat,
 } from "./placedBoxStore";
 
 /** One placed shape as the field outlines it, in field units */
@@ -121,7 +119,7 @@ export function PlacedBoxesOverlay({
     const mode = useUiSettingsStore((s) => s.uiSettings.shapes ?? "selected");
     const recipes = usePlacedBoxStore((s) => s.recipes);
     const version = useTimelineResolverStore((s) => s.version);
-    const beat = useTimelineSelectionStore(displayedBeat);
+    const beat = usePlacedBoxBeat();
     const timelines = useTimelineSelectionStore((s) => s.storedTimelines);
     const toolOpen = useShapeToolStore((s) => s.tool !== null);
     const editing = useBoxSelectionStore((s) => s.selected?.recipe.id ?? null);

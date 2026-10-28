@@ -195,12 +195,10 @@ describe("a mode switch keeps the frame the designer drew (#439)", () => {
             );
         });
 
-        it("Outline → Spread and back: the same frame", () => {
-            const outline = switched(
-                drawnIn(boxTool, n, { x: 0, y: 0 }, { x: 90, y: 40 }),
-                "outline",
-            );
-            const frame = boxTool.frameOf(outline.params as BoxParams, n);
+        it("Grid → Outline → Spread fills the box drawn, not the outline's half steps (#449)", () => {
+            const grid = drawnIn(boxTool, n, { x: 0, y: 0 }, { x: 90, y: 40 });
+            const frame = boxTool.frameOf(grid.params as BoxParams, n);
+            const outline = switched(grid, "outline");
             const spread = switched(outline, "spread");
             expectSameFrame(
                 boxTool.frameOf(spread.params as BoxParams, n),
