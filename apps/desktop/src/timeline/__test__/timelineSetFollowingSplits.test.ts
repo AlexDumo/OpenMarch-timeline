@@ -24,14 +24,7 @@ const resolverOf = async (db: DbConnection): Promise<Resolver> =>
 /** Every marcher's Set beats, by id, as the field and the timeline read them. */
 const setBeatsOf = (r: Resolver) =>
     new Map(
-        r
-            .marcherIds()
-            .map((id) => [
-                id,
-                marcherSetBeats(resolverSpans(r, id), (beat) =>
-                    r.positionAt(id, beat),
-                ),
-            ]),
+        r.marcherIds().map((id) => [id, marcherSetBeats(resolverSpans(r, id))]),
     );
 
 const page2 = async (db: DbConnection) =>

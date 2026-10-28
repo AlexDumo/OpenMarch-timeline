@@ -65,11 +65,7 @@ export function unsetReader({
             resolver
                 ? marcherIds.map((m) => [
                       m,
-                      marcherSetBeats(
-                          resolverSpans(resolver, m),
-                          (b) => resolver.positionAt(m, b),
-                          kept,
-                      ),
+                      marcherSetBeats(resolverSpans(resolver, m), kept),
                   ])
                 : [],
         );

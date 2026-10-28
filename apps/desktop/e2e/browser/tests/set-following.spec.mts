@@ -14,8 +14,9 @@ import { seedShowSql } from "../seed.mjs";
 import { isolate } from "../timeline.mjs";
 
 // Set vs Following (#300, #301): on the playhead's exact count, a marcher with
-// a coordinate of its own (a move of its own ends there, with motion) is Set
-// and drawn solid; every other marcher is Following and drawn with a dashed edge.
+// a coordinate of its own (a move of its own ends there, moved or not, #468) is
+// Set and drawn solid; every other marcher is Following and drawn with a dashed
+// edge.
 //
 // Pages flag at beats 9, 17 and 25, four beats a measure. Over page 1 (1–9)
 // everyone moves. Over page 2 (9–17) T1 moves, T2 has a stay move (it ends
@@ -103,10 +104,11 @@ test("Following marchers are the ones with no coordinate on the count", async ({
     await step(page, "Shift+E");
     await expect.poll(() => following(page)).toEqual(["T1", "T2", "T3"]);
 
-    // Page 2's flag: T1 moved here; T2 stayed where it was and T3 holds
+    // Page 2's flag: T1 moved here; T2's stay move ends here, so it's Set though
+    // it never moved; T3 holds
     await goTo(page, "m5");
     await expectCanvasMatchesShow(show);
-    await expect.poll(() => following(page)).toEqual(["T2", "T3"]);
+    await expect.poll(() => following(page)).toEqual(["T3"]);
 });
 
 test("a page added mid-move shows everyone Following", async ({ show }) => {
@@ -128,11 +130,11 @@ test("a Following marcher can be dragged, and becomes Set on that count", async 
     await open(page);
     await goTo(page, "m5");
     await expectCanvasMatchesShow(show);
-    await expect.poll(() => following(page)).toEqual(["T2", "T3"]);
+    await expect.poll(() => following(page)).toEqual(["T3"]);
 
     await dragMarcher(page, "T3", { x: 0, y: 40 });
     await expectCanvasMatchesShow(show);
-    await expect.poll(() => following(page)).toEqual(["T2"]);
+    await expect.poll(() => following(page)).toEqual([]);
 });
 
 test("selecting a Following marcher keeps its look", async ({ show }) => {
@@ -141,11 +143,11 @@ test("selecting a Following marcher keeps its look", async ({ show }) => {
     await goTo(page, "m5");
     await expectCanvasMatchesShow(show);
 
-    await clickMarcher(page, "T2");
+    await clickMarcher(page, "T3");
     await expect
         .poll(async () => (await readField(page)).selection)
-        .toEqual([2]);
-    await expect.poll(() => following(page)).toEqual(["T2", "T3"]);
+        .toEqual([3]);
+    await expect.poll(() => following(page)).toEqual(["T3"]);
 });
 
 test("isolation's dim takes over from the Following look", async ({ show }) => {
@@ -198,9 +200,9 @@ test("selecting and dragging right after Stop don't wait for the dashed look", a
 }) => {
     const { page } = show;
     await open(page);
-    // Page 2's flag: T2 and T3 follow
+    // Page 2's flag: T3 follows
     await goTo(page, "m5");
-    await expect.poll(() => following(page)).toEqual(["T2", "T3"]);
+    await expect.poll(() => following(page)).toEqual(["T3"]);
     const flag = (await drawnMarchers(page)).find(
         (m) => m.drillNumber === "T1",
     )!;
@@ -218,7 +220,7 @@ test("selecting and dragging right after Stop don't wait for the dashed look", a
     await page.keyboard.press("Space");
     await dragMarcher(page, "T3", { x: 0, y: 40 });
     await expectCanvasMatchesShow(show);
-    await expect.poll(() => following(page)).toEqual(["T2"]);
+    await expect.poll(() => following(page)).toEqual([]);
     await clickMarcher(page, "T2");
     await expect
         .poll(async () => (await readField(page)).selection)
