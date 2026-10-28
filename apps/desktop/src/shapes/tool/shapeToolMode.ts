@@ -271,6 +271,37 @@ function glidingSnapshot(shown: Shown | null) {
     return glideCache.drawing;
 }
 
+/** The open shape's turn as last drawn: a turn's frame doesn't glide */
+let glideRotation: number | null = null;
+
+/** The frame's points as glide targets, keyed below every marcher's id (they're positive) */
+const FRAME = {
+    outline: -1,
+    handles: -100_000,
+    knob: -200_000,
+    stem: -200_001,
+    center: -200_002,
+} as const;
+
+function framePoints(drawing: NonNullable<ReturnType<typeof drawingOf>>) {
+    return [
+        ...(drawing.outline ?? []).map((to, k) => ({
+            id: FRAME.outline - k,
+            to,
+        })),
+        ...drawing.handles.map((to, k) => ({ id: FRAME.handles - k, to })),
+        ...(drawing.knob
+            ? [
+                  { id: FRAME.knob, to: drawing.knob.at },
+                  { id: FRAME.stem, to: drawing.knob.stem },
+              ]
+            : []),
+        ...(drawing.centerDot
+            ? [{ id: FRAME.center, to: drawing.centerDot }]
+            : []),
+    ];
+}
+
 /** People who ask their system for less motion get no glide, as the timeline's follow does */
 const reducedMotion = () =>
     window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
@@ -288,10 +319,15 @@ function glidingDrawing(shown: Shown | null) {
         return drawing;
     const targets = targetsNow(tool, field);
     const now = performance.now();
+    // The frame glides with its marchers, so a change of size (Even out, owner on #459) slides
+    // too; not across a turn, whose corners would cut across instead of turning
+    const rotation = tool.kind.frameOf(tool.params, tool.spots).rotation;
+    const turned = glideRotation !== null && glideRotation !== rotation;
+    glideRotation = rotation;
     glide.update(
         tool.params,
         tool.gesture !== null && tool.gesture !== undefined,
-        targets,
+        turned ? targets : [...targets, ...framePoints(drawing)],
         now,
     );
     const at = glide.positions(now);
@@ -302,9 +338,25 @@ function glidingDrawing(shown: Shown | null) {
     }
     const shownAt = (t: { id: number; to: XY }) => at.get(t.id) ?? t.to;
     const labels = drawing.labels ?? [];
+    const framed = (id: number, to: XY) => at.get(id) ?? to;
     return {
         ...drawing,
         gliding: true,
+        outline:
+            drawing.outline?.map((p, k) => framed(FRAME.outline - k, p)) ??
+            null,
+        handles: drawing.handles.map((p, k) => framed(FRAME.handles - k, p)),
+        ...(drawing.knob
+            ? {
+                  knob: {
+                      at: framed(FRAME.knob, drawing.knob.at),
+                      stem: framed(FRAME.stem, drawing.knob.stem),
+                  },
+              }
+            : {}),
+        ...(drawing.centerDot
+            ? { centerDot: framed(FRAME.center, drawing.centerDot) }
+            : {}),
         spots:
             drawing.spots.length === targets.length
                 ? targets.map(shownAt)

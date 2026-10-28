@@ -24,7 +24,9 @@ questions:
   edge still lands on a yard line or hash when you drag it close.
 - **Even out** (next to Recalculate, and in the command palette) spreads the
   marchers as evenly as the box allows, keeping the box's size. It's the only
-  way marchers move from one side to another. The spacings it
+  way marchers move from one side to another. Like Recalculate, it's just its
+  "=" icon while there's nothing to even, and its name opens out when there is.
+  Pressing it glides the marchers to their new spots. The spacings it
   picks may not be half steps; they show as "≈" until you set them. It's greyed
   out when there's nothing more to even.
 - **A spacing that isn't on a half step shows "≈"**: click the small "≈" before

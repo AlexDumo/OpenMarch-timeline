@@ -3053,6 +3053,71 @@ test("change: 2 steps across then 3 deep stay exactly as typed; dragging the fro
     await expect(deep).toHaveText(dragged);
 });
 
+test("change: Even out has an icon, its word only while it can act; a press glides the marchers to their spots as one undo step, and lands them where reduced motion puts them at once (owner on #459)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    await pickMode(page, "outline");
+    const bar = page.getByTestId("shape-tool-readout");
+    const across = bar.getByTestId("shape-editor-across");
+    const evenOut = bar.getByTestId("shape-editor-even-out");
+    // Across set to ½ step: uneven, so Even out can act, its icon and word showing
+    await across.click();
+    await page.getByTestId("shape-editor-across-input").fill("0.5");
+    await page.keyboard.press("Enter");
+    await expect(across).toHaveText("½");
+    await expect(evenOut).toBeEnabled();
+    await expect(evenOut.locator("svg")).toHaveCount(1);
+    await expect(evenOut).toContainText("Even out");
+    const before = (await shapeOverlay(page))!.spots;
+
+    // Pressed: the spots glide (seen part way), then settle; nothing more to even, icon only
+    const sawGlide = await page.evaluate(async () => {
+        (
+            document.querySelector(
+                '[data-testid="shape-editor-even-out"]',
+            ) as HTMLElement
+        ).click();
+        const end = performance.now() + 600;
+        let seen = false;
+        while (performance.now() < end) {
+            await new Promise(requestAnimationFrame);
+            if (window.fieldTest!.shapeOverlay!()?.gliding) seen = true;
+        }
+        return seen;
+    });
+    expect(sawGlide).toBe(true);
+    const glided = (await shapeOverlay(page))!.spots;
+    expect(glided).not.toEqual(before);
+    await expect(evenOut).toBeDisabled();
+    await expect(evenOut.locator("svg")).toHaveCount(1);
+    await expect(evenOut).not.toContainText("Even out");
+
+    // One undo step takes it back exactly
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(across).toHaveText("½");
+    expect((await shapeOverlay(page))!.spots).toEqual(before);
+
+    // With reduced motion: no glide at all, and the same spots
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const glidedReduced = await page.evaluate(async () => {
+        (
+            document.querySelector(
+                '[data-testid="shape-editor-even-out"]',
+            ) as HTMLElement
+        ).click();
+        let seen = false;
+        for (let k = 0; k < 20; k++) {
+            await new Promise(requestAnimationFrame);
+            if (window.fieldTest!.shapeOverlay!()?.gliding) seen = true;
+        }
+        return seen;
+    });
+    expect(glidedReduced).toBe(false);
+    expect((await shapeOverlay(page))!.spots).toEqual(glided);
+});
+
 test("change: Outline on 7 spreads the back by default, leaves its middle out on request, a click on a spot between corners moves the gap, and the placed box keeps it", async ({
     show,
 }) => {

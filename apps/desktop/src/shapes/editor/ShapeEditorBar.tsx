@@ -22,7 +22,11 @@ import { getActionShortcutLabel } from "@/shortcuts/labels";
 import type { ActionId } from "@/shortcuts/definitions";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { RichTips, Tip } from "./Tip";
-import { RecalculateFace, useRecalculateLook } from "./RecalculateButton";
+import {
+    ActionFace,
+    RecalculateFace,
+    useActionLook,
+} from "./RecalculateButton";
 import {
     FlipHorizontalIcon,
     FlipVerticalIcon,
@@ -30,6 +34,7 @@ import {
     MinusIcon,
     PlusIcon,
     ArrowClockwiseIcon,
+    EqualsIcon,
     PathIcon,
 } from "@phosphor-icons/react";
 import {
@@ -615,7 +620,8 @@ const TurnControls = memo(function TurnControls({
     canCloseUp: boolean;
 }) {
     const base = useRef<unknown>(null);
-    const recalculateLook = useRecalculateLook(canRecalculate);
+    const recalculateLook = useActionLook(canRecalculate);
+    const evenLook = useActionLook(evenState === "uneven");
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     const keyOf = (id: ActionId) => getActionShortcutLabel(id, { overrides });
     const flip = (axis: "across" | "deep") =>
@@ -738,11 +744,19 @@ const TurnControls = memo(function TurnControls({
                     }
                     shortcut={keyOf("shapeEvenOut")}
                     disabled={evenState !== "uneven"}
-                    className="text-sub px-4"
+                    className="relative"
                     onClick={() => evenOut(target)}
                     testId="shape-editor-even-out"
                 >
-                    {tolgee.t("shapes.edit.evenOut.label", "Even out")}
+                    {/* As Recalculate: the word only when it can act (owner on #459) */}
+                    <ActionFace
+                        look={evenLook}
+                        icon={<EqualsIcon size={14} />}
+                        label={tolgee.t(
+                            "shapes.edit.evenOut.label",
+                            "Even out",
+                        )}
+                    />
                 </IconButton>
             )}
             <CloseUpButton
