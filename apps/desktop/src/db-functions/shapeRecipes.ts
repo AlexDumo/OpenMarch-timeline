@@ -1,13 +1,4 @@
-import {
-    and,
-    eq,
-    gte,
-    inArray,
-    isNull,
-    lt,
-    notInArray,
-    sql,
-} from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import type { DbConnection, DbTransaction } from "./types";
 
@@ -18,8 +9,9 @@ import type { DbConnection, DbTransaction } from "./types";
  *
  * A recipe belongs to a move (`timelineId`), or to the homes (`null`), and lists only marchers
  * whose positions are in that move. A marcher is in at most one recipe at a beat: saving a recipe
- * takes its marchers out of the other recipes of every move over the beat it's placed at (its
- * move's end: a move split off a page's shares it, UI-25) and deletes any recipe left with no one.
+ * takes its marchers out of the other recipes of every move ending at the beat it's placed at
+ * (its move's end: a move split off a page's shares it, UI-25), not of a move that only passes
+ * over it (an Expert move on another layer), and deletes any recipe left with no one.
  * Writes run inside the edit that placed the positions, so the shape and its positions are one
  * undo step.
  */
@@ -58,8 +50,8 @@ const sameMove = (timelineId: number | null) =>
 /**
  * Saves a recipe for `members` in move `timelineId` (`null` for homes), replacing `replaces` when
  * given (an edited recipe keeps its id). A member whose positions aren't in the move is left out
- * (a selection over several moves); the rest leave the other recipes of every move over the beat
- * it's placed at, and recipes left empty are deleted.
+ * (a selection over several moves); the rest leave the other recipes of every move ending at the
+ * beat it's placed at, and recipes left empty are deleted.
  *
  * @returns the recipe's id
  */
@@ -113,7 +105,7 @@ export async function saveShapeRecipeInTransaction({
             .from(recipes)
             .where(
                 and(
-                    await movesOverPlacedBeat(tx, timelineId),
+                    await movesEndingAtPlacedBeat(tx, timelineId),
                     notInArray(recipes.id, [id]),
                 ),
             )
@@ -171,9 +163,9 @@ async function moveMembers(
 
 /**
  * Which recipes stand at the beat a recipe of move `timelineId` is placed at (its end; homes for
- * `null`): those of every move over that beat
+ * `null`): those of every move ending at that beat
  */
-async function movesOverPlacedBeat(
+async function movesEndingAtPlacedBeat(
     tx: DbTransaction,
     timelineId: number | null,
 ) {
@@ -187,10 +179,7 @@ async function movesOverPlacedBeat(
     if (!move) return sameMove(timelineId);
     return inArray(
         recipes.timeline_id,
-        tx
-            .select({ id: t.id })
-            .from(t)
-            .where(and(lt(t.start_beat, move.end), gte(t.end_beat, move.end))),
+        tx.select({ id: t.id }).from(t).where(eq(t.end_beat, move.end)),
     );
 }
 
@@ -355,6 +344,14 @@ export async function readShapeRecipes({
         db,
         hits.map((h) => h.id),
     );
+}
+
+/** Recipe `id` as stored, or null when there's none (a save that kept no one deletes it) */
+export async function readShapeRecipe(
+    db: DbConnection | DbTransaction,
+    id: number,
+): Promise<StoredShapeRecipe | null> {
+    return (await recipesById(db, [id]))[0] ?? null;
 }
 
 /** Every recipe that any of `marcherIds` is in, in any move */

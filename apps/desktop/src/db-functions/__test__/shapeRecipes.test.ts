@@ -21,6 +21,7 @@ import {
     type TimelineEditTarget,
 } from "../timelineMoves";
 import { mergeMoves, splitMarchersIntoNewMove } from "../timelineSplitMoves";
+import { addMarchersToTimeline } from "../timelineMembership";
 import {
     readAllShapeRecipes,
     readShapeRecipes,
@@ -524,6 +525,36 @@ describeDbTests("Shape recipes", (it) => {
             expect(await membersOf(db, arc)).toEqual([b]);
             await performUndo(db);
             expect((await membersOf(db, arc))?.sort()).toEqual([a, b].sort());
+        });
+
+        it("a shape saved at a page's flag leaves alone the shape of a move that only passes over it", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a } = await show(db);
+            const arc = await place(db, [a], ARC);
+            const pageMove = (await recipeTimeline(db, arc))!;
+            // An Expert move over page 2's flag, on a layer above a's page move
+            const { timelineId: over } = await addMarchersToTimeline({
+                db,
+                range: { start: PAGE2.end - 4, end: PAGE2.end + 4 },
+                marcherIds: [a],
+            });
+            await timelineResolverSettled();
+            const theirs = await staleRecipe(db, over, [a]);
+            // The page's shape edited (a placement there is refused: a's position at the flag is
+            // the Expert move's now)
+            await transactionWithHistory(db, "editShape", (tx) =>
+                saveShapeRecipeInTransaction({
+                    tx,
+                    timelineId: pageMove,
+                    recipe: LINE,
+                    members: [{ marcherId: a, slot: 0, x: 100, y: 50 }],
+                    replaces: arc,
+                }),
+            );
+            expect(await membersOf(db, arc)).toEqual([a]);
+            expect(await membersOf(db, theirs)).toEqual([a]);
         });
 
         it("a shape over marchers in different moves lists only those in its own move", async ({
