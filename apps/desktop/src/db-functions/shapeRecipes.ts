@@ -207,6 +207,7 @@ export async function moveShapeRecipesInTransaction({
     from: number;
     to: number;
 }): Promise<void> {
+    if (!(await hasShapeRecipes(tx))) return;
     const moving = await tx
         .select({ id: recipes.id })
         .from(recipes)
@@ -244,6 +245,64 @@ export async function moveShapeRecipesInTransaction({
         .where(inArray(recipes.id, movingIds))
         .run();
     await deleteEmptyRecipes(tx, to);
+}
+
+/**
+ * Marchers `marcherIds` split off move `from` into move `to` (UI-25): a recipe of `from` they make
+ * up the whole of goes with them; from any other they're dropped, since their positions are no
+ * longer in its move. Recipes left empty are deleted.
+ */
+export async function splitShapeRecipesInTransaction({
+    tx,
+    from,
+    to,
+    marcherIds,
+}: {
+    tx: DbTransaction;
+    from: number;
+    to: number;
+    marcherIds: readonly number[];
+}): Promise<void> {
+    if (marcherIds.length === 0 || !(await hasShapeRecipes(tx))) return;
+    const split = new Set(marcherIds);
+    const theirs = await recipesById(
+        tx,
+        (
+            await tx
+                .select({ id: recipes.id })
+                .from(recipes)
+                .where(eq(recipes.timeline_id, from))
+                .all()
+        ).map((r) => r.id),
+    );
+    const whole = theirs.filter(
+        (r) =>
+            r.members.length > 0 &&
+            r.members.every((m) => split.has(m.marcherId)),
+    );
+    if (whole.length > 0)
+        await tx
+            .update(recipes)
+            .set({ timeline_id: to })
+            .where(
+                inArray(
+                    recipes.id,
+                    whole.map((r) => r.id),
+                ),
+            )
+            .run();
+    const rest = theirs.filter((r) => !whole.includes(r)).map((r) => r.id);
+    if (rest.length > 0)
+        await tx
+            .delete(members)
+            .where(
+                and(
+                    inArray(members.recipe_id, rest),
+                    inArray(members.marcher_id, [...split]),
+                ),
+            )
+            .run();
+    await deleteEmptyRecipes(tx, from);
 }
 
 /** Whether the show stores shape recipes at all (a database from before them doesn't) */
