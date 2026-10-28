@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import clsx from "clsx";
 import { SquaresFourIcon } from "@phosphor-icons/react";
 import { getButtonClassName } from "@openmarch/ui";
@@ -19,7 +20,9 @@ export function ShapeToolSection() {
     if (selected.length === 0 || toolOpen || placed) return null;
     return (
         <div className="flex flex-col gap-8" data-testid="shape-tool-section">
-            <h5 className="text-h5">Shapes</h5>
+            <h5 className="text-h5">
+                {tolgee.t("shapes.tool.section.title", "Shapes")}
+            </h5>
             <div className="flex flex-wrap gap-8">
                 <SelectWholeShape />
                 <ActionButton
@@ -34,7 +37,7 @@ export function ShapeToolSection() {
                     data-testid="shape-tool-box"
                 >
                     <SquaresFourIcon size={16} weight="bold" />
-                    Box
+                    {tolgee.t("shapes.tool.section.box", "Box")}
                 </ActionButton>
             </div>
         </div>

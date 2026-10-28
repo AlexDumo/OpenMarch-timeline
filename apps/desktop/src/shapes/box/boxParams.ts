@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import {
     onField,
     scrubSize,
@@ -19,7 +20,9 @@ import { boxBlock, isSpread, shortBy, type BoxParams } from "./boxGeometry";
 export const BOX_PARAMS: readonly ToolParam<BoxParams>[] = [
     {
         key: "size",
-        label: "Size, across × deep",
+        get label() {
+            return tolgee.t("shapes.box.params.size", "Size, across × deep");
+        },
         unit: "count",
         primary: true,
         drag: "both",
@@ -50,8 +53,18 @@ export const BOX_PARAMS: readonly ToolParam<BoxParams>[] = [
                 env,
             ),
         stepper: {
-            less: "One fewer across",
-            more: "One more across",
+            get less() {
+                return tolgee.t(
+                    "shapes.box.params.fewerAcross",
+                    "One fewer across",
+                );
+            },
+            get more() {
+                return tolgee.t(
+                    "shapes.box.params.moreAcross",
+                    "One more across",
+                );
+            },
             by: stepSize,
         },
     },
@@ -72,7 +85,11 @@ export function sizeNote(p: BoxParams, n: number): string | null {
     if (block.fellBack) return null;
     if (block.layout.family !== "shortBack") return null;
     const short = shortBy(p, n);
-    return short > 0 ? `${short} short` : null;
+    return short > 0
+        ? tolgee.t("shapes.box.params.short", "{count} short", {
+              count: short,
+          })
+        : null;
 }
 
 /** A spacing on the field: side to side (across) or front to back (deep) */
@@ -95,9 +112,17 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
         withSpacing(p, ownKey(p, n), steps, n, { ...env, snap: false }, true);
     return {
         key: way,
-        label: across
-            ? "Side-to-side spacing, in steps"
-            : "Front-to-back spacing, in steps",
+        get label() {
+            return across
+                ? tolgee.t(
+                      "shapes.box.params.spacingAcross",
+                      "Side-to-side spacing, in steps",
+                  )
+                : tolgee.t(
+                      "shapes.box.params.spacingDeep",
+                      "Front-to-back spacing, in steps",
+                  );
+        },
         unit: "steps",
         primary: true,
         drag: across ? "x" : "y",

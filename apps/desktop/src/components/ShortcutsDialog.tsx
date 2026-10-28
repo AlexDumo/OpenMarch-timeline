@@ -1,4 +1,5 @@
 import { useTolgee } from "@tolgee/react";
+import tolgee from "@/global/singletons/Tolgee";
 import { Dialog, DialogContent, DialogTitle } from "@openmarch/ui";
 import { Keycaps } from "@/components/timeline/ShortcutTooltip";
 import { useShortcutsDialogStore } from "@/stores/ShortcutsDialogStore";
@@ -34,6 +35,8 @@ const GROUPS: readonly (readonly [category: string, title: string])[] = [
 interface Row {
     readonly label: string;
     readonly keys: string;
+    /** i18n key for `label`, which is its English default */
+    readonly labelKey?: string;
 }
 
 /**
@@ -54,9 +57,14 @@ const EXTRA_ROWS: Readonly<Record<string, readonly Row[]>> = {
     shape: [
         {
             label: "Fine control, still catching yard lines and hashes",
+            labelKey: "shortcutsDialog.shape.fineControl",
             keys: "Alt + Drag",
         },
-        { label: "Drag a shape without snapping", keys: "Mod + Drag" },
+        {
+            label: "Drag a shape without snapping",
+            labelKey: "shortcutsDialog.shape.noSnapping",
+            keys: "Mod + Drag",
+        },
     ],
 };
 
@@ -103,7 +111,9 @@ export function shortcutGroups(
         const rows = [
             ...(byCategory.get(category) ?? []),
             ...(EXTRA_ROWS[category] ?? []).map((row) => ({
-                ...row,
+                label: row.labelKey
+                    ? tolgee.t(row.labelKey, row.label)
+                    : row.label,
                 keys: extraKeys(row.keys, isMac),
             })),
         ];

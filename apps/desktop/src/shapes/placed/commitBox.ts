@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import type { QueryClient } from "@tanstack/react-query";
 import type { XY } from "../types";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
@@ -40,6 +41,6 @@ export async function commitBox(
             replaces: box.recipe,
         },
         queryClient,
-        "Error editing the shape",
+        tolgee.t("shapes.placed.editError", "Error editing the shape"),
     );
 }

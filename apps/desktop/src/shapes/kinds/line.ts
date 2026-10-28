@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { flatness, principalExtremes, typicalSpacing } from "../geometry/fit";
 import { makePath, type Path } from "../geometry/path";
 import {
@@ -54,13 +55,17 @@ const linePath = (p: LineParams): Path =>
 export const lineKind: ShapeKind<LineParams> = {
     id: "line",
     version: 1,
-    label: "Line",
+    get label() {
+        return tolgee.t("shapes.kinds.line.label", "Line");
+    },
     family: "path",
     groups: [SPACING_GROUP],
     measures: [
         {
             key: "angle",
-            label: "Angle",
+            get label() {
+                return tolgee.t("shapes.kinds.measure.angle", "Angle");
+            },
             unit: "angle",
             // Counterclockwise as seen on screen, 0 along the sidelines
             get: (p) => Math.atan2(-(p.b.y - p.a.y), p.b.x - p.a.x),
@@ -144,7 +149,10 @@ export const lineKind: ShapeKind<LineParams> = {
             return [
                 {
                     level: "error",
-                    message: "The line's ends are on the same spot",
+                    message: tolgee.t(
+                        "shapes.kinds.line.validate.sameSpot",
+                        "The line's ends are on the same spot",
+                    ),
                 },
             ];
         }

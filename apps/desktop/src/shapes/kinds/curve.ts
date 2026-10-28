@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 // cspell:words Catmull Yuksel Schaefer Keyser
 import { principalExtremes } from "../geometry/fit";
 import { makePath, type Path, type Segment } from "../geometry/path";
@@ -101,7 +102,9 @@ const POINT_KEY = /^p(\d+)$/;
 export const curveKind: ShapeKind<CurveParams> = {
     id: "curve",
     version: 1,
-    label: "Curve",
+    get label() {
+        return tolgee.t("shapes.kinds.curve.label", "Curve");
+    },
     family: "path",
     groups: [SPACING_GROUP],
 
@@ -172,7 +175,10 @@ export const curveKind: ShapeKind<CurveParams> = {
                 at,
                 start: i === 0,
                 end: i === p.points.length - 1,
-                hint: "Point (double-click it to remove)",
+                hint: tolgee.t(
+                    "shapes.kinds.curve.hint.point",
+                    "Point (double-click it to remove)",
+                ),
             })),
             { key: "move", role: "move", at: middleOf(curvePath(p)) },
         ];
@@ -213,7 +219,10 @@ export const curveKind: ShapeKind<CurveParams> = {
             return [
                 {
                     level: "error",
-                    message: "The curve needs at least 2 different points",
+                    message: tolgee.t(
+                        "shapes.kinds.curve.validate.points",
+                        "The curve needs at least 2 different points",
+                    ),
                 },
             ];
         }

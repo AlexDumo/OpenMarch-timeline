@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { radiusForChords } from "../geometry/chords";
 import { fitCircle } from "../geometry/fit";
 import { makePath, type Path } from "../geometry/path";
@@ -63,13 +64,17 @@ const rimPoint = (p: CircleParams): XY => polar(p.center, p.r, p.start);
 export const circleKind: ShapeKind<CircleParams> = {
     id: "circle",
     version: 1,
-    label: "Circle",
+    get label() {
+        return tolgee.t("shapes.kinds.circle.label", "Circle");
+    },
     family: "path",
     groups: [SPACING_GROUP],
     measures: [
         {
             key: "radius",
-            label: "Radius",
+            get label() {
+                return tolgee.t("shapes.kinds.measure.radius", "Radius");
+            },
             unit: "length",
             min: 0.25,
             size: true,
@@ -132,7 +137,10 @@ export const circleKind: ShapeKind<CircleParams> = {
             role: "point",
             at: rimPoint(p),
             start: true,
-            hint: "Radius, and where marcher 1 starts",
+            hint: tolgee.t(
+                "shapes.kinds.circle.hint.radius",
+                "Radius, and where marcher 1 starts",
+            ),
         },
     ],
 
@@ -165,14 +173,28 @@ export const circleKind: ShapeKind<CircleParams> = {
     readouts(p, n, ctx) {
         const readouts = pathReadouts(circlePath(p), p.spacing, n, ctx);
         if (p.spacing.mode === "fit" && readouts[0]) {
-            readouts[0] = { ...readouts[0], label: "Circumference" };
+            readouts[0] = {
+                ...readouts[0],
+                label: tolgee.t(
+                    "shapes.kinds.circle.readout.circumference",
+                    "Circumference",
+                ),
+            };
         }
         return readouts;
     },
 
     validate(p, slots, ctx) {
         if (!(p.r > 0)) {
-            return [{ level: "error", message: "The circle has no radius" }];
+            return [
+                {
+                    level: "error",
+                    message: tolgee.t(
+                        "shapes.kinds.circle.validate.noRadius",
+                        "The circle has no radius",
+                    ),
+                },
+            ];
         }
         const issues: ShapeIssue[] = [];
         if (p.spacing.mode === "interval") {
@@ -185,8 +207,10 @@ export const circleKind: ShapeKind<CircleParams> = {
             if (run >= TAU * p.r - 1e-9) {
                 issues.push({
                     level: "warning",
-                    message:
+                    message: tolgee.t(
+                        "shapes.kinds.circle.validate.overlap",
                         "The intervals go all the way around the circle, so marchers overlap",
+                    ),
                 });
             } else if (p.spacing.size !== "follow" && slots.length > 1) {
                 // Laid on a circle bigger than the run: say why part of it is empty
@@ -194,7 +218,15 @@ export const circleKind: ShapeKind<CircleParams> = {
                     Math.round((v / ctx.stepPx) * 100) / 100;
                 issues.push({
                     level: "info",
-                    message: `${slots.length} marchers at this interval fill ${steps(run)} of the circle's ${steps(TAU * p.r)} steps. Open the size lock to make the circle close.`,
+                    message: tolgee.t(
+                        "shapes.kinds.circle.validate.partFilled",
+                        "{count, plural, one {# marcher at this interval fills} other {# marchers at this interval fill}} {run} of the circle's {total} steps. Open the size lock to make the circle close.",
+                        {
+                            count: slots.length,
+                            run: steps(run),
+                            total: steps(TAU * p.r),
+                        },
+                    ),
                 });
             }
         }

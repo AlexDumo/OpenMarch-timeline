@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { formatSteps } from "../editor/format";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import { pivotPoint, samePivot, type Pivot } from "./frame";
@@ -137,7 +138,11 @@ export function scaleReadout(
                 .filter(Boolean)
                 .join(" "),
         );
-    return shown.length > 0 ? `${shown.join(" ")} apart` : "";
+    return shown.length > 0
+        ? tolgee.t("shapes.frame.scale.apart", "{spacings} apart", {
+              spacings: shown.join(" "),
+          })
+        : "";
 }
 
 /** The shape's length and depth through its frame: "14 × 6 steps", or "14 steps" for a line */
@@ -151,7 +156,11 @@ function sizeText(
     const sizes = [frame.halfWidth, frame.halfDepth]
         .filter((h) => h > 1e-9)
         .map((h) => formatSteps((2 * h) / env.stepPx));
-    return sizes.length > 0 ? `${sizes.join(" × ")} steps` : "";
+    return sizes.length > 0
+        ? tolgee.t("shapes.frame.scale.size", "{sizes} steps", {
+              sizes: sizes.join(" × "),
+          })
+        : "";
 }
 
 /**

@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { Tip } from "./Tip";
+import tolgee from "@/global/singletons/Tolgee";
 import { useRef, useState, type PointerEvent } from "react";
 import {
     lockedAxis,
@@ -155,7 +156,13 @@ export function ScrubNumber({
 
     return (
         <span ref={wrapper} data-scrub-number>
-            <Tip label={`${label}: click to type, drag to change`}>
+            <Tip
+                label={tolgee.t(
+                    "shapes.edit.scrubTip",
+                    "{label}: click to type, drag to change",
+                    { label },
+                )}
+            >
                 <button
                     type="button"
                     aria-label={label}

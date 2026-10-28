@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import type { Walk } from "./geometry/segments";
 import type { ShapeContext, ShapeIssue, Slot } from "./types";
 
@@ -6,6 +7,28 @@ import type { ShapeContext, ShapeIssue, Slot } from "./types";
 /** Marchers closer than this many steps get a warning */
 export const MIN_SPACING_STEPS = 1;
 const SAME_SPOT_STEPS = 0.01;
+
+const sameSpotMessage = (count: number) =>
+    tolgee.t(
+        "shapes.validate.sameSpot",
+        "{count, plural, one {# marcher would stand} other {# marchers would stand}} on the same spot",
+        { count },
+    );
+
+const tooCloseMessage = (count: number) =>
+    tolgee.t(
+        "shapes.validate.tooClose",
+        "{count, plural, one {# marcher is} other {# marchers are}} closer than {min, plural, one {# step} other {# steps}}",
+        { count, min: MIN_SPACING_STEPS },
+    );
+
+/** "3 marchers would stand off the field", in the current language */
+const offFieldMessage = (count: number) =>
+    tolgee.t(
+        "shapes.validate.offField",
+        "{count, plural, one {# marcher would stand} other {# marchers would stand}} off the field",
+        { count },
+    );
 
 export function validateSlots(
     slots: readonly Slot[],
@@ -24,7 +47,10 @@ export function validateSlots(
         if (!Number.isFinite(slot.x) || !Number.isFinite(slot.y)) {
             issues.push({
                 level: "error",
-                message: "The shape has a spot with no position",
+                message: tolgee.t(
+                    "shapes.validate.noPosition",
+                    "The shape has a spot with no position",
+                ),
                 slots: [i],
             });
             return;
@@ -57,14 +83,14 @@ export function validateSlots(
     if (sameSpot.size > 0) {
         issues.push({
             level: "error",
-            message: `${sameSpot.size} marchers would stand on the same spot`,
+            message: sameSpotMessage(sameSpot.size),
             slots: [...sameSpot],
         });
     }
     if (tooClose.size > 0) {
         issues.push({
             level: "warning",
-            message: `${tooClose.size} marchers are closer than ${MIN_SPACING_STEPS} step`,
+            message: tooCloseMessage(tooClose.size),
             slots: [...tooClose],
         });
     }
@@ -82,10 +108,7 @@ export function validateSlots(
         if (off.length > 0)
             issues.push({
                 level: "warning",
-                message:
-                    off.length === 1
-                        ? "1 marcher would stand off the field"
-                        : `${off.length} marchers would stand off the field`,
+                message: offFieldMessage(off.length),
                 slots: off,
             });
     }
@@ -114,10 +137,15 @@ export function validateStepSizes(
     return [
         {
             level: "warning",
-            message:
-                over.length === 1
-                    ? `1 marcher needs steps longer than the ${steps.limit} limit (${steps.describe(longest)}, drawn in orange). Set the limit in Field › Customize.`
-                    : `${over.length} marchers need steps longer than the ${steps.limit} limit (longest ${steps.describe(longest)}, drawn in orange). Set the limit in Field › Customize.`,
+            message: tolgee.t(
+                "shapes.validate.stepsTooLong",
+                "{count, plural, one {# marcher needs steps longer than the {limit} limit ({longest}, drawn in orange).} other {# marchers need steps longer than the {limit} limit (longest {longest}, drawn in orange).}} Set the limit in Field › Customize.",
+                {
+                    count: over.length,
+                    limit: steps.limit,
+                    longest: steps.describe(longest),
+                },
+            ),
             slots: over,
             mark: "steps",
         },
