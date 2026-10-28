@@ -2,12 +2,12 @@ import clsx from "clsx";
 import { BoundingBoxIcon } from "@phosphor-icons/react";
 import { getButtonClassName } from "@openmarch/ui";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
-import {
-    displayedBeat,
-    useTimelineSelectionStore,
-} from "@/stores/TimelineSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
-import { placedBoxesAt, usePlacedBoxStore } from "./placedBoxStore";
+import {
+    placedBoxesAt,
+    usePlacedBoxStore,
+    usePlacedBoxBeat,
+} from "./placedBoxStore";
 import { selectOnField } from "./boxSelection";
 import { setInsideBox } from "./boxSelectionStore";
 
@@ -21,7 +21,7 @@ export function SelectWholeShape() {
     // Re-read when the boxes or the moment change
     usePlacedBoxStore((s) => s.recipes);
     useTimelineResolverStore((s) => s.version);
-    const beat = useTimelineSelectionStore(displayedBeat);
+    const beat = usePlacedBoxBeat();
     const ids = new Set(selected.map((m) => m.id));
     const partOf = placedBoxesAt(beat).find((b) =>
         b.recipe.members.some((m) => ids.has(m.marcherId)),

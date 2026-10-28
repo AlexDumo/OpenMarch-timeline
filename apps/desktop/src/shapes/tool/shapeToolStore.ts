@@ -85,8 +85,12 @@ export function isShapeAway(): boolean {
 /** {@link isShapeAway} for components: true while the open shape's moment is somewhere else */
 export function useShapeAway(): boolean {
     const moment = useShapeToolStore((s) => (s.tool ? s.moment : null));
-    const key = useTimelineSelectionStore((s) => momentOf(s).key);
-    return moment !== null && key !== moment.key;
+    // The moment only with a shape open: the field uses this, and scrubbing would re-render it
+    // for nothing (#455)
+    const away = useTimelineSelectionStore(
+        (s) => moment !== null && momentOf(s).key !== moment.key,
+    );
+    return away;
 }
 
 /**

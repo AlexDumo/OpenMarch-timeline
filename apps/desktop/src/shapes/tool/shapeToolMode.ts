@@ -90,6 +90,42 @@ const shownNow = (): Shown | null => {
     return shown;
 };
 
+/**
+ * `fn` of the tool as it is and the field, worked out once per tool state, field and settings:
+ * hovering asks on every pointer move, and a glide on every frame (#455)
+ */
+function perToolState<T>(fn: (tool: ToolState, field: ShapeField) => T) {
+    let last: {
+        tool: ToolState;
+        fieldProperties: unknown;
+        uiSettings: unknown;
+        value: T;
+    } | null = null;
+    return (tool: ToolState, field: ShapeField): T => {
+        const { fieldProperties } = field;
+        const { uiSettings } = useUiSettingsStore.getState();
+        if (
+            last?.tool !== tool ||
+            last.fieldProperties !== fieldProperties ||
+            last.uiSettings !== uiSettings
+        )
+            last = {
+                tool,
+                fieldProperties,
+                uiSettings,
+                value: fn(tool, field),
+            };
+        return last.value;
+    };
+}
+
+const slotsNow = perToolState((tool, field) =>
+    slotsOf(tool, shapeContextFor(field)),
+);
+const targetsNow = perToolState((tool, field) =>
+    targetsOf(tool, shapeContextFor(field)),
+);
+
 /** Notes the spot under the pointer, on a shape that doesn't label every spot */
 function hoverAt(tool: ToolState, at: XY, radius: number): void {
     const field = currentShapeField();
@@ -102,7 +138,7 @@ function hoverAt(tool: ToolState, at: XY, radius: number): void {
     ) {
         const names = drillNumbers(field);
         let best = radius;
-        for (const t of targetsOf(tool, shapeContextFor(field))) {
+        for (const t of targetsNow(tool, field)) {
             const d = Math.hypot(t.to.x - at.x, t.to.y - at.y);
             if (d <= best) {
                 best = d;
@@ -119,9 +155,8 @@ const drawingOf = memoDrawing(
     ({ tool, hover, calm, walks, scrubbing }: Shown) => {
         const field = currentShapeField();
         if (!field) return null;
-        const ctx = shapeContextFor(field);
         const n = tool.spots;
-        const spots = slotsOf(tool, ctx);
+        const spots = slotsNow(tool, field);
         // The marchers' ghosts stand where they start the move: at the start flag (#346, #417). They
         // always show, so where the marchers come from reads; the pathways toggle is only the walks
         // (owner lab feedback on #417)
@@ -139,7 +174,7 @@ const drawingOf = memoDrawing(
         // While a drag draws a new shape: its spots and a dashed outline, no walks yet (06). Every
         // other gesture holds who goes where, so the walks follow it live.
         const drawing = tool.gesture?.type === "draw";
-        const targets = drawing ? [] : targetsOf(tool, ctx);
+        const targets = drawing ? [] : targetsNow(tool, field);
         const names = drillNumbers(field);
         const env = toolEnvFor(field, { shift: false, alt: false });
         const gap = drawing ? null : outlineGapAt(tool.kind, tool.params, n);
@@ -251,7 +286,7 @@ function glidingDrawing(shown: Shown | null) {
     const field = currentShapeField();
     if (!drawing || tool.params === null || !field || reducedMotion())
         return drawing;
-    const targets = targetsOf(tool, shapeContextFor(field));
+    const targets = targetsNow(tool, field);
     const now = performance.now();
     glide.update(
         tool.params,

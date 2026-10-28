@@ -17,10 +17,32 @@ export { currentShapeField } from "./shapeField";
 export function shapeContextFor(field: ShapeField, snap = true): ShapeContext {
     const { fieldProperties } = field;
     const { uiSettings } = useUiSettingsStore.getState();
+    // The same object for the same field and settings, so work done for it can be known again
+    // (`canRecalculate`, #455)
+    const last = contexts.get(fieldProperties);
+    if (last?.uiSettings === uiSettings && last.snap === snap) return last.ctx;
+    const ctx = contextOf(fieldProperties, uiSettings, snap);
+    contexts.set(fieldProperties, { uiSettings, snap, ctx });
+    return ctx;
+}
+
+const contexts = new WeakMap<
+    FieldProperties,
+    { uiSettings: unknown; snap: boolean; ctx: ShapeContext }
+>();
+
+function contextOf(
+    fieldProperties: FieldProperties,
+    uiSettings: ReturnType<typeof useUiSettingsStore.getState>["uiSettings"],
+    snap: boolean,
+): ShapeContext {
     return {
         stepPx: fieldProperties.pixelsPerStep,
         field: { width: fieldProperties.width, height: fieldProperties.height },
-        steps: stepLimit(fieldProperties),
+        // Worked out when read: the move's counts change while this object is reused
+        get steps() {
+            return stepLimit(fieldProperties);
+        },
         snapPoint: (p) => {
             if (!snap) return p;
             const rounded = getRoundCoordinates2({

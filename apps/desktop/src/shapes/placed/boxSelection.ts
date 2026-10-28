@@ -11,7 +11,11 @@ import { useShapeToolStore } from "../tool/shapeToolStore";
 import { clickOnMarcher } from "./boxClick";
 import { setInsideBox, useBoxSelectionStore } from "./boxSelectionStore";
 import type { PlacedBox } from "./placedBox";
-import { placedBoxesAt, usePlacedBoxStore } from "./placedBoxStore";
+import {
+    placedBoxesAt,
+    usePlacedBoxStore,
+    usePlacedBoxBeat,
+} from "./placedBoxStore";
 
 /** Selects `ids` on the field, through its editor, which writes the app's selection */
 export function selectOnField(ids: readonly number[]): void {
@@ -98,7 +102,7 @@ export function useBoxSelection({ isPlaying }: { isPlaying: boolean }): void {
     const selected = useSelectedMarchers()?.selectedMarchers;
     const recipes = usePlacedBoxStore((s) => s.recipes);
     const version = useTimelineResolverStore((s) => s.version);
-    const beat = useTimelineSelectionStore(displayedBeat);
+    const beat = usePlacedBoxBeat();
     const timelines = useTimelineSelectionStore((s) => s.storedTimelines);
     useEffect(() => {
         const ids = new Set((selected ?? []).map((m) => m.id));
