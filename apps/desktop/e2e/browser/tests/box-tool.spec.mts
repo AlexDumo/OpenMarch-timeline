@@ -3544,6 +3544,28 @@ test("change: the layout menu under the chip switches layout, ↻ turns the box 
         .toEqual(before);
 });
 
+test("change: a right-button press on the floating editor doesn't hold it, so it can't stick when the menu takes the release (#437)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const editor = page.getByTestId("shape-tool-readout");
+    await expect(editor).toHaveAttribute("data-held", "false");
+    // On the bar's edge, clear of its buttons, once it stands still
+    await page
+        .getByTestId("shape-tool-readout-bar")
+        .hover({ position: { x: 2, y: 2 } });
+    // A left press holds it, until a moment after the release
+    await page.mouse.down();
+    await expect(editor).toHaveAttribute("data-held", "true");
+    await page.mouse.up();
+    await expect(editor).toHaveAttribute("data-held", "false");
+    // A right press doesn't
+    await page.mouse.down({ button: "right" });
+    await expect(editor).toHaveAttribute("data-held", "false");
+    await page.mouse.up({ button: "right" });
+});
+
 // The size number's − and + (owner lab feedback on #387; the owner picked
 // center + glide in the lab): the box grows about its center without creeping,
 // and the marchers glide to their new spots rather than jump.
@@ -3563,13 +3585,21 @@ test("change: the floating editor ends up in the same place after a change wheth
     const settled = async () => {
         await expect(editor).toHaveAttribute("data-held", "false");
         let last = "";
-        for (;;) {
-            const b = (await editor.boundingBox())!;
-            const now = `${Math.round(b.x)},${Math.round(b.y)}`;
-            if (now === last) return now;
-            last = now;
-            await page.waitForTimeout(150);
-        }
+        let now = "";
+        await expect
+            .poll(
+                async () => {
+                    const b = (await editor.boundingBox())!;
+                    [last, now] = [
+                        now,
+                        `${Math.round(b.x)},${Math.round(b.y)}`,
+                    ];
+                    return now === last;
+                },
+                { timeout: 5000, intervals: [150] },
+            )
+            .toBe(true);
+        return now;
     };
     const before = await settled();
     // One more across, pressed with the pointer on the editor, which stays there

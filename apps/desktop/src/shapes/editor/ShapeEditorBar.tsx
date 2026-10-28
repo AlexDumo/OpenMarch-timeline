@@ -7,6 +7,7 @@ import {
     useMemo,
     useRef,
     useState,
+    type PointerEvent as ReactPointerEvent,
     type ReactNode,
 } from "react";
 import { animated, to, useSpring } from "@react-spring/web";
@@ -990,7 +991,10 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
             ),
         },
         hold: {
-            onPointerDownCapture: () => {
+            onPointerDownCapture: (e: ReactPointerEvent) => {
+                // A right-button press opens a menu, which can take its release, and the editor
+                // would stay held (#437)
+                if (e.button !== 0) return;
                 if (release.current) clearTimeout(release.current);
                 // Stopped where it is, a glide under way included, so the press lands
                 api.stop();

@@ -95,7 +95,26 @@ const SPLIT_HYSTERESIS = 0.15;
  */
 export const SPLIT_BAND = Math.log(2);
 
-export const filesOf = (p: BoxSize): number => Math.max(1, Math.round(p.files));
+/** The box's file count: one when the stored count isn't a number (a recipe edited by hand) */
+export const filesOf = (p: BoxSize): number =>
+    Number.isFinite(p.files) ? Math.max(1, Math.round(p.files)) : 1;
+
+/**
+ * Whether a stored box's numbers can lay it out: a file count and intervals that are finite
+ * numbers, the intervals not negative. A recipe edited by hand may hold anything.
+ */
+export const boxNumbersReadable = (p: unknown): boolean => {
+    const { files, across, deep } = (p ?? {}) as Record<string, unknown>;
+    const finite = (v: unknown): v is number =>
+        typeof v === "number" && Number.isFinite(v);
+    return (
+        finite(files) &&
+        finite(across) &&
+        across >= 0 &&
+        finite(deep) &&
+        deep >= 0
+    );
+};
 
 /**
  * How the box is filled: its stored distribution, or Files, Short back with no stagger (a recipe
