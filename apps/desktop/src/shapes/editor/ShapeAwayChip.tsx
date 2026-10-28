@@ -7,6 +7,7 @@ import { goBackTo, momentLabel } from "../tool/shapeMoment";
 import { discardShapeTool } from "../tool/shapeLeave";
 import { keepFocus } from "./keepFocus";
 import { Tip } from "./Tip";
+import tolgee from "@/global/singletons/Tolgee";
 
 /**
  * Shown at the top of the field while the paused playhead is away from the open shape's moment
@@ -29,7 +30,9 @@ export function ShapeAwayChip() {
             onPointerDown={(e) => e.stopPropagation()}
         >
             <span data-testid="shape-away-chip-text">
-                Shape open at {momentLabel(moment)}
+                {tolgee.t("shapes.edit.away.text", "Shape open at {moment}", {
+                    moment: momentLabel(moment),
+                })}
             </span>
             <button
                 type="button"
@@ -38,12 +41,17 @@ export function ShapeAwayChip() {
                 onClick={() => goBackTo(moment)}
             >
                 <ArrowUUpLeftIcon size={14} weight="bold" />
-                Go back
+                {tolgee.t("shapes.edit.away.goBack", "Go back")}
             </button>
-            <Tip label="Dismiss the shape (undo brings it back)">
+            <Tip
+                label={tolgee.t(
+                    "shapes.edit.away.dismissTip",
+                    "Dismiss the shape (undo brings it back)",
+                )}
+            >
                 <button
                     type="button"
-                    aria-label="Dismiss"
+                    aria-label={tolgee.t("shapes.edit.away.dismiss", "Dismiss")}
                     className="rounded-6 hover:bg-text-invert/20 flex items-center p-4"
                     onPointerDown={keepFocus}
                     onClick={discardShapeTool}
