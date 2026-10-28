@@ -28,7 +28,7 @@ layer and pages of 8 counts.
 | **Basic's trailing moves that go nowhere are its own artefacts** (storage m1). Keeping them would stop later pages following.                                                                                                                                                                   | Edit rule F4 reverted: Basic keeps deleting them.                                                                                                                                                                                                                                                                                                        |
 | **Zero-motion members of a split get two rows, so a diamond at the cut** (storage m2). This applies to Split at playhead and Basic split page.                                                                                                                                                  | Proposed: a split writes no first-half row for members who stand still. Their position is identical, and they don't gain a keyframe they didn't make.                                                                                                                                                                                                    |
 | **The field look for a Following hold wasn't stated** (semantics M8).                                                                                                                                                                                                                           | It's dashed, as are counts before a marcher's first move. Items behave as marchers. Isolation's dim wins, and playback and exports stay solid, as in #332.                                                                                                                                                                                               |
-| **Split hold broke H-2** (semantics m1, storage n2).                                                                                                                                                                                                                                            | Split hold **ends the hold** there, so H-2 stays strict. Only-this-page inside a mark ends the mark at that page first.                                                                                                                                                                                                                                  |
+| **Split hold broke H-2** (semantics m1, storage n2). H-2 was later dropped altogether (04-anchors).                                                                                                                                                                                             | Split hold **ends the hold** there, so H-2 stays strict. Only-this-page inside a mark ends the mark at that page first.                                                                                                                                                                                                                                  |
 | **The bar end had no limit after the last move** (storage m6).                                                                                                                                                                                                                                  | It's capped at the show's end.                                                                                                                                                                                                                                                                                                                           |
 | Wording and naming (storage m3, n1; semantics m4, nits).                                                                                                                                                                                                                                        | The table is renamed **`timeline_held_marks`** ("span" is the spec's word for derived pieces). Added `UNIQUE(marcher_id, start_beat)` and `CHECK(start_beat >= 0)`. "Deleted first" becomes "taken out of that page". Part 1 strikes "kept spots" from the 2026-10-16 list of page-move writers.                                                         |
 | Write paths missing from 01 (storage m4, m5).                                                                                                                                                                                                                                                   | Added: the shape-placement paths in flight (shapes host `placeShape`, #181, #288), repair's copy order, and the U-1 history-trigger count. Ticket A keeps the stay-writing core of `keepMarchersOnPageInTransaction`, which Remove keyframe and Only this page call.                                                                                     |
@@ -74,3 +74,37 @@ and simulated designers (4 personas, about 15 of 24 tasks right on the first dis
   "adds a move on Page 5"); plain Held in Basic.
 - **Commit check:** H-1 and H-3 in the `timeline_commit_violations` view, with error messages for
   them; H-2 dropped.
+
+## ADR validation, 2026-10-28
+
+An independent validator read the ADR draft against the docs and the code at fork main
+(67476372a, after #332 merged). Its verdict was "ready with edits". All the edits are folded into
+[02-adr-amendment-draft.md](02-adr-amendment-draft.md):
+
+- the migration number;
+- where the upkeep step runs: right after the edit, before the history group is read;
+- the commit view's row shape, and the on-open trim;
+- clearing history instead of pruning it;
+- `DISPLAY_TABLES`;
+- cutting a move at page flags may share a range;
+- the missing rules: merging touching holds, the `planMerge` stop, hold over the window, and the
+  old→new map;
+- real dates, Verification, and the corrected Split at playhead description.
+
+Owner answers, 2026-10-28:
+
+1. **Hold edges and page flags:** a borrowed hold's start, and any hold's end, sitting on a page
+   flag follow that flag when pages are resized. Edges mid-page stay on their beat, and a deleted
+   flag leaves the edge on its count.
+2. **Testers' undo history:** the kept-table migration clears both history stacks in files whose
+   history names the table, with a release note.
+3. **No follow-link chain icons.** The dashed Not-set bars show "this page shows an earlier spot",
+   and they light up during a drag. The unlink action stays as **Set as shown**, in the page box
+   menu and on the bar.
+4. **The UI's words are Set · Held · Not set.** "Following", "linked" and "follows" leave the UI.
+   Set to previous page becomes **Clear this page** in timeline mode, and that is also how a page
+   is re-linked.
+5. **Already settled:**
+   - mixed selections with shape or follow-the-leader members do the others and name the skipped
+     ones (the R5 interim);
+   - the partial-group join is #471, after the whole-membership join in #470 (R4).

@@ -91,6 +91,21 @@ Holds never look inside a shape or a path style. Where a rule below mentions sha
 follow-the-leader (decisions 4, 16, R4, R5), it is provisional until the ownership model lands.
 Tickets built from this doc should say the same.
 
+## Vocabulary (owner, 2026-10-28)
+
+The UI uses three words for a marcher's state on a count:
+
+- **Set:** a keyframe, where a move of its own ends.
+- **Held:** a stored, deliberate hold.
+- **Not set:** nothing decided. The marcher shows the last set spot, and moves with edits to it.
+
+"Following" in these docs (and in the code) means **Not set**. The UI never says "Following",
+"linked" or "follows", and the follow-link chain icons are not shipped. The dashed Not-set bars
+show the same thing, and they light up during a drag. Two commands change names:
+
+- the unlink action is **Set as shown**;
+- Set to previous page, in timeline mode, is **Clear this page**.
+
 ## Decisions
 
 Owner, 2026-10-24 and 2026-10-25. The diagrams are in [images/](images/); each one shows today,
@@ -160,11 +175,12 @@ from stale copies (defined-coordinates finding 7).
       The departure end is the "when does it go again" signal.
 11. **The keyframe diamonds stay.** Diamonds mark arrivals; bars run from a diamond to the next
     departure.
-12. **Follow links (#297) merge, with its unlink writing an ordinary move.** That is #158's "only
-    this page", so there is no separate arming step. Later the chain moves onto the Following
-    bar. See [q12](images/q12.svg).
-    - Today #297's chain click calls the old Keep (`components/timeline/PageKeepChain.tsx:85` →
-      `keepOnPage` → `keepMarchersOnPage`), which stores a kept mark.
+12. **No follow-link chain icons; the unlink action stays as Set as shown** (owner, 2026-10-28,
+    superseding the 2026-10-25 "merge #297" answer). The dashed Not-set bars already say "this page
+    shows an earlier spot", and they take over #297's lighting during a drag. **Set as shown**, in
+    the page box menu and on the bar, writes an ordinary move at the spot the marcher shows, so the
+    page becomes Set: #158's "only this page", with no arming step. Re-linking is Clear this page
+    (16). See [q12](images/q12.svg), which shows the older chain idea.
 13. **Every stored move end shows a diamond,** even when the marcher doesn't move. #332's "did it
     move" test (`timeline/timelineSetFollowing.ts:36`) goes. This removes the invisible pins
     ([q15](images/q15.svg)).
@@ -179,12 +195,13 @@ from stale copies (defined-coordinates finding 7).
     - **Only at counts that aren't page flags** (review, semantics M1). Basic splits moves at
       every new flag, so a join at a flag would join almost everywhere and make moves that cross
       flags. At a flag, Remove behaves as today: the page follows the page before.
-    - **First version: only when the whole move's membership is selected.** For part of a group,
-      see owner question R4 in 03-review.
+    - **With the whole membership selected** (#470). For part of a group, those marchers are pulled
+      out of both halves and joined (R4, #471).
     - Otherwise the behaviour is unchanged.
 15. **Remove keyframe's moves on the next page stay ordinary moves,** as since 272f83526. With
     13 they always show a diamond, and with 1 nothing else marks them.
-16. **Set to previous page never makes a hold.** It makes the page Following again.
+16. **Clear this page (Set to previous page in timeline mode, renamed 2026-10-28) never makes a
+    hold.** It makes the page Not set again, and it is how a page is re-linked.
     - "Hold from previous page" is the separate command in 3. See [q16](images/q16.svg).
     - **Gap found 2026-10-25:** today it only deletes a marcher's _own one-slot_ page move
       (`db-functions/timelineMoves.ts` `ownPageMoves`). For marchers in a shared or longer move it
@@ -240,20 +257,26 @@ timeline_held_marks
 - Removing `timeline_kept_assignments` (decision 1) is part of the same amendment.
 - Draft amendment text: [02-adr-amendment-draft.md](02-adr-amendment-draft.md).
 
-## What changes, as tickets (not filed yet)
+## Tickets (filed 2026-10-28)
 
-| Ticket | What                                                                                                                                         | Decisions       | Size       |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------- |
-| 0      | Merge #384 into #332, then #332 into main                                                                                                    | –               | done/ready |
-| A      | #297 with unlink writing ordinary moves; remove the kept table and its UI (#158); ADR 0001 amendment, part 1                                 | 1, 12           | M          |
-| B      | Diamonds for every stored move end; Set to previous page takes marchers out of shared moves                                                  | 13, 15, 16      | S–M        |
-| C      | Remove keyframe joins halves after a split (mid-page only, whole membership selected)                                                        | 14              | S          |
-| D      | Held hold marks: table and amendment part 2, Hold from previous page, bar-end drag, edit routing, Split hold, leave early, write-path upkeep | 2–7, 16, 17, 18 | L          |
-| E      | Hold bars at exact counts (Following and Held), departure ends, chain on the Following bar                                                   | 10, 11, 12      | M          |
-| F      | Field look: solid when decided; route squares for the selection                                                                              | 8, 9            | M          |
+Fork issues #466–#479. Every ticket carries the scope note.
 
-A to C can start after this doc is accepted. D is the large one; E and F follow it so that the
-field and the timeline change together.
+| #    | Ticket                                                       | Blocked by   |
+| ---- | ------------------------------------------------------------ | ------------ |
+| #466 | Set as shown: protect a later page before an edit            | –            |
+| #467 | Remove stored kept spots                                     | #466         |
+| #468 | Every stored move end is a keyframe                          | –            |
+| #469 | Clear this page really unsets (take a marcher out of a page) | #363 on main |
+| #470 | Remove keyframe joins the halves after a split               | #363 on main |
+| #471 | Joining after a split for part of a group                    | #469, #470   |
+| #472 | First Held hold, end to end                                  | #363 on main |
+| #473 | Holds stay correct across every edit                         | #472         |
+| #474 | Borrowed holds                                               | #473         |
+| #475 | Shaping a hold                                               | #473         |
+| #476 | Expert hold tools                                            | #473         |
+| #477 | Not-set bars and departure ticks                             | #466, #472   |
+| #478 | Field look: solid when decided                               | #472         |
+| #479 | Squares on the selected marchers' route                      | –            |
 
 ## Confidence and gaps
 

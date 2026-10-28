@@ -61,16 +61,14 @@ edit, it checks each hold **in this order**:
 4. Else, if a row ended there before, **delete** the hold (decision 17).
 5. Else it was, and stays, a borrowed hold.
 
-Step 2 must come before step 3: Split at playhead updates the first half in place with an earlier
-end, and inserts the second half. Only writers that delete and re-insert a row with a different
+Step 2 must come before step 3: Split at playhead keeps the original rows as the second half (their start changes, their end stays) and inserts a new first half, so a row still ends at a hold that grew out of the original end. Only writers that delete and re-insert a row with a different
 end need an explicit old→new map. Basic's set-ending (`writePlan`) is the one known case.
 
 **Page and beat edits (ripple).** Spelling out which edge a hold's start maps as:
 
 - An arrival hold's start takes its row's **planned new end, by row id**. The edge map doesn't
   apply, because the ripple's stop-at-the-next-row clip applies only to rows.
-- A borrowed hold's start **stays on its beat** (`beatEnd`), the same as a row start that isn't
-  on a page boundary. This keeps "stays at the same count" true when a page is removed, a case
+- A borrowed hold's start, and any hold's end, **follow a page flag they sit on** (owner, 2026-10-28). An edge mid-page stays on its beat. A deleted flag leaves the edge on its count. This keeps "stays at the same count" true when a page is removed, a case
   where page ends and starts map differently.
 - This lives in `planTimelineRipple`, so the flag-drag limits and previews (`pageFlagMoveLimits`,
   `pageFlagMoveBlock`) agree with the commit.
