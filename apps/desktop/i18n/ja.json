@@ -1310,6 +1310,15 @@
                 "title": "再シャッフル：新しい配置"
             }
         },
+        "field": {
+            "stepLimit": "{steps}対5"
+        },
+        "frame": {
+            "scale": {
+                "apart": "{spacings}間隔",
+                "size": "{sizes}ステップ"
+            }
+        },
         "placed": {
             "label": "{name} · {interval}ステップ",
             "left": {

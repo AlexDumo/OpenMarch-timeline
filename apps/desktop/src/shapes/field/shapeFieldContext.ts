@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { compare as compareMarchers } from "@/global/classes/Marcher";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { getRoundCoordinates2 } from "@/utilities/CoordinateActions";
@@ -106,7 +107,9 @@ function stepLimit(fieldProperties: FieldProperties): ShapeContext["steps"] {
             ((threshold + 0.5) / fieldProperties.stepSizeInches) *
             fieldProperties.pixelsPerStep,
         // Five yards over the inches a step may take
-        limit: `${Math.round((180 / threshold) * 10) / 10} to 5`,
+        limit: tolgee.t("shapes.field.stepLimit", "{steps} to 5", {
+            steps: String(Math.round((180 / threshold) * 10) / 10),
+        }),
         describe: (distance) =>
             StepSize.fromDistance({
                 marcher_id: -1,

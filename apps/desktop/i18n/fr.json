@@ -1310,6 +1310,15 @@
                 "title": "Remélanger : une nouvelle disposition"
             }
         },
+        "field": {
+            "stepLimit": "{steps} à 5"
+        },
+        "frame": {
+            "scale": {
+                "apart": "{spacings} d'écart",
+                "size": "{sizes} pas"
+            }
+        },
         "placed": {
             "label": "{name} · {interval} pas",
             "left": {

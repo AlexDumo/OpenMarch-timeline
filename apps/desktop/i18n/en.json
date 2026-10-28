@@ -2016,6 +2016,15 @@
                 "title": "Reshuffle: a new layout"
             }
         },
+        "field": {
+            "stepLimit": "{steps} to 5"
+        },
+        "frame": {
+            "scale": {
+                "apart": "{spacings} apart",
+                "size": "{sizes} steps"
+            }
+        },
         "placed": {
             "label": "{name} · {interval} steps",
             "left": {

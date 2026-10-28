@@ -1310,6 +1310,15 @@
                 "title": "Reembaralhar: um novo arranjo"
             }
         },
+        "field": {
+            "stepLimit": "{steps} por 5"
+        },
+        "frame": {
+            "scale": {
+                "apart": "{spacings} de distância",
+                "size": "{sizes} passos"
+            }
+        },
         "placed": {
             "label": "{name} · {interval} passos",
             "left": {
