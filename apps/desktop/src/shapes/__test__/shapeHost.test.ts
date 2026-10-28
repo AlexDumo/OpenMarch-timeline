@@ -5,10 +5,7 @@ import { chipLayout } from "../editor/chip";
 import { DEGREE } from "../frame/frame";
 import { flipShape, turnShape } from "../frame/gestures";
 import { placementOf } from "../tool/shapePlacement";
-import {
-    SELECT_MARCHERS_FIRST,
-    shapeSelectionGate,
-} from "../tool/selectionGate";
+import { selectMarchersFirst, shapeSelectionGate } from "../tool/selectionGate";
 import { kindPickGate } from "../tool/pickKind";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import {
@@ -249,9 +246,9 @@ describe("the selection gate", () => {
     it("needs marchers selected, and says so", () => {
         expect(shapeSelectionGate([])).toEqual({
             ok: false,
-            reason: SELECT_MARCHERS_FIRST,
+            reason: selectMarchersFirst(),
         });
-        expect(SELECT_MARCHERS_FIRST).toBe("Select marchers first");
+        expect(selectMarchersFirst()).toBe("Select marchers first");
         expect(shapeSelectionGate([{ id: 4 }, { id: 2 }])).toEqual({
             ok: true,
             ids: [4, 2],
@@ -343,7 +340,7 @@ describe("picking a kind", () => {
     it("needs marchers selected to open a shape", () => {
         expect(kindPickGate(false, [])).toEqual({
             ok: false,
-            reason: SELECT_MARCHERS_FIRST,
+            reason: selectMarchersFirst(),
         });
         expect(kindPickGate(false, [{ id: 3 }])).toEqual({ ok: true });
     });

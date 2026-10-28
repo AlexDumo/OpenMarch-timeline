@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { useCallback } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { CanvasEditPlan } from "@/timeline/timelineCoordinateWrites";
@@ -40,7 +41,7 @@ export async function placeShape(
     const placed = await writePlacement(
         placement,
         queryClient,
-        "Error placing the shape",
+        tolgee.t("shapes.tool.placeError", "Error placing the shape"),
         plan,
     );
     // A show that uses a saved shape keeps a copy of it (#353)

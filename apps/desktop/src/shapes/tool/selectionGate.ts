@@ -1,5 +1,10 @@
-/** Why a shape can't be drawn with nobody selected; the Shapes tab greys its kinds out with it */
-export const SELECT_MARCHERS_FIRST = "Select marchers first";
+import tolgee from "@/global/singletons/Tolgee";
+/**
+ * Why a shape can't be drawn with nobody selected; the Shapes tab greys its kinds out with it. A
+ * function, so it's in the app's language when it's asked for.
+ */
+export const selectMarchersFirst = (): string =>
+    tolgee.t("shapes.tool.selectMarchersFirst", "Select marchers first");
 
 export type ShapeGate =
     | { readonly ok: true; readonly ids: readonly number[] }
@@ -14,6 +19,6 @@ export function shapeSelectionGate(
     selected: readonly { readonly id: number }[],
 ): ShapeGate {
     if (selected.length === 0)
-        return { ok: false, reason: SELECT_MARCHERS_FIRST };
+        return { ok: false, reason: selectMarchersFirst() };
     return { ok: true, ids: selected.map((m) => m.id) };
 }
