@@ -897,12 +897,18 @@ export const moveMarchersInRangeInTransaction = async ({
     moves,
     clearOwn = false,
     into,
+    keepUnchanged = false,
 }: {
     tx: DbTransaction;
     range: BeatRange;
     moves: readonly TimelineMarcherMove[];
     /** Delete the marchers' own moves over the page box `range` (set to previous page) */
     clearOwn?: boolean;
+    /**
+     * Add a marcher left where it is to the range's move too, as a stay, rather than skip it: a
+     * shape's members are all set where it's edited, the one at the pivot included
+     */
+    keepUnchanged?: boolean;
     /** The selected move over `range` that added marchers join (UI-25) */
     into?: number;
 }): Promise<TimelineMoveResult> => {
@@ -955,6 +961,7 @@ export const moveMarchersInRangeInTransaction = async ({
         }
         // In the range's timeline already: `skipUnchanged` below drops a move that changes nothing
         if (
+            !keepUnchanged &&
             !timelineOf.has(move.marcherId) &&
             samePosition(point, await positionAt(move.marcherId, range.end))
         )
@@ -1219,6 +1226,7 @@ export const moveMarchersInTarget = async ({
     target,
     moves,
     clearOwn = false,
+    keepUnchanged = false,
     onStart,
     afterWrite,
 }: {
@@ -1230,6 +1238,11 @@ export const moveMarchersInTarget = async ({
      * previous page; a point move only when its beat is the box's flag)
      */
     clearOwn?: boolean;
+    /**
+     * Range and point moves only: write a marcher left where it is as a stay in the move, not
+     * nothing (a shape's members)
+     */
+    keepUnchanged?: boolean;
     /**
      * Called inside the edit before it writes, when every earlier write has reached the resolver,
      * so it can read the positions the edit starts from (**Move them too**)
@@ -1269,6 +1282,7 @@ export const moveMarchersInTarget = async ({
                               range: { start: target.start, end: target.end },
                               moves,
                               clearOwn,
+                              keepUnchanged,
                               ...(target.timelineId === undefined
                                   ? {}
                                   : { into: target.timelineId }),
@@ -1279,6 +1293,7 @@ export const moveMarchersInTarget = async ({
                               box: target.box,
                               moves,
                               clearOwn,
+                              keepUnchanged,
                           });
                 // The selected move, else the one the marchers are in, since a move split off
                 // the page's shares its counts (UI-25)

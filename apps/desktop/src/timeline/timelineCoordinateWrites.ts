@@ -1,4 +1,5 @@
 import {
+    samePosition,
     type TimelineEditTarget,
     type TimelineMarcherMove,
     type TimelineMovePage,
@@ -269,6 +270,7 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     plan = planCanvasEdit(),
     afterWrite,
     writesShapes,
+    setUnmoved = false,
     keepPlayhead = false,
 }: {
     db: DbConnection;
@@ -287,11 +289,25 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     ) => Promise<void | boolean>;
     /** `afterWrite` saves shape recipes itself, so placed boxes aren't kept up to date around it */
     writesShapes?: boolean;
+    /**
+     * When the edit moves anyone, write the marchers it leaves where they are too, as stays, so
+     * every one is in the move: a shape's members, the one at its pivot included. An edit that
+     * moves nobody still writes nothing for them.
+     */
+    setUnmoved?: boolean;
 }): Promise<R[]> {
     if (!plan.ok) throw plan.error;
     if (!keepPlayhead) snapIsolatedPlayheadToEnd();
-    const next = transform(timelineCoordinateRecords(plan.beat, marcherIds));
+    const current = timelineCoordinateRecords(plan.beat, marcherIds);
+    const next = transform(current);
     const moves = toTimelineMoves(next);
+    const was = new Map(current.map((c) => [c.marcher_id, c]));
+    const keepUnchanged =
+        setUnmoved &&
+        next.some((n) => {
+            const c = was.get(n.marcher_id);
+            return !c || !samePosition([c.x, c.y], [n.x, n.y]);
+        });
     // Basic's locked marchers are dropped there (UI-19)
     await moveMarchersAndOfferFollowUp({
         database: db,
@@ -299,6 +315,7 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
         moves,
         afterWrite,
         writesShapes,
+        keepUnchanged,
     });
     return next;
 }

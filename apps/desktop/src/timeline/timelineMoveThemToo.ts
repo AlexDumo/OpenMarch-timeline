@@ -297,6 +297,7 @@ export async function moveMarchersAndOfferFollowUp({
     target,
     moves: requested,
     clearOwn,
+    keepUnchanged,
     afterWrite,
     writesShapes = false,
 }: {
@@ -304,6 +305,8 @@ export async function moveMarchersAndOfferFollowUp({
     target: TimelineEditTarget;
     moves: readonly TimelineMarcherMove[];
     clearOwn?: boolean;
+    /** Write marchers left where they are as stays (`moveMarchersInTarget`) */
+    keepUnchanged?: boolean;
     /** App data written in the same edit (`moveMarchersInTarget`) */
     afterWrite?: (
         tx: DbTransaction,
@@ -333,6 +336,7 @@ export async function moveMarchersAndOfferFollowUp({
         target,
         moves,
         clearOwn,
+        keepUnchanged,
         afterWrite: membership
             ? async (tx, timelineId) => {
                   const own = afterWrite
