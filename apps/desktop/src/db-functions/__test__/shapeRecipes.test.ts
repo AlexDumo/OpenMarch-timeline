@@ -1,4 +1,4 @@
-import { afterEach, expect } from "vitest";
+import { afterEach, describe, expect } from "vitest";
 import { eq } from "drizzle-orm";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { readShowTiming } from "@/timeline/showTiming";
@@ -10,7 +10,12 @@ import {
 } from "@/timeline/timelineStore";
 import { performRedo, performUndo } from "../history";
 import { createLastPage, deletePages } from "../page";
-import { moveMarchersInTarget } from "../timelineMoves";
+import { deleteMarchers } from "../marcher";
+import {
+    moveMarchersInTarget,
+    type TimelineEditTarget,
+} from "../timelineMoves";
+import { mergeMoves, splitMarchersIntoNewMove } from "../timelineSplitMoves";
 import {
     readShapeRecipes,
     saveShapeRecipeInTransaction,
@@ -56,11 +61,12 @@ const place = async (
     db: DbConnection,
     ids: number[],
     recipe: ShapeRecipeRecord,
+    target: TimelineEditTarget = { kind: "range", ...PAGE2 },
 ) => {
     let saved: number | null = null;
     await moveMarchersInTarget({
         db,
-        target: { kind: "range", ...PAGE2 },
+        target,
         moves: ids.map((marcherId, i) => ({
             marcherId,
             x: 100 + 20 * i,
@@ -253,5 +259,134 @@ describeDbTests("Shape recipes", (it) => {
             [0, 0],
             [40, 0],
         ]);
+    });
+
+    it("deleting a shape's last marcher deletes the shape, and undo brings both back", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a, b } = await show(db);
+        await place(db, [a, b], ARC);
+        const before = await db
+            .select()
+            .from(schema.timeline_shape_recipes)
+            .all();
+
+        await deleteMarchers({ db, marcherIds: new Set([a]) });
+        expect(
+            await db.select().from(schema.timeline_shape_recipes).all(),
+        ).toEqual(before);
+        await deleteMarchers({ db, marcherIds: new Set([b]) });
+        expect(
+            await db.select().from(schema.timeline_shape_recipes).all(),
+        ).toEqual([]);
+
+        await performUndo(db);
+        expect(
+            await db.select().from(schema.timeline_shape_recipes).all(),
+        ).toEqual(before);
+        expect(
+            (
+                await db
+                    .select()
+                    .from(schema.timeline_shape_recipe_marchers)
+                    .all()
+            ).map((m) => m.marcher_id),
+        ).toEqual([b]);
+    });
+
+    describe("with a move split off the page's (UI-25)", () => {
+        /** a and b placed on page 2, then a split off into a move of its own over the same counts */
+        const splitShow = async (db: DbConnection) => {
+            const marchers = await show(db);
+            const first = await place(db, [marchers.a, marchers.b], ARC);
+            const pageMove = (await recipeTimeline(db, first))!;
+            const split = await splitMarchersIntoNewMove({
+                db,
+                timelineId: pageMove,
+                marcherIds: [marchers.a],
+            });
+            await timelineResolverSettled();
+            return { ...marchers, pageMove, splitMove: split.timeline.id };
+        };
+
+        it("a shape placed in the selected split move belongs to it", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, c, splitMove } = await splitShow(db);
+            const id = await place(db, [a, c], LINE, {
+                kind: "range",
+                ...PAGE2,
+                timelineId: splitMove,
+            });
+            expect(await recipeTimeline(db, id)).toBe(splitMove);
+        });
+
+        it("a shape placed over the counts without a selected move belongs to the move its marchers' positions went to", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, splitMove } = await splitShow(db);
+            const id = await place(db, [a], LINE);
+            expect(await recipeTimeline(db, id)).toBe(splitMove);
+        });
+
+        it("in Basic mode too: a shape placed at the page's flag belongs to the move its marchers' positions went to", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, splitMove } = await splitShow(db);
+            const id = await place(db, [a], LINE, {
+                kind: "point",
+                beat: PAGE2.end,
+                box: PAGE2,
+            });
+            expect(await recipeTimeline(db, id)).toBe(splitMove);
+        });
+
+        it("merging the split move back keeps its shape, in the page's move, and undo puts it back", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, pageMove, splitMove } = await splitShow(db);
+            const id = await place(db, [a], LINE, {
+                kind: "range",
+                ...PAGE2,
+                timelineId: splitMove,
+            });
+            const before = await readShapeRecipes({
+                db,
+                timelineId: splitMove,
+                marcherIds: [a],
+            });
+
+            await mergeMoves({ db, sourceId: splitMove, targetId: pageMove });
+            await timelineResolverSettled();
+            const merged = await readShapeRecipes({
+                db,
+                timelineId: pageMove,
+                marcherIds: [a],
+            });
+            expect(merged).toEqual(
+                before.map((r) => ({ ...r, timelineId: pageMove })),
+            );
+            // Where the shape put a is still where a stands at the move's end
+            const member = merged.find((r) => r.id === id)!.members[0]!;
+            expect(resolver().positionAt(a, PAGE2.end)).toEqual([
+                member.x,
+                member.y,
+            ]);
+
+            await performUndo(db);
+            await timelineResolverSettled();
+            expect(
+                await readShapeRecipes({
+                    db,
+                    timelineId: splitMove,
+                    marcherIds: [a],
+                }),
+            ).toEqual(before);
+        });
     });
 });
