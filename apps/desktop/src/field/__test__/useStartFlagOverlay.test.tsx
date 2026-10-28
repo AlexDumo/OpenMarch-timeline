@@ -3,7 +3,11 @@ import { act, renderHook } from "@testing-library/react";
 import { createResolver, type Resolver } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { GOLDEN_FIXTURES } from "@/timeline/fixtures/goldenFixtures";
-import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import {
+    resolverSpans,
+    useTimelineResolverStore,
+} from "@/timeline/timelineStore";
+import { marcherSetBeats } from "@/timeline/timelineSetFollowing";
 import {
     DEFAULT_START_FLAG_POSITIONS,
     type StartFlagPositionsSettings,
@@ -92,6 +96,10 @@ const expected = (
         levels,
         stepSizeWarnings,
         fieldProperties,
+        setBeatsOf: (id) =>
+            marcherSetBeats(resolverSpans(resolver, id), (beat) =>
+                resolver.positionAt(id, beat),
+            ),
     });
 
 beforeEach(() => {
@@ -420,9 +428,14 @@ describe("useStartFlagOverlay", () => {
         act(() => {
             useStartFlagKeyStore.getState().toggleLatched();
         });
-        expect(result.current).toEqual(all);
-        // Only the dot-only samples for the selected marchers were new
-        const dotOnly = calls.count;
+        // All dots and paths again, now with squares on the selected marcher's route
+        expect(result.current).toEqual(
+            expected(resolver, { dots: "all", paths: "all" }, [3]),
+        );
+        expect(result.current!.paths).toEqual(all!.paths);
+        expect(result.current!.dots.dots).toEqual(all!.dots.dots);
+        // The same changes again sample nothing: every piece and Set beat list is kept
+        calls.count = 0;
         rerender(props({ selectedIds: [1, 2] }));
         act(() => {
             useStartFlagKeyStore.getState().toggleLatched();
@@ -431,6 +444,6 @@ describe("useStartFlagOverlay", () => {
         act(() => {
             useStartFlagKeyStore.getState().toggleLatched();
         });
-        expect(calls.count).toBe(dotOnly);
+        expect(calls.count).toBe(0);
     });
 });
