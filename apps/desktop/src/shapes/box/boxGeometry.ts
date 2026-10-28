@@ -283,8 +283,8 @@ export const SWAY_BAND = 0.04;
 /**
  * An outline round a `width` × `depth` frame (#458, owner on #459): of the splits, the one whose
  * following spacing comes nearest its exact one, the exact interval fitting its length on the
- * ladder, or exactly (`exactly`, to 600ths of a step, as typed) for a switch to Outline, which
- * keeps the frame
+ * ladder, or exactly (`exactly`, as it fits) for a switch to Outline, which keeps the frame as
+ * drawn
  */
 export function swayOutline(
     width: number,
@@ -308,14 +308,11 @@ export function swayOutline(
     /** Split `a`: its intervals, how near the following one comes, how far the exact way misses */
     const scoreOf = (a: number) => {
         const b = sum - a;
-        const across =
-            exact === "across"
-                ? snapInterval(width / a, env, exactly)
-                : width / a;
-        const deep =
-            exact === "deep"
-                ? snapInterval(depth / b, env, exactly)
-                : depth / b;
+        // Exactly: the interval that fits, kept as it is so the frame is the one drawn
+        const fit = (v: number) =>
+            exactly ? Math.max(v, half) : snapInterval(v, env);
+        const across = exact === "across" ? fit(width / a) : width / a;
+        const deep = exact === "deep" ? fit(depth / b) : depth / b;
         const follows = exact === "across" ? deep : across;
         const score =
             (follows < half - 1e-9 ? 1e6 : 0) +
