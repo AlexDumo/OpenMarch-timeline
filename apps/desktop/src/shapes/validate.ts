@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { closestApproach, walksCross, type Walk } from "./geometry/segments";
 import type { ShapeContext, ShapeIssue, Slot } from "./types";
 
@@ -6,6 +7,50 @@ import type { ShapeContext, ShapeIssue, Slot } from "./types";
 /** Marchers closer than this many steps get a warning */
 export const MIN_SPACING_STEPS = 1;
 const SAME_SPOT_STEPS = 0.01;
+
+const sameSpotMessage = (count: number) =>
+    tolgee.t(
+        "shapes.validate.sameSpot",
+        "{count, plural, one {# marcher would stand} other {# marchers would stand}} on the same spot",
+        { count },
+    );
+
+const tooCloseMessage = (count: number) =>
+    tolgee.t(
+        "shapes.validate.tooClose",
+        "{count, plural, one {# marcher is} other {# marchers are}} closer than {min, plural, one {# step} other {# steps}}",
+        { count, min: MIN_SPACING_STEPS },
+    );
+
+const passCloseMessage = (count: number) =>
+    tolgee.t(
+        "shapes.validate.passClose",
+        "{count, plural, one {# pair} other {# pairs}} of marchers pass closer than {min, plural, one {# step} other {# steps}} mid-move (drawn in red). Point here to see who.",
+        { count, min: MIN_SPACING_STEPS },
+    );
+
+const crossApartMessage = (count: number) =>
+    tolgee.t(
+        "shapes.validate.crossApart",
+        "{count, plural, one {# pair} other {# pairs}} of walks cross paths at different times: no collision, one marcher is past before the other arrives. Point here to see them.",
+        { count },
+    );
+
+/** "3 marchers would stand off the field", in the current language */
+const offFieldMessage = (count: number) =>
+    tolgee.t(
+        "shapes.validate.offField",
+        "{count, plural, one {# marcher would stand} other {# marchers would stand}} off the field",
+        { count },
+    );
+
+/** The note under the walks when none collide or pass close */
+const walksClearMessage = () =>
+    tolgee.t(
+        "shapes.validate.walksClear",
+        "Walks checked count by count: no two marchers come within {min, plural, one {# step} other {# steps}} of each other at the same moment.",
+        { min: MIN_SPACING_STEPS },
+    );
 
 export function validateSlots(
     slots: readonly Slot[],
@@ -24,7 +69,10 @@ export function validateSlots(
         if (!Number.isFinite(slot.x) || !Number.isFinite(slot.y)) {
             issues.push({
                 level: "error",
-                message: "The shape has a spot with no position",
+                message: tolgee.t(
+                    "shapes.validate.noPosition",
+                    "The shape has a spot with no position",
+                ),
                 slots: [i],
             });
             return;
@@ -57,14 +105,14 @@ export function validateSlots(
     if (sameSpot.size > 0) {
         issues.push({
             level: "error",
-            message: `${sameSpot.size} marchers would stand on the same spot`,
+            message: sameSpotMessage(sameSpot.size),
             slots: [...sameSpot],
         });
     }
     if (tooClose.size > 0) {
         issues.push({
             level: "warning",
-            message: `${tooClose.size} marchers are closer than ${MIN_SPACING_STEPS} step`,
+            message: tooCloseMessage(tooClose.size),
             slots: [...tooClose],
         });
     }
@@ -82,10 +130,7 @@ export function validateSlots(
         if (off.length > 0)
             issues.push({
                 level: "warning",
-                message:
-                    off.length === 1
-                        ? "1 marcher would stand off the field"
-                        : `${off.length} marchers would stand off the field`,
+                message: offFieldMessage(off.length),
                 slots: off,
             });
     }
@@ -114,10 +159,15 @@ export function validateStepSizes(
     return [
         {
             level: "warning",
-            message:
-                over.length === 1
-                    ? `1 marcher needs steps longer than the ${steps.limit} limit (${steps.describe(longest)}, drawn in orange). Set the limit in Field › Customize.`
-                    : `${over.length} marchers need steps longer than the ${steps.limit} limit (longest ${steps.describe(longest)}, drawn in orange). Set the limit in Field › Customize.`,
+            message: tolgee.t(
+                "shapes.validate.stepsTooLong",
+                "{count, plural, one {# marcher needs steps longer than the {limit} limit ({longest}, drawn in orange).} other {# marchers need steps longer than the {limit} limit (longest {longest}, drawn in orange).}} Set the limit in Field › Customize.",
+                {
+                    count: over.length,
+                    limit: steps.limit,
+                    longest: steps.describe(longest),
+                },
+            ),
             slots: over,
             mark: "steps",
         },
@@ -178,27 +228,30 @@ export function validatePaths(
         }
     }
     const issues: ShapeIssue[] = [];
-    const pairs = (k: number) => `${k} ${k === 1 ? "pair" : "pairs"}`;
     if (crossings > 0)
         issues.push({
             level: "warning",
             // The fix, when there is one, is offered beside the warning (sims, draw round 1:
             // "Nearest untangles them" was promised even where Nearest made it worse)
-            message: `${pairs(crossings)} of marchers would walk through each other (drawn in red). Point here to see who.`,
+            message: tolgee.t(
+                "shapes.validate.crossing",
+                "{count, plural, one {# pair} other {# pairs}} of marchers would walk through each other (drawn in red). Point here to see who.",
+                { count: crossings },
+            ),
             slots: [...crossingSlots],
             mark: "collision",
         });
     if (passes > 0)
         issues.push({
             level: "warning",
-            message: `${pairs(passes)} of marchers pass closer than ${MIN_SPACING_STEPS} step mid-move (drawn in red). Point here to see who.`,
+            message: passCloseMessage(passes),
             slots: [...closeSlots],
             mark: "close",
         });
     if (apart > 0)
         issues.push({
             level: "info",
-            message: `${pairs(apart)} of walks cross paths at different times: no collision, one marcher is past before the other arrives. Point here to see them.`,
+            message: crossApartMessage(apart),
             slots: [...apartSlots],
         });
     // Say so when the walks are clear, so a quiet preview reads as checked, not unchecked
@@ -211,7 +264,7 @@ export function validatePaths(
             level: "info",
             // "At the same moment": a walk may cross a spot someone else has already left (sims,
             // round 13: "5's arrow runs through 7's start circle, who do I believe?")
-            message: `Walks checked count by count: no two marchers come within ${MIN_SPACING_STEPS} step of each other at the same moment.`,
+            message: walksClearMessage(),
         });
     return issues;
 }
