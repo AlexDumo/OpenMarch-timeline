@@ -79,8 +79,11 @@ import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { useSplitMergeActions, useSplitMergeMoves } from "./useSplitMergeMoves";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 import { jumpTimelinePlayback } from "@/timeline/timelineTransport";
-import { useLabeledHoldMarks } from "./PageHoldMark";
-import { useTimelineHoldMarks } from "@/timeline/usePageHoldMarks";
+import { useSelectionKeyframes } from "@/timeline/useSelectionKeyframes";
+import { marcherNamesText } from "@/timeline/timelineKeepLater";
+import tolgee from "@/global/singletons/Tolgee";
+import type { TimelineKeyframe } from "./TimelineKeyframes";
+import { useKeyframeUnsetMenu } from "@/timeline/timelineUnset";
 import {
     useKeepToggle,
     useMarcherNameOf,
@@ -234,18 +237,31 @@ export default function TimelineModePanel() {
             ),
         [selectedIdsKey],
     );
-    // UI-18: where the selected marchers hold, on the page boxes
     const selectedIdList = useMemo(
         () => [...selectedMarcherIds],
         [selectedMarcherIds],
     );
-    const holdMarks = useLabeledHoldMarks(
-        useTimelineHoldMarks(pages, selectedIdList),
+    const keepNameOf = useMarcherNameOf(selectedMarchers);
+    // #303: where the selected marchers are Set, as keyframes on the timeline, each naming who
+    const selectionKeyframes = useSelectionKeyframes(selectedIdList);
+    const keyframes = useMemo<readonly TimelineKeyframe[]>(
+        () =>
+            selectionKeyframes.map((keyframe) => ({
+                ...keyframe,
+                names: marcherNamesText(
+                    keyframe.marcherIds,
+                    keepNameOf,
+                    (key, defaultValue, params) =>
+                        tolgee.t(key, defaultValue, params),
+                ),
+            })),
+        [selectionKeyframes, keepNameOf],
     );
+    // #306: a diamond's right-click Unset actions at its count
+    const keyframeMenu = useKeyframeUnsetMenu(selectedIdList, isPlaying);
     // UI-18 keep later pages: the chains on the page boxes, and the page box menu's entries
     // (named up to three; K's target says so, from the current page)
     const keepStates = usePageKeepStates(pages, selectedIdList);
-    const keepNameOf = useMarcherNameOf(selectedMarchers);
     const keepK = useKeepToggle(
         keepStates,
         pages,
@@ -523,7 +539,8 @@ export default function TimelineModePanel() {
                     transportViewControls={
                         basic ? undefined : EXPERT_VIEW_CONTROLS
                     }
-                    holdMarks={holdMarks}
+                    keyframes={keyframes}
+                    keyframeMenu={keyframeMenu}
                     keepChains={keepChains}
                     keepHere={keepHere}
                     onSelectionChange={changeSelection}

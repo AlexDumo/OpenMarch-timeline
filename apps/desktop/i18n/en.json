@@ -121,6 +121,11 @@
             "splitMoveAtPlayhead": "Split the move at the playhead",
             "tapBeats": "Add {count} temporary beats",
             "toggleKeepOnPage": "Keep the selected marchers where they hold on this page (on the next page if they move here), or let them follow again",
+            "unsetHere": "Remove keyframe",
+            "unsetHereAndFollowing": "Remove keyframe, later pages follow back",
+            "unsetHereAndPage": "Remove keyframe, Page {page} follows back",
+            "unsetHereAndPages": "Remove keyframe, Pages {first}–{last} follow back",
+            "unsetHereKeywords": "keyframe diamond unset set following remove clear take back coordinate position delete",
             "splitSelectedIntoNewMove": "Split selected marchers into a new move",
             "mergeMoveIntoPage": "Merge this move into its page"
         },
@@ -128,6 +133,7 @@
             "exitTimelineFocus": "Done editing timeline",
             "focusCanvas": "Focus canvas",
             "focusTimeline": "Edit timeline",
+            "openFieldMenu": "Open the field menu",
             "hideNextPaths": "Hide next page paths",
             "openCommandPalette": "Command palette",
             "openSettings": "Settings…",
@@ -805,7 +811,13 @@
                 "pagesFollowSome": "Pages {first}–{last} follow some of these marchers",
                 "someHoldHere": "Some of these marchers hold here",
                 "someKeptOnThisPage": "Some of these marchers are kept on this page",
-                "theseMarchers": "these marchers"
+                "theseMarchers": "these marchers",
+                "unsetHere": "Remove keyframe",
+                "unsetHereAndFollowingHint": "Remove their keyframe on this count, and {pages} follow back to the keyframe before it",
+                "unsetHereAndFollowingHintSome": "Remove the keyframe of the {count} of the {total} selected that have one on this count, and {pages} follow back to the keyframe before it",
+                "unsetHereHint": "Remove their keyframe on this count, so they follow from earlier. Later pages stay where they are",
+                "unsetHereHintSome": "Remove the keyframe of the {count} of the {total} selected that have one on this count, so they follow from earlier. Later pages stay where they are",
+                "unsetHereNone": "None of the selected marchers has a keyframe on this count"
             },
             "title": "{count} Marchers",
             "titleSingle": "Marcher {drillNumber}",
@@ -1952,14 +1964,14 @@
             "passThrough": {
                 "catchUp": "Now catches up to the set at the end of {caughtUp}",
                 "keepStops": {
-                    "many": "Keep Pages {first}–{last} as stops",
-                    "one": "Keep Page {page} as a stop",
-                    "unnamed": "Keep them as stops"
+                    "many": "Keep Pages {first}–{last} as keyframes",
+                    "one": "Keep Page {page} as a keyframe",
+                    "unnamed": "Keep them as keyframes"
                 },
                 "noLongerStop": {
-                    "many": "Pages {first}–{last} are no longer stops",
-                    "one": "Page {page} is no longer a stop",
-                    "unnamed": "The sets inside this move are no longer stops"
+                    "many": "Pages {first}–{last} are no longer keyframes",
+                    "one": "Page {page} is no longer a keyframe",
+                    "unnamed": "The pages inside this move are no longer keyframes"
                 },
                 "through": "Now moves straight through {through}",
                 "throughAndCatchUp": "Now moves straight through {through}, then catches up to the set at the end of {caughtUp}"
@@ -1984,22 +1996,6 @@
             "slotOutOfRange": "That slot doesn't exist. A transition's slots are numbered from 0 up to one less than its slot count.",
             "transitionSpansTimeline": "A transition must span its whole timeline, starting and ending with it. Change the timeline's range instead, and its transitions move with it.",
             "unknown": "The timeline couldn't make that change."
-        },
-        "holdMarks": {
-            "holds": "Selected marchers hold from Page {page}",
-            "holdsFromStart": "Selected marchers hold from the start",
-            "holdsFromStartHint": "They stand where they started",
-            "holdsHere": "Selected marchers hold on this page",
-            "holdsHereHint": "They stand where their last move left them",
-            "holdsHint": "They stand where Page {page} left them",
-            "kept": "Selected marchers are kept here",
-            "keptHint": "They stay here when earlier pages change",
-            "mixed": "Some selected marchers hold from Page {page}",
-            "mixedFromStart": "Some selected marchers hold from the start",
-            "mixedHere": "Some selected marchers hold on this page",
-            "mixedHint": "Some have their own move here",
-            "moves": "Selected marchers move on this page",
-            "movesHint": "They have their own move here"
         },
         "keep": {
             "chain": {
@@ -2046,6 +2042,14 @@
                 "three": "{first}, {second} and {third}",
                 "two": "{first} and {second}"
             }
+        },
+        "keyframes": {
+            "detail": "{set} of {total} selected",
+            "detailNames": "{set} of {total} selected: {names}",
+            "removeError": "Couldn't remove the keyframes",
+            "removeLocked": "{count, plural, one {One marcher uses Expert moves on this page, so its keyframe wasn't removed. Switch to Expert to edit it.} other {# marchers use Expert moves on this page, so their keyframes weren't removed. Switch to Expert to edit them.}}",
+            "removeLockedAll": "{count, plural, one {One marcher uses Expert moves on this page. Switch to Expert to edit it.} other {# marchers use Expert moves on this page. Switch to Expert to edit them.}}",
+            "title": "Keyframe · Page {page}, count {count}"
         },
         "label": "Timeline",
         "masterVolume": "Master Volume",

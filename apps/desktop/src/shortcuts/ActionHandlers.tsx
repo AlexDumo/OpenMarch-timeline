@@ -9,6 +9,7 @@ import { useNavigationActionHandlers } from "./handlers/useNavigationActionHandl
 import { useNudgeActionHandlers } from "./handlers/useNudgeActionHandlers";
 import { useTimelineActionEffects } from "./handlers/useTimelineActionEffects";
 import { useUiActionHandlers } from "./handlers/useUiActionHandlers";
+import { useUnsetActionHandlers } from "./handlers/useUnsetActionHandlers";
 
 /** Handlers available before a show is open (launch page). */
 export function FileActionHandlers() {
@@ -27,6 +28,7 @@ export function EditorActionHandlers() {
     useUiActionHandlers();
     useCursorActionHandlers();
     useKeepActionHandlers();
+    useUnsetActionHandlers();
     useTimelineActionEffects();
     return null;
 }

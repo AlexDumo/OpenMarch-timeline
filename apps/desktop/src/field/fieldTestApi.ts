@@ -34,6 +34,13 @@ export type FieldTestMarcher = {
      * marcher can't be selected.
      */
     dimmed: boolean;
+    /**
+     * Drawn as Following (a dashed edge) because it has no coordinate of its own on the count shown
+     * (#300, Set vs Following). Reports the drawn look: false while playing,
+     * and false when dimmed, which takes over. A Following marcher can still
+     * be selected.
+     */
+    following: boolean;
 };
 
 /**

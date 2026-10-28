@@ -94,7 +94,9 @@ export type BackupOptions = BackupTestHooks & {
     target?: string;
 };
 
-const byteLength = (s: string) => Buffer.byteLength(s, "utf8");
+// TextEncoder, not Buffer: the web builds run this file in a browser.
+const utf8 = new TextEncoder();
+const byteLength = (s: string) => utf8.encode(s).length;
 
 /** Cuts `s` to at most `maxBytes` UTF-8 bytes without splitting a character. */
 function truncateUtf8(s: string, maxBytes: number): string {

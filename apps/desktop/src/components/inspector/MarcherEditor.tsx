@@ -43,6 +43,9 @@ import {
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import { TagButtons } from "./marcher/TagEditor";
 import TimelineHoldLine from "./TimelineHoldLine";
+import UnsetHereButton, {
+    UnsetHereAndFollowingButton,
+} from "./UnsetHereButton";
 import { useMarcherNameOf } from "@/timeline/useKeepLaterPages";
 import MovePad from "./marcher/MovePad";
 
@@ -686,6 +689,13 @@ function MarcherEditor() {
                                         marcherIds={selectedMarcherIdList}
                                         nameOf={selectedNameOf}
                                     />
+                                    {/* Set vs Following (#304, #305) */}
+                                    <UnsetHereButton
+                                        marcherIds={selectedMarcherIdList}
+                                    />
+                                    <UnsetHereAndFollowingButton
+                                        marcherIds={selectedMarcherIdList}
+                                    />
                                     {selectedMarchers.length === 2 && (
                                         <ActionButton
                                             action="swapMarchers"
@@ -971,6 +981,17 @@ function MarcherEditor() {
                                                         selectedMarcherIdList
                                                     }
                                                     nameOf={selectedNameOf}
+                                                />
+                                                {/* Set vs Following (#304, #305) */}
+                                                <UnsetHereButton
+                                                    marcherIds={
+                                                        selectedMarcherIdList
+                                                    }
+                                                />
+                                                <UnsetHereAndFollowingButton
+                                                    marcherIds={
+                                                        selectedMarcherIdList
+                                                    }
                                                 />
                                             </div>
                                             {/* This is here so the form submits when enter is pressed, does NOT need to be translated */}

@@ -37,7 +37,8 @@ export class FieldDimming {
     }
 }
 
-const sameMembers = (
+/** Whether two sets (or nulls) hold the same ids. */
+export const sameMembers = (
     a: ReadonlySet<number> | null,
     b: ReadonlySet<number> | null,
 ) =>
