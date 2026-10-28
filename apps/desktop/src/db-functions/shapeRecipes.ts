@@ -7,10 +7,13 @@ import type { DbConnection, DbTransaction } from "./types";
  * so the shape can be reopened and edited. Positions stay the source of truth; a member's
  * override is where it stands less where its recipe put it (`x`, `y`).
  *
- * A recipe belongs to a move (`timelineId`), or to the homes (`null`). A marcher is in at most one
- * recipe per move: saving a recipe takes its marchers out of the move's other recipes and deletes
- * any recipe left with no one. Writes run inside the edit that placed the positions, so the shape
- * and its positions are one undo step.
+ * A recipe belongs to a move (`timelineId`), or to the homes (`null`), and lists only marchers
+ * whose positions are in that move. A marcher is in at most one recipe at a beat: saving a recipe
+ * takes its marchers out of the other recipes of every move ending at the beat it's placed at
+ * (its move's end: a move split off a page's shares it, UI-25), not of a move that only passes
+ * over it (an Expert move on another layer), and deletes any recipe left with no one.
+ * Writes run inside the edit that placed the positions, so the shape and its positions are one
+ * undo step.
  */
 
 export interface ShapeRecipeRecord {
@@ -46,8 +49,9 @@ const sameMove = (timelineId: number | null) =>
 
 /**
  * Saves a recipe for `members` in move `timelineId` (`null` for homes), replacing `replaces` when
- * given (an edited recipe keeps its id). Its marchers leave the move's other recipes, and
- * recipes left empty are deleted.
+ * given (an edited recipe keeps its id). A member whose positions aren't in the move is left out
+ * (a selection over several moves); the rest leave the other recipes of every move ending at the
+ * beat it's placed at, and recipes left empty are deleted.
  *
  * @returns the recipe's id
  */
@@ -64,6 +68,8 @@ export async function saveShapeRecipeInTransaction({
     members: readonly ShapeRecipeMember[];
     replaces?: number;
 }): Promise<number> {
+    const own = timelineId === null ? null : await moveMembers(tx, timelineId);
+    if (own) placed = placed.filter((m) => own.has(m.marcherId));
     const marcherIds = placed.map((m) => m.marcherId);
     const values = {
         timeline_id: timelineId,
@@ -92,12 +98,17 @@ export async function saveShapeRecipeInTransaction({
         id = inserted.id;
     }
 
-    // Out of the move's other recipes
+    // Out of the other recipes at the beat it's placed at
     if (marcherIds.length > 0) {
         const others = await tx
             .select({ id: recipes.id })
             .from(recipes)
-            .where(and(sameMove(timelineId), notInArray(recipes.id, [id])))
+            .where(
+                and(
+                    await movesEndingAtPlacedBeat(tx, timelineId),
+                    notInArray(recipes.id, [id]),
+                ),
+            )
             .all();
         if (others.length > 0) {
             await tx
@@ -130,8 +141,46 @@ export async function saveShapeRecipeInTransaction({
             .run();
     }
 
-    await deleteEmptyRecipes(tx, timelineId);
+    await deleteEmptyRecipes(tx);
     return id;
+}
+
+/** The marchers with positions in move `timelineId` */
+async function moveMembers(
+    tx: DbTransaction,
+    timelineId: number,
+): Promise<Set<number>> {
+    const a = schema.timeline_assignments;
+    const t = schema.timeline_transitions;
+    const rows = await tx
+        .selectDistinct({ id: a.marcher_id })
+        .from(a)
+        .innerJoin(t, eq(t.id, a.transition_id))
+        .where(eq(t.timeline_id, timelineId))
+        .all();
+    return new Set(rows.map((r) => r.id));
+}
+
+/**
+ * Which recipes stand at the beat a recipe of move `timelineId` is placed at (its end; homes for
+ * `null`): those of every move ending at that beat
+ */
+async function movesEndingAtPlacedBeat(
+    tx: DbTransaction,
+    timelineId: number | null,
+) {
+    if (timelineId === null) return sameMove(null);
+    const t = schema.timelines;
+    const move = await tx
+        .select({ end: t.end_beat })
+        .from(t)
+        .where(eq(t.id, timelineId))
+        .get();
+    if (!move) return sameMove(timelineId);
+    return inArray(
+        recipes.timeline_id,
+        tx.select({ id: t.id }).from(t).where(eq(t.end_beat, move.end)),
+    );
 }
 
 /**
@@ -147,6 +196,7 @@ export async function moveShapeRecipesInTransaction({
     from: number;
     to: number;
 }): Promise<void> {
+    if (!(await hasShapeRecipes(tx))) return;
     const moving = await tx
         .select({ id: recipes.id })
         .from(recipes)
@@ -184,6 +234,74 @@ export async function moveShapeRecipesInTransaction({
         .where(inArray(recipes.id, movingIds))
         .run();
     await deleteEmptyRecipes(tx, to);
+}
+
+/**
+ * Marchers `marcherIds` split off move `from` into move `to` (UI-25): a recipe of `from` they make
+ * up the whole of goes with them; from any other they're dropped, since their positions are no
+ * longer in its move. Recipes left empty are deleted.
+ */
+export async function splitShapeRecipesInTransaction({
+    tx,
+    from,
+    to,
+    marcherIds,
+}: {
+    tx: DbTransaction;
+    from: number;
+    to: number;
+    marcherIds: readonly number[];
+}): Promise<void> {
+    if (marcherIds.length === 0 || !(await hasShapeRecipes(tx))) return;
+    const split = new Set(marcherIds);
+    const theirs = await recipesById(
+        tx,
+        (
+            await tx
+                .select({ id: recipes.id })
+                .from(recipes)
+                .where(eq(recipes.timeline_id, from))
+                .all()
+        ).map((r) => r.id),
+    );
+    const whole = theirs.filter(
+        (r) =>
+            r.members.length > 0 &&
+            r.members.every((m) => split.has(m.marcherId)),
+    );
+    if (whole.length > 0)
+        await tx
+            .update(recipes)
+            .set({ timeline_id: to })
+            .where(
+                inArray(
+                    recipes.id,
+                    whole.map((r) => r.id),
+                ),
+            )
+            .run();
+    const rest = theirs.filter((r) => !whole.includes(r)).map((r) => r.id);
+    if (rest.length > 0)
+        await tx
+            .delete(members)
+            .where(
+                and(
+                    inArray(members.recipe_id, rest),
+                    inArray(members.marcher_id, [...split]),
+                ),
+            )
+            .run();
+    await deleteEmptyRecipes(tx, from);
+}
+
+/** Whether the show stores shape recipes at all (a database from before them doesn't) */
+export async function hasShapeRecipes(
+    tx: DbConnection | DbTransaction,
+): Promise<boolean> {
+    const row = await tx.get<{ name: string } | undefined>(
+        sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'timeline_shape_recipes'`,
+    );
+    return row !== undefined;
 }
 
 /** Deletes move `timelineId`'s recipes nobody is in anymore (every move's when omitted) */
@@ -226,6 +344,14 @@ export async function readShapeRecipes({
         db,
         hits.map((h) => h.id),
     );
+}
+
+/** Recipe `id` as stored, or null when there's none (a save that kept no one deletes it) */
+export async function readShapeRecipe(
+    db: DbConnection | DbTransaction,
+    id: number,
+): Promise<StoredShapeRecipe | null> {
+    return (await recipesById(db, [id]))[0] ?? null;
 }
 
 /** Every recipe that any of `marcherIds` is in, in any move */

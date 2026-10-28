@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { boxShape } from "../box/boxShape";
 import { boxTool } from "../box/boxTool";
 import { drawBox, filesOf, ranksOf, type BoxSize } from "../box/boxGeometry";
@@ -241,7 +241,15 @@ describe("a box recipe edited by hand (B4)", () => {
                     positionOf: (id) => at(r).get(id),
                 });
             expect(show(r)).toHaveLength(1);
-            expect(show(broken)).toEqual([]);
+            const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+            try {
+                expect(show(broken)).toEqual([]);
+                expect(warn).toHaveBeenCalledWith(
+                    expect.stringContaining(`shape ${r.id}`),
+                );
+            } finally {
+                warn.mockRestore();
+            }
         },
     );
 });

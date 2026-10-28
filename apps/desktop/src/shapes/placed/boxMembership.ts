@@ -1,4 +1,5 @@
 import {
+    readShapeRecipe,
     readShapeRecipesOf,
     saveShapeRecipeInTransaction,
     type ShapeRecipeMember,
@@ -106,13 +107,16 @@ export function boxMembershipEdit({
                         kept.params as StoredParams,
                         kept.members,
                     );
-                    if (kept.members.length > 0)
+                    // Who is in it as saved: the save leaves out marchers not in this move,
+                    // and deletes a recipe it left with no one
+                    const saved = await readShapeRecipe(tx, recipeId);
+                    if (saved && saved.members.length > 0)
                         leaves.push({
                             recipeId,
                             timelineId,
                             left: change.left,
                             box,
-                            members: kept.members,
+                            members: saved.members,
                         });
                 }
                 wrote = true;

@@ -4,6 +4,7 @@ import { boxTool } from "../../box/boxTool";
 import { filesOf, ranksOf, type BoxParams } from "../../box/boxGeometry";
 import {
     savedShapeOf,
+    newerSavedShapes,
     savedShapeRows,
     savedToolKind,
     suggestedName,
@@ -272,6 +273,19 @@ describe("the library's Saved group", () => {
                 tools,
             ),
         ).toEqual([]);
+    });
+
+    it("counts the saved shapes it leaves out for a newer app, each once", () => {
+        const box = shape("a", "Box");
+        const newer = { ...box, id: "n", kindVersion: box.kindVersion + 1 };
+        expect(
+            newerSavedShapes(
+                [newer, box, { ...box, id: "k", kind: "arc-from-later" }],
+                [newer, { ...newer, id: "b" }],
+                tools,
+            ),
+        ).toBe(3);
+        expect(newerSavedShapes([box], [box], tools)).toBe(0);
     });
 
     it("leaves out a saved shape of another version of a kind, as placed shapes do (B3)", () => {

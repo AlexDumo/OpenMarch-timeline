@@ -20,7 +20,10 @@ import {
 import { joinList } from "@/timeline/timelineRangeWords";
 import { nextMoveNameInTransaction, readMoveWords } from "./timelineMoveNames";
 import type { TimelinePathParams } from "./timelineTransitionsInTransaction";
-import { moveShapeRecipesInTransaction } from "./shapeRecipes";
+import {
+    moveShapeRecipesInTransaction,
+    splitShapeRecipesInTransaction,
+} from "./shapeRecipes";
 
 /**
  * Splitting a move and merging moves back (docs/timeline/ui.md UI-25, project owner 2026-10-16).
@@ -337,6 +340,13 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
             })),
         });
     }
+    // The marchers' shapes (ADR 0006) follow them, as a merge's do
+    await splitShapeRecipesInTransaction({
+        tx,
+        from: timelineId,
+        to: timeline!.id,
+        marcherIds: [...chosen],
+    });
     return {
         fromTimelineId: timelineId,
         timeline: timeline!,

@@ -150,6 +150,35 @@ describeDbTests("the shape library", (it) => {
         ).toEqual([wide]);
     });
 
+    it("says how many saved shapes need a newer version of the app, which it can't list", async ({
+        db,
+        wrapper,
+    }) => {
+        const newer = { ...wide, kindVersion: boxTool.shape.version + 1 };
+        useSavedShapeLibrary.getState().put({ ...newer, id: "a" });
+        useSavedShapeLibrary.getState().put(wide);
+        await copyIntoShow(db, { ...newer, id: "b" });
+        await copyIntoShow(db, { ...wide, id: "c", kind: "arc-from-later" });
+        render(<ShapeLibraryContents />, wrapper);
+        // The show's copies load after my library's
+        await waitFor(() =>
+            expect(
+                screen.getByTestId("shape-library-saved-newer"),
+            ).toHaveTextContent(
+                "3 saved shapes need a newer version of OpenMarch.",
+            ),
+        );
+        expect(screen.getByTestId("shape-library-row-wide")).toBeVisible();
+    });
+
+    it("says nothing of newer versions when every saved shape is listed", ({
+        wrapper,
+    }) => {
+        useSavedShapeLibrary.getState().put(wide);
+        render(<ShapeLibraryContents />, wrapper);
+        expect(screen.queryByTestId("shape-library-saved-newer")).toBeNull();
+    });
+
     it("lists a saved shape only the open show has, which can join my library", async ({
         db,
         wrapper,
