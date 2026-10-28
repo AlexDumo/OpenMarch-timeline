@@ -1294,11 +1294,20 @@ export const moveMarchersInTarget = async ({
                             target.start,
                         )) ??
                         (await timelineWithRange(tx, target)))
-                      : ((await timelineHoldingMost(
+                      : // Basic edits only moves over the page box (an Expert move is
+                        // refused), so those first, should a file hold others
+                        ((await timelineHoldingMost(
                             tx,
                             marcherIds,
                             target.beat,
-                        )) ?? (await timelineEndingAt(tx, target.beat)));
+                            target.box.start,
+                        )) ??
+                        (await timelineHoldingMost(
+                            tx,
+                            marcherIds,
+                            target.beat,
+                        )) ??
+                        (await timelineEndingAt(tx, target.beat)));
                 const wroteAppData =
                     afterWrite && timelineId !== null
                         ? (await afterWrite(tx, timelineId)) !== false
