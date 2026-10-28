@@ -471,7 +471,8 @@
             "useHashes": "Utiliser les hachages",
             "width": "Largeur",
             "widthHeight": "l/h",
-            "stepSizeWarningThresholdRatio": "{label} ({steps} à 5)"
+            "stepSizeWarningThresholdRatio": "{label} ({steps} à 5)",
+            "stepSizeWarningThreshold": "Seuil d'alerte de taille de pas"
         },
         "messages": {
             "fieldRatio": "{ratio} ou {decimal}",
@@ -527,7 +528,8 @@
             "stepsFromFrontToHomeLabel": "Nombre de pas depuis la ligne de touche avant jusqu'à l'extérieur du numéro de la maison (plus près de la ligne de touche avant)",
             "stepsFromFrontToHomeLabelTop": "Nombre de pas depuis la ligne de touche avant jusqu'à l'intérieur du numéro de domicile (plus proche du centre du terrain)",
             "stepSize": "La taille de chaque étape sur le terrain en pouces ou centimètres",
-            "useHashes": "Utilisez des hachures pour les points de contrôle Y, comme un terrain de football. Si non coché, des lignes seront utilisées."
+            "useHashes": "Utilisez des hachures pour les points de contrôle Y, comme un terrain de football. Si non coché, des lignes seront utilisées.",
+            "stepSizeWarningThreshold": "Les marcheurs dont la taille de pas dépasse cette distance sont signalés par un chemin de couleur d'alerte. Mettez 0 pour désactiver."
         },
         "units": {
             "steps": "pas"

@@ -471,7 +471,8 @@
             "useHashes": "Usar Hashes",
             "width": "Largura",
             "widthHeight": "l/a",
-            "stepSizeWarningThresholdRatio": "{label} ({steps} por 5)"
+            "stepSizeWarningThresholdRatio": "{label} ({steps} por 5)",
+            "stepSizeWarningThreshold": "Limite de aviso de tamanho do passo"
         },
         "messages": {
             "fieldRatio": "{ratio} ou {decimal}",
@@ -527,7 +528,8 @@
             "stepsFromFrontToHomeLabel": "Número de passos da linha lateral da frente até o lado de fora do número da casa (mais próximo à linha lateral da frente)",
             "stepsFromFrontToHomeLabelTop": "Número de passos da linha lateral da frente para o interior do número da casa (mais próximo ao centro do campo)",
             "stepSize": "O tamanho de cada passo no campo em polegadas ou centímetros",
-            "useHashes": "Usar hashtags para os pontos de verificação Y, como um campo de futebol. Se desmarcado, linhas serão usadas."
+            "useHashes": "Usar hashtags para os pontos de verificação Y, como um campo de futebol. Se desmarcado, linhas serão usadas.",
+            "stepSizeWarningThreshold": "Marchadores cujo tamanho de passo excede esta distância são sinalizados com um caminho na cor de aviso. Defina 0 para desativar."
         },
         "units": {
             "steps": "passos"

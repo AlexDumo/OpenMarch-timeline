@@ -471,7 +471,8 @@
             "useHashes": "ハッシュ を 使用",
             "width": "幅",
             "widthHeight": "幅 / 高さ",
-            "stepSizeWarningThresholdRatio": "{label}（{steps}対5）"
+            "stepSizeWarningThresholdRatio": "{label}（{steps}対5）",
+            "stepSizeWarningThreshold": "歩幅の警告しきい値"
         },
         "messages": {
             "fieldRatio": "{ratio} または {decimal}",
@@ -527,7 +528,8 @@
             "stepsFromFrontToHomeLabel": "前 サイドライン から ホーム 番号 の 外側 まで の ステップ 数 （前 サイドライン に 近い）",
             "stepsFromFrontToHomeLabelTop": "前面 サイドライン から ホーム 番号 の 内側 （フィールド の 中心 に 近い方） まで の ステップ 数",
             "stepSize": "フィールドの各ステップのサイズ（インチまたはセンチメートル）",
-            "useHashes": "Y チェックポイントに ハッシュ を使用します 。 フットボール フィールド のように 。 チェックを外す と、線 が 使用されます 。"
+            "useHashes": "Y チェックポイントに ハッシュ を使用します 。 フットボール フィールド のように 。 チェックを外す と、線 が 使用されます 。",
+            "stepSizeWarningThreshold": "歩幅がこの距離を超えるマーチャーは、警告色のパスで示されます。0にすると無効になります。"
         },
         "units": {
             "steps": "ステップ"
