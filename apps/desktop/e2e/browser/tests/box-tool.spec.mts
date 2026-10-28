@@ -3025,7 +3025,7 @@ test("change: Edge on a Spread box stands marchers along its outline, the box st
             Math.abs(p.y - top),
             Math.abs(p.y - bottom),
         ) < 0.01;
-    // Some stand on the outline (all of them, with this few), everyone on or inside it
+    // Some stand on the outline, about 1½ intervals apart, everyone on or inside it
     expect(on.spots.filter(onEdge).length).toBeGreaterThan(0);
     for (const p of on.spots) {
         expect(p.x).toBeGreaterThanOrEqual(left - 0.01);

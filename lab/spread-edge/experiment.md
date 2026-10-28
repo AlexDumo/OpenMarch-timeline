@@ -3,21 +3,23 @@
 # Keep `id` stable: feedback is filed under it.
 id: spread-edge
 title: Spread with an edge
-summary: A new Edge toggle in Spread stands some marchers evenly along the shape's outline and spreads the rest inside, so the shape reads clearly. Reshuffle only changes the inside.
+summary: A new Edge toggle in Spread stands marchers along the shape's outline, about 1½ spacings apart, and spreads the rest right up to them as one even spread, so the shape reads clearly. Reshuffle only changes the inside.
 status: open
 questions:
   - With Edge on, did the shape read more clearly than a plain spread?
   - Did the marchers along the edge look evenly spaced, and the ones inside evenly spread?
-  - Was the gap between the edge and the inside about right, too tight, or too loose?
+  - Did the edge and the inside read as one spread, or as two separate things?
+  - Were there enough marchers on the edge to see the shape?
   - Did the box or circle stay put when you turned Edge on and off?
   - Was "Edge" a clear name? Was its tooltip (how many stand where) useful?
 ---
 
 **Spread** has a new **Edge** toggle beside Reshuffle. With it on, some
-marchers stand evenly along the shape's outline, a spot on every corner
-of a box, and the rest spread evenly inside it, at least one interval in.
-No two marchers stand closer than the spacing. The box or circle stays
-where you drew it.
+marchers stand along the shape's outline, about 1½ spacings apart with a
+spot on every corner of a box. The rest spread right up to them, with no
+gap between, so the edge and the inside read as one spread. No two
+marchers stand closer than the spacing. The box or circle stays where you
+drew it.
 
 **What to try**
 

@@ -1,5 +1,10 @@
 import type { XY } from "../types";
-import { evenSpread, spreadSize, type SpreadLayout } from "./spread";
+import {
+    evenSpread,
+    spreadAround,
+    spreadSize,
+    type SpreadLayout,
+} from "./spread";
 import type {
     Distribution,
     FilesDistribution,
@@ -233,23 +238,48 @@ const edgeKind = (region: Region): "rect" | "circle" | null => {
     return kind === "rect" || kind === "circle" ? kind : null;
 };
 
-/** How far the inside spread keeps from the edge, in intervals */
-const EDGE_INSET = 1;
-
 /**
- * The edge's sides at size `scale` (intervals per region unit), each as a start, a direction and a
- * length, clockwise from the back-left corner; a circle is its rim, one side with no corners
+ * How far apart the edge's spots stand along it, in intervals (#450, owner's pick C): close enough
+ * to see the outline, sparse enough that the edge and the inside read as one spread
  */
+const EDGE_GAP = 1.5;
+/**
+ * The size allows for the inside as a spread over the frame this far in from the edge, in
+ * intervals: about where the inside's outer spots stand, between the edge's
+ */
+const EDGE_ROOM_IN = 0.55;
+
+/** The frame's half sizes at size `scale` (intervals per region unit); a circle's radius is `w` */
 function edgeSides(region: Region, scale: number) {
     const w = region.bounds.right * scale;
     const h = region.bounds.bottom * scale;
     return { w, h };
 }
 
+/** The frame at size `scale`, in intervals */
+function frameAt(region: Region, scale: number): Region {
+    const { w, h } = edgeSides(region, scale);
+    return edgeKind(region) === "circle" ? circleRegion(w) : rectRegion(w, h);
+}
+
 /**
- * How many spots the edge holds at size `scale`, each one interval or more from the next: whole
- * intervals along each side of a box (a spot on every corner), or round a circle by the chord
+ * How many spots each side of the edge takes at size `scale`: about {@link EDGE_GAP} apart, never
+ * closer than an interval, a spot on every corner of a box; a circle's rim is one side
  */
+function edgePlan(region: Region, scale: number): number[] {
+    const { w, h } = edgeSides(region, scale);
+    const along = (length: number, most: number) =>
+        Math.max(1, Math.min(most, Math.round(length / EDGE_GAP)));
+    if (edgeKind(region) === "circle")
+        return [along(2 * Math.PI * w, rimHolds(w))];
+    const across = along(2 * w, Math.max(1, Math.floor(2 * w + 1e-9)));
+    const deep = along(2 * h, Math.max(1, Math.floor(2 * h + 1e-9)));
+    return [across, deep, across, deep];
+}
+
+const sum = (values: readonly number[]) => values.reduce((a, b) => a + b, 0);
+
+/** The most the edge can hold at size `scale`, one interval apart or more */
 function edgeHolds(region: Region, scale: number): number {
     const { w, h } = edgeSides(region, scale);
     if (edgeKind(region) === "circle") return rimHolds(w);
@@ -266,26 +296,16 @@ const rimHolds = (r: number) =>
         ? 1
         : Math.max(1, Math.floor(Math.PI / Math.asin(1 / (2 * r)) + 1e-9));
 
-/** The inside of the edge at size `scale`, in intervals: the region inset by {@link EDGE_INSET} */
-function insideOf(region: Region, scale: number): Region | null {
-    const { w, h } = edgeSides(region, scale);
-    if (w - EDGE_INSET <= 0 || h - EDGE_INSET <= 0) return null;
-    return edgeKind(region) === "circle"
-        ? circleRegion(w - EDGE_INSET)
-        : rectRegion(w - EDGE_INSET, h - EDGE_INSET);
-}
-
 /** Edge sizes worked out, by region and count */
 const edgeSizes = new Map<string, number>();
 
 /**
  * How big a spread of `n` with an edge is at an interval of 1 (#450): the least size, found by
  * halving to a millionth, at which the sides are an interval long or more (opposite sides' spots
- * would stand closer otherwise) and either the edge holds everyone one interval apart, or the
- * rest fit inside it, {@link EDGE_INSET} in, no closer than the interval. The rest counts the edge
- * at its least ({@link edgeAtLeast}), which only grows with the size, so the size changes smoothly
- * with the shape's proportions (a handle drag doesn't step as the edge's count flips) and never
- * shrinks for a bigger count. Seed-free, like a plain spread's.
+ * would stand closer otherwise) and either the edge, at {@link EDGE_GAP}, has room for everyone,
+ * or the rest fit as a spread over the frame {@link EDGE_ROOM_IN} in. The rest counts the edge at
+ * its least ({@link edgeAtLeast}), which only grows with the size, so the size changes smoothly
+ * with the proportions and never shrinks for a bigger count. Seed-free, like a plain spread's.
  */
 export function edgeSize(region: Region, n: number): number {
     const key = `${region.key} ${n}`;
@@ -294,14 +314,18 @@ export function edgeSize(region: Region, n: number): number {
     const fits = (scale: number) => {
         const { w, h } = edgeSides(region, scale);
         if (2 * Math.min(w, h) < 1) return false;
-        if (edgeHolds(region, scale) >= n) return true;
-        const inside = insideOf(region, scale);
+        if (n <= sum(edgePlan(region, scale))) return true;
         const rest = n - edgeAtLeast(region, scale);
-        return inside !== null && (rest <= 0 || spreadSize(inside, rest) <= 1);
+        if (rest <= 0) return true;
+        if (w <= EDGE_ROOM_IN || h <= EDGE_ROOM_IN) return false;
+        const room =
+            edgeKind(region) === "circle"
+                ? circleRegion(w - EDGE_ROOM_IN)
+                : rectRegion(w - EDGE_ROOM_IN, h - EDGE_ROOM_IN);
+        return spreadSize(room, rest) <= 1;
     };
     // Too small: a side under an interval. Then doubled until it fits, and halved between
-    const short = Math.min(region.bounds.right, region.bounds.bottom);
-    let lo = 0.5 / short;
+    let lo = 0.5 / Math.min(region.bounds.right, region.bounds.bottom);
     let hi = lo;
     while (!fits(hi)) hi *= 2;
     for (let i = 0; i < 60 && hi - lo > hi * 1e-6; i++) {
@@ -315,33 +339,35 @@ export function edgeSize(region: Region, n: number): number {
 }
 
 /**
- * The least the edge holds at size `scale`, as a smooth function of it: a box's sides less one
- * interval each, a circle's rim less one spot. The edge always holds at least this many.
+ * The least the edge takes at size `scale`, as a smooth function of it: a box's sides each
+ * {@link EDGE_GAP} apart less half a spot, a circle's rim likewise. The edge takes at least this.
  */
 function edgeAtLeast(region: Region, scale: number): number {
     const { w, h } = edgeSides(region, scale);
+    const along = (length: number) => Math.max(1, length / EDGE_GAP - 0.5);
     if (edgeKind(region) === "circle")
-        return w < 0.5 ? 0 : Math.PI / Math.asin(1 / (2 * w)) - 1;
-    return 2 * (2 * w - 1) + 2 * (2 * h - 1);
+        return Math.min(along(2 * Math.PI * w), rimHolds(w));
+    return 2 * along(2 * w) + 2 * along(2 * h);
 }
 
 /**
  * The split of `n` with an edge over `region`: how many stand on the edge and how many inside
- * (none inside when there are too few to show both)
+ * (none inside when there are too few for both: then everyone stands on the edge)
  */
 export function edgeSplit(
     region: Region,
     n: number,
 ): { readonly edge: number; readonly inside: number } {
-    const edge = Math.min(n, edgeHolds(region, edgeSize(region, n)));
+    const edge = Math.min(n, sum(edgePlan(region, edgeSize(region, n))));
     return { edge, inside: n - edge };
 }
 
 /**
- * A spread with an edge (#450): spots evenly along the edge, as many as it holds one interval
- * apart (all of them, when there are too few for an inside), then the rest in an even spread
- * inside it, {@link EDGE_INSET} in, stretched to fill the inside. The edge doesn't depend on the
- * seed, so Reshuffle reshuffles the inside only.
+ * A spread with an edge (#450, owner's pick C): spots along the edge about {@link EDGE_GAP} apart
+ * (a spot on every corner of a box), and the rest spread over the frame around them, relaxed with
+ * the edge's spots as still neighbors, so the edge and the inside read as one spread with no band
+ * between, no pair closer than the interval. Too few for an inside: all of them on the edge. The
+ * edge doesn't follow the seed, so Reshuffle reshuffles the inside only.
  */
 function edgeSpread(
     region: Region,
@@ -349,27 +375,28 @@ function edgeSpread(
     seed: number,
     generator: number,
 ): SpreadLayout {
+    void generator;
     const scale = edgeSize(region, n);
     const { edge, inside } = edgeSplit(region, n);
-    const spots = edgeSpots(region, scale, edge);
-    const within = insideOf(region, scale);
-    if (inside > 0 && within) {
-        const layout = evenSpread(within, inside, seed, inside, generator);
-        // Its spots at an interval of 1 over the inside at `layout.scale`, onto the inside itself
-        const grow = layout.scale > 0 ? 1 / layout.scale : 1;
-        for (const s of layout.spots)
-            spots.push({ x: s.x * grow, y: s.y * grow });
-    }
-    return { spots, scale };
+    const onEdge = edgeSpots(region, scale, edge);
+    return {
+        spots: [
+            ...onEdge,
+            ...spreadAround(frameAt(region, scale), onEdge, inside, seed),
+        ],
+        scale,
+    };
 }
 
 /**
- * `count` spots along the edge at size `scale`, each one interval or more from the next. A box's
- * go round clockwise from its back-left corner, each side with its share (no more than it holds),
+ * `count` spots along the edge at size `scale`, each one interval or more from the next: the
+ * edge's plan ({@link edgePlan}) when it takes that many, or fewer shared out by the sides'
+ * lengths (no side more than it holds). A box's go round clockwise from its back-left corner,
  * every side starting on its corner; a circle's go round from the front, evenly.
  */
 function edgeSpots(region: Region, scale: number, count: number): XY[] {
     const { w, h } = edgeSides(region, scale);
+    const plan = edgePlan(region, scale);
     if (edgeKind(region) === "circle") {
         if (count === 1) return [{ x: 0, y: 0 }];
         return Array.from({ length: count }, (_, k) => {
@@ -379,7 +406,7 @@ function edgeSpots(region: Region, scale: number, count: number): XY[] {
     }
     const lengths = [2 * w, 2 * h, 2 * w, 2 * h];
     const holds = lengths.map((l) => Math.max(1, Math.floor(l + 1e-9)));
-    const per = shareOut(count, lengths, holds);
+    const per = count === sum(plan) ? plan : shareOut(count, lengths, holds);
     const corners = [
         { x: -w, y: -h, dx: 1, dy: 0 },
         { x: w, y: -h, dx: 0, dy: 1 },

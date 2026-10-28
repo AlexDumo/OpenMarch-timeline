@@ -57,38 +57,77 @@ describe.each(Object.entries(REGIONS))(
     "Spread with an edge in %s",
     (_, region) => {
         it.each(COUNTS)(
-            "stands %i: the edge on the outline, the rest inside, no pair under the interval",
+            "stands %i: the edge on the outline about 1½ intervals apart, the rest spread up to it, no pair under the interval for 20 seeds",
             (n) => {
-                const d = edged(1, n);
-                const all = spots(region, n, d);
-                expect(all).toHaveLength(n);
-                const scale = spreadScale(region, n, d, INTERVAL);
                 const { edge, inside } = edgeSplit(region, n);
                 expect(edge + inside).toBe(n);
-                const onEdge = all.slice(0, edge);
-                const within = all.slice(edge);
-                for (const p of onEdge)
-                    expect(Math.abs(depthIn(region, scale, p))).toBeLessThan(
-                        1e-6,
-                    );
-                // Inside at least one interval in
-                for (const p of within)
-                    expect(depthIn(region, scale, p)).toBeGreaterThanOrEqual(
+                for (let seed = 1; seed <= 20; seed++) {
+                    const d = edged(seed, n);
+                    const all = spots(region, n, d);
+                    expect(all).toHaveLength(n);
+                    const scale = spreadScale(region, n, d, INTERVAL);
+                    const onEdge = all.slice(0, edge);
+                    const within = all.slice(edge);
+                    for (const p of onEdge)
+                        expect(
+                            Math.abs(depthIn(region, scale, p)),
+                        ).toBeLessThan(1e-6);
+                    for (const p of within)
+                        expect(depthIn(region, scale, p)).toBeGreaterThan(0);
+                    expect(closest(all), `seed ${seed}`).toBeGreaterThanOrEqual(
                         INTERVAL * (1 - 1e-6),
                     );
-                expect(closest(all)).toBeGreaterThanOrEqual(
-                    INTERVAL * (1 - 1e-6),
-                );
-                // With an inside, the edge's spots stand about one interval apart along it, under
-                // 1½ to the next (with none inside, they spread round the whole edge)
+                }
+                if (inside === 0) return;
+                // Along the edge about 1½ intervals apart: whole spots a side can't always land
+                // in 1.3–1.7 on a short side (3.4 intervals: 2 at 1.72 or 3 at 1.15), so 1.3–1.7
+                // where a side takes 4 or more (6 intervals long), 1 to 2 elsewhere
+                const all = spots(region, n, edged(1, n));
+                const onEdge = all.slice(0, edge);
+                const scale = spreadScale(region, n, edged(1, n), INTERVAL);
+                const long = region.key.startsWith("circle")
+                    ? 2 * Math.PI * region.bounds.right * scale >= 6 * INTERVAL
+                    : 2 *
+                          Math.min(region.bounds.right, region.bounds.bottom) *
+                          scale >=
+                      6 * INTERVAL;
                 const ring = [...onEdge, onEdge[0]!];
-                if (inside > 0)
-                    for (let i = 0; i + 1 < ring.length; i++)
-                        expect(dist(ring[i]!, ring[i + 1]!)).toBeLessThan(
-                            1.5 * INTERVAL,
-                        );
+                const gaps = ring.slice(1).map((p, i) => dist(ring[i]!, p));
+                for (const g of gaps) {
+                    expect(g).toBeGreaterThanOrEqual(
+                        (long ? 1.3 : 1) * INTERVAL - 1e-6,
+                    );
+                    expect(g).toBeLessThanOrEqual(
+                        (long ? 1.7 : 2) * INTERVAL + 1e-6,
+                    );
+                }
             },
         );
+
+        it("reads as one spread: the inside stands as near the edge as to each other", () => {
+            for (const n of [30, 60]) {
+                const { edge } = edgeSplit(region, n);
+                const all = spots(region, n, edged(1, n));
+                const onEdge = all.slice(0, edge);
+                const within = all.slice(edge);
+                const nearest = (p: XY, among: readonly XY[]) =>
+                    Math.min(
+                        ...among.filter((q) => q !== p).map((q) => dist(p, q)),
+                    );
+                // The inside's spots nearest the edge: how near the edge's are, against how near
+                // the inside's are to each other
+                const toEdge = within
+                    .map((p) => nearest(p, onEdge))
+                    .sort((a, b) => a - b);
+                const among = within.map((p) => nearest(p, within));
+                const median = (v: number[]) =>
+                    [...v].sort((a, b) => a - b)[v.length >> 1]!;
+                const k = Math.max(3, Math.round(edge / 2));
+                const close = median(toEdge.slice(0, k));
+                expect(close / median(among)).toBeGreaterThan(0.8);
+                expect(close / median(among)).toBeLessThan(1.3);
+            }
+        });
 
         it("puts a spot on every corner of a box", () => {
             if (!region.key.startsWith("rect")) return;
@@ -132,7 +171,7 @@ describe.each(Object.entries(REGIONS))(
 describe("Spread with an edge, too few for an inside", () => {
     it("stands everyone on the edge, still no closer than the interval", () => {
         for (const region of Object.values(REGIONS))
-            for (const n of [3, 4, 6]) {
+            for (const n of [3, 4]) {
                 const { inside } = edgeSplit(region, n);
                 expect(inside).toBe(0);
                 const all = spots(region, n, edged(1, n));
@@ -199,7 +238,7 @@ describe("Spread with an edge, its size (#450 review)", () => {
         }
     });
 
-    it("is the least that holds: the edge's spots stand close to one interval apart", () => {
+    it("is the least that holds: the edge's spots stand an interval to two apart", () => {
         for (const [region, counts] of [
             [rectRegion(1, 1), [8, 9, 10]],
             [rectRegion(10, 0.5), [30, 31, 32, 33, 34]],
@@ -219,7 +258,7 @@ describe("Spread with an edge, its size (#450 review)", () => {
                     `${region.key} ${n}`,
                 ).toBeGreaterThanOrEqual(INTERVAL * (1 - 1e-6));
                 expect(Math.min(...nearest), `${region.key} ${n}`).toBeLessThan(
-                    1.25 * INTERVAL,
+                    2 * INTERVAL,
                 );
             }
     });
