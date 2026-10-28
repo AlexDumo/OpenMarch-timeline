@@ -106,9 +106,19 @@ export const boxTool: ToolKind<BoxParams> = {
             // Into another mode, the drawn box stays (#439, #449)
             if (was !== filled.mode)
                 return switched(params, rest, n, filled, env);
-            // Reshuffle and a typed seed: the same frame, another layout in it
-            if (filled.mode === "spread")
-                return { ...rest, distribution: filled };
+            if (filled.mode === "spread") {
+                const next: BoxParams = { ...rest, distribution: filled };
+                // Reshuffle and a typed seed: the same frame, another layout in it
+                const before = boxDistribution(params);
+                if (
+                    before.mode === "spread" &&
+                    (before.edge === true) === (filled.edge === true)
+                )
+                    return next;
+                // Edge on or off (#450): the same frame, the interval refitted to it; what the
+                // box remembers of its other modes stands, at the frame it has now
+                return withEdgeIn(params, next, n, env);
+            }
             const { spreadAspect: _aspect, ...flat } = rest;
             const next: BoxParams = { ...flat, distribution: filled };
             // The same mode laid out another way (a layout, a gap): it grows from the pivot
@@ -123,6 +133,25 @@ export const boxTool: ToolKind<BoxParams> = {
         },
     },
 };
+
+/**
+ * `next` (the spread with its edge turned on or off, #450) in the frame `params` has, its interval
+ * refitted (half a step at least); a box with no area keeps its interval. The frame it remembers
+ * across mode switches stays, and the frame this change leaves is the one it last saw, so a
+ * switch afterwards still finds Grid's and Outline's numbers.
+ */
+function withEdgeIn(
+    params: BoxParams,
+    next: BoxParams,
+    n: number,
+    env: ToolEnv,
+): BoxParams {
+    const fitted = spreadIn(frameSizeOf(params, n), next, n, env) ?? next;
+    const memory = readMemory(params);
+    return memory && sameSize(memory.seen, frameSizeOf(params, n))
+        ? { ...fitted, modes: { ...memory, seen: frameSizeOf(fitted, n) } }
+        : fitted;
+}
 
 /**
  * The box switched to `distribution`'s mode (#439, #449): its center and turn kept, and its size

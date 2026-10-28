@@ -3100,6 +3100,59 @@ test("change: a Spread box's handle drags its side where the pointer goes, the o
     ).toBeLessThan(2 * field.pixelsPerStep);
 });
 
+test("change: Edge on a Spread box stands marchers along its outline, the box staying put, kept by Reshuffle and undone in one step (#450)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    await pickMode(page, "spread");
+    const editor = page.getByTestId("shape-tool-readout");
+    const edge = editor.getByTestId("shape-editor-edge");
+    await expect(edge).toHaveAttribute("data-state", "off");
+    const before = (await shapeOverlay(page))!;
+    await edge.click();
+    await expect(edge).toHaveAttribute("data-state", "on");
+    const on = (await shapeOverlay(page))!;
+    // The box stays where it was drawn
+    expect(sameSpots(on.outline!, before.outline!)).toBe(true);
+    const xs = on.outline!.map((p) => p.x);
+    const ys = on.outline!.map((p) => p.y);
+    const [left, right, top, bottom] = [
+        Math.min(...xs),
+        Math.max(...xs),
+        Math.min(...ys),
+        Math.max(...ys),
+    ];
+    const onEdge = (p: Point) =>
+        Math.min(
+            Math.abs(p.x - left),
+            Math.abs(p.x - right),
+            Math.abs(p.y - top),
+            Math.abs(p.y - bottom),
+        ) < 0.01;
+    // Some stand on the outline, about 1½ intervals apart, everyone on or inside it
+    expect(on.spots.filter(onEdge).length).toBeGreaterThan(0);
+    for (const p of on.spots) {
+        expect(p.x).toBeGreaterThanOrEqual(left - 0.01);
+        expect(p.x).toBeLessThanOrEqual(right + 0.01);
+        expect(p.y).toBeGreaterThanOrEqual(top - 0.01);
+        expect(p.y).toBeLessThanOrEqual(bottom + 0.01);
+    }
+    // Reshuffle keeps the edge on and the box where it is
+    await editor.getByTestId("shape-editor-reshuffle").click();
+    await expect(edge).toHaveAttribute("data-state", "on");
+    expect(
+        sameSpots((await shapeOverlay(page))!.outline!, before.outline!),
+    ).toBe(true);
+    // Two undo steps: the Reshuffle, then the edge
+    await page.keyboard.press("ControlOrMeta+z");
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(edge).toHaveAttribute("data-state", "off");
+    expect(sameSpots((await shapeOverlay(page))!.spots, before.spots)).toBe(
+        true,
+    );
+});
+
 test("change: every mode switch keeps the box drawn: its center exactly, each side within half a step, and no drift however often it switches (#449)", async ({
     show,
 }) => {
