@@ -1277,12 +1277,40 @@
                 "many": "{count}人がブロックから外れました",
                 "one": "{name}がブロックから外れました",
                 "resplit": "再分割"
+            },
+            "params": {
+                "fewerAcross": "左右に1人減らす",
+                "moreAcross": "左右に1人増やす",
+                "short": "{count}人不足",
+                "size": "サイズ（左右×前後）",
+                "spacingAcross": "左右の間隔（ステップ）",
+                "spacingDeep": "前後の間隔（ステップ）"
             }
         },
         "circle": "円",
         "command": {
             "fill": "配置方法：{modes}",
             "layout": "レイアウト：{layouts}"
+        },
+        "distribute": {
+            "hint": {
+                "add": "{count}人追加",
+                "remove": "{count}人削除"
+            },
+            "layout": {
+                "full": "フル",
+                "notched": "切り欠き",
+                "rounded": "角丸",
+                "shortBack": "後列短縮",
+                "stagger": "千鳥"
+            },
+            "version": {
+                "frontToBack": "{counts}（前から後ろ）",
+                "leftToRight": "{counts}（左から右）",
+                "short": "{across} × {deep}、{short}人不足",
+                "staggered": "{across} × {deep} 千鳥",
+                "straight": "{across} × {deep} 直線"
+            }
         },
         "edit": {
             "away": {
@@ -1395,6 +1423,123 @@
                 "size": "{sizes}ステップ"
             }
         },
+        "kinds": {
+            "arc": {
+                "hint": {
+                    "bend": "曲げる"
+                },
+                "label": "円弧",
+                "validate": {
+                    "flat": "円弧が平らなので直線になっています",
+                    "sameSpot": "円弧の両端が同じ位置にあります"
+                }
+            },
+            "block": {
+                "across": "左右",
+                "deep": "前後",
+                "files": "縦列",
+                "hint": {
+                    "files": "縦列",
+                    "intervalAcross": "左右の間隔",
+                    "intervalDeep": "前後の間隔",
+                    "turn": "回転"
+                },
+                "keepIntervals": {
+                    "label": "間隔を保持",
+                    "locked": "間隔はロック中：辺をドラッグすると縦列が増減します。クリックすると代わりに間隔を伸縮します",
+                    "unlocked": "辺をドラッグすると間隔が伸縮します。クリックしてロックすると縦列が増減します"
+                },
+                "label": "ブロック",
+                "pattern": "パターン",
+                "ranks": {
+                    "grid": "グリッド",
+                    "label": "横列",
+                    "staggered": "千鳥"
+                },
+                "readout": {
+                    "interval": "間隔",
+                    "intervalValue": "{across} × {deep} ステップ",
+                    "ranksFiles": "横列 × 縦列"
+                },
+                "rotation": "回転",
+                "shortRank": {
+                    "center": "中央",
+                    "label": "短い横列",
+                    "left": "左",
+                    "right": "右"
+                },
+                "size": "サイズ",
+                "validate": {
+                    "lastRankOne": "{files}縦列だと最後の横列はマーチャー1人になります",
+                    "noFiles": "ブロックには縦列が1つ以上必要です"
+                }
+            },
+            "circle": {
+                "hint": {
+                    "radius": "半径とマーチャー1の開始位置"
+                },
+                "label": "円",
+                "params": {
+                    "interval": "隣同士の間隔（ステップ）"
+                },
+                "readout": {
+                    "circumference": "円周"
+                },
+                "validate": {
+                    "noRadius": "円に半径がありません",
+                    "overlap": "間隔が円を一周してしまうため、マーチャーが重なります",
+                    "partFilled": "この間隔のマーチャー{count}人は、円の{total}ステップのうち{run}ステップを占めます。サイズのロックを外すと円が閉じます。"
+                }
+            },
+            "curve": {
+                "hint": {
+                    "point": "点（ダブルクリックで削除）"
+                },
+                "label": "曲線",
+                "validate": {
+                    "points": "曲線には異なる点が2つ以上必要です"
+                }
+            },
+            "fill": {
+                "edgeField": "縁（0 = 自動）",
+                "group": "塗りつぶし",
+                "hint": {
+                    "size": "サイズ"
+                },
+                "label": "塗りつぶし",
+                "layout": "レイアウト",
+                "readout": {
+                    "about": "約",
+                    "apart": "{steps}ステップ間隔",
+                    "edge": "縁",
+                    "edgeAuto": "{count}（自動）"
+                },
+                "validate": {
+                    "noSize": "形状にサイズがありません"
+                }
+            },
+            "line": {
+                "label": "直線",
+                "validate": {
+                    "sameSpot": "直線の両端が同じ位置にあります"
+                }
+            },
+            "measure": {
+                "angle": "角度",
+                "depth": "奥行き",
+                "radius": "半径",
+                "sweep": "中心角",
+                "width": "幅"
+            },
+            "path": {
+                "readout": {
+                    "interval": "間隔",
+                    "length": "長さ",
+                    "run": "区間"
+                },
+                "spacing": "間隔"
+            }
+        },
         "library": {
             "addNamed": "{name}をマイライブラリに追加",
             "addTip": "すべてのショーで使えるようにマイライブラリに追加",
@@ -1451,6 +1596,14 @@
             "copyFailed": "保存した形状をショーにコピーできませんでした",
             "deleteFailed": "保存した形状をショーから削除できませんでした"
         },
+        "spacing": {
+            "empty": "間隔をステップで入力してください",
+            "noGaps": "区間には1つ以上の間隔が必要です",
+            "notInterval": "「{part}」は間隔ではありません。ステップ（2）、リスト（4,4,2）、またはステップx間隔数（4x3）を入力してください",
+            "notPositive": "間隔は0ステップより大きくしてください",
+            "repeating": "必要な間隔は{needed}個、入力は{given}個：最初から繰り返します",
+            "unused": "必要な間隔は{needed}個、入力は{given}個：最後の{unused}個は使われません"
+        },
         "square": "正方形",
         "tool": {
             "moment": {
@@ -1483,6 +1636,17 @@
             "title": "変形"
         },
         "triangle": "三角形",
+        "validate": {
+            "crossApart": "{count}組の移動経路が別々のタイミングで交差します：衝突はなく、一方が通過した後にもう一方が到着します。ここにポインターを合わせると表示されます。",
+            "crossing": "{count}組のマーチャーがぶつかって通り抜けます（赤で表示）。ここにポインターを合わせると誰かが表示されます。",
+            "noPosition": "形状に位置のないスポットがあります",
+            "offField": "マーチャー{count}人がフィールドの外に出ます",
+            "passClose": "{count}組のマーチャーが移動中に{min}ステップ未満まで近づきます（赤で表示）。ここにポインターを合わせると誰かが表示されます。",
+            "sameSpot": "マーチャー{count}人が同じ位置に立ちます",
+            "stepsTooLong": "{count, plural, other {マーチャー{count}人が上限{limit}を超える歩幅を必要とします（最大{longest}、オレンジで表示）。}}上限はフィールド › カスタマイズで設定できます。",
+            "tooClose": "マーチャー{count}人の間隔が{min}ステップ未満です",
+            "walksClear": "移動経路をカウントごとに確認しました：同じ瞬間に{min}ステップ以内に近づくマーチャーはいません。"
+        },
         "x": "X"
     },
     "shortcutsDialog": {

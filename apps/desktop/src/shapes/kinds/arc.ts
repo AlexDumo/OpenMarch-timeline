@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { fitCircle, principalExtremes } from "../geometry/fit";
 import { makePath, type Path, type Segment } from "../geometry/path";
 import {
@@ -210,13 +211,17 @@ function arcGeometry(p: ArcParams): { r: number; sweep: number } | null {
 export const arcKind: ShapeKind<ArcParams> = {
     id: "arc",
     version: 1,
-    label: "Arc",
+    get label() {
+        return tolgee.t("shapes.kinds.arc.label", "Arc");
+    },
     family: "path",
     groups: [SPACING_GROUP],
     measures: [
         {
             key: "radius",
-            label: "Radius",
+            get label() {
+                return tolgee.t("shapes.kinds.measure.radius", "Radius");
+            },
             unit: "length",
             get: (p) => arcGeometry(p)?.r ?? 0,
             // Same ends; the bulge that gives this radius, keeping the arc's side and whether it
@@ -239,7 +244,9 @@ export const arcKind: ShapeKind<ArcParams> = {
         },
         {
             key: "sweep",
-            label: "Sweep",
+            get label() {
+                return tolgee.t("shapes.kinds.measure.sweep", "Sweep");
+            },
             unit: "angle",
             min: 1,
             get: (p) => arcGeometry(p)?.sweep ?? 0,
@@ -290,7 +297,12 @@ export const arcKind: ShapeKind<ArcParams> = {
     handles: (p) => [
         { key: "a", role: "point", at: p.a, start: true },
         { key: "b", role: "point", at: p.b, end: true },
-        { key: "bulge", role: "bulge", at: arcMiddle(p), hint: "Bend" },
+        {
+            key: "bulge",
+            role: "bulge",
+            at: arcMiddle(p),
+            hint: tolgee.t("shapes.kinds.arc.hint.bend", "Bend"),
+        },
         { key: "move", role: "move", at: mid(p.a, p.b) },
     ],
 
@@ -327,7 +339,10 @@ export const arcKind: ShapeKind<ArcParams> = {
             return [
                 {
                     level: "error",
-                    message: "The arc's ends are on the same spot",
+                    message: tolgee.t(
+                        "shapes.kinds.arc.validate.sameSpot",
+                        "The arc's ends are on the same spot",
+                    ),
                 },
             ];
         }
@@ -335,7 +350,10 @@ export const arcKind: ShapeKind<ArcParams> = {
             return [
                 {
                     level: "info",
-                    message: "The arc is flat, so it's a straight line",
+                    message: tolgee.t(
+                        "shapes.kinds.arc.validate.flat",
+                        "The arc is flat, so it's a straight line",
+                    ),
                 },
             ];
         }

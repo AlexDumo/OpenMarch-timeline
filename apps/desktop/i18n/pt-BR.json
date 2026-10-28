@@ -1277,12 +1277,40 @@
                 "many": "{count} saíram do bloco",
                 "one": "{name} saiu do bloco",
                 "resplit": "Redividir"
+            },
+            "params": {
+                "fewerAcross": "Um a menos de lado a lado",
+                "moreAcross": "Um a mais de lado a lado",
+                "short": "faltam {count}",
+                "size": "Tamanho, de lado a lado × de frente para trás",
+                "spacingAcross": "Espaçamento de lado a lado, em passos",
+                "spacingDeep": "Espaçamento de frente para trás, em passos"
             }
         },
         "circle": "Círculo",
         "command": {
             "fill": "Preenchimento: {modes}",
             "layout": "Disposição: {layouts}"
+        },
+        "distribute": {
+            "hint": {
+                "add": "adicione {count}",
+                "remove": "remova {count}"
+            },
+            "layout": {
+                "full": "Completo",
+                "notched": "Com entalhe",
+                "rounded": "Arredondado",
+                "shortBack": "Trás curta",
+                "stagger": "Escalonado"
+            },
+            "version": {
+                "frontToBack": "{counts}, de frente para trás",
+                "leftToRight": "{counts}, da esquerda para a direita",
+                "short": "{across} × {deep}, faltam {short}",
+                "staggered": "{across} × {deep} escalonado",
+                "straight": "{across} × {deep} reto"
+            }
         },
         "edit": {
             "away": {
@@ -1395,6 +1423,123 @@
                 "size": "{sizes} passos"
             }
         },
+        "kinds": {
+            "arc": {
+                "hint": {
+                    "bend": "Curvar"
+                },
+                "label": "Arco",
+                "validate": {
+                    "flat": "O arco é plano, então é uma linha reta",
+                    "sameSpot": "As pontas do arco estão no mesmo ponto"
+                }
+            },
+            "block": {
+                "across": "De lado a lado",
+                "deep": "De fundo",
+                "files": "Colunas",
+                "hint": {
+                    "files": "Colunas",
+                    "intervalAcross": "Intervalo de lado a lado",
+                    "intervalDeep": "Intervalo de fundo",
+                    "turn": "Girar"
+                },
+                "keepIntervals": {
+                    "label": "Manter intervalos",
+                    "locked": "Intervalos bloqueados: arrastar o lado adiciona ou remove colunas. Clique para esticar os intervalos",
+                    "unlocked": "Arrastar o lado estica os intervalos. Clique para bloqueá-los, e ele adicionará ou removerá colunas"
+                },
+                "label": "Bloco",
+                "pattern": "Padrão",
+                "ranks": {
+                    "grid": "Grade",
+                    "label": "Fileiras",
+                    "staggered": "Escalonadas"
+                },
+                "readout": {
+                    "interval": "Intervalo",
+                    "intervalValue": "{across} × {deep} passos",
+                    "ranksFiles": "Fileiras × colunas"
+                },
+                "rotation": "Rotação",
+                "shortRank": {
+                    "center": "Centro",
+                    "label": "Fileira curta",
+                    "left": "Esquerda",
+                    "right": "Direita"
+                },
+                "size": "Tamanho",
+                "validate": {
+                    "lastRankOne": "Com {files, plural, one {# coluna} other {# colunas}}, a última fileira tem 1 marchador",
+                    "noFiles": "Um bloco precisa de pelo menos 1 coluna"
+                }
+            },
+            "circle": {
+                "hint": {
+                    "radius": "Raio, e onde o marchador 1 começa"
+                },
+                "label": "Círculo",
+                "params": {
+                    "interval": "Espaçamento entre vizinhos, em passos"
+                },
+                "readout": {
+                    "circumference": "Circunferência"
+                },
+                "validate": {
+                    "noRadius": "O círculo não tem raio",
+                    "overlap": "Os intervalos dão a volta completa no círculo, então os marchadores se sobrepõem",
+                    "partFilled": "{count, plural, one {# marchador neste intervalo ocupa} other {# marchadores neste intervalo ocupam}} {run} dos {total} passos do círculo. Abra o bloqueio de tamanho para fechar o círculo."
+                }
+            },
+            "curve": {
+                "hint": {
+                    "point": "Ponto (clique duas vezes para remover)"
+                },
+                "label": "Curva",
+                "validate": {
+                    "points": "A curva precisa de pelo menos 2 pontos diferentes"
+                }
+            },
+            "fill": {
+                "edgeField": "Borda (0 = automático)",
+                "group": "Preenchimento",
+                "hint": {
+                    "size": "Tamanho"
+                },
+                "label": "Preenchido",
+                "layout": "Layout",
+                "readout": {
+                    "about": "Aprox.",
+                    "apart": "{steps} passos de distância",
+                    "edge": "Borda",
+                    "edgeAuto": "{count} (auto)"
+                },
+                "validate": {
+                    "noSize": "A forma não tem tamanho"
+                }
+            },
+            "line": {
+                "label": "Linha",
+                "validate": {
+                    "sameSpot": "As pontas da linha estão no mesmo ponto"
+                }
+            },
+            "measure": {
+                "angle": "Ângulo",
+                "depth": "Profundidade",
+                "radius": "Raio",
+                "sweep": "Abertura",
+                "width": "Largura"
+            },
+            "path": {
+                "readout": {
+                    "interval": "Intervalo",
+                    "length": "Comprimento",
+                    "run": "Trecho"
+                },
+                "spacing": "Espaçamento"
+            }
+        },
         "library": {
             "addNamed": "Adicionar {name} à minha biblioteca",
             "addTip": "Adicionar à minha biblioteca, para todos os shows",
@@ -1451,6 +1596,14 @@
             "copyFailed": "Não foi possível copiar a forma salva para o show",
             "deleteFailed": "Não foi possível excluir a forma salva do show"
         },
+        "spacing": {
+            "empty": "Digite um intervalo em passos",
+            "noGaps": "Um trecho precisa de pelo menos 1 espaço",
+            "notInterval": "\"{part}\" não é um intervalo. Digite passos (2), uma lista (4,4,2) ou passos x espaços (4x3)",
+            "notPositive": "Um intervalo deve ter mais de 0 passos",
+            "repeating": "{needed, plural, one {# espaço necessário} other {# espaços necessários}}, {given} digitados: repetindo a partir do primeiro",
+            "unused": "{needed, plural, one {# espaço necessário} other {# espaços necessários}}, {given} digitados: os últimos {unused} não são usados"
+        },
         "square": "Quadrado",
         "tool": {
             "moment": {
@@ -1483,6 +1636,17 @@
             "title": "Transformar"
         },
         "triangle": "Triângulo",
+        "validate": {
+            "crossApart": "{count, plural, one {# par} other {# pares}} de trajetos se cruzam em momentos diferentes: sem colisão, um marchador já passou antes de o outro chegar. Aponte aqui para vê-los.",
+            "crossing": "{count, plural, one {# par} other {# pares}} de marchadores passariam um pelo outro (em vermelho). Aponte aqui para ver quem.",
+            "noPosition": "A forma tem um ponto sem posição",
+            "offField": "{count, plural, one {# marchador ficaria} other {# marchadores ficariam}} fora do campo",
+            "passClose": "{count, plural, one {# par} other {# pares}} de marchadores passam a menos de {min, plural, one {# passo} other {# passos}} durante o movimento (em vermelho). Aponte aqui para ver quem.",
+            "sameSpot": "{count, plural, one {# marchador ficaria} other {# marchadores ficariam}} no mesmo ponto",
+            "stepsTooLong": "{count, plural, one {# marchador precisa de passos maiores que o limite de {limit} ({longest}, em laranja).} other {# marchadores precisam de passos maiores que o limite de {limit} (o maior {longest}, em laranja).}} Defina o limite em Campo › Personalizar.",
+            "tooClose": "{count, plural, one {# marchador está} other {# marchadores estão}} a menos de {min, plural, one {# passo} other {# passos}}",
+            "walksClear": "Trajetos verificados tempo a tempo: nenhum par de marchadores fica a menos de {min, plural, one {# passo} other {# passos}} no mesmo momento."
+        },
         "x": "X"
     },
     "shortcutsDialog": {

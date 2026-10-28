@@ -1983,12 +1983,40 @@
                 "many": "{count} left the box",
                 "one": "{name} left the box",
                 "resplit": "Re-split"
+            },
+            "params": {
+                "fewerAcross": "One fewer across",
+                "moreAcross": "One more across",
+                "short": "{count} short",
+                "size": "Size, across × deep",
+                "spacingAcross": "Side-to-side spacing, in steps",
+                "spacingDeep": "Front-to-back spacing, in steps"
             }
         },
         "circle": "Circle",
         "command": {
             "fill": "Fill: {modes}",
             "layout": "Layout: {layouts}"
+        },
+        "distribute": {
+            "hint": {
+                "add": "add {count}",
+                "remove": "remove {count}"
+            },
+            "layout": {
+                "full": "Full",
+                "notched": "Notched",
+                "rounded": "Rounded",
+                "shortBack": "Short back",
+                "stagger": "Stagger"
+            },
+            "version": {
+                "frontToBack": "{counts}, front to back",
+                "leftToRight": "{counts}, left to right",
+                "short": "{across} × {deep}, {short} short",
+                "staggered": "{across} × {deep} staggered",
+                "straight": "{across} × {deep} straight"
+            }
         },
         "edit": {
             "away": {
@@ -2101,6 +2129,123 @@
                 "size": "{sizes} steps"
             }
         },
+        "kinds": {
+            "arc": {
+                "hint": {
+                    "bend": "Bend"
+                },
+                "label": "Arc",
+                "validate": {
+                    "flat": "The arc is flat, so it's a straight line",
+                    "sameSpot": "The arc's ends are on the same spot"
+                }
+            },
+            "block": {
+                "across": "Across",
+                "deep": "Deep",
+                "files": "Files",
+                "hint": {
+                    "files": "Files",
+                    "intervalAcross": "Interval across",
+                    "intervalDeep": "Interval deep",
+                    "turn": "Turn"
+                },
+                "keepIntervals": {
+                    "label": "Keep intervals",
+                    "locked": "Intervals locked: dragging the side adds or removes files. Click to stretch the intervals instead",
+                    "unlocked": "Dragging the side stretches the intervals. Click to lock them, so it adds or removes files"
+                },
+                "label": "Box",
+                "pattern": "Pattern",
+                "ranks": {
+                    "grid": "Grid",
+                    "label": "Ranks",
+                    "staggered": "Staggered"
+                },
+                "readout": {
+                    "interval": "Interval",
+                    "intervalValue": "{across} × {deep} steps",
+                    "ranksFiles": "Ranks × files"
+                },
+                "rotation": "Rotation",
+                "shortRank": {
+                    "center": "Center",
+                    "label": "Short rank",
+                    "left": "Left",
+                    "right": "Right"
+                },
+                "size": "Size",
+                "validate": {
+                    "lastRankOne": "With {files, plural, one {# file} other {# files}} the last rank has 1 marcher",
+                    "noFiles": "A block needs at least 1 file"
+                }
+            },
+            "circle": {
+                "hint": {
+                    "radius": "Radius, and where marcher 1 starts"
+                },
+                "label": "Circle",
+                "params": {
+                    "interval": "Spacing between neighbors, in steps"
+                },
+                "readout": {
+                    "circumference": "Circumference"
+                },
+                "validate": {
+                    "noRadius": "The circle has no radius",
+                    "overlap": "The intervals go all the way around the circle, so marchers overlap",
+                    "partFilled": "{count, plural, one {# marcher at this interval fills} other {# marchers at this interval fill}} {run} of the circle's {total} steps. Open the size lock to make the circle close."
+                }
+            },
+            "curve": {
+                "hint": {
+                    "point": "Point (double-click it to remove)"
+                },
+                "label": "Curve",
+                "validate": {
+                    "points": "The curve needs at least 2 different points"
+                }
+            },
+            "fill": {
+                "edgeField": "Edge (0 = auto)",
+                "group": "Fill",
+                "hint": {
+                    "size": "Size"
+                },
+                "label": "Filled",
+                "layout": "Layout",
+                "readout": {
+                    "about": "About",
+                    "apart": "{steps} steps apart",
+                    "edge": "Edge",
+                    "edgeAuto": "{count} (auto)"
+                },
+                "validate": {
+                    "noSize": "The shape has no size"
+                }
+            },
+            "line": {
+                "label": "Line",
+                "validate": {
+                    "sameSpot": "The line's ends are on the same spot"
+                }
+            },
+            "measure": {
+                "angle": "Angle",
+                "depth": "Depth",
+                "radius": "Radius",
+                "sweep": "Sweep",
+                "width": "Width"
+            },
+            "path": {
+                "readout": {
+                    "interval": "Interval",
+                    "length": "Length",
+                    "run": "Run"
+                },
+                "spacing": "Spacing"
+            }
+        },
         "library": {
             "addNamed": "Add {name} to my Library",
             "addTip": "Add to my Library, for every show",
@@ -2157,6 +2302,14 @@
             "copyFailed": "Couldn't copy the saved shape into the show",
             "deleteFailed": "Couldn't delete the saved shape from the show"
         },
+        "spacing": {
+            "empty": "Enter an interval in steps",
+            "noGaps": "A run needs at least 1 gap",
+            "notInterval": "\"{part}\" isn't an interval. Type steps (2), a list (4,4,2) or steps x gaps (4x3)",
+            "notPositive": "An interval must be more than 0 steps",
+            "repeating": "{needed, plural, one {# gap} other {# gaps}} needed, {given} typed: repeating from the first",
+            "unused": "{needed, plural, one {# gap} other {# gaps}} needed, {given} typed: the last {unused} unused"
+        },
         "square": "Square",
         "tool": {
             "moment": {
@@ -2189,6 +2342,17 @@
             "title": "Transform"
         },
         "triangle": "Triangle",
+        "validate": {
+            "crossApart": "{count, plural, one {# pair} other {# pairs}} of walks cross paths at different times: no collision, one marcher is past before the other arrives. Point here to see them.",
+            "crossing": "{count, plural, one {# pair} other {# pairs}} of marchers would walk through each other (drawn in red). Point here to see who.",
+            "noPosition": "The shape has a spot with no position",
+            "offField": "{count, plural, one {# marcher would stand} other {# marchers would stand}} off the field",
+            "passClose": "{count, plural, one {# pair} other {# pairs}} of marchers pass closer than {min, plural, one {# step} other {# steps}} mid-move (drawn in red). Point here to see who.",
+            "sameSpot": "{count, plural, one {# marcher would stand} other {# marchers would stand}} on the same spot",
+            "stepsTooLong": "{count, plural, one {# marcher needs steps longer than the {limit} limit ({longest}, drawn in orange).} other {# marchers need steps longer than the {limit} limit (longest {longest}, drawn in orange).}} Set the limit in Field › Customize.",
+            "tooClose": "{count, plural, one {# marcher is} other {# marchers are}} closer than {min, plural, one {# step} other {# steps}}",
+            "walksClear": "Walks checked count by count: no two marchers come within {min, plural, one {# step} other {# steps}} of each other at the same moment."
+        },
         "x": "X"
     },
     "showChecks": {
