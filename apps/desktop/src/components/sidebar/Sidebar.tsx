@@ -18,12 +18,13 @@ export default function Sidebar() {
         >
             <div className="flex flex-col gap-16">
                 <MarchersModal />
-                <PropsModal />
+                {/* Shapes before Props (#485, tester request) */}
+                <ShapeLibraryModal />
                 <MusicModal />
                 <FieldModal />
                 <MetronomeModal />
                 <AppearanceModal />
-                <ShapeLibraryModal />
+                <PropsModal />
                 {/* The Library lives in main; the web build has no Library IPC. */}
                 {!isWebBuild && <AssetsModal />}
             </div>
