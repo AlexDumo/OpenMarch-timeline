@@ -1174,7 +1174,9 @@
                 "short": "faltan {count}",
                 "size": "Tamaño, de lado a lado × de adelante hacia atrás",
                 "spacingAcross": "Espaciado de lado a lado, en pasos",
-                "spacingDeep": "Espaciado de adelante hacia atrás, en pasos"
+                "spacingDeep": "Espaciado de adelante hacia atrás, en pasos",
+                "makeAcrossExact": "Hacer exacto el espaciado de lado a lado",
+                "makeDeepExact": "Hacer exacto el espaciado de adelante hacia atrás"
             }
         },
         "circle": "Círculo",
@@ -1301,7 +1303,8 @@
                 "label": "Semilla"
             },
             "steps": "pasos",
-            "turn": "Giro, en grados en sentido horario"
+            "turn": "Giro, en grados en sentido horario",
+            "followsShape": "{label}: {value}, sigue la forma. {action}"
         },
         "field": {
             "stepLimit": "{steps} a 5"

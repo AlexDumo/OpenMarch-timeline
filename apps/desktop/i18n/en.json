@@ -1878,7 +1878,9 @@
                 "short": "{count} short",
                 "size": "Size, across × deep",
                 "spacingAcross": "Side-to-side spacing, in steps",
-                "spacingDeep": "Front-to-back spacing, in steps"
+                "spacingDeep": "Front-to-back spacing, in steps",
+                "makeAcrossExact": "Make side to side exact",
+                "makeDeepExact": "Make front to back exact"
             }
         },
         "circle": "Circle",
@@ -2005,7 +2007,8 @@
                 "label": "Seed"
             },
             "steps": "steps",
-            "turn": "Turn, in degrees clockwise"
+            "turn": "Turn, in degrees clockwise",
+            "followsShape": "{label}: {value}, following the shape. {action}"
         },
         "field": {
             "stepLimit": "{steps} to 5"

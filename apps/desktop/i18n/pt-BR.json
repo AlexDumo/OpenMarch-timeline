@@ -1174,7 +1174,9 @@
                 "short": "faltam {count}",
                 "size": "Tamanho, de lado a lado × de frente para trás",
                 "spacingAcross": "Espaçamento de lado a lado, em passos",
-                "spacingDeep": "Espaçamento de frente para trás, em passos"
+                "spacingDeep": "Espaçamento de frente para trás, em passos",
+                "makeAcrossExact": "Tornar exato o espaçamento de lado a lado",
+                "makeDeepExact": "Tornar exato o espaçamento de frente para trás"
             }
         },
         "circle": "Círculo",
@@ -1301,7 +1303,8 @@
                 "label": "Semente"
             },
             "steps": "passos",
-            "turn": "Giro, em graus no sentido horário"
+            "turn": "Giro, em graus no sentido horário",
+            "followsShape": "{label}: {value}, segue a forma. {action}"
         },
         "field": {
             "stepLimit": "{steps} por 5"

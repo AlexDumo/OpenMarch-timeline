@@ -1174,7 +1174,9 @@
                 "short": "{count}人不足",
                 "size": "サイズ（左右×前後）",
                 "spacingAcross": "左右の間隔（ステップ）",
-                "spacingDeep": "前後の間隔（ステップ）"
+                "spacingDeep": "前後の間隔（ステップ）",
+                "makeAcrossExact": "左右の間隔を正確にする",
+                "makeDeepExact": "前後の間隔を正確にする"
             }
         },
         "circle": "円",
@@ -1301,7 +1303,8 @@
                 "label": "シード"
             },
             "steps": "ステップ",
-            "turn": "回転（時計回りの角度）"
+            "turn": "回転（時計回りの角度）",
+            "followsShape": "{label}: {value}（形状に従う）。{action}"
         },
         "field": {
             "stepLimit": "{steps}対5"

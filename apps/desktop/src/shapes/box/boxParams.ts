@@ -155,9 +155,17 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
         // (its own: turned a quarter, the box's deep is the field's side to side)
         derived: (p, n) => followsFrame(p, n),
         makeExact: {
-            label: across
-                ? "Make side to side exact"
-                : "Make front to back exact",
+            get label() {
+                return across
+                    ? tolgee.t(
+                          "shapes.box.params.makeAcrossExact",
+                          "Make side to side exact",
+                      )
+                    : tolgee.t(
+                          "shapes.box.params.makeDeepExact",
+                          "Make front to back exact",
+                      );
+            },
             apply: (p, n) => withOutlineExact(p, ownKey(p, n)),
         },
         display: (p, n, stepPx) =>

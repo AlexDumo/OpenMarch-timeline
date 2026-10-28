@@ -511,7 +511,15 @@ const NumberChip = memo(function NumberChip({
                     <button
                         type="button"
                         className="rounded-4 text-text/60 hover:bg-fg-2 hover:text-accent min-h-24 px-4 tabular-nums"
-                        aria-label={`${param.label}: ${display}, following the shape. ${param.makeExact?.label ?? ""}`}
+                        aria-label={tolgee.t(
+                            "shapes.edit.followsShape",
+                            "{label}: {value}, following the shape. {action}",
+                            {
+                                label: param.label,
+                                value: display,
+                                action: param.makeExact?.label ?? "",
+                            },
+                        )}
                         data-testid={`shape-editor-${param.key}`}
                         data-derived
                         disabled={!param.makeExact}
