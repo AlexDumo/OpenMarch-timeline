@@ -180,7 +180,11 @@ export function dragShape(
 ): unknown {
     const base = gesture.base;
     if (gesture.type === "pivot")
-        return withPivot(base, snapPivot(kind.frameOf(base, n), at, env));
+        return withPivot(
+            base,
+            // Cmd/Ctrl pulled the pivot out and may still be held: only Alt frees it
+            snapPivot(kind.frameOf(base, n), at, { ...env, snap: !env.fine }),
+        );
     return carryPivot(base, dragged(kind, n, gesture, at, env));
 }
 
@@ -237,7 +241,8 @@ function dragged(
  * edge does (#425); the kind's own grid snap on an axis with none.
  * The radius is never more than a quarter step (half the grid's detent), so every half step near
  * a line can still be reached: a stretch's quarter of its detent (#425) would be under a pixel for
- * a move at the fitted zoom. Alt (no snap) doesn't pull.
+ * a move at the fitted zoom. Alt (fine control) still pulls, off the grid; Cmd/Ctrl (no
+ * snapping) doesn't (owner on #453).
  */
 function moveOntoLines(
     kind: AnyToolKind,
@@ -247,7 +252,7 @@ function moveOntoLines(
     env: ToolEnv,
 ): unknown {
     const snapped = kind.move(base, n, delta, env);
-    if (!env.snap || !env.fieldLines) return snapped;
+    if (env.pull === false || !env.fieldLines) return snapped;
     if (!kind.snapPoints) return snapped;
     const free = kind.move(base, n, delta, { ...env, snap: false });
     const at = kind.frameOf(free, n).center;

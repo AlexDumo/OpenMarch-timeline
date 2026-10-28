@@ -146,8 +146,15 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
     );
 }
 
-/** The env an editor change is worked out with, Alt being "don't snap" as on the field */
-const envFor = (keys: { alt: boolean; shift: boolean }): ToolEnv | null => {
+/**
+ * The env an editor change is worked out with, the keys as on the field: Alt fine control, Cmd or
+ * Ctrl no snapping (owner on #453)
+ */
+const envFor = (keys: {
+    alt: boolean;
+    shift: boolean;
+    mod?: boolean;
+}): ToolEnv | null => {
     const field = currentShapeField();
     return field ? toolEnvFor(field, keys) : null;
 };

@@ -31,6 +31,10 @@ const env = (over: Partial<ToolEnv> = {}): ToolEnv => ({
     ...over,
 });
 const N = 12;
+/** Alt: fine control, off the half-step ladder, still pulled (owner on #453) */
+const ALT = { snap: false, fine: true };
+/** Cmd/Ctrl: no snapping at all */
+const NO_SNAP = { snap: false, pull: false };
 /** 4 files by 3 ranks, 2 steps apart, turned `degrees` around the default pivot */
 const turned = (
     degrees: number,
@@ -122,10 +126,25 @@ describe("dragging a spacing onto a line", () => {
             expect(onHalves(drag(p, px, far).across)).toBe(true);
     });
 
-    it("doesn't pull with Alt: hundredths", () => {
+    it("with Alt, gives hundredths away from lines and still lands a corner on one (owner on #453)", () => {
+        const p = turned(45);
+        let landed = false;
+        for (let px = 0; px <= 160; px += 0.5) {
+            const out = drag(p, px, ALT);
+            const hundredths = out.across / (STEP / 100);
+            const onHundredths =
+                Math.abs(hundredths - Math.round(hundredths)) < 1e-6;
+            const onLineNow = points(out).some(onLine);
+            expect(onHundredths || onLineNow).toBe(true);
+            if (onLineNow && !onHundredths) landed = true;
+        }
+        expect(landed).toBe(true);
+    });
+
+    it("with Cmd/Ctrl, gives hundredths and pulls nothing (owner on #453)", () => {
         const p = turned(45);
         for (let px = 0; px <= 80; px += 1) {
-            const out = drag(p, px, { snap: false });
+            const out = drag(p, px, NO_SNAP);
             const hundredths = out.across / (STEP / 100);
             expect(Math.abs(hundredths - Math.round(hundredths))).toBeLessThan(
                 1e-6,

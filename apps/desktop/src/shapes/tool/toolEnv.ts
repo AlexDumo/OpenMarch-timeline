@@ -45,7 +45,11 @@ export function toolEnvFor(
     const editor = useShapeEditorStore.getState();
     return {
         stepPx: fieldProperties.pixelsPerStep,
-        snap: !keys.alt,
+        // Alt is fine control: off the half-step ladder, still pulled onto the field's lines; Cmd
+        // or Ctrl snaps nothing (owner on #453)
+        snap: !keys.alt && !keys.mod,
+        pull: !keys.mod,
+        fine: keys.alt,
         shift: keys.shift,
         mod: keys.mod ?? false,
         gridSnap: (p) => {

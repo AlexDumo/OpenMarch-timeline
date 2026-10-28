@@ -306,7 +306,7 @@ function reorientedGap(p: BoxParams, spots: number): Partial<BoxParams> {
 
 /**
  * A spacing (the box's own `which`) dragged `distance` px for more: ½ step per 8 px, hundredths
- * with Alt, from where it started
+ * with Alt (still pulled onto the field's lines, #452) or Cmd/Ctrl (not), from where it started
  */
 export function scrubSpacing(
     base: BoxParams,
@@ -320,9 +320,8 @@ export function scrubSpacing(
     // where the drag has the spacing before the ladder rounds it
     const rate = spacingRate(env.snap, "x");
     const raw = (was + (distance / rate.px) * rate.step) * env.stepPx;
-    const onLine = env.snap
-        ? spacingOnLine(base, which, raw, spots, env)
-        : null;
+    const onLine =
+        env.pull !== false ? spacingOnLine(base, which, raw, spots, env) : null;
     if (onLine) return onLine;
     const steps = scrubValue(was, distance, 0, rate);
     // A drag that ends where it started changes nothing; it doesn't round the value
@@ -368,7 +367,7 @@ export function spacingOnLine(
     env: ToolEnv,
 ): BoxParams | null {
     const lines = env.fieldLines;
-    if (!lines || !env.snap) return null;
+    if (!lines || env.pull === false) return null;
     const half = env.stepPx / 2;
     const free = (value: number) =>
         boxTool.snapPoints!(

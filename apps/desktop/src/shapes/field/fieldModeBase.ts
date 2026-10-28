@@ -3,6 +3,7 @@ import type {
     FieldModeDrawing,
     FieldPointer,
 } from "@/field/editor/fieldEditor";
+import { isMacPlatform } from "@/shortcuts/platform";
 import { ReadableCoords } from "@/global/classes/ReadableCoords";
 import type { XY } from "../types";
 import {
@@ -23,8 +24,9 @@ import type { ShapeField } from "./shapeField";
 export const keysOf = (pointer: FieldPointer) => ({
     shift: pointer.shift,
     alt: pointer.alt,
-    // Cmd on a Mac, where Ctrl+press is a right-click and never reaches a shape; Ctrl elsewhere
-    mod: pointer.meta || pointer.ctrl,
+    // The app's $mod: Cmd on a Mac, where Ctrl+press is a right-click that pans and never
+    // reaches a shape; Ctrl elsewhere
+    mod: isMacPlatform() ? pointer.meta : pointer.ctrl,
 });
 
 /** A handle's cursor from a shape kind, as the field shows it */

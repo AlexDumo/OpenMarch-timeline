@@ -2,8 +2,8 @@
 # The lab reads this file when this branch's test build is published.
 # Keep `id` stable: feedback is filed under it.
 id: spacing-guides
-title: Line up a box's corners by dragging its spacing
-summary: While you drag a box's spacing number in the floating editor, a corner or its center that comes close to a yard line, a hash or a sideline lands on it, with the orange guide, its name and a ring on the corner. Typing a spacing and the − and + buttons don't snap.
+title: Line up a box's corners by dragging its spacing, and with Alt
+summary: While you drag a box's spacing number in the floating editor, a corner or its center that comes close to a yard line, a hash or a sideline lands on it, with the orange guide, its name and a ring on the corner. Alt now means fine control, and lines still catch. Cmd (Mac) or Ctrl turns all snapping off.
 status: open
 variants: []
 questions:
@@ -11,6 +11,7 @@ questions:
   - Did the spacing ever catch a line you didn't want, or skip a half step you wanted?
   - Was it clear which corner landed and on which line?
   - Did the spacing it landed on (for example 2.83 or 7⅔) make sense to you?
+  - Holding Alt, does a turned box's corner slide smoothly onto a line now? Is it clear that Cmd or Ctrl turns snapping off completely?
 ---
 
 Turning a box puts its corners off the field's lines. Dragging its spacing is
@@ -38,7 +39,17 @@ how you get them back on, and now the spacing helps.
   from there.
 - Select a placed box and drag its spacing.
 
+**Two modifiers, everywhere the orange guides show** (drawing, stretching,
+moving and dragging a spacing):
+
+- **Alt: fine control.** No half steps: a corner slides smoothly, and spacings
+  go by hundredths. Yard lines, hashes and sidelines **still catch**. Try it on a
+  turned box: Alt-drag a corner handle onto a yard line. Without Alt, the corner
+  zigzags between half steps.
+- **Cmd (Mac) or Ctrl: no snapping at all.** No half steps and no guides.
+- Turning with **Alt** is still free rotation.
+- Cmd- or Ctrl-dragging from the center dot still pulls the pivot out.
+
 **Good to know**
 
-- Holding **Alt** while dragging gives hundredths and no pull.
 - The circle's spacing doesn't snap yet.

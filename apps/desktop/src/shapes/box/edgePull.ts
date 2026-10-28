@@ -62,8 +62,9 @@ interface Pull {
  * from lines at any turn (measured on the edge, not the corner: a line the edge runs nearly along
  * would fling it); only a
  * line beyond the fixed edge, at least a half step apart, counts. Each field axis takes the
- * nearest such line, a corner near a line each way landing on their crossing. Alt (no snap) and
- * Shift (equal spacings) don't pull.
+ * nearest such line, a corner near a line each way landing on their crossing. Alt (fine control)
+ * still pulls, the ladder giving hundredths; Cmd/Ctrl (no snapping) and Shift (equal spacings)
+ * don't (owner on #453).
  */
 export function pullEdges(
     x: PullAxis,
@@ -71,7 +72,8 @@ export function pullEdges(
     field: BoxField | undefined,
     env: ToolEnv,
 ): Pulled {
-    if (!field || !env.snap || env.shift) return {};
+    // Cmd/Ctrl snaps nothing; Alt keeps the pull, off the ladder (owner on #453)
+    if (!field || env.pull === false || env.shift) return {};
     const half = env.stepPx / 2;
     const own = [x, y] as const;
     const gaps = own.map((a) => (a.moves ? a.count - 1 : 0));

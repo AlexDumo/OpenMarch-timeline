@@ -49,7 +49,20 @@ const EXTRA_ROWS: Readonly<Record<string, readonly Row[]>> = {
         { label: "Drag without snapping", keys: "Alt + Drag" },
     ],
     movement: [{ label: "Nudge the selected marchers", keys: "W A S D" }],
+    // While drawing, stretching, moving or dragging a spacing of a shape (owner on #453); "Mod" is
+    // Cmd on a Mac, Ctrl elsewhere
+    shape: [
+        {
+            label: "Fine control, still catching yard lines and hashes",
+            keys: "Alt + Drag",
+        },
+        { label: "Drag a shape without snapping", keys: "Mod + Drag" },
+    ],
 };
+
+/** An extra row's keys for this platform: "Mod" is Cmd on a Mac, Ctrl elsewhere */
+const extraKeys = (keys: string, isMac: boolean) =>
+    keys.replace(/^Mod\b/, isMac ? "⌘" : "Ctrl");
 
 /** Shown elsewhere: the nudge (`EXTRA_ROWS`), the tap-beat digits and the beat editor's keys */
 const LISTED_ELSEWHERE: ReadonlySet<ActionId> = new Set([
@@ -89,7 +102,10 @@ export function shortcutGroups(
     for (const [category, title] of GROUPS) {
         const rows = [
             ...(byCategory.get(category) ?? []),
-            ...(EXTRA_ROWS[category] ?? []),
+            ...(EXTRA_ROWS[category] ?? []).map((row) => ({
+                ...row,
+                keys: extraKeys(row.keys, isMac),
+            })),
         ];
         byCategory.delete(category);
         if (rows.length === 0) continue;

@@ -199,8 +199,10 @@ Every number in the editor works the same way. Owner choice, 2026-10-16.
   | A box's size (6 × 2)      | Sideways for more or fewer across, up or down for more or fewer deep. It locks to the first direction moved | 1 per 16 px     |
   | Rotation (in the editor)  | Right turns clockwise                                                                                       | 1° per 2 px     |
 
-- **Alt** while dragging a spacing gives hundredths of a step (#411). A dragged rotation snaps to 15°
-  (#403), whole degrees with **Shift**.
+- **Alt** while dragging a spacing gives hundredths of a step (#411), and a corner or the center
+  still lands on a yard line, hash or sideline it comes near (#452, owner on #453). **Cmd** (Mac) or
+  **Ctrl** snaps nothing. A dragged rotation snaps to 15° (#403), whole degrees with **Shift**, free
+  with **Alt**.
 - A number lights up while it's being dragged, and its cursor shows its drag direction.
 - A drag that ends where it started changes nothing; it doesn't round the value.
 - A size change keeps the spacing and grows from the pivot (back-left by default; changed
@@ -247,7 +249,8 @@ Guardrails for shapes with unassigned spots later (#358):
   editor's spacings cover it.
 - **Scale by interval**, never by percentage: spacings change in half steps. A shape
   with uneven gaps (4, 4, 2) changes every gap by half a step. Footprint kinds scale their
-  footprint in half steps. Resize handles snap the spacing to half steps (Alt for hundredths), with a
+  footprint in half steps. Resize handles snap the spacing to half steps (Alt for hundredths, still
+  catching the field's lines; Cmd/Ctrl for no snapping, owner on #453), with a
   length readout while dragging a long shape. There are no percentage scale buttons anywhere.
 - **The pivot.** A 3 × 3 grid (the floating editor's pivot menu for a shape, the inspector for a
   plain selection), the center by default. On the field, Cmd/Ctrl-drag
@@ -297,8 +300,15 @@ the **start flag**, not where they stood on this page, so the shape shows the mo
   turn puts the box back on the half-step grid, which can shift it by up to a quarter step.
 - A box turned off the field's axes can't stand on the grid: moving it moves it in whole half
   steps instead.
-- Snapping: positions and spacings snap to half steps; Alt turns snapping off, as in the rest of
-  the timeline.
+- Snapping: positions and spacings snap to half steps, and a corner, side or center near a yard
+  line, hash or sideline lands on it (#425, #444, #446, #452). Two modifiers, wherever these guides
+  apply (drawing, stretching, moving, dragging a spacing; owner on #453):
+  - **Alt: fine control.** No half-step ladder (hundredths, free positions), and the field's lines
+    still catch, with the same pull radius on screen. So a turned box's corner slides smoothly
+    onto a line instead of zigzagging between half steps.
+  - **Cmd (Mac) / Ctrl: no snapping at all.** No ladder and no guides.
+  - The pivot pulled out with Cmd/Ctrl keeps snapping while Cmd/Ctrl is still held; only Alt frees
+    it. Ctrl+click on a Mac stays the context click (it pans and never reaches a shape).
 
 ### Who goes where
 
