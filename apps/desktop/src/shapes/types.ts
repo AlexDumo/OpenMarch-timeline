@@ -165,11 +165,8 @@ export interface ShapeIssue {
     readonly message: string;
     /** Slot indexes the issue is about, for highlighting */
     readonly slots?: readonly number[];
-    /**
-     * `steps`: steps too big, drawn apart from the rest. `collision`: walks that cross, which
-     * Place asks about once before placing. `close`: walks passing too close (drawn red too).
-     */
-    readonly mark?: "steps" | "collision" | "close";
+    /** `steps`: steps too big, drawn apart from the rest */
+    readonly mark?: "steps";
 }
 
 /**
@@ -247,8 +244,6 @@ export interface ShapeKind<P> {
     readonly version: number;
     readonly label: string;
     readonly family: "path" | "fill";
-    /** Not offered in the shape pickers: reached another way (a filled shape, by its switch) */
-    readonly unlisted?: boolean;
     /**
      * Who goes where when the tool opens: an open path keeps the marchers' order along it, a
      * closed or filled shape has no natural start, so nearest spots usually read better

@@ -437,7 +437,7 @@ is back, by interval.
 **Changed 2026-10-16:** the inspector gets two tabs, **Inspector** (what it shows today) and
 **Shape**. The Shape tab switches on by itself when a shape opens or a placed shape is
 selected, and back when it closes. The shape list isn't a tab: it's the **Shapes** window
-([above](#3-the-library-the-inspectors-library-tab)). The Shape tab is for exact work; most
+([above](#3-the-library-left-sidebar)). The Shape tab is for exact work; most
 people won't need it. Owner choice, 2026-10-15: handles for most people, the panel for those who
 want it.
 
@@ -541,12 +541,12 @@ Every kind must work, and be checked, from 1 marcher to a full band.
 | **B**                       | Box                                                    | Existing                                               |
 | **Enter** / **Esc**         | Place / discard (innermost first; Esc is undoable)     | Existing; Esc becomes an undo step (#347)              |
 | `[` / `]`                   | ~~One fewer / one more across~~                        | Dropped: they hold for playback speed (#216)           |
-| **/** and **⌘K**            | The command bar                                        | ⌘K existing; / proposed (#353)                         |
-| Hold or tap **R**           | Favorites ring                                         | Proposed (#351); F is taken (#340)                     |
+| **/** and **⌘K**            | The command bar                                        | Built (#354)                                           |
+| Hold or tap **R**           | Favorites ring                                         | Built (#351); F is taken (#340)                        |
 | Nudge keys (WASD, arrows)   | Move the whole open or selected shape                  | 07                                                     |
 | **Alt+R**                   | Turn the open or selected shape 90°                    | Built (#429)                                           |
 | **Alt+F** / **Alt+Shift+F** | Flip the shape side to side / front to back            | Built (#429); flip the marchers with no shape          |
-| **Shift+R**                 | Recalculate who goes where                             | Built (#429); also in the command palette              |
+| **Shift+R**                 | Recalculate who goes where                             | Built (#429); in the palette while a shape is up       |
 | **Alt** + drag              | Fine control: no half steps, still catching the lines  | Built (#453)                                           |
 | **Cmd/Ctrl** + drag         | No snapping at all                                     | Built (#453)                                           |
 | Kind letters                | Pick a kind, only inside the ring or the Shapes ribbon | Needs shortcut contexts; deferred (README decision 10) |

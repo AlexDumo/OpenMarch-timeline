@@ -3,7 +3,7 @@
 # Keep `id` stable: feedback is filed under it.
 id: shape-tool
 title: The shape tool (box)
-summary: OpenMarch's first shape tool. Select marchers, pick Box, draw it on the field, shape it from the floating editor beside it, and press Enter to place it. We want your read on the controls as the model for every future shape, not only on this box.
+summary: OpenMarch's first shape tool. Select marchers, pick Box, draw it on the field, shape it from the floating editor under it, and press Enter to place it. We want your read on the controls as the model for every future shape, not only on this box.
 status: open
 variants: []
 questions:
@@ -35,8 +35,8 @@ the same controls can carry other shapes later.
 4. Pick how marchers fill it from the mode menu: **Grid**, **Outline** or
    **Spread**. Switching keeps the box where you drew it. In Spread, try
    **Edge** to stand marchers along the outline, and **Reshuffle**.
-5. Drag inside the box to move it. Its sides and center catch yard lines and
-   hashes too.
+5. Drag inside the box to move it. Its corners and center catch yard lines
+   and hashes too.
 6. Press **Enter** to place it, or **Esc** to discard.
 7. Click a placed box to select it and edit it again. **Recalculate**
    (Shift+R) works out who goes where by least travel.
