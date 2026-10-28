@@ -10,6 +10,7 @@ import {
     type BoxParams,
 } from "../../box/boxGeometry";
 import { withSpacing } from "../../editor/boxEdits";
+import { chipLayout } from "../../editor/chip";
 import { DEFAULT_ODD_GAP, type OutlineDistribution } from "../distribution";
 import { withMode } from "../modes";
 import { distribute } from "../distribute";
@@ -83,8 +84,8 @@ function sideCounts(p: BoxParams, n: number) {
     };
 }
 
-describe("an outline with one interval all round", () => {
-    it("a 2:1 rectangle of 100 has about twice as many on its long sides", () => {
+describe("an outline: across is the designer's interval, deep follows the frame (owner on #459)", () => {
+    it("a 2:1 rectangle of 100 has about twice as many on its long sides, the frame kept", () => {
         const files = drawBox({ x: 0, y: 0 }, { x: 400, y: 200 }, 100, env)!;
         const frame = boxTool.frameOf(files, 100);
         const aspect = frame.halfWidth / frame.halfDepth;
@@ -92,19 +93,25 @@ describe("an outline with one interval all round", () => {
         expect(aspect).toBeGreaterThan(1.9);
         expect(aspect).toBeLessThan(2.3);
         const p = withMode(boxTool, files, 100, "outline", env) as BoxParams;
-        expect(p.across).toBe(p.deep);
         const { back, front, left, right } = sideCounts(p, 100);
         expect(back).toBe(front);
         expect(left).toBe(right);
         // Intervals along each side follow its length: the long side about twice the short one
-        const ratio = (back - 1) / (left - 1);
-        expect(Math.abs(ratio / aspect - 1)).toBeLessThan(0.1);
+        expect(Math.abs((back - 1) / (left - 1) / aspect - 1)).toBeLessThan(
+            0.15,
+        );
         // Not 25 a side
         expect(back).toBeGreaterThan(30);
         expect(left).toBeLessThan(20);
+        // The frame kept, to 600ths of a step per interval
+        const kept = boxTool.frameOf(p, 100);
+        expect(Math.abs(kept.halfWidth - frame.halfWidth)).toBeLessThan(0.5);
+        expect(kept.halfDepth).toBeCloseTo(frame.halfDepth, 9);
+        // The sides' spacing near the across interval
+        expect(Math.abs(Math.log(p.deep / p.across))).toBeLessThan(0.15);
     });
 
-    it("spaces every side the same, with a marcher on every corner", () => {
+    it("spaces the back and front at across and the sides evenly at deep, with a marcher on every corner", () => {
         for (const [n, w, d] of [
             [100, 400, 200],
             [24, 120, 50],
@@ -113,8 +120,6 @@ describe("an outline with one interval all round", () => {
         ] as const) {
             const p = outline(n, w, d);
             const { spots, bounds } = sideCounts(p, n);
-            expect(p.across).toBe(p.deep);
-            // A marcher on each corner
             for (const c of [
                 { x: bounds.l, y: bounds.t },
                 { x: bounds.r, y: bounds.t },
@@ -125,23 +130,52 @@ describe("an outline with one interval all round", () => {
                     spots.some((s) => Math.hypot(s.x - c.x, s.y - c.y) < 1e-6),
                     `${n}: corner`,
                 ).toBe(true);
-            // Neighbors round the loop one interval apart, but for an odd count's spread side
-            const loop = spots.map((s) => ({ x: s.x, y: s.y }));
-            const gaps = loop.map((s, i) => {
-                const t = loop[(i + 1) % loop.length]!;
+            const gaps = spots.map((s, i) => {
+                const t = spots[(i + 1) % spots.length]!;
                 return Math.hypot(t.x - s.x, t.y - s.y);
             });
-            const even = gaps.filter(
+            const atAcross = gaps.filter(
                 (g) => Math.abs(g - p.across) < 1e-6,
             ).length;
-            // An odd count spreads one side's spots a little wider (the Leftover rule)
-            expect(even).toBeGreaterThanOrEqual(
+            const atDeep = gaps.filter(
+                (g) => Math.abs(g - p.deep) < 1e-6,
+            ).length;
+            // Every neighbor pair an interval apart, but for an odd count's spread side
+            expect(atAcross + atDeep, `${n}`).toBeGreaterThanOrEqual(
                 n % 2 === 0 ? n : n - Math.ceil(n / 2),
             );
         }
     });
 
-    it("takes more across as a handle widens it, the interval the same both ways", () => {
+    it("keeps across exact through a depth drag, the deep spacing following it smoothly, a marcher moving sides only where another count fits nearer", () => {
+        // On half steps first: the first edit after a switch puts across there
+        const kept = outline(40, 100, 100);
+        const e = boxTool.handles(kept, 40).find((h) => h.key === "e")!.at;
+        const p = stretchBox(kept, 40, "e", e, env);
+        const across = p.across;
+        expect(across % half).toBe(0);
+        const s = boxTool.handles(p, 40).find((h) => h.key === "s")!.at;
+        let last: { b: number; deep: number } | null = null;
+        for (let px = -40; px <= 80; px += 0.5) {
+            const out = stretchBox(p, 40, "s", { x: s.x, y: s.y + px }, env);
+            expect(out.across).toBe(across);
+            const b = onField(out, 40).deep - 1;
+            const depth = b * out.deep;
+            // The nearest count: no other gives a spacing nearer across
+            for (let other = 1; other < 20; other++)
+                expect(
+                    Math.abs(Math.log(depth / b / across)),
+                ).toBeLessThanOrEqual(
+                    Math.abs(Math.log(depth / other / across)) + 1e-9,
+                );
+            // Smooth: between count changes the spacing moves by a hair per half pixel
+            if (last && last.b === b)
+                expect(Math.abs(out.deep - last.deep)).toBeLessThan(0.5);
+            last = { b, deep: out.deep };
+        }
+    });
+
+    it("takes more across as a handle widens it, across on half steps", () => {
         const p = outline(40, 100, 100);
         const before = onField(p, 40).across;
         const e = boxCorners(p, 40).reduce((a, b) => (b.x > a.x ? b : a));
@@ -152,20 +186,32 @@ describe("an outline with one interval all round", () => {
             { x: e.x + 80, y: boxTool.frameOf(p, 40).center.y },
             env,
         );
-        expect(wide.across).toBe(wide.deep);
+        expect(wide.across % half).toBe(0);
         expect(onField(wide, 40).across).toBeGreaterThan(before);
         expect(boxDistribution(wide).mode).toBe("outline");
     });
 
-    it("sets both spacings when one is changed", () => {
+    it("sets across when it's changed, the depth kept and deep following; deep isn't set", () => {
         const p = outline(24, 120, 50);
+        const depth = (onField(p, 24).deep - 1) * p.deep;
         const q = withSpacing(p, "across", 2.5, 24, env);
-        expect([q.across, q.deep]).toEqual([25, 25]);
-        const r = withSpacing(p, "deep", 1.5, 24, env, true);
-        expect([r.across, r.deep]).toEqual([15, 15]);
+        expect(q.across).toBe(25);
+        expect((onField(q, 24).deep - 1) * q.deep).toBeCloseTo(depth, 9);
+        expect(withSpacing(p, "deep", 1.5, 24, env, true)).toBe(p);
     });
 
-    it("opens an outline stored with two intervals unchanged, and evens it on a count change", () => {
+    it("shows the deep spacing as about so much, not to be changed, and no proportion lock", () => {
+        const p = outline(24, 120, 50);
+        const layout = chipLayout(boxTool, p, 24, env);
+        const deep = layout.intervals.find((x) => x.param.key === "deep")!;
+        expect(deep.derived).toBe(true);
+        expect(deep.display.startsWith("≈")).toBe(true);
+        const across = layout.intervals.find((x) => x.param.key === "across")!;
+        expect(across.derived).toBe(false);
+        expect(layout.ratioLock).toBe(false);
+    });
+
+    it("opens an outline stored before unchanged, and a count change keeps its depth", () => {
         // As #390 stored them: sides from the file count, each axis its own interval
         const stored: BoxParams = {
             center: { x: 0, y: 0 },
@@ -182,7 +228,8 @@ describe("an outline with one interval all round", () => {
         expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(75, 9);
         expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(75, 9);
         const fewer = resizeFiles(stored, 16, 5, env);
-        expect([fewer.across, fewer.deep]).toEqual([15, 15]);
+        expect(fewer.across).toBe(15);
+        expect((onField(fewer, 16).deep - 1) * fewer.deep).toBeCloseTo(75, 9);
         expect((boxDistribution(fewer) as OutlineDistribution).mode).toBe(
             "outline",
         );
@@ -205,7 +252,7 @@ describe("the review of #459", () => {
         Math.abs(v / half - Math.round(v / half)) < 1e-9;
 
     for (const degrees of [15, 30])
-        it(`a 24 outline turned ${degrees}°: a pulled stretch puts a corner exactly on a line, traveling no farther than the radius`, () => {
+        it(`a 24 outline turned ${degrees}°: a pulled stretch puts a corner exactly on a line, no farther than the radius`, () => {
             const flat = outline(24, 120, 80);
             const p: BoxParams = {
                 ...flat,
@@ -214,20 +261,19 @@ describe("the review of #459", () => {
                 across: 15,
                 deep: 15,
             };
-            const se = boxTool.handles(p, 24).find((h) => h.key === "se")!.at;
+            const e = boxTool.handles(p, 24).find((h) => h.key === "e")!.at;
+            const dir = { x: Math.cos(p.rotation), y: Math.sin(p.rotation) };
             let pulled = 0;
             for (let px = 0; px <= 80; px += 0.5) {
-                const to = { x: se.x + px, y: se.y + px * 0.3 };
-                const out = stretchBox(p, 24, "se", to, lined());
-                expect(out.across).toBe(out.deep);
+                // The east side dragged out along the box's own across
+                const to = { x: e.x + px * dir.x, y: e.y + px * dir.y };
+                const out = stretchBox(p, 24, "e", to, lined());
                 if (onHalves(out.across)) continue;
                 pulled++;
-                // Pulled: a corner on a line, and that corner near where the ladder's own
-                // interval would have it
                 const corners = boxCorners(out, 24);
                 expect(corners.some(onLine), `${px}`).toBe(true);
                 const free = boxCorners(
-                    stretchBox(p, 24, "se", to, lined({ pull: false })),
+                    stretchBox(p, 24, "e", to, lined({ pull: false })),
                     24,
                 );
                 const landed = corners
@@ -289,14 +335,5 @@ describe("the review of #459", () => {
             top,
             9,
         );
-    });
-
-    it("shows one spacing for an outline", () => {
-        const p = outline(24, 120, 80);
-        const shown = boxTool.params
-            .filter((q) => q.shown?.(p, 24) ?? true)
-            .map((q) => q.key);
-        expect(shown).toContain("across");
-        expect(shown).not.toContain("deep");
     });
 });

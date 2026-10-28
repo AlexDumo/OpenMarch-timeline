@@ -1,9 +1,8 @@
 import { resizeCursor } from "../frame/frame";
-import type { GapSide } from "../distribute/distribution";
 import type { ToolEnv, ToolKind } from "../tool/toolKind";
 import { distributionFor, type Distribution } from "../distribute/distribution";
 import { layoutCatalogue, resolveLayout } from "../distribute/layouts";
-import { acrossRange, nearestSides, OUTLINE_MIN } from "../distribute/outline";
+import { nearestSides, OUTLINE_MIN } from "../distribute/outline";
 import { BOX_PARAMS } from "./boxParams";
 import { leftAs, readMemory, sameSize, type ModeMemory } from "./modeMemory";
 import { boxRegion, boxShape } from "./boxShape";
@@ -28,8 +27,7 @@ import {
     handleKeysOf,
     insideBox,
     moveBox,
-    evenOutline,
-    snapInterval,
+    swayOutline,
     snapToGrid,
     stretchBox,
     withBoxFrame,
@@ -215,13 +213,11 @@ function switched(
 }
 
 /**
- * `next` (the box switched to Outline) in a frame `width` × `depth`, with one interval all the
- * way round (#458): the interval spreads the marchers over the frame's perimeter in half steps,
- * and each side takes as many as its length holds, so a long side gets more than a short one. An
- * outline must have its spots half a step apart or more, so one that can't go round the frame
- * that close (48 round a box 3½ × 2½ steps) grows to the size it needs. Under
- * {@link OUTLINE_MIN} marchers it is a line, and a box with no area (a single rank or file) keeps
- * its intervals and goes round as wide (or deep) as it can.
+ * `next` (the box switched to Outline) in a frame `width` × `depth`, kept exactly (owner on
+ * #458, #459): across is the interval that fits the width, even off the half steps (the first
+ * edit puts it back on them), and deep follows the depth, the split the one whose deep spacing
+ * comes nearest across. Under {@link OUTLINE_MIN} marchers it is a line, and a box with no area
+ * (a single rank or file) keeps its intervals and goes round as wide (or deep) as it can.
  */
 function outlineIn(
     { width, depth }: FrameSize,
@@ -237,53 +233,7 @@ function outlineIn(
         const aspect = width / params.across / (depth / params.deep);
         return withFileCount(next, nearestSides(n, aspect, side).a + 1);
     }
-    const { a, interval } = keptOutline(width, depth, n, side, env);
-    return {
-        ...withFileCount(next, a + 1),
-        across: interval,
-        deep: interval,
-    };
-}
-
-/**
- * The split and the one interval (#458) that keep an outline of `n` nearest a `width` × `depth`
- * frame, the interval kept exactly (to 600ths of a step, as typed) even off the half steps: the
- * space comes first, and the first edit after puts the interval back on half steps (owner on
- * #458). For each split, the interval at which its worse side misses least: one fitting a side,
- * or one where the two sides miss by as much; then the split nearer the frame's proportions.
- * Never under half a step, so a frame too small to go round that close grows.
- */
-function keptOutline(
-    width: number,
-    depth: number,
-    n: number,
-    side: GapSide,
-    env: ToolEnv,
-): { a: number; interval: number } {
-    const sum = Math.ceil(n / 2);
-    const { min, max } = acrossRange(n, side);
-    const proportional = evenOutline(width, depth, n, side, env).a;
-    let best: { a: number; interval: number; off: number } | null = null;
-    for (let a = min; a <= max; a++) {
-        const b = sum - a;
-        const tries = [width / a, depth / b, (width + depth) / sum];
-        if (a !== b) tries.push((width - depth) / (a - b));
-        for (const v of tries) {
-            if (!(v > 0)) continue;
-            const interval = snapInterval(v, env, true);
-            const off = Math.max(
-                Math.abs(a * interval - width),
-                Math.abs(b * interval - depth),
-            );
-            if (
-                best === null ||
-                off < best.off - 1e-9 ||
-                (Math.abs(off - best.off) <= 1e-9 &&
-                    Math.abs(a - proportional) <
-                        Math.abs(best.a - proportional))
-            )
-                best = { a, interval, off };
-        }
-    }
-    return best!;
+    // The frame kept exactly: across fits the width as typed, deep the depth (owner on #459)
+    const { a, across, deep } = swayOutline(width, depth, n, side, env, true);
+    return { ...withFileCount(next, a + 1), across, deep };
 }

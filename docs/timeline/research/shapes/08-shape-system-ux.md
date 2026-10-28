@@ -252,22 +252,25 @@ Guardrails for shapes with unassigned spots later (#358):
   footprint in half steps. Resize handles snap the spacing to half steps (Alt for hundredths, still
   catching the field's lines; Cmd/Ctrl for no snapping, owner on #453), with a
   length readout while dragging a long shape. There are no percentage scale buttons anywhere.
-- **Outline has one interval all the way round** (#458). Each side holds as many marchers as
-  its length: a box twice as long as deep has about twice as many on its long sides, a marcher
+- **Outline: across is the interval, deep follows the frame** (#458; owner on #459, as drill
+  writers do it). The back and front stand exactly at the across interval, the designer's number
+  (half steps; Alt fine, Cmd/Ctrl free). The left and right sides follow the frame: their spacing
+  is the depth over their gaps, the count of gaps being whichever brings it nearest the across
+  interval. So a box twice as long as deep has about twice as many on its long sides, a marcher
   on every corner, and an odd count's leftover spot still goes on the side the Leftover menu
-  picks. The floating editor shows one spacing for an outline. A handle drag shares the
-  marchers out between the sides again as the frame changes, and who goes where is worked out
-  again when a side's count changes; a spacing changed sets it for every side; a count changed
-  (− and +) keeps the interval.
-  - **Switching to Outline keeps the space** (owner on #458): the split and the one interval
-    that keep the frame closest, the interval exact even off the half steps (31 round 7 × 6
-    steps: about 0.8 steps). A mode switch keeps any other box within half a step a side
-    (#449); an outline keeps it as close as one interval allows (12 round 6 × 4 steps can't do
-    better than 6⅔ × 3⅓).
-  - **The first edit goes back to half steps**: a handle drag, a spacing drag or − / +, a count
-    − / + or a move puts the interval (and the box) back on the half-step grid. Alt keeps fine
-    control, Cmd/Ctrl no snapping (#453).
-  - Outlines stored before keep their two intervals until they're edited.
+  picks. The floating editor shows the deep spacing as about so much ("≈1.8"), not to be
+  dragged or typed, and no proportion lock.
+  - A depth drag keeps across and squeezes or stretches the sides' spacing smoothly; a marcher
+    moves between sides only when another count fits nearer, and who goes where is worked out
+    again. A width or corner drag picks the split whose deep spacing comes nearest across. A
+    side edge near a yard line or hash lands on it: across solved so the corner does, the depth
+    (no ladder) within the pull radius.
+  - **Switching to Outline keeps the frame** (owner on #458): across is the interval that fits
+    the width exactly, even off the half steps (31 round 7 × 6 steps: about 0.78), and deep
+    follows the depth, so a mode switch keeps the box drawn as #449 asks.
+  - **The first edit puts across back on half steps**: a handle drag, a spacing drag or − / +,
+    a count − / + or a move. Changing across keeps the depth, the sides following.
+  - Outlines stored before keep their numbers until they're edited.
 - **The pivot.** A 3 × 3 grid (the floating editor's pivot menu for a shape, the inspector for a
   plain selection), the center by default. On the field, Cmd/Ctrl-drag
   from the center dot pulls the pivot out into its own yellow crosshair, which can then be

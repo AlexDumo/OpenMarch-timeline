@@ -15,6 +15,8 @@ export interface ChipNumber {
     /** What − and + would make the shape; null where it can't go that way or has no buttons */
     readonly less: unknown;
     readonly more: unknown;
+    /** Worked out from the shape: shown, not changed ({@link ToolParam.derived}) */
+    readonly derived: boolean;
 }
 
 /**
@@ -43,12 +45,16 @@ export function chipLayout(
             note: param.note?.(params, n) ?? null,
             less: param.stepper?.by(params, n, -1, env) ?? null,
             more: param.stepper?.by(params, n, 1, env) ?? null,
+            derived: param.derived?.(params, n) ?? false,
         }));
     const intervals = numbers.filter((x) => x.param.interval);
     return {
         values: numbers.filter((x) => !x.param.interval),
         intervals,
-        ratioLock: kind.ratioLock === true && intervals.length > 1,
+        // Only spacings the designer sets can be kept in proportion
+        ratioLock:
+            kind.ratioLock === true &&
+            intervals.filter((x) => !x.derived).length > 1,
     };
 }
 

@@ -2878,7 +2878,7 @@ test("change: from the keyboard, Tab reaches the Leftover menu, Enter opens it o
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
 });
 
-test("change: Outline spaces every side the same, and widening it moves marchers onto the long sides (#458)", async ({
+test("change: Outline spaces the back and front at its across interval, the sides following the frame, and widening it moves marchers onto the long sides (#458, #459)", async ({
     show,
 }) => {
     const { page } = show;
@@ -2907,9 +2907,14 @@ test("change: Outline spaces every side the same, and widening it moves marchers
         };
     };
     expect(await sides()).toEqual({ back: 3, left: 3 });
-    // One spacing all round: the editor shows one number (review)
+    // Across is the designer's number; deep follows the frame, shown as about so much and not
+    // to be dragged or typed (owner on #459)
     await expect(bar.getByTestId("shape-editor-across")).toBeVisible();
-    await expect(bar.getByTestId("shape-editor-deep")).toHaveCount(0);
+    const deep = bar.getByTestId("shape-editor-deep");
+    await expect(deep).toHaveText(/^≈/);
+    await expect(deep).toHaveAttribute("data-derived");
+    await deep.click();
+    await expect(page.getByTestId("shape-editor-deep-input")).toHaveCount(0);
 
     // Widened to about three times as wide: the long sides take the marchers, one interval
     const { handles } = (await shapeOverlay(page))!;
@@ -3206,7 +3211,7 @@ test("change: Edge on a Spread box stands marchers along its outline, the box st
     );
 });
 
-test("change: every mode switch keeps the box drawn: its center exactly, each side within half a step (an outline as close as one interval allows), and no drift however often it switches (#449, #458)", async ({
+test("change: every mode switch keeps the box drawn: its center exactly, each side within half a step, and no drift however often it switches (#449)", async ({
     show,
 }) => {
     const { page } = show;
@@ -3224,21 +3229,6 @@ test("change: every mode switch keeps the box drawn: its center exactly, each si
         };
     };
     const drawn = await bounds();
-    /**
-     * How far an outline of all 8 with one interval all round must miss the drawn box by, a
-     * side (#458): half the least its worse dimension can miss by, over every split and interval
-     */
-    const outlineSlack = (() => {
-        const [w, d] = [drawn.right - drawn.left, drawn.bottom - drawn.top];
-        let best = Infinity;
-        for (let a = 1; a <= 3; a++)
-            for (let s = half; s <= Math.max(w, d) + half; s += 0.01)
-                best = Math.min(
-                    best,
-                    Math.max(Math.abs(a * s - w), Math.abs((4 - a) * s - d)),
-                );
-        return best / 2;
-    })();
     // Each mode's box on its first visit: every later visit is that box exactly, no drift
     const first = new Map<string, Awaited<ReturnType<typeof bounds>>>([
         ["files", drawn],
@@ -3258,9 +3248,7 @@ test("change: every mode switch keeps the box drawn: its center exactly, each si
             expect(
                 Math.abs(now[side] - drawn[side]),
                 `${mode}: ${side}`,
-            ).toBeLessThanOrEqual(
-                mode === "outline" ? outlineSlack + 0.05 : half + 0.01,
-            );
+            ).toBeLessThanOrEqual(half + 0.01);
         expect((now.left + now.right) / 2).toBeCloseTo(
             (drawn.left + drawn.right) / 2,
             6,

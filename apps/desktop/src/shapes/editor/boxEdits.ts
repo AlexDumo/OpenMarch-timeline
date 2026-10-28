@@ -8,6 +8,7 @@ import {
     ranksOf,
     snapInterval,
     grownFromPivot,
+    outlineWithAcross,
     resizeFiles,
     acrossIsDeep,
     onField,
@@ -101,11 +102,20 @@ export function withSpacing(
         )
             return p;
     }
+    // An outline's across is the designer's interval; deep follows its depth (#458, #459)
+    if (boxDistribution(p).mode === "outline") {
+        if (which === "deep") return p;
+        if (value === p.across) return p;
+        return grownFromPivot(
+            p,
+            outlineWithAcross(p, spots, value, env),
+            spots,
+            env,
+        );
+    }
     let across = which === "across" ? value : p.across;
     let deep = which === "deep" ? value : p.deep;
-    // An outline has one interval all the way round (#458)
-    if (boxDistribution(p).mode === "outline") across = deep = value;
-    else if (env.ratioLocked)
+    if (env.ratioLocked)
         ({ across, deep } = keepRatio(
             p,
             across,
@@ -343,11 +353,19 @@ function exactSpacing(
     spots: number,
     env: ToolEnv,
 ): BoxParams {
+    // An outline's across is the designer's interval; deep follows its depth (#458, #459)
+    if (boxDistribution(p).mode === "outline")
+        return which === "deep"
+            ? p
+            : grownFromPivot(
+                  p,
+                  outlineWithAcross(p, spots, value, env),
+                  spots,
+                  env,
+              );
     let across = which === "across" ? value : p.across;
     let deep = which === "deep" ? value : p.deep;
-    // An outline has one interval all the way round (#458)
-    if (boxDistribution(p).mode === "outline") across = deep = value;
-    else if (env.ratioLocked && p.across > 0 && p.deep > 0) {
+    if (env.ratioLocked && p.across > 0 && p.deep > 0) {
         const ratio = p.deep / p.across;
         if (which === "across") deep = value * ratio;
         else across = value / ratio;

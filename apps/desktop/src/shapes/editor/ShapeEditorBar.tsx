@@ -272,6 +272,7 @@ function ShapeEditorBar({
                                     canLess={false}
                                     canMore={false}
                                     glyph
+                                    derived={x.derived}
                                     actions={numbers}
                                 />
                             ))}
@@ -454,6 +455,7 @@ const NumberChip = memo(function NumberChip({
     canLess,
     canMore,
     glyph,
+    derived = false,
     actions,
 }: {
     param: Param;
@@ -463,6 +465,8 @@ const NumberChip = memo(function NumberChip({
     canMore: boolean;
     /** The spacings show their glyph */
     glyph: boolean;
+    /** Worked out from the shape: shown as text, not dragged or typed (owner on #459) */
+    derived?: boolean;
     actions: ReturnType<typeof numberActions>;
 }) {
     const scrub = useMemo(() => actions.scrub(param), [actions, param]);
@@ -482,14 +486,25 @@ const NumberChip = memo(function NumberChip({
                     <MinusIcon size={12} />
                 </IconButton>
             )}
-            <ScrubNumber
-                display={display}
-                axis={param.drag}
-                label={param.label}
-                testId={`shape-editor-${param.key}`}
-                {...scrub}
-                onType={(text) => actions.type(param, text)}
-            />
+            {derived ? (
+                <span
+                    className="text-text/60 px-4 tabular-nums"
+                    aria-label={`${param.label}, following the shape`}
+                    data-testid={`shape-editor-${param.key}`}
+                    data-derived
+                >
+                    {display}
+                </span>
+            ) : (
+                <ScrubNumber
+                    display={display}
+                    axis={param.drag}
+                    label={param.label}
+                    testId={`shape-editor-${param.key}`}
+                    {...scrub}
+                    onType={(text) => actions.type(param, text)}
+                />
+            )}
             {param.stepper && (
                 <IconButton
                     label={param.stepper.more}

@@ -96,6 +96,9 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
         const field = onField(p, n);
         return (across ? field.acrossSpacing : field.deepSpacing) / stepPx;
     };
+    /** Whether this way is an outline's deep spacing, which follows its depth (owner on #459) */
+    const followsDepth = (p: BoxParams, n: number) =>
+        boxDistribution(p).mode === "outline" && ownKey(p, n) === "deep";
     /** A spacing set as typed: kept as it is (1⅔, 1.37), not on half steps (#411, #423) */
     const typed = (p: BoxParams, n: number, steps: number, env: ToolEnv) =>
         withSpacing(p, ownKey(p, n), steps, n, { ...env, snap: false }, true);
@@ -115,12 +118,16 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
         shown(p, n) {
             // A spread has one interval, the closest pair: the across one
             if (isSpread(p)) return across && n > 1;
-            // So has an outline, all the way round (#458): one number, the across one
-            if (boxDistribution(p).mode === "outline" && !across) return false;
             const field = onField(p, n);
             return (across ? field.across : field.deep) > 1;
         },
-        display: (p, n, stepPx) => formatSteps(stepsOf(p, n, stepPx)),
+        // An outline's deep spacing follows its depth: shown as about so much (owner on #459)
+        // (its own deep: turned a quarter, that's the field's side to side)
+        derived: (p, n) => followsDepth(p, n),
+        display: (p, n, stepPx) =>
+            followsDepth(p, n)
+                ? `≈${formatSteps(stepsOf(p, n, stepPx))}`
+                : formatSteps(stepsOf(p, n, stepPx)),
         value: stepsOf,
         type(p, n, text, env) {
             const steps = parseSteps(text);

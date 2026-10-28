@@ -88,6 +88,11 @@ export type ParamGlyph = "↔" | "↕";
 export interface ToolParam<P> {
     /** Stable for the kind: the command bar and saved shapes name the parameter by it */
     readonly key: string;
+    /**
+     * Worked out from the shape rather than set: shown, but not dragged, typed or stepped (an
+     * outline's front-to-back spacing, which follows its depth: owner on #459)
+     */
+    readonly derived?: (params: P, n: number) => boolean;
     /** What it is, for tooltips and screen readers: "Side-to-side spacing, in steps" */
     readonly label: string;
     /**

@@ -200,27 +200,98 @@ export function outlineFilesRange(
 }
 
 /**
- * An outline of `n` (4 or more) round a `width` × `depth` frame with one interval all the way
- * round (#458): the half loop's ⌈n/2⌉ intervals spread over half the perimeter (`interval`, on
- * the ladder, when not given), split between the sides as the frame's sides split its length, so
- * a side twice as long holds about twice the marchers. Corners always have a marcher; with an odd
- * count the Leftover spot comes off `side`, which keeps at least two intervals.
+ * How an outline's spacing works (#458, owner on #459): side to side (across) is the designer's
+ * interval, exact on the back and front; front to back (deep) follows the frame, the left and
+ * right sides' spacing being the frame's depth over their gaps. Those gaps are the count whose
+ * spacing comes nearest the across interval, so the deep spacing squeezes and stretches smoothly
+ * with the depth and a marcher moves between sides only when another count fits better. The
+ * total stays: the back takes what the sides don't (a + b = ⌈n/2⌉).
  */
-export function evenOutline(
+export function swaySides(
+    depth: number,
+    across: number,
+    n: number,
+    side: GapSide,
+    half: number,
+): { readonly a: number; readonly b: number } {
+    const sum = Math.ceil(n / 2);
+    const { min, max } = acrossRange(n, side);
+    let best: { b: number; score: number } | null = null;
+    for (let b = sum - max; b <= sum - min; b++) {
+        const deep = depth / b;
+        // Never under half a step, unless no count manages it
+        const score =
+            (deep < half - 1e-9 ? 1e6 : 0) +
+            Math.abs(Math.log(Math.max(deep, 1e-9) / across));
+        if (best === null || score < best.score - 1e-9) best = { b, score };
+    }
+    const b = best!.b;
+    return { a: sum - b, b };
+}
+
+/**
+ * An outline round a `width` × `depth` frame (#458, owner on #459): of the splits, the one whose
+ * deep spacing comes nearest its across interval, that interval fitting the width on the
+ * ladder, or exactly (`exact`, to 600ths of a step, as typed) for a switch to Outline, which
+ * keeps the frame. The deep spacing is the depth over the sides' gaps.
+ */
+export function swayOutline(
     width: number,
     depth: number,
     n: number,
     side: GapSide,
     env: ToolEnv,
-    interval?: number,
-): { readonly a: number; readonly b: number; readonly interval: number } {
+    exact = false,
+): {
+    readonly a: number;
+    readonly b: number;
+    readonly across: number;
+    readonly deep: number;
+} {
     const sum = Math.ceil(n / 2);
     const { min, max } = acrossRange(n, side);
-    const half = Math.max(width, 0) + Math.max(depth, 0);
-    const s = interval ?? snapInterval(half / sum, env);
-    const share = half > 0 ? (sum * Math.max(width, 0)) / half : min;
-    const a = Math.min(max, Math.max(min, Math.round(share)));
-    return { a, b: sum - a, interval: s };
+    const half = halfStep(env);
+    let best: {
+        a: number;
+        across: number;
+        score: number;
+        off: number;
+    } | null = null;
+    for (let a = min; a <= max; a++) {
+        const across = snapInterval(width / a, env, exact);
+        const deep = depth / (sum - a);
+        const score =
+            (deep < half - 1e-9 ? 1e6 : 0) +
+            Math.abs(Math.log(Math.max(deep, 1e-9) / across));
+        const off = Math.abs(a * across - width);
+        if (
+            best === null ||
+            score < best.score - 1e-9 ||
+            (Math.abs(score - best.score) <= 1e-9 && off < best.off - 1e-9)
+        )
+            best = { a, across, score, off };
+    }
+    const { a, across } = best!;
+    const b = sum - a;
+    return { a, b, across, deep: depth > 0 ? depth / b : across };
+}
+
+/**
+ * The outline with its across interval `across` (#458): the depth kept, its sides' gaps chosen
+ * again so the deep spacing comes nearest it ({@link swaySides}), the back taking the rest
+ */
+export function outlineWithAcross(
+    p: BoxParams,
+    n: number,
+    across: number,
+    env: ToolEnv,
+): BoxParams {
+    const d = boxDistribution(p);
+    if (d.mode !== "outline" || n < OUTLINE_MIN)
+        return { ...p, across, deep: across };
+    const depth = (spanOf(p, n).ranks - 1) * p.deep;
+    const { a, b } = swaySides(depth, across, n, d.oddGap.side, halfStep(env));
+    return { ...withFileCount(p, a + 1), across, deep: depth / b };
 }
 
 /** Whether the box is an even spread, whose frame is the spread's edge rather than its marchers */
@@ -927,12 +998,14 @@ function inBoxAxes(
 }
 
 /**
- * {@link stretchBox} for an outline (#458), in its own axes: the opposite corner or side stays
- * put and the frame follows the drag, then the outline goes round it with one interval on half
- * steps, the marchers shared out between the sides by their lengths (a longer side takes more).
- * A side handle keeps the other axis's first corner where it was; that side's length is what the
- * shared interval makes it. A moving corner near a field line lands on it, the one interval
- * solved so it does (#425, #446), every corner moving with it.
+ * {@link stretchBox} for an outline (#458, owner on #459), in its own axes: the opposite corner
+ * or side stays put. Across is the designer's interval, on half steps: a drag that changes the
+ * width picks the split whose deep spacing comes nearest it ({@link swayOutline}). A drag of the
+ * depth alone keeps across and squeezes or stretches the sides' spacing with the depth, a
+ * marcher moving between sides only when another count fits better ({@link swaySides}). A side
+ * handle keeps the other axis's first corner where it was. A moving corner near a field line
+ * lands on it: the across interval solved so it does, and the depth (which has no ladder) the
+ * same way within the pull radius (#425, #446).
  */
 function stretchOutline(
     base: BoxParams,
@@ -950,9 +1023,7 @@ function stretchOutline(
         x: key.includes("e") ? f.left : f.right,
         y: key.includes("s") ? f.top : f.bottom,
     };
-    const width = movesX ? Math.abs(to.x - anchor.x) : f.right - f.left;
-    const depth = movesY ? Math.abs(to.y - anchor.y) : f.bottom - f.top;
-    const even = evenOutline(width, depth, n, side, env);
+    const half = halfStep(env);
     const sign = {
         x: movesX ? signOf(to.x - anchor.x) : 1,
         y: movesY ? signOf(to.y - anchor.y) : 1,
@@ -961,32 +1032,57 @@ function stretchOutline(
         x: movesX ? anchor.x : f.left,
         y: movesY ? anchor.y : f.top,
     };
-    const at = (interval: number) =>
+    const build = (a: number, across: number, deep: number) =>
         boxFrom(
             start,
             sign,
-            even.a + 1,
-            interval,
-            interval,
+            a + 1,
+            across,
+            deep,
             n,
             env,
             boxDistribution(base),
         );
-    // Cmd/Ctrl snaps nothing, and Shift (equal spacings) means nothing to one interval
-    if (!field || env.pull === false || env.shift) return at(even.interval);
-    // Where the drag has the interval before the ladder rounds it
-    const raw = (width + depth) / Math.ceil(n / 2);
-    const corners = (interval: number) =>
-        boxCorners(at(interval), n).map(field.toField);
-    const half = halfStep(env);
-    const onLine = pullValue(
-        corners,
-        raw,
-        field.lines,
-        env,
-        (v) => v >= half - 1e-9,
-    );
-    return at(onLine ?? even.interval);
+    const width = movesX ? Math.abs(to.x - anchor.x) : f.right - f.left;
+    let depth = movesY ? Math.abs(to.y - anchor.y) : f.bottom - f.top;
+    let a: number;
+    let b: number;
+    let across: number;
+    if (movesX) {
+        ({ a, b, across } = swayOutline(width, depth, n, side, env));
+    } else {
+        // The first edit after a switch puts across back on half steps
+        across = env.snap ? snapInterval(base.across, env) : base.across;
+        ({ a, b } = swaySides(depth, across, n, side, half));
+    }
+    const pulls = field && env.pull !== false && !env.shift;
+    if (pulls && movesX) {
+        const corners = (v: number) =>
+            boxCorners(build(a, v, depth / b), n).map(field.toField);
+        across =
+            pullValue(
+                corners,
+                width / a,
+                field.lines,
+                env,
+                (v) => v >= half - 1e-9,
+            ) ?? across;
+    }
+    if (pulls && movesY) {
+        // The depth has no ladder: its edge lands on a line within the pull radius
+        const corners = (v: number) =>
+            boxCorners(build(a, across, v / b), n).map(field.toField);
+        depth =
+            pullValue(
+                corners,
+                depth,
+                field.lines,
+                env,
+                (v) => v / b >= half - 1e-9,
+                Infinity,
+            ) ?? depth;
+    }
+    return build(a, across, depth > 0 ? depth / b : across);
 }
 
 /** {@link stretchBox} in the box's own axes, `to` in them too */
@@ -1214,16 +1310,15 @@ export function moveBox(
 }
 
 /**
- * An outline whose one interval is off the half steps (kept exactly by a switch to Outline, or
- * one stored with two) back on them, about its center: the first edit after such a switch puts
+ * An outline whose across interval is off the half steps (kept exactly by a switch to Outline)
+ * back on them, about its center: the first edit after such a switch puts
  * the box on half steps (owner on #458). Anything else as it is, and nothing without snap.
  */
 function onHalfStepsIfOutline(p: BoxParams, env: ToolEnv): BoxParams {
     if (!env.snap || boxDistribution(p).mode !== "outline") return p;
-    const interval = snapInterval(p.across, env);
-    return interval === p.across && interval === p.deep
-        ? p
-        : { ...p, across: interval, deep: interval };
+    // Across is the designer's interval; deep follows the frame, so it stays (owner on #459)
+    const across = snapInterval(p.across, env);
+    return across === p.across ? p : { ...p, across };
 }
 
 /** The box with `delta` more files (fewer when negative): same intervals, grown from the pivot */
@@ -1255,12 +1350,23 @@ export function resizeFiles(
             : { min: 1, max: Math.max(1, n) };
     const clamped = Math.min(max, Math.max(min, Math.round(files)));
     if (clamped === acrossOf(p, n)) return p;
-    // An outline has one interval all round, back on half steps once it's edited (#458): one
-    // stored with two takes its across
-    const interval = snapInterval(p.across, env);
-    const even =
-        d.mode === "outline" ? { across: interval, deep: interval } : {};
-    return grownFromPivot(p, { ...withFileCount(p, clamped), ...even }, n, env);
+    // An outline keeps its depth, its sides' spacing following it, and its across interval goes
+    // back on half steps once it's edited (#458, owner on #459)
+    const outline =
+        d.mode === "outline" && n >= OUTLINE_MIN
+            ? {
+                  across: snapInterval(p.across, env),
+                  deep:
+                      ((spanOf(p, n).ranks - 1) * p.deep) /
+                      Math.max(1, Math.ceil(n / 2) - (clamped - 1)),
+              }
+            : {};
+    return grownFromPivot(
+        p,
+        { ...withFileCount(p, clamped), ...outline },
+        n,
+        env,
+    );
 }
 
 /**
