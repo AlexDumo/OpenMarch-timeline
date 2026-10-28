@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { boxTool } from "../box/boxTool";
 import { circleTool } from "../circle/circleTool";
 import { withMode } from "../distribute/modes";
+import type { BoxParams } from "../box/boxGeometry";
 import type { DistributionMode } from "../distribute/distribution";
 import type { ShapeFrame } from "../frame/frame";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
@@ -235,6 +236,71 @@ describe("a circle keeps its radius through every mode switch (#449)", () => {
             frameOf(switched(spread, "outline")),
             frameOf(outline),
             "and back",
+        );
+    });
+});
+
+describe("what a box remembers, read from a file (#451 review)", () => {
+    const N = 24;
+    const grid = drawn(boxTool, N, { x: 0, y: 0 }, { x: 120, y: 50 });
+    const outline = switched(grid, "outline");
+    type Stored = { modes?: Record<string, unknown> };
+    const memory = (outline.params as Stored).modes!;
+    const withModes = (modes: unknown) => ({
+        ...(outline.params as object),
+        modes,
+    });
+    const forgotten = withModes(undefined);
+    const toGrid = (params: unknown, n = N) =>
+        withMode(boxTool, params, n, "files", env);
+
+    it("remembers Grid's numbers as left", () => {
+        const back = toGrid(outline.params) as BoxParams;
+        const was = grid.params as BoxParams;
+        expect([back.files, back.across, back.deep]).toEqual([
+            was.files,
+            was.across,
+            was.deep,
+        ]);
+    });
+
+    it.each([
+        ["missing", undefined],
+        ["not an object", "grid"],
+        ["null", null],
+        ["without a frame", { ...memory, frame: undefined }],
+        [
+            "with a frame of no size",
+            { ...memory, frame: { width: 0, depth: 5 } },
+        ],
+        ["with a negative frame", { ...memory, seen: { width: -1, depth: 5 } }],
+        ["with no count", { ...memory, count: undefined }],
+        ["with a count that isn't a number", { ...memory, count: "24" }],
+        ["with left numbers that aren't objects", { ...memory, left: 7 }],
+    ])("starts from the box as it is when its memory is %s", (_, modes) => {
+        expect(toGrid(withModes(modes))).toEqual(toGrid(forgotten));
+    });
+
+    it("forgets when the count changes: the box as it is is the new frame", () => {
+        expect(toGrid(outline.params, N + 1)).toEqual(toGrid(forgotten, N + 1));
+        const after = toGrid(outline.params, N + 1) as Stored;
+        expect(after.modes?.count).toBe(N + 1);
+    });
+
+    const left = memory.left as Record<string, Record<string, unknown>>;
+    it.each([
+        ["more files than marchers", { files: N + 1 }],
+        ["a part file", { files: 2.5 }],
+        ["an interval wider than any field", { across: 1e12 }],
+        ["an interval that isn't a number", { deep: "10" }],
+    ])("ignores Grid's numbers when they hold %s", (_, bad) => {
+        const modes = {
+            ...memory,
+            left: { ...left, files: { ...left.files, ...bad } },
+        };
+        const { files: _files, ...others } = left;
+        expect(toGrid(withModes(modes))).toEqual(
+            toGrid(withModes({ ...memory, left: others })),
         );
     });
 });
