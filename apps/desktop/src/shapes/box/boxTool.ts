@@ -1,4 +1,5 @@
 import { resizeCursor } from "../frame/frame";
+import type { GapSide } from "../distribute/distribution";
 import type { ToolEnv, ToolKind } from "../tool/toolKind";
 import { distributionFor, type Distribution } from "../distribute/distribution";
 import { layoutCatalogue, resolveLayout } from "../distribute/layouts";
@@ -11,7 +12,6 @@ import {
     filesIn,
     spreadIn,
     frameSizeOf,
-    halfStep,
     type FrameSize,
     boxDistribution,
     filesOf,
@@ -28,6 +28,7 @@ import {
     handleKeysOf,
     insideBox,
     moveBox,
+    evenOutline,
     snapInterval,
     snapToGrid,
     stretchBox,
@@ -185,12 +186,11 @@ function switched(
 }
 
 /**
- * `next` (the box switched to Outline) in a frame `width` × `depth`: the sides with the frame's
- * proportions, each interval refitted to it in half steps (owner, lab feedback 2026-10-23:
- * designers care about the space, then adjust the interval); or, when those miss it by more than
- * half a step a side, the split whose half-step intervals come nearest it, the squarer cells on a
- * tie (#449). An outline must have its spots half a step apart or more, so one that can't go
- * round the frame that close (48 round a box 3½ × 2½ steps) grows to the size it needs. Under
+ * `next` (the box switched to Outline) in a frame `width` × `depth`, with one interval all the
+ * way round (#458): the interval spreads the marchers over the frame's perimeter in half steps,
+ * and each side takes as many as its length holds, so a long side gets more than a short one. An
+ * outline must have its spots half a step apart or more, so one that can't go round the frame
+ * that close (48 round a box 3½ × 2½ steps) grows to the size it needs. Under
  * {@link OUTLINE_MIN} marchers it is a line, and a box with no area (a single rank or file) keeps
  * its intervals and goes round as wide (or deep) as it can.
  */
@@ -208,26 +208,53 @@ function outlineIn(
         const aspect = width / params.across / (depth / params.deep);
         return withFileCount(next, nearestSides(n, aspect, side).a + 1);
     }
-    const fit = ({ a, b }: { a: number; b: number }) => {
-        const across = snapInterval(width / a, env);
-        const deep = snapInterval(depth / b, env);
-        return {
-            params: { ...withFileCount(next, a + 1), across, deep },
-            off: Math.abs(a * across - width) + Math.abs(b * deep - depth),
-            square: Math.abs(Math.log(across / deep)),
-        };
+    const { a, interval } = keptOutline(width, depth, n, side, env);
+    return {
+        ...withFileCount(next, a + 1),
+        across: interval,
+        deep: interval,
     };
-    let best = fit(nearestSides(n, width / depth, side));
-    // The frame's proportions, when they keep it within half a step a side
-    if (best.off <= 2 * halfStep(env) + 1e-9) return best.params;
+}
+
+/**
+ * The split and the one interval (#458) that keep an outline of `n` nearest a `width` × `depth`
+ * frame, the interval kept exactly (to 600ths of a step, as typed) even off the half steps: the
+ * space comes first, and the first edit after puts the interval back on half steps (owner on
+ * #458). For each split, the interval at which its worse side misses least: one fitting a side,
+ * or one where the two sides miss by as much; then the split nearer the frame's proportions.
+ * Never under half a step, so a frame too small to go round that close grows.
+ */
+function keptOutline(
+    width: number,
+    depth: number,
+    n: number,
+    side: GapSide,
+    env: ToolEnv,
+): { a: number; interval: number } {
+    const sum = Math.ceil(n / 2);
     const { min, max } = acrossRange(n, side);
+    const proportional = evenOutline(width, depth, n, side, env).a;
+    let best: { a: number; interval: number; off: number } | null = null;
     for (let a = min; a <= max; a++) {
-        const f = fit({ a, b: Math.ceil(n / 2) - a });
-        if (
-            f.off < best.off - 1e-9 ||
-            (Math.abs(f.off - best.off) <= 1e-9 && f.square < best.square)
-        )
-            best = f;
+        const b = sum - a;
+        const tries = [width / a, depth / b, (width + depth) / sum];
+        if (a !== b) tries.push((width - depth) / (a - b));
+        for (const v of tries) {
+            if (!(v > 0)) continue;
+            const interval = snapInterval(v, env, true);
+            const off = Math.max(
+                Math.abs(a * interval - width),
+                Math.abs(b * interval - depth),
+            );
+            if (
+                best === null ||
+                off < best.off - 1e-9 ||
+                (Math.abs(off - best.off) <= 1e-9 &&
+                    Math.abs(a - proportional) <
+                        Math.abs(best.a - proportional))
+            )
+                best = { a, interval, off };
+        }
     }
-    return best.params;
+    return best!;
 }

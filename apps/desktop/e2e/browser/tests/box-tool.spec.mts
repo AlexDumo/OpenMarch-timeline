@@ -2878,6 +2878,57 @@ test("change: from the keyboard, Tab reaches the Leftover menu, Enter opens it o
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
 });
 
+test("change: Outline spaces every side the same, and widening it moves marchers onto the long sides (#458)", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await selectAll(page);
+    await page.keyboard.press("b");
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+    // A square 6 steps a side: 8 go round it 3 a side
+    await drag(
+        page,
+        await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
+        await toScreen(page, { x: cf.x - 9 * S, y: cf.y - 19 * S }),
+    );
+    await pickMode(page, "outline");
+    const bar = page.getByTestId("shape-tool-readout");
+    /** Spots on the back and on the left side, corners counted on both */
+    const sides = async () => {
+        const { spots } = (await shapeOverlay(page))!;
+        const top = Math.min(...spots.map((p) => p.y));
+        const left = Math.min(...spots.map((p) => p.x));
+        return {
+            back: spots.filter((p) => Math.abs(p.y - top) < CLOSE).length,
+            left: spots.filter((p) => Math.abs(p.x - left) < CLOSE).length,
+        };
+    };
+    const spacings = async () => [
+        await bar.getByTestId("shape-editor-across").innerText(),
+        await bar.getByTestId("shape-editor-deep").innerText(),
+    ];
+    expect(await sides()).toEqual({ back: 3, left: 3 });
+    const [across, deep] = await spacings();
+    expect(across).toBe(deep);
+
+    // Widened to about three times as wide: the long sides take the marchers, one interval
+    const { handles } = (await shapeOverlay(page))!;
+    const maxX = Math.max(...handles.map((h) => h.x));
+    const east = handles
+        .filter((h) => Math.abs(h.x - maxX) < 1)
+        .sort((a, b) => a.y - b.y)[1]!;
+    const to = await toScreen(page, { x: cf.x + 3 * S, y: 0 });
+    await drag(page, east, { x: to.x, y: east.y });
+    const after = await sides();
+    expect(after.back).toBeGreaterThan(after.left);
+    expect(after).toEqual({ back: 4, left: 2 });
+    const [a2, d2] = await spacings();
+    expect(a2).toBe(d2);
+});
+
 test("change: Outline on 7 spreads the back by default, leaves its middle out on request, a click on a spot between corners moves the gap, and the placed box keeps it", async ({
     show,
 }) => {
@@ -3100,7 +3151,7 @@ test("change: a Spread box's handle drags its side where the pointer goes, the o
     ).toBeLessThan(2 * field.pixelsPerStep);
 });
 
-test("change: every mode switch keeps the box drawn: its center exactly, each side within half a step, and no drift however often it switches (#449)", async ({
+test("change: every mode switch keeps the box drawn: its center exactly, each side within half a step (an outline as close as one interval allows), and no drift however often it switches (#449, #458)", async ({
     show,
 }) => {
     const { page } = show;
@@ -3118,6 +3169,21 @@ test("change: every mode switch keeps the box drawn: its center exactly, each si
         };
     };
     const drawn = await bounds();
+    /**
+     * How far an outline of all 8 with one interval all round must miss the drawn box by, a
+     * side (#458): half the least its worse dimension can miss by, over every split and interval
+     */
+    const outlineSlack = (() => {
+        const [w, d] = [drawn.right - drawn.left, drawn.bottom - drawn.top];
+        let best = Infinity;
+        for (let a = 1; a <= 3; a++)
+            for (let s = half; s <= Math.max(w, d) + half; s += 0.01)
+                best = Math.min(
+                    best,
+                    Math.max(Math.abs(a * s - w), Math.abs((4 - a) * s - d)),
+                );
+        return best / 2;
+    })();
     // Each mode's box on its first visit: every later visit is that box exactly, no drift
     const first = new Map<string, Awaited<ReturnType<typeof bounds>>>([
         ["files", drawn],
@@ -3137,7 +3203,9 @@ test("change: every mode switch keeps the box drawn: its center exactly, each si
             expect(
                 Math.abs(now[side] - drawn[side]),
                 `${mode}: ${side}`,
-            ).toBeLessThanOrEqual(half + 0.01);
+            ).toBeLessThanOrEqual(
+                mode === "outline" ? outlineSlack + 0.05 : half + 0.01,
+            );
         expect((now.left + now.right) / 2).toBeCloseTo(
             (drawn.left + drawn.right) / 2,
             6,

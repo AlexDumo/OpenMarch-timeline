@@ -102,7 +102,9 @@ export function withSpacing(
     }
     let across = which === "across" ? value : p.across;
     let deep = which === "deep" ? value : p.deep;
-    if (env.ratioLocked)
+    // An outline has one interval all the way round (#458)
+    if (boxDistribution(p).mode === "outline") across = deep = value;
+    else if (env.ratioLocked)
         ({ across, deep } = keepRatio(
             p,
             across,
@@ -342,7 +344,9 @@ function exactSpacing(
 ): BoxParams {
     let across = which === "across" ? value : p.across;
     let deep = which === "deep" ? value : p.deep;
-    if (env.ratioLocked && p.across > 0 && p.deep > 0) {
+    // An outline has one interval all the way round (#458)
+    if (boxDistribution(p).mode === "outline") across = deep = value;
+    else if (env.ratioLocked && p.across > 0 && p.deep > 0) {
         const ratio = p.deep / p.across;
         if (which === "across") deep = value * ratio;
         else across = value / ratio;

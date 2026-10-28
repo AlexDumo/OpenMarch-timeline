@@ -199,6 +199,30 @@ export function outlineFilesRange(
     return { min: min + 1, max: max + 1 };
 }
 
+/**
+ * An outline of `n` (4 or more) round a `width` × `depth` frame with one interval all the way
+ * round (#458): the half loop's ⌈n/2⌉ intervals spread over half the perimeter (`interval`, on
+ * the ladder, when not given), split between the sides as the frame's sides split its length, so
+ * a side twice as long holds about twice the marchers. Corners always have a marcher; with an odd
+ * count the Leftover spot comes off `side`, which keeps at least two intervals.
+ */
+export function evenOutline(
+    width: number,
+    depth: number,
+    n: number,
+    side: GapSide,
+    env: ToolEnv,
+    interval?: number,
+): { readonly a: number; readonly b: number; readonly interval: number } {
+    const sum = Math.ceil(n / 2);
+    const { min, max } = acrossRange(n, side);
+    const half = Math.max(width, 0) + Math.max(depth, 0);
+    const s = interval ?? snapInterval(half / sum, env);
+    const share = half > 0 ? (sum * Math.max(width, 0)) / half : min;
+    const a = Math.min(max, Math.max(min, Math.round(share)));
+    return { a, b: sum - a, interval: s };
+}
+
 /** Whether the box is an even spread, whose frame is the spread's edge rather than its marchers */
 export const isSpread = (p: BoxParams): boolean =>
     boxDistribution(p).mode === "spread";
@@ -811,6 +835,28 @@ export function stretchBox(
         );
     const movesX = key.includes("e") || key.includes("w");
     const movesY = key.includes("n") || key.includes("s");
+    const d = boxDistribution(base);
+    if (d.mode === "outline" && n >= OUTLINE_MIN)
+        return inBoxAxes(
+            base,
+            n,
+            env,
+            (flat, flatEnv, field) =>
+                stretchOutline(
+                    flat,
+                    n,
+                    key,
+                    fieldToFrame(boxFrame(base, n), to),
+                    d.oddGap.side,
+                    flatEnv,
+                    field,
+                ),
+            // As a stretch of a grid holds them (#423)
+            (out) => {
+                const off = offHalfSteps(out, n, env);
+                return { x: movesX || off.x, y: movesY || off.y };
+            },
+        );
     return inBoxAxes(
         base,
         n,
@@ -876,6 +922,78 @@ function inBoxAxes(
         env,
         undefined,
         held && toFieldAxes(placed, n, held(out)),
+    );
+}
+
+/**
+ * {@link stretchBox} for an outline (#458), in its own axes: the opposite corner or side stays
+ * put and the frame follows the drag, then the outline goes round it with one interval, the
+ * marchers shared out between the sides by their lengths (a longer side takes more). A side
+ * handle keeps the other axis centered where it was; that side's length is what the shared
+ * interval makes it. A moving corner near a field line lands on it, the interval becoming what
+ * that takes (#425, #446).
+ */
+function stretchOutline(
+    base: BoxParams,
+    n: number,
+    key: BoxHandleKey,
+    to: XY,
+    side: GapSide,
+    env: ToolEnv,
+    field: BoxField | undefined,
+): BoxParams {
+    const f = footprintOf(base, n);
+    const movesX = key.includes("e") || key.includes("w");
+    const movesY = key.includes("n") || key.includes("s");
+    const anchor = {
+        x: key.includes("e") ? f.left : f.right,
+        y: key.includes("s") ? f.top : f.bottom,
+    };
+    const width = movesX ? Math.abs(to.x - anchor.x) : f.right - f.left;
+    const depth = movesY ? Math.abs(to.y - anchor.y) : f.bottom - f.top;
+    const even = evenOutline(width, depth, n, side, env);
+    const { a, b } = even;
+    const pull = pullEdges(
+        movesX
+            ? {
+                  moves: true,
+                  anchor: anchor.x,
+                  to: to.x,
+                  count: a + 1,
+                  ladder: even.interval,
+              }
+            : { moves: false, edges: [f.left, f.right] },
+        movesY
+            ? {
+                  moves: true,
+                  anchor: anchor.y,
+                  to: to.y,
+                  count: b + 1,
+                  ladder: even.interval,
+              }
+            : { moves: false, edges: [f.top, f.bottom] },
+        field,
+        env,
+    );
+    // One interval: an edge landed on a line sets it for every side
+    const interval = pull.x ?? pull.y ?? even.interval;
+    const sign = {
+        x: movesX ? signOf(to.x - anchor.x) : 1,
+        y: movesY ? signOf(to.y - anchor.y) : 1,
+    };
+    const start = {
+        x: movesX ? anchor.x : (f.left + f.right) / 2 - (a * interval) / 2,
+        y: movesY ? anchor.y : (f.top + f.bottom) / 2 - (b * interval) / 2,
+    };
+    return boxFrom(
+        start,
+        sign,
+        a + 1,
+        interval,
+        interval,
+        n,
+        env,
+        boxDistribution(base),
     );
 }
 
@@ -1131,7 +1249,12 @@ export function resizeFiles(
             : { min: 1, max: Math.max(1, n) };
     const clamped = Math.min(max, Math.max(min, Math.round(files)));
     if (clamped === acrossOf(p, n)) return p;
-    return grownFromPivot(p, withFileCount(p, clamped), n, env);
+    // An outline has one interval all round, back on half steps once it's edited (#458): one
+    // stored with two takes its across
+    const interval = snapInterval(p.across, env);
+    const even =
+        d.mode === "outline" ? { across: interval, deep: interval } : {};
+    return grownFromPivot(p, { ...withFileCount(p, clamped), ...even }, n, env);
 }
 
 /**

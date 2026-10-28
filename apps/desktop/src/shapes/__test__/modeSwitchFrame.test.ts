@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { boxTool } from "../box/boxTool";
 import { circleTool } from "../circle/circleTool";
 import { withMode } from "../distribute/modes";
-import type { DistributionMode } from "../distribute/distribution";
+import {
+    DEFAULT_ODD_GAP,
+    type DistributionMode,
+} from "../distribute/distribution";
+import { acrossRange, OUTLINE_MIN } from "../distribute/outline";
 import type { ShapeFrame } from "../frame/frame";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import {
@@ -51,12 +55,37 @@ const switched = (t: ToolState, mode: DistributionMode) =>
 
 const frameOf = (t: ToolState): ShapeFrame => t.kind.frameOf(t.params, t.spots);
 
+/**
+ * How near an outline of `n` with one interval all round (#458) can come to `frame`: the least
+ * its worse side can miss by, over every split and interval (half a step or more), found by
+ * trying intervals a hundredth of a unit apart. An outline keeps the frame as close as that.
+ */
+function outlineSlack(n: number, frame: ShapeFrame): number {
+    if (n < OUTLINE_MIN) return 0;
+    const [w, d] = [2 * frame.halfWidth, 2 * frame.halfDepth];
+    const sum = Math.ceil(n / 2);
+    const { min, max } = acrossRange(n, DEFAULT_ODD_GAP.side);
+    let best = Infinity;
+    for (let a = min; a <= max; a++)
+        for (let s = half; s <= Math.max(w, d) + half; s += 0.01)
+            best = Math.min(
+                best,
+                Math.max(Math.abs(a * s - w), Math.abs((sum - a) * s - d)),
+            );
+    return best;
+}
+
 function expectKept(
     now: ShapeFrame,
     was: ShapeFrame,
     what: string,
     /** Switches made: each may move a side up to half a step */
     switches = 1,
+    /**
+     * More an outline may miss by: as close as one interval allows (#458), plus its interval
+     * kept to 600ths of a step for each of its intervals
+     */
+    slack = 0,
 ) {
     expect(now.center.x, `${what}: center`).toBeCloseTo(was.center.x, 9);
     expect(now.center.y, `${what}: center`).toBeCloseTo(was.center.y, 9);
@@ -64,14 +93,16 @@ function expectKept(
     expect(
         Math.abs(now.halfWidth - was.halfWidth),
         `${what}: width ${2 * was.halfWidth} → ${2 * now.halfWidth}`,
-    ).toBeLessThanOrEqual(switches * half + 1e-9);
+    ).toBeLessThanOrEqual(switches * half + slack + 1e-9);
     expect(
         Math.abs(now.halfDepth - was.halfDepth),
         `${what}: depth ${2 * was.halfDepth} → ${2 * now.halfDepth}`,
-    ).toBeLessThanOrEqual(switches * half + 1e-9);
+    ).toBeLessThanOrEqual(switches * half + slack + 1e-9);
 }
 
 const COUNTS = [7, 12, 15, 24, 48];
+/** An outline's interval kept to 600ths of a 10-unit step, over up to 24 intervals a side */
+const ROUNDING = (24 * 10) / 600 / 2;
 const BOX_MODES: DistributionMode[] = ["files", "outline", "spread"];
 /** Boxes as drawn: wide, square-ish, deep */
 const DRAWS: [XY, XY][] = [
@@ -102,10 +133,18 @@ describe("a box keeps its frame through every mode switch (#449)", () => {
                 // A frame with no area (a line) has nothing to keep
                 if (!(was.halfWidth > 0) || !(was.halfDepth > 0)) continue;
                 const now = switched(start, b);
+                // One interval all round keeps the frame as close as it can (#458)
+                const drawnFrame = frameOf(drawn(boxTool, n, from, to));
+                const slack =
+                    a === "outline" || b === "outline"
+                        ? outlineSlack(n, drawnFrame) + ROUNDING
+                        : 0;
                 expectKept(
                     frameOf(now),
                     was,
                     `${a} → ${b} drawn to ${to.x},${to.y}`,
+                    1,
+                    slack,
                 );
             }
         });
@@ -210,18 +249,19 @@ describe("cycling modes never walks the box (#449 review)", () => {
         expect(frameOf(switched(saved, "files"))).toEqual(frameOf(grid));
     });
 
-    it("Grid → Outline takes the split nearest the drawn box, however long its sides", () => {
-        // 31 in a box drawn 70 × 60: 14 across by 2 deep fits it exactly
+    it("Grid → Outline keeps 31 in 70 × 60 as close as one interval allows, that interval exact (owner on #458)", () => {
         const grid = drawn(boxTool, 31, { x: 0, y: 0 }, { x: 70, y: 60 });
         const outline = switched(grid, "outline");
-        expectKept(frameOf(outline), frameOf(grid), "31 in 70 × 60");
-        expect(frameOf(outline).halfWidth).toBeCloseTo(
-            frameOf(grid).halfWidth,
-            9,
-        );
-        expect(frameOf(outline).halfDepth).toBeCloseTo(
-            frameOf(grid).halfDepth,
-            9,
+        const p = outline.params as { across: number; deep: number };
+        expect(p.across).toBe(p.deep);
+        // Off the half steps: 0.8 steps or so
+        expect(p.across % half).not.toBe(0);
+        expectKept(
+            frameOf(outline),
+            frameOf(grid),
+            "31 in 70 × 60",
+            0,
+            outlineSlack(31, frameOf(grid)) + ROUNDING,
         );
     });
 });
