@@ -196,7 +196,14 @@ export function savedToolKind(
         // The command bar starts from each parameter's default: the saved intervals here
         params: base.params.map((p) =>
             p.interval && saved.intervals[p.key] !== undefined
-                ? { ...p, default: saved.intervals[p.key] }
+                ? {
+                      ...p,
+                      // Live, so the label follows the language (the spread copies its value)
+                      get label() {
+                          return p.label;
+                      },
+                      default: saved.intervals[p.key],
+                  }
                 : p,
         ),
         draw(from: XY, to: XY, n: number, env: ToolEnv, previous?: unknown) {
