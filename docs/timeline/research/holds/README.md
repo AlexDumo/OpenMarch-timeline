@@ -258,7 +258,7 @@ field and the timeline change together.
 ## Confidence and gaps
 
 - **Reviewed:** [03-review.md](03-review.md).
-- **Read in code, reproduced in the app:** see [Repro](#repro).
+- **Reproduced in the app (2026-10-27):** questions 14 and 15, see [Repro](#repro).
 - **Read in code only:**
   - the layer rules and the dead-diamond fix (#384, with unit and resolver tests);
   - #332's look rule;
@@ -276,7 +276,47 @@ field and the timeline change together.
 
 ## Repro
 
-Pending: the app runs for questions 14 and 15 are in progress and will be added here.
+Both cases were reproduced in the real built app, headless, on fork `timeline/set-following` at
+a4fc8e354 (#332 with #384), 2026-10-27. They were driven through the UI, with positions read
+from the app's resolver (`window.openmarchResolver`) and the drawn state from `window.fieldTest`.
+The scenarios are kept outside the repo (`~/om-capture/scenarios/holds-repro-14.mjs` and
+`holds-repro-15.mjs`).
+
+**Question 14: Remove keyframe after Split at playhead.** A page's own move has no clip, so it
+can't be split at the playhead from the UI. The closest route was used instead:
+
+1. Split 8 marchers off into a move covering Page 3.
+2. Split at playhead at mid-page.
+3. Remove keyframe at the split, for one marcher (T1).
+
+T1's step length per count across Page 3:
+
+|        | Counts 1–4 | Counts 5–8  |
+| ------ | ---------- | ----------- |
+| Before | 53.90 each | 53.90 each  |
+| After  | 0, 0, 0, 0 | 107.80 each |
+
+**Reproduced:** T1 stands still, then walks the whole way at exactly double speed. The inspector
+shows the step size in red. ([still](images/repro-14-after-remove.png))
+
+**Question 15: the invisible pin.**
+
+1. T1 holds through Page 3.
+2. Nudge Page 2. Page 3 follows: no diamond, drawn Following.
+3. Plain Remove keyframe on Page 2. A move is written on Page 3 back to the old spot, and a
+   diamond appears.
+4. Nudge Page 2 onto exactly that spot. **Page 3's diamond disappears and T1 draws Following**,
+   yet the inspector shows "Hold · Moves on this page" with **Remove keyframe greyed out**: the
+   move that goes nowhere can't be removed. ([still](images/repro-15-invisible-pin.png))
+5. Nudge Page 2 again. **Page 3 doesn't follow** (its spot is unchanged), and its diamond
+   silently comes back.
+
+**Reproduced,** exactly as the code reading predicted (decision 13 fixes it).
+
+Other things seen:
+
+- T1 draws Following partway through a move. That's #332's rule, which decision 9 changes.
+- Split at playhead is only reachable on a move's clip, not on a page's own move.
 
 ## Prior art
 
