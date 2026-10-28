@@ -470,7 +470,8 @@
             "top": "Haut",
             "useHashes": "Utiliser les hachages",
             "width": "Largeur",
-            "widthHeight": "l/h"
+            "widthHeight": "l/h",
+            "stepSizeWarningThresholdRatio": "{label} ({steps} à 5)"
         },
         "messages": {
             "fieldRatio": "{ratio} ou {decimal}",
@@ -1337,6 +1338,12 @@
         "square": "Carré",
         "triangle": "Triangle",
         "x": "X"
+    },
+    "shortcutsDialog": {
+        "shape": {
+            "fineControl": "Contrôle fin, toujours aimanté aux lignes de verges et aux hashes",
+            "noSnapping": "Faire glisser une forme sans aimantation"
+        }
     },
     "tags": {
         "title": "Étiquettes"

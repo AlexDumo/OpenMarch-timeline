@@ -631,7 +631,8 @@
             "top": "Top",
             "useHashes": "Use Hashes",
             "width": "Width",
-            "widthHeight": "w/h"
+            "widthHeight": "w/h",
+            "stepSizeWarningThresholdRatio": "{label} ({steps} to 5)"
         },
         "messages": {
             "fieldRatio": "{ratio} or {decimal}",
@@ -2723,6 +2724,12 @@
             "fits_nobody": "fits none of its marchers",
             "kind_not_allowed": "a phrase on a channel that takes states only",
             "transition_cut": "its transition starts before the cue before it lands"
+        }
+    },
+    "shortcutsDialog": {
+        "shape": {
+            "fineControl": "Fine control, still catching yard lines and hashes",
+            "noSnapping": "Drag a shape without snapping"
         }
     }
 }

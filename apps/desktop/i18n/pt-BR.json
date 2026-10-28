@@ -470,7 +470,8 @@
             "top": "Superior",
             "useHashes": "Usar Hashes",
             "width": "Largura",
-            "widthHeight": "l/a"
+            "widthHeight": "l/a",
+            "stepSizeWarningThresholdRatio": "{label} ({steps} por 5)"
         },
         "messages": {
             "fieldRatio": "{ratio} ou {decimal}",
@@ -1337,6 +1338,12 @@
         "square": "Quadrado",
         "triangle": "Triângulo",
         "x": "X"
+    },
+    "shortcutsDialog": {
+        "shape": {
+            "fineControl": "Controle fino, ainda se ajustando às linhas de jardas e hashes",
+            "noSnapping": "Arrastar uma forma sem ajuste"
+        }
     },
     "tags": {
         "title": "Etiquetas"

@@ -470,7 +470,8 @@
             "top": "上部",
             "useHashes": "ハッシュ を 使用",
             "width": "幅",
-            "widthHeight": "幅 / 高さ"
+            "widthHeight": "幅 / 高さ",
+            "stepSizeWarningThresholdRatio": "{label}（{steps}対5）"
         },
         "messages": {
             "fieldRatio": "{ratio} または {decimal}",
@@ -1337,6 +1338,12 @@
         "square": "正方形",
         "triangle": "三角形",
         "x": "X"
+    },
+    "shortcutsDialog": {
+        "shape": {
+            "fineControl": "細かく調整（ヤードラインとハッシュには引き続きスナップ）",
+            "noSnapping": "スナップせずに形状をドラッグ"
+        }
     },
     "tags": {
         "title": "タグ"
