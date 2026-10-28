@@ -1,7 +1,10 @@
 import { create } from "zustand";
 import { db } from "@/global/database/db";
 import { readAllShapeRecipes } from "@/db-functions/shapeRecipes";
-import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
 import { editingPositionAt } from "@/timeline/timelineIsolationPlan";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { boxesAt, type PlacedBox, type PlacedRecipe } from "./placedBox";
@@ -18,6 +21,11 @@ export const usePlacedBoxStore = create<{
 let reading: Promise<void> | null = null;
 let again = false;
 
+/** The same recipes read back keep the array, so nothing re-renders for them (#455) */
+const sameRecipes = (a: readonly PlacedRecipe[], b: readonly PlacedRecipe[]) =>
+    a === b ||
+    (a.length === b.length && JSON.stringify(a) === JSON.stringify(b));
+
 /** Reads the recipes again; calls while a read runs fold into one more read after it */
 export function invalidatePlacedBoxes(): void {
     if (reading) {
@@ -25,7 +33,10 @@ export function invalidatePlacedBoxes(): void {
         return;
     }
     reading = readAllShapeRecipes(db)
-        .then((recipes) => usePlacedBoxStore.setState({ recipes }))
+        .then((recipes) => {
+            if (!sameRecipes(usePlacedBoxStore.getState().recipes, recipes))
+                usePlacedBoxStore.setState({ recipes });
+        })
         .catch((e: unknown) => console.error("Couldn't read shapes", e))
         .finally(() => {
             reading = null;
@@ -61,4 +72,13 @@ export function placedBoxesAt(
             }
         },
     });
+}
+
+/**
+ * The displayed beat, for what shows placed shapes: 0 while the show has none, so scrubbing the
+ * timeline doesn't re-render them for nothing (#455)
+ */
+export function usePlacedBoxBeat(): number {
+    const any = usePlacedBoxStore((s) => s.recipes.length > 0);
+    return useTimelineSelectionStore((s) => (any ? displayedBeat(s) : 0));
 }
