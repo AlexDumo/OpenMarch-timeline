@@ -129,4 +129,79 @@ describe("the outline gap", () => {
             outlineGapOf(boxTool, apply.mock.calls[0]![0], 13)!.stored.side,
         ).toBe("right");
     });
+
+    describe("the leftover side's spacing on the button (owner on #459)", () => {
+        /** 15 round 6 × 4: the front's 5 gaps `across` apart, the back's 4 sharing its width */
+        const fifteen = (
+            across: number,
+            style: "spread" | "gap" = "spread",
+        ): BoxParams => ({
+            center: { x: 0, y: 0 },
+            rotation: 0,
+            files: 6,
+            across,
+            deep: 30,
+            distribution: {
+                mode: "outline",
+                oddGap: { side: "back", at: null, style },
+            },
+        });
+
+        /** The pill's spacing note: plain text, not a control */
+        const note = () => screen.getByTestId("outline-gap-spacing");
+
+        it("shows a clean 4 on the back as a muted note after the side, with ↔, and says why", () => {
+            shown(fifteen(32), 15);
+            const menu = screen.getByTestId("outline-gap-menu");
+            expect(menu.textContent?.trim()).toBe("Leftover: Back");
+            expect(note().textContent?.replace(/\s+/g, " ").trim()).toBe(
+                "· 4 steps",
+            );
+            expect(
+                note().querySelector('[data-glyph="across"]'),
+            ).not.toBeNull();
+            // Information only: not focusable, not a button, hidden from screen readers, which
+            // hear the sentence on the pill instead
+            expect(note().tagName).toBe("SPAN");
+            expect(note()).not.toHaveAttribute("tabindex");
+            expect(note()).toHaveAttribute("aria-hidden");
+            expect(note().className).toContain("text-text/70");
+            expect(note().className).toContain("text-xs");
+            expect(menu).toHaveAccessibleDescription(
+                "The back has one fewer marcher, so its marchers are 4 steps apart.",
+            );
+        });
+
+        it("marks one off the half steps as about so much", () => {
+            shown(fifteen(30), 15);
+            expect(note().textContent?.replace(/\s+/g, " ").trim()).toBe(
+                "· ≈3¾ steps",
+            );
+            expect(
+                screen.getByTestId("outline-gap-menu"),
+            ).toHaveAccessibleDescription(
+                "The back has one fewer marcher, so its marchers are ≈3¾ steps apart.",
+            );
+        });
+
+        it("uses ↕ for a side that runs front to back", () => {
+            const left: BoxParams = {
+                ...fifteen(30),
+                distribution: {
+                    mode: "outline",
+                    oddGap: { side: "left", at: null, style: "spread" },
+                },
+            };
+            shown(left, 15);
+            expect(note().querySelector('[data-glyph="deep"]')).not.toBeNull();
+        });
+
+        it("shows nothing more when the side leaves a gap: its marchers keep the full spacing", () => {
+            shown(fifteen(30, "gap"), 15);
+            expect(screen.queryByTestId("outline-gap-spacing")).toBeNull();
+            expect(screen.getByTestId("outline-gap-menu")).not.toHaveAttribute(
+                "aria-describedby",
+            );
+        });
+    });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { animated, useSpring, useTransition } from "@react-spring/web";
 import { UserSwitchIcon } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import tolgee from "@/global/singletons/Tolgee";
 
@@ -14,14 +15,14 @@ const TINT = 0.15;
 const WORD_MAX = "7em";
 
 /**
- * The floating editor's Recalculate (#429): its icon alone while it would change nothing, and its
- * word too once it can act. The word springs open, and the button flashes accent text on a faint
+ * The floating editor's Recalculate (#429), and Even out the same way (owner on #459): its icon
+ * alone while it would change nothing, and its word too once it can act. The word springs open, and the button flashes accent text on a faint
  * accent tint that fades back to its normal look (owner: readable all the way through, unlike
  * inverted text on a solid accent), only when it becomes available, not when it shows up already available or re-renders
  * (owner). With reduced motion the word appears at once and only the color fades. During a drag
  * the edit target holds what it last knew (`useToolEditTarget`), so a drag doesn't flash it.
  */
-export function useRecalculateLook(available: boolean) {
+export function useActionLook(available: boolean) {
     const reduced = prefersReducedMotion();
     const was = useRef(available);
     const [flashing, setFlashing] = useState(false);
@@ -51,10 +52,14 @@ export function useRecalculateLook(available: boolean) {
 }
 
 /** The button's face: the icon, then the word while it can act, over the fading accent */
-export function RecalculateFace({
+export function ActionFace({
     look,
+    icon,
+    label,
 }: {
-    look: ReturnType<typeof useRecalculateLook>;
+    look: ReturnType<typeof useActionLook>;
+    icon: ReactNode;
+    label: string;
 }) {
     const { flash, flashing, word } = look;
     return (
@@ -76,7 +81,7 @@ export function RecalculateFace({
                     ),
                 }}
             >
-                <UserSwitchIcon size={14} />
+                {icon}
                 {word(
                     (style, shown) =>
                         shown && (
@@ -84,14 +89,26 @@ export function RecalculateFace({
                                 className="overflow-hidden whitespace-nowrap"
                                 style={style}
                             >
-                                {tolgee.t(
-                                    "shapes.edit.recalculate.label",
-                                    "Recalculate",
-                                )}
+                                {label}
                             </animated.span>
                         ),
                 )}
             </animated.span>
         </>
+    );
+}
+
+/** Recalculate's face: who goes where, recalculated */
+export function RecalculateFace({
+    look,
+}: {
+    look: ReturnType<typeof useActionLook>;
+}) {
+    return (
+        <ActionFace
+            look={look}
+            icon={<UserSwitchIcon size={14} />}
+            label={tolgee.t("shapes.edit.recalculate.label", "Recalculate")}
+        />
     );
 }

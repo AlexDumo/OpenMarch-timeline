@@ -83,6 +83,7 @@
             "noMarchersSelected": "行進者が選択されていません",
             "quarterTurn": "形状：時計回りに90°回転",
             "recalculate": "形状：誰がどこに行くかを再計算",
+            "evenOut": "形状: 輪郭を均等にする",
             "ring": "お気に入りリング：長押しで形状を選択、タップで開いたままにする"
         },
         "swap": {
@@ -1225,6 +1226,8 @@
             "flipDeep": "前後に反転",
             "gap": {
                 "menu": "余り",
+                "spacing": "{value} ステップ",
+                "spacingTip": "{side}はマーチャーが1人少ないため、間隔は{spacing}です。",
                 "side": {
                     "back": "後ろ",
                     "front": "前",
@@ -1281,6 +1284,11 @@
                 "locked": "間隔は連動中：クリックで解除",
                 "unlocked": "2つの間隔を連動させる"
             },
+            "evenOut": {
+                "label": "均等にする",
+                "tip": "ブロックが許す限り均等にマーチャーを配置する",
+                "already": "マーチャーはすでにブロックが許す限り均等です"
+            },
             "recalculate": {
                 "already": "誰がどこへ行くかはすでに移動距離が最小です",
                 "closeUpFirst": "誰がどこへ行くかを再計算：先に空きを詰めてください",
@@ -1292,6 +1300,9 @@
                 "title": "再シャッフル：新しい配置"
             },
             "scrubTip": "{label}：クリックで入力、ドラッグで変更",
+            "snapTip": "最も近い半ステップに合わせる",
+            "snapLabel": "{label}: 最も近い半ステップに合わせる",
+            "aboutValue": "{label}: 約 {value}",
             "seed": {
                 "copied": "コピーしました",
                 "copy": "シードをコピー",

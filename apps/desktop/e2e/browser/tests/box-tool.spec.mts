@@ -2806,7 +2806,33 @@ async function outlineOnSeven(show: Show) {
         "on",
     );
     expect((await shapeOverlay(page))!.gaps).toEqual([]);
+    // The spread back's own spacing, as a muted note after the pill, and why, in its tooltip
+    // and its description (owner on #459, B2). The menu closed first: its trigger again
+    if ((await page.getByTestId("outline-gap-side").count()) > 0)
+        await page.getByTestId("outline-gap-menu").click();
+    await expect(page.getByTestId("outline-gap-side")).toHaveCount(0);
+    const note = page.getByTestId("outline-gap-spacing");
+    await expect(note).toHaveText(/^· .+ steps?$/);
+    await expect(note.locator('[data-glyph="across"]')).toHaveCount(1);
+    const pill = page.getByTestId("outline-gap-menu");
+    await expect(pill).toHaveAccessibleDescription(
+        /^The back has one fewer marcher, so its marchers are .+ apart\.$/,
+    );
+    // (a tooltip waits for the pointer to leave after the press that closed the menu)
+    await page.mouse.move(5, 5);
+    await pill.hover();
+    await expect(page.getByRole("tooltip")).toContainText("one fewer marcher");
+    // The note itself says it too, hovered; it still takes no focus
+    await page.mouse.move(5, 5);
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+    await note.hover();
+    await expect(page.getByRole("tooltip")).toContainText(
+        /^The back has one fewer marcher, so its marchers are .+ apart\.$/,
+    );
+    await expect(note).not.toHaveAttribute("tabindex");
     await (await gapOption(page, "outline-gap-gap")).click();
+    // Leaving a gap, the back keeps the full spacing: no note
+    await expect(note).toHaveCount(0);
     await expect
         .poll(async () => (await shapeOverlay(page))?.gaps.length)
         .toBe(1);
@@ -2880,6 +2906,216 @@ test("change: from the keyboard, Tab reaches the Leftover menu, Enter opens it o
     await expect(menuButton).toHaveText(/Front/);
     // Escape closed the menu, not the shape
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+});
+
+test("change: Outline spaces the back and front at across and the sides at deep; widening it stretches the across spacing, the counts kept, and Even out moves marchers onto the long sides (#458, owner on #459)", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await selectAll(page);
+    await page.keyboard.press("b");
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+    // A square 6 steps a side: 8 go round it 3 a side
+    await drag(
+        page,
+        await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
+        await toScreen(page, { x: cf.x - 9 * S, y: cf.y - 19 * S }),
+    );
+    await pickMode(page, "outline");
+    const bar = page.getByTestId("shape-tool-readout");
+    /** Spots on the back and on the left side, corners counted on both */
+    const sides = async () => {
+        const { spots } = (await shapeOverlay(page))!;
+        const top = Math.min(...spots.map((p) => p.y));
+        const left = Math.min(...spots.map((p) => p.x));
+        return {
+            back: spots.filter((p) => Math.abs(p.y - top) < CLOSE).length,
+            left: spots.filter((p) => Math.abs(p.x - left) < CLOSE).length,
+        };
+    };
+    expect(await sides()).toEqual({ back: 3, left: 3 });
+    const across = bar.getByTestId("shape-editor-across");
+    const deep = bar.getByTestId("shape-editor-deep");
+    const spacings = async () => [
+        await across.innerText(),
+        await deep.innerText(),
+    ];
+    const before = await spacings();
+
+    // Widened to about three times as wide: the across spacing follows the handle, the counts
+    // and the deep spacing kept (owner on #459)
+    const { handles } = (await shapeOverlay(page))!;
+    const maxX = Math.max(...handles.map((h) => h.x));
+    const east = handles
+        .filter((h) => Math.abs(h.x - maxX) < 1)
+        .sort((a, b) => a.y - b.y)[1]!;
+    const to = await toScreen(page, { x: cf.x + 3.3 * S, y: 0 });
+    await drag(page, east, { x: to.x, y: east.y });
+    expect(await sides()).toEqual({ back: 3, left: 3 });
+    const stretched = await spacings();
+    expect(stretched[0]).not.toEqual(before[0]);
+    expect(stretched[1]).toEqual(before[1]);
+
+    // Even out moves marchers onto the long sides
+    await page.evaluate(() =>
+        (document.activeElement as HTMLElement | null)?.blur(),
+    );
+    await bar.getByTestId("shape-editor-even-out").click();
+    expect(await sides()).toEqual({ back: 4, left: 2 });
+});
+
+test("change: 2 steps across then 3 deep stay exactly as typed; dragging the front stretches the deep spacing with the back fixed; Even out spreads them as evenly as the box allows (#458, owner on #459)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    await pickMode(page, "outline");
+    const bar = page.getByTestId("shape-tool-readout");
+    const across = bar.getByTestId("shape-editor-across");
+    const deep = bar.getByTestId("shape-editor-deep");
+    const bounds = async () => {
+        const o = (await shapeOverlay(page))!.outline!;
+        const xs = o.map((p) => p.x);
+        const ys = o.map((p) => p.y);
+        return {
+            left: Math.min(...xs),
+            right: Math.max(...xs),
+            top: Math.min(...ys),
+            bottom: Math.max(...ys),
+        };
+    };
+    // The owner's case: 2 across, Tab to deep, 3, and both stay exactly as typed
+    await across.click();
+    await page.getByTestId("shape-editor-across-input").fill("2");
+    await page.keyboard.press("Tab");
+    await expect(page.getByTestId("shape-editor-deep-input")).toBeFocused();
+    await page.getByTestId("shape-editor-deep-input").fill("3");
+    await page.keyboard.press("Enter");
+    await expect(across).toHaveText("2");
+    await expect(deep).toHaveText("3");
+    await expect(bar.getByTestId("shape-editor-across-snap")).toHaveCount(0);
+    await expect(bar.getByTestId("shape-editor-deep-snap")).toHaveCount(0);
+
+    // The front dragged down: the deep spacing follows on half steps, the back stays, and the
+    // across spacing and the counts stay (owner on #459)
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const was = await bounds();
+    const frontHandle = async () => {
+        const { handles } = (await shapeOverlay(page))!;
+        const b = await bounds();
+        const want = await toScreen(page, {
+            x: (b.left + b.right) / 2,
+            y: b.bottom,
+        });
+        return handles.reduce((h, k) =>
+            Math.hypot(k.x - want.x, k.y - want.y) <
+            Math.hypot(h.x - want.x, h.y - want.y)
+                ? k
+                : h,
+        );
+    };
+    const s = await frontHandle();
+    await page.evaluate(() =>
+        (document.activeElement as HTMLElement | null)?.blur(),
+    );
+    const ranks = Math.round((was.bottom - was.top) / S / 3);
+    await drag(page, s, { x: s.x, y: s.y + 30 });
+    const now = await bounds();
+    expect(Math.abs(now.top - was.top)).toBeLessThan(1e-6);
+    expect(now.bottom).toBeGreaterThan(was.bottom);
+    // The same gaps deep, each longer
+    expect((now.bottom - now.top) / S / ranks).toBeGreaterThan(3 + 1e-6);
+    await expect(across).toHaveText("2");
+    await expect(deep).not.toHaveText("3");
+    const dragged = await deep.innerText();
+
+    // Across set to ½ step, far from deep's 3: uneven now. Even out: as even as this frame
+    // allows, one undo step; then nothing more to do
+    await across.click();
+    await page.getByTestId("shape-editor-across-input").fill("0.5");
+    await page.keyboard.press("Enter");
+    await expect(across).toHaveText("½");
+    const evenOut = bar.getByTestId("shape-editor-even-out");
+    await expect(evenOut).toBeEnabled();
+    const evenFrame = await bounds();
+    await evenOut.click();
+    await expect(evenOut).toBeDisabled();
+    const after = await bounds();
+    expect(
+        Math.abs(after.right - after.left - (evenFrame.right - evenFrame.left)),
+    ).toBeLessThan(S / 2);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(across).toHaveText("½");
+    await expect(deep).toHaveText(dragged);
+});
+
+test("change: Even out has an icon, its word only while it can act; a press glides the marchers to their spots as one undo step, and lands them where reduced motion puts them at once (owner on #459)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    await pickMode(page, "outline");
+    const bar = page.getByTestId("shape-tool-readout");
+    const across = bar.getByTestId("shape-editor-across");
+    const evenOut = bar.getByTestId("shape-editor-even-out");
+    // Across set to ½ step: uneven, so Even out can act, its icon and word showing
+    await across.click();
+    await page.getByTestId("shape-editor-across-input").fill("0.5");
+    await page.keyboard.press("Enter");
+    await expect(across).toHaveText("½");
+    await expect(evenOut).toBeEnabled();
+    await expect(evenOut.locator("svg")).toHaveCount(1);
+    await expect(evenOut).toContainText("Even out");
+    const before = (await shapeOverlay(page))!.spots;
+
+    // Pressed: the spots glide (seen part way), then settle; nothing more to even, icon only
+    const sawGlide = await page.evaluate(async () => {
+        (
+            document.querySelector(
+                '[data-testid="shape-editor-even-out"]',
+            ) as HTMLElement
+        ).click();
+        const end = performance.now() + 600;
+        let seen = false;
+        while (performance.now() < end) {
+            await new Promise(requestAnimationFrame);
+            if (window.fieldTest!.shapeOverlay!()?.gliding) seen = true;
+        }
+        return seen;
+    });
+    expect(sawGlide).toBe(true);
+    const glided = (await shapeOverlay(page))!.spots;
+    expect(glided).not.toEqual(before);
+    await expect(evenOut).toBeDisabled();
+    await expect(evenOut.locator("svg")).toHaveCount(1);
+    await expect(evenOut).not.toContainText("Even out");
+
+    // One undo step takes it back exactly
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(across).toHaveText("½");
+    expect((await shapeOverlay(page))!.spots).toEqual(before);
+
+    // With reduced motion: no glide at all, and the same spots
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const glidedReduced = await page.evaluate(async () => {
+        (
+            document.querySelector(
+                '[data-testid="shape-editor-even-out"]',
+            ) as HTMLElement
+        ).click();
+        let seen = false;
+        for (let k = 0; k < 20; k++) {
+            await new Promise(requestAnimationFrame);
+            if (window.fieldTest!.shapeOverlay!()?.gliding) seen = true;
+        }
+        return seen;
+    });
+    expect(glidedReduced).toBe(false);
+    expect((await shapeOverlay(page))!.spots).toEqual(glided);
 });
 
 test("change: Outline on 7 spreads the back by default, leaves its middle out on request, a click on a spot between corners moves the gap, and the placed box keeps it", async ({

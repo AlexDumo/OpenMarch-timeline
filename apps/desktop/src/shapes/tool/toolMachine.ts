@@ -172,7 +172,9 @@ export function press(state: ToolState, at: XY, env: ToolEnv): ToolState {
             : null;
     const gesture: Gesture = onShape
         ? { ...onShape, before, ...(click !== null ? { click } : {}) }
-        : { type: "draw", from: env.gridSnap(at), before };
+        : // Cmd/Ctrl and Alt draw from where the press is (owner on #453); the pivot keeps
+          // gridSnap itself, so the check is here
+          { type: "draw", from: env.snap ? env.gridSnap(at) : at, before };
     return { ...state, gesture, pointer: at };
 }
 

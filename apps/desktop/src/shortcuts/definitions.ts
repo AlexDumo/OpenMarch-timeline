@@ -717,6 +717,16 @@ const STATIC_ACTIONS = {
         // One press, one turn or recalculation: a held key doesn't repeat it (review)
         ignoreRepeat: true,
     },
+    shapeEvenOut: {
+        labelKey: "actions.shape.evenOut",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        // No key: every letter a designer would reach for is taken (Shift+E steps a beat)
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
     shapeRecalculate: {
         labelKey: "actions.shape.recalculate",
         keywordsKey: "actions.shape.keywords",

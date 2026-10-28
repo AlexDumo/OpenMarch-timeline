@@ -29,7 +29,7 @@ import {
     type ToolState,
 } from "./toolMachine";
 import { updateTool, useShapeToolStore } from "./shapeToolStore";
-import { SpotGlide } from "./spotGlide";
+import { ShapeGlide } from "./spotGlide";
 import {
     setShapePointerOver,
     shapeCalm,
@@ -237,7 +237,7 @@ const drawingOf = memoDrawing(
  * The open shape's marchers glide to their new spots when it changes without a gesture (a press
  * of − or +, a layout picked, a quarter turn): the owner picked it in the lab (#387)
  */
-const glide = new SpotGlide();
+const glide = new ShapeGlide();
 const glideListeners = new Set<() => void>();
 let gliding = false;
 /** Counts the glide's frames: the overlay reads the drawing as a snapshot, so one per frame */
@@ -281,7 +281,11 @@ const reducedMotion = () =>
  */
 function glidingDrawing(shown: Shown | null) {
     const drawing = drawingOf(shown);
-    if (!shown) return drawing;
+    if (!shown) {
+        // Closed: whatever opens next starts afresh (review on #459)
+        glide.reset();
+        return drawing;
+    }
     const { tool } = shown;
     const field = currentShapeField();
     if (!drawing || tool.params === null || !field || reducedMotion())
@@ -289,9 +293,16 @@ function glidingDrawing(shown: Shown | null) {
     const targets = targetsNow(tool, field);
     const now = performance.now();
     glide.update(
-        tool.params,
-        tool.gesture !== null && tool.gesture !== undefined,
+        {
+            // The marchers it opened with: a new list is another shape, opened or brought back
+            session: tool.marchers,
+            kind: tool.kind,
+            params: tool.params,
+            rotation: tool.kind.frameOf(tool.params, tool.spots).rotation,
+            gesture: tool.gesture !== null && tool.gesture !== undefined,
+        },
         targets,
+        drawing,
         now,
     );
     const at = glide.positions(now);
@@ -304,6 +315,7 @@ function glidingDrawing(shown: Shown | null) {
     const labels = drawing.labels ?? [];
     return {
         ...drawing,
+        ...glide.frame(now, drawing),
         gliding: true,
         spots:
             drawing.spots.length === targets.length

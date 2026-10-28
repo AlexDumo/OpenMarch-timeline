@@ -21,6 +21,7 @@ import {
     turnShape,
 } from "../frame/gestures";
 import { boxTool } from "../box/boxTool";
+import { pullValue } from "../box/edgePull";
 import { gapAsSeen } from "../distribute/outline";
 import {
     DEGREE,
@@ -99,6 +100,12 @@ export function withSpacing(
             Math.abs(snapInterval(shown * env.stepPx, env, true) - value) < 1e-9
         )
             return p;
+    }
+    // An outline's two spacings are both the designer's: the one set is held, the other
+    // stays as it is, and the box's size follows (owner on #459). No ratio lock for it.
+    if (boxDistribution(p).mode === "outline") {
+        if (value === p[which]) return p;
+        return grownFromPivot(p, { ...p, [which]: value }, spots, env);
     }
     let across = which === "across" ? value : p.across;
     let deep = which === "deep" ? value : p.deep;
@@ -340,6 +347,9 @@ function exactSpacing(
     spots: number,
     env: ToolEnv,
 ): BoxParams {
+    // An outline's spacing set alone, the other as it is (owner on #459)
+    if (boxDistribution(p).mode === "outline")
+        return grownFromPivot(p, { ...p, [which]: value }, spots, env);
     let across = which === "across" ? value : p.across;
     let deep = which === "deep" ? value : p.deep;
     if (env.ratioLocked && p.across > 0 && p.deep > 0) {
@@ -376,8 +386,12 @@ export function spacingOnLine(
         );
     // The spacing, and with the ratio lock the other one it moves exactly, never under half a
     // step: a landing that would take either below is left out, so the ratio stays (review)
+    // An outline's spacings are each the designer's: no ratio, hidden or not (review on #459)
     const ratio =
-        env.ratioLocked && base.across > 0 && base.deep > 0
+        env.ratioLocked &&
+        boxDistribution(base).mode !== "outline" &&
+        base.across > 0 &&
+        base.deep > 0
             ? base.deep / base.across
             : null;
     const atLeastHalf = (value: number) => {
@@ -389,34 +403,8 @@ export function spacingOnLine(
                   : value / ratio;
         return value >= half - 1e-9 && other >= half - 1e-9;
     };
-    const s1 = Math.max(raw, half);
-    const s2 = s1 + env.stepPx;
-    const at1 = free(s1);
-    const at2 = free(s2);
-    let best: { value: number; travel: number } | null = null;
-    at1.forEach((p, k) => {
-        const q = at2[k]!;
-        // How far the point moves per unit of spacing, each way and in all
-        const slope = {
-            x: (q.x - p.x) / (s2 - s1),
-            y: (q.y - p.y) / (s2 - s1),
-        };
-        const speed = Math.hypot(slope.x, slope.y);
-        if (speed < 1e-9) return;
-        const radius = Math.min(env.pullRadius ?? 0, (speed * half) / 4);
-        for (const axis of ["x", "y"] as const) {
-            if (Math.abs(slope[axis]) < 1e-9) continue;
-            for (const line of lines[axis]) {
-                const value = s1 + (line - p[axis]) / slope[axis];
-                const travel = Math.abs(value - raw) * speed;
-                if (travel > radius + 1e-9 || !atLeastHalf(value)) continue;
-                if (best === null || travel < best.travel - 1e-9)
-                    best = { value, travel };
-            }
-        }
-    });
-    if (best === null) return null;
-    const { value } = best;
+    const value = pullValue(free, raw, lines, env, atLeastHalf);
+    if (value === undefined) return null;
     const now = which === "across" ? base.across : base.deep;
     return Math.abs(value - now) < 1e-9
         ? base

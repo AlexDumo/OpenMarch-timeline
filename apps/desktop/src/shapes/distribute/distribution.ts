@@ -193,6 +193,7 @@ export function storedDistribution(
     if (mode === "outline")
         return {
             mode,
+            // (an `exact` some builds of #459 wrote is read past: the spacing touched is held)
             oddGap: readOddGap((d as { oddGap?: unknown }).oddGap),
         };
     if (mode === "spread") return readSpread(d);

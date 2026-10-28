@@ -58,6 +58,8 @@ function expectKept(
     what: string,
     /** Switches made: each may move a side up to half a step */
     switches = 1,
+    /** More an outline may miss by: its across interval kept to 600ths of a step (#458) */
+    slack = 0,
 ) {
     expect(now.center.x, `${what}: center`).toBeCloseTo(was.center.x, 9);
     expect(now.center.y, `${what}: center`).toBeCloseTo(was.center.y, 9);
@@ -65,14 +67,16 @@ function expectKept(
     expect(
         Math.abs(now.halfWidth - was.halfWidth),
         `${what}: width ${2 * was.halfWidth} → ${2 * now.halfWidth}`,
-    ).toBeLessThanOrEqual(switches * half + 1e-9);
+    ).toBeLessThanOrEqual(switches * half + slack + 1e-9);
     expect(
         Math.abs(now.halfDepth - was.halfDepth),
         `${what}: depth ${2 * was.halfDepth} → ${2 * now.halfDepth}`,
-    ).toBeLessThanOrEqual(switches * half + 1e-9);
+    ).toBeLessThanOrEqual(switches * half + slack + 1e-9);
 }
 
 const COUNTS = [7, 12, 15, 24, 48];
+/** An outline's interval kept to 600ths of a 10-unit step, over up to 24 intervals a side */
+const ROUNDING = (24 * 10) / 600 / 2;
 const BOX_MODES: DistributionMode[] = ["files", "outline", "spread"];
 /** Boxes as drawn: wide, square-ish, deep */
 const DRAWS: [XY, XY][] = [
@@ -103,10 +107,14 @@ describe("a box keeps its frame through every mode switch (#449)", () => {
                 // A frame with no area (a line) has nothing to keep
                 if (!(was.halfWidth > 0) || !(was.halfDepth > 0)) continue;
                 const now = switched(start, b);
+                // Outline keeps the frame to its across interval's 600ths of a step (#458, #459)
+                const slack = a === "outline" || b === "outline" ? ROUNDING : 0;
                 expectKept(
                     frameOf(now),
                     was,
                     `${a} → ${b} drawn to ${to.x},${to.y}`,
+                    1,
+                    slack,
                 );
             }
         });
@@ -211,18 +219,17 @@ describe("cycling modes never walks the box (#449 review)", () => {
         expect(frameOf(switched(saved, "files"))).toEqual(frameOf(grid));
     });
 
-    it("Grid → Outline takes the split nearest the drawn box, however long its sides", () => {
-        // 31 in a box drawn 70 × 60: 14 across by 2 deep fits it exactly
+    it("Grid → Outline keeps 31 in 70 × 60, across exact off the half steps and deep following (owner on #458, #459)", () => {
         const grid = drawn(boxTool, 31, { x: 0, y: 0 }, { x: 70, y: 60 });
         const outline = switched(grid, "outline");
-        expectKept(frameOf(outline), frameOf(grid), "31 in 70 × 60");
-        expect(frameOf(outline).halfWidth).toBeCloseTo(
-            frameOf(grid).halfWidth,
-            9,
-        );
-        expect(frameOf(outline).halfDepth).toBeCloseTo(
-            frameOf(grid).halfDepth,
-            9,
+        const p = outline.params as { across: number; deep: number };
+        expect(p.across % half).not.toBe(0);
+        expectKept(
+            frameOf(outline),
+            frameOf(grid),
+            "31 in 70 × 60",
+            0,
+            ROUNDING,
         );
     });
 });

@@ -7,7 +7,12 @@ import {
     onField,
     type BoxParams,
 } from "../../box/boxGeometry";
-import { flipBox, reoriented, withFieldCount } from "../../editor/boxEdits";
+import {
+    flipBox,
+    reoriented,
+    withFieldCount,
+    withSpacing,
+} from "../../editor/boxEdits";
 import {
     DEFAULT_ODD_GAP,
     type OddGap,
@@ -131,10 +136,12 @@ describe("Outline for the box", () => {
     });
 
     it("spaces the spots by the interval around the edge, 2(a + b) = n for an even count", () => {
-        // 6 × 4 steps go round 5 × 4 spots, 1½ steps apart both ways
+        // 6 × 4 steps go round 5 × 4 spots (#458): across 1½ steps, deep following the frame,
+        // 1⅓ steps
         const t = gapped(14, 60, 40);
         const p = t.params as BoxParams;
-        expect([p.across, p.deep]).toEqual([15, 15]);
+        expect(p.across).toBe(15);
+        expect(p.deep).toBeCloseTo(40 / 3, 9);
         const [across, deep] = size(t);
         expect(2 * (across! - 1 + deep! - 1)).toBe(14);
         // Round the loop in slot order, each spot is an interval on from the last
@@ -150,7 +157,7 @@ describe("Outline for the box", () => {
         });
     });
 
-    it("keeps the space the box took up, its intervals refitted in half steps (owner, lab)", () => {
+    it("keeps the space the box took up: across fits the width exactly, deep the depth (owner on #458, #459)", () => {
         for (const [n, w, d] of [
             [12, 60, 40],
             [16, 40, 40],
@@ -163,32 +170,45 @@ describe("Outline for the box", () => {
             const before = boxTool.frameOf(files, n);
             const p = withMode(boxTool, files, n, "outline", env) as BoxParams;
             const after = boxTool.frameOf(p, n);
-            const { across: a1, deep: b1 } = onField(p, n);
-            const [a, b] = [a1 - 1, b1 - 1];
-            // Each interval is on half steps, so a side can miss by a quarter step per interval
+            const { across: a1 } = onField(p, n);
+            // Across kept to 600ths of a step, so the width to that per interval
             expect(
                 Math.abs(after.halfWidth - before.halfWidth) * 2,
-            ).toBeLessThanOrEqual((a * STEP) / 4 + 1e-9);
-            expect(
-                Math.abs(after.halfDepth - before.halfDepth) * 2,
-            ).toBeLessThanOrEqual((b * STEP) / 4 + 1e-9);
-            expect(p.across % half).toBe(0);
-            expect(p.deep % half).toBe(0);
-            // The center stays, but for the box's step back onto the half-step grid
-            expect(
-                Math.abs(after.center.x - before.center.x),
-            ).toBeLessThanOrEqual(half / 2);
-            expect(
-                Math.abs(after.center.y - before.center.y),
-            ).toBeLessThanOrEqual(half / 2);
+                `${n} in ${w} × ${d}`,
+            ).toBeLessThanOrEqual(((a1 - 1) * STEP) / 600 + 1e-9);
+            expect(after.halfDepth).toBeCloseTo(before.halfDepth, 9);
+            expect(after.center.x).toBeCloseTo(before.center.x, 9);
+            expect(after.center.y).toBeCloseTo(before.center.y, 9);
         }
     });
 
-    it("takes the proportions of the space: a 4 × 3 box of 12 (6 × 4 steps) goes round 5 × 3", () => {
+    it("takes the proportions of the space: 12 round 6 × 4 steps go round 5 × 3, across 1½ and deep 2 (owner on #459)", () => {
         const t = gapped(12, 60, 40);
         expect(size(t)).toEqual([5, 3]);
         const p = t.params as BoxParams;
         expect([p.across, p.deep]).toEqual([15, 20]);
+    });
+
+    it("31 round 7 × 6 steps keep the frame with across off the half steps; setting a spacing or pressing its ≈ puts that one on half steps (owner on #458, #459)", () => {
+        const t = outlined(31, 70, 60);
+        const p = t.params as BoxParams;
+        expect(p.across % half).not.toBe(0);
+        // + on the spacing: onto half steps, the rest worked out
+        const wider = withSpacing(p, "across", p.across / STEP + 0.5, 31, env);
+        expect(wider.across % half).toBe(0);
+        // Its ≈ pressed: the nearest half step
+        const across = boxTool.params.find((q) => q.key === "across")!;
+        const snapped = across.snap!(p, 31, env) as BoxParams;
+        expect(snapped.across % half).toBe(0);
+        // A count changed keeps both spacings as they are
+        const more = withFieldCount(
+            p,
+            31,
+            "across",
+            onField(p, 31).across + 1,
+            env,
+        );
+        expect([more.across, more.deep]).toEqual([p.across, p.deep]);
     });
 
     it("keeps the interval for a single rank or file, which has no space to keep, and goes round as wide as it can", () => {
@@ -359,7 +379,17 @@ describe("picking the gap", () => {
         let u = press(t, spot, env);
         u = pointerMove(u, { x: spot.x - 30, y: spot.y }, env);
         u = release(u, ctx, null);
-        expect((u.params as BoxParams).center.x).toBeCloseTo(p.center.x - 30);
+        // Moved, and back on the half-step grid: the first edit after a switch to Outline
+        // that kept the space off it (#458)
+        expect(
+            Math.abs((u.params as BoxParams).center.x - (p.center.x - 30)),
+        ).toBeLessThanOrEqual(half / 2);
+        // Its sides on the grid
+        const moved = u.params as BoxParams;
+        for (const c of boxCorners(moved, 13))
+            expect(Math.abs(c.x / half - Math.round(c.x / half))).toBeLessThan(
+                1e-9,
+            );
         expect(outlineGapOf(boxTool, u.params, 13)!.gap).toMatchObject({
             side: "back",
         });

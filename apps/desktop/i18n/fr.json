@@ -83,6 +83,7 @@
             "noMarchersSelected": "Aucun marcheur sélectionné",
             "quarterTurn": "Forme : Tourner de 90° dans le sens horaire",
             "recalculate": "Forme : Recalculer qui va où",
+            "evenOut": "Forme : égaliser le contour",
             "ring": "Anneau des favoris : maintenez pour choisir une forme, touchez pour le garder ouvert"
         },
         "swap": {
@@ -1225,6 +1226,8 @@
             "flipDeep": "Retourner d'avant en arrière",
             "gap": {
                 "menu": "Reste",
+                "spacing": "{count, plural, one {{value} pas} other {{value} pas}}",
+                "spacingTip": "Le côté {side} a un marcheur de moins, donc ses marcheurs sont à {spacing} les uns des autres.",
                 "side": {
                     "back": "Arrière",
                     "front": "Avant",
@@ -1281,6 +1284,11 @@
                 "locked": "Espacements liés : cliquez pour les délier",
                 "unlocked": "Lier les deux espacements"
             },
+            "evenOut": {
+                "label": "Égaliser",
+                "tip": "Répartir les marcheurs aussi régulièrement que le bloc le permet",
+                "already": "Les marcheurs sont déjà aussi réguliers que le bloc le permet"
+            },
             "recalculate": {
                 "already": "Qui va où est déjà au plus court trajet",
                 "closeUpFirst": "Recalculer qui va où : resserrez d'abord les places vides",
@@ -1292,6 +1300,9 @@
                 "title": "Remélanger : une nouvelle disposition"
             },
             "scrubTip": "{label} : cliquez pour saisir, glissez pour modifier",
+            "snapTip": "Caler sur le demi-pas le plus proche",
+            "snapLabel": "{label} : caler sur le demi-pas le plus proche",
+            "aboutValue": "{label} : environ {value}",
             "seed": {
                 "copied": "Copiée",
                 "copy": "Copier la graine",

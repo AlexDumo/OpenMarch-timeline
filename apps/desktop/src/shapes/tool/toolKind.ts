@@ -88,6 +88,17 @@ export type ParamGlyph = "↔" | "↕";
 export interface ToolParam<P> {
     /** Stable for the kind: the command bar and saved shapes name the parameter by it */
     readonly key: string;
+    /**
+     * Shown as about so much ("≈1.83"): worked out from the shape rather than set, off the half
+     * steps. Still dragged and typed; pressed, it goes to the nearest half step ({@link snap}).
+     * An outline's spacing a drag or the other spacing left there (owner on #459).
+     */
+    readonly derived?: (params: P, n: number, stepPx: number) => boolean;
+    /**
+     * The number put on the nearest half step, as an edit of it: what pressing it does while it
+     * shows as about so much ({@link ToolParam.derived}; an outline's spacing: owner on #459)
+     */
+    readonly snap?: (params: P, n: number, env: ToolEnv) => P;
     /** What it is, for tooltips and screen readers: "Side-to-side spacing, in steps" */
     readonly label: string;
     /**
@@ -174,6 +185,8 @@ export interface ToolKind<P> {
      * ({@link ToolEnv.ratioLocked})
      */
     readonly ratioLock?: boolean;
+    /** Whether this shape offers the ratio lock, when the kind does; always when absent */
+    ratioLockFor?(params: P, n: number): boolean;
     /**
      * The params a drag from `from` to `to` draws, or undefined while the drag is too short.
      * `previous` is what this same drag drew on the last pointer move.

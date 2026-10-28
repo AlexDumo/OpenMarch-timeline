@@ -104,6 +104,7 @@
             "apply": "Place marchers on the shape",
             "quarterTurn": "Shape: Turn 90° clockwise",
             "recalculate": "Shape: Recalculate who goes where",
+            "evenOut": "Shape: Even out the outline",
             "keywords": "shape form formation set place"
         },
         "swap": {
@@ -1963,6 +1964,8 @@
                 },
                 "styleLabel": "That side",
                 "menu": "Leftover",
+                "spacing": "{count, plural, one {{value} step} other {{value} steps}}",
+                "spacingTip": "The {side} has one fewer marcher, so its marchers are {spacing} apart.",
                 "tipGap": "Click a marcher on the outline (not a corner) to move the gap there.",
                 "tipSpread": "Click a marcher on another side (not a corner) to spread that side instead."
             },
@@ -2027,6 +2030,11 @@
                 "locked": "Spacings locked together: click to unlock",
                 "unlocked": "Lock the two spacings together"
             },
+            "evenOut": {
+                "label": "Even out",
+                "tip": "Spread the marchers as evenly as the box allows",
+                "already": "The marchers are as even as the box allows"
+            },
             "recalculate": {
                 "already": "Who goes where is already least travel",
                 "closeUpFirst": "Recalculate who goes where: close up the empty spots first",
@@ -2034,6 +2042,9 @@
                 "title": "Recalculate who goes where, by least travel"
             },
             "scrubTip": "{label}: click to type, drag to change",
+            "snapTip": "Snap to the nearest half step",
+            "snapLabel": "{label}: snap to the nearest half step",
+            "aboutValue": "{label}: about {value}",
             "seed": {
                 "copied": "Copied",
                 "copy": "Copy the seed",

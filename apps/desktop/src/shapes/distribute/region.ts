@@ -54,6 +54,11 @@ export interface ClosedShape<P> {
     /** The distribution switching to `mode` starts with (a box's Files keeps its file count) */
     startMode(params: P, n: number, mode: DistributionMode): Distribution;
     /**
+     * The shape evened out in the frame it has now: the params, the same ones when it's as even
+     * as it gets, or undefined where it doesn't apply (owner on #459: an outline's "Even out")
+     */
+    evenOut?(params: P, n: number, env: ToolEnv): P | undefined;
+    /**
      * The params filled in `distribution`, stored in `params.distribution`. The kind keeps its
      * own numbers in step (a box's file count) and grows from the host's pivot.
      */

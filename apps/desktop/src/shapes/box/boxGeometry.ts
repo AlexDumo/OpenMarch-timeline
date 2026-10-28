@@ -206,6 +206,79 @@ export function outlineFilesRange(
     return { min: min + 1, max: max + 1 };
 }
 
+/** One of an outline's two ways: side to side (across) or front to back (deep) */
+export type OutlineAxis = "across" | "deep";
+
+/**
+ * An outline round a `width` × `depth` frame kept exactly, as a switch to Outline does (#458,
+ * owner on #459): of the splits, the one whose two spacings, each its length over its gaps, come
+ * nearest each other (never under half a step: the frame grows that way if it must)
+ */
+export function keptOutline(
+    width: number,
+    depth: number,
+    n: number,
+    side: GapSide,
+    half: number,
+): {
+    readonly a: number;
+    readonly b: number;
+    readonly across: number;
+    readonly deep: number;
+} {
+    const sum = Math.ceil(n / 2);
+    const { min, max } = acrossRange(n, side);
+    let best: { a: number; score: number } | null = null;
+    for (let a = min; a <= max; a++) {
+        const across = width / a;
+        const deep = depth / (sum - a);
+        const score =
+            (Math.min(across, deep) < half - 1e-9 ? 1e6 : 0) +
+            Math.abs(Math.log(Math.max(deep, 1e-9) / Math.max(across, 1e-9)));
+        if (best === null || score < best.score - 1e-9) best = { a, score };
+    }
+    const a = best!.a;
+    const b = sum - a;
+    const across = Math.max(width / a, half);
+    const deep = Math.max(depth / b, half);
+    return {
+        a,
+        b,
+        across: width > 0 ? across : deep,
+        deep: depth > 0 ? deep : across,
+    };
+}
+
+/**
+ * The outline evened out in the frame it has now (#458, owner on #459): the split and the two
+ * spacings that come as near one spacing all round as that frame allows ({@link keptOutline}),
+ * even off the half steps (shown as about so much until set). The same params when it's as even
+ * as it gets already; null for a box not in Outline.
+ */
+export function evenedOutline(
+    p: BoxParams,
+    n: number,
+    env: ToolEnv,
+): BoxParams | null {
+    const d = boxDistribution(p);
+    if (d.mode !== "outline" || n < OUTLINE_MIN) return null;
+    const span = spanOf(p, n);
+    const width = (span.files - 1) * p.across;
+    const depth = (span.ranks - 1) * p.deep;
+    const even = keptOutline(width, depth, n, d.oddGap.side, halfStep(env));
+    const same =
+        even.a === span.files - 1 &&
+        Math.abs(even.across - p.across) < 1e-9 &&
+        Math.abs(even.deep - p.deep) < 1e-9;
+    return same
+        ? p
+        : {
+              ...withFileCount(p, even.a + 1),
+              across: even.across,
+              deep: even.deep,
+          };
+}
+
 /** Whether the box is an even spread, whose frame is the spread's edge rather than its marchers */
 export const isSpread = (p: BoxParams): boolean =>
     boxDistribution(p).mode === "spread";
@@ -774,7 +847,8 @@ export function handleDirection(
 
 /**
  * The box with handle `key` dragged to `to`: the opposite corner or side stays put and the
- * intervals stretch, in half steps. Files and ranks never change here.
+ * intervals stretch, in half steps; files and ranks never change here. An outline moves only the
+ * dragged edge, its spacing following and the rest kept exactly (#458, owner on #459).
  */
 export function stretchBox(
     base: BoxParams,
@@ -804,6 +878,28 @@ export function stretchBox(
         );
     const movesX = key.includes("e") || key.includes("w");
     const movesY = key.includes("n") || key.includes("s");
+    const d = boxDistribution(base);
+    if (d.mode === "outline" && n >= OUTLINE_MIN)
+        // As Grid's handles: the dragged way's spacing follows the pointer, the counts kept, so the
+        // edge does what it's told; marchers move between the sides only by Even out (owner on
+        // #459). Both spacings are the designer's: no ratio.
+        return inBoxAxes(
+            base,
+            n,
+            { ...env, ratioLocked: false },
+            (flat, flatEnv, field) =>
+                stretchSquare(
+                    flat,
+                    n,
+                    key,
+                    fieldToFrame(boxFrame(base, n), to),
+                    flatEnv,
+                    field,
+                ),
+            // Its fixed corner and sides stay exactly where they were: a drag one way never
+            // shifts the other
+            () => ({ x: true, y: true }),
+        );
     return inBoxAxes(
         base,
         n,
@@ -1124,6 +1220,8 @@ export function resizeFiles(
             : { min: 1, max: Math.max(1, n) };
     const clamped = Math.min(max, Math.max(min, Math.round(files)));
     if (clamped === acrossOf(p, n)) return p;
+    // A count changed is what's touched: both spacings stay as they are, an outline's too, and
+    // the lengths follow (#458, owner on #459)
     return grownFromPivot(p, withFileCount(p, clamped), n, env);
 }
 

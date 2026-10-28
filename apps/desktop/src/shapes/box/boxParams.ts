@@ -10,7 +10,13 @@ import {
 import { formatSteps, parseSteps } from "../editor/format";
 import { parseSize, scrubDistance } from "../editor/scrub";
 import type { ToolEnv, ToolParam } from "../tool/toolKind";
-import { boxBlock, isSpread, shortBy, type BoxParams } from "./boxGeometry";
+import {
+    boxBlock,
+    boxDistribution,
+    isSpread,
+    shortBy,
+    type BoxParams,
+} from "./boxGeometry";
 
 /**
  * The box's numbers (#344, "The kind contract"; 08-shape-system-ux.md, "The floating editor"):
@@ -107,6 +113,15 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
         const field = onField(p, n);
         return (across ? field.acrossSpacing : field.deepSpacing) / stepPx;
     };
+    /**
+     * Whether this way is an outline's spacing off the half steps, worked out from the frame (a
+     * drag, the other spacing set, a switch to Outline): shown as about so much (owner on #459)
+     */
+    const offHalves = (p: BoxParams, n: number, stepPx: number) => {
+        if (boxDistribution(p).mode !== "outline") return false;
+        const halves = stepsOf(p, n, stepPx) * 2;
+        return Math.abs(halves - Math.round(halves)) > 1e-6;
+    };
     /** A spacing set as typed: kept as it is (1⅔, 1.37), not on half steps (#411, #423) */
     const typed = (p: BoxParams, n: number, steps: number, env: ToolEnv) =>
         withSpacing(p, ownKey(p, n), steps, n, { ...env, snap: false }, true);
@@ -137,6 +152,18 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
             const field = onField(p, n);
             return (across ? field.across : field.deep) > 1;
         },
+        // An outline's spacing off the half steps shows as about so much; pressed, it goes to
+        // the nearest half step, the rest worked out from it (owner on #459)
+        derived: offHalves,
+        snap: (p, n, env) =>
+            withSpacing(
+                p,
+                ownKey(p, n),
+                Math.max(0.5, Math.round(stepsOf(p, n, env.stepPx) * 2) / 2),
+                n,
+                env,
+            ),
+        // (the "≈" is the editor's own button before the number)
         display: (p, n, stepPx) => formatSteps(stepsOf(p, n, stepPx)),
         value: stepsOf,
         type(p, n, text, env) {

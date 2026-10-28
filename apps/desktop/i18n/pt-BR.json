@@ -83,6 +83,7 @@
             "noMarchersSelected": "Nenhum marchador selecionado",
             "quarterTurn": "Forma: Girar 90° no sentido horário",
             "recalculate": "Forma: Recalcular quem vai para onde",
+            "evenOut": "Forma: igualar o contorno",
             "ring": "Anel de favoritos: segure para escolher uma forma, toque para mantê-lo aberto"
         },
         "swap": {
@@ -1225,6 +1226,8 @@
             "flipDeep": "Espelhar de frente para trás",
             "gap": {
                 "menu": "Sobra",
+                "spacing": "{count, plural, one {{value} passo} other {{value} passos}}",
+                "spacingTip": "O lado {side} tem um marchador a menos, então seus marchadores ficam a {spacing} de distância.",
                 "side": {
                     "back": "Trás",
                     "front": "Frente",
@@ -1281,6 +1284,11 @@
                 "locked": "Espaçamentos vinculados: clique para desvincular",
                 "unlocked": "Vincular os dois espaçamentos"
             },
+            "evenOut": {
+                "label": "Igualar",
+                "tip": "Distribuir os marchadores tão uniformemente quanto o bloco permite",
+                "already": "Os marchadores já estão tão uniformes quanto o bloco permite"
+            },
             "recalculate": {
                 "already": "Quem vai para onde já tem o menor percurso",
                 "closeUpFirst": "Recalcular quem vai para onde: feche as lacunas primeiro",
@@ -1292,6 +1300,9 @@
                 "title": "Reembaralhar: um novo arranjo"
             },
             "scrubTip": "{label}: clique para digitar, arraste para alterar",
+            "snapTip": "Ajustar ao meio passo mais próximo",
+            "snapLabel": "{label}: ajustar ao meio passo mais próximo",
+            "aboutValue": "{label}: cerca de {value}",
             "seed": {
                 "copied": "Copiada",
                 "copy": "Copiar a semente",

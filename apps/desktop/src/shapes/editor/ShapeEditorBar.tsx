@@ -22,7 +22,11 @@ import { getActionShortcutLabel } from "@/shortcuts/labels";
 import type { ActionId } from "@/shortcuts/definitions";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { RichTips, Tip } from "./Tip";
-import { RecalculateFace, useRecalculateLook } from "./RecalculateButton";
+import {
+    ActionFace,
+    RecalculateFace,
+    useActionLook,
+} from "./RecalculateButton";
 import {
     FlipHorizontalIcon,
     FlipVerticalIcon,
@@ -30,6 +34,7 @@ import {
     MinusIcon,
     PlusIcon,
     ArrowClockwiseIcon,
+    EqualsIcon,
     PathIcon,
 } from "@phosphor-icons/react";
 import {
@@ -224,6 +229,12 @@ function ShapeEditorBar({
         enabled: target.recalculate !== null,
         ignoreRepeat: true,
     });
+    // An outline evened out in its frame (owner on #459): none where it doesn't apply
+    const evenState = evenStateOf(kind, params, spots);
+    useActionHandler("shapeEvenOut", () => evenOut(live), {
+        enabled: evenState === "uneven",
+        ignoreRepeat: true,
+    });
 
     return (
         <animated.div
@@ -280,6 +291,7 @@ function ShapeEditorBar({
                                     canLess={false}
                                     canMore={false}
                                     glyph
+                                    derived={x.derived}
                                     actions={numbers}
                                 />
                             ))}
@@ -306,6 +318,7 @@ function ShapeEditorBar({
                     canRecalculate={target.recalculate !== null}
                     empty={target.empty}
                     canCloseUp={target.closeUp !== undefined}
+                    evenState={evenState}
                 />
                 {/* What doesn't change the shape itself, at the end (owner): its pathways and
                     saving it to the library */}
@@ -370,6 +383,31 @@ function useLiveTarget(target: ShapeEditTarget): ShapeEditTarget {
         [],
     );
 }
+
+/** Whether a shape can be evened out in its frame: not at all, already, or yes (#459) */
+type EvenState = "none" | "even" | "uneven";
+
+function evenStateOf(
+    kind: ShapeEditTarget["kind"],
+    params: unknown,
+    spots: number,
+): EvenState {
+    const env = envFor(PLAIN);
+    const evened = env && kind.closed?.evenOut?.(params, spots, env);
+    if (evened === undefined || evened === null) return "none";
+    return evened === params ? "even" : "uneven";
+}
+
+/** "Even out": the shape as even as its frame allows, as one undo step (owner on #459) */
+const evenOut = (target: ShapeEditTarget) =>
+    applyWith(target, (env) => {
+        const evened = target.kind.closed?.evenOut?.(
+            target.params,
+            target.spots,
+            env,
+        );
+        return evened ?? target.params;
+    });
 
 /** One change at once, worked out with no keys held */
 const applyWith = (
@@ -449,6 +487,12 @@ function numberActions(
                 (b, m, env) => param.scrub(b, target.spots, m, env),
                 param.interval === true,
             ),
+        /** A "≈" number pressed: onto the nearest half step, as an edit of it (#459) */
+        snap: (param: Param) => {
+            const env = envFor(PLAIN);
+            if (env && param.snap)
+                target.apply(param.snap(target.params, target.spots, env));
+        },
         type: (param: Param, text: string) => {
             const env = envFor(PLAIN);
             const next =
@@ -468,6 +512,7 @@ const NumberChip = memo(function NumberChip({
     canLess,
     canMore,
     glyph,
+    derived = false,
     actions,
 }: {
     param: Param;
@@ -477,6 +522,8 @@ const NumberChip = memo(function NumberChip({
     canMore: boolean;
     /** The spacings show their glyph */
     glyph: boolean;
+    /** Shown as about so much: pressing it snaps it to a half step (owner on #459) */
+    derived?: boolean;
     actions: ReturnType<typeof numberActions>;
 }) {
     const scrub = useMemo(() => actions.scrub(param), [actions, param]);
@@ -503,7 +550,13 @@ const NumberChip = memo(function NumberChip({
                 testId={`shape-editor-${param.key}`}
                 {...scrub}
                 onType={(text) => actions.type(param, text)}
+                onSnap={
+                    derived && param.snap
+                        ? () => actions.snap(param)
+                        : undefined
+                }
             />
+
             {param.stepper && (
                 <IconButton
                     label={param.stepper.more}
@@ -553,6 +606,7 @@ const TurnControls = memo(function TurnControls({
     pivot,
     canRecalculate,
     empty,
+    evenState,
 }: {
     live: ShapeEditTarget;
     degrees: number;
@@ -560,11 +614,14 @@ const TurnControls = memo(function TurnControls({
     pivot: Pivot;
     canRecalculate: boolean;
     empty: number;
+    /** Whether "Even out" applies, and whether there's anything to even (#459) */
+    evenState: EvenState;
     /** Only redraws it */
     canCloseUp: boolean;
 }) {
     const base = useRef<unknown>(null);
-    const recalculateLook = useRecalculateLook(canRecalculate);
+    const recalculateLook = useActionLook(canRecalculate);
+    const evenLook = useActionLook(evenState === "uneven");
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     const keyOf = (id: ActionId) => getActionShortcutLabel(id, { overrides });
     const flip = (axis: "across" | "deep") =>
@@ -672,6 +729,36 @@ const TurnControls = memo(function TurnControls({
                     thing on the bar for nothing (owner, review round r429) */}
                 <RecalculateFace look={recalculateLook} />
             </IconButton>
+            {evenState !== "none" && (
+                <IconButton
+                    label={
+                        evenState === "uneven"
+                            ? tolgee.t(
+                                  "shapes.edit.evenOut.tip",
+                                  "Spread the marchers as evenly as the box allows",
+                              )
+                            : tolgee.t(
+                                  "shapes.edit.evenOut.already",
+                                  "The marchers are as even as the box allows",
+                              )
+                    }
+                    shortcut={keyOf("shapeEvenOut")}
+                    disabled={evenState !== "uneven"}
+                    className="relative"
+                    onClick={() => evenOut(target)}
+                    testId="shape-editor-even-out"
+                >
+                    {/* As Recalculate: the word only when it can act (owner on #459) */}
+                    <ActionFace
+                        look={evenLook}
+                        icon={<EqualsIcon size={14} />}
+                        label={tolgee.t(
+                            "shapes.edit.evenOut.label",
+                            "Even out",
+                        )}
+                    />
+                </IconButton>
+            )}
             <CloseUpButton
                 target={target}
                 compact
