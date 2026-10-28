@@ -1,0 +1,110 @@
+<!-- cspell:disable -->
+
+# Independent review, 2026-10-25
+
+Two reviewers read the README, the edit rules and the ADR draft without having written them:
+
+- one with a **storage, undo and code-fit** lens, reading code at fork main dc2b92c25 and #332;
+- one with a **semantics and edge-case** lens.
+
+Below are their findings, what was changed in response, and what is left for the owner. Items
+marked "demo" can be tried in the [demo](demo/holds-demo.html), which is a simplified model with one
+layer and pages of 8 counts.
+
+## Changed in response
+
+| Finding                                                                                                                                                                                                                                                                                         | Change                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Layer derivation isn't built** (storage B1). Layers are still chosen per edit (`stealLayer`, `db-functions/timelineCommands.ts:285`). E-A3 is still enforced, and neither `timeline_page_moves` nor the I-L1 check exists on main.                                                            | The README now says the spec §6.2 rules are decided but not built. The hold invariants no longer depend on them (next row). The "page-move marks" comparison is removed.                                                                                                                                                                                 |
+| **H-1 to H-3 can be checked against stored rows** (storage M1). If any of the marcher's rows covers a count, some row is in charge there. So H-1 is "no row of the marcher overlaps the mark", and H-2 is "a row of the marcher ends at its start, or it starts at 0".                          | The ADR draft states them as SQL and checks them **at commit time**, in the same place as `timeline_commit_violations`, not only in a test.                                                                                                                                                                                                              |
+| **A generic re-derive can't tell a moved arrival from a deleted one** (storage M2). Basic's `planMerge` deletes and re-inserts rows.                                                                                                                                                            | The generic step only **trims** marks that rows now cover and **deletes** marks with no arrival. Paths that move an arrival (clip drag, resize, merge refit, Basic set-ending) pass an explicit old→new map. The step runs in `transactionWithHistory` before the drain, and never in undo/redo replay (C-6).                                            |
+| **The ripple maps starts and ends differently** (storage M3). A mark's start is an arrival, so it must map like an _end_ edge, and its end like a _start_ edge. Otherwise inserting beats at a mid-page arrival breaks H-2. Tempo edits, MusicXML import and endless counts all use the ripple. | Rule added to the edit rules and the ADR draft.                                                                                                                                                                                                                                                                                                          |
+| **"Take the marcher out of the shared move" is incomplete** (storage M4, semantics B1). For a move longer than the page, removing the marcher's slot also removes its motion on the other pages. Split by marcher also refuses shapes and follow-the-leader.                                    | It's now "**cut the move in time at the page's flags, then remove the marcher from that page's part**" (with Basic's tidy-up, as Basic Set to previous page already does). This applies to Set to previous page, Hold from previous page, hold over the window, and the Expert drag back (next row). Shapes and follow-the-leader are owner question R5. |
+| **The Expert drag back in a shared move** has the same symptom as Set to previous page (storage M6).                                                                                                                                                                                            | It gets the same fix.                                                                                                                                                                                                                                                                                                                                    |
+| **Removing the kept table needs a new migration** (storage M5). 0018 is followed by 0019–0026, and #181 claims 0027. Nightly 0.1.7-nightly.20261026 and the lab build ship 0018, so testers' files hold kept rows. Their stored undo history would then hit "no such table" on every undo.      | The ADR draft now has a new migration that drops the table **and prunes undo groups that name it**. It also notes that an older nightly will error on such a file.                                                                                                                                                                                       |
+| **Mark-only edits don't refresh views** (storage M7). This covers a bar-end drag, Split hold and their undo.                                                                                                                                                                                    | The table is added to `DISPLAY_TABLES` (`db-functions/timelineDisplay.ts`) and to the query invalidation map, as the kept table was.                                                                                                                                                                                                                     |
+| **Remove keyframe in Basic would join across every flag** (semantics M1). Basic splits moves at each new flag.                                                                                                                                                                                  | Decision 14 now joins **only at counts that aren't page flags**, which is the Split-at-playhead case. Demo: "Remove at a page flag".                                                                                                                                                                                                                     |
+| **Decisions 15 and 17 contradicted each other** (semantics M3). Removing a Held arrival also wrote next-page stays inside the hold.                                                                                                                                                             | Removing a Held arrival writes **no stays inside the hold**, so its pages become Following. Demo: same scenario.                                                                                                                                                                                                                                         |
+| **Basic's trailing moves that go nowhere are its own artefacts** (storage m1). Keeping them would stop later pages following.                                                                                                                                                                   | Edit rule F4 reverted: Basic keeps deleting them.                                                                                                                                                                                                                                                                                                        |
+| **Zero-motion members of a split get two rows, so a diamond at the cut** (storage m2). This applies to Split at playhead and Basic split page.                                                                                                                                                  | Proposed: a split writes no first-half row for members who stand still. Their position is identical, and they don't gain a keyframe they didn't make.                                                                                                                                                                                                    |
+| **The field look for a Following hold wasn't stated** (semantics M8).                                                                                                                                                                                                                           | It's dashed, as are counts before a marcher's first move. Items behave as marchers. Isolation's dim wins, and playback and exports stay solid, as in #332.                                                                                                                                                                                               |
+| **Split hold broke H-2** (semantics m1, storage n2). H-2 was later dropped altogether (04-anchors).                                                                                                                                                                                             | Split hold **ends the hold** there, so H-2 stays strict. Only-this-page inside a mark ends the mark at that page first.                                                                                                                                                                                                                                  |
+| **The bar end had no limit after the last move** (storage m6).                                                                                                                                                                                                                                  | It's capped at the show's end.                                                                                                                                                                                                                                                                                                                           |
+| Wording and naming (storage m3, n1; semantics m4, nits).                                                                                                                                                                                                                                        | The table is renamed **`timeline_held_marks`** ("span" is the spec's word for derived pieces). Added `UNIQUE(marcher_id, start_beat)` and `CHECK(start_beat >= 0)`. "Deleted first" becomes "taken out of that page". Part 1 strikes "kept spots" from the 2026-10-16 list of page-move writers.                                                         |
+| Write paths missing from 01 (storage m4, m5).                                                                                                                                                                                                                                                   | Added: the shape-placement paths in flight (shapes host `placeShape`, #181, #288), repair's copy order, and the U-1 history-trigger count. Ticket A keeps the stay-writing core of `keepMarchersOnPageInTransaction`, which Remove keyframe and Only this page call.                                                                                     |
+
+## Confirmed sound
+
+The storage reviewer confirmed:
+
+- The table is safe under the history mechanism. The delete inverse restores the rowid.
+- A marcher delete cascades correctly, and undo replays with foreign keys off, as for kept spots (C-1, C-2).
+- No trigger reads the table.
+
+## For the owner
+
+| #   | Question                                                                                                                                                                                                                                | Lead                                                                                                                                                                                                                                                                    | Demo                                      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| R1  | **Mixed drag:** some selected marchers Held, others Following, dragged together at a count inside the hold. Today's rules give each its own edit: Held ones move their arrival (an earlier page); Following ones start a new move here. | **Decided (owner, 2026-10-25):** each marcher by its own kind, **no toast**; "4 of 12 Held" in the inspector, lit bars during the drag, and **Make all selected Held** as an explicit command. Holds are always explicit.                                               | "Mixed drag"                              |
+| R2  | **Expert window starting inside a Held hold:** does the window win (the hold ends at the start flag, and a new move is made) or the hold (the whole hold moves, and the window's start is ignored)?                                     | **Decided (owner, 2026-10-25): the window wins.**                                                                                                                                                                                                                       | "Expert window inside a hold", both rules |
+| R3  | **Hold from previous page after unedited pages:** run on Page 6 when Pages 4–5 are Following, the hold starts at the last arrival, so Pages 4–5 become Held too.                                                                        | **Decided (owner, 2026-10-25):** Hold from previous page holds **this page only**; drag the bar's start back to take in earlier Following pages. H-2 allows a start at a page flag.                                                                                     | "Hold from previous page, later"          |
+| R4  | **Join after a split when only part of the group is selected.**                                                                                                                                                                         | **Decided (owner, 2026-10-26):** pull the selected marchers out of both halves into their own move, then join. Where they can't be pulled out, keep today's behaviour and say why.                                                                                      | –                                         |
+| R5  | **Shapes and follow-the-leader** when Set to previous page, Hold from previous page or a drag back must take a marcher out of a shared move.                                                                                            | **Parked (owner, 2026-10-26):** decided by the shape and transition ownership model (shapes as distributions, transitions as blocks on a track; fork issue #434). Holds only rely on the two-operation contract in the README's Scope section.                          | –                                         |
+| R6  | **"Only this page" writes plain copies (#158),** so if the earlier block later shifts, the copy stays at the old spot, and nothing marks it as a keep.                                                                                  | **Decided (owner, 2026-10-26):** accept. An unlinked page is a normal page with a keyframe diamond, with no lasting kept label (agreeing with study 10 and #158).                                                                                                       | –                                         |
+| R7  | **A clip drag that moves an arrival earlier** stretches its Held mark back over pages that were Following.                                                                                                                              | **Decided (owner, 2026-10-26):** accept. The hold follows its arrival; to keep the old start, drag the bar's start forward.                                                                                                                                             | –                                         |
+| R8  | **Hold over the window when moves are inside the window.**                                                                                                                                                                              | **Decided (owner, 2026-10-26):** hold over the window removes the moves inside it. A move crossing the start flag is cut there; one crossing the playhead starts there and keeps its destination, so it walks faster after the window (shown by the step-size warning). | –                                         |
+
+## Anchor review, 2026-10-26
+
+Three more reviewers read [04-anchors.md](04-anchors.md): model consistency, storage and code fit,
+and simulated designers (4 personas, about 15 of 24 tasks right on the first display). All three:
+**sound with fixes**. Adopted:
+
+- **What you see decides.** Arrival or borrowed follows from the rows (no stored anchor). A drag
+  inside a borrowed hold makes it an arrival hold. All three reviewers asked for this.
+- **Snapshot-based upkeep,** in a fixed order: trim, keep, move with a retimed row, delete. Split
+  at playhead depends on that order.
+- **The ripple:** an arrival hold's start follows its row by id; a borrowed hold's start stays on
+  its beat.
+- **Drags inside a borrowed hold never cover a neighbouring hold,** and touching holds merge.
+- **Decision 6 wins for Expert windows** over the "move created over a hold's start" trim.
+- **Basic's `planMerge` sweep stops at a hold's start.**
+- **Display:** a hatched, lighter fill with a source chip for borrowed holds; the source line only
+  on hover or selection; a drag preview in place and in the inspector ("moves Page 2's set" or
+  "adds a move on Page 5"); plain Held in Basic.
+- **Commit check:** H-1 and H-3 in the `timeline_commit_violations` view, with error messages for
+  them; H-2 dropped.
+
+## ADR validation, 2026-10-28
+
+An independent validator read the ADR draft against the docs and the code at fork main
+(67476372a, after #332 merged). Its verdict was "ready with edits". All the edits are folded into
+[02-adr-amendment-draft.md](02-adr-amendment-draft.md):
+
+- the migration number;
+- where the upkeep step runs: right after the edit, before the history group is read;
+- the commit view's row shape, and the on-open trim;
+- clearing history instead of pruning it;
+- `DISPLAY_TABLES`;
+- cutting a move at page flags may share a range;
+- the missing rules: merging touching holds, the `planMerge` stop, hold over the window, and the
+  old→new map;
+- real dates, Verification, and the corrected Split at playhead description.
+
+Owner answers, 2026-10-28:
+
+1. **Hold edges and page flags:** a borrowed hold's start, and any hold's end, sitting on a page
+   flag follow that flag when pages are resized. Edges mid-page stay on their beat, and a deleted
+   flag leaves the edge on its count.
+2. **Testers' undo history:** the kept-table migration clears both history stacks in files whose
+   history names the table, with a release note.
+3. **No follow-link chain icons.** The dashed Not-set bars show "this page shows an earlier spot",
+   and they light up during a drag. The unlink action stays as **Set as shown**, in the page box
+   menu and on the bar.
+4. **The UI's words are Set · Held · Not set.** "Following", "linked" and "follows" leave the UI.
+   Set to previous page becomes **Clear this page** in timeline mode, and that is also how a page
+   is re-linked.
+5. **Already settled:**
+   - mixed selections with shape or follow-the-leader members do the others and name the skipped
+     ones (the R5 interim);
+   - the partial-group join is #471, after the whole-membership join in #470 (R4).
