@@ -126,11 +126,6 @@ export interface OutlineDistribution {
     readonly mode: "outline";
     /** Which spot an odd count leaves out; an even count leaves none */
     readonly oddGap: OddGap;
-    /**
-     * Which way the spacing is the designer's, the other following the frame (#458, owner on
-     * #459): front to back when "deep", side to side when absent (as every outline was before)
-     */
-    readonly exact?: "deep";
 }
 
 /**
@@ -198,10 +193,8 @@ export function storedDistribution(
     if (mode === "outline")
         return {
             mode,
+            // (an `exact` some builds of #459 wrote is read past: the spacing touched is held)
             oddGap: readOddGap((d as { oddGap?: unknown }).oddGap),
-            ...((d as { exact?: unknown }).exact === "deep" && {
-                exact: "deep" as const,
-            }),
         };
     if (mode === "spread") return readSpread(d);
     if (mode !== "files") return undefined;

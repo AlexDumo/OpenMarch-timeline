@@ -53,14 +53,7 @@ export function pressLive(live: LiveBox, at: XY, env: ToolEnv): LiveBox | null {
 export function moveLive(live: LiveBox, at: XY, env: ToolEnv): LiveBox {
     const g = live.gesture;
     if (!g) return live;
-    const params = dragShape(
-        live.box.kind,
-        live.box.spots,
-        g,
-        at,
-        env,
-        live.params,
-    );
+    const params = dragShape(live.box.kind, live.box.spots, g, at, env);
     return { ...live, params, pointer: at };
 }
 

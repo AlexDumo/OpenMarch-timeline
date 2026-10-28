@@ -45,16 +45,16 @@ export function chipLayout(
             note: param.note?.(params, n) ?? null,
             less: param.stepper?.by(params, n, -1, env) ?? null,
             more: param.stepper?.by(params, n, 1, env) ?? null,
-            derived: param.derived?.(params, n) ?? false,
+            derived: param.derived?.(params, n, env.stepPx) ?? false,
         }));
     const intervals = numbers.filter((x) => x.param.interval);
     return {
         values: numbers.filter((x) => !x.param.interval),
         intervals,
-        // Only spacings the designer sets can be kept in proportion
         ratioLock:
             kind.ratioLock === true &&
-            intervals.filter((x) => !x.derived).length > 1,
+            (kind.ratioLockFor?.(params, n) ?? true) &&
+            intervals.length > 1,
     };
 }
 

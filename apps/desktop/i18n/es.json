@@ -1174,9 +1174,7 @@
                 "short": "faltan {count}",
                 "size": "Tamaño, de lado a lado × de adelante hacia atrás",
                 "spacingAcross": "Espaciado de lado a lado, en pasos",
-                "spacingDeep": "Espaciado de adelante hacia atrás, en pasos",
-                "makeAcrossExact": "Hacer exacto el espaciado de lado a lado",
-                "makeDeepExact": "Hacer exacto el espaciado de adelante hacia atrás"
+                "spacingDeep": "Espaciado de adelante hacia atrás, en pasos"
             }
         },
         "circle": "Círculo",
@@ -1294,6 +1292,7 @@
                 "title": "Reorganizar: una nueva disposición"
             },
             "scrubTip": "{label}: haz clic para escribir, arrastra para cambiar",
+            "snapTip": "{label}: haz clic para ajustar a medio paso, arrastra para cambiar",
             "seed": {
                 "copied": "Copiada",
                 "copy": "Copiar la semilla",
@@ -1303,8 +1302,7 @@
                 "label": "Semilla"
             },
             "steps": "pasos",
-            "turn": "Giro, en grados en sentido horario",
-            "followsShape": "{label}: {value}, sigue la forma. {action}"
+            "turn": "Giro, en grados en sentido horario"
         },
         "field": {
             "stepLimit": "{steps} a 5"

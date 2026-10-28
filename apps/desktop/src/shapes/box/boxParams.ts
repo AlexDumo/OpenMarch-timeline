@@ -13,10 +13,8 @@ import type { ToolEnv, ToolParam } from "../tool/toolKind";
 import {
     boxBlock,
     boxDistribution,
-    exactOf,
     isSpread,
     shortBy,
-    withOutlineExact,
     type BoxParams,
 } from "./boxGeometry";
 
@@ -116,11 +114,14 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
         return (across ? field.acrossSpacing : field.deepSpacing) / stepPx;
     };
     /**
-     * Whether this way is an outline's spacing that follows the frame, the other being the
-     * designer's (owner on #459)
+     * Whether this way is an outline's spacing off the half steps, worked out from the frame (a
+     * drag, the other spacing set, a switch to Outline): shown as about so much (owner on #459)
      */
-    const followsFrame = (p: BoxParams, n: number) =>
-        boxDistribution(p).mode === "outline" && ownKey(p, n) !== exactOf(p);
+    const offHalves = (p: BoxParams, n: number, stepPx: number) => {
+        if (boxDistribution(p).mode !== "outline") return false;
+        const halves = stepsOf(p, n, stepPx) * 2;
+        return Math.abs(halves - Math.round(halves)) > 1e-6;
+    };
     /** A spacing set as typed: kept as it is (1⅔, 1.37), not on half steps (#411, #423) */
     const typed = (p: BoxParams, n: number, steps: number, env: ToolEnv) =>
         withSpacing(p, ownKey(p, n), steps, n, { ...env, snap: false }, true);
@@ -151,25 +152,19 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
             const field = onField(p, n);
             return (across ? field.across : field.deep) > 1;
         },
-        // An outline's deep spacing follows its depth: shown as about so much (owner on #459)
-        // (its own: turned a quarter, the box's deep is the field's side to side)
-        derived: (p, n) => followsFrame(p, n),
-        makeExact: {
-            get label() {
-                return across
-                    ? tolgee.t(
-                          "shapes.box.params.makeAcrossExact",
-                          "Make side to side exact",
-                      )
-                    : tolgee.t(
-                          "shapes.box.params.makeDeepExact",
-                          "Make front to back exact",
-                      );
-            },
-            apply: (p, n) => withOutlineExact(p, ownKey(p, n)),
-        },
+        // An outline's spacing off the half steps shows as about so much; pressed, it goes to
+        // the nearest half step, the rest worked out from it (owner on #459)
+        derived: offHalves,
+        snap: (p, n, env) =>
+            withSpacing(
+                p,
+                ownKey(p, n),
+                Math.max(0.5, Math.round(stepsOf(p, n, env.stepPx) * 2) / 2),
+                n,
+                env,
+            ),
         display: (p, n, stepPx) =>
-            followsFrame(p, n)
+            offHalves(p, n, stepPx)
                 ? `≈${formatSteps(stepsOf(p, n, stepPx))}`
                 : formatSteps(stepsOf(p, n, stepPx)),
         value: stepsOf,

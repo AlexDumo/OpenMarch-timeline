@@ -1174,9 +1174,7 @@
                 "short": "faltam {count}",
                 "size": "Tamanho, de lado a lado × de frente para trás",
                 "spacingAcross": "Espaçamento de lado a lado, em passos",
-                "spacingDeep": "Espaçamento de frente para trás, em passos",
-                "makeAcrossExact": "Tornar exato o espaçamento de lado a lado",
-                "makeDeepExact": "Tornar exato o espaçamento de frente para trás"
+                "spacingDeep": "Espaçamento de frente para trás, em passos"
             }
         },
         "circle": "Círculo",
@@ -1294,6 +1292,7 @@
                 "title": "Reembaralhar: um novo arranjo"
             },
             "scrubTip": "{label}: clique para digitar, arraste para alterar",
+            "snapTip": "{label}: clique para ajustar a meio passo, arraste para mudar",
             "seed": {
                 "copied": "Copiada",
                 "copy": "Copiar a semente",
@@ -1303,8 +1302,7 @@
                 "label": "Semente"
             },
             "steps": "passos",
-            "turn": "Giro, em graus no sentido horário",
-            "followsShape": "{label}: {value}, segue a forma. {action}"
+            "turn": "Giro, em graus no sentido horário"
         },
         "field": {
             "stepLimit": "{steps} por 5"

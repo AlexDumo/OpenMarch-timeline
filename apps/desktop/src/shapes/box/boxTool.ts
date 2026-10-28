@@ -27,7 +27,8 @@ import {
     handleKeysOf,
     insideBox,
     moveBox,
-    swayOutline,
+    keptOutline,
+    halfStep,
     snapToGrid,
     stretchBox,
     withBoxFrame,
@@ -55,8 +56,10 @@ export const boxTool: ToolKind<BoxParams> = {
             ),
         }));
     },
-    dragHandle: (base, n, key, to, env, previous) =>
-        stretchBox(base, n, key as BoxHandleKey, to, env, previous),
+    dragHandle: (base, n, key, to, env) =>
+        stretchBox(base, n, key as BoxHandleKey, to, env),
+    // An outline's spacings are each held as set, the other worked out (#459): no proportion lock
+    ratioLockFor: (params) => boxDistribution(params).mode !== "outline",
     outline: boxCorners,
     snapPoints: (params, n) => [
         ...boxCorners(params, n),
@@ -234,14 +237,12 @@ function outlineIn(
         return withFileCount(next, nearestSides(n, aspect, side).a + 1);
     }
     // The frame kept exactly: across fits the width as typed, deep the depth (owner on #459)
-    const { a, across, deep } = swayOutline(
+    const { a, across, deep } = keptOutline(
         width,
         depth,
         n,
         side,
-        env,
-        true,
-        distribution.exact ?? "across",
+        halfStep(env),
     );
     return { ...withFileCount(next, a + 1), across, deep };
 }

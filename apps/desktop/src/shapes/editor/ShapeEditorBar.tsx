@@ -450,10 +450,11 @@ function numberActions(
                 (b, m, env) => param.scrub(b, target.spots, m, env),
                 param.interval === true,
             ),
-        /** A derived number pressed: it becomes the exact one, the other following (#459) */
-        makeExact: (param: Param) => {
-            if (!param.makeExact) return;
-            target.apply(param.makeExact.apply(target.params, target.spots));
+        /** A "≈" number pressed: onto the nearest half step, as an edit of it (#459) */
+        snap: (param: Param) => {
+            const env = envFor(PLAIN);
+            if (env && param.snap)
+                target.apply(param.snap(target.params, target.spots, env));
         },
         type: (param: Param, text: string) => {
             const env = envFor(PLAIN);
@@ -484,7 +485,7 @@ const NumberChip = memo(function NumberChip({
     canMore: boolean;
     /** The spacings show their glyph */
     glyph: boolean;
-    /** Worked out from the shape: shown as text, not dragged or typed (owner on #459) */
+    /** Shown as about so much: pressing it snaps it to a half step (owner on #459) */
     derived?: boolean;
     actions: ReturnType<typeof numberActions>;
 }) {
@@ -505,48 +506,20 @@ const NumberChip = memo(function NumberChip({
                     <MinusIcon size={12} />
                 </IconButton>
             )}
-            {derived ? (
-                // Follows the frame; pressing it makes this way the exact one (owner on #459)
-                <Tip label={param.makeExact?.label}>
-                    <button
-                        type="button"
-                        className="rounded-4 text-text/60 hover:bg-fg-2 hover:text-accent min-h-24 px-4 tabular-nums"
-                        aria-label={tolgee.t(
-                            "shapes.edit.followsShape",
-                            "{label}: {value}, following the shape. {action}",
-                            {
-                                label: param.label,
-                                value: display,
-                                action: param.makeExact?.label ?? "",
-                            },
-                        )}
-                        data-testid={`shape-editor-${param.key}`}
-                        data-derived
-                        disabled={!param.makeExact}
-                        onClick={() => actions.makeExact(param)}
-                        onKeyDown={(e) => {
-                            // Enter places the shape and Space plays, as on the numbers: here
-                            // they press this button and nothing else (as ScrubNumber does)
-                            if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                actions.makeExact(param);
-                            }
-                        }}
-                    >
-                        {display}
-                    </button>
-                </Tip>
-            ) : (
-                <ScrubNumber
-                    display={display}
-                    axis={param.drag}
-                    label={param.label}
-                    testId={`shape-editor-${param.key}`}
-                    {...scrub}
-                    onType={(text) => actions.type(param, text)}
-                />
-            )}
+            <ScrubNumber
+                display={display}
+                axis={param.drag}
+                label={param.label}
+                testId={`shape-editor-${param.key}`}
+                {...scrub}
+                onType={(text) => actions.type(param, text)}
+                onSnap={
+                    derived && param.snap
+                        ? () => actions.snap(param)
+                        : undefined
+                }
+            />
+
             {param.stepper && (
                 <IconButton
                     label={param.stepper.more}

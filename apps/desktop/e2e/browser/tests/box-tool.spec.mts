@@ -2882,7 +2882,7 @@ test("change: from the keyboard, Tab reaches the Leftover menu, Enter opens it o
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
 });
 
-test("change: Outline spaces the back and front at its across interval, the sides following the frame, and widening it moves marchers onto the long sides (#458, #459)", async ({
+test("change: Outline spaces the back and front at across and the sides at deep; widening it moves only the edge, and pressing the ≈ across shares the marchers out onto the long sides (#458, #459)", async ({
     show,
 }) => {
     const { page } = show;
@@ -2911,22 +2911,28 @@ test("change: Outline spaces the back and front at its across interval, the side
         };
     };
     expect(await sides()).toEqual({ back: 3, left: 3 });
-    // Across is the designer's number; deep follows the frame, shown as about so much and not
-    // to be dragged or typed (owner on #459)
-    await expect(bar.getByTestId("shape-editor-across")).toBeVisible();
-    const deep = bar.getByTestId("shape-editor-deep");
-    await expect(deep).toHaveText(/^≈/);
-    await expect(deep).toHaveAttribute("data-derived");
-    await expect(deep).toHaveAccessibleName(/Make front to back exact/);
+    // Both spacings are shown and set; neither is off the half steps yet
+    const across = bar.getByTestId("shape-editor-across");
+    await expect(across).toBeVisible();
+    await expect(bar.getByTestId("shape-editor-deep")).toBeVisible();
+    await expect(across).not.toHaveText(/^≈/);
 
-    // Widened to about three times as wide: the long sides take the marchers, one interval
+    // Widened to about three times as wide: only the east edge moves, the counts stay, and
+    // across shows as about so much (owner on #459)
     const { handles } = (await shapeOverlay(page))!;
     const maxX = Math.max(...handles.map((h) => h.x));
     const east = handles
         .filter((h) => Math.abs(h.x - maxX) < 1)
         .sort((a, b) => a.y - b.y)[1]!;
-    const to = await toScreen(page, { x: cf.x + 3 * S, y: 0 });
+    // Clear of the lines every 4 steps, so the edge isn't pulled onto one
+    const to = await toScreen(page, { x: cf.x + 2.3 * S, y: 0 });
     await drag(page, east, { x: to.x, y: east.y });
+    expect(await sides()).toEqual({ back: 3, left: 3 });
+    await expect(across).toHaveText(/^≈/);
+    // Pressed, across goes to the nearest half step, and the marchers are shared out again:
+    // the long sides take them
+    await across.click();
+    await expect(across).not.toHaveText(/^≈/);
     const after = await sides();
     expect(after.back).toBeGreaterThan(after.left);
     expect(after).toEqual({ back: 4, left: 2 });
@@ -2939,7 +2945,7 @@ test("change: Outline spaces the back and front at its across interval, the side
     for (const v of nearest) expect(v).toBeCloseTo(nearest[0]!, 6);
 });
 
-test("change: dragging an outline's front changes only its depth: its width, back and sides stay exactly, and the ≈ spacing becomes the exact one from the keyboard (#458, owner on #459)", async ({
+test("change: dragging an outline's front changes only its depth: its width, back and sides stay exactly, and Enter on the ≈ deep puts it on a half step (#458, owner on #459)", async ({
     show,
 }) => {
     const { page } = show;
@@ -2973,11 +2979,11 @@ test("change: dragging an outline's front changes only its depth: its width, bac
                 : a,
         );
     };
-    // The front's handle down by 37 px: only the front moves
+    // The front's handle down by 13 px: only the front moves
     const before = await bounds();
     const across = await bar.getByTestId("shape-editor-across").innerText();
     const s = await handle("s");
-    await drag(page, s, { x: s.x, y: s.y + 37 });
+    await drag(page, s, { x: s.x, y: s.y + 13 });
     const after = await bounds();
     expect(Math.abs(after.left - before.left)).toBeLessThan(1e-6);
     expect(Math.abs(after.right - before.right)).toBeLessThan(1e-6);
@@ -2985,16 +2991,20 @@ test("change: dragging an outline's front changes only its depth: its width, bac
     expect(after.bottom).toBeGreaterThan(before.bottom);
     await expect(bar.getByTestId("shape-editor-across")).toHaveText(across);
 
-    // From the keyboard: Tab to the ≈ spacing and press Enter, and front to back is exact
+    // From the keyboard: the ≈ deep, focused, and Enter puts it on the nearest half step
     const deep = bar.getByTestId("shape-editor-deep");
+    await expect(deep).toHaveText(/^≈/);
     await deep.focus();
     await expect(deep).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(bar.getByTestId("shape-editor-across")).toHaveText(/^≈/);
     await expect(bar.getByTestId("shape-editor-deep")).not.toHaveText(/^≈/);
-    // Now a side's drag changes only the width: the back and front stay exactly
+    // A side's drag changes only the width: the back and front stay exactly
     const was = await bounds();
     const e = await handle("e");
+    // Keyboard focus off the number, so its tooltip doesn't sit over the field
+    await page.evaluate(() =>
+        (document.activeElement as HTMLElement | null)?.blur(),
+    );
     await drag(page, e, { x: e.x + 41, y: e.y });
     const now = await bounds();
     expect(Math.abs(now.top - was.top)).toBeLessThan(1e-6);

@@ -35,6 +35,7 @@ export function ScrubNumber({
     onScrub,
     onScrubEnd,
     onType,
+    onSnap,
 }: {
     /** What the number shows */
     display: string;
@@ -50,6 +51,11 @@ export function ScrubNumber({
     onScrubEnd: (keep: boolean) => void;
     /** Applies typed text; false keeps it open to fix */
     onType: (text: string) => boolean;
+    /**
+     * While the number shows as about so much ("≈"): a click, Enter or Space puts it on the
+     * nearest half step instead of typing (owner on #459). Dragging still drags it.
+     */
+    onSnap?: () => void;
 }) {
     const press = useRef<{
         x: number;
@@ -151,17 +157,28 @@ export function ScrubNumber({
         if (p.dragging) {
             setDragging(false);
             onScrubEnd(keep);
-        } else if (keep) setTyping(editText);
+        } else if (keep) {
+            if (onSnap) onSnap();
+            else setTyping(editText);
+        }
     };
 
     return (
         <span ref={wrapper} data-scrub-number>
             <Tip
-                label={tolgee.t(
-                    "shapes.edit.scrubTip",
-                    "{label}: click to type, drag to change",
-                    { label },
-                )}
+                label={
+                    onSnap
+                        ? tolgee.t(
+                              "shapes.edit.snapTip",
+                              "{label}: click to snap to a half step, drag to change",
+                              { label },
+                          )
+                        : tolgee.t(
+                              "shapes.edit.scrubTip",
+                              "{label}: click to type, drag to change",
+                              { label },
+                          )
+                }
             >
                 <button
                     type="button"
@@ -180,14 +197,18 @@ export function ScrubNumber({
                     onPointerCancel={() => up(false)}
                     onLostPointerCapture={() => up(true)}
                     onClick={(e) => {
-                        // Not a pointer (Tab from the number before, or a script): type into it
-                        if (e.detail === 0) setTyping(editText);
+                        // Not a pointer (Tab from the number before, or a script): type into it,
+                        // or snap a "≈" one
+                        if (e.detail !== 0) return;
+                        if (onSnap) onSnap();
+                        else setTyping(editText);
                     }}
                     onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
                             e.stopPropagation();
-                            setTyping(editText);
+                            if (onSnap) onSnap();
+                            else setTyping(editText);
                         }
                     }}
                 >

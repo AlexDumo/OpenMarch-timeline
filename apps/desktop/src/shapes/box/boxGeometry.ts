@@ -23,7 +23,7 @@ import {
     outlineSides,
     type OutlineSides,
 } from "../distribute/outline";
-import type { FieldLines, ToolEnv } from "../tool/toolKind";
+import type { ToolEnv } from "../tool/toolKind";
 import { pivotOf } from "../frame/pivot";
 import {
     fieldToFrame,
@@ -206,24 +206,14 @@ export function outlineFilesRange(
     return { min: min + 1, max: max + 1 };
 }
 
-/** Which of an outline's spacings is the designer's: side to side, or front to back */
-export type OutlineExact = "across" | "deep";
+/** One of an outline's two ways: side to side (across) or front to back (deep) */
+export type OutlineAxis = "across" | "deep";
 
 /**
- * Which of `p`'s own spacings is the designer's (#458, owner on #459): an outline's choice, side
- * to side by default; anything else sets both
- */
-export function exactOf(p: BoxParams): OutlineExact {
-    const d = boxDistribution(p);
-    return d.mode === "outline" && d.exact === "deep" ? "deep" : "across";
-}
-
-/**
- * How an outline's spacing works (#458, owner on #459): one way is the designer's interval
- * (`exact`, side to side by default), exact on its two sides; the other follows the frame, that
- * way's spacing being the frame's length over its gaps. Those gaps are the count whose spacing
- * comes nearest the exact interval. The total stays (a + b = ⌈n/2⌉), so this picks the split:
- * `length` is the frame's length the other way.
+ * How an outline is shared out when one of its spacings is set (#458, owner on #459): that
+ * spacing (`interval`, the `held` way's) is held as given, and so is the frame's length the other
+ * way (`length`). The other way's gaps are the count whose spacing comes nearest the held one,
+ * never under half a step, and the held way takes the rest (a + b = ⌈n/2⌉).
  */
 export function swaySides(
     length: number,
@@ -231,14 +221,14 @@ export function swaySides(
     n: number,
     side: GapSide,
     half: number,
-    exact: OutlineExact = "across",
+    held: OutlineAxis,
     /** The split it had: kept until another fits clearly better ({@link SWAY_BAND}) */
     current?: number,
 ): { readonly a: number; readonly b: number } {
     const sum = Math.ceil(n / 2);
     const { min, max } = acrossRange(n, side);
     const scoreOf = (a: number) => {
-        const gaps = exact === "across" ? sum - a : a;
+        const gaps = held === "across" ? sum - a : a;
         const follows = length / gaps;
         // Never under half a step, unless no count manages it
         return (
@@ -262,28 +252,23 @@ export function swaySides(
 }
 
 /**
- * How much better (in log of the spacing ratio, about 4%) another split must fit before a drag
- * or a spacing change moves marchers between sides: a wobble at a boundary would otherwise move
+ * How much better (in log of the spacing ratio, about 4%) another split must fit before a
+ * spacing change moves marchers between sides: one a hair from a boundary would otherwise move
  * most of them round the loop (review of #459)
  */
 export const SWAY_BAND = 0.04;
 
 /**
- * An outline round a `width` × `depth` frame (#458, owner on #459): of the splits, the one whose
- * following spacing comes nearest its exact one, the exact interval fitting its length on the
- * ladder, or exactly (`exactly`, as it fits) for a switch to Outline, which keeps the frame as
- * drawn
+ * An outline round a `width` × `depth` frame kept exactly, as a switch to Outline does (#458,
+ * owner on #459): of the splits, the one whose two spacings, each its length over its gaps, come
+ * nearest each other (never under half a step: the frame grows that way if it must)
  */
-export function swayOutline(
+export function keptOutline(
     width: number,
     depth: number,
     n: number,
     side: GapSide,
-    env: ToolEnv,
-    exactly = false,
-    exact: OutlineExact = "across",
-    /** The split it had: kept until another fits clearly better ({@link SWAY_BAND}) */
-    current?: number,
+    half: number,
 ): {
     readonly a: number;
     readonly b: number;
@@ -292,46 +277,19 @@ export function swayOutline(
 } {
     const sum = Math.ceil(n / 2);
     const { min, max } = acrossRange(n, side);
-    const half = halfStep(env);
-    /** Split `a`: its intervals, how near the following one comes, how far the exact way misses */
-    const scoreOf = (a: number) => {
-        const b = sum - a;
-        // Exactly: the interval that fits, kept as it is so the frame is the one drawn
-        const fit = (v: number) =>
-            exactly ? Math.max(v, half) : snapInterval(v, env);
-        const across = exact === "across" ? fit(width / a) : width / a;
-        const deep = exact === "deep" ? fit(depth / b) : depth / b;
-        const follows = exact === "across" ? deep : across;
-        const score =
-            (follows < half - 1e-9 ? 1e6 : 0) +
-            Math.abs(Math.log(Math.max(deep, 1e-9) / Math.max(across, 1e-9)));
-        const off =
-            exact === "across"
-                ? Math.abs(a * across - width)
-                : Math.abs(b * deep - depth);
-        return { a, across, deep, score, off };
-    };
-    let best: ReturnType<typeof scoreOf> | null = null;
+    let best: { a: number; score: number } | null = null;
     for (let a = min; a <= max; a++) {
-        const c = scoreOf(a);
-        if (
-            best === null ||
-            c.score < best.score - 1e-9 ||
-            (Math.abs(c.score - best.score) <= 1e-9 && c.off < best.off - 1e-9)
-        )
-            best = c;
+        const across = width / a;
+        const deep = depth / (sum - a);
+        const score =
+            (Math.min(across, deep) < half - 1e-9 ? 1e6 : 0) +
+            Math.abs(Math.log(Math.max(deep, 1e-9) / Math.max(across, 1e-9)));
+        if (best === null || score < best.score - 1e-9) best = { a, score };
     }
-    let chosen = best!;
-    if (current !== undefined && current >= min && current <= max) {
-        const kept = scoreOf(current);
-        if (kept.score <= chosen.score + SWAY_BAND) chosen = kept;
-    }
-    const { a } = chosen;
+    const a = best!.a;
     const b = sum - a;
-    // The following spacing never under half a step: the frame grows that way (review of #459)
-    const across =
-        exact === "deep" ? Math.max(chosen.across, half) : chosen.across;
-    const deep = exact === "across" ? Math.max(chosen.deep, half) : chosen.deep;
+    const across = Math.max(width / a, half);
+    const deep = Math.max(depth / b, half);
     return {
         a,
         b,
@@ -341,54 +299,39 @@ export function swayOutline(
 }
 
 /**
- * The outline with its exact interval set to `value` (#458): its length the other way kept, the
- * gaps that way chosen again so its spacing comes nearest ({@link swaySides}), the exact way's
- * sides taking the rest
+ * The outline with its `which` spacing set to `value` (#458, owner on #459): whatever was touched
+ * is held, and the rest worked out once. That spacing is held exactly as given, and so is the
+ * frame's length the other way; the split is chosen again ({@link swaySides}, or `split` as
+ * given, for a pull's straight lines), that way's length becomes its gaps times `value`, and the
+ * other spacing is its length over its gaps, never under half a step.
  */
-export function outlineWithExact(
+export function outlineWithSpacing(
     p: BoxParams,
     n: number,
+    which: OutlineAxis,
     value: number,
     env: ToolEnv,
+    split?: number,
 ): BoxParams {
     const d = boxDistribution(p);
     if (d.mode !== "outline" || n < OUTLINE_MIN)
         return { ...p, across: value, deep: value };
-    const exact = exactOf(p);
     const span = spanOf(p, n);
     const length =
-        exact === "across"
+        which === "across"
             ? (span.ranks - 1) * p.deep
             : (span.files - 1) * p.across;
     const half = halfStep(env);
-    const { a, b } = swaySides(
-        length,
-        value,
-        n,
-        d.oddGap.side,
-        half,
-        exact,
-        span.files - 1,
-    );
-    // The following spacing never under half a step: the frame grows that way (review of #459)
+    const sum = Math.ceil(n / 2);
+    const a =
+        split ??
+        swaySides(length, value, n, d.oddGap.side, half, which, span.files - 1)
+            .a;
+    const b = sum - a;
     return {
         ...withFileCount(p, a + 1),
-        across: exact === "across" ? value : Math.max(length / a, half),
-        deep: exact === "deep" ? value : Math.max(length / b, half),
-    };
-}
-
-/**
- * The outline with `exact` the way its spacing is the designer's (#458, owner on #459), its
- * numbers and frame as they are: the first edit puts the newly exact interval on half steps
- */
-export function withOutlineExact(p: BoxParams, exact: OutlineExact): BoxParams {
-    const d = boxDistribution(p);
-    if (d.mode !== "outline") return p;
-    const { exact: _was, ...rest } = d;
-    return {
-        ...p,
-        distribution: exact === "deep" ? { ...rest, exact } : rest,
+        across: which === "across" ? value : Math.max(length / a, half),
+        deep: which === "deep" ? value : Math.max(length / b, half),
     };
 }
 
@@ -969,8 +912,6 @@ export function stretchBox(
     key: BoxHandleKey,
     to: XY,
     env: ToolEnv,
-    /** What this drag made a moment ago: an outline's split holds until another fits clearly better */
-    previous?: BoxParams,
 ): BoxParams {
     if (isSpread(base))
         return inBoxAxes(
@@ -1005,10 +946,8 @@ export function stretchBox(
                     n,
                     key,
                     fieldToFrame(boxFrame(base, n), to),
-                    d.oddGap.side,
                     flatEnv,
                     field,
-                    previous && spanOf(previous, n).files - 1,
                 ),
             // Its fixed corner and sides stay exactly where they were: a drag one way never
             // shifts the other (owner on #459)
@@ -1083,38 +1022,31 @@ function inBoxAxes(
 }
 
 /**
- * {@link stretchBox} for an outline (#458, owner on #459), in its own axes: the opposite corner
- * or side stays put. One way is the designer's interval, on half steps; the other follows the
- * frame ({@link exactOf}). A drag that changes the exact way's length picks the split whose
- * following spacing comes nearest the exact one ({@link swayOutline}). A drag of the other way
- * alone changes only that way's length: the counts, the exact interval and the frame's other
- * edges stay exactly where they are, its spacing squeezing or stretching (owner on #459). A side
- * handle keeps the other axis's first corner where it was. A moving corner near a field line
- * lands on it: the exact interval solved so it does, and the following length (which has no
- * ladder) the same way within the pull radius (#425, #446).
+ * {@link stretchBox} for an outline (#458, owner on #459): whatever is dragged follows the
+ * pointer, and only that changes. The dragged edge's length is what the drag makes it, its
+ * spacing that length over its gaps (shown as about so much while it's off half steps); the
+ * counts, the other way's spacing and every other edge stay exactly where they are. No spacing
+ * under half a step: the edge stops there. A moving corner near a field line lands on it, the
+ * dragged length (no ladder) solved so it does, within the pull radius (#425, #446).
  */
 function stretchOutline(
     base: BoxParams,
     n: number,
     key: BoxHandleKey,
     to: XY,
-    side: GapSide,
     env: ToolEnv,
     field: BoxField | undefined,
-    /** The split the drag had a moment ago, held within the dead band */
-    current?: number,
 ): BoxParams {
     const f = footprintOf(base, n);
-    const exact = exactOf(base);
     const movesX = key.includes("e") || key.includes("w");
     const movesY = key.includes("n") || key.includes("s");
-    const movesExact = exact === "across" ? movesX : movesY;
-    const movesFollowing = exact === "across" ? movesY : movesX;
     const anchor = {
         x: key.includes("e") ? f.left : f.right,
         y: key.includes("s") ? f.top : f.bottom,
     };
     const half = halfStep(env);
+    const span = spanOf(base, n);
+    const gaps = { x: span.files - 1, y: span.ranks - 1 };
     const sign = {
         x: movesX ? signOf(to.x - anchor.x) : 1,
         y: movesY ? signOf(to.y - anchor.y) : 1,
@@ -1123,91 +1055,47 @@ function stretchOutline(
         x: movesX ? anchor.x : f.left,
         y: movesY ? anchor.y : f.top,
     };
-    /** The outline with `a` gaps across, its exact interval and its following length */
-    const build = (a: number, interval: number, length: number) => {
-        const b = Math.ceil(n / 2) - a;
-        // Never under half a step: the frame grows that way instead (review of #459)
-        const follows = (gaps: number) =>
-            length > 0 ? Math.max(length / gaps, half) : interval;
-        return boxFrom(
+    /** The outline `width` × `depth`, its spacings those over its gaps, never under half a step */
+    const build = (width: number, depth: number) =>
+        boxFrom(
             start,
             sign,
-            a + 1,
-            exact === "across" ? interval : follows(a),
-            exact === "deep" ? interval : follows(b),
+            span.files,
+            movesX ? Math.max(width / gaps.x, half) : base.across,
+            movesY ? Math.max(depth / gaps.y, half) : base.deep,
             n,
             env,
             boxDistribution(base),
         );
-    };
-    const width = movesX ? Math.abs(to.x - anchor.x) : f.right - f.left;
-    const depth = movesY ? Math.abs(to.y - anchor.y) : f.bottom - f.top;
-    const length = exact === "across" ? depth : width;
-    // Only the following length changes when only that way is dragged: the rest stays as it is
-    const sway = movesExact
-        ? swayOutline(width, depth, n, side, env, false, exact, current)
-        : { a: spanOf(base, n).files - 1, ...base };
-    const a = sway.a;
-    const interval = sway[exact];
-    if (!field || env.pull === false || env.shift)
-        return build(a, interval, length);
-    const exactLength = exact === "across" ? width : depth;
-    const pulled = pullOutline(
-        (v, l) => boxCorners(build(a, v, l), n).map(field.toField),
-        { interval, length },
-        {
-            exact: movesExact
-                ? exactLength / (exact === "across" ? a : Math.ceil(n / 2) - a)
-                : null,
-            following: movesFollowing,
-            gaps: exact === "across" ? Math.ceil(n / 2) - a : a,
-        },
-        field.lines,
-        env,
-    );
-    return build(a, pulled.interval, pulled.length);
-}
-
-/**
- * An outline's numbers after the pull (#425, #446) for a stretch: `corners(interval, length)` its
- * corners on the field. The exact interval solved so a moving corner lands on a line, from where
- * the drag has it (`moves.exact`, or null when that way isn't dragged); then the following length,
- * which has no ladder, landing on a line within the pull radius when that way is dragged. Neither
- * under half a step.
- */
-function pullOutline(
-    corners: (interval: number, length: number) => readonly XY[],
-    at: { readonly interval: number; readonly length: number },
-    moves: {
-        readonly exact: number | null;
-        readonly following: boolean;
-        readonly gaps: number;
-    },
-    lines: FieldLines,
-    env: ToolEnv,
-): { interval: number; length: number } {
-    const half = halfStep(env);
-    let { interval, length } = at;
-    if (moves.exact !== null)
-        interval =
-            pullValue(
-                (v) => corners(v, length),
-                moves.exact,
-                lines,
-                env,
-                (v) => v >= half - 1e-9,
-            ) ?? interval;
-    if (moves.following)
-        length =
-            pullValue(
-                (v) => corners(interval, v),
-                length,
-                lines,
-                env,
-                (v) => v / moves.gaps >= half - 1e-9,
-                Infinity,
-            ) ?? length;
-    return { interval, length };
+    let width = movesX ? Math.abs(to.x - anchor.x) : f.right - f.left;
+    let depth = movesY ? Math.abs(to.y - anchor.y) : f.bottom - f.top;
+    if (field && env.pull !== false && !env.shift) {
+        const lines = field.lines;
+        const corners = (w: number, d: number) =>
+            boxCorners(build(w, d), n).map(field.toField);
+        // The dragged lengths have no ladder: an edge lands on a line within the pull radius
+        if (movesX)
+            width =
+                pullValue(
+                    (v) => corners(v, depth),
+                    width,
+                    lines,
+                    env,
+                    (v) => v / gaps.x >= half - 1e-9,
+                    Infinity,
+                ) ?? width;
+        if (movesY)
+            depth =
+                pullValue(
+                    (v) => corners(width, v),
+                    depth,
+                    lines,
+                    env,
+                    (v) => v / gaps.y >= half - 1e-9,
+                    Infinity,
+                ) ?? depth;
+    }
+    return build(width, depth);
 }
 
 /** {@link stretchBox} in the box's own axes, `to` in them too */
@@ -1416,7 +1304,6 @@ export function moveBox(
     delta: XY,
     env: ToolEnv,
 ): BoxParams {
-    base = onHalfStepsIfOutline(base, env);
     const by =
         env.snap && !squareToField(base.rotation)
             ? {
@@ -1432,19 +1319,6 @@ export function moveBox(
         n,
         env,
     );
-}
-
-/**
- * An outline whose across interval is off the half steps (kept exactly by a switch to Outline)
- * back on them, about its center: the first edit after such a switch puts
- * the box on half steps (owner on #458). Anything else as it is, and nothing without snap.
- */
-function onHalfStepsIfOutline(p: BoxParams, env: ToolEnv): BoxParams {
-    if (!env.snap || boxDistribution(p).mode !== "outline") return p;
-    // The exact interval is the designer's; the other follows the frame, so it stays (#459)
-    const key = exactOf(p);
-    const interval = snapInterval(p[key], env);
-    return interval === p[key] ? p : { ...p, [key]: interval };
 }
 
 /** The box with `delta` more files (fewer when negative): same intervals, grown from the pivot */
@@ -1476,38 +1350,9 @@ export function resizeFiles(
             : { min: 1, max: Math.max(1, n) };
     const clamped = Math.min(max, Math.max(min, Math.round(files)));
     if (clamped === acrossOf(p, n)) return p;
-    // An outline keeps its length the following way, that way's spacing following it, and its
-    // exact interval goes back on half steps once it's edited (#458, owner on #459)
-    let outline = {};
-    if (d.mode === "outline" && n >= OUTLINE_MIN) {
-        const exact = exactOf(p);
-        const span = spanOf(p, n);
-        const a = clamped - 1;
-        const b = Math.ceil(n / 2) - a;
-        outline =
-            exact === "across"
-                ? {
-                      across: snapInterval(p.across, env),
-                      deep: ((span.ranks - 1) * p.deep) / Math.max(1, b),
-                  }
-                : {
-                      across: ((span.files - 1) * p.across) / Math.max(1, a),
-                      deep: snapInterval(p.deep, env),
-                  };
-        // The following spacing never under half a step: the count stops there (review of
-        // #459), as it does at the ends of its range
-        const follows =
-            exact === "across"
-                ? (outline as { deep: number }).deep
-                : (outline as { across: number }).across;
-        if (follows < halfStep(env) - 1e-9) return p;
-    }
-    return grownFromPivot(
-        p,
-        { ...withFileCount(p, clamped), ...outline },
-        n,
-        env,
-    );
+    // A count changed is what's touched: both spacings stay as they are, an outline's too, and
+    // the lengths follow (#458, owner on #459)
+    return grownFromPivot(p, withFileCount(p, clamped), n, env);
 }
 
 /**

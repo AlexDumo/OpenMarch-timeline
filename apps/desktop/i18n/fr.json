@@ -1174,9 +1174,7 @@
                 "short": "{count} en moins",
                 "size": "Taille, latéralement × d'avant en arrière",
                 "spacingAcross": "Espacement latéral, en pas",
-                "spacingDeep": "Espacement d'avant en arrière, en pas",
-                "makeAcrossExact": "Rendre l'espacement latéral exact",
-                "makeDeepExact": "Rendre l'espacement d'avant en arrière exact"
+                "spacingDeep": "Espacement d'avant en arrière, en pas"
             }
         },
         "circle": "Cercle",
@@ -1294,6 +1292,7 @@
                 "title": "Remélanger : une nouvelle disposition"
             },
             "scrubTip": "{label} : cliquez pour saisir, glissez pour modifier",
+            "snapTip": "{label} : cliquez pour caler sur un demi-pas, faites glisser pour changer",
             "seed": {
                 "copied": "Copiée",
                 "copy": "Copier la graine",
@@ -1303,8 +1302,7 @@
                 "label": "Graine"
             },
             "steps": "pas",
-            "turn": "Rotation, en degrés dans le sens horaire",
-            "followsShape": "{label} : {value}, suit la forme. {action}"
+            "turn": "Rotation, en degrés dans le sens horaire"
         },
         "field": {
             "stepLimit": "{steps} à 5"

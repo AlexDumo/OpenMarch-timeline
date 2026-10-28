@@ -193,10 +193,7 @@ export function pointerMove(state: ToolState, at: XY, env: ToolEnv): ToolState {
             ? { ...state, params: g.before.params }
             : { ...state, params };
     }
-    return {
-        ...state,
-        params: dragShape(state.kind, n, g, at, env, state.params),
-    };
+    return { ...state, params: dragShape(state.kind, n, g, at, env) };
 }
 
 /**

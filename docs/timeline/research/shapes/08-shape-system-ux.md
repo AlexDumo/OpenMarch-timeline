@@ -320,34 +320,29 @@ Guardrails for shapes with unassigned spots later (#358):
   footprint in half steps. Resize handles snap the spacing to half steps (Alt for hundredths, still
   catching the field's lines; Cmd/Ctrl for no snapping, owner on #453), with a
   length readout while dragging a long shape. There are no percentage scale buttons anywhere.
-- **Outline: one way is the interval, the other follows the frame** (#458; owner on #459, as
-  drill writers do it). By default side to side (across) is the designer's number: the back and
-  front stand exactly at it (half steps; Alt fine, Cmd/Ctrl free). The left and right sides
-  follow the frame: their spacing is the depth over their gaps, the count of gaps being
-  whichever brings it nearest the across interval, never under half a step. So a box twice as
-  long as deep has about twice as many on its long sides, a marcher on every corner, and an odd
-  count's leftover spot still goes on the side the Leftover menu picks. The floating editor
-  shows the following spacing as about so much ("≈1.8"); pressing it (a button, Tab and Enter,
-  "Make front to back exact") makes that way the exact one and the other follow, everything
-  mirrored. The choice is stored with the outline (`exact: "deep"`, absent for across), kept
-  through mode switches and in saved shapes. No proportion lock for an outline.
-  - **Dragging the following way changes only that length** (owner on #459): the exact
-    interval, the counts and every other edge stay exactly where they are, and the following
-    spacing squeezes or stretches smoothly (never under half a step: the frame stops growing
-    smaller there). A drag of the exact way (or a corner) picks the split whose following
-    spacing comes nearest the exact one, a marcher moving between sides only when another count
-    fits clearly better (a dead band of about 4%, so a wobble at the boundary moves nobody); who
-    goes where is then worked out again. A side edge near a yard line or hash lands on it: the
-    exact interval solved so the corner does, the following length (no ladder) within the pull
-    radius.
-  - **Switching to Outline keeps the frame** (owner on #458): the exact interval fits its length
-    exactly, even off the half steps (31 round 7 × 6 steps: about 0.78), and the other follows,
-    so a mode switch keeps the box drawn as #449 asks.
-  - **The first edit puts the exact interval back on half steps**: a handle drag of the exact
-    way, a spacing drag or − / +, a count − / + or a move. A count − / + keeps the following
-    length; it stops where the following spacing would go under half a step. The command bar
-    doesn't ask the following spacing, and marks one typed for it as not applying.
-  - Outlines stored before keep their numbers until they're edited.
+- **Outline: what's touched is held, the rest worked out once** (#458; owner on #459). The
+  back and front stand at the across spacing, the sides at the deep spacing, a marcher on every
+  corner, and an odd count's leftover spot on the side the Leftover menu picks. A box twice as
+  long as deep gets about twice as many on its long sides. There is no "exact way" to choose:
+  - **Setting a spacing** (typed, − / +, or dragged, either one) holds it as given (half steps,
+    unless typed or with Alt) and holds the frame's length the other way. The split is chosen
+    once: the other way's gaps are the count whose spacing comes nearest the one set (never under
+    half a step, and only when another fits clearly better: a 4% dead band). The set way's
+    length becomes its gaps times the spacing, and the other spacing is its length over its gaps.
+    Doing it again changes nothing. Who goes where is worked out again when the split changes.
+  - **Dragging an edge** moves only that edge: its length follows the pointer, its spacing is
+    that length over its gaps, and the counts, the other spacing and every other edge stay
+    exactly where they are. The edge stops where its spacing would go under half a step, and
+    lands on a yard line or hash within the pull radius.
+  - **A spacing off the half steps shows as about so much** ("≈1.8"). Both spacings are always
+    shown and set. Pressing a "≈" number (click, Enter or Space) puts it on the nearest half step,
+    as an edit of it. Dragging it still drags it. No proportion lock for an outline.
+  - **Switching to Outline keeps the frame** (owner on #458): the split whose two spacings come
+    nearest each other, each its length over its gaps, so a mode switch keeps the box drawn as
+    #449 asks.
+  - **A count changed** (− / +) keeps both spacings; the lengths follow.
+  - Outlines stored before keep their numbers until edited (an `exact` that some builds of #459
+    wrote is read past).
 - **The pivot.** A 3 × 3 grid (the floating editor's pivot menu for a shape, the inspector for a
   plain selection), the center by default. On the field, Cmd/Ctrl-drag
   from the center dot pulls the pivot out into its own yellow crosshair, which can then be

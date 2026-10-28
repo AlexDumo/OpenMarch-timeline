@@ -1940,9 +1940,7 @@
                 "short": "{count} short",
                 "size": "Size, across × deep",
                 "spacingAcross": "Side-to-side spacing, in steps",
-                "spacingDeep": "Front-to-back spacing, in steps",
-                "makeAcrossExact": "Make side to side exact",
-                "makeDeepExact": "Make front to back exact"
+                "spacingDeep": "Front-to-back spacing, in steps"
             }
         },
         "circle": "Circle",
@@ -2036,6 +2034,7 @@
                 "title": "Recalculate who goes where, by least travel"
             },
             "scrubTip": "{label}: click to type, drag to change",
+            "snapTip": "{label}: click to snap to a half step, drag to change",
             "seed": {
                 "copied": "Copied",
                 "copy": "Copy the seed",
@@ -2045,8 +2044,7 @@
                 "label": "Seed"
             },
             "steps": "steps",
-            "turn": "Turn, in degrees clockwise",
-            "followsShape": "{label}: {value}, following the shape. {action}"
+            "turn": "Turn, in degrees clockwise"
         },
         "placed": {
             "label": "{name} · {interval} steps",

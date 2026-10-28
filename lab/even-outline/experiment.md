@@ -2,53 +2,50 @@
 # The lab reads this file when this branch's test build is published.
 # Keep `id` stable: feedback is filed under it.
 id: even-outline
-title: Outline with a hard side-to-side interval and sides that sway
-summary: A box in Outline now stands its back and front exactly at your side-to-side spacing, and its sides follow the box's depth, about as far apart. A long side gets more marchers than a short one. Switching to Outline keeps the box you drew.
+title: Outline that keeps what you set and works out the rest
+summary: A box in Outline keeps whatever you just touched and works out the rest once. Set a spacing and the marchers are shared out so the other spacing comes as near it as it can. Drag an edge and only that edge moves. A spacing off the half steps shows as "≈" and a click puts it on one.
 status: open
 variants: []
 questions:
+  - Set the side-to-side spacing of an outline to something quite different (for example 2 to 4). Did the result, and the way marchers moved between sides, make sense?
+  - Drag an edge of an outline. Did anything other than that edge move?
+  - When a spacing showed "≈", was it clear what that meant, and that a click puts it on a half step?
   - Switch a long box to Outline. Do the long sides get more marchers than the short ones, about as many as you'd expect?
-  - Drag the front or back handle. Did the sides' spacing squeeze and stretch the way you'd expect, and did marchers move between sides at sensible moments?
-  - The front-to-back spacing shows as "≈". Pressing it makes front to back the exact spacing instead. Did you find that, and does it work the way you'd expect?
-  - Drag the front handle. Did anything other than the front move?
-  - After switching to Outline, the side-to-side spacing may be an odd number such as 0.78. Did that bother you, or was keeping the box you drew more useful?
 ---
 
-This is how drill writers usually build an outline: **side to side is the hard
-interval, front to back is whatever the box's depth makes it.**
+An outline now follows one simple rule: **whatever you just touched is kept,
+and only the rest is worked out, once.**
 
 **New in this build:**
 
-- **The back and front stand exactly at the side-to-side spacing**, the number
-  you set (half steps; Alt for fine control, Cmd or Ctrl for no snapping).
-- **The sides follow the box's depth.** Their spacing is the depth shared out
-  between them, with as many marchers as brings it nearest the side-to-side
-  spacing. A box twice as long as it is deep gets about twice as many on its
-  long sides. There's always a marcher on every corner.
-- The floating editor shows the **front-to-back spacing as "≈ 1.8"**: it
-  follows the box. **Press it** (or Tab to it and press Enter) to make front to
-  back the exact spacing instead; then side to side shows "≈" and follows.
-- **Dragging the front or back** changes only the depth: the width, the back
-  and the sides stay exactly where they are, and the sides' spacing squeezes
-  and stretches smoothly.
-- **Dragging a side or a corner** shares the marchers out to suit the new
-  shape, keeping the side-to-side spacing on half steps.
-- **Switching to Outline keeps the box you drew.** The side-to-side spacing is
-  whatever fits exactly, even if that's not a half step (for example 0.78).
-  The first edit puts it back on half steps.
+- **Set a spacing** (type it, press − or +, or drag it), side to side or front
+  to back. That spacing is kept, and so is the box's length the other way. The
+  marchers are shared out between the sides so the other spacing comes as near
+  the one you set as it can, and that other spacing is worked out. Doing the
+  same edit again changes nothing.
+- **Drag an edge**: only that edge moves. The counts on each side, the other
+  spacing and the other edges stay exactly where they are. The dragged side's
+  spacing follows the drag.
+- **A spacing that isn't on a half step shows as "≈"** (for example "≈1.83").
+  Click it (or Tab to it and press Enter) to put it on the nearest half step.
+  Both spacings are always shown, and you can set either one.
+- **Switching to Outline keeps the box you drew**, with the marchers shared out
+  so the two spacings come as near each other as they can.
 - With an odd count, the **Leftover** menu still decides which side takes the
   extra space.
 
 **What to try**
 
 - Draw a long box of 20 or more, then pick **Outline** in the mode menu.
-- Drag the front handle slowly. Watch the sides' spacing and when a marcher
-  moves to another side.
-- Drag the east handle to make it longer, then shorter.
-- Drag the side-to-side spacing, and press its − and +.
+- Type a very different side-to-side spacing, then a front-to-back one.
+- Drag each edge in and out. Only that edge should move.
+- Click a "≈" spacing to put it on a half step.
 - Open a show that already has an outline: it should look as it did until you
   change it.
 
 **Good to know**
 
+- Hold **Alt** while dragging a spacing for hundredths, or **Cmd** / **Ctrl**
+  for no snapping. Edges still catch yard lines and hashes unless you hold
+  Cmd or Ctrl.
 - A circle's outline is unchanged.

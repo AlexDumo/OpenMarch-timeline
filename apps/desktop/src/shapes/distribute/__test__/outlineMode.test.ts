@@ -5,7 +5,6 @@ import {
     boxDistribution,
     drawBox,
     onField,
-    stretchBox,
     type BoxParams,
 } from "../../box/boxGeometry";
 import {
@@ -190,14 +189,18 @@ describe("Outline for the box", () => {
         expect([p.across, p.deep]).toEqual([15, 20]);
     });
 
-    it("31 round 7 × 6 steps keep the frame with across off the half steps, and the first edit puts it back on them (owner on #458)", () => {
+    it("31 round 7 × 6 steps keep the frame with across off the half steps; setting a spacing or pressing its ≈ puts that one on half steps (owner on #458, #459)", () => {
         const t = outlined(31, 70, 60);
         const p = t.params as BoxParams;
         expect(p.across % half).not.toBe(0);
-        // + on the spacing: onto half steps
+        // + on the spacing: onto half steps, the rest worked out
         const wider = withSpacing(p, "across", p.across / STEP + 0.5, 31, env);
         expect(wider.across % half).toBe(0);
-        // One more across: onto half steps too
+        // Its ≈ pressed: the nearest half step
+        const across = boxTool.params.find((q) => q.key === "across")!;
+        const snapped = across.snap!(p, 31, env) as BoxParams;
+        expect(snapped.across % half).toBe(0);
+        // A count changed keeps both spacings as they are
         const more = withFieldCount(
             p,
             31,
@@ -205,17 +208,7 @@ describe("Outline for the box", () => {
             onField(p, 31).across + 1,
             env,
         );
-        expect(more.across % half).toBe(0);
-        // A handle drag: onto half steps
-        const e = boxCorners(p, 31).reduce((a, b) => (b.x > a.x ? b : a));
-        const dragged = stretchBox(
-            p,
-            31,
-            "e",
-            { x: e.x + 7, y: boxTool.frameOf(p, 31).center.y },
-            env,
-        );
-        expect(dragged.across % half).toBe(0);
+        expect([more.across, more.deep]).toEqual([p.across, p.deep]);
     });
 
     it("keeps the interval for a single rank or file, which has no space to keep, and goes round as wide as it can", () => {
@@ -391,9 +384,8 @@ describe("picking the gap", () => {
         expect(
             Math.abs((u.params as BoxParams).center.x - (p.center.x - 30)),
         ).toBeLessThanOrEqual(half / 2);
-        // Its across interval back on half steps too, its sides on the grid (review)
+        // Its sides on the grid
         const moved = u.params as BoxParams;
-        expect(moved.across % half).toBe(0);
         for (const c of boxCorners(moved, 13))
             expect(Math.abs(c.x / half - Math.round(c.x / half))).toBeLessThan(
                 1e-9,

@@ -89,18 +89,16 @@ export interface ToolParam<P> {
     /** Stable for the kind: the command bar and saved shapes name the parameter by it */
     readonly key: string;
     /**
-     * Worked out from the shape rather than set: shown, but not dragged, typed or stepped (an
-     * outline's front-to-back spacing, which follows its depth: owner on #459)
+     * Shown as about so much ("≈1.83"): worked out from the shape rather than set, off the half
+     * steps. Still dragged and typed; pressed, it goes to the nearest half step ({@link snap}).
+     * An outline's spacing a drag or the other spacing left there (owner on #459).
      */
-    readonly derived?: (params: P, n: number) => boolean;
+    readonly derived?: (params: P, n: number, stepPx: number) => boolean;
     /**
-     * A derived number's way to become the set one (an outline's "≈" spacing: owner on #459):
-     * its button's name, and the params with it set and the other following
+     * The number put on the nearest half step, as an edit of it: what pressing it does while it
+     * shows as about so much ({@link ToolParam.derived}; an outline's spacing: owner on #459)
      */
-    readonly makeExact?: {
-        readonly label: string;
-        apply(params: P, n: number): P;
-    };
+    readonly snap?: (params: P, n: number, env: ToolEnv) => P;
     /** What it is, for tooltips and screen readers: "Side-to-side spacing, in steps" */
     readonly label: string;
     /**
@@ -187,6 +185,8 @@ export interface ToolKind<P> {
      * ({@link ToolEnv.ratioLocked})
      */
     readonly ratioLock?: boolean;
+    /** Whether this shape offers the ratio lock, when the kind does; always when absent */
+    ratioLockFor?(params: P, n: number): boolean;
     /**
      * The params a drag from `from` to `to` draws, or undefined while the drag is too short.
      * `previous` is what this same drag drew on the last pointer move.
@@ -200,15 +200,7 @@ export interface ToolKind<P> {
     ): P | undefined;
     handles(params: P, n: number): readonly ToolHandle[];
     /** The params with handle `key` dragged to `to`, starting from `base` (the params at press) */
-    dragHandle(
-        base: P,
-        n: number,
-        key: string,
-        to: XY,
-        env: ToolEnv,
-        /** What this drag made a moment ago, for a choice to hold until another fits clearly better */
-        previous?: P,
-    ): P;
+    dragHandle(base: P, n: number, key: string, to: XY, env: ToolEnv): P;
     /** The shape's outline on the field; the frame's four corners when absent */
     outline?(params: P, n: number): readonly XY[];
     /**
