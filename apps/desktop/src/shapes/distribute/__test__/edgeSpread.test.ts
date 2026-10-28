@@ -171,15 +171,55 @@ describe.each(Object.entries(REGIONS))(
 describe("Spread with an edge, too few for an inside", () => {
     it("stands everyone on the edge, still no closer than the interval", () => {
         for (const region of Object.values(REGIONS))
-            for (const n of [3, 4]) {
+            for (const n of [3, 4, 6]) {
                 const { inside } = edgeSplit(region, n);
-                expect(inside).toBe(0);
+                // Six round a circle: five on the rim and one in the middle, its natural shape
+                if (region.key.startsWith("circle") && n === 6)
+                    expect(edgeSplit(region, n)).toEqual({
+                        edge: 5,
+                        inside: 1,
+                    });
+                else expect(inside).toBe(0);
                 const all = spots(region, n, edged(1, n));
                 expect(all).toHaveLength(n);
                 expect(closest(all)).toBeGreaterThanOrEqual(
                     INTERVAL * (1 - 1e-6),
                 );
             }
+    });
+});
+
+describe("Spread with an edge keeps the floor for every seed (#450 review)", () => {
+    /** Thin boxes either way, a short one, and a circle, where a relaxed spread can fall short */
+    const SHAPES: Record<string, Region> = {
+        "10:1": rectRegion(5, 0.5),
+        "1:6": rectRegion(0.5, 3),
+        "4:1": rectRegion(2, 0.5),
+        circle: circleRegion(1),
+    };
+    const PROBED = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 37, 64];
+
+    it.each(Object.entries(SHAPES))(
+        "in a %s box, from 5 to 64, over 200 seeds",
+        (name, region) => {
+            for (const n of PROBED)
+                for (let seed = 1; seed <= 200; seed++) {
+                    const all = spots(region, n, edged(seed, n));
+                    expect(all).toHaveLength(n);
+                    expect(
+                        closest(all),
+                        `${name} ${n} seed ${seed}`,
+                    ).toBeGreaterThanOrEqual(INTERVAL * (1 - 1e-6));
+                }
+        },
+    );
+
+    it("is the same each time where the lattice stands in", () => {
+        // 10:1 at 64, seed 190: the relaxed spread fell short of the floor here before
+        const region = SHAPES["10:1"]!;
+        expect(spots(region, 64, edged(190, 64))).toEqual(
+            spots(region, 64, edged(190, 64)),
+        );
     });
 });
 

@@ -1,6 +1,8 @@
 import type { XY } from "../types";
+import { seeded } from "../geometry/naturalFill";
 import {
     evenSpread,
+    settleAround,
     spreadAround,
     spreadSize,
     type SpreadLayout,
@@ -296,6 +298,78 @@ const rimHolds = (r: number) =>
         ? 1
         : Math.max(1, Math.floor(Math.PI / Math.asin(1 / (2 * r)) + 1e-9));
 
+/** The steps the size goes up by, past the least that fits, until the lattice has room */
+const LATTICE_STEP = 1.005;
+
+/**
+ * The spots of a hex lattice an interval apart over the frame at size `scale` that are an
+ * interval or more from every spot on `edge`: any of them, with the edge, keep the floor. The
+ * lattice is centered on the frame's center. This is the size's guarantee (#450): the frame is
+ * made big enough that it holds the rest of the count.
+ */
+function latticeIn(region: Region, scale: number, edge: readonly XY[]): XY[] {
+    const frame = frameAt(region, scale);
+    const { w, h } = edgeSides(region, scale);
+    const apart = 1 + 1e-9;
+    const rowGap = (apart * Math.sqrt(3)) / 2;
+    const spots: XY[] = [];
+    const rows = Math.ceil(h / rowGap);
+    const cols = Math.ceil(w / apart) + 1;
+    for (let j = -rows; j <= rows; j++)
+        for (let i = -cols; i <= cols; i++) {
+            const p = {
+                x: (i + (Math.abs(j) % 2) / 2) * apart,
+                y: j * rowGap,
+            };
+            if (frame.edgeDistance(p) < 0) continue;
+            if (edge.every((q) => Math.hypot(p.x - q.x, p.y - q.y) >= apart))
+                spots.push(p);
+        }
+    return spots;
+}
+
+/**
+ * `m` of the lattice's spots ({@link latticeIn}), as even as it goes: each next the one farthest
+ * from those taken and the edge, the first picked by the seed. The floor holds by construction.
+ */
+function pickFromLattice(
+    lattice: readonly XY[],
+    edge: readonly XY[],
+    m: number,
+    seed: number,
+): XY[] {
+    const near = lattice.map((p) =>
+        Math.min(
+            Infinity,
+            ...edge.map((q) => Math.hypot(p.x - q.x, p.y - q.y)),
+        ),
+    );
+    const taken: XY[] = [];
+    const used = new Set<number>();
+    let next = Math.floor(seeded(seed * 31 + 7)() * lattice.length);
+    while (taken.length < m) {
+        used.add(next);
+        const p = lattice[next]!;
+        taken.push(p);
+        let best = -1;
+        let far = -1;
+        lattice.forEach((q, i) => {
+            if (used.has(i)) return;
+            near[i] = Math.min(near[i]!, Math.hypot(p.x - q.x, p.y - q.y));
+            if (near[i]! > far) {
+                far = near[i]!;
+                best = i;
+            }
+        });
+        if (best < 0) break;
+        next = best;
+    }
+    return taken;
+}
+
+/** How many rounds the fallback eases its lattice spots apart, the floor kept */
+const SETTLE_ROUNDS = 30;
+
 /** Edge sizes worked out, by region and count */
 const edgeSizes = new Map<string, number>();
 
@@ -327,11 +401,28 @@ export function edgeSize(region: Region, n: number): number {
     // Too small: a side under an interval. Then doubled until it fits, and halved between
     let lo = 0.5 / Math.min(region.bounds.right, region.bounds.bottom);
     let hi = lo;
+    const least = lo;
     while (!fits(hi)) hi *= 2;
     for (let i = 0; i < 60 && hi - lo > hi * 1e-6; i++) {
         const mid = (lo + hi) / 2;
         if (fits(mid)) hi = mid;
         else lo = mid;
+    }
+    // Then up, on steps fixed for the region (so a bigger count never gets a smaller size),
+    // until the lattice inside has room for the rest: the floor's guarantee
+    const step = Math.log(LATTICE_STEP);
+    for (let i = Math.ceil(Math.log(hi / least) / step - 1e-9); ; i++) {
+        const scale = least * Math.exp(i * step);
+        if (scale < hi * (1 - 1e-9)) continue;
+        const edge = sum(edgePlan(region, scale));
+        if (
+            n <= edge ||
+            latticeIn(region, scale, edgeSpots(region, scale, edge)).length >=
+                n - edge
+        ) {
+            hi = scale;
+            break;
+        }
     }
     edgeSizes.set(key, hi);
     if (edgeSizes.size > 200) edgeSizes.delete(edgeSizes.keys().next().value!);
@@ -379,13 +470,38 @@ function edgeSpread(
     const scale = edgeSize(region, n);
     const { edge, inside } = edgeSplit(region, n);
     const onEdge = edgeSpots(region, scale, edge);
-    return {
-        spots: [
-            ...onEdge,
-            ...spreadAround(frameAt(region, scale), onEdge, inside, seed),
-        ],
-        scale,
-    };
+    const frame = frameAt(region, scale);
+    let within = spreadAround(frame, onEdge, inside, seed);
+    // Where the relaxed spread can't keep the floor, spots picked from the lattice the size was
+    // made to hold (so it always can), eased apart only as far as the floor allows
+    if (inside > 0 && closestOf([...onEdge, ...within]) < 1 - 1e-9)
+        within = settleAround(
+            frame,
+            onEdge,
+            pickFromLattice(
+                latticeIn(region, scale, onEdge),
+                onEdge,
+                inside,
+                seed,
+            ),
+            SETTLE_ROUNDS,
+        );
+    return { spots: [...onEdge, ...within], scale };
+}
+
+/** The closest distance between any two of `spots` */
+function closestOf(spots: readonly XY[]): number {
+    let best = Infinity;
+    for (let i = 0; i < spots.length; i++)
+        for (let j = i + 1; j < spots.length; j++)
+            best = Math.min(
+                best,
+                Math.hypot(
+                    spots[i]!.x - spots[j]!.x,
+                    spots[i]!.y - spots[j]!.y,
+                ),
+            );
+    return best;
 }
 
 /**

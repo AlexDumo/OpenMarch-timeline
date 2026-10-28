@@ -666,3 +666,35 @@ export function spreadAround(
     // Back to front, then left to right, so slot numbers read like a page
     return w.points.sort((a, b) => a.y - b.y || a.x - b.x);
 }
+
+/**
+ * `start` (spots at least an interval from each other and from `fixed`) eased apart over
+ * `region` for up to `rounds` rounds, a round kept only while no pair comes closer than an
+ * interval: the floor holds whatever happens (#450's fallback). Spots may go to the edge itself.
+ */
+export function settleAround(
+    region: Region,
+    fixed: readonly XY[],
+    start: readonly XY[],
+    rounds: number,
+): XY[] {
+    const w: Work = {
+        region,
+        seed: 0,
+        k: 1,
+        margins: start.map(() => 0),
+        points: start.map((p) => ({ ...p })),
+        fixed,
+    };
+    const target = hexSpacing(region.area, start.length + fixed.length);
+    for (let round = 0; round < rounds; round++) {
+        const before = w.points.map((p) => ({ ...p }));
+        pushApart(w, 1, target);
+        if (closestOf(w) < 1) {
+            w.points.splice(0, w.points.length, ...before);
+            break;
+        }
+    }
+    // Back to front, then left to right, so slot numbers read like a page
+    return w.points.sort((a, b) => a.y - b.y || a.x - b.x);
+}
