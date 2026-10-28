@@ -4315,6 +4315,59 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
             .poll(async () => (await storedPivots(show)).map((r) => r.pivot))
             .toEqual(["se"]);
     });
+
+    test("change: a spacing change there moves its members, so the box gets its own copy on that page and Page 1 keeps its own", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await selectPage(show, "Page 1");
+        await placeBox(show, 1);
+        const onPage1 = await savedPositions(show, 1);
+        const [before] = await show.query<{ params: string }>(
+            "SELECT params FROM timeline_shape_recipes",
+        );
+
+        await selectPage(show, "Page 2");
+        const member = await marcherScreen(page, 1);
+        await page.mouse.click(member.x, member.y);
+        await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+        const across = await page
+            .getByTestId("shape-editor-across")
+            .innerText();
+        const steps = await undoSteps(show);
+        await typeAcross(page, "5");
+        await expect
+            .poll(async () => (await storedPivots(show)).length)
+            .toBe(2);
+        await waitForIdle(page);
+        expect(await undoSteps(show)).toBe(steps + 1);
+
+        // Page 2's own move holds the copy, its members on its wider spots
+        const recipes = await show.query<{
+            timeline_id: number;
+            params: string;
+        }>(
+            "SELECT timeline_id, params FROM timeline_shape_recipes ORDER BY id",
+        );
+        expect(recipes[0]!.params).toBe(before!.params);
+        const [own] = await show.query<{ start_beat: number }>(
+            "SELECT start_beat FROM timelines WHERE id = ?",
+            recipes[1]!.timeline_id,
+        );
+        expect(own!.start_beat).toBeGreaterThanOrEqual(32);
+        const onPage2 = await savedPositions(show, 2);
+        const width = (ps: Position[]) =>
+            Math.max(...ps.map((p) => p.x)) - Math.min(...ps.map((p) => p.x));
+        expect(width(onPage2)).toBeGreaterThan(width(onPage1));
+        // Page 1 is as it was
+        expect(await savedPositions(show, 1)).toEqual(onPage1);
+        await page.keyboard.press("Escape");
+        await selectPage(show, "Page 1");
+        await page.mouse.click(member.x, member.y);
+        await expect(page.getByTestId("shape-editor-across")).toHaveText(
+            across,
+        );
+    });
 });
 
 test("change: pointing at a cell of the pivot menu previews that pivot on the shape, and leaving it or closing the menu takes the preview away (#437)", async ({
