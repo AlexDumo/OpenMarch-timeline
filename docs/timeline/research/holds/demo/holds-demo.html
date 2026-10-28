@@ -1,0 +1,2169 @@
+<!-- cspell:disable -->
+<!doctype html>
+<html lang="en">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Holds demo</title>
+    <style>
+        :root {
+            --ink: #1f2937;
+            --muted: #6b7280;
+            --move: #3b82f6;
+            --held: #059669;
+            --follow: #9ca3af;
+            --bad: #dc2626;
+            --new: #f59e0b;
+        }
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family:
+                system-ui,
+                -apple-system,
+                sans-serif;
+            margin: 0;
+            color: var(--ink);
+            background: #f8fafc;
+        }
+        header {
+            padding: 10px 14px;
+            background: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+        h1 {
+            font-size: 17px;
+            margin: 0 0 6px;
+        }
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+        }
+        button {
+            font: inherit;
+            font-size: 14px;
+            padding: 7px 11px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            background: #fff;
+            cursor: pointer;
+        }
+        button:active {
+            background: #e2e8f0;
+        }
+        button.on {
+            background: var(--ink);
+            color: #fff;
+            border-color: var(--ink);
+        }
+        button.today.on {
+            background: #475569;
+            border-color: #475569;
+        }
+        button.proposed.on {
+            background: var(--held);
+            border-color: var(--held);
+        }
+        button:disabled {
+            opacity: 0.4;
+        }
+        main {
+            padding: 10px 14px 40px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        .card {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .card h2 {
+            font-size: 15px;
+            margin: 0 0 6px;
+        }
+        svg {
+            width: 100%;
+            height: auto;
+            touch-action: none;
+            user-select: none;
+        }
+        #log {
+            font-size: 14px;
+            min-height: 22px;
+        }
+        #log b {
+            color: var(--held);
+        }
+        #log.warn b {
+            color: var(--bad);
+        }
+        .steps button {
+            text-align: left;
+        }
+        .steps ol {
+            margin: 4px 0 0;
+            padding-left: 20px;
+            font-size: 14px;
+        }
+        .steps li {
+            margin: 4px 0;
+        }
+        .muted {
+            color: var(--muted);
+            font-size: 13px;
+        }
+        .legend span {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-right: 12px;
+            font-size: 13px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr;
+            gap: 10px;
+        }
+        @media (max-width: 800px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        table {
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        td,
+        th {
+            padding: 2px 6px;
+            text-align: right;
+        }
+        .barcell {
+            width: 160px;
+            text-align: left;
+        }
+        .bar {
+            height: 10px;
+            background: var(--move);
+            border-radius: 3px;
+        }
+    </style>
+    <body>
+        <header>
+            <h1>
+                Holds demo
+                <span class="muted"
+                    >(simplified: one layer, pages of 8 counts)</span
+                >
+            </h1>
+            <div class="row">
+                <button id="mToday" class="today">Today (#332)</button>
+                <button id="mProp" class="proposed">Proposed</button>
+                <span class="muted" style="margin-left: 6px">Select:</span>
+                <span id="selChips" class="row"></span>
+                <button id="undo">Undo</button>
+            </div>
+        </header>
+        <main>
+            <div class="card steps" id="scenarioCard">
+                <h2>Scenarios</h2>
+                <div class="row" id="scenarioButtons"></div>
+                <div id="scenarioSteps"></div>
+            </div>
+            <div class="card">
+                <div id="log">
+                    Pick a scenario, or edit freely: drag a selected dot on the
+                    field, or use the buttons.
+                </div>
+            </div>
+            <div class="card">
+                <h2>
+                    Timeline <span class="muted">tap to move the playhead</span>
+                </h2>
+                <div style="overflow-x: auto">
+                    <svg id="tl" style="min-width: 720px"></svg>
+                </div>
+                <div class="row" style="margin-top: 6px">
+                    <button id="prev">◀ count</button>
+                    <input
+                        id="ph"
+                        type="range"
+                        min="0"
+                        max="48"
+                        step="1"
+                        value="0"
+                        style="flex: 1; min-width: 140px"
+                    />
+                    <button id="next">count ▶</button>
+                    <span id="phLabel" style="min-width: 110px"></span>
+                </div>
+                <div class="row" style="margin-top: 6px">
+                    <button id="winBtn">Expert window: off</button>
+                    <span class="muted" id="winHelp"
+                        >When on, the start flag sits where the playhead is now;
+                        move the playhead, then edit.</span
+                    >
+                    <button id="ruleBtn" class="propOnly">
+                        Window inside a hold: window wins
+                    </button>
+                </div>
+                <div class="legend muted" id="legend"></div>
+            </div>
+            <div class="grid">
+                <div class="card">
+                    <h2>
+                        Field
+                        <span class="muted"
+                            >drag a selected dot · counts are the
+                            playhead's</span
+                        >
+                    </h2>
+                    <svg id="field"></svg>
+                    <div class="row" style="margin-top: 6px">
+                        <button data-nudge="-4,0">←</button
+                        ><button data-nudge="4,0">→</button>
+                        <button data-nudge="0,-4">↑</button
+                        ><button data-nudge="0,4">↓</button>
+                        <span class="muted">nudge selected by 4</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <h2>
+                        Commands
+                        <span class="muted"
+                            >for the selected marchers, at the playhead</span
+                        >
+                    </h2>
+                    <div class="row">
+                        <button id="cRemove">Remove keyframe</button>
+                        <button id="cRemoveBack">
+                            Remove keyframe, pages follow back
+                        </button>
+                        <button id="cSplit">Split at playhead</button>
+                        <button id="cPrev">Set to previous page</button>
+                        <button id="cHold" class="propOnly">
+                            Hold from previous page
+                        </button>
+                        <button id="cEndHold" class="propOnly">
+                            Split hold here (ends the hold)
+                        </button>
+                        <button id="cExtend" class="propOnly">
+                            Extend hold back to last arrival
+                        </button>
+                        <button id="cAllHeld" class="propOnly">
+                            Make all selected Held
+                        </button>
+                    </div>
+                    <div
+                        class="muted"
+                        id="selSummary"
+                        style="margin-top: 6px"
+                    ></div>
+                    <div
+                        id="preview"
+                        style="margin-top: 6px; font-size: 13px"
+                    ></div>
+                    <div class="row" style="display: none"></div>
+                    <h2 style="margin-top: 12px">
+                        Steps per count
+                        <span class="muted" id="speedWho"></span>
+                    </h2>
+                    <div id="speed"></div>
+                </div>
+            </div>
+        </main>
+        <script>
+            "use strict";
+            const COUNTS = 48;
+            const PAGES = [0, 8, 16, 24, 32, 40].map((s, i) => ({
+                start: s,
+                end: s + 8,
+                name: "Page " + (i + 2),
+            }));
+            const NAMES = ["B1", "B2", "B3"];
+            const COLORS = ["#1f2937", "#7c3aed", "#0e7490"];
+            let mode = "proposed";
+            let win = null; // Expert window start flag (count) or null
+            let winRule = "window"; // "window": a window starting inside a hold leaves it; "hold": the hold wins
+            let ph = 0;
+            let selected = new Set([0]);
+            let marchers = [];
+            let history = [];
+            const EPS = 1e-6;
+
+            // ---------- model ----------
+            const clone = (o) => JSON.parse(JSON.stringify(o));
+            const same = (a, b) =>
+                Math.abs(a[0] - b[0]) < EPS && Math.abs(a[1] - b[1]) < EPS;
+            const lerp = (a, b, t) => [
+                a[0] + (b[0] - a[0]) * t,
+                a[1] + (b[1] - a[1]) * t,
+            ];
+            const sortRows = (m) => m.rows.sort((a, b) => a.start - b.start);
+
+            function pos(m, b) {
+                let cur = m.home;
+                for (const r of m.rows) {
+                    if (b < r.start) return cur;
+                    if (b <= r.end)
+                        return lerp(
+                            cur,
+                            r.dest,
+                            (b - r.start) / (r.end - r.start),
+                        );
+                    cur = r.dest;
+                }
+                return cur;
+            }
+            const rowEnding = (m, b) => m.rows.find((r) => r.end === b);
+            const rowStarting = (m, b) => m.rows.find((r) => r.start === b);
+            const rowInside = (m, b) =>
+                m.rows.find((r) => r.start < b && b < r.end);
+            const moved = (m, r) => !same(pos(m, r.start), r.dest);
+            const heldAt = (m, b) =>
+                mode === "proposed" &&
+                m.marks.find((k) => k.start < b && b <= k.end);
+            const pageOfFlag = (b) =>
+                PAGES.find((p) => p.start < b && b <= p.end);
+            const pageName = (b) =>
+                b === 0 ? "Page 1" : (pageOfFlag(b)?.name ?? "?");
+
+            function arrivalBefore(m, b) {
+                // the last row end at or before b (or 0)
+                let a = 0;
+                for (const r of m.rows) if (r.end <= b && r.end > a) a = r.end;
+                return a;
+            }
+
+            /**
+             * Keep holds true after an edit (04-anchors): trim where rows now cover; keep if a row ends at the
+             * start; follow a retimed row (same object, new end); delete if a row ended there before (17);
+             * otherwise it's a borrowed hold and stays. Touching or overlapping holds merge.
+             */
+            function normalize(m, before) {
+                sortRows(m);
+                let marks = [];
+                for (const k0 of m.marks) {
+                    const k = { ...k0 };
+                    const was =
+                        before instanceof Map ? before.get(k0) || [] : [];
+                    if (!m.rows.some((r) => r.end === k.start)) {
+                        const retimed = was.find(
+                            (r) => m.rows.includes(r) && r.end !== k.start,
+                        );
+                        if (retimed) k.start = retimed.end;
+                        else if (was.length) continue; // its arrival is gone (decision 17)
+                    }
+                    if (
+                        m.rows.some((r) => r.start < k.start && r.end > k.start)
+                    ) {
+                        const cover = m.rows.find(
+                            (r) => r.start < k.start && r.end > k.start,
+                        );
+                        k.start = cover.end; // a move created over its start: trimmed, now grows out of that end
+                    }
+                    for (const r of m.rows)
+                        if (r.start >= k.start && r.start < k.end)
+                            k.end = r.start; // H-1
+                    if (k.end > k.start) marks.push(k);
+                }
+                marks.sort((a, b) => a.start - b.start);
+                const out = [];
+                for (const k of marks) {
+                    const last = out[out.length - 1];
+                    if (last && k.start <= last.end)
+                        last.end = Math.max(last.end, k.end); // touching or overlapping: one hold
+                    else out.push(k);
+                }
+                m.marks = out;
+            }
+            const arrivalHold = (m, k) =>
+                k.start === 0 || m.rows.some((r) => r.end === k.start);
+            const sourceOf = (m, k) =>
+                pageName(arrivalBefore(m, k.start)) + "'s spot";
+
+            // ---------- edits ----------
+            let lastMsg = [];
+            function say(s) {
+                lastMsg.push(s);
+            }
+
+            function setPosAt(m, b, p) {
+                const name = m.name;
+                if (same(p, pos(m, b))) return;
+                if (win !== null && win < b) return windowEdit(m, win, b, p);
+                if (b === 0) {
+                    m.home = p;
+                    say(`${name}: moved the start position (Page 1).`);
+                    return;
+                }
+                const k = heldAt(m, b);
+                if (k) {
+                    const arr = rowEnding(m, k.start);
+                    if (k.start === 0) m.home = p;
+                    else if (arr) arr.dest = p;
+                    else {
+                        const flagBefore = Math.floor((k.start - 1) / 8) * 8;
+                        const earlierHold = Math.max(
+                            0,
+                            ...m.marks
+                                .filter((x) => x.end <= k.start && x !== k)
+                                .map((x) => x.end),
+                        );
+                        const g0 = Math.max(
+                            arrivalBefore(m, k.start),
+                            earlierHold,
+                            flagBefore,
+                        );
+                        m.rows.push({ start: g0, end: k.start, dest: p });
+                        say(
+                            `<b>${name}: moved the whole Held hold</b>. It was borrowing its spot, so a move was added (counts ${g0}–${k.start}); it now grows out of that diamond. Earlier pages are untouched.`,
+                        );
+                        return;
+                    }
+                    say(
+                        `<b>${name}: moved the whole Held hold</b> (counts ${k.start}–${k.end}), including where it arrives at count ${k.start}.`,
+                    );
+                    return;
+                }
+                const end = rowEnding(m, b);
+                if (end) {
+                    end.dest = p;
+                    say(`${name}: changed where its move ends (count ${b}).`);
+                    return;
+                }
+                const inside = rowInside(m, b);
+                if (inside) {
+                    m.rows = m.rows.filter((r) => r !== inside);
+                    m.rows.push(
+                        { start: inside.start, end: b, dest: p },
+                        { start: b, end: inside.end, dest: inside.dest },
+                    );
+                    say(
+                        `${name}: split its move at count ${b} and moved the new point.`,
+                    );
+                    return;
+                }
+                let g0 = arrivalBefore(m, b);
+                if (mode === "proposed")
+                    for (const k2 of m.marks)
+                        if (k2.end <= b && k2.end > g0) g0 = k2.end;
+                m.rows.push({ start: g0, end: b, dest: p });
+                say(
+                    `${name}: new move from count ${g0} to ${b}` +
+                        (g0 > arrivalBefore(m, b)
+                            ? " (starts where its hold ends: left early)."
+                            : ". Later unedited pages follow it."),
+                );
+            }
+
+            function windowEdit(m, s, b, p) {
+                const k = heldAt(m, b);
+                if (k && (winRule === "hold" || s <= k.start)) {
+                    if (k.start === 0) m.home = p;
+                    else rowEnding(m, k.start).dest = p;
+                    say(
+                        `<b>${m.name}: moved the whole Held hold</b> (the window ends inside it${winRule === "hold" && s > k.start ? "; the window's start is ignored" : ""}).`,
+                    );
+                    return;
+                }
+                // the window wins: it becomes a move [s, b); anything of this marcher's inside it goes
+                m.rows = m.rows.filter((r) => !(r.start < b && r.end > s));
+                m.rows.push({ start: s, end: b, dest: p });
+                say(
+                    `${m.name}: new move over the window, counts ${s}–${b}` +
+                        (k ? `; its hold now ends at ${s}.` : "."),
+                );
+            }
+
+            function removeKeyframe(m, b, keepLater) {
+                const r = rowEnding(m, b);
+                if (!r) return false;
+                const next = rowStarting(m, b);
+                const onFlag = b % 8 === 0;
+                if (mode === "proposed" && next && !onFlag) {
+                    next.start = r.start;
+                    m.rows = m.rows.filter((x) => x !== r);
+                    say(
+                        `<b>${m.name}: joined the two moves</b> into one, counts ${r.start}–${next.end}: even speed again.`,
+                    );
+                    return true;
+                }
+                const box = PAGES.find((p) => p.start >= b);
+                const before = box ? pos(m, box.end) : null;
+                m.rows = m.rows.filter((x) => x !== r);
+                let msg = `${m.name}: removed its keyframe at count ${b}.`;
+                if (next && !onFlag)
+                    msg += ` The next move still starts at ${b}, so ${m.name} stands still ${r.start}–${b}, then catches up.`;
+                if (next && onFlag && mode === "proposed")
+                    msg += ` (On a page flag: not joined, so pages keep their own moves.)`;
+                const heldArrival =
+                    mode === "proposed" && m.marks.some((k) => k.start === b);
+                if (
+                    keepLater &&
+                    !heldArrival &&
+                    box &&
+                    !same(before, pos(m, box.end)) &&
+                    !m.rows.some((x) => x.start < box.end && x.end > box.start)
+                ) {
+                    m.rows.push({
+                        start: box.start,
+                        end: box.end,
+                        dest: before,
+                    });
+                    msg += ` ${box.name} keeps its spot: a move back to it was written there.`;
+                }
+                if (mode === "proposed" && m.marks.some((k) => k.start === b))
+                    msg += " The Held hold that started there is removed too.";
+                say(msg);
+                return true;
+            }
+
+            /** R4 today: a group's split halves; removing for part of the group leaves stand-still-then-rush. */
+            function splitGroupAt(b) {
+                for (const m of marchers) {
+                    const r = rowInside(m, b);
+                    if (!r) continue;
+                    const p = pos(m, b);
+                    m.rows = m.rows.filter((x) => x !== r);
+                    m.rows.push(
+                        {
+                            start: r.start,
+                            end: b,
+                            dest: p,
+                            group: r.group ? r.group + "a" : null,
+                        },
+                        {
+                            start: b,
+                            end: r.end,
+                            dest: r.dest,
+                            group: r.group ? r.group + "b" : null,
+                        },
+                    );
+                }
+                say(
+                    `Split the group's move at count ${b}: everyone in it now has two halves.`,
+                );
+            }
+            /** R4 lead: pull the selected marcher out of both halves, then join (others keep their split). */
+            function pullOutAndJoin(m, b) {
+                const r = rowEnding(m, b),
+                    next = rowStarting(m, b);
+                if (!r || !next) return false;
+                next.start = r.start;
+                next.group = null;
+                next.own = true;
+                m.rows = m.rows.filter((x) => x !== r);
+                say(
+                    `<b>${m.name}: pulled out of the group's move and joined</b>: its own move, counts ${next.start}–${next.end}, even speed. The rest of the group keeps its split.`,
+                );
+                return true;
+            }
+            /** R6: only this page (#158) before editing an earlier page: writes the current spot as an ordinary move. */
+            function onlyThisPage(m, b) {
+                const box = pageOfFlag(b);
+                if (
+                    !box ||
+                    m.rows.some((r) => r.start < box.end && r.end > box.start)
+                )
+                    return false;
+                m.rows.push({
+                    start: box.start,
+                    end: box.end,
+                    dest: pos(m, box.end),
+                });
+                say(
+                    `${m.name}: ${box.name} unlinked (only this page): it keeps its current spot as an ordinary move with a keyframe. Nothing marks it as a "keep".`,
+                );
+                return true;
+            }
+            /** R7: clip drag of the move ending at b, earlier by n counts. */
+            function shiftMoveEarlier(m, b, n) {
+                const r = rowEnding(m, b);
+                if (!r || r.start - n < 0) return false;
+                r.start -= n;
+                r.end -= n;
+                say(
+                    `${m.name}: its move now runs ${r.start}–${r.end} (clip dragged ${n} counts earlier).`,
+                );
+                return true;
+            }
+            /** R8: hold over the window [s, b); lead removes moves inside it, alternative refuses. */
+            function holdOverWindow(m, s, b, refuse) {
+                const inside = m.rows.filter((r) => r.start < b && r.end > s);
+                if (refuse && inside.length) {
+                    say(
+                        `${m.name}: <b>refused</b>: it has a move inside the window (counts ${inside.map((r) => r.start + "–" + r.end).join(", ")}). Delete it first.`,
+                    );
+                    return false;
+                }
+                for (const r of inside) {
+                    if (r.start < s) {
+                        const p = pos(m, s);
+                        r.end = s;
+                        r.dest = p;
+                    } else if (r.end > b) {
+                        r.start = b;
+                    } else m.rows = m.rows.filter((x) => x !== r);
+                }
+                m.marks.push({ start: s, end: b });
+                say(
+                    `<b>${m.name}: Held over the window</b> (counts ${s}–${b})` +
+                        (inside.length
+                            ? `; the move inside it was removed.`
+                            : "."),
+                );
+                return true;
+            }
+
+            function splitAt(m, b) {
+                const r = rowInside(m, b);
+                if (!r) return false;
+                const p = pos(m, b);
+                m.rows = m.rows.filter((x) => x !== r);
+                m.rows.push(
+                    { start: r.start, end: b, dest: p },
+                    { start: b, end: r.end, dest: r.dest },
+                );
+                say(`${m.name}: split its move at count ${b}.`);
+                return true;
+            }
+
+            function setToPrevious(m, b) {
+                const box = pageOfFlag(b);
+                if (!box) return false;
+                const n = m.rows.length;
+                m.rows = m.rows.filter(
+                    (r) => !(r.start < box.end && r.end > box.start),
+                );
+                if (m.rows.length === n) return false;
+                say(
+                    `${m.name}: ${box.name} has no move of its own now, so it follows the page before.`,
+                );
+                return true;
+            }
+
+            function holdFromPrevious(m, b) {
+                const box = pageOfFlag(b);
+                if (!box) return false;
+                m.rows = m.rows.filter(
+                    (r) => !(r.start < box.end && r.end > box.start),
+                );
+                const k = m.marks.find((x) => x.end === box.start);
+                if (k) k.end = box.end;
+                else m.marks.push({ start: box.start, end: box.end });
+                say(
+                    `<b>${m.name}: Held</b> on ${box.name} only: it shows what the page before shows. Earlier unedited pages stay Following.`,
+                );
+                return true;
+            }
+
+            function extendHoldBack(m, b) {
+                const k =
+                    m.marks.find((x) => x.start < b && b <= x.end) ||
+                    m.marks.find((x) => x.start === b);
+                if (!k) return false;
+                const a = arrivalBefore(m, k.start);
+                if (a >= k.start) return false;
+                k.start = a;
+                say(
+                    `${m.name}: hold now starts at its last arrival (count ${a}); the pages in between are Held too.`,
+                );
+                return true;
+            }
+
+            function makeHeldLike(m, b) {
+                if (heldAt(m, b)) return false;
+                const ref = marchers.find(
+                    (x, i) => selected.has(i) && heldAt(x, b),
+                );
+                if (!ref) return false;
+                const k = heldAt(ref, b);
+                const start = Math.max(k.start, arrivalBefore(m, b));
+                const next = Math.min(
+                    COUNTS,
+                    ...m.rows.filter((r) => r.start >= b).map((r) => r.start),
+                );
+                m.marks.push({ start, end: Math.min(k.end, next) });
+                say(
+                    `<b>${m.name}: Held</b> over counts ${start}–${Math.min(k.end, next)}, like ${ref.name}.`,
+                );
+                return true;
+            }
+
+            function endHoldAt(m, b) {
+                const k = m.marks.find((x) => x.start < b && b < x.end);
+                if (!k) return false;
+                k.end = b;
+                say(
+                    `${m.name}: its hold now ends at count ${b}. After that it's Following: an edit there starts a new move.`,
+                );
+                return true;
+            }
+
+            function act(fn) {
+                history.push(clone(marchers));
+                lastMsg = [];
+                let any = false;
+                for (const i of selected) {
+                    const m = marchers[i];
+                    const before = new Map(
+                        m.marks.map((k) => [
+                            k,
+                            m.rows.filter((r) => r.end === k.start),
+                        ]),
+                    );
+                    if (fn(m) !== false) any = true;
+                    normalize(m, before);
+                }
+                if (!lastMsg.length) {
+                    history.pop();
+                    say(
+                        "Nothing to do for the selected marchers at this count.",
+                    );
+                }
+                render();
+            }
+
+            // ---------- rendering ----------
+            const $ = (id) => document.getElementById(id);
+            const X0 = 76,
+                CW = 14,
+                LANE = 44,
+                TOP = 30;
+            const tx = (c) => X0 + c * CW;
+            function svgEl(tag, attrs, parent) {
+                const e = document.createElementNS(
+                    "http://www.w3.org/2000/svg",
+                    tag,
+                );
+                for (const k in attrs) e.setAttribute(k, attrs[k]);
+                if (parent) parent.appendChild(e);
+                return e;
+            }
+            function text(parent, x, y, s, attrs = {}) {
+                const t = svgEl(
+                    "text",
+                    { x, y, "font-size": 11, fill: "#6b7280", ...attrs },
+                    parent,
+                );
+                t.textContent = s;
+                return t;
+            }
+            function diamondAt(g, x, y, fill, stroke) {
+                svgEl(
+                    "path",
+                    {
+                        d: `M${x},${y - 7} l7,7 l-7,7 l-7,-7 z`,
+                        fill,
+                        stroke: stroke || fill,
+                        "stroke-width": 2,
+                    },
+                    g,
+                );
+            }
+
+            function renderTimeline() {
+                const svg = $("tl");
+                const h = TOP + LANE * 3 + 10;
+                svg.setAttribute("viewBox", `0 0 ${tx(COUNTS) + 20} ${h}`);
+                svg.innerHTML =
+                    '<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#d1fae5"/><line x1="0" y1="0" x2="0" y2="6" stroke="#34d399" stroke-width="3"/></pattern></defs>';
+                for (const p of PAGES) {
+                    svgEl(
+                        "rect",
+                        {
+                            x: tx(p.start) + 1,
+                            y: 4,
+                            width: 8 * CW - 2,
+                            height: 18,
+                            rx: 3,
+                            fill: "#f8fafc",
+                            stroke: "#e5e7eb",
+                        },
+                        svg,
+                    );
+                    text(svg, (tx(p.start) + tx(p.end)) / 2, 17, p.name, {
+                        "text-anchor": "middle",
+                    });
+                    svgEl(
+                        "line",
+                        {
+                            x1: tx(p.end),
+                            y1: 22,
+                            x2: tx(p.end),
+                            y2: h,
+                            stroke: "#e5e7eb",
+                        },
+                        svg,
+                    );
+                }
+                svgEl(
+                    "line",
+                    { x1: tx(0), y1: 22, x2: tx(0), y2: h, stroke: "#e5e7eb" },
+                    svg,
+                );
+                marchers.forEach((m, i) => {
+                    const y = TOP + LANE * i + LANE / 2;
+                    const sel = selected.has(i);
+                    text(svg, 8, y + 4, m.name, {
+                        "font-size": 13,
+                        "font-weight": "bold",
+                        fill: sel ? COLORS[i] : "#9ca3af",
+                    });
+                    // holds (gaps) — proposed: bars
+                    const ends = [0, ...m.rows.map((r) => r.end)].sort(
+                        (a, b) => a - b,
+                    );
+                    if (mode === "proposed") {
+                        for (const a of ends) {
+                            if (m.rows.some((r) => r.start < a && r.end > a))
+                                continue;
+                            const nextStart = Math.min(
+                                COUNTS,
+                                ...m.rows
+                                    .filter((r) => r.start >= a)
+                                    .map((r) => r.start),
+                            );
+                            if (nextStart <= a) continue;
+                            let c = a;
+                            for (const k of m.marks
+                                .filter(
+                                    (k) => k.start >= a && k.end <= nextStart,
+                                )
+                                .sort((p, q) => p.start - q.start)) {
+                                if (k.start > c) follow(svg, c, k.start, y);
+                                if (arrivalHold(m, k))
+                                    svgEl(
+                                        "rect",
+                                        {
+                                            x: tx(k.start),
+                                            y: y - 5,
+                                            width: (k.end - k.start) * CW,
+                                            height: 10,
+                                            rx: 5,
+                                            fill: "#059669",
+                                        },
+                                        svg,
+                                    );
+                                else {
+                                    svgEl(
+                                        "rect",
+                                        {
+                                            x: tx(k.start),
+                                            y: y - 5,
+                                            width: (k.end - k.start) * CW,
+                                            height: 10,
+                                            rx: 5,
+                                            fill: "url(#hatch)",
+                                            stroke: "#059669",
+                                            "stroke-width": 1.2,
+                                        },
+                                        svg,
+                                    );
+                                    const chip = "Held · " + sourceOf(m, k);
+                                    const w = chip.length * 5.6 + 10;
+                                    svgEl(
+                                        "rect",
+                                        {
+                                            x: tx(k.start),
+                                            y: y - 20,
+                                            width: w,
+                                            height: 13,
+                                            rx: 6,
+                                            fill: "#ecfdf5",
+                                            stroke: "#6ee7b7",
+                                        },
+                                        svg,
+                                    );
+                                    text(svg, tx(k.start) + 5, y - 10, chip, {
+                                        fill: "#047857",
+                                        "font-size": 9.5,
+                                    });
+                                }
+                                c = k.end;
+                            }
+                            if (c < nextStart) follow(svg, c, nextStart, y);
+                            if (nextStart < COUNTS)
+                                svgEl(
+                                    "line",
+                                    {
+                                        x1: tx(nextStart),
+                                        y1: y - 9,
+                                        x2: tx(nextStart),
+                                        y2: y + 9,
+                                        stroke: "#1f2937",
+                                        "stroke-width": 3,
+                                    },
+                                    svg,
+                                );
+                        }
+                    }
+                    for (const r of m.rows) {
+                        const still = !moved(m, r);
+                        svgEl(
+                            "rect",
+                            {
+                                x: tx(r.start) + 1,
+                                y: y - 9,
+                                width: (r.end - r.start) * CW - 2,
+                                height: 18,
+                                rx: 4,
+                                fill: still ? "#f3f4f6" : "#dbeafe",
+                                stroke: still ? "#9ca3af" : "#3b82f6",
+                                "stroke-width": 1.5,
+                            },
+                            svg,
+                        );
+                        if (still)
+                            text(
+                                svg,
+                                (tx(r.start) + tx(r.end)) / 2,
+                                y + 4,
+                                "goes nowhere",
+                                { "text-anchor": "middle", "font-size": 10 },
+                            );
+                        else if (r.group)
+                            text(
+                                svg,
+                                (tx(r.start) + tx(r.end)) / 2,
+                                y + 4,
+                                r.group,
+                                {
+                                    "text-anchor": "middle",
+                                    "font-size": 10,
+                                    fill: "#1d4ed8",
+                                },
+                            );
+                        else if (r.own)
+                            text(
+                                svg,
+                                (tx(r.start) + tx(r.end)) / 2,
+                                y + 4,
+                                "own move",
+                                {
+                                    "text-anchor": "middle",
+                                    "font-size": 10,
+                                    fill: "#b45309",
+                                },
+                            );
+                    }
+                    // diamonds (selected only, as in the app)
+                    if (sel)
+                        for (const r of m.rows) {
+                            const show = mode === "proposed" || moved(m, r);
+                            if (show) diamondAt(svg, tx(r.end), y, COLORS[i]);
+                            else
+                                svgEl(
+                                    "path",
+                                    {
+                                        d: `M${tx(r.end)},${y - 7} l7,7 l-7,7 l-7,-7 z`,
+                                        fill: "none",
+                                        stroke: "#dc2626",
+                                        "stroke-width": 1.5,
+                                        "stroke-dasharray": "2 2",
+                                    },
+                                    svg,
+                                );
+                        }
+                });
+                if (win !== null) {
+                    svgEl(
+                        "rect",
+                        {
+                            x: Math.min(tx(win), tx(ph)),
+                            y: 22,
+                            width: Math.abs(tx(ph) - tx(win)),
+                            height: h - 22,
+                            fill: "#fde68a",
+                            opacity: 0.35,
+                        },
+                        svg,
+                    );
+                    svgEl(
+                        "line",
+                        {
+                            x1: tx(win),
+                            y1: 0,
+                            x2: tx(win),
+                            y2: h,
+                            stroke: "#ca8a04",
+                            "stroke-width": 2,
+                        },
+                        svg,
+                    );
+                    text(svg, tx(win) + 3, h - 4, "start flag", {
+                        fill: "#ca8a04",
+                        "font-weight": "bold",
+                    });
+                }
+                svgEl(
+                    "line",
+                    {
+                        x1: tx(ph),
+                        y1: 0,
+                        x2: tx(ph),
+                        y2: h,
+                        stroke: "#dc2626",
+                        "stroke-width": 2,
+                    },
+                    svg,
+                );
+                svgEl(
+                    "rect",
+                    {
+                        x: 0,
+                        y: 0,
+                        width: tx(COUNTS) + 20,
+                        height: h,
+                        fill: "transparent",
+                        id: "tlHit",
+                    },
+                    svg,
+                );
+            }
+            function follow(svg, a, b, y) {
+                svgEl(
+                    "line",
+                    {
+                        x1: tx(a),
+                        y1: y,
+                        x2: tx(b),
+                        y2: y,
+                        stroke: "#9ca3af",
+                        "stroke-width": 5,
+                        "stroke-dasharray": "6 5",
+                        "stroke-linecap": "round",
+                    },
+                    svg,
+                );
+            }
+
+            const FX = 6,
+                FY = 6; // field units → px
+            function renderField() {
+                const svg = $("field");
+                svg.setAttribute("viewBox", `0 0 ${100 * FX} ${60 * FY}`);
+                svg.innerHTML = "";
+                svgEl(
+                    "rect",
+                    {
+                        x: 0,
+                        y: 0,
+                        width: 100 * FX,
+                        height: 60 * FY,
+                        rx: 8,
+                        fill: "#f0fdf4",
+                        stroke: "#86efac",
+                    },
+                    svg,
+                );
+                for (let x = 10; x < 100; x += 10)
+                    svgEl(
+                        "line",
+                        {
+                            x1: x * FX,
+                            y1: 0,
+                            x2: x * FX,
+                            y2: 60 * FY,
+                            stroke: "#dcfce7",
+                        },
+                        svg,
+                    );
+                marchers.forEach((m, i) => {
+                    if (mode === "proposed" && selected.has(i)) {
+                        const pts = [m.home, ...m.rows.map((r) => r.dest)];
+                        svgEl(
+                            "polyline",
+                            {
+                                points: pts
+                                    .map((p) => `${p[0] * FX},${p[1] * FY}`)
+                                    .join(" "),
+                                fill: "none",
+                                stroke: COLORS[i],
+                                "stroke-width": 1.5,
+                                "stroke-dasharray": "5 4",
+                                opacity: 0.6,
+                            },
+                            svg,
+                        );
+                        [m.home, ...m.rows.map((r) => r.dest)].forEach(
+                            (p, j) => {
+                                svgEl(
+                                    "rect",
+                                    {
+                                        x: p[0] * FX - 4,
+                                        y: p[1] * FY - 4,
+                                        width: 8,
+                                        height: 8,
+                                        fill: "#fff",
+                                        stroke: COLORS[i],
+                                        "stroke-width": 2,
+                                    },
+                                    svg,
+                                );
+                                const c = j === 0 ? 0 : m.rows[j - 1].end;
+                                text(
+                                    svg,
+                                    p[0] * FX + 7,
+                                    p[1] * FY + 14,
+                                    "set · " + c,
+                                    { fill: COLORS[i], "font-size": 10 },
+                                );
+                            },
+                        );
+                    }
+                });
+                marchers.forEach((m, i) => {
+                    const p = pos(m, ph);
+                    const look = lookOf(m, ph);
+                    const g = svgEl(
+                        "g",
+                        { "data-m": i, style: "cursor:grab" },
+                        svg,
+                    );
+                    if (selected.has(i))
+                        svgEl(
+                            "circle",
+                            {
+                                cx: p[0] * FX,
+                                cy: p[1] * FY,
+                                r: 14,
+                                fill: "none",
+                                stroke: "#f59e0b",
+                                "stroke-width": 2.5,
+                            },
+                            g,
+                        );
+                    if (look.solid)
+                        svgEl(
+                            "circle",
+                            {
+                                cx: p[0] * FX,
+                                cy: p[1] * FY,
+                                r: 8,
+                                fill: COLORS[i],
+                            },
+                            g,
+                        );
+                    else
+                        svgEl(
+                            "circle",
+                            {
+                                cx: p[0] * FX,
+                                cy: p[1] * FY,
+                                r: 8,
+                                fill: "#fff",
+                                stroke: COLORS[i],
+                                "stroke-width": 2,
+                                "stroke-dasharray": "3 3",
+                            },
+                            g,
+                        );
+                    text(g, p[0] * FX, p[1] * FY - 13, m.name, {
+                        "text-anchor": "middle",
+                        "font-size": 13,
+                        "font-weight": look.bold ? "bold" : "normal",
+                        fill: "#1f2937",
+                    });
+                    text(g, p[0] * FX, p[1] * FY + 24, look.why, {
+                        "text-anchor": "middle",
+                        "font-size": 10,
+                    });
+                });
+            }
+
+            function dragWill(m, b) {
+                if (b === 0) return "moves its start position";
+                if (win !== null && win < b) {
+                    const k = heldAt(m, b);
+                    if (k && (winRule === "hold" || win <= k.start))
+                        return arrivalHold(m, k)
+                            ? `moves ${pageName(k.start)}'s set (the whole hold)`
+                            : `adds a move ending at count ${k.start} (the whole hold)`;
+                    return `makes a move over the window (${win}–${b})`;
+                }
+                const k = heldAt(m, b);
+                if (k)
+                    return arrivalHold(m, k)
+                        ? `moves ${pageName(k.start)}'s set (the whole hold)`
+                        : `adds a move on ${pageName(k.start)} (the whole hold)`;
+                if (rowEnding(m, b)) return "changes this keyframe";
+                if (rowInside(m, b)) return "splits its move here";
+                return "starts a new move here";
+            }
+
+            function lookOf(m, b) {
+                const end = rowEnding(m, b);
+                if (mode === "today") {
+                    if (b === 0)
+                        return { solid: true, bold: true, why: "page 1" };
+                    if (end && moved(m, end))
+                        return { solid: true, bold: true, why: "keyframe" };
+                    return {
+                        solid: false,
+                        bold: false,
+                        why: rowInside(m, b)
+                            ? "walking"
+                            : end
+                              ? "move goes nowhere"
+                              : "holding",
+                    };
+                }
+                if (b === 0) return { solid: true, bold: true, why: "page 1" };
+                if (end)
+                    return {
+                        solid: true,
+                        bold: true,
+                        why: moved(m, end) ? "keyframe" : "keyframe (stays)",
+                    };
+                if (rowInside(m, b))
+                    return { solid: true, bold: false, why: "walking" };
+                if (heldAt(m, b))
+                    return { solid: true, bold: false, why: "Held" };
+                return { solid: false, bold: false, why: "Following" };
+            }
+
+            function renderSpeed() {
+                const i = [...selected][0];
+                if (i === undefined) {
+                    $("speed").innerHTML = "";
+                    $("speedWho").textContent = "";
+                    return;
+                }
+                const m = marchers[i];
+                const box = pageOfFlag(Math.max(1, ph)) || PAGES[0];
+                $("speedWho").textContent =
+                    `${m.name}, ${box.name} (counts ${box.start}–${box.end})`;
+                let rows =
+                    "<table><tr><th>count</th><th>step</th><th class=barcell></th></tr>";
+                for (let c = box.start + 1; c <= box.end; c++) {
+                    const a = pos(m, c - 1),
+                        b = pos(m, c);
+                    const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+                    rows += `<tr><td>${c}</td><td>${d.toFixed(1)}</td><td class=barcell><div class=bar style="width:${Math.min(160, d * 12)}px"></div></td></tr>`;
+                }
+                $("speed").innerHTML = rows + "</table>";
+            }
+
+            function render() {
+                $("mToday").classList.toggle("on", mode === "today");
+                $("mProp").classList.toggle("on", mode === "proposed");
+                document
+                    .querySelectorAll(".propOnly")
+                    .forEach((b) => (b.disabled = mode !== "proposed"));
+                $("selChips").innerHTML = "";
+                marchers.forEach((m, i) => {
+                    const b = document.createElement("button");
+                    b.textContent = m.name;
+                    b.className = selected.has(i) ? "on" : "";
+                    b.onclick = () => {
+                        selected.has(i) ? selected.delete(i) : selected.add(i);
+                        render();
+                    };
+                    $("selChips").appendChild(b);
+                });
+                $("ph").value = ph;
+                $("winBtn").textContent =
+                    win === null
+                        ? "Expert window: off"
+                        : `Expert window: ${win} → ${ph}`;
+                $("winBtn").classList.toggle("on", win !== null);
+                $("ruleBtn").textContent =
+                    winRule === "window"
+                        ? "Window starting inside a hold: window wins"
+                        : "Window ending inside a hold: hold wins";
+                $("phLabel").textContent =
+                    `count ${ph}` +
+                    (ph % 8 === 0 ? ` · ${pageName(ph)} flag` : "");
+                $("legend").innerHTML =
+                    mode === "proposed"
+                        ? '<span>▭ blue: a move</span><span>◆ keyframe (every move end)</span><span style="color:#059669">▬ Held</span><span style="color:#9ca3af">┅ Following</span><span>| departure</span><span>field: solid = decided, dashed = not set; squares = set spots</span>'
+                        : '<span>▭ blue: a move</span><span>◆ keyframe (moves that moved)</span><span style="color:#dc2626">◇ dashed red: a move end #332 hides</span><span>field: solid only on a keyframe count</span>';
+                $("log").innerHTML = lastMsg.join("<br>") || $("log").innerHTML;
+                const held = [...selected].filter((i) =>
+                    heldAt(marchers[i], ph),
+                ).length;
+                $("selSummary").textContent =
+                    mode === "proposed" && selected.size
+                        ? `At count ${ph}: ${held} of ${selected.size} selected Held`
+                        : "";
+                $("cAllHeld").disabled =
+                    mode !== "proposed" || held === 0 || held === selected.size;
+                $("preview").innerHTML = [...selected]
+                    .map(
+                        (i) =>
+                            `<b>${marchers[i].name}</b>: a drag here ${dragWill(marchers[i], ph)}`,
+                    )
+                    .join("<br>");
+                renderTimeline();
+                renderField();
+                renderSpeed();
+            }
+
+            // ---------- interaction ----------
+            $("mToday").onclick = () => {
+                mode = "today";
+                lastMsg = [
+                    "Today (#332): no Held holds, dashed unless arriving on this exact count, diamonds only where the marcher moved.",
+                ];
+                marchers.forEach(normalize);
+                render();
+            };
+            $("mProp").onclick = () => {
+                mode = "proposed";
+                lastMsg = [
+                    "Proposed: hold bars, Held holds, every move end is a keyframe, solid whenever decided.",
+                ];
+                render();
+            };
+            $("undo").onclick = () => {
+                if (history.length) {
+                    marchers = history.pop();
+                    lastMsg = ["Undone."];
+                    render();
+                }
+            };
+            $("ph").oninput = (e) => {
+                ph = +e.target.value;
+                lastMsg = [];
+                render();
+            };
+            $("prev").onclick = () => {
+                ph = Math.max(0, ph - 1);
+                lastMsg = [];
+                render();
+            };
+            $("next").onclick = () => {
+                ph = Math.min(COUNTS, ph + 1);
+                lastMsg = [];
+                render();
+            };
+            $("tl").addEventListener("pointerdown", (e) => {
+                const svg = $("tl");
+                const pt = svg.createSVGPoint();
+                pt.x = e.clientX;
+                pt.y = e.clientY;
+                const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+                ph = Math.max(0, Math.min(COUNTS, Math.round((p.x - X0) / CW)));
+                lastMsg = [];
+                render();
+            });
+            document.querySelectorAll("[data-nudge]").forEach(
+                (b) =>
+                    (b.onclick = () => {
+                        const [dx, dy] = b.dataset.nudge.split(",").map(Number);
+                        act((m) => {
+                            const p = pos(m, ph);
+                            setPosAt(m, ph, [p[0] + dx, p[1] + dy]);
+                        });
+                    }),
+            );
+            let drag = null;
+            $("field").addEventListener("pointerdown", (e) => {
+                const g = e.target.closest("g[data-m]");
+                if (!g) return;
+                const i = +g.dataset.m;
+                if (!selected.has(i)) {
+                    selected = new Set([i]);
+                    render();
+                }
+                const svg = $("field");
+                const pt = svg.createSVGPoint();
+                pt.x = e.clientX;
+                pt.y = e.clientY;
+                drag = {
+                    start: pt.matrixTransform(svg.getScreenCTM().inverse()),
+                    dx: 0,
+                    dy: 0,
+                };
+                svg.setPointerCapture(e.pointerId);
+            });
+            $("field").addEventListener("pointermove", (e) => {
+                if (!drag) return;
+                const svg = $("field");
+                const pt = svg.createSVGPoint();
+                pt.x = e.clientX;
+                pt.y = e.clientY;
+                const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+                drag.dx = Math.round((p.x - drag.start.x) / FX);
+                drag.dy = Math.round((p.y - drag.start.y) / FY);
+                svg.querySelectorAll("g[data-m]").forEach((g) => {
+                    if (selected.has(+g.dataset.m))
+                        g.setAttribute(
+                            "transform",
+                            `translate(${drag.dx * FX},${drag.dy * FY})`,
+                        );
+                });
+            });
+            $("field").addEventListener("pointerup", () => {
+                if (!drag) return;
+                const { dx, dy } = drag;
+                drag = null;
+                if (dx || dy)
+                    act((m) => {
+                        const p = pos(m, ph);
+                        setPosAt(m, ph, [p[0] + dx, p[1] + dy]);
+                    });
+                else render();
+            });
+            $("winBtn").onclick = () => {
+                win = win === null ? ph : null;
+                lastMsg = [
+                    win === null
+                        ? "Expert window off: edits act at the playhead's count."
+                        : `Start flag at ${win}. Move the playhead, then drag: the edit becomes a move over the window.`,
+                ];
+                render();
+            };
+            $("ruleBtn").onclick = () => {
+                winRule = winRule === "window" ? "hold" : "window";
+                lastMsg = [
+                    winRule === "window"
+                        ? "A window that starts inside a Held hold leaves the hold there and makes a new move."
+                        : "A window that ends inside a Held hold moves the whole hold, whatever its start.",
+                ];
+                render();
+            };
+            $("cRemove").onclick = () =>
+                act((m) => removeKeyframe(m, ph, true));
+            $("cRemoveBack").onclick = () =>
+                act((m) => removeKeyframe(m, ph, false));
+            $("cSplit").onclick = () => act((m) => splitAt(m, ph));
+            $("cPrev").onclick = () => act((m) => setToPrevious(m, ph));
+            $("cHold").onclick = () => act((m) => holdFromPrevious(m, ph));
+            $("cEndHold").onclick = () => act((m) => endHoldAt(m, ph));
+            $("cExtend").onclick = () => act((m) => extendHoldBack(m, ph));
+            $("cAllHeld").onclick = () => act((m) => makeHeldLike(m, ph));
+
+            // ---------- scenarios ----------
+            const M = (name, home, rows = [], marks = []) => ({
+                name,
+                home,
+                rows,
+                marks,
+            });
+            const SCENARIOS = [
+                {
+                    name: "14 · Remove after a split",
+                    setup: () => [
+                        M(
+                            "B1",
+                            [15, 45],
+                            [{ start: 8, end: 16, dest: [75, 15] }],
+                        ),
+                        M(
+                            "B2",
+                            [15, 55],
+                            [{ start: 8, end: 16, dest: [75, 25] }],
+                        ),
+                        M("B3", [50, 50]),
+                    ],
+                    sel: [0],
+                    ph: 12,
+                    steps: [
+                        [
+                            "B1 walks A → B over Page 3 (counts 8–16), evenly. Look at 'Steps per count'.",
+                            null,
+                        ],
+                        [
+                            "Split at playhead (count 12).",
+                            () => act((m) => splitAt(m, 12)),
+                        ],
+                        [
+                            "Remove keyframe at 12. Then compare Today vs Proposed (Undo, switch mode, redo this step).",
+                            () => act((m) => removeKeyframe(m, 12, true)),
+                        ],
+                    ],
+                },
+                {
+                    name: "15 · Invisible pin",
+                    setup: () => [
+                        M(
+                            "B1",
+                            [20, 45],
+                            [
+                                { start: 0, end: 8, dest: [40, 30] },
+                                { start: 24, end: 32, dest: [70, 20] },
+                            ],
+                        ),
+                        M("B2", [30, 55]),
+                        M("B3", [50, 50]),
+                    ],
+                    sel: [0],
+                    ph: 8,
+                    steps: [
+                        [
+                            "B1 moves on Page 2 and Page 5; Pages 3–4 follow Page 2.",
+                            null,
+                        ],
+                        [
+                            "Remove keyframe on Page 2 (count 8). Page 3 gets a move back to the old spot.",
+                            () => act((m) => removeKeyframe(m, 8, true)),
+                        ],
+                        [
+                            "On Page 2, put B1 back on Page 3's spot (as a drag would). Now look at count 16: Today, Page 3's diamond is gone (red dashed outline) and B1 draws dashed, as if Page 3 were unedited. That's the invisible pin.",
+                            () => {
+                                act((m) => setPosAt(m, 8, [40, 30]));
+                                ph = 16;
+                                render();
+                            },
+                        ],
+                        [
+                            "Nudge Page 2 again: Page 3 does NOT follow (scrub 8 → 16: B1 walks back to the pinned spot), and its diamond silently reappears (#317). Proposed shows Page 3's diamond the whole time.",
+                            () => {
+                                ph = 8;
+                                act((m) => setPosAt(m, 8, [46, 34]));
+                            },
+                        ],
+                    ],
+                },
+                {
+                    name: "4 · Held hold, leave early",
+                    setup: () => [
+                        M(
+                            "B1",
+                            [20, 45],
+                            [{ start: 0, end: 8, dest: [35, 25] }],
+                            [{ start: 8, end: 24 }],
+                        ),
+                        M(
+                            "B2",
+                            [30, 50],
+                            [{ start: 0, end: 8, dest: [45, 30] }],
+                            [{ start: 8, end: 24 }],
+                        ),
+                        M("B3", [60, 50]),
+                    ],
+                    sel: [0, 1],
+                    ph: 20,
+                    mode: "proposed",
+                    steps: [
+                        [
+                            "B1 and B2 are Held through Pages 3–4 (solid green bars). Drag either dot at count 20, or:",
+                            null,
+                        ],
+                        [
+                            "Nudge right at count 20 → the whole hold moves, including Page 2's arrival.",
+                            () =>
+                                act((m) => {
+                                    const p = pos(m, 20);
+                                    setPosAt(m, 20, [p[0] + 8, p[1]]);
+                                }),
+                        ],
+                        [
+                            "Select only B1. Playhead 18 → Split hold here (B1's hold ends at 18).",
+                            () => {
+                                selected = new Set([0]);
+                                ph = 18;
+                                act((m) => endHoldAt(m, 18));
+                            },
+                        ],
+                        [
+                            "Playhead 28, move B1 to a new spot → its move starts at 18 (left early). B2 still holds to 24.",
+                            () => {
+                                ph = 28;
+                                act((m) => setPosAt(m, 28, [80, 15]));
+                            },
+                        ],
+                        [
+                            "Try the same edit at count 20 for B2 (still Held): it moves B2's whole hold instead.",
+                            () => {
+                                selected = new Set([1]);
+                                ph = 20;
+                                lastMsg = [];
+                                render();
+                            },
+                        ],
+                    ],
+                },
+                {
+                    name: "17 · Remove where a hold begins",
+                    setup: () => [
+                        M(
+                            "B1",
+                            [20, 45],
+                            [{ start: 0, end: 8, dest: [45, 25] }],
+                            [{ start: 8, end: 24 }],
+                        ),
+                        M("B2", [30, 55]),
+                        M("B3", [60, 50]),
+                    ],
+                    sel: [0],
+                    ph: 8,
+                    mode: "proposed",
+                    steps: [
+                        [
+                            "B1 arrives at count 8 and is Held through Page 4.",
+                            null,
+                        ],
+                        [
+                            "Remove keyframe at 8 → the hold goes too; Pages 2–4 are Following (dashed).",
+                            () => act((m) => removeKeyframe(m, 8, false)),
+                        ],
+                    ],
+                },
+                {
+                    name: "9 · The field look",
+                    setup: () => [
+                        M(
+                            "B1",
+                            [15, 45],
+                            [
+                                { start: 8, end: 16, dest: [55, 15] },
+                                { start: 16, end: 24, dest: [85, 30] },
+                            ],
+                        ),
+                        M(
+                            "B2",
+                            [40, 50],
+                            [{ start: 0, end: 8, dest: [50, 40] }],
+                            [{ start: 8, end: 24 }],
+                        ),
+                        M("B3", [70, 50]),
+                    ],
+                    sel: [0],
+                    ph: 12,
+                    steps: [
+                        [
+                            "At count 12: B1 walking, B2 Held, B3 never set. Switch Today ↔ Proposed and compare the dots.",
+                            null,
+                        ],
+                        [
+                            "Go to count 16 (B1 arrives: bold label, on a square).",
+                            () => {
+                                ph = 16;
+                                lastMsg = [];
+                                render();
+                            },
+                        ],
+                    ],
+                },
+                {
+                    name: "16 · Set to previous vs Hold from previous",
+                    setup: () => [
+                        M(
+                            "B1",
+                            [20, 45],
+                            [
+                                { start: 0, end: 8, dest: [40, 30] },
+                                { start: 8, end: 16, dest: [70, 20] },
+                            ],
+                        ),
+                        M("B2", [30, 55]),
+                        M("B3", [60, 50]),
+                    ],
+                    sel: [0],
+                    ph: 16,
+                    mode: "proposed",
+                    steps: [
+                        ["Page 3 has its own spot for B1.", null],
+                        [
+                            "Set to previous page → Page 3 is Following (dashed): it follows Page 2.",
+                            () => act((m) => setToPrevious(m, 16)),
+                        ],
+                        [
+                            "Undo, then Hold from previous page → one Held hold over Pages 2–3 (solid).",
+                            () => {
+                                if (history.length) marchers = history.pop();
+                                act((m) => holdFromPrevious(m, 16));
+                            },
+                        ],
+                        [
+                            "Now nudge at count 16 → Page 2's spot moves too.",
+                            () =>
+                                act((m) => {
+                                    const p = pos(m, 16);
+                                    setPosAt(m, 16, [p[0], p[1] + 8]);
+                                }),
+                        ],
+                    ],
+                },
+                {
+                    name: "B2 · Mixed drag (decided)",
+                    setup: () => [
+                        M(
+                            "B1",
+                            [20, 45],
+                            [{ start: 8, end: 16, dest: [35, 25] }],
+                            [{ start: 16, end: 32 }],
+                        ),
+                        M(
+                            "B2",
+                            [30, 50],
+                            [{ start: 8, end: 16, dest: [45, 25] }],
+                        ),
+                        M("B3", [60, 50]),
+                    ],
+                    sel: [0, 1],
+                    ph: 20,
+                    mode: "proposed",
+                    steps: [
+                        [
+                            "B1 and B2 arrive together at 16. B1 is Held to 32; B2 is Following. Both selected, playhead 20.",
+                            null,
+                        ],
+                        [
+                            "Decided: each by its own kind, no toast. The Commands card says '1 of 2 selected Held'. Drag both right: B1 moves its whole hold (its Page 3 arrival); B2 starts a new move on Page 4.",
+                            () =>
+                                act((m) => {
+                                    const p = pos(m, 20);
+                                    setPosAt(m, 20, [p[0] + 10, p[1]]);
+                                }),
+                        ],
+                        [
+                            "Or: Undo, then 'Make all selected Held' (explicit), then drag: both move their holds.",
+                            () => {
+                                if (history.length) marchers = history.pop();
+                                act((m) => makeHeldLike(m, 20));
+                            },
+                        ],
+                    ],
+                },
+                {
+                    name: "Review M1/M3 · Remove at a page flag",
+                    setup: () => [
+                        M(
+                            "B1",
+                            [20, 45],
+                            [
+                                { start: 8, end: 16, dest: [40, 25] },
+                                { start: 16, end: 24, dest: [70, 30] },
+                            ],
+                        ),
+                        M(
+                            "B2",
+                            [30, 55],
+                            [
+                                { start: 0, end: 8, dest: [35, 40] },
+                                { start: 8, end: 16, dest: [55, 35] },
+                            ],
+                            [{ start: 16, end: 32 }],
+                        ),
+                        M("B3", [60, 50]),
+                    ],
+                    sel: [0],
+                    ph: 16,
+                    mode: "proposed",
+                    steps: [
+                        [
+                            "B1: moves on Page 3 and Page 4, meeting at the flag (16). Updated rule after review: Remove joins only mid-page, so pages keep their own moves.",
+                            null,
+                        ],
+                        [
+                            "Remove keyframe at 16 for B1 → not joined: Page 3 now follows Page 2, Page 4 walks from the earlier spot.",
+                            () => act((m) => removeKeyframe(m, 16, true)),
+                        ],
+                        [
+                            "B2: arrives at 16 and is Held to 32. Select B2 and Remove at 16 → the hold goes and NO stay is written inside it (review M3), so Pages 4–5 are Following.",
+                            () => {
+                                selected = new Set([1]);
+                                act((m) => removeKeyframe(m, 16, true));
+                            },
+                        ],
+                    ],
+                },
+                {
+                    name: "M6 · Expert window in a hold (decided: window wins)",
+                    setup: () => [
+                        M(
+                            "B1",
+                            [20, 45],
+                            [{ start: 8, end: 16, dest: [40, 25] }],
+                            [{ start: 16, end: 32 }],
+                        ),
+                        M("B2", [30, 55]),
+                        M("B3", [60, 50]),
+                    ],
+                    sel: [0],
+                    ph: 28,
+                    mode: "proposed",
+                    win: 20,
+                    steps: [
+                        [
+                            "B1 is Held over 16–32. Expert window from the start flag at 20 to the playhead at 28 (yellow).",
+                            null,
+                        ],
+                        [
+                            "Drag B1 (rule: window wins) → a new move 20–28; the hold ends at 20.",
+                            () =>
+                                act((m) => {
+                                    const p = pos(m, 28);
+                                    setPosAt(m, 28, [p[0] + 12, p[1] - 6]);
+                                }),
+                        ],
+                        [
+                            "Undo, switch the rule to 'hold wins', drag again → the whole hold moves and the window is ignored. Which feels right?",
+                            () => {
+                                if (history.length) marchers = history.pop();
+                                winRule = "hold";
+                                act((m) => {
+                                    const p = pos(m, 28);
+                                    setPosAt(m, 28, [p[0] + 12, p[1] - 6]);
+                                });
+                            },
+                        ],
+                    ],
+                },
+                {
+                    name: "M7 · Hold from previous page (decided: this page only)",
+                    setup: () => [
+                        M(
+                            "B1",
+                            [20, 45],
+                            [
+                                { start: 8, end: 16, dest: [40, 25] },
+                                { start: 32, end: 40, dest: [70, 30] },
+                            ],
+                        ),
+                        M("B2", [30, 55]),
+                        M("B3", [60, 50]),
+                    ],
+                    sel: [0],
+                    ph: 32,
+                    mode: "proposed",
+                    steps: [
+                        [
+                            "B1 arrives at 16 (Page 3); Pages 4 and 5 are Following; Page 6 has its own move.",
+                            null,
+                        ],
+                        [
+                            "Decided: on Page 6 (count 40), Hold from previous page holds Page 6 only (its own move is replaced); Pages 4–5 stay Following.",
+                            () => {
+                                ph = 40;
+                                act((m) => holdFromPrevious(m, 40));
+                            },
+                        ],
+                        [
+                            "Drag at count 36 (inside the hold): Page 5 gets its own move, the hold follows, Pages 3–4 untouched.",
+                            () => {
+                                ph = 36;
+                                act((m) => {
+                                    const p = pos(m, 36);
+                                    setPosAt(m, 36, [p[0] + 10, p[1] - 8]);
+                                });
+                            },
+                        ],
+                        [
+                            "Undo, then 'Extend hold back to last arrival': the hold now starts at 16, so Pages 4–6 are one hold.",
+                            () => {
+                                if (history.length) marchers = history.pop();
+                                ph = 36;
+                                act((m) => extendHoldBack(m, 36));
+                            },
+                        ],
+                    ],
+                },
+                {
+                    name: "Anchors · Borrowed hold",
+                    setup: () => [
+                        M(
+                            "B1",
+                            [20, 45],
+                            [{ start: 0, end: 8, dest: [40, 25] }],
+                        ),
+                        M("B2", [30, 55]),
+                        M("B3", [60, 50]),
+                    ],
+                    sel: [0],
+                    ph: 40,
+                    mode: "proposed",
+                    steps: [
+                        [
+                            "B1 last moved on Page 2; Pages 3–7 are Following.",
+                            null,
+                        ],
+                        [
+                            "On Page 6, Hold from previous page: nothing arrives at count 32, so it's a borrowed hold: hatched, with a chip naming its source ('Page 2's spot'). Read the 'a drag here…' line.",
+                            () => act((m) => holdFromPrevious(m, 40)),
+                        ],
+                        [
+                            "Remove Page 2's keyframe (count 8): the hold stays and now borrows from Page 1.",
+                            () => {
+                                ph = 8;
+                                act((m) => removeKeyframe(m, 8, false));
+                                ph = 36;
+                                render();
+                            },
+                        ],
+                        [
+                            "Drag inside the hold (count 36): a move is added on Page 5, and the hold now grows out of that diamond (solid).",
+                            () => {
+                                ph = 36;
+                                act((m) => {
+                                    const p = pos(m, 36);
+                                    setPosAt(m, 36, [p[0] + 15, p[1] - 10]);
+                                });
+                            },
+                        ],
+                        [
+                            "Remove that new keyframe (count 32): the hold goes with its diamond (17).",
+                            () => {
+                                ph = 32;
+                                act((m) => removeKeyframe(m, 32, false));
+                            },
+                        ],
+                    ],
+                },
+                {
+                    name: "R4 · Join after a split, part of the group",
+                    setup: () => [
+                        M(
+                            "B1",
+                            [15, 40],
+                            [
+                                {
+                                    start: 8,
+                                    end: 16,
+                                    dest: [75, 12],
+                                    group: "Move 3",
+                                },
+                            ],
+                        ),
+                        M(
+                            "B2",
+                            [15, 48],
+                            [
+                                {
+                                    start: 8,
+                                    end: 16,
+                                    dest: [75, 20],
+                                    group: "Move 3",
+                                },
+                            ],
+                        ),
+                        M(
+                            "B3",
+                            [15, 56],
+                            [
+                                {
+                                    start: 8,
+                                    end: 16,
+                                    dest: [75, 28],
+                                    group: "Move 3",
+                                },
+                            ],
+                        ),
+                    ],
+                    sel: [0],
+                    ph: 12,
+                    mode: "proposed",
+                    steps: [
+                        [
+                            "B1–B3 walk together as one group move ('Move 3') over Page 3.",
+                            null,
+                        ],
+                        [
+                            "Split the group's move at count 12 (Split at playhead splits everyone).",
+                            () => {
+                                history.push(clone(marchers));
+                                lastMsg = [];
+                                splitGroupAt(12);
+                                render();
+                            },
+                        ],
+                        [
+                            "Today's rule (and the lead's fallback): Remove keyframe at 12 with only B1 selected → no join, because the rest of the group still uses the halves. B1 stands still 8–12, then rushes (see Steps per count).",
+                            () =>
+                                act((m) => {
+                                    const r = rowEnding(m, 12);
+                                    m.rows = m.rows.filter((x) => x !== r);
+                                    say(
+                                        `${m.name}: removed its keyframe at 12; the second half still starts at 12, so it stands still, then rushes.`,
+                                    );
+                                }),
+                        ],
+                        [
+                            "Lead: Undo, then Remove → B1 is pulled out of both halves into its own move and joined: even speed. B2 and B3 keep their split.",
+                            () => {
+                                if (history.length) marchers = history.pop();
+                                act((m) => pullOutAndJoin(m, 12));
+                            },
+                        ],
+                    ],
+                },
+                {
+                    name: "R6 · 'Only this page' copies go stale",
+                    setup: () => [
+                        M(
+                            "B1",
+                            [20, 45],
+                            [{ start: 0, end: 8, dest: [35, 30] }],
+                        ),
+                        M(
+                            "B2",
+                            [30, 55],
+                            [{ start: 0, end: 8, dest: [45, 35] }],
+                        ),
+                        M("B3", [60, 50]),
+                    ],
+                    sel: [0, 1],
+                    ph: 32,
+                    mode: "proposed",
+                    steps: [
+                        [
+                            "B1 and B2 last moved on Page 2; Pages 3–7 follow it.",
+                            null,
+                        ],
+                        [
+                            "Before editing Page 2, unlink Page 5 (count 32) — 'only this page': Page 5 keeps its spot as an ordinary move.",
+                            () => act((m) => onlyThisPage(m, 32)),
+                        ],
+                        [
+                            "Edit Page 2 (shift the block right): Pages 3–4 follow, Page 5 keeps the old spot (walks back). As intended.",
+                            () => {
+                                ph = 8;
+                                act((m) => {
+                                    const p = pos(m, 8);
+                                    setPosAt(m, 8, [p[0] + 20, p[1]]);
+                                });
+                            },
+                        ],
+                        [
+                            "Months later, shift the block again on Page 2: Page 5 is still at the very first spot, now unrelated to its neighbours, and nothing says it was a 'keep'. That's the cost of #158 (the lead accepts it; the alternative is keeping stored kept spots).",
+                            () => {
+                                ph = 8;
+                                act((m) => {
+                                    const p = pos(m, 8);
+                                    setPosAt(m, 8, [p[0] + 15, p[1] - 10]);
+                                });
+                                ph = 32;
+                                render();
+                            },
+                        ],
+                    ],
+                },
+                {
+                    name: "R7 · Clip drag lengthens a hold backwards",
+                    setup: () => [
+                        M(
+                            "B1",
+                            [20, 45],
+                            [{ start: 16, end: 24, dest: [45, 25] }],
+                            [{ start: 24, end: 40 }],
+                        ),
+                        M("B2", [30, 55]),
+                        M("B3", [60, 50]),
+                    ],
+                    sel: [0],
+                    ph: 24,
+                    mode: "proposed",
+                    steps: [
+                        [
+                            "B1 walks on Page 4 (16–24) and is Held from 24 to 40.",
+                            null,
+                        ],
+                        [
+                            "Drag that move's clip 8 counts earlier (it now runs 8–16): the hold follows its arrival and now starts at 16, so Page 4 became Held too (lead: accept — the hold is 'from the arrival').",
+                            () => act((m) => shiftMoveEarlier(m, 24, 8)),
+                        ],
+                    ],
+                },
+                {
+                    name: "R8 · Hold over a window with a move inside",
+                    setup: () => [
+                        M(
+                            "B1",
+                            [20, 45],
+                            [
+                                { start: 0, end: 8, dest: [35, 30] },
+                                { start: 20, end: 26, dest: [60, 20] },
+                            ],
+                        ),
+                        M("B2", [30, 55]),
+                        M("B3", [60, 50]),
+                    ],
+                    sel: [0],
+                    ph: 32,
+                    mode: "proposed",
+                    win: 16,
+                    steps: [
+                        [
+                            "B1 has a short move at counts 20–26. The Expert window runs from the start flag at 16 to the playhead at 32.",
+                            null,
+                        ],
+                        [
+                            "Lead: Hold over the window → the move inside is removed and B1 holds 16–32.",
+                            () => act((m) => holdOverWindow(m, 16, 32, false)),
+                        ],
+                        [
+                            "Alternative: Undo, then try again with 'refuse' → nothing changes and it says which move is in the way.",
+                            () => {
+                                if (history.length) marchers = history.pop();
+                                act((m) => holdOverWindow(m, 16, 32, true));
+                            },
+                        ],
+                    ],
+                },
+            ];
+
+            function loadScenario(s) {
+                marchers = s.setup();
+                marchers.forEach(normalize);
+                selected = new Set(s.sel);
+                ph = s.ph;
+                if (s.mode) mode = s.mode;
+                win = s.win ?? null;
+                winRule = "window";
+                history = [];
+                lastMsg = [s.name];
+                const box = $("scenarioSteps");
+                box.innerHTML = "";
+                const ol = document.createElement("ol");
+                s.steps.forEach(([label, fn]) => {
+                    const li = document.createElement("li");
+                    if (fn) {
+                        const b = document.createElement("button");
+                        b.textContent = "▶";
+                        b.style.marginRight = "6px";
+                        b.onclick = fn;
+                        li.appendChild(b);
+                    }
+                    li.appendChild(document.createTextNode(label));
+                    ol.appendChild(li);
+                });
+                box.appendChild(ol);
+                render();
+            }
+            SCENARIOS.forEach((s) => {
+                const b = document.createElement("button");
+                b.textContent = s.name;
+                b.onclick = () => {
+                    document
+                        .querySelectorAll("#scenarioButtons button")
+                        .forEach((x) => x.classList.remove("on"));
+                    b.classList.add("on");
+                    loadScenario(s);
+                };
+                $("scenarioButtons").appendChild(b);
+            });
+            window.__demo = {
+                get marchers() {
+                    return marchers;
+                },
+                get mode() {
+                    return mode;
+                },
+                pos,
+                lookOf,
+                SCENARIOS,
+                loadScenario,
+                setMode: (x) => {
+                    mode = x;
+                    render();
+                },
+            };
+            loadScenario(SCENARIOS[0]);
+            document
+                .querySelector("#scenarioButtons button")
+                .classList.add("on");
+        </script>
+    </body>
+</html>
