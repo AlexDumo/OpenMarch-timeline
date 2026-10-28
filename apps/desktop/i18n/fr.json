@@ -1281,12 +1281,29 @@
         },
         "circle": "Cercle",
         "edit": {
+            "away": {
+                "dismiss": "Abandonner",
+                "dismissTip": "Abandonner la forme (annuler la rétablit)",
+                "goBack": "Revenir",
+                "text": "Forme ouverte à {moment}"
+            },
             "closeUp": {
                 "label": "Resserrer",
                 "title": "Resserrer : remplir {count, plural, one {# place vide} other {# places vides}} avec les marcheurs restants"
             },
+            "drawHint": "Glissez sur le terrain pour dessiner : {shape} · Échap pour annuler",
+            "drawnOn": "depuis {page}",
+            "edge": {
+                "label": "Bord",
+                "tip": "Bord : {edge} répartis le long du contour, {inside} dispersés à l'intérieur",
+                "tipEdgeOnly": "Bord : trop peu de marcheurs pour l'intérieur, les {edge} se placent donc sur le bord"
+            },
+            "empty": "{count} vides",
+            "flipAcross": "Retourner latéralement",
+            "flipDeep": "Retourner d'avant en arrière",
             "gap": {
                 "label": "Écart",
+                "menu": "Reste",
                 "side": {
                     "back": "Arrière",
                     "front": "Avant",
@@ -1298,7 +1315,17 @@
                     "gap": "Laisse un écart",
                     "spread": "Répartit également"
                 },
-                "styleLabel": "Ce côté"
+                "styleLabel": "Ce côté",
+                "tipGap": "Cliquez sur un marcheur du contour (pas un coin) pour y déplacer l'espace.",
+                "tipSpread": "Cliquez sur un marcheur d'un autre côté (pas un coin) pour répartir ce côté à la place."
+            },
+            "layout": {
+                "aria": "Disposition : {label}",
+                "cantMake": "{label} ne peut pas faire {count}",
+                "label": "Disposition",
+                "needs": "{label} demande {count, plural, one {# marcheur} other {# marcheurs}} : {hint}",
+                "needsEither": "{label} demande {a} ou {b} marcheurs : {hint}",
+                "showVersions": "Afficher les versions {label}"
             },
             "mode": {
                 "files": "Grille",
@@ -1306,10 +1333,54 @@
                 "outline": "Contour",
                 "spread": "Dispersion"
             },
+            "pathways": {
+                "hide": "Masquer les chemins depuis le drapeau de départ",
+                "show": "Afficher les chemins depuis le drapeau de départ"
+            },
+            "pivot": {
+                "aria": "Pivot : {pivot}",
+                "custom": "Pivot : là où il a été glissé sur le terrain",
+                "label": "Pivot",
+                "names": {
+                    "c": "centre",
+                    "e": "droite",
+                    "n": "arrière",
+                    "ne": "arrière droit",
+                    "nw": "arrière gauche",
+                    "s": "avant",
+                    "se": "avant droit",
+                    "sw": "avant gauche",
+                    "w": "gauche"
+                },
+                "tip": "Tourner et retourner autour de : {pivot}"
+            },
+            "place": "Placer",
+            "quarterTurn": "Tourner de 90° dans le sens horaire",
+            "ratioLock": {
+                "locked": "Espacements liés : cliquez pour les délier",
+                "unlocked": "Lier les deux espacements"
+            },
+            "recalculate": {
+                "already": "Qui va où est déjà au plus court trajet",
+                "closeUpFirst": "Recalculer qui va où : resserrez d'abord les places vides",
+                "label": "Recalculer",
+                "title": "Recalculer qui va où, au plus court trajet"
+            },
             "reshuffle": {
                 "label": "Remélanger",
                 "title": "Remélanger : une nouvelle disposition"
-            }
+            },
+            "scrubTip": "{label} : cliquez pour saisir, glissez pour modifier",
+            "seed": {
+                "copied": "Copiée",
+                "copy": "Copier la graine",
+                "copyFailed": "Échec de la copie",
+                "count": "pour {count} marcheurs",
+                "hint": "Même graine et même nombre dans la même forme : même dispersion. L'espacement ne fait que la mettre à l'échelle.",
+                "label": "Graine"
+            },
+            "steps": "pas",
+            "turn": "Rotation, en degrés dans le sens horaire"
         },
         "field": {
             "stepLimit": "{steps} à 5"

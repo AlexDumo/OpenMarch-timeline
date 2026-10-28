@@ -1987,12 +1987,29 @@
         },
         "circle": "Circle",
         "edit": {
+            "away": {
+                "dismiss": "Dismiss",
+                "dismissTip": "Dismiss the shape (undo brings it back)",
+                "goBack": "Go back",
+                "text": "Shape open at {moment}"
+            },
             "closeUp": {
                 "label": "Close up",
                 "title": "Close up: fill the {count, plural, one {# empty spot} other {# empty spots}} with the marchers left"
             },
+            "drawHint": "Drag on the field to draw a {shape} · Esc to cancel",
+            "drawnOn": "from {page}",
+            "edge": {
+                "label": "Edge",
+                "tip": "Edge: {edge} evenly along the outline, {inside} spread inside",
+                "tipEdgeOnly": "Edge: too few marchers for an inside, so all {edge} stand on the edge"
+            },
+            "empty": "{count} empty",
+            "flipAcross": "Flip side to side",
+            "flipDeep": "Flip front to back",
             "gap": {
                 "label": "Gap",
+                "menu": "Leftover",
                 "side": {
                     "back": "Back",
                     "front": "Front",
@@ -2004,7 +2021,17 @@
                     "gap": "Leaves a gap",
                     "spread": "Spreads evenly"
                 },
-                "styleLabel": "That side"
+                "styleLabel": "That side",
+                "tipGap": "Click a marcher on the outline (not a corner) to move the gap there.",
+                "tipSpread": "Click a marcher on another side (not a corner) to spread that side instead."
+            },
+            "layout": {
+                "aria": "Layout: {label}",
+                "cantMake": "{label} can't make {count}",
+                "label": "Layout",
+                "needs": "{label} needs {count, plural, one {# marcher} other {# marchers}}: {hint}",
+                "needsEither": "{label} needs {a} or {b} marchers: {hint}",
+                "showVersions": "Show the {label} versions"
             },
             "mode": {
                 "files": "Grid",
@@ -2012,10 +2039,54 @@
                 "outline": "Outline",
                 "spread": "Spread"
             },
+            "pathways": {
+                "hide": "Hide the pathways from the start flag",
+                "show": "Show the pathways from the start flag"
+            },
+            "pivot": {
+                "aria": "Pivot: {pivot}",
+                "custom": "Pivot: where it was dragged on the field",
+                "label": "Pivot",
+                "names": {
+                    "c": "center",
+                    "e": "right",
+                    "n": "back",
+                    "ne": "back right",
+                    "nw": "back left",
+                    "s": "front",
+                    "se": "front right",
+                    "sw": "front left",
+                    "w": "left"
+                },
+                "tip": "Turn and flip around the {pivot}"
+            },
+            "place": "Place",
+            "quarterTurn": "Turn 90° clockwise",
+            "ratioLock": {
+                "locked": "Spacings locked together: click to unlock",
+                "unlocked": "Lock the two spacings together"
+            },
+            "recalculate": {
+                "already": "Who goes where is already least travel",
+                "closeUpFirst": "Recalculate who goes where: close up the empty spots first",
+                "label": "Recalculate",
+                "title": "Recalculate who goes where, by least travel"
+            },
             "reshuffle": {
                 "label": "Reshuffle",
                 "title": "Reshuffle: a new layout"
-            }
+            },
+            "scrubTip": "{label}: click to type, drag to change",
+            "seed": {
+                "copied": "Copied",
+                "copy": "Copy the seed",
+                "copyFailed": "Copy failed",
+                "count": "for {count} marchers",
+                "hint": "Same seed and count in the same shape: same spread. The spacing only scales it.",
+                "label": "Seed"
+            },
+            "steps": "steps",
+            "turn": "Turn, in degrees clockwise"
         },
         "field": {
             "stepLimit": "{steps} to 5"

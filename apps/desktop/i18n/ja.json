@@ -1281,12 +1281,29 @@
         },
         "circle": "円",
         "edit": {
+            "away": {
+                "dismiss": "破棄",
+                "dismissTip": "形状を破棄（元に戻すで復元できます）",
+                "goBack": "戻る",
+                "text": "{moment}で形状を編集中"
+            },
             "closeUp": {
                 "label": "詰める",
                 "title": "詰める：{count, plural, other {#か所の空き}}を残りのマーチャーで埋める"
             },
+            "drawHint": "フィールド上をドラッグして{shape}を描画 · Escでキャンセル",
+            "drawnOn": "{page}から",
+            "edge": {
+                "label": "縁",
+                "tip": "縁：{edge}人を輪郭に沿って均等に、{inside}人を内側に散開",
+                "tipEdgeOnly": "縁：内側に置くにはマーチャーが少ないため、{edge}人全員が縁に立ちます"
+            },
+            "empty": "空き{count}",
+            "flipAcross": "左右に反転",
+            "flipDeep": "前後に反転",
             "gap": {
                 "label": "隙間",
+                "menu": "余り",
                 "side": {
                     "back": "後ろ",
                     "front": "前",
@@ -1298,7 +1315,17 @@
                     "gap": "隙間を残す",
                     "spread": "均等に広げる"
                 },
-                "styleLabel": "その側"
+                "styleLabel": "その側",
+                "tipGap": "輪郭上のマーチャー（角以外）をクリックすると、そこに隙間を移動します。",
+                "tipSpread": "別の辺のマーチャー（角以外）をクリックすると、代わりにその辺を均等にします。"
+            },
+            "layout": {
+                "aria": "レイアウト：{label}",
+                "cantMake": "{label}では{count}人を作れません",
+                "label": "レイアウト",
+                "needs": "{label}には{count}人のマーチャーが必要です：{hint}",
+                "needsEither": "{label}には{a}人または{b}人のマーチャーが必要です：{hint}",
+                "showVersions": "{label}のバージョンを表示"
             },
             "mode": {
                 "files": "グリッド",
@@ -1306,10 +1333,54 @@
                 "outline": "輪郭",
                 "spread": "散開"
             },
+            "pathways": {
+                "hide": "スタートフラグからのパスを非表示",
+                "show": "スタートフラグからのパスを表示"
+            },
+            "pivot": {
+                "aria": "ピボット：{pivot}",
+                "custom": "ピボット：フィールド上でドラッグした位置",
+                "label": "ピボット",
+                "names": {
+                    "c": "中心",
+                    "e": "右",
+                    "n": "後ろ",
+                    "ne": "右後ろ",
+                    "nw": "左後ろ",
+                    "s": "前",
+                    "se": "右前",
+                    "sw": "左前",
+                    "w": "左"
+                },
+                "tip": "{pivot}を中心に回転・反転"
+            },
+            "place": "配置",
+            "quarterTurn": "時計回りに90°回転",
+            "ratioLock": {
+                "locked": "間隔は連動中：クリックで解除",
+                "unlocked": "2つの間隔を連動させる"
+            },
+            "recalculate": {
+                "already": "誰がどこへ行くかはすでに移動距離が最小です",
+                "closeUpFirst": "誰がどこへ行くかを再計算：先に空きを詰めてください",
+                "label": "再計算",
+                "title": "移動距離が最小になるよう、誰がどこへ行くかを再計算"
+            },
             "reshuffle": {
                 "label": "再シャッフル",
                 "title": "再シャッフル：新しい配置"
-            }
+            },
+            "scrubTip": "{label}：クリックで入力、ドラッグで変更",
+            "seed": {
+                "copied": "コピーしました",
+                "copy": "シードをコピー",
+                "copyFailed": "コピーできませんでした",
+                "count": "{count}人のマーチャー用",
+                "hint": "同じ形状で同じシードと人数なら、同じ散開になります。間隔は拡大縮小するだけです。",
+                "label": "シード"
+            },
+            "steps": "ステップ",
+            "turn": "回転（時計回りの角度）"
         },
         "field": {
             "stepLimit": "{steps}対5"

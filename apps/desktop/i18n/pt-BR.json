@@ -1281,12 +1281,29 @@
         },
         "circle": "Círculo",
         "edit": {
+            "away": {
+                "dismiss": "Descartar",
+                "dismissTip": "Descartar a forma (desfazer a traz de volta)",
+                "goBack": "Voltar",
+                "text": "Forma aberta em {moment}"
+            },
             "closeUp": {
                 "label": "Fechar lacunas",
                 "title": "Fechar lacunas: preencher {count, plural, one {# lugar vazio} other {# lugares vazios}} com os marchadores restantes"
             },
+            "drawHint": "Arraste no campo para desenhar: {shape} · Esc para cancelar",
+            "drawnOn": "desde {page}",
+            "edge": {
+                "label": "Borda",
+                "tip": "Borda: {edge} distribuídos ao longo do contorno, {inside} dispersos dentro",
+                "tipEdgeOnly": "Borda: poucos marchadores para o interior, então os {edge} ficam na borda"
+            },
+            "empty": "{count} vazios",
+            "flipAcross": "Espelhar de lado a lado",
+            "flipDeep": "Espelhar de frente para trás",
             "gap": {
                 "label": "Lacuna",
+                "menu": "Sobra",
                 "side": {
                     "back": "Trás",
                     "front": "Frente",
@@ -1298,7 +1315,17 @@
                     "gap": "Deixa uma lacuna",
                     "spread": "Distribui por igual"
                 },
-                "styleLabel": "Esse lado"
+                "styleLabel": "Esse lado",
+                "tipGap": "Clique em um marchador do contorno (não um canto) para mover a lacuna para lá.",
+                "tipSpread": "Clique em um marchador de outro lado (não um canto) para distribuir esse lado no lugar."
+            },
+            "layout": {
+                "aria": "Disposição: {label}",
+                "cantMake": "{label} não consegue formar {count}",
+                "label": "Disposição",
+                "needs": "{label} precisa de {count, plural, one {# marchador} other {# marchadores}}: {hint}",
+                "needsEither": "{label} precisa de {a} ou {b} marchadores: {hint}",
+                "showVersions": "Mostrar as versões de {label}"
             },
             "mode": {
                 "files": "Grade",
@@ -1306,10 +1333,54 @@
                 "outline": "Contorno",
                 "spread": "Dispersão"
             },
+            "pathways": {
+                "hide": "Ocultar os caminhos a partir da bandeira de início",
+                "show": "Mostrar os caminhos a partir da bandeira de início"
+            },
+            "pivot": {
+                "aria": "Pivô: {pivot}",
+                "custom": "Pivô: onde foi arrastado no campo",
+                "label": "Pivô",
+                "names": {
+                    "c": "centro",
+                    "e": "direita",
+                    "n": "trás",
+                    "ne": "trás à direita",
+                    "nw": "trás à esquerda",
+                    "s": "frente",
+                    "se": "frente à direita",
+                    "sw": "frente à esquerda",
+                    "w": "esquerda"
+                },
+                "tip": "Girar e espelhar em torno de: {pivot}"
+            },
+            "place": "Posicionar",
+            "quarterTurn": "Girar 90° no sentido horário",
+            "ratioLock": {
+                "locked": "Espaçamentos vinculados: clique para desvincular",
+                "unlocked": "Vincular os dois espaçamentos"
+            },
+            "recalculate": {
+                "already": "Quem vai para onde já tem o menor percurso",
+                "closeUpFirst": "Recalcular quem vai para onde: feche as lacunas primeiro",
+                "label": "Recalcular",
+                "title": "Recalcular quem vai para onde, pelo menor percurso"
+            },
             "reshuffle": {
                 "label": "Reembaralhar",
                 "title": "Reembaralhar: um novo arranjo"
-            }
+            },
+            "scrubTip": "{label}: clique para digitar, arraste para alterar",
+            "seed": {
+                "copied": "Copiada",
+                "copy": "Copiar a semente",
+                "copyFailed": "Falha ao copiar",
+                "count": "para {count} marchadores",
+                "hint": "Mesma semente e quantidade na mesma forma: mesma dispersão. O espaçamento só a redimensiona.",
+                "label": "Semente"
+            },
+            "steps": "passos",
+            "turn": "Giro, em graus no sentido horário"
         },
         "field": {
             "stepLimit": "{steps} por 5"
