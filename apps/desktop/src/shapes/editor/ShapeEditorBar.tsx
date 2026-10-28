@@ -74,11 +74,12 @@ import { ScrubNumber, type ScrubMove } from "./ScrubNumber";
 import { SaveShapeButton } from "../library/SaveShapeButton";
 import { LayoutMenu } from "./LayoutPicker";
 import { ReshuffleButton } from "./ReshuffleButton";
+import { EdgeToggle } from "./EdgeToggle";
 import { ModeMenu } from "./ModeMenu";
 import { OutlineGap } from "./OutlineGap";
 import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
-import { distributionOf, layoutOf } from "../distribute/modes";
+import { distributionOf, edgeSplitOf, layoutOf } from "../distribute/modes";
 import { outlineGapOf } from "../distribute/outlineGap";
 import type { XY } from "../types";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
@@ -699,6 +700,8 @@ const fillShown = (kind: AnyToolKind, params: unknown, spots: number) => {
         distributionOf(kind, params, spots),
         layoutOf(kind, params, spots),
         outlineGapOf(kind, params, spots),
+        // Edge's tip says how many stand on the edge, which the proportions change (#450)
+        edgeSplitOf(kind, params, spots),
         flipX,
         flipY,
     ]);
@@ -706,7 +709,7 @@ const fillShown = (kind: AnyToolKind, params: unknown, spots: number) => {
 
 /**
  * How it's filled: a pill of its own under the editor (owner, #435), the mode switch first, then
- * what that mode has (a box's layout in Grid, the gap in Outline, Reshuffle in Spread). Hidden
+ * what that mode has (a box's layout in Grid, the gap in Outline, Reshuffle and Edge in Spread). Hidden
  * when the kind has none of them. Only the bar and the pill take the pointer, not the empty
  * space beside the pill
  */
@@ -746,6 +749,12 @@ const FillPill = memo(function FillPill({
                     envFor={env}
                     className="rounded-4 hover:text-accent hover:bg-fg-2 min-h-24 px-4 py-2"
                     testId="shape-editor-reshuffle"
+                />
+                <EdgeToggle
+                    target={target}
+                    envFor={env}
+                    className="rounded-4 hover:text-accent hover:bg-fg-2 min-h-24 px-4 py-2"
+                    testId="shape-editor-edge"
                 />
             </span>
         </div>

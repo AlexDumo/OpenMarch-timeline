@@ -130,6 +130,11 @@ export interface SpreadDistribution {
      * count it's laid out at.
      */
     readonly count?: number;
+    /**
+     * Spread with an edge (#450): some marchers evenly along the outline, the rest an even spread
+     * inside it. Absent: off, a plain spread.
+     */
+    readonly edge?: true;
 }
 
 export type Distribution =
@@ -212,7 +217,9 @@ function readOddGap(v: unknown): OddGap {
  * then can't be laid out: see {@link canLayOut}
  */
 function readSpread(d: object): SpreadDistribution | undefined {
-    const { seed, generator, count } = d as Partial<Record<string, unknown>>;
+    const { seed, generator, count, edge } = d as Partial<
+        Record<string, unknown>
+    >;
     if (typeof generator !== "number" || !SPREAD_GENERATORS.includes(generator))
         return undefined;
     return {
@@ -220,6 +227,7 @@ function readSpread(d: object): SpreadDistribution | undefined {
         seed: isWhole(seed) && seed >= 1 ? seed : 1,
         generator,
         ...(isWhole(count) && count >= 1 && { count }),
+        ...(edge === true && { edge }),
     };
 }
 
@@ -236,7 +244,12 @@ export type SavedDistribution =
 
 /** What a saved shape keeps of `d` */
 export function savedDistributionOf(d: Distribution): SavedDistribution {
-    if (d.mode === "spread") return { mode: d.mode, generator: d.generator };
+    if (d.mode === "spread")
+        return {
+            mode: d.mode,
+            generator: d.generator,
+            ...(d.edge && { edge: d.edge }),
+        };
     if (d.mode === "outline") return d;
     const { files: _files, ...layout } = d.layout;
     return { ...d, layout };
@@ -259,7 +272,8 @@ export function fromSaved(
     files: number,
     n: number,
 ): Distribution {
-    if (saved.mode === "spread") return spreadDistribution(1, n);
+    if (saved.mode === "spread")
+        return spreadDistribution(1, n, saved.edge === true);
     if (saved.mode === "outline") return saved;
     return { ...saved, layout: { ...saved.layout, files } };
 }
@@ -281,11 +295,13 @@ export function canLayOut(params: unknown): boolean {
 export const spreadDistribution = (
     seed: number,
     n: number,
+    edge = false,
 ): SpreadDistribution => ({
     mode: "spread",
     seed,
     generator: SPREAD_GENERATOR,
     count: Math.max(1, n),
+    ...(edge && { edge: true as const }),
 });
 
 /**
@@ -299,7 +315,7 @@ export const reshuffled = (
     d: SpreadDistribution,
     n: number,
 ): SpreadDistribution =>
-    spreadDistribution(d.seed >= SEED_MAX ? 1 : d.seed + 1, n);
+    spreadDistribution(d.seed >= SEED_MAX ? 1 : d.seed + 1, n, d.edge === true);
 
 /**
  * The distribution a shape of `n` spots switched to `mode` starts with: Files takes `files`

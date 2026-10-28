@@ -117,6 +117,11 @@ interface Work {
     readonly k: number;
     readonly margins: number[];
     readonly points: XY[];
+    /**
+     * Points that stand still (a spread with an edge's edge, #450): the moving ones keep their
+     * distance from them as from each other. Absent: none.
+     */
+    readonly fixed?: readonly XY[];
 }
 
 /** How far a work point is inside the region's edge, in work units */
@@ -157,6 +162,13 @@ function addByBestCandidate(w: Work, until: number, random: () => number) {
                 d = Math.min(d, dx * dx + dy * dy);
                 if (d <= bestD) break;
             }
+            if (d > bestD && w.fixed)
+                for (const p of w.fixed) {
+                    const dx = c.x - p.x;
+                    const dy = c.y - p.y;
+                    d = Math.min(d, dx * dx + dy * dy);
+                    if (d <= bestD) break;
+                }
             if (d > bestD) {
                 bestD = d;
                 best = c;
@@ -238,6 +250,8 @@ function pushApart(w: Work, rounds: number, target?: number) {
                 mx[j]! += dx * f;
                 my[j]! += dy * f;
             }
+            // A point that stands still: the moving one takes the whole push
+            if (w.fixed) pushedOff(a, w.fixed, target, 2 * push, mx, my, i);
         }
         for (let i = 0; i < n; i++) {
             const p = points[i]!;
@@ -330,6 +344,11 @@ function raiseFloor(
                 mx[j]! += dx * f;
                 my[j]! += dy * f;
             }
+        // Points that stand still: the moving one steps the whole shortfall away
+        if (w.fixed)
+            for (let i = 0; i < n; i++)
+                if (pushedOff(points[i]!, w.fixed, floor, 1, mx, my, i))
+                    close = true;
         if (!close) return;
         for (let i = 0; i < n; i++) {
             const p = points[i]!;
@@ -346,6 +365,47 @@ function raiseFloor(
             }
         }
     }
+}
+
+/**
+ * `a` (moving point `i`) pushed off each still point nearer than `target`, by `push` of the
+ * shortfall, into `mx`, `my`; whether any was that near
+ */
+function pushedOff(
+    a: XY,
+    still: readonly XY[],
+    target: number,
+    push: number,
+    mx: Float64Array,
+    my: Float64Array,
+    i: number,
+): boolean {
+    let near = false;
+    for (const b of still) {
+        const dx = a.x - b.x;
+        if (dx >= target || dx <= -target) continue;
+        const dy = a.y - b.y;
+        const dd = dx * dx + dy * dy;
+        if (dd >= target * target || dd === 0) continue;
+        near = true;
+        const d = Math.sqrt(dd);
+        const f = ((target - d) / d) * push;
+        mx[i]! += dx * f;
+        my[i]! += dy * f;
+    }
+    return near;
+}
+
+/** The closest distance between any two of `w`'s points, the still ones counted too */
+function closestOf(w: Work): number {
+    let best = closestPair(w.points);
+    for (const a of w.points)
+        for (const b of w.fixed ?? []) {
+            const dx = a.x - b.x;
+            const dy = a.y - b.y;
+            best = Math.min(best, Math.sqrt(dx * dx + dy * dy));
+        }
+    return best;
 }
 
 /** The closest distance between any two points */
@@ -393,7 +453,7 @@ function floorAt(w: Work, interval: number) {
     const floor = interval * (1 + 1e-4);
     raiseFloor(w, floor, undefined, 2);
     for (const share of SQUEEZES) {
-        if (closestPair(w.points) >= interval) return;
+        if (closestOf(w) >= interval) return;
         const squeezed: Work = {
             ...w,
             margins: w.margins.map((m) => m * share),
@@ -567,4 +627,74 @@ export function evenSpread(
         // Back to front, then left to right, so slot numbers read like a page
         .sort((a, b) => a.y - b.y || a.x - b.x);
     return { spots, scale: w.k * unit };
+}
+
+/** A spread around still points: each moving one at least this far in from the edge, in intervals */
+const AROUND_MARGIN_MIN = 0.3;
+const AROUND_MARGIN_SPAN = 0.4;
+
+/**
+ * `m` spots spread evenly over `region` (in intervals, as big as it is) around `fixed` spots that
+ * stand still, no pair closer than an interval where there's room (#450: a spread with an edge,
+ * its edge the still spots). Seeded best candidate and push-apart as for a spread, the still
+ * spots counted as neighbors, so the spread runs right up to them with no band between; each
+ * moving spot keeps its own small seeded distance from the edge. The same spots for the same
+ * region, still spots, count and seed.
+ */
+export function spreadAround(
+    region: Region,
+    fixed: readonly XY[],
+    m: number,
+    seed: number,
+): XY[] {
+    if (m <= 0) return [];
+    const random = seeded(seed * 7919 + 1);
+    const w: Work = {
+        region,
+        seed,
+        k: 1,
+        margins: Array.from(
+            { length: m },
+            () => AROUND_MARGIN_MIN + AROUND_MARGIN_SPAN * random(),
+        ),
+        points: [],
+        fixed,
+    };
+    addByBestCandidate(w, m, seeded(seed));
+    pushApart(w, SPREAD_ROUNDS, hexSpacing(region.area, m + fixed.length));
+    floorAt(w, 1);
+    // Back to front, then left to right, so slot numbers read like a page
+    return w.points.sort((a, b) => a.y - b.y || a.x - b.x);
+}
+
+/**
+ * `start` (spots at least an interval from each other and from `fixed`) eased apart over
+ * `region` for up to `rounds` rounds, a round kept only while no pair comes closer than an
+ * interval: the floor holds whatever happens (#450's fallback). Spots may go to the edge itself.
+ */
+export function settleAround(
+    region: Region,
+    fixed: readonly XY[],
+    start: readonly XY[],
+    rounds: number,
+): XY[] {
+    const w: Work = {
+        region,
+        seed: 0,
+        k: 1,
+        margins: start.map(() => 0),
+        points: start.map((p) => ({ ...p })),
+        fixed,
+    };
+    const target = hexSpacing(region.area, start.length + fixed.length);
+    for (let round = 0; round < rounds; round++) {
+        const before = w.points.map((p) => ({ ...p }));
+        pushApart(w, 1, target);
+        if (closestOf(w) < 1) {
+            w.points.splice(0, w.points.length, ...before);
+            break;
+        }
+    }
+    // Back to front, then left to right, so slot numbers read like a page
+    return w.points.sort((a, b) => a.y - b.y || a.x - b.x);
 }
