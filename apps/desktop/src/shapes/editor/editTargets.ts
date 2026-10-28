@@ -136,7 +136,7 @@ const PREVIEW_HOLD_MS = 1000;
  * Runs a write of `box`, unless one started from it is still going: until it's read back, `box`
  * is the old one, and a change worked out from it would undo the last (review)
  */
-const oneWriteAtATime =
+export const oneWriteAtATime =
     (
         writing: { current: PlacedBox | null },
         queued: { current: Change[] },
@@ -145,18 +145,23 @@ const oneWriteAtATime =
     (run: () => Promise<void>) => {
         if (writing.current === box) return;
         writing.current = box;
-        void run()
-            .catch(() => undefined)
-            .finally(() =>
-                // Read back normally moves on first (a new box); a failed write mustn't stick,
-                // nor the changes waiting for it
-                setTimeout(() => {
-                    if (writing.current !== box) return;
-                    writing.current = null;
-                    queued.current = [];
-                }, PREVIEW_HOLD_MS),
-            );
+        const done = () => {
+            if (writing.current !== box) return;
+            writing.current = null;
+            queued.current = [];
+        };
+        // The box read back normally moves on first (a new box), and the changes waiting for it
+        // go on from there, however slow the read back is (a busy machine took over a second and
+        // dropped the second of two quick Alt+R presses). A failed write mustn't stick, nor the
+        // changes waiting for it; nor a write whose box never comes back
+        void run().then(
+            () => setTimeout(done, READ_BACK_LIMIT_MS),
+            () => done(),
+        );
     };
+
+/** How long a saved shape may take to be read back before the presses waiting for it are dropped */
+const READ_BACK_LIMIT_MS = 3000;
 
 type Change = (params: unknown) => unknown;
 
