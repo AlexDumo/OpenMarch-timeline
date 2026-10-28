@@ -641,16 +641,20 @@ test("change: the View tab keeps only labels, paths, shapes and 3D; the rest mov
         .toMatchAriaSnapshot(`
       - tabpanel "View":
         - /children: equal
-        - text: Labels
-        - combobox "Labels"
-        - button "Next paths":
-          - text: Next paths
-          - img
-        - text: Shapes
-        - combobox "Shapes"
-        - button "Open 3D View":
-          - text: Open 3D View
-          - img
+        - group:
+          - /children: equal
+          - text: Labels
+          - combobox "Labels"
+          - button "Next paths":
+            - text: Next paths
+            - img
+          - text: Shapes
+          - combobox "Shapes"
+        - group:
+          - /children: equal
+          - button "Open 3D View":
+            - text: Open 3D View
+            - img
     `);
 
     const settings = await openSettings(page, "Field");
@@ -5020,4 +5024,194 @@ test("change: a click on a placed circle's member selects it whole, its handle c
     await expect
         .poll(async () => (await placedBoxes(page)).map((b) => b.label))
         .toEqual(["Circle · 9 steps"]);
+});
+
+// Tablets (#1060 tablet layout, merged from main): an Apple Pencil edits the field as a mouse
+// does, fingers only navigate it, and on a screen that can't hover the shape never calms down
+
+/** Drags a pen (an Apple Pencil) from `from` to `to`, in viewport pixels, through Chromium's input. */
+async function penDrag(page: Page, from: Point, to: Point, steps = 12) {
+    const cdp = await page.context().newCDPSession(page);
+    const send = (
+        type: "mousePressed" | "mouseMoved" | "mouseReleased",
+        p: Point,
+    ) =>
+        cdp.send("Input.dispatchMouseEvent", {
+            type,
+            x: p.x,
+            y: p.y,
+            button: "left",
+            buttons: type === "mouseReleased" ? 0 : 1,
+            clickCount: type === "mouseMoved" ? 0 : 1,
+            pointerType: "pen",
+        });
+    await send("mouseMoved", from);
+    await send("mousePressed", from);
+    for (let i = 1; i <= steps; i++)
+        await send("mouseMoved", {
+            x: from.x + ((to.x - from.x) * i) / steps,
+            y: from.y + ((to.y - from.y) * i) / steps,
+        });
+    await send("mouseReleased", to);
+    await cdp.detach();
+}
+
+/** Drags one finger from `from` to `to`, in viewport pixels. */
+async function fingerDrag(page: Page, from: Point, to: Point, steps = 10) {
+    const cdp = await page.context().newCDPSession(page);
+    const send = (type: "touchStart" | "touchMove" | "touchEnd", p?: Point) =>
+        cdp.send("Input.dispatchTouchEvent", {
+            type,
+            touchPoints: p ? [{ x: p.x, y: p.y, id: 0 }] : [],
+        });
+    await send("touchStart", from);
+    for (let i = 1; i <= steps; i++)
+        await send("touchMove", {
+            x: from.x + ((to.x - from.x) * i) / steps,
+            y: from.y + ((to.y - from.y) * i) / steps,
+        });
+    await send("touchEnd");
+    await cdp.detach();
+}
+
+test("change: an Apple Pencil draws the box, stretches it by a handle and moves it, as a mouse does", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await selectAll(page);
+    await page.keyboard.press("b");
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+
+    await penDrag(
+        page,
+        await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
+        await toScreen(page, { x: cf.x - 5 * S, y: cf.y - 19 * S }),
+    );
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    expect(await readout(page)).toMatch(/^4 × 2 · /);
+    const before = await readout(page);
+
+    const handles = (await shapeOverlay(page))!.handles;
+    const se = handles.reduce((a, b) => (b.x + b.y > a.x + a.y ? b : a));
+    await penDrag(page, se, { x: se.x + 60, y: se.y + 30 });
+    await expect.poll(() => readout(page)).not.toBe(before);
+
+    const spotsBefore = (await shapeOverlay(page))!.spots;
+    const xs = spotsBefore.map((p) => p.x);
+    const ys = spotsBefore.map((p) => p.y);
+    const inside = await toScreen(page, {
+        x: (Math.min(...xs) + Math.max(...xs)) / 2,
+        y: (Math.min(...ys) + Math.max(...ys)) / 2,
+    });
+    await penDrag(page, inside, { x: inside.x - 80, y: inside.y + 40 });
+    const spotsAfter = (await shapeOverlay(page))!.spots;
+    expect(spotsAfter[0].x).toBeLessThan(spotsBefore[0].x);
+    expect(spotsAfter[0].y).toBeGreaterThan(spotsBefore[0].y);
+    // Nothing is saved until Enter
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+});
+
+test("change: a finger on the field with the box tool armed pans, and draws no box", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await selectAll(page);
+    await page.keyboard.press("b");
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+    const pan = async () => (await readField(page)).viewport.pan;
+    const before = await pan();
+
+    await fingerDrag(
+        page,
+        await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
+        await toScreen(page, { x: cf.x - 5 * S, y: cf.y - 19 * S }),
+    );
+    await expect.poll(async () => (await pan()).x).not.toBe(before.x);
+    expect((await shapeOverlay(page))!.outline).toBeNull();
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+});
+
+test("change: on a screen that can't hover, the open box's controls and its floating editor stay solid with the pointer away", async ({
+    show,
+}) => {
+    const { page } = show;
+    const cdp = await page.context().newCDPSession(page);
+    // A touch screen: (hover: none)
+    await cdp.send("Emulation.setTouchEmulationEnabled", {
+        enabled: true,
+        maxTouchPoints: 5,
+    });
+    expect(
+        await page.evaluate(() => matchMedia("(hover: hover)").matches),
+    ).toBe(false);
+    const { grid } = await drawBox(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    const away = await toScreen(page, { x: cf.x + 20 * S, y: cf.y - 5 * S });
+    await page.mouse.move(away.x, away.y);
+    // Longer than the editor's half-second wait before it fades
+    await page.waitForTimeout(800);
+    expect((await shapeOverlay(page))!.calm).toBe(false);
+    expect(
+        await page
+            .getByTestId("fieldShapeHandle")
+            .first()
+            .evaluate((el) => getComputedStyle(el).opacity),
+    ).toBe("1");
+    expect(await editorOpacity(page)).toBe(1);
+    await cdp.detach();
+});
+
+// The field's menu (#315, from main) and the shapes: it acts on the selection, so it stays shut
+// while an open shape is being edited, and a selected placed box offers it for its marchers
+const fieldMenu = (page: Page) => page.getByTestId("field-menu");
+
+test("change: while an open box is being edited, a right-click on the field and the context-menu key open no menu (#315)", async ({
+    show,
+}) => {
+    const { page } = show;
+    const { pressed, released } = await drawBox(show);
+    const middle = await toScreen(page, {
+        x: (pressed.x + released.x) / 2,
+        y: (pressed.y + released.y) / 2,
+    });
+    await page.mouse.click(middle.x, middle.y, { button: "right" });
+    const t1 = await marcherScreen(page, 1);
+    await page.mouse.click(t1.x, t1.y, { button: "right" });
+    await page.keyboard.press("ContextMenu");
+    await page.keyboard.press("Shift+F10");
+    await page.waitForTimeout(300);
+    await expect(fieldMenu(page)).toHaveCount(0);
+    // Still open, as it was
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    expect((await readField(page)).selection).toEqual(ALL);
+});
+
+test("change: a selected placed box's right-click opens the field's menu for its marchers, as the context-menu key does (#315)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+    const t1 = await marcherScreen(page, 1);
+    await page.mouse.click(t1.x, t1.y);
+    await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+    const members = (await readField(page)).selection;
+    expect(members).toEqual(ALL);
+
+    const t2 = await marcherScreen(page, 2);
+    await page.mouse.click(t2.x, t2.y, { button: "right" });
+    await expect(fieldMenu(page)).toBeVisible();
+    // The selection is the box's marchers, kept
+    expect((await readField(page)).selection).toEqual(members);
+    await page.keyboard.press("Escape");
+    await expect(fieldMenu(page)).toBeHidden();
+
+    await page.keyboard.press("ContextMenu");
+    await expect(fieldMenu(page)).toBeVisible();
 });

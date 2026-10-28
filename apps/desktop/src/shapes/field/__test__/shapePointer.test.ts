@@ -25,6 +25,19 @@ describe("the shape's calm signal (#403, #430)", () => {
         resetShapePointer();
         expect(shapeCalm(false)).toBe(true);
     });
+
+    it("is never calm on a screen that can't hover (touch, Apple Pencil): the pointer is never over", () => {
+        const matchMedia = vi.fn((query: string) => ({
+            matches: query !== "(hover: hover)",
+        }));
+        vi.stubGlobal("matchMedia", matchMedia);
+        try {
+            expect(shapeCalm(false)).toBe(false);
+            expect(matchMedia).toHaveBeenCalledWith("(hover: hover)");
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
 });
 
 describe("keyboard focus in the floating editor", () => {
