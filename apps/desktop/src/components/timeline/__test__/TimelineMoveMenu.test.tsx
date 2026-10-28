@@ -14,7 +14,11 @@ import {
     type TimelineInput,
 } from "../Timeline";
 import type { TimelineSelection } from "../TimelineViewModel";
-import type { TimelineMoveCommands } from "../TimelineRangeMenu";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import {
+    TimelineMoveMenuItems,
+    type TimelineMoveCommands,
+} from "../TimelineRangeMenu";
 
 /**
  * UI-14: a clip is a move. Its right-click menu, the selected clip's ⋯ button and the focused
@@ -200,18 +204,36 @@ describe("the clip's menu (UI-14)", () => {
         });
         fireEvent.contextMenu(clipButton());
         const split = screen.getByTestId("timeline-move-menu-split");
-        expect(split.getAttribute("data-disabled")).not.toBeNull();
+        expect(split.getAttribute("aria-disabled")).toBe("true");
+        const reason = screen.getByTestId("timeline-move-menu-split-reason");
+        expect(reason.textContent).toBe(
+            "Put the playhead inside the move to split it there.",
+        );
+        // The reason is the entry's description, and sits behind a ? until asked for
+        expect(split.getAttribute("aria-describedby")).toBe(reason.id);
         expect(
-            screen.getByTestId("timeline-move-menu-split-reason").textContent,
-        ).toBe("Put the playhead inside the move to split it there.");
+            screen.getByTestId("timeline-move-menu-split-reason-icon"),
+        ).toBeTruthy();
+        expect(screen.queryByRole("tooltip")).toBeNull();
         fireEvent.click(split);
         expect(moves.onSplit).not.toHaveBeenCalled();
+        // Pressing it shows why and leaves the menu open
+        expect(screen.getByRole("tooltip").textContent).toBe(
+            "Put the playhead inside the move to split it there.",
+        );
+        expect(screen.getByTestId("timeline-range-menu")).toBeTruthy();
         // Edit and Delete stay available: only the split is blocked
         expect(
             screen
                 .getByTestId("timeline-move-menu-edit")
-                .getAttribute("data-disabled"),
+                .getAttribute("aria-disabled"),
         ).toBeNull();
+        // One Escape closes the tip and the menu together
+        fireEvent.keyDown(document.activeElement ?? document.body, {
+            key: "Escape",
+        });
+        expect(screen.queryByRole("tooltip")).toBeNull();
+        expect(screen.queryByTestId("timeline-range-menu")).toBeNull();
     });
 
     it("keeps Delete page alone on a page box, and nothing on a dragged range", () => {
@@ -738,5 +760,53 @@ describe("the flags over the waveform row (UI-21)", () => {
             screen.getByTestId("timeline-playhead"),
         ])
             expect(parseFloat(handle.style.height)).toBeGreaterThan(64);
+    });
+});
+
+describe("an unavailable entry's reason tip", () => {
+    const menuWith = (disabledReason: string | null) => (
+        <DropdownMenu.Root open modal={false}>
+            <DropdownMenu.Trigger />
+            <DropdownMenu.Content data-testid="menu">
+                <TimelineMoveMenuItems
+                    actions={{
+                        onEdit: vi.fn(),
+                        onRename: vi.fn(),
+                        onDelete: vi.fn(),
+                        disabledReason,
+                    }}
+                />
+            </DropdownMenu.Content>
+        </DropdownMenu.Root>
+    );
+
+    // jsdom can't reproduce the tooltip's hover grace area, so crossing the ? is checked in the
+    // app; here: the entry's highlight alone opens and closes it
+    it("opens while the entry is highlighted, and only then", () => {
+        render(menuWith("Pause to edit or delete a move."));
+        const edit = screen.getByTestId("timeline-move-menu-edit");
+        expect(screen.queryByRole("tooltip")).toBeNull();
+        fireEvent.focus(edit);
+        expect(screen.getByRole("tooltip").textContent).toBe(
+            "Pause to edit or delete a move.",
+        );
+        fireEvent.blur(edit);
+        expect(screen.queryByRole("tooltip")).toBeNull();
+    });
+
+    it("keeps the entry, and its focus, when the reason comes or goes", () => {
+        const { rerender } = render(
+            menuWith("Pause to edit or delete a move."),
+        );
+        const edit = screen.getByTestId("timeline-move-menu-edit");
+        edit.focus();
+        rerender(menuWith(null));
+        expect(screen.getByTestId("timeline-move-menu-edit")).toBe(edit);
+        expect(document.activeElement).toBe(edit);
+        expect(edit.getAttribute("aria-disabled")).toBeNull();
+        expect(screen.queryByRole("tooltip")).toBeNull();
+        rerender(menuWith("Pause to edit or delete a move."));
+        expect(screen.getByTestId("timeline-move-menu-edit")).toBe(edit);
+        expect(edit.getAttribute("aria-disabled")).toBe("true");
     });
 });

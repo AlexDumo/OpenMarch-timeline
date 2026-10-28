@@ -492,8 +492,9 @@ test("3D View follows the editor and saves the venue", async ({
 
     // Undo in the editor reverts each change; redo puts it back.
     await editor.getByRole("tab", { name: "File" }).click();
-    const undo = editor.getByRole("button", { name: "Undo", exact: true });
-    const redo = editor.getByRole("button", { name: "Redo", exact: true });
+    // The File tab's buttons, which show their words (the title bar's are icons)
+    const undo = editor.getByRole("button").filter({ hasText: /^Undo$/ });
+    const redo = editor.getByRole("button").filter({ hasText: /^Redo$/ });
     await undo.click();
     await expectVenue(view3d, kit, kitLighting, webgl);
     await undo.click();

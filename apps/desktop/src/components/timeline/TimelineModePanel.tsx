@@ -415,7 +415,7 @@ export default function TimelineModePanel() {
     // move's end (endless counts rule 4)
     const stopBeat = usePlaybackStopBeat();
     const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
-    // Change to subset / normal page: one `updatePages` edit, one undo step
+    // The page box menu's Subset switch: one `updatePages` edit, one undo step
     const { mutate: updatePages } = useMutation(
         updatePagesMutationOptions(queryClient),
     );

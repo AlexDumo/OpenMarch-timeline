@@ -5,7 +5,10 @@
  */
 export const isWebBuild = import.meta.env.VITE_PUBLIC_WEB_BUILD === "true";
 
-/** "stable", "nightly" or "dev" in the web build; undefined in Electron. */
+/**
+ * "stable", "nightly" or "dev" in the web build (the fork adds "preview", and
+ * "lab" for lab.openmarch.com test builds); undefined in Electron.
+ */
 export const webChannel: string | undefined = import.meta.env
     .VITE_PUBLIC_WEB_CHANNEL;
 
@@ -16,7 +19,7 @@ export interface WebExampleShow {
     file: string;
 }
 
-/** The example shows a preview web build offers; empty everywhere else. */
+/** The example shows a preview or lab web build offers; empty everywhere else. */
 export const webExampleShows: WebExampleShow[] = JSON.parse(
     import.meta.env.VITE_PUBLIC_WEB_EXAMPLES || "[]",
 );

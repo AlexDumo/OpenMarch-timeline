@@ -18,11 +18,12 @@ before it can land. To compare with Fabric, use the pinned pre-switch build
 
 ## Files
 
-| File                                                     | Purpose                                                                                    |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| [implementation-plan.md](implementation-plan.md)         | Ticket index and blocking order, architecture rules, interaction rules table, parity gate. |
-| [phases/](phases/)                                       | One file per phase: scope, tickets, exit gate and handoff notes.                           |
-| [porting-fabric-features.md](porting-fabric-features.md) | Porting a Fabric feature to the new field, and the inventory of in-flight Fabric work.     |
+| File                                                     | Purpose                                                                                     |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [implementation-plan.md](implementation-plan.md)         | Ticket index and blocking order, architecture rules, interaction rules table, parity gate.  |
+| [phases/](phases/)                                       | One file per phase: scope, tickets, exit gate and handoff notes.                            |
+| [porting-fabric-features.md](porting-fabric-features.md) | Porting a Fabric feature to the new field, and the inventory of in-flight Fabric work.      |
+| [tablet-port.md](tablet-port.md)                         | What of upstream's tablet layout is in the fork, and what is left to port to the new field. |
 
 ## Where status lives
 

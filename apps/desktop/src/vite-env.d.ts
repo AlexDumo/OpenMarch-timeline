@@ -13,10 +13,16 @@ interface ImportMetaEnv {
     readonly VITE_EDITOR_API_URL?: string;
     /** "true" in the web build (vite.web.config.mts). */
     readonly VITE_PUBLIC_WEB_BUILD?: string;
-    /** The web build's release channel: "stable", "nightly" or "dev". */
+    /** The web build's channel: "stable", "nightly", "dev", "preview" or "lab". */
     readonly VITE_PUBLIC_WEB_CHANNEL?: string;
-    /** JSON list of the example shows a preview web build offers. */
+    /** Names the web build's browser storage: the channel, or "lab-<test id>". */
+    readonly VITE_PUBLIC_WEB_STORAGE_NAMESPACE?: string;
+    /** JSON list of the example shows a preview or lab web build offers. */
     readonly VITE_PUBLIC_WEB_EXAMPLES?: string;
+    /** A lab build's show to open straight away, an example show's id (fork-only, web/LAB.md). */
+    readonly VITE_PUBLIC_LAB_SHOW?: string;
+    /** A lab build's editor mode, "basic" or "expert" (fork-only, web/LAB.md). */
+    readonly VITE_PUBLIC_LAB_MODE?: string;
     /** "true" in the 3D View web preview, which has no Settings window. */
     readonly VITE_VIEW3D_NO_SETTINGS_WINDOW?: string;
     /** The app's version, in the web build's worker. */

@@ -26,6 +26,11 @@ import {
     DatabasePageWithBeat,
 } from "@/db-functions";
 import { DEFAULT_STALE_TIME } from "./constants";
+import { toast } from "sonner";
+import { queueHistoryStep } from "@/shortcuts/handlers/historyQueue";
+import { getLatestUndoEntryToken } from "@/db-functions";
+import { undoIfStillLatest } from "./undoIfStillLatest";
+import { ACTION_TOAST_DURATION_MS } from "@/components/ui/toastDurations";
 import tolgee from "@/global/singletons/Tolgee";
 import { utilityKeys } from "./useUtility";
 import { beatKeys } from "./useBeats";
@@ -245,6 +250,31 @@ export const updatePagesMutationOptions = (qc: QueryClient) => {
         },
     });
 };
+
+/**
+ * The "page deleted" toast, with an Undo button that undoes that deletion
+ * only: it runs Undo only while the deletion is still the latest history
+ * entry (see getLatestUndoEntryToken), and otherwise says it can't.
+ */
+export const pageDeletedToastOptions = (undoToken: string | null) => ({
+    // Long enough to reach for Undo
+    duration: ACTION_TOAST_DURATION_MS,
+    action: {
+        label: tolgee.t("actions.edit.undo"),
+        onClick: () =>
+            void queueHistoryStep(
+                (perform) =>
+                    undoIfStillLatest({
+                        token: undoToken,
+                        getLatestToken: () => getLatestUndoEntryToken(db),
+                        undo: () => perform("undo"),
+                        unavailable: () =>
+                            toast.info(tolgee.t("pages.undoDeleteUnavailable")),
+                    }),
+                false,
+            ),
+    },
+});
 
 export const pagesInOrderQueryOptions = () => {
     return queryOptions<DatabasePageWithBeat[]>({
