@@ -21,7 +21,12 @@ import {
 } from "../definitions";
 import type { ShortcutOverrides } from "../keymap";
 import { getActionLabel, getActionShortcutKeys } from "../labels";
-import { hasActionHandler, isActionEnabled, runAction } from "../registry";
+import {
+    actionLabelNow,
+    hasActionHandler,
+    isActionEnabled,
+    runAction,
+} from "../registry";
 import { isActionOffInWorkspace } from "../workspaceActions";
 import { isPreviewMode } from "@/stores/PreviewModeStore";
 import { paramsCommand } from "./commandBar";
@@ -84,7 +89,7 @@ export function getActionPaletteItems(
         .map((id: ActionId) => {
             const def = getActionDefinition(id);
             const CategoryIcon = CATEGORY_ICONS[def.category];
-            const label = getActionLabel(id, t);
+            const label = actionLabelNow(id) ?? getActionLabel(id, t);
             return {
                 id: `action:${id}`,
                 label,

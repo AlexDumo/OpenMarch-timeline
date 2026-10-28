@@ -26,6 +26,8 @@ const NOT_IN_PALETTE: Partial<Record<ActionId, string>> = {
         "← on the timeline; the palette lists Previous page, which does the same",
     timelineNextPage:
         "→ on the timeline; the palette lists Next page, which does the same",
+    openFieldMenu:
+        "the keyboard's right-click: opens the field's menu at the selection, which the palette would cover",
     shapeBlock: "listed as Shape › Box, which asks the box's numbers",
     shapeCircle: "listed as Shape › Circle, which asks the circle's numbers",
 };

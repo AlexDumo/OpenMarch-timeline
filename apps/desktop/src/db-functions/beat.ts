@@ -2,7 +2,7 @@ import { eq, gt, asc, desc, inArray } from "drizzle-orm";
 import {
     DbConnection,
     DbTransaction,
-    ensureSecondBeatHasPage,
+    keepSecondBeatPageInTransaction,
     transactionWithHistory,
 } from "@/db-functions";
 import { schema } from "@/global/database/db";
@@ -326,16 +326,20 @@ export async function createBeats({
         db,
         "createBeats",
         async (tx) =>
-            await withTimelinePageRipple(tx, async () => {
-                const createdBeats = await createBeatsInTransaction({
+            await withTimelinePageRipple(tx, async () =>
+                keepSecondBeatPageInTransaction({
                     tx,
-                    newBeats,
-                    startingPosition,
-                });
-                await flattenOrderInTransaction({ tx });
-                await ensureSecondBeatHasPage({ tx });
-                return createdBeats;
-            }),
+                    operation: async () => {
+                        const createdBeats = await createBeatsInTransaction({
+                            tx,
+                            newBeats,
+                            startingPosition,
+                        });
+                        await flattenOrderInTransaction({ tx });
+                        return createdBeats;
+                    },
+                }),
+            ),
     );
     return transactionResult;
 }
@@ -526,14 +530,13 @@ export async function deleteBeatsCarryingCues({
         db,
         "deleteBeats",
         async (tx) =>
-            await withTimelinePageRipple(tx, async () => {
-                const response = await deleteBeatsCarryingCuesInTransaction({
+            await withTimelinePageRipple(tx, async () =>
+                keepSecondBeatPageInTransaction({
                     tx,
-                    beatIds,
-                });
-                await ensureSecondBeatHasPage({ tx });
-                return response;
-            }),
+                    operation: () =>
+                        deleteBeatsCarryingCuesInTransaction({ tx, beatIds }),
+                }),
+            ),
     );
 }
 

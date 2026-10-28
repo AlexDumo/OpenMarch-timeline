@@ -4,6 +4,11 @@ import type { FieldTheme } from "@openmarch/core";
 import { rgba01 } from "../fieldGeometry";
 import type { FieldMarchers } from "../fieldMarchers";
 import type { FieldDimming } from "../fieldDimming";
+import {
+    labelOpacity,
+    labelWeight,
+    type FieldFollowing,
+} from "../fieldFollowing";
 import { useFieldDraw } from "../fieldDrawContext";
 import { labelsShown } from "../marcherLooks";
 import { TextBatch, type GlyphAtlas } from "../sdfText";
@@ -37,12 +42,14 @@ const DEFAULT_STYLE: LabelStyle = { form: "fixed", scale: 1, beside: false };
  * Every marcher's label (drill number) in one instanced draw of SDF glyphs,
  * in the theme's label color. A marcher whose
  * appearance hides its label has no glyphs. The text is laid out again only
- * when the marchers, their labels or which labels show change; a frame only
- * rewrites the anchors.
+ * when the marchers, their labels or which labels show change; dimming only
+ * rewrites the colors, the Following look only the weights, and a frame only
+ * the anchors.
  */
 export default function LabelsLayer({
     marchers,
     dimming,
+    following,
     labels,
     theme,
     atlas,
@@ -52,6 +59,8 @@ export default function LabelsLayer({
     marchers: FieldMarchers;
     /** Marchers whose labels are drawn dimmed (#201). */
     dimming: FieldDimming;
+    /** Marchers whose labels are drawn lighter in weight as Following (#300, #324); dimming wins. */
+    following: FieldFollowing;
     /** Each marcher's label text (its drill number, or the number only), by id. */
     labels: ReadonlyMap<number, string>;
     theme: FieldTheme;
@@ -76,6 +85,7 @@ export default function LabelsLayer({
         idsVersion: -1,
         appearanceVersion: -1,
         dimVersion: -1,
+        followingVersion: -1,
         labels,
         theme,
         style,
@@ -96,6 +106,7 @@ export default function LabelsLayer({
             style.beside ? 0 : -LABEL_LIFT,
         );
     }, [text, style.beside]);
+    useEffect(() => following.subscribe(invalidate), [following, invalidate]);
 
     useFrame(() => {
         const { zoom } = draw.view.getState();
@@ -130,7 +141,12 @@ export default function LabelsLayer({
             shown !== last.shown ||
             style !== last.style ||
             size !== last.size ||
+            // Dimming hides or recolors labels: laid out again
             dimming.version !== last.dimVersion;
+        // The Following look (and each frame of its ease on Stop) only
+        // changes the weights
+        const weightsChanged = following.version !== last.followingVersion;
+        const weightOf = (id: number) => labelWeight(dimming, following, id);
         if (newLayout) {
             const color = rgba01(theme.defaultMarcher.label);
             text.setLabels(
@@ -146,10 +162,13 @@ export default function LabelsLayer({
                         color[0],
                         color[1],
                         color[2],
-                        color[3] * dimming.opacityOf(id),
+                        color[3] * labelOpacity(dimming, id),
                     ],
+                    weight: weightOf(id),
                 })),
             );
+        } else if (weightsChanged) {
+            text.setWeights((i) => weightOf(marchers.ids[i]!));
         }
         if (newLayout || marchers.version !== last.version)
             text.setAnchors(marchers.positions);
@@ -158,6 +177,7 @@ export default function LabelsLayer({
             idsVersion: marchers.idsVersion,
             appearanceVersion: marchers.appearanceVersion,
             dimVersion: dimming.version,
+            followingVersion: following.version,
             labels,
             theme,
             style,

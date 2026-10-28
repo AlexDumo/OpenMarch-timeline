@@ -213,9 +213,48 @@ const webEntry = (): Plugin => ({
                         ...labScriptHosts,
                     ].join(" "),
                 )
-                .replace(/<title>[^<]*<\/title>/, "<title>OpenMarch</title>"),
+                .replace(/<title>[^<]*<\/title>/, "<title>OpenMarch</title>")
+                .replace(
+                    /<meta\s+name="viewport"\s+content="[^"]*"\s*\/>/,
+                    `<meta name="viewport" content="${WEB_VIEWPORT}" />`,
+                )
+                .replace("</head>", `    ${HOME_SCREEN_TAGS}\n    </head>`),
     },
 });
+
+/**
+ * `maximum-scale=1` stops iOS Safari zooming the page into a text field
+ * whose font is under 16px (iOS ignores it for pinch-zoom, for
+ * accessibility; `web/renderer/touchGestures.ts` stops that instead) and
+ * stops Android Chrome's page pinch-zoom. `viewport-fit=cover` lets the app
+ * reach under the notch and home indicator in home-screen mode, where
+ * `env(safe-area-inset-*)` pads it back (src/styles/index.css).
+ */
+const WEB_VIEWPORT =
+    "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover";
+
+/**
+ * "Add to Home Screen" (iPadOS Safari, Android Chrome): opens full screen
+ * like an app, with the app icon. The files are in `web/public/`. Electron
+ * shares index.html, so these are added only here.
+ *
+ * The status bar style is "default", not "black-translucent": on iPadOS 17,
+ * black-translucent moves the page up under the status bar but still takes
+ * the bar's height off the page, leaving a strip at the bottom of the screen
+ * that isn't part of the page (measured on an iPad 7: a 790 px page on an
+ * 810 px screen). iPadOS reads this when the app is added to the Home
+ * Screen, so a change needs the app removed and added again.
+ */
+const HOME_SCREEN_TAGS = [
+    '<link rel="manifest" href="/manifest.webmanifest" />',
+    '<link rel="apple-touch-icon" href="/apple-touch-icon.png" />',
+    '<meta name="mobile-web-app-capable" content="yes" />',
+    '<meta name="apple-mobile-web-app-capable" content="yes" />',
+    '<meta name="apple-mobile-web-app-title" content="OpenMarch" />',
+    '<meta name="apple-mobile-web-app-status-bar-style" content="default" />',
+    '<meta name="theme-color" content="#ecebf0" media="(prefers-color-scheme: light)" />',
+    '<meta name="theme-color" content="#0f0e13" media="(prefers-color-scheme: dark)" />',
+].join("\n        ");
 
 export default defineConfig({
     // A lab build is served from a folder, so its URLs are relative.
@@ -276,6 +315,8 @@ export default defineConfig({
         // The migrator reads files with `fs`, which must reach worker/fs.ts.
         exclude: ["@sqlite.org/sqlite-wasm", "drizzle-orm/migrator"],
     },
+    // Home-screen icons and manifest (see HOME_SCREEN_TAGS), and the favicon.
+    publicDir: web("public"),
     build: {
         outDir,
         emptyOutDir: true,

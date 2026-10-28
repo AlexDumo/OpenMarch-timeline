@@ -17,6 +17,7 @@ import {
 } from "@/shapes/tool/shapeToolStore";
 import { PlacedBoxKeys } from "@/shapes/placed/PlacedBoxKeys";
 import { useBoxSelectionStore } from "@/shapes/placed/boxSelectionStore";
+import { useUnsetActionHandlers } from "./handlers/useUnsetActionHandlers";
 
 /** Handlers available before a show is open (launch page). */
 export function FileActionHandlers() {
@@ -36,6 +37,7 @@ export function EditorActionHandlers() {
     useCursorActionHandlers();
     useShapeToolActions();
     useKeepActionHandlers();
+    useUnsetActionHandlers();
     useTimelineActionEffects();
     // Mounted after the handlers above, so the open shape tool's keys are on top, and a selected
     // placed box's below them

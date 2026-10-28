@@ -74,7 +74,8 @@ export interface ActionDefinition {
 }
 
 export type NudgeDirection = "up" | "down" | "left" | "right";
-export type NudgeStep = "grid" | "quarter" | "tenth" | "four";
+/** "one" is exactly one step, for the touch Move pad (no binding uses it). */
+export type NudgeStep = "grid" | "quarter" | "tenth" | "one" | "four";
 export interface NudgeArgs {
     direction: NudgeDirection;
     step: NudgeStep;
@@ -557,6 +558,16 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: ["Alt+C"],
     },
+    // #315: the field's right-click menu, from the keyboard, at the selection. Enabled only with
+    // a selection
+    openFieldMenu: {
+        labelKey: "actions.ui.openFieldMenu",
+        category: "ui",
+        editsDrill: false,
+        scope: "canvas",
+        defaultBindings: ["ContextMenu", "Shift+F10"],
+        hiddenFromPalette: true,
+    },
     focusTimeline: {
         labelKey: "actions.ui.focusTimeline",
         category: "ui",
@@ -745,6 +756,28 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["K"],
         ignoreRepeat: true,
+    },
+
+    // Set vs Following (#304): the selected marchers Set on the count shown lose that
+    // coordinate and follow from earlier; later pages keep their spots. Unbound
+    timelineUnsetHere: {
+        labelKey: "actions.timeline.unsetHere",
+        keywordsKey: "actions.timeline.unsetHereKeywords",
+        category: "timeline",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+    },
+
+    // Set vs Following (#305): as Unset here, but the later pages that followed the spot follow
+    // back to the earlier one. Its handler names the pages ("Unset here and on Pages 3–5"). Unbound
+    timelineUnsetHereAndFollowing: {
+        labelKey: "actions.timeline.unsetHereAndFollowing",
+        keywordsKey: "actions.timeline.unsetHereKeywords",
+        category: "timeline",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
     },
 
     // Opens the transport's go-to box: type a page, a measure ("m23") or a rehearsal mark

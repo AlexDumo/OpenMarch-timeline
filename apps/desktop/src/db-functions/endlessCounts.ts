@@ -95,6 +95,7 @@ export async function appendCountsInTransaction({
     if (counts === 0) return beatCount;
     const appended = continuedCounts(continuation, counts);
     await keepLastPageAsDrawn(tx);
+    const anchorFirstPage = await secondBeatHasPageOrNone(tx);
     // Only once the edit commits: a refused one stores nothing
     afterHistoryCommit(() => {
         storedCounts = true;
@@ -119,13 +120,26 @@ export async function appendCountsInTransaction({
                     notes: null,
                 })),
             });
-        // A show with no counts gets its first page with its first count
-        await ensureSecondBeatHasPage({ tx });
+        // A show with no counts gets its first page with its first count. A count-in before the
+        // first page stays (#1055).
+        if (anchorFirstPage) await ensureSecondBeatHasPage({ tx });
     });
     return beatCount + counts;
 }
 
 let storedCounts = false;
+
+/** True if the show has no second count yet, or a page starts on it */
+async function secondBeatHasPageOrNone(tx: DbTransaction): Promise<boolean> {
+    const second = await tx
+        .select({ page_id: schema.timing_objects.page_id })
+        .from(schema.timing_objects)
+        .orderBy(asc(schema.timing_objects.position))
+        .limit(1)
+        .offset(1)
+        .get();
+    return !second || second.page_id != null;
+}
 
 /**
  * Whether a committed edit has stored counts since the last call (which clears it); a refused one

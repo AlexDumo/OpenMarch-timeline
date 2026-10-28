@@ -12,6 +12,10 @@ import { readExportPositions } from "../utils/exportPagePositions";
 import { buildCoordinateSheets } from "../utils/coordinateSheets";
 import { buildMarcherAppearancesByPageId } from "../utils/exportAppearances";
 import { generateDrillChartExportSVGs } from "../utils/svg-generator";
+import { pageEndBeat } from "@/timeline/pageEndBeat";
+import { followingAt, marcherSetBeats } from "@/timeline/timelineSetFollowing";
+import { readTimelinePageSnapshot } from "@/timeline/timelinePagePositions";
+import { resolverSpans } from "@/timeline/timelineStore";
 
 /**
  * The coordinate sheet and drill chart exports on the `base.tsx` fixtures, through the same
@@ -68,7 +72,7 @@ const exportShow = async (db: DbConnection) => {
     });
     // Individual charts are slow to render, so the chart covers the first few marchers
     const charted = marchers.slice(0, CHARTED);
-    const { coords } = await generateDrillChartExportSVGs({
+    const { coords, SVGs } = await generateDrillChartExportSVGs({
         fieldProperties,
         marchers: charted,
         sortedPages: pages,
@@ -85,7 +89,7 @@ const exportShow = async (db: DbConnection) => {
         }),
         individualCharts: true,
     });
-    return { pages, marchers, positions, sheets, coords };
+    return { pages, marchers, positions, sheets, coords, SVGs };
 };
 
 describeDbTests("coordinate sheet and drill chart exports", (it) => {
@@ -134,5 +138,37 @@ describeDbTests("coordinate sheet and drill chart exports", (it) => {
         after.coords.forEach((coords, i) => {
             if (i !== index) expect(coords).toEqual(before.coords[i]);
         });
+    });
+
+    it("drill charts draw Following marchers solid, as the show looks", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        // The editor draws a marcher with no coordinate of its own on a page's
+        // count dashed (#300); a printed chart draws every dot solid (#302)
+        const { resolver, pages } = await readTimelinePageSnapshot(db);
+        const setBeats = new Map(
+            resolver
+                .marcherIds()
+                .map((id) => [
+                    id,
+                    marcherSetBeats(resolverSpans(resolver, id), (beat) =>
+                        resolver.positionAt(id, beat),
+                    ),
+                ]),
+        );
+        const anyFollowing = pages.some(
+            (page) => followingAt(setBeats, pageEndBeat(page)).size > 0,
+        );
+        expect(anyFollowing).toBe(true);
+
+        const { SVGs } = await exportShow(db);
+        const dots = SVGs.flat().flatMap(
+            (svg) => svg.match(/<[^>]*data-marcher-id="[^"]*"[^>]*>/g) ?? [],
+        );
+        expect(dots.length).toBeGreaterThan(0);
+        // The theme's dot fill is opaque; no dot is drawn fainter than it
+        for (const dot of dots)
+            expect(dot).not.toMatch(/fill-opacity|\sopacity=/);
     });
 });

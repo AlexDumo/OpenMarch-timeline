@@ -23,7 +23,7 @@ import { performersOnly } from "@/global/classes/Marcher";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { clsx } from "clsx";
-import { T } from "@tolgee/react";
+import { T, useTolgee } from "@tolgee/react";
 import { useQuery } from "@tanstack/react-query";
 import type { FieldProperties } from "@openmarch/core";
 import { usePositionAt } from "@/timeline/timelineStore";
@@ -42,7 +42,11 @@ import {
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import { TagButtons } from "./marcher/TagEditor";
 import TimelineHoldLine from "./TimelineHoldLine";
+import UnsetHereButton, {
+    UnsetHereAndFollowingButton,
+} from "./UnsetHereButton";
 import { useMarcherNameOf } from "@/timeline/useKeepLaterPages";
+import MovePad from "./marcher/MovePad";
 
 const DEFAULT_SORTING_THRESHOLD = 0.1;
 
@@ -165,9 +169,16 @@ const evenlyDistributeVertically = ({
  * Component that renders all alignment, distribution, and transformation buttons
  * for multiple selected marchers
  */
+/** In touch mode the caption stacks under the icon and the button grows to fit. */
+const alignButtonClassName =
+    "flex flex-1 items-center justify-center touch:h-auto touch:min-h-44 touch:flex-col touch:gap-2 touch:py-4";
+
 function AlignmentButtons() {
+    const { t } = useTolgee();
     const [horizontalStepInterval, setHorizontalStepInterval] = useState("");
     const [verticalStepInterval, setVerticalStepInterval] = useState("");
+    const [placeMenuOpen, setPlaceMenuOpen] = useState(false);
+    const closePlaceMenu = () => setPlaceMenuOpen(false);
     const { mutate: updateSelectedMarchers } =
         useUpdateSelectedMarchersOnSelectedPage();
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
@@ -254,24 +265,26 @@ function AlignmentButtons() {
             <div className="flex gap-8">
                 <ActionButton
                     action="alignVertically"
+                    caption={t("inspector.marcher.alignVerticallyCaption")}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
                             size: "compact",
                         }),
-                        "flex flex-1 items-center justify-center",
+                        alignButtonClassName,
                     )}
                 >
                     <AlignCenterVerticalSimpleIcon size={16} weight="bold" />
                 </ActionButton>
                 <ActionButton
                     action="alignHorizontally"
+                    caption={t("inspector.marcher.alignHorizontallyCaption")}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
                             size: "compact",
                         }),
-                        "flex flex-1 items-center justify-center",
+                        alignButtonClassName,
                     )}
                 >
                     <AlignCenterHorizontalSimpleIcon size={16} weight="bold" />
@@ -279,24 +292,26 @@ function AlignmentButtons() {
 
                 <ActionButton
                     action="flipHorizontal"
+                    caption={t("inspector.marcher.flipHorizontalCaption")}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
                             size: "compact",
                         }),
-                        "flex flex-1 items-center justify-center",
+                        alignButtonClassName,
                     )}
                 >
                     <FlipHorizontalIcon size={16} weight="bold" />
                 </ActionButton>
                 <ActionButton
                     action="flipVertical"
+                    caption={t("inspector.marcher.flipVerticalCaption")}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
                             size: "compact",
                         }),
-                        "flex flex-1 items-center justify-center",
+                        alignButtonClassName,
                     )}
                 >
                     <FlipVerticalIcon size={16} weight="bold" />
@@ -375,7 +390,10 @@ function AlignmentButtons() {
             <hr className="border-stroke w-full border" />
             {/* Set Marcher Positions Dropdowns */}
             <div className="flex flex-col gap-8">
-                <Dropdown.Root>
+                <Dropdown.Root
+                    open={placeMenuOpen}
+                    onOpenChange={setPlaceMenuOpen}
+                >
                     <Dropdown.Trigger
                         className={clsx(
                             getButtonClassName({
@@ -392,12 +410,14 @@ function AlignmentButtons() {
                         <Dropdown.Content className="bg-modal rounded-6 shadow-modal backdrop-blur-32 border-stroke flex flex-col items-start gap-0 border p-8">
                             <ActionButton
                                 action="setSelectedMarchersToPreviousPage"
+                                onRun={closePlaceMenu}
                                 className="text-text px-6 py-4"
                             >
                                 <T keyName="toolbar.alignment.toPreviousPagePositions" />
                             </ActionButton>
                             <ActionButton
                                 action="setSelectedMarchersToNextPage"
+                                onRun={closePlaceMenu}
                                 className="text-text px-6 py-4"
                             >
                                 <T keyName="toolbar.alignment.toNextPagePositions" />
@@ -588,6 +608,7 @@ function MarcherEditor() {
                                 playingNote
                             ) : (
                                 <>
+                                    <MovePad />
                                     <p className="text-sub text-text/80 w-full px-6 font-mono">
                                         {selectedMarchers
                                             .map(
@@ -667,6 +688,13 @@ function MarcherEditor() {
                                         marcherIds={selectedMarcherIdList}
                                         nameOf={selectedNameOf}
                                     />
+                                    {/* Set vs Following (#304, #305) */}
+                                    <UnsetHereButton
+                                        marcherIds={selectedMarcherIdList}
+                                    />
+                                    <UnsetHereAndFollowingButton
+                                        marcherIds={selectedMarcherIdList}
+                                    />
                                     {selectedMarchers.length === 2 && (
                                         <ActionButton
                                             action="swapMarchers"
@@ -714,6 +742,7 @@ function MarcherEditor() {
                                 playingNote
                             ) : (
                                 <>
+                                    <MovePad />
                                     {!rCoords ? (
                                         <p className="text-body text-red">
                                             <T keyName="inspector.marcher.errorLoadingCoords" />
@@ -932,6 +961,17 @@ function MarcherEditor() {
                                                         selectedMarcherIdList
                                                     }
                                                     nameOf={selectedNameOf}
+                                                />
+                                                {/* Set vs Following (#304, #305) */}
+                                                <UnsetHereButton
+                                                    marcherIds={
+                                                        selectedMarcherIdList
+                                                    }
+                                                />
+                                                <UnsetHereAndFollowingButton
+                                                    marcherIds={
+                                                        selectedMarcherIdList
+                                                    }
                                                 />
                                             </div>
                                             {/* This is here so the form submits when enter is pressed, does NOT need to be translated */}

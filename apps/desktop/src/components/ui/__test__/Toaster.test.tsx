@@ -27,10 +27,10 @@ describe("Toaster", () => {
     it("sits 12px from the window's bottom-right corner, 320px wide, on any window width", async () => {
         render(<Toaster />);
         act(() => {
-            toast.info("Page 3 is no longer a stop");
+            toast.info("Page 3 is no longer a keyframe");
         });
         const li = (
-            await screen.findByText("Page 3 is no longer a stop")
+            await screen.findByText("Page 3 is no longer a keyframe")
         ).closest("[data-sonner-toast]") as HTMLElement;
         const list = li.closest("[data-sonner-toaster]") as HTMLElement;
         expect(list.dataset.yPosition).toBe("bottom");
@@ -66,12 +66,15 @@ describe("Toaster", () => {
     it("keeps an action's label on one line, with a focus ring", async () => {
         render(<Toaster />);
         act(() => {
-            toast.info("Pages 3–4 are no longer stops", {
-                action: { label: "Keep Pages 3–4 as stops", onClick: () => {} },
+            toast.info("Pages 3–4 are no longer keyframes", {
+                action: {
+                    label: "Keep Pages 3–4 as keyframes",
+                    onClick: () => {},
+                },
             });
         });
         const button = await screen.findByRole("button", {
-            name: "Keep Pages 3–4 as stops",
+            name: "Keep Pages 3–4 as keyframes",
         });
         expect(button.className).toMatch(/\bwhitespace-nowrap\b/);
         expect(button.className).toMatch(/\bshrink-0\b/);
@@ -81,12 +84,15 @@ describe("Toaster", () => {
     it("with one button, keeps it beside the text on one row", async () => {
         render(<Toaster />);
         act(() => {
-            toast.info("Page 3 is no longer a stop", {
-                action: { label: "Keep Page 3 as a stop", onClick: () => {} },
+            toast.info("Page 3 is no longer a keyframe", {
+                action: {
+                    label: "Keep Page 3 as a keyframe",
+                    onClick: () => {},
+                },
             });
         });
         const button = await screen.findByRole("button", {
-            name: "Keep Page 3 as a stop",
+            name: "Keep Page 3 as a keyframe",
         });
         const { li, content } = toastOf(button);
         expect(li.querySelector("[data-cancel]")).toBeNull();

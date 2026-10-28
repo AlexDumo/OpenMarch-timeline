@@ -19,6 +19,7 @@ import { applyAnalyticsConsent } from "@/utilities/analyticsConsent";
 import tolgee from "@/global/singletons/Tolgee";
 import { installClickFocusMarker } from "@/utilities/clickFocus";
 import { initEditorModeStore } from "@/stores/EditorModeStore";
+import { startInputModeTracking } from "@/stores/InputModeStore";
 
 installClickFocusMarker();
 
@@ -29,6 +30,9 @@ const isSettingsWindow = window.location.hash === "#settings";
 // three.js, and skips the editor's analytics and providers.
 const isView3dWindow =
     new URLSearchParams(window.location.search).get("view") === "3d";
+
+// Touch or mouse layout (<html data-input>), for every window
+startInputModeTracking();
 
 if (isView3dWindow) {
     void mountView3dWindow();
