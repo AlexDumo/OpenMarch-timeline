@@ -8,7 +8,12 @@ import {
     timelineResolverSettled,
     useTimelineResolverStore,
 } from "@/timeline/timelineStore";
-import { performRedo, performUndo } from "../history";
+import { performRedo, performUndo, transactionWithHistory } from "../history";
+import {
+    followPlacedBoxChanges,
+    invalidatePlacedBoxes,
+    usePlacedBoxStore,
+} from "@/shapes/placed/placedBoxStore";
 import { createLastPage, deletePages } from "../page";
 import { deleteMarchers } from "../marcher";
 import {
@@ -293,6 +298,51 @@ describeDbTests("Shape recipes", (it) => {
                     .all()
             ).map((m) => m.marcher_id),
         ).toEqual([b]);
+    });
+
+    it("placed shapes follow undo and redo of an edit that only changed a recipe (a pivot drag)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const stop = followPlacedBoxChanges();
+        try {
+            const { a, b } = await show(db);
+            const id = await place(db, [a, b], ARC);
+            const timelineId = await recipeTimeline(db, id);
+            const bulge = () =>
+                (
+                    usePlacedBoxStore
+                        .getState()
+                        .recipes.find((r) => r.id === id)?.params as
+                        | { bulge: number }
+                        | undefined
+                )?.bulge;
+            // The app re-reads after its own edits
+            invalidatePlacedBoxes();
+            await expect.poll(bulge).toBe(4);
+
+            // No position changes, so the resolver hears of none of this
+            await transactionWithHistory(db, "editRecipe", async (tx) => {
+                await saveShapeRecipeInTransaction({
+                    tx,
+                    timelineId,
+                    recipe: { ...ARC, params: { bulge: 9 } },
+                    members: [
+                        { marcherId: a, slot: 0, x: 100, y: 50 },
+                        { marcherId: b, slot: 1, x: 120, y: 50 },
+                    ],
+                    replaces: id,
+                });
+            });
+            invalidatePlacedBoxes();
+            await expect.poll(bulge).toBe(9);
+            await performUndo(db);
+            await expect.poll(bulge).toBe(4);
+            await performRedo(db);
+            await expect.poll(bulge).toBe(9);
+        } finally {
+            stop();
+        }
     });
 
     describe("with a move split off the page's (UI-25)", () => {

@@ -14,6 +14,7 @@ import { useBoxSelectionStore } from "./boxSelectionStore";
 import type { PlacedBox } from "./placedBox";
 import { placedNumbers } from "./placedBoxText";
 import {
+    followPlacedBoxChanges,
     invalidatePlacedBoxes,
     placedBoxesAt,
     usePlacedBoxStore,
@@ -126,10 +127,12 @@ export function PlacedBoxesOverlay({
     const selected = useSelectedMarchers()?.selectedMarchers;
     const view = useFieldViewStore();
 
-    // The recipes change with the show: every resolver change re-reads them (undo, redo, edits)
+    // The recipes change with the show: every resolver change re-reads them, and so does every
+    // undoable edit, undo and redo, for those that change only a recipe
     useEffect(() => {
         invalidatePlacedBoxes();
     }, [version]);
+    useEffect(() => followPlacedBoxChanges(), []);
 
     const drawings = useMemo(() => {
         if (mode === "off" || isPlaying || toolOpen) return [];
