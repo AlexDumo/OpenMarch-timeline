@@ -365,7 +365,11 @@ describe("a pivot of its own stays put when the shape settles on the grid", () =
         const { center } = boxTool.frameOf(t.params, N);
         // Dropped with Alt, so off the half steps (a marcher standing there, say)
         const out = { x: center.x + 31.3, y: center.y - 18.6 };
-        const moved = dragged(t, center, out, { mod: true, snap: false });
+        const moved = dragged(t, center, out, {
+            mod: true,
+            snap: false,
+            fine: true,
+        });
         for (const degrees of [90, 37]) {
             const turned = edit(
                 moved,

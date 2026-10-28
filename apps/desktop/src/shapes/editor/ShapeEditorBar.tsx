@@ -14,7 +14,7 @@ import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { editorPlacement } from "./editorPlacement";
 import { keepInView } from "./keepInView";
 import { glideTo, isGliding } from "@/field/three/fieldNavigation";
-import { useShapePointerStore } from "../field/shapePointer";
+import { setShapeScrubbing, useShapePointerStore } from "../field/shapePointer";
 import { keepFocus } from "./keepFocus";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { getActionShortcutLabel } from "@/shortcuts/labels";
@@ -146,8 +146,15 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
     );
 }
 
-/** The env an editor change is worked out with, Alt being "don't snap" as on the field */
-const envFor = (keys: { alt: boolean; shift: boolean }): ToolEnv | null => {
+/**
+ * The env an editor change is worked out with, the keys as on the field: Alt fine control, Cmd or
+ * Ctrl no snapping (owner on #453)
+ */
+const envFor = (keys: {
+    alt: boolean;
+    shift: boolean;
+    mod?: boolean;
+}): ToolEnv | null => {
     const field = currentShapeField();
     return field ? toolEnvFor(field, keys) : null;
 };
@@ -374,22 +381,28 @@ const turnQuarter = (target: ShapeEditTarget) =>
 
 /**
  * A number's drag: the change from the shape at the press, previewed live. `base` holds the
- * shape at the press.
+ * shape at the press. A spacing's (`guides`) shows the field lines a corner or the center lands
+ * on while it goes (#452).
  */
 const scrubWith = (
     target: ShapeEditTarget,
     base: { current: unknown },
     change: (b: unknown, m: ScrubMove, env: ToolEnv) => unknown,
+    guides = false,
 ) => ({
     onScrubStart: () => {
         base.current = target.params;
         target.begin();
+        if (guides) setShapeScrubbing(true);
     },
     onScrub: (m: ScrubMove) => {
         const env = envFor(m);
         if (env) target.preview(change(base.current, m, env));
     },
-    onScrubEnd: (keep: boolean) => target.end(keep),
+    onScrubEnd: (keep: boolean) => {
+        setShapeScrubbing(false);
+        target.end(keep);
+    },
 });
 
 type Param = ChipNumber["param"];
@@ -415,8 +428,11 @@ function numberActions(
         less: (param: Param) => step(param, "less"),
         more: (param: Param) => step(param, "more"),
         scrub: (param: Param) =>
-            scrubWith(target, base, (b, m, env) =>
-                param.scrub(b, target.spots, m, env),
+            scrubWith(
+                target,
+                base,
+                (b, m, env) => param.scrub(b, target.spots, m, env),
+                param.interval === true,
             ),
         type: (param: Param, text: string) => {
             const env = envFor(PLAIN);

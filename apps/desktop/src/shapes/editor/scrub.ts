@@ -13,6 +13,8 @@ export interface ScrubMove {
     /** The direction a two-way number locked to */
     readonly axis: ScrubAxis;
     readonly alt: boolean;
+    /** Cmd on a Mac, Ctrl elsewhere: no snapping at all (owner on #453) */
+    readonly mod?: boolean;
     readonly shift: boolean;
 }
 

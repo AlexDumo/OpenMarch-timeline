@@ -117,13 +117,24 @@ describe("moving a box onto a line", () => {
         expect(Math.abs(e.center.x - free.x)).toBeLessThan(half);
     });
 
-    it("doesn't pull with Alt (no snap)", () => {
+    it("with Alt, still lands on the line, and moves freely away from lines (owner on #453)", () => {
+        const before = edges(box);
+        const alt = { snap: false, fine: true };
+        const p = move(boxTool, box, { x: 0, y: -before.front - 0.8 }, alt);
+        exact(edges(p as BoxParams).front, 0);
+        // Off the half steps, exactly where it was dragged
+        const away = move(boxTool, box, { x: 3.3, y: -7.1 }, alt) as BoxParams;
+        exact(away.center.x, box.center.x + 3.3);
+        exact(away.center.y, box.center.y - 7.1);
+    });
+
+    it("doesn't pull with Cmd/Ctrl (no snapping)", () => {
         const before = edges(box);
         const p = move(
             boxTool,
             box,
             { x: 0, y: -before.front - 0.8 },
-            { snap: false },
+            { snap: false, pull: false },
         );
         exact(edges(p as BoxParams).front, -0.8);
     });

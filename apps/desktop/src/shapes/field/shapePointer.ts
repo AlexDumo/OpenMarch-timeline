@@ -9,19 +9,40 @@ import type { PivotKey } from "../frame/frame";
  * gesture is under way (the open shape's own gesture is in its tool state). `editorFocus`:
  * keyboard focus is inside the floating editor, typing a number counting. `pivotPreview`: the
  * pivot a cell of the editor's pivot menu points at, under the pointer or keyboard focus (#437):
- * shown on the field, never stored.
+ * shown on the field, never stored. `scrubbing`: a spacing number in the editor is being dragged,
+ * so the field shows the guides a corner or center lands on (#452).
  */
 export const useShapePointerStore = create<{
     over: boolean;
     dragging: boolean;
     editorFocus: boolean;
     pivotPreview: PivotKey | null;
+    scrubbing: boolean;
 }>(() => ({
     over: false,
     dragging: false,
     editorFocus: false,
     pivotPreview: null,
+    scrubbing: false,
 }));
+
+/** Notes whether a spacing number in the floating editor is being dragged (#452) */
+export function setShapeScrubbing(scrubbing: boolean): void {
+    if (useShapePointerStore.getState().scrubbing !== scrubbing)
+        useShapePointerStore.setState({ scrubbing });
+}
+
+/**
+ * The gesture the guides follow: a spacing drag in the shape's editor (#452), which the open shape
+ * holds as an edit, or else the shape's own
+ */
+export function guideGesture(
+    gesture: { readonly type: string } | null | undefined,
+    scrubbing: boolean,
+): { readonly type: string } | null {
+    return scrubbing ? SCRUB : (gesture ?? null);
+}
+const SCRUB = { type: "scrub" } as const;
 
 /** Shows where a pivot would be on the field while its cell is pointed at; null hides it */
 export function setPivotPreview(pivotPreview: PivotKey | null): void {
@@ -46,6 +67,7 @@ export function resetShapePointer(): void {
     setShapePointerOver(false);
     setShapeDragging(false);
     setPivotPreview(null);
+    setShapeScrubbing(false);
 }
 
 /**

@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { isMacPlatform } from "@/shortcuts/platform";
 import { Tip } from "./Tip";
 import { useRef, useState, type PointerEvent } from "react";
 import {
@@ -133,7 +134,14 @@ export function ScrubNumber({
         }
         p.axis = lockedAxis(p.axis, dx, dy) ?? p.axis;
         if (!p.axis) return;
-        onScrub({ dx, dy, axis: p.axis, alt: e.altKey, shift: e.shiftKey });
+        onScrub({
+            dx,
+            dy,
+            axis: p.axis,
+            alt: e.altKey,
+            shift: e.shiftKey,
+            mod: isMacPlatform() ? e.metaKey : e.ctrlKey,
+        });
     };
     const up = (keep: boolean) => {
         const p = press.current;
