@@ -27,6 +27,7 @@ import {
     handleKeysOf,
     insideBox,
     moveBox,
+    evenedOutline,
     keptOutline,
     halfStep,
     snapToGrid,
@@ -83,6 +84,7 @@ export const boxTool: ToolKind<BoxParams> = {
                     ? boxBlock(params, n)
                     : null,
         },
+        evenOut: (params, n, env) => evenedOutline(params, n, env) ?? undefined,
         startMode: (params, n, mode) =>
             distributionFor(mode, filesOf(params), n),
         withDistribution(params, n, distribution, env) {

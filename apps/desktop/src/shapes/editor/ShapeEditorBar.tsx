@@ -224,6 +224,12 @@ function ShapeEditorBar({
         enabled: target.recalculate !== null,
         ignoreRepeat: true,
     });
+    // An outline evened out in its frame (owner on #459): none where it doesn't apply
+    const evenState = evenStateOf(kind, params, spots);
+    useActionHandler("shapeEvenOut", () => evenOut(live), {
+        enabled: evenState === "uneven",
+        ignoreRepeat: true,
+    });
 
     return (
         <animated.div
@@ -307,6 +313,7 @@ function ShapeEditorBar({
                     canRecalculate={target.recalculate !== null}
                     empty={target.empty}
                     canCloseUp={target.closeUp !== undefined}
+                    evenState={evenState}
                 />
                 {/* What doesn't change the shape itself, at the end (owner): its pathways and
                     saving it to the library */}
@@ -373,6 +380,31 @@ function useLiveTarget(target: ShapeEditTarget): ShapeEditTarget {
 }
 
 /** One change at once, worked out with no keys held */
+/** Whether a shape can be evened out in its frame: not at all, already, or yes (#459) */
+type EvenState = "none" | "even" | "uneven";
+
+function evenStateOf(
+    kind: ShapeEditTarget["kind"],
+    params: unknown,
+    spots: number,
+): EvenState {
+    const env = envFor(PLAIN);
+    const evened = env && kind.closed?.evenOut?.(params, spots, env);
+    if (evened === undefined || evened === null) return "none";
+    return evened === params ? "even" : "uneven";
+}
+
+/** "Even out": the shape as even as its frame allows, as one undo step (owner on #459) */
+const evenOut = (target: ShapeEditTarget) =>
+    applyWith(target, (env) => {
+        const evened = target.kind.closed?.evenOut?.(
+            target.params,
+            target.spots,
+            env,
+        );
+        return evened ?? target.params;
+    });
+
 const applyWith = (
     target: ShapeEditTarget,
     change: (env: ToolEnv) => unknown,
@@ -569,6 +601,7 @@ const TurnControls = memo(function TurnControls({
     pivot,
     canRecalculate,
     empty,
+    evenState,
 }: {
     live: ShapeEditTarget;
     degrees: number;
@@ -576,6 +609,8 @@ const TurnControls = memo(function TurnControls({
     pivot: Pivot;
     canRecalculate: boolean;
     empty: number;
+    /** Whether "Even out" applies, and whether there's anything to even (#459) */
+    evenState: EvenState;
     /** Only redraws it */
     canCloseUp: boolean;
 }) {
@@ -688,6 +723,28 @@ const TurnControls = memo(function TurnControls({
                     thing on the bar for nothing (owner, review round r429) */}
                 <RecalculateFace look={recalculateLook} />
             </IconButton>
+            {evenState !== "none" && (
+                <IconButton
+                    label={
+                        evenState === "uneven"
+                            ? tolgee.t(
+                                  "shapes.edit.evenOut.tip",
+                                  "Spread the marchers as evenly as the box allows",
+                              )
+                            : tolgee.t(
+                                  "shapes.edit.evenOut.already",
+                                  "The marchers are as even as the box allows",
+                              )
+                    }
+                    shortcut={keyOf("shapeEvenOut")}
+                    disabled={evenState !== "uneven"}
+                    className="text-sub px-4"
+                    onClick={() => evenOut(target)}
+                    testId="shape-editor-even-out"
+                >
+                    {tolgee.t("shapes.edit.evenOut.label", "Even out")}
+                </IconButton>
+            )}
             <CloseUpButton
                 target={target}
                 compact

@@ -83,6 +83,7 @@
             "noMarchersSelected": "Nenhum marchador selecionado",
             "quarterTurn": "Forma: Girar 90° no sentido horário",
             "recalculate": "Forma: Recalcular quem vai para onde",
+            "evenOut": "Forma: igualar o contorno",
             "ring": "Anel de favoritos: segure para escolher uma forma, toque para mantê-lo aberto"
         },
         "swap": {
@@ -1282,6 +1283,11 @@
             "ratioLock": {
                 "locked": "Espaçamentos vinculados: clique para desvincular",
                 "unlocked": "Vincular os dois espaçamentos"
+            },
+            "evenOut": {
+                "label": "Igualar",
+                "tip": "Distribuir os marchadores tão uniformemente quanto o bloco permite",
+                "already": "Os marchadores já estão tão uniformes quanto o bloco permite"
             },
             "recalculate": {
                 "already": "Quem vai para onde já tem o menor percurso",

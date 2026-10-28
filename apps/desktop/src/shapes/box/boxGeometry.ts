@@ -1,5 +1,5 @@
 import type { BlockParams } from "../kinds/block";
-import { pullEdges, pullValue, type BoxField } from "./edgePull";
+import { pullEdges, type BoxField } from "./edgePull";
 import type { XY } from "../types";
 import {
     filesDistribution,
@@ -210,55 +210,6 @@ export function outlineFilesRange(
 export type OutlineAxis = "across" | "deep";
 
 /**
- * How an outline is shared out when one of its spacings is set (#458, owner on #459): that
- * spacing (`interval`, the `held` way's) is held as given, and so is the frame's length the other
- * way (`length`). The other way's gaps are the count whose spacing comes nearest the held one,
- * never under half a step, and the held way takes the rest (a + b = ⌈n/2⌉).
- */
-export function swaySides(
-    length: number,
-    interval: number,
-    n: number,
-    side: GapSide,
-    half: number,
-    held: OutlineAxis,
-    /** The split it had: kept until another fits clearly better ({@link SWAY_BAND}) */
-    current?: number,
-): { readonly a: number; readonly b: number } {
-    const sum = Math.ceil(n / 2);
-    const { min, max } = acrossRange(n, side);
-    const scoreOf = (a: number) => {
-        const gaps = held === "across" ? sum - a : a;
-        const follows = length / gaps;
-        // Never under half a step, unless no count manages it
-        return (
-            (follows < half - 1e-9 ? 1e6 : 0) +
-            Math.abs(Math.log(Math.max(follows, 1e-9) / interval))
-        );
-    };
-    let best: { a: number; score: number } | null = null;
-    for (let a = min; a <= max; a++) {
-        const score = scoreOf(a);
-        if (best === null || score < best.score - 1e-9) best = { a, score };
-    }
-    const a =
-        current !== undefined &&
-        current >= min &&
-        current <= max &&
-        scoreOf(current) <= best!.score + SWAY_BAND
-            ? current
-            : best!.a;
-    return { a, b: sum - a };
-}
-
-/**
- * How much better (in log of the spacing ratio, about 4%) another split must fit before a
- * spacing change moves marchers between sides: one a hair from a boundary would otherwise move
- * most of them round the loop (review of #459)
- */
-export const SWAY_BAND = 0.04;
-
-/**
  * An outline round a `width` × `depth` frame kept exactly, as a switch to Outline does (#458,
  * owner on #459): of the splits, the one whose two spacings, each its length over its gaps, come
  * nearest each other (never under half a step: the frame grows that way if it must)
@@ -299,40 +250,33 @@ export function keptOutline(
 }
 
 /**
- * The outline with its `which` spacing set to `value` (#458, owner on #459): whatever was touched
- * is held, and the rest worked out once. That spacing is held exactly as given, and so is the
- * frame's length the other way; the split is chosen again ({@link swaySides}, or `split` as
- * given, for a pull's straight lines), that way's length becomes its gaps times `value`, and the
- * other spacing is its length over its gaps, never under half a step.
+ * The outline evened out in the frame it has now (#458, owner on #459): the split and the two
+ * spacings that come as near one spacing all round as that frame allows ({@link keptOutline}),
+ * even off the half steps (shown as about so much until set). The same params when it's as even
+ * as it gets already; null for a box not in Outline.
  */
-export function outlineWithSpacing(
+export function evenedOutline(
     p: BoxParams,
     n: number,
-    which: OutlineAxis,
-    value: number,
     env: ToolEnv,
-    split?: number,
-): BoxParams {
+): BoxParams | null {
     const d = boxDistribution(p);
-    if (d.mode !== "outline" || n < OUTLINE_MIN)
-        return { ...p, across: value, deep: value };
+    if (d.mode !== "outline" || n < OUTLINE_MIN) return null;
     const span = spanOf(p, n);
-    const length =
-        which === "across"
-            ? (span.ranks - 1) * p.deep
-            : (span.files - 1) * p.across;
-    const half = halfStep(env);
-    const sum = Math.ceil(n / 2);
-    const a =
-        split ??
-        swaySides(length, value, n, d.oddGap.side, half, which, span.files - 1)
-            .a;
-    const b = sum - a;
-    return {
-        ...withFileCount(p, a + 1),
-        across: which === "across" ? value : Math.max(length / a, half),
-        deep: which === "deep" ? value : Math.max(length / b, half),
-    };
+    const width = (span.files - 1) * p.across;
+    const depth = (span.ranks - 1) * p.deep;
+    const even = keptOutline(width, depth, n, d.oddGap.side, halfStep(env));
+    const same =
+        even.a === span.files - 1 &&
+        Math.abs(even.across - p.across) < 1e-9 &&
+        Math.abs(even.deep - p.deep) < 1e-9;
+    return same
+        ? p
+        : {
+              ...withFileCount(p, even.a + 1),
+              across: even.across,
+              deep: even.deep,
+          };
 }
 
 /** Whether the box is an even spread, whose frame is the spread's edge rather than its marchers */
@@ -946,6 +890,7 @@ export function stretchBox(
                     n,
                     key,
                     fieldToFrame(boxFrame(base, n), to),
+                    d.oddGap.side,
                     flatEnv,
                     field,
                 ),
@@ -1022,18 +967,20 @@ function inBoxAxes(
 }
 
 /**
- * {@link stretchBox} for an outline (#458, owner on #459): whatever is dragged follows the
- * pointer, and only that changes. The dragged edge's length is what the drag makes it, its
- * spacing that length over its gaps (shown as about so much while it's off half steps); the
- * counts, the other way's spacing and every other edge stay exactly where they are. No spacing
- * under half a step: the edge stops there. A moving corner near a field line lands on it, the
- * dragged length (no ladder) solved so it does, within the pull radius (#425, #446).
+ * {@link stretchBox} for an outline (#458, owner on #459): both spacings are the designer's and
+ * stay exactly as they are, so a handle moves in whole spacings. The opposite edge stays put and
+ * the marchers move between the sides, the total kept, for the count whose edge comes nearest
+ * the pointer: the box changes shape in clean jumps. A side handle keeps the other axis's first
+ * corner where it was. Of the counts within a spacing of the pointer, one whose moving corner
+ * lands exactly on a field line the pointer is near wins (#425, #446); no pull ever moves an edge
+ * off its whole spacings.
  */
 function stretchOutline(
     base: BoxParams,
     n: number,
     key: BoxHandleKey,
     to: XY,
+    side: GapSide,
     env: ToolEnv,
     field: BoxField | undefined,
 ): BoxParams {
@@ -1044,9 +991,6 @@ function stretchOutline(
         x: key.includes("e") ? f.left : f.right,
         y: key.includes("s") ? f.top : f.bottom,
     };
-    const half = halfStep(env);
-    const span = spanOf(base, n);
-    const gaps = { x: span.files - 1, y: span.ranks - 1 };
     const sign = {
         x: movesX ? signOf(to.x - anchor.x) : 1,
         y: movesY ? signOf(to.y - anchor.y) : 1,
@@ -1055,47 +999,49 @@ function stretchOutline(
         x: movesX ? anchor.x : f.left,
         y: movesY ? anchor.y : f.top,
     };
-    /** The outline `width` × `depth`, its spacings those over its gaps, never under half a step */
-    const build = (width: number, depth: number) =>
+    const sum = Math.ceil(n / 2);
+    const { min, max } = acrossRange(n, side);
+    const width = Math.abs(to.x - anchor.x);
+    const depth = Math.abs(to.y - anchor.y);
+    /** How far, in spacings, split `a`'s moving edges are from the pointer */
+    const miss = (a: number) =>
+        (movesX ? Math.abs(a * base.across - width) / base.across : 0) +
+        (movesY ? Math.abs((sum - a) * base.deep - depth) / base.deep : 0);
+    const build = (a: number) =>
         boxFrom(
             start,
             sign,
-            span.files,
-            movesX ? Math.max(width / gaps.x, half) : base.across,
-            movesY ? Math.max(depth / gaps.y, half) : base.deep,
+            a + 1,
+            base.across,
+            base.deep,
             n,
             env,
             boxDistribution(base),
         );
-    let width = movesX ? Math.abs(to.x - anchor.x) : f.right - f.left;
-    let depth = movesY ? Math.abs(to.y - anchor.y) : f.bottom - f.top;
+    const splits = Array.from(
+        { length: max - min + 1 },
+        (_, k) => min + k,
+    ).sort((a, b) => miss(a) - miss(b) || a - b);
     if (field && env.pull !== false && !env.shift) {
-        const lines = field.lines;
-        const corners = (w: number, d: number) =>
-            boxCorners(build(w, d), n).map(field.toField);
-        // The dragged lengths have no ladder: an edge lands on a line within the pull radius
-        if (movesX)
-            width =
-                pullValue(
-                    (v) => corners(v, depth),
-                    width,
-                    lines,
-                    env,
-                    (v) => v / gaps.x >= half - 1e-9,
-                    Infinity,
-                ) ?? width;
-        if (movesY)
-            depth =
-                pullValue(
-                    (v) => corners(width, v),
-                    depth,
-                    lines,
-                    env,
-                    (v) => v / gaps.y >= half - 1e-9,
-                    Infinity,
-                ) ?? depth;
+        const pointer = field.toField(to);
+        const radius = env.pullRadius ?? 0;
+        for (const a of splits) {
+            if (miss(a) > 1 + 1e-9) break;
+            const onLine = boxCorners(build(a), n)
+                .map(field.toField)
+                .some((c) =>
+                    (["x", "y"] as const).some((axis) =>
+                        field.lines[axis].some(
+                            (line) =>
+                                Math.abs(c[axis] - line) < 1e-3 &&
+                                Math.abs(pointer[axis] - line) <= radius,
+                        ),
+                    ),
+                );
+            if (onLine) return build(a);
+        }
     }
-    return build(width, depth);
+    return build(splits[0]!);
 }
 
 /** {@link stretchBox} in the box's own axes, `to` in them too */

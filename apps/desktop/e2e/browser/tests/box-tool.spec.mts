@@ -2908,7 +2908,7 @@ test("change: from the keyboard, Tab reaches the Leftover menu, Enter opens it o
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
 });
 
-test("change: Outline spaces the back and front at across and the sides at deep; widening it moves only the edge, and pressing the ≈ across shares the marchers out onto the long sides (#458, #459)", async ({
+test("change: Outline spaces the back and front at across and the sides at deep; widening it moves marchers onto the long sides in whole spacings, both spacings unchanged (#458, owner on #459)", async ({
     show,
 }) => {
     const { page } = show;
@@ -2937,49 +2937,37 @@ test("change: Outline spaces the back and front at across and the sides at deep;
         };
     };
     expect(await sides()).toEqual({ back: 3, left: 3 });
-    // Both spacings are shown and set; neither is off the half steps yet
     const across = bar.getByTestId("shape-editor-across");
-    await expect(across).toBeVisible();
-    await expect(bar.getByTestId("shape-editor-deep")).toBeVisible();
-    const acrossSnap = bar.getByTestId("shape-editor-across-snap");
-    await expect(acrossSnap).toHaveCount(0);
+    const deep = bar.getByTestId("shape-editor-deep");
+    const spacings = async () => [
+        await across.innerText(),
+        await deep.innerText(),
+    ];
+    const before = await spacings();
 
-    // Widened to about three times as wide: only the east edge moves, the counts stay, and
-    // across shows as about so much (owner on #459)
+    // Widened to about three times as wide: marchers move onto the long sides, the box
+    // jumping in whole spacings, and both spacings stay as they were
     const { handles } = (await shapeOverlay(page))!;
     const maxX = Math.max(...handles.map((h) => h.x));
     const east = handles
         .filter((h) => Math.abs(h.x - maxX) < 1)
         .sort((a, b) => a.y - b.y)[1]!;
-    // Clear of the lines every 4 steps, so the edge isn't pulled onto one
-    const to = await toScreen(page, { x: cf.x + 2.3 * S, y: 0 });
+    const to = await toScreen(page, { x: cf.x + 3.3 * S, y: 0 });
     await drag(page, east, { x: to.x, y: east.y });
-    expect(await sides()).toEqual({ back: 3, left: 3 });
-    await expect(acrossSnap).toBeVisible();
-    await expect(across).toHaveAccessibleName(/about/);
-    // Its ≈ pressed, across goes to the nearest half step, and the marchers are shared out
-    // again: the long sides take them
-    await acrossSnap.click();
-    await expect(acrossSnap).toHaveCount(0);
-    const after = await sides();
-    expect(after.back).toBeGreaterThan(after.left);
-    expect(after).toEqual({ back: 4, left: 2 });
-    // Every neighbor round the loop one interval apart
-    const { spots } = (await shapeOverlay(page))!;
-    const d = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y);
-    const nearest = spots.map((p) =>
-        Math.min(...spots.filter((q) => q !== p).map((q) => d(p, q))),
-    );
-    for (const v of nearest) expect(v).toBeCloseTo(nearest[0]!, 6);
+    expect(await sides()).toEqual({ back: 4, left: 2 });
+    expect(await spacings()).toEqual(before);
+    await expect(bar.getByTestId("shape-editor-across-snap")).toHaveCount(0);
 });
 
-test("change: dragging an outline's front changes only its depth: its width, back and sides stay exactly; the ≈ deep still types (Tab and click), and its ≈ button puts it on a half step (#458, owner on #459)", async ({
+test("change: 2 steps across then 3 deep stay exactly as typed; dragging the front moves it in whole spacings with the back fixed; Even out spreads them as evenly as the box allows (#458, owner on #459)", async ({
     show,
 }) => {
     const { page } = show;
     await drawBox(show);
     await pickMode(page, "outline");
     const bar = page.getByTestId("shape-tool-readout");
+    const across = bar.getByTestId("shape-editor-across");
+    const deep = bar.getByTestId("shape-editor-deep");
     const bounds = async () => {
         const o = (await shapeOverlay(page))!.outline!;
         const xs = o.map((p) => p.x);
@@ -2991,69 +2979,69 @@ test("change: dragging an outline's front changes only its depth: its width, bac
             bottom: Math.max(...ys),
         };
     };
-    const handle = async (key: "s" | "e") => {
-        const { handles } = (await shapeOverlay(page))!;
-        const b = await bounds();
-        const want =
-            key === "s"
-                ? { x: (b.left + b.right) / 2, y: b.bottom }
-                : { x: b.right, y: (b.top + b.bottom) / 2 };
-        // The overlay gives handles on screen; the bounds are field units
-        const screen = await toScreen(page, want);
-        return handles.reduce((a, h) =>
-            Math.hypot(h.x - screen.x, h.y - screen.y) <
-            Math.hypot(a.x - screen.x, a.y - screen.y)
-                ? h
-                : a,
-        );
-    };
-    // The front's handle down by 13 px: only the front moves
-    const before = await bounds();
-    const across = await bar.getByTestId("shape-editor-across").innerText();
-    const s = await handle("s");
-    await drag(page, s, { x: s.x, y: s.y + 13 });
-    const after = await bounds();
-    expect(Math.abs(after.left - before.left)).toBeLessThan(1e-6);
-    expect(Math.abs(after.right - before.right)).toBeLessThan(1e-6);
-    expect(Math.abs(after.top - before.top)).toBeLessThan(1e-6);
-    expect(after.bottom).toBeGreaterThan(before.bottom);
-    await expect(bar.getByTestId("shape-editor-across")).toHaveText(across);
-
-    // The ≈ deep still types: Tab from typing across opens it for typing, never snapping it
-    // (review of #459), and a click on it does too
-    const deepSnap = bar.getByTestId("shape-editor-deep-snap");
-    await expect(deepSnap).toBeVisible();
-    const acrossShown = await bar
-        .getByTestId("shape-editor-across")
-        .innerText();
-    await bar.getByTestId("shape-editor-across").click();
-    await page.getByTestId("shape-editor-across-input").fill(acrossShown);
+    // The owner's case: 2 across, Tab to deep, 3, and both stay exactly as typed
+    await across.click();
+    await page.getByTestId("shape-editor-across-input").fill("2");
     await page.keyboard.press("Tab");
     await expect(page.getByTestId("shape-editor-deep-input")).toBeFocused();
-    await page.keyboard.press("Escape");
-    await expect(deepSnap).toBeVisible();
-    await bar.getByTestId("shape-editor-deep").click();
-    await expect(page.getByTestId("shape-editor-deep-input")).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(deepSnap).toBeVisible();
-    // From the keyboard: the ≈ button, focused, and Enter puts deep on the nearest half step
-    await deepSnap.focus();
-    await expect(deepSnap).toBeFocused();
+    await page.getByTestId("shape-editor-deep-input").fill("3");
     await page.keyboard.press("Enter");
-    await expect(deepSnap).toHaveCount(0);
-    // A side's drag changes only the width: the back and front stay exactly
+    await expect(across).toHaveText("2");
+    await expect(deep).toHaveText("3");
+    await expect(bar.getByTestId("shape-editor-across-snap")).toHaveCount(0);
+    await expect(bar.getByTestId("shape-editor-deep-snap")).toHaveCount(0);
+
+    // The front dragged down: it moves in whole 3-step spacings, the back stays, and both
+    // spacings stay as typed
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
     const was = await bounds();
-    const e = await handle("e");
-    // Keyboard focus off the number, so its tooltip doesn't sit over the field
+    const frontHandle = async () => {
+        const { handles } = (await shapeOverlay(page))!;
+        const b = await bounds();
+        const want = await toScreen(page, {
+            x: (b.left + b.right) / 2,
+            y: b.bottom,
+        });
+        return handles.reduce((h, k) =>
+            Math.hypot(k.x - want.x, k.y - want.y) <
+            Math.hypot(h.x - want.x, h.y - want.y)
+                ? k
+                : h,
+        );
+    };
+    const s = await frontHandle();
     await page.evaluate(() =>
         (document.activeElement as HTMLElement | null)?.blur(),
     );
-    await drag(page, e, { x: e.x + 41, y: e.y });
+    await drag(page, s, { x: s.x, y: s.y + 30 });
     const now = await bounds();
     expect(Math.abs(now.top - was.top)).toBeLessThan(1e-6);
-    expect(Math.abs(now.bottom - was.bottom)).toBeLessThan(1e-6);
-    expect(Math.abs(now.left - was.left)).toBeLessThan(1e-6);
-    expect(now.right).toBeGreaterThan(was.right);
+    const depthSteps = (now.bottom - now.top) / S;
+    expect(Math.abs(depthSteps / 3 - Math.round(depthSteps / 3))).toBeLessThan(
+        1e-6,
+    );
+    await expect(across).toHaveText("2");
+    await expect(deep).toHaveText("3");
+
+    // Across set to ½ step, far from deep's 3: uneven now. Even out: as even as this frame
+    // allows, one undo step; then nothing more to do
+    await across.click();
+    await page.getByTestId("shape-editor-across-input").fill("0.5");
+    await page.keyboard.press("Enter");
+    await expect(across).toHaveText("½");
+    const evenOut = bar.getByTestId("shape-editor-even-out");
+    await expect(evenOut).toBeEnabled();
+    const evenFrame = await bounds();
+    await evenOut.click();
+    await expect(evenOut).toBeDisabled();
+    const after = await bounds();
+    expect(
+        Math.abs(after.right - after.left - (evenFrame.right - evenFrame.left)),
+    ).toBeLessThan(S / 2);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(across).toHaveText("½");
+    await expect(deep).toHaveText("3");
 });
 
 test("change: Outline on 7 spreads the back by default, leaves its middle out on request, a click on a spot between corners moves the gap, and the placed box keeps it", async ({

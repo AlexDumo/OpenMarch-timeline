@@ -8,8 +8,6 @@ import {
     ranksOf,
     snapInterval,
     grownFromPivot,
-    outlineWithSpacing,
-    spanOf,
     resizeFiles,
     acrossIsDeep,
     onField,
@@ -103,15 +101,11 @@ export function withSpacing(
         )
             return p;
     }
-    // An outline holds the spacing set and its other length, and works out the rest (#459)
+    // An outline's two spacings are both the designer's: the one set is held, the other
+    // stays as it is, and the box's size follows (owner on #459). No ratio lock for it.
     if (boxDistribution(p).mode === "outline") {
         if (value === p[which]) return p;
-        return grownFromPivot(
-            p,
-            outlineWithSpacing(p, spots, which, value, env),
-            spots,
-            env,
-        );
+        return grownFromPivot(p, { ...p, [which]: value }, spots, env);
     }
     let across = which === "across" ? value : p.across;
     let deep = which === "deep" ? value : p.deep;
@@ -352,18 +346,10 @@ function exactSpacing(
     value: number,
     spots: number,
     env: ToolEnv,
-    /** An outline's split, held (a pull's), else chosen for `value` */
-    split?: number,
 ): BoxParams {
-    // An outline holds the spacing set and its other length, and works out the rest (#459);
-    // a pull keeps one split so its points move in straight lines
+    // An outline's spacing set alone, the other as it is (owner on #459)
     if (boxDistribution(p).mode === "outline")
-        return grownFromPivot(
-            p,
-            outlineWithSpacing(p, spots, which, value, env, split),
-            spots,
-            env,
-        );
+        return grownFromPivot(p, { ...p, [which]: value }, spots, env);
     let across = which === "across" ? value : p.across;
     let deep = which === "deep" ? value : p.deep;
     if (env.ratioLocked && p.across > 0 && p.deep > 0) {
@@ -393,23 +379,9 @@ export function spacingOnLine(
     const lines = env.fieldLines;
     if (!lines || env.pull === false) return null;
     const half = env.stepPx / 2;
-    // An outline's split as the drag has it: held while the pull solves, so each point moves
-    // in a straight line, and kept for the landing
-    const split =
-        boxDistribution(base).mode === "outline"
-            ? spanOf(outlineWithSpacing(base, spots, which, raw, env), spots)
-                  .files - 1
-            : undefined;
     const free = (value: number) =>
         boxTool.snapPoints!(
-            exactSpacing(
-                base,
-                which,
-                value,
-                spots,
-                { ...env, snap: false },
-                split,
-            ),
+            exactSpacing(base, which, value, spots, { ...env, snap: false }),
             spots,
         );
     // The spacing, and with the ratio lock the other one it moves exactly, never under half a
@@ -432,7 +404,7 @@ export function spacingOnLine(
     const now = which === "across" ? base.across : base.deep;
     return Math.abs(value - now) < 1e-9
         ? base
-        : exactSpacing(base, which, value, spots, env, split);
+        : exactSpacing(base, which, value, spots, env);
 }
 
 /** The count across (or deep) on the field dragged `distance` px for more: one per 16 px */

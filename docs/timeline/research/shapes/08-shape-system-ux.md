@@ -320,26 +320,27 @@ Guardrails for shapes with unassigned spots later (#358):
   footprint in half steps. Resize handles snap the spacing to half steps (Alt for hundredths, still
   catching the field's lines; Cmd/Ctrl for no snapping, owner on #453), with a
   length readout while dragging a long shape. There are no percentage scale buttons anywhere.
-- **Outline: what's touched is held, the rest worked out once** (#458; owner on #459). The
-  back and front stand at the across spacing, the sides at the deep spacing, a marcher on every
-  corner, and an odd count's leftover spot on the side the Leftover menu picks. A box twice as
-  long as deep gets about twice as many on its long sides. There is no "exact way" to choose:
-  - **Setting a spacing** (typed, − / +, or dragged, either one) holds it as given (half steps,
-    unless typed or with Alt) and holds the frame's length the other way. The split is chosen
-    once: the other way's gaps are the count whose spacing comes nearest the one set (never under
-    half a step, and only when another fits clearly better: a 4% dead band). The set way's
-    length becomes its gaps times the spacing, and the other spacing is its length over its gaps.
-    Doing it again changes nothing. Who goes where is worked out again when the split changes.
-  - **Dragging an edge** moves only that edge: its length follows the pointer, its spacing is
-    that length over its gaps, and the counts, the other spacing and every other edge stay
-    exactly where they are. The edge stops where its spacing would go under half a step, and
-    lands on a yard line or hash within the pull radius.
-  - **A spacing off the half steps shows as about so much** ("≈1.8"). Both spacings are always
-    shown and set. Pressing a "≈" number (click, Enter or Space) puts it on the nearest half step,
-    as an edit of it. Dragging it still drags it. No proportion lock for an outline.
+- **Outline: both spacings are the designer's, held exactly** (#458; owner on #459). The back
+  and front stand at the across spacing and the sides at the deep spacing, a marcher on every
+  corner, as Grid's files and spacings work: setting 2 steps across and then 3 deep leaves both
+  exactly so (half steps; typed exact, Alt fine, Cmd/Ctrl free), and the box's size follows,
+  width = gaps across × across, depth = gaps down a side × deep. Setting one again changes
+  nothing.
+  - **Handles move in whole spacings.** Dragging an edge moves marchers between the sides, the
+    total kept, so the box changes shape in clean jumps while both spacings stay exact; the
+    opposite edge stays put, and who goes where is worked out again when the split changes. Of
+    the counts within a spacing of the pointer, one whose moving edge lands exactly on a yard
+    line or hash the pointer is near wins; no pull moves an edge off its whole spacings.
+  - **Even out** (beside Recalculate, and in the command palette) takes the box as it is and
+    picks the split and spacings that come as near one spacing all round as that frame allows.
+    They may be off the half steps, shown as about so much ("≈"), until set. One undo step;
+    greyed out when there's nothing more to even.
+  - **A spacing off the half steps shows as about so much**: a small "≈" button before the
+    number puts it on the nearest half step; the number itself types and drags as any other.
   - **Switching to Outline keeps the frame** (owner on #458): the split whose two spacings come
     nearest each other, each its length over its gaps, so a mode switch keeps the box drawn as
-    #449 asks.
+    #449 asks; they may show "≈" until set or evened out. Moving the box never changes them.
+  - **A count changed** (− / +) keeps both spacings; the lengths follow.
   - **An odd count: the full sides are the reference.** The across and deep spacings are always
     the full sides', and the frame is full gaps times them. The leftover side adjusts: spreading
     evenly, its marchers share its whole length one gap fewer (wider apart); leaving a gap, they
@@ -348,7 +349,6 @@ Guardrails for shapes with unassigned spots later (#358):
     half steps): small, not a control, and the menu's tooltip and description say why ("The back
     has one fewer marcher, so its marchers are 4 steps apart."), since the chip's number is the
     full sides' (owner on #459, style B2).
-  - **A count changed** (− / +) keeps both spacings; the lengths follow.
   - Outlines stored before keep their numbers until edited (an `exact` that some builds of #459
     wrote is read past).
 - **The pivot.** A 3 × 3 grid (the floating editor's pivot menu for a shape, the inspector for a

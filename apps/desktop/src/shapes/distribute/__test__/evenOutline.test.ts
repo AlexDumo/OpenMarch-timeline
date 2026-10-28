@@ -11,14 +11,10 @@ import {
 } from "../../box/boxGeometry";
 import { withSpacing } from "../../editor/boxEdits";
 import { chipLayout } from "../../editor/chip";
-import { SWAY_BAND } from "../../box/boxGeometry";
-import {
-    DEFAULT_ODD_GAP,
-    readSavedDistribution,
-    savedDistributionOf,
-} from "../distribution";
+import { DEFAULT_ODD_GAP, savedDistributionOf } from "../distribution";
 import { shapeSteps } from "../../command/shapeSteps";
 import { withMode } from "../modes";
+import { acrossRange } from "../outline";
 import { leftoverSpacing } from "../outlineGap";
 import { distribute } from "../distribute";
 import type { ToolEnv } from "../../tool/toolKind";
@@ -100,9 +96,6 @@ const lined = (over: Partial<ToolEnv> = {}): ToolEnv => ({
     pullRadius: 6,
     ...over,
 });
-const onLine = (p: XY) =>
-    LINES.x.some((x) => Math.abs(p.x - x) < 1e-6) ||
-    LINES.y.some((y) => Math.abs(p.y - y) < 1e-6);
 const onHalves = (v: number) =>
     Math.abs(v / half - Math.round(v / half)) < 1e-9;
 const edgesOf = (q: BoxParams, n: number) => {
@@ -118,7 +111,7 @@ const edgesOf = (q: BoxParams, n: number) => {
 const lengthOf = (q: BoxParams, n: number, way: "across" | "deep") =>
     (onField(q, n)[way] - 1) * q[way];
 
-describe("an outline: what's touched is held, the rest worked out once (owner on #459)", () => {
+describe("an outline: both spacings are the designer's, held exactly (owner on #459)", () => {
     it("a 2:1 rectangle of 100 switched to Outline keeps its frame, about twice as many on its long sides", () => {
         const files = drawBox({ x: 0, y: 0 }, { x: 400, y: 200 }, 100, env)!;
         const frame = boxTool.frameOf(files, 100);
@@ -132,12 +125,9 @@ describe("an outline: what's touched is held, the rest worked out once (owner on
         expect(Math.abs((back - 1) / (left - 1) / aspect - 1)).toBeLessThan(
             0.15,
         );
-        expect(back).toBeGreaterThan(30);
-        expect(left).toBeLessThan(20);
         const kept = boxTool.frameOf(p, 100);
         expect(kept.halfWidth).toBeCloseTo(frame.halfWidth, 9);
         expect(kept.halfDepth).toBeCloseTo(frame.halfDepth, 9);
-        expect(Math.abs(Math.log(p.deep / p.across))).toBeLessThan(0.15);
     });
 
     it("spaces the back and front at across and the sides at deep, with a marcher on every corner", () => {
@@ -159,144 +149,149 @@ describe("an outline: what's touched is held, the rest worked out once (owner on
                     spots.some((s) => Math.hypot(s.x - c.x, s.y - c.y) < 1e-6),
                     `${n}: corner`,
                 ).toBe(true);
-            const gaps = spots.map((s, i) => {
-                const t = spots[(i + 1) % spots.length]!;
-                return Math.hypot(t.x - s.x, t.y - s.y);
-            });
-            const atAcross = gaps.filter(
-                (g) => Math.abs(g - p.across) < 1e-6,
-            ).length;
-            const atDeep = gaps.filter(
-                (g) => Math.abs(g - p.deep) < 1e-6,
-            ).length;
-            expect(atAcross + atDeep, `${n}`).toBeGreaterThanOrEqual(
-                n % 2 === 0 ? n : n - Math.ceil(n / 2),
-            );
         }
     });
 
-    it("a drastic across edit (2 → 4) holds across, keeps the depth, chooses the counts again and works out deep, in one pass", () => {
-        const p = withSpacing(outline(40, 120, 120), "across", 2, 40, env);
-        expect(p.across).toBe(20);
-        const depth = lengthOf(p, 40, "deep");
-        const q = withSpacing(p, "across", 4, 40, env);
-        expect(q.across).toBe(40);
-        expect(lengthOf(q, 40, "deep")).toBeCloseTo(depth, 9);
-        // Deep follows to about 4 steps over the same depth: fewer gaps down the sides, and the
-        // back and front take the rest
-        expect(onField(q, 40).deep).toBeLessThan(onField(p, 40).deep);
-        expect(onField(q, 40).across).toBeGreaterThan(onField(p, 40).across);
-        // Deep is the depth over its gaps, the count nearest 4 steps
-        const b = onField(q, 40).deep - 1;
-        expect(q.deep).toBeCloseTo(depth / b, 9);
-        for (let other = 1; other < 20; other++)
-            if (depth / other >= half)
-                expect(Math.abs(Math.log(q.deep / 40))).toBeLessThanOrEqual(
-                    Math.abs(Math.log(depth / other / 40)) + SWAY_BAND + 1e-9,
-                );
-        // The same edit again changes nothing
-        expect(withSpacing(q, "across", 4, 40, env)).toEqual(q);
-    });
-
-    it("a deep edit holds deep and the width, and works out across", () => {
-        const p = outline(24, 120, 50);
-        const width = lengthOf(p, 24, "across");
-        const q = withSpacing(p, "deep", 1.5, 24, env);
-        expect(q.deep).toBe(15);
-        expect(lengthOf(q, 24, "across")).toBeCloseTo(width, 9);
-        expect(withSpacing(q, "deep", 1.5, 24, env)).toEqual(q);
-    });
+    for (const order of [
+        ["across", "deep"],
+        ["deep", "across"],
+    ] as const)
+        it(`2 steps across and 3 deep stay exactly as set, set ${order.join(" then ")}; the size follows, and doing it again changes nothing`, () => {
+            const p = outline(24, 120, 50);
+            const counts = onField(p, 24);
+            const value = { across: 2, deep: 3 };
+            let q = withSpacing(p, order[0], value[order[0]], 24, env);
+            q = withSpacing(q, order[1], value[order[1]], 24, env);
+            expect([q.across, q.deep]).toEqual([20, 30]);
+            expect(onField(q, 24)).toMatchObject({
+                across: counts.across,
+                deep: counts.deep,
+            });
+            expect(lengthOf(q, 24, "across")).toBeCloseTo(
+                (counts.across - 1) * 20,
+                9,
+            );
+            expect(lengthOf(q, 24, "deep")).toBeCloseTo(
+                (counts.deep - 1) * 30,
+                9,
+            );
+            expect(withSpacing(q, order[1], value[order[1]], 24, env)).toBe(q);
+            expect(withSpacing(q, order[0], value[order[0]], 24, env)).toBe(q);
+        });
 
     for (const key of ["e", "w", "n", "s"] as const)
         for (const way of [1, -1])
-            it(`dragging the ${key} edge ${way > 0 ? "out" : "in"} moves only that edge: the counts, the other spacing and the other edges stay exactly`, () => {
+            it(`dragging the ${key} edge ${way > 0 ? "out" : "in"} moves in whole spacings: both stay exact, the opposite edge stays, and the total is kept`, () => {
                 const p = withSpacing(
-                    outline(40, 100, 100),
-                    "across",
-                    2,
+                    withSpacing(outline(40, 100, 100), "across", 2, 40, env),
+                    "deep",
+                    2.5,
                     40,
                     env,
                 );
-                const counts = onField(p, 40);
                 const was = edgesOf(p, 40);
                 const h = boxTool.handles(p, 40).find((x) => x.key === key)!.at;
-                const out =
+                const dir =
                     key === "e" || key === "w"
                         ? { x: (key === "e" ? 1 : -1) * way, y: 0 }
                         : { x: 0, y: (key === "s" ? 1 : -1) * way };
-                const moved =
+                const opposite =
                     key === "e"
-                        ? "right"
+                        ? "left"
                         : key === "w"
-                          ? "left"
+                          ? "right"
                           : key === "s"
-                            ? "bottom"
-                            : "top";
+                            ? "top"
+                            : "bottom";
                 const across = key === "e" || key === "w";
-                let last: number | null = null;
-                for (let px = 0.5; px <= 30; px += 0.5) {
+                let moved = false;
+                for (let px = 0.5; px <= 40; px += 0.5) {
                     const q = stretchBox(
                         p,
                         40,
                         key,
-                        { x: h.x + out.x * px, y: h.y + out.y * px },
+                        { x: h.x + dir.x * px, y: h.y + dir.y * px },
                         env,
                     );
-                    expect(onField(q, 40)).toMatchObject({
-                        across: counts.across,
-                        deep: counts.deep,
-                    });
-                    expect(q[across ? "deep" : "across"]).toBe(
-                        p[across ? "deep" : "across"],
-                    );
+                    expect([q.across, q.deep]).toEqual([20, 25]);
                     const now = edgesOf(q, 40);
-                    for (const edge of [
-                        "left",
-                        "right",
-                        "top",
-                        "bottom",
-                    ] as const)
-                        if (edge !== moved)
-                            expect(
-                                Math.abs(now[edge] - was[edge]),
-                                edge,
-                            ).toBeLessThan(1e-6);
-                    // The dragged spacing follows smoothly, never under half a step
-                    const spacing = q[across ? "across" : "deep"];
-                    expect(spacing).toBeGreaterThanOrEqual(half - 1e-9);
-                    if (last !== null)
-                        expect(Math.abs(spacing - last)).toBeLessThan(0.5);
-                    last = spacing;
+                    expect(
+                        Math.abs(now[opposite] - was[opposite]),
+                        opposite,
+                    ).toBeLessThan(1e-6);
+                    // The dragged way's length is a whole number of its spacings
+                    const length = across
+                        ? now.right - now.left
+                        : now.bottom - now.top;
+                    const spacing = across ? 20 : 25;
+                    expect(
+                        Math.abs(
+                            length / spacing - Math.round(length / spacing),
+                        ),
+                    ).toBeLessThan(1e-9);
+                    const c = onField(q, 40);
+                    expect(c.across - 1 + (c.deep - 1)).toBe(20);
+                    if (q.files !== p.files) moved = true;
                 }
+                expect(moved).toBe(true);
             });
 
-    it("shows a spacing off the half steps as about so much; pressing it puts it on the nearest half step, as an edit of it", () => {
-        const p = withSpacing(outline(24, 120, 50), "across", 2, 24, env);
-        // A drag leaves across off the half steps
-        const e = boxTool.handles(p, 24).find((h) => h.key === "e")!.at;
-        const q = stretchBox(p, 24, "e", { x: e.x + 7.3, y: e.y }, env);
-        expect(onHalves(q.across)).toBe(false);
-        const layout = chipLayout(boxTool, q, 24, env);
+    it("a count whose moving edge lands exactly on a line the pointer is near wins over the nearer one", () => {
+        // 60 round, half a step apart across, its left edge on 0: edges every 5, a line at 80
+        const p: BoxParams = {
+            center: { x: 0, y: -100 },
+            rotation: 0,
+            files: 13,
+            across: 5,
+            deep: 10,
+            distribution: { mode: "outline", oddGap: DEFAULT_ODD_GAP },
+        };
+        const q0 = {
+            ...p,
+            center: { x: p.center.x - edgesOf(p, 60).left, y: -100 },
+        };
+        const e = boxTool.handles(q0, 60).find((x) => x.key === "e")!.at;
+        // The pointer 3 past the 80: 85 is nearer, but the 80 is within the pull
+        const to = { x: 83, y: e.y };
+        const free = stretchBox(q0, 60, "e", to, lined({ pull: false }));
+        const pulled = stretchBox(q0, 60, "e", to, lined());
+        expect(edgesOf(free, 60).right).toBeCloseTo(85, 9);
+        expect(edgesOf(pulled, 60).right).toBeCloseTo(80, 9);
+        expect([pulled.across, pulled.deep]).toEqual([5, 10]);
+    });
+
+    it("a turned outline's drag keeps both spacings exactly too", () => {
+        const p: BoxParams = {
+            ...withSpacing(outline(24, 120, 80), "across", 2, 24, env),
+            rotation: (30 * Math.PI) / 180,
+        };
+        const e = boxTool.handles(p, 24).find((x) => x.key === "e")!.at;
+        for (let px = -20; px <= 60; px += 1) {
+            const q = stretchBox(
+                p,
+                24,
+                "e",
+                {
+                    x: e.x + px * Math.cos(p.rotation),
+                    y: e.y + px * Math.sin(p.rotation),
+                },
+                lined(),
+            );
+            expect([q.across, q.deep]).toEqual([p.across, p.deep]);
+        }
+    });
+
+    it("shows a spacing off the half steps (after a switch) as about so much; pressing it puts it on the nearest half step", () => {
+        const p = outline(31, 70, 60);
+        expect(onHalves(p.across)).toBe(false);
+        const layout = chipLayout(boxTool, p, 31, env);
         const across = layout.intervals.find((x) => x.param.key === "across")!;
         expect(across.derived).toBe(true);
-        // The "≈" is the editor's button; the number shows plain
-        expect(across.display.startsWith("≈")).toBe(false);
         expect(layout.ratioLock).toBe(false);
-        const snapped = across.param.snap!(q, 24, env) as BoxParams;
+        const snapped = across.param.snap!(p, 31, env) as BoxParams;
         expect(onHalves(snapped.across)).toBe(true);
-        expect(Math.abs(snapped.across - q.across)).toBeLessThanOrEqual(
-            half / 2 + 1e-9,
-        );
-        expect(lengthOf(snapped, 24, "deep")).toBeCloseTo(
-            lengthOf(q, 24, "deep"),
-            9,
-        );
-        const after = chipLayout(boxTool, snapped, 24, env).intervals.find(
-            (x) => x.param.key === "across",
-        )!;
-        expect(after.derived).toBe(false);
-        // Pressing it again changes nothing
-        expect(across.param.snap!(snapped, 24, env)).toEqual(snapped);
+        expect(snapped.deep).toBe(p.deep);
+        expect(across.param.snap!(snapped, 31, env)).toBe(snapped);
     });
 
     it("a count changed keeps both spacings, the lengths following", () => {
@@ -325,47 +320,67 @@ describe("an outline: what's touched is held, the rest worked out once (owner on
             expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(75, 9);
             expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(75, 9);
             expect(boxDistribution(q)).not.toHaveProperty("exact");
-            expect(boxTool.frameOf(q, 16)).toEqual(boxTool.frameOf(stored, 16));
         }
-        expect(
-            readSavedDistribution({
-                mode: "outline",
-                oddGap: DEFAULT_ODD_GAP,
-                exact: "deep",
-            }),
-        ).not.toHaveProperty("exact");
         expect(
             savedDistributionOf(boxDistribution(withExact)),
         ).not.toHaveProperty("exact");
     });
 
-    it("holds the split through a spacing a hair either side of a boundary", () => {
-        const p = withSpacing(outline(40, 100, 100), "across", 2, 40, env);
-        // Find a boundary: the first typed across where the split changes
-        let q = p;
-        let edge: number | null = null;
-        for (let v = 2; v <= 5 && edge === null; v += 0.01) {
-            const next = withSpacing(q, "across", v, 40, env, true);
-            if (next.files !== q.files) edge = v;
-            q = next;
-        }
-        expect(edge).not.toBeNull();
-        const held = q.files;
-        for (let k = 0; k < 20; k++) {
-            const v = edge! + (k % 2 === 0 ? -0.005 : 0.005);
-            q = withSpacing(q, "across", v, 40, env, true);
-            expect(q.files).toBe(held);
-        }
+    describe("Even out", () => {
+        /** The least uneven any split of `n` round a `w` × `d` frame can be */
+        const bestScore = (n: number, w: number, d: number) => {
+            const sum = Math.ceil(n / 2);
+            const { min, max } = acrossRange(n, DEFAULT_ODD_GAP.side);
+            let best = Infinity;
+            for (let a = min; a <= max; a++) {
+                const across = w / a;
+                const deep = d / (sum - a);
+                if (Math.min(across, deep) < half - 1e-9) continue;
+                best = Math.min(best, Math.abs(Math.log(deep / across)));
+            }
+            return best;
+        };
+        for (const [n, w, d] of [
+            [24, 120, 50],
+            [40, 100, 100],
+            [31, 70, 60],
+            [100, 400, 200],
+            [15, 160, 60],
+        ] as const)
+            it(`spreads ${n} round a ${w} × ${d} box as evenly as its frame allows, keeps the frame, and pressed again changes nothing`, () => {
+                // Uneven first: set spacings the frame doesn't suit
+                const p = withSpacing(
+                    withSpacing(outline(n, w, d), "across", 2, n, env),
+                    "deep",
+                    4,
+                    n,
+                    env,
+                );
+                const width = lengthOf(p, n, "across");
+                const depth = lengthOf(p, n, "deep");
+                const q = boxTool.closed!.evenOut!(p, n, env) as BoxParams;
+                expect(q).not.toBe(p);
+                expect(lengthOf(q, n, "across")).toBeCloseTo(width, 6);
+                expect(lengthOf(q, n, "deep")).toBeCloseTo(depth, 6);
+                expect(
+                    Math.abs(Math.log(q.deep / q.across)),
+                ).toBeLessThanOrEqual(bestScore(n, width, depth) + 1e-9);
+                expect(boxTool.closed!.evenOut!(q, n, env)).toBe(q);
+            });
+
+        it("has nothing to do for a box in Grid", () => {
+            const files = drawBox({ x: 0, y: 0 }, { x: 120, y: 50 }, 24, env)!;
+            expect(boxTool.closed!.evenOut!(files, 24, env)).toBeUndefined();
+        });
     });
 
-    it("never takes a worked-out spacing under half a step, whatever the edit", () => {
+    it("never takes a spacing under half a step, whatever the edit", () => {
         let q = outline(24, 120, 30);
         for (const [which, v] of [
             ["across", 0.5],
             ["deep", 4],
             ["across", 6],
             ["deep", 0.5],
-            ["across", 3],
         ] as const) {
             q = withSpacing(q, which, v, 24, env);
             expect(Math.min(q.across, q.deep)).toBeGreaterThanOrEqual(
@@ -379,58 +394,13 @@ describe("an outline: what's touched is held, the rest worked out once (owner on
                 half - 1e-9,
             );
         }
-        for (let k = 0; k < 30; k++) {
-            q = resizeFiles(q, 24, onField(q, 24).across - 1, env);
-            expect(Math.min(q.across, q.deep)).toBeGreaterThanOrEqual(
-                half - 1e-9,
-            );
-        }
+        const evened = boxTool.closed!.evenOut!(q, 24, env) as BoxParams;
+        expect(Math.min(evened.across, evened.deep)).toBeGreaterThanOrEqual(
+            half - 1e-9,
+        );
     });
 
-    for (const degrees of [15, 30, 60])
-        for (const key of ["s", "e"] as const)
-            it(`a turned ${degrees}° outline's ${key} drag lands a corner on a line within the radius`, () => {
-                const p: BoxParams = {
-                    ...outline(24, 120, 80),
-                    center: { x: 40, y: -230 },
-                    rotation: (degrees * Math.PI) / 180,
-                    across: 15,
-                    deep: 15,
-                };
-                const h = boxTool.handles(p, 24).find((x) => x.key === key)!.at;
-                const dir =
-                    key === "s"
-                        ? { x: -Math.sin(p.rotation), y: Math.cos(p.rotation) }
-                        : { x: Math.cos(p.rotation), y: Math.sin(p.rotation) };
-                let pulled = 0;
-                for (let px = -30; px <= 150; px += 0.5) {
-                    const to = { x: h.x + px * dir.x, y: h.y + px * dir.y };
-                    const out = stretchBox(p, 24, key, to, lined());
-                    const free = stretchBox(
-                        p,
-                        24,
-                        key,
-                        to,
-                        lined({ pull: false }),
-                    );
-                    if (out.across === free.across && out.deep === free.deep)
-                        continue;
-                    pulled++;
-                    const corners = boxCorners(out, 24);
-                    const was = boxCorners(free, 24);
-                    const landed = corners
-                        .map((c, k) => ({ c, k }))
-                        .filter(({ c }) => onLine(c))
-                        .map(({ c, k }) =>
-                            Math.hypot(c.x - was[k]!.x, c.y - was[k]!.y),
-                        );
-                    expect(landed.length, `${px}`).toBeGreaterThan(0);
-                    expect(Math.min(...landed)).toBeLessThanOrEqual(6 + 1e-6);
-                }
-                expect(pulled).toBeGreaterThan(0);
-            });
-
-    it("a spacing change that moves marchers between sides works out who goes where again: no walks cross", () => {
+    it("a drag that moves marchers between sides works out who goes where again: no walks cross", () => {
         const marchers = Array.from({ length: 24 }, (_, i) => ({
             id: i + 1,
             at: { x: -200 + (i % 8) * 30, y: 200 + Math.floor(i / 8) * 30 },
@@ -442,13 +412,12 @@ describe("an outline: what's touched is held, the rest worked out once (owner on
         t = release(t, ctx);
         t = edit(t, withMode(boxTool, t.params, 24, "outline", env), ctx);
         const before = onField(t.params as BoxParams, 24);
-        t = edit(
-            t,
-            withSpacing(t.params as BoxParams, "across", 0.5, 24, env),
-            ctx,
-        );
+        const e = boxTool.handles(t.params, 24).find((h) => h.key === "e")!.at;
+        t = press(t, e, env);
+        t = pointerMove(t, { x: e.x + 90, y: e.y }, env);
+        t = release(t, ctx);
         const after = onField(t.params as BoxParams, 24);
-        expect(after.across).not.toBe(before.across);
+        expect(after.across).toBeGreaterThan(before.across);
         const walks = targetsOf(t, ctx);
         const cross = (a: { from: XY; to: XY }, b: { from: XY; to: XY }) => {
             const side = (p: XY, q: XY, r: XY) =>

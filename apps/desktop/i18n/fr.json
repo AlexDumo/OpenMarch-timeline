@@ -83,6 +83,7 @@
             "noMarchersSelected": "Aucun marcheur sélectionné",
             "quarterTurn": "Forme : Tourner de 90° dans le sens horaire",
             "recalculate": "Forme : Recalculer qui va où",
+            "evenOut": "Forme : égaliser le contour",
             "ring": "Anneau des favoris : maintenez pour choisir une forme, touchez pour le garder ouvert"
         },
         "swap": {
@@ -1282,6 +1283,11 @@
             "ratioLock": {
                 "locked": "Espacements liés : cliquez pour les délier",
                 "unlocked": "Lier les deux espacements"
+            },
+            "evenOut": {
+                "label": "Égaliser",
+                "tip": "Répartir les marcheurs aussi régulièrement que le bloc le permet",
+                "already": "Les marcheurs sont déjà aussi réguliers que le bloc le permet"
             },
             "recalculate": {
                 "already": "Qui va où est déjà au plus court trajet",
