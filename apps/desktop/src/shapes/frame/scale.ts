@@ -1,5 +1,6 @@
 import tolgee from "@/global/singletons/Tolgee";
 import { formatSteps } from "../editor/format";
+import { SPACING_FINE_RATE, SPACING_RATE } from "../editor/scrub";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import { pivotPoint, samePivot, type Pivot } from "./frame";
 import { settled } from "./gestures";
@@ -93,6 +94,186 @@ function grown(
     )
         return null;
     return kind.withSize(params, n, { halfWidth, halfDepth }, env);
+}
+
+/** Within this of a half step, a spacing is on the ladder (typed spacings keep 600ths) */
+const LADDER_EPS = 1e-6;
+
+const onLadder = (steps: number) =>
+    Math.abs(steps * 2 - Math.round(steps * 2)) < LADDER_EPS;
+
+/**
+ * Which spacing drives a step that keeps the ratio (owner's rule on #489): the one on the half-step
+ * ladder when only one is; otherwise the larger. Its index in `steps`.
+ */
+export function ratioDriver(steps: readonly number[]): number {
+    const all = steps.map((_, i) => i);
+    const on = all.filter((i) => onLadder(steps[i]!));
+    if (on.length === 1) return on[0]!;
+    return all.reduce((best, i) => (steps[i]! > steps[best]! ? i : best));
+}
+
+/**
+ * One Expand (`by` 1) or Shrink (-1) of the spacings across and deep, in steps, keeping their
+ * ratio (owner's half-step rule, #489). Equal spacings both change by half a step. Otherwise the
+ * driver (`ratioDriver`) goes to its next half step that way (from off the ladder it rounds on to
+ * it: 3.2 → 3.5 or 3) and the other follows in proportion. Null when a spacing would go under half
+ * a step.
+ */
+export function expandStep(
+    steps: readonly number[],
+    by: -1 | 1,
+): number[] | null {
+    if (steps.length === 0) return null;
+    const equal = steps.every((s) => Math.abs(s - steps[0]!) < LADDER_EPS);
+    let next: number[];
+    if (equal && steps.length > 1) next = steps.map((s) => s + by * SCALE_STEP);
+    else {
+        const i = ratioDriver(steps);
+        const from = steps[i]!;
+        const to = onLadder(from)
+            ? from + by * SCALE_STEP
+            : (by > 0 ? Math.ceil(from * 2) : Math.floor(from * 2)) / 2;
+        next = steps.map((s, j) => (j === i ? to : (s * to) / from));
+    }
+    return next.every((s) => s >= SCALE_STEP - LADDER_EPS) ? next : null;
+}
+
+/**
+ * The shape one Expand (`by` 1) or Shrink (-1) scales to, around `pivot`, keeping its across:deep
+ * ratio (#489, `expandStep`); null where it can't go. An interval kind's spacings take the step
+ * (one or two of them: a single file, a circle and a spread have one); a footprint kind's size
+ * does. Counts never change.
+ */
+export function scaleKeepingRatio(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    by: -1 | 1,
+    pivot: Pivot,
+    env: ToolEnv,
+): unknown {
+    return scaledBy(kind, params, n, pivot, env, (steps) =>
+        expandStep(steps, by),
+    );
+}
+
+/** Pixels of drag per Expand step: a spacing's own drag takes half a step per 8 px */
+const EXPAND_PX = SPACING_RATE.px;
+
+/**
+ * Expand or Shrink dragged `distance` px (positive for bigger) from `base`, the shape at the
+ * press: one step of the rule per 8 px, stopping at the smallest it can go. With Alt (`env.fine`)
+ * the driver moves a hundredth of a step per px, with Cmd or Ctrl (`env.mod`) freely, the other
+ * in proportion either way. Around `pivot`; `base` where it can't change.
+ */
+export function scrubKeepingRatio(
+    kind: AnyToolKind,
+    base: unknown,
+    n: number,
+    distance: number,
+    pivot: Pivot,
+    env: ToolEnv,
+): unknown {
+    if (env.fine || env.mod) {
+        const px = Math.trunc(distance);
+        const continuous = (steps: readonly number[]) => {
+            const driver = steps[ratioDriver(steps)]!;
+            const to = env.mod
+                ? driver + (px * SPACING_RATE.step) / EXPAND_PX
+                : driver + px * SPACING_FINE_RATE.step;
+            // As small as it goes: the smallest spacing at half a step
+            const floor = (SCALE_STEP * driver) / Math.min(...steps);
+            const scale = Math.max(to, floor) / driver;
+            return Math.abs(scale - 1) < 1e-12
+                ? null
+                : steps.map((s) => s * scale);
+        };
+        return scaledBy(kind, base, n, pivot, env, continuous) ?? base;
+    }
+    const count = Math.trunc(distance / EXPAND_PX);
+    let params = base;
+    for (let i = 0; i < Math.abs(count); i++) {
+        const next = scaleKeepingRatio(
+            kind,
+            params,
+            n,
+            count > 0 ? 1 : -1,
+            pivot,
+            env,
+        );
+        if (next === null) break;
+        params = next;
+    }
+    return params;
+}
+
+/** The shape with its spacings (or size) changed by `change`, the pivot kept where it was */
+function scaledBy(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    pivot: Pivot,
+    env: ToolEnv,
+    change: (steps: readonly number[]) => readonly number[] | null,
+): unknown {
+    // Each spacing is set exactly as worked out: the ratio lock doesn't move the other
+    const plain: ToolEnv = { ...env, ratioLocked: false, pivot };
+    const scaled =
+        kind.scaling === "interval"
+            ? withSpacings(kind, params, n, plain, change)
+            : withSizes(kind, params, n, plain, change);
+    if (scaled === null || scaled === params) return null;
+    return keepPivot(kind, params, carryPivot(params, scaled), n, pivot);
+}
+
+/** An interval kind with the spacings it shows changed by `change`; null where one can't be */
+function withSpacings(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    env: ToolEnv,
+    change: (steps: readonly number[]) => readonly number[] | null,
+): unknown {
+    const spacings = kind.params.filter(
+        (p) => p.interval && p.value && p.set && (p.shown?.(params, n) ?? true),
+    );
+    if (spacings.length === 0) return null;
+    const next = change(spacings.map((p) => p.value!(params, n, env.stepPx)));
+    if (next === null) return null;
+    let out: unknown = params;
+    for (const [i, param] of spacings.entries()) {
+        out = param.set!(out, n, next[i]!, env);
+        if (out === null) return null;
+    }
+    return out;
+}
+
+/** A footprint kind with its length and depth changed by `change` (a line stays a line) */
+function withSizes(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    env: ToolEnv,
+    change: (steps: readonly number[]) => readonly number[] | null,
+): unknown {
+    if (!kind.withSize) return null;
+    const frame = kind.frameOf(params, n);
+    const halves = [frame.halfWidth, frame.halfDepth];
+    const sized = halves.filter((h) => h > 1e-9);
+    if (sized.length === 0) return null;
+    const next = change(sized.map((h) => (2 * h) / env.stepPx));
+    if (next === null) return null;
+    let i = 0;
+    const [halfWidth, halfDepth] = halves.map((h) =>
+        h > 1e-9 ? (next[i++]! * env.stepPx) / 2 : 0,
+    );
+    return kind.withSize(
+        params,
+        n,
+        { halfWidth: halfWidth!, halfDepth: halfDepth! },
+        env,
+    );
 }
 
 /** `after` moved so `pivot` is where it was on `before` */

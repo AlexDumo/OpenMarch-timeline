@@ -85,6 +85,7 @@ import { ModeMenu } from "./ModeMenu";
 import { OutlineGap } from "./OutlineGap";
 import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
+import { ScaleButtons, scaledOnce, scaleOnce } from "./ScaleButtons";
 import { distributionOf, edgeSplitOf, layoutOf } from "../distribute/modes";
 import { outlineGapOf } from "../distribute/outlineGap";
 import type { XY } from "../types";
@@ -108,9 +109,10 @@ const EDIT_WINDOW_MS = 1000;
  * under it shows, and it is solid while the pointer is over either, with focus inside it or a
  * menu of its open (`ShapeEditorSurface.css`). Its numbers are the kind's primary parameters (#344, `chipLayout`), so it works for any kind.
  * One row, no ⋯ (#429; owner: keep it compact), for a box:
- * `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ↻ 0° ⌖▾ ⇋ ⇵ Recalculate │ ⌇ ☆ │ Place`. Every number can be
+ * `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ↻ 0° ⌖▾ ⇋ ⇵ ⤡ ⤢ Recalculate │ ⌇ ☆ │ Place`. Every number can be
  * typed or dragged, and follows the field: across is side to side however the box is turned. ↻
- * adds a quarter turn to the degrees beside it, and ⌖▾ opens the pivot grid (#435).
+ * adds a quarter turn to the degrees beside it, and ⌖▾ opens the pivot grid (#435). After the
+ * flips, Shrink and Expand scale the shape keeping its proportions (#489, `ScaleButtons`).
  * Recalculate works out who goes where again by least travel, which moving and turning keep until
  * it's pressed, and shows its word only when it would change something; Close up shows for a
  * placed shape with holes (#392). Pathways and ☆ Save, which leave the shape as it is, come last
@@ -225,6 +227,17 @@ function ShapeEditorBar({
     useActionHandler("shapeQuarterTurn", () => turnQuarter(live), {
         ignoreRepeat: true,
     });
+    // Expand and Shrink keeping the proportions (#489), one step a press
+    const canShrink =
+        env !== null && scaledOnce(target, params, -1, env) !== null;
+    const canExpand =
+        env !== null && scaledOnce(target, params, 1, env) !== null;
+    useActionHandler("shapeShrink", () => scaleOnce(live, -1, envFor), {
+        enabled: canShrink,
+    });
+    useActionHandler("shapeExpand", () => scaleOnce(live, 1, envFor), {
+        enabled: canExpand,
+    });
     useActionHandler("shapeRecalculate", () => target.recalculate?.(), {
         enabled: target.recalculate !== null,
         ignoreRepeat: true,
@@ -319,6 +332,8 @@ function ShapeEditorBar({
                     empty={target.empty}
                     canCloseUp={target.closeUp !== undefined}
                     evenState={evenState}
+                    canShrink={canShrink}
+                    canExpand={canExpand}
                 />
                 {/* What doesn't change the shape itself, at the end (owner): its pathways and
                     saving it to the library */}
@@ -598,7 +613,7 @@ const RatioLockButton = memo(function RatioLockButton() {
     );
 });
 
-/** The turn, its pivot, the flips, Recalculate and Close up */
+/** The turn, its pivot, the flips, Shrink and Expand, Recalculate and Close up */
 const TurnControls = memo(function TurnControls({
     live: target,
     degrees,
@@ -607,6 +622,8 @@ const TurnControls = memo(function TurnControls({
     canRecalculate,
     empty,
     evenState,
+    canShrink,
+    canExpand,
 }: {
     live: ShapeEditTarget;
     degrees: number;
@@ -616,6 +633,9 @@ const TurnControls = memo(function TurnControls({
     empty: number;
     /** Whether "Even out" applies, and whether there's anything to even (#459) */
     evenState: EvenState;
+    /** Whether Shrink and Expand can take a step (#489) */
+    canShrink: boolean;
+    canExpand: boolean;
     /** Only redraws it */
     canCloseUp: boolean;
 }) {
@@ -702,6 +722,14 @@ const TurnControls = memo(function TurnControls({
             >
                 <FlipVerticalIcon size={14} />
             </IconButton>
+            <ScaleButtons
+                live={target}
+                envFor={envFor}
+                canShrink={canShrink}
+                canExpand={canExpand}
+                shrinkKey={keyOf("shapeShrink")}
+                expandKey={keyOf("shapeExpand")}
+            />
             <IconButton
                 label={
                     canRecalculate
