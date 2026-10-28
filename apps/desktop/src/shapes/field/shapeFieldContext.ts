@@ -39,7 +39,10 @@ function contextOf(
     return {
         stepPx: fieldProperties.pixelsPerStep,
         field: { width: fieldProperties.width, height: fieldProperties.height },
-        steps: stepLimit(fieldProperties),
+        // Worked out when read: the move's counts change while this object is reused
+        get steps() {
+            return stepLimit(fieldProperties);
+        },
         snapPoint: (p) => {
             if (!snap) return p;
             const rounded = getRoundCoordinates2({
