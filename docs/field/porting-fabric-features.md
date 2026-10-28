@@ -219,7 +219,8 @@ for the box click rules, an SVG `ModeDrawing` in `FieldOverlay`, placed boxes
 in `shapes/placed/PlacedBoxesOverlay.tsx`, label forms in `LabelsLayer`, and
 `shapes/field/shapeField.ts` in place of `window.canvas`. Scenarios:
 `e2e/browser/tests/box-tool.spec.mts`. The decisions below were taken as
-follows: the recipes migration is `0023` (after the cues' `0022`), the recipe ADR is
+follows: the recipes migration is `0027_acoustic_stone_men` (renumbered from
+`0023` as `main` gained migrations; `0028_fast_polaris` adds `saved_shapes`), the recipe ADR is
 `0006-shape-recipes.md`, the line tool is removed (owner, 2026-10-15), and
 the rules table has rows for placed boxes and the box tool's Alt.
 

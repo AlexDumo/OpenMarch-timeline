@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { db } from "@/global/database/db";
 import { readAllShapeRecipes } from "@/db-functions/shapeRecipes";
+import { subscribeHistoryChanges } from "@/db-functions/history";
 import {
     displayedBeat,
     useTimelineSelectionStore,
@@ -11,8 +12,9 @@ import { boxesAt, type PlacedBox, type PlacedRecipe } from "./placedBox";
 
 /**
  * The show's shape recipes, read back for placed boxes
- * (docs/timeline/research/shapes/07-placed-boxes.md). Refreshed after every coordinate edit and
- * whenever the resolver takes a change (undo and redo included).
+ * (docs/timeline/research/shapes/07-placed-boxes.md). Refreshed after every coordinate edit,
+ * whenever the resolver takes a change, and after every undoable edit, undo and redo
+ * (`followPlacedBoxChanges`).
  */
 export const usePlacedBoxStore = create<{
     readonly recipes: readonly PlacedRecipe[];
@@ -45,6 +47,18 @@ export function invalidatePlacedBoxes(): void {
                 invalidatePlacedBoxes();
             }
         });
+}
+
+/**
+ * Reads the recipes again after every undoable edit, undo and redo, until the returned function
+ * stops it: one that changes only a recipe (a pivot drag) moves no one, so the resolver never
+ * hears of it
+ */
+export function followPlacedBoxChanges(): () => void {
+    const stop = subscribeHistoryChanges(invalidatePlacedBoxes);
+    return () => {
+        stop();
+    };
 }
 
 /** The placed boxes shown at `beat`, from the stored recipes and the resolver */

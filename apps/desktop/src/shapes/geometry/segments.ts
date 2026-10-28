@@ -19,18 +19,3 @@ export function walksCross(p: Walk, q: Walk): boolean {
     const inside = (v: number) => v > 1e-6 && v < 1 - 1e-6;
     return inside(t) && inside(u);
 }
-
-/**
- * How close two marchers get while walking at the same time (both start together and arrive
- * together, so their gap changes linearly): the smallest distance between them over the move.
- */
-export function closestApproach(p: Walk, q: Walk): number {
-    const wx = p.from.x - q.from.x;
-    const wy = p.from.y - q.from.y;
-    const vx = p.to.x - p.from.x - (q.to.x - q.from.x);
-    const vy = p.to.y - p.from.y - (q.to.y - q.from.y);
-    const vv = vx * vx + vy * vy;
-    const t =
-        vv === 0 ? 0 : Math.min(1, Math.max(0, -(wx * vx + wy * vy) / vv));
-    return Math.hypot(wx + t * vx, wy + t * vy);
-}

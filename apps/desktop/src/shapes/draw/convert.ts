@@ -1,7 +1,6 @@
 import type { BlockParams } from "../kinds/block";
 import type { CircleParams } from "../kinds/circle";
 import type { FillParams } from "../kinds/fill";
-import { FIT } from "../kinds/pathKind";
 
 /**
  * The switches between a shape's outline and its fills (owner decisions, 2026-10-11): a circle is
@@ -20,10 +19,6 @@ export function circleToFill(p: CircleParams): FillParams {
         edge: 0,
         layout: 1,
     };
-}
-
-export function fillToCircle(p: FillParams): CircleParams {
-    return { center: p.center, r: p.r, start: Math.PI / 2, spacing: FIT };
 }
 
 const ranksOf = (p: BlockParams, n: number) =>

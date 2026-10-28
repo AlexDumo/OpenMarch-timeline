@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { Tip } from "./Tip";
+import tolgee from "@/global/singletons/Tolgee";
 import * as Popover from "@radix-ui/react-popover";
 import { CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react";
 import { LAYOUT_LABELS, type LayoutFamily } from "../distribute/distribution";
@@ -85,9 +86,26 @@ function needsTitle(label: string, hint: LayoutHint, n: number): string {
         hint.more !== null && n + hint.more,
         hint.fewer !== null && n - hint.fewer,
     ].filter((c): c is number => c !== false);
-    return counts.length > 0
-        ? `${label} needs ${counts.join(" or ")} marchers: ${hintText(hint)}`
-        : `${label} can't make ${n}`;
+    if (counts.length === 0)
+        return tolgee.t(
+            "shapes.edit.layout.cantMake",
+            "{label} can't make {count}",
+            {
+                label,
+                count: n,
+            },
+        );
+    return counts.length > 1
+        ? tolgee.t(
+              "shapes.edit.layout.needsEither",
+              "{label} needs {a} or {b} marchers: {hint}",
+              { label, a: counts[0], b: counts[1], hint: hintText(hint) },
+          )
+        : tolgee.t(
+              "shapes.edit.layout.needs",
+              "{label} needs {count, plural, one {# marcher} other {# marchers}}: {hint}",
+              { label, count: counts[0], hint: hintText(hint) },
+          );
 }
 
 /**
@@ -130,11 +148,17 @@ export function LayoutMenu(props: PickerProps) {
                 className={clsx("flex items-center gap-4", props.className)}
                 data-testid="shape-layout-pill"
             >
-                <Tip label="Layout">
+                <Tip label={tolgee.t("shapes.edit.layout.label", "Layout")}>
                     <Popover.Trigger asChild>
                         <button
                             type="button"
-                            aria-label={`Layout: ${LAYOUT_LABELS[family]}`}
+                            aria-label={tolgee.t(
+                                "shapes.edit.layout.aria",
+                                "Layout: {label}",
+                                {
+                                    label: LAYOUT_LABELS[family],
+                                },
+                            )}
                             {...focus.trigger}
                             data-testid="shape-layout-menu"
                             className="rounded-4 hover:bg-fg-2 flex items-center gap-4 px-4 py-2"
@@ -293,7 +317,11 @@ function LayoutMenuBody({
                             {!missing && (
                                 <button
                                     type="button"
-                                    aria-label={`Show the ${row.label} versions`}
+                                    aria-label={tolgee.t(
+                                        "shapes.edit.layout.showVersions",
+                                        "Show the {label} versions",
+                                        { label: row.label },
+                                    )}
                                     onPointerDown={keepFocus}
                                     onClick={() => setActive(row.family)}
                                     data-testid={`shape-layout-menu-expand-${row.family}`}

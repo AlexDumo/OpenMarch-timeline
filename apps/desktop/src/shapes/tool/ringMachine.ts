@@ -26,7 +26,10 @@ export function ringSlots(
         if (slots.some((s) => s.id === kind.shape.id)) continue;
         slots.push({
             id: kind.shape.id,
-            label: kind.shape.label,
+            // A getter, so a kept slot follows the app's language
+            get label() {
+                return kind.shape.label;
+            },
             kind,
         });
     }

@@ -53,6 +53,16 @@ const edges = (p: BoxParams) => {
     };
 };
 
+/** `edges` for a box of `n` marchers */
+const edges2 = (p: BoxParams, n: number) => {
+    const f = boxFrame(p, n);
+    return {
+        left: f.center.x - f.halfWidth,
+        right: f.center.x + f.halfWidth,
+        center: f.center,
+    };
+};
+
 /** `p` dragged from inside by `by` */
 function move(
     kind: AnyToolKind,
@@ -219,6 +229,40 @@ describe("moving a box onto a line", () => {
             exact(p.center.x, 40 + 25);
             exact(p.center.y, -150 - 5);
         });
+    });
+
+    it("pulls a box dragged by its center dot the same way", () => {
+        const c = boxFrame(box, N).center;
+        const gesture = startShapeGesture(boxTool, box, N, c, env());
+        expect(gesture?.type).toBe("center");
+        const before = edges(box);
+        const by = { x: 0, y: -before.front - 0.8 };
+        const p = dragShape(
+            boxTool,
+            N,
+            gesture!,
+            { x: c.x + by.x, y: c.y + by.y },
+            env(),
+        ) as BoxParams;
+        exact(edges(p).front, 0);
+    });
+
+    it("lands a side rather than the center when both are as near a line", () => {
+        // Two files 158 apart: the center 0.5 right of the 50, the right side 0.5 short of
+        // the 40, and the left side out of reach
+        const wide: BoxParams = {
+            center: { x: 0.5, y: -150 },
+            rotation: 0,
+            files: 2,
+            across: 158,
+            deep: 1.6 * STEP,
+        };
+        const n = 4;
+        const before = edges2(wide, n);
+        exact(before.center.x, 0.5);
+        exact(before.right, 79.5);
+        const p = move(boxTool, wide, { x: 0, y: 0 }, {}, n) as BoxParams;
+        exact(edges2(p, n).right, 80);
     });
 
     it("doesn't pull a circle", () => {

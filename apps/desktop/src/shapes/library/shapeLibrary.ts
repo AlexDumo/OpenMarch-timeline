@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import {
     MODE_LABELS,
     storedDistribution,
@@ -35,7 +36,9 @@ export function intervalNote(steps: readonly number[]): string | null {
     if (steps.length === 0) return null;
     const shown = steps.map(formatSteps);
     const same = shown.every((s) => s === shown[0]);
-    return `${same ? shown[0] : shown.join(" × ")} apart`;
+    return tolgee.t("shapes.library.note.apart", "{spacing} apart", {
+        spacing: same ? shown[0]! : shown.join(" × "),
+    });
 }
 
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
@@ -45,7 +48,18 @@ function staggerNote([p, q]: Fraction): string | null {
     if (p === 0) return null;
     const d = gcd(Math.abs(p), q);
     const plain = `${Math.abs(p) / d}/${q / d}`;
-    return `stagger ${FRACTIONS[plain] ?? plain}${p < 0 ? " left" : ""}`;
+    const fraction = FRACTIONS[plain] ?? plain;
+    return p < 0
+        ? tolgee.t(
+              "shapes.library.note.staggerLeft",
+              "stagger {fraction} left",
+              {
+                  fraction,
+              },
+          )
+        : tolgee.t("shapes.library.note.stagger", "stagger {fraction}", {
+              fraction,
+          });
 }
 
 /**
@@ -64,7 +78,12 @@ export function spacingNote(
     if (!d) return spacing;
     if (d.mode !== "files") {
         const mode = MODE_LABELS[d.mode as DistributionMode];
-        return spacing ? `${mode} ${spacing}` : mode;
+        return spacing
+            ? tolgee.t("shapes.library.note.modeSpacing", "{mode} {spacing}", {
+                  mode,
+                  spacing,
+              })
+            : mode;
     }
     return [spacing, staggerNote(d.stagger)].filter(Boolean).join(", ") || null;
 }
@@ -73,16 +92,21 @@ export function spacingNote(
 export function basicShapeRows(
     tools: readonly ShapeToolEntry[],
 ): ShapeLibraryRow[] {
+    // Getters: the rows are made once, and the words follow the app's language
     return tools.map(({ kind }) => ({
         id: kind.shape.id,
         group: "basic",
-        label: kind.shape.label,
+        get label() {
+            return kind.shape.label;
+        },
         kind,
-        note: intervalNote(
-            kind.params.flatMap((p) =>
-                p.interval && p.default !== undefined ? [p.default] : [],
-            ),
-        ),
+        get note() {
+            return intervalNote(
+                kind.params.flatMap((p) =>
+                    p.interval && p.default !== undefined ? [p.default] : [],
+                ),
+            );
+        },
     }));
 }
 

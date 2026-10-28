@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import type { SavedShape } from "@/db-functions/savedShapes";
 import {
     fromSaved,
@@ -195,7 +196,14 @@ export function savedToolKind(
         // The command bar starts from each parameter's default: the saved intervals here
         params: base.params.map((p) =>
             p.interval && saved.intervals[p.key] !== undefined
-                ? { ...p, default: saved.intervals[p.key] }
+                ? {
+                      ...p,
+                      // Live, so the label follows the language (the spread copies its value)
+                      get label() {
+                          return p.label;
+                      },
+                      default: saved.intervals[p.key],
+                  }
                 : p,
         ),
         draw(from: XY, to: XY, n: number, env: ToolEnv, previous?: unknown) {
@@ -235,7 +243,7 @@ export function savedToolKind(
  * The library's Saved group: the user's saved shapes, then the ones only the open show has (a
  * show from another computer), noted as such. Each note starts with the kind, then how it's
  * spaced and filled: "Box · 2 apart, stagger ½", "Circle · Spread 2 apart". A saved shape whose
- * kind this app doesn't have is left out.
+ * kind this app doesn't have, at the version it was saved with, is left out.
  */
 export function savedShapeRows(
     library: readonly SavedShape[],
@@ -245,25 +253,39 @@ export function savedShapeRows(
     const mine = new Set(library.map((s) => s.id));
     const rows = (shapes: readonly SavedShape[], inLibrary: boolean) =>
         shapes.flatMap((saved): ShapeLibraryRow[] => {
+            // Its kind at the version it was saved with, as placed shapes are read back: another
+            // version's intervals may mean something else, so it's left out rather than guessed
             const base = tools.find(
-                (t) => t.kind.shape.id === saved.kind,
+                (t) =>
+                    t.kind.shape.id === saved.kind &&
+                    t.kind.shape.version === saved.kindVersion,
             )?.kind;
             if (!base) return [];
-            // A saved shape has its own name, so its note says which kind it is (story 22)
-            const note = [
-                base.shape.label,
-                spacingNote(Object.values(saved.intervals), saved.distribution),
-                inLibrary ? null : "this show only",
-            ]
-                .filter(Boolean)
-                .join(" · ");
             return [
                 {
                     id: saved.id,
                     group: "saved",
                     label: saved.name,
                     kind: savedToolKind(base, saved),
-                    note,
+                    // A saved shape has its own name, so its note says which kind it is (story
+                    // 22); a getter, so it follows the app's language
+                    get note() {
+                        return [
+                            base.shape.label,
+                            spacingNote(
+                                Object.values(saved.intervals),
+                                saved.distribution,
+                            ),
+                            inLibrary
+                                ? null
+                                : tolgee.t(
+                                      "shapes.library.note.showOnly",
+                                      "this show only",
+                                  ),
+                        ]
+                            .filter(Boolean)
+                            .join(" · ");
+                    },
                     saved: { shape: saved, inLibrary },
                 },
             ];

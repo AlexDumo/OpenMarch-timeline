@@ -1150,6 +1150,49 @@ async function timelineWithRange(
     return row?.id ?? null;
 }
 
+/**
+ * The move, among those ending at `endBeat` (and starting at `startBeat` when given), that most
+ * of `marcherIds` are in (the lowest id on a tie), or null for none: where an edit's positions
+ * belong when several moves share its counts (UI-25)
+ */
+async function timelineHoldingMost(
+    tx: DbTransaction,
+    marcherIds: readonly number[],
+    endBeat: number,
+    startBeat?: number,
+): Promise<number | null> {
+    const t = schema.timelines;
+    const tr = schema.timeline_transitions;
+    const a = schema.timeline_assignments;
+    const rows = await tx
+        .selectDistinct({ timelineId: t.id, marcherId: a.marcher_id })
+        .from(a)
+        .innerJoin(tr, eq(tr.id, a.transition_id))
+        .innerJoin(t, eq(t.id, tr.timeline_id))
+        .where(
+            and(
+                inArray(a.marcher_id, [...new Set(marcherIds)]),
+                eq(t.end_beat, endBeat),
+                startBeat === undefined
+                    ? undefined
+                    : eq(t.start_beat, startBeat),
+            ),
+        )
+        .all();
+    const counts = new Map<number, number>();
+    for (const r of rows)
+        counts.set(r.timelineId, (counts.get(r.timelineId) ?? 0) + 1);
+    let best: number | null = null;
+    for (const [id, n] of counts)
+        if (
+            best === null ||
+            n > counts.get(best)! ||
+            (n === counts.get(best)! && id < best)
+        )
+            best = id;
+    return best;
+}
+
 /** The move that ends at `beat`, if there is one (where a point edit's positions belong) */
 async function timelineEndingAt(
     tx: DbTransaction,
@@ -1237,11 +1280,25 @@ export const moveMarchersInTarget = async ({
                               moves,
                               clearOwn,
                           });
-                const timelineId = afterWrite
-                    ? target.kind === "range"
-                        ? await timelineWithRange(tx, target)
-                        : await timelineEndingAt(tx, target.beat)
-                    : null;
+                // The selected move, else the one the marchers are in, since a move split off
+                // the page's shares its counts (UI-25)
+                const marcherIds = moves.map((m) => m.marcherId);
+                const timelineId = !afterWrite
+                    ? null
+                    : target.kind === "range"
+                      ? (target.timelineId ??
+                        (await timelineHoldingMost(
+                            tx,
+                            marcherIds,
+                            target.end,
+                            target.start,
+                        )) ??
+                        (await timelineWithRange(tx, target)))
+                      : ((await timelineHoldingMost(
+                            tx,
+                            marcherIds,
+                            target.beat,
+                        )) ?? (await timelineEndingAt(tx, target.beat)));
                 const wroteAppData =
                     afterWrite && timelineId !== null
                         ? (await afterWrite(tx, timelineId)) !== false

@@ -38,14 +38,25 @@ export function leftAs(p: BoxParams, distribution: Distribution): LeftAs {
 
 const positive = (v: unknown): v is number =>
     typeof v === "number" && Number.isFinite(v) && v > 0;
+/** Far wider than any field in field units: a larger stored length is a broken file */
+const MOST = 1e6;
+/** A length the box can have: positive, and nothing like a broken file's */
+const length = (v: unknown): v is number => positive(v) && v <= MOST;
+/** A whole number of marchers from 1 to `count` */
+const marchers = (v: unknown, count: number): v is number =>
+    positive(v) && Number.isInteger(v) && v <= count;
 const size = (v: unknown): FrameSize | undefined => {
     const s = v as Partial<Record<keyof FrameSize, unknown>> | null;
-    return s && positive(s.width) && positive(s.depth)
+    return s && length(s.width) && length(s.depth)
         ? { width: s.width, depth: s.depth }
         : undefined;
 };
 
-/** The memory `params` stores, read defensively (recipes come from files); undefined for none */
+/**
+ * The memory `params` stores, read defensively (recipes come from files): undefined for none or
+ * a broken one, and a mode's numbers left out unless it has a whole number of files up to the
+ * count and lengths a field could hold
+ */
 export function readMemory(params: unknown): ModeMemory | undefined {
     const m = (params as { modes?: unknown } | null)?.modes as
         | Partial<Record<keyof ModeMemory, unknown>>
@@ -53,7 +64,9 @@ export function readMemory(params: unknown): ModeMemory | undefined {
     if (!m || typeof m !== "object") return undefined;
     const frame = size(m.frame);
     const seen = size(m.seen);
-    if (!frame || !seen || !positive(m.count)) return undefined;
+    if (!frame || !seen || !marchers(m.count, Number.MAX_SAFE_INTEGER))
+        return undefined;
+    const count = m.count;
     const left: Partial<Record<Distribution["mode"], LeftAs>> = {};
     for (const [mode, v] of Object.entries((m.left ?? {}) as object)) {
         const l = v as Partial<Record<keyof LeftAs, unknown>> | null;
@@ -65,9 +78,9 @@ export function readMemory(params: unknown): ModeMemory | undefined {
             !l ||
             !distribution ||
             distribution.mode !== mode ||
-            !positive(l.files) ||
-            !positive(l.across) ||
-            !positive(l.deep)
+            !marchers(l.files, count) ||
+            !length(l.across) ||
+            !length(l.deep)
         )
             continue;
         left[distribution.mode] = {
@@ -78,7 +91,7 @@ export function readMemory(params: unknown): ModeMemory | undefined {
             ...(positive(l.spreadAspect) && { spreadAspect: l.spreadAspect }),
         };
     }
-    return { frame, seen, count: m.count, left };
+    return { frame, seen, count, left };
 }
 
 /** Whether two frames are the same, to a millionth of a field unit */

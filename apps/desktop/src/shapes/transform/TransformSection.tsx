@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import clsx from "clsx";
 import { keepFocus } from "../editor/keepFocus";
 import { FlipHorizontalIcon, FlipVerticalIcon } from "@phosphor-icons/react";
@@ -29,7 +30,9 @@ export function TransformSection() {
     if (selected.length === 0 || drawn || (!toolOpen && placed)) return null;
     return (
         <div className="flex flex-col gap-8" data-testid="transform-section">
-            <h5 className="text-h5">Transform</h5>
+            <h5 className="text-h5">
+                {tolgee.t("shapes.transform.title", "Transform")}
+            </h5>
             <div className="flex items-start gap-12">
                 <SelectionPivotGrid />
                 <SelectionTransform count={selected.length} />
@@ -92,7 +95,12 @@ function Flips({
     );
     return (
         <div className="flex gap-4">
-            <Tip label="Flip side to side around the pivot">
+            <Tip
+                label={tolgee.t(
+                    "shapes.transform.flipAcrossTip",
+                    "Flip side to side around the pivot",
+                )}
+            >
                 <button
                     type="button"
                     className={button}
@@ -102,10 +110,17 @@ function Flips({
                     data-testid="transform-flip-across"
                 >
                     <FlipHorizontalIcon size={14} />
-                    <GlyphText text="Flip ↔" />
+                    <GlyphText
+                        text={tolgee.t("shapes.transform.flipAcross", "Flip ↔")}
+                    />
                 </button>
             </Tip>
-            <Tip label="Flip front to back around the pivot">
+            <Tip
+                label={tolgee.t(
+                    "shapes.transform.flipDeepTip",
+                    "Flip front to back around the pivot",
+                )}
+            >
                 <button
                     type="button"
                     className={button}
@@ -115,7 +130,9 @@ function Flips({
                     data-testid="transform-flip-deep"
                 >
                     <FlipVerticalIcon size={14} />
-                    <GlyphText text="Flip ↕" />
+                    <GlyphText
+                        text={tolgee.t("shapes.transform.flipDeep", "Flip ↕")}
+                    />
                 </button>
             </Tip>
         </div>

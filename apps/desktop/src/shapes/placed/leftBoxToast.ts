@@ -70,7 +70,10 @@ async function refill(
             },
         );
     } catch (e) {
-        toastTimelineError(e, "Error filling the shape");
+        toastTimelineError(
+            e,
+            tolgee.t("shapes.placed.fillError", "Error filling the shape"),
+        );
     }
 }
 

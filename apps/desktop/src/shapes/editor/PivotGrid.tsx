@@ -10,6 +10,7 @@ import {
 } from "../frame/frame";
 import { keepFocus } from "./keepFocus";
 import { Tip } from "./Tip";
+import tolgee from "@/global/singletons/Tolgee";
 import { setPivotPreview } from "../field/shapePointer";
 import { screenCellOf, shapeKeyAt } from "./pivotScreen";
 import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
@@ -25,6 +26,10 @@ export const PIVOT_NAMES: Record<PivotKey, string> = {
     s: "front",
     se: "front right",
 };
+
+/** A pivot's name, in the app's language */
+export const pivotName = (key: PivotKey): string =>
+    tolgee.t(`shapes.edit.pivot.names.${key}`, PIVOT_NAMES[key]);
 
 /**
  * What turns, flips and scales go around: a corner, an edge's middle or the center. A shape's
@@ -49,7 +54,7 @@ export function PivotGrid({
     return (
         <div
             role="radiogroup"
-            aria-label="Pivot"
+            aria-label={tolgee.t("shapes.edit.pivot.label", "Pivot")}
             onKeyDown={(e) =>
                 arrowFocus(
                     e,
@@ -67,14 +72,22 @@ export function PivotGrid({
             {PIVOT_KEYS.map((key) => (
                 <Tip
                     key={key}
-                    label={`Turn and flip around the ${PIVOT_NAMES[key]}`}
+                    label={tolgee.t(
+                        "shapes.edit.pivot.tip",
+                        "Turn and flip around the {pivot}",
+                        { pivot: pivotName(key) },
+                    )}
                 >
                     <button
                         type="button"
                         role="radio"
                         aria-checked={key === pivot}
                         tabIndex={key === stop ? 0 : -1}
-                        aria-label={`Pivot: ${PIVOT_NAMES[key]}`}
+                        aria-label={tolgee.t(
+                            "shapes.edit.pivot.aria",
+                            "Pivot: {pivot}",
+                            { pivot: pivotName(key) },
+                        )}
                         onPointerDown={keepFocus}
                         onClick={() => onPick(key)}
                         onPointerEnter={() => onPreview?.(key)}
@@ -151,8 +164,13 @@ export function PivotMenu({
         el.querySelector<HTMLElement>('[role="radio"][tabindex="0"]'),
     );
     const label = isPivotKey(shown)
-        ? `Pivot: ${PIVOT_NAMES[shown]}`
-        : "Pivot: where it was dragged on the field";
+        ? tolgee.t("shapes.edit.pivot.aria", "Pivot: {pivot}", {
+              pivot: pivotName(shown),
+          })
+        : tolgee.t(
+              "shapes.edit.pivot.custom",
+              "Pivot: where it was dragged on the field",
+          );
     return (
         <Popover.Root open={open} onOpenChange={setOpen}>
             <Tip label={label}>

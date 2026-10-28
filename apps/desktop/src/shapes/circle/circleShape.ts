@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { fieldToFrame } from "../frame/frame";
 import type { ShapeKind } from "../types";
 import {
@@ -16,7 +17,9 @@ import {
 export const circleShape: ShapeKind<CircleParams> = {
     id: "circle",
     version: 2,
-    label: "Circle",
+    get label() {
+        return tolgee.t("shapes.kinds.circle.label", "Circle");
+    },
     family: "fill",
     defaultOrder: "nearest",
     groups: [],

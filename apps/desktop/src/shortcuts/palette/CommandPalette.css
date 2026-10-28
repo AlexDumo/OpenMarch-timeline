@@ -342,6 +342,10 @@
     .palette-shell[data-state="closed"] {
         animation-name: palette-fade-out;
     }
+    .docked-bar {
+        animation-name: palette-fade-in;
+        animation-duration: 120ms;
+    }
     .palette-highlight[data-animate="true"],
     .palette-list {
         transition: none;

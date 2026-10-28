@@ -10,7 +10,8 @@ import {
     unit,
     xy,
 } from "../geometry/vec";
-import type { ShapeContext, ShapeKind, Slot, XY } from "../types";
+import tolgee from "@/global/singletons/Tolgee";
+import type { ParamGroup, ShapeContext, ShapeKind, Slot, XY } from "../types";
 
 /**
  * A filled block: ranks (rows) of files (columns), in the block's own frame. Local +x runs along
@@ -129,59 +130,132 @@ const ROTATE_OFFSET = Math.PI / 2;
 
 const trim = (v: number) => String(Math.round(v * 100) / 100);
 
-export const blockKind: ShapeKind<BlockParams> = {
-    id: "block",
-    version: 1,
-    label: "Box",
-    family: "fill",
-    groups: [
+/** The block's pattern group: how its ranks sit, and where a short rank goes */
+function patternGroup(): ParamGroup<BlockParams> {
+    return {
+        label: tolgee.t("shapes.kinds.block.pattern", "Pattern"),
+        fields: [
+            {
+                type: "enum",
+                key: "pattern",
+                label: tolgee.t("shapes.kinds.block.ranks.label", "Ranks"),
+                options: [
+                    {
+                        value: "grid",
+                        label: tolgee.t(
+                            "shapes.kinds.block.ranks.grid",
+                            "Grid",
+                        ),
+                    },
+                    {
+                        value: "offset",
+                        label: tolgee.t(
+                            "shapes.kinds.block.ranks.staggered",
+                            "Staggered",
+                        ),
+                    },
+                ],
+            },
+            {
+                type: "enum",
+                key: "shortRank",
+                label: tolgee.t(
+                    "shapes.kinds.block.shortRank.label",
+                    "Short rank",
+                ),
+                options: [
+                    {
+                        value: "start",
+                        label: tolgee.t(
+                            "shapes.kinds.block.shortRank.left",
+                            "Left",
+                        ),
+                    },
+                    {
+                        value: "center",
+                        label: tolgee.t(
+                            "shapes.kinds.block.shortRank.center",
+                            "Center",
+                        ),
+                    },
+                    {
+                        value: "end",
+                        label: tolgee.t(
+                            "shapes.kinds.block.shortRank.right",
+                            "Right",
+                        ),
+                    },
+                ],
+            },
+        ],
+    };
+}
+
+/** The block's panel groups, built when read so they're in the current language */
+function blockGroups(): ParamGroup<BlockParams>[] {
+    return [
         {
-            label: "Size",
+            label: tolgee.t("shapes.kinds.block.size", "Size"),
             fields: [
-                { type: "count", key: "files", label: "Files", min: 1 },
-                { type: "length", key: "across", label: "Across" },
-                { type: "length", key: "deep", label: "Deep" },
+                {
+                    type: "count",
+                    key: "files",
+                    label: tolgee.t("shapes.kinds.block.files", "Files"),
+                    min: 1,
+                },
+                {
+                    type: "length",
+                    key: "across",
+                    label: tolgee.t("shapes.kinds.block.across", "Across"),
+                },
+                {
+                    type: "length",
+                    key: "deep",
+                    label: tolgee.t("shapes.kinds.block.deep", "Deep"),
+                },
                 {
                     type: "lock",
                     key: "keepIntervals",
-                    label: "Keep intervals",
-                    lockedHelp:
+                    label: tolgee.t(
+                        "shapes.kinds.block.keepIntervals.label",
+                        "Keep intervals",
+                    ),
+                    lockedHelp: tolgee.t(
+                        "shapes.kinds.block.keepIntervals.locked",
                         "Intervals locked: dragging the side adds or removes files. Click to stretch the intervals instead",
-                    unlockedHelp:
+                    ),
+                    unlockedHelp: tolgee.t(
+                        "shapes.kinds.block.keepIntervals.unlocked",
                         "Dragging the side stretches the intervals. Click to lock them, so it adds or removes files",
+                    ),
                 },
             ],
         },
+        patternGroup(),
         {
-            label: "Pattern",
+            label: tolgee.t("shapes.kinds.block.rotation", "Rotation"),
+            advanced: true,
             fields: [
                 {
-                    type: "enum",
-                    key: "pattern",
-                    label: "Ranks",
-                    options: [
-                        { value: "grid", label: "Grid" },
-                        { value: "offset", label: "Staggered" },
-                    ],
-                },
-                {
-                    type: "enum",
-                    key: "shortRank",
-                    label: "Short rank",
-                    options: [
-                        { value: "start", label: "Left" },
-                        { value: "center", label: "Center" },
-                        { value: "end", label: "Right" },
-                    ],
+                    type: "angle",
+                    key: "rotation",
+                    label: tolgee.t("shapes.kinds.block.rotation", "Rotation"),
                 },
             ],
         },
-        {
-            label: "Rotation",
-            advanced: true,
-            fields: [{ type: "angle", key: "rotation", label: "Rotation" }],
-        },
-    ],
+    ];
+}
+
+export const blockKind: ShapeKind<BlockParams> = {
+    id: "block",
+    version: 1,
+    get label() {
+        return tolgee.t("shapes.kinds.block.label", "Box");
+    },
+    family: "fill",
+    get groups() {
+        return blockGroups();
+    },
 
     fit({ current }, ctx: ShapeContext) {
         const n = current.length;
@@ -225,14 +299,19 @@ export const blockKind: ShapeKind<BlockParams> = {
             {
                 key: "rotate",
                 role: "rotate",
-                hint: "Turn",
+                hint: tolgee.t("shapes.kinds.block.hint.turn", "Turn"),
                 at: toField(p, 0, backRank - reach),
             },
             {
                 key: "across",
                 role: "bulge",
                 at: toField(p, half.x + out, 0),
-                hint: p.keepIntervals ? "Files" : "Interval across",
+                hint: p.keepIntervals
+                    ? tolgee.t("shapes.kinds.block.hint.files", "Files")
+                    : tolgee.t(
+                          "shapes.kinds.block.hint.intervalAcross",
+                          "Interval across",
+                      ),
             },
             // With the intervals kept, the ranks follow the files, so depth has no handle
             ...(p.keepIntervals
@@ -241,7 +320,10 @@ export const blockKind: ShapeKind<BlockParams> = {
                       {
                           key: "deep",
                           role: "bulge" as const,
-                          hint: "Interval deep",
+                          hint: tolgee.t(
+                              "shapes.kinds.block.hint.intervalDeep",
+                              "Interval deep",
+                          ),
                           at: toField(p, 0, half.y + out),
                       },
                   ]),
@@ -344,12 +426,25 @@ export const blockKind: ShapeKind<BlockParams> = {
     readouts(p, n, ctx) {
         return [
             {
-                label: "Ranks × files",
+                label: tolgee.t(
+                    "shapes.kinds.block.readout.ranksFiles",
+                    "Ranks × files",
+                ),
                 value: `${ranksOf(p, n)} × ${filesOf(p)}`,
             },
             {
-                label: "Interval",
-                value: `${trim(p.across / ctx.stepPx)} × ${trim(p.deep / ctx.stepPx)} steps`,
+                label: tolgee.t(
+                    "shapes.kinds.block.readout.interval",
+                    "Interval",
+                ),
+                value: tolgee.t(
+                    "shapes.kinds.block.readout.intervalValue",
+                    "{across} × {deep} steps",
+                    {
+                        across: trim(p.across / ctx.stepPx),
+                        deep: trim(p.deep / ctx.stepPx),
+                    },
+                ),
             },
         ];
     },
@@ -357,7 +452,13 @@ export const blockKind: ShapeKind<BlockParams> = {
     validate(p, slots) {
         if (!(p.files >= 1)) {
             return [
-                { level: "error", message: "A block needs at least 1 file" },
+                {
+                    level: "error",
+                    message: tolgee.t(
+                        "shapes.kinds.block.validate.noFiles",
+                        "A block needs at least 1 file",
+                    ),
+                },
             ];
         }
         const files = filesOf(p);
@@ -366,7 +467,11 @@ export const blockKind: ShapeKind<BlockParams> = {
             return [
                 {
                     level: "info",
-                    message: `With ${files} files the last rank has 1 marcher`,
+                    message: tolgee.t(
+                        "shapes.kinds.block.validate.lastRankOne",
+                        "With {files, plural, one {# file} other {# files}} the last rank has 1 marcher",
+                        { files },
+                    ),
                 },
             ];
         }

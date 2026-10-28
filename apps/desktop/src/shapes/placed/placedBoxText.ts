@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { LAYOUT_LABELS } from "../distribute/distribution";
 import { layoutOf } from "../distribute/modes";
 import { shownFamily } from "../distribute/layouts";
@@ -15,7 +16,11 @@ export function useDrawnOnPage(box: PlacedBox | null): string | null {
     const pages = useTimelineSelectionStore((s) => s.pageBoxes);
     if (!box || box.endBeat >= beat - 1e-9) return null;
     const page = pages.find((p) => Math.abs(p.end - box.endBeat) < 1e-9);
-    return page?.name ? `Page ${page.name}` : null;
+    return page?.name
+        ? tolgee.t("timeline.page.label", "Page {pageName}", {
+              pageName: page.name,
+          })
+        : null;
 }
 
 /**
@@ -60,8 +65,22 @@ export function placedBoxSummary(box: PlacedBox, stepPx: number): string {
     const { counts, intervals, notes, empty } = placedNumbers(box, stepPx);
     return [
         ...(counts ? [counts] : []),
-        ...(intervals ? [`${intervals} steps`] : []),
+        ...(intervals
+            ? [
+                  tolgee.t("shapes.placed.summary.steps", "{interval} steps", {
+                      interval: intervals,
+                  }),
+              ]
+            : []),
         ...notes,
-        ...(empty > 0 ? [`${empty} empty`] : []),
+        ...(empty > 0
+            ? [
+                  tolgee.t(
+                      "shapes.placed.summary.empty",
+                      "{count, plural, other {# empty}}",
+                      { count: empty },
+                  ),
+              ]
+            : []),
     ].join(" · ");
 }

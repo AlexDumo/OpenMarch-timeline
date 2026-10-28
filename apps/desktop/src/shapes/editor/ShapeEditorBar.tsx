@@ -7,6 +7,7 @@ import {
     useMemo,
     useRef,
     useState,
+    type PointerEvent as ReactPointerEvent,
     type ReactNode,
 } from "react";
 import { animated, to, useSpring } from "@react-spring/web";
@@ -83,6 +84,7 @@ import { distributionOf, edgeSplitOf, layoutOf } from "../distribute/modes";
 import { outlineGapOf } from "../distribute/outlineGap";
 import type { XY } from "../types";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import tolgee from "@/global/singletons/Tolgee";
 
 /** How long the editor stays still after a press on it ends, so a second click lands */
 const PRESS_HOLD_MS = 450;
@@ -130,8 +132,11 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
                 className="rounded-6 border-stroke bg-bg-1 bg-modal text-body text-text shadow-modal pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 border px-12 py-6"
                 data-testid="shape-tool-hint"
             >
-                Drag on the field to draw a {armed.shape.label.toLowerCase()} ·
-                Esc to cancel
+                {tolgee.t(
+                    "shapes.edit.drawHint",
+                    "Drag on the field to draw a {shape} · Esc to cancel",
+                    { shape: armed.shape.label.toLowerCase() },
+                )}
             </div>
         );
     const target = toolOpen ? tool : placed;
@@ -255,7 +260,10 @@ function ShapeEditorBar({
                     ))}
                     {target.empty > 0 && (
                         <span className="text-text/60">
-                            · {target.empty} empty
+                            ·{" "}
+                            {tolgee.t("shapes.edit.empty", "{count} empty", {
+                                count: target.empty,
+                            })}
                         </span>
                     )}
                 </span>
@@ -275,13 +283,19 @@ function ShapeEditorBar({
                                     actions={numbers}
                                 />
                             ))}
-                            <span className="text-text/60">steps</span>
+                            <span className="text-text/60">
+                                {tolgee.t("shapes.edit.steps", "steps")}
+                            </span>
                             {layout.ratioLock && <RatioLockButton />}
                         </span>
                     </>
                 )}
                 {target.drawnOn && (
-                    <span className="text-text/50">from {target.drawnOn}</span>
+                    <span className="text-text/50">
+                        {tolgee.t("shapes.edit.drawnOn", "from {page}", {
+                            page: target.drawnOn,
+                        })}
+                    </span>
                 )}
                 <Divider />
                 <TurnControls
@@ -511,8 +525,14 @@ const RatioLockButton = memo(function RatioLockButton() {
         <IconButton
             label={
                 ratioLocked
-                    ? "Spacings locked together: click to unlock"
-                    : "Lock the two spacings together"
+                    ? tolgee.t(
+                          "shapes.edit.ratioLock.locked",
+                          "Spacings locked together: click to unlock",
+                      )
+                    : tolgee.t(
+                          "shapes.edit.ratioLock.unlocked",
+                          "Lock the two spacings together",
+                      )
             }
             pressed={ratioLocked}
             onClick={toggleRatioLock}
@@ -556,7 +576,10 @@ const TurnControls = memo(function TurnControls({
             {/* The turn: ↻ adds a quarter, and the degrees beside it can be typed or
                 dragged (owner) */}
             <IconButton
-                label="Turn 90° clockwise"
+                label={tolgee.t(
+                    "shapes.edit.quarterTurn",
+                    "Turn 90° clockwise",
+                )}
                 shortcut={keyOf("shapeQuarterTurn")}
                 onClick={() => turnQuarter(target)}
                 testId="shape-editor-quarter-turn"
@@ -567,7 +590,10 @@ const TurnControls = memo(function TurnControls({
                 display={`${degrees}°`}
                 editText={String(degrees)}
                 axis="x"
-                label="Turn, in degrees clockwise"
+                label={tolgee.t(
+                    "shapes.edit.turn",
+                    "Turn, in degrees clockwise",
+                )}
                 testId="shape-editor-rotation"
                 {...scrubWith(target, base, (b, m, env) =>
                     scrubTurn(
@@ -604,7 +630,7 @@ const TurnControls = memo(function TurnControls({
                 testId="shape-editor-pivot"
             />
             <IconButton
-                label="Flip side to side"
+                label={tolgee.t("shapes.edit.flipAcross", "Flip side to side")}
                 shortcut={keyOf("flipHorizontal")}
                 onClick={() => flip("across")}
                 testId="shape-editor-flip-across"
@@ -612,7 +638,7 @@ const TurnControls = memo(function TurnControls({
                 <FlipHorizontalIcon size={14} />
             </IconButton>
             <IconButton
-                label="Flip front to back"
+                label={tolgee.t("shapes.edit.flipDeep", "Flip front to back")}
                 shortcut={keyOf("flipVertical")}
                 onClick={() => flip("deep")}
                 testId="shape-editor-flip-deep"
@@ -622,10 +648,19 @@ const TurnControls = memo(function TurnControls({
             <IconButton
                 label={
                     canRecalculate
-                        ? "Recalculate who goes where, by least travel"
+                        ? tolgee.t(
+                              "shapes.edit.recalculate.title",
+                              "Recalculate who goes where, by least travel",
+                          )
                         : empty > 0
-                          ? "Recalculate who goes where: close up the empty spots first"
-                          : "Who goes where is already least travel"
+                          ? tolgee.t(
+                                "shapes.edit.recalculate.closeUpFirst",
+                                "Recalculate who goes where: close up the empty spots first",
+                            )
+                          : tolgee.t(
+                                "shapes.edit.recalculate.already",
+                                "Who goes where is already least travel",
+                            )
                 }
                 disabled={!canRecalculate}
                 shortcut={keyOf("shapeRecalculate")}
@@ -679,7 +714,7 @@ const EndControls = memo(function EndControls({
                         onClick={() => target.place?.()}
                         data-testid="shape-editor-place"
                     >
-                        Place
+                        {tolgee.t("shapes.edit.place", "Place")}
                     </button>
                 </>
             )}
@@ -955,7 +990,10 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
             ),
         },
         hold: {
-            onPointerDownCapture: () => {
+            onPointerDownCapture: (e: ReactPointerEvent) => {
+                // A right-button press opens a menu, which can take its release, and the editor
+                // would stay held (#437)
+                if (e.button !== 0) return;
                 if (release.current) clearTimeout(release.current);
                 // Stopped where it is, a glide under way included, so the press lands
                 api.stop();
@@ -1042,8 +1080,14 @@ function PathwaysButton() {
         <IconButton
             label={
                 shown
-                    ? "Hide the pathways from the start flag"
-                    : "Show the pathways from the start flag"
+                    ? tolgee.t(
+                          "shapes.edit.pathways.hide",
+                          "Hide the pathways from the start flag",
+                      )
+                    : tolgee.t(
+                          "shapes.edit.pathways.show",
+                          "Show the pathways from the start flag",
+                      )
             }
             pressed={shown}
             onClick={() => {
