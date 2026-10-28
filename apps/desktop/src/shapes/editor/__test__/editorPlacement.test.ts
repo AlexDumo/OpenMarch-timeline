@@ -53,4 +53,26 @@ describe("the floating editor's place", () => {
             1000 - 300 - 4,
         );
     });
+
+    it("never covers the rotate knob, the shape turned so it's underneath (#485)", () => {
+        // Turned 180°: the back edge, and the knob 24 px beyond it, are at the bottom
+        const knob = { x: 400, y: 230 + 24 };
+        const p = editorPlacement(input({ outline: box(400, 200, 180), knob }));
+        expect(p.above).toBe(false);
+        expect(p.top).toBeGreaterThanOrEqual(knob.y + GAP_PX);
+        // With no room under the knob, above the shape
+        const low = { x: 400, y: 560 + 24 };
+        const q = editorPlacement(
+            input({ outline: box(400, 530, 180), knob: low }),
+        );
+        expect(q.above).toBe(true);
+        expect(q.top + 40).toBeLessThanOrEqual(530 - 30);
+    });
+
+    it("keeps centering on the outline when the knob is off to one side (#485)", () => {
+        const p = editorPlacement(
+            input({ outline: box(400, 200, 90), knob: { x: 454, y: 200 } }),
+        );
+        expect(p.left).toBeCloseTo(400 - 150);
+    });
 });

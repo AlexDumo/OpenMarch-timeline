@@ -1,6 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { db } from "@/global/database/db";
+import { transactionWithHistory } from "@/db-functions/history";
 import {
+    moveHoldsAnyOf,
     saveShapeRecipeInTransaction,
     type ShapeRecipeMember,
     type ShapeRecipeRecord,
@@ -11,6 +13,7 @@ import {
     type CanvasEditPlan,
 } from "@/timeline/timelineCoordinateWrites";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import { invalidatePlacedBoxes } from "../placed/placedBoxStore";
 import type { ShapeContext } from "../types";
 import { targetsOf, type ToolState } from "./toolMachine";
 
@@ -79,6 +82,8 @@ export async function writePlacement(
 ): Promise<boolean> {
     const { members, replaces } = placement;
     const to = new Map(members.map((m) => [m.marcherId, m]));
+    const marcherIds = members.map((m) => m.marcherId);
+    let saved = false;
     try {
         await transformMarchersInSelection({
             db,
@@ -93,6 +98,11 @@ export async function writePlacement(
             ...(plan ? { plan, keepPlayhead: true } : {}),
             writesShapes: true,
             afterWrite: async (tx, timelineId) => {
+                // A move none of the members are in would keep no one: the edit moved nobody on a
+                // page the shape is only carried onto, and is saved below instead (#485)
+                if (!(await moveHoldsAnyOf(tx, timelineId, marcherIds)))
+                    return false;
+                saved = true;
                 await saveShapeRecipeInTransaction({
                     tx,
                     timelineId,
@@ -105,6 +115,20 @@ export async function writePlacement(
                 });
             },
         });
+        // Nobody moved and no move here holds the shape's members (a pivot changed on a page
+        // the shape is only carried onto): the change goes to the recipe shown, in its own move
+        if (!saved && replaces) {
+            await transactionWithHistory(db, "editShapeRecipe", (tx) =>
+                saveShapeRecipeInTransaction({
+                    tx,
+                    timelineId: replaces.timelineId,
+                    recipe: placement.recipe,
+                    members,
+                    replaces: replaces.id,
+                }),
+            );
+            invalidatePlacedBoxes();
+        }
     } catch (e) {
         toastTimelineError(e, failure);
         return false;

@@ -46,6 +46,7 @@ import { DEGREE, rotationDegrees, type Pivot } from "../frame/frame";
 import { pivotOf, withPivot } from "../frame/pivot";
 import {
     flipShape,
+    frameControls,
     scrubTurn,
     shapeOutline,
     turnShape,
@@ -55,7 +56,7 @@ import {
     toggleRatioLock,
     useShapeEditorStore,
 } from "../frame/shapeEditorStore";
-import { toolEnvFor } from "../tool/toolEnv";
+import { HANDLE_REACH_PX, toolEnvFor } from "../tool/toolEnv";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 import { ShapeAwayChip } from "./ShapeAwayChip";
@@ -954,14 +955,20 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
     );
     /** Where it goes in `view`. The view isn't subscribed to: a pan or zoom moves the editor
      * without re-rendering it (#455) */
-    const targetIn = (view: FieldView) =>
-        editorPlacement({
+    const targetIn = (view: FieldView) => {
+        // The knob stands a fixed distance off the shape on screen, so it's found at this zoom
+        const { knob } = frameControls(kind, params, spots, {
+            hitRadius: HANDLE_REACH_PX / (view.zoom || 1),
+        });
+        return editorPlacement({
             outline: outline.map((p) => fieldToElement(view, p.x, p.y)),
+            knob: fieldToElement(view, knob.x, knob.y),
             width: room.width,
             height: room.height,
             fieldWidth: room.fieldWidth,
             fieldHeight: room.fieldHeight,
         });
+    };
     const [above, setAbove] = useState(
         () => targetIn(useFieldViewStore.getState()).above,
     );
