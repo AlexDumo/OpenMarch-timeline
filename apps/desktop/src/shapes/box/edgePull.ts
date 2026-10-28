@@ -233,8 +233,6 @@ export function pullValue(
     lines: FieldLines,
     env: ToolEnv,
     fits: (v: number) => boolean,
-    /** How much of `v` one detent is: half a step, or Infinity for a value with no ladder */
-    detent: number = env.stepPx / 2,
 ): number | undefined {
     const half = env.stepPx / 2;
     const s1 = Math.max(raw, half);
@@ -251,7 +249,7 @@ export function pullValue(
         };
         const speed = Math.hypot(slope.x, slope.y);
         if (speed < EPS) return;
-        const radius = Math.min(env.pullRadius ?? 0, (speed * detent) / 4);
+        const radius = Math.min(env.pullRadius ?? 0, (speed * half) / 4);
         for (const axis of ["x", "y"] as const) {
             if (Math.abs(slope[axis]) < EPS) continue;
             for (const line of lines[axis]) {

@@ -2908,7 +2908,7 @@ test("change: from the keyboard, Tab reaches the Leftover menu, Enter opens it o
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
 });
 
-test("change: Outline spaces the back and front at across and the sides at deep; widening it moves marchers onto the long sides in whole spacings, both spacings unchanged (#458, owner on #459)", async ({
+test("change: Outline spaces the back and front at across and the sides at deep; widening it stretches the across spacing, the counts kept, and Even out moves marchers onto the long sides (#458, owner on #459)", async ({
     show,
 }) => {
     const { page } = show;
@@ -2945,8 +2945,8 @@ test("change: Outline spaces the back and front at across and the sides at deep;
     ];
     const before = await spacings();
 
-    // Widened to about three times as wide: marchers move onto the long sides, the box
-    // jumping in whole spacings, and both spacings stay as they were
+    // Widened to about three times as wide: the across spacing follows the handle, the counts
+    // and the deep spacing kept (owner on #459)
     const { handles } = (await shapeOverlay(page))!;
     const maxX = Math.max(...handles.map((h) => h.x));
     const east = handles
@@ -2954,12 +2954,20 @@ test("change: Outline spaces the back and front at across and the sides at deep;
         .sort((a, b) => a.y - b.y)[1]!;
     const to = await toScreen(page, { x: cf.x + 3.3 * S, y: 0 });
     await drag(page, east, { x: to.x, y: east.y });
+    expect(await sides()).toEqual({ back: 3, left: 3 });
+    const stretched = await spacings();
+    expect(stretched[0]).not.toEqual(before[0]);
+    expect(stretched[1]).toEqual(before[1]);
+
+    // Even out moves marchers onto the long sides
+    await page.evaluate(() =>
+        (document.activeElement as HTMLElement | null)?.blur(),
+    );
+    await bar.getByTestId("shape-editor-even-out").click();
     expect(await sides()).toEqual({ back: 4, left: 2 });
-    expect(await spacings()).toEqual(before);
-    await expect(bar.getByTestId("shape-editor-across-snap")).toHaveCount(0);
 });
 
-test("change: 2 steps across then 3 deep stay exactly as typed; dragging the front moves it in whole spacings with the back fixed; Even out spreads them as evenly as the box allows (#458, owner on #459)", async ({
+test("change: 2 steps across then 3 deep stay exactly as typed; dragging the front stretches the deep spacing with the back fixed; Even out spreads them as evenly as the box allows (#458, owner on #459)", async ({
     show,
 }) => {
     const { page } = show;
@@ -2991,8 +2999,8 @@ test("change: 2 steps across then 3 deep stay exactly as typed; dragging the fro
     await expect(bar.getByTestId("shape-editor-across-snap")).toHaveCount(0);
     await expect(bar.getByTestId("shape-editor-deep-snap")).toHaveCount(0);
 
-    // The front dragged down: it moves in whole 3-step spacings, the back stays, and both
-    // spacings stay as typed
+    // The front dragged down: the deep spacing follows on half steps, the back stays, and the
+    // across spacing and the counts stay (owner on #459)
     const grid = await fieldGrid(show);
     const S = grid.pixelsPerStep;
     const was = await bounds();
@@ -3014,15 +3022,16 @@ test("change: 2 steps across then 3 deep stay exactly as typed; dragging the fro
     await page.evaluate(() =>
         (document.activeElement as HTMLElement | null)?.blur(),
     );
+    const ranks = Math.round((was.bottom - was.top) / S / 3);
     await drag(page, s, { x: s.x, y: s.y + 30 });
     const now = await bounds();
     expect(Math.abs(now.top - was.top)).toBeLessThan(1e-6);
-    const depthSteps = (now.bottom - now.top) / S;
-    expect(Math.abs(depthSteps / 3 - Math.round(depthSteps / 3))).toBeLessThan(
-        1e-6,
-    );
+    expect(now.bottom).toBeGreaterThan(was.bottom);
+    // The same gaps deep, each longer
+    expect((now.bottom - now.top) / S / ranks).toBeGreaterThan(3 + 1e-6);
     await expect(across).toHaveText("2");
-    await expect(deep).toHaveText("3");
+    await expect(deep).not.toHaveText("3");
+    const dragged = await deep.innerText();
 
     // Across set to ½ step, far from deep's 3: uneven now. Even out: as even as this frame
     // allows, one undo step; then nothing more to do
@@ -3041,7 +3050,7 @@ test("change: 2 steps across then 3 deep stay exactly as typed; dragging the fro
     ).toBeLessThan(S / 2);
     await page.keyboard.press("ControlOrMeta+z");
     await expect(across).toHaveText("½");
-    await expect(deep).toHaveText("3");
+    await expect(deep).toHaveText(dragged);
 });
 
 test("change: Outline on 7 spreads the back by default, leaves its middle out on request, a click on a spot between corners moves the gap, and the placed box keeps it", async ({

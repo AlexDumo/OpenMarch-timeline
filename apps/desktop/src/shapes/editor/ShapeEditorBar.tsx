@@ -379,7 +379,6 @@ function useLiveTarget(target: ShapeEditTarget): ShapeEditTarget {
     );
 }
 
-/** One change at once, worked out with no keys held */
 /** Whether a shape can be evened out in its frame: not at all, already, or yes (#459) */
 type EvenState = "none" | "even" | "uneven";
 
@@ -405,6 +404,7 @@ const evenOut = (target: ShapeEditTarget) =>
         return evened ?? target.params;
     });
 
+/** One change at once, worked out with no keys held */
 const applyWith = (
     target: ShapeEditTarget,
     change: (env: ToolEnv) => unknown,

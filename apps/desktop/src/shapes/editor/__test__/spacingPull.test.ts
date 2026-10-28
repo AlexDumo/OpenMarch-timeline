@@ -5,6 +5,7 @@ import { boxTool } from "../../box/boxTool";
 import type { ToolEnv } from "../../tool/toolKind";
 import type { XY } from "../../types";
 import { withMode } from "../../distribute/modes";
+import { DEFAULT_ODD_GAP } from "../../distribute/distribution";
 import { scrubSpacing, withSpacing } from "../boxEdits";
 
 /**
@@ -198,6 +199,26 @@ describe("dragging a spacing onto a line", () => {
             if (!onHalves(out.across))
                 expect(out.deep / out.across).toBeCloseTo(0.5, 9);
         }
+    });
+
+    it("an outline ignores the ratio lock: its other spacing stays put and a landing isn't left out for it (review on #459)", () => {
+        // The same box as an outline, 3 gaps each way: the landing on the 80 is fine as it is
+        const p: BoxParams = {
+            center: { x: 80.1 - 15, y: -150 },
+            rotation: 0,
+            files: 4,
+            across: STEP,
+            deep: half,
+            distribution: { mode: "outline", oddGap: DEFAULT_ODD_GAP },
+        };
+        const locked = { ratioLocked: true, pivot: "nw" as const };
+        let landed = false;
+        for (let px = -4; px <= 4; px += 0.25) {
+            const out = drag(p, px, locked);
+            expect(out.deep).toBe(half);
+            if (Math.abs(out.across - 29.9 / 3) < 1e-9) landed = true;
+        }
+        expect(landed).toBe(true);
     });
 
     describe("the cases the review probed", () => {

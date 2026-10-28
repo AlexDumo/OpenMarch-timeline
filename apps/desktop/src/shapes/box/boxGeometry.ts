@@ -880,22 +880,24 @@ export function stretchBox(
     const movesY = key.includes("n") || key.includes("s");
     const d = boxDistribution(base);
     if (d.mode === "outline" && n >= OUTLINE_MIN)
+        // As Grid's handles: the dragged way's spacing follows the pointer, the counts kept, so the
+        // edge does what it's told; marchers move between the sides only by Even out (owner on
+        // #459). Both spacings are the designer's: no ratio.
         return inBoxAxes(
             base,
             n,
-            env,
+            { ...env, ratioLocked: false },
             (flat, flatEnv, field) =>
-                stretchOutline(
+                stretchSquare(
                     flat,
                     n,
                     key,
                     fieldToFrame(boxFrame(base, n), to),
-                    d.oddGap.side,
                     flatEnv,
                     field,
                 ),
             // Its fixed corner and sides stay exactly where they were: a drag one way never
-            // shifts the other (owner on #459)
+            // shifts the other
             () => ({ x: true, y: true }),
         );
     return inBoxAxes(
@@ -964,84 +966,6 @@ function inBoxAxes(
         undefined,
         held && toFieldAxes(placed, n, held(out)),
     );
-}
-
-/**
- * {@link stretchBox} for an outline (#458, owner on #459): both spacings are the designer's and
- * stay exactly as they are, so a handle moves in whole spacings. The opposite edge stays put and
- * the marchers move between the sides, the total kept, for the count whose edge comes nearest
- * the pointer: the box changes shape in clean jumps. A side handle keeps the other axis's first
- * corner where it was. Of the counts within a spacing of the pointer, one whose moving corner
- * lands exactly on a field line the pointer is near wins (#425, #446); no pull ever moves an edge
- * off its whole spacings.
- */
-function stretchOutline(
-    base: BoxParams,
-    n: number,
-    key: BoxHandleKey,
-    to: XY,
-    side: GapSide,
-    env: ToolEnv,
-    field: BoxField | undefined,
-): BoxParams {
-    const f = footprintOf(base, n);
-    const movesX = key.includes("e") || key.includes("w");
-    const movesY = key.includes("n") || key.includes("s");
-    const anchor = {
-        x: key.includes("e") ? f.left : f.right,
-        y: key.includes("s") ? f.top : f.bottom,
-    };
-    const sign = {
-        x: movesX ? signOf(to.x - anchor.x) : 1,
-        y: movesY ? signOf(to.y - anchor.y) : 1,
-    };
-    const start = {
-        x: movesX ? anchor.x : f.left,
-        y: movesY ? anchor.y : f.top,
-    };
-    const sum = Math.ceil(n / 2);
-    const { min, max } = acrossRange(n, side);
-    const width = Math.abs(to.x - anchor.x);
-    const depth = Math.abs(to.y - anchor.y);
-    /** How far, in spacings, split `a`'s moving edges are from the pointer */
-    const miss = (a: number) =>
-        (movesX ? Math.abs(a * base.across - width) / base.across : 0) +
-        (movesY ? Math.abs((sum - a) * base.deep - depth) / base.deep : 0);
-    const build = (a: number) =>
-        boxFrom(
-            start,
-            sign,
-            a + 1,
-            base.across,
-            base.deep,
-            n,
-            env,
-            boxDistribution(base),
-        );
-    const splits = Array.from(
-        { length: max - min + 1 },
-        (_, k) => min + k,
-    ).sort((a, b) => miss(a) - miss(b) || a - b);
-    if (field && env.pull !== false && !env.shift) {
-        const pointer = field.toField(to);
-        const radius = env.pullRadius ?? 0;
-        for (const a of splits) {
-            if (miss(a) > 1 + 1e-9) break;
-            const onLine = boxCorners(build(a), n)
-                .map(field.toField)
-                .some((c) =>
-                    (["x", "y"] as const).some((axis) =>
-                        field.lines[axis].some(
-                            (line) =>
-                                Math.abs(c[axis] - line) < 1e-3 &&
-                                Math.abs(pointer[axis] - line) <= radius,
-                        ),
-                    ),
-                );
-            if (onLine) return build(a);
-        }
-    }
-    return build(splits[0]!);
 }
 
 /** {@link stretchBox} in the box's own axes, `to` in them too */

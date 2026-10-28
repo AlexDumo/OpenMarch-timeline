@@ -326,11 +326,12 @@ Guardrails for shapes with unassigned spots later (#358):
   exactly so (half steps; typed exact, Alt fine, Cmd/Ctrl free), and the box's size follows,
   width = gaps across × across, depth = gaps down a side × deep. Setting one again changes
   nothing.
-  - **Handles move in whole spacings.** Dragging an edge moves marchers between the sides, the
-    total kept, so the box changes shape in clean jumps while both spacings stay exact; the
-    opposite edge stays put, and who goes where is worked out again when the split changes. Of
-    the counts within a spacing of the pointer, one whose moving edge lands exactly on a yard
-    line or hash the pointer is near wins; no pull moves an edge off its whole spacings.
+  - **Handles set the spacing, as Grid's do.** Dragging an edge sets that way's spacing, the
+    counts on each side kept, so the edge follows the pointer (by half steps of the spacing; Alt
+    hundredths, Cmd/Ctrl free) and the opposite edge stays put; a corner sets both. The edge lands
+    on a yard line or hash within the pull's reach, Alt included. Marchers move between the sides
+    only by Even out, a count or a mode change, never by a drag (owner on #459: a split-choosing
+    drag kept stopping, "I kind of want it to do what I tell it to").
   - **Even out** (beside Recalculate, and in the command palette) takes the box as it is and
     picks the split and spacings that come as near one spacing all round as that frame allows.
     They may be off the half steps, shown as about so much ("≈"), until set. One undo step;

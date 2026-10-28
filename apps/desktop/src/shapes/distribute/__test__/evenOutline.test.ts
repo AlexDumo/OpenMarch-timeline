@@ -3,6 +3,7 @@ import { boxTool } from "../../box/boxTool";
 import {
     boxCorners,
     boxDistribution,
+    boxFrame,
     drawBox,
     onField,
     resizeFiles,
@@ -29,10 +30,9 @@ import {
 import type { ShapeContext, XY } from "../../types";
 
 /**
- * Outline (#458, owner on #459): whatever is touched is held and the rest worked out once. A
- * spacing set holds that spacing and the other length, the split chosen so the other spacing
- * comes nearest; a drag moves only the dragged edge. A rectangle twice as long as deep gets about
- * twice as many on its long sides.
+ * Outline (#458, owner on #459): both spacings are the designer's and stay exactly as set, as
+ * in Grid. A drag moves the dragged edge in whole spacings, marchers moving between the sides,
+ * the opposite edge kept; Even out spreads them as evenly as the box allows.
  */
 
 const STEP = 10;
@@ -179,106 +179,244 @@ describe("an outline: both spacings are the designer's, held exactly (owner on #
             expect(withSpacing(q, order[0], value[order[0]], 24, env)).toBe(q);
         });
 
-    for (const key of ["e", "w", "n", "s"] as const)
-        for (const way of [1, -1])
-            it(`dragging the ${key} edge ${way > 0 ? "out" : "in"} moves in whole spacings: both stay exact, the opposite edge stays, and the total is kept`, () => {
-                const p = withSpacing(
-                    withSpacing(outline(40, 100, 100), "across", 2, 40, env),
-                    "deep",
-                    2.5,
-                    40,
-                    env,
-                );
-                const was = edgesOf(p, 40);
-                const h = boxTool.handles(p, 40).find((x) => x.key === key)!.at;
-                const dir =
-                    key === "e" || key === "w"
+    describe("dragging a handle sets that way's spacing, the counts kept (owner on #459)", () => {
+        /** 24 round 8 × 6, 2 steps apart both ways, its back-left corner at 0, -200 */
+        const box = (over: Partial<BoxParams> = {}): BoxParams => ({
+            center: { x: 70, y: -150 },
+            rotation: 0,
+            files: 8,
+            across: 20,
+            deep: 20,
+            distribution: { mode: "outline", oddGap: DEFAULT_ODD_GAP },
+            ...over,
+        });
+        const handle = (p: BoxParams, key: string) =>
+            boxTool.handles(p, 24).find((h) => h.key === key)!.at;
+        const countsOf = (q: BoxParams) => {
+            const c = onField(q, 24);
+            return [c.across, c.deep];
+        };
+
+        for (const key of ["e", "w", "n", "s"] as const)
+            for (const way of [1, -1])
+                it(`the ${key} edge dragged ${way > 0 ? "out" : "in"} follows the pointer by half steps of its spacing; the opposite edge, the other spacing and the counts stay`, () => {
+                    const p = box();
+                    const was = edgesOf(p, 24);
+                    const h = handle(p, key);
+                    const across = key === "e" || key === "w";
+                    const dir = across
                         ? { x: (key === "e" ? 1 : -1) * way, y: 0 }
                         : { x: 0, y: (key === "s" ? 1 : -1) * way };
-                const opposite =
-                    key === "e"
-                        ? "left"
-                        : key === "w"
-                          ? "right"
-                          : key === "s"
-                            ? "top"
-                            : "bottom";
-                const across = key === "e" || key === "w";
-                let moved = false;
-                for (let px = 0.5; px <= 40; px += 0.5) {
+                    const opposite = {
+                        e: "left",
+                        w: "right",
+                        s: "top",
+                        n: "bottom",
+                    }[key] as keyof typeof was;
+                    const gaps = across ? 7 : 5;
+                    let moved = false;
+                    for (let px = 0.5; px <= 60; px += 0.5) {
+                        const q = stretchBox(
+                            p,
+                            24,
+                            key,
+                            { x: h.x + dir.x * px, y: h.y + dir.y * px },
+                            env,
+                        );
+                        expect(countsOf(q)).toEqual([8, 6]);
+                        expect(across ? q.deep : q.across).toBe(20);
+                        const now = edgesOf(q, 24);
+                        expect(
+                            Math.abs(now[opposite] - was[opposite]),
+                        ).toBeLessThan(1e-6);
+                        // The spacing nearest the pointer on the half steps, never under half a step
+                        const spacing = across ? q.across : q.deep;
+                        const wanted = Math.max(
+                            half,
+                            snapHalf((gaps * 20 + way * px) / gaps),
+                        );
+                        expect(spacing).toBeCloseTo(wanted, 9);
+                        if (spacing !== 20) moved = true;
+                    }
+                    expect(moved).toBe(true);
+                });
+
+        it("an e drag of 60 px moves the e edge by the nearest 7 × half-step amount", () => {
+            const p = box();
+            const h = handle(p, "e");
+            const q = stretchBox(p, 24, "e", { x: h.x + 60, y: h.y }, env);
+            const moved = edgesOf(q, 24).right - edgesOf(p, 24).right;
+            // 60 / 7 is 8.57: the nearest half-step spacing change is 10, so 70
+            expect(moved).toBeCloseTo(70, 9);
+            expect(q.across).toBe(30);
+        });
+
+        it("with Alt the edge follows smoothly, in hundredths; with Cmd/Ctrl too, with no pull", () => {
+            const p = box();
+            const h = handle(p, "e");
+            for (const over of [
+                { snap: false, fine: true },
+                { snap: false, pull: false },
+            ]) {
+                const seen = new Set<number>();
+                for (let px = 0; px <= 20; px += 0.5) {
                     const q = stretchBox(
                         p,
-                        40,
-                        key,
-                        { x: h.x + dir.x * px, y: h.y + dir.y * px },
-                        env,
+                        24,
+                        "e",
+                        { x: h.x + px, y: h.y },
+                        { ...env, ...over },
                     );
-                    expect([q.across, q.deep]).toEqual([20, 25]);
-                    const now = edgesOf(q, 40);
-                    expect(
-                        Math.abs(now[opposite] - was[opposite]),
-                        opposite,
-                    ).toBeLessThan(1e-6);
-                    // The dragged way's length is a whole number of its spacings
-                    const length = across
-                        ? now.right - now.left
-                        : now.bottom - now.top;
-                    const spacing = across ? 20 : 25;
-                    expect(
-                        Math.abs(
-                            length / spacing - Math.round(length / spacing),
-                        ),
-                    ).toBeLessThan(1e-9);
-                    const c = onField(q, 40);
-                    expect(c.across - 1 + (c.deep - 1)).toBe(20);
-                    if (q.files !== p.files) moved = true;
+                    expect(q.across).toBeCloseTo(
+                        Math.round(((140 + px) / 7) * 10) / 10,
+                        9,
+                    );
+                    seen.add(q.across);
                 }
-                expect(moved).toBe(true);
-            });
+                expect(seen.size).toBeGreaterThan(20);
+            }
+        });
 
-    it("a count whose moving edge lands exactly on a line the pointer is near wins over the nearer one", () => {
-        // 60 round, half a step apart across, its left edge on 0: edges every 5, a line at 80
-        const p: BoxParams = {
-            center: { x: 0, y: -100 },
-            rotation: 0,
-            files: 13,
-            across: 5,
-            deep: 10,
-            distribution: { mode: "outline", oddGap: DEFAULT_ODD_GAP },
-        };
-        const q0 = {
-            ...p,
-            center: { x: p.center.x - edgesOf(p, 60).left, y: -100 },
-        };
-        const e = boxTool.handles(q0, 60).find((x) => x.key === "e")!.at;
-        // The pointer 3 past the 80: 85 is nearer, but the 80 is within the pull
-        const to = { x: 83, y: e.y };
-        const free = stretchBox(q0, 60, "e", to, lined({ pull: false }));
-        const pulled = stretchBox(q0, 60, "e", to, lined());
-        expect(edgesOf(free, 60).right).toBeCloseTo(85, 9);
-        expect(edgesOf(pulled, 60).right).toBeCloseTo(80, 9);
-        expect([pulled.across, pulled.deep]).toEqual([5, 10]);
-    });
+        it("a corner drag sets both spacings, one per way, and a diagonal sweep never flickers", () => {
+            const p = box();
+            const se = handle(p, "se");
+            let last = { across: 0, deep: 0 };
+            for (let t = 0; t <= 80; t += 0.5) {
+                const q = stretchBox(
+                    p,
+                    24,
+                    "se",
+                    { x: se.x + t, y: se.y + t },
+                    env,
+                );
+                expect(countsOf(q)).toEqual([8, 6]);
+                expect(q.across).toBeCloseTo(snapHalf((140 + t) / 7), 9);
+                expect(q.deep).toBeCloseTo(snapHalf((100 + t) / 5), 9);
+                expect(q.across).toBeGreaterThanOrEqual(last.across);
+                expect(q.deep).toBeGreaterThanOrEqual(last.deep);
+                last = q;
+                const e = edgesOf(q, 24);
+                expect(e.left).toBeCloseTo(0, 9);
+                expect(e.top).toBeCloseTo(-200, 9);
+            }
+            expect(last.across).toBeGreaterThan(20);
+            expect(last.deep).toBeGreaterThan(20);
+        });
 
-    it("a turned outline's drag keeps both spacings exactly too", () => {
-        const p: BoxParams = {
-            ...withSpacing(outline(24, 120, 80), "across", 2, 24, env),
-            rotation: (30 * Math.PI) / 180,
-        };
-        const e = boxTool.handles(p, 24).find((x) => x.key === "e")!.at;
-        for (let px = -20; px <= 60; px += 1) {
+        it("an edge near a line the pointer is near lands on it, within the radius, the counts kept", () => {
+            // The right edge at 140; the pointer 3 past the 160 lands it on the 160
+            const p = box();
+            const h = handle(p, "e");
+            const free = stretchBox(
+                p,
+                24,
+                "e",
+                { x: 163, y: h.y },
+                lined({ pull: false, snap: false }),
+            );
+            const pulled = stretchBox(p, 24, "e", { x: 163, y: h.y }, lined());
+            expect(edgesOf(free, 24).right).toBeCloseTo(163, 0);
+            expect(edgesOf(pulled, 24).right).toBeCloseTo(160, 9);
+            expect(pulled.across).toBeCloseTo(160 / 7, 9);
+            expect(countsOf(pulled)).toEqual([8, 6]);
+            expect(pulled.deep).toBe(20);
+        });
+
+        it("with Alt, an edge still lands on a line", () => {
+            const p = box();
+            const h = handle(p, "e");
             const q = stretchBox(
                 p,
                 24,
                 "e",
-                {
-                    x: e.x + px * Math.cos(p.rotation),
-                    y: e.y + px * Math.sin(p.rotation),
-                },
-                lined(),
+                { x: 157, y: h.y },
+                lined({ snap: false, fine: true }),
             );
-            expect([q.across, q.deep]).toEqual([p.across, p.deep]);
-        }
+            expect(edgesOf(q, 24).right).toBeCloseTo(160, 9);
+        });
+
+        it("an s drag ignores the pointer's sideways drift", () => {
+            const p = box();
+            const s = handle(p, "s");
+            for (let t = 0; t <= 30; t += 0.5) {
+                const at = (dx: number) =>
+                    stretchBox(
+                        p,
+                        24,
+                        "s",
+                        { x: s.x + dx, y: s.y + t },
+                        lined(),
+                    );
+                const straight = at(0);
+                for (const dx of [-7, -2, 3, 7])
+                    expect(at(dx), `${t}`).toEqual(straight);
+            }
+        });
+
+        it("ignores the ratio lock", () => {
+            const p = box();
+            const h = handle(p, "e");
+            const q = stretchBox(
+                p,
+                24,
+                "e",
+                { x: h.x + 70, y: h.y },
+                { ...env, ratioLocked: true },
+            );
+            expect([q.across, q.deep]).toEqual([30, 20]);
+        });
+
+        for (const key of ["e", "n"] as const)
+            it(`a turned box's ${key} side drag keeps its opposite edge, the other spacing and the counts`, () => {
+                const p = box({ rotation: (30 * Math.PI) / 180 });
+                const corner = (q: BoxParams, sx: number, sy: number) => {
+                    const f = boxFrame(q, 24);
+                    const [c, s] = [Math.cos(f.rotation), Math.sin(f.rotation)];
+                    const x = sx * f.halfWidth;
+                    const y = sy * f.halfDepth;
+                    return {
+                        x: f.center.x + x * c - y * s,
+                        y: f.center.y + x * s + y * c,
+                    };
+                };
+                // e keeps the left edge; n the front
+                const ends =
+                    key === "e"
+                        ? ([
+                              [-1, -1],
+                              [-1, 1],
+                          ] as const)
+                        : ([
+                              [-1, 1],
+                              [1, 1],
+                          ] as const);
+                const h = handle(p, key);
+                const out =
+                    key === "e"
+                        ? { x: Math.cos(p.rotation), y: Math.sin(p.rotation) }
+                        : { x: Math.sin(p.rotation), y: -Math.cos(p.rotation) };
+                let moved = false;
+                for (let t = -30; t <= 60; t += 1.5) {
+                    const q = stretchBox(
+                        p,
+                        24,
+                        key,
+                        { x: h.x + out.x * t, y: h.y + out.y * t },
+                        lined(),
+                    );
+                    expect(q.rotation).toBe(p.rotation);
+                    expect(countsOf(q)).toEqual([8, 6]);
+                    expect(key === "e" ? q.deep : q.across).toBe(20);
+                    for (const [sx, sy] of ends) {
+                        const was = corner(p, sx, sy);
+                        const now = corner(q, sx, sy);
+                        expect(now.x).toBeCloseTo(was.x, 6);
+                        expect(now.y).toBeCloseTo(was.y, 6);
+                    }
+                    if ((key === "e" ? q.across : q.deep) !== 20) moved = true;
+                }
+                expect(moved).toBe(true);
+            });
     });
 
     it("shows a spacing off the half steps (after a switch) as about so much; pressing it puts it on the nearest half step", () => {
@@ -400,7 +538,7 @@ describe("an outline: both spacings are the designer's, held exactly (owner on #
         );
     });
 
-    it("a drag that moves marchers between sides works out who goes where again: no walks cross", () => {
+    it("Even out after a drag moves marchers between sides and works out who goes where again: no walks cross", () => {
         const marchers = Array.from({ length: 24 }, (_, i) => ({
             id: i + 1,
             at: { x: -200 + (i % 8) * 30, y: 200 + Math.floor(i / 8) * 30 },
@@ -416,6 +554,9 @@ describe("an outline: both spacings are the designer's, held exactly (owner on #
         t = press(t, e, env);
         t = pointerMove(t, { x: e.x + 90, y: e.y }, env);
         t = release(t, ctx);
+        // A drag keeps the counts; Even out moves marchers onto the now longer back and front
+        expect(onField(t.params as BoxParams, 24).across).toBe(before.across);
+        t = edit(t, boxTool.closed!.evenOut!(t.params, 24, env)!, ctx);
         const after = onField(t.params as BoxParams, 24);
         expect(after.across).toBeGreaterThan(before.across);
         const walks = targetsOf(t, ctx);

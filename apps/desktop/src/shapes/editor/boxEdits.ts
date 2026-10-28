@@ -386,8 +386,12 @@ export function spacingOnLine(
         );
     // The spacing, and with the ratio lock the other one it moves exactly, never under half a
     // step: a landing that would take either below is left out, so the ratio stays (review)
+    // An outline's spacings are each the designer's: no ratio, hidden or not (review on #459)
     const ratio =
-        env.ratioLocked && base.across > 0 && base.deep > 0
+        env.ratioLocked &&
+        boxDistribution(base).mode !== "outline" &&
+        base.across > 0 &&
+        base.deep > 0
             ? base.deep / base.across
             : null;
     const atLeastHalf = (value: number) => {
