@@ -9,7 +9,7 @@ import {
     useState,
     type ReactNode,
 } from "react";
-import { animated, useSpring } from "@react-spring/web";
+import { animated, to, useSpring } from "@react-spring/web";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { editorPlacement } from "./editorPlacement";
 import { keepInView } from "./keepInView";
@@ -917,7 +917,18 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         above,
         held,
         noteEdit,
-        style: spring,
+        // Moved by a transform, not left and top: a pan then only moves its layer, nothing is laid
+        // out or painted again (#455)
+        style: {
+            left: 0,
+            top: 0,
+            willChange: "transform",
+            transform: to(
+                [spring.left, spring.top],
+                // Whole pixels, as left and top were laid out, so its text stays sharp
+                (x, y) => `translate(${Math.round(x)}px, ${Math.round(y)}px)`,
+            ),
+        },
         hold: {
             onPointerDownCapture: () => {
                 if (release.current) clearTimeout(release.current);
