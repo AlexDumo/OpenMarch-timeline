@@ -1292,7 +1292,9 @@
                 "title": "Reorganizar: una nueva disposición"
             },
             "scrubTip": "{label}: haz clic para escribir, arrastra para cambiar",
-            "snapTip": "{label}: haz clic para ajustar a medio paso, arrastra para cambiar",
+            "snapTip": "Ajustar al medio paso más cercano",
+            "snapLabel": "{label}: ajustar al medio paso más cercano",
+            "aboutValue": "{label}: aproximadamente {value}",
             "seed": {
                 "copied": "Copiada",
                 "copy": "Copiar la semilla",

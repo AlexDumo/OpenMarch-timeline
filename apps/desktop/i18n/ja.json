@@ -1292,7 +1292,9 @@
                 "title": "再シャッフル：新しい配置"
             },
             "scrubTip": "{label}：クリックで入力、ドラッグで変更",
-            "snapTip": "{label}: クリックで半ステップに合わせる、ドラッグで変更",
+            "snapTip": "最も近い半ステップに合わせる",
+            "snapLabel": "{label}: 最も近い半ステップに合わせる",
+            "aboutValue": "{label}: 約 {value}",
             "seed": {
                 "copied": "コピーしました",
                 "copy": "シードをコピー",

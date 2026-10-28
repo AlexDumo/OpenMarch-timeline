@@ -1292,7 +1292,9 @@
                 "title": "Reembaralhar: um novo arranjo"
             },
             "scrubTip": "{label}: clique para digitar, arraste para alterar",
-            "snapTip": "{label}: clique para ajustar a meio passo, arraste para mudar",
+            "snapTip": "Ajustar ao meio passo mais próximo",
+            "snapLabel": "{label}: ajustar ao meio passo mais próximo",
+            "aboutValue": "{label}: cerca de {value}",
             "seed": {
                 "copied": "Copiada",
                 "copy": "Copiar a semente",

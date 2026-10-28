@@ -217,9 +217,9 @@ function switched(
 
 /**
  * `next` (the box switched to Outline) in a frame `width` × `depth`, kept exactly (owner on
- * #458, #459): across is the interval that fits the width, even off the half steps (the first
- * edit puts it back on them), and deep follows the depth, the split the one whose deep spacing
- * comes nearest across. Under {@link OUTLINE_MIN} marchers it is a line, and a box with no area
+ * #458, #459): each spacing is its length over its gaps, even off the half steps (shown as about
+ * so much until set), the split the one whose two spacings come nearest each other ({@link
+ * keptOutline}). Under {@link OUTLINE_MIN} marchers it is a line, and a box with no area
  * (a single rank or file) keeps its intervals and goes round as wide (or deep) as it can.
  */
 function outlineIn(

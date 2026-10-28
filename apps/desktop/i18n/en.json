@@ -2034,7 +2034,9 @@
                 "title": "Recalculate who goes where, by least travel"
             },
             "scrubTip": "{label}: click to type, drag to change",
-            "snapTip": "{label}: click to snap to a half step, drag to change",
+            "snapTip": "Snap to the nearest half step",
+            "snapLabel": "{label}: snap to the nearest half step",
+            "aboutValue": "{label}: about {value}",
             "seed": {
                 "copied": "Copied",
                 "copy": "Copy the seed",

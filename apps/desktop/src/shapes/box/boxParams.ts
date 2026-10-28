@@ -163,10 +163,8 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
                 n,
                 env,
             ),
-        display: (p, n, stepPx) =>
-            offHalves(p, n, stepPx)
-                ? `≈${formatSteps(stepsOf(p, n, stepPx))}`
-                : formatSteps(stepsOf(p, n, stepPx)),
+        // (the "≈" is the editor's own button before the number)
+        display: (p, n, stepPx) => formatSteps(stepsOf(p, n, stepPx)),
         value: stepsOf,
         type(p, n, text, env) {
             const steps = parseSteps(text);

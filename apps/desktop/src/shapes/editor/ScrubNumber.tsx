@@ -2,7 +2,7 @@ import clsx from "clsx";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { Tip } from "./Tip";
 import tolgee from "@/global/singletons/Tolgee";
-import { useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 import {
     lockedAxis,
     SCRUB_SLOP_PX,
@@ -25,6 +25,9 @@ const CURSORS: Record<ScrubAxis | "both", string> = {
  * size) locks to the first direction moved. The value itself is the parent's: it hears the drag
  * and the typing and works out what they mean.
  */
+/** The event a number takes to open for typing: Tab from the number before (review of #459) */
+const TYPE_INTO = "scrub-number-type";
+
 export function ScrubNumber({
     display,
     editText = display,
@@ -52,8 +55,8 @@ export function ScrubNumber({
     /** Applies typed text; false keeps it open to fix */
     onType: (text: string) => boolean;
     /**
-     * While the number shows as about so much ("≈"): a click, Enter or Space puts it on the
-     * nearest half step instead of typing (owner on #459). Dragging still drags it.
+     * While the number shows as about so much: a small "≈" button before it puts it on the
+     * nearest half step (owner on #459). The number itself types and drags as any other.
      */
     onSnap?: () => void;
 }) {
@@ -66,6 +69,15 @@ export function ScrubNumber({
     const [dragging, setDragging] = useState(false);
     const [typing, setTyping] = useState<string | null>(null);
     const wrapper = useRef<HTMLSpanElement>(null);
+    // Tab from the number before opens this one for typing, whatever it shows (review of #459)
+    const idle = typing === null;
+    useEffect(() => {
+        const el = wrapper.current;
+        if (!el || !idle) return;
+        const open = () => setTyping(editText);
+        el.addEventListener(TYPE_INTO, open);
+        return () => el.removeEventListener(TYPE_INTO, open);
+    }, [idle, editText]);
 
     if (typing !== null) {
         const apply = () => {
@@ -83,9 +95,10 @@ export function ScrubNumber({
             ];
             const next = own ? all[all.indexOf(own) + step] : undefined;
             setTyping(null);
-            // After this one closes; a click with no pointer opens the next for typing
+            // After this one closes, the next opens for typing: never a click, which a "≈"
+            // number's snap button would take (review of #459)
             requestAnimationFrame(() =>
-                next?.querySelector<HTMLButtonElement>("button")?.click(),
+                next?.dispatchEvent(new Event(TYPE_INTO)),
             );
         };
         return (
@@ -157,32 +170,62 @@ export function ScrubNumber({
         if (p.dragging) {
             setDragging(false);
             onScrubEnd(keep);
-        } else if (keep) {
-            if (onSnap) onSnap();
-            else setTyping(editText);
-        }
+        } else if (keep) setTyping(editText);
     };
 
     return (
         <span ref={wrapper} data-scrub-number>
+            {onSnap && (
+                <Tip
+                    label={tolgee.t(
+                        "shapes.edit.snapTip",
+                        "Snap to the nearest half step",
+                    )}
+                >
+                    <button
+                        type="button"
+                        aria-label={tolgee.t(
+                            "shapes.edit.snapLabel",
+                            "{label}: snap to the nearest half step",
+                            { label },
+                        )}
+                        data-testid={testId && `${testId}-snap`}
+                        className="rounded-4 text-text/60 hover:bg-fg-2 hover:text-accent min-h-24 px-2"
+                        onClick={onSnap}
+                        onKeyDown={(e) => {
+                            // Enter places the shape and Space plays: here they press this
+                            if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onSnap();
+                            }
+                        }}
+                    >
+                        ≈
+                    </button>
+                </Tip>
+            )}
             <Tip
-                label={
-                    onSnap
-                        ? tolgee.t(
-                              "shapes.edit.snapTip",
-                              "{label}: click to snap to a half step, drag to change",
-                              { label },
-                          )
-                        : tolgee.t(
-                              "shapes.edit.scrubTip",
-                              "{label}: click to type, drag to change",
-                              { label },
-                          )
-                }
+                label={tolgee.t(
+                    "shapes.edit.scrubTip",
+                    "{label}: click to type, drag to change",
+                    { label },
+                )}
             >
                 <button
                     type="button"
-                    aria-label={label}
+                    aria-label={
+                        onSnap
+                            ? tolgee.t(
+                                  "shapes.edit.aboutValue",
+                                  "{label}: about {value}",
+                                  {
+                                      label,
+                                      value: display,
+                                  },
+                              )
+                            : label
+                    }
                     data-testid={testId}
                     className={clsx(
                         "rounded-4 min-h-24 px-4 tabular-nums select-none",
@@ -197,18 +240,14 @@ export function ScrubNumber({
                     onPointerCancel={() => up(false)}
                     onLostPointerCapture={() => up(true)}
                     onClick={(e) => {
-                        // Not a pointer (Tab from the number before, or a script): type into it,
-                        // or snap a "≈" one
-                        if (e.detail !== 0) return;
-                        if (onSnap) onSnap();
-                        else setTyping(editText);
+                        // Not a pointer (a script, a screen reader): type into it
+                        if (e.detail === 0) setTyping(editText);
                     }}
                     onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
                             e.stopPropagation();
-                            if (onSnap) onSnap();
-                            else setTyping(editText);
+                            setTyping(editText);
                         }
                     }}
                 >

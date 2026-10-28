@@ -903,8 +903,8 @@ export function handleDirection(
 
 /**
  * The box with handle `key` dragged to `to`: the opposite corner or side stays put and the
- * intervals stretch, in half steps. A grid's files and ranks never change here; an outline's
- * marchers are shared out between its sides again (#458).
+ * intervals stretch, in half steps; files and ranks never change here. An outline moves only the
+ * dragged edge, its spacing following and the rest kept exactly (#458, owner on #459).
  */
 export function stretchBox(
     base: BoxParams,

@@ -1292,7 +1292,9 @@
                 "title": "Remélanger : une nouvelle disposition"
             },
             "scrubTip": "{label} : cliquez pour saisir, glissez pour modifier",
-            "snapTip": "{label} : cliquez pour caler sur un demi-pas, faites glisser pour changer",
+            "snapTip": "Caler sur le demi-pas le plus proche",
+            "snapLabel": "{label} : caler sur le demi-pas le plus proche",
+            "aboutValue": "{label} : environ {value}",
             "seed": {
                 "copied": "Copiée",
                 "copy": "Copier la graine",

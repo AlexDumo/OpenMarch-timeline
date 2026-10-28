@@ -278,7 +278,8 @@ describe("an outline: what's touched is held, the rest worked out once (owner on
         const layout = chipLayout(boxTool, q, 24, env);
         const across = layout.intervals.find((x) => x.param.key === "across")!;
         expect(across.derived).toBe(true);
-        expect(across.display.startsWith("≈")).toBe(true);
+        // The "≈" is the editor's button; the number shows plain
+        expect(across.display.startsWith("≈")).toBe(false);
         expect(layout.ratioLock).toBe(false);
         const snapped = across.param.snap!(q, 24, env) as BoxParams;
         expect(onHalves(snapped.across)).toBe(true);
