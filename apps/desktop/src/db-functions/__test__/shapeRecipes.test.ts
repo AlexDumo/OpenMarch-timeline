@@ -22,6 +22,7 @@ import {
 } from "../timelineMoves";
 import { mergeMoves, splitMarchersIntoNewMove } from "../timelineSplitMoves";
 import {
+    readAllShapeRecipes,
     readShapeRecipes,
     saveShapeRecipeInTransaction,
     type ShapeRecipeRecord,
@@ -357,7 +358,12 @@ describeDbTests("Shape recipes", (it) => {
                 marcherIds: [marchers.a],
             });
             await timelineResolverSettled();
-            return { ...marchers, pageMove, splitMove: split.timeline.id };
+            return {
+                ...marchers,
+                arc: first,
+                pageMove,
+                splitMove: split.timeline.id,
+            };
         };
 
         it("a shape placed in the selected split move belongs to it", async ({
@@ -437,6 +443,122 @@ describeDbTests("Shape recipes", (it) => {
                     marcherIds: [a],
                 }),
             ).toEqual(before);
+        });
+
+        /** Who recipe `id` lists, or null once it's gone */
+        const membersOf = async (db: DbConnection, id: number) => {
+            const [r] = (await readAllShapeRecipes(db)).filter(
+                (x) => x.id === id,
+            );
+            return r ? r.members.map((m) => m.marcherId) : null;
+        };
+
+        /**
+         * A recipe in move `timelineId` listing `ids`, written as a file from before these rules
+         * could hold it (a shape placed in a split move while the page's still listed its marchers)
+         */
+        const staleRecipe = async (
+            db: DbConnection,
+            timelineId: number,
+            ids: number[],
+        ) =>
+            await transactionWithHistory(db, "staleRecipe", async (tx) => {
+                const row = await tx
+                    .insert(schema.timeline_shape_recipes)
+                    .values({
+                        timeline_id: timelineId,
+                        kind: LINE.kind,
+                        kind_version: LINE.kindVersion,
+                        params: "{}",
+                        order_mode: LINE.orderMode,
+                        reverse: false,
+                    })
+                    .returning({ id: schema.timeline_shape_recipes.id })
+                    .get();
+                await tx
+                    .insert(schema.timeline_shape_recipe_marchers)
+                    .values(
+                        ids.map((marcherId, slot) => ({
+                            recipe_id: row.id,
+                            marcher_id: marcherId,
+                            slot,
+                            x: 100 + 20 * slot,
+                            y: 50,
+                        })),
+                    )
+                    .run();
+                return row.id;
+            });
+
+        it("a shape placed in the split move takes its marchers out of the page's shape, at the same counts, in one undo step", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b, c, arc, splitMove } = await splitShow(db);
+            await place(db, [a, c], LINE, {
+                kind: "range",
+                ...PAGE2,
+                timelineId: splitMove,
+            });
+            expect(await membersOf(db, arc)).toEqual([b]);
+            await performUndo(db);
+            expect(await membersOf(db, arc)).toEqual([a, b]);
+        });
+
+        it("a shape over marchers in different moves lists only those in its own move", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b, pageMove } = await splitShow(db);
+            // a has a move of its own over these counts; the shape goes to the page's
+            const id = await place(db, [a, b], LINE, {
+                kind: "range",
+                ...PAGE2,
+                timelineId: pageMove,
+            });
+            expect(await recipeTimeline(db, id)).toBe(pageMove);
+            expect(await membersOf(db, id)).toEqual([b]);
+        });
+
+        it("undoing a merge gives the page's shape back the marcher the merged shape took", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b, arc, pageMove, splitMove } = await splitShow(db);
+            const line = await staleRecipe(db, splitMove, [a]);
+            await mergeMoves({ db, sourceId: splitMove, targetId: pageMove });
+            expect(await membersOf(db, arc)).toEqual([b]);
+            expect(await recipeTimeline(db, line)).toBe(pageMove);
+            await performUndo(db);
+            expect(await membersOf(db, arc)).toEqual([a, b]);
+            expect(await recipeTimeline(db, line)).toBe(splitMove);
+        });
+
+        it("a merge that empties the page's shape deletes it, and undo brings it back", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await show(db);
+            // b in the page's move too, in a shape of its own, so a can be split off
+            await place(db, [b], LINE);
+            const arc = await place(db, [a], ARC);
+            const pageMove = (await recipeTimeline(db, arc))!;
+            const split = await splitMarchersIntoNewMove({
+                db,
+                timelineId: pageMove,
+                marcherIds: [a],
+            });
+            const line = await staleRecipe(db, split.timeline.id, [a]);
+            await mergeMoves({
+                db,
+                sourceId: split.timeline.id,
+                targetId: pageMove,
+            });
+            expect(await membersOf(db, arc)).toBeNull();
+            expect(await membersOf(db, line)).toEqual([a]);
+            await performUndo(db);
+            expect(await membersOf(db, arc)).toEqual([a]);
+            expect(await recipeTimeline(db, line)).toBe(split.timeline.id);
         });
     });
 });

@@ -1,4 +1,13 @@
-import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import {
+    and,
+    eq,
+    gte,
+    inArray,
+    isNull,
+    lt,
+    notInArray,
+    sql,
+} from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import type { DbConnection, DbTransaction } from "./types";
 
@@ -7,10 +16,12 @@ import type { DbConnection, DbTransaction } from "./types";
  * so the shape can be reopened and edited. Positions stay the source of truth; a member's
  * override is where it stands less where its recipe put it (`x`, `y`).
  *
- * A recipe belongs to a move (`timelineId`), or to the homes (`null`). A marcher is in at most one
- * recipe per move: saving a recipe takes its marchers out of the move's other recipes and deletes
- * any recipe left with no one. Writes run inside the edit that placed the positions, so the shape
- * and its positions are one undo step.
+ * A recipe belongs to a move (`timelineId`), or to the homes (`null`), and lists only marchers
+ * whose positions are in that move. A marcher is in at most one recipe at a beat: saving a recipe
+ * takes its marchers out of the other recipes of every move over the beat it's placed at (its
+ * move's end: a move split off a page's shares it, UI-25) and deletes any recipe left with no one.
+ * Writes run inside the edit that placed the positions, so the shape and its positions are one
+ * undo step.
  */
 
 export interface ShapeRecipeRecord {
@@ -46,8 +57,9 @@ const sameMove = (timelineId: number | null) =>
 
 /**
  * Saves a recipe for `members` in move `timelineId` (`null` for homes), replacing `replaces` when
- * given (an edited recipe keeps its id). Its marchers leave the move's other recipes, and
- * recipes left empty are deleted.
+ * given (an edited recipe keeps its id). A member whose positions aren't in the move is left out
+ * (a selection over several moves); the rest leave the other recipes of every move over the beat
+ * it's placed at, and recipes left empty are deleted.
  *
  * @returns the recipe's id
  */
@@ -64,6 +76,8 @@ export async function saveShapeRecipeInTransaction({
     members: readonly ShapeRecipeMember[];
     replaces?: number;
 }): Promise<number> {
+    const own = timelineId === null ? null : await moveMembers(tx, timelineId);
+    if (own) placed = placed.filter((m) => own.has(m.marcherId));
     const marcherIds = placed.map((m) => m.marcherId);
     const values = {
         timeline_id: timelineId,
@@ -92,12 +106,17 @@ export async function saveShapeRecipeInTransaction({
         id = inserted.id;
     }
 
-    // Out of the move's other recipes
+    // Out of the other recipes at the beat it's placed at
     if (marcherIds.length > 0) {
         const others = await tx
             .select({ id: recipes.id })
             .from(recipes)
-            .where(and(sameMove(timelineId), notInArray(recipes.id, [id])))
+            .where(
+                and(
+                    await movesOverPlacedBeat(tx, timelineId),
+                    notInArray(recipes.id, [id]),
+                ),
+            )
             .all();
         if (others.length > 0) {
             await tx
@@ -130,8 +149,49 @@ export async function saveShapeRecipeInTransaction({
             .run();
     }
 
-    await deleteEmptyRecipes(tx, timelineId);
+    await deleteEmptyRecipes(tx);
     return id;
+}
+
+/** The marchers with positions in move `timelineId` */
+async function moveMembers(
+    tx: DbTransaction,
+    timelineId: number,
+): Promise<Set<number>> {
+    const a = schema.timeline_assignments;
+    const t = schema.timeline_transitions;
+    const rows = await tx
+        .selectDistinct({ id: a.marcher_id })
+        .from(a)
+        .innerJoin(t, eq(t.id, a.transition_id))
+        .where(eq(t.timeline_id, timelineId))
+        .all();
+    return new Set(rows.map((r) => r.id));
+}
+
+/**
+ * Which recipes stand at the beat a recipe of move `timelineId` is placed at (its end; homes for
+ * `null`): those of every move over that beat
+ */
+async function movesOverPlacedBeat(
+    tx: DbTransaction,
+    timelineId: number | null,
+) {
+    if (timelineId === null) return sameMove(null);
+    const t = schema.timelines;
+    const move = await tx
+        .select({ end: t.end_beat })
+        .from(t)
+        .where(eq(t.id, timelineId))
+        .get();
+    if (!move) return sameMove(timelineId);
+    return inArray(
+        recipes.timeline_id,
+        tx
+            .select({ id: t.id })
+            .from(t)
+            .where(and(lt(t.start_beat, move.end), gte(t.end_beat, move.end))),
+    );
 }
 
 /**
