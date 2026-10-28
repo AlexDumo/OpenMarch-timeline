@@ -164,10 +164,11 @@ export function ShapeLibraryContents({
                                     className="text-sub text-text-subtitle"
                                     data-testid="shape-library-saved-newer"
                                 >
-                                    {newer === 1
-                                        ? "1 saved shape needs"
-                                        : `${newer} saved shapes need`}{" "}
-                                    a newer version of OpenMarch.
+                                    {tolgee.t(
+                                        "shapes.library.savedNewer",
+                                        "{count, plural, one {# saved shape needs} other {# saved shapes need}} a newer version of OpenMarch.",
+                                        { count: newer },
+                                    )}
                                 </p>
                             )}
                             <ul className="flex flex-col gap-4">

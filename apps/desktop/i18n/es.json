@@ -1451,6 +1451,7 @@
                 "staggerLeft": "escalonado {fraction} a la izquierda"
             },
             "savedEmpty": "Guarda una forma desde su fila ⋯ o desde el inspector para tenerla aquí, en todos los espectáculos.",
+            "savedNewer": "{count, plural, one {# forma guardada necesita} other {# formas guardadas necesitan}} una versión más reciente de OpenMarch.",
             "star": "Destacar",
             "starNamed": "Destacar {name}",
             "title": "Formas",
