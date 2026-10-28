@@ -8,7 +8,7 @@ import {
 } from "./timelineMarchers";
 import { deleteEmptySetCuesInTransaction } from "./cues";
 import { deleteHeldPlacementsWithNoHolderInTransaction } from "./itemPlacements";
-import { deleteEmptyRecipes } from "./shapeRecipes";
+import { deleteEmptyRecipes, hasShapeRecipes } from "./shapeRecipes";
 
 type DatabaseMarcher = typeof schema.marchers.$inferSelect;
 
@@ -264,8 +264,9 @@ export async function deleteMarchers({
                 marcherIds,
                 tx,
             });
-            // A shape (ADR 0006) whose last marcher went goes too
-            await deleteEmptyRecipes(tx);
+            // A shape (ADR 0006) whose last marcher went goes too; a database from before
+            // shapes has none
+            if (await hasShapeRecipes(tx)) await deleteEmptyRecipes(tx);
             return deleted;
         },
     );

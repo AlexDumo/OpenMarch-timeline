@@ -246,6 +246,16 @@ export async function moveShapeRecipesInTransaction({
     await deleteEmptyRecipes(tx, to);
 }
 
+/** Whether the show stores shape recipes at all (a database from before them doesn't) */
+export async function hasShapeRecipes(
+    tx: DbConnection | DbTransaction,
+): Promise<boolean> {
+    const row = await tx.get<{ name: string } | undefined>(
+        sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'timeline_shape_recipes'`,
+    );
+    return row !== undefined;
+}
+
 /** Deletes move `timelineId`'s recipes nobody is in anymore (every move's when omitted) */
 export async function deleteEmptyRecipes(
     tx: DbTransaction,
