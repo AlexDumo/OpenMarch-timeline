@@ -130,17 +130,74 @@ export async function saveShapeRecipeInTransaction({
             .run();
     }
 
-    // Recipes nobody is in anymore
+    await deleteEmptyRecipes(tx, timelineId);
+    return id;
+}
+
+/**
+ * Moves every recipe of move `from` into move `to` (a merge, UI-25), which their marchers' places
+ * there follow: those marchers leave `to`'s other recipes, and recipes left empty are deleted.
+ */
+export async function moveShapeRecipesInTransaction({
+    tx,
+    from,
+    to,
+}: {
+    tx: DbTransaction;
+    from: number;
+    to: number;
+}): Promise<void> {
+    const moving = await tx
+        .select({ id: recipes.id })
+        .from(recipes)
+        .where(eq(recipes.timeline_id, from))
+        .all();
+    if (moving.length === 0) return;
+    const movingIds = moving.map((r) => r.id);
+    const marcherIds = (
+        await tx
+            .selectDistinct({ id: members.marcher_id })
+            .from(members)
+            .where(inArray(members.recipe_id, movingIds))
+            .all()
+    ).map((m) => m.id);
+    const theirs = (
+        await tx
+            .select({ id: recipes.id })
+            .from(recipes)
+            .where(eq(recipes.timeline_id, to))
+            .all()
+    ).map((r) => r.id);
+    if (theirs.length > 0 && marcherIds.length > 0)
+        await tx
+            .delete(members)
+            .where(
+                and(
+                    inArray(members.recipe_id, theirs),
+                    inArray(members.marcher_id, marcherIds),
+                ),
+            )
+            .run();
+    await tx
+        .update(recipes)
+        .set({ timeline_id: to })
+        .where(inArray(recipes.id, movingIds))
+        .run();
+    await deleteEmptyRecipes(tx, to);
+}
+
+/** Deletes move `timelineId`'s recipes nobody is in anymore (every move's when omitted) */
+export async function deleteEmptyRecipes(
+    tx: DbTransaction,
+    timelineId?: number | null,
+): Promise<void> {
+    const empty = sql`NOT EXISTS (SELECT 1 FROM ${members} WHERE ${members.recipe_id} = ${recipes.id})`;
     await tx
         .delete(recipes)
         .where(
-            and(
-                sameMove(timelineId),
-                sql`NOT EXISTS (SELECT 1 FROM ${members} WHERE ${members.recipe_id} = ${recipes.id})`,
-            ),
+            timelineId === undefined ? empty : and(sameMove(timelineId), empty),
         )
         .run();
-    return id;
 }
 
 /** The recipes of move `timelineId` (`null` for homes) that any of `marcherIds` are in. */

@@ -245,7 +245,7 @@ describe("the library's Saved group", () => {
         id,
         name,
         kind: boxTool.shape.id,
-        kindVersion: 1,
+        kindVersion: boxTool.shape.version,
         intervals: { across: 2, deep: 2 },
     });
 
@@ -272,6 +272,18 @@ describe("the library's Saved group", () => {
                 tools,
             ),
         ).toEqual([]);
+    });
+
+    it("leaves out a saved shape of another version of a kind, as placed shapes do (B3)", () => {
+        const box = shape("a", "Box");
+        expect(
+            savedShapeRows(
+                [{ ...box, kindVersion: box.kindVersion + 1 }],
+                [{ ...shape("b", "Old"), kindVersion: box.kindVersion - 1 }],
+                tools,
+            ),
+        ).toEqual([]);
+        expect(savedShapeRows([box], [], tools)).toHaveLength(1);
     });
 });
 

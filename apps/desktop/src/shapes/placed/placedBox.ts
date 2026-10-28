@@ -7,6 +7,7 @@ import { assignSlots, type AssignMarcher } from "../assign";
 import {
     drawBox,
     boxFrame,
+    boxNumbersReadable,
     snapToGrid,
     withBoxFrame,
     type BoxParams,
@@ -87,6 +88,8 @@ function placedOf(
     const { spots, ...params } = stored;
     // A spread from a generator this app doesn't have can't be laid out again
     if (!canLayOut(params)) return null;
+    // Nor can a box whose numbers were edited into something else (B4)
+    if (kind === boxTool && !boxNumbersReadable(params)) return null;
     return {
         kind,
         params,
