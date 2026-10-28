@@ -1225,7 +1225,8 @@
             "flipDeep": "Voltear de adelante hacia atrás",
             "gap": {
                 "menu": "Sobrante",
-                "withSpacing": "{side} · {spacing}",
+                "spacing": "{count, plural, one {{value} paso} other {{value} pasos}}",
+                "spacingTip": "El lado {side} tiene un marchador menos, así que sus marchadores están a {spacing}.",
                 "side": {
                     "back": "Atrás",
                     "front": "Adelante",

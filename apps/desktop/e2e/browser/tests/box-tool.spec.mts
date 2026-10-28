@@ -2806,7 +2806,25 @@ async function outlineOnSeven(show: Show) {
         "on",
     );
     expect((await shapeOverlay(page))!.gaps).toEqual([]);
+    // The spread back's own spacing, as a muted note after the pill, and why, in its tooltip
+    // and its description (owner on #459, B2). The menu closed first: its trigger again
+    if ((await page.getByTestId("outline-gap-side").count()) > 0)
+        await page.getByTestId("outline-gap-menu").click();
+    await expect(page.getByTestId("outline-gap-side")).toHaveCount(0);
+    const note = page.getByTestId("outline-gap-spacing");
+    await expect(note).toHaveText(/^· .+ steps?$/);
+    await expect(note.locator('[data-glyph="across"]')).toHaveCount(1);
+    const pill = page.getByTestId("outline-gap-menu");
+    await expect(pill).toHaveAccessibleDescription(
+        /^The back has one fewer marcher, so its marchers are .+ apart\.$/,
+    );
+    // (a tooltip waits for the pointer to leave after the press that closed the menu)
+    await page.mouse.move(5, 5);
+    await pill.hover();
+    await expect(page.getByRole("tooltip")).toContainText("one fewer marcher");
     await (await gapOption(page, "outline-gap-gap")).click();
+    // Leaving a gap, the back keeps the full spacing: no note
+    await expect(note).toHaveCount(0);
     await expect
         .poll(async () => (await shapeOverlay(page))?.gaps.length)
         .toBe(1);

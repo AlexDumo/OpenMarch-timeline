@@ -33,7 +33,8 @@ and only the rest is worked out, once.**
   so the two spacings come as near each other as they can.
 - With an odd count, the spacing numbers are the **full sides'**, and the
   **Leftover** side adjusts. When it spreads its marchers evenly they stand a
-  little wider apart, and the Leftover menu shows how far: "Leftover: Back · 4".
+  little wider apart, and a small note after the Leftover menu shows how far:
+  "· ↔ 4 steps". Point at the menu to see why.
 
 **What to try**
 

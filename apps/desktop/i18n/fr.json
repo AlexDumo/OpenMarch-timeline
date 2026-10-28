@@ -1225,7 +1225,8 @@
             "flipDeep": "Retourner d'avant en arrière",
             "gap": {
                 "menu": "Reste",
-                "withSpacing": "{side} · {spacing}",
+                "spacing": "{count, plural, one {{value} pas} other {{value} pas}}",
+                "spacingTip": "Le côté {side} a un marcheur de moins, donc ses marcheurs sont à {spacing} les uns des autres.",
                 "side": {
                     "back": "Arrière",
                     "front": "Avant",

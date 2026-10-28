@@ -147,25 +147,61 @@ describe("the outline gap", () => {
             },
         });
 
-        it("shows a clean 4 on the back while the chip has the front's 3.2", () => {
+        /** The pill's spacing note: plain text, not a control */
+        const note = () => screen.getByTestId("outline-gap-spacing");
+
+        it("shows a clean 4 on the back as a muted note after the side, with ↔, and says why", () => {
             shown(fifteen(32), 15);
-            expect(screen.getByTestId("outline-gap-menu")).toHaveTextContent(
-                "Leftover: Back · 4",
+            const menu = screen.getByTestId("outline-gap-menu");
+            expect(menu.textContent?.trim()).toBe("Leftover: Back");
+            expect(note().textContent?.replace(/\s+/g, " ").trim()).toBe(
+                "· 4 steps",
+            );
+            expect(
+                note().querySelector('[data-glyph="across"]'),
+            ).not.toBeNull();
+            // Information only: not focusable, not a button, hidden from screen readers, which
+            // hear the sentence on the pill instead
+            expect(note().tagName).toBe("SPAN");
+            expect(note()).not.toHaveAttribute("tabindex");
+            expect(note()).toHaveAttribute("aria-hidden");
+            expect(note().className).toContain("text-text/70");
+            expect(note().className).toContain("text-xs");
+            expect(menu).toHaveAccessibleDescription(
+                "The back has one fewer marcher, so its marchers are 4 steps apart.",
             );
         });
 
         it("marks one off the half steps as about so much", () => {
             shown(fifteen(30), 15);
-            expect(screen.getByTestId("outline-gap-menu")).toHaveTextContent(
-                "Leftover: Back · ≈3¾",
+            expect(note().textContent?.replace(/\s+/g, " ").trim()).toBe(
+                "· ≈3¾ steps",
             );
+            expect(
+                screen.getByTestId("outline-gap-menu"),
+            ).toHaveAccessibleDescription(
+                "The back has one fewer marcher, so its marchers are ≈3¾ steps apart.",
+            );
+        });
+
+        it("uses ↕ for a side that runs front to back", () => {
+            const left: BoxParams = {
+                ...fifteen(30),
+                distribution: {
+                    mode: "outline",
+                    oddGap: { side: "left", at: null, style: "spread" },
+                },
+            };
+            shown(left, 15);
+            expect(note().querySelector('[data-glyph="deep"]')).not.toBeNull();
         });
 
         it("shows nothing more when the side leaves a gap: its marchers keep the full spacing", () => {
             shown(fifteen(30, "gap"), 15);
-            expect(
-                screen.getByTestId("outline-gap-menu").textContent?.trim(),
-            ).toBe("Leftover: Back");
+            expect(screen.queryByTestId("outline-gap-spacing")).toBeNull();
+            expect(screen.getByTestId("outline-gap-menu")).not.toHaveAttribute(
+                "aria-describedby",
+            );
         });
     });
 });

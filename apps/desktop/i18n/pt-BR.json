@@ -1225,7 +1225,8 @@
             "flipDeep": "Espelhar de frente para trás",
             "gap": {
                 "menu": "Sobra",
-                "withSpacing": "{side} · {spacing}",
+                "spacing": "{count, plural, one {{value} passo} other {{value} passos}}",
+                "spacingTip": "O lado {side} tem um marchador a menos, então seus marchadores ficam a {spacing} de distância.",
                 "side": {
                     "back": "Trás",
                     "front": "Frente",

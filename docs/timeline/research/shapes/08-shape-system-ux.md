@@ -343,9 +343,11 @@ Guardrails for shapes with unassigned spots later (#358):
   - **An odd count: the full sides are the reference.** The across and deep spacings are always
     the full sides', and the frame is full gaps times them. The leftover side adjusts: spreading
     evenly, its marchers share its whole length one gap fewer (wider apart); leaving a gap, they
-    keep the full spacing. When the spread side's spacing differs from the full sides', the
-    Leftover menu says so, "Leftover: Back · 4" (or "· ≈3¾" off the half steps), since the
-    chip's number is the full sides' (owner on #459).
+    keep the full spacing. When the spread side's spacing differs from the full sides', a muted
+    note follows the Leftover menu, "· ↔ 4 steps" (↕ for a side front to back, "≈3¾" off the
+    half steps): small, not a control, and the menu's tooltip and description say why ("The back
+    has one fewer marcher, so its marchers are 4 steps apart."), since the chip's number is the
+    full sides' (owner on #459, style B2).
   - **A count changed** (− / +) keeps both spacings; the lengths follow.
   - Outlines stored before keep their numbers until edited (an `exact` that some builds of #459
     wrote is read past).

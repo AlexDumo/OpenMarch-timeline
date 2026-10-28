@@ -1963,7 +1963,8 @@
                 },
                 "styleLabel": "That side",
                 "menu": "Leftover",
-                "withSpacing": "{side} · {spacing}",
+                "spacing": "{count, plural, one {{value} step} other {{value} steps}}",
+                "spacingTip": "The {side} has one fewer marcher, so its marchers are {spacing} apart.",
                 "tipGap": "Click a marcher on the outline (not a corner) to move the gap there.",
                 "tipSpread": "Click a marcher on another side (not a corner) to spread that side instead."
             },

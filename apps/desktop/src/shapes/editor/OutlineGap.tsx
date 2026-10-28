@@ -18,6 +18,8 @@ import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeEditTarget } from "./editTargets";
 import { useEditorMenu, useMenuFocus } from "./menuFocus";
 import { Tip } from "./Tip";
+import { GlyphText } from "./GlyphText";
+import { useId } from "react";
 
 const SIDE_LABELS: Readonly<Record<GapSide, string>> = {
     back: "Back",
@@ -64,6 +66,7 @@ export function OutlineGap({
             '[data-testid="outline-gap-side"] [data-state="on"]',
         ),
     );
+    const describedBy = useId();
     const now = outlineGapOf(kind, params, spots);
     if (!now) return null;
     const { gap, stored, sides } = now;
@@ -94,19 +97,43 @@ export function OutlineGap({
         Math.abs(spread - fullSpacing) > 1e-9;
     const steps = differs ? spread / stepPx! : 0;
     const onHalves = Math.abs(steps * 2 - Math.round(steps * 2)) < 1e-6;
-    const title = differs
-        ? tolgee.t("shapes.edit.gap.withSpacing", "{side} · {spacing}", {
-              side,
-              spacing: `${onHalves ? "" : "≈"}${formatSteps(steps)}`,
-          })
-        : side;
+    const title = side;
+    // "4 steps", "≈3¾ steps": what the pill's spacing note and its sentence say (owner, B2)
+    const spacingText = differs
+        ? tolgee.t(
+              "shapes.edit.gap.spacing",
+              "{count, plural, one {{value} step} other {{value} steps}}",
+              {
+                  count: steps,
+                  value: `${onHalves ? "" : "≈"}${formatSteps(steps)}`,
+              },
+          )
+        : "";
+    const sentence = differs
+        ? tolgee.t(
+              "shapes.edit.gap.spacingTip",
+              "The {side} has one fewer marcher, so its marchers are {spacing} apart.",
+              {
+                  side: sideLabel(seen.side).toLowerCase(),
+                  spacing: spacingText,
+              },
+          )
+        : null;
+    // ↕ when the leftover side runs front to back
+    const glyph = gap.side === "back" || gap.side === "front" ? "↔" : "↕";
     return (
         <Popover.Root open={open} onOpenChange={setOpen}>
-            <Tip label={`${title}, ${styleLabel(gap.style).toLowerCase()}`}>
+            <Tip
+                label={
+                    sentence ??
+                    `${title}, ${styleLabel(gap.style).toLowerCase()}`
+                }
+            >
                 <Popover.Trigger asChild>
                     <button
                         type="button"
                         {...focus.trigger}
+                        aria-describedby={sentence ? describedBy : undefined}
                         data-testid="outline-gap-menu"
                         className="rounded-4 hover:bg-fg-2 flex min-h-24 items-center gap-4 px-4 py-2"
                     >
@@ -115,6 +142,23 @@ export function OutlineGap({
                     </button>
                 </Popover.Trigger>
             </Tip>
+            {sentence && (
+                <>
+                    {/* Information, not a control: small, muted at 70% (4.5:1 on the editor
+                        in both themes, where the subtitle token's 60% isn't), no hover, not
+                        focusable (owner, B2). The sentence says it to screen readers. */}
+                    <span
+                        aria-hidden
+                        data-testid="outline-gap-spacing"
+                        className="text-text/70 flex items-center gap-2 text-xs whitespace-nowrap select-none"
+                    >
+                        · <GlyphText text={glyph} size={12} /> {spacingText}
+                    </span>
+                    <span id={describedBy} className="sr-only">
+                        {sentence}
+                    </span>
+                </>
+            )}
             <Popover.Portal>
                 <Popover.Content
                     side="bottom"

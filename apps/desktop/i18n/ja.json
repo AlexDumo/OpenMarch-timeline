@@ -1225,7 +1225,8 @@
             "flipDeep": "前後に反転",
             "gap": {
                 "menu": "余り",
-                "withSpacing": "{side} · {spacing}",
+                "spacing": "{value} ステップ",
+                "spacingTip": "{side}はマーチャーが1人少ないため、間隔は{spacing}です。",
                 "side": {
                     "back": "後ろ",
                     "front": "前",
