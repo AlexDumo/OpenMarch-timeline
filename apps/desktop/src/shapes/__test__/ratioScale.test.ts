@@ -30,8 +30,16 @@ describe("one step of the half-step rule", () => {
     it("equal spacings both change by half a step", () => {
         expect(step(2, 2, 1)).toEqual([2.5, 2.5]);
         expect(step(2, 2, -1)).toEqual([1.5, 1.5]);
-        // Equal off the ladder: still half a step each, as the rule says
-        expect(step(1.3, 1.3, 1)).toEqual([1.8, 1.8]);
+    });
+
+    it("equal spacings off the ladder both round to the next half step that way", () => {
+        expect(step(1.3, 1.3, 1)).toEqual([1.5, 1.5]);
+        expect(step(1.3, 1.3, -1)).toEqual([1, 1]);
+        expect(step(2.75, 2.75, 1)).toEqual([3, 3]);
+        expect(step(2.75, 2.75, -1)).toEqual([2.5, 2.5]);
+        // Rounding down onto the floor is fine; under it isn't
+        expect(step(0.7, 0.7, -1)).toEqual([0.5, 0.5]);
+        expect(step(0.5, 0.5, -1)).toBeNull();
     });
 
     it("when only one is on the ladder, that one drives", () => {

@@ -183,7 +183,25 @@ async function drawBox(show: Show) {
         await toScreen(page, released),
     );
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    await editorSettled(page);
     return { grid, pressed, released };
+}
+
+/**
+ * Waits for the floating editor to stop springing to its place: just after a draw it passes over
+ * the box's bottom handles on the way, and a press there would land on it
+ */
+async function editorSettled(page: Page) {
+    const bar = page.getByTestId("shape-tool-readout-bar");
+    let last = "";
+    await expect
+        .poll(async () => {
+            const now = JSON.stringify(await bar.boundingBox());
+            const still = now === last;
+            last = now;
+            return still;
+        })
+        .toBe(true);
 }
 
 /**

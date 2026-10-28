@@ -115,27 +115,25 @@ export function ratioDriver(steps: readonly number[]): number {
 
 /**
  * One Expand (`by` 1) or Shrink (-1) of the spacings across and deep, in steps, keeping their
- * ratio (owner's half-step rule, #489). Equal spacings both change by half a step. Otherwise the
- * driver (`ratioDriver`) goes to its next half step that way (from off the ladder it rounds on to
- * it: 3.2 → 3.5 or 3) and the other follows in proportion. Null when a spacing would go under half
- * a step.
+ * ratio (owner's half-step rule, #489). The driver (`ratioDriver`) goes to its next half step
+ * that way (from off the ladder it rounds on to it: 3.2 → 3.5 or 3) and the other follows in
+ * proportion, so equal spacings both go to the same next half step (1.3 → 1.5 or 1; owner). Null
+ * when a spacing would go under half a step.
  */
 export function expandStep(
     steps: readonly number[],
     by: -1 | 1,
 ): number[] | null {
     if (steps.length === 0) return null;
-    const equal = steps.every((s) => Math.abs(s - steps[0]!) < LADDER_EPS);
-    let next: number[];
-    if (equal && steps.length > 1) next = steps.map((s) => s + by * SCALE_STEP);
-    else {
-        const i = ratioDriver(steps);
-        const from = steps[i]!;
-        const to = onLadder(from)
-            ? from + by * SCALE_STEP
-            : (by > 0 ? Math.ceil(from * 2) : Math.floor(from * 2)) / 2;
-        next = steps.map((s, j) => (j === i ? to : (s * to) / from));
-    }
+    const i = ratioDriver(steps);
+    const from = steps[i]!;
+    const to = onLadder(from)
+        ? from + by * SCALE_STEP
+        : (by > 0 ? Math.ceil(from * 2) : Math.floor(from * 2)) / 2;
+    // Equal ones land on exactly the same value, not a hair off it
+    const next = steps.map((s, j) =>
+        j === i || Math.abs(s - from) < LADDER_EPS ? to : (s * to) / from,
+    );
     return next.every((s) => s >= SCALE_STEP - LADDER_EPS) ? next : null;
 }
 
