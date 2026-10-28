@@ -1454,6 +1454,7 @@
                 "staggerLeft": "千鳥{fraction}左"
             },
             "savedEmpty": "⋯の行かインスペクターから形状を保存すると、すべてのショーで使えるようにここに保管されます。",
+            "savedNewer": "保存済みの形状 {count} 個には、新しいバージョンの OpenMarch が必要です。",
             "star": "スターを付ける",
             "starNamed": "{name}にスターを付ける",
             "title": "形状",

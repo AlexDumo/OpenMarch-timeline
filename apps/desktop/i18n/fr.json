@@ -1454,6 +1454,7 @@
                 "staggerLeft": "en quinconce {fraction} à gauche"
             },
             "savedEmpty": "Enregistrez une forme depuis sa ligne ⋯ ou l'inspecteur pour la garder ici, pour tous les spectacles.",
+            "savedNewer": "{count, plural, one {# forme enregistrée nécessite} other {# formes enregistrées nécessitent}} une version plus récente d'OpenMarch.",
             "star": "Mettre en favori",
             "starNamed": "Mettre {name} en favori",
             "title": "Formes",

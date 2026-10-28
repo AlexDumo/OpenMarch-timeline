@@ -2158,6 +2158,7 @@
                 "staggerLeft": "stagger {fraction} left"
             },
             "savedEmpty": "Save a shape from its ⋯ row or the inspector to keep it here, for every show.",
+            "savedNewer": "{count, plural, one {# saved shape needs} other {# saved shapes need}} a newer version of OpenMarch.",
             "star": "Star",
             "starNamed": "Star {name}",
             "title": "Shapes",

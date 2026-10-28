@@ -240,6 +240,24 @@ export function savedToolKind(
 }
 
 /**
+ * How many of the saved shapes in `library` and `show` (each once) need a newer app: a kind this
+ * app doesn't have, or a newer version of one, which the Saved group leaves out
+ */
+export function newerSavedShapes(
+    library: readonly SavedShape[],
+    show: readonly SavedShape[],
+    tools: readonly ShapeToolEntry[],
+): number {
+    const byId = new Map([...show, ...library].map((s) => [s.id, s]));
+    let n = 0;
+    for (const saved of byId.values()) {
+        const kinds = tools.filter((t) => t.kind.shape.id === saved.kind);
+        if (kinds.every((t) => t.kind.shape.version < saved.kindVersion)) n++;
+    }
+    return n;
+}
+
+/**
  * The library's Saved group: the user's saved shapes, then the ones only the open show has (a
  * show from another computer), noted as such. Each note starts with the kind, then how it's
  * spaced and filled: "Box · 2 apart, stagger ½", "Circle · Spread 2 apart". A saved shape whose

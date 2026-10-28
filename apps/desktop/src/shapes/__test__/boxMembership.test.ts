@@ -191,6 +191,23 @@ describeDbTests("Placed box membership", (it) => {
         expect(copy.members.map((m) => m.y)).toEqual([60, 60, 80, 80]);
     });
 
+    it("an edit on a later page that takes one member away offers no fill for a copy that kept no one", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await place(db, ids);
+        // Only the moved marcher is in page 3's move, so the copy there has none of the others
+        const leaves = await edit(db, PAGE3, [
+            { marcherId: ids[1]!, x: 300, y: 300 },
+        ]);
+        const stored = new Set(
+            (await readAllShapeRecipes(db)).map((r) => r.id),
+        );
+        for (const leave of leaves) expect(stored).toContain(leave.recipeId);
+        expect(leaves).toEqual([]);
+    });
+
     it("an edit that touches no box writes nothing of its own", async ({
         db,
         marchersAndPages: _,
