@@ -11,7 +11,6 @@ import {
     useActionHandlerGroup,
 } from "@/shortcuts/useActionHandler";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
-import { changeFiles, type BoxParams } from "../box/boxGeometry";
 import { toolEnvFor } from "./toolEnv";
 import { cancelGesture, edit, redo } from "./toolMachine";
 import { updateTool, useShapeToolStore } from "./shapeToolStore";
@@ -22,23 +21,6 @@ const NUDGE_DIRECTIONS = {
     left: { x: -1, y: 0 },
     right: { x: 1, y: 0 },
 } as const;
-
-/** Adds `delta` files to the open box, as one undo step */
-export function stepFiles(delta: number): void {
-    const field = currentShapeField();
-    if (!field) return;
-    updateTool((tool) => {
-        if (tool.params === null || tool.gesture) return tool;
-        const env = toolEnvFor(field, { shift: false, alt: false });
-        const params = changeFiles(
-            tool.params as BoxParams,
-            tool.marchers.length,
-            delta,
-            env,
-        );
-        return edit(tool, params, shapeContextFor(field));
-    });
-}
 
 /**
  * The keys the open shape tool takes over. Mounted only while it's open, after the editor's own

@@ -94,32 +94,6 @@ export const sizeIsLocked = (spacing: Spacing): boolean =>
         ? spacing.sizeLocked === true
         : spacing.size !== "follow";
 
-/** `spacing` with the interval locked at `runs`, laid on the shape or followed per the size lock */
-export function lockInterval(
-    spacing: Spacing,
-    runs: readonly IntervalRun[],
-): Spacing {
-    if (spacing.mode === "interval") return { ...spacing, runs };
-    return {
-        mode: "interval",
-        runs,
-        anchor: "center",
-        size: spacing.sizeLocked ? "keep" : "follow",
-    };
-}
-
-/** `spacing` with the interval unlocked (Fit), keeping the size lock */
-export const unlockInterval = (spacing: Spacing): Spacing => ({
-    mode: "fit",
-    sizeLocked: sizeIsLocked(spacing),
-});
-
-/** `spacing` with the size lock set */
-export function setSizeLock(spacing: Spacing, locked: boolean): Spacing {
-    if (spacing.mode === "fit") return { mode: "fit", sizeLocked: locked };
-    return { ...spacing, size: locked ? "keep" : "follow" };
-}
-
 export const followsInterval = (
     spacing: Spacing,
 ): spacing is Extract<Spacing, { mode: "interval" }> =>
@@ -191,11 +165,8 @@ export interface ShapeIssue {
     readonly message: string;
     /** Slot indexes the issue is about, for highlighting */
     readonly slots?: readonly number[];
-    /**
-     * `steps`: steps too big, drawn apart from the rest. `collision`: walks that cross, which
-     * Place asks about once before placing. `close`: walks passing too close (drawn red too).
-     */
-    readonly mark?: "steps" | "collision" | "close";
+    /** `steps`: steps too big, drawn apart from the rest */
+    readonly mark?: "steps";
 }
 
 /**
@@ -273,8 +244,6 @@ export interface ShapeKind<P> {
     readonly version: number;
     readonly label: string;
     readonly family: "path" | "fill";
-    /** Not offered in the shape pickers: reached another way (a filled shape, by its switch) */
-    readonly unlisted?: boolean;
     /**
      * Who goes where when the tool opens: an open path keeps the marchers' order along it, a
      * closed or filled shape has no natural start, so nearest spots usually read better

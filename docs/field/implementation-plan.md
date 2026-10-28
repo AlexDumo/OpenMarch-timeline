@@ -26,7 +26,7 @@ Status lives in the issues, not here (see [README](README.md)).
 | #201   | [3](phases/03-drawing.md)            | Timeline visuals on the new field                         | #199, #200                  |
 | #205   | [3](phases/03-drawing.md)            | Weak machines: low-quality mode, GPU flags, context loss  | #192                        |
 | #202   | [4](phases/04-timeline-and-tools.md) | Timeline interactions on the new field                    | #193, #201                  |
-| #203   | [4](phases/04-timeline-and-tools.md) | Line tool on the new field                                | #197                        |
+| #203   | [4](phases/04-timeline-and-tools.md) | Line tool on the new field (removed since, owner 10-15)   | #197                        |
 | #204   | [4](phases/04-timeline-and-tools.md) | Box shape tool on the new field (rebuild of box v1, #181) | #198                        |
 | #207   | [4](phases/04-timeline-and-tools.md) | Video export and field previews through the new field     | #201                        |
 | #208   | [5](phases/05-gate-and-switch.md)    | Parity gate run                                           | #194, #195, #198, #202–#207 |

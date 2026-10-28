@@ -480,24 +480,6 @@ export function turnBy(
     ) as BoxParams;
 }
 
-/** The box turned to `degrees` about the pivot */
-export function turnTo(
-    p: BoxParams,
-    spots: number,
-    degrees: number,
-    pivot: Pivot,
-    env: ToolEnv,
-): BoxParams {
-    return turnShape(
-        boxTool,
-        p,
-        spots,
-        degrees * DEGREE,
-        pivot,
-        env,
-    ) as BoxParams;
-}
-
 /** The box flipped side to side or front to back about the pivot */
 export const flipBox = (
     p: BoxParams,
