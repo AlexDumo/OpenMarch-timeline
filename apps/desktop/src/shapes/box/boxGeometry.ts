@@ -1,5 +1,5 @@
 import type { BlockParams } from "../kinds/block";
-import { pullEdges, type BoxField } from "./edgePull";
+import { pullEdges, pullValue, type BoxField } from "./edgePull";
 import type { XY } from "../types";
 import {
     filesDistribution,
@@ -805,7 +805,8 @@ export function handlePoint(f: Footprint, key: BoxHandleKey): XY {
 
 /**
  * The box with handle `key` dragged to `to`: the opposite corner or side stays put and the
- * intervals stretch, in half steps. Files and ranks never change here.
+ * intervals stretch, in half steps. A grid's files and ranks never change here; an outline's
+ * marchers are shared out between its sides again (#458).
  */
 export function stretchBox(
     base: BoxParams,
@@ -927,11 +928,11 @@ function inBoxAxes(
 
 /**
  * {@link stretchBox} for an outline (#458), in its own axes: the opposite corner or side stays
- * put and the frame follows the drag, then the outline goes round it with one interval, the
- * marchers shared out between the sides by their lengths (a longer side takes more). A side
- * handle keeps the other axis centered where it was; that side's length is what the shared
- * interval makes it. A moving corner near a field line lands on it, the interval becoming what
- * that takes (#425, #446).
+ * put and the frame follows the drag, then the outline goes round it with one interval on half
+ * steps, the marchers shared out between the sides by their lengths (a longer side takes more).
+ * A side handle keeps the other axis's first corner where it was; that side's length is what the
+ * shared interval makes it. A moving corner near a field line lands on it, the one interval
+ * solved so it does (#425, #446), every corner moving with it.
  */
 function stretchOutline(
     base: BoxParams,
@@ -952,49 +953,40 @@ function stretchOutline(
     const width = movesX ? Math.abs(to.x - anchor.x) : f.right - f.left;
     const depth = movesY ? Math.abs(to.y - anchor.y) : f.bottom - f.top;
     const even = evenOutline(width, depth, n, side, env);
-    const { a, b } = even;
-    const pull = pullEdges(
-        movesX
-            ? {
-                  moves: true,
-                  anchor: anchor.x,
-                  to: to.x,
-                  count: a + 1,
-                  ladder: even.interval,
-              }
-            : { moves: false, edges: [f.left, f.right] },
-        movesY
-            ? {
-                  moves: true,
-                  anchor: anchor.y,
-                  to: to.y,
-                  count: b + 1,
-                  ladder: even.interval,
-              }
-            : { moves: false, edges: [f.top, f.bottom] },
-        field,
-        env,
-    );
-    // One interval: an edge landed on a line sets it for every side
-    const interval = pull.x ?? pull.y ?? even.interval;
     const sign = {
         x: movesX ? signOf(to.x - anchor.x) : 1,
         y: movesY ? signOf(to.y - anchor.y) : 1,
     };
     const start = {
-        x: movesX ? anchor.x : (f.left + f.right) / 2 - (a * interval) / 2,
-        y: movesY ? anchor.y : (f.top + f.bottom) / 2 - (b * interval) / 2,
+        x: movesX ? anchor.x : f.left,
+        y: movesY ? anchor.y : f.top,
     };
-    return boxFrom(
-        start,
-        sign,
-        a + 1,
-        interval,
-        interval,
-        n,
+    const at = (interval: number) =>
+        boxFrom(
+            start,
+            sign,
+            even.a + 1,
+            interval,
+            interval,
+            n,
+            env,
+            boxDistribution(base),
+        );
+    // Cmd/Ctrl snaps nothing, and Shift (equal spacings) means nothing to one interval
+    if (!field || env.pull === false || env.shift) return at(even.interval);
+    // Where the drag has the interval before the ladder rounds it
+    const raw = (width + depth) / Math.ceil(n / 2);
+    const corners = (interval: number) =>
+        boxCorners(at(interval), n).map(field.toField);
+    const half = halfStep(env);
+    const onLine = pullValue(
+        corners,
+        raw,
+        field.lines,
         env,
-        boxDistribution(base),
+        (v) => v >= half - 1e-9,
     );
+    return at(onLine ?? even.interval);
 }
 
 /** {@link stretchBox} in the box's own axes, `to` in them too */
@@ -1203,6 +1195,7 @@ export function moveBox(
     delta: XY,
     env: ToolEnv,
 ): BoxParams {
+    base = onHalfStepsIfOutline(base, env);
     const by =
         env.snap && !squareToField(base.rotation)
             ? {
@@ -1218,6 +1211,19 @@ export function moveBox(
         n,
         env,
     );
+}
+
+/**
+ * An outline whose one interval is off the half steps (kept exactly by a switch to Outline, or
+ * one stored with two) back on them, about its center: the first edit after such a switch puts
+ * the box on half steps (owner on #458). Anything else as it is, and nothing without snap.
+ */
+function onHalfStepsIfOutline(p: BoxParams, env: ToolEnv): BoxParams {
+    if (!env.snap || boxDistribution(p).mode !== "outline") return p;
+    const interval = snapInterval(p.across, env);
+    return interval === p.across && interval === p.deep
+        ? p
+        : { ...p, across: interval, deep: interval };
 }
 
 /** The box with `delta` more files (fewer when negative): same intervals, grown from the pivot */

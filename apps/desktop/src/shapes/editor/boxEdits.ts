@@ -21,6 +21,7 @@ import {
     turnShape,
 } from "../frame/gestures";
 import { boxTool } from "../box/boxTool";
+import { pullValue } from "../box/edgePull";
 import { gapAsSeen } from "../distribute/outline";
 import {
     DEGREE,
@@ -393,34 +394,8 @@ export function spacingOnLine(
                   : value / ratio;
         return value >= half - 1e-9 && other >= half - 1e-9;
     };
-    const s1 = Math.max(raw, half);
-    const s2 = s1 + env.stepPx;
-    const at1 = free(s1);
-    const at2 = free(s2);
-    let best: { value: number; travel: number } | null = null;
-    at1.forEach((p, k) => {
-        const q = at2[k]!;
-        // How far the point moves per unit of spacing, each way and in all
-        const slope = {
-            x: (q.x - p.x) / (s2 - s1),
-            y: (q.y - p.y) / (s2 - s1),
-        };
-        const speed = Math.hypot(slope.x, slope.y);
-        if (speed < 1e-9) return;
-        const radius = Math.min(env.pullRadius ?? 0, (speed * half) / 4);
-        for (const axis of ["x", "y"] as const) {
-            if (Math.abs(slope[axis]) < 1e-9) continue;
-            for (const line of lines[axis]) {
-                const value = s1 + (line - p[axis]) / slope[axis];
-                const travel = Math.abs(value - raw) * speed;
-                if (travel > radius + 1e-9 || !atLeastHalf(value)) continue;
-                if (best === null || travel < best.travel - 1e-9)
-                    best = { value, travel };
-            }
-        }
-    });
-    if (best === null) return null;
-    const { value } = best;
+    const value = pullValue(free, raw, lines, env, atLeastHalf);
+    if (value === undefined) return null;
     const now = which === "across" ? base.across : base.deep;
     return Math.abs(value - now) < 1e-9
         ? base

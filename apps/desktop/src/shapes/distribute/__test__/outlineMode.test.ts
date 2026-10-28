@@ -418,6 +418,18 @@ describe("picking the gap", () => {
         expect(
             Math.abs((u.params as BoxParams).center.x - (p.center.x - 30)),
         ).toBeLessThanOrEqual(half / 2);
+        // Its one interval back on half steps too, and every corner on the grid (review)
+        const moved = u.params as BoxParams;
+        expect(moved.across % half).toBe(0);
+        expect(moved.deep).toBe(moved.across);
+        for (const c of boxCorners(moved, 13)) {
+            expect(Math.abs(c.x / half - Math.round(c.x / half))).toBeLessThan(
+                1e-9,
+            );
+            expect(Math.abs(c.y / half - Math.round(c.y / half))).toBeLessThan(
+                1e-9,
+            );
+        }
         expect(outlineGapOf(boxTool, u.params, 13)!.gap).toMatchObject({
             side: "back",
         });

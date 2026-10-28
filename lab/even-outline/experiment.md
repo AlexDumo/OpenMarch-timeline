@@ -27,8 +27,8 @@ the long sides wider. Now there's **one spacing all the way round**.
   the spacing, its − and + buttons, the count's − and +, or moving the box.
 - **Dragging a side handle** shares the marchers out between the sides again,
   so the spacing stays even as the box gets longer or shorter.
-- Changing the spacing changes it on every side (the two spacing numbers stay
-  the same).
+- The floating editor shows **one spacing** for an outline, and changing it
+  changes every side.
 - With an odd count, the **Leftover** menu still decides which side takes the
   extra space.
 

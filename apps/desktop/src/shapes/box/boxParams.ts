@@ -9,7 +9,13 @@ import {
 import { formatSteps, parseSteps } from "../editor/format";
 import { parseSize, scrubDistance } from "../editor/scrub";
 import type { ToolEnv, ToolParam } from "../tool/toolKind";
-import { boxBlock, isSpread, shortBy, type BoxParams } from "./boxGeometry";
+import {
+    boxBlock,
+    boxDistribution,
+    isSpread,
+    shortBy,
+    type BoxParams,
+} from "./boxGeometry";
 
 /**
  * The box's numbers (#344, "The kind contract"; 08-shape-system-ux.md, "The floating editor"):
@@ -109,6 +115,8 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
         shown(p, n) {
             // A spread has one interval, the closest pair: the across one
             if (isSpread(p)) return across && n > 1;
+            // So has an outline, all the way round (#458): one number, the across one
+            if (boxDistribution(p).mode === "outline" && !across) return false;
             const field = onField(p, n);
             return (across ? field.across : field.deep) > 1;
         },

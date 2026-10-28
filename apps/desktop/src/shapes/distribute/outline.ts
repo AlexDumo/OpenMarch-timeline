@@ -155,6 +155,15 @@ const CORNER_BEFORE: Readonly<Record<GapSide, (s: OutlineSides) => number>> = {
 };
 
 /**
+ * The row an outline's spots carry: negative, unlike a grid's, and different for every split
+ * (a across), so a marcher keeps their spot only while the sides hold the same counts. With one
+ * interval all round a handle drag can move marchers from one side to another (#458), and the
+ * same place in the loop is then on another side: who goes where is worked out again (review).
+ * The spots an odd count spreads along one side are the row below.
+ */
+const loopRow = (sides: OutlineSides): number => -1 - 2 * sides.a;
+
+/**
  * Every spot of the full loop, 2(a + b) of them, in a fixed order: clockwise from the back-left
  * corner, each side's corner first. Stored slot numbers count in this order, and the spot's `col`
  * is its place in it.
@@ -172,7 +181,7 @@ export function outlineLoop(
             ...sidePoint(sides, side, start, across, deep),
             side: null,
             at: start,
-            row: -1,
+            row: loopRow(sides),
             col: spots.length,
         });
         for (let j = 1; j < len; j++) {
@@ -181,7 +190,7 @@ export function outlineLoop(
                 ...sidePoint(sides, side, at, across, deep),
                 side,
                 at,
-                row: -1,
+                row: loopRow(sides),
                 col: spots.length,
             });
         }
@@ -222,7 +231,7 @@ export function outlineSpots(
                           across,
                           deep,
                       ),
-                      row: -2,
+                      row: loopRow(sides) - 1,
                       col: s.col,
                   }
                 : frameSpot(s),

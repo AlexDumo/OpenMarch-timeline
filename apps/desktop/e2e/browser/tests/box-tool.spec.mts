@@ -2906,13 +2906,10 @@ test("change: Outline spaces every side the same, and widening it moves marchers
             left: spots.filter((p) => Math.abs(p.x - left) < CLOSE).length,
         };
     };
-    const spacings = async () => [
-        await bar.getByTestId("shape-editor-across").innerText(),
-        await bar.getByTestId("shape-editor-deep").innerText(),
-    ];
     expect(await sides()).toEqual({ back: 3, left: 3 });
-    const [across, deep] = await spacings();
-    expect(across).toBe(deep);
+    // One spacing all round: the editor shows one number (review)
+    await expect(bar.getByTestId("shape-editor-across")).toBeVisible();
+    await expect(bar.getByTestId("shape-editor-deep")).toHaveCount(0);
 
     // Widened to about three times as wide: the long sides take the marchers, one interval
     const { handles } = (await shapeOverlay(page))!;
@@ -2925,8 +2922,13 @@ test("change: Outline spaces every side the same, and widening it moves marchers
     const after = await sides();
     expect(after.back).toBeGreaterThan(after.left);
     expect(after).toEqual({ back: 4, left: 2 });
-    const [a2, d2] = await spacings();
-    expect(a2).toBe(d2);
+    // Every neighbor round the loop one interval apart
+    const { spots } = (await shapeOverlay(page))!;
+    const d = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y);
+    const nearest = spots.map((p) =>
+        Math.min(...spots.filter((q) => q !== p).map((q) => d(p, q))),
+    );
+    for (const v of nearest) expect(v).toBeCloseTo(nearest[0]!, 6);
 });
 
 test("change: Outline on 7 spreads the back by default, leaves its middle out on request, a click on a spot between corners moves the gap, and the placed box keeps it", async ({

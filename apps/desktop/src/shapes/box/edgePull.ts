@@ -217,3 +217,49 @@ function choose(pulls: readonly Pull[]): Pull[] {
     }
     return out;
 }
+
+/**
+ * One number set so a point lands on a field line (#452, #458): `points(v)`, field points that
+ * each move in a straight line as `v` changes (a spacing grown from the pivot, an outline's one
+ * interval from its fixed corner). Each point and line gives one value; the nearest wins, near
+ * being the point's travel from where `raw` has it, never more than the pull radius on screen
+ * nor a quarter of how far the point moves per half step of `v`, so half steps stay reachable and
+ * a point moving nearly along a line doesn't jump (#448). `fits` leaves values out (never under
+ * half a step, say). Undefined with none near.
+ */
+export function pullValue(
+    points: (v: number) => readonly XY[],
+    raw: number,
+    lines: FieldLines,
+    env: ToolEnv,
+    fits: (v: number) => boolean,
+): number | undefined {
+    const half = env.stepPx / 2;
+    const s1 = Math.max(raw, half);
+    const s2 = s1 + env.stepPx;
+    const at1 = points(s1);
+    const at2 = points(s2);
+    let best: { value: number; travel: number } | null = null;
+    at1.forEach((p, k) => {
+        const q = at2[k]!;
+        // How far the point moves per unit of `v`, each way and in all
+        const slope = {
+            x: (q.x - p.x) / (s2 - s1),
+            y: (q.y - p.y) / (s2 - s1),
+        };
+        const speed = Math.hypot(slope.x, slope.y);
+        if (speed < EPS) return;
+        const radius = Math.min(env.pullRadius ?? 0, (speed * half) / 4);
+        for (const axis of ["x", "y"] as const) {
+            if (Math.abs(slope[axis]) < EPS) continue;
+            for (const line of lines[axis]) {
+                const value = s1 + (line - p[axis]) / slope[axis];
+                const travel = Math.abs(value - raw) * speed;
+                if (travel > radius + EPS || !fits(value)) continue;
+                if (best === null || travel < best.travel - EPS)
+                    best = { value, travel };
+            }
+        }
+    });
+    return best === null ? undefined : (best as { value: number }).value;
+}

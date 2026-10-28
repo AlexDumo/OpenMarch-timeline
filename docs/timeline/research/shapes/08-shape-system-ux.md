@@ -255,8 +255,10 @@ Guardrails for shapes with unassigned spots later (#358):
 - **Outline has one interval all the way round** (#458). Each side holds as many marchers as
   its length: a box twice as long as deep has about twice as many on its long sides, a marcher
   on every corner, and an odd count's leftover spot still goes on the side the Leftover menu
-  picks. A handle drag shares the marchers out between the sides again as the frame changes; a
-  spacing changed sets it for every side; a count changed (− and +) keeps the interval.
+  picks. The floating editor shows one spacing for an outline. A handle drag shares the
+  marchers out between the sides again as the frame changes, and who goes where is worked out
+  again when a side's count changes; a spacing changed sets it for every side; a count changed
+  (− and +) keeps the interval.
   - **Switching to Outline keeps the space** (owner on #458): the split and the one interval
     that keep the frame closest, the interval exact even off the half steps (31 round 7 × 6
     steps: about 0.8 steps). A mode switch keeps any other box within half a step a side

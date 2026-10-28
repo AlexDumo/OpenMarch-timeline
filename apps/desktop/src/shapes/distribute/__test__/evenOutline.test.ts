@@ -14,7 +14,15 @@ import { DEFAULT_ODD_GAP, type OutlineDistribution } from "../distribution";
 import { withMode } from "../modes";
 import { distribute } from "../distribute";
 import type { ToolEnv } from "../../tool/toolKind";
-import type { XY } from "../../types";
+import {
+    edit,
+    openTool,
+    pointerMove,
+    press,
+    release,
+    targetsOf,
+} from "../../tool/toolMachine";
+import type { ShapeContext, XY } from "../../types";
 
 /**
  * Outline with one interval all the way round (#458): each side holds as many marchers as its
@@ -31,6 +39,8 @@ const env: ToolEnv = {
     gridSnap: (p) => ({ x: snapHalf(p.x), y: snapHalf(p.y) }),
     hitRadius: 3,
 };
+
+const ctx: ShapeContext = { stepPx: STEP, snapPoint: (p) => p };
 
 /** `n` marchers drawn in a `w` × `d` box, switched to Outline */
 function outline(n: number, w: number, d: number): BoxParams {
@@ -176,5 +186,117 @@ describe("an outline with one interval all round", () => {
         expect((boxDistribution(fewer) as OutlineDistribution).mode).toBe(
             "outline",
         );
+    });
+});
+
+describe("the review of #459", () => {
+    /** Yard lines every 8 steps, front sideline and hashes, as the field's lines */
+    const LINES = { x: [-160, -80, 0, 80, 160, 240], y: [0, -280, -560] };
+    const lined = (over: Partial<ToolEnv> = {}): ToolEnv => ({
+        ...env,
+        fieldLines: LINES,
+        pullRadius: 6,
+        ...over,
+    });
+    const onLine = (p: XY) =>
+        LINES.x.some((x) => Math.abs(p.x - x) < 1e-6) ||
+        LINES.y.some((y) => Math.abs(p.y - y) < 1e-6);
+    const onHalves = (v: number) =>
+        Math.abs(v / half - Math.round(v / half)) < 1e-9;
+
+    for (const degrees of [15, 30])
+        it(`a 24 outline turned ${degrees}°: a pulled stretch puts a corner exactly on a line, traveling no farther than the radius`, () => {
+            const flat = outline(24, 120, 80);
+            const p: BoxParams = {
+                ...flat,
+                center: { x: 40, y: -140 },
+                rotation: (degrees * Math.PI) / 180,
+                across: 15,
+                deep: 15,
+            };
+            const se = boxTool.handles(p, 24).find((h) => h.key === "se")!.at;
+            let pulled = 0;
+            for (let px = 0; px <= 80; px += 0.5) {
+                const to = { x: se.x + px, y: se.y + px * 0.3 };
+                const out = stretchBox(p, 24, "se", to, lined());
+                expect(out.across).toBe(out.deep);
+                if (onHalves(out.across)) continue;
+                pulled++;
+                // Pulled: a corner on a line, and that corner near where the ladder's own
+                // interval would have it
+                const corners = boxCorners(out, 24);
+                expect(corners.some(onLine), `${px}`).toBe(true);
+                const free = boxCorners(
+                    stretchBox(p, 24, "se", to, lined({ pull: false })),
+                    24,
+                );
+                const landed = corners
+                    .map((c, k) => ({ c, k }))
+                    .filter(({ c }) => onLine(c))
+                    .map(({ c, k }) =>
+                        Math.hypot(c.x - free[k]!.x, c.y - free[k]!.y),
+                    );
+                // Within the radius of the drag's own interval, plus the ladder's rounding
+                expect(Math.min(...landed)).toBeLessThanOrEqual(6 + 3 * half);
+            }
+            expect(pulled).toBeGreaterThan(0);
+        });
+
+    it("a stretch that moves marchers between sides works out who goes where again: no walks cross", () => {
+        const marchers = Array.from({ length: 24 }, (_, i) => ({
+            id: i + 1,
+            at: { x: -200 + (i % 8) * 30, y: 200 + Math.floor(i / 8) * 30 },
+            drillRank: i,
+        }));
+        let t = openTool(boxTool, marchers);
+        t = press(t, { x: 0, y: 0 }, env);
+        t = pointerMove(t, { x: 70, y: 50 }, env);
+        t = release(t, ctx);
+        t = edit(t, withMode(boxTool, t.params, 24, "outline", env), ctx);
+        const before = onField(t.params as BoxParams, 24);
+        const e = boxTool.handles(t.params, 24).find((h) => h.key === "e")!.at;
+        t = press(t, e, env);
+        t = pointerMove(t, { x: e.x + 90, y: e.y }, env);
+        t = release(t, ctx);
+        const after = onField(t.params as BoxParams, 24);
+        // The split changed: more across now
+        expect(after.across).toBeGreaterThan(before.across);
+        const walks = targetsOf(t, ctx);
+        const cross = (a: { from: XY; to: XY }, b: { from: XY; to: XY }) => {
+            const side = (p: XY, q: XY, r: XY) =>
+                Math.sign(
+                    (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x),
+                );
+            return (
+                side(a.from, a.to, b.from) * side(a.from, a.to, b.to) < 0 &&
+                side(b.from, b.to, a.from) * side(b.from, b.to, a.to) < 0
+            );
+        };
+        for (let i = 0; i < walks.length; i++)
+            for (let j = i + 1; j < walks.length; j++)
+                expect(cross(walks[i]!, walks[j]!), `${i} × ${j}`).toBe(false);
+    });
+
+    it("a side handle keeps the other axis's first corner where it was", () => {
+        // On half steps first: a switch keeps the space, and the first edit puts it on the grid
+        const kept = outline(24, 120, 80);
+        const first = boxTool.handles(kept, 24).find((h) => h.key === "e")!.at;
+        const p = stretchBox(kept, 24, "e", first, env);
+        const top = Math.min(...boxCorners(p, 24).map((c) => c.y));
+        const e = boxTool.handles(p, 24).find((h) => h.key === "e")!.at;
+        const out = stretchBox(p, 24, "e", { x: e.x + 37, y: e.y }, env);
+        expect(Math.min(...boxCorners(out, 24).map((c) => c.y))).toBeCloseTo(
+            top,
+            9,
+        );
+    });
+
+    it("shows one spacing for an outline", () => {
+        const p = outline(24, 120, 80);
+        const shown = boxTool.params
+            .filter((q) => q.shown?.(p, 24) ?? true)
+            .map((q) => q.key);
+        expect(shown).toContain("across");
+        expect(shown).not.toContain("deep");
     });
 });
