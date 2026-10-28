@@ -1225,6 +1225,7 @@
             "flipDeep": "Voltear de adelante hacia atrás",
             "gap": {
                 "menu": "Sobrante",
+                "withSpacing": "{side} · {spacing}",
                 "side": {
                     "back": "Atrás",
                     "front": "Adelante",

@@ -1963,6 +1963,7 @@
                 },
                 "styleLabel": "That side",
                 "menu": "Leftover",
+                "withSpacing": "{side} · {spacing}",
                 "tipGap": "Click a marcher on the outline (not a corner) to move the gap there.",
                 "tipSpread": "Click a marcher on another side (not a corner) to spread that side instead."
             },

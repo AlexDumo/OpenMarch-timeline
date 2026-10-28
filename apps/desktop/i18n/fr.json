@@ -1225,6 +1225,7 @@
             "flipDeep": "Retourner d'avant en arrière",
             "gap": {
                 "menu": "Reste",
+                "withSpacing": "{side} · {spacing}",
                 "side": {
                     "back": "Arrière",
                     "front": "Avant",

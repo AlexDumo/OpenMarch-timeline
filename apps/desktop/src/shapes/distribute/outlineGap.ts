@@ -148,3 +148,24 @@ export function withOddGap(
     if (d.mode !== "outline") return params;
     return closed.withDistribution(params, n, { ...d, oddGap }, env);
 }
+
+/**
+ * The spacing on an odd-count outline's leftover side when it spreads its marchers evenly
+ * (#458, owner on #459): its marchers share that side's whole length, one gap fewer than the
+ * full sides, so they stand wider apart. Null when the outline has no leftover, leaves a gap
+ * (its marchers keep the full spacing), or the side has no spot between corners.
+ */
+export function leftoverSpacing(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+): number | null {
+    const o = outlineOnField(kind, params, n);
+    if (!o || o.d.oddGap.style !== "spread") return null;
+    const gap = gapOf(n, o.sides, o.d.oddGap);
+    if (!gap) return null;
+    const across = gap.side === "back" || gap.side === "front";
+    const len = across ? o.sides.a : o.sides.b;
+    if (len < 2) return null;
+    return (len * (across ? o.across : o.deep)) / (len - 1);
+}

@@ -1225,6 +1225,7 @@
             "flipDeep": "Espelhar de frente para trás",
             "gap": {
                 "menu": "Sobra",
+                "withSpacing": "{side} · {spacing}",
                 "side": {
                     "back": "Trás",
                     "front": "Frente",

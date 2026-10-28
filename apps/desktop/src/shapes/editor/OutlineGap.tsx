@@ -8,7 +8,12 @@ import {
     type OddGap,
 } from "../distribute/distribution";
 import { gapAsSeen } from "../distribute/outline";
-import { outlineGapOf, withOddGap } from "../distribute/outlineGap";
+import {
+    leftoverSpacing,
+    outlineGapOf,
+    withOddGap,
+} from "../distribute/outlineGap";
+import { formatSteps } from "./format";
 import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeEditTarget } from "./editTargets";
 import { useEditorMenu, useMenuFocus } from "./menuFocus";
@@ -73,7 +78,28 @@ export function OutlineGap({
         const changed = withOddGap(target.kind, now, target.spots, next, env);
         if (changed !== now) target.apply(changed);
     };
-    const title = `${tolgee.t("shapes.edit.gap.menu", "Leftover")}: ${sideLabel(seen.side)}`;
+    const side = `${tolgee.t("shapes.edit.gap.menu", "Leftover")}: ${sideLabel(seen.side)}`;
+    // The leftover side's own spacing, when it spreads wider than the full sides' (owner on
+    // #459): the chip shows the full sides', which can hide a clean 4 here
+    const spread = leftoverSpacing(kind, params, spots);
+    const stepPx = envFor()?.stepPx;
+    const fullSpacing =
+        gap.side === "back" || gap.side === "front"
+            ? kind.closed?.intervals?.(params).across
+            : kind.closed?.intervals?.(params).deep;
+    const differs =
+        spread !== null &&
+        stepPx !== undefined &&
+        fullSpacing !== undefined &&
+        Math.abs(spread - fullSpacing) > 1e-9;
+    const steps = differs ? spread / stepPx! : 0;
+    const onHalves = Math.abs(steps * 2 - Math.round(steps * 2)) < 1e-6;
+    const title = differs
+        ? tolgee.t("shapes.edit.gap.withSpacing", "{side} · {spacing}", {
+              side,
+              spacing: `${onHalves ? "" : "≈"}${formatSteps(steps)}`,
+          })
+        : side;
     return (
         <Popover.Root open={open} onOpenChange={setOpen}>
             <Tip label={`${title}, ${styleLabel(gap.style).toLowerCase()}`}>

@@ -1225,6 +1225,7 @@
             "flipDeep": "前後に反転",
             "gap": {
                 "menu": "余り",
+                "withSpacing": "{side} · {spacing}",
                 "side": {
                     "back": "後ろ",
                     "front": "前",

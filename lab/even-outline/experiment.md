@@ -31,8 +31,9 @@ and only the rest is worked out, once.**
   Both spacings are always shown, and you can set either one.
 - **Switching to Outline keeps the box you drew**, with the marchers shared out
   so the two spacings come as near each other as they can.
-- With an odd count, the **Leftover** menu still decides which side takes the
-  extra space.
+- With an odd count, the spacing numbers are the **full sides'**, and the
+  **Leftover** side adjusts. When it spreads its marchers evenly they stand a
+  little wider apart, and the Leftover menu shows how far: "Leftover: Back · 4".
 
 **What to try**
 

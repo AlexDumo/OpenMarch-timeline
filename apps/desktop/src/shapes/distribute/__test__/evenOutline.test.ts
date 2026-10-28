@@ -19,6 +19,7 @@ import {
 } from "../distribution";
 import { shapeSteps } from "../../command/shapeSteps";
 import { withMode } from "../modes";
+import { leftoverSpacing } from "../outlineGap";
 import { distribute } from "../distribute";
 import type { ToolEnv } from "../../tool/toolKind";
 import {
@@ -472,3 +473,111 @@ describe("an outline: what's touched is held, the rest worked out once (owner on
         expect(keys).toEqual(expect.arrayContaining(["across", "deep"]));
     });
 });
+
+describe("an odd outline: the full sides are the reference, the leftover side adjusts (owner on #459)", () => {
+    /** 15 round 6 × 4 (5 gaps across, 3 deep), the back leaving its spot out */
+    const fifteen = (
+        across: number,
+        side: "back" | "front" | "left" | "right" = "back",
+        style: "spread" | "gap" = "spread",
+    ): BoxParams => ({
+        center: { x: 0, y: 0 },
+        rotation: 0,
+        files: 6,
+        across,
+        deep: 30,
+        distribution: { mode: "outline", oddGap: { side, at: null, style } },
+    });
+    /** The spots along one side, in order */
+    const sideSpots = (q: BoxParams, n: number, side: string) => {
+        const { spots, bounds } = sideCounts(q, n);
+        const near = (u: number, v: number) => Math.abs(u - v) < 1e-6;
+        const on =
+            side === "back"
+                ? (s: XY) => near(s.y, bounds.t)
+                : side === "front"
+                  ? (s: XY) => near(s.y, bounds.b)
+                  : side === "left"
+                    ? (s: XY) => near(s.x, bounds.l)
+                    : (s: XY) => near(s.x, bounds.r);
+        const across = side === "back" || side === "front";
+        return spots
+            .filter(on)
+            .map((s) => (across ? s.x : s.y))
+            .sort((a, b) => a - b);
+    };
+    const gapsOf = (xs: number[]) => xs.slice(1).map((v, i) => v - xs[i]!);
+
+    it("the chip has the full sides' spacing (the front's ≈3.2), the back a clean 4 that the Leftover pill shows", () => {
+        const p = fifteen(32);
+        const across = chipLayout(boxTool, p, 15, env).intervals.find(
+            (x) => x.param.key === "across",
+        )!;
+        expect(across.display).toBe("3.2");
+        expect(across.derived).toBe(true);
+        for (const g of gapsOf(sideSpots(p, 15, "front")))
+            expect(g).toBeCloseTo(32, 9);
+        for (const g of gapsOf(sideSpots(p, 15, "back")))
+            expect(g).toBeCloseTo(40, 9);
+        expect(leftoverSpacing(boxTool, p, 15)).toBeCloseTo(40, 9);
+    });
+
+    it("an across edit holds the full sides' spacing on its half step, the back following (≈3¾), and again changes nothing", () => {
+        const p = fifteen(32);
+        const q = withSpacing(p, "across", 3, 15, env);
+        expect(q.across).toBe(30);
+        for (const g of gapsOf(sideSpots(q, 15, "front")))
+            expect(g).toBeCloseTo(30, 9);
+        const left = leftoverSpacing(boxTool, q, 15)!;
+        expect(left).toBeCloseTo(
+            (30 * onFieldGaps(q)) / (onFieldGaps(q) - 1),
+            9,
+        );
+        expect(left).toBeGreaterThanOrEqual(half - 1e-9);
+        expect(withSpacing(q, "across", 3, 15, env)).toEqual(q);
+    });
+
+    it("leaving a gap, the back's marchers keep the full spacing and one spot is empty", () => {
+        const p = fifteen(30, "back", "gap");
+        expect(leftoverSpacing(boxTool, p, 15)).toBeNull();
+        const back = sideSpots(p, 15, "back");
+        expect(back).toHaveLength(5);
+        const gaps = gapsOf(back);
+        // Every gap the full spacing, but for the one spot left out (twice as wide)
+        expect(gaps.filter((g) => Math.abs(g - 30) < 1e-6)).toHaveLength(3);
+        expect(gaps.filter((g) => Math.abs(g - 60) < 1e-6)).toHaveLength(1);
+    });
+
+    for (const side of ["back", "front", "left", "right"] as const)
+        it(`spreading on the ${side}, that side's marchers share its length and the rest keep the full spacing`, () => {
+            const p = fifteen(30, side);
+            const across = side === "back" || side === "front";
+            const len = across ? 5 : 3;
+            const full = across ? 30 : 30;
+            const spread = leftoverSpacing(boxTool, p, 15)!;
+            expect(spread).toBeCloseTo((len * full) / (len - 1), 9);
+            for (const g of gapsOf(sideSpots(p, 15, side)))
+                expect(g).toBeCloseTo(spread, 9);
+            const opposite =
+                side === "back"
+                    ? "front"
+                    : side === "front"
+                      ? "back"
+                      : side === "left"
+                        ? "right"
+                        : "left";
+            for (const g of gapsOf(sideSpots(p, 15, opposite)))
+                expect(g).toBeCloseTo(full, 9);
+        });
+
+    it("an even count (22) has no leftover side", () => {
+        const p = outline(22, 160, 100);
+        expect(leftoverSpacing(boxTool, p, 22)).toBeNull();
+        expect(sideCounts(p, 22).back).toBe(sideCounts(p, 22).front);
+    });
+});
+
+/** Gaps along the back and front of a 15-spot outline (a) */
+function onFieldGaps(q: BoxParams): number {
+    return onField(q, 15).across - 1;
+}

@@ -129,4 +129,43 @@ describe("the outline gap", () => {
             outlineGapOf(boxTool, apply.mock.calls[0]![0], 13)!.stored.side,
         ).toBe("right");
     });
+
+    describe("the leftover side's spacing on the button (owner on #459)", () => {
+        /** 15 round 6 × 4: the front's 5 gaps `across` apart, the back's 4 sharing its width */
+        const fifteen = (
+            across: number,
+            style: "spread" | "gap" = "spread",
+        ): BoxParams => ({
+            center: { x: 0, y: 0 },
+            rotation: 0,
+            files: 6,
+            across,
+            deep: 30,
+            distribution: {
+                mode: "outline",
+                oddGap: { side: "back", at: null, style },
+            },
+        });
+
+        it("shows a clean 4 on the back while the chip has the front's 3.2", () => {
+            shown(fifteen(32), 15);
+            expect(screen.getByTestId("outline-gap-menu")).toHaveTextContent(
+                "Leftover: Back · 4",
+            );
+        });
+
+        it("marks one off the half steps as about so much", () => {
+            shown(fifteen(30), 15);
+            expect(screen.getByTestId("outline-gap-menu")).toHaveTextContent(
+                "Leftover: Back · ≈3¾",
+            );
+        });
+
+        it("shows nothing more when the side leaves a gap: its marchers keep the full spacing", () => {
+            shown(fifteen(30, "gap"), 15);
+            expect(
+                screen.getByTestId("outline-gap-menu").textContent?.trim(),
+            ).toBe("Leftover: Back");
+        });
+    });
 });

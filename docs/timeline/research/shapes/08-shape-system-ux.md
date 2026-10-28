@@ -340,6 +340,12 @@ Guardrails for shapes with unassigned spots later (#358):
   - **Switching to Outline keeps the frame** (owner on #458): the split whose two spacings come
     nearest each other, each its length over its gaps, so a mode switch keeps the box drawn as
     #449 asks.
+  - **An odd count: the full sides are the reference.** The across and deep spacings are always
+    the full sides', and the frame is full gaps times them. The leftover side adjusts: spreading
+    evenly, its marchers share its whole length one gap fewer (wider apart); leaving a gap, they
+    keep the full spacing. When the spread side's spacing differs from the full sides', the
+    Leftover menu says so, "Leftover: Back · 4" (or "· ≈3¾" off the half steps), since the
+    chip's number is the full sides' (owner on #459).
   - **A count changed** (− / +) keeps both spacings; the lengths follow.
   - Outlines stored before keep their numbers until edited (an `exact` that some builds of #459
     wrote is read past).
