@@ -855,9 +855,6 @@
                 "title": "Move"
             }
         },
-        "shapeTool": {
-            "apply": "Place"
-        },
         "title": "Inspector"
     },
     "launchpage": {
@@ -1931,7 +1928,6 @@
             "flipAcross": "Flip side to side",
             "flipDeep": "Flip front to back",
             "gap": {
-                "label": "Gap",
                 "menu": "Leftover",
                 "side": {
                     "back": "Back",

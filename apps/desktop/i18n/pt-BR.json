@@ -644,9 +644,6 @@
             "ungroupShapeTooltip": "Excluir esta forma desta página. Não moverá marchadores de sua posição atual",
             "viewTab": "Visualizar"
         },
-        "shapeTool": {
-            "apply": "Posicionar"
-        },
         "title": "Inspetor"
     },
     "launchpage": {
@@ -1227,7 +1224,6 @@
             "flipAcross": "Espelhar de lado a lado",
             "flipDeep": "Espelhar de frente para trás",
             "gap": {
-                "label": "Lacuna",
                 "menu": "Sobra",
                 "side": {
                     "back": "Trás",

@@ -144,7 +144,7 @@ export function beginShapeCommand(
         },
         // The last answer places the shape, through the host's place function (sims B354: a
         // "Done" that left it open read as a trap)
-        finishLabel: tolgee.t("inspector.shapeTool.apply", "Place"),
+        finishLabel: tolgee.t("shapes.edit.place", "Place"),
         fillAhead: (answers) => fillAhead(kind, answers),
         finish(answers) {
             unsubscribe();

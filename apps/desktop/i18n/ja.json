@@ -644,9 +644,6 @@
             "ungroupShapeTooltip": "このページのこのシェイプを削除します。 マーチャーの現在の位置は移動されません",
             "viewTab": "ビュー"
         },
-        "shapeTool": {
-            "apply": "配置"
-        },
         "title": "インスペクター"
     },
     "launchpage": {
@@ -1227,7 +1224,6 @@
             "flipAcross": "左右に反転",
             "flipDeep": "前後に反転",
             "gap": {
-                "label": "隙間",
                 "menu": "余り",
                 "side": {
                     "back": "後ろ",
