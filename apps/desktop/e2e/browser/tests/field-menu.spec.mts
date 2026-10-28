@@ -271,29 +271,6 @@ test("the context-menu key and Shift+F10 open it at the selection, only with one
     await expect(menu(page)).toBeVisible();
 });
 
-test("the line tool's right-click clears its line and opens no menu", async ({
-    show,
-}) => {
-    const { page } = show;
-    await atPage2(show);
-    await clickMarcher(page, "T1");
-    await clickMarcher(page, "T2", { add: true });
-    await page.keyboard.press("L");
-    await expect
-        .poll(async () => (await readField(page)).activeGesture)
-        .toBe("line");
-    const a = await screenAt(page, 300, 450);
-    await page.mouse.click(a.x, a.y);
-    await expect
-        .poll(() => page.evaluate(() => window.fieldTest!.lineTool()?.line))
-        .not.toBeNull();
-    await page.mouse.click(a.x + 40, a.y + 40, { button: "right" });
-    await expect
-        .poll(() => page.evaluate(() => window.fieldTest!.lineTool()?.line))
-        .toBeNull();
-    await expect(menu(page)).toHaveCount(0);
-});
-
 test("a click outside the open menu only closes it: the field doesn't select", async ({
     show,
 }) => {

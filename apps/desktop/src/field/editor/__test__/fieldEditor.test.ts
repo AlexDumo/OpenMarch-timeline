@@ -349,13 +349,22 @@ describe("FieldEditor right-click menu (#315)", () => {
         expect(ports.openMenu).not.toHaveBeenCalled();
     });
 
-    it("opens no menu while a mode (the open shape, a selected placed box) owns the field", () => {
+    it("opens no menu while the open shape is being edited", () => {
         const { editor, ports, state } = setup({ selected: [1] });
-        editor.setMode(fakeMode().mode);
+        editor.setMode({ ...fakeMode().mode, blocksFieldMenu: true });
         rightDown(editor, 300, 100);
         rightUp(editor, 300, 100);
         expect(ports.openMenu).not.toHaveBeenCalled();
         expect(state.selected).toEqual([1]);
+    });
+
+    it("opens the menu for a selected placed box's marchers, keeping the selection", () => {
+        const { editor, ports, state } = setup({ selected: [1, 2] });
+        editor.setMode(fakeMode().mode);
+        rightDown(editor, 200, 100);
+        rightUp(editor, 200, 100);
+        expect(ports.openMenu).toHaveBeenCalledTimes(1);
+        expect(state.selected).toEqual([1, 2]);
     });
 
     it("clears a paused preview first, then selects by where the marchers stand at the playhead (story 60)", () => {

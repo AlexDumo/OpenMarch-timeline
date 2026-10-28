@@ -137,7 +137,7 @@ export type FieldEditorPorts = {
     propDrawn?(outline: DrawnOutline): void;
     /**
      * A right-click (a right press released under the click slop, with no
-     * mode on) asks for the field's menu here (#315), after selecting the
+     * open shape) asks for the field's menu here (#315), after selecting the
      * marcher clicked if it wasn't selected.
      */
     openMenu?(at: FieldPointer): void;
@@ -322,6 +322,11 @@ export interface FieldMode {
     readonly ownsSelectionBox: boolean;
     /** Whether the inspector's typed rotation is refused while it's on. */
     readonly locksSelection: boolean;
+    /**
+     * Whether the field's menu (#315) stays shut while it's on: the open shape, being edited, is
+     * what the field is about. A selected placed box leaves it open, for its marchers.
+     */
+    readonly blocksFieldMenu?: boolean;
     /** What `activeGesture` reports while one of its presses is held, and while it's on when `always`. */
     readonly gesture: { kind: FieldTestGesture; always: boolean };
 }
@@ -511,14 +516,14 @@ export class FieldEditor {
             if (!right || right.dragged || isPastSlop(right.start, pointer))
                 return;
             // Mid-press or mid-drag of the left button, the right one does
-            // nothing more; nor while the prop tool draws or a mode (the open
-            // shape, a selected placed box) owns the field
+            // nothing more; nor while the prop tool draws, a mode's press is
+            // held or the open shape is being edited
             if (
                 !this.gesture &&
                 !this.press &&
                 !this.propTool &&
                 !this.modePress &&
-                !this.mode
+                !this.blocksFieldMenu()
             )
                 this.openMenu(pointer);
             return;
@@ -710,9 +715,9 @@ export class FieldEditor {
         return this.mode?.drawing() ?? null;
     }
 
-    /** Whether a mode (the open shape, a selected placed box) owns the field's presses. */
-    hasMode(): boolean {
-        return this.mode !== null;
+    /** Whether a mode (the open shape) keeps the field's menu shut (#315). */
+    blocksFieldMenu(): boolean {
+        return this.mode?.blocksFieldMenu ?? false;
     }
 
     /** Whether a mode with its own handles is on, so the selection box has none. */

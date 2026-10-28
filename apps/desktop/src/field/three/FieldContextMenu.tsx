@@ -195,8 +195,8 @@ export function useFieldMenu({
     useActionHandler(
         "openFieldMenu",
         () => {
-            // The open shape and a selected placed box own the field
-            if (editor.hasMode()) return;
+            // Not while the open shape is being edited (a selected placed box is its marchers)
+            if (editor.blocksFieldMenu()) return;
             const center = selectedCenter(marchers);
             const view = useFieldViewStore.getState();
             setAt(
