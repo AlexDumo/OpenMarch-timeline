@@ -1526,15 +1526,11 @@
         },
         "triangle": "Triángulo",
         "validate": {
-            "crossApart": "{count, plural, one {# par} other {# pares}} de recorridos se cruzan en momentos distintos: no hay colisión, un marchador ya pasó antes de que llegue el otro. Apunta aquí para verlos.",
-            "crossing": "{count, plural, one {# par} other {# pares}} de marchadores se atravesarían (en rojo). Apunta aquí para ver quiénes.",
             "noPosition": "La forma tiene un punto sin posición",
             "offField": "{count, plural, one {# marchador quedaría} other {# marchadores quedarían}} fuera del campo",
-            "passClose": "{count, plural, one {# par} other {# pares}} de marchadores pasan a menos de {min, plural, one {# paso} other {# pasos}} durante el movimiento (en rojo). Apunta aquí para ver quiénes.",
             "sameSpot": "{count, plural, one {# marchador quedaría} other {# marchadores quedarían}} en el mismo punto",
             "stepsTooLong": "{count, plural, one {# marchador necesita pasos más largos que el límite de {limit} ({longest}, en naranja).} other {# marchadores necesitan pasos más largos que el límite de {limit} (el más largo {longest}, en naranja).}} Ajusta el límite en Campo › Personalizar.",
-            "tooClose": "{count, plural, one {# marchador está} other {# marchadores están}} a menos de {min, plural, one {# paso} other {# pasos}}",
-            "walksClear": "Recorridos revisados tiempo a tiempo: ningún par de marchadores se acerca a menos de {min, plural, one {# paso} other {# pasos}} en el mismo momento."
+            "tooClose": "{count, plural, one {# marchador está} other {# marchadores están}} a menos de {min, plural, one {# paso} other {# pasos}}"
         },
         "x": "X"
     },

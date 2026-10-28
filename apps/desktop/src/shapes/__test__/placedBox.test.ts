@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { boxShape } from "../box/boxShape";
 import { boxTool } from "../box/boxTool";
-import { drawBox, filesOf, ranksOf } from "../box/boxGeometry";
+import { drawBox, filesOf, ranksOf, type BoxSize } from "../box/boxGeometry";
 import {
     boxesAt,
     membershipAfter,
@@ -210,4 +210,38 @@ describe("filling a hole", () => {
         const xs = out.members.map((m) => m.x);
         expect(Math.min(...xs)).toBe(0);
     });
+});
+
+describe("a box recipe edited by hand (B4)", () => {
+    it("counts its files as one when the stored count isn't a number", () => {
+        for (const files of [NaN, Infinity, "4", null])
+            expect(filesOf({ files } as unknown as BoxSize)).toBe(1);
+        expect(filesOf({ files: 3.4 } as BoxSize)).toBe(3);
+    });
+
+    it.each([
+        ["files", "four"],
+        ["files", Infinity],
+        ["across", "20"],
+        ["across", -10],
+        ["deep", null],
+    ])(
+        "isn't shown when its %s is %s, as a kind it can't draw isn't",
+        (key, value) => {
+            const r = recipe(4, { x: 40, y: 40 }, 10);
+            const broken = {
+                ...r,
+                params: { ...(r.params as object), [key]: value },
+            };
+            const show = (rec: PlacedRecipe) =>
+                boxesAt({
+                    recipes: [rec],
+                    endBeatOf: () => 8,
+                    beat: 8,
+                    positionOf: (id) => at(r).get(id),
+                });
+            expect(show(r)).toHaveLength(1);
+            expect(show(broken)).toEqual([]);
+        },
+    );
 });

@@ -56,7 +56,6 @@ const rowShape: ShapeKind<RowParams> = {
     version: 1,
     label: "Row",
     family: "path",
-    unlisted: true,
     groups: [],
     fit: () => ({ center: { x: 0, y: 0 }, gap: 10, rotation: 0 }),
     handles: () => [],

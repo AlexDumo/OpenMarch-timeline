@@ -2230,15 +2230,11 @@
         },
         "triangle": "Triangle",
         "validate": {
-            "crossApart": "{count, plural, one {# pair} other {# pairs}} of walks cross paths at different times: no collision, one marcher is past before the other arrives. Point here to see them.",
-            "crossing": "{count, plural, one {# pair} other {# pairs}} of marchers would walk through each other (drawn in red). Point here to see who.",
             "noPosition": "The shape has a spot with no position",
             "offField": "{count, plural, one {# marcher would stand} other {# marchers would stand}} off the field",
-            "passClose": "{count, plural, one {# pair} other {# pairs}} of marchers pass closer than {min, plural, one {# step} other {# steps}} mid-move (drawn in red). Point here to see who.",
             "sameSpot": "{count, plural, one {# marcher would stand} other {# marchers would stand}} on the same spot",
             "stepsTooLong": "{count, plural, one {# marcher needs steps longer than the {limit} limit ({longest}, drawn in orange).} other {# marchers need steps longer than the {limit} limit (longest {longest}, drawn in orange).}} Set the limit in Field › Customize.",
-            "tooClose": "{count, plural, one {# marcher is} other {# marchers are}} closer than {min, plural, one {# step} other {# steps}}",
-            "walksClear": "Walks checked count by count: no two marchers come within {min, plural, one {# step} other {# steps}} of each other at the same moment."
+            "tooClose": "{count, plural, one {# marcher is} other {# marchers are}} closer than {min, plural, one {# step} other {# steps}}"
         },
         "x": "X"
     },

@@ -429,11 +429,19 @@ function GuideLabel({
     );
 }
 
-/** The controls fade while the pointer is away from the shape (#403), and come back over it */
-const controlsStyle = (calm: boolean | undefined) => ({
-    opacity: calm ? CALM_CONTROLS_OPACITY : 1,
-    transition: "opacity 150ms ease-out",
-});
+/**
+ * The controls fade while the pointer is away from the shape (#403), and come back over it: at
+ * once for people who ask their system for less motion
+ */
+export const controlsStyle = (
+    calm: boolean | undefined,
+): { opacity: number; transition?: string } =>
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
+        ? { opacity: calm ? CALM_CONTROLS_OPACITY : 1 }
+        : {
+              opacity: calm ? CALM_CONTROLS_OPACITY : 1,
+              transition: "opacity 150ms ease-out",
+          };
 
 /**
  * The shape's outline, where its marchers start, their walks and its spots, in field units

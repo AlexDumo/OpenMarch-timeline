@@ -86,7 +86,6 @@ export const fillKind: ShapeKind<FillParams> = {
     },
     family: "fill",
     defaultOrder: "nearest",
-    unlisted: true,
     groups: [
         {
             get label() {

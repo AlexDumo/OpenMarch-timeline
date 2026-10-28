@@ -7,6 +7,7 @@ import { assignSlots, type AssignMarcher } from "../assign";
 import {
     drawBox,
     boxFrame,
+    boxNumbersReadable,
     snapToGrid,
     withBoxFrame,
     type BoxParams,
@@ -35,9 +36,6 @@ export type PlacedRecipe = Omit<StoredShapeRecipe, "members"> & {
 
 /** A recipe's params as stored: the shape, plus how many spots it has (members + holes) */
 export type StoredParams<P = unknown> = P & { readonly spots?: number };
-
-/** A box recipe's params as stored */
-export type StoredBoxParams = StoredParams<BoxParams>;
 
 /** A placed shape: its recipe, its tool kind and its params (`P` for a known kind) */
 export interface PlacedBox<P = unknown> {
@@ -87,6 +85,8 @@ function placedOf(
     const { spots, ...params } = stored;
     // A spread from a generator this app doesn't have can't be laid out again
     if (!canLayOut(params)) return null;
+    // Nor can a box whose numbers were edited into something else (B4)
+    if (kind === boxTool && !boxNumbersReadable(params)) return null;
     return {
         kind,
         params,

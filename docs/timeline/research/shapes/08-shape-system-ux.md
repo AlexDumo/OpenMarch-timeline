@@ -6,8 +6,10 @@ Status: owner decisions, 2026-10-15 and 2026-10-16, from two rounds of clickable
 a grilling on 2026-10-16 about bringing it into the app ([Decisions, 2026-10-16](#decisions-2026-10-16)),
 and a grilling on 2026-10-20 about the shape **host** ([Decisions, 2026-10-20](#decisions-2026-10-20)),
 published as fork issue #344 with tickets #345 to #354. Where #344 and this spec disagree, #344
-wins; this spec was brought in line with it on 2026-10-20 (#345). This spec covers how every
-shape is reached, drawn, edited, transformed and shown. Each kind's own
+wins; this spec was brought in line with it on 2026-10-20 (#345), and brought up to date with
+everything merged into `shapes/host` through #455 on 2026-10-27
+([Decisions, 2026-10-24 to 2026-10-27](#decisions-2026-10-24-to-2026-10-27)). This spec covers
+how every shape is reached, drawn, edited, transformed and shown. Each kind's own
 geometry and parameters are specified separately, shape by shape, like
 [06-box-v1.md](06-box-v1.md).
 
@@ -39,8 +41,8 @@ Both are single HTML files on the fork branch `proto/shape-ui-ideas`, in
   only what its own parameters are and how its spots sit inside the frame
   ([The kind contract](#the-kind-contract)).
 - **The host and kinds.** One shape host owns the session (drawing, gestures, history, who goes
-  where, placing), every way in, the floating chip, the inspector's Transform section and the
-  field styling. A kind owns only its parameters and its geometry.
+  where, placing), every way in, the floating editor and the field styling. A kind owns only its
+  parameters and its geometry.
 - The frame is the record: every kind's recipe stores the center, size, rotation, flip and pivot.
   Scaling isn't stored as a factor; it becomes the new size and intervals. A shape's numbers are
   stored at the keyframe where it is placed.
@@ -154,12 +156,12 @@ editing a shape. Owner choice, 2026-10-15.
 - It sits under the shape's outline, centered, and moves with the shape. It flips above the
   shape when there's no room below.
 - **Kept in view (#441, owner 2026-10-27, picked in a lab A/B over holding the editor still):**
-  after a discrete edit (a turn, a flip, − / +, a typed or dragged number, the mode or layout,
-  Recalculate, Reshuffle) or the end of a drag on the field, the field glides just far enough to
-  bring the shape's outline and the editor back inside it with 24 px to spare; nothing moves if
-  they're in view. When they no longer fit, it zooms out just enough in the same glide, never in,
-  down to the field's least zoom. Never during a drag; panning or zooming stops the glide;
-  reduced motion jumps.
+  after a discrete edit (a turn, a flip, − / +, a typed or dragged number, the mode, layout or
+  leftover, Recalculate, Reshuffle, Close up) or the end of a drag on the field, the field glides
+  just far enough to bring the shape's outline and the editor back inside it with 24 px to spare;
+  nothing moves if they're in view. When they no longer fit, it zooms out just enough in the same
+  glide, never in, down to the field's least zoom. Never during a drag; panning or zooming stops
+  the glide; reduced motion jumps.
 - **Changed 2026-10-26 (#429, #435):** one row with no ⋯, and a second row under it for how
   the shape is filled. For a box:
   `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ↻ 0° ⌖▾ ⇋ ⇵ Recalculate │ ⌇ ☆ │ Place`, and under it
@@ -167,21 +169,40 @@ editing a shape. Owner choice, 2026-10-15.
   menu like the layout menu, its button naming the mode; each row has one hand-drawn example of
   that mode, the same for every kind, beside the mode's name), then a divider and what that
   mode has: the box's **layout menu** in Grid, the **leftover menu** ("Leftover: Back",
-  the odd spot's side and gap or spread) in Outline, **Reshuffle** in Spread. A kind with none of
+  the odd spot's side and gap or spread) in Outline, **Reshuffle** and **Edge** in Spread
+  ([How the shape is filled](#how-the-shape-is-filled)). Reshuffle's caret opens the spread's
+  **seed**, to type one or copy it, for people who want a spread back exactly. A kind with none of
   these has no second row. **⌖▾** is the pivot: its icon is the 3 × 3 grid with the pivot lit
   (none for a pivot dragged on the field), and it opens the grid. Everything the inspector did
   for a shape is here, so the inspector shows nothing of an open or selected shape.
-- Before 2026-10-26, for a box: `6 × 2 │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`.
-- For a path kind (line, arc and others): `Line │ 2 steps apart │ ⋯ │ Place`.
+- In that row (#429): **↻** beside the degrees adds 90° to them; the degrees can still be dragged
+  or typed. The flips are icon buttons. **Close up** shows only when a placed shape has empty spots
+  (#392). Pathways and ☆ Save don't change the shape, so they come last, before Place. The spacing
+  lock is always the chain icon. Every control is at least 24 px, and every tooltip is the app's
+  own, with its key.
+- **Recalculate** shows only its greyed icon while it would change nothing, and its tooltip says
+  why. When it can act, its word springs open and it's tinted with the accent for 1.2 s, so the
+  change is easy to spot (reduced motion: the word appears at once).
+- On toggles (Pathways, the spacing lock) are the accent color on a light accent tint (#426). The
+  editor, its menus and the drag readout by the pointer are solid, in both themes.
+- Before 2026-10-26, for a box: `6 × 2 │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`, and for a path kind (line,
+  arc and others): `Line │ 2 steps apart │ ⋯ │ Place`.
 - What appears is the kind's **primary** parameters, declared by the kind
   ([The kind contract](#the-kind-contract)); the chip knows nothing else about the kind. Sizes
   read as across × deep ("8 × 4"), never as files and ranks.
-- **⋯** opens a second row with the less common actions: rotate 90° each way, flip, who goes
-  where, and "More in inspector →" (once the inspector's Shape tab exists).
+- ~~**⋯** opens a second row with the less common actions: rotate 90° each way, flip, who goes
+  where, and "More in inspector →".~~ Changed 2026-10-26 (#429): there's no ⋯; everything is on
+  the one row above.
 - A press on the editor's buttons and numbers doesn't take the keyboard focus, so Enter still
   places and Esc still cancels after using them. Tab still reaches the numbers.
 - **Place** shows only while the shape is new. A placed shape that is selected saves each edit on
   release, so its editor has no Place.
+- **It fades when you're not using it** (#426, #430, #432). With the pointer away from both the
+  shape and the editor, the editor fades to 40% so the field under it shows. It waits 500 ms
+  before fading and turns solid at once when the pointer is back. It stays solid with the pointer
+  over the shape or the editor, with keyboard focus in it, or with one of its menus open, and it
+  stays faded during a drag on the field. The same goes for a selected placed shape's editor. Touch
+  screens and reduced transparency keep it solid; reduced motion drops the fade but keeps the wait.
 - After a sketch, a row of guesses sits above the numbers.
 
 ### Numbers you can type or drag
@@ -189,6 +210,13 @@ editing a shape. Owner choice, 2026-10-15.
 Every number in the editor works the same way. Owner choice, 2026-10-16.
 
 - **Click** a number to type over it. Enter applies it, Esc cancels, and clicking away applies it.
+- **Exact intervals (#424).** A spacing can be typed as `2`, `2.5`, `2½`, `1⅔`, `1 2/3`, `1-2/3`
+  or `5/3`, with or without "steps". It's kept exact (1⅔ is 5/3 of a step, read in the field's
+  step grid; owner, 2026-10-25), and the same parser reads interval lists such as `2⅔x3,2` and
+  the command bar. Halves, thirds and quarters show as fractions (2½, 1⅔, 2¾); anything else shows
+  to 2 decimals. Saved shapes and the command bar bring an interval back exactly. A box with a
+  spacing off the half steps doesn't creep when its count or a side changes: the marcher held in
+  place stays put.
 - **Drag** a number to change it. Each number has a drag direction:
 
   | Number                    | Drag                                                                                                        | Step            |
@@ -199,9 +227,15 @@ Every number in the editor works the same way. Owner choice, 2026-10-16.
   | A box's size (6 × 2)      | Sideways for more or fewer across, up or down for more or fewer deep. It locks to the first direction moved | 1 per 16 px     |
   | Rotation (in the editor)  | Right turns clockwise                                                                                       | 1° per 2 px     |
 
+- **Dragging a spacing catches the field's lines (#452, #453).** As the box grows from its pivot,
+  when one of its corners or its center comes near a yard line, hash or sideline, the spacing
+  settles where that point is exactly on the line, with the guide
+  ([Snapping and guides](#snapping-and-guides)). It works at any turn, for a box in every mode; not
+  for a circle. Typing and the − / + buttons never do this: typed stays exact, − / + stay on half
+  steps. The spacing never goes under half a step.
 - **Alt** while dragging a spacing gives hundredths of a step (#411), and a corner or the center
-  still lands on a yard line, hash or sideline it comes near (#452, owner on #453). **Cmd** (Mac) or
-  **Ctrl** snaps nothing. A dragged rotation snaps to 15° (#403), whole degrees with **Shift**, free
+  still lands on a line it comes near (owner on #453). **Cmd** (Mac) or **Ctrl** snaps nothing. A
+  dragged rotation snaps to 15° (#403), whole degrees with **Shift**, free
   with **Alt**.
 - A number lights up while it's being dragged, and its cursor shows its drag direction.
 - A drag that ends where it started changes nothing; it doesn't round the value.
@@ -217,6 +251,40 @@ Every number in the editor works the same way. Owner choice, 2026-10-16.
   dragging, typing or a handle.
 - Both spacings stay on half steps, so the ratio is as near as half steps allow (4.5 makes 5, not
   5.14). Owner, 2026-10-16. Alt still gives exact values.
+- A typed value, or one that landed on a field line, drives the other spacing at the exact ratio;
+  at ratio 1 it's copied (#424, #427).
+
+### How the shape is filled
+
+A box (and a circle) is filled one of three ways, picked in the mode menu on the editor's second
+row: **Grid** (rows and files), **Outline** (round the edge, the middle empty) and **Spread**
+(evenly over the whole shape, with no rows).
+
+- **Every mode switch keeps the shape drawn (#449, #451).** The center and turn stay exactly, and
+  each side stays within half a step. Into Grid, the box keeps its file count when that fits,
+  otherwise it takes the nearest count with near-square cells. Into Outline, the sides follow the
+  frame's proportions when they fit. A circle keeps its radius.
+- **Each mode remembers its numbers (#451).** Going back to a mode you left gives back exactly
+  what it had (Grid's count and spacings, Outline's sides and gap, Spread's seed), so switching
+  back and forth never walks the box. Reshaping it in between (a handle, a typed size, − / +, a
+  spacing) makes the box as it is the new starting point.
+- Exceptions: an outline too small to go round with spots at least half a step apart grows to fit;
+  under 4 marchers an outline is a line; a box with no area (one rank or file) keeps its spacings.
+- **Outline across and deep (#458/#459):** _placeholder: filled in by the #459 session._
+- **Spread fills the frame you drew (#439, #440).** The frame (center, size, turn) is what the
+  designer set. Reshuffle and a typed seed change only which even layout is used, never the frame.
+  A handle moves its own side to the pointer and holds the opposite side. The spacing is whatever
+  fits the marchers in the frame, never under half a step: a handle stops there, and a switch into
+  Spread whose frame is too small for the count grows the frame from its center just enough (the
+  one time the frame grows). Typing a spacing scales the frame about the pivot. Spreads placed
+  before this keep their layout when a file is reopened.
+- **Edge (#450, #454; owner's pick C).** A toggle in Spread, beside Reshuffle. Some marchers stand
+  along the outline, about 1½ spacings apart and never closer than one, with a spot on every corner
+  of a box; the rest spread over the whole frame around them, right up to the edge, so the two read
+  as one spread. Reshuffle moves only the inside. Turning it on or off keeps the frame. With too few
+  marchers for an inside, everyone stands on the edge, and the tooltip says so; otherwise it says
+  how many stand on the edge and how many inside. Boxes and circles only; it's hidden for other
+  shapes.
 
 ## The kind contract
 
@@ -300,9 +368,33 @@ the **start flag**, not where they stood on this page, so the shape shows the mo
   turn puts the box back on the half-step grid, which can shift it by up to a quarter step.
 - A box turned off the field's axes can't stand on the grid: moving it moves it in whole half
   steps instead.
-- Snapping: positions and spacings snap to half steps, and a corner, side or center near a yard
-  line, hash or sideline lands on it (#425, #444, #446, #452). Two modifiers, wherever these guides
-  apply (drawing, stretching, moving, dragging a spacing; owner on #453):
+
+### Snapping and guides
+
+- Positions and spacings snap to half steps, and a corner, side or center near a yard line, hash
+  or sideline lands on it (#425, #444, #446, #452). The lines are the field's reference
+  checkpoints, seen or not (the front sideline and grid hashes pull too), plus half lines when the
+  field has them. This works on custom fields too.
+- **Drawing and stretching (#425, #427, #446, #448):** a moving corner that comes near a line lands
+  on it, and the spacing becomes whatever that takes, kept exact (7 files from the 40 to the 50 is
+  2⅔). The fixed side never moves. Away from lines the half-step ladder still decides.
+- **Moving (#444, #445, #446, #448):** on each field axis, the nearest of the box's corners and its
+  center pulls onto a line (centering a block on the 50 or a hash is common). On a tie a corner
+  wins.
+- **Turned boxes** work the same at any angle (#446): one rule for corners and the center, not
+  only for boxes square to the field. A corner near both a yard line and a hash lands on the
+  crossing.
+- **Dragging a spacing (#452, #453):** see [Numbers you can type or drag](#numbers-you-can-type-or-drag).
+- **Gentle:** the pull reaches only 6 px on screen, less when a half step is small on screen, so
+  every half step stays reachable. The circle declares no snap points, so it moves on the half
+  steps alone.
+- **The guide** shows while a point is on a line, and clears on release. It's an orange line across
+  the whole field, with its name at the field's edge as the coordinate sheet names it ("On 50",
+  "S1: On 40", "On FH"). A side lying along the line is drawn thick; a corner or center on a line
+  with no side along it gets an orange ring. The spots on the line are tinted orange. At a crossing
+  both guides show. Orange was the owner's pick from the lab.
+- Two modifiers, wherever these guides apply (drawing, stretching, moving, dragging a spacing;
+  owner on #453):
   - **Alt: fine control.** No half-step ladder (hundredths, free positions), and the field's lines
     still catch, with the same pull radius on screen. So a turned box's corner slides smoothly
     onto a line instead of zigzagging between half steps.
@@ -323,8 +415,9 @@ the **start flag**, not where they stood on this page, so the shape shows the mo
   the right. Without this, turning a symmetric box would visibly do nothing.
 - ~~**Drill order** is the other choice, in the inspector and the editor's ⋯ row.~~ **Changed
   2026-10-26 (#429):** drill order is gone; least travel is the only rule. **Recalculate** in the
-  floating editor (Shift+R) works it out again on demand, from where the marchers start, and is
-  lit only when it would change something. Turns, flips and uneven stretches can change it;
+  floating editor (Shift+R) works it out again on demand, from where the marchers start (the start
+  flag), as one undo step, and is lit only when it would change something. A placed shape measures
+  from the start flag too, so at home it stays greyed. Turns, flips and uneven stretches can change it;
   slides and even growth don't (the squared rule), and the owner kept that.
 - The rule lives behind one replaceable function (`shapes/leastTravel.ts`, `LeastTravelSolver`),
   so it can change later without touching kinds or the tool.
@@ -344,7 +437,7 @@ is back, by interval.
 **Changed 2026-10-16:** the inspector gets two tabs, **Inspector** (what it shows today) and
 **Shape**. The Shape tab switches on by itself when a shape opens or a placed shape is
 selected, and back when it closes. The shape list isn't a tab: it's the **Shapes** window
-([above](#3-the-library-the-inspectors-library-tab)). The Shape tab is for exact work; most
+([above](#3-the-library-left-sidebar)). The Shape tab is for exact work; most
 people won't need it. Owner choice, 2026-10-15: handles for most people, the panel for those who
 want it.
 
@@ -387,7 +480,16 @@ dots and labels, and their previous dots and paths. The stored settings don't ch
 dismissing the shape brings everything back. A shape waiting away from its moment, during
 playback or in Visuals shows none of this.
 
-The table below is the earlier per-stage plan; where it differs, the principle above wins.
+### Calm when the pointer is away (#403, #413, #430, #431)
+
+The open shape, and a selected placed shape too since #430, is calm while the pointer is away from
+it and its editor: its handles, knob and center dot drop to 25% and its fill goes. Over the shape
+or a handle, during a handle drag, or with keyboard focus in its editor, everything is back at full
+strength. Their floating editors fade the same way ([Layout](#layout)).
+
+### Earlier plan
+
+The table below is the earlier per-stage plan; where it differs, the principles above win.
 
 The marchers and marks at each stage. Owner choice for focus, 2026-10-15: fade everyone who isn't
 selected.
@@ -425,18 +527,29 @@ Every kind must work, and be checked, from 1 marcher to a full band.
   is 5 × 5 and 64 is 8 × 8.
 - **Hundreds**: Least travel is cubic in the number of marchers. Above `NEAREST_LIMIT` (500) it
   falls back to keeping order. In the prototype, 109 marchers update in under 10 ms.
+- **Speed in the app (#455, 2026-10-27).** Panning with a shape open no longer redraws the editor
+  or the shape, drags and spacing drags take about half the time they did, and Recalculate's check
+  doesn't solve twice. A show with no shapes does no shape work while scrubbing the timeline. Still
+  open: panning with a shape open is about 1.2× panning without one, a − / + click is about 100 ms
+  under 4× CPU throttle (target 50 ms), and a coordinate write makes 38 calls to main's 36.
+  Measured at 48 marchers with 4× CPU throttle.
 
 ## Keys
 
-| Key                       | Does                                                   | Status                                                 |
-| ------------------------- | ------------------------------------------------------ | ------------------------------------------------------ |
-| **B**                     | Box                                                    | Existing                                               |
-| **Enter** / **Esc**       | Place / discard (innermost first; Esc is undoable)     | Existing; Esc becomes an undo step (#347)              |
-| `[` / `]`                 | ~~One fewer / one more across~~                        | Dropped: they hold for playback speed (#216)           |
-| **/** and **⌘K**          | The command bar                                        | ⌘K existing; / proposed (#353)                         |
-| Hold or tap **R**         | Favorites ring                                         | Proposed (#351); F is taken (#340)                     |
-| Nudge keys (WASD, arrows) | Move the whole open or selected shape                  | 07                                                     |
-| Kind letters              | Pick a kind, only inside the ring or the Shapes ribbon | Needs shortcut contexts; deferred (README decision 10) |
+| Key                         | Does                                                   | Status                                                 |
+| --------------------------- | ------------------------------------------------------ | ------------------------------------------------------ |
+| **B**                       | Box                                                    | Existing                                               |
+| **Enter** / **Esc**         | Place / discard (innermost first; Esc is undoable)     | Existing; Esc becomes an undo step (#347)              |
+| `[` / `]`                   | ~~One fewer / one more across~~                        | Dropped: they hold for playback speed (#216)           |
+| **/** and **⌘K**            | The command bar                                        | Built (#354)                                           |
+| Hold or tap **R**           | Favorites ring                                         | Built (#351); F is taken (#340)                        |
+| Nudge keys (WASD, arrows)   | Move the whole open or selected shape                  | 07                                                     |
+| **Alt+R**                   | Turn the open or selected shape 90°                    | Built (#429)                                           |
+| **Alt+F** / **Alt+Shift+F** | Flip the shape side to side / front to back            | Built (#429); flip the marchers with no shape          |
+| **Shift+R**                 | Recalculate who goes where                             | Built (#429); in the palette while a shape is up       |
+| **Alt** + drag              | Fine control: no half steps, still catching the lines  | Built (#453)                                           |
+| **Cmd/Ctrl** + drag         | No snapping at all                                     | Built (#453)                                           |
+| Kind letters                | Pick a kind, only inside the ring or the Shapes ribbon | Needs shortcut contexts; deferred (README decision 10) |
 
 All of these go through the shortcut system and are rebindable.
 
@@ -549,6 +662,26 @@ match. In short:
   see.
 - Same in Basic and Expert.
 - Shapes with unassigned spots come later (#358); the host keeps the guardrails for them now.
+
+## Decisions, 2026-10-24 to 2026-10-27
+
+From owner feedback and lab tests on the shape host. The sections above were updated to match:
+
+- Intervals off the half steps are typed and kept exactly; 1⅔ is 5/3 of a step in the field's
+  step grid (#423, #424).
+- Corners, sides and the center land on the field's lines while drawing, stretching, moving and
+  dragging a spacing, at any turn, with an orange guide named as on the coordinate sheet (#425 to
+  #452). Alt is fine control that still catches the lines; Cmd/Ctrl snaps nothing (#453).
+- The floating editor is one row with no ⋯, plus a second row for how the shape is filled; drill
+  order is gone and Recalculate replaces it (#429). Everything the inspector did for a shape is in
+  the editor (#435).
+- The editor fades 500 ms after the pointer leaves, and placed shapes are calm like open ones (#426,
+  #430, #432).
+- After an edit, the field keeps the shape and its editor in view, chosen in a lab A/B over holding
+  the editor still (#441).
+- Spread fills the frame drawn; every mode switch keeps the frame and each mode remembers its
+  numbers; Spread can have an edge (#439, #449, #450).
+- Performance fixes from the audit, with no behavior change (#455).
 
 ## Open questions for the owner
 
