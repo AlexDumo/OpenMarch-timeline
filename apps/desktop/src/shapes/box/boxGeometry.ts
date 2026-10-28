@@ -175,18 +175,6 @@ export const shortBy = (p: BoxParams, n: number): number =>
         ? 0
         : acrossOf(p, n) * ranksOf(p, n) - Math.max(1, n);
 
-/** The same layout: family, line width and turn */
-export function sameLayout(a: BoxParams, b: BoxParams): boolean {
-    const x = boxDistribution(a);
-    const y = boxDistribution(b);
-    if (x.mode !== "files" || y.mode !== "files") return x.mode === y.mode;
-    return (
-        x.layout.family === y.layout.family &&
-        x.layout.files === y.layout.files &&
-        x.layout.byFile === y.layout.byFile
-    );
-}
-
 /**
  * The file counts an outline of `n` can have, from its sides' range; just `n` (a line) under 4
  */
@@ -765,20 +753,6 @@ export function handleDirection(
     };
 }
 
-export function handlePoint(f: Footprint, key: BoxHandleKey): XY {
-    const x = key.includes("w")
-        ? f.left
-        : key.includes("e")
-          ? f.right
-          : (f.left + f.right) / 2;
-    const y = key.includes("n")
-        ? f.top
-        : key.includes("s")
-          ? f.bottom
-          : (f.top + f.bottom) / 2;
-    return { x, y };
-}
-
 /**
  * The box with handle `key` dragged to `to`: the opposite corner or side stays put and the
  * intervals stretch, in half steps. Files and ranks never change here.
@@ -1213,19 +1187,6 @@ export function boxCorners(p: BoxParams, n: number): XY[] {
         frameToField(frame, { x: w, y: d }),
         frameToField(frame, { x: -w, y: d }),
     ];
-}
-
-/** The field-aligned rectangle around the box's edge marchers, however it's turned */
-export function boxBounds(p: BoxParams, n: number): Footprint {
-    const corners = boxCorners(p, n);
-    const xs = corners.map((c) => c.x);
-    const ys = corners.map((c) => c.y);
-    return {
-        left: Math.min(...xs),
-        right: Math.max(...xs),
-        top: Math.min(...ys),
-        bottom: Math.max(...ys),
-    };
 }
 
 /**

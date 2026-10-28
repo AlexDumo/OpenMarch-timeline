@@ -36,9 +36,6 @@ export type PlacedRecipe = Omit<StoredShapeRecipe, "members"> & {
 /** A recipe's params as stored: the shape, plus how many spots it has (members + holes) */
 export type StoredParams<P = unknown> = P & { readonly spots?: number };
 
-/** A box recipe's params as stored */
-export type StoredBoxParams = StoredParams<BoxParams>;
-
 /** A placed shape: its recipe, its tool kind and its params (`P` for a known kind) */
 export interface PlacedBox<P = unknown> {
     readonly recipe: PlacedRecipe;

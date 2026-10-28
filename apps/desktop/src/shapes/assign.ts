@@ -121,9 +121,6 @@ const RING_TOLERANCE = 0.15;
  * the new shape, which scrambles a circle opened into an arc (sims, round 9: "151 crossings";
  * a drill writer expects the circle to peel open in order).
  */
-/** Whether the marchers start on a ring (see `ringOrder`) */
-export const startOnRing = (marchers: readonly AssignMarcher[]): boolean =>
-    ringOrder(marchers) !== null;
 
 function ringOrder(marchers: readonly AssignMarcher[]): number[] | null {
     if (marchers.length < 5) return null;
