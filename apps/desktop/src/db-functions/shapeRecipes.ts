@@ -145,6 +145,21 @@ export async function saveShapeRecipeInTransaction({
     return id;
 }
 
+/**
+ * Whether move `timelineId` holds any of `marcherIds`, so a recipe saved in it keeps someone (the
+ * homes hold everyone). A move a shape is only carried onto, its members standing still from an
+ * earlier move, holds none of them (#485).
+ */
+export async function moveHoldsAnyOf(
+    tx: DbTransaction,
+    timelineId: number | null,
+    marcherIds: readonly number[],
+): Promise<boolean> {
+    if (timelineId === null) return true;
+    const own = await moveMembers(tx, timelineId);
+    return marcherIds.some((id) => own.has(id));
+}
+
 /** The marchers with positions in move `timelineId` */
 async function moveMembers(
     tx: DbTransaction,

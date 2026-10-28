@@ -917,6 +917,55 @@ test("change: the floating editor fades with the pointer away, and is solid over
     await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
 });
 
+test("change: turned 90°, 180° or 270°, the knob is never under the floating editor, and a press on it still turns the box (#485)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const editor = page.getByTestId("shape-tool-readout");
+    for (const degrees of [90, 180, 270]) {
+        await editor.getByTestId("shape-editor-rotation").click();
+        await page
+            .getByTestId("shape-editor-rotation-input")
+            .fill(`${degrees}`);
+        await page.getByTestId("shape-editor-rotation-input").press("Enter");
+        await expect(editor.getByTestId("shape-editor-rotation")).toHaveText(
+            `${degrees}°`,
+        );
+        // The editor springs to its place
+        await page.mouse.move(5, 300);
+        let knob = (await shapeOverlay(page))!.knob!;
+        await expect
+            .poll(async () => {
+                knob = (await shapeOverlay(page))!.knob!;
+                const r = (await editor.boundingBox())!;
+                const pad = 6;
+                return (
+                    knob.x < r.x - pad ||
+                    knob.x > r.x + r.width + pad ||
+                    knob.y < r.y - pad ||
+                    knob.y > r.y + r.height + pad
+                );
+            }, `the knob is clear of the editor at ${degrees}°`)
+            .toBe(true);
+        // What's under the knob is the field, not the editor
+        const hit = await page.evaluate(
+            ({ x, y }) =>
+                document.elementFromPoint(x, y)?.closest("[data-shape-editor]")
+                    ? "editor"
+                    : "field",
+            knob,
+        );
+        expect(hit).toBe("field");
+    }
+    // At 270° a drag on the knob turns it on round
+    const center = (await shapeOverlay(page))!.centerDot!;
+    const knob = (await shapeOverlay(page))!.knob!;
+    const v = { x: knob.x - center.x, y: knob.y - center.y };
+    await drag(page, knob, { x: center.x - v.y, y: center.y + v.x });
+    await expect(editor.getByTestId("shape-editor-rotation")).toHaveText("0°");
+});
+
 test("change: the knob turns in 15° steps, as the field's rotate handle does, and freely with Alt", async ({
     show,
 }) => {
@@ -4116,6 +4165,209 @@ test("change: Cmd/Ctrl-drag from the center dot pulls the pivot out onto a march
             .getByTestId("placed-box-readout")
             .getByTestId("shape-editor-pivot"),
     ).toHaveAttribute("data-pivot", "c");
+});
+
+/** The selected placed shape's pivot, from the editor's pivot menu (#485) */
+async function pickPlacedPivot(page: Page, cell: string) {
+    const editor = page.getByTestId("placed-box-readout");
+    await editor.getByTestId("shape-editor-pivot").click();
+    const grid = page.getByTestId("shape-editor-pivot-grid");
+    await grid.getByTestId(`shape-editor-pivot-grid-${cell}`).click();
+    await expect(grid).toBeHidden();
+}
+
+/** Each recipe's move and pivot, oldest first */
+const storedPivots = async (show: Show) =>
+    (
+        await show.query<{ timeline_id: number | null; params: string }>(
+            "SELECT timeline_id, params FROM timeline_shape_recipes ORDER BY id",
+        )
+    ).map((r) => ({
+        move: r.timeline_id,
+        pivot: JSON.parse(r.params).pivot ?? null,
+    }));
+
+// The pivot on a later page (#485): a box placed on Page 1 shows on Page 2
+// while its members stand still there. Where Page 2 sets their positions, an
+// edit there gives the box its own copy on Page 2; where Page 2 only carries
+// them over, a pivot change goes to the box shown, Page 1's.
+
+test("change: the pivot of a box placed on a page and again on the next one changes on the next page only (#485)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectPage(show, "Page 1");
+    await placeBox(show, 1);
+    const t1 = await marcherScreen(page, 1);
+    await page.mouse.click(t1.x, t1.y);
+    await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+    await pickPlacedPivot(page, "nw");
+    await expect
+        .poll(async () => (await storedPivots(show)).map((r) => r.pivot))
+        .toEqual(["nw"]);
+    await waitForIdle(page);
+    await page.keyboard.press("Escape");
+
+    // The same box placed on Page 2 too
+    await selectPage(show, "Page 2");
+    await placeBox(show, 2);
+    await expect.poll(async () => (await storedPivots(show)).length).toBe(2);
+
+    const member = await marcherScreen(page, 1);
+    await page.mouse.click(member.x, member.y);
+    const pivotButton = page
+        .getByTestId("placed-box-readout")
+        .getByTestId("shape-editor-pivot");
+    await expect(pivotButton).toBeVisible();
+    await pickPlacedPivot(page, "se");
+    await expect
+        .poll(async () => (await storedPivots(show)).map((r) => r.pivot))
+        .toEqual(["nw", "se"]);
+    await waitForIdle(page);
+    await expect(pivotButton).toHaveAttribute("data-pivot", "se");
+    // Page 1 keeps its own
+    await page.keyboard.press("Escape");
+    await selectPage(show, "Page 1");
+    await page.mouse.click(t1.x, t1.y);
+    await expect(pivotButton).toHaveAttribute("data-pivot", "nw");
+});
+
+test.describe("a box carried onto a page with no positions of its own (#485)", () => {
+    test.use({
+        seedSql: seedShowSql({
+            beats: 48,
+            pageStarts: [16, 32],
+            measureStarts: Array.from({ length: 12 }, (_, i) => 1 + i * 4),
+            marchers: HOME.map(([id]) => ({
+                id,
+                section: "Trumpet",
+                prefix: "T",
+                order: id,
+            })),
+            // Page 2 sets nobody: everyone stands where Page 1 left them
+            positions: [HOME, HOME, []],
+        }),
+    });
+
+    test("change: its pivot changes there, from the editor or dragged on the field, each as one undo step", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await selectPage(show, "Page 1");
+        await placeBox(show, 1);
+        const placed = await savedPositions(show, 1);
+        const t1 = await marcherScreen(page, 1);
+        await page.mouse.click(t1.x, t1.y);
+        await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+        await pickPlacedPivot(page, "nw");
+        await expect
+            .poll(async () => (await storedPivots(show)).map((r) => r.pivot))
+            .toEqual(["nw"]);
+        await waitForIdle(page);
+        await page.keyboard.press("Escape");
+
+        await selectPage(show, "Page 2");
+        const member = await marcherScreen(page, 1);
+        await page.mouse.click(member.x, member.y);
+        const pivotButton = page
+            .getByTestId("placed-box-readout")
+            .getByTestId("shape-editor-pivot");
+        await expect(pivotButton).toHaveAttribute("data-pivot", "nw");
+
+        // From the editor's pivot menu
+        let steps = await undoSteps(show);
+        await pickPlacedPivot(page, "se");
+        await expect
+            .poll(async () => (await storedPivots(show)).map((r) => r.pivot))
+            .toEqual(["se"]);
+        await waitForIdle(page);
+        await expect(pivotButton).toHaveAttribute("data-pivot", "se");
+        expect(await undoSteps(show)).toBe(steps + 1);
+
+        // Dragged on the field with Ctrl/Cmd, onto T3
+        steps = await undoSteps(show);
+        const mark = (await shapeOverlay(page))!.pivotMark!;
+        const t3 = await marcherScreen(page, 3);
+        await page.keyboard.down("ControlOrMeta");
+        await drag(page, mark, t3);
+        await page.keyboard.up("ControlOrMeta");
+        await expect
+            .poll(async () => typeof (await storedPivots(show))[0]!.pivot)
+            .toBe("object");
+        await waitForIdle(page);
+        await expect
+            .poll(async () => {
+                const m = (await shapeOverlay(page))?.pivotMark;
+                return m != null && near(m, t3);
+            })
+            .toBe(true);
+        expect(await undoSteps(show)).toBe(steps + 1);
+        // Nobody moved, and Page 2 still sets no one
+        expect(await savedPositions(show, 1)).toEqual(placed);
+        const [{ count }] = await show.query<{ count: number }>(
+            "SELECT COUNT(*) AS count FROM timelines WHERE end_beat > 32",
+        );
+        expect(count).toBe(0);
+
+        // Undo puts the menu's pivot back
+        await page.keyboard.press("ControlOrMeta+z");
+        await expect
+            .poll(async () => (await storedPivots(show)).map((r) => r.pivot))
+            .toEqual(["se"]);
+    });
+
+    test("change: a spacing change there moves its members, so the box gets its own copy on that page and Page 1 keeps its own", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await selectPage(show, "Page 1");
+        await placeBox(show, 1);
+        const onPage1 = await savedPositions(show, 1);
+        const [before] = await show.query<{ params: string }>(
+            "SELECT params FROM timeline_shape_recipes",
+        );
+
+        await selectPage(show, "Page 2");
+        const member = await marcherScreen(page, 1);
+        await page.mouse.click(member.x, member.y);
+        await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+        const across = await page
+            .getByTestId("shape-editor-across")
+            .innerText();
+        const steps = await undoSteps(show);
+        await typeAcross(page, "5");
+        await expect
+            .poll(async () => (await storedPivots(show)).length)
+            .toBe(2);
+        await waitForIdle(page);
+        expect(await undoSteps(show)).toBe(steps + 1);
+
+        // Page 2's own move holds the copy, its members on its wider spots
+        const recipes = await show.query<{
+            timeline_id: number;
+            params: string;
+        }>(
+            "SELECT timeline_id, params FROM timeline_shape_recipes ORDER BY id",
+        );
+        expect(recipes[0]!.params).toBe(before!.params);
+        const [own] = await show.query<{ start_beat: number }>(
+            "SELECT start_beat FROM timelines WHERE id = ?",
+            recipes[1]!.timeline_id,
+        );
+        expect(own!.start_beat).toBeGreaterThanOrEqual(32);
+        const onPage2 = await savedPositions(show, 2);
+        const width = (ps: Position[]) =>
+            Math.max(...ps.map((p) => p.x)) - Math.min(...ps.map((p) => p.x));
+        expect(width(onPage2)).toBeGreaterThan(width(onPage1));
+        // Page 1 is as it was
+        expect(await savedPositions(show, 1)).toEqual(onPage1);
+        await page.keyboard.press("Escape");
+        await selectPage(show, "Page 1");
+        await page.mouse.click(member.x, member.y);
+        await expect(page.getByTestId("shape-editor-across")).toHaveText(
+            across,
+        );
+    });
 });
 
 test("change: pointing at a cell of the pivot menu previews that pivot on the shape, and leaving it or closing the menu takes the preview away (#437)", async ({
