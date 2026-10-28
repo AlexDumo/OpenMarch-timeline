@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { useEffect } from "react";
+import tolgee from "@/global/singletons/Tolgee";
 import {
     DownloadSimpleIcon,
     ShapesIcon,
@@ -28,7 +29,7 @@ export default function ShapeLibraryModal() {
             contents={<ShapeLibraryContents />}
             newContentId={SHAPE_LIBRARY_CONTENT_ID}
             buttonLabel={<ShapesIcon size={24} />}
-            ariaLabel="Shapes"
+            ariaLabel={tolgee.t("shapes.library.title", "Shapes")}
             testId="shape-library-tab"
         />
     );
@@ -70,8 +71,14 @@ export function ShapeLibraryContents({
     useEffect(() => dismissAsk, [dismissAsk]);
 
     const groups = [
-        { id: "basic", title: "Basic" },
-        { id: "saved", title: "Saved" },
+        {
+            id: "basic",
+            title: tolgee.t("shapes.library.group.basic", "Basic"),
+        },
+        {
+            id: "saved",
+            title: tolgee.t("shapes.library.group.saved", "Saved"),
+        },
     ] as const;
 
     return (
@@ -80,18 +87,23 @@ export function ShapeLibraryContents({
             data-testid="shape-library"
         >
             <header className="flex items-center justify-between gap-24">
-                <h4 className="text-h4 leading-none">Shapes</h4>
+                <h4 className="text-h4 leading-none">
+                    {tolgee.t("shapes.library.title", "Shapes")}
+                </h4>
                 <button
                     onClick={() => setOpen(false)}
                     className="hover:text-red duration-150 ease-out"
-                    aria-label="Close"
+                    aria-label={tolgee.t("shapes.library.close", "Close")}
                 >
                     <XIcon size={24} />
                 </button>
             </header>
             <p className="text-sub text-text-subtitle">
-                Star a shape to keep it in the Shapes tab and the shape ring, up
-                to {MAX_STARS}.
+                {tolgee.t(
+                    "shapes.library.intro",
+                    "Star a shape to keep it in the Shapes tab and the shape ring, up to {max}.",
+                    { max: MAX_STARS },
+                )}
             </p>
             {asked && (
                 <div
@@ -100,13 +112,19 @@ export function ShapeLibraryContents({
                     data-testid="shape-library-full"
                 >
                     <span>
-                        {MAX_STARS} shapes are starred, as many as the ring
-                        holds. Unstar one first to star {asked.label}.
+                        {tolgee.t(
+                            "shapes.library.full",
+                            "{max} shapes are starred, as many as the ring holds. Unstar one first to star {name}.",
+                            { max: MAX_STARS, name: asked.label },
+                        )}
                     </span>
                     <button
                         onClick={dismissAsk}
                         className="hover:text-red duration-150 ease-out"
-                        aria-label="Dismiss"
+                        aria-label={tolgee.t(
+                            "shapes.library.dismiss",
+                            "Dismiss",
+                        )}
                     >
                         <XIcon size={16} />
                     </button>
@@ -130,8 +148,10 @@ export function ShapeLibraryContents({
                                     className="text-sub text-text-subtitle"
                                     data-testid="shape-library-saved-empty"
                                 >
-                                    Save a shape from its ⋯ row or the inspector
-                                    to keep it here, for every show.
+                                    {tolgee.t(
+                                        "shapes.library.savedEmpty",
+                                        "Save a shape from its ⋯ row or the inspector to keep it here, for every show.",
+                                    )}
                                 </p>
                             )}
                             <ul className="flex flex-col gap-4">
@@ -199,12 +219,34 @@ function LibraryRow({
             className="rounded-6 hover:bg-fg-2 group flex items-center gap-8 px-4 py-4"
             data-testid={`shape-library-row-${row.id}`}
         >
-            <Tip label={starred ? "Unstar" : "Star"}>
+            <Tip
+                label={
+                    starred
+                        ? tolgee.t("shapes.library.unstar", "Unstar")
+                        : tolgee.t("shapes.library.star", "Star")
+                }
+            >
                 <button
                     type="button"
                     onClick={onStar}
                     aria-pressed={starred}
-                    aria-label={`${starred ? "Unstar" : "Star"} ${row.label}`}
+                    aria-label={
+                        starred
+                            ? tolgee.t(
+                                  "shapes.library.unstarNamed",
+                                  "Unstar {name}",
+                                  {
+                                      name: row.label,
+                                  },
+                              )
+                            : tolgee.t(
+                                  "shapes.library.starNamed",
+                                  "Star {name}",
+                                  {
+                                      name: row.label,
+                                  },
+                              )
+                    }
                     className={clsx(
                         "hover:text-accent duration-150 ease-out",
                         starred ? "text-accent" : "text-text-subtitle",
@@ -215,7 +257,13 @@ function LibraryRow({
                 </button>
             </Tip>
             <Tip
-                label={canPick.ok ? `Draw a ${row.label}` : canPick.reason}
+                label={
+                    canPick.ok
+                        ? tolgee.t("shapes.library.draw", "Draw a {name}", {
+                              name: row.label,
+                          })
+                        : canPick.reason
+                }
                 hint={description}
             >
                 <button
@@ -257,11 +305,20 @@ function LibraryRow({
                 </button>
             </Tip>
             {onAddToLibrary && (
-                <Tip label="Add to my Library, for every show">
+                <Tip
+                    label={tolgee.t(
+                        "shapes.library.addTip",
+                        "Add to my Library, for every show",
+                    )}
+                >
                     <button
                         type="button"
                         onClick={onAddToLibrary}
-                        aria-label={`Add ${row.label} to my Library`}
+                        aria-label={tolgee.t(
+                            "shapes.library.addNamed",
+                            "Add {name} to my Library",
+                            { name: row.label },
+                        )}
                         className="text-text-subtitle hover:text-accent duration-150 ease-out"
                         data-testid={`shape-library-add-${row.id}`}
                     >
@@ -270,11 +327,20 @@ function LibraryRow({
                 </Tip>
             )}
             {onDelete && (
-                <Tip label="Delete this saved shape">
+                <Tip
+                    label={tolgee.t(
+                        "shapes.library.deleteTip",
+                        "Delete this saved shape",
+                    )}
+                >
                     <button
                         type="button"
                         onClick={onDelete}
-                        aria-label={`Delete ${row.label}`}
+                        aria-label={tolgee.t(
+                            "shapes.library.deleteNamed",
+                            "Delete {name}",
+                            { name: row.label },
+                        )}
                         className="text-text-subtitle hover:text-red duration-150 ease-out"
                         data-testid={`shape-library-delete-${row.id}`}
                     >

@@ -1986,6 +1986,10 @@
             }
         },
         "circle": "Circle",
+        "command": {
+            "fill": "Fill: {modes}",
+            "layout": "Layout: {layouts}"
+        },
         "edit": {
             "away": {
                 "dismiss": "Dismiss",
@@ -2097,22 +2101,93 @@
                 "size": "{sizes} steps"
             }
         },
+        "library": {
+            "addNamed": "Add {name} to my Library",
+            "addTip": "Add to my Library, for every show",
+            "close": "Close",
+            "deleteNamed": "Delete {name}",
+            "deleteTip": "Delete this saved shape",
+            "dismiss": "Dismiss",
+            "draw": "Draw a {name}",
+            "full": "{max} shapes are starred, as many as the ring holds. Unstar one first to star {name}.",
+            "group": {
+                "basic": "Basic",
+                "saved": "Saved"
+            },
+            "intro": "Star a shape to keep it in the Shapes tab and the shape ring, up to {max}.",
+            "note": {
+                "apart": "{spacing} apart",
+                "modeSpacing": "{mode} {spacing}",
+                "showOnly": "this show only",
+                "stagger": "stagger {fraction}",
+                "staggerLeft": "stagger {fraction} left"
+            },
+            "savedEmpty": "Save a shape from its ⋯ row or the inspector to keep it here, for every show.",
+            "star": "Star",
+            "starNamed": "Star {name}",
+            "title": "Shapes",
+            "unstar": "Unstar",
+            "unstarNamed": "Unstar {name}"
+        },
         "placed": {
+            "editError": "Error editing the shape",
+            "fillError": "Error filling the shape",
             "label": "{name} · {interval} steps",
             "left": {
                 "many": "{count} left the {shape}",
                 "one": "{name} left the {shape}"
+            },
+            "selectWhole": "Select {shape}",
+            "summary": {
+                "empty": "{count, plural, other {# empty}}",
+                "steps": "{interval} steps"
             }
         },
         "save": {
+            "ariaLabel": "Save this shape to your library",
+            "button": "Save",
+            "cancel": "Cancel",
             "descriptionLabel": "Description of the saved shape (optional)",
-            "descriptionPlaceholder": "Description (optional)"
+            "descriptionPlaceholder": "Description (optional)",
+            "nameLabel": "Name of the saved shape",
+            "savedAs": "Saved as {name}",
+            "tip": "Save this shape to your library, starred"
         },
         "saved": {
             "copyFailed": "Couldn't copy the saved shape into the show",
             "deleteFailed": "Couldn't delete the saved shape from the show"
         },
         "square": "Square",
+        "tool": {
+            "moment": {
+                "count": "count {count}",
+                "home": "home"
+            },
+            "placeError": "Error placing the shape",
+            "ring": {
+                "hint": "Click a shape, or anywhere else to close",
+                "starred": "Starred"
+            },
+            "section": {
+                "box": "Box",
+                "title": "Shapes"
+            },
+            "selectMarchersFirst": "Select marchers first",
+            "tab": {
+                "greyed": "{name}: {reason}",
+                "kinds": "Shape kinds",
+                "library": "Library",
+                "libraryTip": "Open the shape library, to star shapes",
+                "ringHint": "Hold {key} on the field for the shape ring"
+            }
+        },
+        "transform": {
+            "flipAcross": "Flip ↔",
+            "flipAcrossTip": "Flip side to side around the pivot",
+            "flipDeep": "Flip ↕",
+            "flipDeepTip": "Flip front to back around the pivot",
+            "title": "Transform"
+        },
         "triangle": "Triangle",
         "x": "X"
     },

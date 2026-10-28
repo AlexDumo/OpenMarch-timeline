@@ -1280,6 +1280,10 @@
             }
         },
         "circle": "Cercle",
+        "command": {
+            "fill": "Remplissage : {modes}",
+            "layout": "Disposition : {layouts}"
+        },
         "edit": {
             "away": {
                 "dismiss": "Abandonner",
@@ -1391,22 +1395,93 @@
                 "size": "{sizes} pas"
             }
         },
+        "library": {
+            "addNamed": "Ajouter {name} à ma bibliothèque",
+            "addTip": "Ajouter à ma bibliothèque, pour tous les spectacles",
+            "close": "Fermer",
+            "deleteNamed": "Supprimer {name}",
+            "deleteTip": "Supprimer cette forme enregistrée",
+            "dismiss": "Ignorer",
+            "draw": "Dessiner : {name}",
+            "full": "{max} formes sont en favori, le maximum que l'anneau peut contenir. Retirez-en une d'abord pour mettre {name} en favori.",
+            "group": {
+                "basic": "De base",
+                "saved": "Enregistrées"
+            },
+            "intro": "Mettez une forme en favori pour la garder dans l'onglet Formes et l'anneau de formes, jusqu'à {max}.",
+            "note": {
+                "apart": "espacés de {spacing}",
+                "modeSpacing": "{mode} {spacing}",
+                "showOnly": "ce spectacle uniquement",
+                "stagger": "en quinconce {fraction}",
+                "staggerLeft": "en quinconce {fraction} à gauche"
+            },
+            "savedEmpty": "Enregistrez une forme depuis sa ligne ⋯ ou l'inspecteur pour la garder ici, pour tous les spectacles.",
+            "star": "Mettre en favori",
+            "starNamed": "Mettre {name} en favori",
+            "title": "Formes",
+            "unstar": "Retirer des favoris",
+            "unstarNamed": "Retirer {name} des favoris"
+        },
         "placed": {
+            "editError": "Erreur lors de la modification de la forme",
+            "fillError": "Erreur lors du remplissage de la forme",
             "label": "{name} · {interval} pas",
             "left": {
                 "many": "{count} ont quitté {shape}",
                 "one": "{name} a quitté {shape}"
+            },
+            "selectWhole": "Sélectionner : {shape}",
+            "summary": {
+                "empty": "{count, plural, one {# vide} other {# vides}}",
+                "steps": "{interval} pas"
             }
         },
         "save": {
+            "ariaLabel": "Enregistrer cette forme dans votre bibliothèque",
+            "button": "Enregistrer",
+            "cancel": "Annuler",
             "descriptionLabel": "Description de la forme enregistrée (facultatif)",
-            "descriptionPlaceholder": "Description (facultatif)"
+            "descriptionPlaceholder": "Description (facultatif)",
+            "nameLabel": "Nom de la forme enregistrée",
+            "savedAs": "Enregistrée sous {name}",
+            "tip": "Enregistrer cette forme dans votre bibliothèque, en favori"
         },
         "saved": {
             "copyFailed": "Impossible de copier la forme enregistrée dans le spectacle",
             "deleteFailed": "Impossible de supprimer la forme enregistrée du spectacle"
         },
         "square": "Carré",
+        "tool": {
+            "moment": {
+                "count": "temps {count}",
+                "home": "début"
+            },
+            "placeError": "Erreur lors du placement de la forme",
+            "ring": {
+                "hint": "Cliquez sur une forme, ou ailleurs pour fermer",
+                "starred": "En favori"
+            },
+            "section": {
+                "box": "Bloc",
+                "title": "Formes"
+            },
+            "selectMarchersFirst": "Sélectionnez d'abord des marcheurs",
+            "tab": {
+                "greyed": "{name} : {reason}",
+                "kinds": "Types de forme",
+                "library": "Bibliothèque",
+                "libraryTip": "Ouvrir la bibliothèque de formes pour mettre des formes en favori",
+                "ringHint": "Maintenez {key} sur le terrain pour l'anneau de formes"
+            }
+        },
+        "transform": {
+            "flipAcross": "Retourner ↔",
+            "flipAcrossTip": "Retourner latéralement autour du pivot",
+            "flipDeep": "Retourner ↕",
+            "flipDeepTip": "Retourner d'avant en arrière autour du pivot",
+            "title": "Transformer"
+        },
         "triangle": "Triangle",
         "x": "X"
     },

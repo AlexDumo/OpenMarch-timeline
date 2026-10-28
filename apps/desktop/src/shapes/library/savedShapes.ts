@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import type { SavedShape } from "@/db-functions/savedShapes";
 import {
     fromSaved,
@@ -249,21 +250,31 @@ export function savedShapeRows(
                 (t) => t.kind.shape.id === saved.kind,
             )?.kind;
             if (!base) return [];
-            // A saved shape has its own name, so its note says which kind it is (story 22)
-            const note = [
-                base.shape.label,
-                spacingNote(Object.values(saved.intervals), saved.distribution),
-                inLibrary ? null : "this show only",
-            ]
-                .filter(Boolean)
-                .join(" · ");
             return [
                 {
                     id: saved.id,
                     group: "saved",
                     label: saved.name,
                     kind: savedToolKind(base, saved),
-                    note,
+                    // A saved shape has its own name, so its note says which kind it is (story
+                    // 22); a getter, so it follows the app's language
+                    get note() {
+                        return [
+                            base.shape.label,
+                            spacingNote(
+                                Object.values(saved.intervals),
+                                saved.distribution,
+                            ),
+                            inLibrary
+                                ? null
+                                : tolgee.t(
+                                      "shapes.library.note.showOnly",
+                                      "this show only",
+                                  ),
+                        ]
+                            .filter(Boolean)
+                            .join(" · ");
+                    },
                     saved: { shape: saved, inLibrary },
                 },
             ];

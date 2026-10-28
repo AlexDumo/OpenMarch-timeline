@@ -1280,6 +1280,10 @@
             }
         },
         "circle": "円",
+        "command": {
+            "fill": "配置方法：{modes}",
+            "layout": "レイアウト：{layouts}"
+        },
         "edit": {
             "away": {
                 "dismiss": "破棄",
@@ -1391,22 +1395,93 @@
                 "size": "{sizes}ステップ"
             }
         },
+        "library": {
+            "addNamed": "{name}をマイライブラリに追加",
+            "addTip": "すべてのショーで使えるようにマイライブラリに追加",
+            "close": "閉じる",
+            "deleteNamed": "{name}を削除",
+            "deleteTip": "この保存済みの形状を削除",
+            "dismiss": "閉じる",
+            "draw": "{name}を描く",
+            "full": "スター付きの形状が{max}個あり、リングがいっぱいです。{name}にスターを付けるには、先にどれかのスターを外してください。",
+            "group": {
+                "basic": "基本",
+                "saved": "保存済み"
+            },
+            "intro": "形状にスターを付けると、形状タブと形状リングに表示されます（最大{max}個）。",
+            "note": {
+                "apart": "間隔{spacing}",
+                "modeSpacing": "{mode} {spacing}",
+                "showOnly": "このショーのみ",
+                "stagger": "千鳥{fraction}",
+                "staggerLeft": "千鳥{fraction}左"
+            },
+            "savedEmpty": "⋯の行かインスペクターから形状を保存すると、すべてのショーで使えるようにここに保管されます。",
+            "star": "スターを付ける",
+            "starNamed": "{name}にスターを付ける",
+            "title": "形状",
+            "unstar": "スターを外す",
+            "unstarNamed": "{name}のスターを外す"
+        },
         "placed": {
+            "editError": "形状の編集中にエラーが発生しました",
+            "fillError": "形状を埋める際にエラーが発生しました",
             "label": "{name} · {interval}ステップ",
             "left": {
                 "many": "{count}人が{shape}から外れました",
                 "one": "{name}が{shape}から外れました"
+            },
+            "selectWhole": "{shape}を選択",
+            "summary": {
+                "empty": "{count, plural, other {空き#}}",
+                "steps": "{interval}ステップ"
             }
         },
         "save": {
+            "ariaLabel": "この形状をライブラリに保存",
+            "button": "保存",
+            "cancel": "キャンセル",
             "descriptionLabel": "保存した形状の説明（任意）",
-            "descriptionPlaceholder": "説明（任意）"
+            "descriptionPlaceholder": "説明（任意）",
+            "nameLabel": "保存する形状の名前",
+            "savedAs": "{name}として保存しました",
+            "tip": "この形状をスター付きでライブラリに保存"
         },
         "saved": {
             "copyFailed": "保存した形状をショーにコピーできませんでした",
             "deleteFailed": "保存した形状をショーから削除できませんでした"
         },
         "square": "正方形",
+        "tool": {
+            "moment": {
+                "count": "カウント{count}",
+                "home": "開始位置"
+            },
+            "placeError": "形状の配置中にエラーが発生しました",
+            "ring": {
+                "hint": "形状をクリック、または他の場所をクリックして閉じる",
+                "starred": "スター付き"
+            },
+            "section": {
+                "box": "ブロック",
+                "title": "形状"
+            },
+            "selectMarchersFirst": "先にマーチャーを選択してください",
+            "tab": {
+                "greyed": "{name}：{reason}",
+                "kinds": "形状の種類",
+                "library": "ライブラリ",
+                "libraryTip": "形状ライブラリを開いてスターを付ける",
+                "ringHint": "フィールド上で{key}を長押しすると形状リングが開きます"
+            }
+        },
+        "transform": {
+            "flipAcross": "反転 ↔",
+            "flipAcrossTip": "ピボットを中心に左右反転",
+            "flipDeep": "反転 ↕",
+            "flipDeepTip": "ピボットを中心に前後反転",
+            "title": "変形"
+        },
         "triangle": "三角形",
         "x": "X"
     },

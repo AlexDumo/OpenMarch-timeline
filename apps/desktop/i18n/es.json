@@ -1280,6 +1280,10 @@
             }
         },
         "circle": "Círculo",
+        "command": {
+            "fill": "Relleno: {modes}",
+            "layout": "Disposición: {layouts}"
+        },
         "edit": {
             "away": {
                 "dismiss": "Descartar",
@@ -1391,22 +1395,93 @@
                 "size": "{sizes} pasos"
             }
         },
+        "library": {
+            "addNamed": "Añadir {name} a mi biblioteca",
+            "addTip": "Añadir a mi biblioteca, para todos los espectáculos",
+            "close": "Cerrar",
+            "deleteNamed": "Eliminar {name}",
+            "deleteTip": "Eliminar esta forma guardada",
+            "dismiss": "Descartar",
+            "draw": "Dibujar: {name}",
+            "full": "Hay {max} formas destacadas, todas las que caben en el anillo. Quita una primero para destacar {name}.",
+            "group": {
+                "basic": "Básicas",
+                "saved": "Guardadas"
+            },
+            "intro": "Destaca una forma para tenerla en la pestaña Formas y en el anillo de formas, hasta {max}.",
+            "note": {
+                "apart": "a {spacing} de distancia",
+                "modeSpacing": "{mode} {spacing}",
+                "showOnly": "solo este espectáculo",
+                "stagger": "escalonado {fraction}",
+                "staggerLeft": "escalonado {fraction} a la izquierda"
+            },
+            "savedEmpty": "Guarda una forma desde su fila ⋯ o desde el inspector para tenerla aquí, en todos los espectáculos.",
+            "star": "Destacar",
+            "starNamed": "Destacar {name}",
+            "title": "Formas",
+            "unstar": "Quitar destacado",
+            "unstarNamed": "Quitar destacado de {name}"
+        },
         "placed": {
+            "editError": "Error al editar la forma",
+            "fillError": "Error al rellenar la forma",
             "label": "{name} · {interval} pasos",
             "left": {
                 "many": "{count} salieron de {shape}",
                 "one": "{name} salió de {shape}"
+            },
+            "selectWhole": "Seleccionar {shape}",
+            "summary": {
+                "empty": "{count, plural, one {# vacío} other {# vacíos}}",
+                "steps": "{interval} pasos"
             }
         },
         "save": {
+            "ariaLabel": "Guardar esta forma en tu biblioteca",
+            "button": "Guardar",
+            "cancel": "Cancelar",
             "descriptionLabel": "Descripción de la forma guardada (opcional)",
-            "descriptionPlaceholder": "Descripción (opcional)"
+            "descriptionPlaceholder": "Descripción (opcional)",
+            "nameLabel": "Nombre de la forma guardada",
+            "savedAs": "Guardada como {name}",
+            "tip": "Guarda esta forma en tu biblioteca, destacada"
         },
         "saved": {
             "copyFailed": "No se pudo copiar la forma guardada en el espectáculo",
             "deleteFailed": "No se pudo eliminar la forma guardada del espectáculo"
         },
         "square": "Cuadrado",
+        "tool": {
+            "moment": {
+                "count": "tiempo {count}",
+                "home": "inicio"
+            },
+            "placeError": "Error al colocar la forma",
+            "ring": {
+                "hint": "Haz clic en una forma, o en cualquier otro lugar para cerrar",
+                "starred": "Destacada"
+            },
+            "section": {
+                "box": "Bloque",
+                "title": "Formas"
+            },
+            "selectMarchersFirst": "Primero selecciona marchadores",
+            "tab": {
+                "greyed": "{name}: {reason}",
+                "kinds": "Tipos de forma",
+                "library": "Biblioteca",
+                "libraryTip": "Abrir la biblioteca de formas para destacar formas",
+                "ringHint": "Mantén {key} sobre el campo para el anillo de formas"
+            }
+        },
+        "transform": {
+            "flipAcross": "Voltear ↔",
+            "flipAcrossTip": "Voltear de lado a lado alrededor del pivote",
+            "flipDeep": "Voltear ↕",
+            "flipDeepTip": "Voltear de adelante hacia atrás alrededor del pivote",
+            "title": "Transformar"
+        },
         "triangle": "Triángulo",
         "x": "X"
     },

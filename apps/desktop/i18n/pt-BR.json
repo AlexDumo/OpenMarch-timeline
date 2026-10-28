@@ -1280,6 +1280,10 @@
             }
         },
         "circle": "Círculo",
+        "command": {
+            "fill": "Preenchimento: {modes}",
+            "layout": "Disposição: {layouts}"
+        },
         "edit": {
             "away": {
                 "dismiss": "Descartar",
@@ -1391,22 +1395,93 @@
                 "size": "{sizes} passos"
             }
         },
+        "library": {
+            "addNamed": "Adicionar {name} à minha biblioteca",
+            "addTip": "Adicionar à minha biblioteca, para todos os shows",
+            "close": "Fechar",
+            "deleteNamed": "Excluir {name}",
+            "deleteTip": "Excluir esta forma salva",
+            "dismiss": "Dispensar",
+            "draw": "Desenhar: {name}",
+            "full": "{max} formas estão favoritadas, o máximo que o anel comporta. Desfavorite uma primeiro para favoritar {name}.",
+            "group": {
+                "basic": "Básicas",
+                "saved": "Salvas"
+            },
+            "intro": "Favorite uma forma para mantê-la na aba Formas e no anel de formas, até {max}.",
+            "note": {
+                "apart": "a {spacing} de distância",
+                "modeSpacing": "{mode} {spacing}",
+                "showOnly": "somente este show",
+                "stagger": "escalonado {fraction}",
+                "staggerLeft": "escalonado {fraction} à esquerda"
+            },
+            "savedEmpty": "Salve uma forma pela linha ⋯ ou pelo inspetor para mantê-la aqui, em todos os shows.",
+            "star": "Favoritar",
+            "starNamed": "Favoritar {name}",
+            "title": "Formas",
+            "unstar": "Desfavoritar",
+            "unstarNamed": "Desfavoritar {name}"
+        },
         "placed": {
+            "editError": "Erro ao editar a forma",
+            "fillError": "Erro ao preencher a forma",
             "label": "{name} · {interval} passos",
             "left": {
                 "many": "{count} saíram de {shape}",
                 "one": "{name} saiu de {shape}"
+            },
+            "selectWhole": "Selecionar {shape}",
+            "summary": {
+                "empty": "{count, plural, one {# vazio} other {# vazios}}",
+                "steps": "{interval} passos"
             }
         },
         "save": {
+            "ariaLabel": "Salvar esta forma na sua biblioteca",
+            "button": "Salvar",
+            "cancel": "Cancelar",
             "descriptionLabel": "Descrição da forma salva (opcional)",
-            "descriptionPlaceholder": "Descrição (opcional)"
+            "descriptionPlaceholder": "Descrição (opcional)",
+            "nameLabel": "Nome da forma salva",
+            "savedAs": "Salva como {name}",
+            "tip": "Salvar esta forma na sua biblioteca, favoritada"
         },
         "saved": {
             "copyFailed": "Não foi possível copiar a forma salva para o show",
             "deleteFailed": "Não foi possível excluir a forma salva do show"
         },
         "square": "Quadrado",
+        "tool": {
+            "moment": {
+                "count": "tempo {count}",
+                "home": "início"
+            },
+            "placeError": "Erro ao posicionar a forma",
+            "ring": {
+                "hint": "Clique em uma forma, ou em qualquer outro lugar para fechar",
+                "starred": "Favoritada"
+            },
+            "section": {
+                "box": "Bloco",
+                "title": "Formas"
+            },
+            "selectMarchersFirst": "Selecione marchadores primeiro",
+            "tab": {
+                "greyed": "{name}: {reason}",
+                "kinds": "Tipos de forma",
+                "library": "Biblioteca",
+                "libraryTip": "Abrir a biblioteca de formas para favoritar formas",
+                "ringHint": "Segure {key} no campo para o anel de formas"
+            }
+        },
+        "transform": {
+            "flipAcross": "Espelhar ↔",
+            "flipAcrossTip": "Espelhar de lado a lado em torno do pivô",
+            "flipDeep": "Espelhar ↕",
+            "flipDeepTip": "Espelhar de frente para trás em torno do pivô",
+            "title": "Transformar"
+        },
         "triangle": "Triângulo",
         "x": "X"
     },
