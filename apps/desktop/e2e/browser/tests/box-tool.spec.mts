@@ -2822,6 +2822,14 @@ async function outlineOnSeven(show: Show) {
     await page.mouse.move(5, 5);
     await pill.hover();
     await expect(page.getByRole("tooltip")).toContainText("one fewer marcher");
+    // The note itself says it too, hovered; it still takes no focus
+    await page.mouse.move(5, 5);
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+    await note.hover();
+    await expect(page.getByRole("tooltip")).toContainText(
+        /^The back has one fewer marcher, so its marchers are .+ apart\.$/,
+    );
+    await expect(note).not.toHaveAttribute("tabindex");
     await (await gapOption(page, "outline-gap-gap")).click();
     // Leaving a gap, the back keeps the full spacing: no note
     await expect(note).toHaveCount(0);

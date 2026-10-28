@@ -147,13 +147,17 @@ export function OutlineGap({
                     {/* Information, not a control: small, muted at 70% (4.5:1 on the editor
                         in both themes, where the subtitle token's 60% isn't), no hover, not
                         focusable (owner, B2). The sentence says it to screen readers. */}
-                    <span
-                        aria-hidden
-                        data-testid="outline-gap-spacing"
-                        className="text-text/70 flex items-center gap-2 text-xs whitespace-nowrap select-none"
-                    >
-                        · <GlyphText text={glyph} size={12} /> {spacingText}
-                    </span>
+                    {/* Hovered, it says why, as the pill does (owner on #459); still not a
+                        control: no focus, no press, no hover styling */}
+                    <Tip label={sentence}>
+                        <span
+                            aria-hidden
+                            data-testid="outline-gap-spacing"
+                            className="text-text/70 flex items-center gap-2 text-xs whitespace-nowrap select-none"
+                        >
+                            · <GlyphText text={glyph} size={12} /> {spacingText}
+                        </span>
+                    </Tip>
                     <span id={describedBy} className="sr-only">
                         {sentence}
                     </span>
