@@ -12,8 +12,10 @@ import type { ToolEnv, ToolParam } from "../tool/toolKind";
 import {
     boxBlock,
     boxDistribution,
+    exactOf,
     isSpread,
     shortBy,
+    withOutlineExact,
     type BoxParams,
 } from "./boxGeometry";
 
@@ -96,9 +98,12 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
         const field = onField(p, n);
         return (across ? field.acrossSpacing : field.deepSpacing) / stepPx;
     };
-    /** Whether this way is an outline's deep spacing, which follows its depth (owner on #459) */
-    const followsDepth = (p: BoxParams, n: number) =>
-        boxDistribution(p).mode === "outline" && ownKey(p, n) === "deep";
+    /**
+     * Whether this way is an outline's spacing that follows the frame, the other being the
+     * designer's (owner on #459)
+     */
+    const followsFrame = (p: BoxParams, n: number) =>
+        boxDistribution(p).mode === "outline" && ownKey(p, n) !== exactOf(p);
     /** A spacing set as typed: kept as it is (1⅔, 1.37), not on half steps (#411, #423) */
     const typed = (p: BoxParams, n: number, steps: number, env: ToolEnv) =>
         withSpacing(p, ownKey(p, n), steps, n, { ...env, snap: false }, true);
@@ -122,10 +127,16 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
             return (across ? field.across : field.deep) > 1;
         },
         // An outline's deep spacing follows its depth: shown as about so much (owner on #459)
-        // (its own deep: turned a quarter, that's the field's side to side)
-        derived: (p, n) => followsDepth(p, n),
+        // (its own: turned a quarter, the box's deep is the field's side to side)
+        derived: (p, n) => followsFrame(p, n),
+        makeExact: {
+            label: across
+                ? "Make side to side exact"
+                : "Make front to back exact",
+            apply: (p, n) => withOutlineExact(p, ownKey(p, n)),
+        },
         display: (p, n, stepPx) =>
-            followsDepth(p, n)
+            followsFrame(p, n)
                 ? `≈${formatSteps(stepsOf(p, n, stepPx))}`
                 : formatSteps(stepsOf(p, n, stepPx)),
         value: stepsOf,

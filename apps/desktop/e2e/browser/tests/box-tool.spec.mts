@@ -2913,8 +2913,7 @@ test("change: Outline spaces the back and front at its across interval, the side
     const deep = bar.getByTestId("shape-editor-deep");
     await expect(deep).toHaveText(/^≈/);
     await expect(deep).toHaveAttribute("data-derived");
-    await deep.click();
-    await expect(page.getByTestId("shape-editor-deep-input")).toHaveCount(0);
+    await expect(deep).toHaveAccessibleName(/Make front to back exact/);
 
     // Widened to about three times as wide: the long sides take the marchers, one interval
     const { handles } = (await shapeOverlay(page))!;
@@ -2934,6 +2933,70 @@ test("change: Outline spaces the back and front at its across interval, the side
         Math.min(...spots.filter((q) => q !== p).map((q) => d(p, q))),
     );
     for (const v of nearest) expect(v).toBeCloseTo(nearest[0]!, 6);
+});
+
+test("change: dragging an outline's front changes only its depth: its width, back and sides stay exactly, and the ≈ spacing becomes the exact one from the keyboard (#458, owner on #459)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    await pickMode(page, "outline");
+    const bar = page.getByTestId("shape-tool-readout");
+    const bounds = async () => {
+        const o = (await shapeOverlay(page))!.outline!;
+        const xs = o.map((p) => p.x);
+        const ys = o.map((p) => p.y);
+        return {
+            left: Math.min(...xs),
+            right: Math.max(...xs),
+            top: Math.min(...ys),
+            bottom: Math.max(...ys),
+        };
+    };
+    const handle = async (key: "s" | "e") => {
+        const { handles } = (await shapeOverlay(page))!;
+        const b = await bounds();
+        const want =
+            key === "s"
+                ? { x: (b.left + b.right) / 2, y: b.bottom }
+                : { x: b.right, y: (b.top + b.bottom) / 2 };
+        // The overlay gives handles on screen; the bounds are field units
+        const screen = await toScreen(page, want);
+        return handles.reduce((a, h) =>
+            Math.hypot(h.x - screen.x, h.y - screen.y) <
+            Math.hypot(a.x - screen.x, a.y - screen.y)
+                ? h
+                : a,
+        );
+    };
+    // The front's handle down by 37 px: only the front moves
+    const before = await bounds();
+    const across = await bar.getByTestId("shape-editor-across").innerText();
+    const s = await handle("s");
+    await drag(page, s, { x: s.x, y: s.y + 37 });
+    const after = await bounds();
+    expect(Math.abs(after.left - before.left)).toBeLessThan(1e-6);
+    expect(Math.abs(after.right - before.right)).toBeLessThan(1e-6);
+    expect(Math.abs(after.top - before.top)).toBeLessThan(1e-6);
+    expect(after.bottom).toBeGreaterThan(before.bottom);
+    await expect(bar.getByTestId("shape-editor-across")).toHaveText(across);
+
+    // From the keyboard: Tab to the ≈ spacing and press Enter, and front to back is exact
+    const deep = bar.getByTestId("shape-editor-deep");
+    await deep.focus();
+    await expect(deep).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(bar.getByTestId("shape-editor-across")).toHaveText(/^≈/);
+    await expect(bar.getByTestId("shape-editor-deep")).not.toHaveText(/^≈/);
+    // Now a side's drag changes only the width: the back and front stay exactly
+    const was = await bounds();
+    const e = await handle("e");
+    await drag(page, e, { x: e.x + 41, y: e.y });
+    const now = await bounds();
+    expect(Math.abs(now.top - was.top)).toBeLessThan(1e-6);
+    expect(Math.abs(now.bottom - was.bottom)).toBeLessThan(1e-6);
+    expect(Math.abs(now.left - was.left)).toBeLessThan(1e-6);
+    expect(now.right).toBeGreaterThan(was.right);
 });
 
 test("change: Outline on 7 spreads the back by default, leaves its middle out on request, a click on a spot between corners moves the gap, and the placed box keeps it", async ({

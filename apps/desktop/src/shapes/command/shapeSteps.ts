@@ -83,6 +83,16 @@ export function shapeSteps(
         if (param.shown && !param.shown(params, n)) continue;
         const initial = param.display(params, n, env.stepPx);
         const answer = answers[steps.length];
+        // A number that follows the shape (an outline's "≈" spacing) isn't asked; one typed for
+        // it anyway (a one-liner) is marked as not applying, never quietly dropped (review)
+        if (param.derived?.(params, n)) {
+            const typed =
+                answer !== undefined &&
+                answer.trim() !== "" &&
+                answer.trim() !== initial;
+            if (typed) steps.push({ param, initial, invalid: true });
+            continue;
+        }
         let invalid = false;
         // The number as shown keeps it as it is: 1⅛ shows as 1.13, which would round it
         if (

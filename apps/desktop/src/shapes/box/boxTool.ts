@@ -55,8 +55,8 @@ export const boxTool: ToolKind<BoxParams> = {
             ),
         }));
     },
-    dragHandle: (base, n, key, to, env) =>
-        stretchBox(base, n, key as BoxHandleKey, to, env),
+    dragHandle: (base, n, key, to, env, previous) =>
+        stretchBox(base, n, key as BoxHandleKey, to, env, previous),
     outline: boxCorners,
     snapPoints: (params, n) => [
         ...boxCorners(params, n),
@@ -234,6 +234,14 @@ function outlineIn(
         return withFileCount(next, nearestSides(n, aspect, side).a + 1);
     }
     // The frame kept exactly: across fits the width as typed, deep the depth (owner on #459)
-    const { a, across, deep } = swayOutline(width, depth, n, side, env, true);
+    const { a, across, deep } = swayOutline(
+        width,
+        depth,
+        n,
+        side,
+        env,
+        true,
+        distribution.exact ?? "across",
+    );
     return { ...withFileCount(next, a + 1), across, deep };
 }

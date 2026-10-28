@@ -9,7 +9,8 @@ variants: []
 questions:
   - Switch a long box to Outline. Do the long sides get more marchers than the short ones, about as many as you'd expect?
   - Drag the front or back handle. Did the sides' spacing squeeze and stretch the way you'd expect, and did marchers move between sides at sensible moments?
-  - The front-to-back spacing now shows as "≈" and can't be changed directly. Is that clear? Do you miss changing it?
+  - The front-to-back spacing shows as "≈". Pressing it makes front to back the exact spacing instead. Did you find that, and does it work the way you'd expect?
+  - Drag the front handle. Did anything other than the front move?
   - After switching to Outline, the side-to-side spacing may be an odd number such as 0.78. Did that bother you, or was keeping the box you drew more useful?
 ---
 
@@ -25,10 +26,11 @@ interval, front to back is whatever the box's depth makes it.**
   spacing. A box twice as long as it is deep gets about twice as many on its
   long sides. There's always a marcher on every corner.
 - The floating editor shows the **front-to-back spacing as "≈ 1.8"**: it
-  follows the box, so you don't set it.
-- **Dragging the front or back** squeezes and stretches the sides' spacing
-  smoothly. A marcher moves from one side to another only when that fits
-  better, and who goes where is worked out again.
+  follows the box. **Press it** (or Tab to it and press Enter) to make front to
+  back the exact spacing instead; then side to side shows "≈" and follows.
+- **Dragging the front or back** changes only the depth: the width, the back
+  and the sides stay exactly where they are, and the sides' spacing squeezes
+  and stretches smoothly.
 - **Dragging a side or a corner** shares the marchers out to suit the new
   shape, keeping the side-to-side spacing on half steps.
 - **Switching to Outline keeps the box you drew.** The side-to-side spacing is

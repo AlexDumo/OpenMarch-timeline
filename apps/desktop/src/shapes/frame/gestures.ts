@@ -177,6 +177,8 @@ export function dragShape(
     gesture: ShapeGesture,
     at: XY,
     env: ToolEnv,
+    /** What this gesture made at the last pointer move, for a kind's choices to hold (#459) */
+    previous?: unknown,
 ): unknown {
     const base = gesture.base;
     if (gesture.type === "pivot")
@@ -185,7 +187,7 @@ export function dragShape(
             // Cmd/Ctrl pulled the pivot out and may still be held: only Alt frees it
             snapPivot(kind.frameOf(base, n), at, { ...env, snap: !env.fine }),
         );
-    return carryPivot(base, dragged(kind, n, gesture, at, env));
+    return carryPivot(base, dragged(kind, n, gesture, at, env, previous));
 }
 
 function dragged(
@@ -194,11 +196,12 @@ function dragged(
     gesture: Exclude<ShapeGesture, { type: "pivot" }>,
     at: XY,
     env: ToolEnv,
+    previous?: unknown,
 ): unknown {
     const base = gesture.base;
     switch (gesture.type) {
         case "handle":
-            return kind.dragHandle(base, n, gesture.key, at, env);
+            return kind.dragHandle(base, n, gesture.key, at, env, previous);
         case "move":
             return moveOntoLines(
                 kind,

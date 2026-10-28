@@ -93,6 +93,14 @@ export interface ToolParam<P> {
      * outline's front-to-back spacing, which follows its depth: owner on #459)
      */
     readonly derived?: (params: P, n: number) => boolean;
+    /**
+     * A derived number's way to become the set one (an outline's "≈" spacing: owner on #459):
+     * its button's name, and the params with it set and the other following
+     */
+    readonly makeExact?: {
+        readonly label: string;
+        apply(params: P, n: number): P;
+    };
     /** What it is, for tooltips and screen readers: "Side-to-side spacing, in steps" */
     readonly label: string;
     /**
@@ -192,7 +200,15 @@ export interface ToolKind<P> {
     ): P | undefined;
     handles(params: P, n: number): readonly ToolHandle[];
     /** The params with handle `key` dragged to `to`, starting from `base` (the params at press) */
-    dragHandle(base: P, n: number, key: string, to: XY, env: ToolEnv): P;
+    dragHandle(
+        base: P,
+        n: number,
+        key: string,
+        to: XY,
+        env: ToolEnv,
+        /** What this drag made a moment ago, for a choice to hold until another fits clearly better */
+        previous?: P,
+    ): P;
     /** The shape's outline on the field; the frame's four corners when absent */
     outline?(params: P, n: number): readonly XY[];
     /**

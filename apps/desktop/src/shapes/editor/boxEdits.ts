@@ -8,7 +8,8 @@ import {
     ranksOf,
     snapInterval,
     grownFromPivot,
-    outlineWithAcross,
+    exactOf,
+    outlineWithExact,
     resizeFiles,
     acrossIsDeep,
     onField,
@@ -102,13 +103,12 @@ export function withSpacing(
         )
             return p;
     }
-    // An outline's across is the designer's interval; deep follows its depth (#458, #459)
+    // An outline's exact interval is the designer's; the other follows the frame (#458, #459)
     if (boxDistribution(p).mode === "outline") {
-        if (which === "deep") return p;
-        if (value === p.across) return p;
+        if (which !== exactOf(p) || value === p[which]) return p;
         return grownFromPivot(
             p,
-            outlineWithAcross(p, spots, value, env),
+            outlineWithExact(p, spots, value, env),
             spots,
             env,
         );
@@ -353,13 +353,13 @@ function exactSpacing(
     spots: number,
     env: ToolEnv,
 ): BoxParams {
-    // An outline's across is the designer's interval; deep follows its depth (#458, #459)
+    // An outline's exact interval is the designer's; the other follows the frame (#458, #459)
     if (boxDistribution(p).mode === "outline")
-        return which === "deep"
+        return which !== exactOf(p)
             ? p
             : grownFromPivot(
                   p,
-                  outlineWithAcross(p, spots, value, env),
+                  outlineWithExact(p, spots, value, env),
                   spots,
                   env,
               );

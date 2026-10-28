@@ -436,6 +436,11 @@ function numberActions(
                 (b, m, env) => param.scrub(b, target.spots, m, env),
                 param.interval === true,
             ),
+        /** A derived number pressed: it becomes the exact one, the other following (#459) */
+        makeExact: (param: Param) => {
+            if (!param.makeExact) return;
+            target.apply(param.makeExact.apply(target.params, target.spots));
+        },
         type: (param: Param, text: string) => {
             const env = envFor(PLAIN);
             const next =
@@ -487,14 +492,29 @@ const NumberChip = memo(function NumberChip({
                 </IconButton>
             )}
             {derived ? (
-                <span
-                    className="text-text/60 px-4 tabular-nums"
-                    aria-label={`${param.label}, following the shape`}
-                    data-testid={`shape-editor-${param.key}`}
-                    data-derived
-                >
-                    {display}
-                </span>
+                // Follows the frame; pressing it makes this way the exact one (owner on #459)
+                <Tip label={param.makeExact?.label}>
+                    <button
+                        type="button"
+                        className="rounded-4 text-text/60 hover:bg-fg-2 hover:text-accent min-h-24 px-4 tabular-nums"
+                        aria-label={`${param.label}: ${display}, following the shape. ${param.makeExact?.label ?? ""}`}
+                        data-testid={`shape-editor-${param.key}`}
+                        data-derived
+                        disabled={!param.makeExact}
+                        onClick={() => actions.makeExact(param)}
+                        onKeyDown={(e) => {
+                            // Enter places the shape and Space plays, as on the numbers: here
+                            // they press this button and nothing else (as ScrubNumber does)
+                            if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                actions.makeExact(param);
+                            }
+                        }}
+                    >
+                        {display}
+                    </button>
+                </Tip>
             ) : (
                 <ScrubNumber
                     display={display}
