@@ -1,5 +1,4 @@
 import {
-    samePosition,
     type TimelineEditTarget,
     type TimelineMarcherMove,
     type TimelineMovePage,
@@ -301,13 +300,6 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     const current = timelineCoordinateRecords(plan.beat, marcherIds);
     const next = transform(current);
     const moves = toTimelineMoves(next);
-    const was = new Map(current.map((c) => [c.marcher_id, c]));
-    const keepUnchanged =
-        setUnmoved &&
-        next.some((n) => {
-            const c = was.get(n.marcher_id);
-            return !c || !samePosition([c.x, c.y], [n.x, n.y]);
-        });
     // Basic's locked marchers are dropped there (UI-19)
     await moveMarchersAndOfferFollowUp({
         database: db,
@@ -315,7 +307,9 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
         moves,
         afterWrite,
         writesShapes,
-        keepUnchanged,
+        ...(setUnmoved && {
+            setUnmovedFrom: new Map(current.map((c) => [c.marcher_id, c])),
+        }),
     });
     return next;
 }

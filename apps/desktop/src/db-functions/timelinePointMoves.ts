@@ -317,7 +317,8 @@ const planPoint = async (
         plan.cleared.push(marcherId);
         return;
     }
-    if (!keepUnchanged && samePosition(point, await at(beat))) return;
+    const still = samePosition(point, await at(beat));
+    if (still && !keepUnchanged) return;
 
     const inside = rows.find((r) => r.start < beat && beat < r.end);
     if (inside) {
@@ -344,6 +345,9 @@ const planPoint = async (
     }
 
     const ending = rows.find((r) => r.end === beat);
+    // Kept still: its own ending here already sets it, a stay included, which the clear below
+    // would take for a move back onto its start
+    if (ending && still) return;
     if (ending) {
         // Back onto where the move starts: the point goes, unless it is a kept spot
         if (
