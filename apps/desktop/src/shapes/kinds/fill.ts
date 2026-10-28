@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { centroid, dist, sub, xy } from "../geometry/vec";
 import {
     autoEdgeCount,
@@ -80,27 +81,45 @@ const fieldOf = (p: FillParams, lx: number, ly: number): XY => {
 export const fillKind: ShapeKind<FillParams> = {
     id: "fill",
     version: 1,
-    label: "Filled",
+    get label() {
+        return tolgee.t("shapes.kinds.fill.label", "Filled");
+    },
     family: "fill",
     defaultOrder: "nearest",
     groups: [
         {
-            label: "Fill",
+            get label() {
+                return tolgee.t("shapes.kinds.fill.group", "Fill");
+            },
             fields: [
                 {
                     type: "count",
                     key: "edge",
-                    label: "Edge (0 = auto)",
+                    get label() {
+                        return tolgee.t(
+                            "shapes.kinds.fill.edgeField",
+                            "Edge (0 = auto)",
+                        );
+                    },
                     min: 0,
                 },
-                { type: "count", key: "layout", label: "Layout", min: 1 },
+                {
+                    type: "count",
+                    key: "layout",
+                    get label() {
+                        return tolgee.t("shapes.kinds.fill.layout", "Layout");
+                    },
+                    min: 1,
+                },
             ],
         },
     ],
     measures: [
         {
             key: "radius",
-            label: "Radius",
+            get label() {
+                return tolgee.t("shapes.kinds.measure.radius", "Radius");
+            },
             unit: "length",
             min: 0.25,
             size: true,
@@ -110,7 +129,9 @@ export const fillKind: ShapeKind<FillParams> = {
         },
         {
             key: "width",
-            label: "Width",
+            get label() {
+                return tolgee.t("shapes.kinds.measure.width", "Width");
+            },
             unit: "length",
             min: 0.25,
             size: true,
@@ -120,7 +141,9 @@ export const fillKind: ShapeKind<FillParams> = {
         },
         {
             key: "height",
-            label: "Depth",
+            get label() {
+                return tolgee.t("shapes.kinds.measure.depth", "Depth");
+            },
             unit: "length",
             min: 0.25,
             size: true,
@@ -157,7 +180,7 @@ export const fillKind: ShapeKind<FillParams> = {
                     key: "radius",
                     role: "point",
                     at: xy(p.center.x + p.r, p.center.y),
-                    hint: "Radius",
+                    hint: tolgee.t("shapes.kinds.measure.radius", "Radius"),
                 },
             ];
         return [
@@ -166,7 +189,7 @@ export const fillKind: ShapeKind<FillParams> = {
                 key: "corner",
                 role: "point",
                 at: fieldOf(p, p.width / 2, p.height / 2),
-                hint: "Size",
+                hint: tolgee.t("shapes.kinds.fill.hint.size", "Size"),
             },
         ];
     },
@@ -219,12 +242,23 @@ export const fillKind: ShapeKind<FillParams> = {
             p.edge > 0 ? Math.min(p.edge, n) : autoEdgeCount(fillOutline(p), n);
         return [
             {
-                label: "About",
-                value: `${steps(typicalNeighborDistance(spots), ctx)} steps apart`,
+                label: tolgee.t("shapes.kinds.fill.readout.about", "About"),
+                value: tolgee.t(
+                    "shapes.kinds.fill.readout.apart",
+                    "{steps} steps apart",
+                    { steps: steps(typicalNeighborDistance(spots), ctx) },
+                ),
             },
             {
-                label: "Edge",
-                value: p.edge > 0 ? `${edge}` : `${edge} (auto)`,
+                label: tolgee.t("shapes.kinds.fill.readout.edge", "Edge"),
+                value:
+                    p.edge > 0
+                        ? `${edge}`
+                        : tolgee.t(
+                              "shapes.kinds.fill.readout.edgeAuto",
+                              "{count} (auto)",
+                              { count: edge },
+                          ),
             },
         ];
     },
@@ -233,6 +267,14 @@ export const fillKind: ShapeKind<FillParams> = {
         const size = p.outline === "circle" ? p.r : Math.min(p.width, p.height);
         return size > 0
             ? []
-            : [{ level: "error", message: "The shape has no size" }];
+            : [
+                  {
+                      level: "error",
+                      message: tolgee.t(
+                          "shapes.kinds.fill.validate.noSize",
+                          "The shape has no size",
+                      ),
+                  },
+              ];
     },
 };

@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { fractionText, readSteps } from "./editor/format";
 import type { Path } from "./geometry/path";
 import type { IntervalRun, Slot, Spacing } from "./types";
@@ -26,7 +27,13 @@ export function parseIntervals(text: string): ParsedIntervals {
         .map((part) => part.trim())
         .filter((part) => part.length > 0);
     if (parts.length === 0)
-        return { ok: false, message: "Enter an interval in steps" };
+        return {
+            ok: false,
+            message: tolgee.t(
+                "shapes.spacing.empty",
+                "Enter an interval in steps",
+            ),
+        };
     const runs: IntervalRun[] = [];
     for (const part of parts) {
         const match = RUN.exec(part);
@@ -34,18 +41,31 @@ export function parseIntervals(text: string): ParsedIntervals {
         if (!match || steps === null) {
             return {
                 ok: false,
-                message: `"${part}" isn't an interval. Type steps (2), a list (4,4,2) or steps x gaps (4x3)`,
+                message: tolgee.t(
+                    "shapes.spacing.notInterval",
+                    '"{part}" isn\'t an interval. Type steps (2), a list (4,4,2) or steps x gaps (4x3)',
+                    { part },
+                ),
             };
         }
         if (!(steps > 0))
             return {
                 ok: false,
-                message: "An interval must be more than 0 steps",
+                message: tolgee.t(
+                    "shapes.spacing.notPositive",
+                    "An interval must be more than 0 steps",
+                ),
             };
         // A bare number is a single run that repeats for every gap.
         const count = match[2] === undefined ? 0 : Number(match[2]);
         if (match[2] !== undefined && !(count >= 1)) {
-            return { ok: false, message: "A run needs at least 1 gap" };
+            return {
+                ok: false,
+                message: tolgee.t(
+                    "shapes.spacing.noGaps",
+                    "A run needs at least 1 gap",
+                ),
+            };
         }
         runs.push({ steps, count });
     }
@@ -201,8 +221,15 @@ export function describeGaps(
     const given = runsGapCount(runs);
     const needed = Math.max(n - 1, 0);
     if (given === undefined || given === needed) return undefined;
-    const gaps = (k: number) => `${k} ${k === 1 ? "gap" : "gaps"}`;
     return given < needed
-        ? `${gaps(needed)} needed, ${given} typed: repeating from the first`
-        : `${gaps(needed)} needed, ${given} typed: the last ${given - needed} unused`;
+        ? tolgee.t(
+              "shapes.spacing.repeating",
+              "{needed, plural, one {# gap} other {# gaps}} needed, {given} typed: repeating from the first",
+              { needed, given },
+          )
+        : tolgee.t(
+              "shapes.spacing.unused",
+              "{needed, plural, one {# gap} other {# gaps}} needed, {given} typed: the last {unused} unused",
+              { needed, given, unused: given - needed },
+          );
 }

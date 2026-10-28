@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import {
     LAYOUT_FAMILIES,
     LAYOUT_LABELS,
@@ -135,26 +136,57 @@ export function versionOf(
     const { across, deep } = blockOf(lines, layout.byFile);
     const width = Math.max(...lines);
     const n = lines.reduce((a, b) => a + b, 0);
-    const marked = (line: number) =>
-        between(width, line) ? " staggered" : " straight";
-    const note =
-        layout.family === "shortBack"
-            ? `, ${across * deep - n} short`
-            : layout.family === "rounded"
-              ? marked(lines[0]!)
-              : layout.family === "notched"
-                ? marked(lines[(lines.length - 1) / 2]!)
-                : "";
+    const short = across * deep - n;
+    // The line that says whether a rounded or notched version is staggered or straight
+    const marker =
+        layout.family === "rounded"
+            ? lines[0]!
+            : layout.family === "notched"
+              ? lines[(lines.length - 1) / 2]!
+              : null;
     const counts = layout.byFile
-        ? `${lines.join(" / ")}, left to right`
-        : `${[...lines].reverse().join(" / ")}, front to back`;
+        ? lines.join(" / ")
+        : [...lines].reverse().join(" / ");
+    // Getters: versions are cached, and the words must follow the current language
     return {
         layout,
         lines,
         across,
         deep,
-        label: `${across} × ${deep}${note}`,
-        tooltip: counts,
+        get label() {
+            if (layout.family === "shortBack")
+                return tolgee.t(
+                    "shapes.distribute.version.short",
+                    "{across} × {deep}, {short} short",
+                    { across, deep, short },
+                );
+            if (marker !== null)
+                return between(width, marker)
+                    ? tolgee.t(
+                          "shapes.distribute.version.staggered",
+                          "{across} × {deep} staggered",
+                          { across, deep },
+                      )
+                    : tolgee.t(
+                          "shapes.distribute.version.straight",
+                          "{across} × {deep} straight",
+                          { across, deep },
+                      );
+            return `${across} × ${deep}`;
+        },
+        get tooltip() {
+            return layout.byFile
+                ? tolgee.t(
+                      "shapes.distribute.version.leftToRight",
+                      "{counts}, left to right",
+                      { counts },
+                  )
+                : tolgee.t(
+                      "shapes.distribute.version.frontToBack",
+                      "{counts}, front to back",
+                      { counts },
+                  );
+        },
     };
 }
 
@@ -356,7 +388,13 @@ export function layoutCatalogue(n: number): readonly LayoutRow[] {
     const rows = LAYOUT_FAMILIES.map((family): LayoutRow => {
         const versions = by.get(family)!;
         if (versions.length > 0)
-            return { family, label: LAYOUT_LABELS[family], versions };
+            return {
+                family,
+                get label() {
+                    return LAYOUT_LABELS[family];
+                },
+                versions,
+            };
         const hint = familyHint(family, count);
         const near =
             hint.more !== null
@@ -368,7 +406,9 @@ export function layoutCatalogue(n: number): readonly LayoutRow[] {
             near === null ? undefined : nearestOf(by4(near, family), 1);
         return {
             family,
-            label: LAYOUT_LABELS[family],
+            get label() {
+                return LAYOUT_LABELS[family];
+            },
             versions,
             hint,
             ...(near !== null && version
@@ -384,8 +424,14 @@ export function layoutCatalogue(n: number): readonly LayoutRow[] {
 /** "add 1 / remove 2" */
 export function hintText(hint: LayoutHint): string {
     return [
-        hint.more !== null && `add ${hint.more}`,
-        hint.fewer !== null && `remove ${hint.fewer}`,
+        hint.more !== null &&
+            tolgee.t("shapes.distribute.hint.add", "add {count}", {
+                count: hint.more,
+            }),
+        hint.fewer !== null &&
+            tolgee.t("shapes.distribute.hint.remove", "remove {count}", {
+                count: hint.fewer,
+            }),
     ]
         .filter(Boolean)
         .join(" / ");

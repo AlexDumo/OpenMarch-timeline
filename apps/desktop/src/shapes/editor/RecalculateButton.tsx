@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { animated, useSpring, useTransition } from "@react-spring/web";
 import { UserSwitchIcon } from "@phosphor-icons/react";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
+import tolgee from "@/global/singletons/Tolgee";
 
 /** The word opening out: quick, with a little give */
 const WORD_SPRING = { tension: 320, friction: 26 };
@@ -83,7 +84,10 @@ export function RecalculateFace({
                                 className="overflow-hidden whitespace-nowrap"
                                 style={style}
                             >
-                                Recalculate
+                                {tolgee.t(
+                                    "shapes.edit.recalculate.label",
+                                    "Recalculate",
+                                )}
                             </animated.span>
                         ),
                 )}

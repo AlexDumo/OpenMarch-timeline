@@ -33,22 +33,30 @@ export function SaveShapeButton({
     const [name, setName] = useState<string | null>(null);
     const [description, setDescription] = useState("");
     const [saved, setSaved] = useState<string | null>(null);
+    const savedAs = (name: string) =>
+        tolgee.t("shapes.save.savedAs", "Saved as {name}", { name });
 
     if (name === null)
         return (
             <Tip
                 label={
                     saved && compact
-                        ? `Saved as ${saved}`
-                        : "Save this shape to your library, starred"
+                        ? savedAs(saved)
+                        : tolgee.t(
+                              "shapes.save.tip",
+                              "Save this shape to your library, starred",
+                          )
                 }
             >
                 <button
                     type="button"
                     aria-label={
                         saved && compact
-                            ? `Saved as ${saved}`
-                            : "Save this shape to your library"
+                            ? savedAs(saved)
+                            : tolgee.t(
+                                  "shapes.save.ariaLabel",
+                                  "Save this shape to your library",
+                              )
                     }
                     onPointerDown={keepFocus}
                     onClick={() => {
@@ -67,7 +75,10 @@ export function SaveShapeButton({
                     data-testid={testId}
                 >
                     <StarIcon size={14} weight={saved ? "fill" : "regular"} />
-                    {!compact && (saved ? `Saved as ${saved}` : "Save")}
+                    {!compact &&
+                        (saved
+                            ? savedAs(saved)
+                            : tolgee.t("shapes.save.button", "Save"))}
                 </button>
             </Tip>
         );
@@ -95,7 +106,10 @@ export function SaveShapeButton({
         >
             <input
                 autoFocus
-                aria-label="Name of the saved shape"
+                aria-label={tolgee.t(
+                    "shapes.save.nameLabel",
+                    "Name of the saved shape",
+                )}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onFocus={(e) => e.target.select()}
@@ -133,14 +147,14 @@ export function SaveShapeButton({
                     className="bg-accent text-text-invert rounded-4 px-8 py-1 font-medium hover:opacity-90 disabled:opacity-50"
                     data-testid={`${testId}-confirm`}
                 >
-                    Save
+                    {tolgee.t("shapes.save.button", "Save")}
                 </button>
                 <button
                     type="button"
                     onClick={() => setName(null)}
                     className="rounded-4 hover:bg-fg-2 px-4 py-1"
                 >
-                    Cancel
+                    {tolgee.t("shapes.save.cancel", "Cancel")}
                 </button>
             </div>
         </form>

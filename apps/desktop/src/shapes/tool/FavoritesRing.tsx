@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import clsx from "clsx";
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -218,7 +219,10 @@ export default function FavoritesRing() {
                             style={{ top: 20 }}
                             data-testid="shape-ring-hint"
                         >
-                            Click a shape, or anywhere else to close
+                            {tolgee.t(
+                                "shapes.tool.ring.hint",
+                                "Click a shape, or anywhere else to close",
+                            )}
                         </span>
                     )}
                 </div>
@@ -277,7 +281,14 @@ function RingSlot({
                 <ShapePreviewIcon kind={slot.kind} size={20} picked={hot} />
                 {slot.label}
                 {starred && (
-                    <StarIcon size={12} weight="fill" aria-label="Starred" />
+                    <StarIcon
+                        size={12}
+                        weight="fill"
+                        aria-label={tolgee.t(
+                            "shapes.tool.ring.starred",
+                            "Starred",
+                        )}
+                    />
                 )}
             </button>
         </Tip>
