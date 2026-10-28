@@ -26,6 +26,10 @@ const LINES = {
     x: [-160, -80, 0, 80, 160],
     y: [0, -280, -560],
 };
+/** Alt: fine control, off the half-step ladder, still pulled (owner on #453) */
+const ALT = { snap: false, fine: true };
+/** Cmd/Ctrl: no snapping at all */
+const NO_SNAP = { snap: false, pull: false };
 const env = (over: Partial<ToolEnv> = {}): ToolEnv => ({
     stepPx: STEP,
     snap: true,
@@ -125,15 +129,19 @@ describe("stretching a box onto a line", () => {
         onHalves(stretch(three, 3, "e", { x: 83, y: -100 }).across);
     });
 
-    it("doesn't pull with Alt or Shift, or a 45° box with no corner near a line", () => {
-        const alt = stretch(
-            row(7),
-            7,
-            "e",
-            { x: 162, y: -100 },
-            { snap: false },
-        );
-        expect(Math.abs(alt.across - (8 / 3) * STEP)).toBeGreaterThan(1e-3);
+    it("with Alt, still lands the edge on the line: 2⅔ exactly (owner on #453)", () => {
+        const alt = stretch(row(7), 7, "e", { x: 162, y: -100 }, ALT);
+        exact(alt.across, (8 / 3) * STEP);
+        exact(edges(alt, 7).right, 160);
+        // Away from lines, hundredths rather than half steps
+        const free = stretch(row(7), 7, "e", { x: 131.3, y: -100 }, ALT);
+        // 131.3 over 6 gaps, to hundredths of a 10-unit step
+        exact(free.across, 21.9);
+    });
+
+    it("doesn't pull with Cmd/Ctrl or Shift, or a 45° box with no corner near a line", () => {
+        const mod = stretch(row(7), 7, "e", { x: 162, y: -100 }, NO_SNAP);
+        expect(Math.abs(mod.across - (8 / 3) * STEP)).toBeGreaterThan(1e-3);
         onHalves(
             stretch(row(7), 7, "e", { x: 162, y: -100 }, { shift: true })
                 .across,
@@ -223,7 +231,17 @@ describe("drawing a box onto a line", () => {
         exact(edges(p, 7).left, 0);
     });
 
-    it("doesn't pull with Shift or Alt", () => {
+    it("drawn with Alt, still lands on the line (owner on #453)", () => {
+        const alt = drawBox(
+            { x: 0, y: -100 },
+            { x: 162, y: -99 },
+            7,
+            env(ALT),
+        )!;
+        exact(alt.across, (8 / 3) * STEP);
+    });
+
+    it("doesn't pull with Shift or Cmd/Ctrl", () => {
         const shift = drawBox(
             { x: 0, y: -100 },
             { x: 162, y: -99 },
@@ -231,13 +249,13 @@ describe("drawing a box onto a line", () => {
             env({ shift: true }),
         )!;
         onHalves(shift.across);
-        const alt = drawBox(
+        const mod = drawBox(
             { x: 0, y: -100 },
             { x: 162, y: -99 },
             7,
-            env({ snap: false }),
+            env(NO_SNAP),
         )!;
-        expect(Math.abs(alt.across - (8 / 3) * STEP)).toBeGreaterThan(1e-3);
+        expect(Math.abs(mod.across - (8 / 3) * STEP)).toBeGreaterThan(1e-3);
     });
 });
 
@@ -316,16 +334,17 @@ describe("stretching a turned box onto a line (#446)", () => {
         exact(out.deep, (HD - cross.y) / 2);
     });
 
-    it("steps by half steps away from lines, and Alt doesn't pull", () => {
+    it("steps by half steps away from lines; Alt still pulls, Cmd/Ctrl doesn't", () => {
         const p = turned(15, { x: HW, y: -HD }, { x: 50, y: -150 });
         const to = field(p, { x: HW + 9, y: 0 });
         onHalves(stretch(p, N, "e", to).across);
         const near = turned(15, { x: HW, y: -HD }, { x: 76, y: -150 });
         const u = field(near, { x: HW + 1, y: -HD }).x - 76;
         const t = field(near, { x: HW + 4 / u - 1, y: 0 });
-        expect(
-            hasCorner(stretch(near, N, "e", t, { snap: false }), { x: 80 }),
-        ).toBe(false);
+        expect(hasCorner(stretch(near, N, "e", t, ALT), { x: 80 })).toBe(true);
+        expect(hasCorner(stretch(near, N, "e", t, NO_SNAP), { x: 80 })).toBe(
+            false,
+        );
     });
 
     describe("at a shallow turn, an edge running nearly along a hash (review of #448)", () => {

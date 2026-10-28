@@ -306,7 +306,7 @@ function reorientedGap(p: BoxParams, spots: number): Partial<BoxParams> {
 
 /**
  * A spacing (the box's own `which`) dragged `distance` px for more: ½ step per 8 px, hundredths
- * with Alt, from where it started
+ * with Alt (still pulled onto the field's lines, #452) or Cmd/Ctrl (not), from where it started
  */
 export function scrubSpacing(
     base: BoxParams,
@@ -316,10 +316,111 @@ export function scrubSpacing(
     env: ToolEnv,
 ): BoxParams {
     const was = (which === "across" ? base.across : base.deep) / env.stepPx;
-    const steps = scrubValue(was, distance, 0, spacingRate(env.snap, "x"));
+    // A corner or the center near a field line pulls the spacing onto it (#452): measured from
+    // where the drag has the spacing before the ladder rounds it
+    const rate = spacingRate(env.snap, "x");
+    const raw = (was + (distance / rate.px) * rate.step) * env.stepPx;
+    const onLine =
+        env.pull !== false ? spacingOnLine(base, which, raw, spots, env) : null;
+    if (onLine) return onLine;
+    const steps = scrubValue(was, distance, 0, rate);
     // A drag that ends where it started changes nothing; it doesn't round the value
     if (steps === was) return base;
     return withSpacing(base, which, steps, spots, env);
+}
+
+/**
+ * The box with spacing `which` exactly `value` (field units), grown from the pivot; the ratio
+ * lock moves the other spacing exactly with it
+ */
+function exactSpacing(
+    p: BoxParams,
+    which: "across" | "deep",
+    value: number,
+    spots: number,
+    env: ToolEnv,
+): BoxParams {
+    let across = which === "across" ? value : p.across;
+    let deep = which === "deep" ? value : p.deep;
+    if (env.ratioLocked && p.across > 0 && p.deep > 0) {
+        const ratio = p.deep / p.across;
+        if (which === "across") deep = value * ratio;
+        else across = value / ratio;
+    }
+    return grownFromPivot(p, { ...p, across, deep }, spots, env);
+}
+
+/**
+ * The box with spacing `which` set so one of its snap points (a corner or the center) lands
+ * exactly on a field line near where a spacing drag at `raw` (field units) has it (#452), or null
+ * with none near. Grown from the pivot, each point moves in a straight line as the spacing
+ * changes, so each line gives one spacing. Near is the point's travel on screen, never more than
+ * a quarter of how far it moves per half step of spacing, so the half steps stay reachable and a
+ * point moving nearly along a line doesn't jump (#448). Never under half a step, the ratio lock's
+ * other spacing included.
+ */
+export function spacingOnLine(
+    base: BoxParams,
+    which: "across" | "deep",
+    raw: number,
+    spots: number,
+    env: ToolEnv,
+): BoxParams | null {
+    const lines = env.fieldLines;
+    if (!lines || env.pull === false) return null;
+    const half = env.stepPx / 2;
+    const free = (value: number) =>
+        boxTool.snapPoints!(
+            exactSpacing(base, which, value, spots, { ...env, snap: false }),
+            spots,
+        );
+    // The spacing, and with the ratio lock the other one it moves exactly, never under half a
+    // step: a landing that would take either below is left out, so the ratio stays (review)
+    const ratio =
+        env.ratioLocked && base.across > 0 && base.deep > 0
+            ? base.deep / base.across
+            : null;
+    const atLeastHalf = (value: number) => {
+        const other =
+            ratio === null
+                ? half
+                : which === "across"
+                  ? value * ratio
+                  : value / ratio;
+        return value >= half - 1e-9 && other >= half - 1e-9;
+    };
+    const s1 = Math.max(raw, half);
+    const s2 = s1 + env.stepPx;
+    const at1 = free(s1);
+    const at2 = free(s2);
+    let best: { value: number; travel: number } | null = null;
+    at1.forEach((p, k) => {
+        const q = at2[k]!;
+        // How far the point moves per unit of spacing, each way and in all
+        const slope = {
+            x: (q.x - p.x) / (s2 - s1),
+            y: (q.y - p.y) / (s2 - s1),
+        };
+        const speed = Math.hypot(slope.x, slope.y);
+        if (speed < 1e-9) return;
+        const radius = Math.min(env.pullRadius ?? 0, (speed * half) / 4);
+        for (const axis of ["x", "y"] as const) {
+            if (Math.abs(slope[axis]) < 1e-9) continue;
+            for (const line of lines[axis]) {
+                const value = s1 + (line - p[axis]) / slope[axis];
+                const travel = Math.abs(value - raw) * speed;
+                if (travel > radius + 1e-9 || !atLeastHalf(value)) continue;
+                if (best === null || travel < best.travel - 1e-9)
+                    best = { value, travel };
+            }
+        }
+    });
+    if (best === null) return null;
+    const { value } = best;
+    const now = which === "across" ? base.across : base.deep;
+    return Math.abs(value - now) < 1e-9
+        ? base
+        : exactSpacing(base, which, value, spots, env);
 }
 
 /** The count across (or deep) on the field dragged `distance` px for more: one per 16 px */

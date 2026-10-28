@@ -3,6 +3,7 @@ import type {
     FieldModeDrawing,
     FieldPointer,
 } from "@/field/editor/fieldEditor";
+import { isMacPlatform } from "@/shortcuts/platform";
 import { ReadableCoords } from "@/global/classes/ReadableCoords";
 import type { XY } from "../types";
 import {
@@ -23,8 +24,9 @@ import type { ShapeField } from "./shapeField";
 export const keysOf = (pointer: FieldPointer) => ({
     shift: pointer.shift,
     alt: pointer.alt,
-    // Cmd on a Mac, where Ctrl+press is a right-click and never reaches a shape; Ctrl elsewhere
-    mod: pointer.meta || pointer.ctrl,
+    // The app's $mod: Cmd on a Mac, where Ctrl+press is a right-click that pans and never
+    // reaches a shape; Ctrl elsewhere
+    mod: isMacPlatform() ? pointer.meta : pointer.ctrl,
 });
 
 /** A handle's cursor from a shape kind, as the field shows it */
@@ -133,7 +135,8 @@ export function frameDrawing(
  * While a draw, a handle drag or a move has the shape's snap points on the field's lines (#425,
  * #444, #446): a guide along each, named as the coordinate sheet writes it (#427), the shape's
  * sides on it drawn thicker, a point on it with no such side ringed, and its spots tinted. The
- * points are the kind's corners, and its center while it's moved (it's pulled only then).
+ * points are the kind's corners, and its center while it's moved or a spacing is dragged (it's
+ * pulled only then).
  * Nothing during any other gesture, for a kind with no snap points, or with none on a line.
  */
 export function guideDrawing(
@@ -146,7 +149,8 @@ export function guideDrawing(
     field: ShapeField,
 ): Pick<FieldModeDrawing, "guides" | "guideEdges" | "guideMarks" | "onGuides"> {
     const type = gesture?.type;
-    const moving = type === "move" || type === "center";
+    // A spacing drag grows the shape from its pivot, so its center can land on a line too (#452)
+    const moving = type === "move" || type === "center" || type === "scrub";
     if (type !== "draw" && type !== "handle" && !moving) return {};
     if (!kind.snapPoints) return {};
     const { fieldProperties } = field;
