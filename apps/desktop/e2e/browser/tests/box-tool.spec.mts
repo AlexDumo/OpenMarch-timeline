@@ -4521,6 +4521,76 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
             across,
         );
     });
+
+    test("change: turned about a member on the next page, the member at the pivot stays in the box there (owner on #486)", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await selectPage(show, "Page 1");
+        await placeBox(show, 1);
+        /** The member drawn furthest toward `dir` on screen */
+        const memberToward = async (dir: Point) =>
+            (await drawnMarchers(page)).reduce((a, b) =>
+                b.screen.x * dir.x + b.screen.y * dir.y >
+                a.screen.x * dir.x + a.screen.y * dir.y
+                    ? b
+                    : a,
+            );
+        /** Pulls the selected box's pivot onto marcher `id` and turns it a quarter */
+        const turnAbout = async (id: number) => {
+            const overlay = (await shapeOverlay(page))!;
+            const from = overlay.pivotMark ?? overlay.centerDot!;
+            const to = await marcherScreen(page, id);
+            await page.keyboard.down("ControlOrMeta");
+            await drag(page, from, to);
+            await page.keyboard.up("ControlOrMeta");
+            await expect
+                .poll(async () => {
+                    const m = (await shapeOverlay(page))?.pivotMark;
+                    return m != null && near(m, to);
+                })
+                .toBe(true);
+            await waitForIdle(page);
+            await page.getByTestId("shape-editor-quarter-turn").click();
+            await waitForIdle(page);
+            // The marcher at the pivot didn't move
+            expect(near(await marcherScreen(page, id), to)).toBe(true);
+        };
+
+        // Page 1: turned about its bottom-right member
+        const corner = await memberToward({ x: 1, y: 1 });
+        await page.mouse.click(corner.screen.x, corner.screen.y);
+        await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+        await turnAbout(corner.id);
+        await page.keyboard.press("Escape");
+
+        // Page 2 carries it; turned again about the member furthest right
+        await selectPage(show, "Page 2");
+        const side = await memberToward({ x: 1, y: 0 });
+        await page.mouse.click(side.screen.x, side.screen.y);
+        await expect
+            .poll(async () => (await readField(page)).selection)
+            .toEqual(ALL);
+        await turnAbout(side.id);
+        await page.keyboard.press("Escape");
+        await expect
+            .poll(async () => (await readField(page)).selection)
+            .toEqual([]);
+
+        // Every member is in Page 2's box, the one at the pivot too
+        const members = await show.query<{ marcher_id: number }>(
+            `SELECT m.marcher_id FROM timeline_shape_recipe_marchers m
+             JOIN timeline_shape_recipes r ON r.id = m.recipe_id
+             JOIN timelines t ON t.id = r.timeline_id
+             WHERE t.start_beat >= 32 ORDER BY m.marcher_id`,
+        );
+        expect(members.map((m) => m.marcher_id)).toEqual(ALL);
+        const at = await marcherScreen(page, side.id);
+        await page.mouse.click(at.x, at.y);
+        await expect
+            .poll(async () => (await readField(page)).selection)
+            .toEqual(ALL);
+    });
 });
 
 test("change: pointing at a cell of the pivot menu previews that pivot on the shape, and leaving it or closing the menu takes the preview away (#437)", async ({

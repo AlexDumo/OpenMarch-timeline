@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { db } from "@/global/database/db";
 import {
     moveMarchersInTarget,
+    samePosition,
     shapeBackedTransitionIds,
     shiftSlotDestinations,
     type SlotShift,
@@ -297,6 +298,7 @@ export async function moveMarchersAndOfferFollowUp({
     target,
     moves: requested,
     clearOwn,
+    setUnmovedFrom,
     afterWrite,
     writesShapes = false,
 }: {
@@ -304,6 +306,12 @@ export async function moveMarchersAndOfferFollowUp({
     target: TimelineEditTarget;
     moves: readonly TimelineMarcherMove[];
     clearOwn?: boolean;
+    /**
+     * Where each marcher stands now: when the moves that are written (Basic's locked marchers
+     * left out) move any of them, the ones they leave where they are are written as stays
+     * (`moveMarchersInTarget`'s `keepUnchanged`)
+     */
+    setUnmovedFrom?: ReadonlyMap<number, { x: number; y: number }>;
     /** App data written in the same edit (`moveMarchersInTarget`) */
     afterWrite?: (
         tx: DbTransaction,
@@ -325,6 +333,12 @@ export async function moveMarchersAndOfferFollowUp({
             marcherIds: editable.locked,
         });
     const moves = editable.moves;
+    const keepUnchanged =
+        setUnmovedFrom !== undefined &&
+        moves.some((m) => {
+            const c = setUnmovedFrom.get(m.marcherId);
+            return !c || !samePosition([c.x, c.y], [m.x, m.y]);
+        });
     const marcherIds = moves.map((m) => m.marcherId);
     // Placed boxes follow the edit: moved together, or left with holes (07-placed-boxes.md)
     const membership = writesShapes ? null : membershipFor(target, moves);
@@ -333,6 +347,7 @@ export async function moveMarchersAndOfferFollowUp({
         target,
         moves,
         clearOwn,
+        keepUnchanged,
         afterWrite: membership
             ? async (tx, timelineId) => {
                   const own = afterWrite
