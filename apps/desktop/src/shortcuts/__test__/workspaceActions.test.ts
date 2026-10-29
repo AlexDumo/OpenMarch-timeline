@@ -111,6 +111,7 @@ describe("Preview, which edits nothing", () => {
             "nextPlaybackSpeed",
             "launchSaveFileDialogue",
             "togglePreview",
+            "timelineFit",
         ];
         const handlers = ids.map(handle);
         usePreviewModeStore.setState({ isPreview: true });
@@ -128,6 +129,7 @@ describe("Preview, which edits nothing", () => {
             nextPlaybackSpeed: true,
             launchSaveFileDialogue: true,
             togglePreview: true,
+            timelineFit: true,
         });
         expect(runAction("performUndo")).toBe(false);
 

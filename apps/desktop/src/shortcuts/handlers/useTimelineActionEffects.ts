@@ -6,8 +6,9 @@ import { runAction, subscribeToActionRuns } from "../registry";
 
 /**
  * Playback controls, peeks that only change what's drawn, and looks that change nothing on the
- * field (the command bar, settings, the shortcuts list, moving focus) leave a held preview frame
- * alone (UI-11). An action the command bar then runs still puts it back.
+ * field (the command bar, settings, the shortcuts list, the 3D View, moving focus, fitting the
+ * timeline) leave a held preview frame alone (UI-11). An action the command bar then runs still
+ * puts it back.
  */
 const KEEPS_PREVIEW_FRAME: ReadonlySet<ActionId> = new Set<ActionId>([
     "playPause",
@@ -19,11 +20,15 @@ const KEEPS_PREVIEW_FRAME: ReadonlySet<ActionId> = new Set<ActionId>([
     "holdFasterPlayback",
     "holdSlowerPlayback",
     "nextPlaybackSpeed",
+    "previousPlaybackSpeed",
     "resetPlaybackSpeed",
     "toggleStartFlagPositions",
+    "toggleNextPagePaths",
     "openCommandPalette",
     "openSettings",
     "showShortcuts",
+    "openView3d",
+    "timelineFit",
     "focusCanvas",
     "focusTimeline",
     "exitTimelineFocus",

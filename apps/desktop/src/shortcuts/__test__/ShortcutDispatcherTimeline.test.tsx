@@ -200,15 +200,20 @@ describe("a held preview frame (UI-11)", () => {
         }
     });
 
-    // Opening the command bar, settings or the shortcuts list, or moving focus, changes nothing
-    // the field draws (shortcut review)
+    // Opening the command bar, settings, the shortcuts list or the 3D View, moving focus,
+    // fitting the timeline, a draw-only peek or a speed step changes nothing the field draws
+    // from (shortcut review)
     const LOOKS: readonly ActionId[] = [
         "openCommandPalette",
         "openSettings",
         "showShortcuts",
+        "openView3d",
         "focusCanvas",
         "focusTimeline",
         "exitTimelineFocus",
+        "timelineFit",
+        "toggleNextPagePaths",
+        "previousPlaybackSpeed",
     ];
     function Looks() {
         useTimelineActionEffects();
@@ -216,7 +221,7 @@ describe("a held preview frame (UI-11)", () => {
         return null;
     }
 
-    it("stays for a look at the command bar, settings or shortcuts, or a focus change", () => {
+    it("stays for a look, a focus change, Fit, a peek or a speed step", () => {
         const clearCursor = vi.fn();
         const original = useTimelineSelectionStore.getState();
         useTimelineSelectionStore.setState({ playback: null, clearCursor });

@@ -12,7 +12,8 @@ export function isDrillEditingAction(id: ActionId): boolean {
 
 /**
  * What still works in Preview, which edits nothing: files, exports, page and beat navigation,
- * playback (but the loop: Preview always plays on), go-to, and the app's own windows and lists.
+ * playback (but the loop: Preview always plays on), go-to, fitting the timeline, and the app's own
+ * windows and lists.
  * Everything else, the selection and undo included, is off.
  */
 const PREVIEW_ACTIONS: ReadonlySet<ActionId> = new Set<ActionId>([
@@ -41,6 +42,7 @@ const PREVIEW_ACTIONS: ReadonlySet<ActionId> = new Set<ActionId>([
     "resetPlaybackSpeed",
     "toggleMetronome",
     "timelineGoTo",
+    "timelineFit",
     "openSettings",
     "openView3d",
     "showShortcuts",
