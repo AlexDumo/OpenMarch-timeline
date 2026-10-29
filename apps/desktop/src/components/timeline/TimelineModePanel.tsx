@@ -91,6 +91,7 @@ import {
 } from "@/timeline/useKeepLaterPages";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { keepHereMenu, usePageKeepChains } from "./PageKeepChain";
+import { setAsShownMenu } from "@/timeline/timelineSetAsShown";
 import { describeMoveClips } from "./moveClipText";
 import { useMoveNotesStore } from "@/stores/MoveNotesStore";
 import { useClearLeftoverMoveSelection } from "./useMoveMemberSelection";
@@ -272,6 +273,8 @@ export default function TimelineModePanel() {
         () => keepHereMenu(keepStates, keepK),
         [keepStates, keepK],
     );
+    // Holds (#466): Set as shown on a page box, for the selected marchers Not set there
+    const setAsShown = useMemo(() => setAsShownMenu(keepStates), [keepStates]);
     const { tracks: timelines, current: tracksCurrent } =
         useTimelineTracksState({
             database: db,
@@ -543,6 +546,7 @@ export default function TimelineModePanel() {
                     keyframeMenu={keyframeMenu}
                     keepChains={keepChains}
                     keepHere={keepHere}
+                    setAsShown={setAsShown}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={
                         basic ? undefined : commands.commitTimelineRange

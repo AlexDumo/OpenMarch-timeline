@@ -1,0 +1,50 @@
+import { describe, expect, it, vi } from "vitest";
+import type { PageKeepState } from "../timelineKeepLater";
+import { setAsShownMenu } from "../timelineSetAsShown";
+
+/**
+ * The page box menu's **Set as shown** entry (holds, fork #466): offered for the selected
+ * marchers Not set on the page, with a reason when none is, and hidden with nothing selected.
+ */
+
+const state = (
+    pageId: number,
+    follows: number[],
+    kept: number[] = [],
+): PageKeepState => ({
+    pageId,
+    pageName: String(pageId),
+    box: { start: pageId * 8 + 1, end: pageId * 8 + 9 },
+    follows,
+    fromStart: [],
+    kept,
+    from: [],
+    selected: 3,
+});
+
+describe("setAsShownMenu", () => {
+    it("runs for exactly the selected marchers Not set on the page", () => {
+        const run = vi.fn();
+        const menu = setAsShownMenu([state(3, [1, 2]), state(4, [])], run);
+        expect(menu.reasonFor(3)).toBeNull();
+        expect(menu.reasonFor("3")).toBeNull();
+        menu.onSet(3);
+        expect(run).toHaveBeenCalledExactlyOnceWith(
+            { start: 25, end: 33 },
+            [1, 2],
+        );
+    });
+
+    it("says why when no selected marcher is Not set there, and does nothing", () => {
+        const run = vi.fn();
+        const menu = setAsShownMenu([state(4, [], [7])], run);
+        expect(menu.reasonFor(4)).toContain("Page 4");
+        menu.onSet(4);
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it("hides the entry when nothing is selected (no states)", () => {
+        const menu = setAsShownMenu([], vi.fn());
+        expect(menu.reasonFor(3)).toBeUndefined();
+    });
+});
