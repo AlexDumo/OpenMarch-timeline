@@ -97,6 +97,9 @@ export async function writePlacement(
                 }),
             ...(plan ? { plan, keepPlayhead: true } : {}),
             writesShapes: true,
+            // Every member is set where the shape is, the one at its pivot included, so each
+            // is in the move its recipe keeps; a change that moves nobody sets no one
+            setUnmoved: true,
             afterWrite: async (tx, timelineId) => {
                 // A move none of the members are in would keep no one: the edit moved nobody on a
                 // page the shape is only carried onto, and is saved below instead (#485)
