@@ -6,8 +6,10 @@
 import {
     type MouseEvent as ReactMouseEvent,
     type ReactNode,
+    createContext,
     memo,
     useCallback,
+    useContext,
     useEffect,
     useState,
 } from "react";
@@ -62,9 +64,10 @@ const PLAY_ON_ICON = (
 );
 
 /**
- * The transport's shortcuts as the tooltips show them (UI-17), as keycaps joined with " + ". They
- * mirror the actions' default bindings (`shortcuts/definitions.ts`), which a test checks; this
- * file doesn't import the app's shortcut registry. A rebound shortcut isn't shown here.
+ * The transport's default shortcuts as the tooltips show them (UI-17), as keycaps joined with
+ * " + ". They mirror the actions' default bindings (`shortcuts/definitions.ts`), which a test
+ * checks; this file doesn't import the app's shortcut registry. The 3D View window's keys are
+ * these; the editor's timeline gives the user's own through `TransportShortcutsContext`.
  */
 export const TRANSPORT_SHORTCUTS = {
     previousPage: "Q",
@@ -77,7 +80,17 @@ export const TRANSPORT_SHORTCUTS = {
     playPage: "Shift + Space",
     playOn: "Alt + Space",
     loop: "C",
+    fit: "Shift + Z",
 } as const;
+
+/** The transport's shortcuts; undefined for an action without one */
+export type TransportShortcuts = Readonly<
+    Record<keyof typeof TRANSPORT_SHORTCUTS, string | undefined>
+>;
+
+/** The shortcuts the transport's tooltips show: the defaults unless the editor gives the user's */
+export const TransportShortcutsContext =
+    createContext<TransportShortcuts>(TRANSPORT_SHORTCUTS);
 
 export const TransportButton = memo(function TransportButton({
     label,
@@ -276,13 +289,14 @@ interface TransportGuideRow<Mode extends string = string> {
     readonly label: string;
     /** What the guide shows instead of `label`, with the lines' marks inline */
     readonly content?: ReactNode;
-    /** The shortcut as keycaps */
-    readonly shortcut: string;
+    /** The shortcut as keycaps, if it has one */
+    readonly shortcut?: string;
 }
 
 /** What Previous (or Next) does with each modifier, in the order the tooltip lists them */
 const navigationGuide = (
     back: boolean,
+    shortcuts: TransportShortcuts,
 ): readonly TransportGuideRow<TransportNavigationMode>[] => {
     const alt = isMac() ? "Option" : "Alt";
     return [
@@ -290,26 +304,22 @@ const navigationGuide = (
             mode: "page",
             icon: back ? SKIP_BACK_ICON : SKIP_FORWARD_ICON,
             label: back ? "Previous page" : "Next page",
-            shortcut: back
-                ? TRANSPORT_SHORTCUTS.previousPage
-                : TRANSPORT_SHORTCUTS.nextPage,
+            shortcut: back ? shortcuts.previousPage : shortcuts.nextPage,
         },
         {
             mode: "beat",
             icon: back ? BEAT_BACK_ICON : BEAT_FORWARD_ICON,
             label: back ? "Previous beat" : "Next beat",
-            shortcut: back
-                ? TRANSPORT_SHORTCUTS.previousBeat
-                : TRANSPORT_SHORTCUTS.nextBeat,
+            shortcut: back ? shortcuts.previousBeat : shortcuts.nextBeat,
         },
         {
             mode: "edge",
             icon: back ? START_ICON : END_ICON,
             label: back ? "Start of the show" : "End of the show",
             shortcut: (back
-                ? TRANSPORT_SHORTCUTS.firstPage
-                : TRANSPORT_SHORTCUTS.lastPage
-            ).replace("Alt", alt),
+                ? shortcuts.firstPage
+                : shortcuts.lastPage
+            )?.replace("Alt", alt),
         },
     ];
 };
@@ -347,7 +357,11 @@ function TransportGuide({
                     <span className="flex items-center gap-4 text-[12px]">
                         {row.content ?? row.label}
                     </span>
-                    <Keycaps shortcut={row.shortcut} plus />
+                    {row.shortcut ? (
+                        <Keycaps shortcut={row.shortcut} plus />
+                    ) : (
+                        <span />
+                    )}
                 </span>
             ))}
         </span>
@@ -380,7 +394,8 @@ export const TransportNavigationButton = memo(
                 ),
             [back, onNavigate],
         );
-        const guide = navigationGuide(back);
+        const shortcuts = useContext(TransportShortcutsContext);
+        const guide = navigationGuide(back, shortcuts);
         const row = guide.find((r) => r.mode === mode)!;
         return (
             <TransportButton
@@ -463,12 +478,13 @@ const playWords = (
 const playGuide = (
     loops: boolean,
     playsOn: boolean,
+    shortcuts: TransportShortcuts,
 ): readonly TransportGuideRow<TransportPlayMode>[] => [
     {
         mode: "play",
         icon: PLAY_ICON,
         ...(loops ? { label: "Play the loop" } : playWords("start", playsOn)),
-        shortcut: TRANSPORT_SHORTCUTS.play,
+        shortcut: shortcuts.play,
     },
     ...(playsOn
         ? [
@@ -476,7 +492,7 @@ const playGuide = (
                   mode: "alt" as const,
                   icon: PLAY_ON_ICON,
                   ...playWords("start", false),
-                  shortcut: TRANSPORT_SHORTCUTS.playOn.replace(
+                  shortcut: shortcuts.playOn?.replace(
                       "Alt",
                       isMac() ? "Option" : "Alt",
                   ),
@@ -489,23 +505,25 @@ const playGuide = (
         ...(loops
             ? { label: "Play the loop once" }
             : playWords("playhead", false)),
-        shortcut: TRANSPORT_SHORTCUTS.playPage,
+        shortcut: shortcuts.playPage,
     },
 ];
 
 /** What Stop (Space) and Pause (Shift+Space) do while playing (UI-24) */
-const stopGuide: readonly TransportGuideRow<TransportPlayMode>[] = [
+const stopGuide = (
+    shortcuts: TransportShortcuts,
+): readonly TransportGuideRow<TransportPlayMode>[] => [
     {
         mode: "play",
         icon: STOP_ICON,
         label: "Stop and go back",
-        shortcut: TRANSPORT_SHORTCUTS.play,
+        shortcut: shortcuts.play,
     },
     {
         mode: "shift",
         icon: PAUSE_ICON,
         label: "Pause here",
-        shortcut: TRANSPORT_SHORTCUTS.playPage,
+        shortcut: shortcuts.playPage,
     },
 ];
 
@@ -545,7 +563,10 @@ export const TransportPlayButton = memo(function TransportPlayButton({
         [isPlaying, onPlayingChange, onPlayFromPlayhead, onPlayOn, playsOn],
     );
     const onClick = onPlayingChange ? togglePlaying : undefined;
-    const guide = isPlaying ? stopGuide : playGuide(playLoops, playsOn);
+    const shortcuts = useContext(TransportShortcutsContext);
+    const guide = isPlaying
+        ? stopGuide(shortcuts)
+        : playGuide(playLoops, playsOn, shortcuts);
     const mode =
         held === "shift" && !onPlayFromPlayhead
             ? "play"

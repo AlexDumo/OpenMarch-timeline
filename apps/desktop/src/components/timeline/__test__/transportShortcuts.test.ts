@@ -12,6 +12,7 @@ import {
     isMenuAction,
 } from "@/global/menuActions";
 import { shortcutGroups } from "@/components/ShortcutsDialog";
+import { transportShortcuts } from "../useTransportShortcuts";
 
 /** An action's first default binding as the tooltips write it, e.g. "Shift + Space" */
 const shown = (id: ActionId) =>
@@ -36,6 +37,7 @@ describe("transport shortcuts (UI-17)", () => {
             playPage: "Shift + Space",
             playOn: "Alt + Space",
             loop: "C",
+            fit: "Shift + Z",
         });
         expect(TRANSPORT_SHORTCUTS.playOn).toBe(shown("playOn"));
         expect(TRANSPORT_SHORTCUTS.playPage).toBe(shown("playPage"));
@@ -47,6 +49,30 @@ describe("transport shortcuts (UI-17)", () => {
         expect(TRANSPORT_SHORTCUTS.lastPage).toBe(shown("lastPage"));
         expect(TRANSPORT_SHORTCUTS.previousBeat).toBe(shown("previousBeat"));
         expect(TRANSPORT_SHORTCUTS.nextBeat).toBe(shown("nextBeat"));
+        expect(TRANSPORT_SHORTCUTS.fit).toBe(shown("timelineFit"));
+    });
+
+    it("are the defaults until the user changes them, on a Mac too (shortcut review)", () => {
+        expect(transportShortcuts({}, false)).toEqual(TRANSPORT_SHORTCUTS);
+        expect(transportShortcuts({}, true)).toEqual(TRANSPORT_SHORTCUTS);
+    });
+
+    it("follow the user's changed shortcuts, and leave out one taken away", () => {
+        const shortcuts = transportShortcuts(
+            {
+                toggleLoop: ["$mod+L"],
+                playPage: [],
+                nextPage: ["ArrowRight", "E"],
+            },
+            false,
+        );
+        expect(shortcuts.loop).toBe("Ctrl + L");
+        expect(shortcuts.playPage).toBeUndefined();
+        expect(shortcuts.nextPage).toBe("→");
+        expect(shortcuts.play).toBe("Space");
+        expect(transportShortcuts({ toggleLoop: ["$mod+L"] }, true).loop).toBe(
+            "Cmd + L",
+        );
     });
 });
 

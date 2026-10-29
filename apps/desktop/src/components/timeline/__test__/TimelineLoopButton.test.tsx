@@ -1,5 +1,12 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+    act,
+    cleanup,
+    fireEvent,
+    render,
+    screen,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { TimelineLoopButton } from "../TimelineControls";
 import { TransportTooltipProvider } from "../ShortcutTooltip";
@@ -48,5 +55,29 @@ describe("the Loop button (UI-17)", () => {
         fireEvent.click(button);
         expect(store().loop).toBeNull();
         expect(button).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("shows the Loop shortcut as the user changed it (shortcut review)", () => {
+        renderButton();
+        const button = screen.getByTestId("timeline-loop");
+        expect(button).toHaveAttribute("aria-keyshortcuts", "C");
+        try {
+            act(() => {
+                useShortcutOverridesStore.setState({
+                    overrides: { toggleLoop: ["Shift+L"] },
+                });
+            });
+            expect(button).toHaveAttribute("aria-keyshortcuts", "Shift+L");
+            act(() => {
+                useShortcutOverridesStore.setState({
+                    overrides: { toggleLoop: [] },
+                });
+            });
+            expect(button).not.toHaveAttribute("aria-keyshortcuts");
+        } finally {
+            act(() => {
+                useShortcutOverridesStore.setState({ overrides: {} });
+            });
+        }
     });
 });

@@ -16,7 +16,7 @@ import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { toggleTimelineLoop } from "@/timeline/timelineTransport";
 import { ShortcutTooltip } from "./ShortcutTooltip";
 import { PlaybackSpeedButton } from "./PlaybackSpeedButton";
-import { TRANSPORT_SHORTCUTS } from "./TimelinePrimitives";
+import { useTransportShortcuts } from "./useTransportShortcuts";
 import { START_INK } from "./startFlagInk";
 import { TOUCH_TARGET_CLASS } from "./touchTargets";
 import {
@@ -111,7 +111,7 @@ export function TimelineLoopButton() {
     const looping = useTimelineSelectionStore(
         (s) => s.loop !== null || s.isolation !== null,
     );
-    const shortcut = TRANSPORT_SHORTCUTS.loop;
+    const shortcut = useTransportShortcuts().loop;
     return (
         <ShortcutTooltip
             label={looping ? "Loop: on" : "Loop: off"}

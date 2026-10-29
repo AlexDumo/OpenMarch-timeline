@@ -19,7 +19,13 @@ import {
     TransportButton,
     TransportNavigationButton,
     TransportPlayButton,
+    TransportShortcutsContext,
 } from "./TransportButtons";
+import { useTransportShortcuts } from "./useTransportShortcuts";
+import { formatBinding } from "@/shortcuts/bindings";
+import { getDisplayBindings } from "@/shortcuts/keymap";
+import { isMacPlatform } from "@/shortcuts/platform";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { ShortcutTooltip, TransportTooltipProvider } from "./ShortcutTooltip";
 import {
     isPlainNudgeKey,
@@ -225,6 +231,17 @@ export const TimelineTransport = memo(function TimelineTransport({
         isPlaying ? Math.min(positionBeat + 1, model.beatCount) : positionBeat,
     );
     const mod = isMac() ? "⌘" : "Ctrl";
+    const shortcuts = useTransportShortcuts();
+    // The go-to box's keys as the user has them, at most two ("G or ⌘G")
+    const overrides = useShortcutOverridesStore((s) => s.overrides);
+    const goToKeys = getDisplayBindings(
+        "timelineGoTo",
+        overrides,
+        isMacPlatform(),
+    )
+        .slice(0, 2)
+        .map((binding) => formatBinding(binding, isMacPlatform()))
+        .join(" or ");
     const [goTo, setGoTo] = useState<string | null>(null);
     const [goToFailed, setGoToFailed] = useState(false);
     const canGoTo = onSeek != null || onSelectionChange != null;
@@ -297,7 +314,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                 disabled={!canGoTo}
                 onClick={openGoTo}
                 aria-label={`${readoutText.spoken}. Go to a page, measure or rehearsal mark`}
-                title={`${readoutText.spoken}. Click or press G or ${mod}+G to go to a page, measure or rehearsal mark`}
+                title={`${readoutText.spoken}. Click${goToKeys ? ` or press ${goToKeys}` : ""} to go to a page, measure or rehearsal mark`}
                 className="text-text rounded-4 enabled:hover:bg-fg-2 flex h-22 min-w-0 items-baseline gap-8 overflow-hidden px-4 font-mono text-[11px] leading-[22px] whitespace-nowrap"
             >
                 {/* UI-13: a minimum width, so the transport doesn't shift as the count changes */}
@@ -314,7 +331,7 @@ export const TimelineTransport = memo(function TimelineTransport({
     const fit = onFit && (
         <TransportButton
             label="Fit the show"
-            shortcut="Shift + Z"
+            shortcut={shortcuts.fit}
             hint={`Press again to go back. Pinch or ${mod}+scroll to zoom`}
             pressed={fitted}
             onClick={onFit}
@@ -326,83 +343,89 @@ export const TimelineTransport = memo(function TimelineTransport({
         <span aria-hidden="true" className="bg-stroke h-16 w-px shrink-0" />
     );
     return (
-        <TransportTooltipProvider>
-            <div
-                ref={rowRef}
-                role="group"
-                aria-label="Transport"
-                data-testid="timeline-transport"
-                className="border-stroke flex h-32 min-w-0 shrink-0 items-center gap-6 border-b px-6"
-            >
-                <div className="flex shrink-0 items-center gap-2">
-                    <TransportNavigationButton
-                        direction="previous"
-                        onNavigate={onNavigate}
-                    />
-                    <TransportPlayButton
-                        isPlaying={isPlaying}
-                        onPlayingChange={onPlayingChange}
-                        playLoops={playLoops}
-                        onPlayFromPlayhead={onPlayFromPlayhead}
-                        onPlayOn={onPlayOn}
-                    />
-                    <TransportNavigationButton
-                        direction="next"
-                        onNavigate={onNavigate}
-                    />
-                </div>
-                {(accessories != null || (secondary != null && !folded)) && (
-                    <>
-                        {divider}
-                        <div className="flex shrink-0 items-center gap-6">
-                            {accessories}
-                            {!folded && secondary}
-                        </div>
-                    </>
-                )}
-                {divider}
-                <div className="text-text-subtitle flex min-w-0 items-center gap-8">
-                    {!folded && clock}
-                    {readout}
-                </div>
-                <div className="ml-auto flex shrink-0 items-center gap-2">
-                    {folded ? (
-                        <Popover.Root>
-                            <Popover.Trigger asChild>
-                                <button
-                                    type="button"
-                                    aria-label="More controls"
-                                    title="More: sound, the clock, Fit and the view controls"
-                                    className="rounded-4 text-text enabled:hover:bg-fg-2 focus-visible:ring-accent flex size-24 items-center justify-center outline-hidden focus-visible:ring-2"
-                                >
-                                    <DotsThreeIcon size={18} weight="bold" />
-                                </button>
-                            </Popover.Trigger>
-                            <Popover.Portal>
-                                <Popover.Content
-                                    side="top"
-                                    align="end"
-                                    sideOffset={6}
-                                    className="border-stroke bg-modal text-text shadow-modal rounded-8 z-50 flex items-center gap-8 border px-8 py-6"
-                                >
-                                    {clock}
-                                    {secondary}
-                                    {leadingViewControls}
-                                    {fit}
-                                    {viewControls}
-                                </Popover.Content>
-                            </Popover.Portal>
-                        </Popover.Root>
-                    ) : (
+        <TransportShortcutsContext.Provider value={shortcuts}>
+            <TransportTooltipProvider>
+                <div
+                    ref={rowRef}
+                    role="group"
+                    aria-label="Transport"
+                    data-testid="timeline-transport"
+                    className="border-stroke flex h-32 min-w-0 shrink-0 items-center gap-6 border-b px-6"
+                >
+                    <div className="flex shrink-0 items-center gap-2">
+                        <TransportNavigationButton
+                            direction="previous"
+                            onNavigate={onNavigate}
+                        />
+                        <TransportPlayButton
+                            isPlaying={isPlaying}
+                            onPlayingChange={onPlayingChange}
+                            playLoops={playLoops}
+                            onPlayFromPlayhead={onPlayFromPlayhead}
+                            onPlayOn={onPlayOn}
+                        />
+                        <TransportNavigationButton
+                            direction="next"
+                            onNavigate={onNavigate}
+                        />
+                    </div>
+                    {(accessories != null ||
+                        (secondary != null && !folded)) && (
                         <>
-                            {leadingViewControls}
-                            {fit}
-                            {viewControls}
+                            {divider}
+                            <div className="flex shrink-0 items-center gap-6">
+                                {accessories}
+                                {!folded && secondary}
+                            </div>
                         </>
                     )}
+                    {divider}
+                    <div className="text-text-subtitle flex min-w-0 items-center gap-8">
+                        {!folded && clock}
+                        {readout}
+                    </div>
+                    <div className="ml-auto flex shrink-0 items-center gap-2">
+                        {folded ? (
+                            <Popover.Root>
+                                <Popover.Trigger asChild>
+                                    <button
+                                        type="button"
+                                        aria-label="More controls"
+                                        title="More: sound, the clock, Fit and the view controls"
+                                        className="rounded-4 text-text enabled:hover:bg-fg-2 focus-visible:ring-accent flex size-24 items-center justify-center outline-hidden focus-visible:ring-2"
+                                    >
+                                        <DotsThreeIcon
+                                            size={18}
+                                            weight="bold"
+                                        />
+                                    </button>
+                                </Popover.Trigger>
+                                <Popover.Portal>
+                                    <Popover.Content
+                                        side="top"
+                                        align="end"
+                                        sideOffset={6}
+                                        className="border-stroke bg-modal text-text shadow-modal rounded-8 z-50 flex items-center gap-8 border px-8 py-6"
+                                    >
+                                        {clock}
+                                        {secondary}
+                                        {leadingViewControls}
+                                        {fit}
+                                        {viewControls}
+                                    </Popover.Content>
+                                </Popover.Portal>
+                            </Popover.Root>
+                        ) : (
+                            <>
+                                {leadingViewControls}
+                                {fit}
+                                {viewControls}
+                            </>
+                        )}
+                    </div>
                 </div>
-            </div>
-        </TransportTooltipProvider>
+            </TransportTooltipProvider>
+        </TransportShortcutsContext.Provider>
     );
 });
 

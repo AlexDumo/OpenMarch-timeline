@@ -22,6 +22,7 @@ import ShortcutDispatcher from "@/shortcuts/ShortcutDispatcher";
 import { getActionDefinition } from "@/shortcuts/definitions";
 import { findConflicts, type ShortcutOverrides } from "@/shortcuts/keymap";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import * as platform from "@/shortcuts/platform";
 import {
     createLongTimelineStoryModel,
@@ -1748,6 +1749,41 @@ describe("a calmer timeline (UI-12)", () => {
         fireEvent.keyDown(window, { key: "Alt", altKey: true });
         expect(rows().map((row) => row.active)).toEqual([false, false, true]);
         expect(next).toHaveAttribute("aria-keyshortcuts", "Alt+E");
+    });
+
+    it("guides the shortcuts as the user changed them (shortcut review)", async () => {
+        useShortcutOverridesStore.setState({
+            overrides: { nextPage: ["L"], lastPage: [], timelineFit: ["F"] },
+        });
+        try {
+            render(
+                <ExpandedTimeline
+                    {...commonProps}
+                    showTransport
+                    onNavigate={vi.fn()}
+                    onPixelsPerBeatChange={vi.fn()}
+                />,
+            );
+            const next = screen.getByTestId("timeline-next");
+            expect(next).toHaveAttribute("aria-keyshortcuts", "L");
+            expect(
+                screen.getByRole("button", { name: /^Fit the show/ }),
+            ).toHaveAttribute("aria-keyshortcuts", "F");
+            act(() => next.focus());
+            await screen.findByRole("tooltip");
+            const rows = [
+                ...document.querySelector(
+                    '[data-testid="timeline-navigation-guide"]',
+                )!.children,
+            ].map(rowWords);
+            expect(rows).toEqual([
+                "Next page L",
+                "Next beat Shift + E",
+                "End of the show",
+            ]);
+        } finally {
+            useShortcutOverridesStore.setState({ overrides: {} });
+        }
     });
 
     it("in Expert guides Play, Alt+Play and Shift+Play with the lines' marks, and swaps to Alt's while Alt is held (UI-26)", async () => {
