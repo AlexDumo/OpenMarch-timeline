@@ -183,7 +183,25 @@ async function drawBox(show: Show) {
         await toScreen(page, released),
     );
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    await editorSettled(page);
     return { grid, pressed, released };
+}
+
+/**
+ * Waits for the floating editor to stop springing to its place: just after a draw it passes over
+ * the box's bottom handles on the way, and a press there would land on it
+ */
+async function editorSettled(page: Page) {
+    const bar = page.getByTestId("shape-tool-readout-bar");
+    let last = "";
+    await expect
+        .poll(async () => {
+            const now = JSON.stringify(await bar.boundingBox());
+            const still = now === last;
+            last = now;
+            return still;
+        })
+        .toBe(true);
 }
 
 /**
@@ -2102,6 +2120,141 @@ test("change: a typed 1 2/3 stays exactly 1⅔ steps and shows as 1⅔, − and 
     const saved = JSON.parse(intervals) as { across: number; deep: number };
     expect(Math.abs(saved.across - 5 / 3)).toBeLessThan(1e-9);
     expect(Math.abs(saved.deep - 8 / 3)).toBeLessThan(1e-9);
+});
+
+test("change: Expand twice and Shrink once keep the across:deep ratio and the pivot, one undo step a click; a hold is one undo step, and Shrink stops at half a step (#489)", async ({
+    show,
+}) => {
+    const { page } = show;
+    const { grid } = await drawBox(show);
+    const S = grid.pixelsPerStep;
+    const bar = page.getByTestId("shape-tool-readout");
+    const deepText = bar.getByTestId("shape-editor-deep");
+    /** The gaps between neighbors side to side and front to back, in steps, and the center */
+    const measure = async () => {
+        const { spots } = (await shapeOverlay(page))!;
+        const gap = (vs: number[]) => {
+            const sorted = [...new Set(vs.map((v) => v.toFixed(6)))]
+                .map(Number)
+                .sort((a, b) => a - b);
+            return (sorted[1] - sorted[0]) / S;
+        };
+        const xs = spots.map((p) => p.x);
+        const ys = spots.map((p) => p.y);
+        return {
+            across: gap(xs),
+            deep: gap(ys),
+            center: {
+                x: (Math.min(...xs) + Math.max(...xs)) / 2,
+                y: (Math.min(...ys) + Math.max(...ys)) / 2,
+            },
+        };
+    };
+    const typeSpacing = async (way: "across" | "deep", text: string) => {
+        await bar.getByTestId(`shape-editor-${way}`).click();
+        await page.keyboard.type(text);
+        await page.keyboard.press("Enter");
+    };
+    await typeSpacing("across", "2");
+    await typeSpacing("deep", "3");
+    await expect(deepText).toHaveText("3");
+    const start = await measure();
+    const counts = await bar.getByTestId("shape-editor-size").innerText();
+
+    const expand = page.getByTestId("shape-editor-expand");
+    const shrink = page.getByTestId("shape-editor-shrink");
+    await expand.hover();
+    await expect(page.getByRole("tooltip")).toContainText(
+        "Expand, keeping the proportions",
+    );
+    // Both on the half steps: the larger, deep, drives; across follows
+    await expand.click();
+    await expect(deepText).toHaveText("3½");
+    await expand.click();
+    await expect(deepText).toHaveText("4");
+    await shrink.click();
+    await expect(deepText).toHaveText("3½");
+    const after = await measure();
+    expect(after.deep).toBeCloseTo(3.5, 3);
+    expect(after.across / after.deep).toBeCloseTo(2 / 3, 3);
+    // Around the pivot (the center), the counts unchanged
+    expect(Math.abs(after.center.x - start.center.x)).toBeLessThan(CLOSE);
+    expect(Math.abs(after.center.y - start.center.y)).toBeLessThan(CLOSE);
+    await expect(bar.getByTestId("shape-editor-size")).toHaveText(counts);
+
+    // One undo step a click: back to before the Shrink
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(deepText).toHaveText("4");
+
+    // Held, it repeats, and the whole hold is one undo step
+    const button = (await expand.boundingBox())!;
+    await page.mouse.move(
+        button.x + button.width / 2,
+        button.y + button.height / 2,
+    );
+    await page.mouse.down();
+    await expect
+        .poll(async () => (await measure()).deep, { timeout: 5000 })
+        .toBeGreaterThan(5);
+    await page.mouse.up();
+    const held = await measure();
+    expect(held.across / held.deep).toBeCloseTo(2 / 3, 3);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(deepText).toHaveText("4");
+
+    // Down to the floor: Shrink disables once the next would take across under half a step
+    for (let i = 0; i < 12; i++) {
+        if (await shrink.isDisabled()) break;
+        const was = await deepText.innerText();
+        await shrink.click();
+        await expect(deepText).not.toHaveText(was);
+    }
+    await expect(shrink).toBeDisabled();
+    const floor = await measure();
+    expect(floor.across).toBeGreaterThanOrEqual(0.5 - CLOSE);
+    expect(floor.across / floor.deep).toBeCloseTo(2 / 3, 3);
+    // A tooltip closes on a press: point elsewhere, then back
+    await expand.hover();
+    await shrink.hover();
+    await expect(page.getByRole("tooltip")).toContainText(
+        "no spacing can go under half a step",
+    );
+});
+
+test("change: quick clicks on Expand all land on it: the editor's numbers keep their width while it's pressed (owner on #490)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const bar = page.getByTestId("shape-tool-readout");
+    const deepText = bar.getByTestId("shape-editor-deep");
+    for (const [way, text] of [
+        ["across", "2"],
+        ["deep", "3"],
+    ] as const) {
+        await bar.getByTestId(`shape-editor-${way}`).click();
+        await page.keyboard.type(text);
+        await page.keyboard.press("Enter");
+    }
+    await expect(deepText).toHaveText("3");
+    await editorSettled(page);
+
+    // 3 → 3½ → 4 → 4½: across follows at 2:3 and shows "≈", a wider number with its snap button
+    const expand = page.getByTestId("shape-editor-expand");
+    const at = (await expand.boundingBox())!;
+    for (const deep of ["3½", "4", "4½"]) {
+        await page.mouse.click(at.x + at.width / 2, at.y + at.height / 2);
+        await expect(deepText).toHaveText(deep);
+        // Put back before the next frame is drawn; a read can fall just before that
+        await expect
+            .poll(
+                async () => Math.abs((await expand.boundingBox())!.x - at.x),
+                {
+                    timeout: 300,
+                },
+            )
+            .toBeLessThan(1);
+    }
 });
 
 /**

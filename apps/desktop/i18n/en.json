@@ -105,6 +105,8 @@
             "quarterTurn": "Shape: Turn 90° clockwise",
             "recalculate": "Shape: Recalculate who goes where",
             "evenOut": "Shape: Even out the outline",
+            "expand": "Shape: Expand, keeping the proportions",
+            "shrink": "Shape: Shrink, keeping the proportions",
             "keywords": "shape form formation set place"
         },
         "swap": {
@@ -1995,6 +1997,10 @@
             "empty": "{count} empty",
             "flipAcross": "Flip side to side",
             "flipDeep": "Flip front to back",
+            "expand": "Expand, keeping the proportions",
+            "shrink": "Shrink, keeping the proportions",
+            "shrinkFloor": "Shrink: no spacing can go under half a step",
+            "scaleHint": "Click, hold to repeat, or drag",
             "layout": {
                 "aria": "Layout: {label}",
                 "cantMake": "{label} can't make {count}",

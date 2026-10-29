@@ -727,6 +727,24 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         ignoreRepeat: true,
     },
+    // Expand and Shrink keeping the proportions (#489): from the palette and the editor's buttons,
+    // no key until one is asked for
+    shapeExpand: {
+        labelKey: "actions.shape.expand",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    shapeShrink: {
+        labelKey: "actions.shape.shrink",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+    },
     shapeRecalculate: {
         labelKey: "actions.shape.recalculate",
         keywordsKey: "actions.shape.keywords",

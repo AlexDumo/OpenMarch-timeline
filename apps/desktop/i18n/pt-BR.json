@@ -84,6 +84,8 @@
             "quarterTurn": "Forma: Girar 90° no sentido horário",
             "recalculate": "Forma: Recalcular quem vai para onde",
             "evenOut": "Forma: igualar o contorno",
+            "expand": "Forma: ampliar, mantendo as proporções",
+            "shrink": "Forma: reduzir, mantendo as proporções",
             "ring": "Anel de favoritos: segure para escolher uma forma, toque para mantê-lo aberto"
         },
         "swap": {
@@ -1224,6 +1226,10 @@
             "empty": "{count} vazios",
             "flipAcross": "Espelhar de lado a lado",
             "flipDeep": "Espelhar de frente para trás",
+            "expand": "Ampliar, mantendo as proporções",
+            "shrink": "Reduzir, mantendo as proporções",
+            "shrinkFloor": "Reduzir: nenhum espaçamento pode ficar abaixo de meio passo",
+            "scaleHint": "Clique, segure para repetir ou arraste",
             "gap": {
                 "menu": "Sobra",
                 "spacing": "{count, plural, one {{value} passo} other {{value} passos}}",
