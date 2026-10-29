@@ -59,7 +59,7 @@ export function setAsShownMenu(
             if (state.follows.length > 0) return null;
             return tolgee.t(
                 "timeline.rangeMenu.setAsShownNone",
-                "No selected marcher is Not set on {page}: each is already set there or partway through a move",
+                "Every selected marcher is already set on {page}, or partway through a move",
                 { page: pagesText([state.pageName]) },
             );
         },
