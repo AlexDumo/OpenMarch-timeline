@@ -9,6 +9,10 @@
  *   and rolled-back transactions all end in `invalidateQueries`), and of
  *   `VIEW3D_TIMELINE_QUERY_KEY` after every committed timeline change.
  *
+ * A reloaded editor asks main whether a window is already open, since main
+ * pushes the window state only when the window opens or closes. If one is,
+ * the window reads everything again, as anything may have changed meanwhile.
+ *
  * It answers the window's `hello` and handles its venue-change (venue
  * settings with history, camera lists without) and playback
  * requests (playback runs the editor's own actions). With no window open it does nothing, except that it opens the
@@ -213,10 +217,22 @@ export function useView3dPublisher() {
     }, []);
 
     // Window state, hello and venue requests. Main pushes the state when the
-    // window opens or closes; a hello also means it's open.
+    // window opens or closes; a hello also means it's open. An editor that
+    // (re)loads with a window already open asks, after subscribing.
     useEffect(() => {
         const electron = window.electron;
         if (!electron?.onView3dWindowState) return;
+        let cancelled = false;
+        void electron
+            .isView3dOpen?.()
+            .then((open) => {
+                if (cancelled || open !== true) return;
+                setWindowOpen(true);
+                electron.publishToView3d(VIEW3D_INVALIDATE_CHANNEL, {
+                    queryKeys: [[]],
+                });
+            })
+            .catch(() => {});
         const cleanups = [
             electron.onView3dWindowState(setWindowOpen),
             electron.onView3dHello(() => {
@@ -250,7 +266,10 @@ export function useView3dPublisher() {
                 updateVenue(parsed.data);
             }),
         ];
-        return () => cleanups.forEach((cleanup) => cleanup());
+        return () => {
+            cancelled = true;
+            cleanups.forEach((cleanup) => cleanup());
+        };
     }, [sendClock, sendSelection, updateVenue, updateCameras]);
 
     // Opens the window with the show when the app setting asks for it, in

@@ -169,11 +169,14 @@ describe("useView3dPublisher", () => {
     let onWindowState: ((open: boolean) => void) | undefined;
     let onHello: (() => void) | undefined;
     let onVenueRequest: ((request: { settings: unknown }) => void) | undefined;
+    let windowAlreadyOpen: boolean;
     const originalElectron = window.electron;
 
     beforeEach(() => {
         sent = [];
+        windowAlreadyOpen = false;
         window.electron = {
+            isView3dOpen: () => Promise.resolve(windowAlreadyOpen),
             publishToView3d: <C extends View3dPublishChannel>(
                 channel: C,
                 payload: View3dPayloads[C],
@@ -240,6 +243,36 @@ describe("useView3dPublisher", () => {
         sent = [];
         void qc.invalidateQueries({ queryKey: ["pages"] });
         await flushMicrotasks();
+        expect(sent).toEqual([]);
+    });
+
+    it("finds a window left open by an editor reload, and has it read everything again", async () => {
+        windowAlreadyOpen = true;
+        const { qc } = render();
+        await act(flushMicrotasks);
+
+        expect(sent).toContainEqual({
+            channel: VIEW3D_INVALIDATE_CHANNEL,
+            payload: { queryKeys: [[]] },
+        });
+        const channels = sent.map((message) => message.channel);
+        expect(channels).toContain(VIEW3D_CLOCK_CHANNEL);
+        expect(channels).toContain(VIEW3D_SELECTION_CHANNEL);
+
+        sent = [];
+        void qc.invalidateQueries({ queryKey: ["pages"] });
+        await flushMicrotasks();
+        expect(sent).toEqual([
+            {
+                channel: VIEW3D_INVALIDATE_CHANNEL,
+                payload: { queryKeys: [["pages"]] },
+            },
+        ]);
+    });
+
+    it("stays quiet when it (re)loads with no window open", async () => {
+        render();
+        await act(flushMicrotasks);
         expect(sent).toEqual([]);
     });
 
