@@ -244,26 +244,9 @@ const filledSquare = (
 });
 
 /**
- * Whether the marcher stands on a set spot at `beat`: it hasn't moved since its last Set beat
- * before `beat`, or since home (the first page is always set) when it has none.
- */
-function restsOnSetSpot(
-    resolver: OverlayResolver,
-    marcherId: number,
-    setBeats: readonly number[],
-    beat: number,
-): boolean {
-    let last = 0;
-    for (const b of setBeats) if (b < beat) last = b;
-    return !resolver
-        .spanInfos(marcherId)
-        .some((s) => s.kind !== "hold" && s.start < beat && s.end > last);
-}
-
-/**
- * The squares on a marcher's route over the window: one at each Set beat in `[fromBeat, toBeat]`,
- * and one at the start flag when the marcher stands there on a spot set earlier (or its home).
- * Each is an outline square with a white one inside it.
+ * The squares on a marcher's route over the window: one at each Set beat in `[fromBeat, toBeat]`.
+ * The start flag gets one only when a coordinate is set on that count (a move end, or home):
+ * standing there on a spot set earlier doesn't count (owner, 2026-10-29). Each is an outline square with a white one inside.
  */
 function routeSquares(
     window: StartFlagWindow,
@@ -272,11 +255,8 @@ function routeSquares(
 ): StrokePlan[] {
     const { resolver, fromBeat, toBeat } = window;
     const beats = setBeats.filter((b) => b >= fromBeat && b <= toBeat);
-    if (
-        beats[0] !== fromBeat &&
-        restsOnSetSpot(resolver, marcherId, setBeats, fromBeat)
-    )
-        beats.unshift(fromBeat);
+    // Home is always set (`isSetAt`), though no move ends there
+    if (fromBeat === 0 && beats[0] !== 0) beats.unshift(0);
     const inner = ROUTE_SQUARE_SIZE - 2 * ROUTE_SQUARE_OUTLINE;
     return beats.flatMap((beat) => {
         const [x, y] = resolver.positionAt(marcherId, beat);

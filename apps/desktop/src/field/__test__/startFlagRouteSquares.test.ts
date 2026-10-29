@@ -84,15 +84,12 @@ describe("route squares", () => {
                 planStartFlagOverlay(input(g4, { fromBeat: 4, toBeat: 16 })),
             ),
         ).toEqual([[8, 0]]);
-        // [10, 20]: holding at the start flag on the spot set on 8, then set on 20
+        // [10, 20]: holding at the start flag on the spot set on 8 isn't set there; set on 20
         expect(
             squareCenters(
                 planStartFlagOverlay(input(g4, { fromBeat: 10, toBeat: 20 })),
             ),
-        ).toEqual([
-            [8, 0],
-            [8, 8],
-        ]);
+        ).toEqual([[8, 8]]);
         // [8, 20]: set at both ends of the window
         expect(
             squareCenters(
@@ -104,16 +101,17 @@ describe("route squares", () => {
         ]);
     });
 
-    it("squares the home spot while the marcher still stands on it at the start flag", () => {
+    it("doesn't square the start flag just because the marcher stands on an earlier set spot", () => {
         // G5: marcher 2 stays home at (0, 0) until a move from 8 ends on 16
         const g5 = resolverFor("G5");
         const end = g5.positionAt(2, 16) as [number, number];
+        // Still home at the start flag (1): home was set on 0, not on 1
         expect(
             squareCenters(
                 planStartFlagOverlay(input(g5, { fromBeat: 1, toBeat: 16 })),
             ),
-        ).toEqual([[0, 0], end]);
-        // Partway through the move at the start flag: no square there
+        ).toEqual([end]);
+        // Partway through the move at the start flag: no square there either
         expect(
             squareCenters(
                 planStartFlagOverlay(input(g5, { fromBeat: 12, toBeat: 16 })),
