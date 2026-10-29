@@ -2,8 +2,7 @@
 
 # Modifier roles: one map from keys to what they mean
 
-Status: design proposal, 2026-10-28, revised 2026-10-29 after review with the owner, for the shape host (`shapes/host`). Nothing changes in the
-app until the owner accepts it. The implementation ticket is linked from the pull request.
+Status: accepted 2026-10-29 (version A), after review with the owner, for the shape host (`shapes/host`). The implementation ticket is linked from the pull request.
 
 ## Why
 
@@ -11,8 +10,8 @@ The team can't settle Shift or Alt for fine control, and a tester asked for Shif
 gesture reads `event.altKey` and friends itself, so changing the key for "fine" means editing a
 dozen files, and the keys already mean different things in different parts of the app (below). The
 proposal: gestures ask for a **role** (`fine`, `constrain`, `fromCenter`), and one module maps the
-physical keys to roles. No snapping becomes a UI toggle instead of a held key. Two key mappings
-go to a lab test (section 5).
+physical keys to roles. No snapping becomes a UI toggle instead of a held key. The owner picked
+version A: Shift = fine, $mod = constrain, Alt = from center (section 5).
 
 Prior research on what other tools do (sources in the shape-host research notes,
 `modifier-conventions.md`):
@@ -319,7 +318,7 @@ is the OS key, so `RoleKey` has three values.
 
 Alt has platform risks the ticket must check on real machines: on Windows and Linux a lone Alt
 press can show Electron's auto-hidden menu bar, and on some Linux desktops Alt+drag moves the
-window. Both versions below put Alt on `fromCenter`, the least important role, so it absorbs those
+window. Version A puts Alt on `fromCenter`, the least important role, so it absorbs those
 risks; today Alt carries `fine`, the most important.
 
 ### Live changes mid-drag
@@ -342,7 +341,7 @@ The timeline reads Alt = no snap (held) and $mod = draw a range (a press choice,
 Both stay. It goes through the module only so the keys are named in one place:
 `timeline: { noSnap: "Alt", range: "$mod" }` in a small timeline-specific type, not mixed into the
 field's roles. The constrain key meaning "range" a few inches away from "equal spacings" is one
-argument against $mod = constrain (see the versions).
+accepted cost of version A (section 5).
 
 ### The shortcuts registry
 
@@ -353,8 +352,7 @@ Roles are not actions: nothing fires on a keypress. They don't go into `ACTIONS`
 2. **Conflict detection.** Within a context, two held roles can't share a key. A modifier plus a
    letter is a shortcut and a modifier alone is a role, so they can't collide. The Snap toggle's
    shortcut is an ordinary action and goes through `keymap.ts` like any other.
-3. **Keyboard nudges** (`NUDGE_VARIANTS` in `definitions.ts`) are left alone until the lab test is
-   decided (see Q3).
+3. **Keyboard nudges** (`NUDGE_VARIANTS` in `definitions.ts`) already use Shift = fine, so they agree with version A and don't change.
 
 **Settings › Shortcuts later: yes**, as a short "While dragging" section above the actions: one row
 per held role with a three-way key picker (Shift / Alt / ⌘ or Ctrl). Picking a key another role
@@ -362,56 +360,56 @@ uses swaps them, so the map stays valid. Ship presets first, per-role picking af
 
 ## 4. Conflicts if fine became Shift
 
-| Conflict                                                                      | What happens with Shift = fine                                        | How the design handles it                                                                                             |
-| ----------------------------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **Constrain is Shift today** (equal spacings, 45°, block 15°, rotation steps) | Both can't be Shift                                                   | Constrain moves to $mod (version A). The real cost: it breaks the near-universal Shift = constrain of 2D design tools |
-| Shift-click adds to the selection; marquee and lasso with Shift add           | A Shift-press-drag would add and go fine                              | The press rule: Shift used by the press isn't `fine` until released. Selection code is untouched                      |
-| Field marcher drag: Shift = no snap; corner scale: Shift = free ratio         | Shift would mean fine _and_ no snap                                   | No snap moves to the Snap toggle; free ratio follows `constrain`. `fine` already drops the grid snap on the field     |
-| $mod draws a range on the timeline                                            | With version A, $mod = constrain on the field, range on the timeline  | Separate contexts, so nothing breaks; but the same key means unrelated things close together. Noted against version A |
-| Shift+arrow nudge                                                             | Already fine (quarter step)                                           | No conflict; it becomes consistent                                                                                    |
-| Shift+R, Shift+E/Q, Shift+F, Shift+Space, Shift+Z, Shift+P/N/V/H              | None: these fire on a letter keydown; roles matter only during a drag | No change                                                                                                             |
-| Timeline: Shift on Previous/Next = beat, Shift on a page box = extend         | Clicks, not drags                                                     | Not roles; untouched                                                                                                  |
-| 3D camera: Shift-drag pans                                                    | Camera navigation                                                     | Not roles; untouched                                                                                                  |
-| Inspector `DragInput` (packages/ui): Shift = slower                           | Already Shift = fine                                                  | Later it takes a `fine` callback from the app, so it follows the map                                                  |
-| Designers press Shift by reflex to constrain                                  | They get a slower drag, which can feel like lag                       | The on-drag chip names what's held                                                                                    |
+| Conflict                                                                      | What happens with Shift = fine                                        | How the design handles it                                                                                                   |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Constrain is Shift today** (equal spacings, 45°, block 15°, rotation steps) | Both can't be Shift                                                   | Constrain moves to $mod (version A). The real cost: it breaks the near-universal Shift = constrain of 2D design tools       |
+| Shift-click adds to the selection; marquee and lasso with Shift add           | A Shift-press-drag would add and go fine                              | The press rule: Shift used by the press isn't `fine` until released. Selection code is untouched                            |
+| Field marcher drag: Shift = no snap; corner scale: Shift = free ratio         | Shift would mean fine _and_ no snap                                   | No snap moves to the Snap toggle; free ratio follows `constrain`. `fine` already drops the grid snap on the field           |
+| $mod draws a range on the timeline                                            | With version A, $mod = constrain on the field, range on the timeline  | Separate contexts, so nothing breaks; but the same key means unrelated things close together. An accepted cost of version A |
+| Shift+arrow nudge                                                             | Already fine (quarter step)                                           | No conflict; it becomes consistent                                                                                          |
+| Shift+R, Shift+E/Q, Shift+F, Shift+Space, Shift+Z, Shift+P/N/V/H              | None: these fire on a letter keydown; roles matter only during a drag | No change                                                                                                                   |
+| Timeline: Shift on Previous/Next = beat, Shift on a page box = extend         | Clicks, not drags                                                     | Not roles; untouched                                                                                                        |
+| 3D camera: Shift-drag pans                                                    | Camera navigation                                                     | Not roles; untouched                                                                                                        |
+| Inspector `DragInput` (packages/ui): Shift = slower                           | Already Shift = fine                                                  | Later it takes a `fine` callback from the app, so it follows the map                                                        |
+| Designers press Shift by reflex to constrain                                  | They get a slower drag, which can feel like lag                       | The on-drag chip names what's held                                                                                          |
 
-## 5. Recommendation: lab-test two versions
+## 5. Decision: version A
 
-Today's mapping (Alt = fine, Shift = constrain, $mod = no snap) is not one of the candidates: Alt =
-fine has no precedent, and no-snap moves to the toggle either way. Test two versions, both with
-the Snap toggle and both with Alt = from center:
+The owner picked version A on 2026-10-29, after trying a prototype of both versions
+(`~/shape-host-orch/proto/modifier-roles/index.html`, outside the repo). There is no lab A/B
+test.
 
-|         | Version A (Shift = fine)                                           | Version B (conventions)                                                                                |
-| ------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| Shift   | fine                                                               | constrain                                                                                              |
-| $mod    | constrain                                                          | fine                                                                                                   |
-| Alt     | from center                                                        | from center                                                                                            |
-| Snap    | toggle                                                             | toggle                                                                                                 |
-| For it  | The tester, the arrow keys, Blender, DAWs                          | Shift = constrain and Alt = from center in every 2D design tool; $mod = fine in After Effects and Maya |
-| Against | $mod = constrain only in Inkscape; $mod is "range" on the timeline | Cmd+arrow is a 4-step nudge today; Figma users expect Cmd = no snap                                    |
+| Input    | Meaning                                            |
+| -------- | -------------------------------------------------- |
+| Shift    | fine                                               |
+| $mod     | constrain                                          |
+| Alt      | from center                                        |
+| Snap     | toggle                                             |
+| At press | Shift add, Alt subtract, $mod reach inside / pivot |
 
-Press choices are the same in both: Shift = add, Alt = subtract, $mod = reach inside / pivot.
+Things the decision settles:
 
-How testers switch:
+- **Rotation:** default 15° steps, Shift (fine) = whole degrees, Snap off = free. Whole degrees
+  stay on Shift, as today.
+- **Arrow nudges:** Shift+arrow is already the fine nudge, so the arrow keys already agree with
+  version A and don't change.
+- **Snap toggle:** resets on restart and on opening a file; covers shape and marcher drags on the
+  field; the timeline keeps its held Alt. The shortcut is picked from the free keys in the
+  shortcuts registry when it's built.
+- **Axis lock, subtract and reach inside** are in scope.
+- **The map stays data** (one `RoleMap`), so a user setting or another preset can come later
+  without touching the gestures. Only the version A map ships.
 
-- **Lab:** the existing Version switch (`lab/labVariant.ts`). A lab test lists
-  `variants: [a, b]` and the feedback records which one was on. No settings UI.
-- **Desktop testers:** a hidden UI setting `modifierPreset: "a" | "b"`, settable from a ⌘K action
-  until the Settings section exists.
-- **On-drag chip, in scope:** while a shape or field drag runs, a small chip near the cursor shows
-  what's held and the snap state (`⇧ fine · ⌥ from center · Snap off`). It makes either version
-  learnable, catches the reflex-Shift surprise, and tells testers which version they're on.
+What the prototype found:
 
-Leave the arrow-key nudges alone until the test is decided: if A wins they already agree; if B
-wins, Cmd+arrow (the 4-step nudge) needs its own decision.
+- A press uses a key only when its choice actually applies. A $mod press on a loose marcher, not
+  inside a box, isn't "reach inside", so $mod stays free for constrain (the axis lock).
+- The on-drag chip earns its place: it's the only way to tell which keys a drag is reading.
 
-Per the lab rules, the variant switch doesn't go to OpenMarch `main`: keep the version that wins.
+Still to check during the build: whether a lone Alt press shows Electron's menu bar on
+Windows/Linux, and whether a Linux window manager takes Alt+drag. Alt now carries only from center,
+the least important role.
 
-## Questions for the owner
+## Open questions
 
-1. After the lab test: version A or B?
-2. Snap toggle: shape and marcher drags on the field only (proposed), or the timeline too? Reset on
-   restart and on opening a file (proposed)?
-3. Arrow nudges: follow the winning version, or stay as they are?
-4. Constrain while moving = axis lock (proposed), with Lock X / Lock Y as its always-on form?
-5. Mirror and timeline ripple: worth designing as toggles, or not now?
+1. Mirror and timeline ripple: design them as toggles, or leave them for now?
