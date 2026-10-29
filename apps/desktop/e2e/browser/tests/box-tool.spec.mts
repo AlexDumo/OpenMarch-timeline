@@ -2221,6 +2221,79 @@ test("change: Expand twice and Shrink once keep the across:deep ratio and the pi
     );
 });
 
+test("change: in a narrow window the editor goes onto two rows, inside the field; one row when it fits (owner)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const bar = page.getByTestId("shape-tool-readout-bar");
+    await expect(bar).toHaveAttribute("data-rows", "1");
+    /** The bar and the field it floats over, on screen */
+    const boxes = () =>
+        bar.evaluate((el) => {
+            const field =
+                el.parentElement!.offsetParent!.getBoundingClientRect();
+            const own = el.getBoundingClientRect();
+            return {
+                left: own.left - field.left,
+                right: field.right - own.right,
+                height: own.height,
+            };
+        });
+    const wide = await boxes();
+
+    await page.setViewportSize({ width: 820, height: 800 });
+    await expect(bar).toHaveAttribute("data-rows", "2");
+    await expect
+        .poll(async () => {
+            const { left, right } = await boxes();
+            return Math.min(left, right);
+        })
+        .toBeGreaterThanOrEqual(0);
+    expect((await boxes()).height).toBeGreaterThan(wide.height * 1.5);
+    // Every control is still there to press
+    await expect(page.getByTestId("shape-editor-expand")).toBeInViewport({
+        ratio: 1,
+    });
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await expect(bar).toHaveAttribute("data-rows", "1");
+});
+
+test("change: a press that makes the editor too wide for one row keeps its rows until let go, so the pressed control stays put (review of #493)", async ({
+    show,
+}) => {
+    const { page } = show;
+    // One row only just fits here, and a + that leaves marchers short widens it past the field
+    await page.setViewportSize({ width: 1000, height: 1000 });
+    await drawBox(show);
+    const bar = page.getByTestId("shape-tool-readout-bar");
+    await expect(bar).toHaveAttribute("data-rows", "1");
+    const more = page.getByRole("button", { name: "One more across" });
+    const at = (await more.boundingBox())!;
+    await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect(page.getByTestId("shape-tool-readout")).toHaveAttribute(
+        "data-held",
+        "true",
+    );
+    await expect(bar).toHaveAttribute("data-rows", "1");
+    expect(Math.abs((await more.boundingBox())!.x - at.x)).toBeLessThan(1);
+    // Let go, it goes onto two rows, inside the field
+    await expect(bar).toHaveAttribute("data-rows", "2");
+    await expect
+        .poll(() =>
+            bar.evaluate((el) => {
+                const field =
+                    el.parentElement!.offsetParent!.getBoundingClientRect();
+                const own = el.getBoundingClientRect();
+                return Math.min(own.left - field.left, field.right - own.right);
+            }),
+        )
+        .toBeGreaterThanOrEqual(0);
+});
+
 test("change: quick clicks on Expand all land on it: the editor's numbers keep their width while it's pressed (owner on #490)", async ({
     show,
 }) => {
