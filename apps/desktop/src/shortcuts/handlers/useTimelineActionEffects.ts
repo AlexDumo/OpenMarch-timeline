@@ -1,11 +1,15 @@
 import { useEffect } from "react";
 import { isMenuAction } from "@/global/menuActions";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
-import { ACTIONS, type ActionId } from "../definitions";
+import type { ActionId } from "../definitions";
 import { runAction, subscribeToActionRuns } from "../registry";
 
-/** Playback controls, and peeks that only change what's drawn, leave a held preview frame alone (UI-11) */
-const TRANSPORT_ACTIONS: ReadonlySet<ActionId> = new Set<ActionId>([
+/**
+ * Playback controls, peeks that only change what's drawn, and looks that change nothing on the
+ * field (the command bar, settings, the shortcuts list, moving focus) leave a held preview frame
+ * alone (UI-11). An action the command bar then runs still puts it back.
+ */
+const KEEPS_PREVIEW_FRAME: ReadonlySet<ActionId> = new Set<ActionId>([
     "playPause",
     "timelinePlayPause",
     "toggleLoop",
@@ -17,15 +21,21 @@ const TRANSPORT_ACTIONS: ReadonlySet<ActionId> = new Set<ActionId>([
     "nextPlaybackSpeed",
     "resetPlaybackSpeed",
     "toggleStartFlagPositions",
+    "openCommandPalette",
+    "openSettings",
+    "showShortcuts",
+    "focusCanvas",
+    "focusTimeline",
+    "exitTimelineFocus",
 ]);
 
 export function useTimelineActionEffects() {
-    // UI-11: anything but the transport puts a held preview frame back on the playhead, so
-    // edits start from the positions they change
+    // UI-11: anything but the transport (and a look, `KEEPS_PREVIEW_FRAME`) puts a held preview
+    // frame back on the playhead, so edits start from the positions they change
     useEffect(
         () =>
             subscribeToActionRuns((id) => {
-                if (TRANSPORT_ACTIONS.has(id)) return;
+                if (KEEPS_PREVIEW_FRAME.has(id)) return;
                 const timelineSelection = useTimelineSelectionStore.getState();
                 if (timelineSelection.playback === null)
                     timelineSelection.clearCursor();
@@ -38,8 +48,7 @@ export function useTimelineActionEffects() {
     useEffect(
         () =>
             window.electron?.onMenuAction?.((action) => {
-                if (isMenuAction(action) && action in ACTIONS)
-                    runAction(action as ActionId);
+                if (isMenuAction(action)) runAction(action as ActionId);
             }),
         [],
     );

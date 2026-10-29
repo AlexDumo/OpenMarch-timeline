@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { spaceStaysPlay } from "@/components/timeline/timelineHotkeys";
 import ShortcutDispatcher from "../ShortcutDispatcher";
 import { registerActionHandler, runAction } from "../registry";
-import { useActionHandler } from "../useActionHandler";
+import { useActionHandler, useActionHandlerGroup } from "../useActionHandler";
+import type { ActionId } from "../definitions";
 import { useTimelineActionEffects } from "../handlers/useTimelineActionEffects";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 
@@ -191,6 +192,38 @@ describe("a held preview frame (UI-11)", () => {
             expect(clearCursor).not.toHaveBeenCalled();
             runAction("lockX");
             expect(clearCursor).toHaveBeenCalledTimes(1);
+        } finally {
+            useTimelineSelectionStore.setState({
+                playback: original.playback,
+                clearCursor: original.clearCursor,
+            });
+        }
+    });
+
+    // Opening the command bar, settings or the shortcuts list, or moving focus, changes nothing
+    // the field draws (shortcut review)
+    const LOOKS: readonly ActionId[] = [
+        "openCommandPalette",
+        "openSettings",
+        "showShortcuts",
+        "focusCanvas",
+        "focusTimeline",
+        "exitTimelineFocus",
+    ];
+    function Looks() {
+        useTimelineActionEffects();
+        useActionHandlerGroup(LOOKS, () => {});
+        return null;
+    }
+
+    it("stays for a look at the command bar, settings or shortcuts, or a focus change", () => {
+        const clearCursor = vi.fn();
+        const original = useTimelineSelectionStore.getState();
+        useTimelineSelectionStore.setState({ playback: null, clearCursor });
+        try {
+            render(<Looks />);
+            for (const id of LOOKS) runAction(id);
+            expect(clearCursor).not.toHaveBeenCalled();
         } finally {
             useTimelineSelectionStore.setState({
                 playback: original.playback,
