@@ -47,6 +47,15 @@ export const ROUTE_SQUARE_OUTLINE = 0.75;
 export const ROUTE_SQUARE_COLOR: Rgba = [0.35, 0.35, 0.35, 1];
 export const ROUTE_SQUARE_FILL: Rgba = [1, 1, 1, 1];
 
+/**
+ * Where a selected marcher came from (owner, 2026-10-29): the last move it started before the
+ * start flag, drawn behind S dotted and lighter than the route, with lighter squares at its set
+ * spots. Shown even when the marcher stands still at S. Screen pixels, like the route.
+ */
+export const ROUTE_TAIL_COLOR: Rgba = [0.75, 0.75, 0.75, 1];
+export const ROUTE_TAIL_DASH: readonly [number, number] = [2, 4];
+export const ROUTE_TAIL_SQUARE_COLOR: Rgba = [0.72, 0.72, 0.72, 1];
+
 export type StartFlagOverlayInput = {
     readonly resolver: Pick<
         Resolver,
@@ -100,6 +109,11 @@ export type StartFlagMarcherPlan = {
      * dots); empty when its path isn't drawn or no Set beats were given
      */
     readonly squares: readonly StrokePlan[];
+    /**
+     * The move it came from, behind the start flag (screen units, dotted and light); empty unless
+     * it has squares
+     */
+    readonly tail: readonly StrokePlan[];
 };
 
 /** Whether a level draws for this marcher. */
@@ -257,14 +271,74 @@ function routeSquares(
     const beats = setBeats.filter((b) => b >= fromBeat && b <= toBeat);
     // Home is always set (`isSetAt`), though no move ends there
     if (fromBeat === 0 && beats[0] !== 0) beats.unshift(0);
+    return beats.flatMap((beat) =>
+        outlinedSquare(
+            resolver.positionAt(marcherId, beat),
+            ROUTE_SQUARE_COLOR,
+        ),
+    );
+}
+
+/** An outline square with a white one inside it, centered on `[x, y]`. */
+function outlinedSquare([x, y]: readonly [number, number], color: Rgba) {
     const inner = ROUTE_SQUARE_SIZE - 2 * ROUTE_SQUARE_OUTLINE;
-    return beats.flatMap((beat) => {
-        const [x, y] = resolver.positionAt(marcherId, beat);
-        return [
-            filledSquare(x, y, ROUTE_SQUARE_SIZE, ROUTE_SQUARE_COLOR),
-            filledSquare(x, y, inner, ROUTE_SQUARE_FILL),
-        ];
-    });
+    return [
+        filledSquare(x, y, ROUTE_SQUARE_SIZE, color),
+        filledSquare(x, y, inner, ROUTE_SQUARE_FILL),
+    ];
+}
+
+/**
+ * Where the marcher came from: the last move it started before the start flag, from that move's
+ * start up to the start flag (or the move's end, when it arrived before it), dotted and light,
+ * with a light square where it left from and one where it arrived before the start flag. Empty
+ * when no move starts before the start flag.
+ */
+function routeTail(
+    window: StartFlagWindow,
+    marcherId: number,
+    setBeats: readonly number[],
+): { tail: StrokePlan[]; squares: StrokePlan[] } {
+    const { resolver, fromBeat } = window;
+    let from: number | null = null;
+    let to = 0;
+    for (const span of resolver.spanInfos(marcherId))
+        if (
+            span.kind !== "hold" &&
+            Number.isFinite(span.start) &&
+            span.start < fromBeat &&
+            (from === null || span.start > from)
+        ) {
+            from = span.start;
+            to = Math.min(span.end, fromBeat);
+        }
+    if (from === null) return { tail: [], squares: [] };
+    const path = sampleTimelinePath(
+        resolver,
+        marcherId,
+        from,
+        to,
+        PATH_DRAW_TOLERANCE,
+    );
+    if (!path || path.points.length < 2) return { tail: [], squares: [] };
+    const spots = [from, ...setBeats.filter((b) => b > from && b < fromBeat)];
+    return {
+        tail: [
+            {
+                points: path.points,
+                color: ROUTE_TAIL_COLOR,
+                width: START_FLAG_PATH_WIDTH,
+                dash: ROUTE_TAIL_DASH,
+                round: true,
+            },
+        ],
+        squares: spots.flatMap((beat) =>
+            outlinedSquare(
+                resolver.positionAt(marcherId, beat),
+                ROUTE_TAIL_SQUARE_COLOR,
+            ),
+        ),
+    };
 }
 
 /** Home (beat 0) has no window, and neither does S at or past P. */
@@ -306,10 +380,19 @@ export function planStartFlagMarcher(
             strokeWidth: 0,
         },
         ...route,
-        squares:
-            withPath && setBeats
-                ? routeSquares(window, marcherId, setBeats)
-                : [],
+        ...(withPath && setBeats
+            ? (() => {
+                  const behind = routeTail(window, marcherId, setBeats);
+                  return {
+                      // Behind the start flag first, so the route draws over it
+                      squares: [
+                          ...behind.squares,
+                          ...routeSquares(window, marcherId, setBeats),
+                      ],
+                      tail: behind.tail,
+                  };
+              })()
+            : { squares: [], tail: [] }),
     };
 }
 
@@ -321,8 +404,10 @@ export function startFlagOverlayOf(
     const paths: StrokePlan[] = [];
     const warnings: StrokePlan[] = [];
     const squares: StrokePlan[] = [];
+    const tails: StrokePlan[] = [];
     for (const marcher of marchers) {
         dots.push(marcher.dot);
+        tails.push(...marcher.tail);
         paths.push(...marcher.paths);
         warnings.push(...marcher.warnings);
         squares.push(...marcher.squares);
@@ -334,7 +419,12 @@ export function startFlagOverlayOf(
             dots,
             labels: [],
         },
-        paths: { units: "screen", strokes: paths, dots: [], labels: [] },
+        paths: {
+            units: "screen",
+            strokes: [...tails, ...paths],
+            dots: [],
+            labels: [],
+        },
     };
 }
 

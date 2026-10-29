@@ -8,6 +8,8 @@ import type { StartFlagLevels } from "@/timeline/startFlagLevels";
 import {
     planStartFlagOverlay,
     ROUTE_SQUARE_COLOR,
+    ROUTE_TAIL_COLOR,
+    ROUTE_TAIL_SQUARE_COLOR,
     ROUTE_SQUARE_FILL,
     ROUTE_SQUARE_OUTLINE,
     ROUTE_SQUARE_SIZE,
@@ -61,6 +63,20 @@ function squareCenters(plan: StartFlagOverlay): [number, number][] {
         (s.points[0]!.x + s.points[1]!.x) / 2,
         s.points[0]!.y,
     ]);
+}
+
+/** The light squares behind the start flag, by center. */
+function tailSquareCenters(plan: StartFlagOverlay): [number, number][] {
+    return plan.dots.strokes
+        .filter((s) => s.color === ROUTE_TAIL_SQUARE_COLOR)
+        .map((s) => [(s.points[0]!.x + s.points[1]!.x) / 2, s.points[0]!.y]);
+}
+
+/** The dotted light strokes behind the start flag, as their end points. */
+function tailEnds(plan: StartFlagOverlay) {
+    return plan.paths.strokes
+        .filter((s) => s.color === ROUTE_TAIL_COLOR)
+        .map((s) => [s.points[0], s.points[s.points.length - 1]]);
 }
 
 describe("route squares", () => {
@@ -197,5 +213,66 @@ describe("route squares", () => {
             planStartFlagOverlay(input(g4, { fromBeat: 8, toBeat: 12 })).dots
                 .strokes,
         ).toEqual([]);
+    });
+});
+
+describe("where a selected marcher came from, behind the start flag", () => {
+    // G4: home (0, 0), a move to (8, 0) over 0-8, standing until 12, then a move to (8, 8) by 20
+    it("draws the move that brought it here, even when it stands still at the start flag", () => {
+        const plan = planStartFlagOverlay(
+            input(resolverFor("G4"), { fromBeat: 10, toBeat: 20 }),
+        );
+        expect(tailEnds(plan)).toEqual([
+            [
+                { x: 0, y: 0 },
+                { x: 8, y: 0 },
+            ],
+        ]);
+        // Light squares where it left from (home) and where it arrived (set on 8)
+        expect(tailSquareCenters(plan)).toEqual([
+            [0, 0],
+            [8, 0],
+        ]);
+        // The route's own squares are unchanged: only the set spot on 20
+        expect(squareCenters(plan)).toEqual([[8, 8]]);
+        // Drawn under the route
+        const strokes = plan.paths.strokes;
+        expect(strokes[0]!.color).toEqual(ROUTE_TAIL_COLOR);
+        expect(strokes[0]!.dash).not.toBeNull();
+    });
+
+    it("draws the part of the current move before the start flag when it's walking there", () => {
+        const plan = planStartFlagOverlay(
+            input(resolverFor("G4"), { fromBeat: 16, toBeat: 20 }),
+        );
+        expect(tailEnds(plan)).toEqual([
+            [
+                { x: 8, y: 0 },
+                { x: 8, y: 4 },
+            ],
+        ]);
+        expect(tailSquareCenters(plan)).toEqual([[8, 0]]);
+    });
+
+    it("draws nothing behind when no move starts before the start flag", () => {
+        const g4 = planStartFlagOverlay(
+            input(resolverFor("G4"), { fromBeat: 0, toBeat: 20 }),
+        );
+        expect(tailEnds(g4)).toEqual([]);
+        expect(tailSquareCenters(g4)).toEqual([]);
+        // G5: marcher 2 stands at home until its first move starts on 8
+        const g5 = planStartFlagOverlay(
+            input(resolverFor("G5"), { fromBeat: 1, toBeat: 16 }),
+        );
+        expect(tailEnds(g5)).toEqual([]);
+    });
+
+    it("draws nothing behind for unselected marchers", () => {
+        const g4 = resolverFor("G4");
+        const plan = planStartFlagOverlay(
+            input(g4, { fromBeat: 10, toBeat: 20, selectedIds: new Set() }),
+        );
+        expect(tailEnds(plan)).toEqual([]);
+        expect(tailSquareCenters(plan)).toEqual([]);
     });
 });
