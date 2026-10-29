@@ -2221,6 +2221,45 @@ test("change: Expand twice and Shrink once keep the across:deep ratio and the pi
     );
 });
 
+test("change: in a narrow window the editor goes onto two rows, inside the field; one row when it fits (owner)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const bar = page.getByTestId("shape-tool-readout-bar");
+    await expect(bar).toHaveAttribute("data-rows", "1");
+    /** The bar and the field it floats over, on screen */
+    const boxes = () =>
+        bar.evaluate((el) => {
+            const field =
+                el.parentElement!.offsetParent!.getBoundingClientRect();
+            const own = el.getBoundingClientRect();
+            return {
+                left: own.left - field.left,
+                right: field.right - own.right,
+                height: own.height,
+            };
+        });
+    const wide = await boxes();
+
+    await page.setViewportSize({ width: 820, height: 800 });
+    await expect(bar).toHaveAttribute("data-rows", "2");
+    await expect
+        .poll(async () => {
+            const { left, right } = await boxes();
+            return Math.min(left, right);
+        })
+        .toBeGreaterThanOrEqual(0);
+    expect((await boxes()).height).toBeGreaterThan(wide.height * 1.5);
+    // Every control is still there to press
+    await expect(page.getByTestId("shape-editor-expand")).toBeInViewport({
+        ratio: 1,
+    });
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await expect(bar).toHaveAttribute("data-rows", "1");
+});
+
 test("change: quick clicks on Expand all land on it: the editor's numbers keep their width while it's pressed (owner on #490)", async ({
     show,
 }) => {

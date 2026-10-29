@@ -9,6 +9,7 @@ import {
     useState,
     type PointerEvent as ReactPointerEvent,
     type ReactNode,
+    type RefObject,
 } from "react";
 import { animated, to, useSpring } from "@react-spring/web";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
@@ -250,6 +251,10 @@ function ShapeEditorBar({
         ignoreRepeat: true,
     });
 
+    const whatRow = useRef<HTMLSpanElement>(null);
+    const doRow = useRef<HTMLSpanElement>(null);
+    const twoRows = useTwoRows(whatRow, doRow, place.fieldWidth);
+
     return (
         <animated.div
             ref={place.ref}
@@ -264,86 +269,103 @@ function ShapeEditorBar({
             onPointerDown={(e) => e.stopPropagation()}
         >
             <div
-                className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-6 border px-6 py-4"
+                className={clsx(
+                    "rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center border px-6 py-4",
+                    twoRows ? "flex-col gap-4" : "gap-6",
+                )}
                 data-testid={`${testId}-bar`}
+                data-rows={twoRows ? 2 : 1}
             >
+                {/* What the shape is, and what's done to it: side by side, or one above the
+                    other when the field is too narrow for one row */}
                 <span
-                    className="flex items-center gap-2"
-                    data-testid={`${testId}-text`}
+                    ref={whatRow}
+                    className="flex shrink-0 items-center gap-6"
                 >
-                    {layout.values.map((x) => (
-                        <NumberChip
-                            key={x.param.key}
-                            param={x.param}
-                            display={x.display}
-                            note={x.note}
-                            canLess={x.less !== null}
-                            canMore={x.more !== null}
-                            glyph={false}
-                            actions={numbers}
-                        />
-                    ))}
-                    {target.empty > 0 && (
-                        <span className="text-text/60">
-                            ·{" "}
-                            {tolgee.t("shapes.edit.empty", "{count} empty", {
-                                count: target.empty,
+                    <span
+                        className="flex items-center gap-2"
+                        data-testid={`${testId}-text`}
+                    >
+                        {layout.values.map((x) => (
+                            <NumberChip
+                                key={x.param.key}
+                                param={x.param}
+                                display={x.display}
+                                note={x.note}
+                                canLess={x.less !== null}
+                                canMore={x.more !== null}
+                                glyph={false}
+                                actions={numbers}
+                            />
+                        ))}
+                        {target.empty > 0 && (
+                            <span className="text-text/60">
+                                ·{" "}
+                                {tolgee.t(
+                                    "shapes.edit.empty",
+                                    "{count} empty",
+                                    {
+                                        count: target.empty,
+                                    },
+                                )}
+                            </span>
+                        )}
+                    </span>
+                    {layout.intervals.length > 0 && (
+                        <>
+                            <Divider />
+                            <span className="flex items-center gap-2">
+                                {layout.intervals.map((x) => (
+                                    <NumberChip
+                                        key={x.param.key}
+                                        param={x.param}
+                                        display={x.display}
+                                        note={null}
+                                        canLess={false}
+                                        canMore={false}
+                                        glyph
+                                        derived={x.derived}
+                                        actions={numbers}
+                                    />
+                                ))}
+                                <span className="text-text/60">
+                                    {tolgee.t("shapes.edit.steps", "steps")}
+                                </span>
+                                {layout.ratioLock && <RatioLockButton />}
+                            </span>
+                        </>
+                    )}
+                    {target.drawnOn && (
+                        <span className="text-text/50">
+                            {tolgee.t("shapes.edit.drawnOn", "from {page}", {
+                                page: target.drawnOn,
                             })}
                         </span>
                     )}
                 </span>
-                {layout.intervals.length > 0 && (
-                    <>
-                        <Divider />
-                        <span className="flex items-center gap-2">
-                            {layout.intervals.map((x) => (
-                                <NumberChip
-                                    key={x.param.key}
-                                    param={x.param}
-                                    display={x.display}
-                                    note={null}
-                                    canLess={false}
-                                    canMore={false}
-                                    glyph
-                                    derived={x.derived}
-                                    actions={numbers}
-                                />
-                            ))}
-                            <span className="text-text/60">
-                                {tolgee.t("shapes.edit.steps", "steps")}
-                            </span>
-                            {layout.ratioLock && <RatioLockButton />}
-                        </span>
-                    </>
-                )}
-                {target.drawnOn && (
-                    <span className="text-text/50">
-                        {tolgee.t("shapes.edit.drawnOn", "from {page}", {
-                            page: target.drawnOn,
-                        })}
-                    </span>
-                )}
-                <Divider />
-                <TurnControls
-                    live={live}
-                    degrees={rotationDegrees(frame.rotation)}
-                    rotation={frame.rotation}
-                    pivot={pivotOf(params)}
-                    canRecalculate={target.recalculate !== null}
-                    empty={target.empty}
-                    canCloseUp={target.closeUp !== undefined}
-                    evenState={evenState}
-                    canShrink={canShrink}
-                    canExpand={canExpand}
-                />
-                {/* What doesn't change the shape itself, at the end (owner): its pathways and
+                {!twoRows && <Divider />}
+                <span ref={doRow} className="flex shrink-0 items-center gap-6">
+                    <TurnControls
+                        live={live}
+                        degrees={rotationDegrees(frame.rotation)}
+                        rotation={frame.rotation}
+                        pivot={pivotOf(params)}
+                        canRecalculate={target.recalculate !== null}
+                        empty={target.empty}
+                        canCloseUp={target.closeUp !== undefined}
+                        evenState={evenState}
+                        canShrink={canShrink}
+                        canExpand={canExpand}
+                    />
+                    {/* What doesn't change the shape itself, at the end (owner): its pathways and
                     saving it to the library */}
-                <Divider />
-                <EndControls
-                    live={live}
-                    stepPx={stepPx}
-                    canPlace={target.place !== undefined}
-                />
+                    <Divider />
+                    <EndControls
+                        live={live}
+                        stepPx={stepPx}
+                        canPlace={target.place !== undefined}
+                    />
+                </span>
             </div>
             <FillPill
                 live={live}
@@ -1124,6 +1146,7 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         ref,
         above,
         held,
+        fieldWidth: room.fieldWidth,
         noteEdit,
         // Moved by a transform, not left and top: a pan then only moves its layer, nothing is laid
         // out or painted again (#455)
@@ -1220,6 +1243,42 @@ function notedTarget(
               }
             : undefined,
     };
+}
+
+/** The bar's padding, border and the divider with its gaps between the rows laid side by side */
+const ONE_ROW_EXTRA_PX = 2 * 6 + 2 + 2 * 6 + 1;
+/** The editor stays this far inside the field side to side (`editorPlacement`) */
+const FIELD_MARGIN_PX = 4;
+
+/**
+ * Whether the editor's two rows, what the shape is and what's done to it, go one above the other:
+ * only when side by side they'd be wider than the field (owner: one row whenever it fits, and
+ * every control visible in a narrow window). Measured from the rows themselves, which keep their
+ * width either way, so it doesn't flip back and forth.
+ */
+function useTwoRows(
+    what: RefObject<HTMLElement | null>,
+    act: RefObject<HTMLElement | null>,
+    fieldWidth: number,
+) {
+    const [twoRows, setTwoRows] = useState(false);
+    useLayoutEffect(() => {
+        const a = what.current;
+        const b = act.current;
+        if (!a || !b) return;
+        const measure = () =>
+            setTwoRows(
+                a.offsetWidth + b.offsetWidth + ONE_ROW_EXTRA_PX >
+                    fieldWidth - 2 * FIELD_MARGIN_PX,
+            );
+        measure();
+        // Its numbers redraw on their own, so it's the rows' size that's watched
+        const observer = new ResizeObserver(measure);
+        observer.observe(a);
+        observer.observe(b);
+        return () => observer.disconnect();
+    }, [what, act, fieldWidth]);
+    return twoRows;
 }
 
 function Divider() {
