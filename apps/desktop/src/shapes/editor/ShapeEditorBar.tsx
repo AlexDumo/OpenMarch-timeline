@@ -253,7 +253,7 @@ function ShapeEditorBar({
 
     const whatRow = useRef<HTMLSpanElement>(null);
     const doRow = useRef<HTMLSpanElement>(null);
-    const twoRows = useTwoRows(whatRow, doRow, place.fieldWidth);
+    const twoRows = useTwoRows(whatRow, doRow, place.fieldWidth, place.held);
 
     return (
         <animated.div
@@ -281,6 +281,7 @@ function ShapeEditorBar({
                 <span
                     ref={whatRow}
                     className="flex shrink-0 items-center gap-6"
+                    data-editor-row
                 >
                     <span
                         className="flex items-center gap-2"
@@ -344,7 +345,11 @@ function ShapeEditorBar({
                     )}
                 </span>
                 {!twoRows && <Divider />}
-                <span ref={doRow} className="flex shrink-0 items-center gap-6">
+                <span
+                    ref={doRow}
+                    className="flex shrink-0 items-center gap-6"
+                    data-editor-row
+                >
                     <TurnControls
                         live={live}
                         degrees={rotationDegrees(frame.rotation)}
@@ -357,8 +362,8 @@ function ShapeEditorBar({
                         canShrink={canShrink}
                         canExpand={canExpand}
                     />
-                    {/* What doesn't change the shape itself, at the end (owner): its pathways and
-                    saving it to the library */}
+                    {/* What doesn't change the shape itself, at the end (owner): its pathways
+                        and saving it to the library */}
                     <Divider />
                     <EndControls
                         live={live}
@@ -1050,6 +1055,9 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         // Its numbers redraw on their own, so it's their size changing that's watched
         const observer = new ResizeObserver(keepStill);
         for (const child of el.children) observer.observe(child);
+        // On two rows, each row is centered: one can change width while the bar doesn't
+        for (const row of el.querySelectorAll("[data-editor-row]"))
+            observer.observe(row);
         return () => observer.disconnect();
     }, [api, spring]);
 
@@ -1245,7 +1253,10 @@ function notedTarget(
     };
 }
 
-/** The bar's padding, border and the divider with its gaps between the rows laid side by side */
+/**
+ * The bar's padding, border and the divider with its gaps between the rows laid side by side, in
+ * px: the bar's `px-6`, `border` and `gap-6`, and `Divider`'s `w-px`. Change them together.
+ */
 const ONE_ROW_EXTRA_PX = 2 * 6 + 2 + 2 * 6 + 1;
 /** The editor stays this far inside the field side to side (`editorPlacement`) */
 const FIELD_MARGIN_PX = 4;
@@ -1260,14 +1271,15 @@ function useTwoRows(
     what: RefObject<HTMLElement | null>,
     act: RefObject<HTMLElement | null>,
     fieldWidth: number,
+    held: boolean,
 ) {
-    const [twoRows, setTwoRows] = useState(false);
+    const [wanted, setWanted] = useState(false);
     useLayoutEffect(() => {
         const a = what.current;
         const b = act.current;
         if (!a || !b) return;
         const measure = () =>
-            setTwoRows(
+            setWanted(
                 a.offsetWidth + b.offsetWidth + ONE_ROW_EXTRA_PX >
                     fieldWidth - 2 * FIELD_MARGIN_PX,
             );
@@ -1278,6 +1290,12 @@ function useTwoRows(
         observer.observe(b);
         return () => observer.disconnect();
     }, [what, act, fieldWidth]);
+    // Held after a press, it keeps its rows: a − or + that crosses the line would otherwise
+    // rearrange it under the pointer and send it a long way once let go (review of #493)
+    const [twoRows, setTwoRows] = useState(wanted);
+    useLayoutEffect(() => {
+        if (!held) setTwoRows(wanted);
+    }, [held, wanted]);
     return twoRows;
 }
 
