@@ -706,6 +706,16 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // UI-12: fits the show in the timeline, or goes back to the zoom from before
+    timelineFit: {
+        labelKey: "actions.timeline.fit",
+        category: "timeline",
+        editsDrill: false,
+        scope: "global",
+        defaultBindings: ["Shift+Z"],
+        ignoreRepeat: true,
+    },
+
     // UI-9: a page flag at the paused playhead, as its right-click menu does. F for flag; Shift
     // for the smaller step (as Shift+Q/E steps a beat), a subset page keeping later pages' numbers
     timelineCreatePageAtPlayhead: {

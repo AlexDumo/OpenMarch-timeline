@@ -55,7 +55,8 @@ import {
     useTimelinePointer,
 } from "./TimelinePrimitives";
 import { markedRangeAt, useTimelineRangeMenu } from "./TimelineRangeMenu";
-import { isTyping, overlayOpen } from "./timelineHotkeys";
+import { overlayOpen } from "./timelineHotkeys";
+import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { useLatestCallback } from "./useLatestCallback";
 import { TimelineAppendAtPlayhead } from "./TimelineAppendAtPlayhead";
 import { useViewportExtent } from "./useViewportExtent";
@@ -299,7 +300,7 @@ const useTimelineZoom = ({
         onFittedChange?.(isFitted);
     }, [fitValue, isFitted, onFittedChange, rememberedFitted]);
 
-    // The same function across zooms and beats, so the transport and the Shift+Z listener stay put
+    // The same function across zooms and beats, so the transport and the timelineFit action stay put
     const fit = useLatestCallback(() => {
         const viewport = viewportRef.current;
         if (!viewport || !onPixelsPerBeatChange || fitValue === null) return;
@@ -315,27 +316,15 @@ const useTimelineZoom = ({
         viewport.scrollLeft = 0;
     })!;
 
-    // Shift+Z fits, or goes back, unless a text field, popover, menu or dialog has the keys
-    useEffect(() => {
-        if (!onPixelsPerBeatChange) return;
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (
-                event.key.toLowerCase() !== "z" ||
-                !event.shiftKey ||
-                event.ctrlKey ||
-                event.metaKey ||
-                event.altKey ||
-                event.repeat ||
-                isTyping(event.target) ||
-                overlayOpen()
-            )
-                return;
-            event.preventDefault();
-            fit();
-        };
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
-    }, [fit, onPixelsPerBeatChange]);
+    // Shift+Z (the timelineFit action) fits, or goes back. The dispatcher skips it in a text field
+    // or modal layer; an open popover or menu keeps its keys too
+    useActionHandler(
+        "timelineFit",
+        () => {
+            if (!overlayOpen()) fit();
+        },
+        { enabled: onPixelsPerBeatChange != null },
+    );
 
     return { fit, fitted: isFitted, viewportWidth };
 };

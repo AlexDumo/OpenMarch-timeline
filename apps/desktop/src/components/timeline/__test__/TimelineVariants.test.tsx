@@ -20,7 +20,8 @@ import {
 import { Timeline, TimelineWaveformProvider } from "../Timeline";
 import ShortcutDispatcher from "@/shortcuts/ShortcutDispatcher";
 import { getActionDefinition } from "@/shortcuts/definitions";
-import { findConflicts } from "@/shortcuts/keymap";
+import { findConflicts, type ShortcutOverrides } from "@/shortcuts/keymap";
+import { useActionHandler } from "@/shortcuts/useActionHandler";
 import * as platform from "@/shortcuts/platform";
 import {
     createLongTimelineStoryModel,
@@ -2059,39 +2060,49 @@ describe("Fit (UI-12 review)", () => {
         width = 392;
     });
 
+    // Shift+Z is the timelineFit action, run by the shortcut dispatcher
     const Zoomed = ({
         initial,
         fitted,
         onZoom,
         onFittedChange,
+        overrides = {},
     }: {
         initial: number;
         fitted: boolean;
         onZoom: (pixelsPerBeat: number) => void;
         onFittedChange: (fitted: boolean) => void;
+        overrides?: ShortcutOverrides;
     }) => {
         const [pixelsPerBeat, setPixelsPerBeat] = useState(initial);
         const [zoomFitted, setZoomFitted] = useState(fitted);
         return (
-            <ExpandedTimeline
-                {...commonProps}
-                showTransport={false}
-                pixelsPerBeat={pixelsPerBeat}
-                onPixelsPerBeatChange={(next) => {
-                    onZoom(next);
-                    setPixelsPerBeat(next);
-                }}
-                zoomFitted={zoomFitted}
-                onZoomFittedChange={(next) => {
-                    onFittedChange(next);
-                    setZoomFitted(next);
-                }}
-            />
+            <>
+                <ShortcutDispatcher overrides={overrides} />
+                <ExpandedTimeline
+                    {...commonProps}
+                    showTransport={false}
+                    pixelsPerBeat={pixelsPerBeat}
+                    onPixelsPerBeatChange={(next) => {
+                        onZoom(next);
+                        setPixelsPerBeat(next);
+                    }}
+                    zoomFitted={zoomFitted}
+                    onZoomFittedChange={(next) => {
+                        onFittedChange(next);
+                        setZoomFitted(next);
+                    }}
+                />
+            </>
         );
     };
     const shiftZ = () =>
         act(() => {
-            fireEvent.keyDown(window, { key: "Z", shiftKey: true });
+            fireEvent.keyDown(window, {
+                key: "Z",
+                code: "KeyZ",
+                shiftKey: true,
+            });
         });
 
     it("goes back to the zoom from before Fit", () => {
@@ -2156,6 +2167,7 @@ describe("Fit (UI-12 review)", () => {
         act(() => {
             fireEvent.keyDown(window, {
                 key: "Z",
+                code: "KeyZ",
                 shiftKey: true,
                 repeat: true,
             });
@@ -2170,6 +2182,48 @@ describe("Fit (UI-12 review)", () => {
             dialog.remove();
         }
         expect(onZoom).not.toHaveBeenCalled();
+    });
+
+    it("follows a changed shortcut: Shift+Z then belongs to the action given it", () => {
+        const onZoom = vi.fn();
+        const lockX = vi.fn();
+        const LockX = () => {
+            useActionHandler("lockX", lockX);
+            return null;
+        };
+        render(
+            <>
+                <LockX />
+                <Zoomed
+                    initial={32}
+                    fitted={false}
+                    onZoom={onZoom}
+                    onFittedChange={vi.fn()}
+                    overrides={{ timelineFit: ["Alt+F"], lockX: ["Shift+Z"] }}
+                />
+            </>,
+        );
+        shiftZ();
+        expect(onZoom).not.toHaveBeenCalled();
+        expect(lockX).toHaveBeenCalledTimes(1);
+        act(() => {
+            fireEvent.keyDown(window, { key: "f", code: "KeyF", altKey: true });
+        });
+        expect(onZoom).toHaveBeenLastCalledWith(10);
+    });
+});
+
+describe("the timelineFit action (shortcut review)", () => {
+    it("is Shift+Z by default, without a conflict, and the palette lists it", () => {
+        const action = getActionDefinition("timelineFit");
+        expect(action.defaultBindings).toEqual(["Shift+Z"]);
+        expect(action.hiddenFromPalette).toBeFalsy();
+        for (const isMac of [false, true])
+            expect(
+                findConflicts({}, undefined, isMac).filter((c) =>
+                    c.actionIds.includes("timelineFit"),
+                ),
+            ).toEqual([]);
     });
 });
 

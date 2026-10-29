@@ -1,5 +1,5 @@
 /**
- * Guards for the timeline's raw window key listeners (G, Shift+Z, Esc), which sit outside the
+ * Guards for the timeline's raw window key listeners (Esc), which sit outside the
  * app's shortcut actions and so must check for themselves what owns the key, and the timeline's
  * rules for the shortcut dispatcher (`shortcuts/ShortcutDispatcher.tsx`).
  */

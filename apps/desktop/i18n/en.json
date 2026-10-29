@@ -114,6 +114,7 @@
         "timeline": {
             "createPageAtPlayhead": "Create page at playhead",
             "createSubsetAtPlayhead": "Create subset at playhead",
+            "fit": "Fit the show in the timeline, or go back",
             "goTo": "Go to a page, measure or rehearsal mark",
             "nextPage": "Next page (timeline)",
             "playPause": "Play / pause audio",
