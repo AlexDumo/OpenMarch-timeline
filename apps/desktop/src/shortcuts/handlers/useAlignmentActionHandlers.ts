@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { useTolgee } from "@tolgee/react";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import * as CoordinateActions from "@/utilities/CoordinateActions";
+import { planCanvasEdit } from "@/timeline/timelineCoordinateWrites";
 import { useActionHandler } from "../useActionHandler";
 import { useEditorReadiness } from "./useEditorReadiness";
 import { useUpdateCoordinates } from "./useUpdateCoordinates";
@@ -146,17 +147,22 @@ export function useAlignmentActionHandlers() {
                 toast.error(t("actions.swap.mustSelectTwo"));
                 return;
             }
-            // Each marcher takes the other's position where the selection edits
-            const pair = getSelectedPerformerPages();
+            // Each marcher takes the other's position where the selection edits, planned once
+            // for the read and the write
+            const plan = planCanvasEdit();
+            const pair = getSelectedPerformerPages(plan);
             if (pair.length !== 2) {
                 // Refused by the selection: say why, as the other tools do
-                updateCoordinates([]);
+                updateCoordinates([], plan);
                 return;
             }
-            updateCoordinates([
-                { ...pair[0], x: pair[1].x, y: pair[1].y },
-                { ...pair[1], x: pair[0].x, y: pair[0].y },
-            ]);
+            updateCoordinates(
+                [
+                    { ...pair[0], x: pair[1].x, y: pair[1].y },
+                    { ...pair[1], x: pair[0].x, y: pair[0].y },
+                ],
+                plan,
+            );
         },
         { enabled: ready && selectedPerformers.length === 2 },
     );

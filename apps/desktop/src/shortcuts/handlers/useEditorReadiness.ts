@@ -8,13 +8,20 @@ import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import {
     planCanvasEdit,
     timelineCoordinateRecords,
+    type CanvasEditPlan,
 } from "@/timeline/timelineCoordinateWrites";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 
-/** Where the selection edits, for `marchers` (see `getSelectedMarcherPages`). */
-const coordinateRecordsOf = (marchers: readonly Marcher[]) => {
+/**
+ * Where the selection edits, for `marchers` (see `getSelectedMarcherPages`), by `plan` when the
+ * caller already planned the edit.
+ */
+const coordinateRecordsOf = (
+    marchers: readonly Marcher[],
+    plan?: CanvasEditPlan,
+) => {
     if (marchers.length === 0) return [];
-    const plan = planCanvasEdit();
+    plan ??= planCanvasEdit();
     if (!plan.ok) return [];
     try {
         return timelineCoordinateRecords(
@@ -64,9 +71,13 @@ export function useEditorReadiness() {
         () => coordinateRecordsOf(selectedMarchers),
         [selectedMarchers],
     );
-    /** `getSelectedMarcherPages` for the selected performers only */
+    /**
+     * `getSelectedMarcherPages` for the selected performers only. Swap passes the plan it writes
+     * with, so the edit is planned once.
+     */
     const getSelectedPerformerPages = useCallback(
-        () => coordinateRecordsOf(selectedPerformers),
+        (plan?: CanvasEditPlan) =>
+            coordinateRecordsOf(selectedPerformers, plan),
         [selectedPerformers],
     );
 

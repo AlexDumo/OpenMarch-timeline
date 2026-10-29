@@ -7,12 +7,14 @@ import {
     planCanvasEdit,
     snapIsolatedPlayheadToEnd,
     toTimelineMoves,
+    type CanvasEditPlan,
 } from "@/timeline/timelineCoordinateWrites";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 
 /**
  * Writes new coordinates for the marchers: the endings in the selected timeline or the homes, as
  * the selection allows (UI-9 Editing, P8.15). A refusal is a toast when marchers are selected.
+ * A caller that already planned the edit passes its `plan`.
  */
 export function useUpdateCoordinates() {
     const selectedMarcherCount =
@@ -22,12 +24,14 @@ export function useUpdateCoordinates() {
     );
 
     return useCallback(
-        (changes: ModifiedMarcherPageArgs[]) => {
+        (
+            changes: ModifiedMarcherPageArgs[],
+            plan: CanvasEditPlan = planCanvasEdit(),
+        ) => {
             // The changes' page ids can be left over from an earlier render and are ignored.
-            // This plans again after `getSelectedMarcherPages` planned the read. The tools call
-            // both synchronously in one action, so the selection can't change in between and
-            // both plans agree; passing the plan through would touch every tool's call.
-            const plan = planCanvasEdit();
+            // Without a `plan` this plans again after `getSelectedMarcherPages` planned the read.
+            // The tools call both synchronously in one action, so the selection can't change in
+            // between and both plans agree.
             if (!plan.ok) {
                 if (changes.length > 0 || selectedMarcherCount > 0)
                     toastTimelineError(plan.error);
