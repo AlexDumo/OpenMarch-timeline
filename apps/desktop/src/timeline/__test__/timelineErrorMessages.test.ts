@@ -252,11 +252,9 @@ describe("en.json", () => {
             expect(lookup(m.key), m.key).toBe(m.defaultMessage);
     });
 
-    it("carries the keep menu entries, the chain's name and the Delete-move toast (pre-merge review U8)", () => {
+    it("carries the Set as shown entry, the chain's name and the Delete-move toast (pre-merge review U8)", () => {
         for (const [key, text] of Object.entries({
-            "timeline.rangeMenu.keepHere": "Keep selected marchers here",
-            "timeline.rangeMenu.followAgain":
-                "Let selected marchers follow again",
+            "timeline.rangeMenu.setAsShown": "Set as shown",
             "timeline.rangeMenu.deleteWithMoves": "Delete page and its moves",
             "timeline.keep.chain.ariaLabel": "Page {page}: {label}. {hint}",
             "timeline.moveDeleted.message": "Deleted {label}",

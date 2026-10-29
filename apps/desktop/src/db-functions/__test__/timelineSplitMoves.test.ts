@@ -17,7 +17,6 @@ import { createTrack } from "../timelineCommands";
 import { moveMarchersInTarget } from "../timelineMoves";
 import { movePageFlag } from "../pageFlags";
 import { createTimelineShape } from "../timelineShapes";
-import { markAssignmentsKeptInTransaction } from "../timelineKeptMarkers";
 import { TimelineWriteError } from "../timelineErrors";
 import {
     mergeFits,
@@ -45,7 +44,6 @@ const TABLES = [
     schema.timeline_transitions,
     schema.timeline_assignments,
     schema.timeline_slot_destinations,
-    schema.timeline_kept_assignments,
 ];
 
 const snapshot = async (db: DbConnection) => {
@@ -238,7 +236,7 @@ describeDbTests("splitting and merging moves (UI-25)", (it) => {
             expectSamePositions(positionsBefore, await everyBeat(pages));
         });
 
-        it("moves a marcher's own one-slot transition as it is: same rows, layer and kept marker", async ({
+        it("moves a marcher's own one-slot transition as it is: same rows and layer", async ({
             db,
             marchersAndPages,
         }) => {
@@ -253,11 +251,6 @@ describeDbTests("splitting and merging moves (UI-25)", (it) => {
                 marcherIds: [a!, b!, c!],
             });
             const membersBefore = await membersOf(db, timelineId);
-            await transactionWithHistory(db, "keep", (tx) =>
-                markAssignmentsKeptInTransaction(tx, [
-                    membersBefore.find((m) => m.marcher === b)!.assignment,
-                ]),
-            );
             const positionsBefore = await everyBeat(pages);
             const before = await snapshot(db);
 
@@ -270,14 +263,6 @@ describeDbTests("splitting and merging moves (UI-25)", (it) => {
             const moved = await membersOf(db, result.timeline.id);
             expect(moved).toEqual(membersBefore.filter((m) => m.marcher !== a));
             expect(moved.every((m) => m.layer === 1)).toBe(true);
-            expect(
-                (
-                    await db
-                        .select()
-                        .from(schema.timeline_kept_assignments)
-                        .all()
-                ).map((k) => k.assignment_id),
-            ).toEqual([membersBefore.find((m) => m.marcher === b)!.assignment]);
             expect(result.timeline.name).toBe("Move 2");
             expect(await violations(db)).toEqual([]);
             expectSamePositions(positionsBefore, await everyBeat(pages));

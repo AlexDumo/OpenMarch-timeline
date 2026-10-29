@@ -176,7 +176,10 @@ There is no schema or file-version change. Files converted by earlier developmen
 holding moves and are converted again by hand, as for C-11. Research and the decision record are in
 `docs/timeline/research/defined-coordinates/`; the interaction is UI-18 in `docs/timeline/ui.md`.
 
-**Amendment (2026-10-09, project owner): kept spots are stored.** A designer can keep selected
+**Amendment (2026-10-09, project owner): kept spots are stored.** _Reversed by the amendment of
+2026-10-29, "kept spots are removed" (holds, fork #467): the table below is dropped and Set as
+shown writes an ordinary move instead. Kept as the record of what fork builds stored._ A designer
+can keep selected
 marchers on a later page, so that editing an earlier page no longer carries into it. This is
 timeline mode only; page mode keeps its runtime comparison. A kept spot must survive reopening the
 file and be told apart from a move that happens to go nowhere, so it is stored:
@@ -252,12 +255,14 @@ edit used to choose layers its own way, and the inspector let a designer type on
 - **A page's move is stored as such.** Which timeline a page's box stands for was inferred from
   its range (the oldest timeline over exactly the box), and the page delete used a different test
   (layer 0, shapeless, rows covering the box). Both are replaced by a stored mark, kept apart from
-  the motion tables the way kept spots are: a `timeline_page_moves` table with one row per page
+  the motion tables the way kept spots were (amendment 2026-10-09, since reversed): a
+  `timeline_page_moves` table with one row per page
   move, naming its timeline and its page. Proposed details, settled in the implementing change: the
   timeline id is the key and cascades on delete; a flag delete that merges pages re-points the
   marks to the merged page in the same edit; **Delete page and its moves** deletes the marked
   timelines; every path that creates a page's move writes its mark (the converter, a drag onto a
-  page box, kept spots, Split page, the simple defaults, and Basic point moves, which split a
+  page box, Set as shown (which replaces kept spots, amendment 2026-10-29), Split page, the simple
+  defaults, and Basic point moves, which split a
   page's move into sub-range timelines). The table is in
   `tablesWithHistory`, has no change-log triggers, and the resolver never reads it.
 - **Existing files.** The migration marks existing page moves once, then derives every marcher's
@@ -279,8 +284,8 @@ edit used to choose layers its own way, and the inspector let a designer type on
   change an FTL move's founders and targets (spec §6.2); the migration can too.
 
 **Amendment (2026-10-29, project owner): keyframes are stored move ends, and Set as shown.** Part
-of the holds design (`docs/timeline/research/holds/`, fork issues #466–#479); the rest of its part
-1 (kept spots removed, Clear this page) lands with #467 and #469.
+of the holds design (`docs/timeline/research/holds/`, fork issues #466–#479). Kept spots are
+removed by the next amendment (#467); Clear this page lands with #469.
 
 - **A keyframe is the end of one of the marcher's own moves, where that move is in charge as it
   ends** (spec §6.2), whether or not the marcher moved. A span cut short by a higher layer is not
@@ -290,8 +295,38 @@ of the holds design (`docs/timeline/research/holds/`, fork issues #466–#479); 
 - **Set as shown** is in the page box menu. For each selected marcher that is Not set on that page,
   it writes an ordinary one-slot move over the page box, ending at the spot the marcher shows there,
   so the page becomes Set and later edits of earlier pages no longer carry into it. Nothing is
-  marked kept (fork #466). Until #467 removes them, kept spots stay as the 2026-10-09 amendment
-  describes, and a kept span is still not a keyframe.
+  marked kept (fork #466).
+
+**Amendment (2026-10-29, project owner): kept spots are removed.** Part 1 of the holds design
+(`docs/timeline/research/holds/` README decisions 1, 12 and 15; fork #467). It reverses the
+2026-10-09 amendment.
+
+- **`timeline_kept_assignments` is dropped,** together with every reader and writer: Keep,
+  Follow again, **K**, the kept chip and mixed badge on page boxes, the kept mark beside a
+  marcher's dot on the field, and the inspector's "Kept on this page · Follow again". Edits no
+  longer clear or carry kept markers, a drag back treats every own move alike, and **Move them
+  too** may offer any later own move.
+- **Set as shown replaces them.** It is in the page box menu (and the chain on a Not-set page box,
+  and the inspector, until the Not-set bars of #477). It writes an ordinary one-slot move over the
+  page box, ending at the spot the marcher shows there, so the page becomes Set.
+- **The other writers of kept rows write the same ordinary move.** Remove keyframe's next-page
+  move (Unset here) and the after-edit **Only Page N** write it, ending where the marchers stood
+  before the edit (decision 15). Nothing else wrote kept rows: the split by marcher and Split at
+  playhead carried markers, and Basic's split page copied them; they now carry only the rows.
+- **In the 2026-10-16 amendment's list of writers of a page's move, Set as shown replaces "kept
+  spots".**
+- **Migration 0027** (`0027_drop_kept_assignments`, after main's latest, 0026) drops the table.
+  Fork nightlies and the lab build already shipped migration 0018, so a file's stored undo or redo
+  history may name the table. Replaying such a step would fail with "no such table", so in a file
+  whose history names it (`instr(sql, 'timeline_kept_assignments')` in either stack) the same
+  migration clears **both** stacks and resets the history groups (owner, 2026-10-28). A file whose
+  history doesn't name the table keeps it. The release notes say so. A kept spot's move stays as
+  an ordinary move, so the show plays the same.
+  - It is a timeline-only migration: a page-era file converts first, and the conversion deletes
+    any kept rows with the timeline rows it replaces, if the table exists.
+  - The table leaves `tablesWithHistory` (dropping it drops its history triggers), the repair copy
+    list, `DISPLAY_TABLES` and the query invalidation map.
+  - An older build opening a migrated file errors on its kept queries.
 
 Cases, a simulator and animations: `docs/timeline/research/layer-priority/README.md`.
 
@@ -627,6 +662,10 @@ file under `docs/timeline/phases/`.
 - File format: opening a version-8 file in an app that supports only 7 is
   refused with a clear message; a real-file corpus of older `.dots` files opens
   and converts (Phase 9).
+- Kept spots removed (2026-10-29 amendment): a migration test opens a file with a kept row and
+  undo and redo steps naming the kept table; after migrating, the table is gone, both history
+  stacks are empty, every resolved position is unchanged, and a new edit undoes and redoes. A file
+  whose history doesn't name the table keeps its history.
 - Layer priority (2026-10-16 amendment): spec QA-LP-1 to -10 pass, and a test after every
   timeline command checks that stored layers equal the derived ones (I-L1). The only function that
   writes assignment rows takes a layer type that only the layer module can produce.

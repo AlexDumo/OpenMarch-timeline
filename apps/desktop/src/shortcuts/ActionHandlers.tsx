@@ -4,7 +4,6 @@ import { useBatchEditActionHandlers } from "./handlers/useBatchEditActionHandler
 import { useCursorActionHandlers } from "./handlers/useCursorActionHandlers";
 import { useFileActionHandlers } from "./handlers/useFileActionHandlers";
 import { useHistoryActionHandlers } from "./handlers/useHistoryActionHandlers";
-import { useKeepActionHandlers } from "./handlers/useKeepActionHandlers";
 import { useNavigationActionHandlers } from "./handlers/useNavigationActionHandlers";
 import { useNudgeActionHandlers } from "./handlers/useNudgeActionHandlers";
 import { useTimelineActionEffects } from "./handlers/useTimelineActionEffects";
@@ -27,7 +26,6 @@ export function EditorActionHandlers() {
     useAlignmentActionHandlers();
     useUiActionHandlers();
     useCursorActionHandlers();
-    useKeepActionHandlers();
     useUnsetActionHandlers();
     useTimelineActionEffects();
     return null;

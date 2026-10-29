@@ -16,8 +16,10 @@ import { timelineErrorCode } from "@/timeline/timelineErrorMessages";
 import { performRedo, performUndo } from "../history";
 import { createLastPage, deletePages } from "../page";
 import { moveMarchersInTarget } from "../timelineMoves";
-import { keptStatesOnPageBoxes } from "../timelineKeepHere";
-import { setAsShownOnPage } from "../timelineSetAsShown";
+import {
+    pageBoxStatesOnPageBoxes,
+    setAsShownOnPage,
+} from "../timelineSetAsShown";
 
 keepFixturesInPageMode(
     "its tests trim the show, write timeline rows and set the flag themselves",
@@ -26,7 +28,8 @@ keepFixturesInPageMode(
 /**
  * **Set as shown** (holds, fork #466; holds README decisions 1 and 12, review R6): a marcher Not
  * set on a page box gets an ordinary move of its own over the box, ending where it shows there, so
- * an edit of an earlier page stops carrying into it. Nothing marks the move as kept.
+ * an edit of an earlier page stops carrying into it. It is an ordinary move: stored kept spots are
+ * gone (#467).
  *
  * The show: home, page 1 [1, 9), page 2 [9, 17), page 3 [17, 25), page 4 [25, 33); beat ids equal
  * their ordinals. Marchers `a` and `b` move on page 2 and hold (Not set) on pages 3 and 4; `c`
@@ -48,7 +51,6 @@ const TABLES = [
     schema.timeline_transitions,
     schema.timeline_assignments,
     schema.timeline_slot_destinations,
-    schema.timeline_kept_assignments,
 ];
 
 const snapshot = async (db: DbConnection) => {
@@ -98,7 +100,7 @@ const stateOn = async (
     marcherId: number,
 ) =>
     (
-        await keptStatesOnPageBoxes({
+        await pageBoxStatesOnPageBoxes({
             db,
             pageBoxes: [box],
             marcherIds: [marcherId],
@@ -155,7 +157,7 @@ describeDbTests("Set as shown", (it) => {
             skipped: [],
         });
         // Nothing moved; each now has its own move ending on page 4's flag (a keyframe, holds
-        // decision 13), and nothing marks it kept
+        // decision 13)
         expect(await atFlags(db, a)).toEqual(before);
         for (const id of [a, b]) {
             const own = (await rowsOf(db, id)).filter(
@@ -165,9 +167,6 @@ describeDbTests("Set as shown", (it) => {
             expect(own[0]!.end_beat).toBe(PAGE4.end);
             expect(await stateOn(db, PAGE4, id)).toBe("own");
         }
-        expect(
-            await db.select().from(schema.timeline_kept_assignments).all(),
-        ).toEqual([]);
 
         await move(db, PAGE2, [
             { marcherId: a, xy: ELSEWHERE },
