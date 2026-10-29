@@ -2221,6 +2221,42 @@ test("change: Expand twice and Shrink once keep the across:deep ratio and the pi
     );
 });
 
+test("change: quick clicks on Expand all land on it: the editor's numbers keep their width while it's pressed (owner on #490)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const bar = page.getByTestId("shape-tool-readout");
+    const deepText = bar.getByTestId("shape-editor-deep");
+    for (const [way, text] of [
+        ["across", "2"],
+        ["deep", "3"],
+    ] as const) {
+        await bar.getByTestId(`shape-editor-${way}`).click();
+        await page.keyboard.type(text);
+        await page.keyboard.press("Enter");
+    }
+    await expect(deepText).toHaveText("3");
+    await editorSettled(page);
+
+    // 3 → 3½ → 4 → 4½: across follows at 2:3 and shows "≈", a wider number with its snap button
+    const expand = page.getByTestId("shape-editor-expand");
+    const at = (await expand.boundingBox())!;
+    for (const deep of ["3½", "4", "4½"]) {
+        await page.mouse.click(at.x + at.width / 2, at.y + at.height / 2);
+        await expect(deepText).toHaveText(deep);
+        // Put back before the next frame is drawn; a read can fall just before that
+        await expect
+            .poll(
+                async () => Math.abs((await expand.boundingBox())!.x - at.x),
+                {
+                    timeout: 300,
+                },
+            )
+            .toBeLessThan(1);
+    }
+});
+
 /**
  * The snap guides' names on screen, and whether each is on top at its center (#427): the overlay
  * ignores the pointer, so hit-testing is turned on for it while this asks

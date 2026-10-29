@@ -1005,6 +1005,32 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         return { left, top };
     });
 
+    // The control a press landed on, and where it was on screen. While held, an edit that widens
+    // or narrows the editor (a number gets longer, "≈" shows) moves the editor so that control
+    // stays under the pointer, and quick clicks keep landing on it (owner on #490: Expand)
+    const pressed = useRef<{ el: Element; left: number } | null>(null);
+    const heldNow = useRef(held);
+    heldNow.current = held;
+    useLayoutEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        const keepStill = () => {
+            const p = pressed.current;
+            if (!heldNow.current || !p || !p.el.isConnected) return;
+            const dx = Math.round(p.el.getBoundingClientRect().left - p.left);
+            if (dx === 0) return;
+            const left = Math.round(spring.left.get()) - dx;
+            const top = Math.round(spring.top.get());
+            api.set({ left, top });
+            // Now, not on the spring's next frame, so a second change before it isn't added twice
+            el.style.transform = `translate(${left}px, ${top}px)`;
+        };
+        // Its numbers redraw on their own, so it's their size changing that's watched
+        const observer = new ResizeObserver(keepStill);
+        for (const child of el.children) observer.observe(child);
+        return () => observer.disconnect();
+    }, [api, spring]);
+
     // After an edit made in the editor, and after a drag on the field ends, the view glides to keep
     // the shape and the editor in view, zooming out if they no longer fit (#441). Never during a
     // drag. Runs before the spring below, so the editor springs along from the first frame.
@@ -1119,6 +1145,14 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
                 if (release.current) clearTimeout(release.current);
                 // Stopped where it is, a glide under way included, so the press lands
                 api.stop();
+                const control =
+                    e.target instanceof Element
+                        ? (e.target.closest("button, input") ?? e.target)
+                        : null;
+                pressed.current = control && {
+                    el: control,
+                    left: control.getBoundingClientRect().left,
+                };
                 setPressing(true);
             },
         },
