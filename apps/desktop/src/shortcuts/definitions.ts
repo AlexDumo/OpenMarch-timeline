@@ -312,7 +312,7 @@ const STATIC_ACTIONS = {
     playPause: {
         labelKey: "actions.playback.playPause",
         toggleOnKey: "actions.playback.play",
-        toggleOffKey: "actions.playback.pause",
+        toggleOffKey: "actions.playback.stop",
         category: "playback",
         editsDrill: false,
         scope: "canvas",

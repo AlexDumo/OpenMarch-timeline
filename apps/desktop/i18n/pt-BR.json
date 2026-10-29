@@ -71,9 +71,9 @@
             "previousPage": "Página Anterior"
         },
         "playback": {
-            "pause": "Pausar",
+            "stop": "Parar",
             "play": "Reproduzir",
-            "playPause": "Reproduzir / pausar"
+            "playPause": "Reproduzir / parar"
         },
         "select": {
             "selectAll": "Selecionar tudo"

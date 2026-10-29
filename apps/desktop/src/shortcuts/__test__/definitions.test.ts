@@ -48,6 +48,11 @@ describe("ACTIONS", () => {
         }
     });
 
+    it("names Play's off state Stop: Space stops and goes back to where Play was pressed (UI-24)", () => {
+        expect(lookup(ACTIONS.playPause.labelKey)).toBe("Play / stop");
+        expect(lookup(ACTIONS.playPause.toggleOffKey)).toBe("Stop");
+    });
+
     it("preserves legacy defaults", () => {
         expect(ACTIONS.performUndo.defaultBindings).toEqual([
             "$mod+Z",

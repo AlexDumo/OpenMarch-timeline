@@ -71,9 +71,9 @@
             "previousPage": "Page précédente"
         },
         "playback": {
-            "pause": "Pause",
+            "stop": "Arrêter",
             "play": "Jouer",
-            "playPause": "Lecture / pause"
+            "playPause": "Lecture / arrêt"
         },
         "select": {
             "selectAll": "Tout sélectionner"

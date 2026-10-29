@@ -82,7 +82,7 @@
             "previousPage": "Previous page"
         },
         "playback": {
-            "pause": "Pause",
+            "stop": "Stop",
             "play": "Play",
             "playPage": "Play from playhead / pause",
             "playOn": "Play on from the start flag",
