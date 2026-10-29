@@ -2,7 +2,7 @@
 
 # Modifier roles: one map from keys to what they mean
 
-Status: design proposal, 2026-10-28, for the shape host (`shapes/host`). Nothing changes in the
+Status: design proposal, 2026-10-28, revised 2026-10-29 after review with the owner, for the shape host (`shapes/host`). Nothing changes in the
 app until the owner accepts it. The implementation ticket is linked from the pull request.
 
 ## Why
@@ -10,9 +10,9 @@ app until the owner accepts it. The implementation ticket is linked from the pul
 The team can't settle Shift or Alt for fine control, and a tester asked for Shift. Today every
 gesture reads `event.altKey` and friends itself, so changing the key for "fine" means editing a
 dozen files, and the keys already mean different things in different parts of the app (below). The
-proposal: gestures ask for a **role** (`fine`, `constrain`, `noSnap`, ...), and one module maps the
-physical keys to roles. Today's mapping is the default, so nothing changes until someone picks a
-different one.
+proposal: gestures ask for a **role** (`fine`, `constrain`, `fromCenter`), and one module maps the
+physical keys to roles. No snapping becomes a UI toggle instead of a held key. Two key mappings
+go to a lab test (section 5).
 
 Prior research on what other tools do (sources in the shape-host research notes,
 `modifier-conventions.md`):
@@ -35,6 +35,9 @@ isMacPlatform|keysOf` and for the normalized fields they feed (`pointer.shift/al
 Paths are under `apps/desktop/src/` unless they start with `packages/`.
 
 ### Pointer gestures: these become roles
+
+The Role column is from the first draft. In the revised model (section 2), `noSnap` becomes the
+Snap toggle (the timeline keeps Alt), and `pivot` becomes the `reachInside` press choice.
 
 Shape tool, frame and placed boxes. All of them go through `keysOf` → `toolEnvFor`, which is
 already a small role layer (`snap`, `pull`, `fine`, `shift`, `mod`):
@@ -117,33 +120,137 @@ Timeline drags:
 4. **Touch:** `stores/TouchModifierStore.ts` holds on-screen Shift and Alt (held or latched), but
    only `ChipSelector` reads it; the field editor ignores touch presses entirely
    (`fieldPointerInput.ts`, `pointerType === "touch"`).
-5. **"From center" doesn't exist yet.** No gesture draws from the center, so Alt isn't needed for
-   it today; the role is reserved.
+5. **"From center" doesn't exist yet.** No gesture draws from the center today; the revised model
+   adds it.
+6. **Selection can only add.** Shift adds on click, marquee and lasso; nothing subtracts, and
+   nothing reaches inside a placed box.
 
-## 2. The role module
+## 2. The model: three held roles, press choices, and toggles
+
+The first draft had five roles (`fine`, `constrain`, `noSnap`, `fromCenter`, `pivot`). Review with
+the owner (2026-10-28) cut that down. There are only three keys a role can take (Shift, Alt/Option,
+and Cmd on a Mac or Ctrl elsewhere: Mac Ctrl is a right-click and the Windows key belongs to the
+system), so the model is built around that limit:
+
+| Kind                      | Members                                   | When it's read                   |
+| ------------------------- | ----------------------------------------- | -------------------------------- |
+| **Held roles**            | `fine`, `constrain`, `fromCenter`         | Live, for the whole drag         |
+| **Press choices**         | `add`, `subtract`, `reachInside`          | Once, when the pointer goes down |
+| **Toggles** (UI, no keys) | Snap, Lock X / Lock Y, later Mirror       | Always; on until switched off    |
+| **Timeline only**         | Alt = no snap (held), $mod = draw a range | Its own row; unchanged           |
+
+### Held roles
+
+One role per key, so every key has exactly one meaning while dragging.
+
+- **`fine`**: slower or finer. Off the half-step ladder (guides still pull), hundredths when
+  scrubbing a number, quarter speed on the field, whole degrees when rotating.
+- **`constrain`**: the shape's natural constraint. It is one idea with a meaning per gesture:
+  - **moving** (marchers, a placed box, a whole shape): stay on one axis, horizontal or vertical,
+    picked by which way the drag has gone further. This is new; today it's only reachable through
+    the Lock X / Lock Y toggles, and a Shift-drag on the field turns snapping off instead;
+  - **drawing or resizing a box**: equal across and deep spacings;
+  - **lines, arcs, curves, circles**: 45° steps;
+  - **rotating**: 15° steps (the default; see "one meaning per role");
+  - **scaling**: flips proportional scaling. The box editor's ratio lock (`ratioLocked` in
+    `shapeEditorStore`) is the always-on form: holding the key flips the lock for one drag, so
+    there is one concept, not two.
+- **`fromCenter`**: draw or resize about the center. A box draws corner to corner today and a
+  handle keeps the opposite side fixed (#439); with the role held, the box grows both ways. Circles
+  already draw from the center, so for circles the role changes nothing.
+
+Two rules hold for every held role:
+
+1. **Keys add up.** Holding two keys always gives both effects; no chord has a meaning of its
+   own. With three roles there are three pairs, and each is useful: fine + constrain, fine + from
+   center, constrain + from center (the "square from its center" of every design tool). A chord
+   such as $mod+Alt = "fine with no snap" was considered and rejected because it takes one of
+   these pairs away.
+2. **One meaning per role across the field and the shape tool.** Today scaling marchers on the
+   field is proportional unless Shift is held, while the shape tool frees spacings unless Shift is
+   held. Rule: the constrain key flips whatever the gesture's default is (what Photoshop does now),
+   and each gesture states its default. Rotation then reads cleanly: default 15° steps, `fine` =
+   whole degrees, Snap off = free.
+
+### No snap is a toggle, not a key
+
+`noSnap` stops being a held role. The **Snap toggle** sits with Lock X / Lock Y and turns off the
+half-step ladder plus the pull of the field's lines and other marchers. Reasons:
+
+- With `fine` already off the ladder, the only thing no-snap adds is "nothing pulls". That's a
+  setting for a section of work, not something you flip mid-drag.
+- It frees a key, which is what lets each key carry one held role.
+- It works on a tablet as is.
+- Precedent: Ableton's grid toggle (Cmd+4), the snap buttons in Logic and Premiere, Blender's
+  magnet, Figma's snapping options.
+
+Details:
+
+- Visible: a pressed button on the shape editor bar, and "Snap off" in the on-drag chip.
+- **Not kept across a restart or opening a file**, so a forgotten toggle doesn't leave a show off
+  the half steps an hour later.
+- A shortcut (to pick; Blender uses Shift+Tab, which we use for focus order, so likely a letter
+  combination checked against `keymap.ts`).
+- Covers shape and marcher drags on the field. The keyboard "free" nudge (Alt+arrow today) can
+  follow the toggle instead of needing its own binding.
+- A held override (hold a key to flip snap for one drag, like Blender's Ctrl) is left out until
+  someone asks, because it brings back the key shortage.
+- The timeline keeps its held Alt = no snap: scrubbing past a flag is a single moment, not a
+  section of work. The toggle doesn't cover the timeline for now.
+
+### Press choices
+
+These are decided once when the pointer goes down, then stop mattering. They are not held roles,
+so they can share a key with one.
+
+- **`add`**: Shift-click and Shift-marquee/lasso add to the selection. Exists today.
+- **`subtract`**: a marquee or lasso removes what it covers. New. Today you can only add; trimming
+  a lasso of a whole section down to "all but the snares" is a real drill task, and Photoshop and
+  Illustrator both have it. Default key: Alt (Photoshop, Illustrator).
+- **`reachInside`**: a press on a placed box picks the marcher under it instead of the box, like
+  Figma's Cmd-click into a group. Placed boxes now keep their members, so this will come up. The
+  pivot grab (a $mod press on a shape's center takes the pivot, `frame/gestures.ts:120`) is the
+  same kind of choice and moves here. Default key: $mod.
+
+The rule that keeps press choices and held roles apart:
+
+> A key the **press** used (to add, subtract, reach inside or grab the pivot) is not read as a
+> held role until it is released. Pressing it again mid-drag turns the role on.
+
+So a Shift-press on a marcher adds it and drags at normal speed even when Shift is `fine`.
+
+### Not modifiers
+
+- **Mirror** (the partner across the 50 follows): very drill-specific and common, but it needs
+  pairing data and stays on for a whole section of work, so it's a toggle like Snap. Open
+  question, not in the ticket.
+- **Ripple on the timeline** (do later pages shift when a flag or move edge is dragged): the
+  resize and page-flag decisions set the default. If it ever gets a key, it's timeline-only. Open
+  question.
+- **Skipped:** duplicate on drag (marchers are people; maybe shapes later), coarse steps (the
+  ladder already gives half steps), hold-to-switch-tool (Space is Play, right-drag pans).
+
+## 3. The role module
 
 A new pure module, `apps/desktop/src/input/modifierRoles.ts`, plus a small store for the chosen
 mapping. Everything that reads a modifier for a gesture asks it.
 
 ```ts
-/** What a held key means for a gesture. Click and navigation meanings are not roles. */
-export type GestureRole =
-  | "fine" // slower or finer: off the ladder, hundredths, quarter speed
-  | "constrain" // equal spacings, 45° and 15° steps, proportional scale
-  | "noSnap" // nothing snaps or pulls
-  | "fromCenter" // reserved: draw or scale about the center
-  | "pivot"; // press-time: the center press grabs the pivot
+/** What a held key means during a drag */
+export type HeldRole = "fine" | "constrain" | "fromCenter";
 
-/** Where the gesture happens; a context lists the roles it honors */
+/** What a key means at the press; decided once */
+export type PressChoice = "add" | "subtract" | "reachInside";
+
+/** Where the gesture happens; each context lists what it honors */
 export type GestureContext =
   | "shape" // shape tool, frame, placed boxes, ScrubNumber
-  | "field" // marcher move, handles, rotate, scale on the field
-  | "timeline"; // playhead, flags, loop, cues, clip edges
+  | "field" // marcher move, handles, rotate, scale, marquee and lasso
+  | "timeline"; // playhead, flags, loop, cues, clip edges (own row, see below)
 
-/** The keys a role can take: never Mac Ctrl (it is a right-click), never Meta on Windows/Linux */
+/** The keys a role can take: never Mac Ctrl (a right-click), never Meta on Windows/Linux */
 export type RoleKey = "Shift" | "Alt" | "$mod";
 
-/** Physical state: from an event, OR'd with the on-screen toggles */
 export interface HeldKeys {
   readonly shift: boolean;
   readonly alt: boolean;
@@ -151,7 +258,7 @@ export interface HeldKeys {
   readonly meta: boolean;
 }
 
-export type Roles = Readonly<Record<GestureRole, boolean>>;
+export type Roles = Readonly<Record<HeldRole, boolean>>;
 
 export function heldKeysOf(event: {
   shiftKey: boolean;
@@ -160,150 +267,151 @@ export function heldKeysOf(event: {
   metaKey: boolean;
 }): HeldKeys;
 
-/** Pure: which roles are on, for this context, under this map */
+/** Pure: which held roles are on, for this context, under this map */
 export function rolesOf(
   keys: HeldKeys,
   context: GestureContext,
-  map?: RoleMap, // default: the current preset
-  isMac?: boolean, // default: isMacPlatform(); resolves $mod
-  onScreen?: ReadonlySet<GestureRole>, // touch and Pencil toggles, OR'd in
+  options?: {
+    map?: RoleMap; // default: the current preset
+    isMac?: boolean; // default: isMacPlatform(); resolves $mod
+    onScreen?: ReadonlySet<HeldRole>; // touch and Pencil toggles, OR'd in
+    usedByPress?: ReadonlySet<RoleKey>; // keys the press consumed, ignored until released
+  },
 ): Roles;
 
-/** The key a role uses here, for hints ("⌥ fine"), tooltips and docs */
-export function keyForRole(
-  role: GestureRole,
+/** Pure: the press choice for a pointer down, or null */
+export function pressChoiceOf(
+  keys: HeldKeys,
+  context: GestureContext,
+  options?: { map?: RoleMap; isMac?: boolean },
+): PressChoice | null;
+
+/** The key for a role or choice here, for hints ("⇧ fine"), tooltips and docs */
+export function keyFor(
+  role: HeldRole | PressChoice,
   context: GestureContext,
 ): RoleKey | null;
 
-/** React: the live roles while a gesture runs, for the on-drag hint */
+/** React: live roles while a gesture runs, for the on-drag chip */
 export function useGestureRoles(context: GestureContext): Roles;
 ```
 
-The map is data, a preset of role → key per context:
+The map is data: per context, a key for each held role and press choice. A preset is valid only if
+no two held roles share a key (press choices may share a key with a held role; that's what the
+press rule is for).
 
 ```ts
 type RoleMap = Readonly<
-  Record<GestureContext, Partial<Record<GestureRole, RoleKey>>>
+  Record<GestureContext, Partial<Record<HeldRole | PressChoice, RoleKey>>>
 >;
-
-/** Today's behavior, exactly */
-export const CURRENT: RoleMap = {
-  shape: { fine: "Alt", constrain: "Shift", noSnap: "$mod", pivot: "$mod" },
-  field: { fine: "Alt", noSnap: "Shift", constrain: "Shift" }, // constrain inverted: frees ratio
-  timeline: { noSnap: "Alt" },
-};
 ```
 
-`toolEnvFor(field, keys)` changes to `toolEnvFor(field, roles)`; `env.shift` becomes
-`env.constrain` and `env.mod` becomes `env.noSnap` (or stays, read from `roles`). `keysOf` goes
-away. The field editor's `FieldPointer` keeps raw keys (the editor is shared with the timeline-mode
-field and tests) and gains `roles` computed once in `fieldPointerInput`.
+`toolEnvFor(field, keys)` becomes `toolEnvFor(field, roles, snapOn)`; `env.shift` becomes
+`env.constrain`, `env.mod` goes away (no-snap comes from the toggle), and `keysOf` is removed. The
+field editor's `FieldPointer` keeps raw keys (it's shared with the timeline-mode field and tests)
+and gains `roles` and `pressChoice`, computed once in `fieldPointerInput`.
 
 ### Platform and $mod
 
 `$mod` resolves the same way as the shortcuts registry (`shortcuts/bindings.ts`, `platform.ts`):
-Cmd on a Mac, Ctrl elsewhere. Mac Ctrl+left is a right-click that pans the field and opens menus,
-so no role may use it; Windows/Linux Meta is the OS key, so no role may use it either. That is why
-`RoleKey` has only three values.
+Cmd on a Mac, Ctrl elsewhere. Mac Ctrl+left pans the field and opens menus, and Windows/Linux Meta
+is the OS key, so `RoleKey` has three values.
+
+Alt has platform risks the ticket must check on real machines: on Windows and Linux a lone Alt
+press can show Electron's auto-hidden menu bar, and on some Linux desktops Alt+drag moves the
+window. Both versions below put Alt on `fromCenter`, the least important role, so it absorbs those
+risks; today Alt carries `fine`, the most important.
 
 ### Live changes mid-drag
 
-A gesture samples roles on press and on every move, like today, **and** a `RoleTracker` listens
-to `keydown`/`keyup` on the window while a gesture is active and re-runs the gesture's last move
-when a role flips. `blur` clears every key (a held Alt is lost when the window loses focus). The
-field's #197 rule (Alt pressed mid-drag re-anchors on the drawn spot) becomes "`fine` turning on
-re-anchors", so it follows the key if the key changes.
-
-### Press-time and click-time meanings
-
-Some keys mean something at the press, before any drag exists: Shift adds to the selection,
-$mod draws a timeline range or grabs the pivot. Rule:
-
-> A key that the **press** used (to add to the selection, to pick a range or the pivot) is not
-> read as a drag role until it is released. Pressing it again mid-drag turns the role on.
-
-This is what keeps Shift-click from turning into a Shift drag. The click meanings stay in their
-own code (`fieldEditor.click`, page box selection) and are not configurable: Shift = add is as
-universal as Shift = constrain and nobody has asked to change it.
+A gesture samples roles on press and on every move, like today, **and** a `RoleTracker` listens to
+`keydown`/`keyup` on the window while a gesture is active and re-runs the gesture's last move when
+a role flips. `blur` clears every key. The field's #197 rule (Alt pressed mid-drag re-anchors on
+the drawn spot) becomes "`fine` turning on re-anchors", so it follows the key.
 
 ### Touch and Apple Pencil
 
-There are no modifier keys on a tablet. `TouchModifierStore` becomes role toggles: the floating
-button offers **Fine**, **Equal** (constrain) and **No snap**, held or latched, and `rolesOf` ORs
-them in through `onScreen`. A tablet user never sees a key name, so a key remap doesn't move the
-buttons. The old `isShiftHeld`/`isAltHeld` stay for the Select tab's add-to-selection.
+No modifier keys on a tablet. `TouchModifierStore` becomes role toggles: the floating button
+offers **Fine**, **Equal** (constrain) and **From center**, held or latched, OR'd in through
+`onScreen`. A tablet user never sees a key name, so a key remap doesn't move the buttons. Snap is
+already a toggle. The old `isShiftHeld`/`isAltHeld` stay for the Select tab's add-to-selection.
+
+### The timeline keeps its own row
+
+The timeline reads Alt = no snap (held) and $mod = draw a range (a press choice, `isRangeModifier`).
+Both stay. It goes through the module only so the keys are named in one place:
+`timeline: { noSnap: "Alt", range: "$mod" }` in a small timeline-specific type, not mixed into the
+field's roles. The constrain key meaning "range" a few inches away from "equal spacings" is one
+argument against $mod = constrain (see the versions).
 
 ### The shortcuts registry
 
-Roles are not actions: nothing fires on a keypress, they are held while a pointer does something.
-So they don't go into `ACTIONS`, but they share three things with it:
+Roles are not actions: nothing fires on a keypress. They don't go into `ACTIONS`, but share:
 
-1. **Platform resolution** (`$mod`) and **labels** (`shortcuts/labels.ts`, so a hint shows ⌥ on a
-   Mac and Alt elsewhere).
-2. **Keyboard nudge variants follow the roles.** `NUDGE_VARIANTS` in `definitions.ts` derive their
-   bindings from the map: the fine nudge is `fine key + arrow`, the free nudge is `noSnap key +
-arrow`. Today's bindings already disagree with the pointer (Shift+arrow is fine), see Q2.
-3. **Conflict detection.** `keymap.ts`'s `BindingConflict` checks action against action. Roles
-   add one rule per context: two roles can't share a key (`field`'s Shift for both noSnap and the
-   freed ratio is today's one exception, kept for parity, see Q4). A modifier plus a key is a
-   shortcut, a modifier alone is a role, so the two can't collide; the only overlap is the nudge
-   derivation above.
+1. **Platform resolution** (`$mod`) and **labels** (`shortcuts/labels.ts`: ⌥ on a Mac, Alt
+   elsewhere).
+2. **Conflict detection.** Within a context, two held roles can't share a key. A modifier plus a
+   letter is a shortcut and a modifier alone is a role, so they can't collide. The Snap toggle's
+   shortcut is an ordinary action and goes through `keymap.ts` like any other.
+3. **Keyboard nudges** (`NUDGE_VARIANTS` in `definitions.ts`) are left alone until the lab test is
+   decided (see Q3).
 
-**Settings › Shortcuts later: yes**, as a short "While dragging" section above the actions:
-one row per role with a three-way key picker (Shift / Alt / ⌘ or Ctrl). Picking a key that another
-role uses swaps them, so the map is always valid. Ship presets first, per-role picking after.
+**Settings › Shortcuts later: yes**, as a short "While dragging" section above the actions: one row
+per held role with a three-way key picker (Shift / Alt / ⌘ or Ctrl). Picking a key another role
+uses swaps them, so the map stays valid. Ship presets first, per-role picking after.
 
-## 3. Conflicts if fine became Shift
+## 4. Conflicts if fine became Shift
 
-| Conflict                                                                                          | What happens with Shift = fine                                                    | How the roles handle it                                                                                                                           |
-| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Constrain is Shift today** (equal spacings, 45°, block 15°, whole-degree rotate)                | Both can't be Shift                                                               | Constrain moves to another key, Alt in the trial preset. This is the real cost: it breaks the near-universal Shift = constrain of 2D design tools |
-| Shift-click adds to the selection on the field and the timeline; marquee and lasso with Shift add | A Shift-press-drag would both add and go fine                                     | The press-time rule: Shift used by the press doesn't count as `fine` until released. Selection code is untouched                                  |
-| Field marcher drag: Shift = no snap; corner scale: Shift = free ratio                             | Shift would mean fine _and_ no snap                                               | The `field` context gets its own row: fine = Shift, noSnap = Alt in the trial (fine already turns snap off on the field)                          |
-| Shift+arrow nudge                                                                                 | Already fine (quarter step)                                                       | No conflict; it becomes consistent                                                                                                                |
-| Shift+R, Shift+E/Q, Shift+F, Shift+Space, Shift+Z, Shift+P/N/V/H                                  | None: these fire on a letter keydown, and roles only matter while a pointer drags | No change. During a drag, letter shortcuts in the canvas scope stay as they are                                                                   |
-| Timeline: Shift on Previous/Next = beat, Shift on a page box = extend                             | Clicks, not drags                                                                 | Not roles; untouched                                                                                                                              |
-| 3D camera: Shift-drag pans                                                                        | Camera navigation                                                                 | Not roles; untouched                                                                                                                              |
-| Inspector `DragInput` (packages/ui): Shift = slower                                               | Already Shift = fine                                                              | It takes a `fine` callback from the app instead of reading Shift, so it follows the map                                                           |
-| Windows/Linux: a lone Alt press shows the menu bar in Electron when the menu is auto-hidden       | Not a Shift problem, but it hits Alt = fine today                                 | Not verified on this branch; the ticket checks it                                                                                                 |
+| Conflict                                                                      | What happens with Shift = fine                                        | How the design handles it                                                                                             |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Constrain is Shift today** (equal spacings, 45°, block 15°, rotation steps) | Both can't be Shift                                                   | Constrain moves to $mod (version A). The real cost: it breaks the near-universal Shift = constrain of 2D design tools |
+| Shift-click adds to the selection; marquee and lasso with Shift add           | A Shift-press-drag would add and go fine                              | The press rule: Shift used by the press isn't `fine` until released. Selection code is untouched                      |
+| Field marcher drag: Shift = no snap; corner scale: Shift = free ratio         | Shift would mean fine _and_ no snap                                   | No snap moves to the Snap toggle; free ratio follows `constrain`. `fine` already drops the grid snap on the field     |
+| $mod draws a range on the timeline                                            | With version A, $mod = constrain on the field, range on the timeline  | Separate contexts, so nothing breaks; but the same key means unrelated things close together. Noted against version A |
+| Shift+arrow nudge                                                             | Already fine (quarter step)                                           | No conflict; it becomes consistent                                                                                    |
+| Shift+R, Shift+E/Q, Shift+F, Shift+Space, Shift+Z, Shift+P/N/V/H              | None: these fire on a letter keydown; roles matter only during a drag | No change                                                                                                             |
+| Timeline: Shift on Previous/Next = beat, Shift on a page box = extend         | Clicks, not drags                                                     | Not roles; untouched                                                                                                  |
+| 3D camera: Shift-drag pans                                                    | Camera navigation                                                     | Not roles; untouched                                                                                                  |
+| Inspector `DragInput` (packages/ui): Shift = slower                           | Already Shift = fine                                                  | Later it takes a `fine` callback from the app, so it follows the map                                                  |
+| Designers press Shift by reflex to constrain                                  | They get a slower drag, which can feel like lag                       | The on-drag chip names what's held                                                                                    |
 
-## 4. Recommendation
+## 5. Recommendation: lab-test two versions
 
-**Default: keep today's mapping** (`CURRENT`: Alt = fine, Shift = constrain, $mod = no snap in
-shapes). Shift = constrain is the one modifier rule designers carry from every 2D tool, and fine has
-no standard to beat it. Reasons to reconsider: our arrow nudges already say Shift = fine, and band
-directors who come from Blender or a DAW will reach for Shift.
+Today's mapping (Alt = fine, Shift = constrain, $mod = no snap) is not one of the candidates: Alt =
+fine has no precedent, and no-snap moves to the toggle either way. Test two versions, both with
+the Snap toggle and both with Alt = from center:
 
-**Let testers try both, cheaply:** two presets, `CURRENT` and `SHIFT_FINE`:
+|         | Version A (Shift = fine)                                           | Version B (conventions)                                                                                |
+| ------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Shift   | fine                                                               | constrain                                                                                              |
+| $mod    | constrain                                                          | fine                                                                                                   |
+| Alt     | from center                                                        | from center                                                                                            |
+| Snap    | toggle                                                             | toggle                                                                                                 |
+| For it  | The tester, the arrow keys, Blender, DAWs                          | Shift = constrain and Alt = from center in every 2D design tool; $mod = fine in After Effects and Maya |
+| Against | $mod = constrain only in Inkscape; $mod is "range" on the timeline | Cmd+arrow is a 4-step nudge today; Figma users expect Cmd = no snap                                    |
 
-```ts
-export const SHIFT_FINE: RoleMap = {
-  shape: { fine: "Shift", constrain: "Alt", noSnap: "$mod", pivot: "$mod" },
-  field: { fine: "Shift", noSnap: "Alt", constrain: "Alt" },
-  timeline: { noSnap: "Alt" },
-};
-```
+Press choices are the same in both: Shift = add, Alt = subtract, $mod = reach inside / pivot.
 
-- **Lab:** the existing Version switch (`lab/labVariant.ts`, fork PR #125). The role store reads
-  `getLabVariant() === "shift-fine"`; a lab test lists `variants: [default, shift-fine]`, and the
-  feedback records which one was on. No settings UI, nothing to undo after the test.
-- **Desktop testers:** a hidden UI setting `modifierPreset: "current" | "shiftFine"` (default
-  `current`), settable from the ⌘K palette action "Use Shift for fine control" until the Settings
-  section exists.
-- **On-drag hint** (from the prior research): while a shape or field drag runs, a small chip near
-  the cursor shows the live roles (`⌥ fine · ⇧ equal`). It makes either mapping discoverable and
-  shows testers which preset they're on.
+How testers switch:
 
-Per the lab rules, the variant switch doesn't go to OpenMarch `main`: keep the preset that wins.
+- **Lab:** the existing Version switch (`lab/labVariant.ts`). A lab test lists
+  `variants: [a, b]` and the feedback records which one was on. No settings UI.
+- **Desktop testers:** a hidden UI setting `modifierPreset: "a" | "b"`, settable from a ⌘K action
+  until the Settings section exists.
+- **On-drag chip, in scope:** while a shape or field drag runs, a small chip near the cursor shows
+  what's held and the snap state (`⇧ fine · ⌥ from center · Snap off`). It makes either version
+  learnable, catches the reflex-Shift surprise, and tells testers which version they're on.
+
+Leave the arrow-key nudges alone until the test is decided: if A wins they already agree; if B
+wins, Cmd+arrow (the 4-step nudge) needs its own decision.
+
+Per the lab rules, the variant switch doesn't go to OpenMarch `main`: keep the version that wins.
 
 ## Questions for the owner
 
-1. Keep Alt = fine as the default, or switch after the lab test?
-2. Should the arrow nudges follow the pointer map (Alt+arrow = fine) or stay (Shift+arrow = fine)?
-   With `SHIFT_FINE` the two agree with no change.
-3. Shape rotation: default 15°, Shift = whole degrees. Is whole degrees `constrain` (as now) or
-   `fine` (it is the finer step)? If fine moves to Shift, both answers give Shift.
-4. The field: unify with shapes (no snap = $mod, Shift = constrain/proportional), or keep its own
-   row? Today the field and the shape tool disagree on what Shift and no-snap are.
-5. Should the timeline's no-snap (Alt) follow the shape map's `noSnap` ($mod)? $mod already draws a
-   range there, so probably not; the timeline keeps its own row.
+1. After the lab test: version A or B?
+2. Snap toggle: shape and marcher drags on the field only (proposed), or the timeline too? Reset on
+   restart and on opening a file (proposed)?
+3. Arrow nudges: follow the winning version, or stay as they are?
+4. Constrain while moving = axis lock (proposed), with Lock X / Lock Y as its always-on form?
+5. Mirror and timeline ripple: worth designing as toggles, or not now?
