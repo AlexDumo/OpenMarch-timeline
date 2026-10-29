@@ -22,15 +22,15 @@ const TRANSPORT_ACTIONS = {
 } as const satisfies Record<keyof TransportShortcuts, ActionId>;
 
 /**
- * A binding as the transport's tooltips write it: words joined with " + " ("Shift + Space"), so
- * the button's ARIA shortcut can be read from it. Alt stays "Alt"; the guides say "Option" on a Mac.
+ * A binding as the transport's tooltips write it: words joined with " + " ("Shift + Space"), with
+ * Cmd and Option on a Mac (`ariaKeyShortcut` turns it into ARIA's names)
  */
 export const transportKeys = (binding: string, isMac: boolean): string => {
     const words = {
         $mod: isMac ? "Cmd" : "Ctrl",
         Control: "Ctrl",
         Meta: isMac ? "Cmd" : "Win",
-        Alt: "Alt",
+        Alt: isMac ? "Option" : "Alt",
         Shift: "Shift",
     };
     const { modifiers } = parseBinding(binding);
@@ -54,4 +54,16 @@ export const transportShortcuts = (
 export function useTransportShortcuts(): TransportShortcuts {
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     return useMemo(() => transportShortcuts(overrides), [overrides]);
+}
+
+/** The go-to box's keys as the user has them, at most two ("G or Cmd + G"); "" when unbound */
+export function useGoToKeys(): string {
+    const overrides = useShortcutOverridesStore((s) => s.overrides);
+    return useMemo(() => {
+        const isMac = isMacPlatform();
+        return getDisplayBindings("timelineGoTo", overrides, isMac)
+            .slice(0, 2)
+            .map((binding) => transportKeys(binding, isMac))
+            .join(" or ");
+    }, [overrides]);
 }

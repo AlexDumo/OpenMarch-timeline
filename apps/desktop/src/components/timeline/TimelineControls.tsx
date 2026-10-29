@@ -17,6 +17,7 @@ import { toggleTimelineLoop } from "@/timeline/timelineTransport";
 import { ShortcutTooltip } from "./ShortcutTooltip";
 import { PlaybackSpeedButton } from "./PlaybackSpeedButton";
 import { useTransportShortcuts } from "./useTransportShortcuts";
+import { ariaKeyShortcut } from "./TransportButtons";
 import { START_INK } from "./startFlagInk";
 import { TOUCH_TARGET_CLASS } from "./touchTargets";
 import {
@@ -129,7 +130,7 @@ export function TimelineLoopButton() {
                 data-testid="timeline-loop"
                 aria-label="Loop"
                 aria-pressed={looping}
-                aria-keyshortcuts={shortcut?.replace(/\s*\+\s*/g, "+")}
+                aria-keyshortcuts={ariaKeyShortcut(shortcut)}
                 // Not `disabled` in isolation, so the tooltip still says why it can't turn off
                 aria-disabled={isolated || undefined}
                 // Keeps keyboard focus off, so Space after a click is still Play

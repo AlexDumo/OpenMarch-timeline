@@ -88,6 +88,26 @@ export type TransportShortcuts = Readonly<
     Record<keyof typeof TRANSPORT_SHORTCUTS, string | undefined>
 >;
 
+const ARIA_KEY_NAMES: Readonly<Record<string, string>> = {
+    Ctrl: "Control",
+    Cmd: "Meta",
+    Win: "Meta",
+    Option: "Alt",
+    "↑": "ArrowUp",
+    "↓": "ArrowDown",
+    "←": "ArrowLeft",
+    "→": "ArrowRight",
+    Esc: "Escape",
+    Del: "Delete",
+};
+
+/** A shortcut as the tooltips write it ("Cmd + L"), as `aria-keyshortcuts` names it ("Meta+L") */
+export const ariaKeyShortcut = (shortcut: string | undefined) =>
+    shortcut
+        ?.split(/\s*\+\s*/)
+        .map((key) => ARIA_KEY_NAMES[key] ?? key)
+        .join("+");
+
 /** The shortcuts the transport's tooltips show: the defaults unless the editor gives the user's */
 export const TransportShortcutsContext =
     createContext<TransportShortcuts>(TRANSPORT_SHORTCUTS);
@@ -130,10 +150,7 @@ export const TransportButton = memo(function TransportButton({
             <button
                 type="button"
                 aria-label={label}
-                aria-keyshortcuts={(shortcut ?? keyShortcut)?.replace(
-                    /\s*\+\s*/g,
-                    "+",
-                )}
+                aria-keyshortcuts={ariaKeyShortcut(shortcut ?? keyShortcut)}
                 aria-pressed={pressed}
                 data-testid={testId}
                 {...(navigation ? { [NAVIGATION_BUTTON_ATTRIBUTE]: "" } : {})}

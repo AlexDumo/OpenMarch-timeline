@@ -13,6 +13,7 @@ import {
 } from "@/global/menuActions";
 import { shortcutGroups } from "@/components/ShortcutsDialog";
 import { transportShortcuts } from "../useTransportShortcuts";
+import { ariaKeyShortcut } from "../TransportButtons";
 
 /** An action's first default binding as the tooltips write it, e.g. "Shift + Space" */
 const shown = (id: ActionId) =>
@@ -52,9 +53,26 @@ describe("transport shortcuts (UI-17)", () => {
         expect(TRANSPORT_SHORTCUTS.fit).toBe(shown("timelineFit"));
     });
 
-    it("are the defaults until the user changes them, on a Mac too (shortcut review)", () => {
+    it("are the defaults until the user changes them, with Option on a Mac (shortcut review)", () => {
         expect(transportShortcuts({}, false)).toEqual(TRANSPORT_SHORTCUTS);
-        expect(transportShortcuts({}, true)).toEqual(TRANSPORT_SHORTCUTS);
+        expect(transportShortcuts({}, true)).toEqual({
+            ...TRANSPORT_SHORTCUTS,
+            firstPage: "Option + Q",
+            lastPage: "Option + E",
+            playOn: "Option + Space",
+        });
+        expect(transportShortcuts({ timelineFit: ["Alt+F"] }, true).fit).toBe(
+            "Option + F",
+        );
+    });
+
+    it("give assistive tech the ARIA key names", () => {
+        expect(ariaKeyShortcut("Shift + Space")).toBe("Shift+Space");
+        expect(ariaKeyShortcut("Ctrl + L")).toBe("Control+L");
+        expect(ariaKeyShortcut("Cmd + L")).toBe("Meta+L");
+        expect(ariaKeyShortcut("Option + E")).toBe("Alt+E");
+        expect(ariaKeyShortcut("→")).toBe("ArrowRight");
+        expect(ariaKeyShortcut(undefined)).toBeUndefined();
     });
 
     it("follow the user's changed shortcuts, and leave out one taken away", () => {

@@ -21,11 +21,7 @@ import {
     TransportPlayButton,
     TransportShortcutsContext,
 } from "./TransportButtons";
-import { useTransportShortcuts } from "./useTransportShortcuts";
-import { formatBinding } from "@/shortcuts/bindings";
-import { getDisplayBindings } from "@/shortcuts/keymap";
-import { isMacPlatform } from "@/shortcuts/platform";
-import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
+import { useGoToKeys, useTransportShortcuts } from "./useTransportShortcuts";
 import { ShortcutTooltip, TransportTooltipProvider } from "./ShortcutTooltip";
 import {
     isPlainNudgeKey,
@@ -232,16 +228,7 @@ export const TimelineTransport = memo(function TimelineTransport({
     );
     const mod = isMac() ? "⌘" : "Ctrl";
     const shortcuts = useTransportShortcuts();
-    // The go-to box's keys as the user has them, at most two ("G or ⌘G")
-    const overrides = useShortcutOverridesStore((s) => s.overrides);
-    const goToKeys = getDisplayBindings(
-        "timelineGoTo",
-        overrides,
-        isMacPlatform(),
-    )
-        .slice(0, 2)
-        .map((binding) => formatBinding(binding, isMacPlatform()))
-        .join(" or ");
+    const goToKeys = useGoToKeys();
     const [goTo, setGoTo] = useState<string | null>(null);
     const [goToFailed, setGoToFailed] = useState(false);
     const canGoTo = onSeek != null || onSelectionChange != null;

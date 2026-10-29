@@ -924,8 +924,9 @@ from it. The spec still wins on the model; this file decides presentation.
     play on from here"). Keycaps are not drawn inside buttons (the survey found that noisy). The
     transport's keys are checked against the action registry by a test.
   - **`?` lists every shortcut**, as GitHub's and Figma's `?` do: a dialog grouped Playback, Pages,
-    Timeline and the rest, read from the action registry so it can't go stale, plus the timeline's
-    own keys and gestures (G, Shift+Z, Esc, Ctrl+drag, Ctrl+scroll, Alt+drag) and the WASD nudge. It
+    Timeline and the rest, read from the action registry so it can't go stale (go-to, G, and Fit,
+    Shift+Z, are actions there and can be changed in Settings), plus the timeline's own keys and
+    gestures (Esc, Ctrl+drag, Ctrl+scroll, Alt+drag) and the WASD nudge. It
     is also Help → Keyboard Shortcuts (_lead default_).
   - **App menu items**: a **Playback** menu (Play / Stop, Play from Playhead, Loop On / Off) and Help →
     Keyboard Shortcuts. They show their keys without registering them, so text fields keep Space
