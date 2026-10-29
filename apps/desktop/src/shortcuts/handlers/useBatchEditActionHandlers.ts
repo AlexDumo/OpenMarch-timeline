@@ -12,12 +12,12 @@ import {
     type NeighborPageScope,
 } from "@/utilities/setMarchersToNeighborPage";
 import { useActionHandler } from "../useActionHandler";
-import { useEditorReadiness } from "./useEditorReadiness";
+import type { EditorReadiness } from "./useEditorReadiness";
 
 /** "Set all or selected marchers to the previous or next page" (`setMarchersToNeighborPage`, P7.6). */
-export function useBatchEditActionHandlers() {
+export function useBatchEditActionHandlers(editor: EditorReadiness) {
     const { t } = useTolgee();
-    const { selectedPage, ready, selectedMarchers } = useEditorReadiness();
+    const { selectedPage, ready, selectedMarchers } = editor;
     const { pages } = useTimingObjects()!;
     // "All" means the performers: props and equipment stay put
     const { data: performers } = useQuery(allMarchersQueryOptions());

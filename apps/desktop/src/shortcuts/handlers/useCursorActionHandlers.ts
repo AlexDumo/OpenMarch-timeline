@@ -3,16 +3,18 @@ import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import { useItemDrawingStore } from "@/stores/ItemDrawingStore";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import { useActionHandler } from "../useActionHandler";
-import { useEditorReadiness } from "./useEditorReadiness";
-import { useUpdateCoordinates } from "./useUpdateCoordinates";
+import type { EditorReadiness } from "./useEditorReadiness";
+import type { UpdateCoordinates } from "./useUpdateCoordinates";
 
 // eslint-disable-next-line max-lines-per-function
-export function useCursorActionHandlers() {
-    const { ready, selectedPerformers } = useEditorReadiness();
+export function useCursorActionHandlers(
+    editor: EditorReadiness,
+    updateCoordinates: UpdateCoordinates,
+) {
+    const { ready, selectedPerformers } = editor;
     const selectedMarchersContext = useSelectedMarchers();
     const setSelectedMarchers =
         selectedMarchersContext?.setSelectedMarchers ?? (() => {});
-    const updateCoordinates = useUpdateCoordinates();
     const alignmentEventStore = useAlignmentEventStore();
     const resetAlignmentEvent =
         alignmentEventStore?.resetAlignmentEvent ?? (() => {});

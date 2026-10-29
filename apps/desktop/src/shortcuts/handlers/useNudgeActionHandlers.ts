@@ -5,11 +5,10 @@ import { useUpdateSelectedMarchersOnSelectedPage } from "@/hooks/queries";
 import { NUDGE_ACTION_IDS, type NudgeArgs } from "../definitions";
 import { resolveNudgeDistance } from "../nudge";
 import { useActionHandlerGroup } from "../useActionHandler";
-import { useEditorReadiness } from "./useEditorReadiness";
+import type { EditorReadiness } from "./useEditorReadiness";
 
-export function useNudgeActionHandlers() {
-    const { ready, fieldProperties, getSelectedMarcherPages } =
-        useEditorReadiness();
+export function useNudgeActionHandlers(editor: EditorReadiness) {
+    const { ready, fieldProperties, getSelectedMarcherPages } = editor;
     const coordinateRounding = useUiSettingsStore(
         (s) => s.uiSettings.coordinateRounding,
     );

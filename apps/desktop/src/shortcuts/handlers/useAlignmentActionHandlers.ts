@@ -4,11 +4,14 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import * as CoordinateActions from "@/utilities/CoordinateActions";
 import { planCanvasEdit } from "@/timeline/timelineCoordinateWrites";
 import { useActionHandler } from "../useActionHandler";
-import { useEditorReadiness } from "./useEditorReadiness";
-import { useUpdateCoordinates } from "./useUpdateCoordinates";
+import type { EditorReadiness } from "./useEditorReadiness";
+import type { UpdateCoordinates } from "./useUpdateCoordinates";
 
 // eslint-disable-next-line max-lines-per-function
-export function useAlignmentActionHandlers() {
+export function useAlignmentActionHandlers(
+    editor: EditorReadiness,
+    updateCoordinates: UpdateCoordinates,
+) {
     const { t } = useTolgee();
     const {
         fieldProperties,
@@ -17,14 +20,13 @@ export function useAlignmentActionHandlers() {
         getSelectedPerformerPages,
         selectedMarchers,
         selectedPerformers,
-    } = useEditorReadiness();
+    } = editor;
     // Read when an action runs, so a settings change (such as a timeline zoom save) doesn't
     // re-render the handlers
     const setUiSettings = useUiSettingsStore((s) => s.setUiSettings);
     const hasSelection = ready && selectedMarchers.length > 0;
     // Align, distribute and swap line performers up: a selected prop isn't one more dot (C2.2)
     const hasPerformers = ready && selectedPerformers.length > 0;
-    const updateCoordinates = useUpdateCoordinates();
 
     useActionHandler(
         "snapToNearestCustomFraction",

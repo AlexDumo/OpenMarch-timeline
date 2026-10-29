@@ -93,3 +93,6 @@ export function useEditorReadiness() {
         selectedPerformers,
     };
 }
+
+/** `useEditorReadiness`'s result, read once by `EditorActionHandlers` and passed to each handler hook */
+export type EditorReadiness = ReturnType<typeof useEditorReadiness>;

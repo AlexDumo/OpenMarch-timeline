@@ -12,11 +12,11 @@ import {
 } from "@/timeline/timelineTransport";
 import { useActionHandler } from "../useActionHandler";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
-import { useEditorReadiness } from "./useEditorReadiness";
+import type { EditorReadiness } from "./useEditorReadiness";
 
 // eslint-disable-next-line max-lines-per-function
-export function useNavigationActionHandlers() {
-    const { ready } = useEditorReadiness();
+export function useNavigationActionHandlers(editor: EditorReadiness) {
+    const { ready } = editor;
     const { pages, countGrid } = useTimingObjects()!;
     const isPlayingContext = useIsPlaying();
     const isPlaying = isPlayingContext?.isPlaying ?? false;

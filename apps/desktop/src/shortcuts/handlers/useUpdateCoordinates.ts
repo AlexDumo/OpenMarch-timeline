@@ -16,6 +16,8 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
  * the selection allows (UI-9 Editing, P8.15). A refusal is a toast when marchers are selected.
  * A caller that already planned the edit passes its `plan`.
  */
+export type UpdateCoordinates = ReturnType<typeof useUpdateCoordinates>;
+
 export function useUpdateCoordinates() {
     const selectedMarcherCount =
         useSelectedMarchers()?.selectedMarchers.length ?? 0;

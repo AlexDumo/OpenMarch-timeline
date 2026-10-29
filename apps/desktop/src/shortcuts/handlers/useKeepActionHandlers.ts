@@ -2,11 +2,11 @@ import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useTimingObjects } from "@/hooks";
 import { toggleKeepOnPage } from "@/timeline/timelineKeepCommands";
 import { useActionHandler } from "../useActionHandler";
-import { useEditorReadiness } from "./useEditorReadiness";
+import type { EditorReadiness } from "./useEditorReadiness";
 
 /** UI-18 keep later pages */
-export function useKeepActionHandlers() {
-    const { selectedPage, ready, selectedMarchers } = useEditorReadiness();
+export function useKeepActionHandlers(editor: EditorReadiness) {
+    const { selectedPage, ready, selectedMarchers } = editor;
     const { pages } = useTimingObjects()!;
     const isPlaying = useIsPlaying()?.isPlaying ?? false;
 
