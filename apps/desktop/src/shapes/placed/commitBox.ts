@@ -3,13 +3,15 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { XY } from "../types";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { writePlacement } from "../tool/shapePlacement";
+import { keepPagePivots } from "../frame/pagePivot";
 import { liveTargets } from "./liveBox";
 import type { PlacedBox } from "./placedBox";
 
 /**
  * Saves a selected placed shape drawn with `params` through `writePlacement`: its members move to
  * their spots in it and its recipe is saved, as one edit at the edit window (a canvas edit). A
- * shape held from an earlier move gets its own copy on this one; the earlier one stays.
+ * shape held from an earlier move gets its own copy on this one; the earlier one stays. A change
+ * there that moves nobody (its pivot) is saved for that page alone (`withPagePivot`).
  */
 export async function commitBox(
     box: PlacedBox,
@@ -33,12 +35,16 @@ export async function commitBox(
         {
             recipe: {
                 ...box.recipe,
-                params: { ...(params as object), spots },
+                // Other pages' pivots stay as they were
+                params: keepPagePivots(box.recipe.params, {
+                    ...(params as object),
+                    spots,
+                }),
                 // Drill order is gone (#429); the column stays for older files
                 orderMode: "nearest",
             },
             members: targets,
-            replaces: box.recipe,
+            replaces: { ...box.recipe, pivotPage: box.pivotPage },
         },
         queryClient,
         tolgee.t("shapes.placed.editError", "Error editing the shape"),

@@ -17,7 +17,14 @@ import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import { SHAPE_TOOLS } from "../tool/shapeTools";
 import type { ShapeContext, XY } from "../types";
 import { frameToField, pivotPoint } from "../frame/frame";
-import { pivotOf } from "../frame/pivot";
+import { pivotOf, withPivot } from "../frame/pivot";
+import {
+    keepPagePivots,
+    pivotAtBeat,
+    pivotPageAt,
+    withoutPagePivots,
+    type PivotPage,
+} from "../frame/pagePivot";
 
 /**
  * Placed shapes (docs/timeline/research/shapes/07-placed-boxes.md): a shape's recipe, read back.
@@ -47,6 +54,11 @@ export interface PlacedBox<P = unknown> {
     readonly spots: number;
     /** The beat the shape was placed at: its move's end (0 for homes) */
     readonly endBeat: number;
+    /**
+     * The later page it's shown on, which a pivot-only change saves a pivot for (`pagePivots`);
+     * absent on its recipe's own page. `params` has that page's pivot.
+     */
+    readonly pivotPage?: number;
 }
 
 /** Whether `placed` is a box, for what only a box has (its file count, Re-split) */
@@ -82,7 +94,8 @@ function placedOf(
     const stored = recipe.params as StoredParams<{ center?: XY }> | null;
     // Every shape's frame has a center, which recipes store (ADR 0006)
     if (!stored || typeof stored !== "object" || !stored.center) return null;
-    const { spots, ...params } = stored;
+    // Page pivots are the host's, read where the shape is shown (boxesAt)
+    const { spots, ...params } = withoutPagePivots(stored);
     // A spread from a generator this app doesn't have can't be laid out again
     if (!canLayOut(params)) return null;
     // Nor can a box whose numbers were edited into something else (B4)
@@ -106,6 +119,8 @@ function placedOf(
  * @param endBeatOf the end beat of a move (`null`: homes, beat 0), undefined for a move that's gone
  * @param positionOf where a marcher stands at `beat`
  * @param kinds the kinds recipes are read back as: every kind the shape tool draws
+ * @param pages the page boxes, with ids: a shape on a later page than its recipe's own shows that
+ *   page's pivot (`pagePivots`). Without them, every shape shows its recipe's own pivot.
  */
 export function boxesAt({
     recipes,
@@ -113,12 +128,14 @@ export function boxesAt({
     beat,
     positionOf,
     kinds = PLACED_KINDS,
+    pages = [],
 }: {
     recipes: readonly PlacedRecipe[];
     endBeatOf: (timelineId: number | null) => number | undefined;
     beat: number;
     positionOf: (marcherId: number) => XY | undefined;
     kinds?: readonly AnyToolKind[];
+    pages?: readonly PivotPage[];
 }): PlacedBox[] {
     const candidates: PlacedBox[] = [];
     for (const recipe of recipes) {
@@ -130,7 +147,19 @@ export function boxesAt({
             const p = positionOf(m.marcherId);
             return p !== undefined && same(p, m);
         });
-        if (held) candidates.push({ recipe, ...box, endBeat });
+        if (!held) continue;
+        const pivotPage = pivotPageAt(pages, endBeat, beat);
+        const pivot = pivotAtBeat(recipe.params, pages, endBeat, beat);
+        candidates.push({
+            recipe,
+            ...box,
+            params:
+                pivot === pivotOf(box.params)
+                    ? box.params
+                    : withPivot(box.params, pivot),
+            endBeat,
+            ...(pivotPage === null ? {} : { pivotPage }),
+        });
     }
     candidates.sort((a, b) => b.endBeat - a.endBeat);
     const claimed = new Set<number>();
@@ -188,7 +217,10 @@ export function movedBox(box: PlacedBox, delta: XY): BoxRecipe {
         center: { x: frame.center.x + delta.x, y: frame.center.y + delta.y },
     }) as object;
     return {
-        params: { ...moved, spots: box.spots },
+        params: keepPagePivots(box.recipe.params, {
+            ...moved,
+            spots: box.spots,
+        }),
         spots: box.spots,
         members: box.recipe.members.map((m) => ({
             ...m,

@@ -249,3 +249,33 @@ scenario places an outline on an odd count with its gap moved and finds it in th
 For layouts, `layoutCatalogue.test.ts` checks every version from 1 to 120 marchers against the
 full-block-minus-pattern rule, `boxLayouts.test.ts` saves a Stagger box and reads it back, and a
 browser scenario finds the picked layout in the recipe.
+
+## Amendment, 2026-10-29: a pivot per page
+
+A recipe is shown on later pages while its members stand on their spots (Revision, 2026-10-14).
+An edit there that moves anyone saves a copy on that page's move (#492). A change of only the
+pivot there moves nobody, so it had no move to save a copy on and changed the recipe itself,
+which moved the pivot on the earlier page too. The owner chose to keep the pivot per page without
+setting the members (option C on #492). This needs no schema change.
+
+1. **`params.pagePivots`** maps a page id (the `pages` row, as a JSON string key) to a pivot, in
+   the same form as `params.pivot`. A pivot-only change on a later page the recipe is carried
+   onto writes that page's entry, as its own undo step, and leaves `params.pivot` (the recipe's
+   own page's) and every other entry alone. The center is stored as `"c"`, so it overrides a
+   recipe pivot that isn't the center. No positions are written, so the page still follows the
+   recipe's later edits.
+2. **A later page shows the entry of the latest page that has one**, from the pages that start at
+   or after the recipe's move end and before the moment shown, or else `params.pivot`, so a page
+   with no pivot of its own carries the most recent earlier page's. Entries for pages that are
+   gone, or that start before the recipe's move end, are ignored. The kind never sees
+   `pagePivots`: the host reads it where the shape is shown (`frame/pagePivot.ts`).
+3. **Edits keep the entries.** Saving the recipe again on its own page, or moving it whole, keeps
+   `pagePivots`, so pages with their own pivot keep it. A copy saved on a later page takes that
+   page's pivot as its own `pivot`.
+
+Verification: `pagePivot.test.ts` checks which page is saved for, carry-forward, and that a save
+keeps other pages' entries; `placedBox.test.ts` reads a recipe back with a page pivot through
+`boxesAt`; browser scenarios in `box-tool.spec.mts` ("a box carried over several pages keeps a
+pivot per page") cover a drag, the menu and a double click on a carried page, carry-forward,
+changing the earlier page's pivot afterwards, an edit of the earlier page carrying on, undo and
+redo, and a page with its own copy.

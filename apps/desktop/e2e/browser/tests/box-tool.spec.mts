@@ -4413,10 +4413,28 @@ const storedPivots = async (show: Show) =>
         pivot: JSON.parse(r.params).pivot ?? null,
     }));
 
+/**
+ * Each recipe's own pivot and the pivots it keeps for later pages it's carried
+ * onto (`pagePivots`, owner's option C on #492), oldest first
+ */
+const storedPagePivots = async (show: Show) =>
+    (
+        await show.query<{ params: string }>(
+            "SELECT params FROM timeline_shape_recipes ORDER BY id",
+        )
+    ).map((r) => {
+        const params = JSON.parse(r.params);
+        return {
+            pivot: params.pivot ?? null,
+            pages: Object.values(params.pagePivots ?? {}),
+        };
+    });
+
 // The pivot on a later page (#485): a box placed on Page 1 shows on Page 2
 // while its members stand still there. Where Page 2 sets their positions, an
 // edit there gives the box its own copy on Page 2; where Page 2 only carries
-// them over, a pivot change goes to the box shown, Page 1's.
+// them over, a pivot change is kept for Page 2 alone in Page 1's recipe
+// (option C on #492), and nobody is set there.
 
 test("change: the pivot of a box placed on a page and again on the next one changes on the next page only (#485)", async ({
     show,
@@ -4500,12 +4518,12 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
             .getByTestId("shape-editor-pivot");
         await expect(pivotButton).toHaveAttribute("data-pivot", "nw");
 
-        // From the editor's pivot menu
+        // From the editor's pivot menu, kept for Page 2 alone
         let steps = await undoSteps(show);
         await pickPlacedPivot(page, "se");
         await expect
-            .poll(async () => (await storedPivots(show)).map((r) => r.pivot))
-            .toEqual(["se"]);
+            .poll(() => storedPagePivots(show))
+            .toEqual([{ pivot: "nw", pages: ["se"] }]);
         await waitForIdle(page);
         await expect(pivotButton).toHaveAttribute("data-pivot", "se");
         expect(await undoSteps(show)).toBe(steps + 1);
@@ -4518,8 +4536,11 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         await drag(page, mark, t3);
         await page.keyboard.up("ControlOrMeta");
         await expect
-            .poll(async () => typeof (await storedPivots(show))[0]!.pivot)
+            .poll(
+                async () => typeof (await storedPagePivots(show))[0]!.pages[0],
+            )
             .toBe("object");
+        expect((await storedPivots(show))[0]!.pivot).toBe("nw");
         await waitForIdle(page);
         await expect
             .poll(async () => {
@@ -4538,8 +4559,8 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         // Undo puts the menu's pivot back
         await page.keyboard.press("ControlOrMeta+z");
         await expect
-            .poll(async () => (await storedPivots(show)).map((r) => r.pivot))
-            .toEqual(["se"]);
+            .poll(() => storedPagePivots(show))
+            .toEqual([{ pivot: "nw", pages: ["se"] }]);
     });
 
     test("change: a spacing change there moves its members, so the box gets its own copy on that page and Page 1 keeps its own", async ({
@@ -4663,6 +4684,286 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         await expect
             .poll(async () => (await readField(page)).selection)
             .toEqual(ALL);
+    });
+});
+
+// A pivot per page (owner's option C on #492): a pivot-only change on a page the
+// box is only carried onto is kept for that page alone, and sets nobody there,
+// so the page still follows Page 1's other edits.
+test.describe("a box carried over several pages keeps a pivot per page (option C on #492)", () => {
+    test.use({
+        seedSql: seedShowSql({
+            beats: 64,
+            pageStarts: [16, 32, 48],
+            measureStarts: Array.from({ length: 16 }, (_, i) => 1 + i * 4),
+            marchers: HOME.map(([id]) => ({
+                id,
+                section: "Trumpet",
+                prefix: "T",
+                order: id,
+            })),
+            // Pages 2 and 3 set nobody: everyone stands where Page 1 left them
+            positions: [HOME, HOME, [], []],
+        }),
+    });
+
+    const pivotButton = (page: Page) =>
+        page
+            .getByTestId("placed-box-readout")
+            .getByTestId("shape-editor-pivot");
+
+    /** Lets go of any selection, goes to `name` and selects the box there by T1 */
+    async function openOn(show: Show, name: string) {
+        const { page } = show;
+        await page.keyboard.press("Escape");
+        await expect
+            .poll(async () => (await readField(page)).selection)
+            .toEqual([]);
+        await selectPage(show, name);
+        const member = await marcherScreen(page, 1);
+        await page.mouse.click(member.x, member.y);
+        await expect(pivotButton(page)).toBeVisible();
+    }
+
+    /** The box placed on Page 1 with its pivot at the back left */
+    async function placeOnPage1(show: Show) {
+        await selectPage(show, "Page 1");
+        await placeBox(show, 1);
+        const member = await marcherScreen(show.page, 1);
+        await show.page.mouse.click(member.x, member.y);
+        await expect(pivotButton(show.page)).toBeVisible();
+        await pickPlacedPivot(show.page, "nw");
+        await expect
+            .poll(() => storedPagePivots(show))
+            .toEqual([{ pivot: "nw", pages: [] }]);
+        await waitForIdle(show.page);
+    }
+
+    /** Moves that end after Page 1's flag: none while the later pages set nobody */
+    const laterMoves = async (show: Show) =>
+        (
+            await show.query<{ count: number }>(
+                "SELECT COUNT(*) AS count FROM timelines WHERE end_beat > 32",
+            )
+        )[0]!.count;
+
+    test("change: the pivot dragged on a carried page is kept for that page; Page 1 keeps its own and nobody is set", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await placeOnPage1(show);
+        const placed = await savedPositions(show, 1);
+
+        await openOn(show, "Page 2");
+        await expect(pivotButton(page)).toHaveAttribute("data-pivot", "nw");
+        const mark = (await shapeOverlay(page))!.pivotMark!;
+        const t3 = await marcherScreen(page, 3);
+        await page.keyboard.down("ControlOrMeta");
+        await drag(page, mark, t3);
+        await page.keyboard.up("ControlOrMeta");
+        await expect
+            .poll(
+                async () => typeof (await storedPagePivots(show))[0]?.pages[0],
+            )
+            .toBe("object");
+        await waitForIdle(page);
+        await expect(pivotButton(page)).toHaveAttribute("data-pivot", "custom");
+        expect(await storedPagePivots(show)).toHaveLength(1);
+        expect((await storedPagePivots(show))[0]!.pivot).toBe("nw");
+        expect(await laterMoves(show)).toBe(0);
+        expect(await savedPositions(show, 1)).toEqual(placed);
+
+        await openOn(show, "Page 1");
+        await expect(pivotButton(page)).toHaveAttribute("data-pivot", "nw");
+    });
+
+    test("change: the pivot menu, a drag and a double click on a carried page each change that page only", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await placeOnPage1(show);
+        await openOn(show, "Page 2");
+
+        // The menu
+        await pickPlacedPivot(page, "se");
+        await expect
+            .poll(() => storedPagePivots(show))
+            .toEqual([{ pivot: "nw", pages: ["se"] }]);
+        await waitForIdle(page);
+
+        // A drag onto T3
+        const mark = (await shapeOverlay(page))!.pivotMark!;
+        const t3 = await marcherScreen(page, 3);
+        await page.keyboard.down("ControlOrMeta");
+        await drag(page, mark, t3);
+        await page.keyboard.up("ControlOrMeta");
+        await expect
+            .poll(
+                async () => typeof (await storedPagePivots(show))[0]!.pages[0],
+            )
+            .toBe("object");
+        await waitForIdle(page);
+
+        // A double click sends Page 2's back to the center
+        const moved = (await shapeOverlay(page))!.pivotMark!;
+        await page.mouse.dblclick(moved.x, moved.y);
+        await expect
+            .poll(() => storedPagePivots(show))
+            .toEqual([{ pivot: "nw", pages: ["c"] }]);
+        await waitForIdle(page);
+        await expect(pivotButton(page)).toHaveAttribute("data-pivot", "c");
+        expect(await laterMoves(show)).toBe(0);
+
+        await openOn(show, "Page 1");
+        await expect(pivotButton(page)).toHaveAttribute("data-pivot", "nw");
+    });
+
+    test("change: a later page with no pivot of its own uses the most recent earlier page's", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await placeOnPage1(show);
+        await openOn(show, "Page 2");
+        await pickPlacedPivot(page, "se");
+        await expect
+            .poll(() => storedPagePivots(show))
+            .toEqual([{ pivot: "nw", pages: ["se"] }]);
+        await waitForIdle(page);
+
+        await openOn(show, "Page 3");
+        await expect(pivotButton(page)).toHaveAttribute("data-pivot", "se");
+        await openOn(show, "Page 1");
+        await expect(pivotButton(page)).toHaveAttribute("data-pivot", "nw");
+    });
+
+    test("change: changing Page 1's pivot afterwards moves the pivot on pages without their own, and pages with their own keep it", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await placeOnPage1(show);
+        await openOn(show, "Page 3");
+        await pickPlacedPivot(page, "se");
+        await expect
+            .poll(() => storedPagePivots(show))
+            .toEqual([{ pivot: "nw", pages: ["se"] }]);
+        await waitForIdle(page);
+
+        await openOn(show, "Page 1");
+        await pickPlacedPivot(page, "ne");
+        await expect
+            .poll(() => storedPagePivots(show))
+            .toEqual([{ pivot: "ne", pages: ["se"] }]);
+        await waitForIdle(page);
+
+        await openOn(show, "Page 2");
+        await expect(pivotButton(page)).toHaveAttribute("data-pivot", "ne");
+        await openOn(show, "Page 3");
+        await expect(pivotButton(page)).toHaveAttribute("data-pivot", "se");
+    });
+
+    test("change: after a pivot change on Page 2, an edit of Page 1's box still carries to Page 2, with Page 2's pivot", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await placeOnPage1(show);
+        await openOn(show, "Page 2");
+        await pickPlacedPivot(page, "se");
+        await expect
+            .poll(() => storedPagePivots(show))
+            .toEqual([{ pivot: "nw", pages: ["se"] }]);
+        await waitForIdle(page);
+
+        // Page 1's box made wider: its members move on Page 1
+        await openOn(show, "Page 1");
+        const before = await savedPositions(show, 1);
+        await typeAcross(page, "5");
+        await expect
+            .poll(async () => JSON.stringify(await savedPositions(show, 1)))
+            .not.toBe(JSON.stringify(before));
+        await waitForIdle(page);
+        const across = await page
+            .getByTestId("shape-editor-across")
+            .innerText();
+        // Still one recipe, Page 2's pivot kept in it
+        expect(await storedPagePivots(show)).toEqual([
+            { pivot: "nw", pages: ["se"] },
+        ]);
+        expect(await laterMoves(show)).toBe(0);
+
+        // Page 2 shows the wider box, with its own pivot
+        await openOn(show, "Page 2");
+        await expect(page.getByTestId("shape-editor-across")).toHaveText(
+            across,
+        );
+        await expect(pivotButton(page)).toHaveAttribute("data-pivot", "se");
+    });
+
+    test("change: undo and redo of a pivot change on a carried page restore that page's pivot exactly", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await placeOnPage1(show);
+        const params = async () =>
+            (
+                await show.query<{ params: string }>(
+                    "SELECT params FROM timeline_shape_recipes",
+                )
+            ).map((r) => r.params);
+        const before = await params();
+
+        await openOn(show, "Page 2");
+        await pickPlacedPivot(page, "se");
+        await expect
+            .poll(() => storedPagePivots(show))
+            .toEqual([{ pivot: "nw", pages: ["se"] }]);
+        await waitForIdle(page);
+        const after = await params();
+
+        await page.keyboard.press("ControlOrMeta+z");
+        await expect.poll(params).toEqual(before);
+        await expect(pivotButton(page)).toHaveAttribute("data-pivot", "nw");
+        await page.keyboard.press("ControlOrMeta+Shift+z");
+        await expect.poll(params).toEqual(after);
+        await expect(pivotButton(page)).toHaveAttribute("data-pivot", "se");
+
+        await openOn(show, "Page 1");
+        await expect(pivotButton(page)).toHaveAttribute("data-pivot", "nw");
+    });
+
+    test("change: a page with its own copy of the box keeps its pivot when Page 1's changes, and saves its own there", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await placeOnPage1(show);
+
+        // A spacing change on Page 2 moves its members: Page 2's own copy
+        await openOn(show, "Page 2");
+        await typeAcross(page, "5");
+        await expect
+            .poll(async () => (await storedPagePivots(show)).length)
+            .toBe(2);
+        await waitForIdle(page);
+        // Its pivot is the copy's own, not a page pivot of Page 1's box
+        await pickPlacedPivot(page, "se");
+        await expect
+            .poll(() => storedPagePivots(show))
+            .toEqual([
+                { pivot: "nw", pages: [] },
+                { pivot: "se", pages: [] },
+            ]);
+        await waitForIdle(page);
+
+        await openOn(show, "Page 1");
+        await pickPlacedPivot(page, "ne");
+        await expect
+            .poll(() => storedPagePivots(show))
+            .toEqual([
+                { pivot: "ne", pages: [] },
+                { pivot: "se", pages: [] },
+            ]);
+        await waitForIdle(page);
+        await openOn(show, "Page 2");
+        await expect(pivotButton(page)).toHaveAttribute("data-pivot", "se");
     });
 });
 

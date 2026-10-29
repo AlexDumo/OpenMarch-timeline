@@ -11,6 +11,7 @@ import {
     type PlacedBox,
     type PlacedRecipe,
 } from "../placed/placedBox";
+import { pivotOf } from "../frame/pivot";
 import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeContext, XY } from "../types";
 
@@ -131,6 +132,53 @@ describe("which placed box holds at a moment", () => {
                 positionOf: () => ({ x: 0, y: 0 }),
             }),
         ).toEqual([]);
+    });
+});
+
+describe("a placed box's pivot on a later page", () => {
+    const ends = new Map<number | null, number>([[10, 16]]);
+    const endBeatOf = (id: number | null) => ends.get(id);
+    const pages = [
+        { id: 2, start: 0, end: 16 },
+        { id: 3, start: 16, end: 32 },
+        { id: 4, start: 32, end: 48 },
+    ];
+    const base = recipe(4, { x: 40, y: 40 }, 10);
+    const r: PlacedRecipe = {
+        ...base,
+        params: {
+            ...(base.params as object),
+            pivot: "nw",
+            pagePivots: { "3": "se" },
+        },
+    };
+    const positions = at(r);
+    const find = (beat: number) =>
+        boxesAt({
+            recipes: [r],
+            endBeatOf,
+            beat,
+            positionOf: (id) => positions.get(id),
+            pages,
+        })[0]!;
+
+    it("shows the page's pivot there and later, and the recipe's own on its page", () => {
+        expect(pivotOf(find(16).params)).toBe("nw");
+        expect(find(16).pivotPage).toBeUndefined();
+        expect(pivotOf(find(32).params)).toBe("se");
+        expect(find(32).pivotPage).toBe(3);
+        expect(pivotOf(find(48).params)).toBe("se");
+        expect(find(48).pivotPage).toBe(4);
+        // The kind never sees the page pivots
+        expect(find(32).params).not.toHaveProperty("pagePivots");
+    });
+
+    it("keeps every page's pivot when the whole box moves", () => {
+        const moved = movedBox(find(16), { x: 5, y: 0 });
+        expect((moved.params as { pagePivots?: unknown }).pagePivots).toEqual({
+            "3": "se",
+        });
+        expect(pivotOf(moved.params)).toBe("nw");
     });
 });
 

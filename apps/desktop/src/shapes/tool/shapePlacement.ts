@@ -14,6 +14,7 @@ import {
 } from "@/timeline/timelineCoordinateWrites";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { invalidatePlacedBoxes } from "../placed/placedBoxStore";
+import { withPagePivot } from "../frame/pagePivot";
 import type { ShapeContext } from "../types";
 import { targetsOf, type ToolState } from "./toolMachine";
 
@@ -32,6 +33,13 @@ export interface ShapePlacement {
     readonly replaces?: {
         readonly id: number;
         readonly timelineId: number | null;
+        /** Its params as stored, with the pivots of later pages */
+        readonly params?: unknown;
+        /**
+         * The later page it's edited on, when it's carried there: a change that moves nobody
+         * saves its pivot for that page alone
+         */
+        readonly pivotPage?: number;
     };
 }
 
@@ -119,13 +127,26 @@ export async function writePlacement(
             },
         });
         // Nobody moved and no move here holds the shape's members (a pivot changed on a page
-        // the shape is only carried onto): the change goes to the recipe shown, in its own move
+        // the shape is only carried onto): the change goes to the recipe shown, in its own move,
+        // its pivot for this page alone, so the page still follows the earlier page's edits
         if (!saved && replaces) {
+            const { pivotPage, params } = replaces;
+            const recipe =
+                pivotPage === undefined
+                    ? placement.recipe
+                    : {
+                          ...placement.recipe,
+                          params: withPagePivot(
+                              placement.recipe.params,
+                              params,
+                              pivotPage,
+                          ),
+                      };
             await transactionWithHistory(db, "editShapeRecipe", (tx) =>
                 saveShapeRecipeInTransaction({
                     tx,
                     timelineId: replaces.timelineId,
-                    recipe: placement.recipe,
+                    recipe,
                     members,
                     replaces: replaces.id,
                 }),

@@ -90,7 +90,9 @@ function useTimelinePageBoxes(enabled: boolean): void {
             .getState()
             .setPageBoxes(
                 pageFlags(pages).flatMap((f) =>
-                    f.range ? [{ ...f.range, name: f.page.name }] : [],
+                    f.range
+                        ? [{ ...f.range, name: f.page.name, id: f.page.id }]
+                        : [],
                 ),
             );
     }, [enabled, pages]);

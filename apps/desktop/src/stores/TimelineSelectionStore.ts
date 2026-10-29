@@ -114,6 +114,8 @@ export interface PageBox {
     readonly end: number;
     /** The page's name, for messages ("Page 2"); absent where only the range matters */
     readonly name?: string;
+    /** The page's id, for what is saved per page (a shape's pivot); absent where only the range matters */
+    readonly id?: number;
 }
 
 export interface TimelineSelectionState {

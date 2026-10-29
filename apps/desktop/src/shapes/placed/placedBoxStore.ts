@@ -8,6 +8,7 @@ import {
 } from "@/stores/TimelineSelectionStore";
 import { editingPositionAt } from "@/timeline/timelineIsolationPlan";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import type { PivotPage } from "../frame/pagePivot";
 import { boxesAt, type PlacedBox, type PlacedRecipe } from "./placedBox";
 
 /**
@@ -61,6 +62,17 @@ export function followPlacedBoxChanges(): () => void {
     };
 }
 
+/** The page boxes with their ids, for a shape's pivot on each page */
+export function pivotPages(): PivotPage[] {
+    return useTimelineSelectionStore
+        .getState()
+        .pageBoxes.flatMap((p) =>
+            p.id === undefined
+                ? []
+                : [{ id: p.id, start: p.start, end: p.end }],
+        );
+}
+
 /** The placed boxes shown at `beat`, from the stored recipes and the resolver */
 export function placedBoxesAt(
     beat: number,
@@ -77,6 +89,7 @@ export function placedBoxesAt(
         recipes,
         endBeatOf: (id) => (id === null ? 0 : ends.get(id)),
         beat,
+        pages: pivotPages(),
         positionOf: (id) => {
             try {
                 const [x, y] = editingPositionAt(resolver, id, beat);

@@ -35,7 +35,10 @@ import { toastPassThrough } from "./timelinePassThrough";
 import { offerOnlyThisPage, ownMovers } from "./timelineOnlyThisPage";
 import { boxMembershipEdit } from "@/shapes/placed/boxMembership";
 import { showLeftBoxToast } from "@/shapes/placed/leftBoxToast";
-import { invalidatePlacedBoxes } from "@/shapes/placed/placedBoxStore";
+import {
+    invalidatePlacedBoxes,
+    pivotPages,
+} from "@/shapes/placed/placedBoxStore";
 import { editingPositionAt } from "./timelineIsolationPlan";
 import {
     resolverSpans,
@@ -421,6 +424,7 @@ function membershipFor(
     return boxMembershipEdit({
         moves,
         beat,
+        pages: pivotPages(),
         // Read inside the edit, when the resolver has every earlier write but not this one
         positionOf: (id) => {
             const resolver = useTimelineResolverStore.getState().resolver;

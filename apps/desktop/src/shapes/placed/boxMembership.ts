@@ -7,6 +7,8 @@ import {
 import { readTimelineEndBeats } from "@/db-functions/timelines";
 import type { DbTransaction } from "@/db-functions/types";
 import type { XY } from "../types";
+import type { PivotPage } from "../frame/pagePivot";
+import { pivotOf, withPivot } from "../frame/pivot";
 import {
     boxesAt,
     membershipAfter,
@@ -27,6 +29,25 @@ export interface BoxLeave {
 }
 
 /**
+ * `box`'s recipe saved with `params`, in its own move or as a copy on a later one: a copy on a later
+ * page takes that page's pivot (`pagePivots`) as its own
+ */
+const recipeWith = (box: PlacedBox, own: boolean, params: StoredParams) => ({
+    ...box.recipe,
+    params:
+        own || box.pivotPage === undefined
+            ? params
+            : withPivot(params, pivotOf(box.params)),
+});
+
+interface BoxMembershipInput {
+    readonly moves: readonly { marcherId: number; x: number; y: number }[];
+    readonly beat: number;
+    readonly positionOf: (marcherId: number) => XY | undefined;
+    readonly pages?: readonly PivotPage[];
+}
+
+/**
  * Keeps placed boxes true to the field through a coordinate edit
  * (docs/timeline/research/shapes/07-placed-boxes.md): `afterWrite` runs inside the edit, after its
  * positions are written, and saves what the edit did to the boxes it touched, in the same undo
@@ -42,16 +63,14 @@ export interface BoxLeave {
  * @param beat the moment the edit writes at
  * @param positionOf where a marcher stands at `beat` before the edit (the resolver, which doesn't
  *   have the edit yet while it is inside its transaction)
+ * @param pages the page boxes, so a box moved on a later page keeps that page's pivot
  */
 export function boxMembershipEdit({
     moves,
     beat,
     positionOf,
-}: {
-    moves: readonly { marcherId: number; x: number; y: number }[];
-    beat: number;
-    positionOf: (marcherId: number) => XY | undefined;
-}): {
+    pages,
+}: BoxMembershipInput): {
     afterWrite: (
         tx: DbTransaction,
         timelineId: number | null,
@@ -81,6 +100,7 @@ export function boxMembershipEdit({
                 endBeatOf: (id) => (id === null ? 0 : ends.get(id)),
                 beat,
                 positionOf,
+                pages,
             });
             let wrote = false;
             for (const box of boxes) {
@@ -94,7 +114,7 @@ export function boxMembershipEdit({
                     saveShapeRecipeInTransaction({
                         tx,
                         timelineId,
-                        recipe: { ...box.recipe, params },
+                        recipe: recipeWith(box, own, params),
                         members,
                         replaces: own ? box.recipe.id : undefined,
                     });
