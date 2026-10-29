@@ -202,10 +202,11 @@ test("a hollow diamond takes back only the selected marchers Set there", async (
         .poll(() => spots(show, 2))
         .toEqual({ ...PAGE_2_BEFORE, T2: "500,340" });
     expect(await spots(show, 3)).toEqual(PAGE_3_BEFORE);
-    // Nobody selected is Set there now
+    // Nobody selected is Set there now. Page 3 kept T2's spot with a move of its
+    // own, whose end is a keyframe like T3's, so that diamond is filled
     await expect
         .poll(() => diamonds(page))
-        .toEqual(["timeline-keyframe-8-filled", "timeline-keyframe-24-hollow"]);
+        .toEqual(["timeline-keyframe-8-filled", "timeline-keyframe-24-filled"]);
 
     // Undo selects the marchers it changed (P7.13): T2 alone, Set there again
     await undoRestores(show, "timeline-keyframe-16-filled");

@@ -225,11 +225,7 @@ function useFieldFollowing(ready: boolean, isPlaying: boolean): FieldFollowing {
                         .marcherIds()
                         .map((id) => [
                             id,
-                            marcherSetBeats(
-                                resolverSpans(resolver, id),
-                                (beat) => resolver.positionAt(id, beat),
-                                kept,
-                            ),
+                            marcherSetBeats(resolverSpans(resolver, id), kept),
                         ]),
                 );
             }

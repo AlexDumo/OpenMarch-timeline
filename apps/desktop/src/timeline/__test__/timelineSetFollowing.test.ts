@@ -9,8 +9,8 @@ import {
 } from "../timelineSetFollowing";
 
 /**
- * Set vs Following (#300): a marcher is Set on a count where a move of its own ends with real
- * motion, and on the first page; everywhere else it's Following.
+ * Set vs Following (#300): a marcher is Set on a count where a move of its own ends, moved or not
+ * (holds decision 13, #468), and on the first page; everywhere else it's Following.
  */
 
 const hold = (start: number, end: number): SetSpan => ({
@@ -25,15 +25,6 @@ const own = (start: number, end: number, assignmentId = 1): SetSpan => ({
     assignmentId,
 });
 
-/** Positions by beat: where each span ends, held before and after. */
-const at =
-    (stops: readonly (readonly [beat: number, xy: XY])[]) =>
-    (beat: number): XY => {
-        let xy = stops[0]![1];
-        for (const [b, p] of stops) if (b <= beat) xy = p;
-        return xy;
-    };
-
 describe("one marcher's Set counts", () => {
     // Home at 0,0; moves to 8,0 over beats 1–9; holds; moves to 8,8 over 25–29 (mid-page 5)
     const spans = [
@@ -43,12 +34,7 @@ describe("one marcher's Set counts", () => {
         own(25, 29),
         hold(29, Infinity),
     ];
-    const positionAt = at([
-        [0, [0, 0]],
-        [9, [8, 0]],
-        [29, [8, 8]],
-    ]);
-    const setBeats = marcherSetBeats(spans, positionAt);
+    const setBeats = marcherSetBeats(spans);
 
     it("is Set on the first page, always", () => {
         expect(isSetAt(setBeats, 0)).toBe(true);
@@ -79,15 +65,11 @@ describe("one marcher's Set counts", () => {
         expect(setBeats).toEqual([9, 29]);
     });
 
-    it("follows on a zero-motion stay move", () => {
-        // Only Page N or unlink: a move ending where it began
+    it("is Set on a move that goes nowhere: a stored move end is a keyframe (#468)", () => {
+        // A stay (Only Page N, Remove keyframe's next-page move): the spans carry no positions,
+        // so a move ending where it began reads like any other
         const stay = [hold(-Infinity, 1), own(1, 9), hold(9, Infinity)];
-        expect(
-            isSetAt(
-                marcherSetBeats(stay, () => [4, 4]),
-                9,
-            ),
-        ).toBe(false);
+        expect(isSetAt(marcherSetBeats(stay), 9)).toBe(true);
     });
 
     it("follows on a kept assignment, even when an earlier edit gave it motion", () => {
@@ -97,12 +79,7 @@ describe("one marcher's Set counts", () => {
             own(9, 17, 7),
             hold(17, Infinity),
         ];
-        const moves = at([
-            [0, [0, 0]],
-            [9, [8, 0]],
-            [17, [0, 0]],
-        ]);
-        const beats = marcherSetBeats(kept, moves, new Set([7]));
+        const beats = marcherSetBeats(kept, new Set([7]));
         expect(isSetAt(beats, 9)).toBe(true);
         expect(isSetAt(beats, 17)).toBe(false);
     });
@@ -114,13 +91,6 @@ describe("a count where a later move cuts in", () => {
         ...own(start, end, id),
         assignmentEnd: rowEnd,
     });
-    const walking = at([
-        [0, [0, 0]],
-        [9, [4, 0]],
-        [13, [4, 4]],
-        [17, [8, 0]],
-    ]);
-
     it("is not Set where the cut stops a span: no move of the marcher's ends there", () => {
         const spans = [
             hold(-Infinity, 1),
@@ -129,7 +99,7 @@ describe("a count where a later move cuts in", () => {
             cut(13, 17, 1, 17),
             hold(17, Infinity),
         ];
-        expect(marcherSetBeats(spans, walking)).toEqual([13, 17]);
+        expect(marcherSetBeats(spans)).toEqual([13, 17]);
     });
 
     it("is Set where one move ends and the next starts on the same count (a split)", () => {
@@ -139,7 +109,7 @@ describe("a count where a later move cuts in", () => {
             cut(9, 17, 2, 17),
             hold(17, Infinity),
         ];
-        expect(marcherSetBeats(spans, walking)).toEqual([9, 17]);
+        expect(marcherSetBeats(spans)).toEqual([9, 17]);
     });
 });
 
@@ -183,7 +153,7 @@ describe("Set counts from the resolver's spans", () => {
             })),
         });
     const setBeats = (r: ReturnType<typeof createResolver>) =>
-        marcherSetBeats(r.spanInfos(1), (beat) => r.positionAt(1, beat));
+        marcherSetBeats(r.spanInfos(1));
 
     it("a move inside another: Set where each ends, not where the inner one starts", () => {
         // Spec G3's shape: [0, 16) on layer 0, [4, 12) on layer 1
@@ -199,6 +169,31 @@ describe("Set counts from the resolver's spans", () => {
         const r = resolverOf([
             [0, 12, 0, [12, 0]],
             [8, 16, 1, [0, 8]],
+        ]);
+        expect(setBeats(r)).toEqual([16]);
+    });
+
+    it("a move that goes nowhere: Set where it ends, though the marcher never moves (#468)", () => {
+        // Home at 0,0; [8, 16) ends at 0,0 too, a stay the designer stored
+        const r = resolverOf([[8, 16, 0, [0, 0]]]);
+        expect(r.positionAt(1, 8)).toEqual(r.positionAt(1, 16));
+        expect(setBeats(r)).toEqual([16]);
+    });
+
+    it("a stay cut partway by a later move: not Set where the cut stops it (#384)", () => {
+        // [0, 12) goes nowhere and [4, 8) on a higher layer takes over partway: the stay's span
+        // stops at 4, where nothing ends, and resumes to its own end at 12
+        const r = resolverOf([
+            [0, 12, 0, [0, 0]],
+            [4, 8, 1, [0, 0]],
+        ]);
+        expect(setBeats(r)).toEqual([8, 12]);
+    });
+
+    it("a stay cut off for good by a later one: never Set", () => {
+        const r = resolverOf([
+            [0, 12, 0, [0, 0]],
+            [8, 16, 1, [4, 0]],
         ]);
         expect(setBeats(r)).toEqual([16]);
     });

@@ -10,8 +10,9 @@ import { emptyField } from "../timeline.mjs";
 // They replace the page boxes' hold marks, in Basic and Expert.
 //
 // Pages flag at beats 9, 17 and 25. Everyone moves over pages 1 and 3. Over
-// page 2 (9–17) T1 moves, T2 has a stay move (it ends where it began, so it's
-// Following there) and T3 has no move: it holds.
+// page 2 (9–17) T1 moves, T2 has a stay move (it ends where it began, but a
+// stored move end is a keyframe, so it's Set there, #468) and T3 has no move:
+// it holds.
 //
 // The diamonds' test ids carry the timeline's beats, as its page boxes'
 // `data-timeline-range-start` do: one less than the show's (the timeline
@@ -105,8 +106,19 @@ for (const mode of ["expert", "basic"] as const)
                 page.getByTestId("timeline-keyframe-16-filled"),
             ).toHaveAccessibleName("Keyframe · Page 2, count 8");
 
-            // T2 too: it's only Following on page 2, so that one's hollow
-            await clickMarcher(page, "T2", { add: true });
+            // T2 alone: its stay move on page 2 goes nowhere, and still has one
+            await clickMarcher(page, "T2");
+            await expect
+                .poll(() => diamonds(page))
+                .toEqual([
+                    "timeline-keyframe-8-filled",
+                    "timeline-keyframe-16-filled",
+                    "timeline-keyframe-24-filled",
+                ]);
+
+            // T1 and T3: T3 is only Following on page 2, so that one's hollow
+            await clickMarcher(page, "T1");
+            await clickMarcher(page, "T3", { add: true });
             await expect
                 .poll(() => diamonds(page))
                 .toEqual([
@@ -146,8 +158,8 @@ for (const mode of ["expert", "basic"] as const)
             await clickMarcher(page, "T1");
             await page.getByTestId("timeline-keyframe-16-filled").click();
             await expect(readout).toHaveText(atPage2Flag!);
-            // The field shows that count: T1 is Set there, the others follow
-            await expect.poll(() => following(page)).toEqual(["T2", "T3"]);
+            // The field shows that count: T1 and T2 (its stay) are Set there, T3 follows
+            await expect.poll(() => following(page)).toEqual(["T3"]);
             // The selection stays
             await expect
                 .poll(() => diamonds(page))
