@@ -2,6 +2,7 @@ import tolgee from "@/global/singletons/Tolgee";
 import type { QueryClient } from "@tanstack/react-query";
 import type { XY } from "../types";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
+import { planCanvasEdit } from "@/timeline/timelineCoordinateWrites";
 import { writePlacement } from "../tool/shapePlacement";
 import { liveTargets } from "./liveBox";
 import type { PlacedBox } from "./placedBox";
@@ -29,6 +30,7 @@ export async function commitBox(
         layOutAgain,
         origins,
     );
+    const plan = planCanvasEdit();
     await writePlacement(
         {
             recipe: {
@@ -39,6 +41,8 @@ export async function commitBox(
             },
             members: targets,
             replaces: box.recipe,
+            // Carried onto a later page: this page gets its own copy, even of a pivot change
+            setAll: plan.ok && plan.beat > box.endBeat + 1e-9,
         },
         queryClient,
         tolgee.t("shapes.placed.editError", "Error editing the shape"),

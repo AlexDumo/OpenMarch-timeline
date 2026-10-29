@@ -33,6 +33,11 @@ export interface ShapePlacement {
         readonly id: number;
         readonly timelineId: number | null;
     };
+    /**
+     * Set every member even when nobody moves: a shape carried onto a later page gets that page's
+     * own copy for a change that moves no one (its pivot), and the earlier page keeps its own
+     */
+    readonly setAll?: boolean;
 }
 
 /** What placing the open shape would write; null while there is nothing to place */
@@ -100,9 +105,10 @@ export async function writePlacement(
             // Every member is set where the shape is, the one at its pivot included, so each
             // is in the move its recipe keeps; a change that moves nobody sets no one
             setUnmoved: true,
+            setAll: placement.setAll,
             afterWrite: async (tx, timelineId) => {
-                // A move none of the members are in would keep no one: the edit moved nobody on a
-                // page the shape is only carried onto, and is saved below instead (#485)
+                // A move none of the members are in would keep no one: the edit moved nobody there,
+                // and is saved below instead (#485)
                 if (!(await moveHoldsAnyOf(tx, timelineId, marcherIds)))
                     return false;
                 saved = true;
@@ -118,8 +124,8 @@ export async function writePlacement(
                 });
             },
         });
-        // Nobody moved and no move here holds the shape's members (a pivot changed on a page
-        // the shape is only carried onto): the change goes to the recipe shown, in its own move
+        // Nobody moved and no move here holds the shape's members (a change without `setAll`):
+        // the change goes to the recipe shown, in its own move
         if (!saved && replaces) {
             await transactionWithHistory(db, "editShapeRecipe", (tx) =>
                 saveShapeRecipeInTransaction({

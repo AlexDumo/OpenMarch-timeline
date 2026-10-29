@@ -270,6 +270,7 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     afterWrite,
     writesShapes,
     setUnmoved = false,
+    setAll = false,
     keepPlayhead = false,
 }: {
     db: DbConnection;
@@ -294,6 +295,8 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
      * moves nobody still writes nothing for them.
      */
     setUnmoved?: boolean;
+    /** With `setUnmoved`, write them even when the edit moves nobody */
+    setAll?: boolean;
 }): Promise<R[]> {
     if (!plan.ok) throw plan.error;
     if (!keepPlayhead) snapIsolatedPlayheadToEnd();
@@ -309,6 +312,7 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
         writesShapes,
         ...(setUnmoved && {
             setUnmovedFrom: new Map(current.map((c) => [c.marcher_id, c])),
+            setAll,
         }),
     });
     return next;
