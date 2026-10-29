@@ -152,9 +152,7 @@ describeDbTests("coordinate sheet and drill chart exports", (it) => {
                 .marcherIds()
                 .map((id) => [
                     id,
-                    marcherSetBeats(resolverSpans(resolver, id), (beat) =>
-                        resolver.positionAt(id, beat),
-                    ),
+                    marcherSetBeats(resolverSpans(resolver, id)),
                 ]),
         );
         const anyFollowing = pages.some(
