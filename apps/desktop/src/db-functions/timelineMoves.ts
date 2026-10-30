@@ -719,7 +719,8 @@ export const ownPageMoves = async (
  *   cut in time at the box's flags and the marcher removed from that part, its slot compacted
  *   (`takeMarchersOutOfRangeInTransaction`). So the page is Not set and follows earlier pages
  *   again; a timeline left empty goes. A zero-motion ending in a window that isn't a page's box is
- *   kept.
+ *   kept. A shape's write (`keepUnchanged`) only deletes a marcher's own page move this way
+ *   (`ownPageMoves`), so a shape placed where its members start stays in a shared move (#485).
  * - **`clearPage`** (Clear this page, which was Set to previous page): every moved marcher is
  *   taken out of every move over the box the same way, whatever the move says, and nothing else
  *   is written.
@@ -786,6 +787,12 @@ export const moveMarchersInRangeInTransaction = async ({
               )
             : [],
     );
+    // A shape's write sets every member where the shape is, so its recipe has a move holding
+    // them: a drag back there only deletes a marcher's own page move, as before holds decision
+    // 16, and never takes it out of a shared one (#485)
+    const own = keepUnchanged
+        ? await ownPageMoves(tx, grid, range, marcherIds)
+        : null;
     const takeOut: TimelineMarcherMove[] = [];
     const toMove: TimelineMarcherMove[] = [];
     for (const move of moves) {
@@ -798,7 +805,7 @@ export const moveMarchersInRangeInTransaction = async ({
             continue;
         }
         if (
-            hasRows &&
+            (own ? own.has(move.marcherId) : hasRows) &&
             !samePosition(point, await positionAt(move.marcherId, range.end)) &&
             samePosition(point, await positionAt(move.marcherId, range.start))
         ) {
