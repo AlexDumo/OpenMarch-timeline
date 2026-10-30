@@ -14,12 +14,12 @@
             "lockY": "Travar eixo Y",
             "lockYOff": "Desbloquear movimento Y",
             "lockYOn": "Bloquear movimento Y",
-            "snapOff": "Desativar o encaixe",
-            "snapOn": "Ativar o encaixe",
+            "snapOff": "Desativar o ajuste",
+            "snapOn": "O ajuste está desativado: ativar de novo",
             "snapToCustomFraction": "Ajustar à grade",
             "snapToWhole": "Ajustar para o inteiro mais próximo",
-            "toggleSnap": "Ativar ou desativar o encaixe",
-            "toggleSnapKeywords": "encaixe ímã grade livre snap"
+            "toggleSnap": "Ativar ou desativar o ajuste",
+            "toggleSnapKeywords": "ajustar ajuste ímã grade livre snap"
         },
         "batchEdit": {
             "noNextPage": "Não é possível definir coordenadas do marcador para a próxima página. Não há próxima página",
@@ -1272,8 +1272,8 @@
                 "show": "Mostrar os caminhos a partir da bandeira de início"
             },
             "snap": {
-                "off": "O encaixe está desativado: ativar de novo",
-                "on": "Desativar o encaixe"
+                "off": "O ajuste está desativado: ativar de novo",
+                "on": "Desativar o ajuste"
             },
             "pivot": {
                 "aria": "Pivô: {pivot}",
@@ -1642,7 +1642,7 @@
             "lockMarchersAriaLabel": "Movimento de cursor e encaixe de marchadores",
             "placeAllMarchers": "Colocar todos os marchadores",
             "placeSelectedMarchers": "Colocar marchadores selecionados",
-            "snapToggleCaption": "Encaixe",
+            "snapToggleCaption": "Ajuste",
             "toNextPagePositions": "...para posições da próxima página",
             "toPreviousPagePositions": "...para posições anteriores de página"
         },

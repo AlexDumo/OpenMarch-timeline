@@ -5,6 +5,7 @@ import {
     type FieldEditorPorts,
     type FieldPointer,
 } from "../fieldEditor";
+import type { ItemFrame, ItemSize } from "../itemTransform";
 import type { MarcherPosition } from "../moveGesture";
 import { ruledMove } from "../moveRules";
 
@@ -13,7 +14,7 @@ import { ruledMove } from "../moveRules";
  * (`FieldEditorOptions.snap`), off it frees a rotation from its 15° steps, and with it a marcher
  * drag isn't rounded (`MoveRules.snap`). Marchers 1 to 4 sit in a row 100 field units apart at
  * zoom 2; the selection box runs from (100, 100) to (400, 100) and its rotate handle is 20 units
- * above it.
+ * above it. A prop (item 5) stands apart, centered on (300, 300).
  */
 
 const ZOOM = 2;
@@ -125,5 +126,80 @@ describe("dragging a marcher with the Snap toggle", () => {
         editor.pointerMove(at(213, 104));
         editor.pointerUp(at(213, 104));
         expect(drops[0]![1]).toEqual({ id: 2, x: 210, y: 100 });
+    });
+});
+
+/** Item 5, a prop 100 by 40 centered on (300, 300), selected on its own */
+function setupProp(toggle: { on: boolean }) {
+    const state = { preview: null as ItemSize | null, saves: [] as ItemSize[] };
+    const frame: ItemFrame = {
+        center: { x: 300, y: 300 },
+        width: 100,
+        depth: 40,
+        rotation: 0,
+    };
+    const ports: FieldEditorPorts = {
+        selection: { get: () => [5], set: vi.fn() },
+        marchers: () => ({
+            ids: [5],
+            positions: Float64Array.from([300, 300]),
+        }),
+        isItem: (id) => id === 5,
+        itemAt: (point) =>
+            point.x >= 250 && point.x <= 350 && point.y >= 280 && point.y <= 320
+                ? 5
+                : null,
+        itemFrame: (id) => (id === 5 ? frame : null),
+        previewItem: (_id, size) => {
+            state.preview = size;
+        },
+        saveItem: vi.fn((_id: number, size: ItemSize) => {
+            state.saves.push(size);
+            return Promise.resolve<DropResult>("saved");
+        }),
+        zoom: () => ZOOM,
+        canSelect: () => true,
+        showPositions: vi.fn(),
+        drop: vi.fn(() => Promise.resolve<DropResult>("saved")),
+    };
+    const editor = new FieldEditor(ports, { snap: () => toggle.on });
+    return { editor, state };
+}
+
+/** The pointer `degrees` clockwise round the prop's center from its rotate handle, 40 units out */
+const roundProp = (degrees: number) => {
+    const radians = (degrees * Math.PI) / 180;
+    return at(300 + 40 * Math.sin(radians), 300 - 40 * Math.cos(radians));
+};
+/** The prop's rotate handle, 20 field units above its top middle */
+const PROP_ROTATE_HANDLE = { x: 300, y: 260 };
+
+describe("turning a prop with the Snap toggle", () => {
+    const turned = (toggle: { on: boolean }, change?: () => void) => {
+        const { editor, state } = setupProp(toggle);
+        editor.pointerDown(at(PROP_ROTATE_HANDLE.x, PROP_ROTATE_HANDLE.y));
+        editor.pointerMove(roundProp(20));
+        editor.pointerMove(roundProp(37));
+        change?.();
+        editor.pointerMove(roundProp(36));
+        editor.pointerUp(roundProp(36));
+        return state.saves[0]!.rotation;
+    };
+
+    it("off, turns freely", () => {
+        expect(turned({ on: false })).toBeCloseTo(36, 6);
+    });
+
+    it("on, turns in 15° steps", () => {
+        expect(turned({ on: true })).toBe(30);
+    });
+
+    it("turned off mid-drag, turns freely from the next move", () => {
+        const toggle = { on: true };
+        expect(
+            turned(toggle, () => {
+                toggle.on = false;
+            }),
+        ).toBeCloseTo(36, 6);
     });
 });

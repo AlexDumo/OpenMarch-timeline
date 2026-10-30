@@ -34,10 +34,8 @@ import { TimelineSplitter } from "@/components/timeline/TimelineSplitter";
 import { SelectedAudioFileProvider } from "@/context/SelectedAudioFileContext";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
 import TitleBar from "@/components/titlebar/TitleBar";
-import {
-    useSnapOnWhenFileOpens,
-    useUiSettingsStore,
-} from "./stores/UiSettingsStore";
+import { useUiSettingsStore } from "./stores/UiSettingsStore";
+import { useSnapOnWhenFileOpens } from "./hooks/useSnapOnWhenFileOpens";
 import CanvasZoomControls from "@/components/canvas/CanvasZoomControls";
 import Plugin from "./global/classes/Plugin";
 import Sidebar from "@/components/sidebar/Sidebar";

@@ -15,7 +15,7 @@
             "lockYOff": "Déverrouiller le mouvement Y",
             "lockYOn": "Verrouiller mouvement en Y",
             "snapOff": "Désactiver le magnétisme",
-            "snapOn": "Activer le magnétisme",
+            "snapOn": "Le magnétisme est désactivé : le réactiver",
             "snapToCustomFraction": "Aligner sur la grille",
             "snapToWhole": "Aligner avec l'entier le plus proche",
             "toggleSnap": "Activer ou désactiver le magnétisme",

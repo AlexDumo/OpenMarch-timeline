@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, renderHook } from "@testing-library/react";
+import { act } from "@testing-library/react";
 import {
+    isSnapOn,
     UI_SETTINGS_STORAGE_KEY,
-    useSnapOnWhenFileOpens,
     useUiSettingsStore,
 } from "../UiSettingsStore";
 
@@ -45,6 +45,14 @@ describe("the Snap toggle", () => {
             setSnap();
         });
         expect(useUiSettingsStore.getState().uiSettings.snap).toBe(false);
+    });
+
+    it("is read as it is now through isSnapOn", () => {
+        expect(isSnapOn()).toBe(true);
+        act(() => {
+            useUiSettingsStore.getState().setSnap(false);
+        });
+        expect(isSnapOn()).toBe(false);
     });
 
     it("is never saved, whichever way the settings are saved", () => {
@@ -101,25 +109,5 @@ describe("the Snap toggle", () => {
         const { uiSettings } = useUiSettingsStore.getState();
         expect(uiSettings.gridLines).toBe(false);
         expect(uiSettings.snap).toBe(false);
-    });
-
-    it("turns back on when a file opens", () => {
-        act(() => {
-            useUiSettingsStore.getState().setSnap(false);
-        });
-        const { rerender } = renderHook(
-            ({ open }) => useSnapOnWhenFileOpens(open),
-            { initialProps: { open: false } },
-        );
-        expect(useUiSettingsStore.getState().uiSettings.snap).toBe(false);
-        rerender({ open: true });
-        expect(useUiSettingsStore.getState().uiSettings.snap).toBe(true);
-
-        // Turned off again while the file is open, it stays off
-        act(() => {
-            useUiSettingsStore.getState().setSnap(false);
-        });
-        rerender({ open: true });
-        expect(useUiSettingsStore.getState().uiSettings.snap).toBe(false);
     });
 });

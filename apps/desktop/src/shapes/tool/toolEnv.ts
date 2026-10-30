@@ -8,7 +8,7 @@ import type { FieldLines, ToolEnv } from "./toolKind";
 import { useLastLayoutStore } from "./lastLayout";
 import type { Roles } from "@/input/modifierRoles";
 import type { NudgeArgs } from "@/shortcuts/definitions";
-import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { isSnapOn } from "@/stores/UiSettingsStore";
 
 /** How far from a handle a press still takes it, in screen pixels */
 export const HANDLE_REACH_PX = 10;
@@ -42,9 +42,6 @@ export const NO_ROLES: Roles = {
     fromCenter: false,
 };
 
-/** The Snap toggle as it is now (`UiSettings.snap`) */
-const snapToggleOn = () => useUiSettingsStore.getState().uiSettings.snap;
-
 /**
  * The tool's view of the field for one pointer event, with the roles held then (version A,
  * docs/timeline/research/shapes/modifier-roles.md). `snapOn` is the Snap toggle, read from the
@@ -56,7 +53,7 @@ export function toolEnvFor(
     field: ShapeField,
     roles: Roles = NO_ROLES,
     {
-        snapOn = snapToggleOn(),
+        snapOn = isSnapOn(),
         spots,
     }: { snapOn?: boolean; spots?: () => readonly XY[] } = {},
 ): ToolEnv {
@@ -106,6 +103,6 @@ export function nudgeEnvFor(
     return toolEnvFor(
         field,
         { ...NO_ROLES, fine },
-        { snapOn: snapToggleOn() && (nudge.snap || fine) },
+        { snapOn: isSnapOn() && (nudge.snap || fine) },
     );
 }

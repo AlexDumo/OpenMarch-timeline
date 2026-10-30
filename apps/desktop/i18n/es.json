@@ -14,12 +14,12 @@
             "lockY": "Bloqueo del eje Y",
             "lockYOff": "Desbloquear movimiento Y",
             "lockYOn": "Bloquear movimiento Y",
-            "snapOff": "Desactivar el ajuste",
-            "snapOn": "Activar el ajuste",
+            "snapOff": "Desactivar la alineación",
+            "snapOn": "La alineación está desactivada: actívala de nuevo",
             "snapToCustomFraction": "Ajustar a la cuadrícula",
             "snapToWhole": "Alinear al entero más cercano",
-            "toggleSnap": "Activar o desactivar el ajuste",
-            "toggleSnapKeywords": "ajuste imán cuadrícula libre snap"
+            "toggleSnap": "Activar o desactivar la alineación",
+            "toggleSnapKeywords": "alinear alineación imán cuadrícula libre snap"
         },
         "batchEdit": {
             "noNextPage": "No se pueden establecer las coordenadas del marchador en la página siguiente. No hay una página siguiente",
@@ -1272,8 +1272,8 @@
                 "show": "Mostrar las rutas desde la bandera de inicio"
             },
             "snap": {
-                "off": "El ajuste está desactivado: actívalo de nuevo",
-                "on": "Desactivar el ajuste"
+                "off": "La alineación está desactivada: actívala de nuevo",
+                "on": "Desactivar la alineación"
             },
             "pivot": {
                 "aria": "Pivote: {pivot}",
@@ -1642,7 +1642,7 @@
             "lockMarchersAriaLabel": "Movimiento del cursor y ajuste de marchadores",
             "placeAllMarchers": "Colocar todos los manifestantes",
             "placeSelectedMarchers": "Colocar manifestantes seleccionados",
-            "snapToggleCaption": "Ajuste",
+            "snapToggleCaption": "Alineación",
             "toNextPagePositions": "...a posiciones de página siguientes",
             "toPreviousPagePositions": "...a posiciones en la página anterior"
         },

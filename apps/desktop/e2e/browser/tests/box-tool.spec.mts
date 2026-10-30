@@ -985,7 +985,17 @@ test("change: turned 90°, 180° or 270°, the knob is never under the floating 
     await expect(editor.getByTestId("shape-editor-rotation")).toHaveText("0°");
 });
 
-test("change: the knob turns in 15° steps, as the field's rotate handle does, and in whole degrees with Shift (fine)", async ({
+/**
+ * Turns the Snap toggle off with the floating editor's Snap button (modifier roles, version A),
+ * which then shows pressed. Never saved, so the next test starts with it on.
+ */
+async function turnSnapOff(page: Page) {
+    const snap = page.getByTestId("shape-editor-snap");
+    await snap.click();
+    await expect(snap).toHaveAttribute("aria-pressed", "true");
+}
+
+test("change: the knob turns in 15° steps, as the field's rotate handle does, in whole degrees with Shift (fine), and freely with the Snap toggle off", async ({
     show,
 }) => {
     const { page } = show;
@@ -1022,6 +1032,14 @@ test("change: the knob turns in 15° steps, as the field's rotate handle does, a
     expect(fine % 15).not.toBe(0);
     expect(fine).toBeGreaterThan(55);
     expect(fine).toBeLessThan(80);
+
+    // With the Snap toggle off (the editor's Snap button): free of the 15° steps
+    await turnSnapOff(page);
+    await turnKnob(37);
+    const free = await degreesShown();
+    expect(free % 15).not.toBe(0);
+    expect(free).toBeGreaterThan(fine + 25);
+    expect(free).toBeLessThan(fine + 50);
 
     // Typed, a rotation stays as typed
     await rotation.click();
@@ -2470,16 +2488,6 @@ const heldGuides = (page: Page): Promise<HeldGuides> =>
             window.fieldTest!.shapeOverlay!()!;
         return { guides, guideEdges, guideMarks, onGuides };
     });
-
-/**
- * Turns the Snap toggle off with the floating editor's Snap button (modifier roles, version A),
- * which then shows pressed. Never saved, so the next test starts with it on.
- */
-async function turnSnapOff(page: Page) {
-    const snap = page.getByTestId("shape-editor-snap");
-    await snap.click();
-    await expect(snap).toHaveAttribute("aria-pressed", "true");
-}
 
 test("change: moving an open box near the front hash lands its front edge on it, with the guide named as on the coordinate sheet; away from lines no guide; Shift (fine) still lands it, the Snap toggle off doesn't pull (#444, #453)", async ({
     show,

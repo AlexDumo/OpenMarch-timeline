@@ -15,7 +15,7 @@
             "lockYOff": "Unlock Y movement",
             "lockYOn": "Lock Y movement",
             "snapOff": "Turn snapping off",
-            "snapOn": "Turn snapping on",
+            "snapOn": "Snapping is off: turn it back on",
             "snapToCustomFraction": "Snap to grid",
             "snapToWhole": "Snap to nearest whole",
             "toggleSnap": "Toggle snapping",

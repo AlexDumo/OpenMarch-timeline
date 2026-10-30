@@ -15,7 +15,7 @@
             "lockYOff": "Y方向の移動のロックを解除",
             "lockYOn": "Y の動きをロック",
             "snapOff": "スナップをオフ",
-            "snapOn": "スナップをオン",
+            "snapOn": "スナップはオフです：オンに戻す",
             "snapToCustomFraction": "グリッドにスナップ",
             "snapToWhole": "最も近い 整数 に スナップ",
             "toggleSnap": "スナップの切り替え",

@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { create } from "zustand";
 import { parseTimelineHeight } from "@/components/timeline/timelineSplit";
 import { syncFromStorage } from "@/stores/syncFromStorage";
@@ -345,15 +344,9 @@ syncFromStorage(UI_SETTINGS_STORAGE_KEY, parseSettings, (uiSettings) =>
     })),
 );
 
-/**
- * Turns the Snap toggle back on when a file opens or a new one is made (`fileOpen` becomes true),
- * so a forgotten toggle doesn't carry into the next show
- */
-export function useSnapOnWhenFileOpens(fileOpen: boolean) {
-    useEffect(() => {
-        if (fileOpen) useUiSettingsStore.getState().setSnap(true);
-    }, [fileOpen]);
-}
+/** The Snap toggle as it is now (`UiSettings.snap`), for code that reads it at event time */
+export const isSnapOn = (): boolean =>
+    useUiSettingsStore.getState().uiSettings.snap;
 /**
  * Sets one setting and saves it. An unchanged value keeps the settings object, so nothing
  * re-renders and nothing is written (the timeline saves its zoom and fit after every gesture).
