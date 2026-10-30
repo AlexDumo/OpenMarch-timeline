@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, lt } from "drizzle-orm";
+import { and, eq, gt, inArray, lt } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import { TimelineEditRefusedError } from "@/timeline/timelineEditRefusals";
 import { joinList } from "@/timeline/timelineRangeWords";
@@ -14,6 +14,7 @@ import { hasShapeRecipes } from "./shapeRecipes";
 import { setTimelineTransitionDestinationInTransaction } from "./timelineTransitionsInTransaction";
 import { timelinesWithRange } from "./timelines";
 import { clearOwnPageMoves, sampleShape } from "./timelineMoveHelpers";
+import { memberRowsWhere, readTimeline } from "./timelineMemberRows";
 
 /**
  * Cut and remove: the two move operations the holds commands share (holds spec,
@@ -167,8 +168,7 @@ export async function cutMoveAtBeatInTransaction({
     timelineId: number;
     beat: number;
 }): Promise<SplitTimelineResult | null> {
-    const L = schema.timelines;
-    const move = await tx.select().from(L).where(eq(L.id, timelineId)).get();
+    const move = await readTimeline(tx, timelineId);
     let idStaysWith: SplitIdKeeper = "after";
     if (move && Number.isInteger(beat)) {
         if (!(move.start_beat < beat && beat < move.end_beat)) return null;
@@ -224,18 +224,12 @@ export async function rowsIn(
             ? [lt(a.start_beat, range.end), gt(a.end_beat, range.start)]
             : []),
     ];
-    return await tx
-        .select({
-            row: a,
-            timelineId: t.timeline_id,
-            shapeId: t.dest_shape_id,
-            pathStyle: t.path_style,
-        })
-        .from(a)
-        .innerJoin(t, eq(t.id, a.transition_id))
-        .where(and(...conditions))
-        .orderBy(asc(a.id))
-        .all();
+    return (await memberRowsWhere(tx, and(...conditions))).map((m) => ({
+        row: m.assignment,
+        timelineId: m.timeline.id,
+        shapeId: m.transition.dest_shape_id,
+        pathStyle: m.transition.path_style,
+    }));
 }
 
 /**
@@ -375,10 +369,9 @@ export async function planRemovalFromRange({
     const rows = await rowsIn(tx, timelineId, { marcherIds, range });
     const stay = await membersThatStay(tx, rows);
     const leaving = rows.filter((r) => !stay.has(r.row.marcher_id));
-    const L = schema.timelines;
     const moves: MoveRemovalPlan[] = [];
     for (const id of ascending(leaving.map((r) => r.timelineId))) {
-        const move = (await tx.select().from(L).where(eq(L.id, id)).get())!;
+        const move = (await readTimeline(tx, id))!;
         const theirs = leaving.filter((r) => r.timelineId === id);
         moves.push({
             timelineId: id,
@@ -428,12 +421,7 @@ async function removeFromMove(
         removed.map((r) => r.row),
         { tidyShared: true },
     );
-    const L = schema.timelines;
-    const deleted = !(await tx
-        .select({ id: L.id })
-        .from(L)
-        .where(eq(L.id, pieceId))
-        .get());
+    const deleted = !(await readTimeline(tx, pieceId));
     return {
         cuts,
         piece: { timelineId: plan.timelineId, pieceId, deleted },
