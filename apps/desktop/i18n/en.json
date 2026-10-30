@@ -3139,7 +3139,18 @@
     "layout": {
         "closeSettings": "Close settings",
         "hideInspector": "Hide inspector",
-        "showInspector": "Show inspector"
+        "showInspector": "Show inspector",
+        "windowTooSmall": {
+            "body": "OpenMarch needs a window at least {minWidth} × {minHeight} to fit the field, the timeline and the Inspector.",
+            "close": "Close",
+            "current": "This window is {width} × {height}.",
+            "hintDesktop": "Maximize the window or make it bigger. If you zoomed in, zoom out with <keys></keys>.",
+            "hintWeb": "Make the browser window bigger, zoom out with <keys></keys>, or turn your tablet sideways. Phones are too small for now.",
+            "hintZoomed": "The page is zoomed in. Zoom out with <keys></keys>, or make the window bigger.",
+            "maximize": "Maximize",
+            "minimize": "Minimize",
+            "title": "Make the window bigger"
+        }
     },
     "touch": {
         "dragMode": {
