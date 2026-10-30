@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { boxFrame, type BoxParams } from "../../box/boxGeometry";
 import { BOX_PARAMS } from "../../box/boxParams";
