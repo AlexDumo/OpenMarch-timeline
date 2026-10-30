@@ -14,7 +14,8 @@ import type { FieldTestShapeOverlay } from "../../../src/field/fieldTestApi";
 // a straight line in Fit (its interval worked out), typing an interval keeps it
 // (the line grows from its pivot), the spacing menu offers Interval on the
 // path, Enter places it as one undo step, and a click on a member reopens it,
-// where a dragged end saves on release with the interval kept.
+// where a dragged end saves on release with the interval kept. A typed list
+// (#526) spaces it in groups of marchers, each a chip in the editor.
 
 // Eight trumpets scattered, all in view.
 const HOME: SeedPosition[] = [
@@ -291,6 +292,74 @@ test("change: Escape discards an open line and the show is untouched", async ({
     expect(await undoSteps(show)).toBe(steps);
 });
 
+test("change: typing 2*3+4*2 spaces the line in groups, shown as chips, placed and reopened as typed", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await page.keyboard.press("l");
+    const y = cf.y - 20 * S;
+    await drag(
+        page,
+        await toScreen(page, { x: cf.x - 14 * S, y }),
+        await toScreen(page, { x: cf.x - 3.5 * S, y }),
+    );
+    const readout = page.getByTestId("shape-tool-readout");
+    await readout.getByTestId("shape-editor-interval").click();
+    await page.getByTestId("shape-editor-interval-input").fill("2*3+4*2");
+    await page.keyboard.press("Enter");
+
+    // 2 marchers at 3 steps, then the other 6 at 2: the last group grew by 2
+    const groups = readout.getByTestId("shape-groups");
+    await expect(groups).toBeVisible();
+    await expect(readout.getByTestId("shape-editor-interval")).toBeHidden();
+    await expect(readout.getByTestId("shape-group-0-count")).toHaveText("2");
+    await expect(readout.getByTestId("shape-group-0-interval")).toHaveText("3");
+    await expect(readout.getByTestId("shape-group-1-count")).toHaveText("6");
+    await expect(readout.getByTestId("shape-group-1-grown")).toHaveText("+2");
+    await expect(readout.getByTestId("shape-group-1-interval")).toHaveText("2");
+    const spaced = (await shapeOverlay(page))!;
+    const expected = [3, 3, 2, 2, 2, 2, 2];
+    const drawnGaps = gaps(spaced.spots);
+    expect(drawnGaps).toHaveLength(expected.length);
+    drawnGaps.forEach((gap, i) =>
+        expect(Math.abs(gap - expected[i]! * S)).toBeLessThan(CLOSE),
+    );
+
+    // Placed, the recipe stores the groups as typed
+    await page.keyboard.press("Enter");
+    await expect(readout).toBeHidden();
+    await expect.poll(() => onSpots(show, spaced.spots)).toBe(true);
+    await waitForIdle(page);
+    const [recipe] = await recipes(show);
+    const stored = JSON.parse(recipe.params).spacing;
+    expect(stored.mode).toBe("keep");
+    expect(stored.groups.map((g: { count?: number }) => g.count)).toEqual([
+        2, 4,
+    ]);
+    expect(stored.groups[0].interval).toBeCloseTo(3 * S);
+    expect(stored.groups[1].interval).toBeCloseTo(2 * S);
+
+    // Reopened from a member, the same chips
+    await page.keyboard.press("Escape");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([]);
+    const t3 = (await drawnMarchers(page)).find((m) => m.id === 3)!.screen;
+    await page.mouse.click(t3.x, t3.y);
+    const placed = page.getByTestId("placed-box-readout");
+    await expect(placed).toBeVisible();
+    await expect(placed.getByTestId("shape-group-0-count")).toHaveText("2");
+    await expect(placed.getByTestId("shape-group-1-count")).toHaveText("6");
+    await expect(placed.getByTestId("shape-group-1-grown")).toHaveText("+2");
+});
+
 test("change: clicks draw an L, its corner holds a marcher until switched off, and it places with every point", async ({
     show,
 }) => {
@@ -471,4 +540,152 @@ test("change: Curve in the Shapes tab draws a line bending through smooth points
         "smooth",
     );
     expect((await shapeOverlay(page))!.handles).toHaveLength(6);
+});
+
+// Who goes where on a Line (#528): a line drawn on marchers who all stand on
+// one placed Line keeps their order along it (Keep order, the default), the
+// menu offers Least travel and Reverse too, and the choice is saved in the
+// recipe, where a reopened line can pick again. Page 2 has no positions of
+// its own, so the line placed on page 1 is still standing there.
+test.describe("who goes where", () => {
+    test.use({
+        seedSql: seedShowSql({
+            beats: 48,
+            pageStarts: [16, 32],
+            measureStarts: Array.from({ length: 12 }, (_, i) => 1 + i * 4),
+            marchers: HOME.map(([id]) => ({
+                id,
+                section: "Trumpet",
+                prefix: "T",
+                order: id,
+            })),
+            positions: [HOME, [], []],
+        }),
+    });
+
+    const orders = (show: Show) =>
+        show.query<{ order_mode: string; reverse: number }>(
+            "SELECT order_mode, reverse FROM timeline_shape_recipes ORDER BY id",
+        );
+
+    async function goToNextPage(show: Show, heading: string) {
+        await show.page.keyboard.press("e");
+        await expect(
+            show.page.getByRole("heading", { name: heading }),
+        ).toBeVisible();
+        await expectCanvasMatchesShow(show);
+    }
+
+    /** Marcher ids on page `pageId`, from the lowest x to the highest */
+    const byX = async (show: Show, pageId: number) =>
+        (await savedPositions(show, pageId))
+            .sort((a, b) => a.x - b.x)
+            .map((p) => p.id);
+
+    test("change: a line drawn from a placed line keeps its order, Reverse flips it, and the choice is saved", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const grid = await fieldGrid(show);
+        const S = grid.pixelsPerStep;
+        const cf = grid.centerFront;
+        const selectAll = async () => {
+            await page.keyboard.press("ControlOrMeta+a");
+            await expect
+                .poll(async () => (await readField(page)).selection)
+                .toEqual(ALL);
+        };
+
+        // Page 1: a line drawn left to right, by least travel from home
+        await goToNextPage(show, "Page 1");
+        await selectAll();
+        await page.keyboard.press("l");
+        const yA = cf.y - 20 * S;
+        await drag(
+            page,
+            await toScreen(page, { x: cf.x - 14 * S, y: yA }),
+            await toScreen(page, { x: cf.x - 3.5 * S, y: yA }),
+        );
+        await expect(page.getByTestId("shape-order")).toHaveAttribute(
+            "data-value",
+            "nearest",
+        );
+        await page.getByTestId("shape-order").click();
+        // Nobody stands on a placed line yet: no Keep order
+        await expect(
+            page.getByTestId("shape-order-content").getByRole("menuitemradio"),
+        ).toHaveText(["Least travel", "Reverse"]);
+        await page.keyboard.press("Escape");
+        await page.keyboard.press("Enter");
+        await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+        await waitForIdle(page);
+        // Its first spot is at the left: the order along it
+        const alongA = await byX(show, 1);
+        expect(await orders(show)).toEqual([
+            { order_mode: "nearest", reverse: 0 },
+        ]);
+
+        // Page 2: everyone still on the line; a new line drawn right to left
+        // below it keeps their order, so the first along A is first along B,
+        // at its right end
+        await goToNextPage(show, "Page 2");
+        await page.keyboard.press("Escape");
+        await selectAll();
+        const steps = await undoSteps(show);
+        await page.keyboard.press("l");
+        const yB = cf.y - 10 * S;
+        await drag(
+            page,
+            await toScreen(page, { x: cf.x - 3.5 * S, y: yB }),
+            await toScreen(page, { x: cf.x - 14 * S, y: yB }),
+        );
+        const order = page.getByTestId("shape-order");
+        await expect(order).toHaveAttribute("data-value", "keep");
+        await order.click();
+        await expect(
+            page.getByTestId("shape-order-content").getByRole("menuitemradio"),
+        ).toHaveText(["Least travel", "Keep order", "Reverse"]);
+
+        // Reverse, then back to Keep order
+        await page.getByTestId("shape-order-reverse").click();
+        await expect(order).toHaveAttribute("data-value", "reverse");
+        await order.click();
+        await page.getByTestId("shape-order-keep").click();
+        await expect(order).toHaveAttribute("data-value", "keep");
+
+        await page.keyboard.press("Enter");
+        await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+        await expect.poll(() => byX(show, 2)).toEqual([...alongA].reverse());
+        await waitForIdle(page);
+        expect(await undoSteps(show)).toBe(steps + 1);
+        expect((await orders(show)).at(-1)).toEqual({
+            order_mode: "keep",
+            reverse: 0,
+        });
+
+        // Reopened, it shows Keep order; Reverse saves on pick, flipping them
+        await page.keyboard.press("Escape");
+        await expect
+            .poll(async () => (await readField(page)).selection)
+            .toEqual([]);
+        const t3 = (await drawnMarchers(page)).find((m) => m.id === 3)!.screen;
+        await page.mouse.click(t3.x, t3.y);
+        await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+        await expect(order).toHaveAttribute("data-value", "keep");
+        await order.click();
+        await page.getByTestId("shape-order-reverse").click();
+        await expect.poll(() => byX(show, 2)).toEqual(alongA);
+        await expect
+            .poll(async () => (await orders(show)).at(-1))
+            .toEqual({ order_mode: "keep", reverse: 1 });
+        await expect(order).toHaveAttribute("data-value", "reverse");
+
+        // Undo puts Keep order back
+        await waitForIdle(page);
+        await page.keyboard.press("ControlOrMeta+z");
+        await expect.poll(() => byX(show, 2)).toEqual([...alongA].reverse());
+        await expect
+            .poll(async () => (await orders(show)).at(-1))
+            .toEqual({ order_mode: "keep", reverse: 0 });
+    });
 });

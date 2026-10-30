@@ -9,7 +9,9 @@ import {
     savedToolKind,
     suggestedName,
     intervalsOf,
+    whyNotSavable,
 } from "../savedShapes";
+import { lineTool } from "../../line/lineTool";
 import { placementOf } from "../../tool/shapePlacement";
 import { shapeSteps, startingParams } from "../../command/shapeSteps";
 import type { AnyToolKind, ToolEnv } from "../../tool/toolKind";
@@ -122,6 +124,28 @@ describe("saving a shape", () => {
         });
         expect(again.kind).toBe(rowTool.shape.id);
         expect(again.intervals).toEqual({ gap: 3 });
+    });
+});
+
+describe("a line with mixed intervals (#526)", () => {
+    const lineTyped = (n: number, list: string) => {
+        const t = drawn(lineTool, n, { x: 100, y: 100 }, { x: 150, y: 100 });
+        const interval = lineTool.params.find((p) => p.key === "interval")!;
+        return interval.type(t.params, n, list, env())!;
+    };
+
+    it("can't be saved yet, saying why, as saving would keep only one interval", () => {
+        expect(whyNotSavable(lineTool, lineTyped(6, "2*3+4*2"), 6, STEP)).toBe(
+            "Lines with mixed intervals can't be saved yet",
+        );
+    });
+
+    it("can be saved with one interval, or groups all at the same one", () => {
+        expect(whyNotSavable(lineTool, lineTyped(6, "2"), 6, STEP)).toBeNull();
+        expect(
+            whyNotSavable(lineTool, lineTyped(6, "2*2+4*2"), 6, STEP),
+        ).toBeNull();
+        expect(whyNotSavable(boxTool, wideBox().params, 6, STEP)).toBeNull();
     });
 });
 

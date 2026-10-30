@@ -283,23 +283,41 @@ The Line shape (spec #522, #523) stores a new kind:
 
 1. **Line recipes are `line`, version 2.** Version 1 is the old shape-model line. Version 2's
    params are `points` (two or more, each `x`, `y` and a `tension` from 0 to 2: 0 is a corner,
-   above 0 a smooth point the line passes through, centripetal Catmull-Rom with its handles scaled
-   by the tension, 1 the plain curve; a smooth point never holds a marcher, #525), `closed` (open when absent), `corners` (false when the intervals run around
-   the corners; when absent or true every corner holds a marcher in Fit and Keep interval, as long
-   as there is at least one gap per stretch from corner to corner; on the path, or with fewer gaps than those stretches, the
-   intervals run around the corners whatever it says, #524), `spacing` and the host's
-   `pivot`. `spacing` is `{ mode: "fit" }`
-   (the interval follows from the drawn points), `{ mode: "keep", groups }` (Keep interval) or
-   `{ mode: "path", groups, anchor }` (Interval on the path, `anchor` one of `start`, `center`,
-   `end`). A group is `{ interval, count? }`: the interval is the straight distance between
-   neighbors in field units, and a group with no `count` is the rest.
-2. **A Curve is a Line.** The Curve in the pickers is a preset whose points start smooth; it
+   above 0 a smooth point the line bends through, centripetal Catmull-Rom with its handles scaled
+   by the tension, 1 the plain curve, #525), `closed` (open when absent), `corners`, `spacing` and
+   the host's `pivot`. `spacing` is `{ mode: "fit" }` (the interval follows from the drawn
+   points), `{ mode: "keep", groups }` (Keep interval) or `{ mode: "path", groups, anchor }`
+   (Interval on the path, `anchor` one of `start`, `center`, `end`). A group is
+   `{ interval, count? }`: the interval is the straight distance between neighbors (the chord) in
+   field units, `count` a whole number of marchers from 1, and a group with no `count` is the
+   rest; at most one group in a list is the rest (#526). The groups give the line's gaps in order
+   from its first point. Recipes store the parsed groups, never the typed text, so the interval
+   list's change of meaning (count × interval, from interval × gaps) changes no saved data.
+2. **Corners and stretches.** The two ends always hold a marcher, smooth or not; a smooth point
+   between them never does. The line from an end or a corner to the next corner or end is a
+   stretch, smooth points inside it. `corners` is false when the intervals run around the
+   corners. Absent or true, every corner holds a marcher in Fit and Keep interval, as long as there
+   is at least one gap per stretch; on the path, or with fewer gaps than stretches, the intervals
+   run around the corners whatever it says (#524). With corners holding marchers, each stretch
+   holds a whole number of the line's gaps, in order along it: in Fit and with one interval for
+   everyone, in proportion to the stretches' lengths; with groups, each corner at the seam between
+   gaps nearest its share of the line. Keep interval makes each stretch as long as the gaps it
+   holds, measured straight across (a whole run of the groups, crossing group seams when they fall
+   mid-stretch), a curved stretch scaled about its start, and a corner drag between two straight
+   stretches lands where both are whole runs. A stretch left off its run (a corner dragged with
+   `fine`) scales its gaps to fit, which is even spacing with one interval. In Fit the groups
+   don't apply: each stretch's marchers spread evenly over it, straight across. On the path the
+   run is laid from its anchor along the path itself: from the start, back from the end, or with
+   as much path spare before it as after it.
+3. **A Curve is a Line.** The Curve in the pickers is a preset whose points start smooth; it
    saves a `line` recipe and reads back as a Line.
-3. **A Line stores no frame.** Its frame (center, size, turn) follows from its points, so the
+4. **A Line stores no frame.** Its frame (center, size, turn) follows from its points, so the
    frame amendment's stored center doesn't apply. A kind whose frame follows from its own numbers
    declares a `readable` check, used instead of the stored-center check when a recipe is read.
-4. **Version 2 grows without a new version.** `closed`, counted groups, and the Measured
-   setting still to come are all optional fields or wider values of these (more points and
-   `corners` came with #524, tensions above 0 with #525). A build reads a Line only when it can lay out every field exactly as saved; anything
-   newer reads as plain positions (decision 5), never as the nearest shape it understands. Each
-   build widens its `readable` check as it learns a field.
+5. **Version 2 grows without a new version.** `closed` and the Measured setting still to come
+   are optional fields or wider values of these. A build reads a Line only when it can lay out
+   every field exactly as saved; anything newer reads as plain positions (decision 5), never as
+   the nearest shape it understands. Each build widens its `readable` check as it learns a field:
+   the first Line build read two straight points and a single group with no count; more points
+   and `corners` came with #524, any number of groups, counted or with one rest, with #526, and
+   tensions from 0 to 2 with #525. `closed: true` is still refused.
