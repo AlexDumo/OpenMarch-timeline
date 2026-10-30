@@ -8,7 +8,7 @@ import {
     type HoldFromPreviousSkipReason,
 } from "@/db-functions/timelineHoldFromPrevious";
 import type { TimelinePageCommandMenu } from "@/components/timeline/TimelineRangeMenu";
-import type { KeptPageBox } from "./timelineKept";
+import type { PageBoxRange } from "./timelinePageBoxState";
 import {
     marcherNamesText,
     pagesText,
@@ -100,7 +100,7 @@ export function holdFromPreviousMessage(
 
 /** **Hold from previous page** for `marcherIds` on the page box `box` (`holdFromPreviousPage`). */
 export async function holdFromPreviousOn(
-    box: KeptPageBox,
+    box: PageBoxRange,
     marcherIds: readonly number[],
     database: DbConnection = db,
 ): Promise<HoldFromPreviousResult> {
@@ -128,7 +128,7 @@ export function holdFromPreviousMenu(
     marcherIds: readonly number[],
     nameOf: MarcherNameOf | undefined,
     run: (
-        box: KeptPageBox,
+        box: PageBoxRange,
         marcherIds: readonly number[],
     ) => Promise<HoldFromPreviousResult> = holdFromPreviousOn,
 ): TimelinePageCommandMenu {

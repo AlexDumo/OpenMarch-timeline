@@ -7,17 +7,12 @@ import { setAsShownMenu } from "../timelineSetAsShown";
  * marchers Not set on the page, with a reason when none is, and hidden with nothing selected.
  */
 
-const state = (
-    pageId: number,
-    follows: number[],
-    kept: number[] = [],
-): PageKeepState => ({
+const state = (pageId: number, follows: number[]): PageKeepState => ({
     pageId,
     pageName: String(pageId),
     box: { start: pageId * 8 + 1, end: pageId * 8 + 9 },
     follows,
     fromStart: [],
-    kept,
     from: [],
     selected: 3,
 });
@@ -37,7 +32,7 @@ describe("setAsShownMenu", () => {
 
     it("says why when no selected marcher is Not set there, and does nothing", () => {
         const run = vi.fn();
-        const menu = setAsShownMenu([state(4, [], [7])], run);
+        const menu = setAsShownMenu([state(4, [])], run);
         expect(menu.reasonFor(4)).toContain("Page 4");
         menu.onSet(4);
         expect(run).not.toHaveBeenCalled();

@@ -35,7 +35,6 @@ import type {
 import type { SelectionHeldBar } from "@/timeline/timelineHeldBars";
 import type {
     TimelineAddMarchersMenu,
-    TimelineKeepHereMenu,
     TimelineSetAsShownMenu,
     TimelinePageCommandMenu,
     TimelineMenuEntry,
@@ -271,8 +270,6 @@ export interface TimelineProps {
      * (`useClipDrops`)
      */
     readonly pageMoves?: ReadonlySet<string | number>;
-    /** The page box menu's **Keep selected marchers here** and **Let selected marchers follow again** */
-    readonly keepHere?: TimelineKeepHereMenu;
     /** The page box menu's **Set as shown** (holds, fork #466) */
     readonly setAsShown?: TimelineSetAsShownMenu;
     /** **Hold from previous page** on a page box (holds, fork #472) */
@@ -656,7 +653,6 @@ export function Timeline(props: TimelineProps) {
         onDeletePageWithMoves,
         onSetPageSubset,
         onOpenRange,
-        keepHere,
         setAsShown,
         holdFromPrevious,
         pageMenuExtra,
@@ -748,7 +744,6 @@ export function Timeline(props: TimelineProps) {
         onDeletePageFlag ||
         onDeletePageWithMoves ||
         onSetPageSubset ||
-        keepHere ||
         setAsShown ||
         holdFromPrevious
     );
@@ -764,7 +759,6 @@ export function Timeline(props: TimelineProps) {
                       ...(deleteWithMoves
                           ? { onDeleteWithMoves: deleteWithMoves }
                           : {}),
-                      ...(keepHere ? { keepHere } : {}),
                       ...(setAsShown ? { setAsShown } : {}),
                       ...(holdFromPrevious ? { holdFromPrevious } : {}),
                       ...(subsetMenu ? { subset: subsetMenu } : {}),
@@ -778,7 +772,6 @@ export function Timeline(props: TimelineProps) {
             deleteWithMoves,
             disabledReason,
             hasMarchersMenu,
-            keepHere,
             setAsShown,
             holdFromPrevious,
             subsetMenu,

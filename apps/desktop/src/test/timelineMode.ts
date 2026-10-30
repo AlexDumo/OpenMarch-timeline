@@ -114,7 +114,7 @@ export const LATER_MARCHER_COLUMNS = [
 
 /**
  * Tables the timeline-only migrations add that timeline edits read: the shape recipes (0027),
- * which the holds commands check, and the Held marks (0029). A page-mode fixture, which tests write timeline rows into
+ * which the holds commands check, and the Held marks (0030). A page-mode fixture, which tests write timeline rows into
  * and call app functions on, gets them before its undo triggers are made. Their migrations create
  * them `IF NOT EXISTS`, so `finishTestConversion` runs them again harmlessly.
  */

@@ -21,10 +21,9 @@ import {
     type KeepTranslate,
     type MarcherNameOf,
 } from "@/timeline/timelineKeepLater";
-import { followAgainOn, keepOnPage } from "@/timeline/timelineKeepCommands";
-import { KEEP_SHORTCUT } from "@/components/timeline/PageKeepChain";
+import { setAsShownOn } from "@/timeline/timelineSetAsShown";
 import { OWN_KEYS_WITH_SPACE } from "@/components/timeline/timelineHotkeys";
-import { useKeepToggle, usePageKeepStates } from "@/timeline/useKeepLaterPages";
+import { usePageKeepStates } from "@/timeline/useKeepLaterPages";
 import {
     ShortcutTooltip,
     TransportTooltipProvider,
@@ -77,30 +76,24 @@ const DOT = (
 );
 
 /**
- * **Keep here** or **Follow again** after the line (UI-18 keep later pages): a real button styled
- * as the line's link, with a tooltip that says what it changes, and (K) where **K** does the same.
+ * **Set as shown** after the line (UI-18 keep later pages; holds decision 12): a real button
+ * styled as the line's link, with a tooltip that says what it changes.
  */
-function KeepButton({
+function SetAsShownButton({
     testId,
     label,
     tooltip,
-    withK,
     onClick,
 }: {
     testId: string;
     label: string;
     tooltip: string;
-    withK: boolean;
     onClick: () => void;
 }) {
     const descriptionId = useId();
     return (
         <>
-            <ShortcutTooltip
-                label={withK ? `${tooltip} (${KEEP_SHORTCUT})` : tooltip}
-                side="bottom"
-                closeOnPress
-            >
+            <ShortcutTooltip label={tooltip} side="bottom" closeOnPress>
                 <button
                     type="button"
                     className={LINK_CLASS}
@@ -108,7 +101,6 @@ function KeepButton({
                     data-timeline-own-keys={OWN_KEYS_WITH_SPACE}
                     data-testid={testId}
                     aria-describedby={descriptionId}
-                    aria-keyshortcuts={withK ? KEEP_SHORTCUT : undefined}
                     onClick={onClick}
                 >
                     {label}
@@ -122,17 +114,16 @@ function KeepButton({
 }
 
 /**
- * The selection's keep state on the selected page's box (`PageKeepState`), which later pages
- * follow it from there (`followingPages`), and what **K** does from there (`keepToggle`).
+ * The selection's keep state on the selected page's box (`PageKeepState`), and which later pages
+ * follow it from there (`followingPages`).
  */
 function useSelectionKeepState(marcherIds: readonly number[]) {
     const { pages } = useTimingObjects()!;
     const { selectedPage } = useSelectedPage()!;
     const states = usePageKeepStates(pages, marcherIds);
-    const k = useKeepToggle(states, pages, selectedPage?.id);
     return useMemo(() => {
         if (!selectedPage || states.length === 0)
-            return { here: null, following: null, k: null };
+            return { here: null, following: null };
         return {
             here: states.find((s) => s.pageId === selectedPage.id) ?? null,
             following: followingPages(
@@ -140,9 +131,8 @@ function useSelectionKeepState(marcherIds: readonly number[]) {
                 selectedPage.id,
                 pages[0]?.id ?? null,
             ),
-            k,
         };
-    }, [states, selectedPage, pages, k]);
+    }, [states, selectedPage, pages]);
 }
 
 /**
@@ -201,14 +191,11 @@ function TimelineHoldLineContent({
 }) {
     const { t } = useTranslate();
     const state = useSelectionHoldState(marcherIds);
-    const { here, following, k } = useSelectionKeepState(marcherIds);
+    const { here, following } = useSelectionKeepState(marcherIds);
     const selected = marcherIds.length;
     const follows = here?.follows ?? [];
-    const kept = here?.kept ?? [];
     const page = here?.pageName ?? "";
     const from = here?.from.length === 1 ? here.from[0]! : null;
-    const kHere = (action: "keep" | "follow") =>
-        !!here && k?.pageId === here.pageId && k.action === action;
     const translate: KeepTranslate = (key, defaultValue, params) =>
         t(key, { defaultValue, ...params });
     /**
@@ -240,53 +227,29 @@ function TimelineHoldLineContent({
               });
     };
 
-    const keepButton = here && follows.length > 0 && (
-        <KeepButton
-            testId="timeline-keep-here"
-            label={t("inspector.marcher.timeline.keepHere", {
-                defaultValue: "Keep here",
+    const setButton = here && follows.length > 0 && (
+        <SetAsShownButton
+            testId="timeline-set-as-shown"
+            label={t("inspector.marcher.timeline.setAsShown", {
+                defaultValue: "Set as shown",
             })}
             tooltip={
                 from
-                    ? t("inspector.marcher.timeline.keepHereHint", {
+                    ? t("inspector.marcher.timeline.setAsShownHint", {
                           defaultValue:
-                              "Keep {who} on Page {page}, so editing Page {from} won't move them here",
+                              "Set {who} on Page {page} where they are shown, so editing Page {from} won't move them here",
                           who: who(follows),
                           page,
                           from,
                       })
-                    : t("inspector.marcher.timeline.keepHereHintEarlier", {
+                    : t("inspector.marcher.timeline.setAsShownHintEarlier", {
                           defaultValue:
-                              "Keep {who} on Page {page}, so editing earlier pages won't move them here",
+                              "Set {who} on Page {page} where they are shown, so editing earlier pages won't move them here",
                           who: who(follows),
                           page,
                       })
             }
-            withK={kHere("keep")}
-            onClick={() => void keepOnPage(here.box, follows)}
-        />
-    );
-    const followButton = here && kept.length > 0 && (
-        <KeepButton
-            testId="timeline-follow-again"
-            label={t("inspector.marcher.timeline.followAgain", {
-                defaultValue: "Follow again",
-            })}
-            tooltip={
-                from
-                    ? t("inspector.marcher.timeline.followAgainHint", {
-                          defaultValue:
-                              "Let {who} follow Page {from} again, so editing Page {from} moves them here too",
-                          who: who(kept),
-                          from,
-                      })
-                    : t("inspector.marcher.timeline.followAgainHintEarlier", {
-                          defaultValue: "Let {who} follow earlier pages again",
-                          who: who(kept),
-                      })
-            }
-            withK={kHere("follow")}
-            onClick={() => void followAgainOn(here.box, kept)}
+            onClick={() => void setAsShownOn(here.box, follows)}
         />
     );
     /** The buttons, a dot before each (or only between them, `leading` false) */
@@ -327,24 +290,7 @@ function TimelineHoldLineContent({
     );
 
     let line: ReactNode = null;
-    if (kept.length > 0 && kept.length === selected)
-        line = textLine(
-            t("inspector.marcher.timeline.keptOnThisPage", {
-                defaultValue: "Kept on this page",
-            }),
-            false,
-            followButton,
-        );
-    else if (kept.length > 0)
-        line = textLine(
-            t("inspector.marcher.timeline.someKeptOnThisPage", {
-                defaultValue: "Some of these marchers are kept on this page",
-            }),
-            true,
-            keepButton,
-            followButton,
-        );
-    else if (state?.kind === "movesHere")
+    if (state?.kind === "movesHere")
         line = (
             <p
                 className="text-body text-text px-6 leading-none"
@@ -397,7 +343,7 @@ function TimelineHoldLineContent({
                         <ArrowRightIcon size={14} aria-hidden />
                     </button>
                 </ShortcutTooltip>
-                {buttons(true, keepButton)}
+                {buttons(true, setButton)}
             </p>
         );
     } else if (follows.length > 0)
@@ -410,7 +356,7 @@ function TimelineHoldLineContent({
                       defaultValue: "Some of these marchers hold here",
                   }),
             follows.length !== selected,
-            keepButton,
+            setButton,
         );
     if (!line && !following) return null;
     return (
@@ -431,7 +377,7 @@ export default function TimelineHoldLine({
     nameOf,
 }: {
     marcherIds: readonly number[];
-    /** The selected marchers' names, for the keep tooltips */
+    /** The selected marchers' names, for the Set as shown tooltip */
     nameOf?: MarcherNameOf;
 }) {
     return <TimelineHoldLineContent marcherIds={marcherIds} nameOf={nameOf} />;

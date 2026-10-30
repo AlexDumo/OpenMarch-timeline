@@ -17,7 +17,7 @@ const migrationTags = journal.entries
     .sort((a, b) => a.idx - b.idx)
     .map((e) => e.tag);
 
-const HELD_MARKS_MIGRATION = migrationTags[29]!;
+const HELD_MARKS_MIGRATION = migrationTags[30]!;
 
 /** Runs one migration file the way `DrizzleMigrationService` does, foreign keys off. */
 const runMigration = (db: DatabaseSync, tag: string) => {
@@ -36,7 +36,7 @@ const runMigration = (db: DatabaseSync, tag: string) => {
 type Row = Record<string, unknown>;
 
 /**
- * Migration 0029 adds the Held marks (holds, fork #472; ADR 0001 amendment 2026-10-30). It only
+ * Migration 0030 adds the Held marks (holds, fork #472; ADR 0001 amendment 2026-10-30). It only
  * adds a table, so older files open with their rows untouched and an empty table. Its statements
  * are `IF NOT EXISTS`, like 0027's, so a test file given the table early can take it again.
  */
@@ -50,9 +50,9 @@ describe(`Migration ${HELD_MARKS_MIGRATION}`, () => {
         );
 
     beforeEach(() => {
-        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0029-"));
-        db = new DatabaseSync(path.join(tempDir, "pre-0029.dots"));
-        for (const tag of migrationTags.slice(0, 29)) runMigration(db, tag);
+        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0030-"));
+        db = new DatabaseSync(path.join(tempDir, "pre-0030.dots"));
+        for (const tag of migrationTags.slice(0, 30)) runMigration(db, tag);
         db.exec(
             "INSERT INTO marchers (id, section, drill_prefix, drill_order) VALUES (1, 'Trumpet', 'T', 1), (2, 'Trumpet', 'T', 2)",
         );
