@@ -120,8 +120,8 @@ numbers) is in [parity-gate-results.md](parity-gate-results.md).
 73. Select one marcher → no box, no handles (story 47).
 74. Drag a corner → scales uniformly from the opposite corner; with $mod (constrain), freely (story 48).
 75. Drag a middle handle → one axis; hold $mod (constrain) → still one axis. **(change)** Fabric cancelled the scale while Shift was down (story 49).
-76. Rotate → snaps to 15°; with fine (Shift), whole degrees at ¼ speed; with the Snap toggle off, free (story 50).
-77. Hold Shift (fine) on any handle → a quarter speed, no step snapping on that axis. **(change)** Alt panned on Fabric (story 51).
+76. Rotate → snaps to 15°; with fine (Shift), whole degrees at full speed (owner 2026-10-30); with the Snap toggle off, free (story 50).
+77. Hold Shift (fine) on a scale handle → a quarter speed, no step snapping on that axis; on the rotate handle, whole degrees at full speed. **(change)** Alt panned on Fabric (story 51).
 78. Drag a handle far past the opposite side → no flip; the marchers stack about 1% of their spread apart, in order. Fabric held the last valid scale instead (story 52).
 79. Press a handle, hold over 300 ms and move under 4 px → nothing changes. **(change)** Fabric transformed.
 80. While scaling or rotating → dots and labels stay upright and the same size (story 53).

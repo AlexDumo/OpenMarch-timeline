@@ -354,7 +354,8 @@ grid and compare within 1.5 units.
 
 **For #198 and #204.** Lock X / Lock Y must not constrain shape or group
 handles (rules table; Fabric locks them, a `change:` to pin there). Fine's
-quarter speed for handles reuses `precisionDelta` and `anchorAt`.
+quarter speed for scale handles reuses `precisionDelta`; a rotation turns at
+full speed with fine, in whole degrees (owner 2026-10-30).
 
 ### #198 Group scale and rotate handles
 
@@ -367,8 +368,9 @@ control size; the nearest wins), `handleCursor`, `scaleFor` and
 middles one axis, constrain ignored; `MIN_SCALE` instead of a flip),
 `turnBetween`, `snapRotation` (15°, whole degrees with fine, free with the
 Snap toggle off) and `rotatePositions`. `src/field/editor/transformGestures.ts`
-has `ScaleGesture` and `RotateGesture`, the `FieldGesture`s, with fine through
-#197's `precisionDelta` (and `anchorAt` for the snapped angle).
+has `ScaleGesture` and `RotateGesture`, the `FieldGesture`s. A scale's fine
+goes through #197's `precisionDelta`; a rotation's fine only snaps to whole
+degrees, at full speed (owner 2026-10-30).
 
 **In the editor.** `pointerDown` asks `handleAt` after `takePress` and
 before the marcher hit test, so a handle wins over a marcher under it, and

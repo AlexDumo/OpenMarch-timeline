@@ -1470,7 +1470,7 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
         let running: FieldEditor | undefined;
         afterEach(() => running?.pointerCancel());
 
-        it("re-runs a rotation: Shift down keeps the angle drawn, Shift up snaps it to 15° again", () => {
+        it("re-runs a rotation: Shift down draws whole degrees where the pointer is, Shift up snaps it to 15° again", () => {
             const { editor, state } = setup({ selected: ALL });
             running = editor;
             editor.pointerDown(at(HANDLE.rot.x, HANDLE.rot.y));
@@ -1483,10 +1483,10 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
             editor.pointerMove(pointer);
             expect(editor.rotationFrame()?.angle).toBe(30);
             key("keydown", { key: "Shift", shiftKey: true });
-            expect(editor.rotationFrame()?.angle).toBe(30);
+            expect(editor.rotationFrame()?.angle).toBe(37);
             key("keyup", { key: "Shift" });
             expect(editor.rotationFrame()?.angle).toBe(30);
-            // Fine re-anchors on the 30° drawn: 40° more turns 10°, in whole degrees
+            // Fine at full speed: 40° more turns 40°, in whole degrees
             key("keydown", { key: "Shift", shiftKey: true });
             const further = ((77 - 90) * Math.PI) / 180;
             editor.pointerMove(
@@ -1494,10 +1494,10 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
                     shift: true,
                 }),
             );
-            expect(editor.rotationFrame()?.angle).toBe(40);
+            expect(editor.rotationFrame()?.angle).toBe(77);
             // Shift up with no move: 15° steps again
             key("keyup", { key: "Shift" });
-            expect(editor.rotationFrame()?.angle).toBe(45);
+            expect(editor.rotationFrame()?.angle).toBe(75);
             editor.pointerUp(
                 at(250 + 30 * Math.cos(further), 100 + 30 * Math.sin(further)),
             );
