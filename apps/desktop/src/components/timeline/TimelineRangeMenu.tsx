@@ -12,6 +12,7 @@ import { TooltipClassName } from "@openmarch/ui";
 import {
     CursorTextIcon,
     DiamondIcon,
+    PauseIcon,
     FlagIcon,
     LinkBreakIcon,
     LinkSimpleIcon,
@@ -368,6 +369,11 @@ export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
      */
     readonly setAsShown?: TimelineSetAsShownMenu;
     /**
+     * **Hold from previous page** on a page box (holds, fork #472). Without it, the menu has no
+     * such entry.
+     */
+    readonly holdFromPrevious?: TimelinePageCommandMenu;
+    /**
      * **Subset** on a page box (UI-9): a switch that shows whether the page is a subset, and
      * flips it. Without it, the menu has no such entry.
      */
@@ -398,15 +404,21 @@ export interface TimelineKeepHereMenu {
     readonly onFollow: (pageId: string | number) => void;
 }
 
-/** The page box menu's **Set as shown** entry (holds, fork #466), by page id. */
-export interface TimelineSetAsShownMenu {
+/** A page box menu entry for the selected marchers (holds), by page id. */
+export interface TimelinePageCommandMenu {
     /**
-     * Why the entry can't run on the page (no selected marcher is Not set there), or null when it
-     * can; undefined when no marchers are selected, so the entry doesn't show
+     * Why the entry can't run on the page, or null when it can; undefined when no marchers are
+     * selected, so the entry doesn't show
      */
     readonly reasonFor: (pageId: string | number) => string | null | undefined;
     readonly onSet: (pageId: string | number) => void;
 }
+
+/**
+ * The page box menu's **Set as shown** entry (holds, fork #466), by page id: unavailable when no
+ * selected marcher is Not set there.
+ */
+export type TimelineSetAsShownMenu = TimelinePageCommandMenu;
 
 /**
  * What was right-clicked, in view beats. A clip names its track, so `Timeline` can send the
@@ -501,6 +513,7 @@ export function useTimelineRangeMenu({
                 menu?.onDeleteWithMoves !== undefined ||
                 menu?.keepHere !== undefined ||
                 menu?.setAsShown !== undefined ||
+                menu?.holdFromPrevious !== undefined ||
                 menu?.subset !== undefined ||
                 menu?.extraFor !== undefined) &&
             target.pageId !== undefined;
@@ -517,6 +530,10 @@ export function useTimelineRangeMenu({
     const setAsShownReason =
         open && menu?.setAsShown && open.target.pageId !== undefined
             ? menu.setAsShown.reasonFor(open.target.pageId)
+            : undefined;
+    const holdReason =
+        open && menu?.holdFromPrevious && open.target.pageId !== undefined
+            ? menu.holdFromPrevious.reasonFor(open.target.pageId)
             : undefined;
     const pageExtra =
         open && menu?.extraFor && open.target.pageId !== undefined
@@ -581,6 +598,29 @@ export function useTimelineRangeMenu({
                                     {tolgee.t(
                                         "timeline.rangeMenu.setAsShown",
                                         "Set as shown",
+                                    )}
+                                </MenuItemWithReason>
+                                {!keepState && holdReason === undefined && (
+                                    <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                                )}
+                            </>
+                        )}
+                        {holdReason !== undefined && (
+                            <>
+                                <MenuItemWithReason
+                                    testId="timeline-range-menu-hold-from-previous"
+                                    reason={holdReason}
+                                    reasonTestId="timeline-range-menu-hold-from-previous-reason"
+                                    onSelect={() =>
+                                        menu?.holdFromPrevious?.onSet(
+                                            open.target.pageId!,
+                                        )
+                                    }
+                                >
+                                    <PauseIcon size={14} />
+                                    {tolgee.t(
+                                        "timeline.rangeMenu.holdFromPrevious",
+                                        "Hold from previous page",
                                     )}
                                 </MenuItemWithReason>
                                 {!keepState && (

@@ -41,6 +41,8 @@ const SPEC_CODES = [
     "E-A3",
 ];
 const COMBINED_CODES = ["E-A1/E-A2", "E-T3/E-T4"];
+/** The Held marks' commit-time codes (ADR 0001 amendment 2026-10-30) */
+const HELD_CODES = ["E-H1", "E-H3"];
 
 describe("timelineErrorMessage", () => {
     it.each([...SPEC_CODES, ...COMBINED_CODES])(
@@ -62,7 +64,7 @@ describe("timelineErrorMessage", () => {
         );
         expect(new Set(messages).size).toBe(messages.length);
         expect(Object.keys(TIMELINE_ERROR_MESSAGES).sort()).toEqual(
-            [...SPEC_CODES, ...COMBINED_CODES].sort(),
+            [...SPEC_CODES, ...COMBINED_CODES, ...HELD_CODES].sort(),
         );
     });
 
@@ -84,6 +86,25 @@ describe("timelineErrorMessage", () => {
         expect(message).toBe(TIMELINE_ERROR_MESSAGES["E-T6"]!.defaultMessage);
         expect(message).not.toContain("transition 4");
     });
+
+    it.each(HELD_CODES)(
+        "maps a Held mark's commit-time %s, which names no transition",
+        (code) => {
+            const error = new TimelineCommitViolationError([
+                {
+                    code,
+                    transitionId: null,
+                    detail: "marcher 3 is Held over [17, 25)",
+                },
+            ]);
+            expect(error.message).toBe(
+                `${code}: marcher 3 is Held over [17, 25)`,
+            );
+            expect(timelineErrorMessage(error)).toBe(
+                TIMELINE_ERROR_MESSAGES[code]!.defaultMessage,
+            );
+        },
+    );
 
     it("E-T1 says a transition spans its timeline (C-11), from a row trigger or the commit check", () => {
         const message = TIMELINE_ERROR_MESSAGES["E-T1"]!.defaultMessage;

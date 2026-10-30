@@ -10,8 +10,8 @@ import type { DbTransaction } from "./types";
  * range) or a shape rename gives an empty batch and leaves the resolver store's version where it
  * was. Those edits don't change what the resolver answers, but views that show the rows read
  * (the timeline's tracks, the inspector) must still refresh. The write wrapper and undo and redo
- * bump this version after a commit that touched `timelines`, `timeline_shapes`, `marchers` or
- * `timeline_kept_assignments`, and those views
+ * bump this version after a commit that touched `timelines`, `timeline_shapes`, `marchers`,
+ * `timeline_kept_assignments` or `timeline_held_marks`, and those views
  * follow it next to the resolver version. It never feeds the resolver.
  */
 export const useTimelineDisplayStore = create<{ version: number }>(() => ({
@@ -26,6 +26,9 @@ const DISPLAY_TABLES: ReadonlySet<string> = new Set([
     "marchers",
     // Kept spots (ADR 0001 amendment 2026-10-09): never in the change log
     "timeline_kept_assignments",
+    // Held marks (ADR 0001 amendment 2026-10-30): never in the change log either, so an edit
+    // that only writes marks refreshes the views through this
+    "timeline_held_marks",
 ]);
 
 /** Whether a commit that touched `tableNames` should bump the display version. */

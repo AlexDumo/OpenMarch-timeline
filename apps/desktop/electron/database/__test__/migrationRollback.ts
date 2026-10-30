@@ -93,6 +93,8 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
         ]),
     // Saved shapes, the show's copies (ADR 0006, saved shapes)
     28: (db) => dropTables(db, ["saved_shapes"]),
+    // Held marks (ADR 0001 amendment 2026-10-30)
+    29: (db) => dropTables(db, ["timeline_held_marks"]),
 };
 
 /**

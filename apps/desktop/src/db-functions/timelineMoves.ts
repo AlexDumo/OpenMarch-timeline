@@ -43,6 +43,10 @@ import {
 } from "./timelineKeptMarkers";
 // A cycle (it imports helpers from here), safe because neither module uses the other at load time
 import { setPositionsAtBeatInTransaction } from "./timelinePointMoves";
+import {
+    splitHeldEditsInTransaction,
+    type HeldArrivalEdit,
+} from "./timelineHeldMarks";
 
 /**
  * "Move a marcher on page N" in timeline mode (docs/timeline/phases/07-page-parity.md P7.2, spec
@@ -1133,6 +1137,40 @@ class NothingWritten extends Error {
     }
 }
 
+const emptyMoveResult = (): TimelineMoveResult => ({
+    homes: [],
+    slots: [],
+    convertedTransitionIds: [],
+});
+
+/**
+ * Held marchers' edits (`splitHeldEditsInTransaction`): each sets its ending in the move that
+ * arrives at its hold's start, as a drag at that count would, so the arrival and the whole hold
+ * move together (holds decision 4). Adds what it wrote to `result`.
+ */
+async function moveHeldArrivalsInTransaction(
+    tx: DbTransaction,
+    held: readonly HeldArrivalEdit<TimelineMarcherMove>[],
+    result: TimelineMoveResult,
+): Promise<void> {
+    const byTimeline = new Map<number, TimelineMarcherMove[]>();
+    for (const { move, timelineId } of held)
+        byTimeline.set(timelineId, [
+            ...(byTimeline.get(timelineId) ?? []),
+            move,
+        ]);
+    for (const [timelineId, moves] of byTimeline) {
+        const written = await moveMarchersInTimelineInTransaction({
+            tx,
+            timelineId,
+            moves,
+            skipUnchanged: true,
+        });
+        result.slots.push(...written.slots);
+        result.convertedTransitionIds.push(...written.convertedTransitionIds);
+    }
+}
+
 const wroteSomething = (r: TimelineMoveResult): boolean =>
     r.homes.length > 0 ||
     r.slots.length > 0 ||
@@ -1275,54 +1313,67 @@ export const moveMarchersInTarget = async ({
                 return result;
             }
             if (target.kind === "range" || target.kind === "point") {
+                // A marcher Held at the edited count edits the move arriving at its hold
+                // instead, so the whole hold moves (holds decision 4)
+                const { held, rest } = clearOwn
+                    ? { held: [], rest: [...moves] }
+                    : await splitHeldEditsInTransaction(
+                          tx,
+                          target.kind === "range" ? target.end : target.beat,
+                          moves,
+                      );
                 const result =
-                    target.kind === "range"
-                        ? await moveMarchersInRangeInTransaction({
-                              tx,
-                              range: { start: target.start, end: target.end },
-                              moves,
-                              clearOwn,
-                              keepUnchanged,
-                              ...(target.timelineId === undefined
-                                  ? {}
-                                  : { into: target.timelineId }),
-                          })
-                        : await setPositionsAtBeatInTransaction({
-                              tx,
-                              beat: target.beat,
-                              box: target.box,
-                              moves,
-                              clearOwn,
-                              keepUnchanged,
-                          });
+                    rest.length === 0
+                        ? emptyMoveResult()
+                        : target.kind === "range"
+                          ? await moveMarchersInRangeInTransaction({
+                                tx,
+                                range: { start: target.start, end: target.end },
+                                moves: rest,
+                                clearOwn,
+                                keepUnchanged,
+                                ...(target.timelineId === undefined
+                                    ? {}
+                                    : { into: target.timelineId }),
+                            })
+                          : await setPositionsAtBeatInTransaction({
+                                tx,
+                                beat: target.beat,
+                                box: target.box,
+                                moves: rest,
+                                clearOwn,
+                                keepUnchanged,
+                            });
+                await moveHeldArrivalsInTransaction(tx, held, result);
                 // The selected move, else the one the marchers are in, since a move split off
                 // the page's shares its counts (UI-25)
-                const marcherIds = moves.map((m) => m.marcherId);
-                const timelineId = !afterWrite
-                    ? null
-                    : target.kind === "range"
-                      ? (target.timelineId ??
-                        (await timelineHoldingMost(
-                            tx,
-                            marcherIds,
-                            target.end,
-                            target.start,
-                        )) ??
-                        (await timelineWithRange(tx, target)))
-                      : // Basic edits only moves over the page box (an Expert move is
-                        // refused), so those first, should a file hold others
-                        ((await timelineHoldingMost(
-                            tx,
-                            marcherIds,
-                            target.beat,
-                            target.box.start,
-                        )) ??
-                        (await timelineHoldingMost(
-                            tx,
-                            marcherIds,
-                            target.beat,
-                        )) ??
-                        (await timelineEndingAt(tx, target.beat)));
+                const marcherIds = rest.map((m) => m.marcherId);
+                const timelineId =
+                    !afterWrite || marcherIds.length === 0
+                        ? null
+                        : target.kind === "range"
+                          ? (target.timelineId ??
+                            (await timelineHoldingMost(
+                                tx,
+                                marcherIds,
+                                target.end,
+                                target.start,
+                            )) ??
+                            (await timelineWithRange(tx, target)))
+                          : // Basic edits only moves over the page box (an Expert move is
+                            // refused), so those first, should a file hold others
+                            ((await timelineHoldingMost(
+                                tx,
+                                marcherIds,
+                                target.beat,
+                                target.box.start,
+                            )) ??
+                            (await timelineHoldingMost(
+                                tx,
+                                marcherIds,
+                                target.beat,
+                            )) ??
+                            (await timelineEndingAt(tx, target.beat)));
                 const wroteAppData =
                     afterWrite && timelineId !== null
                         ? (await afterWrite(tx, timelineId)) !== false

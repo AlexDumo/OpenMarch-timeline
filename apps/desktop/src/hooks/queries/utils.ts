@@ -42,13 +42,14 @@ const singleTableNameToQueryKey = (tableName: string): string[][] => {
         // every view that follows its version, picks up their changes from each edit's change
         // batch (P7.13). Mapping them to no keys keeps undo and redo from invalidating keys that
         // never exist. A query added over these tables must add its keys here. The kept markers
-        // aren't in the change log: their views follow the display version (`timelineDisplay.ts`).
+        // and Held marks aren't in the change log: their views follow the display version (`timelineDisplay.ts`).
         case "timelines":
         case "timeline_shapes":
         case "timeline_transitions":
         case "timeline_assignments":
         case "timeline_slot_destinations":
         case "timeline_kept_assignments":
+        case "timeline_held_marks":
             return [];
         // A cue's set members are read with the cue (`useCues.ts`)
         case "cue_marchers":

@@ -2390,7 +2390,9 @@
             "destinationShapeUnsuitable": "That destination doesn't fit the transition. A follow-the-leader transition can't end on a block, and a block needs at least as many places as the transition has slots.",
             "followLeaderBlock": "A follow-the-leader transition can't end on a block. Choose a line, curve, circle or box instead.",
             "followLeaderNeedsShape": "A follow-the-leader transition needs a shape to follow.",
+            "heldHoldsOverlap": "A marcher can't have two Held holds over the same counts.",
             "legacyConvertedTimeline": "This file was converted to timelines by an earlier development build, which put several page moves in one timeline, so it can't be edited. Convert it again: open its backup (the file saved next to it before the conversion).",
+            "moveInHeldHold": "That would put a move inside a Held hold. Drag inside the hold to move the whole hold, or edit a page outside it.",
             "notReady": "The timeline is still loading. Try again in a moment.",
             "numberOutOfRange": "A number is out of range. Beats, layers, slot counts and positions must be whole or finite numbers within the allowed limits.",
             "pathParamsInvalid": "That path setting isn't valid. An arc's bulge can be at most half the distance between its ends, and waypoints must be points on the field.",
@@ -2399,6 +2401,21 @@
             "slotOutOfRange": "That slot doesn't exist. A transition's slots are numbered from 0 up to one less than its slot count.",
             "transitionSpansTimeline": "A transition must span its whole timeline, starting and ending with it. Change the timeline's range instead, and its transitions move with it.",
             "unknown": "The timeline couldn't make that change."
+        },
+        "heldBar": {
+            "detail": "{held} of {total} selected",
+            "title": "Held · Page {page}"
+        },
+        "holdFromPrevious": {
+            "count": "{count} marchers",
+            "crossesFlag": "{names}: a move runs across one of the page's flags",
+            "done": "{names} Held on {page}",
+            "expertMoves": "{names}: Expert moves on this page",
+            "held": "{names}: already Held here",
+            "noArrival": "{names}: no move ends where {page} starts",
+            "none": "Nobody Held on {page}",
+            "notHeld": "Not held:",
+            "shape": "{names}: in a shape on this page"
         },
         "keep": {
             "chain": {
@@ -2502,6 +2519,7 @@
         "rangeMenu": {
             "deleteWithMoves": "Delete page and its moves",
             "followAgain": "Let selected marchers follow again",
+            "holdFromPrevious": "Hold from previous page",
             "keepHere": "Keep selected marchers here"
         },
         "startFlagPositions": {

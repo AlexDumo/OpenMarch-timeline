@@ -75,7 +75,8 @@ export function notifyTimelineBatch(batch: ChangeBatch | undefined): void {
 /** One row of the `timeline_commit_violations` view. */
 export interface TimelineCommitViolation {
     code: string;
-    transitionId: number;
+    /** The transition at fault; null for a Held mark's (`E-H1`, `E-H3`), whose detail says who */
+    transitionId: number | null;
     detail: string;
 }
 
@@ -91,9 +92,10 @@ export class TimelineCommitViolationError extends Error {
         const [first] = violations;
         super(
             violations
-                .map(
-                    (v) =>
-                        `${v.code}: transition ${v.transitionId}: ${v.detail}`,
+                .map((v) =>
+                    v.transitionId === null
+                        ? `${v.code}: ${v.detail}`
+                        : `${v.code}: transition ${v.transitionId}: ${v.detail}`,
                 )
                 .join("; "),
         );
@@ -107,20 +109,42 @@ export class TimelineCommitViolationError extends Error {
 const rowValue = (row: unknown, index: number, key: string): unknown =>
     Array.isArray(row) ? row[index] : (row as Record<string, unknown>)[key];
 
-/** Throws `TimelineCommitViolationError` if `timeline_commit_violations` returns any row. */
+/**
+ * Throws `TimelineCommitViolationError` if `timeline_commit_violations`, or
+ * `timeline_held_violations` once the file has Held marks (a page-era file being converted
+ * doesn't yet), returns any row.
+ */
 export async function assertNoTimelineCommitViolationsInTransaction(
     tx: DbTransaction,
 ): Promise<void> {
     const rows = (await tx.all(
         sql`SELECT code, transition_id, detail FROM timeline_commit_violations`,
     )) as unknown[];
+    const hasMarks =
+        (
+            (await tx.all(
+                sql`SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'timeline_held_marks'`,
+            )) as unknown[]
+        ).length > 0;
+    if (hasMarks)
+        rows.push(
+            ...((await tx.all(
+                sql`SELECT code, transition_id, detail FROM timeline_held_violations`,
+            )) as unknown[]),
+        );
     if (rows.length === 0) return;
     throw new TimelineCommitViolationError(
-        rows.map((row) => ({
-            code: String(rowValue(row, 0, "code")),
-            transitionId: Number(rowValue(row, 1, "transition_id")),
-            detail: String(rowValue(row, 2, "detail")),
-        })),
+        rows.map((row) => {
+            const transitionId = rowValue(row, 1, "transition_id");
+            return {
+                code: String(rowValue(row, 0, "code")),
+                transitionId:
+                    transitionId === null || transitionId === undefined
+                        ? null
+                        : Number(transitionId),
+                detail: String(rowValue(row, 2, "detail")),
+            };
+        }),
     );
 }
 

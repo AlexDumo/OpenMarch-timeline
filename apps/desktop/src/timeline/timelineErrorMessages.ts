@@ -10,8 +10,8 @@ import { toastBasicLock } from "./basicLockToast";
  * error code a timeline write can fail with to a short message a person can act on, so the
  * toasts never show a raw code, a SQLite message or a stack.
  *
- * - The spec's codes (`E-S1`, `E-P1`, `E-T1` to `E-T6`, `E-A1` to `E-A3`) and the app's `E-D2` and
- *   `E-N2` each have a message. The combined codes the database reports when one trigger checks
+ * - The spec's codes (`E-S1`, `E-P1`, `E-T1` to `E-T6`, `E-A1` to `E-A3`), the app's `E-D2` and
+ *   `E-N2`, and the Held marks' `E-H1` and `E-H3` each have a message. The combined codes the database reports when one trigger checks
  *   two invariants (`E-A1/E-A2`, `E-T3/E-T4`) have their own, which name both halves.
  * - `E-ARGS` is a refusal the write path words itself ("slot 3 is already taken"): its own message
  *   is shown, without the code prefix.
@@ -97,6 +97,16 @@ export const TIMELINE_ERROR_MESSAGES: Readonly<
         key: "timeline.errors.assignmentDoesNotFit",
         defaultMessage:
             "That marcher's move doesn't fit the transition: it must stay inside the transition's range, and use a slot the transition has.",
+    },
+    "E-H1": {
+        key: "timeline.errors.moveInHeldHold",
+        defaultMessage:
+            "That would put a move inside a Held hold. Drag inside the hold to move the whole hold, or edit a page outside it.",
+    },
+    "E-H3": {
+        key: "timeline.errors.heldHoldsOverlap",
+        defaultMessage:
+            "A marcher can't have two Held holds over the same counts.",
     },
     "E-A3": {
         key: "timeline.errors.assignmentOverlap",
