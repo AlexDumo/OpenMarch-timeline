@@ -34,13 +34,16 @@ import type { DatabaseTimelineAssignment } from "./timelineAssignments";
 import { setPositionsAtBeatInTransaction } from "./timelinePointMoves";
 import {
     clearHeldMarksOverInTransaction,
+    nameHeldConflict,
     splitHeldEditsInTransaction,
+    type HeldConflict,
     type HeldArrivalEdit,
 } from "./timelineHeldMarks";
 import {
     rowsIn,
     skippedRefusal,
     takeMarchersOutOfRangeInTransaction,
+    type MoveMemberSkip,
 } from "./timelineMoveCuts";
 import { sampleShape } from "./timelineMoveHelpers";
 
@@ -109,6 +112,11 @@ export interface TimelineMoveResult {
      * it (Clear this page)
      */
     cleared?: number[];
+    /**
+     * Clear this page on the first page of a Held hold that runs on: the marchers whose hold on
+     * the later pages went too (its arrival went), and those pages, for the toast
+     */
+    clearedLaterHolds?: HeldConflict;
     /**
      * Clear this page: the shape and follow-the-leader members it left in their move, named in
      * the refusal's message (`skippedRefusal`), for the toast after the rest was written
@@ -754,6 +762,7 @@ export const moveMarchersInRangeInTransaction = async ({
     clearPage = false,
     into,
     keepUnchanged = false,
+    alsoSkipped = [],
 }: {
     tx: DbTransaction;
     range: BeatRange;
@@ -767,6 +776,8 @@ export const moveMarchersInRangeInTransaction = async ({
     keepUnchanged?: boolean;
     /** The selected move over `range` that added marchers join (UI-25) */
     into?: number;
+    /** Marchers the caller left alone, named in `skipped` with this edit's own */
+    alsoSkipped?: readonly MoveMemberSkip[];
 }): Promise<TimelineMoveResult> => {
     const result: TimelineMoveResult = {
         homes: [],
@@ -843,7 +854,7 @@ export const moveMarchersInRangeInTransaction = async ({
     });
     if (out.removed.length > 0) result.cleared = out.removed;
     // Shape and follow-the-leader members keep their move, and the toast names them
-    const skipped = await skippedRefusal(tx, out.skipped);
+    const skipped = await skippedRefusal(tx, [...alsoSkipped, ...out.skipped]);
     if (skipped) result.skipped = skipped;
     // A cut may have taken a timeline over the range out of `timelineOf`'s reach: read it again
     if (out.cuts.length > 0) {
@@ -1242,9 +1253,10 @@ export const moveMarchersInTarget = async ({
             }
             if (target.kind === "range" || target.kind === "point") {
                 // A marcher Held at the edited count edits the move arriving at its hold
-                // instead, so the whole hold moves (holds decision 4)
-                const { held, rest } = clearPage
-                    ? { held: [], rest: [...moves] }
+                // instead, so the whole hold moves (holds decision 4); one whose arrival is a
+                // shape's or follow-the-leader move is skipped and named
+                const { held, skipped, rest } = clearPage
+                    ? { held: [], skipped: [], rest: [...moves] }
                     : await splitHeldEditsInTransaction(
                           tx,
                           target.kind === "range" ? target.end : target.beat,
@@ -1260,6 +1272,7 @@ export const moveMarchersInTarget = async ({
                                 moves: rest,
                                 clearPage,
                                 keepUnchanged,
+                                alsoSkipped: skipped,
                                 ...(target.timelineId === undefined
                                     ? {}
                                     : { into: target.timelineId }),
@@ -1272,6 +1285,14 @@ export const moveMarchersInTarget = async ({
                                 clearPage,
                                 keepUnchanged,
                             });
+                // The range writer names them with its own skips; otherwise they're named here
+                if (
+                    skipped.length > 0 &&
+                    !(target.kind === "range" && rest.length > 0)
+                ) {
+                    const refusal = await skippedRefusal(tx, skipped);
+                    if (refusal) result.skipped = refusal;
+                }
                 // Clear this page clears a Held hold too: the page becomes Not set (#472)
                 if (clearPage) {
                     const clearedHolds = await clearHeldMarksOverInTransaction(
@@ -1279,13 +1300,18 @@ export const moveMarchersInTarget = async ({
                         moves.map((m) => m.marcherId),
                         target.kind === "range" ? target : target.box,
                     );
-                    if (clearedHolds.length > 0)
+                    if (clearedHolds.marchers.length > 0)
                         result.cleared = [
                             ...new Set([
                                 ...(result.cleared ?? []),
-                                ...clearedHolds,
+                                ...clearedHolds.marchers,
                             ]),
                         ].sort((x, y) => x - y);
+                    if (clearedHolds.later.length > 0)
+                        result.clearedLaterHolds = await nameHeldConflict(
+                            tx,
+                            clearedHolds.later,
+                        );
                 }
                 await moveHeldArrivalsInTransaction(tx, held, result, {
                     basic: target.kind === "point",

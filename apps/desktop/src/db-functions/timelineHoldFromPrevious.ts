@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import {
     marcherSimpleOnBox,
@@ -14,6 +14,8 @@ import { readBasicRows } from "./basicRows";
 import { isPageBox } from "./timelineMoves";
 import { clearOwnPageMoves } from "./timelineMoveHelpers";
 import {
+    arrivalSkipReason,
+    marcherRecipeTimelines,
     readArrival,
     readHeldMarks,
     type HeldArrival,
@@ -238,8 +240,9 @@ function skipReason({
     if (inShapeRecipe) return "shape";
     if (arrival === null) return "noArrival";
     if (arrival === "joined") return null;
-    if (arrival.pathStyle === "follow_the_leader") return "arrivalFollowLeader";
-    if (arrival.shapeId !== null || arrival.inRecipe) return "arrivalShape";
+    const arrivalReason = arrivalSkipReason(arrival, arrival.inRecipe);
+    if (arrivalReason === "followTheLeader") return "arrivalFollowLeader";
+    if (arrivalReason === "shape") return "arrivalShape";
     return null;
 }
 
@@ -250,28 +253,4 @@ async function marchersInRecipesOf(
 ): Promise<Set<number>> {
     const byTimeline = await marcherRecipeTimelines(tx, timelineIds);
     return new Set([...byTimeline.values()].flatMap((ids) => [...ids]));
-}
-
-/** For each of `timelineIds` with a placed shape's recipe, the marchers it holds. */
-async function marcherRecipeTimelines(
-    tx: DbTransaction,
-    timelineIds: readonly number[],
-): Promise<Map<number, Set<number>>> {
-    const out = new Map<number, Set<number>>();
-    if (timelineIds.length === 0) return out;
-    const r = schema.timeline_shape_recipes;
-    const m = schema.timeline_shape_recipe_marchers;
-    const rows = await tx
-        .select({ timelineId: r.timeline_id, marcherId: m.marcher_id })
-        .from(m)
-        .innerJoin(r, eq(r.id, m.recipe_id))
-        .where(inArray(r.timeline_id, [...new Set(timelineIds)]))
-        .all();
-    for (const row of rows) {
-        if (row.timelineId === null) continue;
-        const ids = out.get(row.timelineId) ?? new Set<number>();
-        ids.add(row.marcherId);
-        out.set(row.timelineId, ids);
-    }
-    return out;
 }

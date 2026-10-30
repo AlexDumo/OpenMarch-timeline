@@ -1,4 +1,6 @@
-import { afterEach, expect } from "vitest";
+import { afterEach, expect, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { countDistinct, eq as eqId, getTableName, sql } from "drizzle-orm";
 import type { XY } from "@openmarch/core";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
@@ -29,6 +31,9 @@ import { readHeldMarks } from "../timelineHeldMarks";
 import { holdFromPreviousPage } from "../timelineHoldFromPrevious";
 import { setAsShownOnPage } from "../timelineSetAsShown";
 import { unsetMarchersAt } from "../timelineUnset";
+import { setMarchersToNeighborPage } from "@/utilities/setMarchersToNeighborPage";
+import { resizeTimeline } from "../timelineResize";
+import { shiftTimeline } from "../timelineCommands";
 
 keepFixturesInPageMode(
     "its tests trim the show, write timeline rows and set the flag themselves",
@@ -425,6 +430,53 @@ describeDbTests("A drag inside a Held hold", (it) => {
             }
         });
     }
+
+    it("skips, and names, a marcher whose arrival became a placed shape's move since it was held", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a, c } = await show(db);
+        await holdFromPreviousPage({ db, pageBox: PAGE3, marcherIds: [a] });
+        // A later edit puts a shape on page 2: its recipe holds a in the arrival's move
+        const arrival = (await rowsOf(db, a)).find(
+            (r) => r.end_beat === PAGE3.start,
+        )!;
+        const transition = await db
+            .select()
+            .from(schema.timeline_transitions)
+            .where(eqId(schema.timeline_transitions.id, arrival.transition_id))
+            .get();
+        await transactionWithHistory(db, "test", async (tx) => {
+            const [recipe] = await tx
+                .insert(schema.timeline_shape_recipes)
+                .values({
+                    timeline_id: transition!.timeline_id,
+                    kind: "line",
+                    kind_version: 1,
+                    params: "{}",
+                    order_mode: "keep",
+                })
+                .returning();
+            await tx.insert(schema.timeline_shape_recipe_marchers).values({
+                recipe_id: recipe!.id,
+                marcher_id: a,
+                slot: 0,
+                x: UP[0],
+                y: UP[1],
+            });
+        });
+        const aBefore = await atFlags(db, a);
+
+        const result = await move(db, PAGE3, [
+            { marcherId: a, xy: ELSEWHERE },
+            { marcherId: c, xy: FAR },
+        ]);
+        expect(result.skipped?.marcherIds).toEqual([a]);
+        expect(result.skipped?.refusal).toBe("inShapeOrFollowTheLeader");
+        expect(await atFlags(db, a)).toEqual(aBefore);
+        expect(await marksOf(db, a)).toEqual([PAGE3]);
+        expect((await atFlags(db, c))[3]).toEqual(FAR);
+    });
 
     it("edits each marcher by its own kind in a mixed selection", async ({
         db,
@@ -846,6 +898,64 @@ describeDbTests("A Held mark goes when its arrival goes", (it) => {
     });
 });
 
+describeDbTests(
+    "Editing the arrival in time is refused while it has a hold (E-H1, until #473)",
+    (it) => {
+        /** The move (timeline) of `marcherId`'s arrival at page 3's flag. */
+        const arrivalMove = async (db: DbConnection, marcherId: number) => {
+            const arrival = (await rowsOf(db, marcherId)).find(
+                (r) => r.end_beat === PAGE3.start,
+            )!;
+            return (await db
+                .select()
+                .from(schema.timeline_transitions)
+                .where(
+                    eqId(schema.timeline_transitions.id, arrival.transition_id),
+                )
+                .get())!.timeline_id;
+        };
+        for (const [what, run] of [
+            [
+                "a resize into the hold",
+                (db: DbConnection, id: number) =>
+                    resizeTimeline({ db, timelineId: id, start: 9, end: 21 }),
+            ],
+            [
+                "a resize away from it",
+                (db: DbConnection, id: number) =>
+                    resizeTimeline({ db, timelineId: id, start: 9, end: 13 }),
+            ],
+            [
+                "a clip drag into the hold",
+                (db: DbConnection, id: number) =>
+                    shiftTimeline({ db, timelineId: id, delta: 2 }),
+            ],
+            [
+                "a clip drag away from it",
+                (db: DbConnection, id: number) =>
+                    shiftTimeline({ db, timelineId: id, delta: -2 }),
+            ],
+        ] as const)
+            it(`${what} is refused, writing nothing`, async ({
+                db,
+                marchersAndPages: _,
+            }) => {
+                const { a } = await show(db);
+                await holdFromPreviousPage({
+                    db,
+                    pageBox: PAGE3,
+                    marcherIds: [a],
+                });
+                const rows = await snapshot(db);
+                const error = await run(db, await arrivalMove(db, a)).catch(
+                    (e: unknown) => e,
+                );
+                expect(timelineErrorCode(error)).toBe("E-H1");
+                expect(await snapshot(db)).toEqual(rows);
+            });
+    },
+);
+
 describeDbTests("The E-H1 refusal names who and where", (it) => {
     it("names the marcher and the page, and points to Clear this page", async ({
         db,
@@ -872,6 +982,31 @@ describeDbTests("The E-H1 refusal names who and where", (it) => {
         expect(timelineErrorMessage(error, { translate: fill })).toBe(
             `${m.drill_prefix}${m.drill_order} is Held on Page 3. Clear this page to remove the hold, or drag inside it to move it.`,
         );
+    });
+});
+
+describeDbTests("The E-H1 refusal names the page of the conflict", (it) => {
+    it("a hold over pages 3 and 4 and a move over page 4: Page 4", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a } = await show(db);
+        await holdFromPreviousPage({ db, pageBox: PAGE3, marcherIds: [a] });
+        await holdFromPreviousPage({ db, pageBox: PAGE4, marcherIds: [a] });
+        expect(await marksOf(db, a)).toEqual([{ start: 17, end: 33 }]);
+        // Ends past the hold, so it isn't a drag inside it
+        const error = await move(db, { start: 25, end: 37 }, [
+            { marcherId: a, xy: FAR },
+        ]).catch((e: unknown) => e);
+        expect(timelineErrorCode(error)).toBe("E-H1");
+        expect(
+            timelineErrorMessage(error, {
+                translate: (_key, text, params) =>
+                    text.replace(/\{(\w+)\}/g, (_, name: string) =>
+                        String(params?.[name] ?? ""),
+                    ),
+            }),
+        ).toContain("is Held on Page 4.");
     });
 });
 
@@ -987,5 +1122,61 @@ describeDbTests("Clear this page clears a hold", (it) => {
             clearPage: true,
         });
         expect(await marksOf(db, a)).toEqual([PAGE2]);
+    });
+});
+
+/** `key`'s English text from en.json, its plurals and parameters filled in. */
+const english = (key: string, params: Record<string, string | number> = {}) => {
+    const en = JSON.parse(
+        readFileSync(resolve(__dirname, "../../../i18n/en.json"), "utf8"),
+    ) as Record<string, unknown>;
+    const text = key
+        .split(".")
+        .reduce<unknown>(
+            (node, part) => (node as Record<string, unknown>)[part],
+            en,
+        ) as string;
+    const branch = "((?:[^{}]|\\{\\w+\\})*)";
+    return text
+        .replace(
+            new RegExp(
+                `\\{(\\w+), plural, one \\{${branch}\\} other \\{${branch}\\}\\}`,
+                "g",
+            ),
+            (_, name: string, one: string, other: string) =>
+                Number(params[name]) === 1 ? one : other,
+        )
+        .replace(/\{(\w+)\}/g, (_, name: string) => String(params[name]));
+};
+
+describeDbTests("Clear this page on the first page of a joined hold", (it) => {
+    it("clears the later pages too, and the toast says so", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a } = await show(db);
+        await holdFromPreviousPage({ db, pageBox: PAGE3, marcherIds: [a] });
+        await holdFromPreviousPage({ db, pageBox: PAGE4, marcherIds: [a] });
+        const pages = await pagesInOrder(db);
+        const m = (await db.select().from(schema.marchers).all()).find(
+            (r) => r.id === a,
+        )!;
+        const notify = { success: vi.fn(), error: vi.fn() };
+        const count = await setMarchersToNeighborPage({
+            direction: "previous",
+            scope: "selected",
+            selectedPage: pages.find((p) => p.name === "3")!,
+            pages,
+            selectedMarcherIds: [a],
+            writeTimeline: (request) =>
+                moveMarchersInTarget({ db, ...request }),
+            notify,
+            t: english,
+        });
+        expect(count).toBe(1);
+        expect(await marksOf(db, a)).toEqual([]);
+        expect(notify.success).toHaveBeenCalledExactlyOnceWith(
+            `Page 3 is Not set for 1 marcher; ${m.drill_prefix}${m.drill_order}'s hold on Page 4 was cleared too`,
+        );
     });
 });

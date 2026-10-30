@@ -206,12 +206,13 @@ function heldConflictMessage(
                 (key, defaultValue, params) =>
                     translate(key, defaultValue, params),
             ) ?? names.join(", "),
-        pages:
-            held.pages.length === 1
-                ? `Page ${held.pages[0]}`
-                : `Pages ${joinList(held.pages)}`,
+        pages: heldPagesText(held.pages),
     });
 }
+
+/** Held pages by name, as the hold messages say them: "Page 3", "Pages 3 and 4". */
+export const heldPagesText = (pages: readonly string[]): string =>
+    pages.length === 1 ? `Page ${pages[0]}` : `Pages ${joinList(pages)}`;
 
 export const TIMELINE_NOT_READY_MESSAGE: TimelineErrorMessage = {
     key: "timeline.errors.notReady",

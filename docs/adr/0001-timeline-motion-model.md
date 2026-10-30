@@ -411,24 +411,32 @@ holds to the resolver (spec R-6), so the mark is app data:
   an edit of that move's timeline would. The arrival and the whole hold move together; earlier and
   later pages behave as before. In a mixed selection each marcher is edited by its own kind. A
   Basic drag respects Basic's lock: an arrival that isn't simple on the page it ends is refused
-  (`notSimple`), naming the marchers. A shape's after-write step gets the arrival's move when only
+  (`notSimple`), naming the marchers. A marcher whose arrival has since become a shape's move or a
+  follow-the-leader move (a shape placed on its page, say) is left alone and named, as Hold from
+  previous page skips it. A shape's after-write step gets the arrival's move when only
   Held marchers were dragged, and `keepUnchanged` applies to Held marchers too.
 - **Set as shown** (with Only Page N's and Remove keyframe's stays, which share its write) treats a
   Held marcher as decided: it is skipped and reported (`held`), and nothing is written inside the
   hold.
 - **Clear this page clears a hold** on the page for the marchers it clears: the part of their marks
   over the box goes, so the page is Not set. That is the way out of a hold. A part after the box
-  has nothing arriving at its start, so it goes too (below); a part before the box stays.
+  has nothing arriving at its start, so it goes too (below), and the toast says so ("Page 2 is Not
+  set for 1 marcher; T1's hold on Page 3 was cleared too"); a part before the box stays.
 - **`E-H1` names who and where:** "T1 is Held on Page 3. Clear this page to remove the hold, or
-  drag inside it to move it." (`TimelineCommitViolationError.held`).
-- **A mark goes when its arrival goes** (#472): right after each edit's function, in
-  `transactionWithHistory`, every mark that nothing arrives at (by the rule above) is deleted, in
-  the same undo step; never during undo or redo replay. A mark over counts nothing arrives at could
-  never be reached by a drag, and only blocks edits. This is step 4 below, in the small form #472
-  needs while every mark is an arrival hold; #473 grows it into the full upkeep.
+  drag inside it to move it." (`TimelineCommitViolationError.held`). The page is the one where the
+  move first overlaps the hold, or, for an arrival moved away, where the hold starts.
+- **A mark goes when its arrival is deleted** (#472): `transactionWithHistory` reads each mark's
+  arrival row (by the rule above, one SQL fragment the ripple's plan uses too) before the edit's
+  function, and checks the marks right after it, in the same undo step; never during undo or redo
+  replay. A mark something still arrives at stays, whichever row that is (Basic rewrites a page's
+  move as a new row ending at the same flag). A mark nothing arrives at any more is deleted when
+  its arrival row was deleted, or it had none: a mark over counts nothing arrives at could never
+  be reached by a drag, and only blocks edits. When its arrival row is still there but ends
+  somewhere else, the edit is refused with `E-H1` (below). This is steps 2 and 4 below, in the
+  small form #472 needs while every mark is an arrival hold; #473 grows it into the full upkeep.
 - **Upkeep, in `transactionWithHistory`** (fork #473; until it lands, an edit other than a page or
-  beat edit that would run a move into a mark, a clip drag, resize, merge refit or split, is
-  refused at commit with `E-H1`):
+  beat edit that moves an arrival in time, a clip drag, resize or merge refit, into the hold or
+  away from it, is refused with `E-H1`):
   - **When:** the step snapshots, before the edit's function runs, the ids of the rows ending at
     each mark's start. It runs **right after the function**, before the history group is read, so
     its writes belong to the same undo step. It never runs during undo or redo replay (C-6).

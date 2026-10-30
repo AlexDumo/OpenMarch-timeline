@@ -19,6 +19,7 @@
         },
         "batchEdit": {
             "clearThisPageAll": "Clear this page (all marchers)",
+            "clearThisPageHoldsToo": "{count, plural, one {{names}'s hold on {pages} was cleared too} other {{names}'s holds on {pages} were cleared too}}",
             "clearThisPageAllSuccess": "{count, plural, one {Page {currentPage} is Not set for {count} marcher} other {Page {currentPage} is Not set for {count} marchers}}",
             "clearThisPageSelected": "Clear this page (selected)",
             "clearThisPageSelectedSuccess": "{count, plural, one {Page {currentPage} is Not set for {count} marcher} other {Page {currentPage} is Not set for {count} marchers}}",

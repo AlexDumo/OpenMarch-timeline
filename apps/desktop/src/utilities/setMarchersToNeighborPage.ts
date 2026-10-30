@@ -7,8 +7,13 @@ import {
     type PagePositionCopy,
     type TimelineNeighborPageRequest,
 } from "@/timeline/timelineCoordinateWrites";
-import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import {
+    heldPagesText,
+    toastTimelineError,
+} from "@/timeline/timelineErrorMessages";
 import type { TimelineMoveResult } from "@/db-functions/timelineMoves";
+import type { HeldConflict } from "@/db-functions/timelineHeldMarks";
+import { joinList } from "@/timeline/timelineRangeWords";
 
 /**
  * "Set all or selected marchers to the previous or next page", the four batch-edit actions in
@@ -25,7 +30,8 @@ import type { TimelineMoveResult } from "@/db-functions/timelineMoves";
  *   edits before it carry through). A move shared with others, or longer than the page, is cut in
  *   time at the page's flags first (`takeMarchersOutOfRangeInTransaction`). Shape and
  *   follow-the-leader members are left as they are; the write names them, and they aren't
- *   counted.
+ *   counted. On the first page of a Held hold that runs on, the later pages' hold goes too (its
+ *   arrival is gone), and the message says so.
  *
  * The success message shows only once the edit is written; a refused edit writes nothing and the
  * write's own error handler shows why.
@@ -100,13 +106,20 @@ export async function setMarchersToNeighborPage({
         direction === "previous"
             ? getPreviousPage(selectedPage, pages)
             : getNextPage(selectedPage, pages);
-    const succeed = (count: number) => {
+    const succeed = (count: number, laterHolds?: HeldConflict) => {
+        const message = t(messages[scope], {
+            count,
+            currentPage: selectedPage.name,
+            [messages.param]: neighbor!.name,
+        });
         notify.success(
-            t(messages[scope], {
-                count,
-                currentPage: selectedPage.name,
-                [messages.param]: neighbor!.name,
-            }),
+            laterHolds && laterHolds.names.length > 0
+                ? `${message}; ${t("actions.batchEdit.clearThisPageHoldsToo", {
+                      count: laterHolds.names.length,
+                      names: joinList(laterHolds.names),
+                      pages: heldPagesText(laterHolds.pages),
+                  })}`
+                : message,
         );
         return count;
     };
@@ -140,6 +153,7 @@ export async function setMarchersToNeighborPage({
     const clearPage = direction === "previous" && target.kind !== "home";
     const moves = clearPage ? copy.targets : copy.moves;
     let skipped = 0;
+    let laterHolds: HeldConflict | undefined;
     if (moves.length > 0) {
         try {
             const written = await writeTimeline({
@@ -148,6 +162,7 @@ export async function setMarchersToNeighborPage({
                 clearPage,
             });
             skipped = written.skipped?.marcherIds.length ?? 0;
+            laterHolds = written.clearedLaterHolds;
         } catch {
             // Refused or failed: nothing was written, and the write's error handler said why
             return null;
@@ -156,5 +171,5 @@ export async function setMarchersToNeighborPage({
     // Shape and follow-the-leader members Clear this page left alone: the write's warning names
     // them, and the success message counts only the others
     if (count - skipped === 0) return null;
-    return succeed(count - skipped);
+    return succeed(count - skipped, laterHolds);
 }

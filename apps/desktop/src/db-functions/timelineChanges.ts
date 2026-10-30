@@ -3,12 +3,11 @@ import { asc, count, sql } from "drizzle-orm";
 import * as schema from "@om-electron/database/migrations/schema";
 import { assert } from "../utilities/assert";
 import type { DbTransaction } from "./types";
-// A cycle through the ripple and history, safe because nothing here runs at load time
+import { hasHeldMarksTable } from "./timelineHeldArrival";
 import {
-    hasHeldMarksTable,
     heldConflictInTransaction,
     type HeldConflict,
-} from "./timelineHeldMarks";
+} from "./timelineHeldConflict";
 
 /**
  * The timeline change-log listener contract (ADR 0001 §5, spec §6 and §10.2).

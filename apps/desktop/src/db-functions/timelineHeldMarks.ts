@@ -1,8 +1,32 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import * as schema from "@om-electron/database/migrations/schema";
-import type { DbConnection, DbTransaction } from "./types";
-// A cycle (the ripple reads marks from here), safe because neither module uses the other at load
-import { readPageGrid } from "./timelineRipple";
+import type { DbTransaction } from "./types";
+import type { MoveMemberSkip, MoveMemberSkipReason } from "./timelineMoveCuts";
+import {
+    hasHeldMarksTable,
+    isInsideHeldMark,
+    readArrival,
+    readHeldMarks,
+    type HeldArrival,
+    type HeldMark,
+} from "./timelineHeldArrival";
+
+import type { HeldConflictSpot } from "./timelineHeldConflict";
+
+export {
+    heldConflictInTransaction,
+    nameHeldConflict,
+    type HeldConflict,
+    type HeldConflictSpot,
+} from "./timelineHeldConflict";
+export {
+    hasHeldMarksTable,
+    isInsideHeldMark,
+    readArrival,
+    readHeldMarks,
+    type HeldArrival,
+    type HeldMark,
+} from "./timelineHeldArrival";
 
 /**
  * **Held** holds (holds README decisions 2 and 4; ADR 0001 amendment 2026-10-30): a stored mark
@@ -17,51 +41,15 @@ import { readPageGrid } from "./timelineRipple";
  *
  * **Keeping marks true** (ADR 0001 amendment 2026-10-30, part 2). A mark grows out of its
  * **arrival**: the marcher's highest-layer row ending at the mark's start, whose move ends there
- * too (`arrivalTimeline`), which a drag inside the mark edits.
+ * too (`arrivalRowSql`, the one rule), which a drag inside the mark edits.
  *
  * - Page and beat edits move marks with the rows (`planTimelineRipple`).
  * - Every edit, after its own statements and before the commit check, drops the marks whose
- *   arrival is gone (`dropHeldMarksWithoutArrivalInTransaction`, run by `transactionWithHistory`,
- *   never by undo or redo replay, which restore the marks the edit dropped). This is the first
- *   step of the upkeep #473 completes (trim, keep, follow an arrival moved in time, drop).
+ *   arrival row it deleted, and refuses one that left a mark's arrival row ending elsewhere
+ *   (`keepHeldMarksTrueInTransaction`, run by `transactionWithHistory`, never by undo or redo
+ *   replay, which restore the marks the edit dropped). This is the first step of the upkeep #473
+ *   completes (trim, keep, follow an arrival moved in time, drop).
  */
-
-/** One Held mark. */
-export interface HeldMark {
-    readonly id: number;
-    readonly marcherId: number;
-    /** Where the hold starts: the arrival, a count the marcher has a move ending at */
-    readonly start: number;
-    /** Where it ends; the marcher may move again from here */
-    readonly end: number;
-}
-
-const toMark = (row: typeof schema.timeline_held_marks.$inferSelect) => ({
-    id: row.id,
-    marcherId: row.marcher_id,
-    start: row.start_beat,
-    end: row.end_beat,
-});
-
-/** Every Held mark, or only `marcherIds`' ones, by marcher and start. */
-export async function readHeldMarks(
-    db: DbConnection | DbTransaction,
-    marcherIds?: readonly number[],
-): Promise<HeldMark[]> {
-    if (marcherIds && marcherIds.length === 0) return [];
-    const h = schema.timeline_held_marks;
-    const rows = await db
-        .select()
-        .from(h)
-        .where(marcherIds ? inArray(h.marcher_id, [...marcherIds]) : undefined)
-        .orderBy(h.marcher_id, h.start_beat)
-        .all();
-    return rows.map(toMark);
-}
-
-/** Whether the count `beat` is inside `mark` (`start < beat <= end`). */
-export const isInsideHeldMark = (mark: HeldMark, beat: number): boolean =>
-    mark.start < beat && beat <= mark.end;
 
 /** A Held marcher's edit, routed to the move that arrives at its hold's start (decision 4). */
 export interface HeldArrivalEdit<M extends { marcherId: number }> {
@@ -72,12 +60,15 @@ export interface HeldArrivalEdit<M extends { marcherId: number }> {
 }
 
 /**
- * Splits an edit at the count `beat` into the moved marchers that are Held there and the rest.
+ * Splits an edit at the count `beat` into the moved marchers that are Held there, those skipped,
+ * and the rest.
  *
- * A Held marcher's edit is the edit of the move that arrives at its hold's start: the row of the
- * marcher ending there (the highest layer, should there be several), whose timeline ends there
- * too, so setting that move's ending moves the arrival and the whole hold with it. A marcher Held
- * at `beat` with no such move (a borrowed hold, which only #474 makes) stays with the rest.
+ * A Held marcher's edit is the edit of the move that arrives at its hold's start (`readArrival`),
+ * so setting that move's ending moves the arrival and the whole hold with it. A marcher Held at
+ * `beat` with no such move (a borrowed hold, which only #474 makes) stays with the rest. One whose
+ * arrival is a shape's move or a follow-the-leader move, which the edit would rewrite, is left
+ * alone and named in `skipped`, as Hold from previous page skips it (owner's rule, #434 / #436):
+ * a later edit, such as a shape placed on the arrival's page, can make it one.
  */
 export async function splitHeldEditsInTransaction<
     M extends { marcherId: number },
@@ -85,183 +76,107 @@ export async function splitHeldEditsInTransaction<
     tx: DbTransaction,
     beat: number,
     moves: readonly M[],
-): Promise<{ held: HeldArrivalEdit<M>[]; rest: M[] }> {
+): Promise<{
+    held: HeldArrivalEdit<M>[];
+    skipped: MoveMemberSkip[];
+    rest: M[];
+}> {
     const marks = (
         await readHeldMarks(
             tx,
             moves.map((m) => m.marcherId),
         )
     ).filter((mark) => isInsideHeldMark(mark, beat));
-    if (marks.length === 0) return { held: [], rest: [...moves] };
+    if (marks.length === 0) return { held: [], skipped: [], rest: [...moves] };
     const markOf = new Map(marks.map((mark) => [mark.marcherId, mark]));
+    const arrivals = new Map<number, HeldArrival>();
+    for (const mark of marks) {
+        const arrival = await readArrival(tx, mark.marcherId, mark.start);
+        if (arrival) arrivals.set(mark.marcherId, arrival);
+    }
+    const inRecipe = await marcherRecipeTimelines(tx, [
+        ...new Set([...arrivals.values()].map((a) => a.timelineId)),
+    ]);
     const held: HeldArrivalEdit<M>[] = [];
+    const skipped: MoveMemberSkip[] = [];
     const rest: M[] = [];
     for (const move of moves) {
         const mark = markOf.get(move.marcherId);
-        const timelineId = mark
-            ? await arrivalTimeline(tx, mark.marcherId, mark.start)
-            : null;
-        if (mark && timelineId !== null) held.push({ move, mark, timelineId });
-        else rest.push(move);
+        const arrival = arrivals.get(move.marcherId);
+        if (!mark || !arrival) {
+            rest.push(move);
+            continue;
+        }
+        const reason = arrivalSkipReason(
+            arrival,
+            inRecipe.get(arrival.timelineId)?.has(move.marcherId) ?? false,
+        );
+        if (reason)
+            skipped.push({
+                marcherId: move.marcherId,
+                timelineId: arrival.timelineId,
+                reason,
+            });
+        else held.push({ move, mark, timelineId: arrival.timelineId });
     }
-    return { held, rest };
-}
-
-/** The move a mark grows out of (`readArrival`). */
-export interface HeldArrival {
-    readonly timelineId: number;
-    readonly transitionId: number;
-    /** Its transition's destination shape, if any (a shape or follow-the-leader move) */
-    readonly shapeId: number | null;
-    readonly pathStyle: string;
+    return { held, skipped, rest };
 }
 
 /**
- * The move of `marcherId` that arrives at `beat` and ends there, if there is one: the marcher's
- * highest-layer row ending at `beat`, when its move ends there too. A mark starting at `beat`
- * grows out of it, and a drag inside the mark edits it.
+ * Why a drag inside a hold can't edit `arrival`, or null when it can: it is a follow-the-leader
+ * move, or a shape's move (a shape destination, or a placed shape's recipe holds the marcher in
+ * it, `inRecipe`), which the edit would rewrite.
  */
-export async function readArrival(
-    tx: DbConnection | DbTransaction,
-    marcherId: number,
-    beat: number,
-): Promise<HeldArrival | null> {
-    const a = schema.timeline_assignments;
-    const t = schema.timeline_transitions;
-    const row = await tx
-        .select({
-            timelineId: t.timeline_id,
-            transitionId: t.id,
-            transitionEnd: t.end_beat,
-            shapeId: t.dest_shape_id,
-            pathStyle: t.path_style,
-        })
-        .from(a)
-        .innerJoin(t, eq(t.id, a.transition_id))
-        .where(and(eq(a.marcher_id, marcherId), eq(a.end_beat, beat)))
-        .orderBy(desc(a.layer))
-        .get();
-    if (!row || row.transitionEnd !== beat) return null;
-    const { transitionEnd: _, ...arrival } = row;
-    return arrival;
+export function arrivalSkipReason(
+    arrival: HeldArrival,
+    inRecipe: boolean,
+): MoveMemberSkipReason | null {
+    if (arrival.pathStyle === "follow_the_leader") return "followTheLeader";
+    if (arrival.shapeId !== null || inRecipe) return "shape";
+    return null;
 }
 
-/** The timeline of `marcherId`'s arrival at `beat` (`readArrival`), if there is one. */
-export async function arrivalTimeline(
-    tx: DbConnection | DbTransaction,
-    marcherId: number,
-    beat: number,
-): Promise<number | null> {
-    return (await readArrival(tx, marcherId, beat))?.timelineId ?? null;
-}
-
-/** Whether the file has the Held marks table (a page-era file being converted doesn't yet). */
-export async function hasHeldMarksTable(
-    db: DbConnection | DbTransaction,
-): Promise<boolean> {
-    const rows = (await db.all(
-        sql`SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'timeline_held_marks'`,
-    )) as unknown[];
-    return rows.length > 0;
-}
-
-/**
- * Deletes every mark whose arrival is gone: no row of its marcher arrives at its start by the rule
- * of `arrivalTimeline` (the move that ended there was removed, or replaced by one ending
- * elsewhere). A mark over counts nothing arrives at could never be reached by a drag, and only
- * blocks edits (holds decision 17). Runs after each edit's statements (`transactionWithHistory`),
- * never during undo or redo replay.
- */
-export async function dropHeldMarksWithoutArrivalInTransaction(
+/** For each of `timelineIds` with a placed shape's recipe, the marchers it holds. */
+export async function marcherRecipeTimelines(
     tx: DbTransaction,
-): Promise<void> {
-    if (!(await hasHeldMarksTable(tx))) return;
-    await tx.run(sql`
-        DELETE FROM timeline_held_marks
-         WHERE id IN (
-            SELECT h.id FROM timeline_held_marks h
-             WHERE NOT EXISTS (
-                SELECT 1 FROM timeline_assignments a
-                  JOIN timeline_transitions t ON t.id = a.transition_id
-                 WHERE a.marcher_id = h.marcher_id
-                   AND a.end_beat = h.start_beat
-                   AND t.end_beat = h.start_beat
-                   AND a.layer = (
-                        SELECT MAX(b.layer) FROM timeline_assignments b
-                         WHERE b.marcher_id = h.marcher_id AND b.end_beat = h.start_beat
-                   )
-             )
-         )`);
-}
-
-/** Who an E-H1 refusal is about: the marchers with a move inside their mark, and its pages. */
-export interface HeldConflict {
-    /** Drill numbers ("T1"), by drill order */
-    readonly names: string[];
-    /** The names of the pages those marks start on, in show order */
-    readonly pages: string[];
-}
-
-/**
- * The marchers that have a move inside one of their marks (the E-H1 rows of
- * `timeline_held_violations`), named for the refusal's message.
- */
-export async function heldConflictInTransaction(
-    tx: DbTransaction,
-): Promise<HeldConflict> {
-    const h = schema.timeline_held_marks;
-    const a = schema.timeline_assignments;
-    const m = schema.marchers;
+    timelineIds: readonly number[],
+): Promise<Map<number, Set<number>>> {
+    const out = new Map<number, Set<number>>();
+    if (timelineIds.length === 0) return out;
+    const r = schema.timeline_shape_recipes;
+    const m = schema.timeline_shape_recipe_marchers;
     const rows = await tx
-        .selectDistinct({
-            marcherId: h.marcher_id,
-            start: h.start_beat,
-            prefix: m.drill_prefix,
-            order: m.drill_order,
-        })
-        .from(h)
-        .innerJoin(a, eq(a.marcher_id, h.marcher_id))
-        .innerJoin(m, eq(m.id, h.marcher_id))
-        .where(
-            and(
-                sql`${a.start_beat} < ${h.end_beat}`,
-                sql`${h.start_beat} < ${a.end_beat}`,
-            ),
-        )
+        .select({ timelineId: r.timeline_id, marcherId: m.marcher_id })
+        .from(m)
+        .innerJoin(r, eq(r.id, m.recipe_id))
+        .where(inArray(r.timeline_id, [...new Set(timelineIds)]))
         .all();
-    const grid = await readPageGrid(tx);
-    const pageOf = (beat: number) =>
-        grid.pages.find((p) => p.id !== 0 && p.start <= beat && beat < p.end);
-    const names = [
-        ...new Map(
-            [...rows]
-                .sort(
-                    (x, y) =>
-                        x.prefix.localeCompare(y.prefix) || x.order - y.order,
-                )
-                .map((r) => [r.marcherId, `${r.prefix}${r.order}`]),
-        ).values(),
-    ];
-    const pages = grid.pages
-        .filter((p) => rows.some((r) => pageOf(r.start) === p))
-        .flatMap((p) => (p.name === undefined ? [] : [p.name]));
-    return { names, pages };
+    for (const row of rows) {
+        if (row.timelineId === null) continue;
+        const ids = out.get(row.timelineId) ?? new Set<number>();
+        ids.add(row.marcherId);
+        out.set(row.timelineId, ids);
+    }
+    return out;
 }
 
 /**
  * **Clear this page** for Held marchers (#472): the part of each of `marcherIds`' marks over `box`
  * goes, so the page is Not set for them. A part before the box stays (its arrival is unchanged); a
- * part after it would have nothing arriving at its start, so it goes too (the drop after the
- * edit, `dropHeldMarksWithoutArrivalInTransaction`, would delete it anyway).
+ * part after it would have nothing arriving at its start, so it goes too (dropped when its
+ * arrival is gone, `keepHeldMarksTrueInTransaction`), and is reported in `later` so the toast
+ * can say so.
  *
- * @returns the marchers whose marks changed, ascending
+ * @returns `marchers`, those whose marks changed, ascending, and `later`, the marchers whose
+ *   hold on later pages went too, each at the box's end
  */
 export async function clearHeldMarksOverInTransaction(
     tx: DbTransaction,
     marcherIds: readonly number[],
     box: { start: number; end: number },
-): Promise<number[]> {
-    if (marcherIds.length === 0 || !(await hasHeldMarksTable(tx))) return [];
+): Promise<{ marchers: number[]; later: HeldConflictSpot[] }> {
+    if (marcherIds.length === 0 || !(await hasHeldMarksTable(tx)))
+        return { marchers: [], later: [] };
     const h = schema.timeline_held_marks;
     const over = (await readHeldMarks(tx, marcherIds)).filter(
         (m) => m.start < box.end && box.start < m.end,
@@ -274,5 +189,12 @@ export async function clearHeldMarksOverInTransaction(
                 .where(eq(h.id, mark.id));
         else await tx.delete(h).where(eq(h.id, mark.id));
     }
-    return [...new Set(over.map((m) => m.marcherId))].sort((x, y) => x - y);
+    return {
+        marchers: [...new Set(over.map((m) => m.marcherId))].sort(
+            (x, y) => x - y,
+        ),
+        later: over
+            .filter((m) => m.end > box.end)
+            .map((m) => ({ marcherId: m.marcherId, beat: box.end })),
+    };
 }
