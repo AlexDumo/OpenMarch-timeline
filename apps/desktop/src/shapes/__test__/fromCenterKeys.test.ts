@@ -10,7 +10,6 @@ import { boxHandlePoint, drawBox, type BoxParams } from "../box/boxGeometry";
 import { boxTool } from "../box/boxTool";
 import { setShapeField } from "../field/shapeField";
 import { shapeContextFor } from "../field/shapeFieldContext";
-import * as commit from "../placed/commitBox";
 import { LiveBoxMode } from "../placed/liveBoxMode";
 import type { PlacedBox } from "../placed/placedBox";
 import { shapeToolMode } from "../tool/shapeToolMode";
@@ -191,11 +190,8 @@ function placed(): PlacedBox<BoxParams> {
     };
 }
 
+// Each case cancels before letting go, so nothing is saved: the drawn outline is the result
 describe("a placed box's handles with Alt", () => {
-    beforeEach(() => {
-        vi.spyOn(commit, "commitBox").mockResolvedValue(undefined);
-    });
-
     it.each(["e", "se"] as const)(
         "the %s handle resizes about the center, held or pressed mid-drag, and #439 without it",
         (at) => {

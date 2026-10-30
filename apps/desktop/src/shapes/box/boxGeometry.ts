@@ -627,11 +627,15 @@ function sizedBox(
 
 /**
  * A box from its file count and intervals, its edge marchers reaching from `anchor` toward
- * `sign`, filled in `distribution` (Files, Short back when absent)
+ * `grow` on each axis, or centered on it where `grow` is 0 (`fromCenter`), filled in
+ * `distribution` (Files, Short back when absent). Its marchers go on the half-step grid, except
+ * on `held` axes (by default those whose marchers aren't half steps apart, pulled onto a line or
+ * fine), which stay as built. Centered, an even count with an odd number of half steps between
+ * puts them between grid spots, so the box goes a quarter step off `anchor`, toward `tie`.
  */
 function boxFrom(
     anchor: XY,
-    sign: XY,
+    grow: XY,
     files: number,
     across: number,
     deep: number,
@@ -639,36 +643,18 @@ function boxFrom(
     env: ToolEnv,
     distribution?: Distribution,
     held?: HeldAxes,
+    tie?: XY,
 ): BoxParams {
     const sized = sizedBox(files, across, deep, distribution);
     const span = spanOf(sized, n);
     const box: BoxParams = {
         ...sized,
         center: {
-            x: anchor.x + (sign.x * (span.files - 1) * across) / 2,
-            y: anchor.y + (sign.y * (span.ranks - 1) * deep) / 2,
+            x: anchor.x + (grow.x * (span.files - 1) * across) / 2,
+            y: anchor.y + (grow.y * (span.ranks - 1) * deep) / 2,
         },
     };
-    return snapToGrid(box, n, env, undefined, held);
-}
-
-/**
- * A box from its file count and intervals centered on `center` (`fromCenter`), filled in
- * `distribution`. Its marchers go on the half-step grid: with an even count and an odd number of
- * half steps between them, that moves it a quarter step off `center`. An interval off the half
- * steps (pulled onto a line, or fine) stays centered.
- */
-function boxAbout(
-    center: XY,
-    files: number,
-    across: number,
-    deep: number,
-    n: number,
-    env: ToolEnv,
-    distribution?: Distribution,
-): BoxParams {
-    const box = { ...sizedBox(files, across, deep, distribution), center };
-    return snapToGrid(box, n, env, undefined, offHalfSteps(box, n, env));
+    return snapToGrid(box, n, env, tie, held ?? offHalfSteps(box, n, env));
 }
 
 const signOf = (v: number) => (v < 0 ? -1 : 1);
@@ -812,19 +798,11 @@ export function drawBox(
     let across = a ?? d ?? snapInterval(Math.max(width, depth), env);
     let deep = d ?? across;
     if (env.constrain) ({ across, deep } = equalized(across, deep, env));
-    if (env.fromCenter)
-        return boxAbout(
-            corner,
-            drawn.distribution.layout.files,
-            across,
-            deep,
-            n,
-            env,
-            drawn.distribution,
-        );
     return boxFrom(
         corner,
-        { x: signOf(to.x - from.x), y: signOf(to.y - from.y) },
+        env.fromCenter
+            ? { x: 0, y: 0 }
+            : { x: signOf(to.x - from.x), y: signOf(to.y - from.y) },
         drawn.distribution.layout.files,
         across,
         deep,
@@ -833,7 +811,10 @@ export function drawBox(
         drawn.distribution,
         // The pressed corner is on the grid already; with a pulled interval, snapping the
         // back-left corner instead would shift the box off the line (#423)
-        { x: true, y: true },
+        env.fromCenter ? undefined : { x: true, y: true },
+        // From the center, a box between grid spots goes toward the pointer, so a drag one way
+        // and the other draw mirror images
+        { x: Math.sign(to.x - from.x), y: Math.sign(to.y - from.y) },
     );
 }
 
@@ -973,7 +954,24 @@ export function stretchBox(
                 y: (fixed && movesY) || off.y,
             };
         },
+        env.fromCenter ? backToGrid(base, env) : undefined,
     );
+}
+
+/**
+ * Which way a resize about the center moves a box whose marchers land exactly between two grid
+ * spots: with its center a quarter step off the grid already, back to the grid spot the field's
+ * rounding doesn't take it to, so each such center pairs with one spot and resizing again and
+ * again doesn't walk the box away; with its center on the grid, the field's rounding (0)
+ */
+function backToGrid(p: BoxParams, env: ToolEnv): XY {
+    const snapped = env.gridSnap(p.center);
+    const axis = (d: number) =>
+        Math.abs(Math.abs(d) - halfStep(env) / 2) < 1e-6 ? Math.sign(d) : 0;
+    return {
+        x: axis(p.center.x - snapped.x),
+        y: axis(p.center.y - snapped.y),
+    };
 }
 
 /**
@@ -993,6 +991,8 @@ function inBoxAxes(
     ) => BoxParams,
     /** The box's own axes on which `change` holds a marcher where it was, not to be snapped */
     held?: (out: BoxParams) => HeldAxes,
+    /** Which way the result goes on the field's axes when its marchers are between grid spots */
+    tie?: XY,
 ): BoxParams {
     const frame = boxFrame(base, n);
     const flat: BoxParams = {
@@ -1017,7 +1017,7 @@ function inBoxAxes(
         placed,
         n,
         env,
-        undefined,
+        tie,
         held && toFieldAxes(placed, n, held(out)),
     );
 }

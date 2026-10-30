@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boxShape } from "../box/boxShape";
+import { boxShape } from "../boxShape";
 import {
     boxHandlePoint,
     drawBox,
@@ -8,13 +8,13 @@ import {
     ranksOf,
     type BoxHandleKey,
     type BoxParams,
-} from "../box/boxGeometry";
-import { boxTool } from "../box/boxTool";
-import { circleTool } from "../circle/circleTool";
-import { withMode } from "../distribute/modes";
-import type { DistributionMode } from "../distribute/distribution";
-import type { ToolEnv } from "../tool/toolKind";
-import type { ShapeContext, XY } from "../types";
+} from "../boxGeometry";
+import { boxTool } from "../boxTool";
+import { withMode } from "../../distribute/modes";
+import { frameToField } from "../../frame/frame";
+import type { DistributionMode } from "../../distribute/distribution";
+import type { ToolEnv } from "../../tool/toolKind";
+import type { ShapeContext, XY } from "../../types";
 
 /**
  * Alt = from center (version A, docs/timeline/research/shapes/modifier-roles.md, section 2): a box
@@ -129,6 +129,31 @@ describe("drawing a box from its center", () => {
                 expect(Math.abs(c.x - 100)).toBeLessThanOrEqual(half / 2);
                 expect(Math.abs(c.y - 100)).toBeLessThanOrEqual(half / 2);
             }
+    });
+
+    it("draws mirror images on the four diagonals, the quarter step going toward the pointer", () => {
+        // 2 × 2, 1½ steps apart: centered on the press, the marchers would be between grid spots
+        const drawn = (dx: number, dy: number) =>
+            footprintOf(
+                drawBox(
+                    { x: 100, y: 100 },
+                    { x: 100 + dx, y: 100 + dy },
+                    4,
+                    env({ fromCenter: true }),
+                )!,
+                4,
+            );
+        const toward = (sign: number) => (sign > 0 ? [95, 110] : [90, 105]);
+        for (const [sx, sy] of [
+            [1, 1],
+            [-1, -1],
+            [1, -1],
+            [-1, 1],
+        ] as const) {
+            const f = drawn(7.5 * sx, 7.5 * sy);
+            expect([f.left, f.right]).toEqual(toward(sx));
+            expect([f.top, f.bottom]).toEqual(toward(sy));
+        }
     });
 
     it("is too short when the box it would draw, both ways from the press, is under half a step", () => {
@@ -322,27 +347,38 @@ describe("resizing a box from its center", () => {
     });
 });
 
-describe("a circle", () => {
-    it("draws and resizes the same with or without it: it's drawn from its center already", () => {
-        const from = { x: 100, y: 100 };
-        const to = { x: 137, y: 121 };
-        const plain = circleTool.draw(from, to, 12, env());
-        expect(plain).toBeDefined();
-        expect(
-            circleTool.draw(from, to, 12, env({ fromCenter: true })),
-        ).toEqual(plain);
-        const [handle] = circleTool.handles(plain, 12);
-        const at = { x: handle!.at.x + 13, y: handle!.at.y + 4 };
-        expect(
-            circleTool.dragHandle(
-                plain,
-                12,
-                handle!.key,
-                at,
-                env({ fromCenter: true }),
-            ),
-        ).toEqual(circleTool.dragHandle(plain, 12, handle!.key, at, env()));
-    });
+describe("resizing from the center again and again", () => {
+    /** `box`'s se handle dragged to where its spacings become `spacing` both ways, from the center */
+    const resized = (box: BoxParams, n: number, spacing: number) =>
+        boxTool.dragHandle(
+            box,
+            n,
+            "se",
+            frameToField(boxTool.frameOf(box, n), {
+                x: spacing / 2,
+                y: spacing / 2,
+            }),
+            env({ fromCenter: true }),
+        );
+
+    it.each([
+        ["square to the field", 0],
+        ["turned a quarter", Math.PI / 2],
+    ])(
+        "doesn't walk a 2 × 2 box %s off its center: an even number of resizes puts it back",
+        (_, rotation) => {
+            // 2 × 2, 20 apart: 90 to 110 each way
+            let box: BoxParams = { ...square, files: 2, rotation };
+            for (let i = 1; i <= 6; i++) {
+                // 1½ steps apart puts the marchers between grid spots, a quarter step either way
+                box = resized(box, 4, i % 2 === 1 ? 15 : 20);
+                const f = footprintOf(box, 4);
+                expect(onGrid({ x: f.left, y: f.top })).toBe(true);
+                if (i % 2 === 0)
+                    expect(centerOf(box, 4)).toEqual({ x: 100, y: 100 });
+            }
+        },
+    );
 });
 
 describe("from the center, with the other roles", () => {
