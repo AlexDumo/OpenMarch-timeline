@@ -313,7 +313,10 @@ export async function moveMarchersAndOfferFollowUp({
      * (`moveMarchersInTarget`'s `keepUnchanged`)
      */
     setUnmovedFrom?: ReadonlyMap<number, { x: number; y: number }>;
-    /** With `setUnmovedFrom`, write the stays even when nobody moves */
+    /**
+     * With `setUnmovedFrom`, write the stays even when nobody moves, unless Basic leaves some of
+     * them out (a copy of a shape without them would drop them from it)
+     */
     setAll?: boolean;
     /** App data written in the same edit (`moveMarchersInTarget`) */
     afterWrite?: (
@@ -338,7 +341,7 @@ export async function moveMarchersAndOfferFollowUp({
     const moves = editable.moves;
     const keepUnchanged =
         setUnmovedFrom !== undefined &&
-        (setAll ||
+        ((setAll && editable.locked.length === 0) ||
             moves.some((m) => {
                 const c = setUnmovedFrom.get(m.marcherId);
                 return !c || !samePosition([c.x, c.y], [m.x, m.y]);

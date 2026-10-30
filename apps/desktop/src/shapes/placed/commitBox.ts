@@ -2,10 +2,45 @@ import tolgee from "@/global/singletons/Tolgee";
 import type { QueryClient } from "@tanstack/react-query";
 import type { XY } from "../types";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
-import { planCanvasEdit } from "@/timeline/timelineCoordinateWrites";
+import {
+    planCanvasEdit,
+    type CanvasEditPlan,
+} from "@/timeline/timelineCoordinateWrites";
 import { writePlacement } from "../tool/shapePlacement";
 import { liveTargets } from "./liveBox";
 import type { PlacedBox } from "./placedBox";
+
+/** Whether two recipe params say the same, whatever their key order (keys set to undefined are left out) */
+export function sameParams(a: unknown, b: unknown): boolean {
+    if (a === b) return true;
+    if (typeof a !== "object" || typeof b !== "object" || !a || !b)
+        return false;
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+    const entries = (o: object) =>
+        Object.entries(o).filter(([, v]) => v !== undefined);
+    const ea = entries(a);
+    const eb = new Map(entries(b));
+    return (
+        ea.length === eb.size &&
+        ea.every(([k, v]) => eb.has(k) && sameParams(v, eb.get(k)))
+    );
+}
+
+/**
+ * Whether `plan` edits only a page `box` is carried onto: its whole window is past the box's own
+ * move. A window reaching back over that move (Expert's start flag left on an earlier page) isn't
+ */
+export function carriedOnto(plan: CanvasEditPlan, box: PlacedBox): boolean {
+    if (!plan.ok) return false;
+    const { target } = plan;
+    const start =
+        target.kind === "range"
+            ? target.start
+            : target.kind === "point"
+              ? target.box.start
+              : plan.beat;
+    return plan.beat > box.endBeat + 1e-9 && start >= box.endBeat - 1e-9;
+}
 
 /**
  * Saves a selected placed shape drawn with `params` through `writePlacement`: its members move to
@@ -30,19 +65,22 @@ export async function commitBox(
         layOutAgain,
         origins,
     );
-    const plan = planCanvasEdit();
+    const next = { ...(params as object), spots };
     await writePlacement(
         {
             recipe: {
                 ...box.recipe,
-                params: { ...(params as object), spots },
+                params: next,
                 // Drill order is gone (#429); the column stays for older files
                 orderMode: "nearest",
             },
             members: targets,
             replaces: box.recipe,
-            // Carried onto a later page: this page gets its own copy, even of a pivot change
-            setAll: plan.ok && plan.beat > box.endBeat + 1e-9,
+            // Changed on a later page it's carried onto: that page gets its own copy, even when
+            // nobody moves (a pivot change), and the earlier page keeps its own
+            setAll:
+                carriedOnto(planCanvasEdit(), box) &&
+                !sameParams(next, box.recipe.params),
         },
         queryClient,
         tolgee.t("shapes.placed.editError", "Error editing the shape"),

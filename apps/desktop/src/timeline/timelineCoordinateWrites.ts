@@ -292,10 +292,10 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     /**
      * When the edit moves anyone, write the marchers it leaves where they are too, as stays, so
      * every one is in the move: a shape's members, the one at its pivot included. An edit that
-     * moves nobody still writes nothing for them.
+     * moves nobody still writes nothing for them, unless `setAll`.
      */
     setUnmoved?: boolean;
-    /** With `setUnmoved`, write them even when the edit moves nobody */
+    /** With `setUnmoved`, write them even when the edit moves nobody (`moveMarchersAndOfferFollowUp`) */
     setAll?: boolean;
 }): Promise<R[]> {
     if (!plan.ok) throw plan.error;

@@ -34,8 +34,9 @@ export interface ShapePlacement {
         readonly timelineId: number | null;
     };
     /**
-     * Set every member even when nobody moves: a shape carried onto a later page gets that page's
-     * own copy for a change that moves no one (its pivot), and the earlier page keeps its own
+     * Set every member even when nobody moves. The caller decides when: a shape changed on a later
+     * page it's only carried onto (`commitBox`), so that page gets its own copy for a change that
+     * moves no one (its pivot), and the earlier page keeps its own
      */
     readonly setAll?: boolean;
 }
