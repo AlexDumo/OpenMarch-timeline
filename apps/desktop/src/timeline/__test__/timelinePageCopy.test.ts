@@ -557,7 +557,7 @@ describeDbTests("set marchers to the previous or next page", (it) => {
         });
 
         expect(result).toBe(1);
-        expect(writeTimeline.mock.calls[0]![0].clearOwn).toBe(true);
+        expect(writeTimeline.mock.calls[0]![0].clearPage).toBe(true);
         for (let beat = box.start; beat <= box.end; beat++)
             expect(positionAt(1, beat), `beat ${beat}`).toEqual(held);
     });
@@ -832,7 +832,16 @@ describeDbTests("Clear this page on a converted show (holds 4, #469)", (it) => {
         });
 
         expect(result).toBe(1);
-        expect(notify.success).toHaveBeenCalledTimes(1);
+        // Counts only the marcher it cleared; the write's warning names the one it skipped
+        expect(notify.success.mock.calls).toEqual([
+            [
+                t("actions.batchEdit.clearThisPageSelectedSuccess", {
+                    count: 1,
+                    currentPage: page.name,
+                    previousPage: pages[2]!.name,
+                }),
+            ],
+        ]);
         const written = (await writeTimeline.mock.results[0]!
             .value) as TimelineMoveResult;
         expect(written.cleared).toEqual([other]);

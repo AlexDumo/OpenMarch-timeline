@@ -752,6 +752,57 @@ describeDbTests(
             expect(at(1, page2.end)).toEqual(target);
             expect(at(1, page2.start + 3)).toEqual(midPage2);
         });
+
+        it("Clear this page cutting a window move whose rest lands on a later page with its own move leaves that page's move the page's (Expert)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page2 = box(pages[2]!);
+            const page3 = box(pages[3]!);
+            // "Move 1": A and B in a window from page 2's start to page 3's end
+            await move(db, { start: page2.start, end: page3.end }, [
+                { marcherId: 1, x: 300, y: 100 },
+                { marcherId: 2, x: 350, y: 100 },
+            ]);
+            const window = (await db.select().from(schema.timelines).all())[0]!;
+            // Page 3's own move: C dragged there
+            await move(db, page3, [{ marcherId: 3, x: 200, y: 300 }]);
+            const page3Move = (await db.select().from(schema.timelines).all())
+                .filter(
+                    (l) =>
+                        l.start_beat === page3.start &&
+                        l.end_beat === page3.end,
+                )
+                .sort((x, y) => x.id - y.id)[0]!;
+            const beforeAt = [1, 2, 3].map((id) => at(id, page3.end));
+
+            await run(db, pages, pages[2]!, "previous", [1]);
+
+            const overPage3 = (await db.select().from(schema.timelines).all())
+                .filter(
+                    (l) =>
+                        l.start_beat === page3.start &&
+                        l.end_beat === page3.end,
+                )
+                .sort((x, y) => x.id - y.id);
+            // The page's own move (the oldest over its box) is still C's
+            expect(overPage3[0]!.id).toBe(page3Move.id);
+            expect(overPage3).toHaveLength(2);
+            // The window move's original id (and name) stays with its part over page 2
+            const kept = (await db
+                .select()
+                .from(schema.timelines)
+                .where(eq(schema.timelines.id, window.id))
+                .get())!;
+            expect([kept.start_beat, kept.end_beat]).toEqual([
+                page2.start,
+                page2.end,
+            ]);
+            expect(kept.name).toBe(window.name);
+            expect(await rowsOf(db, 1)).toEqual([[page3.start, page3.end, 0]]);
+            expect([1, 2, 3].map((id) => at(id, page3.end))).toEqual(beforeAt);
+        });
     },
 );
 

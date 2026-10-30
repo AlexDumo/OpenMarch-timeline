@@ -8,12 +8,18 @@ import { readTimelineTables } from "@/timeline/timelineRows";
 import { loadTimelineFixture } from "@/timeline/fixtures/loadTimelineFixture";
 import { GOLDEN_FIXTURES } from "@/timeline/fixtures/goldenFixtures";
 import { performUndo, transactionWithHistory } from "../history";
-import { createTimelinesInTransaction } from "../timelines";
+import {
+    createTimelinesInTransaction,
+    deleteTimelinesInTransaction,
+    timelinesWithRange,
+} from "../timelines";
 import { createTimelineTransitionsInTransaction } from "../timelineTransitionsInTransaction";
 import { createTimelineAssignmentsInTransaction } from "../timelineAssignments";
 import { saveShapeRecipeInTransaction } from "../shapeRecipes";
+import { moveMarchersInRangeInTransaction } from "../timelineMoves";
 import {
     cutMoveAtBeatInTransaction,
+    planRemovalFromRange,
     removeMarchersFromMoveForRangeInTransaction,
     skippedRefusal,
     takeMarchersOutOfRangeInTransaction,
@@ -153,6 +159,58 @@ const longSharedMove = async (db: DbConnection, marcherIds: number[]) =>
         return t!;
     });
 
+/** Deletes every timeline row, so marchers hold on their homes and no page has a move. */
+const clearTimelines = (db: DbConnection) =>
+    transactionWithHistory(db, "clear", async (tx) => {
+        const ids = (
+            await tx.select({ id: schema.timelines.id }).from(schema.timelines)
+        ).map((r) => r.id);
+        await deleteTimelinesInTransaction({ tx, timelineIds: new Set(ids) });
+    });
+
+/** A move over `range` named `name`, one transition taking `marcherIds` to spots of their own. */
+const moveOver = async (
+    db: DbConnection,
+    range: BeatRange,
+    marcherIds: number[],
+    name: string | null,
+) =>
+    transactionWithHistory(db, "move", async (tx) => {
+        const [t] = await createTimelinesInTransaction({
+            tx,
+            newTimelines: [
+                { name, startBeat: range.start, endBeat: range.end },
+            ],
+        });
+        const [made] = await createTimelineTransitionsInTransaction({
+            tx,
+            newTransitions: [
+                {
+                    timelineId: t!.id,
+                    slotCount: marcherIds.length,
+                    destination: {
+                        kind: "individual",
+                        points: marcherIds.map(
+                            (_, i) => [100 + 30 * i, 80 + range.end] as XY,
+                        ),
+                    },
+                },
+            ],
+        });
+        await createTimelineAssignmentsInTransaction({
+            tx,
+            newAssignments: marcherIds.map((marcherId, i) => ({
+                marcherId,
+                transitionId: made!.id,
+                slotIndex: i,
+                startBeat: range.start,
+                endBeat: range.end,
+                layer: 0,
+            })),
+        });
+        return t!;
+    });
+
 const golden = (name: string) =>
     GOLDEN_FIXTURES.find((g) => g.name === name)!.build();
 
@@ -222,7 +280,166 @@ describeDbTests("cut a move in time at a count", (it) => {
     });
 });
 
+describeDbTests("cut: which part keeps the move's id", (it) => {
+    it("the part after would take over a newer page move: the part before keeps the id and name; the transitions after and the shape recipe go with the part after", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        await clearTimelines(db);
+        const [a, b, c] = (await resolverOf(db)).marcherIds();
+        const long = await moveOver(
+            db,
+            { start: 9, end: 25 },
+            [a!, b!],
+            "Long",
+        );
+        await db.transaction((tx) =>
+            saveShapeRecipeInTransaction({
+                tx,
+                timelineId: long.id,
+                recipe: {
+                    kind: "line",
+                    kindVersion: 1,
+                    params: {},
+                    orderMode: "slot",
+                    reverse: false,
+                },
+                members: [{ marcherId: a!, slot: 0, x: 100, y: 105 }],
+            }),
+        );
+        const page3 = await moveOver(db, { start: 17, end: 25 }, [c!], null);
+        const before = track(await resolverOf(db), [a!, b!, c!], 25);
+
+        const cut = (await transactionWithHistory(db, "cut", (tx) =>
+            cutMoveAtBeatInTransaction({ tx, timelineId: long.id, beat: 17 }),
+        ))!;
+
+        expect(cut.before.id).toBe(long.id);
+        expect(cut.before.name).toBe("Long");
+        expect([cut.before.start_beat, cut.before.end_beat]).toEqual([9, 17]);
+        expect(cut.after.id).toBeGreaterThan(page3.id);
+        expect(cut.after.name).toMatch(/^Move \d+$/);
+        expect([cut.after.start_beat, cut.after.end_beat]).toEqual([17, 25]);
+        const overPage3 = await db.transaction((tx) =>
+            timelinesWithRange(tx, { start: 17, end: 25 }),
+        );
+        expect(overPage3.map((l) => l.id)).toEqual([page3.id, cut.after.id]);
+        const recipes = await db
+            .select()
+            .from(schema.timeline_shape_recipes)
+            .all();
+        expect(recipes.map((r) => r.timeline_id)).toEqual([cut.after.id]);
+        expectClose(before, track(await resolverOf(db), [a!, b!, c!], 25));
+    });
+
+    it("both parts would take over a newer page move: neither keeps the id, and the original goes", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        await clearTimelines(db);
+        const [a, b, c, d] = (await resolverOf(db)).marcherIds();
+        const long = await moveOver(
+            db,
+            { start: 9, end: 25 },
+            [a!, b!],
+            "Long",
+        );
+        const page2 = await moveOver(db, PAGE2, [c!], null);
+        const page3 = await moveOver(db, { start: 17, end: 25 }, [d!], null);
+        const ids = [a!, b!, c!, d!];
+        const before = track(await resolverOf(db), ids, 25);
+
+        const cut = (await transactionWithHistory(db, "cut", (tx) =>
+            cutMoveAtBeatInTransaction({ tx, timelineId: long.id, beat: 17 }),
+        ))!;
+
+        expect(cut.before.id).toBeGreaterThan(page3.id);
+        expect(cut.after.id).toBeGreaterThan(page3.id);
+        expect(
+            await db
+                .select()
+                .from(schema.timelines)
+                .where(eq(schema.timelines.id, long.id))
+                .get(),
+        ).toBeUndefined();
+        for (const [range, own] of [
+            [PAGE2, page2],
+            [{ start: 17, end: 25 }, page3],
+        ] as const)
+            expect(
+                (
+                    await db.transaction((tx) => timelinesWithRange(tx, range))
+                )[0]!.id,
+            ).toBe(own.id);
+        expectClose(before, track(await resolverOf(db), ids, 25));
+    });
+});
+
 describeDbTests("remove marchers from a move for a range of counts", (it) => {
+    it("the preview writes nothing and says what the removal then does; the removal returns the piece they left", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        const [a, b, c] = (await resolverOf(db)).marcherIds();
+        const long = await longSharedMove(db, [a!, b!, c!]);
+        const before = await dataOf(db);
+
+        const plan = await db.transaction((tx) =>
+            planRemovalFromRange({ tx, marcherIds: [a!, c!], range: PAGE2 }),
+        );
+
+        expect(await dataOf(db)).toEqual(before);
+        const leaving = [a!, c!].sort((x, y) => x - y);
+        const pageMove = await page2Move(db);
+        expect(plan).toEqual({
+            removed: leaving,
+            skipped: [],
+            moves: [
+                // The page's own move over exactly the range needs no cut
+                { timelineId: pageMove.id, removed: leaving, cuts: [] },
+                {
+                    timelineId: long.id,
+                    removed: leaving,
+                    cuts: [
+                        { timelineId: long.id, beat: 9, idStaysWith: "after" },
+                        { timelineId: long.id, beat: 17, idStaysWith: "after" },
+                    ],
+                },
+            ],
+        });
+
+        const result = await transactionWithHistory(db, "take out", (tx) =>
+            takeMarchersOutOfRangeInTransaction({
+                tx,
+                marcherIds: [a!, c!],
+                range: PAGE2,
+            }),
+        );
+
+        expect(result.removed).toEqual(plan.removed);
+        expect(result.cuts.map((cut) => cut.before.end_beat)).toEqual([9, 17]);
+        expect(result.pieces).toEqual([
+            { timelineId: pageMove.id, pieceId: pageMove.id, deleted: false },
+            {
+                timelineId: long.id,
+                pieceId: result.cuts[1]!.before.id,
+                deleted: false,
+            },
+        ]);
+        const piece = (await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.id, result.pieces[1]!.pieceId))
+            .get())!;
+        expect([piece.start_beat, piece.end_beat]).toEqual([
+            PAGE2.start,
+            PAGE2.end,
+        ]);
+    });
+
     it("a range inside a shared move: cut at both ends, the marcher leaves the middle, the others keep their motion", async ({
         db,
         marchersAndPages: _,
@@ -411,5 +628,55 @@ describeDbTests("remove marchers from a move for a range of counts", (it) => {
         const undo = await performUndo(db);
         expect(undo.success, undo.error?.message).toBe(true);
         expect(await dataOf(db)).toEqual(before);
+    });
+});
+
+describeDbTests("the drag back (holds decision 16)", (it) => {
+    it("skips and names a shape member: it keeps its move, untouched; the others are taken out", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        const [a, b] = (await resolverOf(db)).marcherIds();
+        const pageMove = await page2Move(db);
+        await db.transaction((tx) =>
+            saveShapeRecipeInTransaction({
+                tx,
+                timelineId: pageMove.id,
+                recipe: {
+                    kind: "line",
+                    kindVersion: 1,
+                    params: {},
+                    orderMode: "slot",
+                    reverse: false,
+                },
+                members: [{ marcherId: a!, slot: 0, x: 10, y: 10 }],
+            }),
+        );
+        const r = await resolverOf(db);
+        const back = [a!, b!].map((marcherId) => {
+            const [x, y] = r.positionAt(marcherId, PAGE2.start);
+            return { marcherId, x, y };
+        });
+        expect(r.positionAt(a!, PAGE2.end)).not.toEqual(
+            r.positionAt(a!, PAGE2.start),
+        );
+        const aRows = await rowsOver(db, [a!], PAGE2);
+        const aTrack = track(r, [a!], 33);
+
+        const result = await transactionWithHistory(db, "drag back", (tx) =>
+            moveMarchersInRangeInTransaction({ tx, range: PAGE2, moves: back }),
+        );
+
+        expect(result.cleared).toEqual([b]);
+        expect(result.skipped!.refusal).toBe("inShapeOrFollowTheLeader");
+        expect(result.skipped!.marcherIds).toEqual([a]);
+        expect(result.skipped!.message).toMatch(
+            /^\S+ is in a shape, so it keeps its move here\.$/,
+        );
+        expect(result.slots).toEqual([]);
+        expect(await rowsOver(db, [b!], PAGE2)).toEqual([]);
+        expect(await rowsOver(db, [a!], PAGE2)).toEqual(aRows);
+        expectClose(aTrack, track(await resolverOf(db), [a!], 33));
     });
 });

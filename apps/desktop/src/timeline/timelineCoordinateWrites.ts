@@ -417,7 +417,7 @@ export const toTimelineMoves = (
 export interface TimelineNeighborPageRequest {
     target: TimelineEditTarget;
     moves: TimelineMarcherMove[];
-    clearOwn: boolean;
+    clearPage: boolean;
 }
 
 /** What a canvas move hands to the timeline write path (`moveMarchersInTarget`). */

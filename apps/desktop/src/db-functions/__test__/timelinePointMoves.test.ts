@@ -122,13 +122,13 @@ const point = async (
     db: DbConnection,
     beat: number,
     moves: [number, XY][],
-    { box = PAGE2, clearOwn = false } = {},
+    { box = PAGE2, clearPage = false } = {},
 ) =>
     await moveMarchersInTarget({
         db,
         target: { kind: "point", beat, box },
         moves: moves.map(([marcherId, [x, y]]) => ({ marcherId, x, y })),
-        clearOwn,
+        clearPage,
     });
 
 /** Undo once: the data is `before`; redo once: it is `after` again. */
@@ -587,7 +587,7 @@ describeDbTests("Basic point writes: repeated and mixed edits", (it) => {
         ]);
     });
 
-    it("set to previous page (clearOwn on the flag) deletes every move in the box", async ({
+    it("set to previous page (clearPage on the flag) deletes every move in the box", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -596,7 +596,7 @@ describeDbTests("Basic point writes: repeated and mixed edits", (it) => {
         await range(db, a, 9, 17, A);
         await point(db, 13, [[a, C]]);
         const before = await snapshot(db);
-        const result = await point(db, 17, [[a, B]], { clearOwn: true });
+        const result = await point(db, 17, [[a, B]], { clearPage: true });
         expect(result.cleared).toEqual([a]);
         expect(await rowsOf(db, a)).toEqual([[1, 9, 0]]);
         expect(await timelineRanges(db)).toEqual([[1, 9]]);
@@ -872,7 +872,7 @@ describeDbTests("Basic point writes on a converted show", (it) => {
             db,
             box.end,
             [marcher, ...others].map((m) => [m, C] as [number, XY]),
-            { box, clearOwn: true },
+            { box, clearPage: true },
         );
         expect(await vacant(db)).toEqual([]);
         expect(await transitionsOver(db, box)).toEqual([]);
@@ -891,7 +891,7 @@ describeDbTests("Basic point writes on a converted show", (it) => {
         const { box, marcher, others } = await converted(db);
         const othersBefore = await positionsOf(db, others);
         const before = await snapshot(db);
-        await point(db, box.end, [[marcher, C]], { box, clearOwn: true });
+        await point(db, box.end, [[marcher, C]], { box, clearPage: true });
         expect(await vacant(db)).toEqual([]);
         const [shared] = await transitionsOver(db, box);
         expect(shared!.slot_count).toBe(others.length);
@@ -913,7 +913,7 @@ describeDbTests("Basic point writes on a converted show", (it) => {
         const last = rows.find((r) => r.slotIndex === rows.length - 1)!;
         await point(db, box.end, [[first.marcherId, C]], {
             box,
-            clearOwn: true,
+            clearPage: true,
         });
         // The last slot's marcher now holds slot 0
         const moved = (

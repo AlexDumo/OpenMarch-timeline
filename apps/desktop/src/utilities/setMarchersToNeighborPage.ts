@@ -49,7 +49,9 @@ export interface SetMarchersToNeighborPageArgs {
      * The write (`moveMarchersInTarget`'s `mutateAsync`). It rejects when the edit is
      * refused, after its own error handler has shown the reason.
      */
-    writeTimeline: (request: TimelineNeighborPageRequest) => Promise<unknown>;
+    writeTimeline: (
+        request: TimelineNeighborPageRequest,
+    ) => Promise<TimelineMoveResult>;
     notify: {
         success: (message: string) => unknown;
         error: (message: string) => unknown;
@@ -135,23 +137,24 @@ export async function setMarchersToNeighborPage({
     if (count === 0) return null;
     // Previous clears own moves even where they already go nowhere, so every marcher is sent.
     // Basic's point target on the page's flag clears them too (its mid-page points with them)
-    const clearOwn = direction === "previous" && target.kind !== "home";
-    const moves = clearOwn ? copy.targets : copy.moves;
+    const clearPage = direction === "previous" && target.kind !== "home";
+    const moves = clearPage ? copy.targets : copy.moves;
     let skipped = 0;
     if (moves.length > 0) {
         try {
-            const written = (await writeTimeline({
+            const written = await writeTimeline({
                 target,
                 moves,
-                clearOwn,
-            })) as Partial<TimelineMoveResult> | undefined;
-            skipped = written?.skipped?.marcherIds.length ?? 0;
+                clearPage,
+            });
+            skipped = written.skipped?.marcherIds.length ?? 0;
         } catch {
             // Refused or failed: nothing was written, and the write's error handler said why
             return null;
         }
     }
-    // Shape and follow-the-leader members Clear this page left alone: the write's toast names them
+    // Shape and follow-the-leader members Clear this page left alone: the write's warning names
+    // them, and the success message counts only the others
     if (count - skipped === 0) return null;
     return succeed(count - skipped);
 }

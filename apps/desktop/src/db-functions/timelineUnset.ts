@@ -6,7 +6,8 @@ import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { readPageGrid } from "./timelineRipple";
 import { FIRST_PAGE_ID } from "./rowMappers";
-import { clearOwnPageMoves, samePosition } from "./timelineMoves";
+import { samePosition } from "./timelineMoves";
+import { clearOwnPageMoves } from "./timelineMoveHelpers";
 import { setAsShownOnPageInTransaction } from "./timelineSetAsShown";
 
 /**
