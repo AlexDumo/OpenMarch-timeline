@@ -6138,3 +6138,146 @@ test("change: a selected placed box's right-click opens the field's menu for its
     await page.keyboard.press("ContextMenu");
     await expect(fieldMenu(page)).toBeVisible();
 });
+
+/** Selects the placed box by a click on a member, and returns where to grab it to move it (between marchers, off the center dot) and the positions before */
+async function selectPlacedBox(show: Show) {
+    const { page } = show;
+    const t1 = await marcherScreen(page, 1);
+    await page.mouse.click(t1.x, t1.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    const S = (await fieldGrid(show)).pixelsPerStep;
+    const before = await savedPositions(show, 0);
+    const front = Math.max(...before.map((p) => p.y));
+    const left = Math.min(...before.map((p) => p.x));
+    const back = Math.min(...before.map((p) => p.y));
+    return {
+        S,
+        before,
+        grab: { x: left + (5 / 3) * S, y: (back + front) / 2 },
+    };
+}
+
+/** How far each marcher moved across from `before`, in steps */
+const stepsAcross = (before: Position[], after: Position[], S: number) =>
+    after.map(
+        (p) =>
+            Math.round(
+                ((p.x - before.find((q) => q.id === p.id)!.x) / S) * 100,
+            ) / 100,
+    );
+
+/** Runs the page's CPU `rate` times slower, as on a busy or weak machine */
+async function slowDown(page: Page, rate: number) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate });
+}
+
+test("a placed box dragged again before its last drag is saved goes on from where it was left, and every drag lands", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+    const { S, before, grab } = await selectPlacedBox(show);
+    // A slow machine: a save takes long enough to press again before it's read back
+    await slowDown(page, 4);
+    for (let i = 0; i < 3; i++) {
+        const from = { x: grab.x + i * 4 * S, y: grab.y };
+        await drag(
+            page,
+            await toScreen(page, from),
+            await toScreen(page, { x: from.x + 4 * S, y: from.y }),
+        );
+    }
+    await waitForIdle(page, 1000);
+    const after = await savedPositions(show, 0);
+    expect(stepsAcross(before, after, S)).toEqual(after.map(() => 12));
+    expect((await readField(page)).selection).toEqual(ALL);
+});
+
+test("quick arrow presses on a selected placed box all land", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+    const { S, before } = await selectPlacedBox(show);
+    await slowDown(page, 4);
+    for (let i = 0; i < 4; i++) await page.keyboard.press("ArrowRight");
+    await waitForIdle(page, 1000);
+    const after = await savedPositions(show, 0);
+    const moved = stepsAcross(before, after, S);
+    expect(new Set(moved).size).toBe(1);
+    const one = moved[0]! / 4;
+    expect(one).toBeGreaterThan(0);
+    // Four presses, four nudges of the same size
+    await page.keyboard.press("ArrowRight");
+    await waitForIdle(page, 1000);
+    expect(
+        stepsAcross(before, await savedPositions(show, 0), S)[0],
+    ).toBeCloseTo(5 * one, 2);
+});
+
+test("a placed box stays drawn where it was dropped, every frame, while the drag is saved", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+    const { S, grab } = await selectPlacedBox(show);
+    await slowDown(page, 4);
+    const from = await toScreen(page, grab);
+    const to = await toScreen(page, { x: grab.x + 4 * S, y: grab.y });
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 12 });
+    // The outline's left edge, each frame from the release until well after it's read back
+    const edges = page.evaluate(
+        () =>
+            new Promise<(number | null)[]>((resolve) => {
+                const out: (number | null)[] = [];
+                const t0 = performance.now();
+                const tick = () => {
+                    const xs =
+                        window.fieldTest
+                            .shapeOverlay?.()
+                            ?.outline?.map((p) => p.x) ?? [];
+                    out.push(xs.length ? Math.min(...xs) : null);
+                    if (performance.now() - t0 < 1500)
+                        requestAnimationFrame(tick);
+                    else resolve(out);
+                };
+                tick();
+            }),
+    );
+    await page.mouse.up();
+    const seen = await edges;
+    const last = seen.at(-1)!;
+    expect(last).not.toBeNull();
+    // Never gone, never back where it was
+    expect(seen.filter((x) => x === null || Math.abs(x - last) > 1e-6)).toEqual(
+        [],
+    );
+});
+
+test("a drag waiting for the one before it to be saved is saved on its own page, even after the next page is shown (review of #512)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+    const { S, before, grab } = await selectPlacedBox(show);
+    // Slower still: the second save must still be waiting when the next page shows
+    await slowDown(page, 8);
+    for (let i = 0; i < 2; i++) {
+        const from = { x: grab.x + i * 4 * S, y: grab.y };
+        await drag(
+            page,
+            await toScreen(page, from),
+            await toScreen(page, { x: from.x + 4 * S, y: from.y }),
+        );
+    }
+    // On to the next page while the second drag still waits for the first
+    await page.keyboard.press("e");
+    await waitForIdle(page, 1000);
+    const after = await savedPositions(show, 0);
+    expect(stepsAcross(before, after, S)).toEqual(after.map(() => 8));
+});

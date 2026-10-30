@@ -49,6 +49,11 @@ export function invalidatePlacedBoxes(): void {
         });
 }
 
+/** Settles once the recipes asked for so far are read back */
+export async function placedBoxesRead(): Promise<void> {
+    while (reading) await reading;
+}
+
 /**
  * Reads the recipes again after every undoable edit, undo and redo, until the returned function
  * stops it: one that changes only a recipe (a pivot drag) moves no one, so the resolver never

@@ -27,3 +27,13 @@ export const usePlacedBoxPreviewStore = create<{
 
 export const previewPlacedBox = (params: unknown): void =>
     usePlacedBoxPreviewStore.setState({ params });
+
+/**
+ * A selected placed shape while its edits are being saved (`commitBox`): the shape as the last of
+ * them will read it back, null with none going. Until then it's the box selected, so the shape
+ * doesn't jump back to where it was, and a press or a key goes on from the edit (a second drag
+ * right after the first used to start from the old shape and drop the first).
+ */
+export const useSavingBoxStore = create<{
+    readonly box: PlacedBox | null;
+}>(() => ({ box: null }));
