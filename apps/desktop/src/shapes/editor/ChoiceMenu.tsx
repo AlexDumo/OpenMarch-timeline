@@ -4,6 +4,7 @@ import { CaretDownIcon } from "@phosphor-icons/react";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { ShapeEditTarget } from "./editTargets";
 import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
+import { GlyphText } from "./GlyphText";
 import { Tip } from "./Tip";
 
 // A kind's menus hold choices of any kind's params
@@ -60,6 +61,7 @@ function ChoiceMenu({
         setOpen(false);
         const env = envFor();
         if (!env || value === current) return;
+        if (options.find((o) => o.value === value)?.disabled) return;
         const next = choice.pick(target.params, target.spots, value, env);
         if (next !== target.params) target.apply(next);
     };
@@ -75,7 +77,9 @@ function ChoiceMenu({
                         data-value={current}
                         className="rounded-4 hover:bg-fg-2 flex min-h-24 items-center gap-4 px-4 py-2"
                     >
-                        <span>{currentLabel}</span>
+                        <span>
+                            <GlyphText text={currentLabel} size={12} />
+                        </span>
                         <CaretDownIcon size={10} />
                     </button>
                 </Popover.Trigger>
@@ -108,16 +112,37 @@ function ChoiceMenu({
                                 type="button"
                                 role="menuitemradio"
                                 aria-checked={option.value === current}
+                                // Greyed out but still reachable, so its reason can be read
+                                aria-disabled={
+                                    option.disabled ? true : undefined
+                                }
+                                aria-describedby={
+                                    option.disabled
+                                        ? `shape-choice-${choice.key}-${option.value}-reason`
+                                        : undefined
+                                }
                                 onClick={() => pick(option.value)}
                                 data-testid={`shape-choice-${choice.key}-${option.value}`}
                                 className={clsx(
-                                    "rounded-4 flex min-h-24 items-center px-4 py-2 text-left",
+                                    "rounded-4 flex min-h-24 flex-col items-start px-4 py-2 text-left",
                                     option.value === current
                                         ? "bg-fg-2 text-accent"
-                                        : "hover:text-accent",
+                                        : option.disabled
+                                          ? "text-text/40 cursor-default"
+                                          : "hover:text-accent",
                                 )}
                             >
-                                {option.label}
+                                <span className="flex items-center gap-4">
+                                    <GlyphText text={option.label} size={12} />
+                                </span>
+                                {option.disabled && (
+                                    <span
+                                        id={`shape-choice-${choice.key}-${option.value}-reason`}
+                                        className="text-text/60 text-xs"
+                                    >
+                                        {option.disabled}
+                                    </span>
+                                )}
                             </button>
                         ))}
                     </div>

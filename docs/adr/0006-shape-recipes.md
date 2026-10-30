@@ -286,13 +286,17 @@ The Line shape (spec #522, #523) stores a new kind:
    `closed` (open when absent), `spacing` and the host's `pivot`. `spacing` is `{ mode: "fit" }`
    (the interval follows from the drawn points), `{ mode: "keep", groups }` (Keep interval) or
    `{ mode: "path", groups, anchor }` (Interval on the path, `anchor` one of `start`, `center`,
-   `end`). A group is `{ interval, count? }`: the interval is the straight distance between
-   neighbors in field units, and a group with no `count` is the rest.
+   `end`). A group is `{ interval, count? }`: the interval is the distance between neighbors in
+   field units, and a group with no `count` is the rest. `measured` (#527) says what an interval
+   measures: absent is the straight (true) distance; `"x"` (↔) is how far neighbors are apart
+   side to side, laid from the line's start so each x is exactly an interval from the last, and
+   `"y"` (↕) the same front to back. A line that no longer goes one way along its `measured` axis
+   (an end turned square to it) is laid out by the true distance until it does again.
 2. **A Line stores no frame.** Its frame (center, size, turn) follows from its points, so the
    frame amendment's stored center doesn't apply. A kind whose frame follows from its own numbers
    declares a `readable` check, used instead of the stored-center check when a recipe is read.
 3. **Version 2 grows without a new version.** More points, tensions, `closed`, counted groups,
-   and the Measured and corners settings still to come are all optional fields or wider values of
-   these. A build reads a Line only when it can lay out every field exactly as saved; anything
+   `measured` (read since #527) and the corners setting still to come are all optional fields or
+   wider values of these. A build reads a Line only when it can lay out every field exactly as saved; anything
    newer reads as plain positions (decision 5), never as the nearest shape it understands. Each
    build widens its `readable` check as it learns a field.

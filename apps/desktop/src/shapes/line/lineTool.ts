@@ -17,12 +17,16 @@ import {
     lineFrame,
     lineInFrame,
     lineInterval,
+    measuredAxis,
+    measuredBlock,
     moveLine,
     onLine,
     withInterval,
     withLineFrame,
+    withMeasured,
     withSpacing,
     type LineAnchor,
+    type LineMeasured,
     type LineParams,
 } from "./lineGeometry";
 
@@ -56,7 +60,11 @@ const INTERVAL: ToolParam<LineParams> = {
     blends: true,
     default: 2,
     range: { min: 0.5 },
-    glyph: "↔",
+    // What it measures: none for the true distance, the box's marks for ↔ and ↕
+    glyph: (p) => {
+        const axis = measuredAxis(p);
+        return axis === "x" ? "↔" : axis === "y" ? "↕" : null;
+    },
     shown: (_p, n) => n > 1,
     // Off the half steps in Fit, it shows as about so much
     derived: (p, n, stepPx) =>
@@ -148,6 +156,62 @@ const SPACING: ToolChoice<LineParams> = {
     },
 };
 
+/** Why a line can't be measured along `axis`, or undefined when it can */
+function measuredReason(p: LineParams, axis: LineMeasured): string | undefined {
+    const block = measuredBlock(p, axis);
+    if (block === null) return undefined;
+    if (axis === "x")
+        return block === "none"
+            ? tolgee.t(
+                  "shapes.kinds.line.measured.noX",
+                  "The line doesn't go side to side",
+              )
+            : tolgee.t(
+                  "shapes.kinds.line.measured.turnsX",
+                  "The line turns back side to side",
+              );
+    return block === "none"
+        ? tolgee.t(
+              "shapes.kinds.line.measured.noY",
+              "The line doesn't go front to back",
+          )
+        : tolgee.t(
+              "shapes.kinds.line.measured.turnsY",
+              "The line turns back front to back",
+          );
+}
+
+/**
+ * The Measured menu (spec #522): what the interval measures. The true distance between neighbors
+ * is the default; ↔ puts neighbors the interval apart side to side, x exactly on the step grid,
+ * and ↕ front to back. Each is greyed out, with why, on a line that doesn't go one way that way.
+ */
+const MEASURED: ToolChoice<LineParams> = {
+    key: "measured",
+    get label() {
+        return tolgee.t("shapes.kinds.line.measured.label", "Measured");
+    },
+    options: (p) => [
+        {
+            value: "true",
+            label: tolgee.t("shapes.kinds.line.measured.true", "True distance"),
+        },
+        {
+            value: "x",
+            label: tolgee.t("shapes.kinds.line.measured.x", "↔ Side to side"),
+            disabled: measuredReason(p, "x"),
+        },
+        {
+            value: "y",
+            label: tolgee.t("shapes.kinds.line.measured.y", "↕ Front to back"),
+            disabled: measuredReason(p, "y"),
+        },
+    ],
+    current: (p) => p.measured ?? "true",
+    pick: (p, n, value, env) =>
+        withMeasured(p, n, value === "x" || value === "y" ? value : null, env),
+};
+
 /**
  * The Line (#523, spec #522): a straight line of marchers drawn with one drag, its two ends
  * dragged by their handles, moved from its body, and turned and flipped through its frame like
@@ -156,7 +220,7 @@ const SPACING: ToolChoice<LineParams> = {
 export const lineTool: ToolKind<LineParams> = {
     shape: lineShape,
     params: [INTERVAL],
-    choices: [SPACING],
+    choices: [SPACING, MEASURED],
     readable: isLineParams,
     scaling: "interval",
     draw: (from, to, _n, env) => drawLine(from, to, env),

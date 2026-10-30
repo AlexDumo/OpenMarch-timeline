@@ -52,12 +52,20 @@ export type LineSpacing =
           readonly anchor: LineAnchor;
       };
 
+/**
+ * What an interval measures (spec #522, "Measured"): `x` (↔) is how far neighbors are apart side
+ * to side, `y` (↕) front to back. Absent is the true distance, straight across.
+ */
+export type LineMeasured = "x" | "y";
+
 export interface LineParams {
     /** In order from the first marcher's end; two for now */
     readonly points: readonly LinePoint[];
     /** A closed line joins its last point to its first (later); open when absent */
     readonly closed?: boolean;
     readonly spacing: LineSpacing;
+    /** The true distance when absent */
+    readonly measured?: LineMeasured;
 }
 
 const FIT: LineSpacing = { mode: "fit" };
@@ -85,11 +93,11 @@ const isGroup = (g: unknown): g is LineGroup =>
 
 const ANCHORS: readonly unknown[] = ["start", "center", "end"];
 // `pivot` is the host's (ADR 0006, amendment of 2026-10-20), stored beside the kind's own numbers
-const KEYS = new Set(["points", "closed", "spacing", "pivot"]);
+const KEYS = new Set(["points", "closed", "spacing", "measured", "pivot"]);
 
 /**
  * Whether `params` is a line this version can lay out exactly as it was saved. Anything a newer
- * build adds (more points, tensions, closing, mixed groups, Measured, corners) is refused, so the
+ * build adds (more points, tensions, closing, mixed groups, corners) is refused, so the
  * recipe shows as plain positions instead of being misread and rewritten on the first edit (ADR
  * 0006, decision 5). Each later ticket widens this as it adds the layout.
  */
@@ -98,6 +106,8 @@ export function isLineParams(params: unknown): params is LineParams {
     if (Object.keys(params).some((key) => !KEYS.has(key))) return false;
     const p = params as Partial<LineParams>;
     if (p.closed !== undefined && p.closed !== false) return false;
+    if (p.measured !== undefined && p.measured !== "x" && p.measured !== "y")
+        return false;
     if (!Array.isArray(p.points) || p.points.length !== 2) return false;
     if (!p.points.every(isPoint)) return false;
     const spacing: unknown = p.spacing;
@@ -127,37 +137,146 @@ export function typedInterval(p: LineParams): number | null {
     return p.spacing.mode === "fit" ? null : p.spacing.groups[0]!.interval;
 }
 
+const coord = (q: XY, axis: LineMeasured) => (axis === "x" ? q.x : q.y);
+
 /**
- * The interval between neighbors, in field units: the typed one, or in Fit the one the drawn
- * line works out to
+ * Why the line can't be measured along `axis` (↔ or ↕), or null when it can: it has to keep going
+ * one way that way from its first point to its last, never turning back or standing still, so
+ * each spot has one place on it. Any number of points.
  */
-export function lineInterval(p: LineParams, n: number): number {
-    return typedInterval(p) ?? (n > 1 ? linePath(p).length / (n - 1) : 0);
+export function measuredBlock(
+    p: LineParams,
+    axis: LineMeasured,
+): "none" | "turns" | null {
+    const d = p.points
+        .slice(1)
+        .map((b, i) => coord(b, axis) - coord(p.points[i]!, axis));
+    if (d.every((v) => Math.abs(v) < 1e-9)) return "none";
+    if (p.closed) return "turns";
+    return d.every((v) => v > 1e-9) || d.every((v) => v < -1e-9)
+        ? null
+        : "turns";
 }
 
-/** The `n` spots along the line, tagged with their distance along it */
-export function lineSpots(p: LineParams, n: number): Slot[] {
+/**
+ * What the line's intervals measure as it's laid out: its Measured setting, or the true distance
+ * (null) when that's absent or the line no longer goes one way along it (an end turned square)
+ */
+export function measuredAxis(p: LineParams): LineMeasured | null {
+    return p.measured && measuredBlock(p, p.measured) === null
+        ? p.measured
+        : null;
+}
+
+/** The line's length as its intervals measure it */
+function measuredLength(p: LineParams): number {
+    const axis = measuredAxis(p);
+    if (!axis) return linePath(p).length;
+    return Math.abs(coord(p.points.at(-1)!, axis) - coord(p.points[0]!, axis));
+}
+
+/** The gaps between neighbors a typed spacing keeps, in field units, first to last */
+function gapsOf(p: LineParams, n: number): number[] {
+    const interval = typedInterval(p) ?? 0;
+    return Array.from({ length: Math.max(0, n - 1) }, () => interval);
+}
+
+/**
+ * The spot on a line measured along `axis` where that coordinate is `c`, exactly: on the segment
+ * that reaches it, or past an end along the end segment. Tagged with its distance along the line.
+ */
+function atCoord(p: LineParams, axis: LineMeasured, c: number): Slot {
+    const points = p.points;
+    let s = 0;
+    for (let i = 1; i < points.length; i++) {
+        const a = points[i - 1]!;
+        const b = points[i]!;
+        const ca = coord(a, axis);
+        const cb = coord(b, axis);
+        const len = length(sub(b, a));
+        if (i < points.length - 1 && (cb - c) * (cb - ca) < 0) {
+            s += len;
+            continue;
+        }
+        const t = (c - ca) / (cb - ca);
+        const at = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+        return { ...at, [axis]: c, s: s + len * t };
+    }
+    return { ...points[0]!, s: 0 };
+}
+
+/**
+ * The interval between neighbors, in field units: the typed one, or in Fit the one the drawn
+ * line works out to, measured as the line measures it
+ */
+export function lineInterval(p: LineParams, n: number): number {
+    return typedInterval(p) ?? (n > 1 ? measuredLength(p) / (n - 1) : 0);
+}
+
+/**
+ * The `n` spots along the line, tagged with their distance along it. Measured ↔ or ↕, neighbors
+ * are the interval apart that way, exactly, from an end; with `stepPx`, a centered run on the
+ * path starts a whole number of half steps from the line's start, so it stays on the grid with it.
+ */
+export function lineSpots(p: LineParams, n: number, stepPx?: number): Slot[] {
     if (n <= 0) return [];
+    const axis = measuredAxis(p);
+    if (axis) return measuredSpots(p, n, axis, stepPx);
     const path = linePath(p);
     const at = (s: number): Slot => ({ ...path.at(s), s });
-    const interval = typedInterval(p);
-    if (interval === null) {
+    if (typedInterval(p) === null) {
         if (n === 1) return [at(path.length / 2)];
         return Array.from({ length: n }, (_, i) =>
             at((path.length * i) / (n - 1)),
         );
     }
-    const gaps = Array.from({ length: n - 1 }, () => interval);
+    const gaps = gapsOf(p, n);
     const run = chordOffsets(path, 0, gaps).at(-1)!;
+    const from = runStart(p, path.length, run);
+    return chordOffsets(path, from, gaps).map(at);
+}
+
+/** How far along the line, as it's measured, a typed run of `run` starts */
+function runStart(p: LineParams, total: number, run: number): number {
     // Keep interval is sized to its run, which sits on it whole; on the path it sits at its anchor
     const anchor = p.spacing.mode === "path" ? p.spacing.anchor : "center";
-    const from =
-        anchor === "start"
-            ? 0
-            : anchor === "end"
-              ? path.length - run
-              : (path.length - run) / 2;
-    return chordOffsets(path, from, gaps).map(at);
+    return anchor === "start"
+        ? 0
+        : anchor === "end"
+          ? total - run
+          : (total - run) / 2;
+}
+
+/** {@link lineSpots} on a line measured along `axis` */
+function measuredSpots(
+    p: LineParams,
+    n: number,
+    axis: LineMeasured,
+    stepPx: number | undefined,
+): Slot[] {
+    const first = coord(p.points[0]!, axis);
+    const last = coord(p.points.at(-1)!, axis);
+    const total = Math.abs(last - first);
+    const way = Math.sign(last - first);
+    const at = (c: number) => atCoord(p, axis, first + way * c);
+    if (typedInterval(p) === null) {
+        if (n === 1) return [at(total / 2)];
+        return Array.from({ length: n }, (_, i) =>
+            // The last spot is exactly on the end
+            i === n - 1 ? at(total) : at((total * i) / (n - 1)),
+        );
+    }
+    const gaps = gapsOf(p, n);
+    const run = gaps.reduce((a, b) => a + b, 0);
+    let from = runStart(p, total, run);
+    // A centered run (Keep interval's is the whole line) starts on a half step from the start
+    const centered =
+        p.spacing.mode === "keep" ||
+        (p.spacing.mode === "path" && p.spacing.anchor === "center");
+    if (stepPx && centered)
+        from = Math.round(from / (stepPx / 2)) * (stepPx / 2);
+    let c = from;
+    return [at(c), ...gaps.map((gap) => at((c += gap)))];
 }
 
 /**
@@ -249,7 +368,24 @@ export function drawLine(
     const a = landPoint(from, env);
     const b = endAt(a, to, env);
     if (length(sub(b, a)) < halfStep(env) - 1e-9) return undefined;
-    return { points: [corner(a), corner(b)], spacing: FIT };
+    const line: LineParams = { points: [corner(a), corner(b)], spacing: FIT };
+    return yardToYard(a, b, env) ? { ...line, measured: "x" } : line;
+}
+
+/**
+ * Whether a line from `a` to `b` runs diagonally from one yard line to another (spec #522): such
+ * a line starts measured side to side (↔), the common diagonal needing no setting
+ */
+function yardToYard(a: XY, b: XY, env: ToolEnv): boolean {
+    const yards = env.fieldLines?.x ?? [];
+    const onYard = (x: number) =>
+        yards.some((line) => Math.abs(line - x) < 1e-6);
+    return (
+        Math.abs(a.x - b.x) > 1e-6 &&
+        Math.abs(a.y - b.y) > 1e-6 &&
+        onYard(a.x) &&
+        onYard(b.x)
+    );
 }
 
 /**
@@ -287,7 +423,13 @@ export function dragPoint(
         const u = directionFrom(other, to, env);
         if (!u) return base;
         const was = length(sub(base.points[index]!, other));
-        point = { x: other.x + u.x * was, y: other.y + u.y * was };
+        // Measured ↔ or ↕, the line keeps its length that way, which is what its interval keeps
+        const axis = measuredAxis(base);
+        const keep =
+            axis && Math.abs(coord(u, axis)) > 1e-9
+                ? measuredLength(base) / Math.abs(coord(u, axis))
+                : was;
+        point = { x: other.x + u.x * keep, y: other.y + u.y * keep };
     } else {
         point = endAt(other, to, env);
         if (length(sub(point, other)) < 1e-9) return base;
@@ -314,8 +456,56 @@ export function withInterval(
     const groups = [{ interval }];
     if (p.spacing.mode === "path")
         return { ...p, spacing: { ...p.spacing, groups } };
-    const kept: LineParams = { ...p, spacing: { mode: "keep", groups } };
-    return n > 1 ? resized(kept, (n - 1) * interval, env) : kept;
+    return sizedToRun({ ...p, spacing: { mode: "keep", groups } }, n, env);
+}
+
+/**
+ * A line in Keep interval as long as its run, grown or shrunk from its pivot. Measured ↔ or ↕,
+ * it's the run that way, its start then moved along it onto the grid that way (when snapping) so
+ * every spot's x (or y) lands on it.
+ */
+function sizedToRun(p: LineParams, n: number, env: ToolEnv): LineParams {
+    if (n <= 1) return p;
+    const run = gapsOf(p, n).reduce((a, b) => a + b, 0);
+    const axis = measuredAxis(p);
+    if (!axis) return resized(p, run, env);
+    const extent = measuredLength(p);
+    const ends = 2 * lineFrame(p).halfWidth;
+    const grown = resized(p, (ends * run) / extent, env);
+    if (!env.snap) return grown;
+    const first = grown.points[0]!;
+    const off = coord(env.gridSnap(first), axis) - coord(first, axis);
+    const d = sub(grown.points.at(-1)!, first);
+    const k = off / coord(d, axis);
+    if (!Number.isFinite(k)) return grown;
+    // That way the move is exactly `off`, so the start is exactly on the grid
+    return {
+        ...grown,
+        points: grown.points.map((q) => ({
+            ...q,
+            x: q.x + d.x * k,
+            y: q.y + d.y * k,
+            [axis]: coord(q, axis) + off,
+        })),
+    };
+}
+
+/**
+ * The line measured along `axis` (↔, ↕) or by the true distance (null), from the Measured menu.
+ * The typed interval stays the same number, now measured the new way, so Keep interval resizes;
+ * Fit leaves the line as it is. A line that doesn't go one way along `axis` can't take it.
+ */
+export function withMeasured(
+    p: LineParams,
+    n: number,
+    axis: LineMeasured | null,
+    env: ToolEnv,
+): LineParams {
+    if ((p.measured ?? null) === axis) return p;
+    if (axis && measuredBlock(p, axis) !== null) return p;
+    const { measured: _was, ...rest } = p;
+    const next: LineParams = axis ? { ...rest, measured: axis } : rest;
+    return next.spacing.mode === "keep" ? sizedToRun(next, n, env) : next;
 }
 
 /**

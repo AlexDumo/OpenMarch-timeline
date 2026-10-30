@@ -290,3 +290,86 @@ test("change: Escape discards an open line and the show is untouched", async ({
     expect(await recipes(show)).toEqual([]);
     expect(await undoSteps(show)).toBe(steps);
 });
+
+// Measured (#527): a diagonal drawn from yard line to yard line starts in ↔,
+// where a typed interval is how far apart neighbors are side to side, every
+// saved x exactly that far from the last and on the step grid.
+test("change: a diagonal from yard line to yard line is measured ↔, placing marchers an interval apart in x on the grid", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await page.keyboard.press("l");
+
+    // From the 40 yard line to the 45, 6 steps deeper
+    const from = { x: cf.x - 16 * S, y: cf.y - 24 * S };
+    const to = { x: cf.x - 8 * S, y: cf.y - 18 * S };
+    await drag(page, await toScreen(page, from), await toScreen(page, to));
+    const measured = page.getByTestId("shape-choice-measured");
+    await expect(measured).toHaveAttribute("data-value", "x");
+
+    // The menu offers the true distance too; ↕ is there, this line going one
+    // way front to back as well
+    await measured.click();
+    const rows = page
+        .getByTestId("shape-choice-measured-content")
+        .getByRole("menuitemradio");
+    await expect(rows).toHaveText([
+        "True distance",
+        "Side to side",
+        "Front to back",
+    ]);
+    await expect(rows.nth(2)).not.toHaveAttribute("aria-disabled", "true");
+    await page.keyboard.press("Escape");
+
+    // 1½ steps side to side, grown from the center onto the grid
+    await page
+        .getByTestId("shape-tool-readout")
+        .getByTestId("shape-editor-interval")
+        .click();
+    await page.getByTestId("shape-editor-interval-input").fill("1.5");
+    await page.keyboard.press("Enter");
+    await expect.poll(() => interval(page, "shape-tool-readout")).toBe("1½");
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await waitForIdle(page);
+
+    const [recipe] = await recipes(show);
+    const stored = JSON.parse(recipe.params);
+    expect(stored.measured).toBe("x");
+    expect(stored.spacing.mode).toBe("keep");
+    const saved = [...(await savedPositions(show, 0))].sort(
+        (a, b) => a.x - b.x,
+    );
+    expect(saved).toHaveLength(ALL.length);
+    for (let i = 1; i < saved.length; i++)
+        expect(Math.abs(saved[i]!.x - saved[i - 1]!.x - 1.5 * S)).toBeLessThan(
+            CLOSE,
+        );
+    for (const p of saved) {
+        const halves = ((p.x - cf.x) / S) * 2;
+        expect(Math.abs(halves - Math.round(halves))).toBeLessThan(CLOSE);
+    }
+    // Still on the line as drawn
+    const slope = (to.y - from.y) / (to.x - from.x);
+    for (const p of saved)
+        expect(Math.abs(p.y - (from.y + (p.x - from.x) * slope))).toBeLessThan(
+            CLOSE * 2,
+        );
+
+    // Reopened, it's still ↔
+    await page.keyboard.press("Escape");
+    const t3 = (await drawnMarchers(page)).find((m) => m.id === 3)!.screen;
+    await page.mouse.click(t3.x, t3.y);
+    await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+    await expect(page.getByTestId("shape-choice-measured")).toHaveAttribute(
+        "data-value",
+        "x",
+    );
+});
