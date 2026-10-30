@@ -207,6 +207,11 @@ export interface ToolKind<P> {
     /** Its own menus, shown under the floating editor beside how it's filled (#523) */
     readonly choices?: readonly ToolChoice<P>[];
     /**
+     * Its spots run in an order along it (a Line, #528): the host offers who goes where by Least
+     * travel, Keep order or Reverse. Absent: always least travel.
+     */
+    readonly ordered?: boolean;
+    /**
      * Whether params read back from a recipe are a shape of this kind this app can lay out. Absent:
      * they have a center, as every frame-based kind stores (ADR 0006). A kind whose frame follows
      * from its points (a Line) checks its own.

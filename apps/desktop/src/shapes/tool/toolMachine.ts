@@ -1,4 +1,9 @@
-import { assignSlots, type AssignMarcher } from "../assign";
+import {
+    assignSlots,
+    orderFields,
+    type AssignMarcher,
+    type OrderChoice,
+} from "../assign";
 import { carryPivot } from "../frame/pivot";
 import {
     centerPivot,
@@ -23,7 +28,7 @@ import type { AnyToolKind, ToolEnv } from "./toolKind";
  *
  * Releasing ends the gesture as one undo step. Who goes where is held during every gesture. Only
  * a fresh draw, a change in how many spots there are across or deep, or Recalculate (#429) works
- * it out again, by least travel: stretching, moving, turning and flipping keep each marcher on
+ * it out again, by least travel (or, on a Line, the order picked: #528): stretching, moving, turning and flipping keep each marcher on
  * their own spot, so a turned or flipped form is the same form (owner, 2026-10-16).
  *
  * Every function is pure; `shapeToolStore.ts` holds the state.
@@ -37,6 +42,11 @@ export interface ToolSnapshot {
     readonly params: unknown;
     /** The slot index for each marcher, in `marchers` order; null with no shape */
     readonly assignment: readonly number[] | null;
+    /**
+     * Who goes where on a kind with an order along it (#528): Least travel, Keep order or Reverse.
+     * Kept through other kinds, which go by least travel.
+     */
+    readonly order: OrderChoice;
 }
 
 export type Gesture =
@@ -84,6 +94,8 @@ export function openTool(
         spots: marchers.length,
         params: null,
         assignment: null,
+        // Keep order when the marchers all come from one placed Line (#528)
+        order: keepsOrder(marchers) ? "keep" : "nearest",
         gesture: null,
         past: [],
         future: [],
@@ -94,7 +106,23 @@ const snapshot = (s: ToolState): ToolSnapshot => ({
     kind: s.kind,
     params: s.params,
     assignment: s.assignment,
+    order: s.order,
 });
+
+/** Whether every marcher has a place along one placed Line, so their order there can be kept */
+const keepsOrder = (marchers: readonly AssignMarcher[]) =>
+    marchers.length > 0 && marchers.every((m) => m.along !== undefined);
+
+/**
+ * Whether Keep order is offered (#528): every selected marcher is a member of one placed Line.
+ * Reverse is offered on any line.
+ */
+export const keepOrderOffered = (state: ToolState): boolean =>
+    keepsOrder(state.marchers);
+
+/** Who goes where as the open shape works it out: least travel unless its kind has an order */
+export const orderOf = (state: Pick<ToolState, "kind" | "order">) =>
+    state.kind.ordered ? orderFields(state.order) : orderFields("nearest");
 
 /** The spots for the open shape, in the kind's order; empty before one is drawn */
 export function slotsOf(state: ToolState, ctx: ShapeContext): Slot[] {
@@ -113,19 +141,29 @@ export function slotsOf(state: ToolState, ctx: ShapeContext): Slot[] {
  */
 const solvedFor = new WeakMap<
     readonly number[],
-    { params: unknown; marchers: ToolState["marchers"]; ctx: ShapeContext }
+    {
+        params: unknown;
+        marchers: ToolState["marchers"];
+        ctx: ShapeContext;
+        order: OrderChoice;
+    }
 >();
 
-/** Who goes where on the current shape, by least travel from where the marchers start */
+/**
+ * Who goes where on the current shape: by least travel from where the marchers start, or in the
+ * order picked on a kind with one ({@link orderOf})
+ */
 function reassign(state: ToolState, ctx: ShapeContext): ToolState {
     if (state.params === null) return { ...state, assignment: null };
     const slots = slotsOf(state, ctx);
+    const { orderMode, reverse } = orderOf(state);
     const assignment = assignSlots({
         kind: state.kind.shape,
         params: state.params,
         slots,
         marchers: state.marchers,
-        mode: "nearest",
+        mode: orderMode,
+        reverse,
         ctx,
     });
     if (assignment && !state.gesture)
@@ -133,6 +171,7 @@ function reassign(state: ToolState, ctx: ShapeContext): ToolState {
             params: state.params,
             marchers: state.marchers,
             ctx,
+            order: state.order,
         });
     return { ...state, assignment };
 }
@@ -302,8 +341,21 @@ export function switchKind(
 }
 
 /**
+ * Picks who goes where on a kind with an order (#528): Least travel, Keep order or Reverse, worked
+ * out at once as one undo step. Nothing happens for the choice there already.
+ */
+export function setOrder(
+    state: ToolState,
+    order: OrderChoice,
+    ctx: ShapeContext,
+): ToolState {
+    if (state.gesture || order === state.order) return state;
+    return reassign(pushHistory({ ...state, order }, snapshot(state)), ctx);
+}
+
+/**
  * Recalculate who goes where (#429): the shape's marchers on its spots by least travel from where
- * they come from, as one undo step. Moving, turning and flipping keep the assignment (the
+ * they come from (or in the order picked, #528), as one undo step. Moving, turning and flipping keep the assignment (the
  * default); this is the one button that works it out again. Unchanged when it's already that.
  */
 export function recalculate(state: ToolState, ctx: ShapeContext): ToolState {
@@ -319,7 +371,8 @@ export function canRecalculate(state: ToolState, ctx: ShapeContext): boolean {
         solved !== undefined &&
         solved.params === state.params &&
         solved.marchers === state.marchers &&
-        solved.ctx === ctx
+        solved.ctx === ctx &&
+        solved.order === state.order
     )
         return false;
     const fresh = reassign(state, ctx).assignment;

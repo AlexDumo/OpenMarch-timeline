@@ -87,6 +87,7 @@ import { ReshuffleButton } from "./ReshuffleButton";
 import { EdgeToggle } from "./EdgeToggle";
 import { ModeMenu } from "./ModeMenu";
 import { ChoiceMenus } from "./ChoiceMenu";
+import { OrderMenu } from "./OrderMenu";
 import { OutlineGap } from "./OutlineGap";
 import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
@@ -371,6 +372,11 @@ function ShapeEditorBar({
                 kind={kind}
                 shown={fillShown(kind, params, spots)}
                 canPlace={target.place !== undefined}
+                order={
+                    target.order
+                        ? `${target.order.current} ${target.order.keepOffered}`
+                        : ""
+                }
                 testId={testId}
             />
         </animated.div>
@@ -410,6 +416,9 @@ function useLiveTarget(target: ShapeEditTarget): ShapeEditTarget {
             },
             get closeUp() {
                 return latest.current.closeUp;
+            },
+            get order() {
+                return latest.current.order;
             },
             begin: () => latest.current.begin(),
             preview: (params) => latest.current.preview(params),
@@ -884,7 +893,7 @@ const fillShown = (kind: AnyToolKind, params: unknown, spots: number) => {
 
 /**
  * How it's filled: a pill of its own under the editor (owner, #435), the kind's own menus (a
- * Line's spacing, #523) and the mode switch first, then what that mode has (a box's layout in Grid, the gap in Outline, Reshuffle and Edge in Spread). Hidden
+ * Line's spacing, #523), who goes where on a Line (#528) and the mode switch first, then what that mode has (a box's layout in Grid, the gap in Outline, Reshuffle and Edge in Spread). Hidden
  * when the kind has none of them. Only the bar and the pill take the pointer, not the empty
  * space beside the pill
  */
@@ -898,6 +907,8 @@ const FillPill = memo(function FillPill({
     kind: AnyToolKind;
     shown: string;
     canPlace: boolean;
+    /** Only redraw it: who goes where, and whether Keep order is offered */
+    order: string;
     testId: string;
 }) {
     const env = () => envFor();
@@ -908,6 +919,8 @@ const FillPill = memo(function FillPill({
         >
             {/* The kind's own menus (a Line's spacing, #523) */}
             <ChoiceMenus target={target} envFor={env} />
+            {/* Who goes where on a Line (#528) */}
+            <OrderMenu target={target} />
             <ModeMenu target={target} envFor={env} />
             {/* What the mode has, after a divider (owner); nothing, and no divider, when it
                 has none */}
