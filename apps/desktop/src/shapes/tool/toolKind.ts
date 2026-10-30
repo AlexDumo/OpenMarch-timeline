@@ -273,6 +273,16 @@ export interface ToolClickPoints<P> {
 export interface ToolKind<P> {
     /** The shape kind that generates its spots and is stored in recipes */
     readonly shape: AnyShapeKind;
+    /**
+     * A preset of another kind's shape, named for the pickers (Curve, a Line whose points start
+     * smooth, #525): its recipes are that kind's, read back as it. Absent for the kind itself.
+     */
+    readonly preset?: string;
+    /**
+     * The words the command bar finds a preset by, in place of its kind's id (the Curve's
+     * "curve", "smooth" …); a kind itself is found by its shape's id
+     */
+    readonly keywords?: readonly string[];
     /** Its numbers, in the order the chip shows them (#344) */
     readonly params: readonly ToolParam<P>[];
     /** Its own menus, shown under the floating editor beside how it's filled (#523) */
@@ -377,3 +387,7 @@ export interface ToolKind<P> {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyToolKind = ToolKind<any>;
+
+/** What the pickers know a kind by: its preset's name, else its shape's id */
+export const toolId = (kind: AnyToolKind): string =>
+    kind.preset ?? kind.shape.id;

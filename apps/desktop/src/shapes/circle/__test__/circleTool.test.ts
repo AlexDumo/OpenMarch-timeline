@@ -265,6 +265,7 @@ describe("the circle and the host", () => {
             "Box",
             "Circle",
             "Line",
+            "Curve",
         ]);
     });
 

@@ -11,7 +11,7 @@ import {
     intervalsOf,
     whyNotSavable,
 } from "../savedShapes";
-import { lineTool } from "../../line/lineTool";
+import { curveTool, lineTool } from "../../line/lineTool";
 import { placementOf } from "../../tool/shapePlacement";
 import { shapeSteps, startingParams } from "../../command/shapeSteps";
 import type { AnyToolKind, ToolEnv } from "../../tool/toolKind";
@@ -322,6 +322,26 @@ describe("the library's Saved group", () => {
             ),
         ).toEqual([]);
         expect(savedShapeRows([box], [], tools)).toHaveLength(1);
+    });
+
+    it("reads a saved line as the Line, not its Curve preset listed first", () => {
+        const withCurve = [
+            { kind: curveTool, action: "shapeCurve" as const },
+            { kind: lineTool, action: "shapeLine" as const },
+        ];
+        const line = {
+            id: "l",
+            name: "Company front",
+            kind: lineTool.shape.id,
+            kindVersion: lineTool.shape.version,
+            intervals: { interval: 2 },
+        };
+        const [row] = savedShapeRows([line], [], withCurve);
+        expect(row!.note).toMatch(/^Line/);
+        expect(row!.kind.preset).toBeUndefined();
+        // Only the Curve: the line needs the Line, which this app would have
+        expect(savedShapeRows([line], [], withCurve.slice(0, 1))).toEqual([]);
+        expect(newerSavedShapes([line], [], withCurve.slice(0, 1))).toBe(1);
     });
 });
 
