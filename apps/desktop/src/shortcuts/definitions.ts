@@ -708,6 +708,17 @@ const STATIC_ACTIONS = {
         // The command bar lists Shape › Line instead, which asks the line's numbers
         hiddenFromPalette: true,
     },
+    // The Curve (#525): a Line whose points start smooth. No key of its own yet
+    shapeCurve: {
+        labelKey: "actions.shape.curve",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+        args: { kind: "curve" },
+        hiddenFromPalette: true,
+    },
     // The favorites ring (#351): hold to aim and let go to pick a shape, tap to keep it open.
     // The ring takes the key's release, so a held key doesn't repeat it. From the palette it opens
     // latched, as a tap does (#411).

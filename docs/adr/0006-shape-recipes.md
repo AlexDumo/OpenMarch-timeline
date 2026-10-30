@@ -35,12 +35,12 @@ and a group transition into a shape breaks UI-9's one-transition-per-marcher rul
      the recipe), `marcher_id` (deleted with the marcher), `slot` (the marcher's spot in the
      recipe's slot order) and `x`, `y` (where the recipe put it when last placed). One row per
      marcher and recipe.
-3. *(Revised 2026-10-14, see below.)* **Overrides are the difference between where a member
+3. _(Revised 2026-10-14, see below.)_ **Overrides are the difference between where a member
    stands and where its recipe put it.**
    They are not stored separately: a member nudged after placement simply stands somewhere else,
    and reopening the recipe shows it as moved by hand. Editing the recipe moves each member to
    its new spot plus its override, unless the designer resets the overrides.
-4. *(Revised 2026-10-29, see below.)* **A marcher belongs to at most one recipe at a beat.**
+4. _(Revised 2026-10-29, see below.)_ **A marcher belongs to at most one recipe at a beat.**
    Placing marchers with a new shape removes them from the other recipes at the beat it's placed
    at; a recipe left with no members is deleted. Both happen in the same edit as the positions,
    so it is one undo step.
@@ -75,7 +75,6 @@ Decision 3 is replaced: there are no overrides, and a reopened recipe always mat
 
 A recipe is shown at its move's end and at later moments while all its members stand on their
 spots. Editing it at a later moment saves a copy on that later move.
-
 
 ## Amendment, 2026-10-20: the frame and pivot, and spots with marchers
 
@@ -282,21 +281,55 @@ and merge cases (UI-25) with undo; `boxMembership.test.ts` and `box-tool.spec.mt
 The Line shape (spec #522, #523) stores a new kind:
 
 1. **Line recipes are `line`, version 2.** Version 1 is the old shape-model line. Version 2's
-   params are `points` (each `x`, `y` and a `tension`: 0 is a corner, above 0 a smooth point),
-   `closed` (open when absent), `spacing` and the host's `pivot`. `spacing` is `{ mode: "fit" }`
-   (the interval follows from the drawn points), `{ mode: "keep", groups }` (Keep interval) or
-   `{ mode: "path", groups, anchor }` (Interval on the path, `anchor` one of `start`, `center`,
-   `end`). A group is `{ interval, count? }`: the interval is the distance between neighbors in
-   field units, and a group with no `count` is the rest. `measured` (#527) says what an interval
-   measures: absent is the straight (true) distance; `"x"` (↔) is how far neighbors are apart
-   side to side, laid from the line's start so each x is exactly an interval from the last, and
-   `"y"` (↕) the same front to back. A line that no longer goes one way along its `measured` axis
-   (an end turned square to it) is laid out by the true distance until it does again.
-2. **A Line stores no frame.** Its frame (center, size, turn) follows from its points, so the
+   params are `points` (two or more, each `x`, `y` and a `tension` from 0 to 2: 0 is a corner,
+   above 0 a smooth point the line bends through, centripetal Catmull-Rom with its handles scaled
+   by the tension, 1 the plain curve, #525), `closed` (open when absent), `corners`, `spacing`,
+   `measured` and the host's `pivot`. `spacing` is `{ mode: "fit" }` (the interval follows from the drawn
+   points), `{ mode: "keep", groups }` (Keep interval) or `{ mode: "path", groups, anchor }`
+   (Interval on the path, `anchor` one of `start`, `center`, `end`). A group is
+   `{ interval, count? }`: the interval is the straight distance between neighbors (the chord) in
+   field units, `count` a whole number of marchers from 1, and a group with no `count` is the
+   rest; at most one group in a list is the rest (#526). The groups give the line's gaps in order
+   from its first point. Recipes store the parsed groups, never the typed text, so the interval
+   list's change of meaning (count × interval, from interval × gaps) changes no saved data.
+   `measured` (#527) says what every interval measures: absent is the straight (true) distance
+   above; `"x"` (↔) is how far neighbors are apart side to side, and `"y"` (↕) front to back. Each
+   spot is then found where the line reaches its coordinate that way, so the line must go one way
+   along that axis over its whole drawn path (curves included); a line that no longer does (a
+   part turned back, or a straight part square to the axis) is laid out by the true distance
+   until it does again. Measured ↔ or ↕, each neighbor's x (or y) is its gap from the one before,
+   computed from the run's start as `start + i × gap` within each group rather than summed, so a
+   spot on the step grid stays on it; every spot is on the grid that way only with intervals that
+   are whole half steps, in Keep interval (whose start slides along the line onto the grid) and on
+   the path from a start or end on the grid, or centered (the run's start rounded to a half step
+   from the line's start). Fit, and other intervals, put only the start on the grid.
+2. **Corners and stretches.** The two ends always hold a marcher, smooth or not; a smooth point
+   between them never does. The line from an end or a corner to the next corner or end is a
+   stretch, smooth points inside it. `corners` is false when the intervals run around the
+   corners. Absent or true, every corner holds a marcher in Fit and Keep interval, as long as there
+   is at least one gap per stretch; on the path, or with fewer gaps than stretches, the intervals
+   run around the corners whatever it says (#524). With corners holding marchers, each stretch
+   holds a whole number of the line's gaps, in order along it: in Fit and with one interval for
+   everyone, in proportion to the stretches' lengths (measured ↔ or ↕, their lengths that way, so
+   each stretch's gaps are even that way with a marcher on every corner); with groups, each corner at the seam between
+   gaps nearest its share of the line. Keep interval makes each stretch as long as the gaps it
+   holds, measured straight across or, measured ↔ or ↕, that way (a whole run of the groups, crossing group seams when they fall
+   mid-stretch), a curved stretch scaled about its start, and a corner drag between two straight
+   stretches lands where both are whole runs. A stretch left off its run (a corner dragged with
+   `fine`) scales its gaps to fit, which is even spacing with one interval. In Fit the groups
+   don't apply: each stretch's marchers spread evenly over it, straight across. On the path the
+   run is laid from its anchor along the path itself: from the start, back from the end, or with
+   as much path spare before it as after it.
+3. **A Curve is a Line.** The Curve in the pickers is a preset whose points start smooth; it
+   saves a `line` recipe and reads back as a Line.
+4. **A Line stores no frame.** Its frame (center, size, turn) follows from its points, so the
    frame amendment's stored center doesn't apply. A kind whose frame follows from its own numbers
    declares a `readable` check, used instead of the stored-center check when a recipe is read.
-3. **Version 2 grows without a new version.** More points, tensions, `closed`, counted groups,
-   `measured` (read since #527) and the corners setting still to come are all optional fields or
-   wider values of these. A build reads a Line only when it can lay out every field exactly as saved; anything
-   newer reads as plain positions (decision 5), never as the nearest shape it understands. Each
-   build widens its `readable` check as it learns a field.
+5. **Version 2 grows without a new version.** `closed`, still to come, is an optional field.
+   A build reads a Line only when it can lay out
+   every field exactly as saved; anything newer reads as plain positions (decision 5), never as
+   the nearest shape it understands. Each build widens its `readable` check as it learns a field:
+   the first Line build read two straight points and a single group with no count; more points
+   and `corners` came with #524, any number of groups, counted or with one rest, with #526,
+   tensions from 0 to 2 with #525, and `measured` (`"x"` or `"y"`, with any of these) with #527.
+   `closed: true` is still refused.

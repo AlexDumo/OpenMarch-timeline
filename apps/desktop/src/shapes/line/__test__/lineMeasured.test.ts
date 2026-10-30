@@ -3,11 +3,13 @@ import { lineTool } from "../lineTool";
 import {
     isLineParams,
     lineSpots,
+    onLine,
     type LineParams,
     type LinePoint,
 } from "../lineGeometry";
 import { chipLayout } from "../../editor/chip";
 import { scaleReadout } from "../../frame/scale";
+import { turnShape } from "../../frame/gestures";
 import { boxesAt, type PlacedRecipe } from "../../placed/placedBox";
 import { placementOf } from "../../tool/shapePlacement";
 import { paramGlyph, type ToolEnv } from "../../tool/toolKind";
@@ -242,6 +244,8 @@ describe("greyed out on a line that isn't one way", () => {
             points: [corner(0, 0), corner(30, 40), corner(80, 50)],
             spacing: { mode: "keep", groups: [{ interval: 20 }] },
             measured: "x",
+            // The intervals run around the corner
+            corners: false,
         };
         const spots = lineSpots(bent, 5, STEP);
         expect(spots.map((p) => p.x)).toEqual([0, 20, 40, 60, 80]);
@@ -315,5 +319,201 @@ describe("a placed line keeps its Measured setting", () => {
         expect(isLineParams({ ...p, measured: "x" })).toBe(true);
         expect(isLineParams({ ...p, measured: "y" })).toBe(true);
         expect(isLineParams({ ...p, measured: "true" })).toBe(false);
+    });
+});
+
+/** A session on a line of `n` marchers whose params are `p` */
+const opened = (n: number, p: LineParams) =>
+    edit(drawn(n, { x: 1, y: 100 }, { x: 79, y: 160 }), p, ctx);
+const smooth = (x: number, y: number): LinePoint => ({ x, y, tension: 1 });
+const onHalf = (v: number) => Math.abs(v / half - Math.round(v / half)) < 1e-9;
+
+describe("↔ with mixed intervals", () => {
+    it("spaces each group at its own interval side to side, on the grid", () => {
+        // 2 marchers at 1½ steps, then 3 at 2: the seam takes the larger
+        const t = typed(measuredBy(offYards(), "x"), "2*1.5+3*2");
+        expect(paramsOf(t).measured).toBe("x");
+        const xs = spotsOf(t).map((p) => p.x);
+        expect(gapsOf(xs)).toEqual([15, 20, 20, 20]);
+        for (const x of xs) expect(x % half).toBe(0);
+        expect(glyphOf(t)).toBe("↔");
+    });
+});
+
+describe("↔ on a line whose corners hold marchers", () => {
+    // A zigzag of diagonals, x only ever going right
+    const zigzag = (spacing: LineParams["spacing"]): LineParams => ({
+        points: [corner(0, 100), corner(40, 140), corner(100, 80)],
+        spacing,
+        measured: "x",
+    });
+
+    it("in Fit gives each leg a whole number of even gaps side to side, a marcher on the corner", () => {
+        const t = opened(6, zigzag({ mode: "fit" }));
+        const spots = spotsOf(t);
+        // 4 steps across then 6: 2 gaps and 3
+        expect(spots.map((p) => p.x)).toEqual([0, 20, 40, 60, 80, 100]);
+        expect(spots[2]).toEqual({ x: 40, y: 140 });
+        expect(spots[1]!.y).toBeCloseTo(120, 9);
+        expect(spots[3]!.y).toBeCloseTo(120, 9);
+    });
+
+    it("in Keep interval sizes each leg to its gaps side to side, every x on the grid", () => {
+        // 3 steps across then 7, typed 2: legs of 2 gaps and 3, so 4 steps and 6
+        const t = typed(
+            opened(6, {
+                ...zigzag({ mode: "fit" }),
+                points: [corner(0, 100), corner(30, 130), corner(100, 60)],
+            }),
+            "2",
+        );
+        const p = paramsOf(t);
+        expect(p.spacing.mode).toBe("keep");
+        const spots = spotsOf(t);
+        expect(gapsOf(spots.map((q) => q.x))).toEqual([20, 20, 20, 20, 20]);
+        for (const q of spots) expect(onHalf(q.x)).toBe(true);
+        // The corner holds the third marcher, each leg still at its own slope
+        expect(spots[2]!.x).toBeCloseTo(p.points[1]!.x, 9);
+        expect(spots[2]!.y).toBeCloseTo(p.points[1]!.y, 9);
+        expect(spots.at(-1)!.x).toBeCloseTo(p.points[2]!.x, 9);
+        const slope = (a: XY, b: XY) => (b.y - a.y) / (b.x - a.x);
+        expect(slope(p.points[0]!, p.points[1]!)).toBeCloseTo(1, 9);
+        expect(slope(p.points[1]!, p.points[2]!)).toBeCloseTo(-1, 9);
+    });
+});
+
+describe("↔ on a curve", () => {
+    it("lays a gentle bow out side to side", () => {
+        const t = opened(5, {
+            points: [smooth(0, 100), smooth(40, 80), smooth(80, 100)],
+            spacing: { mode: "fit" },
+            measured: "x",
+        });
+        expect(reasonOf(t, "x")).toBeUndefined();
+        const spots = spotsOf(t);
+        expect(spots.map((p) => p.x)).toEqual([0, 20, 40, 60, 80]);
+        // On the bow, not the straight line between its ends
+        expect(spots[2]!.y).toBeCloseTo(80, 6);
+    });
+
+    it("refuses ↔ on a curve that turns back side to side, though its points go one way", () => {
+        const t = opened(5, {
+            points: [
+                smooth(0, 0),
+                smooth(100, 0),
+                smooth(101, 100),
+                smooth(200, 100),
+            ],
+            spacing: { mode: "fit" },
+        });
+        expect(reasonOf(t, "x")).toBe("The line turns back side to side");
+        expect(measured.pick(t.params, t.spots, "x", env)).toBe(t.params);
+    });
+});
+
+describe("review fixes", () => {
+    it("keeps a dragged end's x in Keep interval ↔, however steep the drag", () => {
+        let t = typed(measuredBy(diagonal(), "x"), "2");
+        const before = paramsOf(t).points;
+        const end = lineTool.handles(t.params, t.spots)[1]!;
+        t = press(t, end.at, env);
+        // Nearly straight down the field from the other end
+        t = pointerMove(t, { x: before[0]!.x + 1, y: before[0]!.y + 300 }, env);
+        t = release(t, ctx);
+        const after = paramsOf(t).points;
+        expect(after[1]!.x).toBe(before[1]!.x);
+        expect(after[1]!.y).toBe(snapHalf(before[0]!.y + 300));
+        const xs = spotsOf(t).map((p) => p.x);
+        expect(gapsOf(xs)).toEqual([20, 20, 20, 20]);
+        expect(xs[0]).toBe(before[0]!.x);
+    });
+
+    it("sizes a line in Keep interval ↔ to its run again when it's turned", () => {
+        const t = typed(measuredBy(diagonal(), "x"), "2");
+        const turned = turnShape(
+            lineTool,
+            t.params,
+            t.spots,
+            Math.atan2(60, 80) + Math.PI / 6,
+            "c",
+            env,
+        ) as LineParams;
+        const after = edit(t, turned, ctx);
+        const p = paramsOf(after);
+        const spots = spotsOf(after);
+        expect(gapsOf(spots.map((q) => q.x)).map((g) => g.toFixed(9))).toEqual(
+            Array(4).fill((20).toFixed(9)),
+        );
+        // The run reaches from end to end, no marcher past them
+        expect(spots[0]!.x).toBeCloseTo(p.points[0]!.x, 9);
+        expect(spots.at(-1)!.x).toBeCloseTo(p.points.at(-1)!.x, 9);
+        expect(spots[0]!.y).toBeCloseTo(p.points[0]!.y, 9);
+    });
+
+    it("takes a press by the run it shows, rounded onto the grid", () => {
+        // 8 steps across, 4 gaps of 2⅜ centered: from -7½, shown from -5
+        const p: LineParams = {
+            points: [corner(0, 100), corner(80, 160)],
+            spacing: {
+                mode: "path",
+                groups: [{ interval: 23.75 }],
+                anchor: "center",
+            },
+            measured: "x",
+        };
+        expect(lineSpots(p, 5, STEP)[0]!.x).toBe(-5);
+        // 8.4 along the line past the shown run's end, 11.5 past the unrounded one
+        const at = {
+            x: 87.5 + 11.5 * 0.8,
+            y: 100 + (87.5 + 11.5 * 0.8) * 0.75,
+        };
+        expect(onLine(p, 5, at, { stepPx: STEP, hitRadius: 3 })).toBe(true);
+    });
+
+    it("shows the true distance on the trigger while a part runs square to its setting", () => {
+        const t = opened(5, {
+            points: [
+                corner(0, 100),
+                corner(40, 140),
+                corner(40, 180),
+                corner(80, 220),
+            ],
+            spacing: { mode: "fit" },
+            measured: "x",
+        });
+        expect(measured.current(t.params, t.spots)).toBe("true");
+        expect(glyphOf(t)).toBeNull();
+    });
+
+    it("says a part runs square rather than turning back", () => {
+        const t = opened(5, {
+            points: [
+                corner(0, 100),
+                corner(40, 140),
+                corner(40, 180),
+                corner(80, 220),
+            ],
+            spacing: { mode: "fit" },
+        });
+        expect(reasonOf(t, "x")).toBe(
+            "Part of the line runs straight front to back",
+        );
+        expect(reasonOf(t, "y")).toBeUndefined();
+    });
+});
+
+describe("a saved line with Measured and everything else", () => {
+    it("reads measured with corners, tensions and groups", () => {
+        expect(
+            isLineParams({
+                points: [corner(0, 0), smooth(40, 40), corner(100, 0)],
+                spacing: {
+                    mode: "keep",
+                    groups: [{ interval: 15, count: 2 }, { interval: 20 }],
+                },
+                corners: false,
+                measured: "x",
+            }),
+        ).toBe(true);
     });
 });

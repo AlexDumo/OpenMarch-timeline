@@ -20,6 +20,10 @@ ordinary positions it writes.
 - `box/`, `circle/`, `line/`: the drawable kinds (`boxTool`, `circleTool`, `lineTool`) and their
   geometry. The Line's frame follows from its points, so it checks its own recipes (`readable`)
   and declares its spacing menu as a kind choice (`ToolChoice`, shown by `editor/ChoiceMenu.tsx`).
+  The Curve (`curveTool`) is a preset of the Line (`ToolKind.preset`): its points start smooth, it
+  saves Line recipes, and pickers know it by `toolId`. A picker that arms or highlights a kind
+  threads `toolId(kind)`, never `kind.shape.id`, which a preset shares with its kind; code that
+  reads recipes or saved shapes back skips presets (`PLACED_KINDS`, `savedShapes.ts`).
   `box/edgePull.ts` lands edges and corners on yard lines and hashes; `box/modeMemory.ts`
   remembers each fill mode's numbers.
 - `kinds/`: the older shape-model kinds (`ShapeKind` in `types.ts`) that generate spots. The box
@@ -29,7 +33,8 @@ ordinary positions it writes.
 - `distribute/`: how a closed shape is filled (Grid, Outline, Spread, Edge), owned by the host;
   a kind only describes its region.
 - `editor/`: the floating editor (`ShapeEditorBar.tsx`) and its controls: numbers you type or
-  drag (`ScrubNumber`, `scrub.ts`, `format.ts` for exact fractions), the mode, layout and pivot
+  drag (`ScrubNumber`, `scrub.ts`, `format.ts` for exact fractions), a Line's interval groups
+  (`GroupChips`; the list syntax and groups-to-gaps layout are `spacing.ts`), the mode, layout and pivot
   menus, Recalculate, Reshuffle, Close up, and keeping the shape in view (`keepInView.ts`).
 - `field/`: how the shape code reads the three.js field (`shapeField.ts`, registered by the
   field, never `window.canvas`), pointer routing and the field modes it installs.
@@ -48,7 +53,7 @@ ordinary positions it writes.
 - A kind implements `ToolKind<P>` (`tool/toolKind.ts`): its params (declared once, with primary,
   drag direction and interval flags), handles, `dragHandle`, `move`, `frameOf` / `withFrame` /
   `fromFrame`, and optionally `closed` for the host's distributor and `choices` for menus of its
-  own. Everything is pure.
+  own, and `groups` for mixed intervals (#526). Everything is pure.
 - The spot count comes from the host. Spots and who goes where are separate steps.
 - Every placement goes through `writePlacement` (`tool/shapePlacement.ts`): `placeShape` for an
   open shape, `commitBox` for an edit of a placed one. Members move through the canvas-drag path

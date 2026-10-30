@@ -78,6 +78,8 @@ export interface ToolHandle {
     readonly key: string;
     readonly at: XY;
     readonly cursor: string;
+    /** A handle that adds a point (a Line's segment midpoint, #524), drawn smaller and round */
+    readonly adds?: boolean;
 }
 
 /** A parameter's direction mark: ↔ across, ↕ deep */
@@ -180,6 +182,58 @@ export function paramGlyph<P>(
     return (typeof glyph === "function" ? glyph(params, n) : glyph) ?? null;
 }
 
+/** One group of a kind's interval list as the floating editor shows it (#526) */
+export interface ToolGroup {
+    /** Marchers in it as laid out: "2" */
+    readonly count: string;
+    /** Its interval in steps: "3", "1⅔" */
+    readonly interval: string;
+    /** No count was given: it takes the marchers the other groups don't */
+    readonly rest: boolean;
+    /** Marchers it took past its count, as the last group with no rest to take them; 0 if none */
+    readonly grown: number;
+    /** Too few marchers to reach it: it's dropped off the end */
+    readonly dropped: boolean;
+}
+
+/** Which number of a group: how many marchers, or the steps between them */
+export type GroupPart = "count" | "interval";
+
+/**
+ * A kind's mixed intervals (#526, spec #522): groups of marchers, each at its own interval, which
+ * the floating editor shows as a chip each (`2 × 3 │ 4 × 2`) in place of the kind's single
+ * interval. Everything is pure.
+ */
+export interface ToolGroups<P> {
+    /** The groups, or null when the shape has one interval for everyone (its interval number) */
+    shown(params: P, n: number, stepPx: number): readonly ToolGroup[] | null;
+    /**
+     * `text` typed over group `index`'s count or interval; a whole list typed there (`2*3+4*2`)
+     * replaces the list. Null when the text isn't understood.
+     */
+    type(
+        params: P,
+        n: number,
+        index: number,
+        part: GroupPart,
+        text: string,
+        env: ToolEnv,
+    ): P | null;
+    /** Group `index`'s count or interval dragged by `move` from `base`, the params at the press */
+    scrub(
+        base: P,
+        n: number,
+        index: number,
+        part: GroupPart,
+        move: ScrubMove,
+        env: ToolEnv,
+    ): P;
+    /** The params with a group added at the end (the chip's +) */
+    add(params: P, n: number, env: ToolEnv): P;
+    /** The params without group `index`; one group left is everyone at its interval */
+    remove(params: P, n: number, index: number, env: ToolEnv): P;
+}
+
 /** One answer in a kind's menu ({@link ToolChoice}) */
 export interface ToolChoiceOption {
     /** Stable for the kind: tests and a later command step name the answer by it */
@@ -205,6 +259,23 @@ export interface ToolChoice<P> {
     current(params: P, n: number): string;
     /** The params with `value` picked */
     pick(params: P, n: number, value: string, env: ToolEnv): P;
+    /** Hidden while this is false (the corners switch on a line with no corner); shown when absent */
+    shown?(params: P, n: number): boolean;
+}
+
+/**
+ * Drawing by clicking point after point (#524, spec #522), for a kind that opts in. A drag still
+ * draws with {@link ToolKind.draw}; a click with no drag starts a run of points, each click adds
+ * one, and Enter, a double-click or a click on the last point finishes it. Everything is pure.
+ */
+export interface ToolClickPoints<P> {
+    /**
+     * Where a point clicked at `at` lands, after `previous` (the points placed so far, landed):
+     * on the grid or a field line, at 45° from the last with `constrain`
+     */
+    land(previous: readonly XY[], at: XY, env: ToolEnv): XY;
+    /** The shape through `points`, in order, or undefined while they aren't one yet */
+    draw(points: readonly XY[], n: number, env: ToolEnv): P | undefined;
 }
 
 /**
@@ -215,10 +286,27 @@ export interface ToolChoice<P> {
 export interface ToolKind<P> {
     /** The shape kind that generates its spots and is stored in recipes */
     readonly shape: AnyShapeKind;
+    /**
+     * A preset of another kind's shape, named for the pickers (Curve, a Line whose points start
+     * smooth, #525): its recipes are that kind's, read back as it. Absent for the kind itself.
+     */
+    readonly preset?: string;
+    /**
+     * The words the command bar finds a preset by, in place of its kind's id (the Curve's
+     * "curve", "smooth" …); a kind itself is found by its shape's id
+     */
+    readonly keywords?: readonly string[];
     /** Its numbers, in the order the chip shows them (#344) */
     readonly params: readonly ToolParam<P>[];
     /** Its own menus, shown under the floating editor beside how it's filled (#523) */
     readonly choices?: readonly ToolChoice<P>[];
+    /** Its mixed intervals, when it can be spaced by groups of marchers (#526) */
+    readonly groups?: ToolGroups<P>;
+    /**
+     * Its spots run in an order along it (a Line, #528): the host offers who goes where by Least
+     * travel, Keep order or Reverse. Absent: always least travel.
+     */
+    readonly ordered?: boolean;
     /**
      * Whether params read back from a recipe are a shape of this kind this app can lay out. Absent:
      * they have a center, as every frame-based kind stores (ADR 0006). A kind whose frame follows
@@ -248,11 +336,23 @@ export interface ToolKind<P> {
         env: ToolEnv,
         previous?: P,
     ): P | undefined;
+    /**
+     * Click point after point to draw (#524); absent for kinds drawn by one drag only (the box,
+     * the circle)
+     */
+    readonly clickPoints?: ToolClickPoints<P>;
     handles(params: P, n: number): readonly ToolHandle[];
+    /**
+     * What a click on handle `key` does, rather than nothing: a Line's midpoint handle splits its
+     * segment (#524). Null or absent: a click does nothing.
+     */
+    clickHandle?(params: P, n: number, key: string): P | null;
     /** The params with handle `key` dragged to `to`, starting from `base` (the params at press) */
     dragHandle(base: P, n: number, key: string, to: XY, env: ToolEnv): P;
     /** The shape's outline on the field; the frame's four corners when absent */
     outline?(params: P, n: number): readonly XY[];
+    /** Whether the outline is open, drawn without joining its last point to its first (a line) */
+    outlineOpen?(params: P, n: number): boolean;
     /**
      * The points pulled onto the field's lines while the shape is moved (#446): a box's corners,
      * then its center. None when absent, so the shape moves on the grid alone.
@@ -300,3 +400,7 @@ export interface ToolKind<P> {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyToolKind = ToolKind<any>;
+
+/** What the pickers know a kind by: its preset's name, else its shape's id */
+export const toolId = (kind: AnyToolKind): string =>
+    kind.preset ?? kind.shape.id;

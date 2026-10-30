@@ -192,6 +192,8 @@ export type FieldTestShapeOverlay = {
     gaps: { x: number; y: number }[];
     /** Its handles, in the viewport. */
     handles: ScreenPoint[];
+    /** Its handles that add a point (a line's segment midpoints, #524), in the viewport. */
+    addHandles: ScreenPoint[];
     /** Drawing (a drag draws it) or open; null for a mode that doesn't say. */
     stage: "drawing" | "open" | null;
     /** The rotate knob and the center dot, in the viewport; null when not drawn. */

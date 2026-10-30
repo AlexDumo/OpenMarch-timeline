@@ -252,6 +252,10 @@ export type FieldModeDrawing = {
     spots: readonly FieldPoint[];
     walks: readonly { from: FieldPoint; to: FieldPoint }[];
     handles: readonly FieldPoint[];
+    /** Handles that add a point (a line's segment midpoints, #524), drawn smaller and round */
+    addHandles?: readonly FieldPoint[];
+    /** The outline is open: drawn without joining its last point to its first (a line, #524) */
+    openOutline?: boolean;
     /**
      * Where the shape's marchers start the move (08-shape-system-ux.md, "Marcher styling"), drawn
      * as faint ghosts of them (#417): at the start flag, the same points the walks leave from
@@ -410,8 +414,15 @@ export class FieldEditor {
     /** The mode taking presses first, while one is on. */
     private mode: FieldMode | null = null;
     private unsubscribeMode: (() => void) | null = null;
-    /** A press the mode claimed, until its release. */
-    private modePress: { start: FieldPointer; double: boolean } | null = null;
+    /**
+     * A press the mode claimed, until its release. `dragged` once it went past
+     * the slop: dragged out and back, it's no click.
+     */
+    private modePress: {
+        start: FieldPointer;
+        double: boolean;
+        dragged: boolean;
+    } | null = null;
     /** The prop tool, while it's on (C2.1). */
     private propTool: PropTool | null = null;
     /** The prop tool's last press, for telling its double-clicks. */
@@ -495,6 +506,7 @@ export class FieldEditor {
                 // The first click may have been the editor's: the click
                 // on a box's member that turned the mode on
                 double: last !== null && this.isSoonAfter(last, pointer),
+                dragged: false,
             };
             this.mode.press(pointer, modePress);
             this.emit();
@@ -522,6 +534,8 @@ export class FieldEditor {
             return;
         }
         if (this.modePress) {
+            if (isPastSlop(this.modePress.start, pointer))
+                this.modePress.dragged = true;
             this.mode?.move(pointer);
             return;
         }
@@ -585,7 +599,8 @@ export class FieldEditor {
         if (modePress) {
             if (pointer.button !== modePress.start.button) return;
             this.modePress = null;
-            const click = !isPastSlop(modePress.start, pointer);
+            const click =
+                !modePress.dragged && !isPastSlop(modePress.start, pointer);
             // A double-click's second click starts no third
             this.lastClick =
                 click && !modePress.double

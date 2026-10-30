@@ -1,4 +1,10 @@
-import { assignSlots, type AssignMarcher } from "../assign";
+import {
+    assignSlots,
+    orderFields,
+    orderOn,
+    type AssignMarcher,
+    type OrderChoice,
+} from "../assign";
 import { carryPivot } from "../frame/pivot";
 import {
     centerPivot,
@@ -23,7 +29,7 @@ import type { AnyToolKind, ToolEnv } from "./toolKind";
  *
  * Releasing ends the gesture as one undo step. Who goes where is held during every gesture. Only
  * a fresh draw, a change in how many spots there are across or deep, or Recalculate (#429) works
- * it out again, by least travel: stretching, moving, turning and flipping keep each marcher on
+ * it out again, by least travel (or, on a Line, the order picked: #528): stretching, moving, turning and flipping keep each marcher on
  * their own spot, so a turned or flipped form is the same form (owner, 2026-10-16).
  *
  * Every function is pure; `shapeToolStore.ts` holds the state.
@@ -37,12 +43,41 @@ export interface ToolSnapshot {
     readonly params: unknown;
     /** The slot index for each marcher, in `marchers` order; null with no shape */
     readonly assignment: readonly number[] | null;
+    /**
+     * Who goes where on a kind with an order along it (#528): Least travel, Keep order or Reverse.
+     * Kept through other kinds, which go by least travel.
+     */
+    readonly order: OrderChoice;
 }
 
 export type Gesture =
     | {
           readonly type: "draw";
           readonly from: XY;
+          readonly before: ToolSnapshot;
+          /**
+           * For a kind drawn by clicking points (#524): where the first point lands, should this
+           * press be a click rather than a drag
+           */
+          readonly first?: XY;
+      }
+    /**
+     * Clicking point after point (#524): it lasts from click to click, the pointer up between,
+     * until Enter, a double-click or a click on the last point finishes it, or Escape
+     */
+    | {
+          readonly type: "points";
+          readonly points: readonly XY[];
+          /** Where a click now would put the next point, landed: the preview's last point */
+          readonly next: XY | null;
+          /** The shape through `points`; undefined while they aren't one yet */
+          readonly drawn: unknown;
+          /** The shape through `points` and `next`: what adding it draws */
+          readonly adding: unknown;
+          /** The pointer is down: its release adds `next` */
+          readonly pressed: boolean;
+          /** The press is on the last point: its release finishes the line */
+          readonly onLast: boolean;
           readonly before: ToolSnapshot;
       }
     /** A number in the floating editor being dragged: the shape follows it live */
@@ -84,6 +119,8 @@ export function openTool(
         spots: marchers.length,
         params: null,
         assignment: null,
+        // Keep order when the marchers all come from one placed Line (#528)
+        order: keepsOrder(marchers) ? "keep" : "nearest",
         gesture: null,
         past: [],
         future: [],
@@ -94,7 +131,23 @@ const snapshot = (s: ToolState): ToolSnapshot => ({
     kind: s.kind,
     params: s.params,
     assignment: s.assignment,
+    order: s.order,
 });
+
+/** Whether every marcher has a place along one placed Line, so their order there can be kept */
+const keepsOrder = (marchers: readonly AssignMarcher[]) =>
+    marchers.length > 0 && marchers.every((m) => m.along !== undefined);
+
+/**
+ * Whether Keep order is offered (#528): every selected marcher is a member of one placed Line.
+ * Reverse is offered on any line.
+ */
+export const keepOrderOffered = (state: ToolState): boolean =>
+    keepsOrder(state.marchers);
+
+/** Who goes where as the open shape works it out: least travel unless its kind has an order */
+export const orderOf = (state: Pick<ToolState, "kind" | "order">) =>
+    orderFields(orderOn(state.kind, state.order));
 
 /** The spots for the open shape, in the kind's order; empty before one is drawn */
 export function slotsOf(state: ToolState, ctx: ShapeContext): Slot[] {
@@ -113,19 +166,29 @@ export function slotsOf(state: ToolState, ctx: ShapeContext): Slot[] {
  */
 const solvedFor = new WeakMap<
     readonly number[],
-    { params: unknown; marchers: ToolState["marchers"]; ctx: ShapeContext }
+    {
+        params: unknown;
+        marchers: ToolState["marchers"];
+        ctx: ShapeContext;
+        order: OrderChoice;
+    }
 >();
 
-/** Who goes where on the current shape, by least travel from where the marchers start */
+/**
+ * Who goes where on the current shape: by least travel from where the marchers start, or in the
+ * order picked on a kind with one ({@link orderOf})
+ */
 function reassign(state: ToolState, ctx: ShapeContext): ToolState {
     if (state.params === null) return { ...state, assignment: null };
     const slots = slotsOf(state, ctx);
+    const { orderMode, reverse } = orderOf(state);
     const assignment = assignSlots({
         kind: state.kind.shape,
         params: state.params,
         slots,
         marchers: state.marchers,
-        mode: "nearest",
+        mode: orderMode,
+        reverse,
         ctx,
     });
     if (assignment && !state.gesture)
@@ -133,6 +196,7 @@ function reassign(state: ToolState, ctx: ShapeContext): ToolState {
             params: state.params,
             marchers: state.marchers,
             ctx,
+            order: state.order,
         });
     return { ...state, assignment };
 }
@@ -160,6 +224,8 @@ export function pressTarget(
 }
 
 export function press(state: ToolState, at: XY, env: ToolEnv): ToolState {
+    if (state.gesture?.type === "points")
+        return pressPoint(state, state.gesture, at, env);
     if (state.gesture) return state;
     const before = snapshot(state);
     const onShape =
@@ -167,14 +233,79 @@ export function press(state: ToolState, at: XY, env: ToolEnv): ToolState {
             ? null
             : startShapeGesture(state.kind, state.params, state.spots, at, env);
     const click =
-        onShape && (onShape.type === "move" || onShape.type === "handle")
-            ? gapPickAt(state.kind, state.params, state.spots, at, env)
-            : null;
+        onShape?.type === "handle"
+            ? (state.kind.clickHandle?.(
+                  state.params,
+                  state.spots,
+                  onShape.key,
+              ) ?? gapPickAt(state.kind, state.params, state.spots, at, env))
+            : onShape?.type === "move"
+              ? gapPickAt(state.kind, state.params, state.spots, at, env)
+              : null;
     const gesture: Gesture = onShape
         ? { ...onShape, before, ...(click !== null ? { click } : {}) }
-        : // fine and the Snap toggle off draw from where the press is (owner on #453)
-          { type: "draw", from: env.snap ? env.gridSnap(at) : at, before };
+        : {
+              type: "draw",
+              // fine and the Snap toggle off draw from where the press is (owner on #453)
+              from: env.snap ? env.gridSnap(at) : at,
+              before,
+              ...(state.kind.clickPoints
+                  ? { first: state.kind.clickPoints.land([], at, env) }
+                  : {}),
+          };
     return { ...state, gesture, pointer: at };
+}
+
+type PointsGesture = Extract<Gesture, { type: "points" }>;
+
+/** A press while clicking points: its release adds a point, or finishes on the last one */
+function pressPoint(
+    state: ToolState,
+    g: PointsGesture,
+    at: XY,
+    env: ToolEnv,
+): ToolState {
+    const last = g.points.at(-1)!;
+    const onLast = Math.hypot(at.x - last.x, at.y - last.y) <= env.hitRadius;
+    return previewPoints(
+        { ...state, pointer: at },
+        { ...g, pressed: true, onLast },
+        at,
+        env,
+    );
+}
+
+/** The line through the points clicked and the one the pointer would add, shown as it'd be */
+function previewPoints(
+    state: ToolState,
+    g: PointsGesture,
+    at: XY,
+    env: ToolEnv,
+): ToolState {
+    const draw = state.kind.clickPoints!;
+    const next = draw.land(g.points, at, env);
+    const drawn = draw.draw(g.points, state.spots, env);
+    const adding = draw.draw([...g.points, next], state.spots, env);
+    return {
+        ...state,
+        params: adding ?? drawn ?? g.before.params,
+        gesture: { ...g, next, drawn, adding },
+    };
+}
+
+/**
+ * Ends a run of clicked points (#524): Enter, a double-click or a click on the last point. The
+ * line through them is one undo step, who goes where worked out; fewer than make a shape is the
+ * same as Escape. Unchanged when no points are being clicked.
+ */
+export function finishPoints(state: ToolState, ctx: ShapeContext): ToolState {
+    const g = state.gesture;
+    if (g?.type !== "points") return state;
+    if (g.drawn === undefined) return cancelGesture(state);
+    return reassign(
+        pushHistory({ ...state, params: g.drawn, gesture: null }, g.before),
+        ctx,
+    );
 }
 
 export function pointerMove(state: ToolState, at: XY, env: ToolEnv): ToolState {
@@ -182,6 +313,7 @@ export function pointerMove(state: ToolState, at: XY, env: ToolEnv): ToolState {
     if (!g || g.type === "edit") return state;
     const n = state.spots;
     state = { ...state, pointer: at };
+    if (g.type === "points") return previewPoints(state, g, at, env);
     if (g.type === "draw") {
         // What this drag drew a moment ago, not the shape it replaces
         const previous =
@@ -207,6 +339,26 @@ export function release(
 ): ToolState {
     const g = state.gesture;
     if (!g) return state;
+    if (g.type === "points") return releasePoint(state, g, ctx, click);
+    // Nothing drawn by a kind drawn by clicking: the press was its first point (#524)
+    if (
+        g.type === "draw" &&
+        g.first !== undefined &&
+        state.params === g.before.params
+    )
+        return {
+            ...state,
+            gesture: {
+                type: "points",
+                points: [g.first],
+                next: null,
+                drawn: undefined,
+                adding: undefined,
+                pressed: false,
+                onLast: false,
+                before: g.before,
+            },
+        };
     if (click?.double && g.type !== "draw" && g.type !== "edit") {
         const centered = centerPivot(g);
         if (centered !== null) state = { ...state, params: centered };
@@ -219,6 +371,32 @@ export function release(
     return g.type === "draw" || !holdsSpots(state, g.before.params, ctx)
         ? reassign(next, ctx)
         : next;
+}
+
+/** A click while clicking points: a point added, or the line finished */
+function releasePoint(
+    state: ToolState,
+    g: PointsGesture,
+    ctx: ShapeContext,
+    click?: { readonly double: boolean } | null,
+): ToolState {
+    if (!g.pressed) return state;
+    if (click?.double || g.onLast || g.next === null)
+        return finishPoints(state, ctx);
+    const last = g.points.at(-1)!;
+    // Landed on the last point: the same as clicking it
+    if (g.next.x === last.x && g.next.y === last.y)
+        return finishPoints(state, ctx);
+    return {
+        ...state,
+        gesture: {
+            ...g,
+            points: [...g.points, g.next],
+            drawn: g.adding,
+            pressed: false,
+            onLast: false,
+        },
+    };
 }
 
 /**
@@ -302,8 +480,21 @@ export function switchKind(
 }
 
 /**
+ * Picks who goes where on a kind with an order (#528): Least travel, Keep order or Reverse, worked
+ * out at once as one undo step. Nothing happens for the choice there already.
+ */
+export function setOrder(
+    state: ToolState,
+    order: OrderChoice,
+    ctx: ShapeContext,
+): ToolState {
+    if (state.gesture || order === state.order) return state;
+    return reassign(pushHistory({ ...state, order }, snapshot(state)), ctx);
+}
+
+/**
  * Recalculate who goes where (#429): the shape's marchers on its spots by least travel from where
- * they come from, as one undo step. Moving, turning and flipping keep the assignment (the
+ * they come from (or in the order picked, #528), as one undo step. Moving, turning and flipping keep the assignment (the
  * default); this is the one button that works it out again. Unchanged when it's already that.
  */
 export function recalculate(state: ToolState, ctx: ShapeContext): ToolState {
@@ -319,7 +510,8 @@ export function canRecalculate(state: ToolState, ctx: ShapeContext): boolean {
         solved !== undefined &&
         solved.params === state.params &&
         solved.marchers === state.marchers &&
-        solved.ctx === ctx
+        solved.ctx === ctx &&
+        solved.order === state.order
     )
         return false;
     const fresh = reassign(state, ctx).assignment;

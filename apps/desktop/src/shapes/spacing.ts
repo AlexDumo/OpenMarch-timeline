@@ -6,97 +6,194 @@ import type { IntervalRun, Slot, Spacing } from "./types";
 /**
  * Spacing along a path, shared by every path kind.
  *
- * Intervals are typed in steps:
- * - one number is that interval for every gap: `2`;
- * - a list is one gap each, in order: `4,4,4,2,2,2,2`;
- * - `steps x gaps` repeats an interval: `4x3,2x4` is three gaps of 4 steps, then four of 2 (the
- *   same as the list above). Runs and single gaps can be mixed: `4x3,2,2`.
+ * An interval list is typed on a numpad (spec #522, "Mixed intervals"): groups of marchers, each
+ * a count and an interval in steps.
+ * - one number is everyone at that interval: `2`;
+ * - `count * interval` is a group of that many marchers: `2*3+4*2` is 2 marchers at 3 steps,
+ *   then 4 at 2. `x` or `×` work for `*`, and `,` for `+`;
+ * - at most one group has no count: it's the rest, so `2.5+3*4` puts the last 3 at 4 steps and
+ *   `2*3+2+2*3` 2 at each end. Where it sits decides where the counted groups go.
  *
- * A list shorter than the marchers need repeats from its start (`describeGaps` says so).
+ * Each interval is read by {@link readSteps}, so fractions stay exact (`2*5/3`, `3*2⅔`).
  */
+export interface IntervalGroup {
+    /** Steps between neighbors */
+    readonly steps: number;
+    /** How many marchers; absent for the rest */
+    readonly count?: number;
+}
+
 export type ParsedIntervals =
-    | { readonly ok: true; readonly runs: IntervalRun[] }
+    | { readonly ok: true; readonly groups: IntervalGroup[] }
     | { readonly ok: false; readonly message: string };
 
-/** A number of steps ({@link readSteps}: "2", "2⅔", "1 2/3"), then optionally a gap count */
-const RUN = /^(.+?)(?:\s*[x×*]\s*(\d+))?$/i;
+/** A count, `*` or `x`, then the interval; or the interval alone */
+const GROUP = /^(?:([^*x×]+?)\s*[x×*]\s*)?([^*x×]+)$/i;
 
-export function parseIntervals(text: string): ParsedIntervals {
-    const parts = text
-        .split(/[,;]/)
-        .map((part) => part.trim())
-        .filter((part) => part.length > 0);
-    if (parts.length === 0)
+/** The most marchers one group can have */
+export const MAX_GROUP_COUNT = 999;
+
+/** A list's groups apart (`2*3+4*2` is `2*3` and `4*2`), or why they can't be */
+function listParts(
+    text: string,
+): { readonly parts: string[] } | { readonly message: string } {
+    const parts = text.split(/[+,;]/).map((part) => part.trim());
+    // One separator at the end is a list still being typed (`2*3+`)
+    if (parts.length > 1 && parts.at(-1) === "") parts.pop();
+    if (parts.length === 1 && parts[0] === "")
         return {
-            ok: false,
             message: tolgee.t(
                 "shapes.spacing.empty",
                 "Enter an interval in steps",
             ),
         };
-    const runs: IntervalRun[] = [];
-    for (const part of parts) {
-        const match = RUN.exec(part);
-        const steps = match && readSteps(match[1]!);
-        if (!match || steps === null) {
-            return {
-                ok: false,
-                message: tolgee.t(
-                    "shapes.spacing.notInterval",
-                    '"{part}" isn\'t an interval. Type steps (2), a list (4,4,2) or steps x gaps (4x3)',
-                    { part },
-                ),
-            };
-        }
-        if (!(steps > 0))
-            return {
-                ok: false,
-                message: tolgee.t(
-                    "shapes.spacing.notPositive",
-                    "An interval must be more than 0 steps",
-                ),
-            };
-        // A bare number is a single run that repeats for every gap.
-        const count = match[2] === undefined ? 0 : Number(match[2]);
-        if (match[2] !== undefined && !(count >= 1)) {
-            return {
-                ok: false,
-                message: tolgee.t(
-                    "shapes.spacing.noGaps",
-                    "A run needs at least 1 gap",
-                ),
-            };
-        }
-        runs.push({ steps, count });
-    }
-    // In a list, a bare number is a single gap; alone, it repeats for every gap
-    if (runs.length > 1) {
+    if (parts.includes(""))
         return {
-            ok: true,
-            runs: runs.map((run) =>
-                run.count === 0 ? { ...run, count: 1 } : run,
+            message: tolgee.t(
+                "shapes.spacing.emptyGroup",
+                "There's an empty group in the list. Type a group between each +: 2*3+4*2",
             ),
         };
+    return { parts };
+}
+
+/** One group of a list (`2*3`, or `2` for the rest), or why it isn't one */
+function parseGroup(
+    part: string,
+): IntervalGroup | { readonly message: string } {
+    const match = GROUP.exec(part);
+    const steps = match && readSteps(match[2]!.replace(/\s*steps?$/i, ""));
+    if (!match || steps === null)
+        return {
+            message: tolgee.t(
+                "shapes.spacing.notInterval",
+                '"{part}" isn\'t an interval. Type steps (2), or a count and steps for each group (2*3+4*2)',
+                { part },
+            ),
+        };
+    const countText = match[1]?.trim();
+    if (countText !== undefined && !/^\d+$/.test(countText))
+        return {
+            message: tolgee.t(
+                "shapes.spacing.notCount",
+                '"{count}" isn\'t a number of marchers. Type a whole count before the interval: 2*3',
+                { count: countText },
+            ),
+        };
+    if (!(steps > 0))
+        return {
+            message: tolgee.t(
+                "shapes.spacing.notPositive",
+                "An interval must be more than 0 steps",
+            ),
+        };
+    if (countText === undefined) return { steps };
+    const count = Number(countText);
+    if (!(count >= 1))
+        return {
+            message: tolgee.t(
+                "shapes.spacing.noMarchers",
+                "A group needs at least 1 marcher",
+            ),
+        };
+    if (count > MAX_GROUP_COUNT)
+        return {
+            message: tolgee.t(
+                "shapes.spacing.tooManyMarchers",
+                "A group can have at most {max} marchers",
+                { max: MAX_GROUP_COUNT },
+            ),
+        };
+    return { count, steps };
+}
+
+export function parseIntervals(text: string): ParsedIntervals {
+    const list = listParts(text);
+    if ("message" in list) return { ok: false, message: list.message };
+    const groups: IntervalGroup[] = [];
+    for (const part of list.parts) {
+        const group = parseGroup(part);
+        if ("message" in group) return { ok: false, message: group.message };
+        groups.push(group);
     }
-    return { ok: true, runs };
+    if (groups.filter((g) => g.count === undefined).length > 1)
+        return {
+            ok: false,
+            message: tolgee.t(
+                "shapes.spacing.twoRests",
+                "Only one group can go without a count (the rest). Type a count before the others: 2*3",
+            ),
+        };
+    return { ok: true, groups };
 }
 
 /** Steps as a list shows them: decimals, or a glyph where decimals can't be exact (2⅔) */
 const trim = (n: number) =>
     fractionText(n, [3, 6]) ?? String(Number(n.toFixed(4)));
 
-export function formatIntervals(runs: readonly IntervalRun[]): string {
-    return runs
-        .map((run) =>
-            run.count === 0 || (run.count === 1 && runs.length > 1)
-                ? trim(run.steps)
-                : `${trim(run.steps)}x${run.count}`,
+/** An interval list as it's typed: `2*3+4*2` */
+export function formatIntervals(groups: readonly IntervalGroup[]): string {
+    return groups
+        .map((g) =>
+            g.count === undefined
+                ? trim(g.steps)
+                : `${g.count}*${trim(g.steps)}`,
         )
-        .join(",");
+        .join("+");
+}
+
+/** A group as laid out for a number of marchers */
+export interface LaidGroup {
+    /** Marchers in it; 0 for a group dropped off the end */
+    readonly count: number;
+    /** How many more than its count it took: the last group grown, with no rest to take them */
+    readonly grown: number;
 }
 
 /**
- * The `gapCount` gaps, in steps, that `runs` give. Runs repeat from the first when there are more
+ * How many of `n` marchers each group takes (spec #522, "Groups to gaps"). The counted groups
+ * take theirs in order and the rest what's left; without a rest, the last group grows to take
+ * the extra marchers. When there are too few, groups drop from the end.
+ */
+export function layGroups(
+    groups: readonly { readonly count?: number }[],
+    n: number,
+): LaidGroup[] {
+    let left = Math.max(0, n);
+    const laid = groups.map((g) => {
+        if (g.count === undefined) return { count: 0, grown: 0 };
+        const count = Math.min(g.count, left);
+        left -= count;
+        return { count, grown: 0 };
+    });
+    const rest = groups.findIndex((g) => g.count === undefined);
+    if (rest >= 0) laid[rest] = { count: left, grown: 0 };
+    else if (left > 0 && laid.length > 0) {
+        const last = laid.at(-1)!;
+        laid[laid.length - 1] = { count: last.count + left, grown: left };
+    }
+    return laid;
+}
+
+/**
+ * The `n − 1` gaps between `n` marchers in a row laid out in `groups`: each group's interval
+ * between its own marchers, and the larger of two groups' intervals at the seam between them
+ */
+export function groupGaps<G extends { readonly count?: number }>(
+    groups: readonly G[],
+    n: number,
+    intervalOf: (group: G) => number,
+): number[] {
+    const each: number[] = [];
+    layGroups(groups, n).forEach(({ count }, i) => {
+        for (let k = 0; k < count; k++) each.push(intervalOf(groups[i]!));
+    });
+    return each.slice(1).map((interval, i) => Math.max(interval, each[i]!));
+}
+
+/**
+ * The `gapCount` gaps, in steps, that the older path kinds' `runs` give (`kinds/`; the typed list
+ * is groups of marchers now, {@link IntervalGroup}). Runs repeat from the first when there are more
  * gaps than they cover; extra runs past `gapCount` are unused.
  */
 export function gapsInSteps(
@@ -115,12 +212,6 @@ export function gapsInSteps(
         }
     }
     return gaps;
-}
-
-/** How many gaps the runs spell out, or undefined for a single repeating interval */
-export function runsGapCount(runs: readonly IntervalRun[]): number | undefined {
-    if (runs.length === 1 && runs[0]!.count === 0) return undefined;
-    return runs.reduce((sum, run) => sum + run.count, 0);
 }
 
 /**
@@ -152,16 +243,23 @@ function nextAtChord(path: Path, s: number, gap: number): number {
     // A chord is never longer than its arc, so the answer is at least `gap` along. On a straight
     // stretch it is exactly that.
     let lo = s + gap;
-    if (far(lo) >= gap * (1 - 1e-12)) return lo;
-    // March out in quarter gaps until the point is far enough, then bisect that step. A path
-    // that never gets that far (a gap wider than a small circle) falls back to the arc length.
-    const step = gap / 4;
     let hi = lo;
-    for (let i = 0; ; i++) {
-        hi = lo + step;
-        if (far(hi) >= gap) break;
-        lo = hi;
-        if (i === 4096) return s + gap;
+    const reach = far(lo);
+    if (Math.abs(reach - gap) <= gap * 1e-12) return lo;
+    if (reach > gap) {
+        // A curve's measured length runs a little short where it bends hard, so the chord can
+        // overshoot: the answer is back toward `s`
+        lo = s;
+    } else {
+        // March out in quarter gaps until the point is far enough, then bisect that step. A path
+        // that never gets that far (a gap wider than a small circle) falls back to the arc length.
+        const step = gap / 4;
+        for (let i = 0; ; i++) {
+            hi = lo + step;
+            if (far(hi) >= gap) break;
+            lo = hi;
+            if (i === 4096) return s + gap;
+        }
     }
     while (hi - lo > gap * 1e-9) {
         const mid = (lo + hi) / 2;
@@ -207,29 +305,4 @@ export function sampleAlong(
         }
     }
     return offsets.map((s) => ({ ...path.at(s), s }));
-}
-
-/**
- * What a typed list does for `n` marchers, when that isn't obvious: a list shorter than the gaps
- * needed repeats from its start, a longer one leaves its end unused. Undefined when it fits
- * exactly or is a single repeating interval.
- */
-export function describeGaps(
-    runs: readonly IntervalRun[],
-    n: number,
-): string | undefined {
-    const given = runsGapCount(runs);
-    const needed = Math.max(n - 1, 0);
-    if (given === undefined || given === needed) return undefined;
-    return given < needed
-        ? tolgee.t(
-              "shapes.spacing.repeating",
-              "{needed, plural, one {# gap} other {# gaps}} needed, {given} typed: repeating from the first",
-              { needed, given },
-          )
-        : tolgee.t(
-              "shapes.spacing.unused",
-              "{needed, plural, one {# gap} other {# gaps}} needed, {given} typed: the last {unused} unused",
-              { needed, given, unused: given - needed },
-          );
 }
