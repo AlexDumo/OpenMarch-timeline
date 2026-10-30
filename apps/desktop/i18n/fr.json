@@ -1561,9 +1561,14 @@
         "x": "X"
     },
     "shortcutsDialog": {
+        "movement": {
+            "constrain": "Déplacer sur un seul axe en glissant",
+            "fineControl": "Contrôle fin en glissant des marchers"
+        },
         "shape": {
+            "constrain": "Contraindre (espacements égaux, 45°, un axe)",
             "fineControl": "Contrôle fin, toujours aimanté aux lignes de verges et aux hashes",
-            "noSnapping": "Faire glisser une forme sans aimantation"
+            "fromCenter": "Dessiner ou redimensionner une boîte depuis le centre"
         }
     },
     "tags": {

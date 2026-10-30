@@ -1561,9 +1561,14 @@
         "x": "X"
     },
     "shortcutsDialog": {
+        "movement": {
+            "constrain": "ドラッグ中に一軸だけ移動",
+            "fineControl": "マーチャーをドラッグ中の細かい調整"
+        },
         "shape": {
+            "constrain": "制約（等間隔・45°・一軸）",
             "fineControl": "細かく調整（ヤードラインとハッシュには引き続きスナップ）",
-            "noSnapping": "スナップせずに形状をドラッグ"
+            "fromCenter": "中心からボックスを描く・リサイズ"
         }
     },
     "tags": {

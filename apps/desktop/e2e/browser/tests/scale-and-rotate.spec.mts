@@ -320,7 +320,7 @@ test("rotation snaps to 15°, about the box's center", async ({ show }) => {
     await expectCanvasMatchesShow(show);
 });
 
-test("change: Alt and constrain leave rotation in 15° steps", async ({
+test("change: from center (Alt) and constrain leave rotation in 15° steps", async ({
     show,
 }) => {
     const { page } = show;

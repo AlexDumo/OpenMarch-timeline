@@ -58,8 +58,10 @@ the same controls can carry other shapes later.
   out of the inspector on purpose, so you never have to look away from the
   field.
 
-- Hold **Alt** for fine control (no half steps, lines still catch). Hold
-  **Cmd** (Mac) or **Ctrl** for no snapping at all.
+- Hold **Shift** for fine control (no half steps, lines still catch). Hold
+  **Cmd** (Mac) or **Ctrl** to constrain (equal spacings, 45°, one axis). Hold
+  **Alt** to draw or resize a box from its center. Turn snapping off with the
+  **Snap** toggle (**Shift+M**), not a held key.
 - If the box or its editor would end up off the screen, the field glides just
   far enough to bring them back.
 

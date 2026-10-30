@@ -3182,7 +3182,7 @@
             "addOnNote": "Add on: tap marchers to add or remove.",
             "clearLine": "Clear line",
             "explain": {
-                "alt": "Move and turn without snapping.",
+                "alt": "Move and turn without snapping to steps (same idea as the Snap toggle).",
                 "drag": "What dragging on empty field does.",
                 "grip": "Drag to move.",
                 "help": "Gestures.",
@@ -3210,9 +3210,14 @@
         "undone": "Undone"
     },
     "shortcutsDialog": {
+        "movement": {
+            "constrain": "Move on one axis while dragging",
+            "fineControl": "Fine control while dragging marchers"
+        },
         "shape": {
+            "constrain": "Constrain (equal spacings, 45°, one axis)",
             "fineControl": "Fine control, still catching yard lines and hashes",
-            "noSnapping": "Drag a shape without snapping"
+            "fromCenter": "Draw or resize a box from center"
         }
     }
 }

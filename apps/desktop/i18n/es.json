@@ -1561,9 +1561,14 @@
         "x": "X"
     },
     "shortcutsDialog": {
+        "movement": {
+            "constrain": "Mover en un solo eje al arrastrar",
+            "fineControl": "Control fino al arrastrar marchadores"
+        },
         "shape": {
+            "constrain": "Restringir (espaciados iguales, 45°, un eje)",
             "fineControl": "Control fino, que sigue ajustándose a las líneas de yardas y los hashes",
-            "noSnapping": "Arrastrar una forma sin ajuste"
+            "fromCenter": "Dibujar o redimensionar una caja desde el centro"
         }
     },
     "tags": {

@@ -67,7 +67,7 @@ Other field behavior:
 
 - **Floating pill** (`components/canvas/touch/TouchModifierButtons.tsx`):
   "Drag: … ▾" mode menu, **Add** (on-screen Shift: add to selection, axis lock),
-  **No snap** (on-screen Alt/Shift-for-snapping), and **?** (explains the gestures).
+  **No snap** (same idea as the Snap toggle), and **?** (explains the gestures).
   Long press on any pill control explains it. It places itself where it covers the
   fewest marchers (`pillPlacement.ts`) and can be dragged by its grip.
 - **Handles**: a press on a marcher dot always wins over a selection handle (all
