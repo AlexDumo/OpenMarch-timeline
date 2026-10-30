@@ -58,6 +58,7 @@ import {
     useShapeEditorStore,
 } from "../frame/shapeEditorStore";
 import { HANDLE_REACH_PX, toolEnvFor } from "../tool/toolEnv";
+import type { Roles } from "@/input/modifierRoles";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 import { ShapeAwayChip } from "./ShapeAwayChip";
@@ -161,20 +162,11 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
     );
 }
 
-/**
- * The env an editor change is worked out with, the keys as on the field: Alt fine control, Cmd or
- * Ctrl no snapping (owner on #453)
- */
-const envFor = (keys: {
-    alt: boolean;
-    shift: boolean;
-    mod?: boolean;
-}): ToolEnv | null => {
+/** The env an editor change is worked out with, the roles held as on the field; none by default */
+const envFor = (roles?: Roles): ToolEnv | null => {
     const field = currentShapeField();
-    return field ? toolEnvFor(field, keys) : null;
+    return field ? toolEnvFor(field, roles) : null;
 };
-
-const PLAIN = { alt: false, shift: false };
 
 function ShapeEditorBar({
     target: shape,
@@ -203,7 +195,7 @@ function ShapeEditorBar({
     // A run of − and + presses grows from where it began, so the shape doesn't creep (#387)
     const run = useRef<SizeRun | null>(null);
     const anchor = sizeRun(run.current, kind, params, spots);
-    const env = envFor(PLAIN);
+    const env = envFor();
     const layout = env
         ? chipLayout(kind, params, spots, { ...env, stepPx, anchor })
         : { values: [], intervals: [], ratioLock: false };
@@ -435,7 +427,7 @@ function evenStateOf(
     params: unknown,
     spots: number,
 ): EvenState {
-    const env = envFor(PLAIN);
+    const env = envFor();
     const evened = env && kind.closed?.evenOut?.(params, spots, env);
     if (evened === undefined || evened === null) return "none";
     return evened === params ? "even" : "uneven";
@@ -457,7 +449,7 @@ const applyWith = (
     target: ShapeEditTarget,
     change: (env: ToolEnv) => unknown,
 ) => {
-    const env = envFor(PLAIN);
+    const env = envFor();
     if (env) target.apply(change(env));
 };
 
@@ -466,7 +458,7 @@ const updateWith = (
     target: ShapeEditTarget,
     change: (params: unknown, env: ToolEnv) => unknown,
 ) => {
-    const env = envFor(PLAIN);
+    const env = envFor();
     if (env) target.update((now) => change(now, env));
 };
 
@@ -492,7 +484,7 @@ const scrubWith = (
         if (guides) setShapeScrubbing(true);
     },
     onScrub: (m: ScrubMove) => {
-        const env = envFor(m);
+        const env = envFor(m.roles);
         if (env) target.preview(change(base.current, m, env));
     },
     onScrubEnd: (keep: boolean) => {
@@ -532,12 +524,12 @@ function numberActions(
             ),
         /** A "≈" number pressed: onto the nearest half step, as an edit of it (#459) */
         snap: (param: Param) => {
-            const env = envFor(PLAIN);
+            const env = envFor();
             if (env && param.snap)
                 target.apply(param.snap(target.params, target.spots, env));
         },
         type: (param: Param, text: string) => {
-            const env = envFor(PLAIN);
+            const env = envFor();
             const next =
                 env && param.type(target.params, target.spots, text, env);
             if (next == null) return false;
@@ -903,7 +895,7 @@ const FillPill = memo(function FillPill({
     canPlace: boolean;
     testId: string;
 }) {
-    const env = () => envFor(PLAIN);
+    const env = () => envFor();
     return (
         <div
             className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-6 border px-6 py-2 empty:hidden"

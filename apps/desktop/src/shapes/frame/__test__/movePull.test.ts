@@ -23,7 +23,7 @@ const LINES = {
 const env = (over: Partial<ToolEnv> = {}): ToolEnv => ({
     stepPx: STEP,
     snap: true,
-    shift: false,
+    constrain: false,
     gridSnap: (p) => ({ x: snapHalf(p.x), y: snapHalf(p.y) }),
     hitRadius: 3,
     fieldLines: LINES,
@@ -127,18 +127,18 @@ describe("moving a box onto a line", () => {
         expect(Math.abs(e.center.x - free.x)).toBeLessThan(half);
     });
 
-    it("with Alt, still lands on the line, and moves freely away from lines (owner on #453)", () => {
+    it("with fine, still lands on the line, and moves freely away from lines (owner on #453)", () => {
         const before = edges(box);
-        const alt = { snap: false, fine: true };
-        const p = move(boxTool, box, { x: 0, y: -before.front - 0.8 }, alt);
+        const fine = { snap: false, fine: true };
+        const p = move(boxTool, box, { x: 0, y: -before.front - 0.8 }, fine);
         exact(edges(p as BoxParams).front, 0);
         // Off the half steps, exactly where it was dragged
-        const away = move(boxTool, box, { x: 3.3, y: -7.1 }, alt) as BoxParams;
+        const away = move(boxTool, box, { x: 3.3, y: -7.1 }, fine) as BoxParams;
         exact(away.center.x, box.center.x + 3.3);
         exact(away.center.y, box.center.y - 7.1);
     });
 
-    it("doesn't pull with Cmd/Ctrl (no snapping)", () => {
+    it("doesn't pull with the Snap toggle off", () => {
         const before = edges(box);
         const p = move(
             boxTool,

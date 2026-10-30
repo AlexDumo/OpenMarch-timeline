@@ -5,34 +5,38 @@ import type { LayoutFamily } from "../distribute/distribution";
 import type { AnyShapeKind, XY } from "../types";
 
 /**
- * What a gesture knows about the field and the keys held. Built fresh for each pointer event.
+ * What a gesture knows about the field and the roles held. Built fresh for each pointer event.
  */
 export interface ToolEnv {
     /** Field units per 8-to-5 step */
     readonly stepPx: number;
     /**
-     * False while Alt (fine control) or Cmd/Ctrl (no snapping) is held: sizes and spots aren't
-     * rounded to the half-step ladder
+     * False while `fine` is held or the Snap toggle is off: sizes and spots aren't rounded to the
+     * half-step ladder
      */
     readonly snap: boolean;
     /**
-     * False while Cmd/Ctrl is held: nothing is pulled onto the field's lines either (#425, #444,
-     * #446, #452). Alt keeps the pulls (owner on #453). On when absent.
+     * False while the Snap toggle is off: nothing is pulled onto the field's lines either (#425,
+     * #444, #446, #452), and a turn is free of its steps. `fine` keeps the pulls (owner on #453).
+     * On when absent.
      */
     readonly pull?: boolean;
-    /** Alt is held: fine control, the ladder off and the pulls on (owner on #453) */
+    /** The `fine` role is held: the ladder off and the pulls on (owner on #453), whole degrees */
     readonly fine?: boolean;
-    /** Shift is held */
-    readonly shift: boolean;
+    /**
+     * The `constrain` role is held: the gesture's own constraint (equal spacings, 45° ends, the
+     * block handle's 15°)
+     */
+    readonly constrain: boolean;
     /** The nearest spot on the half-step grid */
     readonly gridSnap: (p: XY) => XY;
     /** How far from a handle a press still takes it, in field units */
     readonly hitRadius: number;
     /**
-     * Cmd (Mac) or Ctrl is held: a press on the center dot pulls the pivot out (#350); during
-     * any other drag, no snapping at all (owner on #453)
+     * The press's `reachInside` choice: a press on the center dot pulls the pivot out (#350). Read
+     * at the press only.
      */
-    readonly mod?: boolean;
+    readonly reachInside?: boolean;
     /**
      * What a change the kind works out grows from (a new count, a spacing): the shape's pivot
      * when the host sets it, the center when absent

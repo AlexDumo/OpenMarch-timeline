@@ -457,7 +457,7 @@ export const halfStep = (env: ToolEnv): number => env.stepPx / 2;
 const TYPED_PER_STEP = 600;
 
 /**
- * An interval as drawn, stretched or typed: half steps, hundredths of a step with Alt (spec #344,
+ * An interval as drawn, stretched or typed: half steps, hundredths of a step with fine (spec #344,
  * #411), or as typed (`typed`: 1/600 of a step, so 1⅔ stays exact, #423); never under half a step
  */
 export function snapInterval(v: number, env: ToolEnv, typed = false): number {
@@ -641,7 +641,7 @@ function boxFrom(
 
 const signOf = (v: number) => (v < 0 ? -1 : 1);
 
-/** Shift: one interval both ways, between the two the drag gives */
+/** `constrain`: one interval both ways, between the two the drag gives */
 function equalized(across: number, deep: number, env: ToolEnv) {
     const both = snapInterval((across + deep) / 2, env);
     return { across: both, deep: both };
@@ -774,7 +774,7 @@ export function drawBox(
     const d = pull.y ?? ladder.y;
     let across = a ?? d ?? snapInterval(Math.max(width, depth), env);
     let deep = d ?? across;
-    if (env.shift) ({ across, deep } = equalized(across, deep, env));
+    if (env.constrain) ({ across, deep } = equalized(across, deep, env));
     return boxFrom(
         corner,
         { x: signOf(to.x - from.x), y: signOf(to.y - from.y) },
@@ -1022,7 +1022,7 @@ function stretchSquare(
         : null;
     let across = x?.interval || base.across;
     let deep = y?.interval || base.deep;
-    if (env.shift && movesX && movesY)
+    if (env.constrain && movesX && movesY)
         ({ across, deep } = equalized(across, deep, env));
     else if (env.ratioLocked)
         // A pulled value drives the other spacing exactly (#425)

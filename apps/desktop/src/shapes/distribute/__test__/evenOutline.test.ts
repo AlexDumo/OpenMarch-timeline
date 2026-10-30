@@ -41,7 +41,7 @@ const snapHalf = (v: number) => Math.round(v / half) * half;
 const env: ToolEnv = {
     stepPx: STEP,
     snap: true,
-    shift: false,
+    constrain: false,
     gridSnap: (p) => ({ x: snapHalf(p.x), y: snapHalf(p.y) }),
     hitRadius: 3,
 };
@@ -251,7 +251,7 @@ describe("an outline: both spacings are the designer's, held exactly (owner on #
             expect(q.across).toBe(30);
         });
 
-        it("with Alt the edge follows smoothly, in hundredths; with Cmd/Ctrl too, with no pull", () => {
+        it("with fine the edge follows smoothly, in hundredths; with the Snap toggle off too, with no pull", () => {
             const p = box();
             const h = handle(p, "e");
             for (const over of [
@@ -322,7 +322,7 @@ describe("an outline: both spacings are the designer's, held exactly (owner on #
             expect(pulled.deep).toBe(20);
         });
 
-        it("with Alt, an edge still lands on a line", () => {
+        it("with fine, an edge still lands on a line", () => {
             const p = box();
             const h = handle(p, "e");
             const q = stretchBox(
