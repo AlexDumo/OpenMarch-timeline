@@ -365,4 +365,28 @@ test.describe("subtract (Alt)", () => {
         });
         await expectSelected(page, ["B1"]);
     });
+
+    test("Alt+drag from empty field inside a multi-selection's box starts a marquee that subtracts", async ({
+        show,
+    }) => {
+        // A plain press there moves the selection; an Alt (or Shift) press
+        // starts the marquee or lasso instead (owner decision, 2026-10-30)
+        const { page } = show;
+        await clickMarcher(page, "T1");
+        await clickMarcher(page, "T2", { add: true });
+        await clickMarcher(page, "T3", { add: true });
+        await clickMarcher(page, "T4", { add: true });
+        await expectSelected(page, ["T1", "T2", "T3", "T4"]);
+        // Between T1 and T2, inside the box from T1 to T4, clear of every marcher
+        const t2 = await screenOf(page, "T2");
+        const t3 = await screenOf(page, "T3");
+        const start = { x: t2.x - 30, y: t3.y + 15 };
+        const gesture = await dragThrough(
+            page,
+            [start, t2, { x: t2.x + 30, y: t2.y + 30 }],
+            { alt: true },
+        );
+        expect(gesture).toBe("marquee");
+        await expectSelected(page, ["T1", "T3", "T4"]);
+    });
 });
