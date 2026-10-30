@@ -9,6 +9,7 @@ import { FIRST_PAGE_ID } from "./rowMappers";
 import { clearOwnPageMoves, samePosition } from "./timelineMoves";
 import { readKeptAssignmentIds } from "./timelineKeptMarkers";
 import { keepMarchersOnPageInTransaction } from "./timelineKeepHere";
+import { joinMovesAtInTransaction, readMoveEnds } from "./timelineJoinAtBeat";
 
 /**
  * **Unset** (Set vs Following, #300): takes back the coordinate marchers have on one count, so
@@ -24,6 +25,12 @@ import { keepMarchersOnPageInTransaction } from "./timelineKeepHere";
  * and on Pages N–M** (#305) is the same delete without the stay (`keepLaterPages` false), so the
  * followers carry back to the earlier spot.
  *
+ * Where the marchers' next move starts on the count, the count isn't a page flag and the whole
+ * membership of the removed move was selected, the two moves join back into one
+ * (`timelineJoinAtBeat.ts`, holds decision 14, #470): the marcher walks the move as it was before
+ * Split at playhead, at even speed. The join comes before the stays, so a joined marcher, which
+ * still gets where it did, needs none.
+ *
  * Callers pass the marchers that are Set on the count (`timelineSetFollowing`); a marcher with no
  * move ending there is skipped. Nobody to unset writes nothing and adds no undo step.
  */
@@ -32,6 +39,8 @@ import { keepMarchersOnPageInTransaction } from "./timelineKeepHere";
 export interface UnsetResult {
     /** The marchers whose coordinate on the count was deleted, ascending */
     unset: number[];
+    /** Of those, the ones whose two moves around the count were joined into one, ascending */
+    joined: number[];
     /**
      * The kept markers cleared (a deleted move that was a kept spot), by assignment id, for the
      * renderer's copy (`applyKeptChange`). `added` is always empty: the stays aren't marked kept.
@@ -69,6 +78,7 @@ export async function unsetMarchersAtInTransaction({
 }): Promise<UnsetResult> {
     const result: UnsetResult = {
         unset: [],
+        joined: [],
         markers: { added: [], removed: [] },
     };
     if (marcherIds.length === 0) return result;
@@ -98,7 +108,12 @@ export async function unsetMarchersAtInTransaction({
     result.markers.removed = ascending(
         rows.filter((r) => kept.has(r.id)).map((r) => r.id),
     );
+    const ends = await readMoveEnds(
+        tx,
+        rows.map((r) => r.id),
+    );
     await clearOwnPageMoves(tx, rows, { tidyShared });
+    result.joined = await joinMovesAtInTransaction({ tx, beat, ends });
 
     if (box) {
         const resolver = createResolver(

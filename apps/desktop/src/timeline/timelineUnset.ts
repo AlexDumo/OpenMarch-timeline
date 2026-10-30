@@ -34,7 +34,11 @@ import { applyKeptChange, useKeptAssignmentsStore } from "./useKeepLaterPages";
  * (`unsetFollowingPages`). Each is one undo step; a refusal is a toast, never thrown.
  */
 
-const NOTHING: UnsetResult = { unset: [], markers: { added: [], removed: [] } };
+const NOTHING: UnsetResult = {
+    unset: [],
+    joined: [],
+    markers: { added: [], removed: [] },
+};
 
 /** What the Unset actions read for some marchers, worked out once per show version. */
 interface UnsetReads {

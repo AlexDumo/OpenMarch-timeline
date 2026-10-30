@@ -450,13 +450,14 @@ export const mergeMovesInTransaction = async ({
             { start: target.start_beat, end: target.end_beat },
         )
     ) {
-        await refuseBadFit(tx, source, target, sourceRows, nameOf);
-        await setTimelineRangeInTransaction({
+        const why = await fitInTransaction(
             tx,
-            timelineId: sourceId,
-            start: target.start_beat,
-            end: target.end_beat,
-        });
+            source,
+            target,
+            sourceRows,
+            nameOf,
+        );
+        if (why) refuse(why);
     }
     const transitions = await tx
         .select({ id: schema.timeline_transitions.id })
@@ -484,21 +485,71 @@ export const mergeMovesInTransaction = async ({
     };
 };
 
+/** The counts a move is fitted to, and the move whose counts they are, for the messages. */
+type FitTarget = Pick<DatabaseTimeline, "id" | "start_beat" | "end_beat">;
+
 /**
- * Refuses (E-ARGS) fitting `source` to `target`'s counts when the range procedure would fail
- * (`setTimelineRangeInTransaction`), with a message that names the marchers: a row that doesn't
- * reach an edge stays where it is, so it must lie inside the target's counts; every fitted row
- * must stay clear of the same marcher's rows on its layer in other moves; and no marcher may
+ * Fits move `sourceId` to `target`'s counts as a merge does (UI-25; `mergeMovesInTransaction`):
+ * rows from its start start at the target's start, rows to its end end at the target's end, and
+ * destinations and paths stay. Returns why it can't, having written nothing, or `null` once it's
+ * fitted. Remove keyframe's join (`timelineJoinAtBeat.ts`, holds decision 14) fits the move after
+ * a split back over the counts of the one before it this way.
+ */
+export async function fitMoveInTransaction({
+    tx,
+    sourceId,
+    target,
+}: {
+    tx: DbTransaction;
+    sourceId: number;
+    target: FitTarget;
+}): Promise<string | null> {
+    const source = await readTimeline(tx, sourceId);
+    if (!source) refuse(`timeline ${sourceId} does not exist`);
+    const { nameOf } = await timelineWords(tx);
+    return await fitInTransaction(
+        tx,
+        source,
+        target,
+        await memberRows(tx, sourceId),
+        nameOf,
+    );
+}
+
+/** `fitMoveInTransaction` with the source's rows and the move names already read. */
+async function fitInTransaction(
+    tx: DbTransaction,
+    source: DatabaseTimeline,
+    target: FitTarget,
+    sourceRows: readonly MemberRow[],
+    nameOf: (timelineId: number) => string,
+): Promise<string | null> {
+    const why = await badFitReason(tx, source, target, sourceRows, nameOf);
+    if (why) return why;
+    await setTimelineRangeInTransaction({
+        tx,
+        timelineId: source.id,
+        start: target.start_beat,
+        end: target.end_beat,
+    });
+    return null;
+}
+
+/**
+ * Why fitting `source` to `target`'s counts would make the range procedure fail
+ * (`setTimelineRangeInTransaction`), in a message that names the marchers, or `null`: a row that
+ * doesn't reach an edge stays where it is, so it must lie inside the target's counts; every fitted
+ * row must stay clear of the same marcher's rows on its layer in other moves; and no marcher may
  * already have another move over exactly the target's counts (spec §6.2 L-4), as one split off
  * the target has.
  */
-async function refuseBadFit(
+async function badFitReason(
     tx: DbTransaction,
     source: DatabaseTimeline,
-    target: DatabaseTimeline,
+    target: FitTarget,
     sourceRows: readonly MemberRow[],
     nameOf: (timelineId: number) => string,
-): Promise<void> {
+): Promise<string | null> {
     const fitted = sourceRows.map(({ assignment: a }) => ({
         row: a,
         start:
@@ -515,16 +566,14 @@ async function refuseBadFit(
     );
     if (partway.length > 0) {
         const ids = [...new Set(partway.map((f) => f.row.marcher_id))];
-        refuse(
-            `${labelList(await marcherLabels(tx, ids), ids)} ${
-                ids.length === 1 ? "joins or leaves" : "join or leave"
-            } ${nameOf(source.id)} partway, outside ${nameOf(target.id)}'s counts. Resize ${nameOf(
-                source.id,
-            )} to ${nameOf(target.id)}'s counts first.`,
-        );
+        return `${labelList(await marcherLabels(tx, ids), ids)} ${
+            ids.length === 1 ? "joins or leaves" : "join or leave"
+        } ${nameOf(source.id)} partway, outside ${nameOf(target.id)}'s counts. Resize ${nameOf(
+            source.id,
+        )} to ${nameOf(target.id)}'s counts first.`;
     }
     const marcherIds = [...new Set(fitted.map((f) => f.row.marcher_id))];
-    if (marcherIds.length === 0) return;
+    if (marcherIds.length === 0) return null;
     const A = schema.timeline_assignments;
     const T = schema.timeline_transitions;
     const L = schema.timelines;
@@ -558,24 +607,22 @@ async function refuseBadFit(
     });
     if (hits.length > 0) {
         const ids = [...new Set(hits.map((h) => h.marcherId))];
-        refuse(
-            `Fitting ${nameOf(source.id)} to ${nameOf(target.id)}'s counts would run ${labelList(
-                await marcherLabels(tx, ids),
-                ids,
-            )} into ${nameOf(hits[0]!.timelineId)}. Resize ${nameOf(source.id)} to ${nameOf(
-                target.id,
-            )}'s counts first.`,
-        );
+        return `Fitting ${nameOf(source.id)} to ${nameOf(target.id)}'s counts would run ${labelList(
+            await marcherLabels(tx, ids),
+            ids,
+        )} into ${nameOf(hits[0]!.timelineId)}. Resize ${nameOf(source.id)} to ${nameOf(
+            target.id,
+        )}'s counts first.`;
     }
-    await refuseSecondMoveOverCounts(tx, others, source, target, nameOf);
+    return await secondMoveOverCountsReason(tx, others, source, target, nameOf);
 }
 
 /**
- * Refuses (E-ARGS) a fit that would give a marcher two moves over the same counts (spec §6.2
- * L-4): one of `rows` (the source's marchers' rows) is in another move over exactly `target`'s
- * counts, as a move split off the target is.
+ * Why a fit would give a marcher two moves over the same counts (spec §6.2 L-4), or `null`: one
+ * of `rows` (the source's marchers' rows) is in another move over exactly `target`'s counts, as a
+ * move split off the target is.
  */
-async function refuseSecondMoveOverCounts(
+async function secondMoveOverCountsReason(
     tx: DbTransaction,
     rows: readonly {
         readonly marcherId: number;
@@ -584,9 +631,9 @@ async function refuseSecondMoveOverCounts(
         readonly timelineEnd: number;
     }[],
     source: DatabaseTimeline,
-    target: DatabaseTimeline,
+    target: FitTarget,
     nameOf: (timelineId: number) => string,
-): Promise<void> {
+): Promise<string | null> {
     const sameCounts = rows.filter(
         (o) =>
             o.timelineId !== source.id &&
@@ -594,17 +641,15 @@ async function refuseSecondMoveOverCounts(
             o.timelineStart === target.start_beat &&
             o.timelineEnd === target.end_beat,
     );
-    if (sameCounts.length === 0) return;
+    if (sameCounts.length === 0) return null;
     const ids = [...new Set(sameCounts.map((o) => o.marcherId))];
-    refuse(
-        `${labelList(await marcherLabels(tx, ids), ids)} ${
-            ids.length === 1 ? "is" : "are"
-        } already in ${nameOf(sameCounts[0]!.timelineId)}, over ${nameOf(
-            target.id,
-        )}'s counts, so merging would give ${
-            ids.length === 1 ? "it" : "them"
-        } two moves over the same counts.`,
-    );
+    return `${labelList(await marcherLabels(tx, ids), ids)} ${
+        ids.length === 1 ? "is" : "are"
+    } already in ${nameOf(sameCounts[0]!.timelineId)}, over ${nameOf(
+        target.id,
+    )}'s counts, so merging would give ${
+        ids.length === 1 ? "it" : "them"
+    } two moves over the same counts.`;
 }
 
 /** `mergeMovesInTransaction` as one undoable edit. */
