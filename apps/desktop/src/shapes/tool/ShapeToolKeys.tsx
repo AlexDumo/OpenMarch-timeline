@@ -40,7 +40,8 @@ export function ShapeToolKeys(): null {
         if (tool?.gesture) cancelShapeGesture();
         else discardShapeTool();
     });
-    // Enter while clicking points finishes the line rather than placing it (#524)
+    // Enter while clicking points finishes the line rather than placing it (#524). Registered
+    // only then: a handler on top that can't run doesn't let Enter through to Place.
     const clicking = useShapeToolStore(
         (s) => s.tool?.gesture?.type === "points",
     );
@@ -51,7 +52,8 @@ export function ShapeToolKeys(): null {
             if (field)
                 updateTool((t) => finishPoints(t, shapeContextFor(field)));
         },
-        { enabled: clicking },
+        {},
+        clicking,
     );
     useActionHandler("performUndo", undoOpenShape);
     useActionHandler("performRedo", () => updateTool(redo));

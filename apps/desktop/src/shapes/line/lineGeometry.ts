@@ -209,13 +209,11 @@ export function cornerOffInterval(p: LineParams, n: number): boolean {
 
 /**
  * The spots of a line whose corners hold marchers: segment by segment from its first point, each
- * `gaps[i]` gaps, evenly in Fit or `interval` apart in Keep interval, then the last point
+ * `gaps[i]` even gaps, then the last point. In Keep interval a segment is a whole number of
+ * intervals, so even gaps are the interval; a corner `fine` left off its interval spreads its
+ * segments' gaps evenly instead of running past the corner and stacking marchers on it.
  */
-function cornerSpots(
-    p: LineParams,
-    gaps: readonly number[],
-    interval: number | null,
-): Slot[] {
+function cornerSpots(p: LineParams, gaps: readonly number[]): Slot[] {
     const spots: Slot[] = [];
     let s = 0;
     p.points.slice(1).forEach((b, i) => {
@@ -223,12 +221,8 @@ function cornerSpots(
         const d = sub(b, a);
         const l = length(d);
         for (let j = 0; j < gaps[i]!; j++) {
-            const along = Math.min(
-                l,
-                interval === null ? (l * j) / gaps[i]! : interval * j,
-            );
-            const t = l > 0 ? along / l : 0;
-            spots.push({ x: a.x + d.x * t, y: a.y + d.y * t, s: s + along });
+            const t = j / gaps[i]!;
+            spots.push({ x: a.x + d.x * t, y: a.y + d.y * t, s: s + l * t });
         }
         s += l;
     });
@@ -244,7 +238,7 @@ export function lineSpots(p: LineParams, n: number): Slot[] {
     const at = (s: number): Slot => ({ ...path.at(s), s });
     const interval = typedInterval(p);
     const corners = cornerGaps(p, n);
-    if (corners) return cornerSpots(p, corners, interval);
+    if (corners) return cornerSpots(p, corners);
     if (interval === null) {
         if (n === 1) return [at(path.length / 2)];
         return Array.from({ length: n }, (_, i) =>

@@ -2238,7 +2238,8 @@
                     "sameSpot": "The line's ends are on the same spot"
                 },
                 "params": {
-                    "interval": "Spacing between neighbors, in steps"
+                    "interval": "Spacing between neighbors, in steps",
+                    "cornerOff": "corner off its interval"
                 },
                 "spacing": {
                     "label": "Spacing",
@@ -2247,6 +2248,11 @@
                     "pathStart": "Interval on the path, from the start",
                     "pathCenter": "Interval on the path, centered",
                     "pathEnd": "Interval on the path, from the end"
+                },
+                "corners": {
+                    "label": "Corners",
+                    "on": "Marcher on every corner",
+                    "off": "Intervals run around corners"
                 }
             },
             "measure": {

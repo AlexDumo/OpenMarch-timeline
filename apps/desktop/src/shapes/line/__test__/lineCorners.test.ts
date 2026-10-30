@@ -279,6 +279,19 @@ describe("corners", () => {
         expect(corners.shown!(straight.params, 4)).toBe(false);
         expect(corners.shown!(L().params, 4)).toBe(true);
     });
+
+    it("aren't offered where corners can't hold marchers: on the path, or too few marchers", () => {
+        const spacing = lineTool.choices!.find((c) => c.key === "spacing")!;
+        const onPath = edit(
+            L(),
+            spacing.pick(L().params, L().spots, "path-start", env),
+            ctx,
+        );
+        expect(paramsOf(onPath).spacing.mode).toBe("path");
+        expect(corners.shown!(onPath.params, onPath.spots)).toBe(false);
+        // Three points are two segments, so two marchers are one gap too few
+        expect(corners.shown!(L().params, 2)).toBe(false);
+    });
 });
 
 describe("Keep interval on a line with corners", () => {
@@ -342,6 +355,27 @@ describe("Keep interval on a line with corners", () => {
         expect(
             spotsOf(t).some((s) => dist(s, { x: 73.3, y: 4.1 }) < 1e-6),
         ).toBe(true);
+    });
+
+    it("never stacks two marchers when fine pulls a corner in off its interval", () => {
+        // Legs of about 2.7 and exactly 3 intervals, each still holding 4 gaps
+        const t = onHandle(L(), "p1", { x: 44, y: 32 }, fine);
+        const [a, b, c] = pointsOf(t);
+        expect(b).toEqual({ x: 44, y: 32 });
+        const spots = spotsOf(t);
+        expect(spots).toHaveLength(9);
+        for (let i = 0; i < spots.length; i++)
+            for (let j = i + 1; j < spots.length; j++)
+                expect(dist(spots[i]!, spots[j]!)).toBeGreaterThan(1);
+        // Each leg is laid out evenly, the corner and both ends holding a marcher
+        expectNear([spots[0]!, spots[4]!, spots[8]!], [a!, b!, c!]);
+        const legs = [spots.slice(0, 5), spots.slice(4)];
+        legs.forEach((leg, k) => {
+            const each = dist(pointsOf(t)[k]!, pointsOf(t)[k + 1]!) / 4;
+            for (let i = 1; i < leg.length; i++)
+                expect(dist(leg[i - 1]!, leg[i]!)).toBeCloseTo(each, 6);
+        });
+        expect(chip(t).note).toBe("corner off its interval");
     });
 
     it("turns an end about its neighbor, the segment's length kept", () => {

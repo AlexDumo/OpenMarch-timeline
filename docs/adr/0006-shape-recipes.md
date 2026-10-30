@@ -284,7 +284,9 @@ The Line shape (spec #522, #523) stores a new kind:
 1. **Line recipes are `line`, version 2.** Version 1 is the old shape-model line. Version 2's
    params are `points` (two or more, each `x`, `y` and a `tension`: 0 is a corner, above 0 a
    smooth point), `closed` (open when absent), `corners` (false when the intervals run around
-   the corners; when absent or true every corner holds a marcher, #524), `spacing` and the host's
+   the corners; when absent or true every corner holds a marcher in Fit and Keep interval, as long
+   as there is at least one gap per segment; on the path, or with fewer gaps than segments, the
+   intervals run around the corners whatever it says, #524), `spacing` and the host's
    `pivot`. `spacing` is `{ mode: "fit" }`
    (the interval follows from the drawn points), `{ mode: "keep", groups }` (Keep interval) or
    `{ mode: "path", groups, anchor }` (Interval on the path, `anchor` one of `start`, `center`,

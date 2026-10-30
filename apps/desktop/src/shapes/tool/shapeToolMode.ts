@@ -16,7 +16,7 @@ import {
 } from "../field/fieldModeBase";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { toolEnvFor } from "./toolEnv";
-import type { Roles } from "@/input/modifierRoles";
+import { rolesOf, type Roles } from "@/input/modifierRoles";
 import { pressShapeKeys, type HeldFieldGesture } from "../field/heldGesture";
 import {
     cancelGesture,
@@ -418,9 +418,14 @@ export const shapeToolMode: FieldMode = {
         const field = currentShapeField();
         if (!tool || !field) return null;
         const env = envOf(field, tool);
-        // Between clicked points the next segment follows the pointer (#524)
+        // Between clicked points the next segment follows the pointer (#524), with the roles the
+        // pointer's keys hold, so it lands where a click would. A role key pressed or released
+        // without a move shows at the next move: no gesture follows the keyboard between clicks.
         if (tool.gesture?.type === "points") {
-            updateTool((t) => pointerMove(t, pointer.field, envOf(field, t)));
+            const roles = rolesOf(pointer, "shape");
+            updateTool((t) =>
+                pointerMove(t, pointer.field, envOf(field, t, roles)),
+            );
             return "crosshair";
         }
         // The editor asks for the cursor as the pointer moves, so this is where hovering is seen

@@ -184,7 +184,7 @@ const SPACING: ToolChoice<LineParams> = {
 
 /**
  * The corners switch (#524): every corner holds a marcher, or the intervals run around the
- * corners. Only on a line with a corner.
+ * corners. Only on a line with a corner, where corners can hold marchers (`cornerGaps`).
  */
 const CORNERS: ToolChoice<LineParams> = {
     key: "corners",
@@ -219,7 +219,12 @@ const CORNERS: ToolChoice<LineParams> = {
             ? withInterval(next, n, interval, env)
             : next;
     },
-    shown: (p) => p.points.length > 2,
+    // Corners hold marchers only in Fit and Keep interval, with a gap for every segment
+    // (n - 1 gaps, one fewer segment than points)
+    shown: (p, n) =>
+        p.points.length > 2 &&
+        p.spacing.mode !== "path" &&
+        n >= p.points.length,
 };
 
 /**
