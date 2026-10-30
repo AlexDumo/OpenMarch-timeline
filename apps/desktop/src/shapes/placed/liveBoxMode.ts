@@ -1,6 +1,10 @@
 import type { PivotKey } from "../frame/frame";
 import type { QueryClient } from "@tanstack/react-query";
-import type { FieldMode, FieldPointer } from "@/field/editor/fieldEditor";
+import type {
+    FieldMode,
+    FieldModePress,
+    FieldPointer,
+} from "@/field/editor/fieldEditor";
 import {
     drillNumbers,
     frameDrawing,
@@ -10,7 +14,11 @@ import {
     SPOT_LABEL_LIMIT,
 } from "../field/fieldModeBase";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
-import { shapeOutline, shapeTargetAt } from "../frame/gestures";
+import {
+    shapeOutline,
+    shapeTargetAt,
+    type ShapeTarget,
+} from "../frame/gestures";
 import { toolEnvFor } from "../tool/toolEnv";
 import { pressShapeKeys, type HeldFieldGesture } from "../field/heldGesture";
 import { commitBox } from "./commitBox";
@@ -36,6 +44,13 @@ import {
     useShapePointerStore,
     guideGesture,
 } from "../field/shapePointer";
+
+/** What a press that reaches inside keeps for the box: its pivot, handles and knob */
+const OWN_CONTROLS: ReadonlySet<ShapeTarget["type"]> = new Set([
+    "pivot",
+    "handle",
+    "rotate",
+]);
 
 /** An odd-count outline's gap, the spot nobody stands on by design (#390) */
 function gapsOf(kind: AnyToolKind, params: unknown, n: number) {
@@ -115,8 +130,9 @@ const drawingOf = memoDrawing(
 /**
  * A selected placed shape of any kind, edited in place (07-placed-boxes.md), as a field editor
  * mode: it claims presses on its handles and inside it. Its handles resize it (a box's stretch it),
- * a drag inside moves it, and each gesture is saved when it ends, as one undo step. A double click on a member goes inside the box. Other presses go through the editor's
- * rules as usual. The selection box's own handles (#198) are off while it's on.
+ * a drag inside moves it, and each gesture is saved when it ends, as one undo step. A double click
+ * on a member goes inside the box. A press that reaches inside ($mod on a member, away from the
+ * box's controls) and other presses go through the editor's rules as usual. The selection box's own handles (#198) are off while it's on.
  */
 export class LiveBoxMode implements FieldMode {
     private live: LiveBox;
@@ -145,11 +161,37 @@ export class LiveBoxMode implements FieldMode {
         this.emit();
     }
 
-    claims(pointer: FieldPointer): boolean {
-        return this.pressed(pointer) !== null;
+    claims(pointer: FieldPointer, press: FieldModePress): boolean {
+        return (
+            !this.yieldsToEditor(pointer, press) &&
+            this.pressed(pointer) !== null
+        );
     }
 
-    press(pointer: FieldPointer): void {
+    /**
+     * A press that reaches inside a placed box, by the field editor's own rule: the editor's,
+     * which picks that marcher out of the box. Where the editor says no (you're inside this box
+     * already, no member under the press), $mod is `constrain` on the box's own move. The box's
+     * controls drawn over a member keep their press: on the pivot (the crosshair, or the center
+     * dot that $mod pulls the pivot out of) $mod is reach inside's, and on a handle or the knob
+     * it's `constrain` (on a corner, an equal-spaced resize).
+     */
+    private yieldsToEditor(
+        pointer: FieldPointer,
+        press: FieldModePress,
+    ): boolean {
+        if (!press.reachesInside()) return false;
+        const field = currentShapeField();
+        if (!field) return false;
+        const { kind, params, spots } = this.live.box;
+        const target = shapeTargetAt(kind, params, spots, pointer.field, {
+            ...toolEnvFor(field),
+            reachInside: true,
+        });
+        return !target || !OWN_CONTROLS.has(target.type);
+    }
+
+    press(pointer: FieldPointer, { isMac }: FieldModePress): void {
         const field = currentShapeField();
         this.endHeld();
         if (!field) return;
@@ -164,6 +206,7 @@ export class LiveBoxMode implements FieldMode {
                     { ...toolEnvFor(field), reachInside: true },
                 ),
             (at, roles) => this.rerun(at, roles),
+            isMac,
         );
         this.held = held;
         this.live =

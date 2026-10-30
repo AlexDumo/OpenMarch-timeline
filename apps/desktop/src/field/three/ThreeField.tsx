@@ -55,14 +55,18 @@ import {
     useFieldQualityStore,
 } from "@/field/fieldQuality";
 import { FieldEditor } from "@/field/editor/fieldEditor";
-import { ruledMove } from "@/field/editor/moveRules";
+import { settingsMoveOptions } from "@/field/editor/settingsMoveOptions";
 import { VisualsFieldEditor } from "@/field/editor/visualsFieldEditor";
 import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { takeFieldPress } from "@/field/takeFieldPress";
 import { setShapeField } from "@/shapes/field/shapeField";
 import { useShapeFieldModes } from "@/shapes/field/useShapeFieldModes";
-import { boxPressSelection, enterBox } from "@/shapes/placed/boxSelection";
+import {
+    boxPressSelection,
+    canReachInside,
+    enterBox,
+} from "@/shapes/placed/boxSelection";
 import {
     drawnPlacedBoxes,
     PlacedBoxesOverlay,
@@ -420,8 +424,14 @@ function ThreeFieldView() {
                             latest.current.moveMarchers,
                         ),
                     // #204: a click on a placed box's member selects the whole box
-                    pressSelection: (hit, shift) =>
-                        boxPressSelection(hit, shift, selection.current),
+                    pressSelection: (hit, shift, reachInside) =>
+                        boxPressSelection(
+                            hit,
+                            shift,
+                            selection.current,
+                            reachInside,
+                        ),
+                    reachesInside: canReachInside,
                     doubleClickMarcher: enterBox,
                     // C2.1: items are hit anywhere inside their Outline
                     isItem: (id) => items.isItem(id),
@@ -447,18 +457,11 @@ function ThreeFieldView() {
                     isMac: isMacPlatform(),
                     // The touch pill's Fine, Equal, From center and Add
                     onScreen: onScreenToggles,
-                    // #197: snapping and Lock X/Y, read as they are on each move; fine and
-                    // constrain come from the held roles
-                    moveTransform: ruledMove(() => {
-                        const { coordinateRounding, lockX, lockY } =
-                            useUiSettingsStore.getState().uiSettings;
-                        return {
-                            rounding: coordinateRounding,
-                            lockX,
-                            lockY,
-                            grid: latest.current.fieldProperties ?? null,
-                        };
-                    }),
+                    // #197: snapping, the Snap toggle and Lock X/Y, read as they are on each
+                    // move; off, the Snap toggle frees a rotate handle too
+                    ...settingsMoveOptions(
+                        () => latest.current.fieldProperties ?? null,
+                    ),
                 },
             ),
         [marchers, items],

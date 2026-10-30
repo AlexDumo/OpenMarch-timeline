@@ -36,6 +36,7 @@ import {
     PlusIcon,
     ArrowClockwiseIcon,
     EqualsIcon,
+    MagnetIcon,
     PathIcon,
 } from "@phosphor-icons/react";
 import {
@@ -817,7 +818,7 @@ const TurnControls = memo(function TurnControls({
     );
 });
 
-/** Pathways and ☆ Save, then Place for a new shape */
+/** Snap, Pathways and ☆ Save, then Place for a new shape */
 const EndControls = memo(function EndControls({
     live: target,
     stepPx,
@@ -830,6 +831,7 @@ const EndControls = memo(function EndControls({
     return (
         <>
             <span className="flex items-center gap-2">
+                <SnapButton />
                 {canPlace && <PathwaysButton />}
                 <SaveShapeButton
                     shape={target}
@@ -1326,6 +1328,34 @@ function PathwaysButton() {
             testId="shape-editor-pathways"
         >
             <PathIcon size={14} />
+        </IconButton>
+    );
+}
+
+/**
+ * The Snap toggle (modifier roles, version A), as in the toolbar's alignment tab: pressed while
+ * snapping is off, so a forgotten off state shows on the editor of every shape. Off, the shape's
+ * drags land on no half steps, are pulled onto nothing and turn freely.
+ */
+export function SnapButton() {
+    const on = useUiSettingsStore((s) => s.uiSettings.snap);
+    const overrides = useShortcutOverridesStore((s) => s.overrides);
+    return (
+        <IconButton
+            label={
+                on
+                    ? tolgee.t("shapes.edit.snap.on", "Turn snapping off")
+                    : tolgee.t(
+                          "shapes.edit.snap.off",
+                          "Snapping is off: turn it back on",
+                      )
+            }
+            shortcut={getActionShortcutLabel("toggleSnap", { overrides })}
+            pressed={!on}
+            onClick={() => useUiSettingsStore.getState().setSnap()}
+            testId="shape-editor-snap"
+        >
+            <MagnetIcon size={14} />
         </IconButton>
     );
 }

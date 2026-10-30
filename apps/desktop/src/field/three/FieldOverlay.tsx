@@ -27,6 +27,11 @@ const MARQUEE_WIDTH = 2;
 const LASSO_WIDTH = 2;
 const LASSO_DASH = "5 5";
 /**
+ * A marquee or lasso that subtracts (Alt at the press) is told apart by its line: the marquee's
+ * border dashed as a lasso's is, with a fainter fill, and the lasso dotted.
+ */
+const SUBTRACT_LASSO_DASH = "2 4";
+/**
  * A mode's look (the shape tool, a selected placed box): the outline 1 CSS px
  * wide, dashed 6 on, 4 off; spots of radius 4 field units, 1.5 wide; walks 1
  * field unit wide; handles 9 CSS px squares with a 1.5 px rim. As on Fabric.
@@ -140,7 +145,11 @@ export default function FieldOverlay({
         >
             <SelectionBox frame={JSON.parse(box) as DrawnSelectionBox | null} />
             {area?.kind === "marquee" && (
-                <Marquee rect={area.rect} theme={theme} />
+                <Marquee
+                    rect={area.rect}
+                    subtract={area.subtract}
+                    theme={theme}
+                />
             )}
             {area?.kind === "lasso" && <Lasso lasso={area} theme={theme} />}
             {modeDrawing && (
@@ -259,28 +268,38 @@ function PropToolPreview({
     );
 }
 
-/** The marquee: the theme's shape color, filled at 20%. */
-function Marquee({ rect, theme }: { rect: FieldRect; theme: FieldTheme }) {
+/** The marquee: the theme's shape color, filled at 20%; dashed and filled at 8% when it subtracts. */
+function Marquee({
+    rect,
+    subtract,
+    theme,
+}: {
+    rect: FieldRect;
+    subtract: boolean;
+    theme: FieldTheme;
+}) {
     const view = useFieldViewStore();
     const topLeft = fieldToElement(view, rect.left, rect.top);
     const bottomRight = fieldToElement(view, rect.right, rect.bottom);
     return (
         <rect
             data-testid="fieldMarquee"
+            data-subtract={subtract}
             x={topLeft.x}
             y={topLeft.y}
             width={bottomRight.x - topLeft.x}
             height={bottomRight.y - topLeft.y}
-            fill={rgbaToString({ ...theme.shape, a: 0.2 })}
+            fill={rgbaToString({ ...theme.shape, a: subtract ? 0.08 : 0.2 })}
             stroke={rgbaToString(theme.shape)}
             strokeWidth={MARQUEE_WIDTH}
+            strokeDasharray={subtract ? LASSO_DASH : undefined}
         />
     );
 }
 
 /**
- * The lasso's line, dashed: the theme's stroke color, and its
- * next-path green while releasing would close it.
+ * The lasso's line, dashed (dotted when it subtracts): the theme's stroke
+ * color, and its next-path green while releasing would close it.
  */
 function Lasso({
     lasso,
@@ -300,13 +319,14 @@ function Lasso({
         <polyline
             data-testid="fieldLasso"
             data-closes={lasso.closes}
+            data-subtract={lasso.subtract}
             points={points}
             fill="none"
             stroke={rgbaToString(
                 lasso.closes ? theme.nextPath : theme.primaryStroke,
             )}
             strokeWidth={LASSO_WIDTH}
-            strokeDasharray={LASSO_DASH}
+            strokeDasharray={lasso.subtract ? SUBTRACT_LASSO_DASH : LASSO_DASH}
         />
     );
 }

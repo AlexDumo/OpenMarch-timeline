@@ -2,8 +2,8 @@ import { CLICK_SLOP, type FieldPointer } from "@/field/editor/fieldEditor";
 import { startGestureKeys } from "@/input/gestureKeys";
 import {
     pressChoiceOf,
+    REACH_INSIDE,
     type HeldKeys,
-    type PressChoice,
     type RoleKey,
     type Roles,
 } from "@/input/modifierRoles";
@@ -27,11 +27,15 @@ export interface HeldGesture<A> {
     end(): void;
 }
 
-/** Starts following a gesture's keys; `rerun` is the last move again, with the roles now */
+/**
+ * Starts following a gesture's keys; `rerun` is the last move again, with the roles now. `isMac`:
+ * $mod is Cmd (the platform's by default).
+ */
 export function holdGesture<A>(
     press: HeldKeys,
     rerun: (last: A, roles: Roles) => void,
     usedByPress: readonly RoleKey[] = [],
+    isMac?: boolean,
 ): HeldGesture<A> {
     let last: A | null = null;
     let ended = false;
@@ -41,6 +45,7 @@ export function holdGesture<A>(
         usedByPress,
         onScreen: onScreenRoles,
         onScreenChange: subscribeOnScreen,
+        isMac,
         onRolesChange: (roles) => {
             if (!ended && last !== null) rerun(last, roles);
         },
@@ -59,9 +64,6 @@ export function holdGesture<A>(
     };
 }
 
-/** The press choices a shape press can use: reach inside pulls the pivot out of the center dot */
-const REACH_INSIDE: ReadonlySet<PressChoice> = new Set(["reachInside"]);
-
 /** A shape gesture on the field: a move hands its pointer, which counts once past the click slop */
 export interface HeldFieldGesture extends Omit<HeldGesture<XY>, "move"> {
     move(pointer: FieldPointer): Roles;
@@ -72,20 +74,25 @@ export interface HeldFieldGesture extends Omit<HeldGesture<XY>, "move"> {
  * inside on; a press that pulls the pivot out of the center dot uses reach inside's key ($mod), so
  * that key isn't `constrain` until it's released and pressed again. Once the pointer has gone past
  * the field's click slop, a role key pressed or released calls `rerun` at the last pointer; before,
- * the press is still a click and stays one.
+ * the press is still a click and stays one. `isMac` is the field editor's: $mod is Cmd.
  */
 export function pressShapeKeys(
     pointer: FieldPointer,
     grabs: () => ShapeTarget | { type: "draw" } | null,
     rerun: (at: XY, roles: Roles) => void,
+    isMac: boolean,
 ): { held: HeldFieldGesture; reachInside: boolean } {
-    const reach = pressChoiceOf(pointer, "shape", { applicable: REACH_INSIDE });
+    const reach = pressChoiceOf(pointer, "shape", {
+        applicable: REACH_INSIDE,
+        isMac,
+    });
     const target = reach ? grabs() : null;
     const pulled = target?.type === "pivot" && target.pulled === true;
     const held = holdGesture<XY>(
         pointer,
         rerun,
         pulled && reach ? [reach.key] : [],
+        isMac,
     );
     let dragging = false;
     return {
