@@ -388,3 +388,87 @@ test("change: clicks draw an L, its corner holds a marcher until switched off, a
     expect(reopened.handles).toHaveLength(3);
     expect(reopened.addHandles).toHaveLength(2);
 });
+
+test("change: Curve in the Shapes tab draws a line bending through smooth points, none holding a marcher, and places it with its tensions", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+
+    // In the Shapes tab after the Line
+    await page.getByRole("tab", { name: "Shapes" }).click();
+    const curve = page.getByTestId("shapes-tab-curve");
+    await expect(curve).toHaveAccessibleName("Curve");
+    await curve.click();
+    await expect(curve).toHaveAttribute("aria-pressed", "true");
+
+    // An arch clicked through three points, finished with a click on the last
+    const y = cf.y - 20 * S;
+    const a = { x: cf.x - 14 * S, y };
+    const top = { x: cf.x - 8 * S, y: y - 4 * S };
+    const c = { x: cf.x - 2 * S, y };
+    const click = async (p: Point) => {
+        const at = await toScreen(page, p);
+        await page.mouse.move(at.x, at.y, { steps: 4 });
+        await page.mouse.click(at.x, at.y);
+    };
+    await click(a);
+    await click(top);
+    await click(c);
+    await click(c);
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    await expect(page.getByTestId("shape-choice-points")).toHaveAttribute(
+        "data-value",
+        "smooth",
+    );
+
+    // Three points, each with a tension handle; the outline follows the curve
+    const drawn = (await shapeOverlay(page))!;
+    expect(drawn.handles).toHaveLength(6);
+    expect(drawn.outline!.length).toBeGreaterThan(3);
+    // 8 marchers on a symmetric arch: none on its smooth top, evenly apart
+    expect(drawn.spots).toHaveLength(ALL.length);
+    expect(
+        drawn.spots.every(
+            (s) => Math.hypot(s.x - top.x, s.y - top.y) > 0.25 * S,
+        ),
+    ).toBe(true);
+    const sorted = [...drawn.spots].sort((p, q) => p.x - q.x);
+    const apart = sorted
+        .slice(1)
+        .map((p, i) => Math.hypot(p.x - sorted[i]!.x, p.y - sorted[i]!.y));
+    for (const gap of apart)
+        expect(Math.abs(gap - apart[0]!)).toBeLessThan(CLOSE);
+
+    // Enter places it, a Line recipe with smooth points
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect.poll(() => onSpots(show, drawn.spots)).toBe(true);
+    await waitForIdle(page);
+    const [recipe] = await recipes(show);
+    expect([recipe.kind, recipe.kind_version]).toEqual(["line", 2]);
+    const stored = JSON.parse(recipe.params);
+    expect(stored.points.map((p: { tension: number }) => p.tension)).toEqual([
+        1, 1, 1,
+    ]);
+
+    // Reopened from a member, it is still smooth
+    await page.keyboard.press("Escape");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([]);
+    const t3 = (await drawnMarchers(page)).find((m) => m.id === 3)!.screen;
+    await page.mouse.click(t3.x, t3.y);
+    await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+    await expect(page.getByTestId("shape-choice-points")).toHaveAttribute(
+        "data-value",
+        "smooth",
+    );
+    expect((await shapeOverlay(page))!.handles).toHaveLength(6);
+});

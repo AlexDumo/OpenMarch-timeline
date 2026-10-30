@@ -6,23 +6,34 @@ import {
 } from "../frame/frame";
 import { linePull } from "../frame/edgeGuides";
 import { pivotOf } from "../frame/pivot";
-import { makePath, type Path } from "../geometry/path";
+import { catmullRomControls, mirroredAt } from "../geometry/catmullRom";
+import { makePath, type Path, type Segment } from "../geometry/path";
+import { cross, dot, lerp } from "../geometry/vec";
 import { chordOffsets } from "../spacing";
 import type { ToolEnv } from "../tool/toolKind";
 import type { Slot, XY } from "../types";
 
 /**
- * A Line as the shape host draws it (#523, #524, spec #522): points the line passes through, with
- * straight segments between them, and how its marchers are spaced along it. Every corner holds a
- * marcher unless the corners switch is off. The params already hold what later versions add
- * (tensions, a closed flag, interval groups), so recipes saved now read the same then. Everything
- * here is pure.
+ * A Line as the shape host draws it (#523, #524, #525, spec #522): points the line passes through,
+ * and how its marchers are spaced along it. A point with no tension is a corner, where the line
+ * turns sharply; a point with tension is smooth, and the line bends through it (centripetal
+ * Catmull-Rom, the tension scaling its handles). Every corner holds a marcher unless the corners
+ * switch is off; a smooth point never does. The params already hold what later versions add (a
+ * closed flag, interval groups), so recipes saved now read the same then. Everything here is pure.
  */
 
-/** A point the line passes through. Tension 0 is a corner; above 0 a smooth point (later) */
+/**
+ * A point the line passes through. Tension 0 is a corner; above 0 a smooth point, 1 the plain
+ * Catmull-Rom curve, more rounder (up to {@link MAX_TENSION})
+ */
 export interface LinePoint extends XY {
     readonly tension: number;
 }
+
+/** The tension a point made smooth starts with: the plain Catmull-Rom curve (#525) */
+export const SMOOTH = 1;
+/** The roundest a point can be */
+export const MAX_TENSION = 2;
 
 /**
  * A run of marchers at one interval (spec #522, "Mixed intervals"). `count` absent is "the rest":
@@ -72,14 +83,18 @@ const halfStep = (env: Pick<ToolEnv, "stepPx">) => env.stepPx / 2;
 const sub = (a: XY, b: XY): XY => ({ x: a.x - b.x, y: a.y - b.y });
 const length = (d: XY) => Math.hypot(d.x, d.y);
 const corner = ({ x, y }: XY): LinePoint => ({ x, y, tension: 0 });
+const withTension =
+    (tension: number) =>
+    ({ x, y }: XY): LinePoint => ({ x, y, tension });
 
 const isPoint = (q: unknown): q is LinePoint =>
     typeof q === "object" &&
     q !== null &&
     Number.isFinite((q as LinePoint).x) &&
     Number.isFinite((q as LinePoint).y) &&
-    // Smooth points come later (#525): a curve saved by a newer build isn't read as straight
-    (q as LinePoint).tension === 0;
+    Number.isFinite((q as LinePoint).tension) &&
+    (q as LinePoint).tension >= 0 &&
+    (q as LinePoint).tension <= MAX_TENSION;
 
 const isGroup = (g: unknown): g is LineGroup =>
     typeof g === "object" &&
@@ -95,7 +110,7 @@ const KEYS = new Set(["points", "closed", "spacing", "corners", "pivot"]);
 
 /**
  * Whether `params` is a line this version can lay out exactly as it was saved. Anything a newer
- * build adds (tensions, closing, mixed groups, Measured) is refused, so the recipe shows as plain
+ * build adds (closing, mixed groups, Measured) is refused, so the recipe shows as plain
  * positions instead of being misread and rewritten on the first edit (ADR 0006, decision 5). Each
  * later ticket widens this as it adds the layout.
  */
@@ -121,12 +136,125 @@ export function isLineParams(params: unknown): params is LineParams {
     return sp.mode === "keep" || ANCHORS.includes(sp.anchor);
 }
 
+/**
+ * The line's segments, from each point to the next: straight where it doesn't bend, else a cubic
+ * whose handles are the Catmull-Rom curve's at each smooth point, scaled by its tension (none at a
+ * corner)
+ */
+export function lineSegments(p: LineParams): Segment[] {
+    const points = p.points;
+    return points.slice(1).map((b, i): Segment => {
+        const a = points[i]!;
+        const line: Segment = { type: "line", a, b };
+        if (a.tension === 0 && b.tension === 0) return line;
+        const full = catmullRomControls(
+            mirroredAt(points, i - 1),
+            a,
+            b,
+            mirroredAt(points, i + 2),
+        );
+        const c1 = lerp(a, full.c1, a.tension);
+        const c2 = lerp(b, full.c2, b.tension);
+        // Handles along the segment and inside it (an end beside a corner) bend nothing
+        const d = sub(b, a);
+        const l2 = dot(d, d);
+        const along = (c: XY) => {
+            const t = dot(sub(c, a), d);
+            return (
+                Math.abs(cross(d, sub(c, a))) <= 1e-9 * l2 && t >= 0 && t <= l2
+            );
+        };
+        return along(c1) && along(c2) ? line : { type: "cubic", a, c1, c2, b };
+    });
+}
+
 /** The path through the line's points */
 export function linePath(p: LineParams): Path {
-    const segments = p.points
-        .slice(1)
-        .map((b, i) => ({ type: "line" as const, a: p.points[i]!, b }));
-    return makePath(segments);
+    return makePath(lineSegments(p));
+}
+
+/** Whether any point of the line is smooth */
+const smooth = (p: LineParams) => p.points.some((q) => q.tension > 0);
+
+/**
+ * The points a stretch of the line can be drawn through: its points when it's straight from point
+ * to point, else about 24 a segment along its curves
+ */
+export function lineOutline(p: LineParams): XY[] {
+    if (!smooth(p)) return p.points.map(({ x, y }) => ({ x, y }));
+    const path = linePath(p);
+    return path.polyline(path.length / (24 * (p.points.length - 1)));
+}
+
+/** Where segment `index`'s midpoint handle sits: halfway along it, on its curve */
+export function segmentMidpoint(p: LineParams, index: number): XY {
+    const segment = lineSegments(p)[index]!;
+    const path = makePath([segment]);
+    return path.at(path.length / 2);
+}
+
+/**
+ * The stretches between the points that hold a marcher (#524, #525): from an end or a corner to
+ * the next, smooth points inside them. `from` and `to` are point indices.
+ */
+export function lineRuns(
+    p: LineParams,
+): { readonly from: number; readonly to: number }[] {
+    const last = p.points.length - 1;
+    const runs: { from: number; to: number }[] = [];
+    let from = 0;
+    for (let i = 1; i <= last; i++) {
+        if (i < last && p.points[i]!.tension > 0) continue;
+        runs.push({ from, to: i });
+        from = i;
+    }
+    return runs;
+}
+
+/** Each run's path, in order */
+function runPaths(p: LineParams): Path[] {
+    const segments = lineSegments(p);
+    return lineRuns(p).map(({ from, to }) =>
+        makePath(segments.slice(from, to)),
+    );
+}
+
+/**
+ * The interval at which `gaps` neighbors, measured straight across (the chord), reach exactly from
+ * one end of `path` to the other. On a straight path it's the length over the gaps.
+ */
+function evenChord(path: Path, gaps: number): number {
+    if (gaps <= 0 || !(path.length > 0)) return 0;
+    const arc = path.length / gaps;
+    // A chord is as long as its arc only on a straight stretch
+    if (
+        length(sub(path.at(path.length), path.at(0))) >=
+        path.length * (1 - 1e-9)
+    )
+        return arc;
+    const reach = (c: number) =>
+        chordOffsets(path, 0, Array<number>(gaps).fill(c)).at(-1)!;
+    // Each chord reaches at least its own length along, so the arc's share reaches the end
+    let lo = 0;
+    let hi = arc;
+    while (hi - lo > arc * 1e-10) {
+        const mid = (lo + hi) / 2;
+        if (reach(mid) < path.length) lo = mid;
+        else hi = mid;
+    }
+    return (lo + hi) / 2;
+}
+
+/** `gaps` neighbors evenly apart straight across, from one end of `path` to the other */
+function evenSpots(path: Path, gaps: number, from = 0): Slot[] {
+    const offsets = chordOffsets(
+        path,
+        0,
+        Array<number>(gaps).fill(evenChord(path, gaps)),
+    );
+    // The last on the end exactly, whatever the search left
+    offsets[gaps] = path.length;
+    return offsets.map((s) => ({ ...path.at(s), s: from + s }));
 }
 
 /** The interval a typed spacing keeps, in field units; null in Fit */
@@ -139,22 +267,26 @@ export function typedInterval(p: LineParams): number | null {
  * line works out to
  */
 export function lineInterval(p: LineParams, n: number): number {
-    return typedInterval(p) ?? (n > 1 ? linePath(p).length / (n - 1) : 0);
+    const typed = typedInterval(p);
+    if (typed !== null) return typed;
+    if (n <= 1) return 0;
+    // Along a curve, the straight distance between neighbors (#525)
+    return smooth(p)
+        ? evenChord(linePath(p), n - 1)
+        : linePath(p).length / (n - 1);
 }
 
-/** Each segment's length, in order */
-const segmentLengths = (p: LineParams): number[] =>
-    p.points.slice(1).map((b, i) => length(sub(b, p.points[i]!)));
-
 /**
- * How many gaps each segment holds when every corner holds a marcher (#524): a whole number each,
- * in proportion to its length, at least one. Null when the corners don't hold marchers: the switch
- * is off, there's no corner, the run is laid on the path, or there are fewer gaps than segments.
+ * How many gaps each run (corner to corner, {@link lineRuns}) holds when every corner holds a
+ * marcher (#524): a whole number each, in proportion to its length, at least one. Null when the
+ * corners don't hold marchers: the switch is off, there's no corner, the run is laid on the path,
+ * or there are fewer gaps than runs.
  */
 export function cornerGaps(p: LineParams, n: number): number[] | null {
-    if (p.corners === false || p.points.length < 3) return null;
-    if (p.spacing.mode === "path") return null;
-    const lengths = segmentLengths(p);
+    if (p.corners === false || p.spacing.mode === "path") return null;
+    const runs = lineRuns(p);
+    if (runs.length < 2) return null;
+    const lengths = runPaths(p).map((path) => path.length);
     const gaps = n - 1;
     const total = lengths.reduce((sum, l) => sum + l, 0);
     if (gaps < lengths.length || !(total > 0)) return null;
@@ -181,8 +313,8 @@ const argMax = (xs: readonly number[]): number =>
     xs.reduce((best, x, i) => (x > xs[best]! ? i : best), 0);
 
 /**
- * In Fit with every corner holding a marcher, the narrowest and widest interval of its segments,
- * in field units; null otherwise
+ * In Fit with every corner holding a marcher, the narrowest and widest interval of its runs, in
+ * field units; null otherwise
  */
 export function intervalRange(
     p: LineParams,
@@ -190,41 +322,37 @@ export function intervalRange(
 ): { readonly min: number; readonly max: number } | null {
     const gaps = p.spacing.mode === "fit" ? cornerGaps(p, n) : null;
     if (!gaps) return null;
-    const each = segmentLengths(p).map((l, i) => l / gaps[i]!);
+    const each = runPaths(p).map((path, i) => evenChord(path, gaps[i]!));
     return { min: Math.min(...each), max: Math.max(...each) };
 }
 
 /**
- * In Keep interval with every corner holding a marcher, whether a segment isn't a whole number of
+ * In Keep interval with every corner holding a marcher, whether a run isn't a whole number of
  * intervals long: a corner dragged with `fine` (#524)
  */
 export function cornerOffInterval(p: LineParams, n: number): boolean {
     const interval = typedInterval(p);
     const gaps = interval === null ? null : cornerGaps(p, n);
     if (!gaps) return false;
-    return segmentLengths(p).some(
-        (l, i) => Math.abs(l - gaps[i]! * interval!) > 1e-6 * Math.max(1, l),
+    return runPaths(p).some(
+        (path, i) =>
+            Math.abs(evenChord(path, gaps[i]!) - interval!) >
+            1e-6 * Math.max(1, interval!),
     );
 }
 
 /**
- * The spots of a line whose corners hold marchers: segment by segment from its first point, each
- * `gaps[i]` even gaps, then the last point. In Keep interval a segment is a whole number of
- * intervals, so even gaps are the interval; a corner `fine` left off its interval spreads its
- * segments' gaps evenly instead of running past the corner and stacking marchers on it.
+ * The spots of a line whose corners hold marchers: run by run from its first point, each
+ * `gaps[i]` even gaps straight across, then the last point. In Keep interval a run is a whole
+ * number of intervals, so even gaps are the interval; a corner `fine` left off its interval spreads
+ * its runs' gaps evenly instead of running past the corner and stacking marchers on it.
  */
 function cornerSpots(p: LineParams, gaps: readonly number[]): Slot[] {
     const spots: Slot[] = [];
     let s = 0;
-    p.points.slice(1).forEach((b, i) => {
-        const a = p.points[i]!;
-        const d = sub(b, a);
-        const l = length(d);
-        for (let j = 0; j < gaps[i]!; j++) {
-            const t = j / gaps[i]!;
-            spots.push({ x: a.x + d.x * t, y: a.y + d.y * t, s: s + l * t });
-        }
-        s += l;
+    runPaths(p).forEach((path, i) => {
+        spots.push(...evenSpots(path, gaps[i]!, s).slice(0, -1));
+        s += path.length;
     });
     const last = p.points.at(-1)!;
     spots.push({ x: last.x, y: last.y, s });
@@ -241,6 +369,8 @@ export function lineSpots(p: LineParams, n: number): Slot[] {
     if (corners) return cornerSpots(p, corners);
     if (interval === null) {
         if (n === 1) return [at(path.length / 2)];
+        // Along a curve, neighbors evenly apart straight across (#525)
+        if (smooth(p)) return evenSpots(path, n - 1);
         return Array.from({ length: n }, (_, i) =>
             at((path.length * i) / (n - 1)),
         );
@@ -338,16 +468,20 @@ function at45(from: XY, to: XY, env: ToolEnv): XY {
 const endAt = (other: XY, to: XY, env: ToolEnv): XY =>
     env.constrain ? at45(other, to, env) : landPoint(to, env);
 
-/** A straight line drawn from `from` to `to`, in Fit; undefined while it's under half a step */
+/**
+ * A straight line drawn from `from` to `to`, in Fit, its two points of `tension` (a Curve's are
+ * smooth, #525); undefined while it's under half a step
+ */
 export function drawLine(
     from: XY,
     to: XY,
     env: ToolEnv,
+    tension = 0,
 ): LineParams | undefined {
     const a = landPoint(from, env);
     const b = endAt(a, to, env);
     if (length(sub(b, a)) < halfStep(env) - 1e-9) return undefined;
-    return { points: [corner(a), corner(b)], spacing: FIT };
+    return { points: [a, b].map(withTension(tension)), spacing: FIT };
 }
 
 /**
@@ -360,19 +494,24 @@ export function landClicked(previous: readonly XY[], at: XY, env: ToolEnv): XY {
 }
 
 /**
- * A line through clicked points, in Fit (#524), a point landed on the one before it dropped;
- * undefined while that leaves under two, or a line under half a step long
+ * A line through clicked points, in Fit (#524), each of `tension` (a Curve's are smooth, #525), a
+ * point landed on the one before it dropped; undefined while that leaves under two, or a line
+ * under half a step long
  */
 export function drawPoints(
     clicked: readonly XY[],
     env: ToolEnv,
+    tension = 0,
 ): LineParams | undefined {
     const points = clicked.filter(
         (q, i) =>
             i === 0 || q.x !== clicked[i - 1]!.x || q.y !== clicked[i - 1]!.y,
     );
     if (points.length < 2) return undefined;
-    const p: LineParams = { points: points.map(corner), spacing: FIT };
+    const p: LineParams = {
+        points: points.map(withTension(tension)),
+        spacing: FIT,
+    };
     if (linePath(p).length < halfStep(env) - 1e-9) return undefined;
     return p;
 }
@@ -398,8 +537,9 @@ function directionFrom(other: XY, to: XY, env: ToolEnv): XY | null {
 /**
  * Point `index` dragged to `to`. In Fit and on the path the point goes there (landed). In Keep
  * interval an end turns about its neighbor, its segment's length (so its intervals) kept, and a
- * corner holding a marcher lands where each of its two segments is a whole number of intervals
- * long (#524); `fine` frees it.
+ * corner holding a marcher between straight segments lands where each of them is a whole number
+ * of intervals long (#524); `fine` frees it. A smooth point, or a corner beside a curve, goes
+ * where it's dragged.
  */
 export function dragPoint(
     base: LineParams,
@@ -418,7 +558,7 @@ export function dragPoint(
         if (!u) return base;
         const was = length(sub(base.points[index]!, other));
         point = { x: other.x + u.x * was, y: other.y + u.y * was };
-    } else if (keep && env.snap && !end && cornerGaps(base, n)) {
+    } else if (keep && env.snap && !end && straightCorner(base, n, index)) {
         point = cornerOnIntervals(base, n, index, to);
         if (!point) return base;
     } else {
@@ -434,9 +574,26 @@ export function dragPoint(
 }
 
 /**
- * Where corner `index` can stand with its neighbors where they are and each of its two segments a
- * whole number of the typed interval long, the gaps between them as many as now: the spot nearest
- * `to`, or null when there's none
+ * Whether point `index` is a corner holding a marcher with a straight run on each side: the runs
+ * whose lengths {@link cornerOnIntervals} can make whole intervals
+ */
+function straightCorner(p: LineParams, n: number, index: number): boolean {
+    if (p.points[index]!.tension !== 0 || !cornerGaps(p, n)) return false;
+    const runs = lineRuns(p);
+    const r = runs.findIndex((run) => run.to === index);
+    const segments = lineSegments(p);
+    return [runs[r], runs[r + 1]].every(
+        (run) =>
+            run !== undefined &&
+            run.to - run.from === 1 &&
+            segments[run.from]!.type === "line",
+    );
+}
+
+/**
+ * Where corner `index` can stand with its neighbors where they are and each of its two straight
+ * runs a whole number of the typed interval long, the gaps between them as many as now: the spot
+ * nearest `to`, or null when there's none
  */
 function cornerOnIntervals(
     p: LineParams,
@@ -448,7 +605,8 @@ function cornerOnIntervals(
     const interval = typedInterval(p)!;
     const a = p.points[index - 1]!;
     const b = p.points[index + 1]!;
-    const total = gaps[index - 1]! + gaps[index]!;
+    const r = lineRuns(p).findIndex((run) => run.to === index);
+    const total = gaps[r]! + gaps[r + 1]!;
     let best: XY | null = null;
     for (let k = 1; k < total; k++)
         for (const q of circlesMeet(a, k * interval, b, (total - k) * interval))
@@ -473,12 +631,17 @@ function circlesMeet(a: XY, ra: number, b: XY, rb: number): XY[] {
     ];
 }
 
-/** The line with a corner added halfway along segment `index`, so the line looks the same */
+/**
+ * The line with a point added halfway along segment `index`, on its curve: a corner between two
+ * corners, so a straight line looks the same, else as smooth as the smoother end (#525)
+ */
 export function splitSegment(p: LineParams, index: number): LineParams {
     const a = p.points[index];
     const b = p.points[index + 1];
     if (!a || !b) return p;
-    const mid = corner({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+    const mid = withTension(Math.max(a.tension, b.tension))(
+        segmentMidpoint(p, index),
+    );
     return {
         ...p,
         points: [
@@ -499,7 +662,7 @@ export function withInterval(
     p: LineParams,
     n: number,
     interval: number,
-    env: ToolEnv,
+    env: Pick<ToolEnv, "pivot" | "anchor">,
 ): LineParams {
     const groups = [{ interval }];
     if (p.spacing.mode === "path")
@@ -513,24 +676,31 @@ export function withInterval(
     return scaled(kept, runScale(kept, n, interval), env);
 }
 
-/** Each segment `gaps[i]` intervals long, in its own direction, from the first point */
+/**
+ * Each run (corner to corner) scaled about its start so its `gaps[i]` gaps are `interval` straight
+ * across, in its own direction and shape, from the first point
+ */
 function onIntervals(
     p: LineParams,
     gaps: readonly number[],
     interval: number,
 ): LineParams {
+    const points = [...p.points];
+    const paths = runPaths(p);
     let at: XY = p.points[0]!;
-    const points = p.points.map((q, i) => {
-        if (i === 0) return q;
-        const a = p.points[i - 1]!;
-        const d = sub(q, a);
-        const l = length(d);
-        const want = gaps[i - 1]! * interval;
-        at =
-            l > 0
-                ? { x: at.x + (d.x / l) * want, y: at.y + (d.y / l) * want }
-                : at;
-        return { ...q, ...at };
+    lineRuns(p).forEach(({ from, to }, r) => {
+        const each = evenChord(paths[r]!, gaps[r]!);
+        const k = each > 0 ? interval / each : 1;
+        const start = p.points[from]!;
+        for (let i = from + 1; i <= to; i++) {
+            const q = p.points[i]!;
+            points[i] = {
+                ...q,
+                x: at.x + (q.x - start.x) * k,
+                y: at.y + (q.y - start.y) * k,
+            };
+        }
+        at = points[to]!;
     });
     return { ...p, points };
 }
@@ -558,7 +728,11 @@ function runScale(p: LineParams, n: number, interval: number): number {
 }
 
 /** The line `k` times as big, its pivot staying where it is on the field */
-function scaled(p: LineParams, k: number, env: ToolEnv): LineParams {
+function scaled(
+    p: LineParams,
+    k: number,
+    env: Pick<ToolEnv, "pivot" | "anchor">,
+): LineParams {
     // A line with no length has no direction to grow along
     if (!(lineFrame(p).halfWidth > 1e-9) || !Number.isFinite(k)) return p;
     const first = p.points[0]!;
@@ -574,7 +748,11 @@ function scaled(p: LineParams, k: number, env: ToolEnv): LineParams {
 }
 
 /** `next` moved so its pivot is where `was`'s is on the field (or the run's anchor) */
-function pinned(was: LineParams, next: LineParams, env: ToolEnv): LineParams {
+function pinned(
+    was: LineParams,
+    next: LineParams,
+    env: Pick<ToolEnv, "pivot" | "anchor">,
+): LineParams {
     const key = env.pivot ?? pivotOf(was);
     const fixed = env.anchor ?? pivotPoint(lineFrame(was), key);
     const now = pivotPoint(lineFrame(next), key);
@@ -652,7 +830,8 @@ export function onLine(
         1e-9,
     );
     const near = (a: XY, b: XY) => fromSegment(at, a, b) <= reach;
-    if (p.points.slice(1).some((b, i) => near(p.points[i]!, b))) return true;
+    const outline = lineOutline(p);
+    if (outline.slice(1).some((b, i) => near(outline[i]!, b))) return true;
     // A run on the path can reach past the drawn line's ends
     const spots = lineSpots(p, n);
     return spots.length > 1 && near(spots[0]!, spots.at(-1)!);
@@ -681,6 +860,92 @@ export function lineInFrame(
         points: [corner(env.gridSnap(a)), corner(env.gridSnap(b))],
         spacing: FIT,
     };
+}
+
+/**
+ * {@link lineInFrame} as a Curve (#525): its two ends and, between them, a point half as far off
+ * the line as they are apart, every point smooth
+ */
+export function curveInFrame(
+    frame: ShapeFrame,
+    n: number,
+    env: ToolEnv,
+): LineParams {
+    const line = lineInFrame(frame, n, env);
+    const [a, b] = line.points as [LinePoint, LinePoint];
+    const d = sub(b, a);
+    // Toward the back of the field for a line drawn left to right
+    const apex = env.gridSnap({
+        x: (a.x + b.x) / 2 + d.y / 4,
+        y: (a.y + b.y) / 2 - d.x / 4,
+    });
+    return { ...line, points: [a, apex, b].map(withTension(SMOOTH)) };
+}
+
+/** The line with point `index` of `tension` (0 a corner, more a smooth point, #525) */
+export function setTension(
+    p: LineParams,
+    index: number,
+    tension: number,
+): LineParams {
+    const was = p.points[index];
+    if (!was || was.tension === tension) return p;
+    return {
+        ...p,
+        points: p.points.map((q, i) => (i === index ? { ...q, tension } : q)),
+    };
+}
+
+/**
+ * Where point `index`'s handles would be at tension 1, on the side its tension handle shows: the
+ * way to the next point, or from the one before for the last
+ */
+function fullHandle(p: LineParams, index: number): XY {
+    const points = p.points;
+    const last = points.length - 1;
+    if (index < last)
+        return catmullRomControls(
+            mirroredAt(points, index - 1),
+            points[index]!,
+            points[index + 1]!,
+            mirroredAt(points, index + 2),
+        ).c1;
+    return catmullRomControls(
+        mirroredAt(points, index - 2),
+        points[index - 1]!,
+        points[index]!,
+        mirroredAt(points, index + 1),
+    ).c2;
+}
+
+/**
+ * Where smooth point `index`'s tension handle sits: along the line's way through it, as far out
+ * as its tension takes the curve's handle (#525); null for a corner
+ */
+export function tensionHandle(p: LineParams, index: number): XY | null {
+    const q = p.points[index];
+    if (!q || q.tension === 0) return null;
+    return lerp(q, fullHandle(p, index), q.tension);
+}
+
+/**
+ * Point `index`'s tension handle dragged to `to`: the tension as far out along the curve's way
+ * as the pointer went, in tenths when snapping, 0 (a corner) at or behind the point (#525)
+ */
+export function dragTension(
+    base: LineParams,
+    index: number,
+    to: XY,
+    env: ToolEnv,
+): LineParams {
+    const q = base.points[index];
+    if (!q) return base;
+    const d = sub(fullHandle(base, index), q);
+    const l2 = dot(d, d);
+    if (!(l2 > 1e-12)) return base;
+    let tension = Math.min(MAX_TENSION, Math.max(0, dot(sub(to, q), d) / l2));
+    if (env.snap) tension = Math.round(tension * 10) / 10;
+    return setTension(base, index, tension);
 }
 
 /** How far along the line a field point is, for keeping marchers' order along it */

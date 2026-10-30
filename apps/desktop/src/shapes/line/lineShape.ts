@@ -1,6 +1,11 @@
 import tolgee from "@/global/singletons/Tolgee";
 import type { ShapeKind } from "../types";
-import { alongLine, lineSpots, type LineParams } from "./lineGeometry";
+import {
+    alongLine,
+    lineOutline,
+    lineSpots,
+    type LineParams,
+} from "./lineGeometry";
 
 /**
  * The Line's shape kind, as recipes store it (#523): `line`, version 2. Version 1 is the path line
@@ -26,8 +31,19 @@ export const lineShape: ShapeKind<LineParams> = {
     // The tool's handles are the Line tool's own (`lineTool.ts`)
     handles: () => [],
     drag: (p) => p,
-    outline: (p) => [p.points.map(({ x, y }) => ({ x, y }))],
+    outline: (p) => [lineOutline(p)],
     generate: (p, n) => lineSpots(p, n),
     /** From the first point along the line, the way the spots go */
     orderKey: (p, point) => [alongLine(p, point)],
+};
+
+/**
+ * The Curve's shape kind (#525): the Line's, named Curve for the pickers. Its recipes are Line
+ * recipes, so a placed curve reads back as a Line.
+ */
+export const curveShape: ShapeKind<LineParams> = {
+    ...lineShape,
+    get label() {
+        return tolgee.t("shapes.kinds.curve.label", "Curve");
+    },
 };

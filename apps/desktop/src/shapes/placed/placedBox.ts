@@ -54,9 +54,9 @@ export const isPlacedBox = (
     placed: PlacedBox,
 ): placed is PlacedBox<BoxParams> => placed.kind === boxTool;
 
-/** The kinds a recipe can be read back as: every kind the shape tool draws */
-export const PLACED_KINDS: readonly AnyToolKind[] = SHAPE_TOOLS.map(
-    (entry) => entry.kind,
+/** The kinds a recipe can be read back as: every kind the shape tool draws, presets as their kind */
+export const PLACED_KINDS: readonly AnyToolKind[] = SHAPE_TOOLS.flatMap(
+    (entry) => (entry.kind.preset ? [] : [entry.kind]),
 );
 
 /** How close a marcher must stand to its spot to be on it, in field units */

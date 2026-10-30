@@ -112,7 +112,8 @@
             "expand": "Shape: Expand, keeping the proportions",
             "shrink": "Shape: Shrink, keeping the proportions",
             "keywords": "shape form formation set place",
-            "line": "Shape: Line"
+            "line": "Shape: Line",
+            "curve": "Shape: Curve"
         },
         "swap": {
             "error": "Could not swap marchers {marcher1} and {marcher2}",
@@ -2253,6 +2254,12 @@
                     "label": "Corners",
                     "on": "Marcher on every corner",
                     "off": "Intervals run around corners"
+                },
+                "points": {
+                    "label": "Points",
+                    "corner": "Corners",
+                    "smooth": "Smooth",
+                    "mixed": "Corners and smooth points"
                 }
             },
             "measure": {

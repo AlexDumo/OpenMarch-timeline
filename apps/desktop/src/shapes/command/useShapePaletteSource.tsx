@@ -10,7 +10,7 @@ import { isActionOffInWorkspace } from "@/shortcuts/workspaceActions";
 import { isPreviewMode } from "@/stores/PreviewModeStore";
 import { kindPickGate } from "../tool/pickKind";
 import { shapeSelectionGate } from "../tool/selectionGate";
-import type { AnyToolKind } from "../tool/toolKind";
+import { toolId, type AnyToolKind } from "../tool/toolKind";
 import { SHAPE_TOOLS } from "../tool/shapeTools";
 import { isShapeShown } from "../tool/shapeToolStore";
 import { beginShapeCommand } from "./shapeCommand";
@@ -100,7 +100,7 @@ function kindItem(
     const offHere = isActionOffInWorkspace("shapeBlock");
     const label = named?.label ?? kind.shape.label;
     return {
-        id: `${SHAPE_BRANCH}:${named?.id ?? kind.shape.id}`,
+        id: `${SHAPE_BRANCH}:${named?.id ?? toolId(kind)}`,
         label,
         group: t("commandPalette.shape"),
         icon: <ShapePreviewIcon kind={kind} size={18} />,
