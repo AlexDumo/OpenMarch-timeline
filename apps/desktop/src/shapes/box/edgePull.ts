@@ -62,9 +62,10 @@ interface Pull {
  * from lines at any turn (measured on the edge, not the corner: a line the edge runs nearly along
  * would fling it); only a
  * line beyond the fixed edge, at least a half step apart, counts. Each field axis takes the
- * nearest such line, a corner near a line each way landing on their crossing. Alt (fine control)
- * still pulls, the ladder giving hundredths; Cmd/Ctrl (no snapping) and Shift (equal spacings)
- * don't (owner on #453).
+ * nearest such line, a corner near a line each way landing on their crossing. fine still pulls,
+ * the ladder giving hundredths; the Snap toggle off doesn't (owner on #453), nor constrain while it
+ * equalizes a corner's spacings. On a side handle constrain only flips the ratio lock, so the edge
+ * still lands on the line, as with the lock button.
  */
 export function pullEdges(
     x: PullAxis,
@@ -72,8 +73,10 @@ export function pullEdges(
     field: BoxField | undefined,
     env: ToolEnv,
 ): Pulled {
-    // Cmd/Ctrl snaps nothing; Alt keeps the pull, off the ladder (owner on #453)
-    if (!field || env.pull === false || env.constrain) return {};
+    // The Snap toggle off snaps nothing; fine keeps the pull, off the ladder (owner on #453)
+    if (!field || env.pull === false) return {};
+    // Equal spacings win over a line, on a draw or a corner (constrain on one axis is the ratio lock)
+    if (env.constrain && x.moves && y.moves) return {};
     const half = env.stepPx / 2;
     const own = [x, y] as const;
     const gaps = own.map((a) => (a.moves ? a.count - 1 : 0));

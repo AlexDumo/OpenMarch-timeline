@@ -1,6 +1,6 @@
 import clsx from "clsx";
-import { startGestureKeys, type GestureKeys } from "@/input/gestureKeys";
 import { heldKeysOf } from "@/input/modifierRoles";
+import { holdGesture, type HeldGesture } from "../field/heldGesture";
 import { Tip } from "./Tip";
 import tolgee from "@/global/singletons/Tolgee";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
@@ -67,9 +67,7 @@ export function ScrubNumber({
         axis: ScrubAxis | null;
         dragging: boolean;
         /** The held roles, from the press; a role key mid-drag scrubs again where it is */
-        keys: GestureKeys;
-        /** The last drag, from the press */
-        last: { dx: number; dy: number } | null;
+        held: HeldGesture<{ dx: number; dy: number }>;
     } | null>(null);
     const [dragging, setDragging] = useState(false);
     const [typing, setTyping] = useState<string | null>(null);
@@ -77,7 +75,7 @@ export function ScrubNumber({
     // Tab from the number before opens this one for typing, whatever it shows (review of #459)
     const idle = typing === null;
     // Unmounted mid-drag: stop following the keyboard
-    useEffect(() => () => press.current?.keys.dispose(), []);
+    useEffect(() => () => press.current?.held.end(), []);
     useEffect(() => {
         const el = wrapper.current;
         if (!el || !idle) return;
@@ -141,21 +139,19 @@ export function ScrubNumber({
         // reaches the number for typing
         e.preventDefault();
         e.currentTarget.setPointerCapture(e.pointerId);
-        press.current?.keys.dispose();
+        press.current?.held.end();
         const p = {
             x: e.clientX,
             y: e.clientY,
             axis: axis === "both" ? null : axis,
             dragging: false,
-            keys: startGestureKeys({
-                context: "shape",
-                press: heldKeysOf(e),
-                onRolesChange: (roles) => {
-                    if (press.current !== p || !p.axis || !p.last) return;
-                    onScrub({ ...p.last, axis: p.axis, roles });
+            held: holdGesture<{ dx: number; dy: number }>(
+                heldKeysOf(e),
+                (last, roles) => {
+                    if (press.current === p && p.axis)
+                        onScrub({ ...last, axis: p.axis, roles });
                 },
-            }),
-            last: null as { dx: number; dy: number } | null,
+            ),
         };
         press.current = p;
     };
@@ -164,23 +160,25 @@ export function ScrubNumber({
         if (!p) return;
         const dx = e.clientX - p.x;
         const dy = e.clientY - p.y;
-        p.keys.update(heldKeysOf(e));
+        const keys = heldKeysOf(e);
         if (!p.dragging) {
-            if (Math.max(Math.abs(dx), Math.abs(dy)) < SCRUB_SLOP_PX) return;
+            if (Math.max(Math.abs(dx), Math.abs(dy)) < SCRUB_SLOP_PX) {
+                p.held.move(keys, null);
+                return;
+            }
             p.dragging = true;
             setDragging(true);
             onScrubStart();
         }
         p.axis = lockedAxis(p.axis, dx, dy) ?? p.axis;
-        if (!p.axis) return;
-        p.last = { dx, dy };
-        onScrub({ dx, dy, axis: p.axis, roles: p.keys.roles() });
+        const roles = p.held.move(keys, p.axis ? { dx, dy } : null);
+        if (p.axis) onScrub({ dx, dy, axis: p.axis, roles });
     };
     const up = (keep: boolean) => {
         const p = press.current;
         press.current = null;
         if (!p) return;
-        p.keys.dispose();
+        p.held.end();
         if (p.dragging) {
             setDragging(false);
             onScrubEnd(keep);

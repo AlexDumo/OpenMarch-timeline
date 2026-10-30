@@ -457,7 +457,7 @@ export const halfStep = (env: ToolEnv): number => env.stepPx / 2;
 const TYPED_PER_STEP = 600;
 
 /**
- * An interval as drawn, stretched or typed: half steps, hundredths of a step with Alt (spec #344,
+ * An interval as drawn, stretched or typed: half steps, hundredths of a step with fine (spec #344,
  * #411), or as typed (`typed`: 1/600 of a step, so 1⅔ stays exact, #423); never under half a step
  */
 export function snapInterval(v: number, env: ToolEnv, typed = false): number {

@@ -11,14 +11,13 @@ import {
     frameDrawing,
     guideDrawing,
     memoDrawing,
-    pressShapeKeys,
     shapeCursor,
     SPOT_LABEL_LIMIT,
 } from "../field/fieldModeBase";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { toolEnvFor } from "./toolEnv";
-import type { GestureKeys } from "@/input/gestureKeys";
 import type { Roles } from "@/input/modifierRoles";
+import { pressShapeKeys, type HeldFieldGesture } from "../field/heldGesture";
 import {
     cancelGesture,
     pointerMove,
@@ -335,29 +334,32 @@ function glidingDrawing(shown: Shown | null) {
 
 /** The env for the roles held: a dragged pivot also snaps to the open shape's spots (#350) */
 const envOf = (field: ShapeField, tool: ToolState, roles?: Roles) =>
-    toolEnvFor(field, roles, undefined, () =>
-        slotsOf(tool, shapeContextFor(field)),
-    );
+    toolEnvFor(field, roles, {
+        spots: () => slotsOf(tool, shapeContextFor(field)),
+    });
 
-/**
- * The held roles of the gesture under way, from its press to its release; `moved` once a pointer
- * move has come, so a key alone never turns a click into an edit
- */
-let held: { keys: GestureKeys; moved: boolean } | null = null;
+/** The held roles of the gesture under way, from its press to its end */
+let held: HeldFieldGesture | null = null;
 
 const endHeld = () => {
-    held?.keys.dispose();
+    held?.end();
     held = null;
 };
 
 /** A role key pressed or released mid-drag: the last move again, at the last pointer */
-function rolesChanged() {
+function rerun(at: XY, roles: Roles) {
     const field = currentShapeField();
-    if (!field || !held?.moved) return;
-    const roles = held.keys.roles();
-    updateTool((t) =>
-        t.pointer ? pointerMove(t, t.pointer, envOf(field, t, roles)) : t,
-    );
+    if (!field) return;
+    updateTool((t) => pointerMove(t, at, envOf(field, t, roles)));
+}
+
+/**
+ * Escape mid-gesture: the shape as it was at the press, and the keys no longer followed, though
+ * the pointer is still down
+ */
+export function cancelShapeGesture(): void {
+    endHeld();
+    updateTool(cancelGesture);
 }
 
 /**
@@ -374,31 +376,28 @@ export const shapeToolMode: FieldMode = {
         const tool = useShapeToolStore.getState().tool;
         if (!field || !tool) return;
         endHeld();
-        const { keys, reachInside } = pressShapeKeys(
+        const pressed = pressShapeKeys(
             pointer,
             () =>
                 pressTarget(tool, pointer.field, {
                     ...envOf(field, tool),
                     reachInside: true,
                 }),
-            rolesChanged,
+            rerun,
         );
-        held = { keys, moved: false };
+        held = pressed.held;
+        const roles = held.roles();
         updateTool((t) =>
             press(t, pointer.field, {
-                ...envOf(field, t, keys.roles()),
-                reachInside,
+                ...envOf(field, t, roles),
+                reachInside: pressed.reachInside,
             }),
         );
     },
     move(pointer) {
         const field = currentShapeField();
         if (!field) return;
-        if (held) {
-            held.keys.update(pointer);
-            held.moved = true;
-        }
-        const roles = held?.keys.roles();
+        const roles = held?.move(pointer);
         updateTool((t) =>
             pointerMove(t, pointer.field, envOf(field, t, roles)),
         );
@@ -409,10 +408,7 @@ export const shapeToolMode: FieldMode = {
         if (!field) return;
         updateTool((t) => release(t, shapeContextFor(field), click));
     },
-    cancel() {
-        endHeld();
-        updateTool(cancelGesture);
-    },
+    cancel: cancelShapeGesture,
     cursorAt(pointer) {
         const tool = useShapeToolStore.getState().tool;
         const field = currentShapeField();

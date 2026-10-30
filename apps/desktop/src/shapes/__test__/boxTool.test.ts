@@ -212,6 +212,27 @@ describe("editing a box", () => {
         expect([f.left, f.top, f.right, f.bottom]).toEqual([0, 0, 120, 105]);
     });
 
+    it("a corner with constrain makes the intervals equal; a side with it doesn't", () => {
+        const out = stretchBox(
+            box,
+            16,
+            "se",
+            { x: 120, y: 105 },
+            env({ constrain: true }),
+        );
+        expect(out.across).not.toBe(35);
+        expect(out.across).toBe(out.deep);
+        expect(filesOf(out)).toBe(4);
+        const side = stretchBox(
+            box,
+            16,
+            "e",
+            { x: 120, y: 999 },
+            env({ constrain: true }),
+        );
+        expect(side.deep).toBe(box.deep);
+    });
+
     it("a side stretches only its own axis", () => {
         const out = stretchBox(box, 16, "e", { x: 120, y: 999 }, env());
         expect(out.across).toBe(40);

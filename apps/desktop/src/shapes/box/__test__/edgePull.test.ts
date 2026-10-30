@@ -139,17 +139,64 @@ describe("stretching a box onto a line", () => {
         exact(free.across, 21.9);
     });
 
-    it("doesn't pull with the Snap toggle off or constrain, or a 45° box with no corner near a line", () => {
+    it("doesn't pull with the Snap toggle off, or a 45° box with no corner near a line", () => {
         const noSnap = stretch(row(7), 7, "e", { x: 162, y: -100 }, NO_SNAP);
         expect(Math.abs(noSnap.across - (8 / 3) * STEP)).toBeGreaterThan(1e-3);
-        onHalves(
-            stretch(row(7), 7, "e", { x: 162, y: -100 }, { constrain: true })
-                .across,
-        );
         const turned = { ...row(7), rotation: Math.PI / 4 };
         const to = boxHandlePoint(turned, 7, "e");
         const p = stretch(turned, 7, "e", { x: to.x + 1, y: to.y + 1 });
         onHalves(p.across);
+    });
+
+    it("doesn't pull a corner while constrain equalizes the spacings", () => {
+        // 7 files, 2 ranks: the south-east corner moves both ways
+        const block: BoxParams = { ...row(7), files: 7 };
+        const free = stretch(block, 14, "se", { x: 162, y: -77 });
+        exact(free.across, (8 / 3) * STEP);
+        const equal = stretch(
+            block,
+            14,
+            "se",
+            { x: 162, y: -77 },
+            { constrain: true },
+        );
+        expect(Math.abs(equal.across - (8 / 3) * STEP)).toBeGreaterThan(1e-3);
+        onHalves(equal.across);
+        exact(equal.deep, equal.across);
+        // In hundredths a pulled 2⅔ across would show: 27 across and 33 deep make 30 each, not 29.8
+        const fine = stretch(
+            block,
+            14,
+            "se",
+            { x: 162, y: -77 },
+            { ...FINE, constrain: true },
+        );
+        exact(fine.across, 30);
+        exact(fine.deep, 30);
+    });
+
+    it("still pulls a side handle with constrain, which only flips the ratio lock there", () => {
+        // What toolEnvFor gives a $mod side drag: constrain, and the ratio lock flipped on
+        const p = stretch(
+            row(7),
+            7,
+            "e",
+            { x: 162, y: -100 },
+            { constrain: true, ratioLocked: true },
+        );
+        exact(p.across, (8 / 3) * STEP);
+        exact(edges(p, 7).right, 160);
+        // The same drag with the lock button on and no key lands the same
+        const locked = stretch(
+            row(7),
+            7,
+            "e",
+            { x: 162, y: -100 },
+            {
+                ratioLocked: true,
+            },
+        );
+        exact(locked.across, p.across);
     });
 
     it("with the ratio lock at 1, a pulled 2⅔ across makes deep exactly 2⅔", () => {

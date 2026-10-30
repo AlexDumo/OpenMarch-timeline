@@ -373,6 +373,34 @@ describe("curve kind", () => {
         );
     });
 
+    it("drags a point with constrain to 45° steps from its neighbor", () => {
+        // The middle point leans on the first; the first, on the second
+        const leg = (from: XY, to: XY) =>
+            Math.atan2(to.y - from.y, to.x - from.x);
+        const to = xy(40, 13);
+        const free = curveKind.drag(base, "p1", to, noConstrain, 5, ctx);
+        expect(leg(free.points[0]!, free.points[1]!)).not.toBeCloseTo(0, 3);
+        const snapped = curveKind.drag(
+            base,
+            "p1",
+            to,
+            { constrain: true },
+            5,
+            ctx,
+        );
+        close(leg(snapped.points[0]!, snapped.points[1]!), 0);
+        closeXY(snapped.points[2]!, base.points[2]!);
+        const first = curveKind.drag(
+            base,
+            "p0",
+            xy(20, 12),
+            { constrain: true },
+            5,
+            ctx,
+        );
+        close(leg(base.points[1]!, first.points[0]!), (-3 * Math.PI) / 4);
+    });
+
     it("orders by distance along the curve", () => {
         const a = curveKind.orderKey(base, xy(10, 5), ctx, 3)[0]!;
         const b = curveKind.orderKey(base, xy(90, 5), ctx, 3)[0]!;

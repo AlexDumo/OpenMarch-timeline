@@ -1,10 +1,4 @@
 import type { FieldCursor, FieldModeDrawing } from "@/field/editor/fieldEditor";
-import { startGestureKeys, type GestureKeys } from "@/input/gestureKeys";
-import {
-    pressChoiceOf,
-    type HeldKeys,
-    type PressChoice,
-} from "@/input/modifierRoles";
 import { ReadableCoords } from "@/global/classes/ReadableCoords";
 import type { XY } from "../types";
 import {
@@ -20,33 +14,6 @@ import { useShapePointerStore } from "./shapePointer";
 import { lengthReadout } from "../frame/scale";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { ShapeField } from "./shapeField";
-
-/** The press choices a shape press can use: reach inside pulls the pivot out of the center dot */
-const REACH_INSIDE: ReadonlySet<PressChoice> = new Set(["reachInside"]);
-
-/**
- * The held roles of a shape gesture, from its press to its release (version A,
- * docs/timeline/research/shapes/modifier-roles.md). `grabs` is what the press would take with
- * reach inside on; a press that pulls the pivot out of the center dot uses reach inside's key
- * ($mod), so that key isn't `constrain` until it's released and pressed again. A role key pressed
- * or released mid-drag calls `onRolesChange`, for the gesture to re-run its last move.
- */
-export function pressShapeKeys(
-    pointer: HeldKeys,
-    grabs: () => ShapeTarget | { type: "draw" } | null,
-    onRolesChange: () => void,
-): { keys: GestureKeys; reachInside: boolean } {
-    const reach = pressChoiceOf(pointer, "shape", { applicable: REACH_INSIDE });
-    const target = reach ? grabs() : null;
-    const pulled = target?.type === "pivot" && target.pulled === true;
-    const keys = startGestureKeys({
-        context: "shape",
-        press: pointer,
-        usedByPress: pulled && reach ? [reach.key] : [],
-        onRolesChange,
-    });
-    return { keys, reachInside: reach !== null };
-}
 
 /** A handle's cursor from a shape kind, as the field shows it */
 export const asCursor = (cursor: string): FieldCursor => cursor as FieldCursor;

@@ -6,6 +6,8 @@ import type { ShapeField } from "../../field/shapeField";
 import { toolEnvFor } from "../../tool/toolEnv";
 import { SPACING_FINE_RATE, spacingRate } from "../scrub";
 import { ScrubNumber, type ScrubMove } from "../ScrubNumber";
+import { watchKeyListeners } from "../../__test__/keyListeners";
+import { stubPointerCapture } from "./pointerEvents";
 
 /**
  * A number in the floating editor reads held roles (version A): Shift is fine, hundredths of a step
@@ -13,28 +15,16 @@ import { ScrubNumber, type ScrubMove } from "../ScrubNumber";
  * scrubs again where the pointer is.
  */
 
-// jsdom has no PointerEvent, so fireEvent's pointer events would lose clientX and the keys
-if (typeof window.PointerEvent === "undefined") {
-    class TestPointerEvent extends MouseEvent {
-        readonly pointerId: number;
-        readonly pointerType: string;
-        constructor(type: string, init: PointerEventInit = {}) {
-            super(type, init);
-            this.pointerId = init.pointerId ?? 1;
-            this.pointerType = init.pointerType ?? "mouse";
-        }
-    }
-    window.PointerEvent = TestPointerEvent as unknown as typeof PointerEvent;
-}
+let restorePointerCapture: () => void;
 
 beforeEach(() => {
     vi.spyOn(platform, "isMacPlatform").mockReturnValue(false);
-    // jsdom has no pointer capture
-    HTMLElement.prototype.setPointerCapture = () => {};
+    restorePointerCapture = stubPointerCapture();
 });
 
 afterEach(() => {
     cleanup();
+    restorePointerCapture();
     vi.restoreAllMocks();
 });
 
@@ -48,7 +38,7 @@ const field = {
 
 function shown() {
     const onScrub = vi.fn<(move: ScrubMove) => void>();
-    render(
+    const { unmount } = render(
         <ScrubNumber
             display="2"
             axis="x"
@@ -60,7 +50,7 @@ function shown() {
             onType={() => true}
         />,
     );
-    return { button: screen.getByTestId("n"), onScrub };
+    return { button: screen.getByTestId("n"), onScrub, unmount };
 }
 
 const lastMove = (onScrub: ReturnType<typeof shown>["onScrub"]) =>
@@ -123,5 +113,31 @@ describe("dragging a number", () => {
         const ended = onScrub.mock.calls.length;
         fireEvent.keyDown(window, { key: "Shift", shiftKey: true });
         expect(onScrub.mock.calls.length).toBe(ended);
+    });
+});
+
+describe("a number's drag stops following the keys", () => {
+    it.each([
+        ["released", (button: HTMLElement) => fireEvent.pointerUp(button)],
+        ["cancelled", (button: HTMLElement) => fireEvent.pointerCancel(button)],
+        [
+            "when it loses the pointer",
+            (button: HTMLElement) => fireEvent.lostPointerCapture(button),
+        ],
+        [
+            "when it's unmounted mid-drag",
+            (_: HTMLElement, unmount: () => void) => unmount(),
+        ],
+    ])("%s", (_, end) => {
+        const keyListeners = watchKeyListeners();
+        const { button, onScrub, unmount } = shown();
+        fireEvent.pointerDown(button, { button: 0, clientX: 0, clientY: 0 });
+        fireEvent.pointerMove(button, { clientX: 10, clientY: 0 });
+        expect(keyListeners()).toBeGreaterThan(0);
+        end(button, unmount);
+        expect(keyListeners()).toBe(0);
+        const calls = onScrub.mock.calls.length;
+        fireEvent.keyDown(window, { key: "Shift", shiftKey: true });
+        expect(onScrub.mock.calls.length).toBe(calls);
     });
 });

@@ -6,14 +6,13 @@ import {
     frameDrawing,
     guideDrawing,
     memoDrawing,
-    pressShapeKeys,
     shapeCursor,
     SPOT_LABEL_LIMIT,
 } from "../field/fieldModeBase";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { shapeOutline, shapeTargetAt } from "../frame/gestures";
 import { toolEnvFor } from "../tool/toolEnv";
-import type { GestureKeys } from "@/input/gestureKeys";
+import { pressShapeKeys, type HeldFieldGesture } from "../field/heldGesture";
 import { commitBox } from "./commitBox";
 import {
     liveTargets,
@@ -28,6 +27,8 @@ import { enterBox } from "./boxSelection";
 import { usePlacedBoxPreviewStore } from "./boxSelectionStore";
 import { outlineGapAt } from "../distribute/outlineGap";
 import type { AnyToolKind } from "../tool/toolKind";
+import type { XY } from "../types";
+import type { Roles } from "@/input/modifierRoles";
 import {
     setShapeDragging,
     setShapePointerOver,
@@ -127,11 +128,8 @@ export class LiveBoxMode implements FieldMode {
     readonly gesture = { kind: "box", always: false } as const;
 
     private shown: Shown | null = null;
-    /**
-     * The held roles of the gesture under way; `moved` once a pointer move has come, so a key
-     * alone never turns a click into an edit
-     */
-    private held: { keys: GestureKeys; moved: boolean } | null = null;
+    /** The held roles of the gesture under way, from its press to its end */
+    private held: HeldFieldGesture | null = null;
 
     constructor(
         box: PlacedBox,
@@ -155,7 +153,7 @@ export class LiveBoxMode implements FieldMode {
         const field = currentShapeField();
         this.endHeld();
         if (!field) return;
-        const { keys, reachInside } = pressShapeKeys(
+        const { held, reachInside } = pressShapeKeys(
             pointer,
             () =>
                 shapeTargetAt(
@@ -165,12 +163,12 @@ export class LiveBoxMode implements FieldMode {
                     pointer.field,
                     { ...toolEnvFor(field), reachInside: true },
                 ),
-            () => this.rolesChanged(),
+            (at, roles) => this.rerun(at, roles),
         );
-        this.held = { keys, moved: false };
+        this.held = held;
         this.live =
             pressLive(this.live, pointer.field, {
-                ...toolEnvFor(field, keys.roles()),
+                ...toolEnvFor(field, held.roles()),
                 reachInside,
             }) ?? this.live;
         this.emit();
@@ -179,33 +177,24 @@ export class LiveBoxMode implements FieldMode {
     move(pointer: FieldPointer): void {
         const field = currentShapeField();
         if (!field) return;
-        if (this.held) {
-            this.held.keys.update(pointer);
-            this.held.moved = true;
-        }
         this.live = moveLive(
             this.live,
             pointer.field,
-            toolEnvFor(field, this.held?.keys.roles()),
+            toolEnvFor(field, this.held?.move(pointer)),
         );
         this.emit();
     }
 
     /** A role key pressed or released mid-drag: the last move again, at the last pointer */
-    private rolesChanged(): void {
+    private rerun(at: XY, roles: Roles): void {
         const field = currentShapeField();
-        const at = this.live.pointer;
-        if (!field || !this.held?.moved || !at) return;
-        this.live = moveLive(
-            this.live,
-            at,
-            toolEnvFor(field, this.held.keys.roles()),
-        );
+        if (!field) return;
+        this.live = moveLive(this.live, at, toolEnvFor(field, roles));
         this.emit();
     }
 
     private endHeld(): void {
-        this.held?.keys.dispose();
+        this.held?.end();
         this.held = null;
     }
 

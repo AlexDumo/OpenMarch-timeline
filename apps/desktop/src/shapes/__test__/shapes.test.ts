@@ -415,6 +415,34 @@ describe("arc kind", () => {
         for (const s of slots) close(dist(s, xy(0, 0)), 50, 1e-6);
     });
 
+    it("drags an end with constrain to a 45° direction from the other end", () => {
+        for (const [key, to] of [
+            ["b", xy(28, 17)],
+            ["a", xy(-28, -17)],
+        ] as const) {
+            const free = arcKind.drag(
+                params,
+                key,
+                to,
+                { constrain: false },
+                3,
+                ctx,
+            );
+            const snapped = arcKind.drag(
+                params,
+                key,
+                to,
+                { constrain: true },
+                3,
+                ctx,
+            );
+            const chord = (p: ArcParams) =>
+                Math.atan2(p.b.y - p.a.y, p.b.x - p.a.x);
+            expect(chord(free) % (Math.PI / 4)).not.toBeCloseTo(0, 3);
+            close(chord(snapped), Math.PI / 4);
+        }
+    });
+
     it("keeps its proportions when an end is dragged", () => {
         const next = arcKind.drag(
             params,

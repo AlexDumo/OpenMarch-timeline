@@ -7,8 +7,8 @@ import {
     type ReactNode,
 } from "react";
 import { ArrowsInSimpleIcon, ArrowsOutSimpleIcon } from "@phosphor-icons/react";
-import { startGestureKeys, type GestureKeys } from "@/input/gestureKeys";
 import { heldKeysOf, type Roles } from "@/input/modifierRoles";
+import { holdGesture, type HeldGesture } from "../field/heldGesture";
 import tolgee from "@/global/singletons/Tolgee";
 import { pivotOf } from "../frame/pivot";
 import { scaleKeepingRatio, scrubKeepingRatio } from "../frame/scale";
@@ -57,8 +57,8 @@ export const scaleOnce = (
 /**
  * Shrink and Expand (#489): the shape smaller or bigger, its across:deep ratio kept, around the
  * pivot, its counts unchanged (`scaleKeepingRatio`, the owner's half-step rule). A click is one
- * step; held, it repeats; dragged, it scrubs (right or up for bigger), one step per 8 px, with Alt
- * finely and with Cmd or Ctrl freely. Each press is one undo step. Shrink is disabled when the
+ * step; held, it repeats; dragged, it scrubs (right or up for bigger), one step per 8 px, finely
+ * with fine (Shift) held and freely with the Snap toggle off. Each press is one undo step. Shrink is disabled when the
  * next step would take a spacing under half a step.
  */
 export const ScaleButtons = memo(function ScaleButtons({
@@ -129,9 +129,7 @@ interface Press {
     /** The shape as last previewed while held */
     current: unknown;
     /** The held roles, from the press; a role key mid-drag scrubs again where it is */
-    readonly keys: GestureKeys;
-    /** The last drag, from the press */
-    last: { dx: number; dy: number } | null;
+    readonly held: HeldGesture<{ dx: number; dy: number }>;
 }
 
 function ScaleButton({
@@ -164,7 +162,7 @@ function ScaleButton({
     useEffect(
         () => () => {
             stopTimer();
-            press.current?.keys.dispose();
+            press.current?.held.end();
         },
         [],
     );
@@ -191,7 +189,7 @@ function ScaleButton({
         // As the editor's other controls: the press doesn't take the focus (`keepFocus`)
         e.preventDefault();
         e.currentTarget.setPointerCapture(e.pointerId);
-        press.current?.keys.dispose();
+        press.current?.held.end();
         const p: Press = {
             x: e.clientX,
             y: e.clientY,
@@ -200,14 +198,12 @@ function ScaleButton({
             axis: null,
             base: target.params,
             current: target.params,
-            keys: startGestureKeys({
-                context: "shape",
-                press: heldKeysOf(e),
-                onRolesChange: () => {
-                    if (press.current === p && p.last) scrubTo(p, p.last);
+            held: holdGesture<{ dx: number; dy: number }>(
+                heldKeysOf(e),
+                (last, roles) => {
+                    if (press.current === p) scrubTo(p, last, roles);
                 },
-            }),
-            last: null,
+            ),
         };
         press.current = p;
         if (!disabled) timer.current = setTimeout(repeat, HOLD_MS);
@@ -217,21 +213,27 @@ function ScaleButton({
         if (!p || p.mode === "hold") return;
         const dx = e.clientX - p.x;
         const dy = e.clientY - p.y;
-        p.keys.update(heldKeysOf(e));
+        const keys = heldKeysOf(e);
         if (p.mode === "press") {
-            if (Math.max(Math.abs(dx), Math.abs(dy)) < SCRUB_SLOP_PX) return;
+            if (Math.max(Math.abs(dx), Math.abs(dy)) < SCRUB_SLOP_PX) {
+                p.held.move(keys, null);
+                return;
+            }
             stopTimer();
             p.mode = "scrub";
             target.begin();
         }
         p.axis = lockedAxis(p.axis, dx, dy);
-        if (!p.axis) return;
-        p.last = { dx, dy };
-        scrubTo(p, p.last);
+        const roles = p.held.move(keys, p.axis ? { dx, dy } : null);
+        if (p.axis) scrubTo(p, { dx, dy }, roles);
     };
-    /** The shape dragged `dx`, `dy` px from the press, with the roles held now */
-    const scrubTo = (p: Press, { dx, dy }: { dx: number; dy: number }) => {
-        const env = envFor(p.keys.roles());
+    /** The shape dragged `dx`, `dy` px from the press, with these roles */
+    const scrubTo = (
+        p: Press,
+        { dx, dy }: { dx: number; dy: number },
+        roles: Roles,
+    ) => {
+        const env = envFor(roles);
         if (!env || !p.axis) return;
         target.preview(
             scrubKeepingRatio(
@@ -249,7 +251,7 @@ function ScaleButton({
         press.current = null;
         stopTimer();
         if (!p) return;
-        p.keys.dispose();
+        p.held.end();
         if (p.mode !== "press") target.end(keep);
         else if (keep && !disabled) scaleOnce(target, by, envFor);
     };

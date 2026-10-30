@@ -49,8 +49,10 @@ export const NO_ROLES: Roles = {
 export function toolEnvFor(
     field: ShapeField,
     roles: Roles = NO_ROLES,
-    snapOn: boolean = true,
-    spots?: () => readonly XY[],
+    {
+        snapOn = true,
+        spots,
+    }: { snapOn?: boolean; spots?: () => readonly XY[] } = {},
 ): ToolEnv {
     const { fieldProperties } = field;
     const editor = useShapeEditorStore.getState();
@@ -95,5 +97,9 @@ export function nudgeEnvFor(
 ): ToolEnv {
     const fine =
         !nudge.snap && (nudge.step === "quarter" || nudge.step === "tenth");
-    return toolEnvFor(field, { ...NO_ROLES, fine }, nudge.snap || fine);
+    return toolEnvFor(
+        field,
+        { ...NO_ROLES, fine },
+        { snapOn: nudge.snap || fine },
+    );
 }

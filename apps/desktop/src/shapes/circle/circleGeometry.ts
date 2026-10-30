@@ -215,7 +215,7 @@ export function withInterval(
 
 /**
  * The circle a drag from `from` (its center) to `to` (its rim) draws for `n` marchers: the
- * interval that puts them around that radius, in half steps (hundredths with Alt), so the rim lands
+ * interval that puts them around that radius, in half steps (hundredths with fine), so the rim lands
  * near the cursor. Undefined for a drag too short to be a circle.
  */
 export function drawCircle(

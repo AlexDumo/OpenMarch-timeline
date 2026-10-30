@@ -57,7 +57,7 @@ describe("toolEnvFor", () => {
     });
 
     it("with the Snap toggle off, neither snaps nor pulls", () => {
-        const env = toolEnvFor(field, roles(), false);
+        const env = toolEnvFor(field, roles(), { snapOn: false });
         expect([env.snap, env.pull, env.fine]).toEqual([false, false, false]);
     });
 
@@ -80,7 +80,9 @@ describe("toolEnvFor", () => {
         expect(toolEnvFor(field, roles({ fine: true })).gridSnap(at)).toEqual(
             at,
         );
-        expect(toolEnvFor(field, roles(), false).gridSnap(at)).toEqual(at);
+        expect(
+            toolEnvFor(field, roles(), { snapOn: false }).gridSnap(at),
+        ).toEqual(at);
     });
 
     it("flips the editor's ratio lock while constrain is held", () => {
@@ -176,6 +178,8 @@ describe("a draw's first corner", () => {
             fromWith(toolEnvFor(field, roles({ constrain: true }))),
         ).not.toEqual(at);
         expect(fromWith(toolEnvFor(field, roles({ fine: true })))).toEqual(at);
-        expect(fromWith(toolEnvFor(field, roles(), false))).toEqual(at);
+        expect(fromWith(toolEnvFor(field, roles(), { snapOn: false }))).toEqual(
+            at,
+        );
     });
 });

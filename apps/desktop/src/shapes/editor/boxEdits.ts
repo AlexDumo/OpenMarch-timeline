@@ -313,7 +313,8 @@ function reorientedGap(p: BoxParams, spots: number): Partial<BoxParams> {
 
 /**
  * A spacing (the box's own `which`) dragged `distance` px for more: ½ step per 8 px, hundredths
- * with Alt (still pulled onto the field's lines, #452) or Cmd/Ctrl (not), from where it started
+ * with fine (still pulled onto the field's lines, #452) or the Snap toggle off (not), from where it
+ * started
  */
 export function scrubSpacing(
     base: BoxParams,
