@@ -15,9 +15,9 @@ declare module "vitest" {
  * reuses them. A new folder each run, so a changed migration or fixture never hits an old one.
  */
 export default function setup(project: TestProject) {
-    const dir = fs.mkdtempSync(
-        path.join(os.tmpdir(), "openmarch-test", "fixture-cache-"),
-    );
+    const parent = path.join(os.tmpdir(), "openmarch-test");
+    fs.mkdirSync(parent, { recursive: true });
+    const dir = fs.mkdtempSync(path.join(parent, "fixture-cache-"));
     project.provide("fixtureCacheDir", dir);
     return () => fs.rmSync(dir, { recursive: true, force: true });
 }
