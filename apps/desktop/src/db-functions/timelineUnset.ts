@@ -8,6 +8,11 @@ import { readPageGrid } from "./timelineRipple";
 import { FIRST_PAGE_ID } from "./rowMappers";
 import { clearOwnPageMoves, samePosition } from "./timelineMoves";
 import { setAsShownOnPageInTransaction } from "./timelineSetAsShown";
+import {
+    joinMovesAtInTransaction,
+    readMoveEnds,
+    type NotJoined,
+} from "./timelineJoinAtBeat";
 
 /**
  * **Unset** (Set vs Following, #300): takes back the coordinate marchers have on one count, so
@@ -23,6 +28,13 @@ import { setAsShownOnPageInTransaction } from "./timelineSetAsShown";
  * and on Pages N–M** (#305) is the same delete without the stay (`keepLaterPages` false), so the
  * followers carry back to the earlier spot.
  *
+ * Where the marchers' next move starts on the count, the count isn't a page flag and the whole
+ * membership of the removed move was selected, the two moves join back into one
+ * (`timelineJoinAtBeat.ts`, holds decision 14, #470): the marcher walks the move as it was before
+ * Split at playhead, at even speed. The join comes before the stays, so a joined marcher, which
+ * still gets where it did, needs none. Where the join is refused, those marchers keep the plain
+ * Remove and come back in `notJoined` with the reason, for the UI's toast.
+ *
  * Callers pass the marchers that are Set on the count (`timelineSetFollowing`); a marcher with no
  * move ending there is skipped. Nobody to unset writes nothing and adds no undo step.
  */
@@ -31,6 +43,10 @@ import { setAsShownOnPageInTransaction } from "./timelineSetAsShown";
 export interface UnsetResult {
     /** The marchers whose coordinate on the count was deleted, ascending */
     unset: number[];
+    /** Of those, the ones whose two moves around the count were joined into one, ascending */
+    joined: number[];
+    /** Of those, the ones whose moves weren't joined because the fit was refused, with why */
+    notJoined: NotJoined[];
 }
 
 const ascending = (ids: Iterable<number>) =>
@@ -61,7 +77,7 @@ export async function unsetMarchersAtInTransaction({
     keepLaterPages: boolean;
     tidyShared?: boolean;
 }): Promise<UnsetResult> {
-    const result: UnsetResult = { unset: [] };
+    const result: UnsetResult = { unset: [], joined: [], notJoined: [] };
     if (marcherIds.length === 0) return result;
     const a = schema.timeline_assignments;
     const rows = await tx
@@ -85,7 +101,14 @@ export async function unsetMarchersAtInTransaction({
             before.set(id, resolver.positionAt(id, box.end));
     }
 
+    const ends = await readMoveEnds(
+        tx,
+        rows.map((r) => r.id),
+    );
     await clearOwnPageMoves(tx, rows, { tidyShared });
+    const join = await joinMovesAtInTransaction({ tx, beat, ends });
+    result.joined = join.joined;
+    result.notJoined = join.notJoined;
 
     if (box) {
         const resolver = createResolver(

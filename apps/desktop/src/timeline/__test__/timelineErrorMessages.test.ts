@@ -11,6 +11,9 @@ import {
     TIMELINE_LEGACY_CONVERSION_MESSAGE,
     TIMELINE_NOT_READY_MESSAGE,
     isLegacyConversionViolation,
+    NOT_JOINED_MESSAGE,
+    NOT_JOINED_REASONS,
+    notJoinedMessage,
     TIMELINE_UNKNOWN_ERROR_MESSAGE,
     timelineErrorCode,
     timelineErrorMessage,
@@ -229,6 +232,49 @@ describe("toastTimelineError", () => {
     });
 });
 
+describe("notJoinedMessage", () => {
+    const labels = new Map([
+        [3, "T3"],
+        [4, "T4"],
+        [7, "B1"],
+    ]);
+    const nameOf = (id: number) => labels.get(id);
+
+    it("names the marchers and words the reason for a join (#470)", () => {
+        expect(
+            notJoinedMessage(
+                [{ marcherIds: [3, 4], reason: "secondMove" }],
+                nameOf,
+            ),
+        ).toBe(
+            "T3 and T4 couldn't join their moves: they'd have two moves over the same counts.",
+        );
+    });
+
+    it("puts each refused join in the one toast", () => {
+        expect(
+            notJoinedMessage(
+                [
+                    { marcherIds: [3], reason: "partway" },
+                    { marcherIds: [7], reason: "overlap" },
+                ],
+                nameOf,
+            ),
+        ).toBe(
+            "T3 couldn't join their moves: a marcher joins or leaves the next move partway. B1 couldn't join their moves: the joined move would run into another of their moves on the same layer.",
+        );
+    });
+
+    it("counts marchers whose names aren't known", () => {
+        expect(
+            notJoinedMessage(
+                [{ marcherIds: [3, 99], reason: "overlap" }],
+                nameOf,
+            ),
+        ).toMatch(/^2 marchers couldn't join their moves: /);
+    });
+});
+
 describe("en.json", () => {
     const en = JSON.parse(
         readFileSync(resolve(__dirname, "../../../i18n/en.json"), "utf8"),
@@ -248,6 +294,8 @@ describe("en.json", () => {
             TIMELINE_UNKNOWN_ERROR_MESSAGE,
             TIMELINE_NOT_READY_MESSAGE,
             TIMELINE_LEGACY_CONVERSION_MESSAGE,
+            NOT_JOINED_MESSAGE,
+            ...Object.values(NOT_JOINED_REASONS),
         ])
             expect(lookup(m.key), m.key).toBe(m.defaultMessage);
     });

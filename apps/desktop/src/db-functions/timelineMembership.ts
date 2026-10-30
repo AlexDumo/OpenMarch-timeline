@@ -76,7 +76,7 @@ const rangeText = ({ start, end }: BeatRange) => `[${start}, ${end})`;
 
 /** Each marcher's drill number ("T3"), for refusals. */
 export const marcherLabels = async (
-    tx: DbTransaction,
+    tx: DbConnection | DbTransaction,
     marcherIds: readonly number[],
 ): Promise<Map<number, string>> => {
     if (marcherIds.length === 0) return new Map();
