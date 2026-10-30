@@ -202,12 +202,18 @@ export interface ToolKind<P> {
     ratioLockFor?(params: P, n: number): boolean;
     /**
      * What `constrain` and `fromCenter` do in this kind's own drags, as the chip near the cursor
-     * names them: on the draw, and on a handle by its key (`ratioLocked`: the lock is on). A role
-     * left out does nothing there, so the chip leaves it out.
+     * names them: on the draw, and on a handle of the shape `params` of `n` spots by its key
+     * (`ratioLocked`: the lock is on). A role left out does nothing there, so the chip leaves it
+     * out.
      */
     readonly honors?: {
         readonly draw?: KindHonors;
-        handle?(key: string, ratioLocked: boolean): KindHonors;
+        handle?(
+            key: string,
+            ratioLocked: boolean,
+            params: P,
+            n: number,
+        ): KindHonors;
     };
     /**
      * The params a drag from `from` to `to` draws, or undefined while the drag is too short.

@@ -200,7 +200,11 @@ export class LiveBoxMode implements FieldMode {
         if (!field) return;
         const { held, reachInside } = pressShapeKeys(
             pointer,
-            this.live.box.kind,
+            {
+                kind: this.live.box.kind,
+                params: this.live.box.params,
+                n: this.live.box.spots,
+            },
             (reachInside) =>
                 shapeTargetAt(
                     this.live.box.kind,
