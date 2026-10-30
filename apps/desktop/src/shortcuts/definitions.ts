@@ -697,6 +697,17 @@ const STATIC_ACTIONS = {
         // The command bar lists Shape › Circle instead, which asks the circle's numbers
         hiddenFromPalette: true,
     },
+    shapeLine: {
+        labelKey: "actions.shape.line",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["L"],
+        args: { kind: "line" },
+        // The command bar lists Shape › Line instead, which asks the line's numbers
+        hiddenFromPalette: true,
+    },
     // The favorites ring (#351): hold to aim and let go to pick a shape, tap to keep it open.
     // The ring takes the key's release, so a held key doesn't repeat it. From the palette it opens
     // latched, as a tap does (#411).

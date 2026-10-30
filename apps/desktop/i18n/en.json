@@ -111,7 +111,8 @@
             "evenOut": "Shape: Even out the outline",
             "expand": "Shape: Expand, keeping the proportions",
             "shrink": "Shape: Shrink, keeping the proportions",
-            "keywords": "shape form formation set place"
+            "keywords": "shape form formation set place",
+            "line": "Shape: Line"
         },
         "swap": {
             "error": "Could not swap marchers {marcher1} and {marcher2}",
@@ -2233,6 +2234,17 @@
                 "label": "Line",
                 "validate": {
                     "sameSpot": "The line's ends are on the same spot"
+                },
+                "params": {
+                    "interval": "Spacing between neighbors, in steps"
+                },
+                "spacing": {
+                    "label": "Spacing",
+                    "fit": "Fit",
+                    "keep": "Keep interval",
+                    "pathStart": "Interval on the path, from the start",
+                    "pathCenter": "Interval on the path, centered",
+                    "pathEnd": "Interval on the path, from the end"
                 }
             },
             "measure": {

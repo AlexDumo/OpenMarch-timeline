@@ -17,7 +17,9 @@ ordinary positions it writes.
   that can be drawn; `shapeToolStore.ts` holds the open shape; `useShapeToolActions.ts` has
   `placeShape`; `shapeMoment.ts` ties an open shape to its edit window; `selectionGate.ts` is the
   one home of "Select marchers first"; `ShapesTab.tsx` and `FavoritesRing.tsx` are ways in.
-- `box/`, `circle/`: the two drawable kinds (`boxTool`, `circleTool`) and their geometry.
+- `box/`, `circle/`, `line/`: the drawable kinds (`boxTool`, `circleTool`, `lineTool`) and their
+  geometry. The Line's frame follows from its points, so it checks its own recipes (`readable`)
+  and declares its spacing menu as a kind choice (`ToolChoice`, shown by `editor/ChoiceMenu.tsx`).
   `box/edgePull.ts` lands edges and corners on yard lines and hashes; `box/modeMemory.ts`
   remembers each fill mode's numbers.
 - `kinds/`: the older shape-model kinds (`ShapeKind` in `types.ts`) that generate spots. The box
@@ -45,7 +47,8 @@ ordinary positions it writes.
   pointer event or the selection.
 - A kind implements `ToolKind<P>` (`tool/toolKind.ts`): its params (declared once, with primary,
   drag direction and interval flags), handles, `dragHandle`, `move`, `frameOf` / `withFrame` /
-  `fromFrame`, and optionally `closed` for the host's distributor. Everything is pure.
+  `fromFrame`, and optionally `closed` for the host's distributor and `choices` for menus of its
+  own. Everything is pure.
 - The spot count comes from the host. Spots and who goes where are separate steps.
 - Every placement goes through `writePlacement` (`tool/shapePlacement.ts`): `placeShape` for an
   open shape, `commitBox` for an edit of a placed one. Members move through the canvas-drag path

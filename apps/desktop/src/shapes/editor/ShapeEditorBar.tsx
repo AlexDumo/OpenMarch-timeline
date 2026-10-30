@@ -86,6 +86,7 @@ import { LayoutMenu } from "./LayoutPicker";
 import { ReshuffleButton } from "./ReshuffleButton";
 import { EdgeToggle } from "./EdgeToggle";
 import { ModeMenu } from "./ModeMenu";
+import { ChoiceMenus } from "./ChoiceMenu";
 import { OutlineGap } from "./OutlineGap";
 import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
@@ -874,14 +875,16 @@ const fillShown = (kind: AnyToolKind, params: unknown, spots: number) => {
         outlineGapOf(kind, params, spots),
         // Edge's tip says how many stand on the edge, which the proportions change (#450)
         edgeSplitOf(kind, params, spots),
+        // The kind's own menus show the answer the shape has (#523)
+        kind.choices?.map((c) => c.current(params, spots)),
         flipX,
         flipY,
     ]);
 };
 
 /**
- * How it's filled: a pill of its own under the editor (owner, #435), the mode switch first, then
- * what that mode has (a box's layout in Grid, the gap in Outline, Reshuffle and Edge in Spread). Hidden
+ * How it's filled: a pill of its own under the editor (owner, #435), the kind's own menus (a
+ * Line's spacing, #523) and the mode switch first, then what that mode has (a box's layout in Grid, the gap in Outline, Reshuffle and Edge in Spread). Hidden
  * when the kind has none of them. Only the bar and the pill take the pointer, not the empty
  * space beside the pill
  */
@@ -903,6 +906,8 @@ const FillPill = memo(function FillPill({
             className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-6 border px-6 py-2 empty:hidden"
             data-testid={`${testId}-fill`}
         >
+            {/* The kind's own menus (a Line's spacing, #523) */}
+            <ChoiceMenus target={target} envFor={env} />
             <ModeMenu target={target} envFor={env} />
             {/* What the mode has, after a divider (owner); nothing, and no divider, when it
                 has none */}

@@ -80,9 +80,11 @@ function placedOf(
     );
     if (!kind) return null;
     const stored = recipe.params as StoredParams<{ center?: XY }> | null;
-    // Every shape's frame has a center, which recipes store (ADR 0006)
-    if (!stored || typeof stored !== "object" || !stored.center) return null;
+    if (!stored || typeof stored !== "object") return null;
     const { spots, ...params } = stored;
+    // Every shape's frame has a center, which recipes store (ADR 0006), unless the kind's frame
+    // follows from its own numbers (a Line's points), which it checks
+    if (kind.readable ? !kind.readable(params) : !stored.center) return null;
     // A spread from a generator this app doesn't have can't be laid out again
     if (!canLayOut(params)) return null;
     // Nor can a box whose numbers were edited into something else (B4)
