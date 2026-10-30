@@ -2,7 +2,8 @@
 
 # Draft: ADR 0001 amendment, ownership of motion
 
-Status: **not ready to accept.** This is a sketch to bring to the grilling session, not a proposal
+Status: **not ready to accept.** _2026-10-30: P1 is decided (README decisions 6–14); this draft
+needs updating to match before it is proposed._ This is a sketch to bring to the grilling session, not a proposal
 (owner, 2026-10-26: no shape or transition data model is chosen yet). Only the parts that restate
 decisions 1–5 in the [research](README.md) are settled. The placement model (P1 in
 [placements.md](placements.md)) and the block contract are options. Text in [brackets] waits on

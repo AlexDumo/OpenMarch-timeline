@@ -2,16 +2,9 @@
 
 # Placements as their own entity
 
-> **Status (owner, 2026-10-26): findings and options for a grilling session. Nothing is decided
-> beyond decisions 1–5 in the [README](README.md).** No shape or transition data model is chosen
-> yet; that needs the grilling first. Two framing points from the owner:
->
-> - **Where and how stay separate.** Only follow-the-leader would link them, and it is deferred.
-> - **The "how" is a straight line for now.** There is no design for a "how" block yet.
->
-> **The one time-sensitive item is #181's migration 0027**, which creates the recipe tables. The
-> owner will decide separately whether #181 waits for the grilling, or merges as-is and accepts a
-> later conversion (see [placements.md](placements.md#181-and-migration-0027) for the cost of each).
+> **Status (owner, 2026-10-30): P1 chosen.** The grilling answered questions 1, 2, 4, 5 and 6
+> below. See [Decisions (owner, 2026-10-30)](README.md#decisions-owner-2026-10-30). Question 3 is
+> still open.
 
 This page reframes README open item 1 (where the recipe is keyed). Its "recommended" labels are
 the research's suggestions for the grilling, not decisions. All its owner questions are open.
@@ -298,6 +291,8 @@ doesn't change under P1.
   transition. Old moves are never restructured on open.
 
 ## Owner questions (open, for the grilling)
+
+_Answered 2026-10-30 except question 3: see the README's decisions 6–13._
 
 1. **Is a placement a transition with an optional recipe (P1), or a timeless shared entity that
    moves reference (P2)?** Recommend P1. It keeps the copy-per-page rule and needs no resolver

@@ -2,16 +2,12 @@
 
 # Ownership model for motion: shapes, blocks and keyframes
 
-> **Status (owner, 2026-10-26): findings and options for a grilling session. Nothing is decided
-> beyond decisions 1–5 below.** No shape or transition data model is chosen
-> yet; that needs the grilling first. Two framing points from the owner:
->
-> - **Where and how stay separate.** Only follow-the-leader would link them, and it is deferred.
-> - **The "how" is a straight line for now.** There is no design for a "how" block yet.
->
-> **The one time-sensitive item is #181's migration 0027**, which creates the recipe tables. The
-> owner will decide separately whether #181 waits for the grilling, or merges as-is and accepts a
-> later conversion (see [placements.md](placements.md#181-and-migration-0027) for the cost of each).
+> **Status (owner, 2026-10-30): decided.** The grilling chose P1 from
+> [placements.md](placements.md): a placement is the move's transition row, plus an optional
+> formula. See [Decisions (owner, 2026-10-30)](#decisions-owner-2026-10-30). Decision 4 below is
+> reversed. Shape spot behaviour moved to #358, the P1 conversion is #504 and the cleanup is #505.
+> Still open: open item 5 (block contract first) and placements question 3 (where the "how"
+> lives).
 
 Decisions 1–5 below are the owner's (2026-10-26, on fork PR #436); nothing is built. Open items and
 deferred work are at the end. [placements.md](placements.md) studies shapes and marcher
@@ -44,12 +40,35 @@ about steals and joins (layers). That one is settled by spec §6.2.
    points. **Timing:** this must be settled before migration 0027 (#181, box v1) reaches `main`,
    because 0027 creates the recipe table. How it maps onto today's tables is open item 1: the
    points of one move sit in several transitions.
-4. **Hole, Close up or Re-split is a stored setting on each shape.** When a marcher leaves a
+4. _Reversed 2026-10-30: there is no stored setting. A leaving marcher leaves an empty spot, and
+   Close up and Re-spread are explicit commands (#358)._ **Hole, Close up or Re-split is a stored setting on each shape.** When a marcher leaves a
    shape, the shape's setting says what the others do. The toast stays as the per-edit override.
    Holds' "remove a marcher for a range of counts" uses the shape's setting too (open item 2 notes
    the side effect).
 5. **Follow-the-leader is deferred.** It isn't implemented in the app (Finding 2), and nothing in
    holds or shapes needs it now. Its questions are in [Deferred](#deferred-follow-the-leader).
+
+## Decisions (owner, 2026-10-30)
+
+From the grilling on #436. The questions are in [placements.md](placements.md#owner-questions-open-for-the-grilling).
+
+6. **P1: a placement is the move's existing transition row, plus an optional formula** (placements
+   question 1, open item 1). The recipe keys by `transition_id`. Placing a shape gathers its
+   members into one transition of the move.
+7. **An empty spot is a formula slot with no marcher.** It's not a separate concept, so shapes
+   with fewer marchers than spots (#358) need nothing new in the ownership model. A temporary
+   removal (holds' remove-for-a-range) always leaves an empty spot (open item 2).
+8. **No stored on-leave setting.** This replaces decision 4 and open item 3. Close up and Re-spread
+   are explicit commands. How spots fill, move and empty is shape behaviour, recorded on #358.
+9. **#363 merges as it is, and moves to P1 in its own migration (#504)** (placements question 2).
+   Files that opened #363's tables need a new migration either way.
+10. **Marchers split off from a shape into another move become freeform** (placements question 4).
+11. **#469 builds the two shared operations** (cut a block in time, remove a marcher for a range).
+12. **"Placement" stays internal.** UI and docs keep saying shape and move (placements question 5).
+13. **Existing files convert automatically on open** (placements question 6): assignments, empty
+    spots and hand-picked spots carry over. The conversion always clears undo history.
+14. **One cleanup ticket (#505)** removes `main`'s leftover arcs, follow-the-leader and spec-shape
+    code, including `dest_shape_id` and `timeline_shapes` (open items 4 and 6).
 
 ## The model
 
@@ -262,7 +281,7 @@ Pro Tools. Adobe quotes come from search snippets only (tagged in the notes).
 
 ## Open items
 
-1. **Where exactly the recipe is keyed (decision 3).** _Reframed by [placements.md](placements.md),
+1. _Decided 2026-10-30: P1 (decision 6)._ **Where exactly the recipe is keyed (decision 3).** _Reframed by [placements.md](placements.md),
    which recommends option (a) in a fuller form: a placement is a transition with its own recipe._ The points of one move are not held by one
    transition: UI-9 gives each marcher its own one-slot transition
    (`db-functions/timelineMembership.ts:163-180`), and converted shows share transitions. So a
@@ -280,21 +299,21 @@ Pro Tools. Adobe quotes come from search snippets only (tagged in the notes).
    - **First recommendation, superseded by placements.md:** (b), because it matches decision 2's "a block is one move", it doesn't touch 0027, and
      cut already keeps the recipe on the original move, which is the half that holds its points
      (`timelineSplitAtBeat.ts:35-38`). Either way, decide before 0027 reaches `main`.
-2. **Re-split or Close up over a range of counts moves other marchers twice.** With `closeUp` or
+2. _Decided 2026-10-30: always an empty spot (decision 7)._ **Re-split or Close up over a range of counts moves other marchers twice.** With `closeUp` or
    `resplit`, removing one marcher for counts 9-16 steps the others out to new spots at 9 and back
    at 16. That is real new motion the designer didn't draw. Should holds' remove-for-a-range use
    `hole` regardless of the setting, offer the setting as a choice in the moment, or follow it as
    decided? The prior art treats a temporary removal as a separate operation that leaves the
    layout alone. Not a blocker: decision 4 stands until the owner says otherwise.
-3. **Default on-leave setting per kind.** Recommend: hole for a box (the 2026-10-14 decision),
+3. _Moot 2026-10-30: no on-leave setting (decision 8)._ **Default on-leave setting per kind.** Recommend: hole for a box (the 2026-10-14 decision),
    re-split for even spread, and hole for other kinds until each kind's spec says otherwise.
-4. **Retire the spec's shape link** (`dest_shape_id`, `timeline_shapes` and their checks)? No
+4. _Decided 2026-10-30: yes, in #505 (decision 14)._ **Retire the spec's shape link** (`dest_shape_id`, `timeline_shapes` and their checks)? No
    write path uses it, and the resolver needs it only for FTL, which is deferred. Recommend: stop
    writing it now, and retire it with the FTL design.
 5. **Build the block contract first, as a refactor with no behaviour change?** It moves today's
    branches on `path_style` and `dest_shape_id` into one module per style, so holds' tickets and
    the shape host call one seam.
-6. **Remove `main`'s leftover arcs, follow-the-leader and spec-shape code?** None of it is the
+6. _Decided 2026-10-30: yes, in #505 (decision 14)._ **Remove `main`'s leftover arcs, follow-the-leader and spec-shape code?** None of it is the
    intended design (owner, 2026-10-26). Removing it, together with the branches in item 5, is what
    clears the edge cases. Pathways and follow-the-leader then get designed fresh.
 
