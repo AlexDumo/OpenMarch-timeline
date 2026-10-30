@@ -3220,9 +3220,14 @@
         "undone": "Undone"
     },
     "shortcutsDialog": {
+        "movement": {
+            "constrain": "Move on one axis while dragging",
+            "fineControl": "Fine control while dragging marchers"
+        },
         "shape": {
+            "constrain": "Constrain (equal spacings, 45°, one axis)",
             "fineControl": "Fine control, still catching yard lines and hashes",
-            "noSnapping": "Drag a shape without snapping"
+            "fromCenter": "Draw or resize a box from center"
         }
     }
 }
