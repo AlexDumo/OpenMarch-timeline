@@ -7,6 +7,12 @@ on:
 permissions:
   contents: read
 
+# A new push to a PR cancels the run for the older commit, so stale commits
+# don't use up CI minutes. Non-PR runs get a unique group and are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   # Detect which files changed to conditionally skip jobs
   check-changes:
