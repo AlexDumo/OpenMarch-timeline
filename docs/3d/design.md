@@ -238,7 +238,10 @@ approved reference, converted to meters (1 ft = 0.3048 m).
   It answers `hello` and handles `venue-change-request`. It does nothing when
   no 3D View window is open (main tells it with `view3d:window-state`, a
   boolean push), except open the window with a show when the app setting
-  `view3dAutoOpen` is on. `RegisteredActionsHandler` handles
+  `view3dAutoOpen` is on. A push only comes when the window opens or closes,
+  so an editor that loads or reloads asks with `view3d:is-open`; if a window
+  is already open, it sends `invalidate` of everything so the window reads the
+  show again. `RegisteredActionsHandler` handles
   `playback-request` by running the same registered action as the editor's
   playback buttons.
 

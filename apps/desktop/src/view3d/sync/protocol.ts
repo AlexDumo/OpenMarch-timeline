@@ -18,6 +18,11 @@ export const VIEW3D_SELECTION_CHANNEL = "view3d:selection";
 export const VIEW3D_INVALIDATE_CHANNEL = "view3d:invalidate";
 /** Main → editor: whether a 3D View window is open (a boolean push). */
 export const VIEW3D_WINDOW_STATE_CHANNEL = "view3d:window-state";
+/**
+ * Editor → main, `invoke`: whether a 3D View window is open now. A reloaded
+ * editor asks, since main pushes the window state only when it changes.
+ */
+export const VIEW3D_IS_OPEN_CHANNEL = "view3d:is-open";
 /** Window → main → editor: the window is ready for a fresh clock and selection. */
 export const VIEW3D_HELLO_CHANNEL = "view3d:hello";
 /** Window → main → editor: `{ settings }` or `{ cameras }` for the editor to validate and write. */
