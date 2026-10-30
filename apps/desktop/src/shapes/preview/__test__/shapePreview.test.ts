@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { boxTool } from "../../box/boxTool";
 import { rowTool } from "../../__test__/fakeRowKind";
+import { curveTool, lineTool } from "../../line/lineTool";
 import { savedToolKind } from "../../library/savedShapes";
 import { PREVIEW_SPOTS, PREVIEW_VIEW, shapePreview } from "../shapePreview";
 
@@ -57,6 +58,27 @@ describe("a shape's preview (#378)", () => {
 
     it("gives the same picture for the same kind, so pickers don't redraw it", () => {
         expect(shapePreview(boxTool)).toBe(shapePreview(boxTool));
+    });
+
+    it("draws the line from its spots and open outline along the path", () => {
+        const preview = shapePreview(lineTool);
+        expect(preview.spots).toHaveLength(PREVIEW_SPOTS);
+        expect(preview.outline).not.toBeNull();
+        expect(preview.openOutline).toBe(true);
+        expect(preview.spots.every(inView)).toBe(true);
+        expect(preview.outline!.every(inView)).toBe(true);
+        const row = size(preview.spots);
+        expect(row.depth).toBeLessThan(row.width / 3);
+    });
+
+    it("draws the curve bowed, not as the straight line's picture", () => {
+        const line = shapePreview(lineTool);
+        const curve = shapePreview(curveTool);
+        expect(curve.openOutline).toBe(true);
+        const lineMid = line.outline![Math.floor(line.outline!.length / 2)]!;
+        const curveMid = curve.outline![Math.floor(curve.outline!.length / 2)]!;
+        expect(Math.abs(curveMid.y - lineMid.y)).toBeGreaterThan(0.5);
+        expect(curve.outline).not.toEqual(line.outline);
     });
 
     it("keeps the dots clear of the outline, so the line reads as the shape (#382)", () => {

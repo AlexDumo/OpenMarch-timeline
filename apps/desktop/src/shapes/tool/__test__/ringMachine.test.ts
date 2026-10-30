@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { boxTool } from "../../box/boxTool";
+import { curveTool, lineTool } from "../../line/lineTool";
 import { rowTool } from "../../__test__/fakeRowKind";
+import { SHAPE_TOOLS } from "../shapeTools";
+import { toolId } from "../toolKind";
+import { basicShapeRows, toggleStar } from "../../library/shapeLibrary";
 import {
     clickRing,
     latchRing,
@@ -66,6 +70,44 @@ describe("the favorites ring's slots", () => {
         expect(ringSlots([starredBox], basics).map((s) => s.label)).toEqual([
             "Box",
             "Row",
+        ]);
+    });
+
+    it("includes Line and Curve in the ring's basic slots", () => {
+        expect(ringSlots([], SHAPE_TOOLS).map((s) => s.id)).toEqual([
+            "block",
+            "circle",
+            "line",
+            "curve",
+        ]);
+    });
+
+    it("can star Line and Curve for the favorites ring", () => {
+        const rows = basicShapeRows(SHAPE_TOOLS);
+        expect(toggleStar([], toolId(lineTool), rows)).toEqual({
+            stars: ["line"],
+        });
+        expect(toggleStar(["line"], toolId(curveTool), rows)).toEqual({
+            stars: ["line", "curve"],
+        });
+        const slots = ringSlots(
+            [
+                {
+                    id: toolId(lineTool),
+                    label: "Line",
+                    kind: lineTool,
+                },
+                {
+                    id: toolId(curveTool),
+                    label: "Curve",
+                    kind: curveTool,
+                },
+            ],
+            SHAPE_TOOLS,
+        );
+        expect(slots.slice(0, 2).map((s) => s.label)).toEqual([
+            "Line",
+            "Curve",
         ]);
     });
 });
