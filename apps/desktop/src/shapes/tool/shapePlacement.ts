@@ -104,7 +104,8 @@ export async function writePlacement(
             ...(plan ? { plan, keepPlayhead: true } : {}),
             writesShapes: true,
             // Every member is set where the shape is, the one at its pivot included, so each
-            // is in the move its recipe keeps; a change that moves nobody sets no one
+            // is in the move its recipe keeps; a change that moves nobody sets no one, unless
+            // `setAll`
             setUnmoved: true,
             setAll: placement.setAll,
             afterWrite: async (tx, timelineId) => {

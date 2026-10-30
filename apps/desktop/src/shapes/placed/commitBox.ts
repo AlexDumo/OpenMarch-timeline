@@ -28,17 +28,14 @@ export function sameParams(a: unknown, b: unknown): boolean {
 
 /**
  * Whether `plan` edits only a page `box` is carried onto: its whole window is past the box's own
- * move. A window reaching back over that move (Expert's start flag left on an earlier page) isn't
+ * move. A window reaching back over that move (Expert's start flag left on an earlier page) isn't.
+ * Neither are homes and isolation, whose writes never set marchers left where they are
  */
 export function carriedOnto(plan: CanvasEditPlan, box: PlacedBox): boolean {
     if (!plan.ok) return false;
     const { target } = plan;
-    const start =
-        target.kind === "range"
-            ? target.start
-            : target.kind === "point"
-              ? target.box.start
-              : plan.beat;
+    if (target.kind !== "range" && target.kind !== "point") return false;
+    const start = target.kind === "range" ? target.start : target.box.start;
     return plan.beat > box.endBeat + 1e-9 && start >= box.endBeat - 1e-9;
 }
 

@@ -25,7 +25,7 @@ describe("carriedOnto", () => {
         expect(carriedOnto(range(8, 32), box)).toBe(false);
     });
 
-    it("reads Basic's page box, and isolation's end", () => {
+    it("reads Basic's page box, and is false for isolation (its writes set no one left in place)", () => {
         const point = (start: number, end: number): CanvasEditPlan => ({
             ok: true,
             target: { kind: "point", beat: end, box: { start, end } },
@@ -38,7 +38,7 @@ describe("carriedOnto", () => {
             target: { kind: "timeline", timelineId: 1, ghosts: true },
             beat: end,
         });
-        expect(carriedOnto(isolated(32), box)).toBe(true);
+        expect(carriedOnto(isolated(32), box)).toBe(false);
         expect(carriedOnto(isolated(16), box)).toBe(false);
     });
 
@@ -48,6 +48,7 @@ describe("carriedOnto", () => {
             carriedOnto({ ok: true, target: { kind: "home" }, beat: 0 }, home),
         ).toBe(false);
         expect(carriedOnto(range(0, 16), home)).toBe(true);
+        expect(carriedOnto(range(0, 16), box)).toBe(false);
         expect(
             carriedOnto(
                 { ok: false, error: new Error("not ready") as never },
