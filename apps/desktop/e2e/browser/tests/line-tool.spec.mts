@@ -14,7 +14,8 @@ import type { FieldTestShapeOverlay } from "../../../src/field/fieldTestApi";
 // a straight line in Fit (its interval worked out), typing an interval keeps it
 // (the line grows from its pivot), the spacing menu offers Interval on the
 // path, Enter places it as one undo step, and a click on a member reopens it,
-// where a dragged end saves on release with the interval kept.
+// where a dragged end saves on release with the interval kept. A typed list
+// (#526) spaces it in groups of marchers, each a chip in the editor.
 
 // Eight trumpets scattered, all in view.
 const HOME: SeedPosition[] = [
@@ -289,6 +290,74 @@ test("change: Escape discards an open line and the show is untouched", async ({
     expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
     expect(await recipes(show)).toEqual([]);
     expect(await undoSteps(show)).toBe(steps);
+});
+
+test("change: typing 2*3+4*2 spaces the line in groups, shown as chips, placed and reopened as typed", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await page.keyboard.press("l");
+    const y = cf.y - 20 * S;
+    await drag(
+        page,
+        await toScreen(page, { x: cf.x - 14 * S, y }),
+        await toScreen(page, { x: cf.x - 3.5 * S, y }),
+    );
+    const readout = page.getByTestId("shape-tool-readout");
+    await readout.getByTestId("shape-editor-interval").click();
+    await page.getByTestId("shape-editor-interval-input").fill("2*3+4*2");
+    await page.keyboard.press("Enter");
+
+    // 2 marchers at 3 steps, then the other 6 at 2: the last group grew by 2
+    const groups = readout.getByTestId("shape-groups");
+    await expect(groups).toBeVisible();
+    await expect(readout.getByTestId("shape-editor-interval")).toBeHidden();
+    await expect(readout.getByTestId("shape-group-0-count")).toHaveText("2");
+    await expect(readout.getByTestId("shape-group-0-interval")).toHaveText("3");
+    await expect(readout.getByTestId("shape-group-1-count")).toHaveText("6");
+    await expect(readout.getByTestId("shape-group-1-grown")).toHaveText("+2");
+    await expect(readout.getByTestId("shape-group-1-interval")).toHaveText("2");
+    const spaced = (await shapeOverlay(page))!;
+    const expected = [3, 3, 2, 2, 2, 2, 2];
+    const drawnGaps = gaps(spaced.spots);
+    expect(drawnGaps).toHaveLength(expected.length);
+    drawnGaps.forEach((gap, i) =>
+        expect(Math.abs(gap - expected[i]! * S)).toBeLessThan(CLOSE),
+    );
+
+    // Placed, the recipe stores the groups as typed
+    await page.keyboard.press("Enter");
+    await expect(readout).toBeHidden();
+    await expect.poll(() => onSpots(show, spaced.spots)).toBe(true);
+    await waitForIdle(page);
+    const [recipe] = await recipes(show);
+    const stored = JSON.parse(recipe.params).spacing;
+    expect(stored.mode).toBe("keep");
+    expect(stored.groups.map((g: { count?: number }) => g.count)).toEqual([
+        2, 4,
+    ]);
+    expect(stored.groups[0].interval).toBeCloseTo(3 * S);
+    expect(stored.groups[1].interval).toBeCloseTo(2 * S);
+
+    // Reopened from a member, the same chips
+    await page.keyboard.press("Escape");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([]);
+    const t3 = (await drawnMarchers(page)).find((m) => m.id === 3)!.screen;
+    await page.mouse.click(t3.x, t3.y);
+    const placed = page.getByTestId("placed-box-readout");
+    await expect(placed).toBeVisible();
+    await expect(placed.getByTestId("shape-group-0-count")).toHaveText("2");
+    await expect(placed.getByTestId("shape-group-1-count")).toHaveText("6");
+    await expect(placed.getByTestId("shape-group-1-grown")).toHaveText("+2");
 });
 
 test("change: clicks draw an L, its corner holds a marcher until switched off, and it places with every point", async ({

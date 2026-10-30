@@ -7,16 +7,16 @@ import {
 import { linePull } from "../frame/edgeGuides";
 import { pivotOf } from "../frame/pivot";
 import { makePath, type Path } from "../geometry/path";
-import { chordOffsets } from "../spacing";
+import { chordOffsets, groupGaps } from "../spacing";
 import type { ToolEnv } from "../tool/toolKind";
 import type { Slot, XY } from "../types";
 
 /**
  * A Line as the shape host draws it (#523, #524, spec #522): points the line passes through, with
- * straight segments between them, and how its marchers are spaced along it. Every corner holds a
- * marcher unless the corners switch is off. The params already hold what later versions add
- * (tensions, a closed flag, interval groups), so recipes saved now read the same then. Everything
- * here is pure.
+ * straight segments between them, and how its marchers are spaced along it: by one interval, or by
+ * groups of marchers at their own intervals (#526). Every corner holds a marcher unless the corners
+ * switch is off. The params already hold what later versions add (tensions, a closed flag), so
+ * recipes saved now read the same then. Everything here is pure.
  */
 
 /** A point the line passes through. Tension 0 is a corner; above 0 a smooth point (later) */
@@ -25,12 +25,14 @@ export interface LinePoint extends XY {
 }
 
 /**
- * A run of marchers at one interval (spec #522, "Mixed intervals"). `count` absent is "the rest":
- * with a single group, every gap is `interval`.
+ * A run of marchers at one interval (spec #522, "Mixed intervals"). `count` absent is "the rest",
+ * at most one group in a list; with a single group, every gap is `interval`. How the groups share
+ * the marchers is `layGroups` (`spacing.ts`).
  */
 export interface LineGroup {
     /** Field units between neighbors, straight across (the chord) */
     readonly interval: number;
+    /** Marchers in the group, a whole number from 1; absent for the rest */
     readonly count?: number;
 }
 
@@ -71,6 +73,7 @@ const FIT: LineSpacing = { mode: "fit" };
 const halfStep = (env: Pick<ToolEnv, "stepPx">) => env.stepPx / 2;
 const sub = (a: XY, b: XY): XY => ({ x: a.x - b.x, y: a.y - b.y });
 const length = (d: XY) => Math.hypot(d.x, d.y);
+const sum = (xs: readonly number[]) => xs.reduce((a, b) => a + b, 0);
 const corner = ({ x, y }: XY): LinePoint => ({ x, y, tension: 0 });
 
 const isPoint = (q: unknown): q is LinePoint =>
@@ -81,13 +84,12 @@ const isPoint = (q: unknown): q is LinePoint =>
     // Smooth points come later (#525): a curve saved by a newer build isn't read as straight
     (q as LinePoint).tension === 0;
 
-const isGroup = (g: unknown): g is LineGroup =>
-    typeof g === "object" &&
-    g !== null &&
-    Number.isFinite((g as LineGroup).interval) &&
-    (g as LineGroup).interval > 0 &&
-    // A counted group is a mixed interval (#526), which this version can't lay out
-    (g as LineGroup).count === undefined;
+const isGroup = (g: unknown): g is LineGroup => {
+    if (typeof g !== "object" || g === null) return false;
+    const { interval, count } = g as LineGroup;
+    if (!Number.isFinite(interval) || !(interval > 0)) return false;
+    return count === undefined || (Number.isInteger(count) && count >= 1);
+};
 
 const ANCHORS: readonly unknown[] = ["start", "center", "end"];
 // `pivot` is the host's (ADR 0006, amendment of 2026-10-20), stored beside the kind's own numbers
@@ -95,9 +97,9 @@ const KEYS = new Set(["points", "closed", "spacing", "corners", "pivot"]);
 
 /**
  * Whether `params` is a line this version can lay out exactly as it was saved. Anything a newer
- * build adds (tensions, closing, mixed groups, Measured) is refused, so the recipe shows as plain
- * positions instead of being misread and rewritten on the first edit (ADR 0006, decision 5). Each
- * later ticket widens this as it adds the layout.
+ * build adds (tensions, closing, Measured) is refused, so the recipe shows as plain positions
+ * instead of being misread and rewritten on the first edit (ADR 0006, decision 5). Each later
+ * ticket widens this as it adds the layout.
  */
 export function isLineParams(params: unknown): params is LineParams {
     if (typeof params !== "object" || params === null) return false;
@@ -116,8 +118,13 @@ export function isLineParams(params: unknown): params is LineParams {
     };
     if (sp.mode === "fit") return true;
     if (sp.mode !== "keep" && sp.mode !== "path") return false;
-    if (!Array.isArray(sp.groups) || sp.groups.length !== 1) return false;
+    if (!Array.isArray(sp.groups) || sp.groups.length === 0) return false;
     if (!sp.groups.every(isGroup)) return false;
+    // Mixed intervals (#526): any groups, at most one of them the rest
+    const rests = (sp.groups as LineGroup[]).filter(
+        (g) => g.count === undefined,
+    );
+    if (rests.length > 1) return false;
     return sp.mode === "keep" || ANCHORS.includes(sp.anchor);
 }
 
@@ -129,9 +136,27 @@ export function linePath(p: LineParams): Path {
     return makePath(segments);
 }
 
-/** The interval a typed spacing keeps, in field units; null in Fit */
+/**
+ * Whether the line is spaced by groups (#526) rather than one interval for everyone: more than
+ * one group, or a group with a count
+ */
+export const hasGroups = (p: LineParams): boolean =>
+    p.spacing.mode !== "fit" &&
+    (p.spacing.groups.length > 1 || p.spacing.groups[0]!.count !== undefined);
+
+/**
+ * The interval a typed spacing keeps, in field units, the smallest of its groups' when it has
+ * several; null in Fit
+ */
 export function typedInterval(p: LineParams): number | null {
-    return p.spacing.mode === "fit" ? null : p.spacing.groups[0]!.interval;
+    if (p.spacing.mode === "fit") return null;
+    return Math.min(...p.spacing.groups.map((g) => g.interval));
+}
+
+/** The gaps between the `n` marchers in a typed spacing, in field units; null in Fit */
+export function lineGaps(p: LineParams, n: number): number[] | null {
+    if (p.spacing.mode === "fit") return null;
+    return groupGaps(p.spacing.groups, n, (g) => g.interval);
 }
 
 /**
@@ -148,33 +173,87 @@ const segmentLengths = (p: LineParams): number[] =>
 
 /**
  * How many gaps each segment holds when every corner holds a marcher (#524): a whole number each,
- * in proportion to its length, at least one. Null when the corners don't hold marchers: the switch
- * is off, there's no corner, the run is laid on the path, or there are fewer gaps than segments.
+ * at least one. With one interval for everyone (or in Fit) they're in proportion to the segments'
+ * lengths; with groups (#526) each corner takes the seam between gaps nearest it along the run, so
+ * a segment that is a whole run of the groups' gaps holds exactly those. Null when the corners
+ * don't hold marchers: the switch is off, there's no corner, the run is laid on the path, or there
+ * are fewer gaps than segments.
  */
 export function cornerGaps(p: LineParams, n: number): number[] | null {
     if (p.corners === false || p.points.length < 3) return null;
     if (p.spacing.mode === "path") return null;
     const lengths = segmentLengths(p);
     const gaps = n - 1;
-    const total = lengths.reduce((sum, l) => sum + l, 0);
+    const total = sum(lengths);
     if (gaps < lengths.length || !(total > 0)) return null;
+    if (hasGroups(p)) return seamGaps(lengths, lineGaps(p, n)!);
     const ideal = lengths.map((l) => (gaps * l) / total);
     const counts = ideal.map((x) => Math.max(1, Math.floor(x + 1e-9)));
-    let sum = counts.reduce((a, b) => a + b, 0);
+    let left = sum(counts);
     // Largest remainders first, and never under one gap a segment
-    while (sum < gaps) {
+    while (left < gaps) {
         const i = argMax(ideal.map((x, k) => x - counts[k]!));
         counts[i]!++;
-        sum++;
+        left++;
     }
-    while (sum > gaps) {
+    while (left > gaps) {
         const i = argMax(
             ideal.map((x, k) => (counts[k]! > 1 ? counts[k]! - x : -Infinity)),
         );
         counts[i]!--;
-        sum--;
+        left--;
     }
     return counts;
+}
+
+/**
+ * How many of `gaps`, in order, each segment holds: each corner at the seam whose share of the run
+ * is nearest its share of the line, at least one gap a segment
+ */
+function seamGaps(
+    lengths: readonly number[],
+    gaps: readonly number[],
+): number[] {
+    const total = sum(lengths);
+    const run = sum(gaps);
+    const counts: number[] = [];
+    let along = 0;
+    let seam = 0;
+    let reach = 0;
+    lengths.slice(0, -1).forEach((l, i) => {
+        along += l;
+        const want = (along / total) * run;
+        // Room for one gap in each segment still to come
+        const last = gaps.length - (lengths.length - 1 - i);
+        let best = seam + 1;
+        let at = reach + gaps[seam]!;
+        let bestAt = at;
+        for (let j = seam + 2; j <= last; j++) {
+            at += gaps[j - 1]!;
+            if (Math.abs(at - want) < Math.abs(bestAt - want) - 1e-9) {
+                best = j;
+                bestAt = at;
+            }
+        }
+        counts.push(best - seam);
+        seam = best;
+        reach = bestAt;
+    });
+    counts.push(gaps.length - seam);
+    return counts;
+}
+
+/**
+ * The gaps each segment holds, in field units, when every corner holds a marcher: in Fit even
+ * shares (1 each, scaled to the segment), typed the line's gaps in order along it ({@link
+ * lineGaps}), {@link cornerGaps} of them a segment. Null when the corners don't hold marchers.
+ */
+export function cornerRuns(p: LineParams, n: number): number[][] | null {
+    const counts = cornerGaps(p, n);
+    if (!counts) return null;
+    const gaps = lineGaps(p, n) ?? Array<number>(n - 1).fill(1);
+    let at = 0;
+    return counts.map((count) => gaps.slice(at, (at += count)));
 }
 
 const argMax = (xs: readonly number[]): number =>
@@ -195,34 +274,37 @@ export function intervalRange(
 }
 
 /**
- * In Keep interval with every corner holding a marcher, whether a segment isn't a whole number of
- * intervals long: a corner dragged with `fine` (#524)
+ * In Keep interval with every corner holding a marcher, whether a segment isn't as long as its run
+ * of gaps (a whole number of intervals): a corner dragged with `fine` (#524)
  */
 export function cornerOffInterval(p: LineParams, n: number): boolean {
-    const interval = typedInterval(p);
-    const gaps = interval === null ? null : cornerGaps(p, n);
-    if (!gaps) return false;
+    const runs = p.spacing.mode === "fit" ? null : cornerRuns(p, n);
+    if (!runs) return false;
     return segmentLengths(p).some(
-        (l, i) => Math.abs(l - gaps[i]! * interval!) > 1e-6 * Math.max(1, l),
+        (l, i) => Math.abs(l - sum(runs[i]!)) > 1e-6 * Math.max(1, l),
     );
 }
 
 /**
  * The spots of a line whose corners hold marchers: segment by segment from its first point, each
- * `gaps[i]` even gaps, then the last point. In Keep interval a segment is a whole number of
- * intervals, so even gaps are the interval; a corner `fine` left off its interval spreads its
- * segments' gaps evenly instead of running past the corner and stacking marchers on it.
+ * holding its run of gaps, then the last point. In Keep interval a segment is as long as its run,
+ * so the gaps are as typed; a corner `fine` left off its interval scales its segments' gaps to fit
+ * (even gaps, with one interval) instead of running past the corner and stacking marchers on it.
  */
-function cornerSpots(p: LineParams, gaps: readonly number[]): Slot[] {
+function cornerSpots(p: LineParams, runs: readonly number[][]): Slot[] {
     const spots: Slot[] = [];
     let s = 0;
     p.points.slice(1).forEach((b, i) => {
         const a = p.points[i]!;
         const d = sub(b, a);
         const l = length(d);
-        for (let j = 0; j < gaps[i]!; j++) {
-            const t = j / gaps[i]!;
+        const run = runs[i]!;
+        const whole = sum(run);
+        let done = 0;
+        for (const gap of run) {
+            const t = done / whole;
             spots.push({ x: a.x + d.x * t, y: a.y + d.y * t, s: s + l * t });
+            done += gap;
         }
         s += l;
     });
@@ -236,16 +318,15 @@ export function lineSpots(p: LineParams, n: number): Slot[] {
     if (n <= 0) return [];
     const path = linePath(p);
     const at = (s: number): Slot => ({ ...path.at(s), s });
-    const interval = typedInterval(p);
-    const corners = cornerGaps(p, n);
+    const corners = cornerRuns(p, n);
     if (corners) return cornerSpots(p, corners);
-    if (interval === null) {
+    const gaps = lineGaps(p, n);
+    if (gaps === null) {
         if (n === 1) return [at(path.length / 2)];
         return Array.from({ length: n }, (_, i) =>
             at((path.length * i) / (n - 1)),
         );
     }
-    const gaps = Array.from({ length: n - 1 }, () => interval);
     const run = chordOffsets(path, 0, gaps).at(-1)!;
     // Keep interval is sized to its run, which sits on it whole; on the path it sits at its anchor
     const anchor = p.spacing.mode === "path" ? p.spacing.anchor : "center";
@@ -435,8 +516,8 @@ export function dragPoint(
 
 /**
  * Where corner `index` can stand with its neighbors where they are and each of its two segments a
- * whole number of the typed interval long, the gaps between them as many as now: the spot nearest
- * `to`, or null when there's none
+ * whole run of the gaps the two hold now, in order (one typed interval, or the groups' gaps,
+ * #526): the spot nearest `to`, or null when there's none
  */
 function cornerOnIntervals(
     p: LineParams,
@@ -444,15 +525,18 @@ function cornerOnIntervals(
     index: number,
     to: XY,
 ): XY | null {
-    const gaps = cornerGaps(p, n)!;
-    const interval = typedInterval(p)!;
+    const runs = cornerRuns(p, n)!;
+    const both = [...runs[index - 1]!, ...runs[index]!];
+    const whole = sum(both);
     const a = p.points[index - 1]!;
     const b = p.points[index + 1]!;
-    const total = gaps[index - 1]! + gaps[index]!;
     let best: XY | null = null;
-    for (let k = 1; k < total; k++)
-        for (const q of circlesMeet(a, k * interval, b, (total - k) * interval))
+    let ra = 0;
+    for (let k = 1; k < both.length; k++) {
+        ra += both[k - 1]!;
+        for (const q of circlesMeet(a, ra, b, whole - ra))
             if (!best || length(sub(q, to)) < length(sub(best, to))) best = q;
+    }
     return best;
 }
 
@@ -493,7 +577,7 @@ export function splitSegment(p: LineParams, index: number): LineParams {
  * The line as long as `n` marchers `interval` apart need, grown or shrunk from its pivot (or the
  * run's anchor, `env.anchor`), in Keep interval. With every corner holding a marcher each segment
  * becomes a whole number of intervals long, its direction kept (#524). A line on the path keeps
- * its drawn length and takes the interval.
+ * its drawn length and takes the interval. One group of {@link withGroups}.
  */
 export function withInterval(
     p: LineParams,
@@ -501,31 +585,43 @@ export function withInterval(
     interval: number,
     env: ToolEnv,
 ): LineParams {
-    const groups = [{ interval }];
+    return withGroups(p, n, [{ interval }], env);
+}
+
+/**
+ * The line spaced by `groups` (#526), sized to them from its pivot (or `env.anchor`): in Keep
+ * interval as long as their gaps add up to, and with every corner holding a marcher each segment
+ * as long as its run of the gaps ({@link cornerRuns}), its direction kept (#524). A line on the
+ * path keeps its drawn length and takes the groups.
+ */
+export function withGroups(
+    p: LineParams,
+    n: number,
+    groups: readonly LineGroup[],
+    env: ToolEnv,
+): LineParams {
     if (p.spacing.mode === "path")
         return { ...p, spacing: { ...p.spacing, groups } };
     const kept: LineParams = { ...p, spacing: { mode: "keep", groups } };
     if (n <= 1) return kept;
-    const gaps = cornerGaps(kept, n);
-    if (gaps) return pinned(kept, onIntervals(kept, gaps, interval), env);
+    const runs = cornerRuns(kept, n);
+    if (runs) return pinned(kept, onIntervals(kept, runs), env);
+    const gaps = lineGaps(kept, n)!;
+    const size = gaps.reduce((sum, gap) => sum + gap, 0);
     if (p.points.length === 2)
-        return scaled(kept, ((n - 1) * interval) / linePath(p).length, env);
-    return scaled(kept, runScale(kept, n, interval), env);
+        return scaled(kept, size / linePath(p).length, env);
+    return scaled(kept, runScale(kept, gaps), env);
 }
 
-/** Each segment `gaps[i]` intervals long, in its own direction, from the first point */
-function onIntervals(
-    p: LineParams,
-    gaps: readonly number[],
-    interval: number,
-): LineParams {
+/** Each segment as long as its run of gaps adds up to, in its own direction, from the first point */
+function onIntervals(p: LineParams, runs: readonly number[][]): LineParams {
     let at: XY = p.points[0]!;
     const points = p.points.map((q, i) => {
         if (i === 0) return q;
         const a = p.points[i - 1]!;
         const d = sub(q, a);
         const l = length(d);
-        const want = gaps[i - 1]! * interval;
+        const want = sum(runs[i - 1]!);
         at =
             l > 0
                 ? { x: at.x + (d.x / l) * want, y: at.y + (d.y / l) * want }
@@ -536,18 +632,20 @@ function onIntervals(
 }
 
 /**
- * How much bigger the line must be for `n` marchers `interval` apart around its corners to reach
- * from end to end
+ * How much bigger the line must be for a run of `gaps` around its corners to reach from end to end
  */
-function runScale(p: LineParams, n: number, interval: number): number {
+function runScale(p: LineParams, gaps: readonly number[]): number {
     const path = linePath(p);
     if (!(path.length > 0)) return 1;
     // The run of chords on the line `k` times as big, against its length
     const over = (k: number) =>
-        chordOffsets(path, 0, Array(n - 1).fill(interval / k)).at(-1)! -
-        path.length;
+        chordOffsets(
+            path,
+            0,
+            gaps.map((gap) => gap / k),
+        ).at(-1)! - path.length;
     let lo = 1e-6;
-    let hi = Math.max(1, ((n - 1) * interval) / path.length) * 2;
+    let hi = Math.max(1, sum(gaps) / path.length) * 2;
     while (over(hi) > 0) hi *= 2;
     for (let i = 0; i < 60; i++) {
         const mid = (lo + hi) / 2;
@@ -601,7 +699,7 @@ export function withSpacing(
     if (mode === "keep")
         return p.spacing.mode === "keep"
             ? p
-            : withInterval({ ...p, spacing: FIT }, n, groups[0]!.interval, env);
+            : withGroups({ ...p, spacing: FIT }, n, groups, env);
     return { ...p, spacing: { mode: "path", groups, anchor: mode } };
 }
 
