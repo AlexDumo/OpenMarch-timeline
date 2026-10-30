@@ -245,8 +245,11 @@ export interface ToolKind<P> {
      * then its center. None when absent, so the shape moves on the grid alone.
      */
     snapPoints?(params: P, n: number): readonly XY[];
-    /** Whether a press at `at` grabs the whole shape to move it */
-    contains(params: P, n: number, at: XY): boolean;
+    /**
+     * Whether a press at `at` grabs the whole shape to move it. `env` gives the field's scale, for
+     * kinds whose body is a reach around a line rather than an area.
+     */
+    contains(params: P, n: number, at: XY, env?: ToolEnv): boolean;
     /** `base` moved by `delta` */
     move(base: P, n: number, delta: XY, env: ToolEnv): P;
     /**

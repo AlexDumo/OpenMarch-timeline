@@ -67,28 +67,51 @@ const sub = (a: XY, b: XY): XY => ({ x: a.x - b.x, y: a.y - b.y });
 const length = (d: XY) => Math.hypot(d.x, d.y);
 const corner = ({ x, y }: XY): LinePoint => ({ x, y, tension: 0 });
 
-/** Whether `params` is a line this version can read back from a recipe */
+const isPoint = (q: unknown): q is LinePoint =>
+    typeof q === "object" &&
+    q !== null &&
+    Number.isFinite((q as LinePoint).x) &&
+    Number.isFinite((q as LinePoint).y) &&
+    // Smooth points come later (#525): a curve saved by a newer build isn't read as straight
+    (q as LinePoint).tension === 0;
+
+const isGroup = (g: unknown): g is LineGroup =>
+    typeof g === "object" &&
+    g !== null &&
+    Number.isFinite((g as LineGroup).interval) &&
+    (g as LineGroup).interval > 0 &&
+    // A counted group is a mixed interval (#526), which this version can't lay out
+    (g as LineGroup).count === undefined;
+
+const ANCHORS: readonly unknown[] = ["start", "center", "end"];
+// `pivot` is the host's (ADR 0006, amendment of 2026-10-20), stored beside the kind's own numbers
+const KEYS = new Set(["points", "closed", "spacing", "pivot"]);
+
+/**
+ * Whether `params` is a line this version can lay out exactly as it was saved. Anything a newer
+ * build adds (more points, tensions, closing, mixed groups, Measured, corners) is refused, so the
+ * recipe shows as plain positions instead of being misread and rewritten on the first edit (ADR
+ * 0006, decision 5). Each later ticket widens this as it adds the layout.
+ */
 export function isLineParams(params: unknown): params is LineParams {
     if (typeof params !== "object" || params === null) return false;
+    if (Object.keys(params).some((key) => !KEYS.has(key))) return false;
     const p = params as Partial<LineParams>;
-    return (
-        Array.isArray(p.points) &&
-        p.points.length >= 2 &&
-        p.points.every(
-            (q) =>
-                typeof q === "object" &&
-                q !== null &&
-                Number.isFinite(q.x) &&
-                Number.isFinite(q.y),
-        ) &&
-        typeof p.spacing === "object" &&
-        p.spacing !== null &&
-        (p.spacing.mode === "fit" ||
-            ((p.spacing.mode === "keep" || p.spacing.mode === "path") &&
-                Array.isArray(p.spacing.groups) &&
-                p.spacing.groups.length > 0 &&
-                p.spacing.groups.every((g) => g.interval > 0)))
-    );
+    if (p.closed !== undefined && p.closed !== false) return false;
+    if (!Array.isArray(p.points) || p.points.length !== 2) return false;
+    if (!p.points.every(isPoint)) return false;
+    const spacing: unknown = p.spacing;
+    if (typeof spacing !== "object" || spacing === null) return false;
+    const sp = spacing as {
+        mode?: unknown;
+        groups?: unknown;
+        anchor?: unknown;
+    };
+    if (sp.mode === "fit") return true;
+    if (sp.mode !== "keep" && sp.mode !== "path") return false;
+    if (!Array.isArray(sp.groups) || sp.groups.length !== 1) return false;
+    if (!sp.groups.every(isGroup)) return false;
+    return sp.mode === "keep" || ANCHORS.includes(sp.anchor);
 }
 
 /** The path through the line's points */
@@ -372,9 +395,22 @@ function fromSegment(at: XY, a: XY, b: XY): number {
     return length(sub(at, { x: a.x + d.x * t, y: a.y + d.y * t }));
 }
 
-/** Whether a press at `at` is on the line: within half its interval of it, or of its spots */
-export function onLine(p: LineParams, n: number, at: XY): boolean {
-    const reach = Math.max(lineInterval(p, n) / 2, 1e-9);
+/**
+ * Whether a press at `at` is on the line: within half its interval of it, or of its spots, but
+ * never more than a step away (or the handle reach, when that's larger), so a long line with few
+ * marchers doesn't take presses meant for the empty field
+ */
+export function onLine(
+    p: LineParams,
+    n: number,
+    at: XY,
+    env?: Pick<ToolEnv, "stepPx" | "hitRadius">,
+): boolean {
+    const half = lineInterval(p, n) / 2;
+    const reach = Math.max(
+        env ? Math.max(Math.min(half, env.stepPx), env.hitRadius) : half,
+        1e-9,
+    );
     const near = (a: XY, b: XY) => fromSegment(at, a, b) <= reach;
     if (p.points.slice(1).some((b, i) => near(p.points[i]!, b))) return true;
     // A run on the path can reach past the drawn line's ends

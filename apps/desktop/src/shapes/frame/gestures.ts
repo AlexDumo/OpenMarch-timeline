@@ -133,7 +133,7 @@ export function shapeTargetAt(
         )
     )
         return { type: "rotate", from: "corner" };
-    if (kind.contains(params, n, at)) return { type: "move" };
+    if (kind.contains(params, n, at, env)) return { type: "move" };
     return null;
 }
 

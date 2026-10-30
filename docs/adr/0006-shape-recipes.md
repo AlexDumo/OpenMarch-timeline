@@ -276,3 +276,23 @@ the consequence about splits. None of this changes the schema.
 
 Verification: the db-function `shapeRecipes.test.ts` covers rules 1 to 3, including the split
 and merge cases (UI-25) with undo; `boxMembership.test.ts` and `box-tool.spec.mts` cover rule 4.
+
+## Amendment, 2026-10-30: Line recipes
+
+The Line shape (spec #522, #523) stores a new kind:
+
+1. **Line recipes are `line`, version 2.** Version 1 is the old shape-model line. Version 2's
+   params are `points` (each `x`, `y` and a `tension`: 0 is a corner, above 0 a smooth point),
+   `closed` (open when absent), `spacing` and the host's `pivot`. `spacing` is `{ mode: "fit" }`
+   (the interval follows from the drawn points), `{ mode: "keep", groups }` (Keep interval) or
+   `{ mode: "path", groups, anchor }` (Interval on the path, `anchor` one of `start`, `center`,
+   `end`). A group is `{ interval, count? }`: the interval is the straight distance between
+   neighbors in field units, and a group with no `count` is the rest.
+2. **A Line stores no frame.** Its frame (center, size, turn) follows from its points, so the
+   frame amendment's stored center doesn't apply. A kind whose frame follows from its own numbers
+   declares a `readable` check, used instead of the stored-center check when a recipe is read.
+3. **Version 2 grows without a new version.** More points, tensions, `closed`, counted groups,
+   and the Measured and corners settings still to come are all optional fields or wider values of
+   these. A build reads a Line only when it can lay out every field exactly as saved; anything
+   newer reads as plain positions (decision 5), never as the nearest shape it understands. Each
+   build widens its `readable` check as it learns a field.

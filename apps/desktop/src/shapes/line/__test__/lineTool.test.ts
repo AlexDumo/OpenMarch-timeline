@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { lineTool } from "../lineTool";
-import type { LineParams } from "../lineGeometry";
+import { isLineParams, type LineParams } from "../lineGeometry";
 import { boxTool } from "../../box/boxTool";
 import { chipLayout } from "../../editor/chip";
 import {
@@ -433,5 +433,104 @@ describe("a placed line", () => {
         const at = [...members].sort((a, b) => a.slot - b.slot);
         for (let i = 1; i < at.length; i++)
             expect(dist(at[i - 1]!, at[i]!)).toBeCloseTo(20, 6);
+    });
+
+    describe("a line saved by a newer build reads as plain positions", () => {
+        const saved = () => {
+            const recipe = recipeOf(keptLine());
+            const { spots: _spots, ...params } = recipe.params as LineParams & {
+                spots: number;
+            };
+            return { recipe, params };
+        };
+        const withParams = (recipe: PlacedRecipe, params: object) =>
+            readBack({ ...recipe, params: { ...params, spots: N } });
+
+        it("reads this version's lines, its host pivot included", () => {
+            const { recipe, params } = saved();
+            expect(isLineParams(params)).toBe(true);
+            expect(
+                withParams(recipe, { ...params, pivot: "start" }),
+            ).toBeDefined();
+        });
+
+        it.each([
+            [
+                "a smooth point",
+                (p: LineParams) => ({
+                    ...p,
+                    points: [p.points[0], { ...p.points[1]!, tension: 0.5 }],
+                }),
+            ],
+            [
+                "three points",
+                (p: LineParams) => ({
+                    ...p,
+                    points: [...p.points, { x: 0, y: 0, tension: 0 }],
+                }),
+            ],
+            ["a closed line", (p: LineParams) => ({ ...p, closed: true })],
+            [
+                "counted groups",
+                () => ({
+                    points: [
+                        { x: 0, y: 0, tension: 0 },
+                        { x: 50, y: 0, tension: 0 },
+                    ],
+                    spacing: {
+                        mode: "keep",
+                        groups: [{ interval: 30, count: 2 }, { interval: 20 }],
+                    },
+                }),
+            ],
+            [
+                "a setting it doesn't know",
+                (p: LineParams) => ({ ...p, measured: "across" }),
+            ],
+            [
+                "a broken group",
+                (p: LineParams) => ({
+                    ...p,
+                    spacing: { mode: "keep", groups: [null] },
+                }),
+            ],
+            [
+                "a group interval that isn't a number",
+                (p: LineParams) => ({
+                    ...p,
+                    spacing: { mode: "keep", groups: [{ interval: "2" }] },
+                }),
+            ],
+            [
+                "an unknown anchor",
+                (p: LineParams) => ({
+                    ...p,
+                    spacing: {
+                        mode: "path",
+                        groups: [{ interval: 20 }],
+                        anchor: "middle",
+                    },
+                }),
+            ],
+        ])("refuses %s", (_name, change) => {
+            const { recipe, params } = saved();
+            const changed = change(params as LineParams);
+            expect(isLineParams(changed)).toBe(false);
+            expect(withParams(recipe, changed)).toBeUndefined();
+        });
+    });
+});
+
+describe("grabbing a line", () => {
+    it("takes a press near the line, but not a press far from a long line with few marchers", () => {
+        // 2 marchers 40 steps apart: half the interval would reach 20 steps off the line
+        const t = drawn(2, { x: 100, y: 100 }, { x: 500, y: 100 });
+        const p = paramsOf(t);
+        expect(lineTool.contains(p, 2, { x: 300, y: 105 }, env)).toBe(true);
+        expect(lineTool.contains(p, 2, { x: 300, y: 150 }, env)).toBe(false);
+        let pressed = press(t, { x: 300, y: 150 }, env);
+        expect(pressed.gesture?.type).toBe("draw");
+        pressed = press(t, { x: 300, y: 105 }, env);
+        expect(pressed.gesture?.type).toBe("move");
     });
 });
