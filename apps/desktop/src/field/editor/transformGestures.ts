@@ -1,5 +1,8 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
+import type { GestureKeys } from "@/input/gestureKeys";
+import type { Roles } from "@/input/modifierRoles";
 import type { FieldGesture, FieldPoint, FieldPointer } from "./fieldEditor";
+import { fieldKeys, type FieldKeys } from "./fieldKeys";
 import {
     centerOf,
     rotatePositions,
@@ -20,12 +23,14 @@ import type { FieldRect } from "./selectionArea";
  * positions, the drop and its pending save, snap-back, one undo step.
  *
  * Lock X and Lock Y don't apply to handles (rules table: Lock X / Lock Y).
- * While Alt is down the pointer counts at a quarter of its speed, with
- * snapping off (`precisionDelta`, #197).
+ * While fine is on the pointer counts at a quarter of its speed
+ * (`precisionDelta`, #197). As in a move, a role key pressed or released
+ * mid-drag redraws the marchers at the last pointer.
  */
 abstract class HandleGesture implements FieldGesture {
     abstract readonly kind: FieldTestGesture;
     protected track = PRECISION_START;
+    private readonly keys: GestureKeys;
     /** The last positions shown, and where the pointer was for them. */
     private shown: { at: FieldPoint; positions: MarcherPosition[] } | null =
         null;
@@ -34,12 +39,16 @@ abstract class HandleGesture implements FieldGesture {
         protected readonly origin: FieldPointer,
         protected readonly starts: readonly MarcherPosition[],
         private readonly host: MoveGestureHost,
-    ) {}
+        keys: FieldKeys = fieldKeys(origin),
+    ) {
+        this.keys = keys(() => {
+            if (this.shown) this.show(this.shown.at);
+        });
+    }
 
     move(pointer: FieldPointer): void {
-        const positions = this.positionsAt(pointer);
-        this.shown = { at: pointer.field, positions };
-        this.host.show(positions);
+        this.keys.update(pointer);
+        this.show(pointer.field);
     }
 
     /**
@@ -51,17 +60,36 @@ abstract class HandleGesture implements FieldGesture {
             this.shown !== null &&
             this.shown.at.x === pointer.field.x &&
             this.shown.at.y === pointer.field.y;
+        if (!still) this.keys.update(pointer);
+        this.keys.dispose();
         this.host.drop(
-            still ? this.shown!.positions : this.positionsAt(pointer),
+            still
+                ? this.shown!.positions
+                : this.positionsAt(pointer.field, this.keys.roles()),
         );
     }
 
     cancel(): void {
+        this.keys.dispose();
         this.host.cancel();
     }
 
-    /** Where the marchers go for this pointer event. */
-    protected abstract positionsAt(pointer: FieldPointer): MarcherPosition[];
+    /** The held roles at the press, before any move. */
+    protected pressRoles(): Roles {
+        return this.keys.roles();
+    }
+
+    private show(at: FieldPoint) {
+        const positions = this.positionsAt(at, this.keys.roles());
+        this.shown = { at, positions };
+        this.host.show(positions);
+    }
+
+    /** Where the marchers go for the pointer at `at`, with these roles held. */
+    protected abstract positionsAt(
+        at: FieldPoint,
+        roles: Roles,
+    ): MarcherPosition[];
 }
 
 /** A corner or middle handle: scales the selection from the opposite side. */
@@ -75,33 +103,33 @@ export class ScaleGesture extends HandleGesture {
         private readonly handle: Exclude<HandleId, "rot">,
         /** The marchers' bounds at the press. */
         private readonly box: FieldRect,
+        keys?: FieldKeys,
     ) {
-        super(origin, starts, host);
+        super(origin, starts, host, keys);
     }
 
-    protected positionsAt(pointer: FieldPointer) {
-        // Nothing snaps, so Alt needs no re-anchoring: the slow drag goes on
+    protected positionsAt(at: FieldPoint, roles: Roles) {
+        // Nothing snaps, so fine needs no re-anchoring: the slow drag goes on
         // from wherever the pointer had taken the marchers
         const moved = precisionDelta(
             this.track,
-            {
-                x: pointer.field.x - this.origin.field.x,
-                y: pointer.field.y - this.origin.field.y,
-            },
-            pointer.alt,
+            { x: at.x - this.origin.field.x, y: at.y - this.origin.field.y },
+            roles.fine,
         );
         this.track = moved.track;
+        // A corner scales proportionally; constrain flips that, freeing each axis
         return scalePositions(
             this.starts,
-            scaleFor(this.handle, this.box, moved.delta, pointer.shift),
+            scaleFor(this.handle, this.box, moved.delta, roles.constrain),
         );
     }
 }
 
 /**
  * The rotate handle: turns the selection about its box's center by the angle
- * the pointer turns through, snapped to 15° unless Shift or Alt is down.
- * Pressing Alt goes on slowly from the angle drawn (snapped), with no jump.
+ * the pointer turns through, snapped to 15°, or with fine to whole degrees at
+ * a quarter speed. Fine turning on goes on slowly from the angle drawn
+ * (snapped), with no jump.
  */
 export class RotateGesture extends HandleGesture {
     readonly kind: FieldTestGesture = "rotate";
@@ -109,7 +137,7 @@ export class RotateGesture extends HandleGesture {
     /** The angle the pointer has turned through, at full speed. */
     private turned = 0;
     private last: FieldPoint;
-    private alt: boolean;
+    private fine: boolean;
     /** The angle drawn at the last event, in degrees. */
     private drawn = 0;
 
@@ -119,11 +147,12 @@ export class RotateGesture extends HandleGesture {
         host: MoveGestureHost,
         /** The marchers' bounds at the press. */
         readonly box: FieldRect,
+        keys?: FieldKeys,
     ) {
-        super(origin, starts, host);
+        super(origin, starts, host, keys);
         this.center = centerOf(box);
         this.last = origin.field;
-        this.alt = origin.alt;
+        this.fine = this.pressRoles().fine;
     }
 
     /** The angle drawn, in degrees clockwise: the overlay turns the box by it until the release. */
@@ -131,19 +160,19 @@ export class RotateGesture extends HandleGesture {
         return this.drawn;
     }
 
-    protected positionsAt(pointer: FieldPointer) {
-        this.turned += turnBetween(this.center, this.last, pointer.field);
-        this.last = pointer.field;
-        if (pointer.alt && !this.alt)
+    protected positionsAt(at: FieldPoint, roles: Roles) {
+        this.turned += turnBetween(this.center, this.last, at);
+        this.last = at;
+        if (roles.fine && !this.fine)
             this.track = anchorAt(this.track, { x: this.drawn, y: 0 });
-        this.alt = pointer.alt;
+        this.fine = roles.fine;
         const moved = precisionDelta(
             this.track,
             { x: this.turned, y: 0 },
-            pointer.alt,
+            roles.fine,
         );
         this.track = moved.track;
-        this.drawn = snapRotation(moved.delta.x, pointer.shift || pointer.alt);
+        this.drawn = snapRotation(moved.delta.x, roles);
         return rotatePositions(this.starts, this.center, this.drawn);
     }
 }

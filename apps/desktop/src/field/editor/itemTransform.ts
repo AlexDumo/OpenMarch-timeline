@@ -1,5 +1,8 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
+import type { GestureKeys } from "@/input/gestureKeys";
+import type { Roles } from "@/input/modifierRoles";
 import type { FieldGesture, FieldPoint, FieldPointer } from "./fieldEditor";
+import { fieldKeys, type FieldKeys } from "./fieldKeys";
 import {
     rotatePoint,
     snapRotation,
@@ -64,27 +67,46 @@ const PULLS: Record<Exclude<HandleId, "rot">, FieldPoint> = {
     w: { x: -1, y: 0 },
 };
 
+/** A role key pressed or released mid-drag redraws the Outline at the last pointer. */
 abstract class ItemHandleGesture implements FieldGesture {
     abstract readonly kind: FieldTestGesture;
+    private readonly keys: GestureKeys;
+    /** Where the pointer was at the last move. */
+    private last: FieldPoint | null = null;
 
     constructor(
         protected readonly frame: ItemFrame,
         private readonly host: ItemTransformHost,
-    ) {}
+        press: FieldPointer,
+        keys: FieldKeys = fieldKeys(press),
+    ) {
+        this.keys = keys(() => {
+            if (this.last) this.show(this.last);
+        });
+    }
 
     move(pointer: FieldPointer): void {
-        this.host.show(this.sizeAt(pointer));
+        this.keys.update(pointer);
+        this.show(pointer.field);
     }
 
     end(pointer: FieldPointer): void {
-        this.host.save(this.sizeAt(pointer));
+        this.keys.update(pointer);
+        this.keys.dispose();
+        this.host.save(this.sizeAt(pointer.field, this.keys.roles()));
     }
 
     cancel(): void {
+        this.keys.dispose();
         this.host.cancel();
     }
 
-    protected abstract sizeAt(pointer: FieldPointer): ItemSize;
+    private show(at: FieldPoint) {
+        this.last = at;
+        this.host.show(this.sizeAt(at, this.keys.roles()));
+    }
+
+    protected abstract sizeAt(at: FieldPoint, roles: Roles): ItemSize;
 }
 
 /**
@@ -95,17 +117,19 @@ export class ItemResizeGesture extends ItemHandleGesture {
     readonly kind: FieldTestGesture = "scale";
 
     constructor(
+        origin: FieldPointer,
         frame: ItemFrame,
         host: ItemTransformHost,
         private readonly handle: Exclude<HandleId, "rot">,
+        keys?: FieldKeys,
     ) {
-        super(frame, host);
+        super(frame, host, origin, keys);
     }
 
-    protected sizeAt(pointer: FieldPointer): ItemSize {
+    protected sizeAt(at: FieldPoint): ItemSize {
         const { center, width, depth, rotation } = this.frame;
         // The pointer in the Outline's own frame, unturned about its center
-        const local = rotatePoint(pointer.field, center, -rotation);
+        const local = rotatePoint(at, center, -rotation);
         const pulls = PULLS[this.handle];
         const half = (offset: number, pull: number, size: number) =>
             pull === 0
@@ -121,7 +145,7 @@ export class ItemResizeGesture extends ItemHandleGesture {
 
 /**
  * The rotate handle: turns the Outline about its center by the angle the
- * pointer turns through, snapped to 15° unless Shift or Alt is down.
+ * pointer turns through, snapped to 15°, or to whole degrees with fine.
  */
 export class ItemRotateGesture extends ItemHandleGesture {
     readonly kind: FieldTestGesture = "rotate";
@@ -132,16 +156,17 @@ export class ItemRotateGesture extends ItemHandleGesture {
         origin: FieldPointer,
         frame: ItemFrame,
         host: ItemTransformHost,
+        keys?: FieldKeys,
     ) {
-        super(frame, host);
+        super(frame, host, origin, keys);
         this.lastPoint = origin.field;
     }
 
-    protected sizeAt(pointer: FieldPointer): ItemSize {
+    protected sizeAt(at: FieldPoint, roles: Roles): ItemSize {
         const { center, width, depth, rotation } = this.frame;
-        this.turned += turnBetween(center, this.lastPoint, pointer.field);
-        this.lastPoint = pointer.field;
-        const turn = snapRotation(this.turned, pointer.shift || pointer.alt);
+        this.turned += turnBetween(center, this.lastPoint, at);
+        this.lastPoint = at;
+        const turn = snapRotation(this.turned, roles);
         // Raw, not wrapped to [0, 360): an Outline change eases through the raw angle (so a
         // spin can be drawn), and 350° turned 20° must ease 20°, not back 340°
         return { width, depth, rotation: rotation + turn };

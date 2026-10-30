@@ -1,4 +1,5 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
+import type { RoleKey } from "@/input/modifierRoles";
 import {
     startLasso,
     startMarquee,
@@ -16,6 +17,7 @@ import {
     type HandleId,
     type SelectionFrame,
 } from "./groupTransform";
+import { fieldKeys, type FieldKeys } from "./fieldKeys";
 import { hitRadius, marcherAt, type DrawnMarchers } from "./hitTest";
 import {
     ItemResizeGesture,
@@ -52,7 +54,10 @@ export type FieldPoint = { x: number; y: number };
 
 /**
  * One pointer event, as the renderer reports it: where it is on the field and
- * on screen, and which button and modifiers are down.
+ * on screen, and which button and modifiers are down. The keys are raw:
+ * selection and navigation read them, and drag gestures read held roles
+ * through `startGestureKeys` (`fieldKeys.ts`), which takes a `FieldPointer`
+ * as the keys it carries.
  */
 export type FieldPointer = {
     /** Field units. */
@@ -146,7 +151,10 @@ export type FieldEditorPorts = {
 export type DropResult = "saved" | "refused";
 
 export type FieldEditorOptions = {
-    /** On a Mac, Ctrl+press is a right-click, which pans (navigation's, not the editor's). */
+    /**
+     * On a Mac, Ctrl+press is a right-click, which pans (navigation's, not the
+     * editor's), and Cmd is $mod (constrain) where elsewhere Ctrl is.
+     */
     isMac?: boolean;
     /** The time in milliseconds, for double-clicks. Defaults to `performance.now`. */
     now?: () => number;
@@ -872,9 +880,17 @@ export class FieldEditor {
                 this.drop(starts, positions),
             cancel: () => this.endLive(),
         };
+        const keys = this.keysFor(press.start);
         return press.handle === "rot"
-            ? new RotateGesture(press.start, starts, host, box)
-            : new ScaleGesture(press.start, starts, host, press.handle, box);
+            ? new RotateGesture(press.start, starts, host, box, keys)
+            : new ScaleGesture(
+                  press.start,
+                  starts,
+                  host,
+                  press.handle,
+                  box,
+                  keys,
+              );
     }
 
     /**
@@ -943,9 +959,10 @@ export class FieldEditor {
                 );
             },
         };
+        const keys = this.keysFor(press.start);
         return handle === "rot"
-            ? new ItemRotateGesture(press.start, frame, host)
-            : new ItemResizeGesture(frame, host, handle);
+            ? new ItemRotateGesture(press.start, frame, host, keys)
+            : new ItemResizeGesture(press.start, frame, host, handle, keys);
     }
 
     /** A marquee, or a lasso after a double-click, from empty field. */
@@ -986,10 +1003,14 @@ export class FieldEditor {
      *   selection;
      * - pressing empty field inside a multi-selection's box moves the
      *   selection.
+     *
+     * A Shift that added the marcher was the press's (the press rule): the
+     * drag goes at full speed until Shift is released and pressed again.
      */
     private startMove(press: FieldPress): FieldGesture | null {
         const selection = this.ports.selection.get();
         let ids: readonly number[];
+        let added = false;
         if (press.hit !== null) {
             const chosen = this.ports.pressSelection?.(
                 press.hit,
@@ -1000,11 +1021,13 @@ export class FieldEditor {
                 this.write(chosen);
                 return null;
             }
+            added =
+                !chosen && press.start.shift && !selection.includes(press.hit);
             ids =
                 chosen ??
                 (selection.includes(press.hit)
                     ? selection
-                    : press.start.shift
+                    : added
                       ? [...selection, press.hit]
                       : [press.hit]);
             this.write(ids);
@@ -1026,7 +1049,19 @@ export class FieldEditor {
                 cancel: () => this.endLive(),
             },
             this.options.moveTransform,
+            this.keysFor(press.start, added ? ["Shift"] : []),
         );
+    }
+
+    /** The held roles of a gesture from `press`, with the keys a selection choice used. */
+    private keysFor(
+        press: FieldPointer,
+        usedByPress: readonly RoleKey[] = [],
+    ): FieldKeys {
+        return fieldKeys(press, {
+            usedByPress,
+            isMac: this.options.isMac ?? false,
+        });
     }
 
     /** Where `ids` are drawn now, skipping any not drawn or hidden. */

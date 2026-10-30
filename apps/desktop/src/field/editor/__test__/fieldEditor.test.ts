@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     CLICK_SLOP,
     DOUBLE_CLICK_MS,
@@ -10,6 +10,7 @@ import {
     type FieldPointer,
 } from "../fieldEditor";
 import type { MarcherPosition, MoveTransform } from "../moveGesture";
+import { ruledMove, type MoveRules } from "../moveRules";
 
 /**
  * Marchers 1 to 4 in a row 100 field units apart, at zoom 2 (2 CSS px per
@@ -669,9 +670,9 @@ describe("FieldEditor moving marchers", () => {
         expect(state.drops[0].positions).toEqual([{ id: 1, x: 100, y: 160 }]);
     });
 
-    it("hands the pointer delta to the move transform (#197's seam)", () => {
+    it("hands the pointer delta and the held roles to the move transform (#197's seam)", () => {
         // Whole tens across, and no movement down
-        const moveTransform = vi.fn<MoveTransform>((delta, _pointer, starts) =>
+        const moveTransform = vi.fn<MoveTransform>((delta, _roles, starts) =>
             starts.map((s) => ({
                 id: s.id,
                 x: s.x + Math.round(delta.x / 10) * 10,
@@ -679,43 +680,49 @@ describe("FieldEditor moving marchers", () => {
             })),
         );
         const { editor, state } = setup({ moveTransform });
-        drag(editor, { x: 100, y: 100 }, { x: 137, y: 120 }, { shift: true });
+        drag(editor, { x: 100, y: 100 }, { x: 137, y: 120 }, { ctrl: true });
         expect(moveTransform).toHaveBeenLastCalledWith(
             { x: 37, y: 20 },
-            expect.objectContaining({ shift: true }),
+            { fine: false, constrain: true, fromCenter: false },
             [{ id: 1, x: 100, y: 100 }],
         );
         expect(state.drops[0].positions).toEqual([{ id: 1, x: 140, y: 100 }]);
     });
 
-    it("moves at a quarter of the pointer's speed while Alt is down (user story 39)", () => {
-        const { editor, state } = setup();
-        drag(editor, { x: 100, y: 100 }, { x: 180, y: 140 }, { alt: true });
+    it("moves at a quarter of the pointer's speed with fine (Shift; user story 39)", () => {
+        const { editor, state } = setup({ selected: [1] });
+        drag(editor, { x: 100, y: 100 }, { x: 180, y: 140 }, { shift: true });
         expect(state.drops[0].positions).toEqual([{ id: 1, x: 120, y: 110 }]);
     });
 
-    // Snaps to tens, except with Shift or Alt
-    const snapToTens: MoveTransform = (delta, pointer, starts) =>
+    it("doesn't slow down with Alt any more", () => {
+        const { editor, state } = setup({ selected: [1] });
+        drag(editor, { x: 100, y: 100 }, { x: 180, y: 140 }, { alt: true });
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 180, y: 140 }]);
+    });
+
+    // Snaps to tens, except with fine
+    const snapToTens: MoveTransform = (delta, roles, starts) =>
         starts.map((s) => ({
             id: s.id,
-            x:
-                pointer.alt || pointer.shift
-                    ? s.x + delta.x
-                    : s.x + Math.round(delta.x / 10) * 10,
+            x: roles.fine ? s.x + delta.x : s.x + Math.round(delta.x / 10) * 10,
             y: s.y + delta.y,
         }));
 
-    it("drops where the marcher is drawn when Alt comes up before a release that doesn't move", () => {
-        const { editor, state } = setup({ moveTransform: snapToTens });
-        editor.pointerDown(at(100, 100, { alt: true }));
-        editor.pointerMove(at(112, 100, { alt: true }));
+    it("drops where the marcher is drawn when fine comes off before a release that doesn't move", () => {
+        const { editor, state } = setup({
+            selected: [1],
+            moveTransform: snapToTens,
+        });
+        editor.pointerDown(at(100, 100, { shift: true }));
+        editor.pointerMove(at(112, 100, { shift: true }));
         expect(shown(state)).toEqual({ 1: { x: 103, y: 100 } });
-        // Alt up fires no pointer event; the release reports it up
+        // No keyboard event came; the release reports Shift up
         editor.pointerUp(at(112, 100));
         expect(state.drops[0].positions).toEqual([{ id: 1, x: 103, y: 100 }]);
     });
 
-    it("drops where the marcher is drawn when Shift goes down before a release that doesn't move", () => {
+    it("drops where the marcher is drawn when fine goes on before a release that doesn't move", () => {
         const { editor, state } = setup({ moveTransform: snapToTens });
         editor.pointerDown(at(100, 100));
         editor.pointerMove(at(137, 100));
@@ -724,49 +731,271 @@ describe("FieldEditor moving marchers", () => {
         expect(state.drops[0].positions).toEqual([{ id: 1, x: 140, y: 100 }]);
     });
 
-    it("drops by the release's modifiers when the release moved the pointer", () => {
+    it("drops by the release's roles when the release moved the pointer", () => {
         const { editor, state } = setup({ moveTransform: snapToTens });
         editor.pointerDown(at(100, 100));
         editor.pointerMove(at(137, 100));
+        // Fine on at the release: from the 140 drawn, a quarter of 1 more
         editor.pointerUp(at(138, 100, { shift: true }));
-        expect(state.drops[0].positions).toEqual([{ id: 1, x: 138, y: 100 }]);
+        expect(state.drops[0].positions).toEqual([
+            { id: 1, x: 140.25, y: 100 },
+        ]);
     });
 
-    it("goes on slowly from the snapped spot when Alt is pressed during a snapped drag", () => {
-        // Snaps to tens, except with Alt
-        const moveTransform: MoveTransform = (delta, pointer, starts) =>
-            starts.map((s) => ({
-                id: s.id,
-                x: pointer.alt
-                    ? s.x + delta.x
-                    : s.x + Math.round(delta.x / 10) * 10,
-                y: s.y + delta.y,
-            }));
-        const { editor, state } = setup({ moveTransform });
+    it("goes on slowly from the snapped spot when fine turns on during a snapped drag", () => {
+        const { editor, state } = setup({ moveTransform: snapToTens });
         editor.pointerDown(at(100, 100));
         editor.pointerMove(at(137, 100));
         expect(shown(state)).toEqual({ 1: { x: 140, y: 100 } });
-        editor.pointerMove(at(137, 100, { alt: true }));
+        editor.pointerMove(at(137, 100, { shift: true }));
         expect(shown(state)).toEqual({ 1: { x: 140, y: 100 } });
-        editor.pointerUp(at(157, 100, { alt: true }));
+        editor.pointerUp(at(157, 100, { shift: true }));
         expect(state.drops[0].positions).toEqual([{ id: 1, x: 145, y: 100 }]);
     });
 
-    it("carries on from where the marchers are when Alt is pressed or released mid-drag", () => {
+    it("carries on from where the marchers are when fine turns on or off mid-drag", () => {
         const { editor, state } = setup();
         editor.pointerDown(at(100, 100));
         editor.pointerMove(at(140, 100));
         expect(shown(state)).toEqual({ 1: { x: 140, y: 100 } });
-        // Alt down: the next 40 units count as 10, with no jump
-        editor.pointerMove(at(140, 100, { alt: true }));
+        // Shift down: the next 40 units count as 10, with no jump
+        editor.pointerMove(at(140, 100, { shift: true }));
         expect(shown(state)).toEqual({ 1: { x: 140, y: 100 } });
-        editor.pointerMove(at(180, 100, { alt: true }));
+        editor.pointerMove(at(180, 100, { shift: true }));
         expect(shown(state)).toEqual({ 1: { x: 150, y: 100 } });
-        // Alt up: full speed again, still trailing the pointer by 30
+        // Shift up: full speed again, still trailing the pointer by 30
         editor.pointerMove(at(180, 100));
         expect(shown(state)).toEqual({ 1: { x: 150, y: 100 } });
         editor.pointerUp(at(200, 120));
         expect(state.drops[0].positions).toEqual([{ id: 1, x: 170, y: 120 }]);
+    });
+});
+
+/** The move rules ThreeField gives the editor, on a grid of tens from (0, 0). */
+const rulesOn = (overrides: Partial<MoveRules> = {}) =>
+    ruledMove(() => ({
+        rounding: { nearestXSteps: 1, nearestYSteps: 1 },
+        lockX: false,
+        lockY: false,
+        grid: {
+            pixelsPerStep: 10,
+            centerFrontPoint: { xPixels: 0, yPixels: 0 },
+        },
+        ...overrides,
+    }));
+
+const key = (type: "keydown" | "keyup", init: KeyboardEventInit) =>
+    window.dispatchEvent(new KeyboardEvent(type, init));
+
+describe("FieldEditor modifier roles (version A)", () => {
+    // A gesture left running keeps listening for keys; end each one
+    let running: FieldEditor | undefined;
+    afterEach(() => running?.pointerCancel());
+
+    it("doesn't turn snapping off for Shift as such: only fine does, at a quarter speed", () => {
+        const plain = setup({ moveTransform: rulesOn() });
+        drag(plain.editor, { x: 100, y: 100 }, { x: 137, y: 121 });
+        expect(plain.state.drops[0].positions).toEqual([
+            { id: 1, x: 140, y: 120 },
+        ]);
+        // A Shift-press that adds the marcher uses Shift: snapped, full speed
+        const added = setup({ selected: [2], moveTransform: rulesOn() });
+        drag(
+            added.editor,
+            { x: 100, y: 100 },
+            { x: 137, y: 121 },
+            {
+                shift: true,
+            },
+        );
+        expect(added.state.drops[0].positions).toEqual([
+            { id: 1, x: 140, y: 120 },
+            { id: 2, x: 240, y: 120 },
+        ]);
+        // Marcher 1 is selected, so the Shift-press adds nothing and Shift is fine
+        const fine = setup({ selected: [1], moveTransform: rulesOn() });
+        drag(
+            fine.editor,
+            { x: 100, y: 100 },
+            { x: 137, y: 121 },
+            {
+                shift: true,
+            },
+        );
+        expect(fine.state.drops[0].positions).toEqual([
+            { id: 1, x: 109.25, y: 105.25 },
+        ]);
+        // Alt (from center) doesn't move marchers differently
+        const alt = setup({ moveTransform: rulesOn() });
+        drag(alt.editor, { x: 100, y: 100 }, { x: 137, y: 121 }, { alt: true });
+        expect(alt.state.drops[0].positions).toEqual([
+            { id: 1, x: 140, y: 120 },
+        ]);
+    });
+
+    it("keeps a drag to one axis with constrain ($mod), whichever it has gone further along", () => {
+        const across = setup({
+            moveTransform: rulesOn({ rounding: undefined }),
+        });
+        drag(
+            across.editor,
+            { x: 100, y: 100 },
+            { x: 137, y: 121 },
+            {
+                ctrl: true,
+            },
+        );
+        expect(across.state.drops[0].positions).toEqual([
+            { id: 1, x: 137, y: 100 },
+        ]);
+        const down = setup({
+            isMac: true,
+            moveTransform: rulesOn({ rounding: undefined }),
+        });
+        drag(
+            down.editor,
+            { x: 100, y: 100 },
+            { x: 121, y: 137 },
+            {
+                meta: true,
+            },
+        );
+        expect(down.state.drops[0].positions).toEqual([
+            { id: 1, x: 100, y: 137 },
+        ]);
+    });
+
+    it("never reads Mac Ctrl as constrain: a Ctrl-press pans, and Ctrl held mid-drag does nothing", () => {
+        const press = setup({
+            isMac: true,
+            moveTransform: rulesOn({ rounding: undefined }),
+        });
+        expect(press.editor.pointerDown(at(100, 100, { ctrl: true }))).toBe(
+            false,
+        );
+        press.editor.pointerMove(at(137, 121, { ctrl: true }));
+        press.editor.pointerUp(at(137, 121, { ctrl: true }));
+        expect(press.state.drops).toEqual([]);
+        expect(press.state.selected).toEqual([]);
+
+        const held = setup({
+            isMac: true,
+            moveTransform: rulesOn({ rounding: undefined }),
+        });
+        held.editor.pointerDown(at(100, 100));
+        held.editor.pointerMove(at(137, 121, { ctrl: true }));
+        held.editor.pointerUp(at(137, 121, { ctrl: true }));
+        expect(held.state.drops[0].positions).toEqual([
+            { id: 1, x: 137, y: 121 },
+        ]);
+    });
+
+    it("re-runs the last move when a role key changes mid-drag, with no pointer move", () => {
+        const { editor, state } = setup({
+            moveTransform: rulesOn({ rounding: undefined }),
+        });
+        running = editor;
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(137, 121));
+        expect(shown(state)).toEqual({ 1: { x: 137, y: 121 } });
+        key("keydown", { key: "Control", ctrlKey: true });
+        expect(shown(state)).toEqual({ 1: { x: 137, y: 100 } });
+        key("keyup", { key: "Control" });
+        expect(shown(state)).toEqual({ 1: { x: 137, y: 121 } });
+        // The release where the pointer was drops what's drawn
+        editor.pointerUp(at(137, 121));
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 137, y: 121 }]);
+    });
+
+    it("re-anchors on the snapped spot when fine turns on from a keydown, with no pointer move", () => {
+        const { editor, state } = setup({ moveTransform: rulesOn() });
+        running = editor;
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(137, 100));
+        expect(shown(state)).toEqual({ 1: { x: 140, y: 100 } });
+        key("keydown", { key: "Shift", shiftKey: true });
+        // Off the grid now, but still drawn where it was: no jump back to 137
+        expect(shown(state)).toEqual({ 1: { x: 140, y: 100 } });
+        editor.pointerMove(at(157, 100, { shift: true }));
+        expect(shown(state)).toEqual({ 1: { x: 145, y: 100 } });
+        // Shift up: back on the grid where it's drawn
+        key("keyup", { key: "Shift" });
+        expect(shown(state)).toEqual({ 1: { x: 150, y: 100 } });
+    });
+
+    it("adds an unselected marcher on a Shift-press and drags it at full speed until Shift is pressed again (the press rule)", () => {
+        const { editor, state } = setup({ selected: [2] });
+        running = editor;
+        editor.pointerDown(at(100, 100, { shift: true }));
+        editor.pointerMove(at(100, 140, { shift: true }));
+        expect(state.selected).toEqual([2, 1]);
+        expect(shown(state)).toEqual({
+            1: { x: 100, y: 140 },
+            2: { x: 200, y: 140 },
+        });
+        // Released: still full speed
+        key("keyup", { key: "Shift" });
+        editor.pointerMove(at(100, 180));
+        expect(shown(state)).toEqual({
+            1: { x: 100, y: 180 },
+            2: { x: 200, y: 180 },
+        });
+        // Pressed again: fine, at a quarter speed from where they are
+        key("keydown", { key: "Shift", shiftKey: true });
+        editor.pointerMove(at(100, 220, { shift: true }));
+        expect(shown(state)).toEqual({
+            1: { x: 100, y: 190 },
+            2: { x: 200, y: 190 },
+        });
+        editor.pointerUp(at(100, 220, { shift: true }));
+        expect(state.drops[0].positions).toEqual([
+            { id: 1, x: 100, y: 190 },
+            { id: 2, x: 200, y: 190 },
+        ]);
+    });
+
+    it("reads the press rule from pointer events too, with no keyboard events", () => {
+        const { editor, state } = setup({ selected: [2] });
+        editor.pointerDown(at(100, 100, { shift: true }));
+        editor.pointerMove(at(100, 140, { shift: true }));
+        editor.pointerMove(at(100, 140));
+        editor.pointerMove(at(100, 180, { shift: true }));
+        editor.pointerUp(at(100, 180, { shift: true }));
+        expect(state.drops[0].positions).toEqual([
+            { id: 1, x: 100, y: 150 },
+            { id: 2, x: 200, y: 150 },
+        ]);
+    });
+
+    it("drags fine from a Shift-press that changed no selection: on a selected marcher, or inside the box", () => {
+        const onSelected = setup({ selected: [1, 2] });
+        drag(
+            onSelected.editor,
+            { x: 100, y: 100 },
+            { x: 100, y: 140 },
+            {
+                shift: true,
+            },
+        );
+        expect(onSelected.state.selected).toEqual([1, 2]);
+        expect(onSelected.state.drops[0].positions).toEqual([
+            { id: 1, x: 100, y: 110 },
+            { id: 2, x: 200, y: 110 },
+        ]);
+
+        const inBox = setup({ selected: [1, 3] });
+        drag(
+            inBox.editor,
+            { x: 250, y: 100 },
+            { x: 250, y: 140 },
+            {
+                shift: true,
+            },
+        );
+        expect(inBox.state.drops[0].positions).toEqual([
+            { id: 1, x: 100, y: 110 },
+            { id: 3, x: 300, y: 110 },
+        ]);
     });
 });
 
@@ -1149,14 +1378,62 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
         ]);
     });
 
-    it("ignores Shift on a middle handle", () => {
+    it("ignores constrain on a middle handle", () => {
         const plain = setup({ selected: ALL });
         drag(plain.editor, HANDLE.e, { x: 560, y: 160 });
-        const shifted = setup({ selected: ALL });
-        drag(shifted.editor, HANDLE.e, { x: 560, y: 160 }, { shift: true });
-        expect(shifted.state.drops[0].positions).toEqual(
+        const constrained = setup({ selected: ALL });
+        drag(constrained.editor, HANDLE.e, { x: 560, y: 160 }, { ctrl: true });
+        expect(constrained.state.drops[0].positions).toEqual(
             plain.state.drops[0].positions,
         );
+    });
+
+    it("scales at a quarter speed with fine (Shift)", () => {
+        const { editor, state } = setup({ selected: ALL });
+        // 150 across at a quarter: the box grows from 300 to 337.5
+        drag(editor, HANDLE.e, { x: 560, y: 100 }, { shift: true });
+        expect(state.drops[0].positions.map((p) => p.x)).toEqual([
+            100, 212.5, 325, 437.5,
+        ]);
+    });
+
+    describe("keys pressed or released mid-drag, with no pointer move", () => {
+        let running: FieldEditor | undefined;
+        afterEach(() => running?.pointerCancel());
+
+        it("re-runs a rotation: Shift down keeps the angle drawn, Shift up snaps it to 15° again", () => {
+            const { editor, state } = setup({ selected: ALL });
+            running = editor;
+            editor.pointerDown(at(HANDLE.rot.x, HANDLE.rot.y));
+            // 37° clockwise about (250, 100), 30 units out: drawn at 30°
+            const radians = ((37 - 90) * Math.PI) / 180;
+            const pointer = at(
+                250 + 30 * Math.cos(radians),
+                100 + 30 * Math.sin(radians),
+            );
+            editor.pointerMove(pointer);
+            expect(editor.rotationFrame()?.angle).toBe(30);
+            key("keydown", { key: "Shift", shiftKey: true });
+            expect(editor.rotationFrame()?.angle).toBe(30);
+            key("keyup", { key: "Shift" });
+            expect(editor.rotationFrame()?.angle).toBe(30);
+            // Fine re-anchors on the 30° drawn: 40° more turns 10°, in whole degrees
+            key("keydown", { key: "Shift", shiftKey: true });
+            const further = ((77 - 90) * Math.PI) / 180;
+            editor.pointerMove(
+                at(250 + 30 * Math.cos(further), 100 + 30 * Math.sin(further), {
+                    shift: true,
+                }),
+            );
+            expect(editor.rotationFrame()?.angle).toBe(40);
+            // Shift up with no move: 15° steps again
+            key("keyup", { key: "Shift" });
+            expect(editor.rotationFrame()?.angle).toBe(45);
+            editor.pointerUp(
+                at(250 + 30 * Math.cos(further), 100 + 30 * Math.sin(further)),
+            );
+            expect(state.drops).toHaveLength(1);
+        });
     });
 
     it("scales from the opposite corner with a corner handle", () => {
