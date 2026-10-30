@@ -436,3 +436,79 @@ describe("stretching a turned box onto a line (#446)", () => {
         }
     });
 });
+
+describe("from the center (fromCenter)", () => {
+    const CENTER = { fromCenter: true };
+
+    describe("drawing 2 × 2 with fine, from a press 1 step short of the 45", () => {
+        /** The right edge of a box drawn from 70 to `x` */
+        const right = (x: number) =>
+            edges(
+                drawBox(
+                    { x: 70, y: -100 },
+                    { x, y: -90 },
+                    4,
+                    env({ ...FINE, ...CENTER }),
+                )!,
+                4,
+            ).right;
+
+        it("still lands the dragged edge on the line: one gap is half a gap from the center", () => {
+            exact(right(80.5), 80);
+        });
+
+        it("pulls within a quarter of the edge's own detent, half the reach of a fixed edge", () => {
+            // An interval's half step moves the edge a quarter step from the center: 0.625 here
+            exact(right(80.6), 80);
+            exact(right(81), 81);
+        });
+    });
+
+    describe("a 3 × 3 box turned 30°, its se corner dragged", () => {
+        const N = 9;
+        /** 3 × 3, 2 steps apart, turned 30°, around `center` */
+        const turned = (center: XY): BoxParams => ({
+            center,
+            rotation: Math.PI / 6,
+            files: 3,
+            across: 2 * STEP,
+            deep: 2 * STEP,
+        });
+        /** `p` with its se corner dragged to own 20.1, 20.1: a tenth past where it was */
+        const dragged = (p: BoxParams) =>
+            stretch(
+                p,
+                N,
+                "se",
+                frameToField(boxFrame(p, N), { x: 20.1, y: 20.1 }),
+                CENTER,
+            );
+        const corner = (p: BoxParams, own: XY) => {
+            const f = boxFrame(p, N);
+            return frameToField(f, {
+                x: own.x * f.halfWidth,
+                y: own.y * f.halfDepth,
+            });
+        };
+
+        it("lands the moving east edge's other corner on a line near it", () => {
+            // The ne corner just short of the 50; the se corner nowhere near a line
+            const p = turned({ x: 52.5, y: -140 });
+            expect(Math.abs(corner(p, { x: 1, y: -1 }).x - 80)).toBeLessThan(1);
+            const out = dragged(p);
+            exact(corner(out, { x: 1, y: -1 }).x, 80);
+            exact(out.center.x, 52.5);
+            exact(out.center.y, -140);
+        });
+
+        it("doesn't take the middle of a moving edge for a corner", () => {
+            // The middle of the east edge just short of the 50, no corner near a line
+            const p = turned({ x: 62.5, y: -140 });
+            expect(
+                Math.abs(frameToField(boxFrame(p, N), { x: 20, y: 0 }).x - 80),
+            ).toBeLessThan(1);
+            const out = dragged(p);
+            expect([out.across, out.deep]).toEqual([20, 20]);
+        });
+    });
+});

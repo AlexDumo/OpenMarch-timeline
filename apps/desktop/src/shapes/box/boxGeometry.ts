@@ -1,5 +1,5 @@
 import type { BlockParams } from "../kinds/block";
-import { pullEdges, type BoxField } from "./edgePull";
+import { pullEdges, reachOf, type BoxField } from "./edgePull";
 import type { XY } from "../types";
 import {
     filesDistribution,
@@ -756,9 +756,8 @@ export function drawBox(
     previous?: BoxParams,
 ): BoxParams | undefined {
     // From the center, the box is twice as far across as the pointer is from the press
-    const reach = env.fromCenter ? 2 : 1;
-    const width = reach * Math.abs(to.x - from.x);
-    const depth = reach * Math.abs(to.y - from.y);
+    const width = reachOf(env) * Math.abs(to.x - from.x);
+    const depth = reachOf(env) * Math.abs(to.y - from.y);
     if (Math.max(width, depth) < halfStep(env)) return undefined;
     const drawn = drawnLayout(width, depth, n, env, previous);
     // One file or one rank has no interval on that axis: it takes the other's, for a later
@@ -767,8 +766,16 @@ export function drawBox(
     // The dragged corner's edges land on field lines near the pointer (#425): the count can
     // change on the way, and the edge stays on its line while the interval follows
     const ladder = {
-        x: spread(reach * Math.abs(to.x - corner.x), drawn.block.across, env),
-        y: spread(reach * Math.abs(to.y - corner.y), drawn.block.deep, env),
+        x: spread(
+            reachOf(env) * Math.abs(to.x - corner.x),
+            drawn.block.across,
+            env,
+        ),
+        y: spread(
+            reachOf(env) * Math.abs(to.y - corner.y),
+            drawn.block.deep,
+            env,
+        ),
     };
     const pull = pullEdges(
         {
@@ -777,7 +784,6 @@ export function drawBox(
             to: to.x,
             count: drawn.block.across,
             ladder: ladder.x,
-            fromCenter: env.fromCenter,
         },
         {
             moves: true,
@@ -785,7 +791,6 @@ export function drawBox(
             to: to.y,
             count: drawn.block.deep,
             ladder: ladder.y,
-            fromCenter: env.fromCenter,
         },
         // Drawn square to the field, so its own axes are the field's
         env.fieldLines
@@ -1023,19 +1028,38 @@ function inBoxAxes(
 }
 
 /**
- * What a stretch holds on each of the box's own axes: the edge opposite handle `key` (left for an
- * east handle), or with `fromCenter` the center, the box reaching as far the other way
+ * What a stretch with handle `key` toward `to` holds on each of the box's own axes, `at` among
+ * `edges`, and which way the box grows from there, `grow`: the edge opposite the handle (left for
+ * an east handle), growing toward `to` and past it flipping over; on an axis the handle doesn't
+ * move, the left or back edge, growing as before; or with `fromCenter`, the center, growing both
+ * ways (0), so the box reaches as far again the other way
  */
 function stretchAnchor(
-    f: Footprint,
+    edges: Footprint,
     key: BoxHandleKey,
-    fromCenter: boolean | undefined,
-): XY {
-    if (fromCenter)
-        return { x: (f.left + f.right) / 2, y: (f.top + f.bottom) / 2 };
+    to: XY,
+    env: ToolEnv,
+): { at: XY; grow: XY } {
+    if (env.fromCenter)
+        return {
+            at: {
+                x: (edges.left + edges.right) / 2,
+                y: (edges.top + edges.bottom) / 2,
+            },
+            grow: { x: 0, y: 0 },
+        };
+    const movesX = key.includes("e") || key.includes("w");
+    const movesY = key.includes("n") || key.includes("s");
+    const at = {
+        x: !movesX || key.includes("e") ? edges.left : edges.right,
+        y: !movesY || key.includes("s") ? edges.top : edges.bottom,
+    };
     return {
-        x: key.includes("e") ? f.left : f.right,
-        y: key.includes("s") ? f.top : f.bottom,
+        at,
+        grow: {
+            x: movesX ? signOf(to.x - at.x) : 1,
+            y: movesY ? signOf(to.y - at.y) : 1,
+        },
     };
 }
 
@@ -1052,35 +1076,32 @@ function stretchSquare(
     const { files: across0, ranks } = spanOf(base, n);
     const movesX = key.includes("e") || key.includes("w");
     const movesY = key.includes("n") || key.includes("s");
-    const anchor = stretchAnchor(f, key, env.fromCenter);
-    // How far the box reaches on an axis: from the center, as far again the other way
-    const far = (a: "x" | "y") =>
-        (env.fromCenter ? 2 : 1) * Math.abs(to[a] - anchor[a]);
+    const { at, grow } = stretchAnchor(f, key, to, env);
+    // How far the box reaches on an axis, edge to edge, for the pointer there
+    const extent = (a: "x" | "y") => reachOf(env) * Math.abs(to[a] - at[a]);
     // A moving corner lands on a field line near the pointer, at any turn (#425, #446), or the
     // interval steps by halves
     const ladder = {
-        x: movesX ? spread(far("x"), across0, env) : undefined,
-        y: movesY ? spread(far("y"), ranks, env) : undefined,
+        x: movesX ? spread(extent("x"), across0, env) : undefined,
+        y: movesY ? spread(extent("y"), ranks, env) : undefined,
     };
     const pull = pullEdges(
         movesX
             ? {
                   moves: true,
-                  anchor: anchor.x,
+                  anchor: at.x,
                   to: to.x,
                   count: across0,
                   ladder: ladder.x,
-                  fromCenter: env.fromCenter,
               }
             : { moves: false, edges: [f.left, f.right] },
         movesY
             ? {
                   moves: true,
-                  anchor: anchor.y,
+                  anchor: at.y,
                   to: to.y,
                   count: ranks,
                   ladder: ladder.y,
-                  fromCenter: env.fromCenter,
               }
             : { moves: false, edges: [f.top, f.bottom] },
         field,
@@ -1102,21 +1123,9 @@ function stretchSquare(
             across: x?.pulled === true,
             deep: y?.pulled === true,
         }));
-    // A side handle keeps the other axis where it was; past the fixed edge, the box flips over it.
-    // From the center, both axes stay centered (one the ratio lock changes too).
-    const sign = {
-        x: movesX && !env.fromCenter ? signOf(to.x - anchor.x) : 1,
-        y: movesY && !env.fromCenter ? signOf(to.y - anchor.y) : 1,
-    };
-    const start = env.fromCenter
-        ? {
-              x: anchor.x - ((across0 - 1) * across) / 2,
-              y: anchor.y - ((ranks - 1) * deep) / 2,
-          }
-        : { x: movesX ? anchor.x : f.left, y: movesY ? anchor.y : f.top };
     return boxFrom(
-        start,
-        sign,
+        at,
+        grow,
         filesOf(base),
         across,
         deep,
@@ -1143,20 +1152,24 @@ function reshapeSpread(
     const movesX = key.includes("e") || key.includes("w");
     const movesY = key.includes("n") || key.includes("s");
     // The frame is centered on 0, 0 here
-    const anchor = env.fromCenter
-        ? { x: 0, y: 0 }
-        : {
-              x: key.includes("e") ? -frame.halfWidth : frame.halfWidth,
-              y: key.includes("s") ? -frame.halfDepth : frame.halfDepth,
-          };
-    const reach = env.fromCenter ? 2 : 1;
+    const { at, grow } = stretchAnchor(
+        {
+            left: -frame.halfWidth,
+            right: frame.halfWidth,
+            top: -frame.halfDepth,
+            bottom: frame.halfDepth,
+        },
+        key,
+        to,
+        env,
+    );
     const least = halfStep(env);
     const side = (v: number) =>
         Math.max(least, env.snap ? Math.round(v / least) * least : v);
     const w0 = 2 * frame.halfWidth;
     const d0 = 2 * frame.halfDepth;
-    let width = movesX ? side(reach * Math.abs(to.x - anchor.x)) : w0;
-    let depth = movesY ? side(reach * Math.abs(to.y - anchor.y)) : d0;
+    let width = movesX ? side(reachOf(env) * Math.abs(to.x - at.x)) : w0;
+    let depth = movesY ? side(reachOf(env) * Math.abs(to.y - at.y)) : d0;
     // The handle stops where the interval would go under half a step, as at the least size
     const d = boxDistribution(base);
     if (d.mode !== "spread") throw new Error("Not a spread");
@@ -1174,14 +1187,12 @@ function reshapeSpread(
         width = w0 + (width - w0) * lo;
         depth = d0 + (depth - d0) * lo;
     }
-    const next = spreadSized(base, n, width, depth, true);
-    if (env.fromCenter) return next;
-    // Grown away from the fixed corner or side, toward the handle (past it, the other way)
+    // Grown from what it holds, toward the handle (past it, the other way)
     return {
-        ...next,
+        ...spreadSized(base, n, width, depth, true),
         center: {
-            x: movesX ? anchor.x + signOf(to.x - anchor.x) * (width / 2) : 0,
-            y: movesY ? anchor.y + signOf(to.y - anchor.y) * (depth / 2) : 0,
+            x: at.x + grow.x * (width / 2),
+            y: at.y + grow.y * (depth / 2),
         },
     };
 }
