@@ -133,22 +133,37 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
     const armed = useShapeToolStore((s) =>
         s.tool !== null && s.tool.params === null ? s.tool.kind : null,
     );
+    // Clicking a line's points (#524): how to go on, even once two make a line
+    const clicking = useShapeToolStore(
+        (s) => s.tool?.gesture?.type === "points",
+    );
     const toolOpen = useShapeToolStore((s) => s.tool !== null);
     const hidden = useShapeHidden();
     const tool = useToolEditTarget();
     const placed = usePlacedEditTarget();
     if (hidden) return <ShapeAwayChip />;
-    if (armed)
+    if (armed || clicking)
         return (
             <div
                 className="rounded-6 border-stroke bg-bg-1 bg-modal text-body text-text shadow-modal pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 border px-12 py-6"
                 data-testid="shape-tool-hint"
             >
-                {tolgee.t(
-                    "shapes.edit.drawHint",
-                    "Drag on the field to draw a {shape} · Esc to cancel",
-                    { shape: armed.shape.label.toLowerCase() },
-                )}
+                {clicking
+                    ? tolgee.t(
+                          "shapes.edit.pointsHint",
+                          "Click to add a point · Enter or a click on the last point finishes · Esc to cancel",
+                      )
+                    : armed!.clickPoints
+                      ? tolgee.t(
+                            "shapes.edit.drawPointsHint",
+                            "Drag on the field to draw a {shape}, or click point after point · Esc to cancel",
+                            { shape: armed!.shape.label.toLowerCase() },
+                        )
+                      : tolgee.t(
+                            "shapes.edit.drawHint",
+                            "Drag on the field to draw a {shape} · Esc to cancel",
+                            { shape: armed!.shape.label.toLowerCase() },
+                        )}
             </div>
         );
     const target = toolOpen ? tool : placed;
