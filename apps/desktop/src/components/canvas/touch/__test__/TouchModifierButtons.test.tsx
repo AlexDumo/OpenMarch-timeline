@@ -9,16 +9,17 @@ import { TolgeeProvider } from "@tolgee/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import tolgee from "@/global/singletons/Tolgee";
 import { useInputModeStore } from "@/stores/InputModeStore";
+import { isSnapOn, useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     isShiftHeld,
     onScreenRoles,
+    subscribeOnScreen,
     useTouchModifierStore,
 } from "@/stores/TouchModifierStore";
 import "@/shapes/editor/__test__/pointerEvents";
 import TouchModifierButtons, {
     parseModifierPosition,
     TOUCH_MODIFIER_POSITION_KEY,
-    type SnapToggle,
 } from "../TouchModifierButtons";
 
 /**
@@ -33,12 +34,24 @@ const touchMode = (on: boolean) => {
     });
 };
 
-function renderPill(snap?: SnapToggle) {
+function renderPill() {
     return render(
         <TolgeeProvider tolgee={tolgee} fallback="Loading...">
-            <TouchModifierButtons snap={snap} />
+            <TouchModifierButtons />
         </TolgeeProvider>,
     );
+}
+
+/**
+ * The pill at a saved spot: until it has one, or has placed itself (no layout here), it's hidden,
+ * and out of the accessibility tree
+ */
+function renderPlacedPill() {
+    localStorage.setItem(
+        TOUCH_MODIFIER_POSITION_KEY,
+        JSON.stringify({ left: 40, bottom: 60 }),
+    );
+    return renderPill();
 }
 
 const button = (toggle: string) => screen.getByTestId(`touch-toggle-${toggle}`);
@@ -58,6 +71,7 @@ afterEach(() => {
     useTouchModifierStore.getState().clear();
     useInputModeStore.getState().setPreference("auto");
     localStorage.removeItem(TOUCH_MODIFIER_POSITION_KEY);
+    useUiSettingsStore.getState().setSnap(true);
 });
 
 describe("the pill", () => {
@@ -71,7 +85,7 @@ describe("the pill", () => {
 
     it("names its buttons by role, never by key", () => {
         touchMode(true);
-        renderPill({ on: true, toggle: () => {} });
+        renderPill();
         const pill = screen.getByTestId("touch-modifier-buttons");
         for (const name of ["Fine", "Equal", "From center", "Add"])
             expect(pill.textContent).toContain(name);
@@ -81,6 +95,19 @@ describe("the pill", () => {
         expect(`${pill.textContent} ${labels}`).not.toMatch(
             /Shift|Alt|Ctrl|Cmd|⇧|⌥|⌘/,
         );
+    });
+
+    it("lets go of everything held or latched when the field goes away", () => {
+        touchMode(true);
+        const { unmount } = renderPill();
+        tap(button("fine"));
+        fireEvent.pointerDown(button("constrain"), {
+            pointerId: 6,
+            pointerType: "touch",
+        });
+        expect(onScreenRoles()).toEqual(new Set(["fine", "constrain"]));
+        unmount();
+        expect(onScreenRoles().size).toBe(0);
     });
 
     it("lets go of everything held or latched when the touch layout is left", () => {
@@ -129,6 +156,37 @@ describe.each([
         expect(button(role).getAttribute("aria-pressed")).toBe("false");
     });
 
+    it("held, lets go when the press loses its capture (the palm guard took the finger's release)", () => {
+        touchMode(true);
+        renderPill();
+        fireEvent.pointerDown(button(role), {
+            pointerId: 5,
+            pointerType: "touch",
+        });
+        expect(onScreenRoles()).toEqual(new Set([role]));
+        fireEvent.lostPointerCapture(button(role), { pointerId: 5 });
+        expect(onScreenRoles().size).toBe(0);
+        expect(button(role).getAttribute("aria-pressed")).toBe("false");
+    });
+
+    it("tapped mid-drag, the drag hears one change, not two", () => {
+        touchMode(true);
+        renderPill();
+        fireEvent.pointerDown(button(role), {
+            pointerId: 5,
+            pointerType: "touch",
+        });
+        const changed = vi.fn();
+        const stop = subscribeOnScreen(changed);
+        fireEvent.pointerUp(button(role), {
+            pointerId: 5,
+            pointerType: "touch",
+        });
+        stop();
+        expect(onScreenRoles()).toEqual(new Set([role]));
+        expect(changed).toHaveBeenCalledTimes(1);
+    });
+
     it("Enter on the keyboard latches it", () => {
         touchMode(true);
         renderPill();
@@ -148,29 +206,95 @@ describe("Add", () => {
     });
 });
 
-describe("the magnet", () => {
-    it("is pressed while snapping is off, and a tap flips the Snap toggle", () => {
+describe.each([
+    ["fine", "Fine", "Drags go slowly, off the grid"],
+    ["constrain", "Equal", "Equal spacings"],
+    ["fromCenter", "From center", "from their center"],
+    ["add", "Add", "adds them to the selection"],
+] as const)("%s, for assistive tech", (toggle, name, hint) => {
+    const pressed = () =>
+        screen.getByRole("button", { name }).getAttribute("aria-pressed");
+
+    it("is named by its visible label whatever its state, with the hint as its description", () => {
         touchMode(true);
-        const toggle = vi.fn();
-        const { rerender } = renderPill({ on: true, toggle });
-        const magnet = screen.getByTestId("touch-snap");
-        expect(magnet.getAttribute("aria-pressed")).toBe("false");
-        fireEvent.click(magnet);
-        expect(toggle).toHaveBeenCalledTimes(1);
-        rerender(
-            <TolgeeProvider tolgee={tolgee} fallback="Loading...">
-                <TouchModifierButtons snap={{ on: false, toggle }} />
-            </TolgeeProvider>,
-        );
-        expect(
-            screen.getByTestId("touch-snap").getAttribute("aria-pressed"),
-        ).toBe("true");
+        renderPlacedPill();
+        const el = screen.getByRole("button", { name });
+        expect(el.textContent).toBe(name);
+        expect(el.getAttribute("title")).toContain(hint);
+        fireEvent.click(el);
+        expect(screen.getByRole("button", { name })).toBe(el);
+        expect(el.getAttribute("title")).toContain(hint);
     });
 
-    it("isn't shown without a Snap toggle", () => {
+    it("a click with no pointer (VoiceOver, Voice Control, Switch Control) latches it, and another turns it off", () => {
         touchMode(true);
-        renderPill();
-        expect(screen.queryByTestId("touch-snap")).toBeNull();
+        renderPlacedPill();
+        expect(pressed()).toBe("false");
+        fireEvent.click(screen.getByRole("button", { name }));
+        expect(pressed()).toBe("true");
+        fireEvent.click(screen.getByRole("button", { name }));
+        expect(pressed()).toBe("false");
+    });
+
+    it("a tap's own click doesn't latch it a second time", () => {
+        touchMode(true);
+        renderPlacedPill();
+        const el = screen.getByRole("button", { name });
+        tap(el);
+        fireEvent.click(el, { detail: 1 });
+        expect(pressed()).toBe("true");
+    });
+
+    it("held, reads as pressed under the same name", () => {
+        touchMode(true);
+        renderPlacedPill();
+        const el = screen.getByRole("button", { name });
+        fireEvent.pointerDown(el, { pointerId: 5, pointerType: "touch" });
+        expect(screen.getByRole("button", { name })).toBe(el);
+        expect(pressed()).toBe("true");
+        fireEvent.pointerCancel(el, { pointerId: 5, pointerType: "touch" });
+        expect(pressed()).toBe("false");
+    });
+
+    it("Enter held down toggles it once, not on every repeat", () => {
+        touchMode(true);
+        renderPlacedPill();
+        const el = screen.getByRole("button", { name });
+        fireEvent.keyDown(el, { key: "Enter" });
+        expect(pressed()).toBe("true");
+        for (let i = 0; i < 2; i++) {
+            fireEvent.keyDown(el, { key: "Enter", repeat: true });
+            expect(pressed()).toBe("true");
+        }
+    });
+});
+
+describe("the magnet", () => {
+    it("a tap turns the Snap toggle off, pressed, and another turns it back on", () => {
+        touchMode(true);
+        renderPlacedPill();
+        const magnet = screen.getByRole("button", { name: "No snap" });
+        expect(isSnapOn()).toBe(true);
+        expect(magnet.getAttribute("aria-pressed")).toBe("false");
+        fireEvent.click(magnet);
+        expect(isSnapOn()).toBe(false);
+        expect(magnet.getAttribute("aria-pressed")).toBe("true");
+        fireEvent.click(magnet);
+        expect(isSnapOn()).toBe(true);
+        expect(magnet.getAttribute("aria-pressed")).toBe("false");
+    });
+
+    it("shows the Snap toggle turned off elsewhere (Shift+M)", () => {
+        touchMode(true);
+        renderPlacedPill();
+        act(() => {
+            useUiSettingsStore.getState().setSnap(false);
+        });
+        expect(
+            screen
+                .getByRole("button", { name: "No snap" })
+                .getAttribute("aria-pressed"),
+        ).toBe("true");
     });
 });
 
@@ -185,6 +309,29 @@ describe("where it sits", () => {
         const pill = screen.getByTestId("touch-modifier-buttons");
         expect(pill.style.left).toBe("40px");
         expect(pill.style.bottom).toBe("60px");
+    });
+
+    it("dragged by its grip, stays where it was dropped, and remembers it", () => {
+        touchMode(true);
+        renderPlacedPill();
+        const grip = screen.getByRole("button", { name: "Move these buttons" });
+        fireEvent.pointerDown(grip, {
+            pointerId: 3,
+            clientX: 100,
+            clientY: 100,
+        });
+        fireEvent.pointerMove(grip, {
+            pointerId: 3,
+            clientX: 130,
+            clientY: 80,
+        });
+        fireEvent.pointerUp(grip, { pointerId: 3, clientX: 130, clientY: 80 });
+        const pill = screen.getByTestId("touch-modifier-buttons");
+        expect(pill.style.left).toBe("70px");
+        expect(pill.style.bottom).toBe("80px");
+        expect(
+            JSON.parse(localStorage.getItem(TOUCH_MODIFIER_POSITION_KEY)!),
+        ).toEqual({ left: 70, bottom: 80 });
     });
 
     it("reads a stored spot, and nothing for anything else", () => {

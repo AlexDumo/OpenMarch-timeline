@@ -12,6 +12,7 @@ import {
 } from "../fieldEditor";
 import type { MarcherPosition } from "../moveGesture";
 import { ruledMove } from "../moveRules";
+import { clickOnMarcher } from "@/shapes/placed/boxClick";
 
 /**
  * The touch pill's toggles on the field (modifier roles, version A, "Touch and Apple Pencil"):
@@ -26,8 +27,11 @@ function setup({
     selected = [] as number[],
     /** Whether the pill's toggles are wired in, as `ThreeField` does */
     wired = true,
+    /** Marchers 1 and 2 are a placed box's members, as `ThreeField`'s box selection makes them */
+    box = false,
 } = {}) {
     const state = {
+        inside: null as number | null,
         selected: [...selected] as readonly number[],
         shown: null as ReadonlyMap<number, FieldPoint> | null,
         drops: [] as (readonly MarcherPosition[])[],
@@ -57,6 +61,25 @@ function setup({
             return Promise.resolve<DropResult>("saved");
         },
     };
+    if (box) {
+        const placed = { id: 7, members: [1, 2] };
+        const boxOf = (id: number) =>
+            placed.members.includes(id) ? placed : null;
+        ports.pressSelection = (hit, shift, reachInside) => {
+            const out = clickOnMarcher({
+                marcherId: hit,
+                shift,
+                reachInside,
+                selected: new Set(state.selected),
+                box: boxOf(hit),
+                inside: state.inside,
+            });
+            state.inside = out.inside;
+            return out.select;
+        };
+        ports.reachesInside = (hit) =>
+            boxOf(hit) !== null && state.inside !== placed.id;
+    }
     const editor = new FieldEditor(ports, {
         isMac: false,
         moveTransform: ruledMove(() => ({
@@ -251,5 +274,57 @@ describe("Add on the pill, as Shift at the press", () => {
         const { editor, state } = setup({ selected: [1] });
         drag(editor, { x: 100, y: 100 }, { x: 157, y: 121 });
         expect(state.drops[0]).toEqual([{ id: 1, x: 160, y: 120 }]);
+    });
+
+    describe("on a placed box's member, as Shift does", () => {
+        /** The same press with Shift held, and with the pill's Add latched instead */
+        const both = (
+            selected: number[],
+            press: (
+                editor: FieldEditor,
+                keys: Parameters<typeof at>[2],
+            ) => void,
+        ) => {
+            const shift = setup({ selected, box: true });
+            press(shift.editor, { shift: true });
+            store().toggleLatched("add");
+            const add = setup({ selected, box: true });
+            press(add.editor, {});
+            return { shift: shift.state, add: add.state };
+        };
+        const tapOn = (editor: FieldEditor, keys: Parameters<typeof at>[2]) => {
+            editor.pointerDown(at(100, 100, keys));
+            editor.pointerUp(at(100, 100, keys));
+        };
+
+        it("a click adds the whole box", () => {
+            const { shift, add } = both([3], tapOn);
+            expect(shift.selected).toEqual([3, 1, 2]);
+            expect(add.selected).toEqual(shift.selected);
+        });
+
+        it("a press-drag adds the whole box and drags it", () => {
+            const { shift, add } = both([3], (editor, keys) =>
+                drag(editor, { x: 100, y: 100 }, { x: 100, y: 140 }, keys),
+            );
+            expect(shift.selected).toEqual([3, 1, 2]);
+            expect(shift.drops[0]).toEqual([
+                { id: 1, x: 100, y: 140 },
+                { id: 2, x: 200, y: 140 },
+                { id: 3, x: 300, y: 140 },
+            ]);
+            expect(add.selected).toEqual(shift.selected);
+            expect(add.drops).toEqual(shift.drops);
+        });
+
+        it("a press-drag on a box selected whole takes it out, and moves nothing", () => {
+            const { shift, add } = both([1, 2, 3], (editor, keys) =>
+                drag(editor, { x: 100, y: 100 }, { x: 100, y: 140 }, keys),
+            );
+            expect(shift.selected).toEqual([3]);
+            expect(shift.drops).toEqual([]);
+            expect(add.selected).toEqual(shift.selected);
+            expect(add.drops).toEqual(shift.drops);
+        });
     });
 });

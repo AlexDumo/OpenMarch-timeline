@@ -21,6 +21,7 @@ import { T, useTolgee } from "@tolgee/react";
 import type { FieldMarchers } from "@/field/three/fieldMarchers";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
 import { useIsTouchMode } from "@/stores/InputModeStore";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     useTouchModifierStore,
     type TouchToggle,
@@ -41,12 +42,6 @@ interface Position {
     left: number;
     /** Distance from the bottom edge of the field (px) */
     bottom: number;
-}
-
-/** The Snap toggle the magnet shows and flips (`uiSettings.snap`) */
-export interface SnapToggle {
-    on: boolean;
-    toggle(): void;
 }
 
 export const parseModifierPosition = (raw: string | null): Position | null => {
@@ -86,36 +81,32 @@ const writeStorage = (key: string, value: string) => {
 const TOGGLES: readonly {
     toggle: TouchToggle;
     label: string;
-    on: string;
-    off: string;
+    /** What it does and how to use it: the button's description (`title`) */
+    hint: string;
     Icon: Icon;
 }[] = [
     {
         toggle: "fine",
         label: "touch.modifiers.fine",
-        on: "touch.modifiers.fineOn",
-        off: "touch.modifiers.fineOff",
+        hint: "touch.modifiers.fineHint",
         Icon: CrosshairSimpleIcon,
     },
     {
         toggle: "constrain",
         label: "touch.modifiers.constrain",
-        on: "touch.modifiers.constrainOn",
-        off: "touch.modifiers.constrainOff",
+        hint: "touch.modifiers.constrainHint",
         Icon: EqualsIcon,
     },
     {
         toggle: "fromCenter",
         label: "touch.modifiers.fromCenter",
-        on: "touch.modifiers.fromCenterOn",
-        off: "touch.modifiers.fromCenterOff",
+        hint: "touch.modifiers.fromCenterHint",
         Icon: ArrowsOutIcon,
     },
     {
         toggle: "add",
         label: "touch.modifiers.add",
-        on: "touch.modifiers.addOn",
-        off: "touch.modifiers.addOff",
+        hint: "touch.modifiers.addHint",
         Icon: PlusCircleIcon,
     },
 ];
@@ -146,6 +137,7 @@ const HELP = [
 function useTogglePress(toggle: TouchToggle, onExplain: () => void) {
     const setHeld = useTouchModifierStore((s) => s.setHeld);
     const toggleLatched = useTouchModifierStore((s) => s.toggleLatched);
+    const release = useTouchModifierStore((s) => s.release);
     const press = useRef<{
         at: number;
         id: number;
@@ -205,11 +197,9 @@ function useTogglePress(toggle: TouchToggle, onExplain: () => void) {
         e.stopPropagation();
         const p = finish();
         if (!p) return;
-        setHeld(toggle, false);
         const now = e.timeStamp > 0 ? e.timeStamp : performance.now();
         // Released before the explanation, with nothing else pressed: a tap
-        if (tap && !p.otherPress && now - p.at < EXPLAIN_MS)
-            toggleLatched(toggle);
+        release(toggle, tap && !p.otherPress && now - p.at < EXPLAIN_MS);
     };
     return {
         onPointerDown,
@@ -222,11 +212,18 @@ function useTogglePress(toggle: TouchToggle, onExplain: () => void) {
         onLostPointerCapture: (e: React.PointerEvent<HTMLButtonElement>) => {
             if (press.current?.id === e.pointerId) end(e, false);
         },
-        // Keyboard and assistive tech: a click latches
+        // VoiceOver, Voice Control and Switch Control press a button with a
+        // click and no pointer (detail 0); a tap's own click (detail 1) was
+        // the pointer's, and has latched already
+        onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
+            if (e.detail === 0) toggleLatched(toggle);
+        },
+        // The keyboard latches once per press, not on every repeat; the
+        // default click it would make is the keydown's
         onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => {
             if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                toggleLatched(toggle);
+                if (!e.repeat) toggleLatched(toggle);
             }
         },
         onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
@@ -281,18 +278,17 @@ const segment = (on: boolean) =>
 // eslint-disable-next-line max-lines-per-function
 export default function TouchModifierButtons({
     marchers = null,
-    snap,
 }: {
     /** The marchers drawn, for a spot that covers the fewest */
     marchers?: FieldMarchers | null;
-    /** The Snap toggle; no magnet without one */
-    snap?: SnapToggle;
 }) {
     const { t } = useTolgee();
     const isTouchMode = useIsTouchMode();
     const held = useTouchModifierStore((s) => s.held);
     const latched = useTouchModifierStore((s) => s.latched);
     const clear = useTouchModifierStore((s) => s.clear);
+    const snapOff = useUiSettingsStore((s) => !s.uiSettings.snap);
+    const setSnap = useUiSettingsStore((s) => s.setSnap);
     const [saved, setSaved] = useState<Position | null>(() =>
         parseModifierPosition(readStorage(TOUCH_MODIFIER_POSITION_KEY)),
     );
@@ -466,7 +462,6 @@ export default function TouchModifierButtons({
     const setAnchor = (key: Explained) => (el: HTMLElement | null) => {
         anchors.current[key] = el;
     };
-    const snapOff = snap !== undefined && !snap.on;
 
     return (
         <div
@@ -533,14 +528,16 @@ export default function TouchModifierButtons({
                 >
                     <DotsSixVerticalIcon size={20} />
                 </div>
-                {TOGGLES.map(({ toggle, label, on, off, Icon }) => {
+                {TOGGLES.map(({ toggle, label, hint, Icon }) => {
                     const isOn = held[toggle] || latched[toggle];
                     return (
                         <button
                             key={toggle}
                             ref={setAnchor(toggle)}
                             type="button"
-                            aria-label={t(latched[toggle] ? on : off)}
+                            // One name, the label shown; on or off is aria-pressed
+                            aria-label={t(label)}
+                            title={t(hint)}
                             aria-pressed={isOn}
                             className={segment(isOn)}
                             data-testid={`touch-toggle-${toggle}`}
@@ -554,31 +551,24 @@ export default function TouchModifierButtons({
                         </button>
                     );
                 })}
-                {snap && (
-                    <>
-                        <span className="bg-stroke h-24 w-px" aria-hidden />
-                        <button
-                            ref={setAnchor("snap")}
-                            type="button"
-                            aria-label={t(
-                                snap.on
-                                    ? "touch.modifiers.snapOn"
-                                    : "touch.modifiers.snapOff",
-                            )}
-                            aria-pressed={snapOff}
-                            className={segment(snapOff)}
-                            data-testid="touch-snap"
-                            {...snapLongPress}
-                            onClick={() => snap.toggle()}
-                        >
-                            <MagnetIcon
-                                size={16}
-                                weight={snapOff ? "bold" : "regular"}
-                            />
-                            {t("touch.modifiers.noSnap")}
-                        </button>
-                    </>
-                )}
+                <span className="bg-stroke h-24 w-px" aria-hidden />
+                <button
+                    ref={setAnchor("snap")}
+                    type="button"
+                    aria-label={t("touch.modifiers.noSnap")}
+                    title={t(EXPLAIN.snap)}
+                    aria-pressed={snapOff}
+                    className={segment(snapOff)}
+                    data-testid="touch-snap"
+                    {...snapLongPress}
+                    onClick={() => setSnap()}
+                >
+                    <MagnetIcon
+                        size={16}
+                        weight={snapOff ? "bold" : "regular"}
+                    />
+                    {t("touch.modifiers.noSnap")}
+                </button>
                 <button
                     ref={setAnchor("help")}
                     type="button"

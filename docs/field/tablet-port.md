@@ -31,8 +31,11 @@ These work as upstream describes, with no changes needed for the new field:
   rendered by `ThreeField`): upstream's grip, saved spot, `pillPlacement`, long-press
   explanations and help, with its buttons as role toggles (modifier roles, version A):
   Fine, Equal and From center (`TouchModifierStore`, OR'd into every drag through
-  `onScreenRoles`), Add (the old Shift, `isShiftHeld`) and a magnet for the Snap toggle
-  (shown once the Snap toggle, #511, is in: `snapToggle.ts`).
+  `onScreenRoles`), Add (the old Shift, `isShiftHeld`) and a magnet, "No snap", for the
+  Snap toggle (`uiSettings.snap`, pressed while snapping is off). From center reaches the
+  shape tool's roles; boxes draw from their center once #510 is in. Each toggle is named by
+  its label, with on or off in `aria-pressed`, and latches on a click with no pointer
+  (VoiceOver, Voice Control, Switch Control).
   Upstream's field drag-mode menu (Auto / Box / Lasso / Pan) and Clear line were left
   out: they need touch-finger editing, which the field doesn't take yet.
 - Renderer-free gesture rules and helpers, kept for the port:

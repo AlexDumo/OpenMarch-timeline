@@ -1678,11 +1678,9 @@
     "touch": {
         "modifiers": {
             "add": "Ajouter",
-            "addOff": "Ajouter : maintenez, ou touchez pour le garder actif. Toucher des marcheurs les ajoute à la sélection",
-            "addOn": "Ajouter, actif. Touchez pour désactiver",
+            "addHint": "Ajouter : maintenez, ou touchez pour le garder actif. Toucher des marcheurs les ajoute à la sélection",
             "constrain": "Égal",
-            "constrainOff": "Égal : maintenez, ou touchez pour le garder actif. Espacements égaux, un seul axe, rotations régulières",
-            "constrainOn": "Égal, actif. Touchez pour désactiver",
+            "constrainHint": "Égal : maintenez, ou touchez pour le garder actif. Espacements égaux, un seul axe, rotations régulières",
             "explain": {
                 "add": "Touchez des marcheurs pour les ajouter ou les retirer.",
                 "constrain": "Espacements égaux, un seul axe, rotations régulières.",
@@ -1693,11 +1691,9 @@
                 "snap": "Aimantation aux pas et aux lignes, active ou non."
             },
             "fine": "Précis",
-            "fineOff": "Précis : maintenez, ou touchez pour le garder actif. Les glissements vont lentement, hors de la grille",
-            "fineOn": "Précis, actif. Touchez pour désactiver",
+            "fineHint": "Précis : maintenez, ou touchez pour le garder actif. Les glissements vont lentement, hors de la grille",
             "fromCenter": "Depuis le centre",
-            "fromCenterOff": "Depuis le centre : maintenez, ou touchez pour le garder actif. Les blocs se dessinent et se redimensionnent depuis leur centre",
-            "fromCenterOn": "Depuis le centre, actif. Touchez pour désactiver",
+            "fromCenterHint": "Depuis le centre : maintenez, ou touchez pour le garder actif. Les blocs se dessinent et se redimensionnent depuis leur centre",
             "grip": "Déplacer ces boutons",
             "gripTitle": "Glissez pour déplacer",
             "help": "À quoi servent ces boutons",
@@ -1707,9 +1703,7 @@
                 "fromCenter": "<b>Depuis le centre</b> les blocs grandissent depuis le milieu",
                 "toggles": "<b>Touchez</b> un bouton pour le garder actif, ou <b>maintenez-le</b> pendant que vous glissez"
             },
-            "noSnap": "Sans aimant",
-            "snapOff": "Aimantation désactivée. Touchez pour l'activer",
-            "snapOn": "Aimantation active. Touchez pour la désactiver"
+            "noSnap": "Sans aimant"
         }
     },
     "versionCheck": {

@@ -17,6 +17,8 @@ interface TouchModifierState {
     latched: Record<TouchToggle, boolean>;
     setHeld: (toggle: TouchToggle, held: boolean) => void;
     toggleLatched: (toggle: TouchToggle) => void;
+    /** Lets go of a held toggle, and flips its latch too when `tap`: one change, so a drag re-runs once */
+    release: (toggle: TouchToggle, tap: boolean) => void;
     clear: () => void;
 }
 
@@ -35,6 +37,13 @@ export const useTouchModifierStore = create<TouchModifierState>((set) => ({
     toggleLatched: (toggle) =>
         set((state) => ({
             latched: { ...state.latched, [toggle]: !state.latched[toggle] },
+        })),
+    release: (toggle, tap) =>
+        set((state) => ({
+            held: { ...state.held, [toggle]: false },
+            latched: tap
+                ? { ...state.latched, [toggle]: !state.latched[toggle] }
+                : state.latched,
         })),
     clear: () => set({ held: none(), latched: none() }),
 }));

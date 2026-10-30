@@ -89,7 +89,6 @@ import { FieldMarchers } from "./fieldMarchers";
 import { FieldItems } from "./fieldItems";
 import FieldOverlay from "./FieldOverlay";
 import TouchModifierButtons from "@/components/canvas/touch/TouchModifierButtons";
-import { useSnapToggle } from "@/components/canvas/touch/snapToggle";
 import FieldContextMenu, { useFieldMenu } from "./FieldContextMenu";
 import { attachFieldPointerInput } from "./fieldPointerInput";
 import { cameraBounds, useFieldViewStore } from "./fieldView";
@@ -206,7 +205,6 @@ function ThreeFieldView() {
     const { beats, pages, countGrid } = useTimingObjects()!;
     const preview = useIsPreviewMode();
     const panning = useFieldViewStore((s) => s.panning);
-    const snapToggle = useSnapToggle();
     const { image: fieldImage, size: fieldImageSize } = useFieldImage();
     // Planned once, for the layer that draws it and the field test API
     const fieldImagePlan = useMemo(
@@ -718,12 +716,7 @@ function ThreeFieldView() {
                     <ShapeEditor stepPx={fieldProperties.pixelsPerStep} />
                 )}
                 {/* Fine, Equal, From center, Add and Snap for a tablet: touch layout only */}
-                {!preview && (
-                    <TouchModifierButtons
-                        marchers={marchers}
-                        snap={snapToggle}
-                    />
-                )}
+                {!preview && <TouchModifierButtons marchers={marchers} />}
                 <FavoritesRing />
                 {/* A command asking its parameters docks here, over the field's top (#354) */}
                 <DockedCommandBar />
