@@ -38,7 +38,7 @@ describe("the floating editor's Snap button", () => {
     it("isn't pressed while snapping is on, and a click turns snapping off", () => {
         const button = shown();
         expect(button.getAttribute("aria-pressed")).toBe("false");
-        expect(button.getAttribute("aria-label")).toBe("Turn snapping off");
+        expect(button.getAttribute("aria-label")).toBe("Turn Snap off");
         fireEvent.click(button);
         expect(snapOn()).toBe(false);
     });
@@ -50,7 +50,7 @@ describe("the floating editor's Snap button", () => {
         const button = shown();
         expect(button.getAttribute("aria-pressed")).toBe("true");
         expect(button.getAttribute("aria-label")).toBe(
-            "Snapping is off: turn it back on",
+            "Snap off: turn it back on",
         );
         fireEvent.click(button);
         expect(snapOn()).toBe(true);

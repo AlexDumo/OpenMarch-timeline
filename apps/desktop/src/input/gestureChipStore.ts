@@ -35,6 +35,8 @@ export type GestureChipState = {
     honored: HonoredRoles;
     roles: Roles;
     screen?: GestureChipScreen;
+    /** The gesture that showed the chip, so only it follows or clears it */
+    owner?: object;
 };
 
 interface GestureChipStore extends GestureChipState {
@@ -42,10 +44,12 @@ interface GestureChipStore extends GestureChipState {
         honored: HonoredRoles,
         roles: Roles,
         screen: GestureChipScreen,
+        owner?: object,
     ) => void;
     /** The drag's roles and pointer now; the roles keep their identity while they're the same */
     follow: (roles: Roles, screen?: GestureChipScreen) => void;
-    clear: () => void;
+    /** Hides the chip; with `owner`, only when that gesture showed it */
+    clear: (owner?: object) => void;
 }
 
 const emptyRoles: Roles = {
@@ -63,18 +67,23 @@ export const useGestureChipStore = create<GestureChipStore>((set) => ({
     active: false,
     honored: HONORS_NOTHING,
     roles: emptyRoles,
-    show: (honored, roles, screen) =>
-        set({ active: true, honored, roles, screen }),
+    show: (honored, roles, screen, owner) =>
+        set({ active: true, honored, roles, screen, owner }),
     follow: (roles, screen) =>
         set((state) => ({
             roles: sameRoles(roles, state.roles) ? state.roles : roles,
             screen: screen ?? state.screen,
         })),
-    clear: () =>
-        set({
-            active: false,
-            honored: HONORS_NOTHING,
-            roles: emptyRoles,
-            screen: undefined,
-        }),
+    clear: (owner) =>
+        set((state) =>
+            owner !== undefined && state.owner !== owner
+                ? state
+                : {
+                      active: false,
+                      honored: HONORS_NOTHING,
+                      roles: emptyRoles,
+                      screen: undefined,
+                      owner: undefined,
+                  },
+        ),
 }));

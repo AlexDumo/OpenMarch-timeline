@@ -18,7 +18,7 @@ import { runAction } from "../registry";
 import { useAlignmentActionHandlers } from "../handlers/useAlignmentActionHandlers";
 
 /**
- * "Toggle snapping" turns the Snap toggle (modifier roles, version A) off and on from its key,
+ * "Toggle Snap" turns the Snap toggle (modifier roles, version A) off and on from its key,
  * Shift+M, or the command palette, as Lock X and Lock Y do. Shift+S, the obvious key, is the fine
  * nudge down (Shift with the S of W/A/S/D), so the toggle takes M, for the magnet on its buttons.
  */
@@ -47,7 +47,7 @@ afterEach(() => {
     localStorage.clear();
 });
 
-describe("Toggle snapping", () => {
+describe("Toggle Snap", () => {
     it("is bound to Shift+M, with no conflict on any platform", () => {
         expect(ACTIONS.toggleSnap.defaultBindings).toEqual(["Shift+M"]);
         for (const isMac of [false, true]) {
@@ -91,7 +91,7 @@ describe("Toggle snapping", () => {
             .getAllByRole("option")
             .map((o) => o.textContent ?? "");
         expect(labels.some((l) => l.startsWith("Lock X axis"))).toBe(true);
-        expect(labels.some((l) => l.startsWith("Toggle snapping"))).toBe(true);
+        expect(labels.some((l) => l.startsWith("Toggle Snap"))).toBe(true);
     });
 });
 

@@ -207,7 +207,11 @@ describe("Add", () => {
 });
 
 describe.each([
-    ["fine", "Fine", "Drags go slowly, off the grid"],
+    [
+        "fine",
+        "Fine",
+        "Marchers move slowly, off the grid; shapes leave the half steps; turns go by whole degrees",
+    ],
     ["constrain", "Equal", "Equal spacings"],
     ["fromCenter", "From center", "from their center"],
     ["add", "Add", "adds them to the selection"],
@@ -273,7 +277,7 @@ describe("the magnet", () => {
     it("a tap turns the Snap toggle off, pressed, and another turns it back on", () => {
         touchMode(true);
         renderPlacedPill();
-        const magnet = screen.getByRole("button", { name: "No snap" });
+        const magnet = screen.getByRole("button", { name: "Snap off" });
         expect(isSnapOn()).toBe(true);
         expect(magnet.getAttribute("aria-pressed")).toBe("false");
         fireEvent.click(magnet);
@@ -292,7 +296,7 @@ describe("the magnet", () => {
         });
         expect(
             screen
-                .getByRole("button", { name: "No snap" })
+                .getByRole("button", { name: "Snap off" })
                 .getAttribute("aria-pressed"),
         ).toBe("true");
     });

@@ -6489,3 +6489,88 @@ test("a number drag in a placed box's editor right after another follows the poi
     // Never back to the first drag's width, or the box's from before
     expect(seen.filter((w) => Math.abs(w - end) > 0.01)).toEqual([]);
 });
+
+test.describe("a box carried onto the next page, where nobody has a move yet (#514)", () => {
+    test.use({
+        seedSql: seedShowSql({
+            beats: 48,
+            pageStarts: [16, 32],
+            measureStarts: Array.from({ length: 12 }, (_, i) => 1 + i * 4),
+            marchers: HOME.map(([id]) => ({
+                id,
+                section: "Trumpet",
+                prefix: "T",
+                order: id,
+            })),
+            // Page 2 sets nobody: everyone stands where Page 1 left them
+            positions: [HOME, HOME, []],
+        }),
+    });
+
+    test("dragged twice quickly there, it stays selected every frame, and the second drag moves its copy on that page rather than copying it again", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await selectPage(show, "Page 1");
+        await placeBox(show, 1);
+        const onPage1 = await savedPositions(show, 1);
+        await selectPage(show, "Page 2");
+        const t1 = await marcherScreen(page, 1);
+        await page.mouse.click(t1.x, t1.y);
+        await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+        const S = (await fieldGrid(show)).pixelsPerStep;
+        const front = Math.max(...onPage1.map((p) => p.y));
+        const left = Math.min(...onPage1.map((p) => p.x));
+        const back = Math.min(...onPage1.map((p) => p.y));
+        const grab = { x: left + (5 / 3) * S, y: (back + front) / 2 };
+
+        await slowDown(page, 4);
+        // Whether the shape is drawn selected, each frame from the first press until it's saved
+        await page.evaluate(() => {
+            const w = window as unknown as {
+                drawnEachFrame: boolean[];
+                stopFrames: boolean;
+            };
+            w.drawnEachFrame = [];
+            w.stopFrames = false;
+            const tick = () => {
+                const outline = window.fieldTest.shapeOverlay?.()?.outline;
+                w.drawnEachFrame.push((outline?.length ?? 0) > 0);
+                if (!w.stopFrames) requestAnimationFrame(tick);
+            };
+            tick();
+        });
+        for (let i = 0; i < 2; i++) {
+            const from = { x: grab.x + i * 4 * S, y: grab.y };
+            await drag(
+                page,
+                await toScreen(page, from),
+                await toScreen(page, { x: from.x + 4 * S, y: from.y }),
+            );
+        }
+        await waitForIdle(page, 2000);
+        const drawn = await page.evaluate(() => {
+            const w = window as unknown as {
+                drawnEachFrame: boolean[];
+                stopFrames: boolean;
+            };
+            w.stopFrames = true;
+            return w.drawnEachFrame;
+        });
+        expect(drawn.length).toBeGreaterThan(10);
+        expect(drawn.filter((d) => !d)).toEqual([]);
+        expect((await readField(page)).selection).toEqual(ALL);
+
+        // Both drags land on Page 2, and Page 1 is as it was
+        const after = await savedPositions(show, 2);
+        expect(stepsAcross(onPage1, after, S)).toEqual(after.map(() => 8));
+        expect(await savedPositions(show, 1)).toEqual(onPage1);
+        // Page 1's box and one copy on Page 2: no recipe is left with nobody in it
+        const recipes = await show.query<{ members: number }>(
+            `SELECT (SELECT COUNT(*) FROM timeline_shape_recipe_marchers m
+                WHERE m.recipe_id = r.id) AS members
+             FROM timeline_shape_recipes r ORDER BY r.id`,
+        );
+        expect(recipes.map((r) => r.members)).toEqual([8, 8]);
+    });
+});

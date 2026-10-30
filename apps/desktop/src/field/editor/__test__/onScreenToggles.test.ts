@@ -252,6 +252,14 @@ describe("Add on the pill, as Shift at the press", () => {
         expect(state.selected).toEqual([1, 3]);
     });
 
+    it("a marquee starts inside a multi-selection's box and adds, as Shift does", () => {
+        store().toggleLatched("add");
+        const { editor, state } = setup({ selected: [1, 3] });
+        drag(editor, { x: 250, y: 100 }, { x: 450, y: 150 });
+        expect(state.selected).toEqual([1, 3, 4]);
+        expect(state.drops).toEqual([]);
+    });
+
     it("a lasso adds to the selection", () => {
         store().toggleLatched("add");
         const { editor, state } = setup({ selected: [1] });

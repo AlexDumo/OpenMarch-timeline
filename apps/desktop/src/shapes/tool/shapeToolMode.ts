@@ -378,7 +378,7 @@ export const shapeToolMode: FieldMode = {
         endHeld();
         const pressed = pressShapeKeys(
             pointer,
-            tool.kind,
+            { kind: tool.kind, params: tool.params, n: tool.spots },
             (reachInside) =>
                 pressTarget(tool, pointer.field, {
                     ...envOf(field, tool),

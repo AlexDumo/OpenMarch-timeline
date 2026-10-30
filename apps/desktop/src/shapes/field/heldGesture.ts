@@ -53,12 +53,14 @@ export function holdGesture<A>(
     let last: A | null = null;
     let ended = false;
     let chipShown = false;
+    /** This gesture, as the chip's owner */
+    const owner = {};
     const touchChip = (roles: Roles) => {
         if (!chip || ended) return;
         if (!chipShown && last === null && !holdsHonored(chip.honored, roles))
             return;
         chipShown = true;
-        syncGestureChip(chip.honored, roles, chip.screen());
+        syncGestureChip(chip.honored, roles, chip.screen(), owner);
     };
     const keys = startGestureKeys({
         context: "shape",
@@ -84,7 +86,7 @@ export function holdGesture<A>(
         end() {
             ended = true;
             keys.dispose();
-            if (chip) clearGestureChip();
+            if (chip) clearGestureChip(owner);
         },
     };
 }
@@ -94,6 +96,13 @@ export interface HeldFieldGesture extends Omit<HeldGesture<XY>, "move"> {
     move(pointer: FieldPointer): Roles;
 }
 
+/** The shape a press lands on: its kind, its params (null before it's drawn) and its spot count */
+export interface PressedShape {
+    readonly kind: AnyToolKind;
+    readonly params: unknown;
+    readonly n: number;
+}
+
 /**
  * What a drag of `kind` reads, from what its press grabbed, for the chip (modifier roles: it names
  * only these). Every shape drag snaps and reads fine; constrain is one axis on a move, and on a
@@ -101,7 +110,7 @@ export interface HeldFieldGesture extends Omit<HeldGesture<XY>, "move"> {
  * and the pivot read neither, and fine on a turn is whole degrees.
  */
 export function shapeDragHonors(
-    kind: AnyToolKind,
+    { kind, params, n }: PressedShape,
     grabbed: ShapeTarget | { type: "draw" } | null,
     ratioLocked: boolean,
 ): HonoredRoles {
@@ -117,7 +126,9 @@ export function shapeDragHonors(
         case "draw":
             return honors(kind.honors?.draw);
         case "handle":
-            return honors(kind.honors?.handle?.(grabbed.key, ratioLocked));
+            return honors(
+                kind.honors?.handle?.(grabbed.key, ratioLocked, params, n),
+            );
         case "move":
         case "center":
             return honors({ constrain: "oneAxis" });
@@ -133,13 +144,13 @@ export function shapeDragHonors(
  * inside on or off; a press that pulls the pivot out of the center dot uses reach inside's key
  * ($mod), so that key isn't `constrain` until it's released and pressed again. Once the pointer has
  * gone past the field's click slop, a role key pressed or released calls `rerun` at the last
- * pointer; before, the press is still a click and stays one. The chip names what a drag of `kind`
- * on what the press took reads ({@link shapeDragHonors}). `isMac` is the field editor's: $mod is
- * Cmd.
+ * pointer; before, the press is still a click and stays one. The chip names what a drag of
+ * `shape` on what the press took reads ({@link shapeDragHonors}). `isMac` is the field editor's:
+ * $mod is Cmd.
  */
 export function pressShapeKeys(
     pointer: FieldPointer,
-    kind: AnyToolKind,
+    shape: PressedShape,
     grabs: (reachInside: boolean) => ShapeTarget | { type: "draw" } | null,
     rerun: (at: XY, roles: Roles) => void,
     isMac: boolean,
@@ -158,7 +169,7 @@ export function pressShapeKeys(
         isMac,
         {
             honored: shapeDragHonors(
-                kind,
+                shape,
                 target,
                 useShapeEditorStore.getState().ratioLocked,
             ),

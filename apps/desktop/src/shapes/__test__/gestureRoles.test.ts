@@ -30,6 +30,8 @@ import {
 } from "../box/boxGeometry";
 import { boxTool } from "../box/boxTool";
 import { circleTool } from "../circle/circleTool";
+import type { DistributionMode } from "../distribute/distribution";
+import { withMode } from "../distribute/modes";
 import { setShapeField } from "../field/shapeField";
 import { shapeContextFor } from "../field/shapeFieldContext";
 import { pivotPoint, rotationDegrees } from "../frame/frame";
@@ -151,6 +153,21 @@ const openBox = () =>
         x: FROM.x + 12 * STEP,
         y: FROM.y + 6 * STEP,
     });
+
+/** The open box switched to `mode` (Outline or Spread), as the mode switch does */
+const openBoxIn = (mode: DistributionMode): BoxParams => {
+    openBox();
+    const tool = useShapeToolStore.getState().tool!;
+    const params = withMode(
+        boxTool,
+        tool.params,
+        N,
+        mode,
+        toolEnvFor(field()),
+    ) as BoxParams;
+    openShapeTool({ ...tool, params }, null, null);
+    return params;
+};
 
 const openParams = <P = BoxParams>() =>
     useShapeToolStore.getState().tool!.params as P;
@@ -540,6 +557,33 @@ describe("the chip names what the shape drag reads", () => {
             shape({
                 fine: "fine",
                 constrain: "freeRatio",
+                fromCenter: "fromCenter",
+            }),
+        ],
+        [
+            "a Spread's corner: from center only, the reshape reads no constrain",
+            () => honoredFrom(boxHandlePoint(openBoxIn("spread"), N, "se")),
+            shape({ fine: "fine", fromCenter: "fromCenter" }),
+        ],
+        [
+            "a Spread's side, even with the ratio lock on: from center only",
+            () => {
+                useShapeEditorStore.setState({ ratioLocked: true });
+                return honoredFrom(boxHandlePoint(openBoxIn("spread"), N, "e"));
+            },
+            shape({ fine: "fine", fromCenter: "fromCenter" }),
+        ],
+        [
+            "an Outline's side: from center only, it holds no ratio",
+            () => honoredFrom(boxHandlePoint(openBoxIn("outline"), N, "e")),
+            shape({ fine: "fine", fromCenter: "fromCenter" }),
+        ],
+        [
+            "an Outline's corner: equal spacings, from center",
+            () => honoredFrom(boxHandlePoint(openBoxIn("outline"), N, "se")),
+            shape({
+                fine: "fine",
+                constrain: "equalSpacings",
                 fromCenter: "fromCenter",
             }),
         ],

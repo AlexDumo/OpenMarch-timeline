@@ -4,7 +4,6 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import tolgee from "@/global/singletons/Tolgee";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { frameCorners } from "../frame/frame";
 import { shapeOutline } from "../frame/gestures";
@@ -121,7 +120,7 @@ export function PlacedBoxesOverlay({
     const recipes = usePlacedBoxStore((s) => s.recipes);
     const version = useTimelineResolverStore((s) => s.version);
     const beat = usePlacedBoxBeat();
-    const timelines = useTimelineSelectionStore((s) => s.storedTimelines);
+    const ends = usePlacedBoxStore((s) => s.ends);
     const toolOpen = useShapeToolStore((s) => s.tool !== null);
     const editing = useBoxSelectionStore((s) => s.selected?.recipe.id ?? null);
     const selected = useSelectedMarchers()?.selectedMarchers;
@@ -160,7 +159,7 @@ export function PlacedBoxesOverlay({
                     label: boxLabel(box, stepPx),
                 };
             });
-        // placedBoxesAt reads the resolver and the timelines, which these stand for
+        // placedBoxesAt reads the resolver and the move end beats, which these stand for
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         mode,
@@ -170,7 +169,7 @@ export function PlacedBoxesOverlay({
         recipes,
         beat,
         version,
-        timelines,
+        ends,
         editing,
         stepPx,
     ]);

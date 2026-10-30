@@ -383,7 +383,7 @@
             "fromCenter": "a partir do centro",
             "keepRatio": "manter proporção",
             "oneAxis": "um eixo",
-            "snapOff": "Ajuste desativado",
+            "snapOff": "Sem ajuste",
             "wholeDegrees": "graus inteiros"
         },
         "general": {
@@ -1576,7 +1576,7 @@
             "fineControl": "Controle fino ao arrastar marchadores"
         },
         "shape": {
-            "constrain": "Restringir (espaçamentos iguais, 45°, um eixo)",
+            "constrain": "Restringir (espaçamentos iguais, um eixo, inverte a escala proporcional)",
             "fineControl": "Controle fino, ainda se ajustando às linhas de jardas e hashes",
             "fromCenter": "Desenhar ou redimensionar uma caixa a partir do centro"
         }
@@ -1695,18 +1695,18 @@
             "add": "Adicionar",
             "addHint": "Adicionar: segure, ou toque para manter ativo. Tocar em marchadores os adiciona à seleção",
             "constrain": "Igual",
-            "constrainHint": "Igual: segure, ou toque para manter ativo. Espaçamentos iguais, um só eixo, giros regulares",
+            "constrainHint": "Igual: segure, ou toque para manter ativo. Espaçamentos iguais, um só eixo ao mover, inverte a escala proporcional",
             "explain": {
                 "add": "Toque em marchadores para adicioná-los ou removê-los.",
-                "constrain": "Espaçamentos iguais, um só eixo, giros regulares.",
-                "fine": "Os arrastos vão devagar, fora da grade.",
+                "constrain": "Espaçamentos iguais, um só eixo ao mover, inverte a escala proporcional.",
+                "fine": "Os marchadores vão devagar, fora da grade. As formas saem dos meios passos mas ainda se ajustam às linhas. Os giros vão de grau em grau.",
                 "fromCenter": "Os blocos são desenhados e redimensionados a partir do centro.",
                 "grip": "Arraste para mover.",
                 "help": "Gestos.",
                 "snap": "Ajuste a passos e linhas, ativo ou não."
             },
             "fine": "Fino",
-            "fineHint": "Fino: segure, ou toque para manter ativo. Os arrastos vão devagar, fora da grade",
+            "fineHint": "Fino: segure, ou toque para manter ativo. Os marchadores vão devagar, fora da grade; as formas saem dos meios passos; os giros vão de grau em grau",
             "fromCenter": "Do centro",
             "fromCenterHint": "Do centro: segure, ou toque para manter ativo. Os blocos são desenhados e redimensionados a partir do centro",
             "grip": "Mover estes botões",
@@ -1714,7 +1714,7 @@
             "help": "O que estes botões fazem",
             "helpList": {
                 "add": "<b>Adicionar</b> tocar adiciona à seleção · <b>Sem ajuste</b> move livremente",
-                "fine": "<b>Fino</b> arrastos lentos e exatos · <b>Igual</b> espaçamentos iguais",
+                "fine": "<b>Fino</b> arrastos e giros exatos · <b>Igual</b> espaçamentos iguais",
                 "fromCenter": "<b>Do centro</b> os blocos crescem a partir do meio",
                 "toggles": "<b>Toque</b> em um botão para mantê-lo ativo, ou <b>segure-o</b> enquanto arrasta"
             },
