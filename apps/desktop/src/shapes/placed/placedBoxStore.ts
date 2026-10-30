@@ -17,9 +17,10 @@ import { boxesAt, type PlacedBox, type PlacedRecipe } from "./placedBox";
  * whenever the resolver takes a change, and after every undoable edit, undo and redo
  * (`followPlacedBoxChanges`).
  *
- * `ends` is the end beat of each recipe's move, read with the recipes. `storedTimelines` has them
- * too, but it's reloaded on its own after an edit: a copy saved on a new move was read back before
- * its move was, so it showed nowhere for a moment and the next save copied it again (#514).
+ * `ends` is the end beat of each recipe's move, read with the recipes, so `placedBoxesRead` covers
+ * both. `storedTimelines` has them too, but it's reloaded on its own after an edit: a copy saved
+ * on a new move could be read back before its move, show nowhere for a moment, and be copied
+ * again by the next save (#514).
  */
 export const usePlacedBoxStore = create<{
     readonly recipes: readonly PlacedRecipe[];
