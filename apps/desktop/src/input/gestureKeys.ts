@@ -75,9 +75,12 @@ export function startGestureKeys({
         return changed;
     };
     const detach = track
-        ? trackHeldKeys((next) => {
-              if (update(next)) onRolesChange?.(last);
-          }, press)
+        ? trackHeldKeys(
+              (next) => {
+                  if (update(next)) onRolesChange?.(last);
+              },
+              () => keys,
+          )
         : () => {};
     return { roles, keys: () => keys, update, dispose: detach };
 }

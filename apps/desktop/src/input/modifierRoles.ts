@@ -235,27 +235,32 @@ export const NO_KEYS: HeldKeys = {
  */
 export function trackHeldKeys(
     onChange: (keys: HeldKeys) => void,
-    initial: HeldKeys = NO_KEYS,
+    initial: HeldKeys | (() => HeldKeys) = NO_KEYS,
 ): () => void {
-    let current = initial;
+    // A getter lets the caller own the keys, so keys it learns from pointer events count too
+    let stored = typeof initial === "function" ? NO_KEYS : initial;
+    const current = typeof initial === "function" ? initial : () => stored;
+    const report = (next: HeldKeys) => {
+        stored = next;
+        onChange(next);
+    };
     const onKey = (event: KeyboardEvent) => {
         const next = heldKeysOf(event);
+        const now = current();
         if (
-            next.shift === current.shift &&
-            next.alt === current.alt &&
-            next.ctrl === current.ctrl &&
-            next.meta === current.meta
+            next.shift === now.shift &&
+            next.alt === now.alt &&
+            next.ctrl === now.ctrl &&
+            next.meta === now.meta
         ) {
             return;
         }
-        current = next;
-        onChange(current);
+        report(next);
     };
     const onBlur = () => {
-        if (!current.shift && !current.alt && !current.ctrl && !current.meta)
-            return;
-        current = NO_KEYS;
-        onChange(current);
+        const now = current();
+        if (!now.shift && !now.alt && !now.ctrl && !now.meta) return;
+        report(NO_KEYS);
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKey);
