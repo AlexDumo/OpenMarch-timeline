@@ -5,6 +5,7 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useBoxSelection } from "../placed/boxSelection";
 import {
+    clearReleasedPreview,
     previewPlacedBox,
     useBoxSelectionStore,
 } from "../placed/boxSelectionStore";
@@ -50,9 +51,12 @@ export function useShapeFieldModes(
     );
     useEffect(() => {
         if (box) live?.setBox(box);
-        // The box read back (or another one) replaces a number drag's preview
-        previewPlacedBox(null);
+        // The box read back replaces a released number drag's preview; a drag still held keeps
+        // its own, though an earlier save was read back meanwhile (#515)
+        clearReleasedPreview();
     }, [live, box]);
+    // Another box (or none) drops any preview, held or not
+    useEffect(() => () => previewPlacedBox(null), [live]);
 
     useEffect(() => {
         // The pointer was over the last shape, if any; the next cursor check finds the new one

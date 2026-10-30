@@ -23,10 +23,34 @@ export const setInsideBox = (inside: number | null): void =>
  */
 export const usePlacedBoxPreviewStore = create<{
     readonly params: unknown;
-}>(() => ({ params: null }));
+    /** The drag is still held: only it lets go of its preview */
+    readonly held: boolean;
+}>(() => ({ params: null, held: false }));
 
+/** A number drag shows the box drawn with `params`; null drops any preview */
 export const previewPlacedBox = (params: unknown): void =>
-    usePlacedBoxPreviewStore.setState({ params });
+    usePlacedBoxPreviewStore.setState({ params, held: params !== null });
+
+/**
+ * The number drag is released: its preview, which stays until the box is read back or its save is
+ * done (`clearReleasedPreview`)
+ */
+export function releasePlacedBoxPreview(): unknown {
+    usePlacedBoxPreviewStore.setState({ held: false });
+    return usePlacedBoxPreviewStore.getState().params;
+}
+
+/**
+ * Drops a released drag's preview: the box read back replaces it, or its save is done. Never a
+ * drag still held: saves wait for the ones before them, so a later drag may have started (#515).
+ * With `params`, only the preview of those.
+ */
+export function clearReleasedPreview(params?: unknown): void {
+    const preview = usePlacedBoxPreviewStore.getState();
+    if (preview.held || (params !== undefined && preview.params !== params))
+        return;
+    previewPlacedBox(null);
+}
 
 /**
  * A selected placed shape while its edits are being saved (`commitBox`): the shape as the last of
