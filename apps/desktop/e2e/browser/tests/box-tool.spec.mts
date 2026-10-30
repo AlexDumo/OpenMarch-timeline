@@ -1548,6 +1548,57 @@ test("change: a click on a placed box's member selects the whole box, and a doub
         .toEqual(ALL);
 });
 
+test("change: a Cmd/Ctrl-click on a placed box's member picks just that marcher and goes inside the box, and a Cmd/Ctrl-drag moves only it, on both axes (reach inside)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+
+    const t3 = await marcherScreen(page, 3);
+    await page.mouse.click(t3.x, t3.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    // On the box selected whole, the press reaches inside it
+    await page.keyboard.down("ControlOrMeta");
+    await page.mouse.click(t3.x, t3.y);
+    await page.keyboard.up("ControlOrMeta");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([3]);
+    // Inside, as a double click leaves it: the other members' outline shows, a click picks one
+    await expect.poll(async () => (await placedBoxes(page)).length).toBe(1);
+    const t5 = await marcherScreen(page, 5);
+    await page.mouse.click(t5.x, t5.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([5]);
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([]);
+
+    // From nothing selected, a Cmd/Ctrl-drag takes the one marcher, and the press's key doesn't
+    // keep it to one axis
+    const before = await drawnMarchers(page);
+    await page.keyboard.down("ControlOrMeta");
+    await drag(page, t3, { x: t3.x + 60, y: t3.y + 45 });
+    await page.keyboard.up("ControlOrMeta");
+    await waitForIdle(page);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([3]);
+    const after = await drawnMarchers(page);
+    for (const m of after) {
+        const was = before.find((b) => b.id === m.id)!.screen;
+        if (m.id === 3) {
+            expect(Math.abs(m.screen.x - was.x)).toBeGreaterThan(20);
+            expect(Math.abs(m.screen.y - was.y)).toBeGreaterThan(20);
+        } else expect(m.screen).toEqual(was);
+    }
+});
+
 test("a selected box's handle stretches it and saves at once, as one undo step", async ({
     show,
 }) => {

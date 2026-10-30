@@ -61,7 +61,11 @@ import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { takeFieldPress } from "@/field/takeFieldPress";
 import { setShapeField } from "@/shapes/field/shapeField";
 import { useShapeFieldModes } from "@/shapes/field/useShapeFieldModes";
-import { boxPressSelection, enterBox } from "@/shapes/placed/boxSelection";
+import {
+    boxPressSelection,
+    canReachInside,
+    enterBox,
+} from "@/shapes/placed/boxSelection";
 import {
     drawnPlacedBoxes,
     PlacedBoxesOverlay,
@@ -416,8 +420,14 @@ function ThreeFieldView() {
                             latest.current.moveMarchers,
                         ),
                     // #204: a click on a placed box's member selects the whole box
-                    pressSelection: (hit, shift) =>
-                        boxPressSelection(hit, shift, selection.current),
+                    pressSelection: (hit, shift, reachInside) =>
+                        boxPressSelection(
+                            hit,
+                            shift,
+                            selection.current,
+                            reachInside,
+                        ),
+                    reachesInside: canReachInside,
                     doubleClickMarcher: enterBox,
                     // C2.1: items are hit anywhere inside their Outline
                     isItem: (id) => items.isItem(id),
