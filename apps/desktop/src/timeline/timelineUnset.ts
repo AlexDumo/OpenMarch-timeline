@@ -27,7 +27,6 @@ import {
 import { keepPagesOfBoxes } from "./timelineOnlyThisPage";
 import { isSetAt, marcherSetBeats } from "./timelineSetFollowing";
 import { resolverSpans, useTimelineResolverStore } from "./timelineStore";
-import { applyKeptChange, useKeptAssignmentsStore } from "./useKeepLaterPages";
 
 /**
  * **Unset here** as the UI runs it (Set vs Following, #300 and #304): the selected marchers that
@@ -37,17 +36,11 @@ import { applyKeptChange, useKeptAssignmentsStore } from "./useKeepLaterPages";
  * (`unsetFollowingPages`). Each is one undo step; a refusal is a toast, never thrown.
  */
 
-const NOTHING: UnsetResult = {
-    unset: [],
-    joined: [],
-    notJoined: [],
-    markers: { added: [], removed: [] },
-};
+const NOTHING: UnsetResult = { unset: [], joined: [], notJoined: [] };
 
 /** What the Unset actions read for some marchers, worked out once per show version. */
 interface UnsetReads {
     resolver: Resolver | null;
-    kept: ReadonlySet<number>;
     marcherIds: readonly number[];
     boxes?: readonly PageBox[];
 }
@@ -56,14 +49,9 @@ interface UnsetReads {
  * The Unset actions' reads for `marcherIds` at any count (`unsetTargets`, `unsetFollowingPages`).
  * Each marcher's Set beats are worked out once, and each count's answers the first time it's
  * asked, so scrubbing with a large selection looks counts up instead of walking every move again.
- * Make a new one when the resolver version, kept markers, selection or page boxes change.
+ * Make a new one when the resolver version, selection or page boxes change.
  */
-export function unsetReader({
-    resolver,
-    kept,
-    marcherIds,
-    boxes = [],
-}: UnsetReads): {
+export function unsetReader({ resolver, marcherIds, boxes = [] }: UnsetReads): {
     targets: (beat: number) => number[];
     followingPages: (beat: number) => string[] | null;
 } {
@@ -73,7 +61,7 @@ export function unsetReader({
             resolver
                 ? marcherIds.map((m) => [
                       m,
-                      marcherSetBeats(resolverSpans(resolver, m), kept),
+                      marcherSetBeats(resolverSpans(resolver, m)),
                   ])
                 : [],
         );
@@ -120,7 +108,6 @@ export function unsetReader({
             pages,
             marcherIds: lastInPage,
             spansOf: (id) => resolverSpans(resolver, id),
-            kept,
         });
         return followingPages(states, holding.id)?.names ?? null;
     };
@@ -142,12 +129,11 @@ export function unsetTargets({
 function useUnsetReader(marcherIds: readonly number[]) {
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const version = useTimelineResolverStore((s) => s.version);
-    const kept = useKeptAssignmentsStore((s) => s.ids);
     const boxes = useTimelineSelectionStore((s) => s.pageBoxes);
     return useMemo(() => {
         void version; // a new version means new spans
-        return unsetReader({ resolver, kept, marcherIds, boxes });
-    }, [resolver, version, kept, marcherIds, boxes]);
+        return unsetReader({ resolver, marcherIds, boxes });
+    }, [resolver, version, marcherIds, boxes]);
 }
 
 /** `unsetTargets` for `marcherIds` at the count shown, kept current. */
@@ -237,7 +223,6 @@ export function useKeyframeUnsetMenu(
             stateFor: (beat: number) =>
                 unsetMenuStateAt({
                     resolver: useTimelineResolverStore.getState().resolver,
-                    kept: useKeptAssignmentsStore.getState().ids,
                     boxes: useTimelineSelectionStore.getState().pageBoxes,
                     marcherIds,
                     beat,
@@ -296,7 +281,6 @@ async function unsetSetMarchers(
 ): Promise<UnsetResult> {
     let targets = unsetTargets({
         resolver: useTimelineResolverStore.getState().resolver,
-        kept: useKeptAssignmentsStore.getState().ids,
         marcherIds,
         beat,
     });
@@ -319,7 +303,6 @@ async function unsetSetMarchers(
             keepLaterPages,
             tidyShared: basic,
         });
-        applyKeptChange(result.markers);
         if (result.notJoined.length > 0)
             void toastNotJoined(result.notJoined, database);
         return result;

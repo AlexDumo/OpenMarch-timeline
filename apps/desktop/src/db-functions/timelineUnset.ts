@@ -7,8 +7,7 @@ import { transactionWithHistory } from "./history";
 import { readPageGrid } from "./timelineRipple";
 import { FIRST_PAGE_ID } from "./rowMappers";
 import { clearOwnPageMoves, samePosition } from "./timelineMoves";
-import { readKeptAssignmentIds } from "./timelineKeptMarkers";
-import { keepMarchersOnPageInTransaction } from "./timelineKeepHere";
+import { setAsShownOnPageInTransaction } from "./timelineSetAsShown";
 import {
     joinMovesAtInTransaction,
     readMoveEnds,
@@ -23,9 +22,9 @@ import {
  * **Unset here** (#304) keeps the later pages that followed the deleted spot where they were: the
  * first page box starting on or after the count gets a move of the marcher's own, ending where it
  * stood there before the edit, for each marcher that follows there and would otherwise move
- * (Only Page N's `keepMarchersOnPage` with `at`, but unmarked). That move walks somewhere, so its
- * end is a keyframe the designer can see and remove in turn (owner, 2026-10-20); it isn't a kept
- * spot, so the page's keep chain doesn't show it. Pages after it follow it. **Unset here
+ * (Set as shown with `at`, as Only Page N writes it). That move walks somewhere, so its end is a
+ * keyframe the designer can see and remove in turn (owner, 2026-10-20): an ordinary move (holds
+ * decision 15). Pages after it follow it. **Unset here
  * and on Pages N–M** (#305) is the same delete without the stay (`keepLaterPages` false), so the
  * followers carry back to the earlier spot.
  *
@@ -48,11 +47,6 @@ export interface UnsetResult {
     joined: number[];
     /** Of those, the ones whose moves weren't joined because the fit was refused, with why */
     notJoined: NotJoined[];
-    /**
-     * The kept markers cleared (a deleted move that was a kept spot), by assignment id, for the
-     * renderer's copy (`applyKeptChange`). `added` is always empty: the stays aren't marked kept.
-     */
-    markers: { added: number[]; removed: number[] };
 }
 
 const ascending = (ids: Iterable<number>) =>
@@ -83,12 +77,7 @@ export async function unsetMarchersAtInTransaction({
     keepLaterPages: boolean;
     tidyShared?: boolean;
 }): Promise<UnsetResult> {
-    const result: UnsetResult = {
-        unset: [],
-        joined: [],
-        notJoined: [],
-        markers: { added: [], removed: [] },
-    };
+    const result: UnsetResult = { unset: [], joined: [], notJoined: [] };
     if (marcherIds.length === 0) return result;
     const a = schema.timeline_assignments;
     const rows = await tx
@@ -112,10 +101,6 @@ export async function unsetMarchersAtInTransaction({
             before.set(id, resolver.positionAt(id, box.end));
     }
 
-    const kept = await readKeptAssignmentIds(tx);
-    result.markers.removed = ascending(
-        rows.filter((r) => kept.has(r.id)).map((r) => r.id),
-    );
     const ends = await readMoveEnds(
         tx,
         rows.map((r) => r.id),
@@ -133,12 +118,11 @@ export async function unsetMarchersAtInTransaction({
         for (const [id, spot] of before)
             if (!samePosition(spot, resolver.positionAt(id, box.end)))
                 at.set(id, spot);
-        await keepMarchersOnPageInTransaction({
+        await setAsShownOnPageInTransaction({
             tx,
             pageBox: box,
             marcherIds: [...at.keys()],
             at,
-            markKept: false,
         });
     }
     return result;

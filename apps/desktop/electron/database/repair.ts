@@ -54,8 +54,6 @@ const DEPENDENT_TABLE_COPY_ORDER = [
     "timeline_transitions",
     "timeline_slot_destinations",
     "timeline_assignments",
-    // A kept marker after the assignment it marks
-    "timeline_kept_assignments",
     // Performer cues after the beats, pages, marchers and tags they name (ADR 0004 D-5). No
     // trigger reads them, so this is for order's sake: a cue after its phrase asset, set
     // members after their cue.

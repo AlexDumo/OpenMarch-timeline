@@ -106,12 +106,8 @@ import {
 } from "./TimelineKeyframes";
 import {
     chainFit,
-    KEEP_DOT_SIZE,
-    KEEP_SHORTCUT,
-    keepDotFit,
     labelPaddingBeside,
     PageKeepChainButton,
-    PageKeepDot,
     type PageKeepChain,
     type PageKeepChains,
 } from "./PageKeepChain";
@@ -708,7 +704,7 @@ type RulerScrub = ReturnType<typeof useRulerScrub>;
  * scrolled out of view, so a long page always shows its name. Set heavier than the counts and
  * measure numbers under it, so the box and the weight tell them apart. Hidden when the box is too
  * narrow to read it, when zoomed far out (UI-12). It slides no further left than its box's
- * padding, which ends before a keep chain or dot (`labelPaddingBeside`).
+ * padding, which ends before a keep chain (`labelPaddingBeside`).
  */
 const PageBoxLabel = memo(function PageBoxLabel({
     label,
@@ -1063,31 +1059,19 @@ const TimelinePageBox = memo(function TimelinePageBox({
     const labelShown = pageLabelFits(page.label, boxWidth);
     const labelChars = labelShown ? page.label.length : 0;
     const fit = chain ? chainFit(boxWidth, labelChars) : null;
-    const dot =
-        chain && !fit && chain.kind !== "follows"
-            ? keepDotFit(boxWidth, labelChars)
-            : null;
-    // The sticky label stops before the chain or dot (`labelPaddingBeside`)
+    // The sticky label stops before the chain (`labelPaddingBeside`)
     const labelPadding = fit
         ? labelPaddingBeside(fit.offset, fit.size)
-        : dot?.clear
-          ? labelPaddingBeside(dot.offset, KEEP_DOT_SIZE)
-          : undefined;
+        : undefined;
     // A chain with no room for its button: its words go on the box, as its tooltip and accessible
-    // description, naming whom the box's menu changes, with (K) where K does the same, as the
-    // chain's button shows it
-    const menuK = !!chain && !fit && !!chain.menuWithK;
+    // description, naming whom the box's menu changes
     const words =
         chain && !fit
             ? { label: chain.menuLabel, hint: chain.menuHint }
             : undefined;
     const box = (
         <ShortcutTooltip
-            label={
-                words && menuK
-                    ? `${words.label} (${KEEP_SHORTCUT})`
-                    : words?.label
-            }
+            label={words?.label}
             hint={words?.hint}
             side="top"
             closeOnPress
@@ -1098,7 +1082,6 @@ const TimelinePageBox = memo(function TimelinePageBox({
                 {...timelineRangeTargetProps(range, undefined, page.id)}
                 aria-label={`Page ${page.label}`}
                 aria-describedby={words ? descriptionId : undefined}
-                aria-keyshortcuts={menuK ? KEEP_SHORTCUT : undefined}
                 aria-pressed={selected}
                 {...scrub.handlers}
                 onClick={(event) => {
@@ -1119,9 +1102,6 @@ const TimelinePageBox = memo(function TimelinePageBox({
                         {words.label}. {words.hint}
                     </span>
                 )}
-                {chain && dot && (
-                    <PageKeepDot kind={chain.kind} left={dot.offset} />
-                )}
             </button>
         </ShortcutTooltip>
     );
@@ -1138,7 +1118,7 @@ const TimelinePageBox = memo(function TimelinePageBox({
                 range={range}
                 left={boxLeft + fit.offset}
                 size={fit.size}
-                always={selected || !!chain.withK}
+                always={selected}
             />
         </>
     );

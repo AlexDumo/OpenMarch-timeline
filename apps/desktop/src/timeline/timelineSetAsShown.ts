@@ -6,7 +6,7 @@ import {
     type SetAsShownResult,
 } from "@/db-functions/timelineSetAsShown";
 import type { TimelineSetAsShownMenu } from "@/components/timeline/TimelineRangeMenu";
-import type { KeptPageBox } from "./timelineKept";
+import type { PageBoxRange } from "./timelinePageBoxState";
 import { pagesText, type PageKeepState } from "./timelineKeepLater";
 import { toastTimelineError } from "./timelineErrorMessages";
 
@@ -20,7 +20,7 @@ const NOTHING: SetAsShownResult = { changed: [], skipped: [] };
 
 /** **Set as shown** for `marcherIds` on the page box `box` (`setAsShownOnPage`). */
 export async function setAsShownOn(
-    box: KeptPageBox,
+    box: PageBoxRange,
     marcherIds: readonly number[],
     database: DbConnection = db,
 ): Promise<SetAsShownResult> {
@@ -46,7 +46,7 @@ export async function setAsShownOn(
 export function setAsShownMenu(
     states: readonly PageKeepState[],
     run: (
-        box: KeptPageBox,
+        box: PageBoxRange,
         marcherIds: readonly number[],
     ) => unknown = setAsShownOn,
 ): TimelineSetAsShownMenu {

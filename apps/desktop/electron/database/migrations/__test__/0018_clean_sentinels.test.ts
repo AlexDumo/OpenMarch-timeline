@@ -162,7 +162,7 @@ describe("opening a version-8 file from before the kept table", () => {
         }
     };
 
-    it("applies 0018 and keeps the version and the rows", async () => {
+    it("applies 0018 and the later migrations, and keeps the version and the rows", async () => {
         const filePath = path.join(tempDir, "older-v8.dots");
         const db = new DatabaseSync(filePath);
         applyFileVersionDecision(db, true);
@@ -190,13 +190,14 @@ describe("opening a version-8 file from before the kept table", () => {
         const after = new DatabaseSync(filePath);
         try {
             expect(readUserVersion(after)).toBe(8);
+            // 0029 drops the table again (kept spots removed, holds #467)
             expect(
                 after
                     .prepare(
                         "SELECT count(*) AS n FROM sqlite_schema WHERE name = 'timeline_kept_assignments'",
                     )
                     .get(),
-            ).toEqual({ n: 1 });
+            ).toEqual({ n: 0 });
             expect(
                 after.prepare("SELECT * FROM timeline_assignments").all(),
             ).toEqual(assignments);

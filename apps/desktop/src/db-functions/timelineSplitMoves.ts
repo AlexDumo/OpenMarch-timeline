@@ -44,7 +44,7 @@ import {
  * edit, and every refusal is decided before the first write.
  *
  * - A transition whose marchers are all being split moves whole (its row changes timeline), so
- *   its assignments, destinations, shape and any kept marker stay the same rows.
+ *   its assignments, destinations and shape stay the same rows.
  * - A shared shapeless `direct` or `arc` transition (a converted page's, P9.10) that also holds
  *   marchers who stay is split slot by slot: each leaving marcher gets its own one-slot transition
  *   with its slot's destination and the same path, and the old transition is compacted, so it
