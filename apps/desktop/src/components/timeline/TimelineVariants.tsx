@@ -767,7 +767,8 @@ const TimelineSurface = memo(function TimelineSurface({
         isPlaying: props.isPlaying,
         positionBeat,
         livePositionBeat: props.livePositionBeat,
-        loop: props.playLoops ? (props.loop ?? null) : null,
+        // A focused band (tempo mode) loops its own selection, not the loop's bar
+        loop: props.playLoops && !band?.focus ? (props.loop ?? null) : null,
         selectionRange,
     });
     // Endless counts rule 7: say how wide a screen is, for the room past the end
@@ -982,6 +983,7 @@ const TimelineSurface = memo(function TimelineSurface({
                         playLoops={props.playLoops}
                         onPlayFromPlayhead={props.onPlayFromPlayhead}
                         onPlayOn={props.onPlayOn}
+                        playOnly={props.playOnly}
                         onNavigate={onNavigate}
                         onFit={
                             props.onPixelsPerBeatChange ? zoom.fit : undefined
@@ -1220,6 +1222,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             />
                         )}
                         {props.isPlaying &&
+                            !bandFocus &&
                             props.returnBeat !== undefined &&
                             showsReturnMarker(
                                 props.returnBeat,
@@ -1278,7 +1281,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             pixelsPerBeat={pixelsPerBeat}
                             height={pinnedHeight}
                         />
-                        {props.loop && (
+                        {props.loop && !bandFocus && (
                             <TimelineLoopBar
                                 loop={props.loop}
                                 beatCount={model.beatCount}
@@ -1295,7 +1298,8 @@ const TimelineSurface = memo(function TimelineSurface({
                                     height={pinnedHeight}
                                 />
                             )}
-                        {selectionRange && !basic && (
+                        {/* A focused band (tempo mode) has one playhead: no start flag or window */}
+                        {selectionRange && !basic && !bandFocus && (
                             <TimelineSelectionRange
                                 range={selectionRange}
                                 startFlagBeatIndex={
@@ -1316,7 +1320,7 @@ const TimelineSurface = memo(function TimelineSurface({
                                 scrubLine={pointer.scrubLine}
                             />
                         )}
-                        {selectionRange && !basic && (
+                        {selectionRange && !basic && !bandFocus && (
                             <TimelineSelectionActions
                                 model={model}
                                 range={selectionRange}

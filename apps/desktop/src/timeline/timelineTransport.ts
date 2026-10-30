@@ -425,8 +425,8 @@ export function startTimelinePlayOn(
  * (project owner, 2026-10-13, lab test playback-start: version B won). Alt+Space plays on from the
  * start flag (`playTimelineOn`) and Shift+Space from the playhead (`playTimelinePage`). Playing,
  * it stops and goes back to where Play was pressed (UI-24, `stopTimelinePlayback`); Shift+Space
- * pauses where it is instead. In tempo mode (prototype) it plays on from the playhead (or loops
- * the loop, with looping on), and Stop stays where playback stopped.
+ * pauses where it is instead. In tempo mode (prototype) it is the only play action
+ * (`playTempoMode`).
  */
 export function toggleTimelinePlayback({
     isPlaying,
@@ -443,14 +443,12 @@ export function toggleTimelinePlayback({
         playPreview(setIsPlaying);
         return;
     }
-    const state = useTimelineSelectionStore.getState();
-    const bounds = loopBounds(state);
-    // Tempo mode (prototype): plays on from the playhead, or loops the loop (to hear a tempo
-    // change again and again; owner, 2026-10-24)
-    if (tempoModeOn() && !bounds) {
-        startTimelinePlayOn(setIsPlaying, state.playheadBeat);
+    if (tempoModeOn()) {
+        playTempoMode(setIsPlaying);
         return;
     }
+    const state = useTimelineSelectionStore.getState();
+    const bounds = loopBounds(state);
     if (bounds) {
         state.cue(bounds.from);
         state.setPlayback({ kind: "preview", ...bounds });
@@ -464,6 +462,24 @@ export function toggleTimelinePlayback({
     }
     state.cue(once.from);
     state.setPlayback({ kind: "preview", ...once, once: true });
+    setIsPlaying(true);
+}
+
+/**
+ * Tempo mode's Play (prototype; owner, 2026-10-30: one playhead, one Play): with measures
+ * selected it loops them, to hear a passage again and again while lining it up; otherwise it
+ * plays on from the playhead. Stop stays where playback stopped (`stopTimelinePlayback`).
+ * Shift+Space and Alt+Space do the same.
+ */
+function playTempoMode(setIsPlaying: (isPlaying: boolean) => void): void {
+    const state = useTimelineSelectionStore.getState();
+    const loop = useTempoModeStore.getState().loop;
+    if (!loop || loop.to <= loop.from) {
+        startTimelinePlayOn(setIsPlaying, state.playheadBeat);
+        return;
+    }
+    state.cue(loop.from);
+    state.setPlayback({ kind: "preview", from: loop.from, to: loop.to });
     setIsPlaying(true);
 }
 
@@ -507,7 +523,7 @@ export function playTimelineOn({
         return;
     }
     const state = useTimelineSelectionStore.getState();
-    if (state.isolation || isPreviewMode()) {
+    if (state.isolation || isPreviewMode() || tempoModeOn()) {
         toggleTimelinePlayback({ isPlaying, setIsPlaying });
         return;
     }
@@ -534,6 +550,10 @@ export function playTimelinePage({
         playPreview(setIsPlaying);
         return;
     }
+    if (tempoModeOn()) {
+        playTempoMode(setIsPlaying);
+        return;
+    }
     const state = useTimelineSelectionStore.getState();
     const bounds = loopBounds(state);
     if (!bounds) {
@@ -552,7 +572,8 @@ export function playTimelinePage({
  */
 export function toggleTimelineLoop(): void {
     const state = useTimelineSelectionStore.getState();
-    if (state.isolation || isPreviewMode()) return;
+    // Tempo mode loops the selected measures instead (`playTempoMode`)
+    if (state.isolation || isPreviewMode() || tempoModeOn()) return;
     if (state.loop) {
         state.setLoop(null);
         return;

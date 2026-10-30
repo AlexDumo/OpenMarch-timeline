@@ -139,6 +139,11 @@ export interface TimelinePlayback {
     readonly onPlayFromPlayhead?: () => void;
     /** Alt+click on Play (Alt+Space): plays on from the start flag (Expert, UI-26) */
     readonly onPlayOn?: () => void;
+    /**
+     * PROTOTYPE (tempo mode): Play is the only play action, and its tooltip names it like this
+     * ("Play from the playhead", "Loop m. 11–12"): no Shift or Alt variants
+     */
+    readonly playOnly?: string;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
     readonly onNavigate?: (direction: TimelineNavigation) => void;
 }
@@ -985,6 +990,7 @@ export function Timeline(props: TimelineProps) {
         playLoops: playback.playLoops,
         onPlayFromPlayhead: useLatestCallback(playback.onPlayFromPlayhead),
         onPlayOn: useLatestCallback(playback.onPlayOn),
+        playOnly: playback.playOnly,
         onNavigate: useLatestCallback(playback.onNavigate),
         onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
         zoomFitted: props.zoomFitted,

@@ -166,6 +166,8 @@ export function useStartFlagOverlay({
     const version = useTimelineResolverStore((s) => s.version);
     const { inRange, fromBeat, toBeat, gesture } = useStartFlagWindow();
     const isolating = useTimelineSelectionStore((s) => s.isolation !== null);
+    // Tempo mode hides the start flag, so nothing is drawn from it
+    const startHidden = useTimelineSelectionStore((s) => s.startHidden);
     const visuals = useIsVisualsView();
     const levels = useStartFlagLevelsInEffect();
     const kept = useKeptAssignmentsStore((s) => s.ids);
@@ -179,6 +181,7 @@ export function useStartFlagOverlay({
     const shown =
         enabled &&
         !isolating &&
+        !startHidden &&
         !visuals &&
         startFlagLevelsDrawAnything(levels) &&
         inRange &&

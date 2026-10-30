@@ -173,6 +173,7 @@ export const TimelineTransport = memo(function TimelineTransport({
     playLoops = false,
     onPlayFromPlayhead,
     onPlayOn,
+    playOnly,
     onNavigate,
     onFit,
     fitted = false,
@@ -195,6 +196,8 @@ export const TimelineTransport = memo(function TimelineTransport({
     onPlayFromPlayhead?: () => void;
     /** Alt+click on Play (Alt+Space): plays on from the start flag (Expert, UI-26) */
     onPlayOn?: () => void;
+    /** PROTOTYPE (tempo mode): Play's one action, as its tooltip names it */
+    playOnly?: string;
     onNavigate?: (direction: TimelineNavigation) => void;
     /** Fit the show in view, or back to the zoom from before fitting */
     onFit?: () => void;
@@ -347,6 +350,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                         playLoops={playLoops}
                         onPlayFromPlayhead={onPlayFromPlayhead}
                         onPlayOn={onPlayOn}
+                        playOnly={playOnly}
                     />
                     <TransportNavigationButton
                         direction="next"

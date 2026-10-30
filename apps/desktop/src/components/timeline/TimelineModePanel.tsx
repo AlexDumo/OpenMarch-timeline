@@ -152,6 +152,8 @@ const LOOP_BUTTONS = (
     </>
 );
 const SPEED_BUTTON = <TimelineSpeedButton />;
+/** PROTOTYPE (tempo mode): Play loops the selected measures, so no Loop button; no start flag */
+const TEMPO_VIEW_CONTROLS = <TempoModeButton />;
 /** First on the transport's right in both modes, before Fit: start flag positions (fork #331) */
 const LEADING_VIEW_CONTROLS = (
     <>
@@ -560,9 +562,13 @@ export default function TimelineModePanel() {
                     timelines={basic || tempoMode ? NO_CLIPS : offPage}
                     band={tempoMode ? TEMPO_BAND : undefined}
                     pageMoves={pageMoves}
-                    transportAccessories={basic ? SPEED_BUTTON : LOOP_BUTTONS}
+                    transportAccessories={
+                        basic || tempoMode ? SPEED_BUTTON : LOOP_BUTTONS
+                    }
                     transportSecondary={SOUND_BUTTON}
-                    transportLeadingViewControls={LEADING_VIEW_CONTROLS}
+                    transportLeadingViewControls={
+                        tempoMode ? TEMPO_VIEW_CONTROLS : LEADING_VIEW_CONTROLS
+                    }
                     transportViewControls={
                         basic ? undefined : EXPERT_VIEW_CONTROLS
                     }

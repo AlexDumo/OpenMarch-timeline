@@ -10,6 +10,7 @@ questions:
   - When the counts were off, could you fix them by dragging a count onto its hit in the music? Did the counts around it move the way you expected?
   - Did you try a hold (fermata), a gradual change, a new meter or renumbering a measure? Which were easy to find, and which weren't?
   - When you added or removed a count, was it clear which of the three choices to pick?
+  - Was it clear what Play would do: play from the playhead, or loop the measures you'd selected?
   - Did Undo always put back what you expected, including the music moving when Fit lined up the first hit?
 ---
 
@@ -31,9 +32,12 @@ your own music to a show.
 - Click a measure's meter chip to set a meter, such as 7/8 counted 2+2+3.
 - Right-click a measure number to renumber it, or a rehearsal mark to edit
   it.
-- Drag along the measure row to select some measures; Fit then works on just
-  those.
-- Turn on **Click** and press Space to hear the counts against the music.
+- Drag along the measure row to select some measures. Fit then works on just
+  those, and Play loops them until you clear the selection (click empty space
+  or press Esc).
+- Tempo mode has one playhead and one Play: Space plays from the playhead, or
+  loops the selected measures, and stops where it is. Turn on **Click** to
+  hear the counts against the music.
 
 **Good to know**
 

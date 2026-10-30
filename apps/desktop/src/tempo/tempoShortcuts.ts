@@ -28,7 +28,6 @@ export const TEMPO_MODE_ACTIONS: ReadonlySet<ActionId> = new Set<ActionId>([
     "playPage",
     "playOn",
     "timelinePlayPause",
-    "toggleLoop",
     "holdFasterPlayback",
     "holdSlowerPlayback",
     "nextPlaybackSpeed",

@@ -1242,6 +1242,22 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         if (a === undefined || b === undefined) return rangeLabel(from, to);
         return a === b ? `m. ${a}` : `m. ${a}–${b}`;
     };
+    // Play loops the selected measures (owner, 2026-10-30): the transport reads them, and the
+    // Play button's tooltip names them
+    const loopLabel = ui.range
+        ? measuresLabel(ui.range.from, ui.range.to)
+        : null;
+    useEffect(() => {
+        const range = useTempoUi.getState().range;
+        useTempoModeStore
+            .getState()
+            .setLoop(
+                range && loopLabel !== null
+                    ? { ...range, label: loopLabel }
+                    : null,
+            );
+    }, [ui.range, loopLabel]);
+    useEffect(() => () => useTempoModeStore.getState().setLoop(null), []);
     /**
      * Where a tempo change from `beat` stops: the end of its tempo segment, or the next pin or
      * hold if that comes first (holds and pins past it are never touched)
