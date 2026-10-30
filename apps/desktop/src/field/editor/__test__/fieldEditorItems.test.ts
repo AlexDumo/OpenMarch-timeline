@@ -260,20 +260,20 @@ describe("FieldEditor with items", () => {
             expect(turned({})).toBe(30);
             expect(turned({ alt: true })).toBe(30);
             expect(turned({ ctrl: true })).toBe(30);
-            // Fine from the press: a quarter of 37°, in whole degrees
-            expect(turned({ shift: true })).toBe(9);
+            // Fine from the press: all 37°, in whole degrees
+            expect(turned({ shift: true })).toBe(37);
         });
 
-        it("turns at a quarter speed with fine, from the angle drawn, with no jump", () => {
+        it("turns at full speed with fine, in whole degrees where the pointer is", () => {
             const { editor, state } = setup({ selected: [2] });
             editor.pointerDown(at(HANDLE.rot.x, HANDLE.rot.y));
             editor.pointerMove(round(37));
             expect(state.preview?.rotation).toBe(30);
             editor.pointerMove(round(37, { shift: true }));
-            expect(state.preview?.rotation).toBe(30);
-            // 40° more at a quarter: 10°
-            editor.pointerMove(round(77, { shift: true }));
-            expect(state.preview?.rotation).toBe(40);
+            expect(state.preview?.rotation).toBe(37);
+            // 40° more turns 40°: fine doesn't slow the pointer
+            editor.pointerMove(round(77.3, { shift: true }));
+            expect(state.preview?.rotation).toBe(77);
         });
 
         it("saves the turn drawn when the release didn't move, whatever keys it reports", () => {
@@ -282,11 +282,12 @@ describe("FieldEditor with items", () => {
             editor.pointerMove(round(37));
             editor.pointerMove(round(37, { shift: true }));
             editor.pointerMove(round(81, { shift: true }));
-            expect(state.preview?.rotation).toBe(41);
-            // No keyboard event came; the release reports Shift up
+            expect(state.preview?.rotation).toBe(81);
+            // No keyboard event came; the release reports Shift up, which
+            // would snap to 75°: it saves the 81° drawn
             editor.pointerUp(round(81));
             expect(state.saves).toEqual([
-                { width: 100, depth: 40, rotation: 41 },
+                { width: 100, depth: 40, rotation: 81 },
             ]);
         });
 
@@ -328,21 +329,21 @@ describe("FieldEditor with items", () => {
                 expect(state.preview?.width).toBe(180);
             });
 
-            it("re-runs a rotation: Shift down keeps the angle drawn, Shift up snaps it to 15° again", () => {
+            it("re-runs a rotation: Shift down draws whole degrees where the pointer is, Shift up snaps it to 15° again", () => {
                 const { editor, state } = setup({ selected: [2] });
                 running = editor;
                 editor.pointerDown(at(HANDLE.rot.x, HANDLE.rot.y));
                 editor.pointerMove(round(37));
                 expect(state.preview?.rotation).toBe(30);
                 key("keydown", { key: "Shift", shiftKey: true });
-                expect(state.preview?.rotation).toBe(30);
+                expect(state.preview?.rotation).toBe(37);
                 editor.pointerMove(round(77, { shift: true }));
-                expect(state.preview?.rotation).toBe(40);
+                expect(state.preview?.rotation).toBe(77);
                 key("keyup", { key: "Shift" });
-                expect(state.preview?.rotation).toBe(45);
+                expect(state.preview?.rotation).toBe(75);
                 editor.pointerUp(round(77));
                 expect(state.saves).toEqual([
-                    { width: 100, depth: 40, rotation: 45 },
+                    { width: 100, depth: 40, rotation: 75 },
                 ]);
             });
         });

@@ -68,10 +68,10 @@ const PULLS: Record<Exclude<HandleId, "rot">, FieldPoint> = {
 };
 
 /**
- * As the selection's handles do: while fine is on the pointer counts at a
- * quarter of its speed, a role key pressed or released mid-drag redraws the
- * Outline at the last pointer, and a release where the last move left the
- * pointer saves what's drawn. Neither handle reads constrain or from center.
+ * As the selection's handles do: while fine is on a resize counts the
+ * pointer at a quarter of its speed (a turn doesn't slow), a role key pressed
+ * or released mid-drag redraws the Outline at the last pointer, and a release
+ * where the last move left the pointer saves what's drawn. Neither handle reads constrain or from center.
  */
 abstract class ItemHandleGesture implements FieldGesture {
     abstract readonly kind: FieldTestGesture;
@@ -164,8 +164,8 @@ export class ItemResizeGesture extends ItemHandleGesture {
 /**
  * The rotate handle: turns the Outline about its center by the angle
  * {@link RotationDrag} draws, as the selection's rotate handle does: snapped
- * to 15°, or to whole degrees at a quarter speed with fine; free with the
- * Snap toggle off.
+ * to 15°, or to whole degrees with fine, at full speed; free with the Snap
+ * toggle off.
  */
 export class ItemRotateGesture extends ItemHandleGesture {
     readonly kind: FieldTestGesture = "rotate";

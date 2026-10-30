@@ -60,9 +60,9 @@ describe("what each field drag honors", () => {
             { fine: "fine", snaps: false },
         ],
         [
-            "a rotate: fine, snapping",
+            "a rotate: whole degrees, snapping",
             () => new RotateGesture(at(5, -5), marchers, host, box, keys()),
-            { fine: "fine", snaps: true },
+            { fine: "wholeDegrees", snaps: true },
         ],
         [
             "a prop's side or corner: fine only",
@@ -70,9 +70,9 @@ describe("what each field drag honors", () => {
             { fine: "fine", snaps: false },
         ],
         [
-            "a prop's rotate: fine, snapping",
+            "a prop's rotate: whole degrees, snapping",
             () => new ItemRotateGesture(at(5, -5), frame, host, keys()),
-            { fine: "fine", snaps: true },
+            { fine: "wholeDegrees", snaps: true },
         ],
     ])("%s", (_, start, expected) => {
         expect(honoredBy(start())).toEqual({ context: "field", ...expected });
