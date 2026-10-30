@@ -106,11 +106,7 @@ class StartFlagPieces {
     ): readonly number[] {
         let beats = this.setBeats.get(marcherId);
         if (!beats) {
-            beats = marcherSetBeats(
-                resolverSpans(resolver, marcherId),
-                (beat) => resolver.positionAt(marcherId, beat),
-                kept,
-            );
+            beats = marcherSetBeats(resolverSpans(resolver, marcherId), kept);
             this.setBeats.set(marcherId, beats);
         }
         return beats;

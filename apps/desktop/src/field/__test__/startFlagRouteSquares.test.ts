@@ -31,9 +31,7 @@ const fieldProperties =
 
 /** The shared keyframe computation the timeline's diamonds use, with nothing kept. */
 const setBeatsOf = (resolver: Resolver) => (id: number) =>
-    marcherSetBeats(resolverSpans(resolver, id), (beat) =>
-        resolver.positionAt(id, beat),
-    );
+    marcherSetBeats(resolverSpans(resolver, id));
 
 function input(
     resolver: Resolver,
@@ -173,13 +171,15 @@ describe("route squares", () => {
     });
 
     it("squares only the selected marchers' routes", () => {
-        // G6: four marchers follow the leader, each move ending on 12
+        // G6: four marchers follow the leader, each move ending on 12. Marcher 2 also has a move
+        // over 0-4 that stays put: a keyframe on 4 (#468), so set on the start flag's count
         const g6 = resolverFor("G6");
         const window = { fromBeat: 4, toBeat: 12 };
         const one = planStartFlagOverlay(
             input(g6, { ...window, selectedIds: new Set([2]) }),
         );
         expect(squareCenters(one)).toEqual([
+            g6.positionAt(2, 4) as [number, number],
             g6.positionAt(2, 12) as [number, number],
         ]);
         // Every route is drawn, but nothing is selected: no squares

@@ -96,10 +96,7 @@ const expected = (
         levels,
         stepSizeWarnings,
         fieldProperties,
-        setBeatsOf: (id) =>
-            marcherSetBeats(resolverSpans(resolver, id), (beat) =>
-                resolver.positionAt(id, beat),
-            ),
+        setBeatsOf: (id) => marcherSetBeats(resolverSpans(resolver, id)),
     });
 
 beforeEach(() => {
