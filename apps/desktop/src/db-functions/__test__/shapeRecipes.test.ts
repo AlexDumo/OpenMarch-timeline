@@ -12,6 +12,7 @@ import { performRedo, performUndo, transactionWithHistory } from "../history";
 import {
     followPlacedBoxChanges,
     invalidatePlacedBoxes,
+    placedBoxesRead,
     usePlacedBoxStore,
 } from "@/shapes/placed/placedBoxStore";
 import { createLastPage, deletePages } from "../page";
@@ -345,6 +346,25 @@ describeDbTests("Shape recipes", (it) => {
         } finally {
             stop();
         }
+    });
+
+    it("placed shapes are read back with the end beats of their moves, a move made by the same edit too (#514)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a, b } = await show(db);
+        const id = await place(db, [a, b], ARC);
+        const timelineId = (await recipeTimeline(db, id))!;
+        const [move] = await db
+            .select({ end: schema.timelines.end_beat })
+            .from(schema.timelines)
+            .where(eq(schema.timelines.id, timelineId))
+            .all();
+        invalidatePlacedBoxes();
+        await placedBoxesRead();
+        const { recipes, ends } = usePlacedBoxStore.getState();
+        expect(recipes.map((r) => r.id)).toContain(id);
+        expect(ends.get(timelineId)).toBe(move!.end);
     });
 
     describe("with a move split off the page's (UI-25)", () => {
