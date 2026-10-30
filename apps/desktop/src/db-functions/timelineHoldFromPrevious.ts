@@ -11,7 +11,8 @@ import { transactionWithHistory } from "./history";
 import { NothingToDo, refuse } from "./timelineErrors";
 import { readPageGrid } from "./timelineRipple";
 import { readBasicRows } from "./basicRows";
-import { clearOwnPageMoves, isPageBox } from "./timelineMoves";
+import { isPageBox } from "./timelineMoves";
+import { clearOwnPageMoves } from "./timelineMoveHelpers";
 import {
     readArrival,
     readHeldMarks,

@@ -1296,10 +1296,11 @@ from it. The spec still wins on the model; this file decides presentation.
     a page's own timeline (Delete page and its moves) leaves a split move as the oldest over the box,
     so the box stands for it from then on and its clip goes. Once the stored page-move mark lands this
     changes (owner, 2026-10-18): the split move stays a clip, and the page box has no move until
-    marchers are added to it. An edit that only empties the page's timeline (dragging its last marcher
-    back, set to previous page) keeps it, empty, while a move split off it shares its range
-    (`oldestOnSharedRange`), so the split move stays a clip. Some refusal messages still name a split
-    move by its range ("Page 2's move", `moveName`).
+    marchers are added to it. An edit that only empties the page's timeline keeps it, empty, while a
+    move split off it shares its range (`oldestOnSharedRange`), so the split move stays a clip. A drag
+    back or Clear this page takes the marchers it moves out of a split-off move too, and the split
+    move is deleted when that leaves it empty (holds decision 16, owner 2026-10-30). Some refusal
+    messages still name a split move by its range ("Page 2's move", `moveName`).
   - Open, for the owner: a drag-out from a page box; whether a split should leave the new move
     isolated or only selected; and Basic's writes over a page whose marchers were split (Basic writes
     the page's own timeline, so a Basic edit of a split-off marcher moves its row back into the page's

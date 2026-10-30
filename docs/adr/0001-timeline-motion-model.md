@@ -328,7 +328,32 @@ removed by the next amendment (#467); Clear this page lands with #469.
     list, `DISPLAY_TABLES` and the query invalidation map.
   - An older build opening a migrated file errors on its kept queries.
 
-**Amendment (2026-10-30, project owner): Held holds are stored.** Part 2 of the holds design
+**Amendment (2026-10-30, project owner): Clear this page, and cut and remove.** _Accepted (owner,
+2026-10-30, with #469)._ Part 1 of the holds design (`docs/timeline/research/holds/` decision 16
+and `02-adr-amendment-draft.md`; fork #469).
+
+- **Clear this page** is Set to previous page in timeline mode, renamed. It leaves the page with no
+  move of the marcher's own, so the page is Not set. Re-linking a page is this command; there is no
+  separate control.
+  - For a marcher in a shared or longer move, the move is first **cut in time at the page's
+    flags**. This may create a timeline over exactly the page box, which is allowed in the same way
+    as a split by marcher (`allowSharedRanges`). The other members keep their stored layers, since
+    layer derivation isn't built. The marcher is then removed from that page's part, and the slot
+    is compacted.
+  - The Expert drag back in a shared move does the same.
+  - **Shape and follow-the-leader members are skipped,** by the command and by the drag back. The
+    rest still applies, and the skipped marchers are named through `TimelineEditRefusedError` (its
+    `marcherIds`) in a warning. This is interim until fork #504.
+- **Holds rely on transitions only through two operations:** cut a move in time at a count, and
+  remove a marcher from a move for a range of counts (`db-functions/timelineMoveCuts.ts`). How
+  shapes and transitions provide them is left to the shape and transition ownership model (fork
+  #434, #436), a later amendment.
+- **A part of a cut never takes over a page's move.** A page's move is the oldest timeline over its
+  box, so the cut move's id stays with a part that doesn't land on a range a newer move has; when
+  both parts would, neither keeps it.
+
+**Amendment (2026-10-30, project owner): Held holds are stored.** _Proposed (for the owner to
+accept, with #472)._ Part 2 of the holds design
 (`docs/timeline/research/holds/`, fork issues #472–#476; the owner reviewed the draft on 2026-10-27
 and answered the validator's questions on 2026-10-28). On a given count a marcher is **Set** (a
 keyframe), **Held** or **Not set**. A designer can mark a stretch where a marcher stands still as
@@ -371,19 +396,39 @@ holds to the resolver (spec R-6), so the mark is app data:
 - **Hold from previous page** (page box menu): for each selected marcher, a mark over the page box,
   from the previous page's flag, where a move of the marcher must end. The marcher's own moves
   inside the box are removed first, as Basic's Set to previous page removes them (a converted
-  page's shared slot is compacted). A mark starting at the box's end is taken into the new one
-  (touching holds are one hold). Marchers it can't hold are left alone and named, with why: nothing
-  arrives at the previous flag (a borrowed hold, #474), already Held there, a move crossing one of
-  the box's flags (taking a marcher out of part of a move is the cut in time of #469), Expert moves
-  in the box, or a shape or placed shape's recipe on the page (shape and follow-the-leader members
-  are skipped and named until fork #504).
+  page's shared slot is compacted). Touching holds are one hold: a mark ending at the box's start
+  grows over the box, and a mark starting at its end is taken in, so holding Page 2 then Page 3
+  gives what Page 3 then Page 2 does. The arrival is found by the rule a drag inside the hold uses
+  (the marcher's highest-layer row ending at the flag, whose move ends there too), so every hold it
+  makes is one its drags can reach. Marchers it can't hold are left alone and named, with why:
+  nothing arrives at the previous flag (a borrowed hold, #474), already Held there, a move
+  crossing one of the box's flags, Expert moves in the box, a shape or placed shape's recipe on
+  the page, following the leader on the page, or an arrival that is a shape's move or a
+  follow-the-leader move, which a drag inside the hold would rewrite (shape and follow-the-leader
+  members are skipped and named until fork #504).
 - **A drag on a count inside a Held hold** (a range edit whose end, or a Basic point edit whose
   count, is inside it) sets the marcher's ending in the move that arrives at the hold's start, as
   an edit of that move's timeline would. The arrival and the whole hold move together; earlier and
-  later pages behave as before. In a mixed selection each marcher is edited by its own kind.
-- **Upkeep, in `transactionWithHistory`** (fork #473; until it lands, an edit that would run a
-  move into a mark, including a page or beat edit that shifts rows past a mark, is refused at
-  commit with `E-H1`):
+  later pages behave as before. In a mixed selection each marcher is edited by its own kind. A
+  Basic drag respects Basic's lock: an arrival that isn't simple on the page it ends is refused
+  (`notSimple`), naming the marchers. A shape's after-write step gets the arrival's move when only
+  Held marchers were dragged, and `keepUnchanged` applies to Held marchers too.
+- **Set as shown** (with Only Page N's and Remove keyframe's stays, which share its write) treats a
+  Held marcher as decided: it is skipped and reported (`held`), and nothing is written inside the
+  hold.
+- **Clear this page clears a hold** on the page for the marchers it clears: the part of their marks
+  over the box goes, so the page is Not set. That is the way out of a hold. A part after the box
+  has nothing arriving at its start, so it goes too (below); a part before the box stays.
+- **`E-H1` names who and where:** "T1 is Held on Page 3. Clear this page to remove the hold, or
+  drag inside it to move it." (`TimelineCommitViolationError.held`).
+- **A mark goes when its arrival goes** (#472): right after each edit's function, in
+  `transactionWithHistory`, every mark that nothing arrives at (by the rule above) is deleted, in
+  the same undo step; never during undo or redo replay. A mark over counts nothing arrives at could
+  never be reached by a drag, and only blocks edits. This is step 4 below, in the small form #472
+  needs while every mark is an arrival hold; #473 grows it into the full upkeep.
+- **Upkeep, in `transactionWithHistory`** (fork #473; until it lands, an edit other than a page or
+  beat edit that would run a move into a mark, a clip drag, resize, merge refit or split, is
+  refused at commit with `E-H1`):
   - **When:** the step snapshots, before the edit's function runs, the ids of the rows ending at
     each mark's start. It runs **right after the function**, before the history group is read, so
     its writes belong to the same undo step. It never runs during undo or redo replay (C-6).
@@ -400,12 +445,15 @@ holds to the resolver (spec R-6), so the mark is app data:
   - **Basic's sweep** of following moves that go nowhere stops at a mark's start.
   - Opening a file runs the upkeep trim once, so a file edited by a build without marks support
     can't fail every later edit.
-- **Page and beat edits** (`planTimelineRipple`, so previews match commits; fork #473):
+- **Page and beat edits** (`planTimelineRipple`, so previews match commits; #472):
   - An arrival hold's start takes its row's planned new end.
   - Any other mark edge that sits on a page flag follows that flag. That covers a borrowed hold's
     start and any hold's end.
   - An edge in the middle of a page stays on its beat, as a row edge does.
   - A deleted flag leaves an edge on its count.
+  - The end of the last page counts as a flag, when the same page is last before and after.
+  - A mark whose arrival is a page move that goes with a removed page goes too; a mark left with
+    no counts (its page deleted) is deleted.
 - **Removing the keyframe a hold grows out of** removes the hold, and writes no next-page move
   inside it. The pages become Not set (fork #473).
 - **Hold over the window** removes the selected marchers' moves inside the window, cuts a move that

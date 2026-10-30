@@ -22,12 +22,8 @@
             "noPreviousPage": "Impossible de définir les coordonnées pour la page précédente. Il n'y a pas de page précédente",
             "setAllToNext": "Copier les positions de la page suivante (tous)",
             "setAllToNextSuccess": "Coordonnées de {count} marcheurs sur la page {currentPage} définies avec succès aux coordonnées de la page suivante {nextPage}",
-            "setAllToPrevious": "Copier les positions de la page précédente (tous)",
-            "setAllToPreviousSuccess": "Coordonnées de {{count}} marcheurs sur la page {{currentPage}} définies avec succès aux coordonnées de la page précédente {{previousPage}}",
             "setSelectedToNext": "Copier les positions de la page suivante (sélection)",
-            "setSelectedToNextSuccess": "{count, plural, one {Paramètres {count} coordonnée de marcheur sur la page {currentPage} aux coordonnées de la page suivante {nextPage}} other {Paramètres {count} coordonnées de marcheur sur la page {currentPage} aux coordonnées de la page suivante {nextPage}} }",
-            "setSelectedToPrevious": "Copier les positions de la page précédente (sélection)",
-            "setSelectedToPreviousSuccess": "{count, plural, other {Coordonnée'{{count, plural, one {} other {s}}} de {{count}} marcheur{{count, plural, one {} other {s}}} sur la page {{currentPage}} définie avec succès aux coordonnées de la page précédente {{previousPage}}'}}"
+            "setSelectedToNextSuccess": "{count, plural, one {Paramètres {count} coordonnée de marcheur sur la page {currentPage} aux coordonnées de la page suivante {nextPage}} other {Paramètres {count} coordonnées de marcheur sur la page {currentPage} aux coordonnées de la page suivante {nextPage}} }"
         },
         "edit": {
             "noRedoAvailable": "Aucune action à rétablir",
@@ -1634,8 +1630,7 @@
             "lockMarchersAriaLabel": "Déplacement du curseur et ajustement des marcheurs",
             "placeAllMarchers": "Placer tous les marcheurs",
             "placeSelectedMarchers": "Placer les marcheurs sélectionnés",
-            "toNextPagePositions": "...aux positions suivantes de la page",
-            "toPreviousPagePositions": "...aux positions précédentes de la page"
+            "toNextPagePositions": "...aux positions suivantes de la page"
         },
         "select": {
             "noDrillPrefixesToSelect": "Aucun préfixe de forage à sélectionner trouvé",

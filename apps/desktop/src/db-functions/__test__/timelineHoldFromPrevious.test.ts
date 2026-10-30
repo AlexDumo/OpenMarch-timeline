@@ -937,3 +937,55 @@ describeDbTests(
         });
     },
 );
+
+describeDbTests("Clear this page clears a hold", (it) => {
+    for (const [mode, target] of [
+        ["Expert, the page's window", { kind: "range", ...PAGE3 }],
+        ["Basic, on the page's flag", { kind: "point", beat: 25, box: PAGE3 }],
+    ] as const) {
+        it(`makes the held page Not set for the cleared marchers (${mode}), in one undo step`, async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await show(db);
+            await holdFromPreviousPage({
+                db,
+                pageBox: PAGE3,
+                marcherIds: [a, b],
+            });
+            const before = await snapshot(db);
+            const result = await moveMarchersInTarget({
+                db,
+                target,
+                moves: [{ marcherId: a, x: UP[0], y: UP[1] }],
+                clearPage: true,
+            });
+            await timelineResolverSettled();
+            expect(result.cleared).toEqual([a]);
+            expect(await marksOf(db, a)).toEqual([]);
+            expect(await marksOf(db, b)).toEqual([PAGE3]);
+            // Not set: a drag on page 2 now carries into page 3
+            await move(db, PAGE2, [{ marcherId: a, xy: FAR }]);
+            expect((await atFlags(db, a)).slice(2, 4)).toEqual([FAR, FAR]);
+            await performUndo(db);
+            await roundTrip(db, before, await snapshot(db));
+        });
+    }
+
+    it("keeps the part of a joined hold before the page", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a } = await show(db);
+        await move(db, PAGE1, [{ marcherId: a, xy: LEFT }]);
+        await holdFromPreviousPage({ db, pageBox: PAGE2, marcherIds: [a] });
+        await holdFromPreviousPage({ db, pageBox: PAGE3, marcherIds: [a] });
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", ...PAGE3 },
+            moves: [{ marcherId: a, x: LEFT[0], y: LEFT[1] }],
+            clearPage: true,
+        });
+        expect(await marksOf(db, a)).toEqual([PAGE2]);
+    });
+});

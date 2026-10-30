@@ -422,14 +422,14 @@ const STATIC_ACTIONS = {
 
     // Batch editing
     setAllMarchersToPreviousPage: {
-        labelKey: "actions.batchEdit.setAllToPrevious",
+        labelKey: "actions.batchEdit.clearThisPageAll",
         category: "batchEdit",
         editsDrill: true,
         scope: "canvas",
         defaultBindings: ["$mod+Shift+P", "Control+Shift+P"],
     },
     setSelectedMarchersToPreviousPage: {
-        labelKey: "actions.batchEdit.setSelectedToPrevious",
+        labelKey: "actions.batchEdit.clearThisPageSelected",
         category: "batchEdit",
         editsDrill: true,
         scope: "canvas",

@@ -16,8 +16,8 @@ import { createRangeTimelineInTransaction } from "./timelineMoveNames";
 import { findTimelineByRange } from "./timelines";
 import { readPageGrid } from "./timelineRipple";
 import { updateTimelineSlotDestinationInTransaction } from "./timelineTransitions";
+import { clearOwnPageMoves } from "./timelineMoveHelpers";
 import {
-    clearOwnPageMoves,
     isPageBox,
     marcherLabel,
     refuseDuplicateMarchers,
@@ -89,7 +89,7 @@ interface PointPlan {
     /** Rows deleted, with their transitions and any timeline they leave empty */
     removed: BasicRow[];
     added: NewMove[];
-    /** Marchers whose moves were deleted and not replaced (a drag back, or `clearOwn`) */
+    /** Marchers whose moves were deleted and not replaced (a drag back, or `clearPage`) */
     cleared: number[];
 }
 
@@ -276,7 +276,7 @@ const planPoint = async (
     box: Box,
     beat: number,
     move: TimelineMarcherMove,
-    clearOwn: boolean,
+    clearPage: boolean,
     keepUnchanged: boolean,
 ): Promise<void> => {
     const { marcherId } = move;
@@ -285,7 +285,7 @@ const planPoint = async (
     const at = (b: number) => state.positionAt(marcherId, b);
 
     // Set to previous page: the marcher's moves in the box go, so it holds from the page before
-    if (clearOwn && beat === box.end) {
+    if (clearPage && beat === box.end) {
         if (rows.length === 0) return;
         plan.removed.push(...rows);
         plan.cleared.push(marcherId);
@@ -432,8 +432,8 @@ const writePlan = async (
  * comment). Run it inside `transactionWithHistory`; `moveMarchersInTarget` does for
  * `{kind: "point"}`.
  *
- * With `clearOwn` (set to previous page) and `beat` on the flag, each marcher's moves in the box
- * are deleted instead, whatever its x/y, so it holds from the page before. `clearOwn` with `beat`
+ * With `clearPage` (set to previous page) and `beat` on the flag, each marcher's moves in the box
+ * are deleted instead, whatever its x/y, so it holds from the page before. `clearPage` with `beat`
  * mid-page is ignored.
  */
 export async function setPositionsAtBeatInTransaction({
@@ -441,14 +441,14 @@ export async function setPositionsAtBeatInTransaction({
     beat,
     box,
     moves,
-    clearOwn = false,
+    clearPage = false,
     keepUnchanged = false,
 }: {
     tx: DbTransaction;
     beat: number;
     box: { start: number; end: number };
     moves: readonly TimelineMarcherMove[];
-    clearOwn?: boolean;
+    clearPage?: boolean;
     /**
      * Write a marcher left where it is too, as a stay, rather than nothing: a shape's members
      * are all set where it's edited, the one at the pivot included
@@ -468,7 +468,7 @@ export async function setPositionsAtBeatInTransaction({
     );
     const plan = emptyPlan();
     for (const move of moves)
-        await planPoint(plan, state, box, beat, move, clearOwn, keepUnchanged);
+        await planPoint(plan, state, box, beat, move, clearPage, keepUnchanged);
     return await writePlan(tx, plan);
 }
 

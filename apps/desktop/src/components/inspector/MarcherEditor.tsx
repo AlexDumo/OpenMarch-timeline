@@ -413,7 +413,7 @@ function AlignmentButtons() {
                                 onRun={closePlaceMenu}
                                 className="text-text px-6 py-4"
                             >
-                                <T keyName="toolbar.alignment.toPreviousPagePositions" />
+                                <T keyName="toolbar.alignment.clearThisPage" />
                             </ActionButton>
                             <ActionButton
                                 action="setSelectedMarchersToNextPage"

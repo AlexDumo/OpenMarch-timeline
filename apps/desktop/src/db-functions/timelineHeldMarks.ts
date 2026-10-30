@@ -247,3 +247,32 @@ export async function heldConflictInTransaction(
         .flatMap((p) => (p.name === undefined ? [] : [p.name]));
     return { names, pages };
 }
+
+/**
+ * **Clear this page** for Held marchers (#472): the part of each of `marcherIds`' marks over `box`
+ * goes, so the page is Not set for them. A part before the box stays (its arrival is unchanged); a
+ * part after it would have nothing arriving at its start, so it goes too (the drop after the
+ * edit, `dropHeldMarksWithoutArrivalInTransaction`, would delete it anyway).
+ *
+ * @returns the marchers whose marks changed, ascending
+ */
+export async function clearHeldMarksOverInTransaction(
+    tx: DbTransaction,
+    marcherIds: readonly number[],
+    box: { start: number; end: number },
+): Promise<number[]> {
+    if (marcherIds.length === 0 || !(await hasHeldMarksTable(tx))) return [];
+    const h = schema.timeline_held_marks;
+    const over = (await readHeldMarks(tx, marcherIds)).filter(
+        (m) => m.start < box.end && box.start < m.end,
+    );
+    for (const mark of over) {
+        if (mark.start < box.start)
+            await tx
+                .update(h)
+                .set({ end_beat: box.start })
+                .where(eq(h.id, mark.id));
+        else await tx.delete(h).where(eq(h.id, mark.id));
+    }
+    return [...new Set(over.map((m) => m.marcherId))].sort((x, y) => x - y);
+}
