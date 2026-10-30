@@ -6282,6 +6282,44 @@ test("a drag waiting for the one before it to be saved is saved on its own page,
     expect(stepsAcross(before, after, S)).toEqual(after.map(() => 8));
 });
 
+test("an undo pressed while a drag of a placed box waits to be saved undoes that drag, and the outline goes back with the marchers (#513)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+    const { S, before, grab } = await selectPlacedBox(show);
+    const outlineLeft = async () =>
+        Math.min(
+            ...((await page.evaluate(() =>
+                window.fieldTest.shapeOverlay?.()?.outline?.map((p) => p.x),
+            )) ?? []),
+        );
+    const left = await outlineLeft();
+    await slowDown(page, 8);
+    for (let i = 0; i < 2; i++) {
+        const from = { x: grab.x + i * 4 * S, y: grab.y };
+        await drag(
+            page,
+            await toScreen(page, from),
+            await toScreen(page, { x: from.x + 4 * S, y: from.y }),
+            { steps: 4 },
+        );
+    }
+    // Straight away, while the second drag still waits for the first to be read back
+    await page.keyboard.press("ControlOrMeta+z");
+    await waitForIdle(page, 1000);
+    const after = await savedPositions(show, 0);
+    // One press, one drag undone: the first drag stays
+    expect(stepsAcross(before, after, S)).toEqual(after.map(() => 4));
+    expect((await readField(page)).selection).toEqual(ALL);
+    expect((await outlineLeft()) - left).toBeCloseTo(4 * S, 1);
+    // And the next undoes the first
+    await page.keyboard.press("ControlOrMeta+z");
+    await waitForIdle(page, 1000);
+    const back = await savedPositions(show, 0);
+    expect(stepsAcross(before, back, S)).toEqual(back.map(() => 0));
+});
+
 test.describe("a box carried onto the next page, where nobody has a move yet (#514)", () => {
     test.use({
         seedSql: seedShowSql({
