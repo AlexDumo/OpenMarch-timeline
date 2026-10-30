@@ -19,6 +19,7 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { LABEL_SIZE_SCALE, useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useIsPreviewMode } from "@/stores/PreviewModeStore";
+import { onScreenToggles } from "@/stores/TouchModifierStore";
 import {
     allItemsQueryOptions,
     allMarcherRowsQueryOptions,
@@ -83,6 +84,8 @@ import { dropMarchersOnTimeline } from "@/field/fieldDrop";
 import { FieldMarchers } from "./fieldMarchers";
 import { FieldItems } from "./fieldItems";
 import FieldOverlay from "./FieldOverlay";
+import TouchModifierButtons from "@/components/canvas/touch/TouchModifierButtons";
+import { useSnapToggle } from "@/components/canvas/touch/snapToggle";
 import FieldContextMenu, { useFieldMenu } from "./FieldContextMenu";
 import { attachFieldPointerInput } from "./fieldPointerInput";
 import { cameraBounds, useFieldViewStore } from "./fieldView";
@@ -199,6 +202,7 @@ function ThreeFieldView() {
     const { beats, pages, countGrid } = useTimingObjects()!;
     const preview = useIsPreviewMode();
     const panning = useFieldViewStore((s) => s.panning);
+    const snapToggle = useSnapToggle();
     const { image: fieldImage, size: fieldImageSize } = useFieldImage();
     // Planned once, for the layer that draws it and the field test API
     const fieldImagePlan = useMemo(
@@ -441,6 +445,8 @@ function ThreeFieldView() {
                 },
                 {
                     isMac: isMacPlatform(),
+                    // The touch pill's Fine, Equal, From center and Add
+                    onScreen: onScreenToggles,
                     // #197: snapping and Lock X/Y, read as they are on each move; fine and
                     // constrain come from the held roles
                     moveTransform: ruledMove(() => {
@@ -707,6 +713,13 @@ function ThreeFieldView() {
                 )}
                 {fieldProperties && (
                     <ShapeEditor stepPx={fieldProperties.pixelsPerStep} />
+                )}
+                {/* Fine, Equal, From center, Add and Snap for a tablet: touch layout only */}
+                {!preview && (
+                    <TouchModifierButtons
+                        marchers={marchers}
+                        snap={snapToggle}
+                    />
                 )}
                 <FavoritesRing />
                 {/* A command asking its parameters docks here, over the field's top (#354) */}

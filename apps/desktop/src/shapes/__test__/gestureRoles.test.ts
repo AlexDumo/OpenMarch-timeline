@@ -14,6 +14,7 @@ import type { FieldPointer } from "@/field/editor/fieldEditor";
 import * as gestureKeys from "@/input/gestureKeys";
 import { NO_KEYS, type HeldKeys } from "@/input/modifierRoles";
 import * as platform from "@/shortcuts/platform";
+import { useTouchModifierStore } from "@/stores/TouchModifierStore";
 import { runAction } from "@/shortcuts/registry";
 import { boxShape } from "../box/boxShape";
 import {
@@ -39,6 +40,7 @@ import {
     openShapeTool,
     useShapeToolStore,
 } from "../tool/shapeToolStore";
+import * as toolEnv from "../tool/toolEnv";
 import { toolEnvFor } from "../tool/toolEnv";
 import type { AnyToolKind } from "../tool/toolKind";
 import { openTool, pointerMove, press, release } from "../tool/toolMachine";
@@ -108,6 +110,7 @@ afterEach(() => {
     closeShapeTool();
     setShapeField(null);
     useShapeEditorStore.setState({ ratioLocked: false });
+    useTouchModifierStore.getState().clear();
     vi.restoreAllMocks();
 });
 
@@ -460,5 +463,118 @@ describe("a placed box, with role keys mid-drag", () => {
         const after = shown();
         key("keydown", { ctrl: true });
         expect(shown()).toEqual(after);
+    });
+});
+
+describe("the touch pill's role toggles, OR'd in as held keys are", () => {
+    const latch = (role: "fine" | "constrain" | "fromCenter") =>
+        useTouchModifierStore.getState().toggleLatched(role);
+
+    /** The open row moved from one of its spots to off the half-step ladder, with these keys */
+    function moveRow(keys: Partial<HeldKeys> = {}) {
+        const row = openRow();
+        const spot = rowTool.shape.generate(
+            row,
+            N,
+            shapeContextFor(field()),
+        )[3]!;
+        shapeToolMode.press(pointer(spot, keys));
+        shapeToolMode.move(
+            pointer({ x: spot.x + 1.3 * STEP, y: spot.y + 0.7 * STEP }, keys),
+        );
+        const moved = openParams<RowParams>();
+        shapeToolMode.release(pointer(spot), null);
+        closeShapeTool();
+        return moved;
+    }
+
+    it("Fine latched moves a shape off the ladder, exactly as Shift held does", () => {
+        const plain = moveRow();
+        const shift = moveRow({ shift: true });
+        expect(shift).not.toEqual(plain);
+        latch("fine");
+        expect(moveRow()).toEqual(shift);
+    });
+
+    it("Fine latched turns the frame in whole degrees, as Shift held does", () => {
+        const { knob, to } = knobTurn(openRow());
+        latch("fine");
+        shapeToolMode.press(pointer(knob));
+        shapeToolMode.move(pointer(to));
+        const fine = degreesOf(openParams());
+        expect(Number.isInteger(fine)).toBe(true);
+        expect(fine % 15).not.toBe(0);
+    });
+
+    it("Equal latched draws a box with equal spacings", () => {
+        latch("constrain");
+        openShapeTool(openTool(boxTool, marchers), null, null);
+        shapeToolMode.press(pointer(FROM));
+        shapeToolMode.move(
+            pointer({ x: FROM.x + 12 * STEP, y: FROM.y + 6 * STEP }),
+        );
+        const equal = openParams();
+        expect(equal.across).toBeCloseTo(equal.deep, 6);
+    });
+
+    it("From center latched is held for the draw", () => {
+        // Drawing from the center is #510's; until then the roles the tool reads carry it
+        const env = vi.spyOn(toolEnv, "toolEnvFor");
+        latch("fromCenter");
+        openShapeTool(openTool(boxTool, marchers), null, null);
+        shapeToolMode.press(pointer(FROM));
+        shapeToolMode.move(
+            pointer({ x: FROM.x + 12 * STEP, y: FROM.y + 6 * STEP }),
+        );
+        expect(env.mock.calls.at(-1)![1]).toEqual({
+            fine: false,
+            constrain: false,
+            fromCenter: true,
+        });
+    });
+
+    it("latching Equal mid-draw re-runs the last move, and letting go undoes it", () => {
+        openShapeTool(openTool(boxTool, marchers), null, null);
+        shapeToolMode.press(pointer(FROM));
+        shapeToolMode.move(
+            pointer({ x: FROM.x + 12 * STEP, y: FROM.y + 6 * STEP }),
+        );
+        const drawn = openParams();
+        expect(drawn.across).not.toBeCloseTo(drawn.deep, 6);
+
+        latch("constrain");
+        const equal = openParams();
+        expect(equal.across).toBeCloseTo(equal.deep, 6);
+
+        latch("constrain");
+        expect(openParams()).toEqual(drawn);
+    });
+
+    it("holding Equal on the pill during a placed box's handle drag flips the ratio lock, as $mod does", () => {
+        const saved = vi
+            .spyOn(commit, "commitBox")
+            .mockResolvedValue(undefined);
+        const box = placed();
+        const mode = new LiveBoxMode(box, new QueryClient());
+        const handle = boxHandlePoint(box.params, 4, "e");
+        mode.press(pointer(handle));
+        mode.move(pointer({ x: handle.x + 3 * STEP, y: handle.y }));
+        const deep = depthOf(mode.drawing()!.outline!);
+        useTouchModifierStore.getState().setHeld("constrain", true);
+        expect(depthOf(mode.drawing()!.outline!)).toBeGreaterThan(deep);
+        useTouchModifierStore.getState().setHeld("constrain", false);
+        expect(depthOf(mode.drawing()!.outline!)).toBeCloseTo(deep, 6);
+        mode.cancel();
+        expect(saved).not.toHaveBeenCalled();
+    });
+
+    it("stops following the pill once the gesture ends", () => {
+        const { knob, to } = knobTurn(openRow());
+        shapeToolMode.press(pointer(knob));
+        shapeToolMode.move(pointer(to));
+        shapeToolMode.release(pointer(to), null);
+        const after = openParams();
+        latch("fine");
+        expect(openParams()).toBe(after);
     });
 });

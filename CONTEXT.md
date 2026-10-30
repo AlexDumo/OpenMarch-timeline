@@ -17,6 +17,9 @@ version A). The code is `apps/desktop/src/input/modifierRoles.ts`.
   (Shift), `subtract` (Alt) and `reachInside` ($mod). A press uses its key only when the choice
   applies to what's under the pointer, and a key the press used isn't read as a held role until
   it's released.
+- **Role toggles**: the touch pill's Fine, Equal (constrain) and From center, held or latched,
+  OR'd into the held roles of every drag; the press rule never blocks them. Its Add is the `add`
+  press choice. Named by role, never by key (`stores/TouchModifierStore.ts`).
 - **Snap toggle**: an on-screen setting, not a key, that turns off the half-step ladder and the
   pull of guides and marchers for shape and marcher drags on the field. It resets on restart and when a file opens. The
   timeline keeps its own held Alt = no snap.
