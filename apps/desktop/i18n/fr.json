@@ -376,6 +376,16 @@
         "videoResolution": "Résolution"
     },
     "field": {
+        "gestureChip": {
+            "equalSpacings": "espacements égaux",
+            "fine": "fin",
+            "freeRatio": "proportions libres",
+            "fromCenter": "depuis le centre",
+            "keepRatio": "garder les proportions",
+            "oneAxis": "un axe",
+            "snapOff": "Magnétisme désactivé",
+            "wholeDegrees": "degrés entiers"
+        },
         "general": {
             "exportField": "Exporter le champ",
             "exportField.tooltip": "Exporter ce champ vers un fichier pour l'utiliser dans d'autres projets",

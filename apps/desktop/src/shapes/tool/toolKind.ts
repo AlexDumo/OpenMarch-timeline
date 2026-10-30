@@ -1,8 +1,12 @@
+import type { HonoredRoles } from "@/input/gestureChipStore";
 import type { Pivot, ShapeFrame } from "../frame/frame";
 import type { ScrubMove } from "../editor/scrub";
 import type { ClosedShape } from "../distribute/region";
 import type { LayoutFamily } from "../distribute/distribution";
 import type { AnyShapeKind, XY } from "../types";
+
+/** The roles a kind's own drag reads beyond fine, which every shape drag reads */
+export type KindHonors = Pick<HonoredRoles, "constrain" | "fromCenter">;
 
 /**
  * What a gesture knows about the field and the roles held. Built fresh for each pointer event.
@@ -196,6 +200,15 @@ export interface ToolKind<P> {
     readonly ratioLock?: boolean;
     /** Whether this shape offers the ratio lock, when the kind does; always when absent */
     ratioLockFor?(params: P, n: number): boolean;
+    /**
+     * What `constrain` and `fromCenter` do in this kind's own drags, as the chip near the cursor
+     * names them: on the draw, and on a handle by its key (`ratioLocked`: the lock is on). A role
+     * left out does nothing there, so the chip leaves it out.
+     */
+    readonly honors?: {
+        readonly draw?: KindHonors;
+        handle?(key: string, ratioLocked: boolean): KindHonors;
+    };
     /**
      * The params a drag from `from` to `to` draws, or undefined while the drag is too short.
      * `previous` is what this same drag drew on the last pointer move.

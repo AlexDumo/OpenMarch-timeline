@@ -378,10 +378,11 @@ export const shapeToolMode: FieldMode = {
         endHeld();
         const pressed = pressShapeKeys(
             pointer,
-            () =>
+            tool.kind,
+            (reachInside) =>
                 pressTarget(tool, pointer.field, {
                     ...envOf(field, tool),
-                    reachInside: true,
+                    reachInside,
                 }),
             rerun,
             isMac,

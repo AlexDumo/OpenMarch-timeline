@@ -12,6 +12,11 @@ import { QueryClient } from "@tanstack/react-query";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import type { FieldModePress, FieldPointer } from "@/field/editor/fieldEditor";
 import * as gestureKeys from "@/input/gestureKeys";
+import {
+    useGestureChipStore,
+    type HonoredRoles,
+} from "@/input/gestureChipStore";
+import { clearGestureChip } from "@/input/gestureChipSync";
 import { NO_KEYS, type HeldKeys } from "@/input/modifierRoles";
 import * as platform from "@/shortcuts/platform";
 import { useTouchModifierStore } from "@/stores/TouchModifierStore";
@@ -24,6 +29,7 @@ import {
     type BoxParams,
 } from "../box/boxGeometry";
 import { boxTool } from "../box/boxTool";
+import { circleTool } from "../circle/circleTool";
 import { setShapeField } from "../field/shapeField";
 import { shapeContextFor } from "../field/shapeFieldContext";
 import { pivotPoint, rotationDegrees } from "../frame/frame";
@@ -113,6 +119,7 @@ afterEach(() => {
     closeShapeTool();
     setShapeField(null);
     useShapeEditorStore.setState({ ratioLocked: false });
+    clearGestureChip();
     useTouchModifierStore.getState().clear();
     vi.restoreAllMocks();
 });
@@ -466,6 +473,163 @@ describe("a placed box, with role keys mid-drag", () => {
         const after = shown();
         key("keydown", { ctrl: true });
         expect(shown()).toEqual(after);
+    });
+});
+
+describe("the chip names what the shape drag reads", () => {
+    const chip = () => useGestureChipStore.getState();
+    /** What the open shape's drag from `from` tells the chip it honors, past the click slop */
+    const honoredFrom = (from: XY, held: Partial<HeldKeys> = {}) => {
+        shapeToolMode.press(pointer(from, held), OFF_MAC);
+        shapeToolMode.move(
+            pointer({ x: from.x + 2 * STEP, y: from.y + STEP }, held),
+        );
+        return chip().honored;
+    };
+    const shape = (honored: Omit<HonoredRoles, "context" | "snaps">) => ({
+        context: "shape",
+        snaps: true,
+        ...honored,
+    });
+
+    it.each<[string, () => HonoredRoles, object]>([
+        [
+            "drawing a box: fine, equal spacings, from center",
+            () => {
+                openShapeTool(openTool(boxTool, marchers), null, null);
+                return honoredFrom(FROM);
+            },
+            shape({
+                fine: "fine",
+                constrain: "equalSpacings",
+                fromCenter: "fromCenter",
+            }),
+        ],
+        [
+            "drawing a circle: fine only",
+            () => {
+                openShapeTool(openTool(circleTool, marchers), null, null);
+                return honoredFrom(FROM);
+            },
+            shape({ fine: "fine" }),
+        ],
+        [
+            "a box corner: equal spacings, from center",
+            () => honoredFrom(boxHandlePoint(openBox(), N, "se")),
+            shape({
+                fine: "fine",
+                constrain: "equalSpacings",
+                fromCenter: "fromCenter",
+            }),
+        ],
+        [
+            "a box side: constrain keeps the ratio, from center",
+            () => honoredFrom(boxHandlePoint(openBox(), N, "e")),
+            shape({
+                fine: "fine",
+                constrain: "keepRatio",
+                fromCenter: "fromCenter",
+            }),
+        ],
+        [
+            "a box side with the ratio lock on: constrain frees it, from center",
+            () => {
+                useShapeEditorStore.setState({ ratioLocked: true });
+                return honoredFrom(boxHandlePoint(openBox(), N, "e"));
+            },
+            shape({
+                fine: "fine",
+                constrain: "freeRatio",
+                fromCenter: "fromCenter",
+            }),
+        ],
+        [
+            "moving the shape: one axis",
+            () => {
+                const row = openRow();
+                const spot = rowTool.shape.generate(
+                    row,
+                    N,
+                    shapeContextFor(field()),
+                )[3]!;
+                return honoredFrom(spot);
+            },
+            shape({ fine: "fine", constrain: "oneAxis" }),
+        ],
+        [
+            "the center dot: one axis",
+            () => honoredFrom(rowTool.frameOf(openRow(), N).center),
+            shape({ fine: "fine", constrain: "oneAxis" }),
+        ],
+        [
+            "the rotate knob: whole degrees, no constrain",
+            () => honoredFrom(knobTurn(openRow()).knob),
+            shape({ fine: "wholeDegrees" }),
+        ],
+        [
+            "the pivot, pulled out with $mod: fine only",
+            () =>
+                honoredFrom(rowTool.frameOf(openRow(), N).center, {
+                    ctrl: true,
+                }),
+            shape({ fine: "fine" }),
+        ],
+    ])("%s", (_, honored, expected) => {
+        expect(honored()).toEqual(expected);
+    });
+
+    it("shows at the press when a role the drag reads is held", () => {
+        const corner = boxHandlePoint(openBox(), N, "se");
+        shapeToolMode.press(pointer(corner, { ctrl: true }), OFF_MAC);
+        expect(chip()).toMatchObject({
+            active: true,
+            roles: { constrain: true },
+            screen: corner,
+        });
+    });
+
+    it("waits for the click slop when nothing it reads is held, and shows once a key it reads goes down", () => {
+        // A move doesn't read from center
+        const spot = rowTool.shape.generate(
+            openRow(),
+            N,
+            shapeContextFor(field()),
+        )[3]!;
+        shapeToolMode.press(pointer(spot, { alt: true }), OFF_MAC);
+        expect(gestureType()).toBe("move");
+        expect(chip().active).toBe(false);
+        key("keydown", { alt: true, shift: true });
+        expect(chip()).toMatchObject({ active: true, roles: { fine: true } });
+    });
+
+    it("clears on release", () => {
+        const corner = boxHandlePoint(openBox(), N, "se");
+        shapeToolMode.press(pointer(corner, { ctrl: true }), OFF_MAC);
+        shapeToolMode.release(pointer(corner), null);
+        expect(chip().active).toBe(false);
+    });
+
+    it.each<[BoxHandleKey, object]>([
+        [
+            "se",
+            {
+                fine: "fine",
+                constrain: "equalSpacings",
+                fromCenter: "fromCenter",
+            },
+        ],
+        [
+            "e",
+            { fine: "fine", constrain: "keepRatio", fromCenter: "fromCenter" },
+        ],
+    ])("a placed box's %s handle", (at, expected) => {
+        const mode = new LiveBoxMode(placed(), new QueryClient());
+        const handle = boxHandlePoint(placed().params, 4, at);
+        mode.press(pointer(handle), OFF_MAC);
+        mode.move(pointer({ x: handle.x + 2 * STEP, y: handle.y }));
+        expect(chip().honored).toEqual(shape(expected));
+        mode.cancel();
+        expect(chip().active).toBe(false);
     });
 });
 

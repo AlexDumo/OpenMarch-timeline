@@ -376,6 +376,16 @@
         "videoResolution": "解像度"
     },
     "field": {
+        "gestureChip": {
+            "equalSpacings": "等間隔",
+            "fine": "微調整",
+            "freeRatio": "比率フリー",
+            "fromCenter": "中心から",
+            "keepRatio": "比率を保持",
+            "oneAxis": "1軸",
+            "snapOff": "スナップオフ",
+            "wholeDegrees": "1度単位"
+        },
         "general": {
             "exportField": "フィールドをエクスポート",
             "exportField.tooltip": "このフィールドをファイルにエクスポートして、他のプロジェクトで使用",
