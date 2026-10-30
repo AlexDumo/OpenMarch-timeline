@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+    act,
+    cleanup,
+    fireEvent,
+    render,
+    screen,
+} from "@testing-library/react";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import * as platform from "@/shortcuts/platform";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import type { ShapeField } from "../../field/shapeField";
 import { toolEnvFor } from "../../tool/toolEnv";
 import { SPACING_FINE_RATE, spacingRate } from "../scrub";
@@ -12,7 +19,7 @@ import { stubPointerCapture } from "./pointerEvents";
 /**
  * A number in the floating editor reads held roles (version A): Shift is fine, hundredths of a step
  * on a spacing (#411, Alt before); $mod is constrain. A role key pressed or released mid-drag
- * scrubs again where the pointer is.
+ * scrubs again where the pointer is. The Snap toggle off frees a spacing as fine does.
  */
 
 let restorePointerCapture: () => void;
@@ -24,6 +31,9 @@ beforeEach(() => {
 
 afterEach(() => {
     cleanup();
+    act(() => {
+        useUiSettingsStore.getState().setSnap(true);
+    });
     restorePointerCapture();
     vi.restoreAllMocks();
 });
@@ -71,6 +81,21 @@ describe("dragging a number", () => {
             constrain: false,
             fromCenter: false,
         });
+        const env = toolEnvFor(field, move.roles);
+        expect(spacingRate(env.snap, move.axis)).toMatchObject(
+            SPACING_FINE_RATE,
+        );
+    });
+
+    it("goes in hundredths of a step on a spacing with the Snap toggle off, no key held", () => {
+        act(() => {
+            useUiSettingsStore.getState().setSnap(false);
+        });
+        const { button, onScrub } = shown();
+        fireEvent.pointerDown(button, { button: 0, clientX: 0, clientY: 0 });
+        fireEvent.pointerMove(button, { clientX: 10, clientY: 0 });
+        const move = lastMove(onScrub);
+        expect(move.roles.fine).toBe(false);
         const env = toolEnvFor(field, move.roles);
         expect(spacingRate(env.snap, move.axis)).toMatchObject(
             SPACING_FINE_RATE,

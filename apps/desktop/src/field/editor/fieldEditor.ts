@@ -181,6 +181,8 @@ export type FieldEditorOptions = {
     now?: () => number;
     /** Where a drag puts the marchers for a pointer delta; snapping and locks are #197's. */
     moveTransform?: MoveTransform;
+    /** The Snap toggle, read on every pointer event; off, a rotation turns freely. On when omitted. */
+    snap?: () => boolean;
 };
 
 /**
@@ -921,7 +923,14 @@ export class FieldEditor {
         };
         const keys = this.keysFor(press.start);
         return press.handle === "rot"
-            ? new RotateGesture(press.start, starts, host, box, keys)
+            ? new RotateGesture(
+                  press.start,
+                  starts,
+                  host,
+                  box,
+                  keys,
+                  this.options.snap,
+              )
             : new ScaleGesture(
                   press.start,
                   starts,
@@ -1000,7 +1009,13 @@ export class FieldEditor {
         };
         const keys = this.keysFor(press.start);
         return handle === "rot"
-            ? new ItemRotateGesture(press.start, frame, host, keys)
+            ? new ItemRotateGesture(
+                  press.start,
+                  frame,
+                  host,
+                  keys,
+                  this.options.snap,
+              )
             : new ItemResizeGesture(press.start, frame, host, handle, keys);
     }
 
