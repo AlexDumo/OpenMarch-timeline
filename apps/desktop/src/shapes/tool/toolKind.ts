@@ -1,3 +1,4 @@
+import type { ConstrainWord } from "@/input/gestureChipStore";
 import type { Pivot, ShapeFrame } from "../frame/frame";
 import type { ScrubMove } from "../editor/scrub";
 import type { ClosedShape } from "../distribute/region";
@@ -191,6 +192,15 @@ export interface ToolKind<P> {
     readonly ratioLock?: boolean;
     /** Whether this shape offers the ratio lock, when the kind does; always when absent */
     ratioLockFor?(params: P, n: number): boolean;
+    /**
+     * What `constrain` does in this kind's own drags, as the chip near the cursor names it: on the
+     * draw, and on a handle by its key (`ratioLocked`: the lock is on). Absent where it does
+     * nothing, so the chip leaves it out.
+     */
+    readonly constrains?: {
+        readonly draw?: ConstrainWord;
+        handle?(key: string, ratioLocked: boolean): ConstrainWord | undefined;
+    };
     /**
      * The params a drag from `from` to `to` draws, or undefined while the drag is too short.
      * `previous` is what this same drag drew on the last pointer move.

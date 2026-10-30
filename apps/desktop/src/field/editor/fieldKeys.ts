@@ -1,3 +1,4 @@
+import type { HonoredRoles } from "@/input/gestureChipStore";
 import { clearGestureChip, syncGestureChip } from "@/input/gestureChipSync";
 import { startGestureKeys, type GestureKeys } from "@/input/gestureKeys";
 import type { HeldKeys, RoleKey, Roles } from "@/input/modifierRoles";
@@ -40,7 +41,10 @@ export function fieldKeys(
  * released mid-drag redraws at the last pointer, with no move. A release
  * where the last move left the pointer keeps what's drawn: a key changed
  * since has redrawn it already, and one the release reports that no keyboard
- * event did mustn't change the drop (user stories 41 and 42).
+ * event did mustn't change the drop (user stories 41 and 42). The chip near
+ * the cursor names the held roles `honored` declares, from the first move:
+ * the field editor starts a drag only past the click slop, since until then it
+ * can't tell what the press becomes (a click, a move, a marquee).
  */
 export class FieldDrag<T> {
     private readonly keys: GestureKeys;
@@ -53,17 +57,12 @@ export class FieldDrag<T> {
         /** What the drag draws for the pointer at `at`, with these roles held. */
         private readonly draw: (at: FieldPoint, roles: Roles) => T,
         private readonly show: (drawn: T) => void,
-        private readonly constrainWord?: string,
+        /** The roles the drag reads, and their words, for the chip */
+        private readonly honored: HonoredRoles,
     ) {
         this.keys = keys((roles) => {
             if (this.shown) this.drawAt(this.shown.at);
-            if (this.lastScreen) {
-                syncGestureChip(roles, {
-                    dragging: true,
-                    constrainWord: this.constrainWord,
-                    screen: this.lastScreen,
-                });
-            }
+            syncGestureChip(this.honored, roles, this.lastScreen);
         });
     }
 
@@ -71,11 +70,7 @@ export class FieldDrag<T> {
         this.lastScreen = pointer.screen;
         this.keys.update(pointer);
         this.drawAt(pointer.field);
-        syncGestureChip(this.keys.roles(), {
-            dragging: true,
-            constrainWord: this.constrainWord,
-            screen: pointer.screen,
-        });
+        syncGestureChip(this.honored, this.keys.roles(), pointer.screen);
     }
 
     /** Stops following the keys, and returns what the release drops. */

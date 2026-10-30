@@ -377,13 +377,14 @@
     },
     "field": {
         "gestureChip": {
-            "constrain": "restringir",
-            "constrain45": "45°",
-            "constrainEqualSpacings": "espaciados iguales",
-            "constrainOneAxis": "un eje",
+            "equalSpacings": "espaciados iguales",
             "fine": "fino",
+            "freeRatio": "proporción libre",
             "fromCenter": "desde el centro",
-            "snapOff": "Ajuste desactivado"
+            "keepRatio": "mantener proporción",
+            "oneAxis": "un eje",
+            "snapOff": "Alineación desactivada",
+            "wholeDegrees": "grados enteros"
         },
         "general": {
             "exportField": "Exportar campo",

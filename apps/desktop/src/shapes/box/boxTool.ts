@@ -61,6 +61,16 @@ export const boxTool: ToolKind<BoxParams> = {
         stretchBox(base, n, key as BoxHandleKey, to, env),
     // An outline's spacings are each held as set, the other worked out (#459): no proportion lock
     ratioLockFor: (params) => boxDistribution(params).mode !== "outline",
+    // A draw or a corner makes the spacings equal; a side flips the ratio lock for the drag
+    constrains: {
+        draw: "equalSpacings",
+        handle: (key, ratioLocked) =>
+            key.length === 2
+                ? "equalSpacings"
+                : ratioLocked
+                  ? "freeRatio"
+                  : "keepRatio",
+    },
     outline: boxCorners,
     snapPoints: (params, n) => [
         ...boxCorners(params, n),

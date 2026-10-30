@@ -1,46 +1,67 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { startGestureKeys } from "@/input/gestureKeys";
-import { NO_KEYS } from "@/input/modifierRoles";
-import { useGestureChipStore } from "@/input/gestureChipStore";
+import {
+    useGestureChipStore,
+    type HonoredRoles,
+} from "@/input/gestureChipStore";
+import { clearGestureChip } from "@/input/gestureChipSync";
+import { NO_KEYS, type HeldKeys, type Roles } from "@/input/modifierRoles";
+import type { FieldPointer } from "../fieldEditor";
 import { FieldDrag } from "../fieldKeys";
 
 afterEach(() => {
-    useGestureChipStore.getState().clear();
+    clearGestureChip();
 });
 
+const MOVE: HonoredRoles = {
+    context: "field",
+    fine: "fine",
+    constrain: "oneAxis",
+    snaps: true,
+};
+
+const keys = (changed: (roles: Roles) => void) =>
+    startGestureKeys({
+        context: "field",
+        press: NO_KEYS,
+        isMac: false,
+        onRolesChange: changed,
+    });
+
+const pointer = (x: number, held: Partial<HeldKeys> = {}): FieldPointer => ({
+    field: { x, y: 0 },
+    screen: { x: 50 + x, y: 60 },
+    button: 0,
+    ...NO_KEYS,
+    ...held,
+});
+
+const chip = () => useGestureChipStore.getState();
+
 describe("gesture chip in FieldDrag", () => {
-    it("shows on move, updates on a role change, and clears on cancel", () => {
-        const keys = (changed: (roles: typeof NO_KEYS) => void) =>
-            startGestureKeys({
-                context: "field",
-                press: NO_KEYS,
-                isMac: false,
-                onRolesChange: changed,
-            });
-        const drag = new FieldDrag(
-            keys,
-            (_at, roles) => roles,
-            vi.fn(),
-            "one axis",
-        );
-        drag.move({
-            field: { x: 0, y: 0 },
-            screen: { x: 50, y: 60 },
-            button: 0,
-            ...NO_KEYS,
-        });
-        expect(useGestureChipStore.getState()).toMatchObject({
+    it("shows the gesture's honored roles on a move, follows a role key, and clears on cancel", () => {
+        const drag = new FieldDrag(keys, (_at, roles) => roles, vi.fn(), MOVE);
+        drag.move(pointer(0));
+        expect(chip()).toMatchObject({
             active: true,
-            constrainWord: "one axis",
+            honored: MOVE,
             screen: { x: 50, y: 60 },
         });
 
         window.dispatchEvent(
             new KeyboardEvent("keydown", { key: "Shift", shiftKey: true }),
         );
-        expect(useGestureChipStore.getState().roles.fine).toBe(true);
+        expect(chip().roles.fine).toBe(true);
 
         drag.cancel();
-        expect(useGestureChipStore.getState().active).toBe(false);
+        expect(chip().active).toBe(false);
+    });
+
+    it("clears on release", () => {
+        const drag = new FieldDrag(keys, (_at, roles) => roles, vi.fn(), MOVE);
+        drag.move(pointer(0, { shift: true }));
+        expect(chip().active).toBe(true);
+        drag.end(pointer(3, { shift: true }));
+        expect(chip().active).toBe(false);
     });
 });

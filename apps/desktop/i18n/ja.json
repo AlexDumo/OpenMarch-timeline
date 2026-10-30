@@ -377,13 +377,14 @@
     },
     "field": {
         "gestureChip": {
-            "constrain": "制約",
-            "constrain45": "45°",
-            "constrainEqualSpacings": "等間隔",
-            "constrainOneAxis": "1軸",
+            "equalSpacings": "等間隔",
             "fine": "微調整",
+            "freeRatio": "比率フリー",
             "fromCenter": "中心から",
-            "snapOff": "スナップオフ"
+            "keepRatio": "比率を保持",
+            "oneAxis": "1軸",
+            "snapOff": "スナップオフ",
+            "wholeDegrees": "1度単位"
         },
         "general": {
             "exportField": "フィールドをエクスポート",

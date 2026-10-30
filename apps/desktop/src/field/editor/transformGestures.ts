@@ -1,4 +1,5 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
+import type { HonoredRoles } from "@/input/gestureChipStore";
 import type { Roles } from "@/input/modifierRoles";
 import type { FieldGesture, FieldPoint, FieldPointer } from "./fieldEditor";
 import { FieldDrag, type FieldKeys } from "./fieldKeys";
@@ -24,7 +25,8 @@ import type { FieldRect } from "./selectionArea";
  * Lock X and Lock Y don't apply to handles (rules table: Lock X / Lock Y).
  * While fine is on the pointer counts at a quarter of its speed
  * (`precisionDelta`, #197). As in a move, a role key pressed or released
- * mid-drag redraws the marchers at the last pointer.
+ * mid-drag redraws the marchers at the last pointer. Each handle declares the
+ * roles it reads, for the chip.
  */
 abstract class HandleGesture implements FieldGesture {
     abstract readonly kind: FieldTestGesture;
@@ -35,12 +37,13 @@ abstract class HandleGesture implements FieldGesture {
         protected readonly starts: readonly MarcherPosition[],
         private readonly host: MoveGestureHost,
         keys: FieldKeys,
+        honored: HonoredRoles,
     ) {
         this.drag = new FieldDrag(
             keys,
             (at, roles) => this.positionsAt(at, roles),
             (positions) => host.show(positions),
-            "one axis",
+            honored,
         );
     }
 
@@ -68,6 +71,27 @@ abstract class HandleGesture implements FieldGesture {
     ): MarcherPosition[];
 }
 
+/**
+ * A corner scales proportionally, and constrain frees its ratio; a middle handle scales one axis,
+ * which constrain doesn't change. Nothing snaps.
+ */
+const scaleHonors = (handle: Exclude<HandleId, "rot">): HonoredRoles =>
+    handle.length === 2
+        ? {
+              context: "field",
+              fine: "fine",
+              constrain: "freeRatio",
+              snaps: false,
+          }
+        : { context: "field", fine: "fine", snaps: false };
+
+/** A rotate handle reads fine (whole degrees, slowly) and snaps to 15°; constrain does nothing */
+export const ROTATE_HONORS: HonoredRoles = {
+    context: "field",
+    fine: "fine",
+    snaps: true,
+};
+
 /** A corner or middle handle: scales the selection from the opposite side. */
 export class ScaleGesture extends HandleGesture {
     readonly kind: FieldTestGesture = "scale";
@@ -82,7 +106,7 @@ export class ScaleGesture extends HandleGesture {
         private readonly box: FieldRect,
         keys: FieldKeys,
     ) {
-        super(origin, starts, host, keys);
+        super(origin, starts, host, keys, scaleHonors(handle));
     }
 
     protected positionsAt(at: FieldPoint, roles: Roles) {
@@ -171,7 +195,7 @@ export class RotateGesture extends HandleGesture {
         /** The Snap toggle, read on every event; on when omitted. */
         snap?: () => boolean,
     ) {
-        super(origin, starts, host, keys);
+        super(origin, starts, host, keys, ROTATE_HONORS);
         this.center = centerOf(box);
         this.rotation = new RotationDrag(this.center, origin.field, snap);
     }

@@ -1,24 +1,50 @@
 import { create } from "zustand";
-import type { Roles } from "./modifierRoles";
+import type { GestureContext, Roles } from "./modifierRoles";
 
 export type GestureChipScreen = { readonly x: number; readonly y: number };
 
+/** What `constrain` does in one gesture, as the chip names it */
+export type ConstrainWord =
+    | "oneAxis"
+    | "equalSpacings"
+    | "freeRatio"
+    | "keepRatio";
+
+/** What `fine` does in one gesture, as the chip names it */
+export type FineWord = "fine" | "wholeDegrees";
+
+/**
+ * What one drag reads, declared by the gesture (modifier roles, version A): each role it honors
+ * with its own word, absent where it ignores the role, and whether it snaps at all, so the Snap
+ * toggle off changes it. The chip names only these.
+ */
+export interface HonoredRoles {
+    /** Where the drag happens, for the key each role takes */
+    readonly context: GestureContext;
+    readonly fine?: FineWord;
+    readonly constrain?: ConstrainWord;
+    readonly fromCenter?: "fromCenter";
+    readonly snaps: boolean;
+}
+
+/** Nothing honored: a press that grabbed nothing */
+export const HONORS_NOTHING: HonoredRoles = { context: "field", snaps: false };
+
 export type GestureChipState = {
     active: boolean;
+    honored: HonoredRoles;
     roles: Roles;
-    constrainWord?: string;
-    screen?: GestureChipScreen;
-};
-
-type GestureChipPayload = {
-    roles: Roles;
-    constrainWord?: string;
     screen?: GestureChipScreen;
 };
 
 interface GestureChipStore extends GestureChipState {
-    show: (payload: GestureChipPayload) => void;
-    update: (payload: GestureChipPayload) => void;
+    show: (
+        honored: HonoredRoles,
+        roles: Roles,
+        screen: GestureChipScreen,
+    ) => void;
+    /** The drag's roles and pointer now; the roles keep their identity while they're the same */
+    follow: (roles: Roles, screen?: GestureChipScreen) => void;
     clear: () => void;
 }
 
@@ -28,23 +54,27 @@ const emptyRoles: Roles = {
     fromCenter: false,
 };
 
+const sameRoles = (a: Roles, b: Roles) =>
+    a.fine === b.fine &&
+    a.constrain === b.constrain &&
+    a.fromCenter === b.fromCenter;
+
 export const useGestureChipStore = create<GestureChipStore>((set) => ({
     active: false,
+    honored: HONORS_NOTHING,
     roles: emptyRoles,
-    show: ({ roles, constrainWord, screen }) =>
-        set({ active: true, roles, constrainWord, screen }),
-    update: ({ roles, constrainWord, screen }) =>
+    show: (honored, roles, screen) =>
+        set({ active: true, honored, roles, screen }),
+    follow: (roles, screen) =>
         set((state) => ({
-            active: true,
-            roles,
-            constrainWord: constrainWord ?? state.constrainWord,
+            roles: sameRoles(roles, state.roles) ? state.roles : roles,
             screen: screen ?? state.screen,
         })),
     clear: () =>
         set({
             active: false,
+            honored: HONORS_NOTHING,
             roles: emptyRoles,
-            constrainWord: undefined,
             screen: undefined,
         }),
 }));

@@ -545,13 +545,14 @@
             "title": "Field benchmark"
         },
         "gestureChip": {
-            "constrain": "constrain",
-            "constrain45": "45°",
-            "constrainEqualSpacings": "equal spacings",
-            "constrainOneAxis": "one axis",
+            "equalSpacings": "equal spacings",
             "fine": "fine",
+            "freeRatio": "free ratio",
             "fromCenter": "from center",
-            "snapOff": "Snap off"
+            "keepRatio": "keep ratio",
+            "oneAxis": "one axis",
+            "snapOff": "Snap off",
+            "wholeDegrees": "whole degrees"
         },
         "general": {
             "exportField": "Export Field",
