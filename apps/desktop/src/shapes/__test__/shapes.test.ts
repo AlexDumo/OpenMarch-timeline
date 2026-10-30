@@ -86,8 +86,27 @@ describe("parseIntervals", () => {
         expect(parsed("2⅔x3")).toBe(
             '"2⅔" isn\'t a number of marchers. Type a whole count before the interval: 2*3',
         );
-        for (const text of ["1/0", "abc", "x3", "2x", "4,,x", "2*3*4"])
+        for (const text of ["1/0", "abc", "x3", "2x", "4,x", "2*3*4"])
             expect(parsed(text), text).toMatch(/isn't (an interval|a number)/);
+    });
+
+    it("refuses an empty group between others, but lets a list end in + while it's typed", () => {
+        const empty =
+            "There's an empty group in the list. Type a group between each +: 2*3+4*2";
+        for (const text of ["2*3++4*2", "+2*3", "2*3+ +4*2", "4,,x", "2*3++"])
+            expect(parsed(text), text).toBe(empty);
+        expect(parsed("2*3+")).toEqual([{ count: 2, steps: 3 }]);
+        expect(parsed("2*3+4*2, ")).toEqual([
+            { count: 2, steps: 3 },
+            { count: 4, steps: 2 },
+        ]);
+    });
+
+    it("refuses a group of more than 999 marchers", () => {
+        expect(parsed("999*2")).toEqual([{ count: 999, steps: 2 }]);
+        expect(parsed("1000*2+2")).toBe(
+            "A group can have at most 999 marchers",
+        );
     });
 
     it("round-trips through formatIntervals", () => {

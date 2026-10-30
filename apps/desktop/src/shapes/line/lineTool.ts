@@ -7,7 +7,7 @@ import {
     scrubValue,
     spacingRate,
 } from "../editor/scrub";
-import { layGroups, parseIntervals } from "../spacing";
+import { layGroups, MAX_GROUP_COUNT, parseIntervals } from "../spacing";
 import { snapInterval } from "../box/boxGeometry";
 import type {
     GroupPart,
@@ -220,8 +220,10 @@ const GROUPS: ToolGroups<LineParams> = {
         if (/[+,;*x×]/i.test(text)) return typedList(p, n, text, env);
         if (part === "count") {
             const t = text.trim();
-            if (!/^\d+$/.test(t) || Number(t) < 1) return null;
-            return withGroup(p, n, index, (g) => counted(g, Number(t)), env);
+            const count = Number(t);
+            if (!/^\d+$/.test(t) || count < 1 || count > MAX_GROUP_COUNT)
+                return null;
+            return withGroup(p, n, index, (g) => counted(g, count), env);
         }
         const steps = parseSteps(text);
         if (steps === null) return null;
@@ -231,10 +233,19 @@ const GROUPS: ToolGroups<LineParams> = {
     scrub(base, n, index, part, m, env) {
         const distance = scrubDistance("x", m.dx, m.dy);
         if (part === "count") {
-            const was = layGroups(groupsOf(base, n), n)[index]?.count ?? 0;
-            const count = Math.max(
-                1,
-                scrubValue(was, distance, 0, { axis: "x", ...COUNT_RATE }),
+            // From the count typed, when there is one: a dropped or grown group shows another
+            const all = groupsOf(base, n);
+            const was =
+                all[index]?.count ?? layGroups(all, n)[index]?.count ?? 0;
+            const count = Math.min(
+                MAX_GROUP_COUNT,
+                Math.max(
+                    1,
+                    scrubValue(was, distance, 0, {
+                        axis: "x",
+                        ...COUNT_RATE,
+                    }),
+                ),
             );
             if (count === was) return base;
             return withGroup(base, n, index, (g) => counted(g, count), env);
@@ -250,12 +261,28 @@ const GROUPS: ToolGroups<LineParams> = {
     add(p, n, env) {
         const groups = [...groupsOf(p, n)];
         const last = groups.at(-1)!;
-        // A marcher from a counted last group goes to the new one, so the new one isn't dropped
-        if (last.count !== undefined && last.count > 1)
-            groups[groups.length - 1] = counted(last, last.count - 1);
-        else if (last.count === undefined && groups.length === 1)
+        // A plain line: everyone but one at its interval, then the new group of 1
+        if (last.count === undefined && groups.length === 1)
             groups[0] = counted(last, Math.max(1, n - 1));
-        return withGroups(p, n, [...groups, counted(last, 1)], env);
+        groups.push(counted(last, 1));
+        // The new group is never dropped: while the counts before it take every marcher, the
+        // biggest counted group (the later one of a tie) gives one up. With every group at 1
+        // there's no marcher to give, so nothing is added.
+        for (;;) {
+            const laid = layGroups(groups, n);
+            if (laid.at(-1)!.count > 0) break;
+            let from = -1;
+            for (let i = 0; i < groups.length - 1; i++)
+                if (
+                    groups[i]!.count !== undefined &&
+                    laid[i]!.count > 1 &&
+                    (from < 0 || laid[i]!.count >= laid[from]!.count)
+                )
+                    from = i;
+            if (from < 0) return p;
+            groups[from] = counted(groups[from]!, laid[from]!.count - 1);
+        }
+        return withGroups(p, n, groups, env);
     },
     remove(p, n, index, env) {
         const groups = groupsOf(p, n).filter((_, i) => i !== index);

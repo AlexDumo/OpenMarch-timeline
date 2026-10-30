@@ -16,6 +16,8 @@ import {
     type PlacedRecipe,
 } from "../../placed/placedBox";
 import { placementOf } from "../../tool/shapePlacement";
+import { boxLabel } from "../../placed/PlacedBoxesOverlay";
+import { placedBoxSummary } from "../../placed/placedBoxText";
 import { SHAPE_TOOLS } from "../../tool/shapeTools";
 import { kindPickGate } from "../../tool/pickKind";
 import type { ToolEnv } from "../../tool/toolKind";
@@ -532,6 +534,59 @@ describe("mixed intervals (#526)", () => {
             expect(chips(t)).toEqual(["2 × 3", "3 × 2", "1 × 2"]);
         });
 
+        it("adds a group that gets a marcher, even when the last has only 1", () => {
+            let t = typed(fitLine(6), "5*3+1*2");
+            t = edit(t, groups.add(t.params, 6, env), ctx);
+            expect(chips(t)).toEqual(["4 × 3", "1 × 2", "1 × 2"]);
+        });
+
+        it("adds a group that gets a marcher when the counts already take everyone", () => {
+            let t = typed(fitLine(4), "2*3+4*2");
+            expect(chips(t)).toEqual(["2 × 3", "2 × 2"]);
+            t = edit(t, groups.add(t.params, 4, env), ctx);
+            expect(chips(t)).toEqual(["2 × 3", "1 × 2", "1 × 2"]);
+        });
+
+        it("adds no group when every group already has just 1 marcher", () => {
+            const t = typed(fitLine(2), "1*3+1*2");
+            expect(groups.add(t.params, 2, env)).toBe(t.params);
+        });
+
+        const roles = { fine: false, constrain: false, fromCenter: false };
+        const countDragged = (t: ToolState, index: number, dx: number) =>
+            groups.scrub(
+                t.params,
+                t.spots,
+                index,
+                "count",
+                { dx, dy: 0, axis: "x", roles },
+                env,
+            ) as LineParams;
+        const storedCounts = (p: LineParams) =>
+            p.spacing.mode === "fit"
+                ? []
+                : p.spacing.groups.map((g) => g.count);
+
+        it("drags a dropped or grown group's count from its typed count", () => {
+            const dropped = typed(fitLine(2), "2*3+4*2");
+            expect(countDragged(dropped, 1, 1)).toBe(dropped.params);
+            expect(storedCounts(countDragged(dropped, 1, 33))).toEqual([2, 6]);
+            const grown = typed(fitLine(10), "2*3+4*2");
+            expect(storedCounts(countDragged(grown, 1, 33))).toEqual([2, 6]);
+        });
+
+        it("keeps a group's count at 999 or under", () => {
+            const t = typed(fitLine(6), "998*3+2");
+            expect(
+                groups.type(t.params, 6, 0, "count", "1000", env),
+            ).toBeNull();
+            expect(storedCounts(countDragged(t, 0, 2000))).toEqual([
+                999,
+                undefined,
+            ]);
+            expect(interval.type(t.params, 6, "1000*3+2", env)).toBeNull();
+        });
+
         it("adds a group after the rest with +", () => {
             const rest = typed(fitLine(6), "2*3+2");
             const t = edit(rest, groups.add(rest.params, 6, env), ctx);
@@ -681,6 +736,20 @@ describe("a placed line", () => {
                 (g) => `${g.count} × ${g.interval}`,
             ),
         ).toEqual(["2 × 3", "3 × 2", "2 × 1⅔"]);
+    });
+
+    it("labels a placed grouped line with its groups", () => {
+        const t = typed(
+            drawn(6, { x: 100, y: 100 }, { x: 150, y: 100 }),
+            "2*3+4*2",
+        );
+        const placed = readBack(recipeOf(t));
+        expect(boxLabel(placed, STEP)).toBe("Line · 2 × 3 + 4 × 2 steps");
+        expect(placedBoxSummary(placed, STEP)).toBe("2 × 3 + 4 × 2 steps");
+        // A plain line keeps its one interval
+        expect(boxLabel(readBack(recipeOf(keptLine())), STEP)).toBe(
+            "Line · 2 steps",
+        );
     });
 
     describe("a line saved by a newer build reads as plain positions", () => {

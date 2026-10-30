@@ -30,64 +30,91 @@ export type ParsedIntervals =
 /** A count, `*` or `x`, then the interval; or the interval alone */
 const GROUP = /^(?:([^*x×]+?)\s*[x×*]\s*)?([^*x×]+)$/i;
 
-export function parseIntervals(text: string): ParsedIntervals {
-    const parts = text
-        .split(/[+,;]/)
-        .map((part) => part.trim())
-        .filter((part) => part.length > 0);
-    if (parts.length === 0)
+/** The most marchers one group can have */
+export const MAX_GROUP_COUNT = 999;
+
+/** A list's groups apart (`2*3+4*2` is `2*3` and `4*2`), or why they can't be */
+function listParts(
+    text: string,
+): { readonly parts: string[] } | { readonly message: string } {
+    const parts = text.split(/[+,;]/).map((part) => part.trim());
+    // One separator at the end is a list still being typed (`2*3+`)
+    if (parts.length > 1 && parts.at(-1) === "") parts.pop();
+    if (parts.length === 1 && parts[0] === "")
         return {
-            ok: false,
             message: tolgee.t(
                 "shapes.spacing.empty",
                 "Enter an interval in steps",
             ),
         };
+    if (parts.includes(""))
+        return {
+            message: tolgee.t(
+                "shapes.spacing.emptyGroup",
+                "There's an empty group in the list. Type a group between each +: 2*3+4*2",
+            ),
+        };
+    return { parts };
+}
+
+/** One group of a list (`2*3`, or `2` for the rest), or why it isn't one */
+function parseGroup(
+    part: string,
+): IntervalGroup | { readonly message: string } {
+    const match = GROUP.exec(part);
+    const steps = match && readSteps(match[2]!.replace(/\s*steps?$/i, ""));
+    if (!match || steps === null)
+        return {
+            message: tolgee.t(
+                "shapes.spacing.notInterval",
+                '"{part}" isn\'t an interval. Type steps (2), or a count and steps for each group (2*3+4*2)',
+                { part },
+            ),
+        };
+    const countText = match[1]?.trim();
+    if (countText !== undefined && !/^\d+$/.test(countText))
+        return {
+            message: tolgee.t(
+                "shapes.spacing.notCount",
+                '"{count}" isn\'t a number of marchers. Type a whole count before the interval: 2*3',
+                { count: countText },
+            ),
+        };
+    if (!(steps > 0))
+        return {
+            message: tolgee.t(
+                "shapes.spacing.notPositive",
+                "An interval must be more than 0 steps",
+            ),
+        };
+    if (countText === undefined) return { steps };
+    const count = Number(countText);
+    if (!(count >= 1))
+        return {
+            message: tolgee.t(
+                "shapes.spacing.noMarchers",
+                "A group needs at least 1 marcher",
+            ),
+        };
+    if (count > MAX_GROUP_COUNT)
+        return {
+            message: tolgee.t(
+                "shapes.spacing.tooManyMarchers",
+                "A group can have at most {max} marchers",
+                { max: MAX_GROUP_COUNT },
+            ),
+        };
+    return { count, steps };
+}
+
+export function parseIntervals(text: string): ParsedIntervals {
+    const list = listParts(text);
+    if ("message" in list) return { ok: false, message: list.message };
     const groups: IntervalGroup[] = [];
-    for (const part of parts) {
-        const match = GROUP.exec(part);
-        const steps = match && readSteps(match[2]!.replace(/\s*steps?$/i, ""));
-        if (!match || steps === null)
-            return {
-                ok: false,
-                message: tolgee.t(
-                    "shapes.spacing.notInterval",
-                    '"{part}" isn\'t an interval. Type steps (2), or a count and steps for each group (2*3+4*2)',
-                    { part },
-                ),
-            };
-        const countText = match[1]?.trim();
-        if (countText !== undefined && !/^\d+$/.test(countText))
-            return {
-                ok: false,
-                message: tolgee.t(
-                    "shapes.spacing.notCount",
-                    '"{count}" isn\'t a number of marchers. Type a whole count before the interval: 2*3',
-                    { count: countText },
-                ),
-            };
-        if (!(steps > 0))
-            return {
-                ok: false,
-                message: tolgee.t(
-                    "shapes.spacing.notPositive",
-                    "An interval must be more than 0 steps",
-                ),
-            };
-        if (countText === undefined) {
-            groups.push({ steps });
-            continue;
-        }
-        const count = Number(countText);
-        if (!(count >= 1))
-            return {
-                ok: false,
-                message: tolgee.t(
-                    "shapes.spacing.noMarchers",
-                    "A group needs at least 1 marcher",
-                ),
-            };
-        groups.push({ count, steps });
+    for (const part of list.parts) {
+        const group = parseGroup(part);
+        if ("message" in group) return { ok: false, message: group.message };
+        groups.push(group);
     }
     if (groups.filter((g) => g.count === undefined).length > 1)
         return {
