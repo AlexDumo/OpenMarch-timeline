@@ -244,9 +244,7 @@ the rules table has rows for placed boxes and the box tool's Alt.
   `fieldLineTool.ts`, `LineToolPreview` and the test API's `lineTool()`.
 - **Rules table conflicts.** A click on a box member selects the whole box,
   where the Click row (story 23) says a click selects only that marcher. The
-  box tool's Alt is from center, where the Alt row is the same for shapes.
-  Lock X / Lock Y must not
-  constrain box handles (Lock row). Each needs a row edit or a box-specific
+  Lock X / Lock Y must not constrain box handles (Lock row). Each needs a row edit or a box-specific
   exception, decided by the owner.
 - **Box v1's own open questions** for the owner: the pressed back corner is
   empty when the short back rank is centered; later-page box copies go stale

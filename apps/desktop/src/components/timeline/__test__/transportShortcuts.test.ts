@@ -102,7 +102,7 @@ describe("app menu actions (docs/adr/0003-menu-actions-ipc.md)", () => {
 });
 
 describe("the shortcuts list (UI-17 follow-up)", () => {
-    it("lists shape drags' Shift (fine), Mod (constrain) and Alt (from center) for the platform (#453)", () => {
+    it("lists the drag keys for shapes and marchers: Shift (fine), Mod (constrain), Alt (from center) (#453)", () => {
         const shapeKeys = (isMac: boolean) =>
             shortcutGroups((key) => key, {}, isMac)
                 .find((g) => g.title === "Shapes")!

@@ -407,7 +407,7 @@ did): that would re-render the inspector on every pointer move.
 
 **Decided changes** (`change:` in `scale-and-rotate.spec.mts`, `test.fail`
 on Fabric): constrain on a middle handle still scales its axis ("constrain does
-nothing there"; Fabric cancels the scale while Shift was down), fine (Shift) is
+nothing there"; Fabric cancelled the scale while Shift was down), fine (Shift) is
 precision on scale and rotate (Alt pans on Fabric), and a press on a handle
 held over 300 ms but moved under 4 px changes nothing (Fabric's click has a
 time limit, so it transforms). As on Fabric, Lock X / Lock Y leave the group

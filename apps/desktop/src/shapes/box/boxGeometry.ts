@@ -519,8 +519,8 @@ export interface HeldAxes {
 /**
  * `p` moved so its marchers stand on the grid: the back-left corner snaps (a spot of the full
  * grid, even when the short back rank leaves it empty), and every other marcher follows, the
- * intervals being whole half steps. Unchanged with the Snap toggle off, and for a box turned off the field's
- * axes, whose marchers can't all stand on the grid.
+ * intervals being whole half steps. Unchanged with the Snap toggle off, and for a box turned
+ * off the field's axes, whose marchers can't all stand on the grid.
  *
  * On a `held` field axis the box isn't moved: the caller has put the marcher being held (a
  * stretch's fixed edge, the pivot's spot) where it was, on the grid if it was. With an interval

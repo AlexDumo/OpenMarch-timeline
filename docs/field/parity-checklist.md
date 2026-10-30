@@ -100,9 +100,9 @@ numbers) is in [parity-gate-results.md](parity-gate-results.md).
 56. Quickly flick a marcher about 20 px and let go → it moves. **(change)** Fabric's "under 300 ms and 20 px" rule made that a click.
 57. Rounding on: drag one marcher → it snaps to the rounding grid (story 36).
 58. Rounding on: drag a group whose marchers are off the grid → it moves in whole steps and keeps its shape. **(change)** On Fabric each marcher snapped (story 37).
-59. Rounding on: hold Shift (fine) while dragging → ¼ speed, no grid snap (story 38).
+59. Rounding on: hold Shift (fine) while dragging → ¼ speed, no grid snap (story 38). **(change)** On Fabric, Shift only turned snapping off.
 60. With the Snap toggle off (Shift+M), dragging isn't rounded until it is turned on again.
-61. Press Shift (fine) mid-drag, then let go of it → slows down from where the marcher is, with no jump; full speed and snapping again after. **(change)** Alt did this on Fabric (story 39).
+61. Press Shift (fine) mid-drag, then let go of it → slows down from where the marcher is, with no jump; full speed and snapping again after. **(change)** On Fabric, Alt panned (story 39).
 62. Lock X, then Lock Y, and drag → the locked axis doesn't change (story 40).
 63. Shift+press an unselected marcher and drag → it's added and the whole selection moves (as Fabric).
 64. Drop on a page with a timeline range selected → the drop creates or joins that range's move (story 41).

@@ -23,7 +23,7 @@ export interface GestureKeys {
     keys(): HeldKeys;
     /** Takes the keys a pointer event carries; returns whether the roles changed */
     update(keys: HeldKeys): boolean;
-    /** Stops following the keyboard */
+    /** Stops following the keyboard and the on-screen toggles */
     dispose(): void;
 }
 
@@ -37,6 +37,7 @@ export function startGestureKeys({
     press,
     usedByPress = [],
     onScreen,
+    onScreenChange,
     onRolesChange,
     track = true,
     map,
@@ -49,7 +50,12 @@ export function startGestureKeys({
     usedByPress?: readonly RoleKey[];
     /** Touch and Pencil toggles, read whenever the roles are */
     onScreen?: () => ReadonlySet<HeldRole>;
-    /** Called when a key pressed or released mid-drag changes the roles */
+    /**
+     * Subscribes to the on-screen toggles changing (returns the stop), so latching one mid-drag
+     * changes the roles as a keydown does. On-screen toggles never wait on the press rule.
+     */
+    onScreenChange?: (changed: () => void) => () => void;
+    /** Called when a key or on-screen toggle changed mid-drag changes the roles */
     onRolesChange?: (roles: Roles) => void;
     /** Follow `keydown`/`keyup` on window; off for tests and one-shot reads */
     track?: boolean;
@@ -66,15 +72,19 @@ export function startGestureKeys({
             usedByPress: used,
         });
     let last = roles();
-    const update = (next: HeldKeys) => {
-        keys = next;
-        used = releaseUsedKeys(used, keys, isMac);
+    /** Whether the roles changed since they were last read here */
+    const reread = () => {
         const now = roles();
         const changed = !sameRoles(now, last);
         last = now;
         return changed;
     };
-    const detach = track
+    const update = (next: HeldKeys) => {
+        keys = next;
+        used = releaseUsedKeys(used, keys, isMac);
+        return reread();
+    };
+    const detachKeys = track
         ? trackHeldKeys(
               (next) => {
                   if (update(next)) onRolesChange?.(last);
@@ -82,5 +92,17 @@ export function startGestureKeys({
               () => keys,
           )
         : () => {};
-    return { roles, keys: () => keys, update, dispose: detach };
+    const detachScreen =
+        onScreenChange?.(() => {
+            if (reread()) onRolesChange?.(last);
+        }) ?? (() => {});
+    return {
+        roles,
+        keys: () => keys,
+        update,
+        dispose: () => {
+            detachKeys();
+            detachScreen();
+        },
+    };
 }
