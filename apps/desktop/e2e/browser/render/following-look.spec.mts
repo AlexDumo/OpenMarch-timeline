@@ -32,7 +32,10 @@ const STYLES = [
     { name: "both", fill: "rgba(220,0,0,1)", outline: "rgba(0,0,0,1)" },
 ] as const;
 
-/** One section per shape and style, two marchers each: Set (moves over page 1) and Following (stays). */
+/**
+ * One section per shape and style, two marchers each: Set (moves over page 1) and Following (no
+ * move over page 1: it holds, its slot left vacant, since a stay move's end is a keyframe, #468).
+ */
 const sections = SHAPES.flatMap((shape, row) =>
     STYLES.map((style, column) => ({
         shape,
@@ -66,6 +69,9 @@ const SHOW_SQL = [
         marchers,
         positions: [home, page1],
     }),
+    `DELETE FROM timeline_assignments WHERE transition_id = 1 AND marcher_id IN (${sections
+        .map((s) => s.following)
+        .join(", ")})`,
     `INSERT INTO section_appearances (section, fill_color, outline_color, shape_type, visible, label_visible) VALUES ${sections
         .map(
             (s) =>
@@ -284,9 +290,9 @@ test.describe("following look, turf", () => {
 });
 
 // Over page 2 (beats 9–17) T1 and T2 move (T1 with a detour), T3 has a stay
-// move and T4 holds.
-// Isolating that move on its flag: T1 and T2 Set, T3 Following, T4 dimmed
-// outside it, beside the move's gray dashed ghosts
+// move (its end is a keyframe, so it's Set, #468) and T4 holds.
+// Isolating that move on its flag: T1, T2 and T3 Set, T4 dimmed outside it;
+// mid-move they follow, beside the move's gray dashed ghosts
 test.describe("following look, isolated", () => {
     test.use({
         seedSql: [
@@ -357,7 +363,7 @@ test.describe("following look, isolated", () => {
                         ),
                 ),
             )
-            .toEqual(["set", "set", "following", "dimmed"]);
+            .toEqual(["set", "set", "set", "dimmed"]);
         await zoomBy(page, 3);
         await capture(page, "following-isolated-3x", 60);
         // Mid-move, where the move's ghosts show
@@ -369,30 +375,34 @@ test.describe("following look, isolated", () => {
 });
 
 // #324: a Following label is lighter in weight than a Set one, at full
-// opacity. S12 moves over page 1 (Set), F12 stays (Following); their "12"s
+// opacity. S12 moves over page 1 (Set), F12 holds (Following); their "12"s
 // are the same glyphs at the same size, so the thinner one has less ink but
 // the same darkest stroke
 test.describe("following label weight", () => {
     test.use({
-        seedSql: seedShowSql({
-            beats: 16,
-            measureStarts: [1, 5, 9, 13],
-            pageStarts: [1],
-            marchers: [
-                { id: 1, section: "Trumpet", prefix: "S", order: 12 },
-                { id: 2, section: "Trumpet", prefix: "F", order: 12 },
-            ],
-            positions: [
-                [
-                    [1, 400, 284],
-                    [2, 460, 300],
+        seedSql: [
+            ...seedShowSql({
+                beats: 16,
+                measureStarts: [1, 5, 9, 13],
+                pageStarts: [1],
+                marchers: [
+                    { id: 1, section: "Trumpet", prefix: "S", order: 12 },
+                    { id: 2, section: "Trumpet", prefix: "F", order: 12 },
                 ],
-                [
-                    [1, 400, 300],
-                    [2, 460, 300],
+                positions: [
+                    [
+                        [1, 400, 284],
+                        [2, 460, 300],
+                    ],
+                    [
+                        [1, 400, 300],
+                        [2, 460, 300],
+                    ],
                 ],
-            ],
-        }),
+            }),
+            // F12 has no move over page 1, its slot left vacant
+            "DELETE FROM timeline_assignments WHERE transition_id = 1 AND marcher_id = 2",
+        ],
     });
 
     test("a Following label is drawn thinner than a Set one, as dark", async ({

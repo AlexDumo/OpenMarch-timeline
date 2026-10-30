@@ -11,6 +11,7 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 import { TooltipClassName } from "@openmarch/ui";
 import {
     CursorTextIcon,
+    DiamondIcon,
     FlagIcon,
     LinkBreakIcon,
     LinkSimpleIcon,
@@ -363,6 +364,10 @@ export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
      */
     readonly keepHere?: TimelineKeepHereMenu;
     /**
+     * **Set as shown** on a page box (holds, fork #466). Without it, the menu has no such entry.
+     */
+    readonly setAsShown?: TimelineSetAsShownMenu;
+    /**
      * **Subset** on a page box (UI-9): a switch that shows whether the page is a subset, and
      * flips it. Without it, the menu has no such entry.
      */
@@ -391,6 +396,16 @@ export interface TimelineKeepHereMenu {
     } | null;
     readonly onKeep: (pageId: string | number) => void;
     readonly onFollow: (pageId: string | number) => void;
+}
+
+/** The page box menu's **Set as shown** entry (holds, fork #466), by page id. */
+export interface TimelineSetAsShownMenu {
+    /**
+     * Why the entry can't run on the page (no selected marcher is Not set there), or null when it
+     * can; undefined when no marchers are selected, so the entry doesn't show
+     */
+    readonly reasonFor: (pageId: string | number) => string | null | undefined;
+    readonly onSet: (pageId: string | number) => void;
 }
 
 /**
@@ -485,6 +500,7 @@ export function useTimelineRangeMenu({
             (menu?.onDeleteFlag !== undefined ||
                 menu?.onDeleteWithMoves !== undefined ||
                 menu?.keepHere !== undefined ||
+                menu?.setAsShown !== undefined ||
                 menu?.subset !== undefined ||
                 menu?.extraFor !== undefined) &&
             target.pageId !== undefined;
@@ -498,6 +514,10 @@ export function useTimelineRangeMenu({
         open && menu?.keepHere && open.target.pageId !== undefined
             ? menu.keepHere.stateFor(open.target.pageId)
             : null;
+    const setAsShownReason =
+        open && menu?.setAsShown && open.target.pageId !== undefined
+            ? menu.setAsShown.reasonFor(open.target.pageId)
+            : undefined;
     const pageExtra =
         open && menu?.extraFor && open.target.pageId !== undefined
             ? menu.extraFor(open.target.pageId)
@@ -543,6 +563,29 @@ export function useTimelineRangeMenu({
                             <>
                                 <TimelineMenuEntries entries={pageExtra} />
                                 <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                            </>
+                        )}
+                        {setAsShownReason !== undefined && (
+                            <>
+                                <MenuItemWithReason
+                                    testId="timeline-range-menu-set-as-shown"
+                                    reason={setAsShownReason}
+                                    reasonTestId="timeline-range-menu-set-as-shown-reason"
+                                    onSelect={() =>
+                                        menu?.setAsShown?.onSet(
+                                            open.target.pageId!,
+                                        )
+                                    }
+                                >
+                                    <DiamondIcon size={14} />
+                                    {tolgee.t(
+                                        "timeline.rangeMenu.setAsShown",
+                                        "Set as shown",
+                                    )}
+                                </MenuItemWithReason>
+                                {!keepState && (
+                                    <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                                )}
                             </>
                         )}
                         {keepState && (
