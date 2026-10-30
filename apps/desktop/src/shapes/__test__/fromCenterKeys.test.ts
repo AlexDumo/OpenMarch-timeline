@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
-import type { FieldPointer } from "@/field/editor/fieldEditor";
+import type { FieldModePress, FieldPointer } from "@/field/editor/fieldEditor";
 import { NO_KEYS, type HeldKeys } from "@/input/modifierRoles";
 import * as platform from "@/shortcuts/platform";
 import { boxShape } from "../box/boxShape";
@@ -57,6 +57,9 @@ const field = () => ({
     drawn: () => new Map(),
 });
 
+/** What the field editor tells a mode of a press, off a Mac */
+const OFF_MAC: FieldModePress = { reachesInside: () => false, isMac: false };
+
 /** On the grid and away from the field's lines */
 const FROM = toolEnvFor(field()).gridSnap({ x: 30 * STEP, y: 20 * STEP });
 
@@ -101,7 +104,7 @@ describe("drawing a box with Alt", () => {
 
     it("held from the press, grows the box about the press", () => {
         openShapeTool(openTool(boxTool, marchers), null, null);
-        shapeToolMode.press(pointer(FROM, { alt: true }));
+        shapeToolMode.press(pointer(FROM, { alt: true }), OFF_MAC);
         shapeToolMode.move(pointer(TO, { alt: true }));
         const c = boxCenter(openParams());
         expect(c.x).toBeCloseTo(FROM.x, 6);
@@ -110,7 +113,7 @@ describe("drawing a box with Alt", () => {
 
     it("pressed and released mid-drag, switches between corner to corner and from the center without a pointer move", () => {
         openShapeTool(openTool(boxTool, marchers), null, null);
-        shapeToolMode.press(pointer(FROM));
+        shapeToolMode.press(pointer(FROM), OFF_MAC);
         shapeToolMode.move(pointer(TO));
         const corner = openParams();
         const middle = boxCenter(corner);
@@ -129,7 +132,7 @@ describe("drawing a box with Alt", () => {
 describe("the open box's handle with Alt mid-drag", () => {
     it("resizes about the center, and letting go puts the opposite side back", () => {
         openShapeTool(openTool(boxTool, marchers), null, null);
-        shapeToolMode.press(pointer(FROM));
+        shapeToolMode.press(pointer(FROM), OFF_MAC);
         shapeToolMode.move(
             pointer({ x: FROM.x + 8 * STEP, y: FROM.y + 8 * STEP }),
         );
@@ -138,7 +141,7 @@ describe("the open box's handle with Alt mid-drag", () => {
         const before = boxTool.frameOf(box, N);
         const handle = boxHandlePoint(box, N, "e");
 
-        shapeToolMode.press(pointer(handle));
+        shapeToolMode.press(pointer(handle), OFF_MAC);
         shapeToolMode.move(pointer({ x: handle.x + 2 * STEP, y: handle.y }));
         const fixed = openParams();
         // #439: the west side stays
@@ -200,7 +203,7 @@ describe("a placed box's handles with Alt", () => {
             const handle = boxHandlePoint(box.params, N, at);
             const shown = () => mode.drawing()!.outline!;
             const center = boxCenter(box.params);
-            mode.press(pointer(handle));
+            mode.press(pointer(handle), OFF_MAC);
             const to = {
                 x: handle.x + 2 * STEP,
                 y: handle.y + (at === "se" ? 2 * STEP : 0),
