@@ -7,15 +7,16 @@ import {
 import { linePull } from "../frame/edgeGuides";
 import { pivotOf } from "../frame/pivot";
 import { makePath, type Path } from "../geometry/path";
-import { chordOffsets } from "../spacing";
+import { chordOffsets, groupGaps } from "../spacing";
 import type { ToolEnv } from "../tool/toolKind";
 import type { Slot, XY } from "../types";
 
 /**
  * A Line as the shape host draws it (#523, spec #522): points the line passes through, and how
  * its marchers are spaced along it. This first version draws two points with straight segments
- * between them; the params already hold what later versions add (more points with tensions, a
- * closed flag, interval groups), so recipes saved now read the same then. Everything here is pure.
+ * between them, spaced by one interval or by groups of marchers at their own intervals (#526); the
+ * params already hold what later versions add (more points with tensions, a closed flag), so
+ * recipes saved now read the same then. Everything here is pure.
  */
 
 /** A point the line passes through. Tension 0 is a corner; above 0 a smooth point (later) */
@@ -24,12 +25,14 @@ export interface LinePoint extends XY {
 }
 
 /**
- * A run of marchers at one interval (spec #522, "Mixed intervals"). `count` absent is "the rest":
- * with a single group, every gap is `interval`.
+ * A run of marchers at one interval (spec #522, "Mixed intervals"). `count` absent is "the rest",
+ * at most one group in a list; with a single group, every gap is `interval`. How the groups share
+ * the marchers is `layGroups` (`spacing.ts`).
  */
 export interface LineGroup {
     /** Field units between neighbors, straight across (the chord) */
     readonly interval: number;
+    /** Marchers in the group, a whole number from 1; absent for the rest */
     readonly count?: number;
 }
 
@@ -75,13 +78,12 @@ const isPoint = (q: unknown): q is LinePoint =>
     // Smooth points come later (#525): a curve saved by a newer build isn't read as straight
     (q as LinePoint).tension === 0;
 
-const isGroup = (g: unknown): g is LineGroup =>
-    typeof g === "object" &&
-    g !== null &&
-    Number.isFinite((g as LineGroup).interval) &&
-    (g as LineGroup).interval > 0 &&
-    // A counted group is a mixed interval (#526), which this version can't lay out
-    (g as LineGroup).count === undefined;
+const isGroup = (g: unknown): g is LineGroup => {
+    if (typeof g !== "object" || g === null) return false;
+    const { interval, count } = g as LineGroup;
+    if (!Number.isFinite(interval) || !(interval > 0)) return false;
+    return count === undefined || (Number.isInteger(count) && count >= 1);
+};
 
 const ANCHORS: readonly unknown[] = ["start", "center", "end"];
 // `pivot` is the host's (ADR 0006, amendment of 2026-10-20), stored beside the kind's own numbers
@@ -89,7 +91,7 @@ const KEYS = new Set(["points", "closed", "spacing", "pivot"]);
 
 /**
  * Whether `params` is a line this version can lay out exactly as it was saved. Anything a newer
- * build adds (more points, tensions, closing, mixed groups, Measured, corners) is refused, so the
+ * build adds (more points, tensions, closing, Measured, corners) is refused, so the
  * recipe shows as plain positions instead of being misread and rewritten on the first edit (ADR
  * 0006, decision 5). Each later ticket widens this as it adds the layout.
  */
@@ -109,8 +111,13 @@ export function isLineParams(params: unknown): params is LineParams {
     };
     if (sp.mode === "fit") return true;
     if (sp.mode !== "keep" && sp.mode !== "path") return false;
-    if (!Array.isArray(sp.groups) || sp.groups.length !== 1) return false;
+    if (!Array.isArray(sp.groups) || sp.groups.length === 0) return false;
     if (!sp.groups.every(isGroup)) return false;
+    // Mixed intervals (#526): any groups, at most one of them the rest
+    const rests = (sp.groups as LineGroup[]).filter(
+        (g) => g.count === undefined,
+    );
+    if (rests.length > 1) return false;
     return sp.mode === "keep" || ANCHORS.includes(sp.anchor);
 }
 
@@ -122,9 +129,27 @@ export function linePath(p: LineParams): Path {
     return makePath(segments);
 }
 
-/** The interval a typed spacing keeps, in field units; null in Fit */
+/**
+ * Whether the line is spaced by groups (#526) rather than one interval for everyone: more than
+ * one group, or a group with a count
+ */
+export const hasGroups = (p: LineParams): boolean =>
+    p.spacing.mode !== "fit" &&
+    (p.spacing.groups.length > 1 || p.spacing.groups[0]!.count !== undefined);
+
+/**
+ * The interval a typed spacing keeps, in field units, the smallest of its groups' when it has
+ * several; null in Fit
+ */
 export function typedInterval(p: LineParams): number | null {
-    return p.spacing.mode === "fit" ? null : p.spacing.groups[0]!.interval;
+    if (p.spacing.mode === "fit") return null;
+    return Math.min(...p.spacing.groups.map((g) => g.interval));
+}
+
+/** The gaps between the `n` marchers in a typed spacing, in field units; null in Fit */
+export function lineGaps(p: LineParams, n: number): number[] | null {
+    if (p.spacing.mode === "fit") return null;
+    return groupGaps(p.spacing.groups, n, (g) => g.interval);
 }
 
 /**
@@ -140,14 +165,13 @@ export function lineSpots(p: LineParams, n: number): Slot[] {
     if (n <= 0) return [];
     const path = linePath(p);
     const at = (s: number): Slot => ({ ...path.at(s), s });
-    const interval = typedInterval(p);
-    if (interval === null) {
+    const gaps = lineGaps(p, n);
+    if (gaps === null) {
         if (n === 1) return [at(path.length / 2)];
         return Array.from({ length: n }, (_, i) =>
             at((path.length * i) / (n - 1)),
         );
     }
-    const gaps = Array.from({ length: n - 1 }, () => interval);
     const run = chordOffsets(path, 0, gaps).at(-1)!;
     // Keep interval is sized to its run, which sits on it whole; on the path it sits at its anchor
     const anchor = p.spacing.mode === "path" ? p.spacing.anchor : "center";
@@ -311,11 +335,24 @@ export function withInterval(
     interval: number,
     env: ToolEnv,
 ): LineParams {
-    const groups = [{ interval }];
+    return withGroups(p, n, [{ interval }], env);
+}
+
+/**
+ * The line spaced by `groups` (#526), sized to them from its pivot like {@link withInterval}: as
+ * long as their gaps add up to, in Keep interval; its drawn length kept on the path
+ */
+export function withGroups(
+    p: LineParams,
+    n: number,
+    groups: readonly LineGroup[],
+    env: ToolEnv,
+): LineParams {
     if (p.spacing.mode === "path")
         return { ...p, spacing: { ...p.spacing, groups } };
     const kept: LineParams = { ...p, spacing: { mode: "keep", groups } };
-    return n > 1 ? resized(kept, (n - 1) * interval, env) : kept;
+    const size = lineGaps(kept, n)!.reduce((sum, gap) => sum + gap, 0);
+    return n > 1 ? resized(kept, size, env) : kept;
 }
 
 /**
@@ -361,7 +398,7 @@ export function withSpacing(
     if (mode === "keep")
         return p.spacing.mode === "keep"
             ? p
-            : withInterval({ ...p, spacing: FIT }, n, groups[0]!.interval, env);
+            : withGroups({ ...p, spacing: FIT }, n, groups, env);
     return { ...p, spacing: { mode: "path", groups, anchor: mode } };
 }
 

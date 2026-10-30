@@ -87,6 +87,7 @@ import { ReshuffleButton } from "./ReshuffleButton";
 import { EdgeToggle } from "./EdgeToggle";
 import { ModeMenu } from "./ModeMenu";
 import { ChoiceMenus } from "./ChoiceMenu";
+import { GroupChips } from "./GroupChips";
 import { OutlineGap } from "./OutlineGap";
 import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
@@ -200,7 +201,7 @@ function ShapeEditorBar({
     const env = envFor();
     const layout = env
         ? chipLayout(kind, params, spots, { ...env, stepPx, anchor })
-        : { values: [], intervals: [], ratioLock: false };
+        : { values: [], intervals: [], groups: null, ratioLock: false };
     const chips = useRef({ layout, anchor });
     // What the − and + presses act on: what this render shows
     chips.current = { layout, anchor };
@@ -306,6 +307,20 @@ function ShapeEditorBar({
                             </span>
                         )}
                     </span>
+                    {layout.groups && (
+                        <>
+                            <Divider />
+                            <GroupChips
+                                target={live}
+                                groups={layout.groups}
+                                envFor={envFor}
+                                onScrubbing={setShapeScrubbing}
+                            />
+                            <span className="text-text/60">
+                                {tolgee.t("shapes.edit.steps", "steps")}
+                            </span>
+                        </>
+                    )}
                     {layout.intervals.length > 0 && (
                         <>
                             <Divider />

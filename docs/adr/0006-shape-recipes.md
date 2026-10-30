@@ -287,7 +287,10 @@ The Line shape (spec #522, #523) stores a new kind:
    (the interval follows from the drawn points), `{ mode: "keep", groups }` (Keep interval) or
    `{ mode: "path", groups, anchor }` (Interval on the path, `anchor` one of `start`, `center`,
    `end`). A group is `{ interval, count? }`: the interval is the straight distance between
-   neighbors in field units, and a group with no `count` is the rest.
+   neighbors in field units, `count` a whole number of marchers from 1, and a group with no
+   `count` is the rest. At most one group in a list is the rest (#526). Recipes store the parsed
+   groups, never the typed text, so the interval list's change of meaning (count × interval, from
+   interval × gaps) changes no saved data.
 2. **A Line stores no frame.** Its frame (center, size, turn) follows from its points, so the
    frame amendment's stored center doesn't apply. A kind whose frame follows from its own numbers
    declares a `readable` check, used instead of the stored-center check when a recipe is read.
@@ -295,4 +298,6 @@ The Line shape (spec #522, #523) stores a new kind:
    and the Measured and corners settings still to come are all optional fields or wider values of
    these. A build reads a Line only when it can lay out every field exactly as saved; anything
    newer reads as plain positions (decision 5), never as the nearest shape it understands. Each
-   build widens its `readable` check as it learns a field.
+   build widens its `readable` check as it learns a field: the first Line build read two straight
+   points and a single group with no count; mixed intervals (#526) read any number of groups,
+   counted or with one rest.

@@ -1,11 +1,19 @@
 import tolgee from "@/global/singletons/Tolgee";
 import { resizeCursor } from "../frame/frame";
 import { formatSteps, parseSteps } from "../editor/format";
-import { scrubDistance, scrubValue, spacingRate } from "../editor/scrub";
+import {
+    COUNT_RATE,
+    scrubDistance,
+    scrubValue,
+    spacingRate,
+} from "../editor/scrub";
+import { layGroups, parseIntervals } from "../spacing";
 import { snapInterval } from "../box/boxGeometry";
 import type {
+    GroupPart,
     ToolChoice,
     ToolEnv,
+    ToolGroups,
     ToolKind,
     ToolParam,
 } from "../tool/toolKind";
@@ -13,16 +21,19 @@ import { lineShape } from "./lineShape";
 import {
     dragPoint,
     drawLine,
+    hasGroups,
     isLineParams,
     lineFrame,
     lineInFrame,
     lineInterval,
     moveLine,
     onLine,
+    withGroups,
     withInterval,
     withLineFrame,
     withSpacing,
     type LineAnchor,
+    type LineGroup,
     type LineParams,
 } from "./lineGeometry";
 
@@ -36,6 +47,54 @@ const onHalves = (steps: number) =>
 /** An interval set as typed: kept as it is (1⅔, 1.37), not on half steps (#411, #423) */
 const typed = (p: LineParams, n: number, steps: number, env: ToolEnv) =>
     withInterval(p, n, snapInterval(steps * env.stepPx, env, true), env);
+
+/** The line's groups, in Fit the one interval it works out to */
+const groupsOf = (p: LineParams, n: number): readonly LineGroup[] =>
+    p.spacing.mode === "fit"
+        ? [{ interval: lineInterval(p, n) }]
+        : p.spacing.groups;
+
+/**
+ * An interval list typed (#526): one number is everyone at it, as before; groups space the line
+ * by them, each interval kept as typed. Null when the list isn't understood.
+ */
+function typedList(
+    p: LineParams,
+    n: number,
+    text: string,
+    env: ToolEnv,
+): LineParams | null {
+    const parsed = parseIntervals(text);
+    if (!parsed.ok) return null;
+    const [first, ...others] = parsed.groups;
+    if (others.length === 0 && first!.count === undefined)
+        return typed(p, n, first!.steps, env);
+    const groups = parsed.groups.map(({ steps, count }) => ({
+        interval: snapInterval(steps * env.stepPx, env, true),
+        ...(count === undefined ? {} : { count }),
+    }));
+    return withGroups(p, n, groups, env);
+}
+
+/**
+ * The line's groups with each interval changed by `change` and rounded by `round`; null when one
+ * would go under half a step
+ */
+function eachInterval(
+    p: LineParams,
+    n: number,
+    change: (interval: number) => number,
+    round: (interval: number) => number,
+    env: ToolEnv,
+): LineParams | null {
+    const changed = groupsOf(p, n).map((g) => ({
+        ...g,
+        interval: change(g.interval),
+    }));
+    if (changed.some((g) => g.interval < env.stepPx / 2 - 1e-9)) return null;
+    const groups = changed.map((g) => ({ ...g, interval: round(g.interval) }));
+    return withGroups(p, n, groups, env);
+}
 
 /**
  * The line's interval between neighbors. In Fit it's worked out from the line as drawn; typing or
@@ -70,11 +129,20 @@ const INTERVAL: ToolParam<LineParams> = {
         ),
     display: (p, n, stepPx) => formatSteps(lineInterval(p, n) / stepPx),
     value: (p, n, stepPx) => lineInterval(p, n) / stepPx,
-    type(p, n, text, env) {
-        const steps = parseSteps(text);
-        return steps === null ? null : typed(p, n, steps, env);
-    },
-    set: (p, n, steps, env) => typed(p, n, steps, env),
+    // The full list syntax (#526): `2*3+4*2` switches to groups
+    type: (p, n, text, env) => typedList(p, n, text, env),
+    // With groups, every interval in proportion: the smallest one set to `steps`
+    set: (p, n, steps, env) =>
+        hasGroups(p)
+            ? eachInterval(
+                  p,
+                  n,
+                  (interval) =>
+                      (interval * steps * env.stepPx) / lineInterval(p, n),
+                  (interval) => snapInterval(interval, env, true),
+                  env,
+              )
+            : typed(p, n, steps, env),
     scrub(base, n, m, env) {
         const was = lineInterval(base, n) / env.stepPx;
         const steps = scrubValue(
@@ -93,9 +161,109 @@ const INTERVAL: ToolParam<LineParams> = {
         );
     },
     widen(p, n, by, env) {
+        if (hasGroups(p))
+            return eachInterval(
+                p,
+                n,
+                (interval) => interval + by * env.stepPx,
+                (interval) => snapInterval(interval, env),
+                env,
+            );
         const steps = lineInterval(p, n) / env.stepPx + by;
         if (steps < 0.5 - 1e-9) return null;
         return withInterval(p, n, snapInterval(steps * env.stepPx, env), env);
+    },
+};
+
+/** The line's groups with group `index` changed by `change` */
+function withGroup(
+    p: LineParams,
+    n: number,
+    index: number,
+    change: (group: LineGroup) => LineGroup,
+    env: ToolEnv,
+): LineParams {
+    const groups = groupsOf(p, n);
+    if (index < 0 || index >= groups.length) return p;
+    return withGroups(
+        p,
+        n,
+        groups.map((g, i) => (i === index ? change(g) : g)),
+        env,
+    );
+}
+
+/** A group given `count` marchers, typed: a group that was the rest no longer is */
+const counted = (g: LineGroup, count: number): LineGroup => ({
+    interval: g.interval,
+    count,
+});
+
+/**
+ * The line's mixed intervals (#526): each group a chip in the floating editor, its count and
+ * interval typed or dragged, `+` adding a group and × removing one
+ */
+const GROUPS: ToolGroups<LineParams> = {
+    shown(p, n, stepPx) {
+        if (!hasGroups(p) || p.spacing.mode === "fit") return null;
+        const { groups } = p.spacing;
+        return layGroups(groups, n).map(({ count, grown }, i) => ({
+            count: String(count),
+            interval: formatSteps(groups[i]!.interval / stepPx),
+            rest: groups[i]!.count === undefined,
+            grown,
+            dropped: count === 0,
+        }));
+    },
+    type(p, n, index, part: GroupPart, text, env) {
+        // A list typed into any of the numbers replaces the whole list
+        if (/[+,;*x×]/i.test(text)) return typedList(p, n, text, env);
+        if (part === "count") {
+            const t = text.trim();
+            if (!/^\d+$/.test(t) || Number(t) < 1) return null;
+            return withGroup(p, n, index, (g) => counted(g, Number(t)), env);
+        }
+        const steps = parseSteps(text);
+        if (steps === null) return null;
+        const interval = snapInterval(steps * env.stepPx, env, true);
+        return withGroup(p, n, index, (g) => ({ ...g, interval }), env);
+    },
+    scrub(base, n, index, part, m, env) {
+        const distance = scrubDistance("x", m.dx, m.dy);
+        if (part === "count") {
+            const was = layGroups(groupsOf(base, n), n)[index]?.count ?? 0;
+            const count = Math.max(
+                1,
+                scrubValue(was, distance, 0, { axis: "x", ...COUNT_RATE }),
+            );
+            if (count === was) return base;
+            return withGroup(base, n, index, (g) => counted(g, count), env);
+        }
+        const group = groupsOf(base, n)[index];
+        if (!group) return base;
+        const was = group.interval / env.stepPx;
+        const steps = scrubValue(was, distance, 0, spacingRate(env.snap, "x"));
+        if (steps === was) return base;
+        const interval = snapInterval(steps * env.stepPx, env);
+        return withGroup(base, n, index, (g) => ({ ...g, interval }), env);
+    },
+    add(p, n, env) {
+        const groups = [...groupsOf(p, n)];
+        const last = groups.at(-1)!;
+        // A marcher from a counted last group goes to the new one, so the new one isn't dropped
+        if (last.count !== undefined && last.count > 1)
+            groups[groups.length - 1] = counted(last, last.count - 1);
+        else if (last.count === undefined && groups.length === 1)
+            groups[0] = counted(last, Math.max(1, n - 1));
+        return withGroups(p, n, [...groups, counted(last, 1)], env);
+    },
+    remove(p, n, index, env) {
+        const groups = groupsOf(p, n).filter((_, i) => i !== index);
+        if (groups.length === 0) return p;
+        // One group left is everyone at its interval
+        if (groups.length === 1)
+            return withInterval(p, n, groups[0]!.interval, env);
+        return withGroups(p, n, groups, env);
     },
 };
 
@@ -151,12 +319,14 @@ const SPACING: ToolChoice<LineParams> = {
 /**
  * The Line (#523, spec #522): a straight line of marchers drawn with one drag, its two ends
  * dragged by their handles, moved from its body, and turned and flipped through its frame like
- * every shape. Drawn in Fit; typing an interval keeps it, the length following from the pivot.
+ * every shape. Drawn in Fit; typing an interval keeps it, the length following from the pivot. A
+ * typed list (`2*3+4*2`, #526) spaces it in groups of marchers, each a chip in the editor.
  */
 export const lineTool: ToolKind<LineParams> = {
     shape: lineShape,
     params: [INTERVAL],
     choices: [SPACING],
+    groups: GROUPS,
     readable: isLineParams,
     scaling: "interval",
     draw: (from, to, _n, env) => drawLine(from, to, env),
