@@ -317,6 +317,86 @@ describe("opening a closed line", () => {
     });
 });
 
+describe("a closed line with mixed groups (#526)", () => {
+    /** A 6 × 6 step square, closed by a click on its first point */
+    const SIX = [
+        { x: 100, y: 100 },
+        { x: 160, y: 100 },
+        { x: 160, y: 160 },
+        { x: 100, y: 160 },
+    ];
+    const six = (n = 9) => click(clicking(n, SIX), { x: 101, y: 99 });
+    // 4 marchers 2 steps apart, the rest 3: the top side holds the 2-step gaps, every other
+    // side two 3-step gaps, the closing gap the seam between the last group and the first
+    const grouped = (t: ToolState, n = 9) =>
+        edit(t, interval.type(t.params, n, "4*2+3", env), ctx);
+    const GAPS = [20, 20, 20, 30, 30, 30, 30, 30, 30];
+
+    it("runs the groups once round in Outline + Keep interval, from the first point", () => {
+        const t = grouped(six());
+        expect(paramsOf(t).spacing).toEqual({
+            mode: "keep",
+            groups: [{ interval: 20, count: 4 }, { interval: 30 }],
+        });
+        expect(isLineParams(paramsOf(t))).toBe(true);
+        // Already as long as its gaps round: the outline stays, every corner holds a marcher
+        expect(pointsOf(t)).toEqual(SIX);
+        const spots = spotsOf(t);
+        gapsRound(spots).forEach((g, i) => expect(g).toBeCloseTo(GAPS[i]!, 6));
+        for (const c of SIX)
+            expect(spots.some((s) => dist(s, c) < 1e-6)).toBe(true);
+        expect(lineTool.groups!.shown(t.params, 9, STEP)).toHaveLength(2);
+    });
+
+    it("gives the closing segment the gaps that fall on it, corners off", () => {
+        const t = grouped(picked(six(), "corners", "off"));
+        gapsRound(spotsOf(t)).forEach((g, i) =>
+            expect(g).toBeCloseTo(GAPS[i]!, 6),
+        );
+    });
+
+    it("spreads evenly round the same outline in Fit", () => {
+        const t = picked(grouped(six()), "spacing", "fit");
+        expect(paramsOf(t).spacing).toEqual({ mode: "fit" });
+        expect(pointsOf(t)).toEqual(SIX);
+        // 9 marchers round 24 steps, corners held: the sides share the 9 gaps
+        expect(spotsOf(t)).toHaveLength(9);
+        for (const c of SIX)
+            expect(spotsOf(t).some((s) => dist(s, c) < 1e-6)).toBe(true);
+    });
+
+    it("keeps its groups when an open line with them is closed", () => {
+        let t = finishPoints(clicking(9, SIX), ctx);
+        t = grouped(t);
+        t = picked(t, "ends", "closed");
+        expect(paramsOf(t).closed).toBe(true);
+        expect(paramsOf(t).spacing).toEqual({
+            mode: "keep",
+            groups: [{ interval: 20, count: 4 }, { interval: 30 }],
+        });
+        expect(spotsOf(t)).toHaveLength(9);
+        // Grown as a whole to its gaps round
+        expect(gapsRound(spotsOf(t)).reduce((a, b) => a + b, 0)).toBeCloseTo(
+            240,
+            6,
+        );
+    });
+
+    it("hides the group chips once it's filled", () => {
+        const t = inMode(grouped(six()), "files");
+        expect(lineTool.groups!.shown(t.params, 9, STEP)).toBeNull();
+        expect(spotsOf(t)).toHaveLength(9);
+    });
+
+    it("opens to the outline's spots, its groups kept", () => {
+        const closed = grouped(six());
+        const opened = picked(closed, "ends", "open");
+        expect(paramsOf(opened).closed).toBeFalsy();
+        expect(paramsOf(opened).spacing).toEqual(paramsOf(closed).spacing);
+        expectSameSpots(spotsOf(opened), spotsOf(closed));
+    });
+});
+
 describe("a placed closed line", () => {
     const N = 9;
     function recipeOf(t: ToolState): PlacedRecipe {
