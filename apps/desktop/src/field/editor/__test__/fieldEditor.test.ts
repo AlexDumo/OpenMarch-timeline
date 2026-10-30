@@ -2035,13 +2035,9 @@ describe("FieldEditor subtract (Alt) on a marquee or lasso", () => {
         expect(loop.state.selected).toEqual([1, 2, 3]);
     });
 
-    it("takes marchers one by one out of a placed box, as a marquee adds them one by one", () => {
-        // Marchers 1 and 2 are a placed box, selected whole
-        const group = (hit: number) => (hit <= 2 ? [1, 2] : null);
-        const { editor, state } = setup({
-            selected: [1, 2],
-            pressSelection: group,
-        });
+    it("takes marchers out one by one, never a whole group: a box selected whole keeps the members it misses", () => {
+        // Areas don't ask pressSelection: marchers 1 and 2 could be a placed box selected whole
+        const { editor, state } = setup({ selected: [1, 2] });
         dragThrough(
             editor,
             [
@@ -2099,8 +2095,11 @@ describe("FieldEditor reach inside a placed box ($mod)", () => {
             (hit: number, shift: boolean, reachInside: boolean) => {
                 if (!enabled || hit > 2) return null;
                 if (reachInside) {
+                    // A press inside the box: Shift takes a selected member out
                     box.inside = 7;
-                    return null;
+                    return shift && t.state.selected.includes(hit)
+                        ? t.state.selected.filter((id) => id !== hit)
+                        : null;
                 }
                 return shift ? [...t.state.selected, 1, 2] : [1, 2];
             },
@@ -2180,6 +2179,31 @@ describe("FieldEditor reach inside a placed box ($mod)", () => {
         expect(state.drops[0].positions).toEqual([
             { id: 1, x: 137, y: 121 },
             { id: 3, x: 337, y: 121 },
+        ]);
+    });
+
+    it("takes a selected member out on a Shift+$mod drag: the press is done, and starts no marquee", () => {
+        const { editor, state } = boxed({ selected: [1, 2] });
+        const keys = { shift: true, ctrl: true };
+        editor.pointerDown(at(200, 100, keys));
+        editor.pointerMove(at(237, 121, keys));
+        expect(editor.activeGesture()).toBeNull();
+        editor.pointerUp(at(237, 121, keys));
+        expect(state.selected).toEqual([1]);
+        expect(state.drops).toEqual([]);
+    });
+
+    it("leaves Shift free on a selected loose marcher it doesn't change: Shift is fine and $mod constrain", () => {
+        const { editor, state } = boxed({ selected: [3] });
+        drag(
+            editor,
+            { x: 300, y: 100 },
+            { x: 337, y: 121 },
+            { shift: true, ctrl: true },
+        );
+        expect(state.selected).toEqual([3]);
+        expect(state.drops[0].positions).toEqual([
+            { id: 3, x: 309.25, y: 100 },
         ]);
     });
 

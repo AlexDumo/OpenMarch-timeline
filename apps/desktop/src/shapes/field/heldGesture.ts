@@ -2,8 +2,8 @@ import { CLICK_SLOP, type FieldPointer } from "@/field/editor/fieldEditor";
 import { startGestureKeys } from "@/input/gestureKeys";
 import {
     pressChoiceOf,
+    REACH_INSIDE,
     type HeldKeys,
-    type PressChoice,
     type RoleKey,
     type Roles,
 } from "@/input/modifierRoles";
@@ -54,9 +54,6 @@ export function holdGesture<A>(
         },
     };
 }
-
-/** The press choices a shape press can use: reach inside pulls the pivot out of the center dot */
-const REACH_INSIDE: ReadonlySet<PressChoice> = new Set(["reachInside"]);
 
 /** A shape gesture on the field: a move hands its pointer, which counts once past the click slop */
 export interface HeldFieldGesture extends Omit<HeldGesture<XY>, "move"> {

@@ -1,6 +1,7 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
 import {
     pressChoiceOf,
+    REACH_INSIDE,
     type PressChoice,
     type RoleKey,
 } from "@/input/modifierRoles";
@@ -121,8 +122,10 @@ export type FieldEditorPorts = {
      * rules, or null for the editor's rules: a click on a placed box's member
      * selects the whole box. Asked once per press, when it becomes a click or
      * a drag. `reachInside`: the press reaches inside ($mod, where
-     * {@link reachesInside} said it can); the app enters the box and returns
-     * null, so the editor's rules pick the marcher as if it were in no box.
+     * {@link reachesInside} said it can); the app enters the box and leaves
+     * the press as a press inside the box: null, so the editor's rules pick
+     * the marcher, except that Shift on a selected member returns the
+     * selection without it (the press is done).
      */
     pressSelection?(
         hit: number,
@@ -131,8 +134,9 @@ export type FieldEditorPorts = {
     ): readonly number[] | null;
     /**
      * Whether a press on marcher `hit` can reach inside ($mod): it's a member
-     * of a placed box that a press would select whole. When it can't, $mod is
-     * no press choice there and stays a held role (constrain).
+     * of a placed box that a press would select whole, so not one you're
+     * inside already. When it can't, $mod is no press choice there and stays
+     * a held role (constrain).
      */
     reachesInside?(hit: number): boolean;
     /** A double-click on marcher `id`: the second click came after a click on it. */
@@ -194,8 +198,6 @@ const DROP_SETTLE_WARNING_MS = 30_000;
  */
 export const DOUBLE_CLICK_MS = 500;
 export const DOUBLE_CLICK_SLOP = 8;
-
-const REACH_INSIDE: ReadonlySet<PressChoice> = new Set(["reachInside"]);
 
 /**
  * A gesture the editor runs once a press becomes a drag: marquee, lasso
@@ -315,6 +317,17 @@ export type FieldModeDrawing = {
     onGuides?: readonly FieldPoint[];
 };
 
+/** What the editor knows of a press it asks a {@link FieldMode} to claim. */
+export type FieldModePress = {
+    /**
+     * The marcher the editor's own hit test finds under the press, as for a
+     * press it takes (hidden, dimmed and items included), or null.
+     */
+    marcherAt(): number | null;
+    /** The editor's `isMac`: on a Mac, $mod is Cmd. */
+    readonly isMac: boolean;
+};
+
 /**
  * A tool that takes edit presses before the editor's own rules (the shape
  * tool, a selected placed box). The editor asks it about every edit press
@@ -323,8 +336,8 @@ export type FieldModeDrawing = {
  * rules as usual. Navigation's presses never reach it.
  */
 export interface FieldMode {
-    /** Whether the mode takes this press. */
-    claims(pointer: FieldPointer): boolean;
+    /** Whether the mode takes this press; `press` is what the editor knows of it. */
+    claims(pointer: FieldPointer, press: FieldModePress): boolean;
     press(pointer: FieldPointer): void;
     move(pointer: FieldPointer): void;
     /**
@@ -461,7 +474,12 @@ export class FieldEditor {
             this.ignoredButton = pointer.button;
             return true;
         }
-        if (this.mode?.claims(pointer)) {
+        if (
+            this.mode?.claims(pointer, {
+                marcherAt: () => this.marcherAt(pointer.field),
+                isMac: this.options.isMac ?? false,
+            })
+        ) {
             const last = this.lastClick;
             this.press = null;
             this.modePress = {
@@ -873,14 +891,16 @@ export class FieldEditor {
      * or rotates the selection (#198). A move starts from a marcher, or from
      * empty field inside a multi-selection's box (owner decision, #196);
      * marquee and lasso (#195) start from the rest of the empty field: a lasso
-     * after a double-click, else a marquee.
+     * after a double-click, else a marquee. A press on a marcher that moves
+     * nothing (Shift took a group or a box's member out) is done, and starts
+     * no marquee.
      */
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     protected startDrag(press: FieldPress, pointer: FieldPointer) {
         return (
             this.startTransform(press) ??
             this.startMove(press) ??
-            this.startArea(press)
+            (press.hit === null ? this.startArea(press) : null)
         );
     }
 
@@ -1027,8 +1047,9 @@ export class FieldEditor {
      * A Shift that added the marcher was the press's (the press rule): the
      * drag goes at full speed until Shift is released and pressed again. So is
      * a $mod that reached inside a placed box for the marcher: it picks the
-     * marcher alone (Shift+$mod adds it), and the drag is free until $mod is
-     * released and pressed again.
+     * marcher alone, and the drag is free until $mod is released and pressed
+     * again. Shift+$mod is Shift inside the box: it adds the marcher and drags,
+     * or takes a selected one out and the press is done.
      */
     private startMove(press: FieldPress): FieldGesture | null {
         const selection = this.ports.selection.get();
@@ -1055,11 +1076,9 @@ export class FieldEditor {
                 isMac: this.options.isMac ?? false,
             });
             usedByPress = [add, reach].flatMap((c) => (c ? [c.key] : []));
-            // Reaching inside without Shift takes the marcher out of a
-            // selected box, to move it alone
-            const keeps =
-                selection.includes(press.hit) &&
-                (reach === null || press.start.shift);
+            // Reaching inside takes the marcher out of a selected box, to move
+            // it alone (Shift+$mod on a selected one was the app's choice)
+            const keeps = selection.includes(press.hit) && reach === null;
             ids =
                 chosen ??
                 (keeps

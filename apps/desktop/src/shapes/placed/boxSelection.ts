@@ -35,7 +35,7 @@ const boxOf = (marcherId: number): PlacedBox | undefined =>
  * (`FieldEditorPorts.pressSelection`), Figma-style (07-placed-boxes.md, `clickOnMarcher`): a
  * member selects its whole box, Shift adds or removes a whole box, and inside a box (after a
  * double click) Shift toggles one marcher. A press that reaches inside ($mod, `reachInside`) goes
- * inside the box and leaves the press to the editor, which picks the marcher. Null leaves the
+ * inside the box and is then a press inside it: the editor picks the marcher. Null leaves the
  * press to the editor's rules. Also keeps which box you're inside. Off when the View tab's Shapes
  * setting is Off, during playback and while the Shape tool is open (`useBoxSelection` says so).
  */
@@ -72,10 +72,14 @@ export function boxPressSelection(
 
 /**
  * Whether a press on marcher `hit` can reach inside ($mod, `FieldEditorPorts.reachesInside`): it's
- * a member of a placed box on the field while box selection is on
+ * a member of a placed box on the field while box selection is on, and you're not inside that box
+ * already, where a click picks one marcher anyway and $mod stays `constrain`
  */
 export function canReachInside(hit: number): boolean {
-    return useBoxSelectionStore.getState().enabled && boxOf(hit) !== undefined;
+    const { enabled, inside } = useBoxSelectionStore.getState();
+    if (!enabled) return false;
+    const box = boxOf(hit);
+    return box !== undefined && box.recipe.id !== inside;
 }
 
 /** Goes inside the box `marcherId` is in, selecting just that marcher */

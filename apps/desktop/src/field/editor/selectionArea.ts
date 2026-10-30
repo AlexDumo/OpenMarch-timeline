@@ -1,3 +1,4 @@
+import type { AreaChoice } from "@/input/modifierRoles";
 import type { FieldPoint } from "./fieldEditor";
 import type { DrawnMarchers } from "./hitTest";
 
@@ -128,7 +129,7 @@ export function areaPicks(
 export function selectionAfterArea(
     current: readonly number[],
     inside: readonly number[],
-    choice: "add" | "subtract" | null,
+    choice: AreaChoice,
 ): readonly number[] {
     if (choice === null) return inside;
     if (choice === "subtract") {

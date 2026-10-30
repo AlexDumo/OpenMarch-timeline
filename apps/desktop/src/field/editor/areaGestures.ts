@@ -1,4 +1,8 @@
-import { pressChoiceOf, type PressChoice } from "@/input/modifierRoles";
+import {
+    pressChoiceOf,
+    type AreaChoice,
+    type PressChoice,
+} from "@/input/modifierRoles";
 import type { FieldGesture, FieldPoint, FieldPointer } from "./fieldEditor";
 import { hitRadius, type DrawnMarchers } from "./hitTest";
 import {
@@ -54,10 +58,7 @@ const AREA_CHOICES: ReadonlySet<PressChoice> = new Set(["add", "subtract"]);
  * What an area does with what it covers, decided at the press: add (Shift), subtract (Alt; add
  * wins when both are held), or null to replace the selection.
  */
-export function areaChoice(
-    press: FieldPointer,
-    isMac?: boolean,
-): "add" | "subtract" | null {
+export function areaChoice(press: FieldPointer, isMac?: boolean): AreaChoice {
     const chosen = pressChoiceOf(press, "field", {
         applicable: AREA_CHOICES,
         isMac,
