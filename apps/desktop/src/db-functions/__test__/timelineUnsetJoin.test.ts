@@ -15,6 +15,7 @@ import { saveShapeRecipeInTransaction } from "../shapeRecipes";
 import { splitTimelineAtBeat } from "../timelineSplitAtBeat";
 import { splitMarchersIntoNewMove } from "../timelineSplitMoves";
 import { unsetMarchersAt } from "../timelineUnset";
+import { resizeTimeline } from "../timelineResize";
 
 keepFixturesInPageMode("its tests convert the show themselves");
 
@@ -265,6 +266,99 @@ describeDbTests(
             expect(
                 rows.some((r) => r.start_beat === 13 && r.end_beat === 17),
             ).toBe(true);
+        });
+
+        it("joins each of two moves after the count, and deletes the removed move once", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await convertPagesToTimeline(db);
+            const { timeline, members } = await page2(db);
+            const even = stepsOf(await resolverOf(db), members, PAGE2);
+            const split = await splitTimelineAtBeat({
+                db,
+                timelineId: timeline.id,
+                beat: 13,
+            });
+            // The removed move's marchers go on into two different moves after the count
+            const chosen = members.slice(0, 2);
+            const off = await splitMarchersIntoNewMove({
+                db,
+                timelineId: timeline.id,
+                marcherIds: chosen,
+            });
+
+            const result = await unsetMarchersAt({
+                db,
+                beat: 13,
+                marcherIds: members,
+            });
+
+            expect(result.joined).toEqual(members);
+            expect(result.notJoined).toEqual([]);
+            expect(await timelineRange(db, timeline.id)).toEqual(PAGE2);
+            expect(await timelineRange(db, off.timeline.id)).toEqual(PAGE2);
+            expect(await timelineRange(db, split.before.id)).toBeUndefined();
+            expectSameSteps(
+                even,
+                stepsOf(await resolverOf(db), members, PAGE2),
+            );
+        });
+
+        it("reports the marchers whose join is refused (L-4), and keeps the plain Remove for them", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await convertPagesToTimeline(db);
+            const { timeline, members } = await page2(db);
+            // One marcher's move split off page 1 and grown over page 2's own move (its row rises
+            // a layer), then, once page 2 is split at the playhead, taken off page 1: a second
+            // move over [9, 17) for it
+            const a = members[0]!;
+            const page1 = (await db
+                .select()
+                .from(schema.timelines)
+                .where(eq(schema.timelines.end_beat, 9))
+                .get())!;
+            const off = await splitMarchersIntoNewMove({
+                db,
+                timelineId: page1.id,
+                marcherIds: [a],
+            });
+            await resizeTimeline({
+                db,
+                timelineId: off.timeline.id,
+                start: page1.start_beat,
+                end: 17,
+            });
+            await splitTimelineAtBeat({
+                db,
+                timelineId: timeline.id,
+                beat: 13,
+            });
+            await resizeTimeline({
+                db,
+                timelineId: off.timeline.id,
+                start: 9,
+                end: 17,
+            });
+
+            const result = await unsetMarchersAt({
+                db,
+                beat: 13,
+                marcherIds: members,
+            });
+
+            expect(result.unset).toEqual(members);
+            expect(result.joined).toEqual([]);
+            expect(result.notJoined).toEqual([
+                { marcherIds: members, reason: "secondMove" },
+            ]);
+            // The move after the count still starts on it
+            expect(await timelineRange(db, timeline.id)).toEqual({
+                start: 13,
+                end: 17,
+            });
         });
 
         it("a follow-the-leader move joins with its members still in it, and plays as before the split", async ({
