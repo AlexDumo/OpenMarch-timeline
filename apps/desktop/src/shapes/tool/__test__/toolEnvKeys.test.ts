@@ -56,6 +56,13 @@ describe("toolEnvFor", () => {
         expect([env.snap, env.pull, env.constrain]).toEqual([true, true, true]);
     });
 
+    it("with fromCenter, grows from the center, and not without it", () => {
+        expect(toolEnvFor(field, roles()).fromCenter).toBe(false);
+        expect(toolEnvFor(field, roles({ fromCenter: true })).fromCenter).toBe(
+            true,
+        );
+    });
+
     it("with the Snap toggle off, neither snaps nor pulls", () => {
         const env = toolEnvFor(field, roles(), { snapOn: false });
         expect([env.snap, env.pull, env.fine]).toEqual([false, false, false]);

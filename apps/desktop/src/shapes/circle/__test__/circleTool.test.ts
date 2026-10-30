@@ -363,3 +363,19 @@ describe("the circle and the host", () => {
         ]);
     });
 });
+
+describe("with fromCenter (Alt, version A)", () => {
+    it("draws and resizes the same with or without it: it's drawn from its center already", () => {
+        const centered: ToolEnv = { ...env, fromCenter: true };
+        const from = { x: 100, y: 100 };
+        const to = { x: 137, y: 121 };
+        const plain = circleTool.draw(from, to, 12, env);
+        expect(plain).toBeDefined();
+        expect(circleTool.draw(from, to, 12, centered)).toEqual(plain);
+        const [handle] = circleTool.handles(plain, 12);
+        const at = { x: handle!.at.x + 13, y: handle!.at.y + 4 };
+        expect(
+            circleTool.dragHandle(plain, 12, handle!.key, at, centered),
+        ).toEqual(circleTool.dragHandle(plain, 12, handle!.key, at, env));
+    });
+});

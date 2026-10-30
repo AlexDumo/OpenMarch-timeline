@@ -1,9 +1,12 @@
-import type { ConstrainWord } from "@/input/gestureChipStore";
+import type { HonoredRoles } from "@/input/gestureChipStore";
 import type { Pivot, ShapeFrame } from "../frame/frame";
 import type { ScrubMove } from "../editor/scrub";
 import type { ClosedShape } from "../distribute/region";
 import type { LayoutFamily } from "../distribute/distribution";
 import type { AnyShapeKind, XY } from "../types";
+
+/** The roles a kind's own drag reads beyond fine, which every shape drag reads */
+export type KindHonors = Pick<HonoredRoles, "constrain" | "fromCenter">;
 
 /**
  * What a gesture knows about the field and the roles held. Built fresh for each pointer event.
@@ -29,6 +32,11 @@ export interface ToolEnv {
      * block handle's 15°)
      */
     readonly constrain: boolean;
+    /**
+     * The `fromCenter` role is held: a box is drawn from its center out, and a handle resizes it
+     * about its center, the opposite side moving the other way. Corner to corner when absent.
+     */
+    readonly fromCenter?: boolean;
     /** The nearest spot on the half-step grid */
     readonly gridSnap: (p: XY) => XY;
     /** How far from a handle a press still takes it, in field units */
@@ -193,13 +201,13 @@ export interface ToolKind<P> {
     /** Whether this shape offers the ratio lock, when the kind does; always when absent */
     ratioLockFor?(params: P, n: number): boolean;
     /**
-     * What `constrain` does in this kind's own drags, as the chip near the cursor names it: on the
-     * draw, and on a handle by its key (`ratioLocked`: the lock is on). Absent where it does
-     * nothing, so the chip leaves it out.
+     * What `constrain` and `fromCenter` do in this kind's own drags, as the chip near the cursor
+     * names them: on the draw, and on a handle by its key (`ratioLocked`: the lock is on). A role
+     * left out does nothing there, so the chip leaves it out.
      */
-    readonly constrains?: {
-        readonly draw?: ConstrainWord;
-        handle?(key: string, ratioLocked: boolean): ConstrainWord | undefined;
+    readonly honors?: {
+        readonly draw?: KindHonors;
+        handle?(key: string, ratioLocked: boolean): KindHonors;
     };
     /**
      * The params a drag from `from` to `to` draws, or undefined while the drag is too short.

@@ -2,7 +2,7 @@ import type { HonoredRoles } from "@/input/gestureChipStore";
 import { clearGestureChip, syncGestureChip } from "@/input/gestureChipSync";
 import { startGestureKeys, type GestureKeys } from "@/input/gestureKeys";
 import type { HeldKeys, RoleKey, Roles } from "@/input/modifierRoles";
-import type { FieldPoint, FieldPointer } from "./fieldEditor";
+import type { FieldOnScreen, FieldPoint, FieldPointer } from "./fieldEditor";
 
 /**
  * Starts following one field gesture's held roles (`startGestureKeys` in the
@@ -17,13 +17,19 @@ export type FieldKeys = (changed: (roles: Roles) => void) => GestureKeys;
  * `FieldPointer` carries its keys), `usedByPress` the key a selection choice
  * used (a Shift-press that added the marcher), which is no role until it's
  * released and pressed again. `isMac` resolves $mod; the editor passes its own.
+ * `onScreen` is the touch pill's toggles, OR'd in and followed as keys are.
  */
 export function fieldKeys(
     press: HeldKeys,
     {
         usedByPress,
         isMac,
-    }: { usedByPress?: readonly RoleKey[]; isMac: boolean },
+        onScreen,
+    }: {
+        usedByPress?: readonly RoleKey[];
+        isMac: boolean;
+        onScreen?: FieldOnScreen;
+    },
 ): FieldKeys {
     return (changed) =>
         startGestureKeys({
@@ -31,6 +37,8 @@ export function fieldKeys(
             press,
             usedByPress,
             isMac,
+            onScreen: onScreen?.roles,
+            onScreenChange: onScreen?.subscribe,
             onRolesChange: changed,
         });
 }

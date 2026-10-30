@@ -68,6 +68,7 @@ export function toolEnvFor(
         pull: snapOn,
         fine: roles.fine,
         constrain: roles.constrain,
+        fromCenter: roles.fromCenter,
         gridSnap: (p) => {
             if (!snap) return p;
             const r = getRoundCoordinates2({

@@ -13,16 +13,18 @@ import {
     type RoleKey,
     type Roles,
 } from "@/input/modifierRoles";
+import { onScreenRoles, subscribeOnScreen } from "@/stores/TouchModifierStore";
 import type { ShapeTarget } from "../frame/gestures";
 import { useShapeEditorStore } from "../frame/shapeEditorStore";
-import type { AnyToolKind } from "../tool/toolKind";
+import type { AnyToolKind, KindHonors } from "../tool/toolKind";
 import type { XY } from "../types";
 
 /**
  * The held roles of one shape gesture, from its press to its end (version A,
  * docs/timeline/research/shapes/modifier-roles.md), and the move to run again when a role key is
- * pressed or released mid-drag. Until a move hands it `last`, the press is still a click, and a key
- * changes nothing.
+ * pressed or released mid-drag. The touch pill's role toggles count as held keys, and a toggle
+ * latched or let go mid-drag runs the move again too. Until a move hands it `last`, the press is
+ * still a click, and a key changes nothing.
  */
 export interface HeldGesture<A> {
     /** The held roles now */
@@ -62,6 +64,8 @@ export function holdGesture<A>(
         context: "shape",
         press,
         usedByPress,
+        onScreen: onScreenRoles,
+        onScreenChange: subscribeOnScreen,
         isMac,
         onRolesChange: (roles) => {
             if (!ended && last !== null) rerun(last, roles);
@@ -92,31 +96,31 @@ export interface HeldFieldGesture extends Omit<HeldGesture<XY>, "move"> {
 
 /**
  * What a drag of `kind` reads, from what its press grabbed, for the chip (modifier roles: it names
- * only these). Every shape drag snaps and reads fine; constrain is one axis on a move, the kind's
- * own on a draw or a handle, and nothing on a turn or the pivot. Fine on a turn is whole degrees.
- * Nothing reads from center yet.
+ * only these). Every shape drag snaps and reads fine; constrain is one axis on a move, and on a
+ * draw or a handle constrain and from center are the kind's own (`ToolKind.honors`). A turn
+ * and the pivot read neither, and fine on a turn is whole degrees.
  */
 export function shapeDragHonors(
     kind: AnyToolKind,
     grabbed: ShapeTarget | { type: "draw" } | null,
     ratioLocked: boolean,
 ): HonoredRoles {
-    const honors = (constrain?: HonoredRoles["constrain"]): HonoredRoles => ({
+    const honors = (own: KindHonors = {}): HonoredRoles => ({
         context: "shape",
         fine: "fine",
-        ...(constrain ? { constrain } : {}),
+        ...own,
         snaps: true,
     });
     switch (grabbed?.type) {
         case undefined:
             return { context: "shape", snaps: false };
         case "draw":
-            return honors(kind.constrains?.draw);
+            return honors(kind.honors?.draw);
         case "handle":
-            return honors(kind.constrains?.handle?.(grabbed.key, ratioLocked));
+            return honors(kind.honors?.handle?.(grabbed.key, ratioLocked));
         case "move":
         case "center":
-            return honors("oneAxis");
+            return honors({ constrain: "oneAxis" });
         case "rotate":
             return { context: "shape", fine: "wholeDegrees", snaps: true };
         case "pivot":
