@@ -1,4 +1,5 @@
 import type { FieldProperties, Resolver } from "@openmarch/core";
+import { SELECTION_RGBA01 } from "./three/selectionRing";
 import type {
     StartFlagLevel,
     StartFlagLevels,
@@ -41,10 +42,13 @@ export const START_FLAG_PATH_COLOR: Rgba = [0.5, 0.5, 0.5, 1];
  * Route squares (holds decision 9, fork #479): on a selected marcher's drawn route, a small square
  * at each spot where a coordinate is set, the way After Effects draws a motion path. In field
  * units, like the dots: a little wider than a dot, so a dot on a set spot sits inside its square.
+ * Outlined in the selection blue, since only selected marchers get them, with a white inside that
+ * keeps them visible on a green field (owner, 2026-10-30, from the research in fork #521).
  */
 export const ROUTE_SQUARE_SIZE = 4.5;
 export const ROUTE_SQUARE_OUTLINE = 0.75;
-export const ROUTE_SQUARE_COLOR: Rgba = [0.35, 0.35, 0.35, 1];
+const [selR, selG, selB] = SELECTION_RGBA01 as [number, number, number];
+export const ROUTE_SQUARE_COLOR: Rgba = [selR, selG, selB, 1];
 export const ROUTE_SQUARE_FILL: Rgba = [1, 1, 1, 1];
 
 /**
@@ -54,7 +58,14 @@ export const ROUTE_SQUARE_FILL: Rgba = [1, 1, 1, 1];
  */
 export const ROUTE_TAIL_COLOR: Rgba = [0.75, 0.75, 0.75, 1];
 export const ROUTE_TAIL_DASH: readonly [number, number] = [2, 4];
-export const ROUTE_TAIL_SQUARE_COLOR: Rgba = [0.72, 0.72, 0.72, 1];
+/** The selection blue, 55% of the way to white. */
+const towardWhite = (c: number) => c + (1 - c) * 0.55;
+export const ROUTE_TAIL_SQUARE_COLOR: Rgba = [
+    towardWhite(selR),
+    towardWhite(selG),
+    towardWhite(selB),
+    1,
+];
 
 export type StartFlagOverlayInput = {
     readonly resolver: Pick<
