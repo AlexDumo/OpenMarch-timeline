@@ -481,7 +481,7 @@ describeDbTests("sparse timeline writes: a drag back clears the move", (it) => {
         expect(at(1, window.end)).toEqual([100, 100]);
     });
 
-    it("a zero-motion ending is kept in a transition shared with other marchers", async ({
+    it("a drag back in a transition shared with other marchers takes the marcher out of it, so the page is Not set (holds 16, M6)", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -492,12 +492,21 @@ describeDbTests("sparse timeline writes: a drag back clears the move", (it) => {
         const pages = [...unsorted].sort((a, b) => a.order - b.order);
         const page3 = box(pages[3]!);
         const origin = at(5, page3.start);
-        await move(db, page3, [{ marcherId: 5, x: origin[0], y: origin[1] }]);
-        expect(await rowsOf(db, 5)).toContainEqual([page3.start, page3.end, 0]);
+        const others = at(6, page3.end);
+        const back = await move(db, page3, [
+            { marcherId: 5, x: origin[0], y: origin[1] },
+        ]);
+        expect(back.cleared).toEqual([5]);
+        expect(
+            (await rowsOf(db, 5)).filter(
+                ([start, end]) => start! < page3.end && end! > page3.start,
+            ),
+        ).toEqual([]);
         expect(at(5, page3.end)).toEqual(origin);
+        expect(at(6, page3.end)).toEqual(others);
     });
 
-    it("a drag back keeps a page move the marcher doesn't own alone over the box (a track underneath)", async ({
+    it("a drag back over a track underneath cuts the track at the page's flag and takes the marcher out of both", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -510,8 +519,18 @@ describeDbTests("sparse timeline writes: a drag back clears the move", (it) => {
         ]);
         await move(db, page3, [{ marcherId: 1, x: 300, y: 300 }]);
         const origin = at(1, page3.start);
-        await move(db, page3, [{ marcherId: 1, x: origin[0], y: origin[1] }]);
-        expect(await rowsOf(db, 1)).toHaveLength(2);
+        const onPage2 = [page2.start, page2.start + 2, page3.start].map((b) =>
+            at(1, b),
+        );
+        const back = await move(db, page3, [
+            { marcherId: 1, x: origin[0], y: origin[1] },
+        ]);
+        expect(back.cleared).toEqual([1]);
+        // The track's page 2 part is left, so page 2 plays as before
+        expect(await rowsOf(db, 1)).toEqual([[page2.start, page3.start, 0]]);
+        expect(
+            [page2.start, page2.start + 2, page3.start].map((b) => at(1, b)),
+        ).toEqual(onPage2);
         expect(at(1, page3.end)).toEqual(origin);
     });
 
@@ -694,7 +713,7 @@ describeDbTests(
             expect(await undoRows(db)).toEqual(history);
         });
 
-        it("set to previous falls back to writing the previous page's position for a move shared with others", async ({
+        it("Clear this page takes the marcher out of a move shared with others, so the page is Not set (holds 16, M4)", async ({
             db,
             marchersAndPages: _,
         }) => {
@@ -708,14 +727,14 @@ describeDbTests(
 
             await run(db, pages, pages[3]!, "previous", [5]);
             expect(at(5, page3.end)).toEqual(target);
-            expect(await rowsOf(db, 5)).toContainEqual([
-                page3.start,
-                page3.end,
-                0,
-            ]);
+            expect(
+                (await rowsOf(db, 5)).filter(
+                    ([start, end]) => start! < page3.end && end! > page3.start,
+                ),
+            ).toEqual([]);
         });
 
-        it("set to previous inside a longer move writes a stay over the page box", async ({
+        it("Clear this page inside a longer move cuts it at the page's flag; the page before keeps its motion", async ({
             db,
             marchersAndPages: _,
         }) => {
@@ -726,9 +745,12 @@ describeDbTests(
                 { marcherId: 1, x: 300, y: 100 },
             ]);
             const target = at(1, page2.end);
+            const midPage2 = at(1, page2.start + 3);
             await run(db, pages, pages[3]!, "previous", [1]);
+            expect(await rowsOf(db, 1)).toEqual([[page2.start, page2.end, 0]]);
             expect(at(1, page3.end)).toEqual(target);
             expect(at(1, page2.end)).toEqual(target);
+            expect(at(1, page2.start + 3)).toEqual(midPage2);
         });
     },
 );

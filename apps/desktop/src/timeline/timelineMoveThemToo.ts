@@ -371,6 +371,8 @@ export async function moveMarchersAndOfferFollowUp({
     });
     const mark = editHistoryMark();
     toastLockedMarchers(editable.locked.length, true);
+    // Clear this page left shape and follow-the-leader members in their move: say who and why
+    if (result.skipped) toastTimelineError(result.skipped);
     // The resolver's change re-reads them (`PlacedBoxesOverlay`), except where nobody moves (#455)
     if (writesShapes) invalidatePlacedBoxes();
     if (membership && membership.leaves.length > 0)

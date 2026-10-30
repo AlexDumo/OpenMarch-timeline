@@ -135,14 +135,21 @@ export async function splitTimelineAtBeat({
     );
 }
 
+/**
+ * The split inside a caller's edit. With `allowSharedRanges` (a holds cut, `timelineMoveCuts`), a
+ * half may land on a range another move already has (C-12 relaxed as for a split by marcher,
+ * UI-25); the new half is then numbered, so it never takes over a page's move.
+ */
 export async function splitTimelineAtBeatInTransaction({
     tx,
     timelineId,
     beat,
+    allowSharedRanges = false,
 }: {
     tx: DbTransaction;
     timelineId: number;
     beat: number;
+    allowSharedRanges?: boolean;
 }): Promise<SplitTimelineResult> {
     const L = schema.timelines;
     const timeline = await tx
@@ -156,6 +163,7 @@ export async function splitTimelineAtBeatInTransaction({
         tx,
         timeline,
         beat,
+        allowSharedRanges,
     );
     const kept = await keptAmong(
         tx,
@@ -188,7 +196,17 @@ export async function splitTimelineAtBeatInTransaction({
     });
 
     return await mapDbErrors(() =>
-        writeSplit({ tx, timelineId, beat, s0, rows, plans, kept, changed }),
+        writeSplit({
+            tx,
+            timelineId,
+            beat,
+            s0,
+            rows,
+            plans,
+            kept,
+            changed,
+            allowSharedRanges,
+        }),
     );
 }
 
@@ -215,6 +233,7 @@ async function writeSplit({
     plans,
     kept,
     changed,
+    allowSharedRanges,
 }: {
     tx: DbTransaction;
     timelineId: number;
@@ -224,6 +243,7 @@ async function writeSplit({
     plans: readonly TransitionPlan[];
     kept: ReadonlySet<number>;
     changed: ReadonlyMap<number, number>;
+    allowSharedRanges: boolean;
 }): Promise<SplitTimelineResult> {
     const L = schema.timelines;
     const T = schema.timeline_transitions;
@@ -264,7 +284,13 @@ async function writeSplit({
         .returning()
         .get();
 
-    const before = await writeBeforeMove(tx, { s0, beat, plans, kept });
+    const before = await writeBeforeMove(tx, {
+        s0,
+        beat,
+        plans,
+        kept,
+        allowSharedRanges,
+    });
 
     return {
         before,
@@ -283,6 +309,7 @@ async function refuseUnlessSplitAllowed(
     tx: DbTransaction,
     timeline: DatabaseTimeline,
     beat: number,
+    allowSharedRanges: boolean,
 ): Promise<{ transitions: DatabaseTimelineTransition[]; rows: Row[] }> {
     const T = schema.timeline_transitions;
     const A = schema.timeline_assignments;
@@ -297,10 +324,12 @@ async function refuseUnlessSplitAllowed(
         refuse(
             `${where} isn't inside ${name}. Put the playhead inside the move to split it.`,
         );
-    for (const half of [
-        { start: s0, end: beat },
-        { start: beat, end: e0 },
-    ]) {
+    for (const half of allowSharedRanges
+        ? []
+        : [
+              { start: s0, end: beat },
+              { start: beat, end: e0 },
+          ]) {
         if (await findTimelineByRange(tx, half))
             refuse(
                 `${moveName(half, words.boxes, words.moves)} already runs over ${countsText(half, words.boxes)}, so a half can't go there`,
@@ -342,17 +371,20 @@ async function writeBeforeMove(
         beat,
         plans,
         kept,
+        allowSharedRanges,
     }: {
         s0: number;
         beat: number;
         plans: readonly TransitionPlan[];
         kept: ReadonlySet<number>;
+        allowSharedRanges: boolean;
     },
 ): Promise<DatabaseTimeline> {
     // 4. The new move before the beat, with a shapeless direct transition per transition
     const before = await createRangeTimelineInTransaction(tx, {
         startBeat: s0,
         endBeat: beat,
+        allowSharedRanges,
     });
     for (const { t, first, earlier } of plans)
         for (const rows of [first, ...earlier])

@@ -8,6 +8,7 @@ import {
     type TimelineNeighborPageRequest,
 } from "@/timeline/timelineCoordinateWrites";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import type { TimelineMoveResult } from "@/db-functions/timelineMoves";
 
 /**
  * "Set all or selected marchers to the previous or next page", the four batch-edit actions in
@@ -19,9 +20,12 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
  * `moveMarchersInTarget`), so it works on a page the marchers only hold through:
  *
  * - **Next page** moves each marcher to its next-page position there.
- * - **Previous page** clears each marcher's own move on the page, so the page follows earlier
- *   pages again (and later edits before it carry through). A marcher whose move there is shared
- *   with others, or longer than the page, is moved to its previous-page position instead.
+ * - **Previous page** is **Clear this page** (holds decision 16): each marcher is taken out of
+ *   every move over the page, so the page is Not set and follows earlier pages again (and later
+ *   edits before it carry through). A move shared with others, or longer than the page, is cut in
+ *   time at the page's flags first (`takeMarchersOutOfRangeInTransaction`). Shape and
+ *   follow-the-leader members are left as they are; the write names them, and they aren't
+ *   counted.
  *
  * The success message shows only once the edit is written; a refused edit writes nothing and the
  * write's own error handler shows why.
@@ -58,8 +62,8 @@ export interface SetMarchersToNeighborPageArgs {
 const MESSAGES = {
     previous: {
         none: "actions.batchEdit.noPreviousPage",
-        all: "actions.batchEdit.setAllToPreviousSuccess",
-        selected: "actions.batchEdit.setSelectedToPreviousSuccess",
+        all: "actions.batchEdit.clearThisPageAllSuccess",
+        selected: "actions.batchEdit.clearThisPageSelectedSuccess",
         param: "previousPage",
     },
     next: {
@@ -133,13 +137,21 @@ export async function setMarchersToNeighborPage({
     // Basic's point target on the page's flag clears them too (its mid-page points with them)
     const clearOwn = direction === "previous" && target.kind !== "home";
     const moves = clearOwn ? copy.targets : copy.moves;
+    let skipped = 0;
     if (moves.length > 0) {
         try {
-            await writeTimeline({ target, moves, clearOwn });
+            const written = (await writeTimeline({
+                target,
+                moves,
+                clearOwn,
+            })) as Partial<TimelineMoveResult> | undefined;
+            skipped = written?.skipped?.marcherIds.length ?? 0;
         } catch {
             // Refused or failed: nothing was written, and the write's error handler said why
             return null;
         }
     }
-    return succeed(count);
+    // Shape and follow-the-leader members Clear this page left alone: the write's toast names them
+    if (count - skipped === 0) return null;
+    return succeed(count - skipped);
 }

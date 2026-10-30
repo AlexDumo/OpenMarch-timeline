@@ -791,7 +791,7 @@ describeDbTests("splitting and merging moves (UI-25)", (it) => {
             expect(await violations(db)).toEqual([]);
         });
 
-        it("dragging a split-off marcher back to where the page starts keeps its move (it isn't the page's own)", async ({
+        it("dragging a split-off marcher back to where the page starts takes it out of its move, so the page is Not set (holds 16)", async ({
             db,
             marchersAndPages,
         }) => {
@@ -811,9 +811,14 @@ describeDbTests("splitting and merging moves (UI-25)", (it) => {
                 target: { kind: "range", ...range },
                 moves: [{ marcherId: a!, x, y }],
             });
+            // Emptied, the split-off move goes; the page's own move stays
             expect(
-                (await membersOf(db, split.timeline.id)).map((m) => m.marcher),
-            ).toEqual([a]);
+                await db
+                    .select()
+                    .from(schema.timelines)
+                    .where(eq(schema.timelines.id, split.timeline.id))
+                    .all(),
+            ).toEqual([]);
             // The page's own rows are untouched by it
             expect(
                 (await membersOf(db, page.id)).map((m) => m.marcher),
