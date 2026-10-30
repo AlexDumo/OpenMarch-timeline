@@ -55,8 +55,9 @@ export function useShapeFieldModes(
         // its own, though an earlier save was read back meanwhile (#515)
         clearReleasedPreview();
     }, [live, box]);
-    // Another box (or none) drops any preview, held or not
-    useEffect(() => () => previewPlacedBox(null), [live]);
+    // Another box (or none) drops any preview, held or not; so does the tool opening, which takes
+    // the editor and with it a drag's release (review of #516)
+    useEffect(() => () => previewPlacedBox(null), [live, toolOpen]);
 
     useEffect(() => {
         // The pointer was over the last shape, if any; the next cursor check finds the new one

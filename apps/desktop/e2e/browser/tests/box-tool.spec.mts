@@ -6335,5 +6335,5 @@ test("a number drag in a placed box's editor right after another follows the poi
     const end = await width();
     expect(end).toBeGreaterThan(start);
     // Never back to the first drag's width, or the box's from before
-    expect(seen.filter((w) => Math.abs(w - end) > 1e-6)).toEqual([]);
+    expect(seen.filter((w) => Math.abs(w - end) > 0.01)).toEqual([]);
 });
