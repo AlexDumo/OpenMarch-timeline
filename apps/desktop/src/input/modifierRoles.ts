@@ -229,10 +229,15 @@ export const NO_KEYS: HeldKeys = {
 /**
  * The role tracker: follows the modifier keys on `window` while a gesture runs, so a role key
  * pressed or released mid-drag updates the preview without a pointer move. Calls back when the
- * keys change; a window `blur` clears them all, since the keyup never arrives. Returns a detach.
+ * keys change; a window `blur` clears them all, since the keyup never arrives. `initial` is the
+ * keys held when tracking starts (`heldKeysOf` the pointer-down), so releasing the key that began
+ * the drag is a change. Returns a detach.
  */
-export function trackHeldKeys(onChange: (keys: HeldKeys) => void): () => void {
-    let current = NO_KEYS;
+export function trackHeldKeys(
+    onChange: (keys: HeldKeys) => void,
+    initial: HeldKeys = NO_KEYS,
+): () => void {
+    let current = initial;
     const onKey = (event: KeyboardEvent) => {
         const next = heldKeysOf(event);
         if (
@@ -247,6 +252,8 @@ export function trackHeldKeys(onChange: (keys: HeldKeys) => void): () => void {
         onChange(current);
     };
     const onBlur = () => {
+        if (!current.shift && !current.alt && !current.ctrl && !current.meta)
+            return;
         current = NO_KEYS;
         onChange(current);
     };

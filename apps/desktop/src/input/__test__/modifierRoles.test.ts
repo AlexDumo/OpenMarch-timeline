@@ -363,6 +363,25 @@ describe("trackHeldKeys", () => {
         expect(onChange).toHaveBeenCalledTimes(1);
     });
 
+    it("sees the release of a key held when tracking started, and its press again", () => {
+        const onChange = vi.fn();
+        detach = trackHeldKeys(onChange, held({ shift: true }));
+
+        key("keyup", { key: "Shift" });
+        expect(onChange).toHaveBeenLastCalledWith(NONE);
+
+        key("keydown", { key: "Shift", shiftKey: true });
+        expect(onChange).toHaveBeenLastCalledWith(held({ shift: true }));
+        expect(onChange).toHaveBeenCalledTimes(2);
+    });
+
+    it("doesn't call back on blur when nothing is held", () => {
+        const onChange = vi.fn();
+        detach = trackHeldKeys(onChange);
+        window.dispatchEvent(new Event("blur"));
+        expect(onChange).not.toHaveBeenCalled();
+    });
+
     it("clears every key on window blur", () => {
         const onChange = vi.fn();
         detach = trackHeldKeys(onChange);
