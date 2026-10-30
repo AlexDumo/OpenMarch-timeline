@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup } from "@testing-library/react";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
-import type { FieldPointer } from "@/field/editor/fieldEditor";
+import type { FieldModePress, FieldPointer } from "@/field/editor/fieldEditor";
 import { NO_KEYS } from "@/input/modifierRoles";
 import * as platform from "@/shortcuts/platform";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
@@ -37,6 +37,9 @@ const STEP = fieldProperties.pixelsPerStep;
 const N = 12;
 /** Away from the field's lines */
 const FROM = { x: 30 * STEP + 1, y: 20 * STEP + 1 };
+
+/** What the field editor tells a mode of a press, off a Mac */
+const OFF_MAC: FieldModePress = { reachesInside: () => false, isMac: false };
 
 const pointer = (field: XY): FieldPointer => ({
     field,
@@ -122,7 +125,7 @@ function pressKnob() {
         N,
         toolEnvFor(field()),
     );
-    shapeToolMode.press(pointer(knob));
+    shapeToolMode.press(pointer(knob), OFF_MAC);
     return { knob, center };
 }
 
@@ -174,7 +177,7 @@ describe("moving an open box", () => {
         });
         const before = spotsOf(box);
         const grab = { x: box.center.x + 2 * STEP, y: box.center.y + STEP };
-        shapeToolMode.press(pointer(grab));
+        shapeToolMode.press(pointer(grab), OFF_MAC);
         expect(useShapeToolStore.getState().tool!.gesture?.type).toBe("move");
         shapeToolMode.move(pointer({ x: grab.x + by.x, y: grab.y + by.y }));
         return { before, after: spotsOf(openParams()) };

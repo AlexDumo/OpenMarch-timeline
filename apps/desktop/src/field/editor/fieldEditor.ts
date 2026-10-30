@@ -322,10 +322,14 @@ export type FieldModeDrawing = {
 /** What the editor knows of a press it asks a {@link FieldMode} to claim. */
 export type FieldModePress = {
     /**
-     * The marcher the editor's own hit test finds under the press, as for a
-     * press it takes (hidden, dimmed and items included), or null.
+     * Whether the press reaches inside a placed box ($mod on a member), by
+     * the editor's own rule for a press it takes: its hit test (which skips
+     * hidden and dimmed marchers) finds a marcher under the press, $mod is
+     * held, and {@link FieldEditorPorts.reachesInside} says yes for that
+     * marcher. A mode that hands such a press to the editor gets it picked
+     * there; the two never decide it apart.
      */
-    marcherAt(): number | null;
+    reachesInside(): boolean;
     /** The editor's `isMac`: on a Mac, $mod is Cmd. */
     readonly isMac: boolean;
 };
@@ -340,7 +344,8 @@ export type FieldModePress = {
 export interface FieldMode {
     /** Whether the mode takes this press; `press` is what the editor knows of it. */
     claims(pointer: FieldPointer, press: FieldModePress): boolean;
-    press(pointer: FieldPointer): void;
+    /** It took the press `claims` said it would, with what the editor knows of it. */
+    press(pointer: FieldPointer, press: FieldModePress): void;
     move(pointer: FieldPointer): void;
     /**
      * The press it claimed ended. `click` when it moved less than the click
@@ -476,12 +481,13 @@ export class FieldEditor {
             this.ignoredButton = pointer.button;
             return true;
         }
-        if (
-            this.mode?.claims(pointer, {
-                marcherAt: () => this.marcherAt(pointer.field),
-                isMac: this.options.isMac ?? false,
-            })
-        ) {
+        const modePress: FieldModePress = {
+            reachesInside: () =>
+                this.reachInside(pointer, this.marcherAt(pointer.field)) !==
+                null,
+            isMac: this.options.isMac ?? false,
+        };
+        if (this.mode?.claims(pointer, modePress)) {
             const last = this.lastClick;
             this.press = null;
             this.modePress = {
@@ -490,7 +496,7 @@ export class FieldEditor {
                 // on a box's member that turned the mode on
                 double: last !== null && this.isSoonAfter(last, pointer),
             };
-            this.mode.press(pointer);
+            this.mode.press(pointer, modePress);
             this.emit();
             return true;
         }
@@ -1054,8 +1060,10 @@ export class FieldEditor {
      *
      * - pressing a selected marcher moves the whole selection (narrowing to
      *   it happens only on a click);
-     * - pressing another marcher selects it (Shift adds it) and moves the
-     *   selection;
+     * - pressing another marcher selects it (Shift adds it, or its whole
+     *   group when the app says so) and moves the selection;
+     * - Shift on a marcher that takes it out (a group, or a box's member)
+     *   moves nothing: the press is done;
      * - pressing empty field inside a multi-selection's box moves the
      *   selection.
      *
@@ -1071,22 +1079,26 @@ export class FieldEditor {
         let ids: readonly number[];
         let usedByPress: readonly RoleKey[] = [];
         if (press.hit !== null) {
-            const reach = this.reachInside(press);
+            const reach = this.reachInside(press.start, press.hit);
             const chosen = this.ports.pressSelection?.(
                 press.hit,
                 press.start.shift,
                 reach !== null,
             );
-            if (chosen && press.start.shift) {
-                // Shift adds or removes a whole group; the press is done
+            const shiftChose = chosen != null && press.start.shift;
+            if (shiftChose && !chosen.includes(press.hit)) {
+                // Shift took a group (or a box's member) out; the press is done
                 this.write(chosen);
                 return null;
             }
-            // The add choice applies only when the press adds the marcher;
-            // then its key is the press's, no role until pressed again
+            // The add choice applies only when the press adds the marcher (or
+            // Shift adds its whole group); then its key is the press's, no
+            // role until pressed again
             const add = pressChoiceOf(press.start, "field", {
                 applicable: new Set<PressChoice>(
-                    !chosen && !selection.includes(press.hit) ? ["add"] : [],
+                    (!chosen || shiftChose) && !selection.includes(press.hit)
+                        ? ["add"]
+                        : [],
                 ),
                 isMac: this.options.isMac ?? false,
             });
@@ -1125,18 +1137,19 @@ export class FieldEditor {
     }
 
     /**
-     * The reach inside choice of a press on a marcher: $mod (Cmd on a Mac,
-     * Ctrl elsewhere) on a member of a placed box ({@link
+     * The reach inside choice of a press with `keys` on marcher `hit`: $mod
+     * (Cmd on a Mac, Ctrl elsewhere) on a member of a placed box ({@link
      * FieldEditorPorts.reachesInside}). Null elsewhere, so $mod stays
-     * constrain. A Mac's Ctrl pans and never gets here.
+     * constrain. A Mac's Ctrl pans and never gets here. The one rule for it:
+     * a mode asks it too ({@link FieldModePress.reachesInside}).
      */
-    private reachInside(press: FieldPress) {
-        if (press.hit === null) return null;
-        const reach = pressChoiceOf(press.start, "field", {
+    private reachInside(keys: FieldPointer, hit: number | null) {
+        if (hit === null) return null;
+        const reach = pressChoiceOf(keys, "field", {
             applicable: REACH_INSIDE,
             isMac: this.options.isMac ?? false,
         });
-        return reach && this.ports.reachesInside?.(press.hit) ? reach : null;
+        return reach && this.ports.reachesInside?.(hit) ? reach : null;
     }
 
     /** The held roles of a gesture from `press`, with the keys a selection choice used. */
@@ -1267,7 +1280,7 @@ export class FieldEditor {
                 : this.ports.pressSelection?.(
                       press.hit,
                       shift,
-                      this.reachInside(press) !== null,
+                      this.reachInside(press.start, press.hit) !== null,
                   );
         // Alt on empty field keeps the selection too, as Shift does, so an
         // Alt double-click-and-drag lasso has something to subtract from

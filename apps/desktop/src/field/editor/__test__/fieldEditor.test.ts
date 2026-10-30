@@ -1953,7 +1953,7 @@ describe("FieldEditor groups a press selects (#204)", () => {
         expect(state.drops[0].positions.map((p) => p.id)).toEqual([1, 2]);
     });
 
-    it("adds a group with Shift and drags nothing", () => {
+    it("adds a group with Shift and drags the selection at full speed: Shift was the press's", () => {
         const { editor, state } = setup({
             selected: [3],
             pressSelection: group,
@@ -1962,6 +1962,26 @@ describe("FieldEditor groups a press selects (#204)", () => {
         editor.pointerMove(at(100, 150, { shift: true }));
         editor.pointerUp(at(100, 150, { shift: true }));
         expect(state.selected).toEqual([3, 1, 2]);
+        expect(state.drops[0].positions).toEqual([
+            { id: 1, x: 100, y: 150 },
+            { id: 2, x: 200, y: 150 },
+            { id: 3, x: 300, y: 150 },
+        ]);
+    });
+
+    it("takes a selected group out with Shift: the press is done, and no marquee adds it back", () => {
+        const { editor, state } = setup({
+            selected: [3, 1, 2],
+            pressSelection: (hit, shift) =>
+                hit <= 2 && shift ? [3] : group(hit, shift),
+        });
+        editor.pointerDown(at(100, 100, { shift: true }));
+        editor.pointerMove(at(100, 150, { shift: true }));
+        expect(editor.activeGesture()).toBeNull();
+        expect(editor.areaShape()).toBeNull();
+        editor.pointerMove(at(250, 150, { shift: true }));
+        editor.pointerUp(at(250, 150, { shift: true }));
+        expect(state.selected).toEqual([3]);
         expect(state.drops).toEqual([]);
     });
 

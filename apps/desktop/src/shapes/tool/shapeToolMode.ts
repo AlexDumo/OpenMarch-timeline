@@ -371,7 +371,7 @@ export function cancelShapeGesture(): void {
  */
 export const shapeToolMode: FieldMode = {
     claims: () => useShapeToolStore.getState().tool !== null,
-    press(pointer) {
+    press(pointer, { isMac }) {
         const field = currentShapeField();
         const tool = useShapeToolStore.getState().tool;
         if (!field || !tool) return;
@@ -384,6 +384,7 @@ export const shapeToolMode: FieldMode = {
                     reachInside: true,
                 }),
             rerun,
+            isMac,
         );
         held = pressed.held;
         const roles = held.roles();

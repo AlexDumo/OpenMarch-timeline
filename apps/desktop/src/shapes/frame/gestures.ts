@@ -198,7 +198,7 @@ function dragged(
         case "handle":
             return kind.dragHandle(base, n, gesture.key, at, env);
         case "move":
-            return moveOntoLines(
+            return movedOnAxis(
                 kind,
                 base,
                 n,
@@ -207,7 +207,7 @@ function dragged(
             );
         case "center": {
             const { center } = kind.frameOf(base, n);
-            return moveOntoLines(
+            return movedOnAxis(
                 kind,
                 base,
                 n,
@@ -231,6 +231,37 @@ function dragged(
             return settled(kind, turned, n, env, gesture.pivot);
         }
     }
+}
+
+/**
+ * `base` moved by `delta` ({@link moveOntoLines}); with `constrain` held, on one axis only, across
+ * or down, whichever the drag has gone further along, as a marcher drag does (`ruledMove`). The
+ * other axis stays where it was, whatever the grid or a line would pull it to.
+ */
+function movedOnAxis(
+    kind: AnyToolKind,
+    base: unknown,
+    n: number,
+    delta: XY,
+    env: ToolEnv,
+): unknown {
+    if (!env.constrain) return moveOntoLines(kind, base, n, delta, env);
+    const across = Math.abs(delta.y) <= Math.abs(delta.x);
+    const moved = moveOntoLines(
+        kind,
+        base,
+        n,
+        across ? { x: delta.x, y: 0 } : { x: 0, y: delta.y },
+        env,
+    );
+    const start = kind.frameOf(base, n).center;
+    const frame = kind.frameOf(moved, n);
+    return kind.withFrame(moved, n, {
+        ...frame,
+        center: across
+            ? { x: frame.center.x, y: start.y }
+            : { x: start.x, y: frame.center.y },
+    });
 }
 
 /**

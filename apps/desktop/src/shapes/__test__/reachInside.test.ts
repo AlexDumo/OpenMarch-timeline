@@ -17,7 +17,9 @@ import { drawBox, type BoxParams } from "../box/boxGeometry";
 import { boxTool } from "../box/boxTool";
 import { setShapeField } from "../field/shapeField";
 import { shapeContextFor } from "../field/shapeFieldContext";
+import { DEFAULT_PIVOT } from "../frame/frame";
 import { frameControls } from "../frame/gestures";
+import { pivotOf } from "../frame/pivot";
 import {
     boxPressSelection,
     canReachInside,
@@ -53,9 +55,12 @@ const field = () => ({
     drawn: () => new Map(),
 });
 
+/** Where the view draws the field: the screen point is never the field point */
+const SCREEN = { x: -400, y: 250 };
+
 const pointer = (at: XY, keys: Partial<HeldKeys> = {}): FieldPointer => ({
     field: at,
-    screen: at,
+    screen: { x: at.x + SCREEN.x, y: at.y + SCREEN.y },
     button: 0,
     ...NO_KEYS,
     ...keys,
@@ -104,10 +109,10 @@ const membersOf = (b: PlacedBox) =>
     new Map(b.recipe.members.map((m) => [m.marcherId, { x: m.x, y: m.y }]));
 let members = membersOf(box);
 
-/** What the field editor tells a mode of a press: the marcher its hit test finds there */
-const editorSees = (hit: number | null, isMac = false): FieldModePress => ({
-    marcherAt: () => hit,
-    isMac,
+/** What the field editor tells a mode of a press: whether it reaches inside a placed box */
+const editorSays = (reaches: boolean): FieldModePress => ({
+    reachesInside: () => reaches,
+    isMac: false,
 });
 
 beforeEach(() => {
@@ -140,30 +145,25 @@ describe("the selected box's field mode and reach inside", () => {
     // Marcher 2 is the back-right corner: the ne handle sits on it
     const member = members.get(2)!;
 
-    it("claims a press on a member without $mod: the drag moves the box", () => {
-        expect(mode().claims(pointer(member), editorSees(2))).toBe(true);
+    beforeEach(() => vi.mocked(commitBox).mockClear());
+
+    it("claims a press on a member that doesn't reach inside: the drag moves the box", () => {
+        expect(mode().claims(pointer(member), editorSays(false))).toBe(true);
     });
 
-    it("lets a $mod press on a member through to the field editor, away from the box's controls", () => {
+    it("lets a press the field editor says reaches inside through, away from the box's controls", () => {
         const big = placed(15);
         members = membersOf(big);
-        const beside = bigMode(big).claims(
-            pointer(members.get(7)!, { ctrl: true }),
-            editorSees(7),
-        );
-        expect(beside).toBe(false);
-        // Mac Ctrl is no $mod off a Mac: Ctrl is $mod here, Meta isn't
-        expect(
-            bigMode(big).claims(
-                pointer(members.get(7)!, { meta: true }),
-                editorSees(7),
-            ),
-        ).toBe(true);
+        const beside = pointer(members.get(7)!, { ctrl: true });
+        expect(bigMode(big).claims(beside, editorSays(true))).toBe(false);
+        // The editor's rule says no (inside the box already, a loose marcher drawn nearer, a
+        // hidden one): the press is the box's
+        expect(bigMode(big).claims(beside, editorSays(false))).toBe(true);
     });
 
     it("keeps a $mod press on a handle, over its marcher: $mod is constrain there, for an equal-spaced resize", () => {
         expect(
-            mode().claims(pointer(member, { ctrl: true }), editorSees(2)),
+            mode().claims(pointer(member, { ctrl: true }), editorSays(true)),
         ).toBe(true);
     });
 
@@ -173,9 +173,54 @@ describe("the selected box's field mode and reach inside", () => {
         expect(
             bigMode(big).claims(
                 pointer(members.get(8)!, { ctrl: true }),
-                editorSees(8),
+                editorSays(true),
             ),
         ).toBe(true);
+    });
+
+    it("keeps a $mod press on the rotate knob drawn over a member, and turns the box", () => {
+        const { knob } = frameControls(
+            box.kind,
+            box.params,
+            box.spots,
+            toolEnvFor(field()),
+        );
+        const turning = mode();
+        const press = editorSays(true);
+        const keys = { ctrl: true };
+        expect(turning.claims(pointer(knob, keys), press)).toBe(true);
+        const to = { x: knob.x + 6 * STEP, y: knob.y + 2 * STEP };
+        turning.press(pointer(knob, keys), press);
+        turning.move(pointer(to, keys));
+        turning.release(pointer(to, keys), null);
+        expect(commitBox).toHaveBeenCalledTimes(1);
+        const params = vi.mocked(commitBox).mock.calls[0][1] as BoxParams;
+        expect(params.rotation).not.toBeCloseTo(box.params.rotation);
+        expect(params.center.x).toBeCloseTo(box.params.center.x);
+        expect(params.center.y).toBeCloseTo(box.params.center.y);
+    });
+
+    it("reads $mod at its press as the field editor does: a Mac's Cmd on the center dot pulls the pivot out", () => {
+        const { center } = frameControls(
+            box.kind,
+            box.params,
+            box.spots,
+            toolEnvFor(field()),
+        );
+        const onMac: FieldModePress = {
+            reachesInside: () => false,
+            isMac: true,
+        };
+        const pulling = mode();
+        const keys = { meta: true };
+        const to = { x: center.x + 2 * STEP, y: center.y + STEP };
+        pulling.press(pointer(center, keys), onMac);
+        pulling.move(pointer(to, keys));
+        pulling.release(pointer(to, keys), null);
+        expect(commitBox).toHaveBeenCalledTimes(1);
+        const params = vi.mocked(commitBox).mock.calls[0][1] as BoxParams;
+        expect(pivotOf(params)).not.toBe(DEFAULT_PIVOT);
+        expect(params.center).toEqual(box.params.center);
     });
 
     it("still claims a $mod press away from every member: the center dot pulls the pivot out", () => {
@@ -186,18 +231,8 @@ describe("the selected box's field mode and reach inside", () => {
             toolEnvFor(field()),
         );
         expect(
-            mode().claims(pointer(center, { ctrl: true }), editorSees(null)),
+            mode().claims(pointer(center, { ctrl: true }), editorSays(false)),
         ).toBe(true);
-    });
-
-    it("asks the field editor's hit test which marcher is under the press", () => {
-        const big = placed(15);
-        members = membersOf(big);
-        const beside = pointer(members.get(7)!, { ctrl: true });
-        // Hidden or dimmed there: the editor finds no marcher, so the press is the box's
-        expect(bigMode(big).claims(beside, editorSees(null))).toBe(true);
-        // A marcher in no box drawn over it is nearer: the editor's, not this box's
-        expect(bigMode(big).claims(beside, editorSees(42))).toBe(true);
     });
 
     it("lays the 5 × 3 box out as these tests read it", () => {
@@ -213,24 +248,6 @@ describe("the selected box's field mode and reach inside", () => {
         expect(at.get(8)!.y).toBeCloseTo(center.y);
         expect(at.get(7)!.y).toBeCloseTo(center.y);
         expect(at.get(7)!.x).toBeCloseTo(center.x - 4 * STEP);
-    });
-
-    it("reads $mod as the field editor does: Cmd on a Mac", () => {
-        const big = placed(15);
-        members = membersOf(big);
-        const beside = members.get(7)!;
-        expect(
-            bigMode(big).claims(
-                pointer(beside, { meta: true }),
-                editorSees(7, true),
-            ),
-        ).toBe(false);
-        expect(
-            bigMode(big).claims(
-                pointer(beside, { ctrl: true }),
-                editorSees(7, true),
-            ),
-        ).toBe(true);
     });
 });
 
@@ -269,29 +286,35 @@ describe("canReachInside", () => {
 
 /**
  * The field editor with the app's box ports (`ThreeField`): `boxPressSelection` and
- * `canReachInside` over the 2 × 2 box (marchers 1..4), and marcher 9 loose, 8 steps right of it.
- * The selected box's field mode is on while the whole box is selected, as `useShapeFieldModes`
- * puts it.
+ * `canReachInside` over the 2 × 2 box (marchers 1..4) and marcher 9 loose, 8 steps right of it,
+ * or the 5 × 3 box (1..15) and marcher 20 loose. The selected box's field mode is on while the
+ * whole box is selected, as `useShapeFieldModes` puts it.
  */
 describe("reaching inside through the field editor", () => {
     const LOOSE = { x: FROM.x + 12 * STEP, y: FROM.y };
     let running: FieldEditor | undefined;
 
+    const BIG_LOOSE = { x: FROM.x + 24 * STEP, y: FROM.y };
+
     beforeEach(() => {
-        vi.spyOn(placedBoxStore, "placedBoxesAt").mockReturnValue([box]);
         useBoxSelectionStore.setState({ enabled: true, inside: null });
         vi.mocked(commitBox).mockClear();
     });
 
     afterEach(() => running?.pointerCancel());
 
-    function app({ selected = [] as number[] } = {}) {
+    function app({ selected = [] as number[], on = box, isMac = false } = {}) {
+        members = membersOf(on);
+        vi.spyOn(placedBoxStore, "placedBoxesAt").mockReturnValue([on]);
         const state = {
             selected: [...selected] as readonly number[],
             drops: [] as (readonly MarcherPosition[])[],
             shown: null as ReadonlyMap<number, FieldPoint> | null,
         };
-        const drawn = [...members.entries(), [9, LOOSE] as const];
+        const drawn = [
+            ...members.entries(),
+            on === box ? ([9, LOOSE] as const) : ([20, BIG_LOOSE] as const),
+        ];
         const editor = new FieldEditor(
             {
                 selection: {
@@ -323,14 +346,16 @@ describe("reaching inside through the field editor", () => {
                     return new Promise<DropResult>(() => {});
                 },
             },
-            { isMac: false, moveTransform: ruledMove(() => RULES) },
+            { isMac, moveTransform: ruledMove(() => RULES) },
         );
-        const whole = new LiveBoxMode(box, new QueryClient());
+        const whole = new LiveBoxMode(on, new QueryClient());
         function syncMode() {
             const all = [...members.keys()].every((id) =>
                 state.selected.includes(id),
             );
-            editor.setMode(all && state.selected.length === 4 ? whole : null);
+            editor.setMode(
+                all && state.selected.length === members.size ? whole : null,
+            );
         }
         syncMode();
         running = editor;
@@ -461,5 +486,99 @@ describe("reaching inside through the field editor", () => {
         const params = vi.mocked(commitBox).mock.calls[0][1] as BoxParams;
         expect(params.across).toBeCloseTo(params.deep);
         expect(params.across).not.toBeCloseTo(box.params.across);
+    });
+    it("adds an unselected box whole with a Shift drag from outside, and moves the selection at full speed: Shift was the press's", () => {
+        const { editor, state } = app({ selected: [9] });
+        drag(editor, m(3), BY, { shift: true });
+        expect(state.selected).toEqual([9, 1, 2, 3, 4]);
+        expect(useBoxSelectionStore.getState().inside).toBeNull();
+        const moved = (id: number, at: XY) => ({
+            id,
+            x: at.x + BY.x,
+            y: at.y + BY.y,
+        });
+        expect(state.drops[0]).toEqual([
+            moved(1, m(1)),
+            moved(2, m(2)),
+            moved(3, m(3)),
+            moved(4, m(4)),
+            moved(9, LOOSE),
+        ]);
+    });
+
+    it("takes a selected box out with a Shift drag from outside: the press ends there, and no marquee adds it back", () => {
+        const { editor, state } = app({ selected: [9, 1, 2, 3, 4] });
+        const keys = { shift: true };
+        press(editor, m(3), keys);
+        editor.pointerMove(pointer({ x: m(3).x + BY.x, y: m(3).y }, keys));
+        expect(editor.activeGesture()).toBeNull();
+        expect(editor.areaShape()).toBeNull();
+        editor.pointerMove(
+            pointer({ x: m(3).x + BY.x, y: m(3).y + BY.y }, keys),
+        );
+        editor.pointerUp(pointer({ x: m(3).x + BY.x, y: m(3).y + BY.y }, keys));
+        expect(state.selected).toEqual([9]);
+        expect(state.drops).toEqual([]);
+    });
+
+    describe("a 5 × 3 box selected whole", () => {
+        const big = placed(15);
+        const all = big.recipe.members.map((mm) => mm.marcherId);
+
+        it("picks one marcher with a $mod press on a member away from its handles", () => {
+            const { editor, state } = app({ on: big, selected: all });
+            click(editor, m(7), { ctrl: true });
+            expect(state.selected).toEqual([7]);
+            expect(useBoxSelectionStore.getState().inside).toBe(8);
+            expect(commitBox).not.toHaveBeenCalled();
+        });
+
+        it("drags only that marcher, free: the press used $mod", () => {
+            const { editor, state } = app({ on: big, selected: all });
+            drag(editor, m(7), BY, { ctrl: true });
+            expect(state.selected).toEqual([7]);
+            expect(state.drops).toEqual([
+                [{ id: 7, x: m(7).x + BY.x, y: m(7).y + BY.y }],
+            ]);
+            expect(commitBox).not.toHaveBeenCalled();
+        });
+
+        it("reads $mod as Cmd on a Mac, and a Mac's Cmd isn't $mod elsewhere", () => {
+            const mac = app({ on: big, selected: all, isMac: true });
+            click(mac.editor, m(7), { meta: true });
+            expect(mac.state.selected).toEqual([7]);
+            expect(useBoxSelectionStore.getState().inside).toBe(8);
+            running?.pointerCancel();
+            useBoxSelectionStore.setState({ inside: null });
+            // Off a Mac, Meta is no $mod: the press is the box's, and a click keeps it whole
+            const pc = app({ on: big, selected: all });
+            click(pc.editor, m(7), { meta: true });
+            expect(pc.state.selected).toEqual(all);
+            expect(useBoxSelectionStore.getState().inside).toBeNull();
+        });
+
+        it("inside it already, moves the box with its own commit: a plain drag, and a $mod drag on one axis", () => {
+            useBoxSelectionStore.setState({ inside: 8 });
+            const plain = app({ on: big, selected: all });
+            drag(plain.editor, m(7), BY, {});
+            expect(plain.state.drops).toEqual([]);
+            expect(commitBox).toHaveBeenCalledTimes(1);
+            // The box's move lands on the field's grid: it moves on both axes
+            const free = vi.mocked(commitBox).mock.calls[0][1] as BoxParams;
+            expect(free.center.x).toBeGreaterThan(big.params.center.x + STEP);
+            expect(free.center.y).toBeGreaterThan(big.params.center.y + STEP);
+            running?.pointerCancel();
+            vi.mocked(commitBox).mockClear();
+
+            const constrained = app({ on: big, selected: all });
+            drag(constrained.editor, m(7), BY, { ctrl: true });
+            expect(constrained.state.drops).toEqual([]);
+            expect(constrained.state.selected).toEqual(all);
+            expect(useBoxSelectionStore.getState().inside).toBe(8);
+            expect(commitBox).toHaveBeenCalledTimes(1);
+            const params = vi.mocked(commitBox).mock.calls[0][1] as BoxParams;
+            expect(params.center.x).toBeGreaterThan(big.params.center.x + STEP);
+            expect(params.center.y).toBeCloseTo(big.params.center.y);
+        });
     });
 });
