@@ -69,6 +69,27 @@ describe("startGestureKeys", () => {
         expect(onRolesChange).toHaveBeenCalledTimes(2);
     });
 
+    it("follows a key the pointer saw change before the keyboard did", () => {
+        const onRolesChange = vi.fn();
+        gesture = startGestureKeys({
+            context: "field",
+            press: NO_KEYS,
+            onRolesChange,
+            isMac: false,
+        });
+        // Ctrl goes down between the press and the drag; a pointer move reports it
+        gesture.update(held({ ctrl: true }));
+        expect(gesture.roles().constrain).toBe(true);
+
+        key("keyup", { key: "Control" });
+        expect(onRolesChange).toHaveBeenLastCalledWith({
+            fine: false,
+            constrain: false,
+            fromCenter: false,
+        });
+        expect(gesture.roles().constrain).toBe(false);
+    });
+
     it("drops every role on window blur", () => {
         const onRolesChange = vi.fn();
         gesture = startGestureKeys({
