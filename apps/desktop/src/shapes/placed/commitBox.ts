@@ -62,8 +62,9 @@ let unsaved = 0;
  * starts from the shape as the last one read it back, so quick edits add up. Each goes to the edit
  * window it was made in, even when it waited and the timeline moved on meanwhile.
  *
- * They run in the queue undo and redo presses do (`queueHistoryStep`), so an undo pressed while
- * saves wait undoes the last of them, and an edit after an undo goes on from what it left (#513).
+ * They run in the queue undo and redo presses do (`queueHistoryStep`), in the order they were
+ * pressed: an undo pressed while saves wait undoes the last of them (#513). An edit is saved as it
+ * was shown, even when an undo before it hadn't run yet.
  */
 export function commitBox(
     box: PlacedBox,
