@@ -1,6 +1,7 @@
 import {
     assignSlots,
     orderFields,
+    orderOn,
     type AssignMarcher,
     type OrderChoice,
 } from "../assign";
@@ -146,7 +147,7 @@ export const keepOrderOffered = (state: ToolState): boolean =>
 
 /** Who goes where as the open shape works it out: least travel unless its kind has an order */
 export const orderOf = (state: Pick<ToolState, "kind" | "order">) =>
-    state.kind.ordered ? orderFields(state.order) : orderFields("nearest");
+    orderFields(orderOn(state.kind, state.order));
 
 /** The spots for the open shape, in the kind's order; empty before one is drawn */
 export function slotsOf(state: ToolState, ctx: ShapeContext): Slot[] {

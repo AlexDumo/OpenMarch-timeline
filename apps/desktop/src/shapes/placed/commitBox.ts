@@ -1,6 +1,6 @@
 import tolgee from "@/global/singletons/Tolgee";
 import type { QueryClient } from "@tanstack/react-query";
-import { orderFields, type OrderChoice } from "../assign";
+import { orderFields, type OrderChoice, type OrderMode } from "../assign";
 import type { XY } from "../types";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import {
@@ -42,6 +42,16 @@ export function carriedOnto(plan: CanvasEditPlan, box: PlacedBox): boolean {
 }
 
 /**
+ * Who goes where as a placed shape's recipe saves it: a Line's order (#528), Least travel
+ * otherwise. Drill order is gone (#429); a kind without an order keeps its stored reverse.
+ */
+export const recipeOrderFields = (
+    box: PlacedBox,
+    order: OrderChoice,
+): { orderMode: OrderMode; reverse?: boolean } =>
+    box.kind.ordered ? orderFields(order) : { orderMode: "nearest" };
+
+/**
  * Saves a selected placed shape drawn with `params` through `writePlacement`: its members move to
  * their spots in it and its recipe is saved, as one edit at the edit window (a canvas edit). A
  * shape held from an earlier move gets its own copy on this one; the earlier one stays.
@@ -73,8 +83,7 @@ export async function commitBox(
             recipe: {
                 ...box.recipe,
                 params: next,
-                // Least travel, or a Line's order (#528); drill order is gone (#429)
-                ...orderFields(box.kind.ordered ? order : "nearest"),
+                ...recipeOrderFields(box, order),
             },
             members: targets,
             replaces: box.recipe,

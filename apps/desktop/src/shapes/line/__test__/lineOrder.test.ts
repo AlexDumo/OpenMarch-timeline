@@ -10,6 +10,7 @@ import {
     type PlacedRecipe,
 } from "../../placed/placedBox";
 import { placedOrderChoice, withPlacedOrder } from "../../placed/placedOrder";
+import { recipeOrderFields } from "../../placed/commitBox";
 import { placementOf } from "../../tool/shapePlacement";
 import type { ToolEnv } from "../../tool/toolKind";
 import {
@@ -152,6 +153,15 @@ describe("the order on a line", () => {
         const t = intoNewLine(fromLine([4, 2, 5]));
         expect(t.order).toBe("keep");
         expect(alongOrder(t)).toEqual([2, 4, 5]);
+    });
+
+    it("is kept from the line holding them all when the first marcher is in two lines", () => {
+        // Marcher 1 is in a line of two that comes first, and in the line of all five
+        const boxes = [placedLine(2, [1, 2], 300), placedLine()];
+        const t = intoNewLine(fromLine([1, 2, 3, 4, 5], boxes));
+        expect(keepOrderOffered(t)).toBe(true);
+        expect(t.order).toBe("keep");
+        expect(alongOrder(t)).toEqual([1, 2, 3, 4, 5]);
     });
 
     it("is Least travel when the marchers come from two placed lines, or one isn't on any", () => {
@@ -362,5 +372,145 @@ describe("the order stored with a placed line", () => {
             orderMode: "nearest",
         });
         expect(recalculatedTargets(nearest, ctx, origins)).not.toBeNull();
+    });
+});
+
+describe("the order picked on a placed line", () => {
+    const recipeOf = (t: ToolState): PlacedRecipe => {
+        const placement = placementOf(t, ctx)!;
+        return {
+            ...placement.recipe,
+            id: 2,
+            timelineId: 11,
+            members: placement.members,
+            params: JSON.parse(JSON.stringify(placement.recipe.params)),
+        };
+    };
+    const slotOf = (members: readonly { marcherId: number; slot: number }[]) =>
+        new Map(members.map((m) => [m.marcherId, m.slot]));
+    const kept = () => readBack(recipeOf(intoNewLine(fromLine())));
+    const reversed = () =>
+        readBack(recipeOf(setOrder(intoNewLine(fromLine()), "reverse", ctx)));
+    const pick = (placed: PlacedBox, choice: "nearest" | "keep" | "reverse") =>
+        liveTargets(placed, placed.params, ctx, true, undefined, choice);
+
+    it("has Recalculate leave a line saved as Reverse as it is", () => {
+        const placed = reversed();
+        expect(placedOrderChoice(placed)).toBe("reverse");
+        // From the start flag, least travel would put them the other way round
+        const origins = new Map(
+            placed.recipe.members.map((m) => [
+                m.marcherId,
+                { x: 280 - m.x, y: m.y },
+            ]),
+        );
+        expect(recalculatedTargets(placed, ctx, origins)).toBeNull();
+        expect(slotOf(pick(placed, "reverse").members)).toEqual(
+            slotOf(placed.recipe.members),
+        );
+    });
+
+    it("puts a line saved as Reverse back in order when Keep order is picked", () => {
+        expect(slotOf(pick(reversed(), "keep").members)).toEqual(
+            slotOf(kept().recipe.members),
+        );
+    });
+
+    /** A placed line of 8 spots along y = 100 with 6 members, spots 2 and 5 empty */
+    function holedLine(reverse = false): PlacedBox {
+        const params: LineParams = {
+            points: [
+                { x: 100, y: 100, tension: 0 },
+                { x: 170, y: 100, tension: 0 },
+            ],
+            spacing: { mode: "fit" },
+        };
+        const slots = lineTool.shape.generate(params, 8, ctx);
+        return readBack({
+            id: 4,
+            timelineId: 10,
+            kind: "line",
+            kindVersion: 2,
+            params: { ...params, spots: 8 },
+            orderMode: "keep",
+            reverse,
+            members: [0, 1, 3, 4, 6, 7].map((slot, i) => ({
+                marcherId: i + 1,
+                slot,
+                x: slots[slot]!.x,
+                y: slots[slot]!.y,
+            })),
+        });
+    }
+
+    it("keeps a line's holes whichever order is picked", () => {
+        const placed = holedLine();
+        const flipped = pick(placed, "reverse");
+        expect(flipped.spots).toBe(8);
+        expect(slotOf(flipped.members)).toEqual(
+            new Map(
+                placed.recipe.members.map((m) => [m.marcherId, 7 - m.slot]),
+            ),
+        );
+        const back = pick(holedLine(true), "keep");
+        expect(back.spots).toBe(8);
+        expect(slotOf(back.members)).toEqual(
+            new Map(
+                placed.recipe.members.map((m) => [m.marcherId, 7 - m.slot]),
+            ),
+        );
+        // Least travel from where they stand: nobody moves, the holes stay
+        const nearest = pick(placed, "nearest");
+        expect(nearest.spots).toBe(8);
+        expect(slotOf(nearest.members)).toEqual(slotOf(placed.recipe.members));
+        // From elsewhere, still on 8 spots, each on their own
+        const origins = new Map(
+            placed.recipe.members.map((m) => [
+                m.marcherId,
+                { x: 270 - m.x, y: m.y },
+            ]),
+        );
+        const moved = liveTargets(
+            placed,
+            placed.params,
+            ctx,
+            true,
+            origins,
+            "nearest",
+        );
+        expect(moved.spots).toBe(8);
+        expect(new Set(moved.members.map((m) => m.slot)).size).toBe(6);
+        expect(slotOf(moved.members).get(1)).toBe(7);
+    });
+
+    it("is saved with the recipe, and a kind without an order keeps its stored reverse", () => {
+        expect(recipeOrderFields(kept(), "reverse")).toEqual({
+            orderMode: "keep",
+            reverse: true,
+        });
+        expect(recipeOrderFields(kept(), "nearest")).toEqual({
+            orderMode: "nearest",
+            reverse: false,
+        });
+        const params = drawBox({ x: 0, y: 0 }, { x: 20, y: 20 }, 4, env)!;
+        const slots = boxTool.shape.generate(params, 4, ctx);
+        const box = readBack({
+            id: 3,
+            timelineId: 10,
+            kind: "block",
+            kindVersion: 1,
+            params: { ...params, spots: 4 },
+            orderMode: "keep",
+            reverse: true,
+            members: slots.map((s, i) => ({
+                marcherId: i + 1,
+                slot: i,
+                x: s.x,
+                y: s.y,
+            })),
+        });
+        expect(recipeOrderFields(box, "keep")).toEqual({
+            orderMode: "nearest",
+        });
     });
 });

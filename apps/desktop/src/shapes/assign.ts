@@ -21,6 +21,12 @@ export type OrderMode =
  */
 export type OrderChoice = "nearest" | "keep" | "reverse";
 
+/** Who goes where on a kind: its choice when it has an order along it (a Line), Least travel otherwise */
+export const orderOn = (
+    kind: { readonly ordered?: boolean },
+    choice: OrderChoice,
+): OrderChoice => (kind.ordered ? choice : "nearest");
+
 /** A choice as a recipe stores it */
 export const orderFields = (
     choice: OrderChoice,

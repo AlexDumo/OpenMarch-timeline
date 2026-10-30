@@ -274,18 +274,7 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
                     : null,
             order: placedOrder(box, queryClient, write),
             ...(canCloseUp(box) && {
-                closeUp: () => {
-                    const field = currentShapeField();
-                    if (!field) return;
-                    const params = closedUpParams(
-                        box,
-                        box.recipe.members.length,
-                        toolEnvFor(field),
-                    );
-                    // Least travel, whatever order it was laid out in (spec #385)
-                    if (params !== null)
-                        write(() => commitBox(box, params, queryClient, true));
-                },
+                closeUp: () => closeUpPlaced(box, queryClient, write),
             }),
         };
         // `resolverVersion` changes whenever the resolver's answers may have: where members come
@@ -295,6 +284,25 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
     useWaitingChanges(target, queued);
     return target;
 }
+
+/** Close up (#392): the members left laid out again by least travel, whatever order it was laid out in (spec #385) */
+const closeUpPlaced = (
+    box: PlacedBox,
+    queryClient: ReturnType<typeof useQueryClient>,
+    write: ReturnType<typeof oneWriteAtATime>,
+) => {
+    const field = currentShapeField();
+    if (!field) return;
+    const params = closedUpParams(
+        box,
+        box.recipe.members.length,
+        toolEnvFor(field),
+    );
+    if (params !== null)
+        write(() =>
+            commitBox(box, params, queryClient, true, undefined, "nearest"),
+        );
+};
 
 /**
  * Who goes where on a placed Line, whose members are all on it, so its order can be kept: picking
