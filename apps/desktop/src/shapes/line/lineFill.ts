@@ -19,6 +19,7 @@ import {
     lineFrame,
     lineSpots,
     scaled,
+    withGroups,
     type LineParams,
 } from "./lineGeometry";
 
@@ -111,6 +112,13 @@ export const lineClosed: ClosedShape<LineParams> = {
     region: (p) => lineRegion(p),
     distribution: (p) => lineDistribution(p),
     startMode: (_p, n, mode) => distributionFor(mode, 1, n),
-    // The outline drawn is kept in every mode: its spacing follows
-    withDistribution: (p, _n, distribution) => ({ ...p, distribution }),
+    // The outline drawn is kept in every mode, its spacing following, except in Outline with a
+    // kept spacing: there the outline follows its spacing, so a new count (Close up) grows or
+    // shrinks it from its pivot and keeps every gap as typed rather than leaving the hole
+    withDistribution(p, n, distribution, env) {
+        const next = { ...p, distribution };
+        if (distribution.mode !== "outline" || p.spacing.mode !== "keep")
+            return next;
+        return withGroups(next, n, p.spacing.groups, env);
+    },
 };

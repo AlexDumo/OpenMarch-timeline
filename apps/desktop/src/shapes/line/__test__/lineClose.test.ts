@@ -10,6 +10,8 @@ import {
 } from "../../distribute/modes";
 import {
     boxesAt,
+    closedUpParams,
+    withoutMembers,
     type PlacedBox,
     type PlacedRecipe,
 } from "../../placed/placedBox";
@@ -555,6 +557,19 @@ describe("a placed closed line", () => {
             );
         },
     );
+
+    it("closes up in Outline + Keep interval with even gaps, grown from its pivot", () => {
+        let t = picked(square(N), "corners", "off");
+        t = edit(t, interval.type(t.params, N, "2", env), ctx);
+        const placed = readBack(withoutMembers(recipeOf(t), [5]))!;
+        const params = closedUpParams(placed, N - 1, env) as LineParams;
+        const spots = lineTool.shape.generate(params, N - 1, ctx);
+        expect(spots).toHaveLength(N - 1);
+        // The hole closes all the way round: every gap the interval, the last back to the first
+        gapsRound(spots).forEach((g) => expect(g).toBeCloseTo(20, 6));
+        const xs = params.points.map((p) => p.x);
+        expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(120, 6);
+    });
 
     it.each([
         [
