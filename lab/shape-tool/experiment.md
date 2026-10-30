@@ -59,9 +59,10 @@ the same controls can carry other shapes later.
   field.
 
 - Hold **Shift** for fine control (no half steps, lines still catch). Hold
-  **Cmd** (Mac) or **Ctrl** to constrain (equal spacings, 45°, one axis). Hold
-  **Alt** to draw or resize a box from its center. Turn snapping off with the
-  **Snap** toggle (**Shift+M**), not a held key.
+  **Cmd** (Mac) or **Ctrl** to constrain (equal spacings, one axis when moving,
+  flips proportional scaling). Hold **Alt** to draw or resize a box from its
+  center. Turn snapping off with the **Snap** toggle (**Shift+M**), not a held
+  key.
 - If the box or its editor would end up off the screen, the field glides just
   far enough to bring them back.
 

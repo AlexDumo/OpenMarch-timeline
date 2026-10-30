@@ -67,7 +67,7 @@ Other field behavior:
 
 - **Floating pill** (`components/canvas/touch/TouchModifierButtons.tsx`):
   **Fine**, **Equal** and **From center** (role toggles, tap to latch or hold),
-  **Add** (add to selection, like Shift at the press), **No snap** (the Snap
+  **Add** (add to selection, like Shift at the press), **Snap off** (the Snap
   toggle) and **?** (explains the gestures). The "Drag: … ▾" mode menu isn't
   ported to the three.js field yet (`docs/field/tablet-port.md`).
   Long press on any pill control explains it. It places itself where it covers the
