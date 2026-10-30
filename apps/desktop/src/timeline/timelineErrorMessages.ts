@@ -4,6 +4,12 @@ import { TimelineWriteError } from "@/db-functions/timelineErrors";
 import { conToastError } from "@/utilities/utils";
 import { toast } from "sonner";
 import { toastBasicLock } from "./basicLockToast";
+import type { NotJoined } from "@/db-functions/timelineJoinAtBeat";
+import {
+    marcherNamesText,
+    type KeepTranslate,
+    type MarcherNameOf,
+} from "./timelineKeepLater";
 
 /**
  * User-facing messages for the timeline's refusals (spec section 6, P8.6). One place maps every
@@ -155,6 +161,67 @@ export const TIMELINE_NOT_READY_MESSAGE: TimelineErrorMessage = {
     key: "timeline.errors.notReady",
     defaultMessage: "The timeline is still loading. Try again in a moment.",
 };
+
+/**
+ * Remove keyframe's toast for marchers whose moves around the count weren't joined (holds decision
+ * 14, #470; `NotJoined`): they keep the plain Remove, so they stand still and then walk.
+ */
+export const NOT_JOINED_MESSAGE: TimelineErrorMessage = {
+    key: "timeline.errors.notJoined.message",
+    defaultMessage: "{names} couldn't join their moves: {reason}.",
+};
+
+/** Why a join was refused, by `FitRefusal` kind, worded for a join (merge words its own). */
+export const NOT_JOINED_REASONS: Readonly<
+    Record<NotJoined["reason"], TimelineErrorMessage>
+> = {
+    partway: {
+        key: "timeline.errors.notJoined.partway",
+        defaultMessage: "a marcher joins or leaves the next move partway",
+    },
+    overlap: {
+        key: "timeline.errors.notJoined.overlap",
+        defaultMessage:
+            "the joined move would run into another of their moves on the same layer",
+    },
+    secondMove: {
+        key: "timeline.errors.notJoined.secondMove",
+        defaultMessage: "they'd have two moves over the same counts",
+    },
+};
+
+const englishWithParams: KeepTranslate = (_key, defaultValue, params) =>
+    defaultValue.replace(
+        /\{(\w+)\}/g,
+        (_, name: string) => params?.[name] ?? "",
+    );
+
+/**
+ * One toast's text for the refused joins `groups`: a sentence per group, naming its marchers
+ * (`marcherNamesText`, or a count when a name isn't known) and the reason.
+ */
+export function notJoinedMessage(
+    groups: readonly NotJoined[],
+    nameOf: MarcherNameOf,
+    t: KeepTranslate = englishWithParams,
+): string {
+    return groups
+        .map(({ marcherIds, reason }) => {
+            const names =
+                marcherNamesText(marcherIds, nameOf, t) ??
+                `${marcherIds.length} marchers`;
+            const why = NOT_JOINED_REASONS[reason];
+            return t(
+                NOT_JOINED_MESSAGE.key,
+                NOT_JOINED_MESSAGE.defaultMessage,
+                {
+                    names,
+                    reason: t(why.key, why.defaultMessage),
+                },
+            );
+        })
+        .join(" ");
+}
 
 /** Looks a message up by key and default; the Tolgee singleton by default, anything in tests. */
 export type TimelineTranslate = (

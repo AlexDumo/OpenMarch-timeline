@@ -87,26 +87,38 @@ jobs:
         working-directory: apps/desktop
         run: pnpm run test:history $(find . -type f -name "*.test.*" -exec grep -l "getTestWithHistory" {} +) --silent
 
+  # The packaged app under Xvfb. Linux runners start right away; macOS ones queued for
+  # minutes on the free tier.
   desktop-e2e:
     needs: check-changes
     if: needs.check-changes.outputs.desktop == 'true'
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4.1.0
 
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4.1.0
+          cache: pnpm
 
       - name: Install project dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Install Playwright Browsers
-        run: pnpm exec playwright install --with-deps
+      # Electron needs no Playwright browser, only the shared libraries and Xvfb
+      - name: Install Electron system dependencies
+        run: |
+          pnpm exec playwright install-deps chromium
+          sudo apt-get install -y xvfb
+
+      # Ubuntu 24.04 blocks the unprivileged user namespaces Chromium's sandbox uses, so
+      # Electron would abort at launch
+      - name: Allow the Chromium sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 # cspell:disable-line
 
       - name: Build monorepo
         run: pnpm run build
@@ -121,7 +133,7 @@ jobs:
 
       - name: Run E2E tests
         working-directory: apps/desktop
-        run: pnpm run e2e
+        run: xvfb-run -a --server-args="-screen 0 1600x1000x24" pnpm run e2e
 
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
