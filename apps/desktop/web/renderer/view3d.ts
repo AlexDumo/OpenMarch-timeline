@@ -16,6 +16,7 @@
 import {
     VIEW3D_HELLO_CHANNEL,
     VIEW3D_INVALIDATE_CHANNEL,
+    VIEW3D_IS_OPEN_CHANNEL,
     VIEW3D_PLAYBACK_REQUEST_CHANNEL,
     VIEW3D_PUBLISH_CHANNELS,
     VIEW3D_SET_SPEED,
@@ -162,6 +163,8 @@ export function registerView3dHost() {
         );
         return view3dWindow !== null;
     });
+
+    handleInPage(VIEW3D_IS_OPEN_CHANNEL, () => open);
 
     const relay = (publishChannel: View3dPublishChannel, payload: unknown) => {
         if (open) post({ type: "publish", channel: publishChannel, payload });

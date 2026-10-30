@@ -28,11 +28,7 @@ export function useSelectionKeyframes(
         if (!resolver || marcherIds.length === 0) return NO_KEYFRAMES;
         return selectionKeyframes(
             marcherIds.map((id) =>
-                marcherSetBeats(
-                    resolverSpans(resolver, id),
-                    (beat) => resolver.positionAt(id, beat),
-                    kept,
-                ),
+                marcherSetBeats(resolverSpans(resolver, id), kept),
             ),
             marcherIds,
         );

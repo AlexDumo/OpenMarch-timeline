@@ -35,6 +35,7 @@ import type {
 import type {
     TimelineAddMarchersMenu,
     TimelineKeepHereMenu,
+    TimelineSetAsShownMenu,
     TimelineMenuEntry,
     TimelineMenuTarget,
     TimelineMoveCommands,
@@ -268,6 +269,8 @@ export interface TimelineProps {
     readonly pageMoves?: ReadonlySet<string | number>;
     /** The page box menu's **Keep selected marchers here** and **Let selected marchers follow again** */
     readonly keepHere?: TimelineKeepHereMenu;
+    /** The page box menu's **Set as shown** (holds, fork #466) */
+    readonly setAsShown?: TimelineSetAsShownMenu;
     /** UI-19 Basic: the selected marchers' mid-page positions, spec beats */
     readonly basicPoints?: readonly TimelineBasicPoint[];
     /** UI-19 Basic: **Remove this count's position**, by its spec beat */
@@ -648,6 +651,7 @@ export function Timeline(props: TimelineProps) {
         onSetPageSubset,
         onOpenRange,
         keepHere,
+        setAsShown,
         pageMenuExtra,
     } = props;
     // A clip's stored spec range, else the view range mapped back (as the menu's Add does)
@@ -737,7 +741,8 @@ export function Timeline(props: TimelineProps) {
         onDeletePageFlag ||
         onDeletePageWithMoves ||
         onSetPageSubset ||
-        keepHere
+        keepHere ||
+        setAsShown
     );
     const disabledReason = addSelectedMarchers?.disabledReason;
     const addMarchersMenu = useMemo<
@@ -752,6 +757,7 @@ export function Timeline(props: TimelineProps) {
                           ? { onDeleteWithMoves: deleteWithMoves }
                           : {}),
                       ...(keepHere ? { keepHere } : {}),
+                      ...(setAsShown ? { setAsShown } : {}),
                       ...(subsetMenu ? { subset: subsetMenu } : {}),
                       ...(pageExtra ? { extraFor: pageExtra } : {}),
                       onAdd: addMarchers,
@@ -764,6 +770,7 @@ export function Timeline(props: TimelineProps) {
             disabledReason,
             hasMarchersMenu,
             keepHere,
+            setAsShown,
             subsetMenu,
             pageExtra,
         ],

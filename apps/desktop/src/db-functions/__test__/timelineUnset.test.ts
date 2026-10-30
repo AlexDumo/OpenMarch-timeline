@@ -6,8 +6,15 @@ import { keepFixturesInPageMode } from "@/test/timelineMode";
 import { convertPagesToTimeline } from "@/test/convertPages";
 import { readShowTiming } from "@/timeline/showTiming";
 import { pageEndBeat } from "@/timeline/timelineCanvas";
-import { marcherSetBeats } from "@/timeline/timelineSetFollowing";
-import { useKeptAssignmentsStore } from "@/timeline/useKeepLaterPages";
+import {
+    followingAt,
+    marcherSetBeats,
+    selectionKeyframes,
+} from "@/timeline/timelineSetFollowing";
+import {
+    applyKeptChange,
+    useKeptAssignmentsStore,
+} from "@/timeline/useKeepLaterPages";
 import {
     resolverSpans,
     startTimelineResolver,
@@ -45,7 +52,10 @@ keepFixturesInPageMode(
  * their ordinals. Marchers `a` and `b` move on page 2 and hold on pages 3 and 4; `c` never moves.
  */
 
-afterEach(() => stopTimelineResolver());
+afterEach(() => {
+    stopTimelineResolver();
+    useKeptAssignmentsStore.setState({ ids: new Set() });
+});
 
 const UP: XY = [100, 100];
 const UP2: XY = [200, 100];
@@ -195,7 +205,6 @@ describeDbTests("Remove keyframe", (it) => {
         const setBeats = () =>
             marcherSetBeats(
                 resolverSpans(resolver(), a),
-                (beat) => resolver().positionAt(a, beat),
                 useKeptAssignmentsStore.getState().ids,
             );
         expect(setBeats()).toContain(PAGE3.end);
@@ -204,6 +213,62 @@ describeDbTests("Remove keyframe", (it) => {
         expect(await atFlags(db, a)).toEqual([homeA, homeA, homeA, homeA, UP]);
         expect(setBeats()).not.toContain(PAGE3.end);
         expect(setBeats()).toContain(PAGE3.end + 8);
+    });
+
+    it("a move that goes nowhere is a keyframe: no invisible pin (holds question 15, #468)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a } = await show(db);
+        const NUDGED: XY = [120, 100];
+        const NUDGED_AGAIN: XY = [140, 100];
+        const reads = () => {
+            const setBeats = marcherSetBeats(resolverSpans(resolver(), a));
+            return {
+                keyframes: selectionKeyframes([setBeats], [a]).map(
+                    (k) => k.beat,
+                ),
+                following: followingAt(new Map([[a, setBeats]]), PAGE3.end),
+                canUnset: unsetMenuStateAt({
+                    resolver: resolver(),
+                    kept: new Set(),
+                    boxes: [],
+                    marcherIds: [a],
+                    beat: PAGE3.end,
+                    isPlaying: false,
+                }).canUnset,
+            };
+        };
+
+        // 1–2. a holds through page 3, and page 3 follows a nudge on page 2
+        await move(db, PAGE2, [{ marcherId: a, xy: NUDGED }]);
+        expect((await atFlags(db, a))[3]).toEqual(NUDGED);
+        expect(reads().keyframes).not.toContain(PAGE3.end);
+        // 3. Remove keyframe on page 2 writes a move on page 3, to where a stood
+        await unset(db, PAGE2.end, [a]);
+        expect((await atFlags(db, a))[3]).toEqual(NUDGED);
+        expect(reads().keyframes).toContain(PAGE3.end);
+        // 4. Page 2 onto exactly that spot: page 3's move now goes nowhere, and is still a keyframe
+        await move(db, PAGE2, [{ marcherId: a, xy: NUDGED }]);
+        const flags = await atFlags(db, a);
+        expect(flags[3]).toEqual(flags[2]);
+        const pinned = reads();
+        expect(pinned.keyframes).toContain(PAGE3.end);
+        expect(pinned.following.has(a)).toBe(false);
+        expect(pinned.canUnset).toBe(true);
+
+        // Remove keyframe takes it back, and page 3 follows page 2 again
+        expect(
+            (await unsetHere([a], { beat: PAGE3.end, database: db })).unset,
+        ).toEqual([a]);
+        await timelineResolverSettled();
+        const removed = reads();
+        expect(removed.keyframes).not.toContain(PAGE3.end);
+        expect(removed.following.has(a)).toBe(true);
+        expect(removed.canUnset).toBe(false);
+        // 5. The next nudge on page 2 carries into page 3
+        await move(db, PAGE2, [{ marcherId: a, xy: NUDGED_AGAIN }]);
+        expect((await atFlags(db, a))[3]).toEqual(NUDGED_AGAIN);
     });
 
     it("skips marchers with no move ending on the count, and writes nothing when none has one", async ({
@@ -321,9 +386,17 @@ describeDbTests(
             marchersAndPages: _,
         }) => {
             const { a, b, c } = await show(db);
-            // b's spot on page 3 is a kept stay move: Following there
+            // b's spot on page 3 is a kept stay move: Following there, by its kept marker
             await move(db, PAGE3, [{ marcherId: a, xy: ELSEWHERE }]);
-            await keepMarchersOnPage({ db, pageBox: PAGE3, marcherIds: [b] });
+            applyKeptChange(
+                (
+                    await keepMarchersOnPage({
+                        db,
+                        pageBox: PAGE3,
+                        marcherIds: [b],
+                    })
+                ).markers,
+            );
             await timelineResolverSettled();
             const rows = await snapshot(db);
 
