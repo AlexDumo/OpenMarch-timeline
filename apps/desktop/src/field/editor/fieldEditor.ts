@@ -915,8 +915,9 @@ export class FieldEditor {
      * The gesture a press becomes once it moves past the click slop, or null
      * when the press does nothing more. A handle of the selection box scales
      * or rotates the selection (#198). A move starts from a marcher, or from
-     * empty field inside a multi-selection's box (owner decision, #196);
-     * marquee and lasso (#195) start from the rest of the empty field: a lasso
+     * empty field inside a multi-selection's box (owner decision, #196) with
+     * no add or subtract choice; marquee and lasso (#195) start from the rest
+     * of the empty field, and from inside the box with one: a lasso
      * after a double-click, else a marquee. A press on a marcher that moves
      * nothing (Shift took a group or a box's member out) is done, and starts
      * no marquee.
@@ -1045,13 +1046,17 @@ export class FieldEditor {
 
     /** A marquee, or a lasso after a double-click, from empty field. */
     private startArea(press: FieldPress): FieldGesture {
-        // The pill's Add adds, as Shift at the press does
-        const start = press.add ? { ...press.start, shift: true } : press.start;
+        const start = this.areaStart(press);
         const isMac = this.options.isMac ?? false;
         this.area = press.double
             ? startLasso(this.areaPorts, start, isMac)
             : startMarquee(this.areaPorts, start, isMac);
         return this.area;
+    }
+
+    /** The keys an area from `press` starts with: the pill's Add adds, as Shift at the press does. */
+    private areaStart(press: FieldPress): FieldPointer {
+        return press.add ? { ...press.start, shift: true } : press.start;
     }
 
     /** Whether a press on `hit` (null: empty field) is the second of a double-click. */
@@ -1085,7 +1090,8 @@ export class FieldEditor {
      * - Shift on a marcher that takes it out (a group, or a box's member)
      *   moves nothing: the press is done;
      * - pressing empty field inside a multi-selection's box moves the
-     *   selection.
+     *   selection, unless the press adds or subtracts (Shift, the pill's Add,
+     *   or Alt): that starts a marquee or lasso (owner decision, 2026-10-30).
      *
      * A Shift that added the marcher was the press's (the press rule): the
      * drag goes at full speed until Shift is released and pressed again. So is
@@ -1114,11 +1120,12 @@ export class FieldEditor {
                 return null;
             }
             // The add choice applies only when the press adds the marcher (or
-            // Shift adds its whole group); then its key is the press's, no
-            // role until pressed again. The pill's Add uses no key, so nothing
-            // waits on the press rule
-            const applies =
-                (!chosen || shiftChose) && !selection.includes(press.hit);
+            // Shift adds its group, or the rest of a partly selected box);
+            // then its key is the press's, no role until pressed again. The
+            // pill's Add uses no key, so nothing waits on the press rule
+            const applies = shiftChose
+                ? chosen.some((id) => !selection.includes(id))
+                : !chosen && !selection.includes(press.hit);
             const add = pressChoiceOf(press.start, "field", {
                 applicable: new Set<PressChoice>(applies ? ["add"] : []),
                 isMac: this.options.isMac ?? false,
@@ -1137,6 +1144,7 @@ export class FieldEditor {
             this.write(ids);
         } else if (
             !this.modeOwnsSelectionBox() &&
+            areaChoice(this.areaStart(press), this.options.isMac) === null &&
             this.insideSelectionBox(selection, press.start.field)
         ) {
             ids = selection;
