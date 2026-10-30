@@ -42,6 +42,8 @@ const SPOT_RADIUS = 4;
 const SPOT_WIDTH = 1.5;
 const WALK_WIDTH = 1;
 const SHAPE_HANDLE_SIZE = 9;
+/** A handle that adds a point (a line's midpoint, #524): a small ring, over the center dot */
+const ADD_HANDLE_RADIUS = 3;
 const SHAPE_HANDLE_WIDTH = 1.5;
 
 /** The prop tool's line while drawing, in CSS px. */
@@ -488,19 +490,32 @@ const ShapeBody = memo(function ShapeBody({
     const dots = drawing.stage === "drawing";
     return (
         <>
-            {drawing.outline && (
-                <polygon
-                    points={drawing.outline
-                        .map((p) => `${p.x},${p.y}`)
-                        .join(" ")}
-                    // The faint fill shows with the controls, on hover (#403)
-                    fill={open && !drawing.calm ? fill : "none"}
-                    stroke={shape}
-                    strokeWidth={SHAPE_OUTLINE_WIDTH}
-                    strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
-                    vectorEffect="non-scaling-stroke"
-                />
-            )}
+            {drawing.outline &&
+                (drawing.openOutline ? (
+                    // A line has no inside to fill (#524)
+                    <polyline
+                        points={drawing.outline
+                            .map((p) => `${p.x},${p.y}`)
+                            .join(" ")}
+                        fill="none"
+                        stroke={shape}
+                        strokeWidth={SHAPE_OUTLINE_WIDTH}
+                        strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
+                        vectorEffect="non-scaling-stroke"
+                    />
+                ) : (
+                    <polygon
+                        points={drawing.outline
+                            .map((p) => `${p.x},${p.y}`)
+                            .join(" ")}
+                        // The faint fill shows with the controls, on hover (#403)
+                        fill={open && !drawing.calm ? fill : "none"}
+                        stroke={shape}
+                        strokeWidth={SHAPE_OUTLINE_WIDTH}
+                        strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
+                        vectorEffect="non-scaling-stroke"
+                    />
+                ))}
             <StartMarks
                 drawing={drawing}
                 theme={theme}
@@ -756,6 +771,22 @@ function ModeDrawing({
                         />
                     );
                 })()}
+            {drawing.addHandles?.map((point, i) => {
+                const p = at(point);
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={ADD_HANDLE_RADIUS}
+                        fill="white"
+                        stroke={shape}
+                        strokeWidth={SHAPE_HANDLE_WIDTH}
+                        style={controls}
+                        data-testid="fieldShapeAddHandle"
+                    />
+                );
+            })}
             {drawing.pivotMark &&
                 (() => {
                     const p = at(drawing.pivotMark);

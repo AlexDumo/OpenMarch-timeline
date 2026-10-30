@@ -107,6 +107,10 @@ export function shapeTargetAt(
     // Drawn over everything, so it wins over a handle on the marcher it sits on
     if (controls.pivot && near(controls.pivot, at, env.hitRadius))
         return { type: "pivot" };
+    // Reaching inside the center dot pulls the pivot out, even from under a handle there (a
+    // straight line's midpoint, #524)
+    if (env.reachInside && near(controls.center, at, env.hitRadius))
+        return { type: "pivot", pulled: true };
     let best: { key: string; d: number } | undefined;
     for (const h of kind.handles(params, n)) {
         const d = Math.hypot(h.at.x - at.x, h.at.y - at.y);

@@ -291,6 +291,104 @@ test("change: Escape discards an open line and the show is untouched", async ({
     expect(await undoSteps(show)).toBe(steps);
 });
 
+test("change: clicks draw an L, its corner holds a marcher until switched off, and it places with every point", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await page.keyboard.press("l");
+    await expect(page.getByTestId("shape-tool-hint")).toContainText(
+        "click point after point",
+    );
+
+    // An L of 8 steps then 6: 8 marchers, 4 gaps on the long leg and 3 on the short one
+    const y = cf.y - 20 * S;
+    const a = { x: cf.x - 14 * S, y };
+    const b = { x: cf.x - 6 * S, y };
+    const c = { x: cf.x - 6 * S, y: y + 6 * S };
+    const click = async (p: Point) => {
+        const at = await toScreen(page, p);
+        await page.mouse.move(at.x, at.y, { steps: 4 });
+        await page.mouse.click(at.x, at.y);
+    };
+    await click(a);
+    await expect(page.getByTestId("shape-tool-hint")).toContainText(
+        "Click to add a point",
+    );
+    await click(b);
+    // The next segment follows the pointer before it's clicked
+    const pointer = await toScreen(page, c);
+    await page.mouse.move(pointer.x, pointer.y, { steps: 4 });
+    await expect
+        .poll(async () => (await shapeOverlay(page))?.outline?.length)
+        .toBe(3);
+    await click(c);
+    // A click on the last point finishes the line
+    await click(c);
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    await expect.poll(() => interval(page, "shape-tool-readout")).toBe("2");
+
+    const drawn = (await shapeOverlay(page))!;
+    expect(drawn.handles).toHaveLength(3);
+    expect(drawn.addHandles).toHaveLength(2);
+    expect(drawn.spots).toHaveLength(ALL.length);
+    const onCorner = (spots: readonly Point[]) =>
+        spots.some((s) => Math.hypot(s.x - b.x, s.y - b.y) < CLOSE);
+    expect(onCorner(drawn.spots)).toBe(true);
+
+    // The corners switch turns it off: the intervals run around the corner
+    const corners = page.getByTestId("shape-choice-corners");
+    await expect(corners).toHaveAttribute("data-value", "on");
+    await corners.click();
+    await page
+        .getByTestId("shape-choice-corners-content")
+        .getByRole("menuitemradio", { name: "Intervals run around corners" })
+        .click();
+    await expect(corners).toHaveAttribute("data-value", "off");
+    await expect
+        .poll(async () => onCorner((await shapeOverlay(page))!.spots))
+        .toBe(false);
+    // And back on
+    await corners.click();
+    await page
+        .getByTestId("shape-choice-corners-content")
+        .getByRole("menuitemradio", { name: "Marcher on every corner" })
+        .click();
+    await expect(corners).toHaveAttribute("data-value", "on");
+    const shown = (await shapeOverlay(page))!;
+    expect(onCorner(shown.spots)).toBe(true);
+
+    // Enter places it with every point
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect.poll(() => onSpots(show, shown.spots)).toBe(true);
+    await waitForIdle(page);
+    const [recipe] = await recipes(show);
+    const stored = JSON.parse(recipe.params);
+    expect(stored.points).toHaveLength(3);
+    expect(stored.points[1].x).toBeCloseTo(b.x, 3);
+    expect(stored.points[1].y).toBeCloseTo(b.y, 3);
+    expect(stored.corners).toBeUndefined();
+
+    // Reopened from a member, it has the same three points and both midpoints
+    await page.keyboard.press("Escape");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([]);
+    const t3 = (await drawnMarchers(page)).find((m) => m.id === 3)!.screen;
+    await page.mouse.click(t3.x, t3.y);
+    await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+    const reopened = (await shapeOverlay(page))!;
+    expect(reopened.handles).toHaveLength(3);
+    expect(reopened.addHandles).toHaveLength(2);
+});
+
 // Who goes where on a Line (#528): a line drawn on marchers who all stand on
 // one placed Line keeps their order along it (Keep order, the default), the
 // menu offers Least travel and Reverse too, and the choice is saved in the

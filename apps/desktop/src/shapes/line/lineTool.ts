@@ -11,14 +11,19 @@ import type {
 } from "../tool/toolKind";
 import { lineShape } from "./lineShape";
 import {
+    cornerOffInterval,
     dragPoint,
     drawLine,
+    drawPoints,
+    intervalRange,
+    landClicked,
     isLineParams,
     lineFrame,
     lineInFrame,
     lineInterval,
     moveLine,
     onLine,
+    splitSegment,
     withInterval,
     withLineFrame,
     withSpacing,
@@ -28,6 +33,15 @@ import {
 
 /** A handle's key for point `i`: `p0` is the first marcher's end */
 const POINT_KEY = /^p(\d+)$/;
+/** A handle's key for the midpoint of segment `i`, from point `i` to the next (#524) */
+const MIDPOINT_KEY = /^m(\d+)$/;
+
+/** The segment whose midpoint handle `key` is, or -1 */
+const midpointOf = (p: LineParams, key: string): number => {
+    const match = MIDPOINT_KEY.exec(key);
+    const index = match ? Number(match[1]) : -1;
+    return index >= 0 && index < p.points.length - 1 ? index : -1;
+};
 
 /** Whether `steps` is on the half-step ladder */
 const onHalves = (steps: number) =>
@@ -58,9 +72,10 @@ const INTERVAL: ToolParam<LineParams> = {
     range: { min: 0.5 },
     glyph: "↔",
     shown: (_p, n) => n > 1,
-    // Off the half steps in Fit, it shows as about so much
+    // Off the half steps in Fit, or uneven around corners, it shows as about so much
     derived: (p, n, stepPx) =>
-        p.spacing.mode === "fit" && !onHalves(lineInterval(p, n) / stepPx),
+        p.spacing.mode === "fit" &&
+        (!onHalves(lineInterval(p, n) / stepPx) || isRange(p, n)),
     snap: (p, n, env) =>
         withInterval(
             p,
@@ -68,7 +83,20 @@ const INTERVAL: ToolParam<LineParams> = {
             snapInterval(lineInterval(p, n), { ...env, snap: true }),
             env,
         ),
-    display: (p, n, stepPx) => formatSteps(lineInterval(p, n) / stepPx),
+    // A cornered Fit line shows its narrowest and widest segment: "2–2½" (#524)
+    display(p, n, stepPx) {
+        const range = intervalRange(p, n);
+        if (range && isRange(p, n))
+            return `${formatSteps(range.min / stepPx)}–${formatSteps(range.max / stepPx)}`;
+        return formatSteps(lineInterval(p, n) / stepPx);
+    },
+    note: (p, n) =>
+        cornerOffInterval(p, n)
+            ? tolgee.t(
+                  "shapes.kinds.line.params.cornerOff",
+                  "corner off its interval",
+              )
+            : null,
     value: (p, n, stepPx) => lineInterval(p, n) / stepPx,
     type(p, n, text, env) {
         const steps = parseSteps(text);
@@ -98,6 +126,12 @@ const INTERVAL: ToolParam<LineParams> = {
         return withInterval(p, n, snapInterval(steps * env.stepPx, env), env);
     },
 };
+
+/** Whether a cornered Fit line's segments have different intervals */
+function isRange(p: LineParams, n: number): boolean {
+    const range = intervalRange(p, n);
+    return range !== null && range.max - range.min > 1e-6 * range.max;
+}
 
 const ANCHORS: readonly LineAnchor[] = ["start", "center", "end"];
 
@@ -149,35 +183,114 @@ const SPACING: ToolChoice<LineParams> = {
 };
 
 /**
- * The Line (#523, spec #522): a straight line of marchers drawn with one drag, its two ends
- * dragged by their handles, moved from its body, and turned and flipped through its frame like
- * every shape. Drawn in Fit; typing an interval keeps it, the length following from the pivot.
+ * The corners switch (#524): every corner holds a marcher, or the intervals run around the
+ * corners. Only on a line with a corner, where corners can hold marchers (`cornerGaps`).
+ */
+const CORNERS: ToolChoice<LineParams> = {
+    key: "corners",
+    get label() {
+        return tolgee.t("shapes.kinds.line.corners.label", "Corners");
+    },
+    options: () => [
+        {
+            value: "on",
+            label: tolgee.t(
+                "shapes.kinds.line.corners.on",
+                "Marcher on every corner",
+            ),
+        },
+        {
+            value: "off",
+            label: tolgee.t(
+                "shapes.kinds.line.corners.off",
+                "Intervals run around corners",
+            ),
+        },
+    ],
+    current: (p) => (p.corners === false ? "off" : "on"),
+    pick(p, n, value, env) {
+        if (value !== "on" && value !== "off") return p;
+        const { corners: _corners, ...rest } = p;
+        const next: LineParams =
+            value === "off" ? { ...rest, corners: false } : rest;
+        // A typed interval keeps the line as long as its marchers need
+        const interval = lineInterval(p, n);
+        return next.spacing.mode === "keep" && interval > 0
+            ? withInterval(next, n, interval, env)
+            : next;
+    },
+    // Corners hold marchers only in Fit and Keep interval, with a gap for every segment
+    // (n - 1 gaps, one fewer segment than points)
+    shown: (p, n) =>
+        p.points.length > 2 &&
+        p.spacing.mode !== "path" &&
+        n >= p.points.length,
+};
+
+/**
+ * The Line (#523, #524, spec #522): a line of marchers drawn with one drag (two points) or by
+ * clicking point after point, every point and every segment's midpoint a handle, moved from its
+ * body, and turned and flipped through its frame like every shape. Drawn in Fit; typing an interval
+ * keeps it, the length following from the pivot. Every corner holds a marcher unless switched off.
  */
 export const lineTool: ToolKind<LineParams> = {
     shape: lineShape,
     params: [INTERVAL],
-    choices: [SPACING],
+    choices: [SPACING, CORNERS],
     ordered: true,
     readable: isLineParams,
     scaling: "interval",
     draw: (from, to, _n, env) => drawLine(from, to, env),
+    clickPoints: {
+        land: landClicked,
+        draw: (points, _n, env) => drawPoints(points, env),
+    },
     handles(params) {
         const frame = lineFrame(params);
         const last = params.points.length - 1;
-        return params.points.map((at, i) => ({
+        const points = params.points.map((at, i) => ({
             key: `p${i}`,
             at: { x: at.x, y: at.y },
-            // Along the line, however it's turned
-            cursor: resizeCursor(frame, { x: i === last ? 1 : -1, y: 0 }),
+            // An end along the line, however it's turned; a corner any way
+            cursor:
+                i === 0 || i === last
+                    ? resizeCursor(frame, { x: i === last ? 1 : -1, y: 0 })
+                    : "move",
         }));
+        const midpoints = params.points.slice(1).map((b, i) => {
+            const a = params.points[i]!;
+            return {
+                key: `m${i}`,
+                at: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+                cursor: "pointer",
+                adds: true,
+            };
+        });
+        return [...points, ...midpoints];
     },
     dragHandle(base, n, key, to, env) {
+        // A midpoint dragged: a corner added there, and dragged
+        const segment = midpointOf(base, key);
+        if (segment >= 0)
+            return dragPoint(
+                splitSegment(base, segment),
+                n,
+                segment + 1,
+                to,
+                env,
+            );
         const match = POINT_KEY.exec(key);
         const index = match ? Number(match[1]) : -1;
         if (index < 0 || index >= base.points.length) return base;
         return dragPoint(base, n, index, to, env);
     },
+    // A midpoint clicked splits its segment
+    clickHandle(params, _n, key) {
+        const segment = midpointOf(params, key);
+        return segment >= 0 ? splitSegment(params, segment) : null;
+    },
     outline: (params) => params.points.map(({ x, y }) => ({ x, y })),
+    outlineOpen: (params) => params.closed !== true,
     snapPoints: (params) => {
         const { center } = lineFrame(params);
         return [...params.points.map(({ x, y }) => ({ x, y })), center];

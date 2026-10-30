@@ -252,6 +252,10 @@ export type FieldModeDrawing = {
     spots: readonly FieldPoint[];
     walks: readonly { from: FieldPoint; to: FieldPoint }[];
     handles: readonly FieldPoint[];
+    /** Handles that add a point (a line's segment midpoints, #524), drawn smaller and round */
+    addHandles?: readonly FieldPoint[];
+    /** The outline is open: drawn without joining its last point to its first (a line, #524) */
+    openOutline?: boolean;
     /**
      * Where the shape's marchers start the move (08-shape-system-ux.md, "Marcher styling"), drawn
      * as faint ghosts of them (#417): at the start flag, the same points the walks leave from

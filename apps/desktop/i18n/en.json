@@ -1993,6 +1993,8 @@
                 "text": "Shape open at {moment}"
             },
             "drawHint": "Drag on the field to draw a {shape} · Esc to cancel",
+            "drawPointsHint": "Drag on the field to draw a {shape}, or click point after point · Esc to cancel",
+            "pointsHint": "Click to add a point · Enter or a click on the last point finishes · Esc to cancel",
             "drawnOn": "from {page}",
             "edge": {
                 "label": "Edge",
@@ -2236,7 +2238,8 @@
                     "sameSpot": "The line's ends are on the same spot"
                 },
                 "params": {
-                    "interval": "Spacing between neighbors, in steps"
+                    "interval": "Spacing between neighbors, in steps",
+                    "cornerOff": "corner off its interval"
                 },
                 "spacing": {
                     "label": "Spacing",
@@ -2245,6 +2248,11 @@
                     "pathStart": "Interval on the path, from the start",
                     "pathCenter": "Interval on the path, centered",
                     "pathEnd": "Interval on the path, from the end"
+                },
+                "corners": {
+                    "label": "Corners",
+                    "on": "Marcher on every corner",
+                    "off": "Intervals run around corners"
                 }
             },
             "measure": {
