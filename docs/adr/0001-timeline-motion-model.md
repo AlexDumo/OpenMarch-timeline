@@ -320,7 +320,7 @@ removed by the next amendment (#467); Clear this page lands with #469.
   undo or redo history may name the table. Replaying such a step would fail with "no such
   table", so in a file whose history names it (`instr(sql, 'timeline_kept_assignments')` in either
   stack) the same migration clears **both** stacks and resets the history groups (owner,
-  2026-10-28). A file whose history doesn't name the table keeps it. The release notes say so. A kept spot's move stays as
+  2026-10-28). A file whose history doesn't name the table keeps it. The release notes in `docs/timeline/phases/09-flip.md` say so. A kept spot's move stays as
   an ordinary move, so the show plays the same.
   - It is a timeline-only migration: a page-era file converts first, and the conversion deletes
     any kept rows with the timeline rows it replaces, if the table exists.

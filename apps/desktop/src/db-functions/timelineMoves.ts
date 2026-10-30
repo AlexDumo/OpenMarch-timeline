@@ -962,7 +962,7 @@ export const moveMarchersInRangeInTransaction = async ({
  * drag's), deletes that timeline when the drag created it (`deleteIfEmpty`) and nobody is left in
  * it, then moves them over `[from, range.end)` instead, `from` being the last flag inside the
  * range. Each marcher keeps where it is at the range's end now, so later nudges in the window are
- * toMove. One undoable edit, decided from the rows as they are now, so it is safe after other edits.
+ * preserved. One undoable edit, decided from the rows as they are now, so it is safe after other edits.
  *
  * Refused (E-ARGS) when `from` isn't strictly inside the range, or none of the marchers is in the
  * timeline over the range any more.

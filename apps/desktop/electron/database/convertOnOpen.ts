@@ -221,7 +221,7 @@ async function convertPageEraTablesInTransaction(
         .from(schema.pages)
         .get();
     if ((pages?.n ?? 0) === 0) return undefined;
-    // Kept spots (migration 0018, dropped by a later timeline migration) go with their
+    // Kept spots (migration 0018, dropped by migration 0029) go with their
     // assignments; with foreign keys off nothing cascades, so they are deleted first.
     if (
         countTimelineRows(db) > 0 &&

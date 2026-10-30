@@ -190,7 +190,7 @@ describe("opening a version-8 file from before the kept table", () => {
         const after = new DatabaseSync(filePath);
         try {
             expect(readUserVersion(after)).toBe(8);
-            // 0027 drops the table again (kept spots removed, holds #467)
+            // 0029 drops the table again (kept spots removed, holds #467)
             expect(
                 after
                     .prepare(

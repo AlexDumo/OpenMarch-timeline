@@ -204,7 +204,7 @@ describe(`Migration ${CUE_MIGRATION.tag}`, () => {
         expect(await open(showPath)).toMatchObject({ kind: "none" });
 
         withDb(showPath, (db) => {
-            // Rolled back to before 0022, the file has the kept table again; 0027 drops it
+            // Rolled back to before 0022, the file has the kept table again; 0029 drops it
             expect(tableNames(db)).toEqual(
                 [
                     ...before.tables.filter(
