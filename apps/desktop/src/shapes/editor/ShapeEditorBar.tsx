@@ -21,6 +21,7 @@ import { keepFocus } from "./keepFocus";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { getActionShortcutLabel } from "@/shortcuts/labels";
 import type { ActionId } from "@/shortcuts/definitions";
+import type { OrderChoice } from "../assign";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { RichTips, Tip } from "./Tip";
 import {
@@ -87,6 +88,7 @@ import { ReshuffleButton } from "./ReshuffleButton";
 import { EdgeToggle } from "./EdgeToggle";
 import { ModeMenu } from "./ModeMenu";
 import { ChoiceMenus } from "./ChoiceMenu";
+import { OrderMenu } from "./OrderMenu";
 import { OutlineGap } from "./OutlineGap";
 import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
@@ -123,9 +125,9 @@ const EDIT_WINDOW_MS = 1000;
  * typed or dragged, and follows the field: across is side to side however the box is turned. ↻
  * adds a quarter turn to the degrees beside it, and ⌖▾ opens the pivot grid (#435). After the
  * flips, Shrink and Expand scale the shape keeping its proportions (#489, `ScaleButtons`).
- * Recalculate works out who goes where again by least travel, which moving and turning keep until
- * it's pressed, and shows its word only when it would change something; Close up shows for a
- * placed shape with holes (#392). Pathways and ☆ Save, which leave the shape as it is, come last
+ * Recalculate works out who goes where again by least travel (a Line in Keep order or Reverse: in
+ * that order), which moving and turning keep until it's pressed, and shows its word only when it
+ * would change something; Close up shows for a placed shape with holes (#392). Pathways and ☆ Save, which leave the shape as it is, come last
  * before Place. Its controls show the app's tooltips (`RichTips`). Under the editor, a pill of
  * its own says how the shape is filled (#435): the mode menu (Grid, Outline, Spread, each with a
  * picture of this shape in it), then after a divider the box's layout menu in Grid, the leftover
@@ -370,6 +372,10 @@ function ShapeEditorBar({
                         rotation={frame.rotation}
                         pivot={pivotOf(params)}
                         canRecalculate={target.recalculate !== null}
+                        inOrder={
+                            target.order !== undefined &&
+                            target.order.current !== "nearest"
+                        }
                         empty={target.empty}
                         canCloseUp={target.closeUp !== undefined}
                         evenState={evenState}
@@ -391,6 +397,8 @@ function ShapeEditorBar({
                 kind={kind}
                 shown={fillShown(kind, params, spots)}
                 canPlace={target.place !== undefined}
+                order={target.order?.current}
+                keepOffered={target.order?.keepOffered}
                 testId={testId}
             />
         </animated.div>
@@ -430,6 +438,9 @@ function useLiveTarget(target: ShapeEditTarget): ShapeEditTarget {
             },
             get closeUp() {
                 return latest.current.closeUp;
+            },
+            get order() {
+                return latest.current.order;
             },
             begin: () => latest.current.begin(),
             preview: (params) => latest.current.preview(params),
@@ -663,6 +674,7 @@ const TurnControls = memo(function TurnControls({
     rotation,
     pivot,
     canRecalculate,
+    inOrder,
     empty,
     evenState,
     canShrink,
@@ -673,6 +685,8 @@ const TurnControls = memo(function TurnControls({
     rotation: number;
     pivot: Pivot;
     canRecalculate: boolean;
+    /** Who goes where follows a Line's order (Keep order or Reverse, #528), not least travel */
+    inOrder: boolean;
     empty: number;
     /** Whether "Even out" applies, and whether there's anything to even (#459) */
     evenState: EvenState;
@@ -776,19 +790,29 @@ const TurnControls = memo(function TurnControls({
             <IconButton
                 label={
                     canRecalculate
-                        ? tolgee.t(
-                              "shapes.edit.recalculate.title",
-                              "Recalculate who goes where, by least travel",
-                          )
+                        ? inOrder
+                            ? tolgee.t(
+                                  "shapes.edit.recalculate.titleInOrder",
+                                  "Recalculate who goes where, in order along the line",
+                              )
+                            : tolgee.t(
+                                  "shapes.edit.recalculate.title",
+                                  "Recalculate who goes where, by least travel",
+                              )
                         : empty > 0
                           ? tolgee.t(
                                 "shapes.edit.recalculate.closeUpFirst",
                                 "Recalculate who goes where: close up the empty spots first",
                             )
-                          : tolgee.t(
-                                "shapes.edit.recalculate.already",
-                                "Who goes where is already least travel",
-                            )
+                          : inOrder
+                            ? tolgee.t(
+                                  "shapes.edit.recalculate.alreadyInOrder",
+                                  "Who goes where is already in order along the line",
+                              )
+                            : tolgee.t(
+                                  "shapes.edit.recalculate.already",
+                                  "Who goes where is already least travel",
+                              )
                 }
                 disabled={!canRecalculate}
                 shortcut={keyOf("shapeRecalculate")}
@@ -909,7 +933,7 @@ const fillShown = (kind: AnyToolKind, params: unknown, spots: number) => {
 
 /**
  * How it's filled: a pill of its own under the editor (owner, #435), the kind's own menus (a
- * Line's spacing, #523) and the mode switch first, then what that mode has (a box's layout in Grid, the gap in Outline, Reshuffle and Edge in Spread). Hidden
+ * Line's spacing, #523), who goes where on a Line (#528) and the mode switch first, then what that mode has (a box's layout in Grid, the gap in Outline, Reshuffle and Edge in Spread). Hidden
  * when the kind has none of them. Only the bar and the pill take the pointer, not the empty
  * space beside the pill
  */
@@ -923,6 +947,9 @@ const FillPill = memo(function FillPill({
     kind: AnyToolKind;
     shown: string;
     canPlace: boolean;
+    /** Only redraw it: who goes where, and whether Keep order is offered */
+    order: OrderChoice | undefined;
+    keepOffered: boolean | undefined;
     testId: string;
 }) {
     const env = () => envFor();
@@ -933,6 +960,8 @@ const FillPill = memo(function FillPill({
         >
             {/* The kind's own menus (a Line's spacing, #523) */}
             <ChoiceMenus target={target} envFor={env} />
+            {/* Who goes where on a Line (#528) */}
+            <OrderMenu target={target} />
             <ModeMenu target={target} envFor={env} />
             {/* What the mode has, after a divider (owner); nothing, and no divider, when it
                 has none */}

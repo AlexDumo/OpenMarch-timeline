@@ -1,4 +1,4 @@
-import { assignSlots } from "../assign";
+import { assignSlots, orderFields, orderOn, type OrderChoice } from "../assign";
 import { changeFiles, type BoxParams } from "../box/boxGeometry";
 import { samePivot, type ShapeFrame } from "../frame/frame";
 import { pivotOf } from "../frame/pivot";
@@ -12,6 +12,8 @@ import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { ShapeContext, XY } from "../types";
 import type { PlacedBox } from "./placedBox";
 import { distributionOf } from "../distribute/modes";
+import { leastTravelOnto } from "../leastTravel";
+import { placedAlong, placedOrderChoice } from "./placedOrder";
 
 /**
  * A selected placed shape, edited in place (docs/timeline/research/shapes/07-placed-boxes.md): its
@@ -137,7 +139,8 @@ export const liveFiles = (
  * keeps its spot in the shape (its slot), so a stretch or move keeps everyone's place and holes
  * stay holes. A new layout (a box's file count) lays the shape out again for its members, Nearest,
  * so the fewest marchers move: any holes close up (a slot number means another place in a
- * different grid).
+ * different grid). A Line is laid out again in its recipe's order (#528), on its own spots: Keep
+ * order and Reverse follow the members' order along it as saved, and any holes stay.
  */
 export function liveTargets(
     box: PlacedBox,
@@ -147,6 +150,8 @@ export function liveTargets(
     layOutAgain?: boolean,
     /** Where members come from, when laying out again: their spots in the shape otherwise */
     origins?: ReadonlyMap<number, XY>,
+    /** Who goes where when laying out again: the recipe's otherwise */
+    order: OrderChoice = placedOrderChoice(box),
 ): {
     members: { marcherId: number; slot: number; x: number; y: number }[];
     spots: number;
@@ -154,22 +159,36 @@ export function liveTargets(
     const members = box.recipe.members;
     const shape = box.kind.shape;
     const slots = shape.generate(params, box.spots, ctx);
+    const onSlots = (
+        slotOf: (m: (typeof members)[number], i: number) => number,
+    ) => ({
+        members: members.map((m, i) => {
+            const slot = slotOf(m, i);
+            return { marcherId: m.marcherId, slot, ...xyOf(slots[slot]!) };
+        }),
+        spots: box.spots,
+    });
     // An outline's count across isn't in its distribution, so the spots are compared too (#390)
-    if (
-        !layOutAgain &&
-        !newLayout(box, params) &&
-        sameLattice(box, slots, ctx)
-    ) {
-        return {
-            members: members.map((m) => ({
-                marcherId: m.marcherId,
-                slot: m.slot,
-                ...xyOf(slots[m.slot]!),
-            })),
-            spots: box.spots,
-        };
+    const sameSpots = !newLayout(box, params) && sameLattice(box, slots, ctx);
+    if (!layOutAgain && sameSpots) return onSlots((m) => m.slot);
+    const choice = orderOn(box.kind, order);
+    // A Line laid out again as it was saved (Recalculate, an order picked) keeps its spots, holes
+    // and all: Keep order and Reverse go from the order it was saved in, and Least travel fills
+    // the spots nearest (#528). New params (Close up's) are laid out for the members below
+    if (box.kind.ordered && sameSpots && params === box.params) {
+        if (choice !== "nearest")
+            return onSlots((m) => {
+                const along = placedAlong(box, m.slot);
+                return choice === "reverse" ? box.spots - 1 - along : along;
+            });
+        const nearest = leastTravelOnto(
+            members.map((m) => origins?.get(m.marcherId) ?? m),
+            slots,
+        );
+        return onSlots((_, i) => nearest[i]!);
     }
     const laidOut = shape.generate(params, members.length, ctx);
+    const { orderMode, reverse } = orderFields(choice);
     const assignment = assignSlots({
         kind: shape,
         params,
@@ -181,8 +200,10 @@ export function liveTargets(
                 from: origins.get(m.marcherId)!,
             }),
             drillRank: i,
+            along: placedAlong(box, m.slot),
         })),
-        mode: "nearest",
+        mode: orderMode,
+        reverse,
         ctx,
     });
     return {
@@ -198,7 +219,8 @@ const xyOf = (p: XY): XY => ({ x: p.x, y: p.y });
 
 /**
  * Recalculate who goes where (#429): the members on the shape's own spots by least travel from
- * `origins` (where each comes from: the start flag), or null when that changes nothing. A shape
+ * `origins` (where each comes from: the start flag), or in a Line's order (#528), or null when
+ * that changes nothing. A shape
  * with holes has Close up instead, which lays it out again by least travel.
  */
 export function recalculatedTargets(
