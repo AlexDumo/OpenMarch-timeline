@@ -232,7 +232,9 @@ export function useView3dPublisher() {
                     queryKeys: [[]],
                 });
             })
-            .catch(() => {});
+            .catch((error: unknown) =>
+                console.warn("3D View: couldn't ask whether it's open", error),
+            );
         const cleanups = [
             electron.onView3dWindowState(setWindowOpen),
             electron.onView3dHello(() => {

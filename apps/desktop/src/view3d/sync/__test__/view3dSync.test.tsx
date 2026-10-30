@@ -170,13 +170,16 @@ describe("useView3dPublisher", () => {
     let onHello: (() => void) | undefined;
     let onVenueRequest: ((request: { settings: unknown }) => void) | undefined;
     let windowAlreadyOpen: boolean;
+    let isOpenReply: Promise<boolean> | undefined;
     const originalElectron = window.electron;
 
     beforeEach(() => {
         sent = [];
         windowAlreadyOpen = false;
+        isOpenReply = undefined;
         window.electron = {
-            isView3dOpen: () => Promise.resolve(windowAlreadyOpen),
+            isView3dOpen: () =>
+                isOpenReply ?? Promise.resolve(windowAlreadyOpen),
             publishToView3d: <C extends View3dPublishChannel>(
                 channel: C,
                 payload: View3dPayloads[C],
@@ -268,6 +271,16 @@ describe("useView3dPublisher", () => {
                 payload: { queryKeys: [["pages"]] },
             },
         ]);
+    });
+
+    it("ignores an answer that arrives after it unmounts", async () => {
+        let answer!: (open: boolean) => void;
+        isOpenReply = new Promise((resolve) => (answer = resolve));
+        const { unmount } = render();
+        unmount();
+        answer(true);
+        await act(flushMicrotasks);
+        expect(sent).toEqual([]);
     });
 
     it("stays quiet when it (re)loads with no window open", async () => {

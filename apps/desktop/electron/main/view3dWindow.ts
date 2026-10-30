@@ -123,7 +123,10 @@ export function initView3dWindow(windowConfig: View3dWindowConfig) {
         }),
     );
     // A reloaded editor missed the window-state push, so it asks.
-    ipcMain.handle(VIEW3D_IS_OPEN_CHANNEL, () => getView3dWindow() !== null);
+    ipcMain.handle(
+        VIEW3D_IS_OPEN_CHANNEL,
+        (event) => isEditorSender(event.sender) && getView3dWindow() !== null,
+    );
     ipcMain.handle("view3d:sql-read", handleSqlRead);
     ipcMain.handle("view3d:sql-read-batch", (event, queries: unknown) => {
         if (!isView3dSender(event.sender))
