@@ -22,6 +22,7 @@ import {
     planRemovalFromRange,
     removeMarchersFromMoveForRangeInTransaction,
     skippedRefusal,
+    takeMarchersIntoOwnMoveInTransaction,
     takeMarchersOutOfRangeInTransaction,
 } from "../timelineMoveCuts";
 import type { BeatRange } from "../timelineMembership";
@@ -210,6 +211,25 @@ const moveOver = async (
         });
         return t!;
     });
+
+/** The marchers with a row in move `timelineId`, ascending. */
+const membersOf = async (db: DbConnection, timelineId: number) =>
+    (
+        await db
+            .select({ id: schema.timeline_assignments.marcher_id })
+            .from(schema.timeline_assignments)
+            .innerJoin(
+                schema.timeline_transitions,
+                eq(
+                    schema.timeline_transitions.id,
+                    schema.timeline_assignments.transition_id,
+                ),
+            )
+            .where(eq(schema.timeline_transitions.timeline_id, timelineId))
+            .all()
+    )
+        .map((r) => r.id)
+        .sort((x, y) => x - y);
 
 const golden = (name: string) =>
     GOLDEN_FIXTURES.find((g) => g.name === name)!.build();
@@ -630,6 +650,120 @@ describeDbTests("remove marchers from a move for a range of counts", (it) => {
         expect(await dataOf(db)).toEqual(before);
     });
 });
+
+describeDbTests(
+    "take marchers out of a move into a move of their own",
+    (it) => {
+        it("they leave for a new move over the same counts, and everyone keeps every position", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await convertPagesToTimeline(db);
+            const all = (await resolverOf(db)).marcherIds();
+            const [a, b] = all;
+            const pageMove = await page2Move(db);
+            const before = track(await resolverOf(db), all, 30);
+
+            const result = await transactionWithHistory(db, "take", (tx) =>
+                takeMarchersIntoOwnMoveInTransaction({
+                    tx,
+                    timelineId: pageMove.id,
+                    marcherIds: [b!, a!],
+                }),
+            );
+
+            expect(result.taken).toEqual([a, b]);
+            expect(result.skipped).toEqual([]);
+            expect(result.timelineId).not.toBe(pageMove.id);
+            const own = (await db
+                .select()
+                .from(schema.timelines)
+                .where(eq(schema.timelines.id, result.timelineId!))
+                .get())!;
+            expect({ start: own.start_beat, end: own.end_beat }).toEqual(PAGE2);
+            expect(await membersOf(db, own.id)).toEqual([a, b]);
+            expectClose(before, track(await resolverOf(db), all, 30));
+        });
+
+        it("the move's whole membership: it already is their own, so nothing is written", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await convertPagesToTimeline(db);
+            const all = (await resolverOf(db)).marcherIds();
+            const pageMove = await page2Move(db);
+            const before = await dataOf(db);
+
+            // Nothing to write, so outside the history (an empty edit is refused there)
+            const result = await db.transaction((tx) =>
+                takeMarchersIntoOwnMoveInTransaction({
+                    tx,
+                    timelineId: pageMove.id,
+                    marcherIds: all,
+                }),
+            );
+
+            expect(result).toEqual({
+                taken: all,
+                skipped: [],
+                timelineId: pageMove.id,
+            });
+            expect(await dataOf(db)).toEqual(before);
+        });
+
+        it("a shape recipe member stays and is named; nobody left to take writes nothing", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await convertPagesToTimeline(db);
+            const [a, b] = (await resolverOf(db)).marcherIds();
+            const pageMove = await page2Move(db);
+            await db.transaction((tx) =>
+                saveShapeRecipeInTransaction({
+                    tx,
+                    timelineId: pageMove.id,
+                    recipe: {
+                        kind: "line",
+                        kindVersion: 1,
+                        params: {},
+                        orderMode: "slot",
+                        reverse: false,
+                    },
+                    members: [{ marcherId: a!, slot: 0, x: 10, y: 10 }],
+                }),
+            );
+            const before = await dataOf(db);
+
+            const alone = await db.transaction((tx) =>
+                takeMarchersIntoOwnMoveInTransaction({
+                    tx,
+                    timelineId: pageMove.id,
+                    marcherIds: [a!],
+                }),
+            );
+            expect(alone).toEqual({
+                taken: [],
+                skipped: [
+                    { marcherId: a, timelineId: pageMove.id, reason: "shape" },
+                ],
+                timelineId: null,
+            });
+            expect(await dataOf(db)).toEqual(before);
+
+            const both = await transactionWithHistory(db, "take", (tx) =>
+                takeMarchersIntoOwnMoveInTransaction({
+                    tx,
+                    timelineId: pageMove.id,
+                    marcherIds: [a!, b!],
+                }),
+            );
+            expect(both.taken).toEqual([b]);
+            expect(both.skipped.map((s) => s.marcherId)).toEqual([a]);
+            expect(await membersOf(db, pageMove.id)).toContain(a);
+            expect(await membersOf(db, both.timelineId!)).toEqual([b]);
+        });
+    },
+);
 
 describeDbTests("the drag back (holds decision 16)", (it) => {
     it("skips and names a shape member: it keeps its move, untouched; the others are taken out", async ({

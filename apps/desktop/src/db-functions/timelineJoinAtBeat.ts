@@ -9,6 +9,11 @@ import {
     memberRowsWhere,
     readTimeline,
 } from "./timelineMemberRows";
+import {
+    planRemovalFromRange,
+    takeMarchersIntoOwnMoveInTransaction,
+    type MoveMemberSkip,
+} from "./timelineMoveCuts";
 
 /**
  * **Remove keyframe joins the halves after a split** (holds README decision 14, #470). When
@@ -27,9 +32,9 @@ import {
  * - at a count that isn't a page flag (review, semantics M1): at a flag Remove behaves as before,
  *   and the page follows the page before;
  * - when the whole membership was removed (#470): nobody is left in the removed move, and every marcher
- *   starting the next move on the count was in it. Joining part of a group would mean taking
- *   marchers out of both halves first (#471, which pulls them into a move of their own and then
- *   removes there, so this step runs on their own moves);
+ *   starting the next move on the count was in it. For part of a group, Remove first takes the
+ *   selected marchers out of both halves into moves of their own (`takePartOfGroupsApartInTransaction`,
+ *   R4, #471), so this step runs on their own moves;
  * - when the fit is allowed (`fitMoveInTransaction`); otherwise those marchers keep the plain
  *   Remove, and are reported with the reason (`NotJoined`), which the UI shows as a toast.
  *
@@ -155,6 +160,95 @@ export async function joinMovesAtInTransaction({
     }
     result.joined = ascending(joined);
     return result;
+}
+
+/**
+ * **Part of a group** (R4, #471): before Remove keyframe at `beat` for `marcherIds`, takes those
+ * of them that are only part of the move ending on the count (the move before a split) out of it,
+ * and out of the moves they start on the count (the move after), each into a move of their own
+ * (`takeMarchersIntoOwnMoveInTransaction`, motion unchanged). Remove then empties their move
+ * before the count, so `joinMovesAtInTransaction` joins it with theirs after. The others keep both
+ * halves.
+ *
+ * As for the join, only at a count that isn't a page flag, and only for a marcher whose row runs
+ * the whole move before the count and who starts a move on it. Who can't be taken out (a shape or
+ * follow-the-leader member of either half, holds ownership, owner 2026-10-30) is decided for both
+ * halves before anything is written (`planRemovalFromRange`): those marchers aren't taken out of
+ * either, so they keep the plain Remove, and are returned, one entry each, ascending, for the
+ * caller to name (`skippedRefusal`).
+ */
+export async function takePartOfGroupsApartInTransaction({
+    tx,
+    beat,
+    marcherIds,
+}: {
+    tx: DbTransaction;
+    beat: number;
+    marcherIds: readonly number[];
+}): Promise<MoveMemberSkip[]> {
+    if (marcherIds.length === 0) return [];
+    const grid = await readPageGrid(tx);
+    if (grid.pages.some((p) => p.start === beat)) return [];
+    const a = schema.timeline_assignments;
+    const l = schema.timelines;
+    const ending = await memberRowsWhere(
+        tx,
+        and(
+            inArray(a.marcher_id, [...marcherIds]),
+            eq(a.end_beat, beat),
+            eq(l.end_beat, beat),
+        ),
+    );
+    // The selected marchers of each move ending on the count whose row runs its whole counts
+    const chosenIn = new Map<number, Set<number>>();
+    for (const { assignment, timeline } of ending) {
+        if (assignment.start_beat !== timeline.start_beat) continue;
+        const set = chosenIn.get(timeline.id) ?? new Set<number>();
+        set.add(assignment.marcher_id);
+        chosenIn.set(timeline.id, set);
+    }
+
+    // Plan every move first, so a refusal never leaves half of it written
+    const skipped = new Map<number, MoveMemberSkip>();
+    const takes: { moves: number[]; marcherIds: number[] }[] = [];
+    for (const [beforeId, chosen] of chosenIn) {
+        const members = (await memberRows(tx, beforeId)).map(
+            (r) => r.assignment.marcher_id,
+        );
+        // The whole membership joins as it is (#470)
+        if (members.every((m) => chosen.has(m))) continue;
+        const after = await movesStartingAt(tx, beat, chosen);
+        const starting = new Set([...after.values()].flat());
+        const going = ascending([...chosen].filter((m) => starting.has(m)));
+        if (going.length === 0) continue;
+        const moves = [beforeId, ...after.keys()];
+        for (const id of moves) {
+            // `memberRows` and `movesStartingAt` just read these moves, in this transaction
+            const move = (await readTimeline(tx, id))!;
+            const plan = await planRemovalFromRange({
+                tx,
+                marcherIds: going,
+                range: { start: move.start_beat, end: move.end_beat },
+                timelineId: id,
+            });
+            for (const skip of plan.skipped)
+                if (!skipped.has(skip.marcherId))
+                    skipped.set(skip.marcherId, skip);
+        }
+        takes.push({ moves, marcherIds: going });
+    }
+
+    for (const take of takes) {
+        const taking = take.marcherIds.filter((m) => !skipped.has(m));
+        if (taking.length > 0)
+            for (const timelineId of take.moves)
+                await takeMarchersIntoOwnMoveInTransaction({
+                    tx,
+                    timelineId,
+                    marcherIds: taking,
+                });
+    }
+    return [...skipped.values()].sort((x, y) => x.marcherId - y.marcherId);
 }
 
 /**

@@ -9,11 +9,14 @@ import { FIRST_PAGE_ID } from "./rowMappers";
 import { samePosition } from "./timelineMoves";
 import { clearOwnPageMoves } from "./timelineMoveHelpers";
 import { setAsShownOnPageInTransaction } from "./timelineSetAsShown";
+import type { TimelineEditRefusedError } from "@/timeline/timelineEditRefusals";
 import {
     joinMovesAtInTransaction,
     readMoveEnds,
+    takePartOfGroupsApartInTransaction,
     type NotJoined,
 } from "./timelineJoinAtBeat";
+import { skippedRefusal } from "./timelineMoveCuts";
 
 /**
  * **Unset** (Set vs Following, #300): takes back the coordinate marchers have on one count, so
@@ -36,6 +39,11 @@ import {
  * still gets where it did, needs none. Where the join is refused, those marchers keep the plain
  * Remove and come back in `notJoined` with the reason, for the UI's toast.
  *
+ * Where only part of the move's membership was selected (R4, #471), those marchers are first taken
+ * out of both halves into moves of their own (`takePartOfGroupsApartInTransaction`), which then
+ * join; the others keep both halves. Shape and follow-the-leader members can't be taken out: they
+ * keep the plain Remove, and `skipped` names them.
+ *
  * Callers pass the marchers that are Set on the count (`timelineSetFollowing`); a marcher with no
  * move ending there is skipped. Nobody to unset writes nothing and adds no undo step.
  */
@@ -48,6 +56,12 @@ export interface UnsetResult {
     joined: number[];
     /** Of those, the ones whose moves weren't joined because the fit was refused, with why */
     notJoined: NotJoined[];
+    /**
+     * Shape and follow-the-leader members that couldn't be taken out of part of a group to join
+     * (#471) and kept the plain Remove, with the refusal's message (`skippedRefusal`), for the
+     * toast after the rest was written
+     */
+    skipped?: TimelineEditRefusedError;
 }
 
 const ascending = (ids: Iterable<number>) =>
@@ -80,6 +94,12 @@ export async function unsetMarchersAtInTransaction({
 }): Promise<UnsetResult> {
     const result: UnsetResult = { unset: [], joined: [], notJoined: [] };
     if (marcherIds.length === 0) return result;
+    // Part of a group: take them out of both halves first, so their own moves join below
+    const kept = await takePartOfGroupsApartInTransaction({
+        tx,
+        beat,
+        marcherIds,
+    });
     const a = schema.timeline_assignments;
     const rows = await tx
         .select()
@@ -110,6 +130,8 @@ export async function unsetMarchersAtInTransaction({
     const join = await joinMovesAtInTransaction({ tx, beat, ends });
     result.joined = join.joined;
     result.notJoined = join.notJoined;
+    const skipped = await skippedRefusal(tx, kept);
+    if (skipped) result.skipped = skipped;
 
     if (box) {
         const resolver = createResolver(

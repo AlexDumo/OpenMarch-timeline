@@ -305,6 +305,9 @@ async function unsetSetMarchers(
         });
         if (result.notJoined.length > 0)
             void toastNotJoined(result.notJoined, database);
+        // Shape and follow-the-leader members of part of a group kept the plain Remove: say who
+        // and why (a warning, since the rest was written)
+        if (result.skipped) toastTimelineError(result.skipped);
         return result;
     } catch (error) {
         toastTimelineError(

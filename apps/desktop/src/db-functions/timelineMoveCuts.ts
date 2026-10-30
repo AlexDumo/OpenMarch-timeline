@@ -15,6 +15,7 @@ import { setTimelineTransitionDestinationInTransaction } from "./timelineTransit
 import { timelinesWithRange } from "./timelines";
 import { clearOwnPageMoves, sampleShape } from "./timelineMoveHelpers";
 import { memberRowsWhere, readTimeline } from "./timelineMemberRows";
+import { splitMarchersIntoNewMoveInTransaction } from "./timelineSplitMoves";
 
 /**
  * Cut and remove: the two move operations the holds commands share (holds spec,
@@ -45,6 +46,12 @@ import { memberRowsWhere, readTimeline } from "./timelineMemberRows";
  * others are still removed. `skippedRefusal` words them for the toast. A transition into a stored
  * shape (Q-14, no recipe) is switched to individual points first, as a canvas move switches it,
  * so the marchers who stay keep their spots.
+ *
+ * **Into a move of their own** (`takeMarchersIntoOwnMoveInTransaction`, R4, #471): a removal over
+ * the move's whole counts whose marchers aren't left with nothing there but go, rows and motion as
+ * they are, into a new move over the same counts (a split by marcher, UI-25). Remove keyframe pulls
+ * part of a group out of both halves of a split this way, so #470's join can make them one move.
+ * The same members stay as for a removal.
  *
  * **Preview:** `planRemovalFromRange` changes nothing and says what a removal would do: who would
  * be refused and why, who would leave, and the cuts. The write functions carry out its plan, so a
@@ -491,6 +498,73 @@ export async function takeMarchersOutOfRangeInTransaction({
 }): Promise<RemoveFromRangeResult> {
     const plan = await planRemovalFromRange({ tx, marcherIds, range });
     return await carryOut(tx, plan, range);
+}
+
+/** What `takeMarchersIntoOwnMoveInTransaction` did, marcher ids ascending. */
+export interface TakenIntoOwnMove {
+    /** The marchers now in a move of their own */
+    taken: number[];
+    /** The marchers left in the move, one entry each */
+    skipped: MoveMemberSkip[];
+    /** Their move: the move itself when they were its whole membership, null when nobody went */
+    timelineId: number | null;
+}
+
+/**
+ * **Into a move of their own**: `marcherIds` leave move `timelineId` for a new move over the same
+ * counts, with their rows, destinations and paths as they were, so nobody's motion changes (see
+ * the module comment). Shape and follow-the-leader members stay and are listed in `skipped`, as
+ * `planRemovalFromRange` plans them; a transition into a stored shape that some leave is switched
+ * to individual points first. When they are the move's whole membership it already is their own,
+ * and nothing is written. Marchers with no row in the move are ignored.
+ */
+export async function takeMarchersIntoOwnMoveInTransaction({
+    tx,
+    timelineId,
+    marcherIds,
+}: {
+    tx: DbTransaction;
+    timelineId: number;
+    marcherIds: readonly number[];
+}): Promise<TakenIntoOwnMove> {
+    const move = await readTimeline(tx, timelineId);
+    const none = (skipped: MoveMemberSkip[]): TakenIntoOwnMove => ({
+        taken: [],
+        skipped,
+        timelineId: null,
+    });
+    if (!move) return none([]);
+    const plan = await planRemovalFromRange({
+        tx,
+        marcherIds,
+        range: { start: move.start_beat, end: move.end_beat },
+        timelineId,
+    });
+    const taken = plan.removed;
+    if (taken.length === 0) return none(plan.skipped);
+    const rows = await rowsIn(tx, timelineId);
+    const going = new Set(taken);
+    if (rows.every((r) => going.has(r.row.marcher_id)))
+        return { taken, skipped: plan.skipped, timelineId };
+    // Only transitions shared with someone who stays are switched; a whole one keeps its shape
+    const staying = new Set(
+        rows
+            .filter((r) => !going.has(r.row.marcher_id))
+            .map((r) => r.row.transition_id),
+    );
+    await switchToIndividualPoints(
+        tx,
+        rows.filter(
+            (r) =>
+                going.has(r.row.marcher_id) && staying.has(r.row.transition_id),
+        ),
+    );
+    const split = await splitMarchersIntoNewMoveInTransaction({
+        tx,
+        timelineId,
+        marcherIds: taken,
+    });
+    return { taken, skipped: plan.skipped, timelineId: split.timeline.id };
 }
 
 const REASON_WORDS: Record<MoveMemberSkipReason, [string, string]> = {

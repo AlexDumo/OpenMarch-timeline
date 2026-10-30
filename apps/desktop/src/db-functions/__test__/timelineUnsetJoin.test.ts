@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { asc, eq, getTableName } from "drizzle-orm";
+import { eq, getTableName } from "drizzle-orm";
 import { createResolver, type Resolver } from "@openmarch/core";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
@@ -24,7 +24,8 @@ keepFixturesInPageMode("its tests convert the show themselves");
  * `marchersAndPages` show (pages 1 to 6 of 8 counts, so page 2's box is `[9, 17)` and page 3's
  * `[17, 25)`), Split at playhead at count 13 and Remove keyframe there with the whole move
  * selected walks the marchers along the original path at even speed again, instead of standing
- * still until 13 and then going at double speed (#362 Repro, question 14).
+ * still until 13 and then going at double speed (#362 Repro, question 14). Part of a group is
+ * `timelineUnsetJoinPart.test.ts` (#471).
  */
 
 const TABLES = [
@@ -107,14 +108,6 @@ const timelineRange = async (db: DbConnection, id: number) =>
         .from(schema.timelines)
         .where(eq(schema.timelines.id, id))
         .get();
-
-const rowsOfMarcher = (db: DbConnection, marcherId: number) =>
-    db
-        .select()
-        .from(schema.timeline_assignments)
-        .where(eq(schema.timeline_assignments.marcher_id, marcherId))
-        .orderBy(asc(schema.timeline_assignments.start_beat))
-        .all();
 
 const PAGE2 = { start: 9, end: 17 };
 
@@ -234,37 +227,6 @@ describeDbTests(
                 start: 17,
                 end: 25,
             });
-        });
-
-        it("does not join for part of the move's marchers (that is #471): they stand still, then walk", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            await convertPagesToTimeline(db);
-            const { timeline, members } = await page2(db);
-            await splitTimelineAtBeat({
-                db,
-                timelineId: timeline.id,
-                beat: 13,
-            });
-            const one = members[0]!;
-
-            const result = await unsetMarchersAt({
-                db,
-                beat: 13,
-                marcherIds: [one],
-            });
-
-            expect(result.unset).toEqual([one]);
-            expect(result.joined).toEqual([]);
-            expect(await timelineRange(db, timeline.id)).toEqual({
-                start: 13,
-                end: 17,
-            });
-            const rows = await rowsOfMarcher(db, one);
-            expect(
-                rows.some((r) => r.start_beat === 13 && r.end_beat === 17),
-            ).toBe(true);
         });
 
         it("joins each of two moves after the count, and deletes the removed move once", async ({
