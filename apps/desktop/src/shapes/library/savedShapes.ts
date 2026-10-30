@@ -271,7 +271,10 @@ export function newerSavedShapes(
     const byId = new Map([...show, ...library].map((s) => [s.id, s]));
     let n = 0;
     for (const saved of byId.values()) {
-        const kinds = tools.filter((t) => t.kind.shape.id === saved.kind);
+        // Presets save their kind's recipe, so a saved shape is always its kind's
+        const kinds = tools.filter(
+            (t) => !t.kind.preset && t.kind.shape.id === saved.kind,
+        );
         if (kinds.every((t) => t.kind.shape.version < saved.kindVersion)) n++;
     }
     return n;
@@ -292,9 +295,11 @@ export function savedShapeRows(
     const rows = (shapes: readonly SavedShape[], inLibrary: boolean) =>
         shapes.flatMap((saved): ShapeLibraryRow[] => {
             // Its kind at the version it was saved with, as placed shapes are read back: another
-            // version's intervals may mean something else, so it's left out rather than guessed
+            // version's intervals may mean something else, so it's left out rather than guessed.
+            // Never a preset (the Curve is a Line), as placed shapes are read back (PLACED_KINDS)
             const base = tools.find(
                 (t) =>
+                    !t.kind.preset &&
                     t.kind.shape.id === saved.kind &&
                     t.kind.shape.version === saved.kindVersion,
             )?.kind;

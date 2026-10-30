@@ -1,6 +1,11 @@
 import tolgee from "@/global/singletons/Tolgee";
 import type { ShapeKind } from "../types";
-import { alongLine, isClosed, type LineParams } from "./lineGeometry";
+import {
+    alongLine,
+    isClosed,
+    lineOutline,
+    type LineParams,
+} from "./lineGeometry";
 import { lineFillSpots } from "./lineFill";
 
 /**
@@ -29,10 +34,21 @@ export const lineShape: ShapeKind<LineParams> = {
     handles: () => [],
     drag: (p) => p,
     outline: (p) => {
-        const points = p.points.map(({ x, y }) => ({ x, y }));
-        return [isClosed(p) ? [...points, points[0]!] : points];
+        const outline = lineOutline(p);
+        return [isClosed(p) ? [...outline, outline[0]!] : outline];
     },
     generate: (p, n) => lineFillSpots(p, n),
     /** From the first point along the line, the way the spots go */
     orderKey: (p, point) => [alongLine(p, point)],
+};
+
+/**
+ * The Curve's shape kind (#525): the Line's, named Curve for the pickers. Its recipes are Line
+ * recipes, so a placed curve reads back as a Line.
+ */
+export const curveShape: ShapeKind<LineParams> = {
+    ...lineShape,
+    get label() {
+        return tolgee.t("shapes.kinds.curve.label", "Curve");
+    },
 };

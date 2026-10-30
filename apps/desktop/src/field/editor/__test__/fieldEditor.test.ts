@@ -1846,6 +1846,17 @@ describe("FieldEditor modes (#204)", () => {
         ]);
     });
 
+    it("tells the mode a drag, not a click, when the press went past the slop and came back", () => {
+        const { editor } = setup();
+        const { mode, calls } = fakeMode();
+        editor.setMode(mode);
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(140, 100));
+        editor.pointerMove(at(100, 100));
+        editor.pointerUp(at(100, 100));
+        expect(calls.at(-1)).toBe("release 100,100 drag");
+    });
+
     it("leaves a press it doesn't claim to the editor's rules", () => {
         const { editor, state } = setup();
         const { mode, calls } = fakeMode({ claims: (p) => p.field.x > 350 });

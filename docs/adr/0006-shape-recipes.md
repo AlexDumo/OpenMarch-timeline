@@ -35,12 +35,12 @@ and a group transition into a shape breaks UI-9's one-transition-per-marcher rul
      the recipe), `marcher_id` (deleted with the marcher), `slot` (the marcher's spot in the
      recipe's slot order) and `x`, `y` (where the recipe put it when last placed). One row per
      marcher and recipe.
-3. *(Revised 2026-10-14, see below.)* **Overrides are the difference between where a member
+3. _(Revised 2026-10-14, see below.)_ **Overrides are the difference between where a member
    stands and where its recipe put it.**
    They are not stored separately: a member nudged after placement simply stands somewhere else,
    and reopening the recipe shows it as moved by hand. Editing the recipe moves each member to
    its new spot plus its override, unless the designer resets the overrides.
-4. *(Revised 2026-10-29, see below.)* **A marcher belongs to at most one recipe at a beat.**
+4. _(Revised 2026-10-29, see below.)_ **A marcher belongs to at most one recipe at a beat.**
    Placing marchers with a new shape removes them from the other recipes at the beat it's placed
    at; a recipe left with no members is deleted. Both happen in the same edit as the positions,
    so it is one undo step.
@@ -75,7 +75,6 @@ Decision 3 is replaced: there are no overrides, and a reopened recipe always mat
 
 A recipe is shown at its move's end and at later moments while all its members stand on their
 spots. Editing it at a later moment saves a copy on that later move.
-
 
 ## Amendment, 2026-10-20: the frame and pivot, and spots with marchers
 
@@ -282,60 +281,78 @@ and merge cases (UI-25) with undo; `boxMembership.test.ts` and `box-tool.spec.mt
 The Line shape (spec #522, #523) stores a new kind:
 
 1. **Line recipes are `line`, version 2.** Version 1 is the old shape-model line. Version 2's
-   params are `points` (two or more, each `x`, `y` and a `tension`: 0 is a corner, above 0 a
-   smooth point), `closed` (open when absent), `corners`, `spacing` and the host's `pivot`.
-   `spacing` is `{ mode: "fit" }` (the interval follows from the drawn points),
-   `{ mode: "keep", groups }` (Keep interval) or `{ mode: "path", groups, anchor }` (Interval on
-   the path, `anchor` one of `start`, `center`, `end`). A group is `{ interval, count? }`: the
-   interval is the straight distance between neighbors in field units, `count` a whole number of
-   marchers from 1, and a group with no `count` is the rest; at most one group in a list is the
-   rest (#526). The groups give the line's gaps in order from its first point. Recipes store the
-   parsed groups, never the typed text, so the interval list's change of meaning (count ×
-   interval, from interval × gaps) changes no saved data.
-2. **Corners.** `corners` is false when the intervals run around the corners. Absent or true,
-   every corner holds a marcher in Fit and Keep interval, as long as there is at least one gap per
-   segment; on the path, or with fewer gaps than segments, the intervals run around the corners
-   whatever it says (#524). With corners holding marchers, each segment holds a whole number of the
-   line's gaps, in order along it: in Fit and with one interval for everyone, in proportion to
-   the segments' lengths; with groups, each corner at the seam between gaps nearest its share of
-   the line. Keep interval makes each segment as long as the gaps it holds (a whole run of the
-   groups, crossing group seams when they fall mid-segment) and a corner drag lands where both of
-   its segments are whole runs. A segment left off its run (a corner dragged with `fine`) scales
-   its gaps to fit, which is even spacing with one interval. In Fit the groups don't apply: each
-   segment's marchers spread evenly over it.
-3. **A Line stores no frame.** Its frame (center, size, turn) follows from its points, so the
+   params are `points` (two or more, each `x`, `y` and a `tension` from 0 to 2: 0 is a corner,
+   above 0 a smooth point the line bends through, centripetal Catmull-Rom with its handles scaled
+   by the tension, 1 the plain curve, #525), `closed` (open when absent), `corners`, `spacing` and
+   the host's `pivot`. `spacing` is `{ mode: "fit" }` (the interval follows from the drawn
+   points), `{ mode: "keep", groups }` (Keep interval) or `{ mode: "path", groups, anchor }`
+   (Interval on the path, `anchor` one of `start`, `center`, `end`). A group is
+   `{ interval, count? }`: the interval is the straight distance between neighbors (the chord) in
+   field units, `count` a whole number of marchers from 1, and a group with no `count` is the
+   rest; at most one group in a list is the rest (#526). The groups give the line's gaps in order
+   from its first point. Recipes store the parsed groups, never the typed text, so the interval
+   list's change of meaning (count × interval, from interval × gaps) changes no saved data.
+2. **Corners and stretches.** The two ends always hold a marcher, smooth or not; a smooth point
+   between them never does. The line from an end or a corner to the next corner or end is a
+   stretch, smooth points inside it. `corners` is false when the intervals run around the
+   corners. Absent or true, every corner holds a marcher in Fit and Keep interval, as long as there
+   is at least one gap per stretch; on the path, or with fewer gaps than stretches, the intervals
+   run around the corners whatever it says (#524). With corners holding marchers, each stretch
+   holds a whole number of the line's gaps, in order along it: in Fit and with one interval for
+   everyone, in proportion to the stretches' lengths; with groups, each corner at the seam between
+   gaps nearest its share of the line. Keep interval makes each stretch as long as the gaps it
+   holds, measured straight across (a whole run of the groups, crossing group seams when they fall
+   mid-stretch), a curved stretch scaled about its start, and a corner drag between two straight
+   stretches lands where both are whole runs. A stretch left off its run (a corner dragged with
+   `fine`) scales its gaps to fit, which is even spacing with one interval. In Fit the groups
+   don't apply: each stretch's marchers spread evenly over it, straight across. On the path the
+   run is laid from its anchor along the path itself: from the start, back from the end, or with
+   as much path spare before it as after it.
+3. **A Curve is a Line.** The Curve in the pickers is a preset whose points start smooth; it
+   saves a `line` recipe and reads back as a Line.
+4. **A Line stores no frame.** Its frame (center, size, turn) follows from its points, so the
    frame amendment's stored center doesn't apply. A kind whose frame follows from its own numbers
    declares a `readable` check, used instead of the stored-center check when a recipe is read.
-4. **Version 2 grows without a new version.** Tensions and the Measured setting still to come
-   are optional fields or wider values of these. A build reads a Line only when it can lay out
-   every field exactly as saved; anything newer reads as plain positions (decision 5), never as
-   the nearest shape it understands. Each build widens its `readable` check as it learns a field:
-   the first Line build read two straight points and a single group with no count; more points
-   and `corners` came with #524, any number of groups, counted or with one rest, with #526, and
-   `closed` with its `distribution` with #529. Smooth points (tension above 0) are still refused.
-5. **A closed Line (#529).** `closed: true` joins the last point to the first: a closed line has
+5. **Version 2 grows without a new version.** The Measured setting still to come is an optional
+   field or a wider value of these. A build reads a Line only when it can lay out every field
+   exactly as saved; anything newer reads as plain positions (decision 5), never as the nearest
+   shape it understands. Each build widens its `readable` check as it learns a field: the first
+   Line build read two straight points and a single group with no count; more points and
+   `corners` came with #524, any number of groups, counted or with one rest, with #526, tensions
+   from 0 to 2 with #525, and `closed` with its `distribution` with #529, together with tensions
+   and groups.
+6. **A closed Line (#529).** `closed: true` joins the last point to the first: a closed line has
    three points or more and a gap for every marcher (n gaps, an open line n − 1), and its spacing
-   is `fit` or `keep`, never `path` (a closed line has no ends to lay a run from). Its groups run
-   once round the outline from the first point, so the closing segment, from the last point back
-   to the first, holds the gaps that fall on it, and the closing gap (last marcher to first) is
-   the seam between the last group and the first. Keep interval grows or shrinks the whole
-   outline from its pivot to its gaps round (its segments can't each be set on their own and
-   still meet the first point), noting a corner left off its run. A closed line stores the host's
+   is `fit` or `keep`, never `path` (a closed line has no ends to lay a run from). The closing
+   segment runs from the last point to the first, and its curve is the same Catmull-Rom with the
+   neighbors wrapping round (not the mirrored end points an open line has), so a smooth first or
+   last point is smooth on the closing segment too. Its stretches wrap round: from corner to corner
+   round from its first corner, the last back past the first point; with no corner, one stretch
+   all the way round from the first point. In Outline its corners hold marchers and its smooth
+   points never do, except that a line with no corner starts its run on its first point. Its
+   groups run once round from the first corner (the first point when it is one), so the closing
+   stretch holds the gaps that fall on it, and the closing gap (last marcher to first) is the
+   seam between the last group and the first. Keep interval grows or shrinks the whole outline
+   from its pivot to its gaps round (its stretches can't each be set on their own and still meet
+   the first point), noting a corner left off its run. A closed line stores the host's
    `distribution` as a closed kind does (amendment of 2026-10-22), in Grid (`files`), Outline or
    Spread (with its `edge`); without one it's Outline. Outline is the line itself, its corners
-   and spacing laid out as above, so it ignores `oddGap`. Grid and Spread fill the drawn points
-   as a polygon, through the host's distributor, in a frame that doesn't depend on which point was
-   clicked first or which way round: turned with its sides when sides square to each other make
-   up most of the outline (their directions a quarter turn at a time, averaged by length, within
-   an eighth of a turn of 0), else square to the field, so its ranks square to the field like a
-   box's and the back rank is at the back. Grid is the
-   widest square grid with room for every marcher, at the grid's phase with the fewest spots,
-   extra spots left off its back rank and the spots left re-centred in the outline; it ignores
-   `layout` and `stagger`. Grid's spots on a polygon are part of the format, like the spread
-   generator's: any change to them needs a new version. Spread fills the polygon, its spacing
-   whatever fits. A `distribution` on an open line, one this build can't read, or `closed` that
-   isn't a boolean reads as plain positions. Opening a closed line keeps its spots and its
-   spacing, groups included, as far as an open line can lay them out the same.
+   and spacing laid out as above, so it ignores `oddGap`. Grid and Spread fill the outline as
+   drawn: a polygon of its points with each curved segment cut into 32 pieces of equal length
+   along it, its corners only the points of tension 0 (where Edge's sides start; with none, one
+   side all the way round from the first point). The fill's frame is round that polygon and
+   doesn't depend on which point was clicked first or which way round: turned with its sides when
+   sides square to each other make up most of the outline (their directions a quarter turn at a
+   time, averaged by length, within an eighth of a turn of 0), else square to the field, so its
+   ranks square to the field like a box's and the back rank is at the back. Grid is the widest
+   square grid with room for every marcher, at the grid's phase with the fewest spots, extra
+   spots left off its back rank and the spots left re-centred in the outline; it ignores `layout`
+   and `stagger`. Grid's spots on the polygon are part of the format, like the spread
+   generator's: any change to them, or to how a curve is cut into it, needs a new version. Spread
+   fills the polygon, its spacing whatever fits. A `distribution` on an open line, one this build
+   can't read, or `closed` that isn't a boolean reads as plain positions. Opening a closed line
+   keeps its spots and its spacing, groups included, as far as an open line can lay them out the
+   same; a new end inside a curved segment is as smooth as the smoother of its points.
 
 Verification (#529): `lineClose.test.ts` closes a Line by a click on its first point, an end
 dropped on the other and the editor's choice; checks a gap for every marcher; fills a square and
@@ -343,6 +360,9 @@ an L in Grid, Spread and Edge through the distributor; pins Grid's spots on two 
 the same outline clicked from different corners fills the same; opens a cornered outline and a
 grid back to the outline's spots; places and reads back a closed Line in each mode; and refuses a
 fill on an open line, an unknown fill, a closed run on the path and a closed line of two points.
-The session tests close and reopen a Line with mixed groups. `clickPoints.test.ts` covers the
-host's close-on-first-point with a fake kind, and a browser scenario in `line-tool.spec.mts`
-closes a clicked line, fills it in Grid, places and reopens it.
+The session tests close and reopen a Line with mixed groups. `lineClosedCurves.test.ts` closes a
+Curve smoothly through its first point, lays Outline with groups on a closed curve with corners
+(corners held, the smooth point not), puts Edge's spots on the drawn curve, pins Grid's spots on
+a closed curve, and reopens closed curves. `clickPoints.test.ts` covers the host's
+close-on-first-point with a fake kind, and a browser scenario in `line-tool.spec.mts` closes a
+clicked line, fills it in Grid, places and reopens it.

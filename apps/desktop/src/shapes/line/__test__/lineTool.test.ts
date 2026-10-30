@@ -124,6 +124,8 @@ describe("Line in the pickers", () => {
             ["Box", "shapeBlock"],
             ["Circle", "shapeCircle"],
             ["Line", "shapeLine"],
+            // Its preset with smooth points (#525)
+            ["Curve", "shapeCurve"],
         ]);
     });
 
@@ -773,10 +775,10 @@ describe("a placed line", () => {
 
         it.each([
             [
-                "a smooth point",
+                "a point rounder than this build lays out",
                 (p: LineParams) => ({
                     ...p,
-                    points: [p.points[0], { ...p.points[1]!, tension: 0.5 }],
+                    points: [p.points[0], { ...p.points[1]!, tension: 2.5 }],
                 }),
             ],
             [

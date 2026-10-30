@@ -15,6 +15,7 @@ import {
 import type { ToolEnv } from "../tool/toolKind";
 import type { Slot } from "../types";
 import {
+    closedOutline,
     isClosed,
     lineFrame,
     lineSpots,
@@ -24,8 +25,8 @@ import {
 } from "./lineGeometry";
 
 /**
- * A closed Line filled by the host (#529, spec #522): its points make a closed region, and the
- * host's distributor lays out Grid and Spread (with its Edge) over it. Outline is the line itself,
+ * A closed Line filled by the host (#529, spec #522): its outline as drawn makes a closed region,
+ * and the host's distributor lays out Grid and Spread (with its Edge) over it. Outline is the line itself,
  * its corners and spacing as an open line has them (`lineSpots`), so it isn't the distributor's.
  * The drawn outline is the shape: the spacing in Grid and Spread is whatever fits the marchers in
  * it. Everything here is pure.
@@ -51,12 +52,18 @@ export function lineDistribution(p: LineParams): Distribution {
 export const isFilled = (p: LineParams): boolean =>
     isClosed(p) && lineDistribution(p).mode !== "outline";
 
-/** The closed line's region in its frame, every corner a corner of it */
+/**
+ * The closed line's region in its frame: its outline as drawn, a curve in short pieces
+ * (`closedOutline`), so Grid, Spread and Edge fill the curve rather than the points' polygon.
+ * Only its corners (tension 0) are corners of the region, where Edge's sides start.
+ */
 export function lineRegion(p: LineParams): Region {
     const frame = lineFrame(p);
-    const outline = p.points.map((q) => fieldToFrame(frame, q));
-    const corners = p.points.flatMap((q, i) => (q.tension === 0 ? [i] : []));
-    return polygonRegion(outline, corners);
+    const { points, corners } = closedOutline(p);
+    return polygonRegion(
+        points.map((q) => fieldToFrame(frame, q)),
+        corners,
+    );
 }
 
 /**
