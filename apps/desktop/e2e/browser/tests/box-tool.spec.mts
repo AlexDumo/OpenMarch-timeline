@@ -5,6 +5,7 @@ import {
     drawnMarchers,
     openSettings,
     expectCanvasMatchesShow,
+    goTo,
     readField,
     selectPage,
     setUiSettings,
@@ -4402,6 +4403,9 @@ async function pickPlacedPivot(page: Page, cell: string) {
     await expect(grid).toBeHidden();
 }
 
+/** The toasts showing now, by their text */
+const toastTexts = (page: Page) => toasts(page).allInnerTexts();
+
 /** Each recipe's move and pivot, oldest first */
 const storedPivots = async (show: Show) =>
     (
@@ -4475,21 +4479,38 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         }),
     });
 
-    test("change: its pivot changes there, from the editor or dragged on the field, each as one undo step", async ({
+    test("change: a pivot change there, from the menu, dragged or double-clicked, gives the box its own copy on that page and Page 1 keeps its pivot; on Page 1 it sets no one, and undo shares the box again", async ({
         show,
     }) => {
         const { page } = show;
+        const assignments = async () =>
+            (
+                await show.query<{ count: number }>(
+                    "SELECT COUNT(*) AS count FROM timeline_assignments",
+                )
+            )[0]!.count;
+        const laterMoves = async () =>
+            (
+                await show.query<{ count: number }>(
+                    "SELECT COUNT(*) AS count FROM timelines WHERE end_beat > 32",
+                )
+            )[0]!.count;
         await selectPage(show, "Page 1");
         await placeBox(show, 1);
         const placed = await savedPositions(show, 1);
         const t1 = await marcherScreen(page, 1);
         await page.mouse.click(t1.x, t1.y);
         await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+
+        // On its own page, the pivot only changes: no one is set
+        const assigned = await assignments();
         await pickPlacedPivot(page, "nw");
         await expect
             .poll(async () => (await storedPivots(show)).map((r) => r.pivot))
             .toEqual(["nw"]);
         await waitForIdle(page);
+        expect(await assignments()).toBe(assigned);
+        expect(await savedPositions(show, 1)).toEqual(placed);
         await page.keyboard.press("Escape");
 
         await selectPage(show, "Page 2");
@@ -4499,47 +4520,135 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
             .getByTestId("placed-box-readout")
             .getByTestId("shape-editor-pivot");
         await expect(pivotButton).toHaveAttribute("data-pivot", "nw");
+        const [home] = await storedPivots(show);
+        let steps = 0;
+        let toastsBefore: string[] = [];
+        /** Page 2 has its own copy with `pivot`, everyone set where they stood, as one undo step; Page 1's is as it was */
+        const ownCopy = async (pivot: (p: unknown) => boolean) => {
+            await expect
+                .poll(async () => {
+                    const r = await storedPivots(show);
+                    return r.length === 2 && pivot(r[1]!.pivot);
+                })
+                .toBe(true);
+            await waitForIdle(page);
+            const [first, second] = await storedPivots(show);
+            expect(first).toEqual(home);
+            expect(second!.move).not.toBe(home!.move);
+            expect(await laterMoves()).toBe(1);
+            expect(await savedPositions(show, 1)).toEqual(placed);
+            expect(await savedPositions(show, 2)).toEqual(placed);
+            expect(await undoSteps(show)).toBe(steps + 1);
+            // Nobody moved: no pass-through, Move them too or Only Page N offer
+            const now = await toastTexts(page);
+            expect(now.filter((t) => !toastsBefore.includes(t))).toEqual([]);
+        };
+        /** Undo shares Page 1's box again */
+        const undone = async () => {
+            await page.keyboard.press("ControlOrMeta+z");
+            await expect.poll(() => storedPivots(show)).toEqual([home]);
+            await waitForIdle(page);
+            expect(await laterMoves()).toBe(0);
+            await expect(pivotButton).toHaveAttribute("data-pivot", "nw");
+        };
 
         // From the editor's pivot menu
-        let steps = await undoSteps(show);
+        steps = await undoSteps(show);
+        toastsBefore = await toastTexts(page);
         await pickPlacedPivot(page, "se");
-        await expect
-            .poll(async () => (await storedPivots(show)).map((r) => r.pivot))
-            .toEqual(["se"]);
-        await waitForIdle(page);
+        await ownCopy((p) => p === "se");
         await expect(pivotButton).toHaveAttribute("data-pivot", "se");
-        expect(await undoSteps(show)).toBe(steps + 1);
+        await undone();
 
         // Dragged on the field with Ctrl/Cmd, onto T3
         steps = await undoSteps(show);
+        toastsBefore = await toastTexts(page);
         const mark = (await shapeOverlay(page))!.pivotMark!;
         const t3 = await marcherScreen(page, 3);
         await page.keyboard.down("ControlOrMeta");
         await drag(page, mark, t3);
         await page.keyboard.up("ControlOrMeta");
-        await expect
-            .poll(async () => typeof (await storedPivots(show))[0]!.pivot)
-            .toBe("object");
-        await waitForIdle(page);
+        await ownCopy((p) => typeof p === "object" && p !== null);
         await expect
             .poll(async () => {
                 const m = (await shapeOverlay(page))?.pivotMark;
                 return m != null && near(m, t3);
             })
             .toBe(true);
-        expect(await undoSteps(show)).toBe(steps + 1);
-        // Nobody moved, and Page 2 still sets no one
-        expect(await savedPositions(show, 1)).toEqual(placed);
-        const [{ count }] = await show.query<{ count: number }>(
-            "SELECT COUNT(*) AS count FROM timelines WHERE end_beat > 32",
-        );
-        expect(count).toBe(0);
+        await undone();
 
-        // Undo puts the menu's pivot back
-        await page.keyboard.press("ControlOrMeta+z");
-        await expect
-            .poll(async () => (await storedPivots(show)).map((r) => r.pivot))
-            .toEqual(["se"]);
+        // Double-clicked back to the center
+        steps = await undoSteps(show);
+        toastsBefore = await toastTexts(page);
+        const nw = (await shapeOverlay(page))!.pivotMark!;
+        await page.mouse.dblclick(nw.x, nw.y);
+        await ownCopy((p) => p === null);
+        await expect(pivotButton).toHaveAttribute("data-pivot", "c");
+        await undone();
+        await page.keyboard.press("ControlOrMeta+Shift+z");
+        await ownCopy((p) => p === null);
+
+        // Page 1 keeps its own
+        await page.keyboard.press("Escape");
+        await selectPage(show, "Page 1");
+        await page.mouse.click(t1.x, t1.y);
+        await expect(pivotButton).toHaveAttribute("data-pivot", "nw");
+    });
+
+    test.describe("in Expert, with the start flag left on Page 1", () => {
+        test.use({
+            appSettings: { optOutAnalytics: true, editorMode: "expert" },
+        });
+
+        test("change: a pivot change with the window reaching back over Page 1 sets no one, and Page 1's motion and box stay", async ({
+            show,
+        }) => {
+            const { page } = show;
+            await selectPage(show, "Page 1");
+            await placeBox(show, 1);
+            const placed = await savedPositions(show, 1);
+            const assigned = (
+                await show.query<{ count: number }>(
+                    "SELECT COUNT(*) AS count FROM timeline_assignments",
+                )
+            )[0]!.count;
+
+            // The playhead to Page 2's end; the start flag stays on Page 1's start (UI-26)
+            await goTo(page, "m9");
+            for (let i = 0; i < 7; i++) await page.keyboard.press("Shift+E");
+            await expect(page.getByTestId("timeline-readout")).toContainText(
+                "Pg 2 · ct 8/8",
+            );
+            await expectCanvasMatchesShow(show);
+            const member = await marcherScreen(page, 1);
+            await page.mouse.click(member.x, member.y);
+            await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+            const toastsBefore = await toastTexts(page);
+            await pickPlacedPivot(page, "se");
+            await expect
+                .poll(async () =>
+                    (await storedPivots(show)).map((r) => r.pivot),
+                )
+                .toEqual(["se"]);
+            await waitForIdle(page);
+
+            // Nobody is set across the window: Page 1's members still stop on its box
+            const [{ count }] = await show.query<{ count: number }>(
+                "SELECT COUNT(*) AS count FROM timeline_assignments",
+            );
+            expect(count).toBe(assigned);
+            expect(await savedPositions(show, 1)).toEqual(placed);
+            const now = await toastTexts(page);
+            expect(now.filter((t) => !toastsBefore.includes(t))).toEqual([]);
+            await page.keyboard.press("Escape");
+            await selectPage(show, "Page 1");
+            await page.mouse.click(member.x, member.y);
+            await expect(
+                page
+                    .getByTestId("placed-box-readout")
+                    .getByTestId("shape-editor-pivot"),
+            ).toHaveAttribute("data-pivot", "se");
+        });
     });
 
     test("change: a spacing change there moves its members, so the box gets its own copy on that page and Page 1 keeps its own", async ({

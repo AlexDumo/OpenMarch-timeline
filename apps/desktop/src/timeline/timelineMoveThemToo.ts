@@ -301,6 +301,7 @@ export async function moveMarchersAndOfferFollowUp({
     setUnmovedFrom,
     afterWrite,
     writesShapes = false,
+    setAll = false,
 }: {
     database?: DbConnection;
     target: TimelineEditTarget;
@@ -312,6 +313,11 @@ export async function moveMarchersAndOfferFollowUp({
      * (`moveMarchersInTarget`'s `keepUnchanged`)
      */
     setUnmovedFrom?: ReadonlyMap<number, { x: number; y: number }>;
+    /**
+     * With `setUnmovedFrom`, write the stays even when nobody moves, unless Basic leaves some of
+     * them out (a copy of a shape without them would drop them from it)
+     */
+    setAll?: boolean;
     /** App data written in the same edit (`moveMarchersInTarget`) */
     afterWrite?: (
         tx: DbTransaction,
@@ -335,10 +341,11 @@ export async function moveMarchersAndOfferFollowUp({
     const moves = editable.moves;
     const keepUnchanged =
         setUnmovedFrom !== undefined &&
-        moves.some((m) => {
-            const c = setUnmovedFrom.get(m.marcherId);
-            return !c || !samePosition([c.x, c.y], [m.x, m.y]);
-        });
+        ((setAll && editable.locked.length === 0) ||
+            moves.some((m) => {
+                const c = setUnmovedFrom.get(m.marcherId);
+                return !c || !samePosition([c.x, c.y], [m.x, m.y]);
+            }));
     const marcherIds = moves.map((m) => m.marcherId);
     // Placed boxes follow the edit: moved together, or left with holes (07-placed-boxes.md)
     const membership = writesShapes ? null : membershipFor(target, moves);
