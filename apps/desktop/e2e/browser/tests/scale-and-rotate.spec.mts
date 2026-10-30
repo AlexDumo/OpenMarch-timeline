@@ -17,8 +17,9 @@ import type { FieldTestHandle } from "../../../src/field/fieldTestApi";
 // #189 user stories 46 to 55, rules table rows Handles, Lock X / Lock Y,
 // Click vs drag; keys from the modifier roles design, version A): corners
 // scale uniformly and constrain (Cmd/Ctrl) frees them; middle handles scale
-// one axis; rotation snaps to 15°, and fine (Shift) turns it in whole degrees;
-// fine works at a quarter of the pointer's speed; no flipping; the box fits
+// one axis; rotation snaps to 15°, fine (Shift) turns it in whole degrees, and
+// the Snap toggle off (Shift+M) turns it freely; fine works at a quarter of
+// the pointer's speed; no flipping; the box fits
 // the marchers again after each transform. A transform is dropped through the
 // same timeline rules as a move.
 //
@@ -328,6 +329,20 @@ test("change: Alt and constrain leave rotation in 15° steps", async ({
     await turnRotateHandle(page, 37, { hold: ["Alt", "ControlOrMeta"] });
 
     expect(turned(await savedChange(show))).toBeCloseTo(30, 0);
+    await expectCanvasMatchesShow(show);
+});
+
+test("change: with the Snap toggle off (Shift+M), rotation turns freely", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectAll(page);
+    await page.keyboard.press("Shift+M");
+
+    await turnRotateHandle(page, 37);
+
+    const degrees = turned(await savedChange(show));
+    expect(Math.abs(degrees - 37)).toBeLessThan(1.5);
     await expectCanvasMatchesShow(show);
 });
 

@@ -21,7 +21,8 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 // design, version A): with coordinate rounding on, one marcher snaps onto the
 // rounding grid and a group moves in whole rounding steps; fine (Shift) moves
 // at a quarter of the pointer's speed with snapping off; constrain (Cmd/Ctrl)
-// keeps a drag on one axis; Lock X and Lock Y hold an axis.
+// keeps a drag on one axis; the Snap toggle off (Shift+M) turns snapping off
+// until the show opens again; Lock X and Lock Y hold an axis.
 //
 // The "change:" scenarios are the rules-table changes decided in #189. Lock X
 // / Lock Y leaving shape handles free is #198's and #204's to pin: there are no shape handles here.
@@ -280,6 +281,33 @@ test("change: rounding on: Alt during a drag no longer turns snapping off", asyn
     await dragLegs(page, "T2", [{ by: half }, { by: half, hold: ["Alt"] }]);
 
     await expectSaved(show, withMarcherAt(2, snapped(plus(start, by), grid)));
+    await expectCanvasMatchesShow(show);
+});
+
+test("change: rounding on: with the Snap toggle off (Shift+M) a dragged marcher isn't rounded, until the show opens again", async ({
+    show,
+}) => {
+    const { page } = show;
+    await roundToSteps(show);
+    const grid = await fieldGrid(show);
+    const start = startOf(2);
+    const by = offGridDrag(start, { x: 3, y: 2 }, grid);
+
+    await page.keyboard.press("Shift+M");
+    await dragLegs(page, "T2", [{ by }]);
+
+    const free = plus(start, by);
+    await expectSaved(show, withMarcherAt(2, free));
+    await expectCanvasMatchesShow(show);
+
+    // Never saved: opened again, the show snaps again (1½ steps, well past the click slop)
+    await roundToSteps(show);
+    const further = { x: 1.5 * grid.pixelsPerStep, y: 0 };
+    await dragLegs(page, "T2", [{ by: further }]);
+    await expectSaved(
+        show,
+        withMarcherAt(2, snapped(plus(free, further), grid)),
+    );
     await expectCanvasMatchesShow(show);
 });
 

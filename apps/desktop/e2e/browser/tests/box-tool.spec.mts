@@ -1027,7 +1027,17 @@ test("change: turned 90°, 180° or 270°, the knob is never under the floating 
     await expect(editor.getByTestId("shape-editor-rotation")).toHaveText("0°");
 });
 
-test("change: the knob turns in 15° steps, as the field's rotate handle does, and in whole degrees with Shift (fine)", async ({
+/**
+ * Turns the Snap toggle off with the floating editor's Snap button (modifier roles, version A),
+ * which then shows pressed. Never saved, so the next test starts with it on.
+ */
+async function turnSnapOff(page: Page) {
+    const snap = page.getByTestId("shape-editor-snap");
+    await snap.click();
+    await expect(snap).toHaveAttribute("aria-pressed", "true");
+}
+
+test("change: the knob turns in 15° steps, as the field's rotate handle does, in whole degrees with Shift (fine), and freely with the Snap toggle off", async ({
     show,
 }) => {
     const { page } = show;
@@ -1064,6 +1074,14 @@ test("change: the knob turns in 15° steps, as the field's rotate handle does, a
     expect(fine % 15).not.toBe(0);
     expect(fine).toBeGreaterThan(55);
     expect(fine).toBeLessThan(80);
+
+    // With the Snap toggle off (the editor's Snap button): free of the 15° steps
+    await turnSnapOff(page);
+    await turnKnob(37);
+    const free = await degreesShown();
+    expect(free % 15).not.toBe(0);
+    expect(free).toBeGreaterThan(fine + 25);
+    expect(free).toBeLessThan(fine + 50);
 
     // Typed, a rotation stays as typed
     await rotation.click();
@@ -1570,6 +1588,57 @@ test("change: a click on a placed box's member selects the whole box, and a doub
     await expect
         .poll(async () => (await readField(page)).selection)
         .toEqual(ALL);
+});
+
+test("change: a Cmd/Ctrl-click on a placed box's member picks just that marcher and goes inside the box, and a Cmd/Ctrl-drag moves only it, on both axes (reach inside)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+
+    const t3 = await marcherScreen(page, 3);
+    await page.mouse.click(t3.x, t3.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    // On the box selected whole, the press reaches inside it
+    await page.keyboard.down("ControlOrMeta");
+    await page.mouse.click(t3.x, t3.y);
+    await page.keyboard.up("ControlOrMeta");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([3]);
+    // Inside, as a double click leaves it: the other members' outline shows, a click picks one
+    await expect.poll(async () => (await placedBoxes(page)).length).toBe(1);
+    const t5 = await marcherScreen(page, 5);
+    await page.mouse.click(t5.x, t5.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([5]);
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([]);
+
+    // From nothing selected, a Cmd/Ctrl-drag takes the one marcher, and the press's key doesn't
+    // keep it to one axis
+    const before = await drawnMarchers(page);
+    await page.keyboard.down("ControlOrMeta");
+    await drag(page, t3, { x: t3.x + 60, y: t3.y + 45 });
+    await page.keyboard.up("ControlOrMeta");
+    await waitForIdle(page);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([3]);
+    const after = await drawnMarchers(page);
+    for (const m of after) {
+        const was = before.find((b) => b.id === m.id)!.screen;
+        if (m.id === 3) {
+            expect(Math.abs(m.screen.x - was.x)).toBeGreaterThan(20);
+            expect(Math.abs(m.screen.y - was.y)).toBeGreaterThan(20);
+        } else expect(m.screen).toEqual(was);
+    }
 });
 
 test("a selected box's handle stretches it and saves at once, as one undo step", async ({
@@ -2308,8 +2377,9 @@ test("change: a press that makes the editor too wide for one row keeps its rows 
     show,
 }) => {
     const { page } = show;
-    // One row only just fits here, and a + that leaves marchers short widens it past the field
-    await page.setViewportSize({ width: 1000, height: 1000 });
+    // One row only just fits here (with the Snap button), and a + that leaves marchers short widens
+    // it past the field
+    await page.setViewportSize({ width: 1030, height: 1000 });
     await drawBox(show);
     const bar = page.getByTestId("shape-tool-readout-bar");
     await expect(bar).toHaveAttribute("data-rows", "1");
@@ -2512,7 +2582,7 @@ const heldGuides = (page: Page): Promise<HeldGuides> =>
         return { guides, guideEdges, guideMarks, onGuides };
     });
 
-test("change: moving an open box near the front hash lands its front edge on it, with the guide named as on the coordinate sheet; away from lines no guide; Shift (fine) still lands it (#444, #453)", async ({
+test("change: moving an open box near the front hash lands its front edge on it, with the guide named as on the coordinate sheet; away from lines no guide; Shift (fine) still lands it, the Snap toggle off doesn't pull (#444, #453)", async ({
     show,
 }) => {
     const { page } = show;
@@ -2592,10 +2662,17 @@ test("change: moving an open box near the front hash lands its front edge on it,
     expect(held.guides.map((g) => g.label)).toEqual(["On FH"]);
     e = await edgesOf();
     expect(Math.abs(e.front - frontHash)).toBeLessThan(CLOSE);
-    // Moving with no pull at all is the Snap toggle's (modifier roles, version A), not a key
+
+    // With the Snap toggle off (the editor's Snap button), near it from the other side: no pull
+    // and no guide
+    await turnSnapOff(page);
+    held = await moveBy({ x: 0, y: -2 * near });
+    expect(held.guides).toEqual([]);
+    e = await edgesOf();
+    expect(Math.abs(e.front - frontHash)).toBeGreaterThan(CLOSE);
 });
 
-test("change: moving a box turned 15° lands its front corner on the 40, with the guide named and the corner ringed (#446)", async ({
+test("change: moving a box turned 15° lands its front corner on the 40, with the guide named and the corner ringed; the Snap toggle off doesn't pull (#446)", async ({
     show,
 }) => {
     const { page } = show;
@@ -2659,7 +2736,13 @@ test("change: moving a box turned 15° lands its front corner on the 40, with th
     expect(Math.abs((await frontCorner()).x - forty)).toBeLessThan(CLOSE);
     await expect(editor.getByTestId("shape-editor-rotation")).toHaveText("15°");
     expect((await shapeOverlay(page))!.guides).toEqual([]);
-    // Moving with no pull at all is the Snap toggle's (modifier roles, version A), not a key
+
+    // Moved away, then back with the Snap toggle off: no pull and no guide
+    await moveBy({ x: 2 * S, y: 0 });
+    await turnSnapOff(page);
+    const free = await moveOnto40();
+    expect(free.guides).toEqual([]);
+    expect(Math.abs((await frontCorner()).x - forty)).toBeGreaterThan(CLOSE);
 });
 
 test("change: dragging a 45° box's across spacing lands a corner on a line, with the guide named and the corner ringed, and the spacing stays where it landed (#452)", async ({

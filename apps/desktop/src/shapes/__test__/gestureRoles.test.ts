@@ -10,7 +10,7 @@ import {
 import { cleanup, renderHook } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
-import type { FieldPointer } from "@/field/editor/fieldEditor";
+import type { FieldModePress, FieldPointer } from "@/field/editor/fieldEditor";
 import * as gestureKeys from "@/input/gestureKeys";
 import { NO_KEYS, type HeldKeys } from "@/input/modifierRoles";
 import * as platform from "@/shortcuts/platform";
@@ -87,6 +87,9 @@ const field = () => ({
     marchers: () => [],
     drawn: () => new Map(),
 });
+
+/** What the field editor tells a mode of a press, off a Mac */
+const OFF_MAC: FieldModePress = { reachesInside: () => false, isMac: false };
 
 /** The key listeners on window that haven't been taken off */
 let keyListeners: () => number;
@@ -170,7 +173,7 @@ function knobTurn(row: RowParams) {
 describe("the open shape's frame, with role keys mid-drag", () => {
     it("turns in 15° steps, whole degrees while Shift (fine) is held, without a pointer move", () => {
         const { knob, to } = knobTurn(openRow());
-        shapeToolMode.press(pointer(knob));
+        shapeToolMode.press(pointer(knob), OFF_MAC);
         shapeToolMode.move(pointer(to));
         const stepped = degreesOf(openParams());
         expect(stepped % 15).toBe(0);
@@ -188,7 +191,7 @@ describe("the open shape's frame, with role keys mid-drag", () => {
 
     it("doesn't turn whole degrees with Alt, or free with $mod", () => {
         const { knob, to } = knobTurn(openRow());
-        shapeToolMode.press(pointer(knob));
+        shapeToolMode.press(pointer(knob), OFF_MAC);
         shapeToolMode.move(pointer(to, { alt: true }));
         expect(degreesOf(openParams()) % 15).toBe(0);
         shapeToolMode.move(pointer(to, { ctrl: true }));
@@ -199,7 +202,7 @@ describe("the open shape's frame, with role keys mid-drag", () => {
 describe("drawing a box, with role keys mid-drag", () => {
     it("$mod (constrain) makes the spacings equal without a pointer move, and letting go undoes it", () => {
         openShapeTool(openTool(boxTool, marchers), null, null);
-        shapeToolMode.press(pointer(FROM));
+        shapeToolMode.press(pointer(FROM), OFF_MAC);
         expect(gestureType()).toBe("draw");
         shapeToolMode.move(
             pointer({ x: FROM.x + 12 * STEP, y: FROM.y + 6 * STEP }),
@@ -221,7 +224,7 @@ describe("a role key before the pointer has gone past the click slop", () => {
         const box = openBox();
         expect(box.across).not.toBeCloseTo(box.deep, 6);
         const corner = boxHandlePoint(box, N, "se");
-        shapeToolMode.press(pointer(corner));
+        shapeToolMode.press(pointer(corner), OFF_MAC);
         key("keydown", { ctrl: true });
         expect(openParams()).toBe(box);
     });
@@ -230,7 +233,7 @@ describe("a role key before the pointer has gone past the click slop", () => {
         const box = openBox();
         expect(box.across).not.toBeCloseTo(box.deep, 6);
         const corner = boxHandlePoint(box, N, "se");
-        shapeToolMode.press(pointer(corner));
+        shapeToolMode.press(pointer(corner), OFF_MAC);
         shapeToolMode.move(pointer({ x: corner.x + 1, y: corner.y }));
         expect(openParams()).toEqual(box);
         // Released with $mod still down: its keyup would undo it
@@ -252,7 +255,7 @@ describe("the press rule, through the tool", () => {
         const row = openRow();
         const usedByPress = watchPress();
         const { center } = rowTool.frameOf(row, N);
-        shapeToolMode.press(pointer(center, { ctrl: true }));
+        shapeToolMode.press(pointer(center, { ctrl: true }), OFF_MAC);
         expect(gestureType()).toBe("pivot");
         expect(usedByPress()).toEqual(["$mod"]);
 
@@ -277,7 +280,7 @@ describe("the press rule, through the tool", () => {
             N,
             shapeContextFor(field()),
         )[3]!;
-        shapeToolMode.press(pointer(spot, { ctrl: true }));
+        shapeToolMode.press(pointer(spot, { ctrl: true }), OFF_MAC);
         expect(gestureType()).toBe("move");
         expect(usedByPress()).toEqual([]);
     });
@@ -286,7 +289,7 @@ describe("the press rule, through the tool", () => {
         const box = openBox();
         const usedByPress = watchPress();
         const corner = boxHandlePoint(box, N, "se");
-        shapeToolMode.press(pointer(corner, { ctrl: true }));
+        shapeToolMode.press(pointer(corner, { ctrl: true }), OFF_MAC);
         expect(usedByPress()).toEqual([]);
         shapeToolMode.move(
             pointer({ x: corner.x + 2 * STEP, y: corner.y }, { ctrl: true }),
@@ -297,7 +300,7 @@ describe("the press rule, through the tool", () => {
 
     it("a plain press on the center dot moves the shape", () => {
         const row = openRow();
-        shapeToolMode.press(pointer(rowTool.frameOf(row, N).center));
+        shapeToolMode.press(pointer(rowTool.frameOf(row, N).center), OFF_MAC);
         expect(gestureType()).toBe("center");
     });
 });
@@ -314,7 +317,7 @@ describe("the open shape's keys stop being followed when its gesture ends", () =
     ])("%s", (_, end) => {
         renderHook(() => ShapeToolKeys());
         const { knob, to } = knobTurn(openRow());
-        shapeToolMode.press(pointer(knob));
+        shapeToolMode.press(pointer(knob), OFF_MAC);
         shapeToolMode.move(pointer(to));
         expect(keyListeners()).toBeGreaterThan(0);
         end(to);
@@ -377,7 +380,7 @@ describe("a placed box, with role keys mid-drag", () => {
     function pressed(box: PlacedBox<BoxParams>, at: BoxHandleKey) {
         const mode = new LiveBoxMode(box, queryClient);
         const handle = boxHandlePoint(box.params, 4, at);
-        mode.press(pointer(handle));
+        mode.press(pointer(handle), OFF_MAC);
         return { mode, handle, shown: () => mode.drawing()!.outline! };
     }
 

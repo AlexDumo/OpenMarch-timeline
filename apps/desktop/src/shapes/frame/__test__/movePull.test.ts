@@ -287,3 +287,38 @@ describe("moving a box onto a line", () => {
         expect(p).toEqual(free);
     });
 });
+
+describe("moving with constrain held ($mod)", () => {
+    /** Off the half steps both ways, so the grid would pull either axis */
+    const off: BoxParams = { ...box, center: { x: 31.3, y: -151.7 } };
+
+    it("stays on the axis the drag has gone further along, across or down", () => {
+        const across = edges(
+            move(
+                boxTool,
+                off,
+                { x: 23, y: 9 },
+                { constrain: true },
+            ) as BoxParams,
+        ).center;
+        exact(across.y, off.center.y);
+        expect(across.x).toBeGreaterThan(off.center.x + STEP);
+        const down = edges(
+            move(
+                boxTool,
+                off,
+                { x: -6, y: -24 },
+                { constrain: true },
+            ) as BoxParams,
+        ).center;
+        exact(down.x, off.center.x);
+        expect(down.y).toBeLessThan(off.center.y - STEP);
+    });
+
+    it("moves on both axes without it", () => {
+        const free = edges(
+            move(boxTool, off, { x: 23, y: 9 }) as BoxParams,
+        ).center;
+        expect(free.y).toBeGreaterThan(off.center.y + half);
+    });
+});

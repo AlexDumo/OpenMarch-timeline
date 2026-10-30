@@ -14,6 +14,12 @@ export type HeldRole = "fine" | "constrain" | "fromCenter";
 /** What a key means at the press; read once when the pointer goes down */
 export type PressChoice = "add" | "subtract" | "reachInside";
 
+/** What a marquee or lasso does with what it covers: add, subtract, or (null) replace the selection */
+export type AreaChoice = Extract<PressChoice, "add" | "subtract"> | null;
+
+/** For `pressChoiceOf`'s `applicable`, where reach inside is the only choice a press can make */
+export const REACH_INSIDE: ReadonlySet<PressChoice> = new Set(["reachInside"]);
+
 /** Where the gesture happens: the shape tool, or marcher gestures on the field */
 export type GestureContext = "shape" | "field";
 
