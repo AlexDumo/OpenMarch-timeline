@@ -32,7 +32,10 @@ import {
 } from "./liveBox";
 import type { PlacedBox } from "./placedBox";
 import { enterBox } from "./boxSelection";
-import { usePlacedBoxPreviewStore } from "./boxSelectionStore";
+import {
+    usePlacedBoxPreviewStore,
+    useSavingBoxStore,
+} from "./boxSelectionStore";
 import { outlineGapAt } from "../distribute/outlineGap";
 import type { AnyToolKind } from "../tool/toolKind";
 import type { XY } from "../types";
@@ -247,10 +250,14 @@ export class LiveBoxMode implements FieldMode {
         const before = this.live;
         const out = releaseLive(before, click);
         this.live = out.live;
-        this.emit();
-        if (out.changed)
+        if (out.changed) {
             void commitBox(before.box, out.live.params, this.queryClient);
-        else if (click?.double) this.enterAt(pointer);
+            // The next press goes on from the shape as saved, before the selection hears of it
+            const saving = useSavingBoxStore.getState().box;
+            if (saving) this.live = openLive(saving);
+        }
+        this.emit();
+        if (!out.changed && click?.double) this.enterAt(pointer);
     }
 
     cancel(): void {

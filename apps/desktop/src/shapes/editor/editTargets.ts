@@ -4,9 +4,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { carryPivot } from "../frame/pivot";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import {
+    clearReleasedPreview,
     previewPlacedBox,
+    releasePlacedBoxPreview,
     useBoxSelectionStore,
-    usePlacedBoxPreviewStore,
 } from "../placed/boxSelectionStore";
 import { originsAtStart } from "../field/previewContext";
 import { commitBox } from "../placed/commitBox";
@@ -205,7 +206,7 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
             write(() =>
                 commitBox(box, params, queryClient).finally(() =>
                     // Normally the box read back replaces the preview first (useShapeFieldModes)
-                    setTimeout(() => previewPlacedBox(null), PREVIEW_HOLD_MS),
+                    setTimeout(clearReleasedPreview, PREVIEW_HOLD_MS, params),
                 ),
             );
         return {
@@ -218,7 +219,7 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
             preview: (params) =>
                 previewPlacedBox(carryPivot(box.params, params)),
             end: (keep) => {
-                const { params } = usePlacedBoxPreviewStore.getState();
+                const params = releasePlacedBoxPreview();
                 if (keep && params && params !== box.params) save(params);
                 else previewPlacedBox(null);
             },

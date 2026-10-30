@@ -7,6 +7,8 @@ export type HistoryPerformer = (
 
 let performer: HistoryPerformer | null = null;
 let tail: Promise<unknown> = Promise.resolve();
+/** Steps queued and not yet finished */
+let pending = 0;
 
 /** Installs what queued undo/redo presses run; returns the uninstall. */
 export function setHistoryPerformer(next: HistoryPerformer): () => void {
@@ -38,11 +40,19 @@ export function queueHistoryStep<T>(
     step: (perform: HistoryPerformer) => Promise<T>,
     fallback: T,
 ): Promise<T> {
-    const run = tail.then(() =>
-        step(async (direction) =>
-            performer ? await performer(direction) : false,
-        ),
-    );
+    pending++;
+    const run = tail
+        .then(() =>
+            step(async (direction) =>
+                performer ? await performer(direction) : false,
+            ),
+        )
+        .finally(() => {
+            pending--;
+        });
     tail = run.catch(() => undefined);
     return run.catch(() => fallback);
 }
+
+/** Whether a step queued earlier hasn't finished, so one queued now waits for it */
+export const historyStepsPending = (): boolean => pending > 0;

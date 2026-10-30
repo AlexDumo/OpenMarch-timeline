@@ -9,7 +9,11 @@ import {
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useShapeToolStore } from "../tool/shapeToolStore";
 import { clickOnMarcher } from "./boxClick";
-import { setInsideBox, useBoxSelectionStore } from "./boxSelectionStore";
+import {
+    setInsideBox,
+    useBoxSelectionStore,
+    useSavingBoxStore,
+} from "./boxSelectionStore";
 import type { PlacedBox } from "./placedBox";
 import {
     placedBoxesAt,
@@ -119,15 +123,19 @@ export function useBoxSelection({ isPlaying }: { isPlaying: boolean }): void {
     const version = useTimelineResolverStore((s) => s.version);
     const beat = usePlacedBoxBeat();
     const timelines = useTimelineSelectionStore((s) => s.storedTimelines);
+    const saving = useSavingBoxStore((s) => s.box);
     useEffect(() => {
         const ids = new Set((selected ?? []).map((m) => m.id));
         const boxes = enabled ? placedBoxesAt(beat, recipes) : [];
+        const exactly = (b: PlacedBox) =>
+            b.recipe.members.length === ids.size &&
+            b.recipe.members.every((m) => ids.has(m.marcherId));
+        // Until its save is read back, a box being saved is selected as it will be: the positions
+        // and recipes read back in between don't agree, and would drop or move it back
         const box =
-            boxes.find(
-                (b) =>
-                    b.recipe.members.length === ids.size &&
-                    b.recipe.members.every((m) => ids.has(m.marcherId)),
-            ) ?? null;
+            (enabled && saving && exactly(saving) ? saving : null) ??
+            boxes.find(exactly) ??
+            null;
         // Inside a box until the selection leaves it
         const { inside } = useBoxSelectionStore.getState();
         const insideBox = boxes.find((b) => b.recipe.id === inside);
@@ -141,5 +149,5 @@ export function useBoxSelection({ isPlaying }: { isPlaying: boolean }): void {
             selected: box,
             ...(stillInside ? {} : { inside: null }),
         });
-    }, [enabled, selected, recipes, version, beat, timelines]);
+    }, [enabled, selected, recipes, version, beat, timelines, saving]);
 }
