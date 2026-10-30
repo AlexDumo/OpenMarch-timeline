@@ -11,6 +11,7 @@ import {
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { ShapeContext, XY } from "../types";
 import type { PlacedBox } from "./placedBox";
+import { distributionOf } from "../distribute/modes";
 
 /**
  * A selected placed shape, edited in place (docs/timeline/research/shapes/07-placed-boxes.md): its
@@ -70,8 +71,10 @@ const sameFrame = (a: ShapeFrame, b: ShapeFrame) =>
  * How a closed shape is filled, as text to compare; empty for an open kind. The box's file count
  * is in it, so a change of count across reads as a new layout.
  */
-const layoutOf = (kind: AnyToolKind, params: unknown, spots: number) =>
-    kind.closed ? JSON.stringify(kind.closed.distribution(params, spots)) : "";
+const layoutOf = (kind: AnyToolKind, params: unknown, spots: number) => {
+    const d = distributionOf(kind, params, spots);
+    return d ? JSON.stringify(d) : "";
+};
 
 /**
  * Whether `a` and `b` are the same shape as far as anyone can see: the same frame, pivot, fill

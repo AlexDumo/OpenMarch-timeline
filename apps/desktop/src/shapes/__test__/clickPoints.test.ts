@@ -152,6 +152,49 @@ describe("drawing by clicking points", () => {
     });
 });
 
+describe("closing by clicking the first point (#529)", () => {
+    const open = () => openTool(polyTool, marchers(5));
+    const clickedL = () => {
+        let t = click(open(), { x: 0, y: 0 });
+        t = click(t, { x: 50, y: 0 });
+        return click(t, { x: 50, y: 40 });
+    };
+    const closedOf = (t: ToolState) =>
+        (t.params as PolyParams | null)?.closed === true;
+
+    it("previews the closed shape with the pointer on the first point", () => {
+        const t = pointerMove(clickedL(), { x: 1, y: -1 }, env);
+        expect(closedOf(t)).toBe(true);
+        expect(pointsOf(t)).toEqual(L3);
+        // Off it, the next point again
+        expect(closedOf(pointerMove(t, { x: 20, y: 30 }, env))).toBe(false);
+    });
+
+    it("closes and finishes with a click there, as one undo step", () => {
+        const t = click(clickedL(), { x: 1, y: -1 });
+        expect(t.gesture).toBeNull();
+        expect(closedOf(t)).toBe(true);
+        expect(pointsOf(t)).toEqual(L3);
+        expect(targetsOf(t, ctx)).toHaveLength(5);
+        expect(t.past).toHaveLength(1);
+        expect(undo(t).params).toBeNull();
+    });
+
+    it("adds a point there with only two points: there's nothing to close", () => {
+        let t = click(open(), { x: 0, y: 0 });
+        t = click(t, { x: 50, y: 0 });
+        t = click(t, { x: 0, y: 0 });
+        expect(t.gesture?.type).toBe("points");
+        expect(closedOf(t)).toBe(false);
+    });
+});
+
+const L3 = [
+    { x: 0, y: 0 },
+    { x: 50, y: 0 },
+    { x: 50, y: 40 },
+];
+
 describe("a kind drawn by one drag only", () => {
     it("does nothing on a click: the box starts no run of points", () => {
         const t = click(openTool(boxTool, marchers(5)), { x: 0, y: 0 });

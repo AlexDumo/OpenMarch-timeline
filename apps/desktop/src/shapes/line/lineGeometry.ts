@@ -8,6 +8,11 @@ import { linePull } from "../frame/edgeGuides";
 import { pivotOf } from "../frame/pivot";
 import { makePath, type Path } from "../geometry/path";
 import { chordOffsets } from "../spacing";
+import {
+    canLayOut,
+    storedDistribution,
+    type Distribution,
+} from "../distribute/distribution";
 import type { ToolEnv } from "../tool/toolKind";
 import type { Slot, XY } from "../types";
 
@@ -56,7 +61,10 @@ export type LineSpacing =
 export interface LineParams {
     /** In order from the first marcher's end; two or more */
     readonly points: readonly LinePoint[];
-    /** A closed line joins its last point to its first (later); open when absent */
+    /**
+     * A closed line joins its last point to its first (#529): its marchers have a gap on every
+     * segment, n gaps for n marchers, and it can be filled like a box. Open when absent.
+     */
     readonly closed?: boolean;
     readonly spacing: LineSpacing;
     /**
@@ -64,7 +72,16 @@ export interface LineParams {
      * (#524)
      */
     readonly corners?: boolean;
+    /**
+     * How a closed line is filled, the host's (ADR 0006, amendment of 2026-10-22): Outline (the
+     * line itself) when absent. Only on a closed line.
+     */
+    readonly distribution?: Distribution;
 }
+
+/** Whether `p` joins its last point to its first */
+export const isClosed = (p: Pick<LineParams, "closed">): boolean =>
+    p.closed === true;
 
 const FIT: LineSpacing = { mode: "fit" };
 
@@ -91,7 +108,14 @@ const isGroup = (g: unknown): g is LineGroup =>
 
 const ANCHORS: readonly unknown[] = ["start", "center", "end"];
 // `pivot` is the host's (ADR 0006, amendment of 2026-10-20), stored beside the kind's own numbers
-const KEYS = new Set(["points", "closed", "spacing", "corners", "pivot"]);
+const KEYS = new Set([
+    "points",
+    "closed",
+    "spacing",
+    "corners",
+    "distribution",
+    "pivot",
+]);
 
 /**
  * Whether `params` is a line this version can lay out exactly as it was saved. Anything a newer
@@ -103,9 +127,15 @@ export function isLineParams(params: unknown): params is LineParams {
     if (typeof params !== "object" || params === null) return false;
     if (Object.keys(params).some((key) => !KEYS.has(key))) return false;
     const p = params as Partial<LineParams>;
-    if (p.closed !== undefined && p.closed !== false) return false;
+    if (p.closed !== undefined && typeof p.closed !== "boolean") return false;
     if (p.corners !== undefined && typeof p.corners !== "boolean") return false;
-    if (!Array.isArray(p.points) || p.points.length < 2) return false;
+    if (!Array.isArray(p.points) || p.points.length < (p.closed ? 3 : 2))
+        return false;
+    // A closed line's fill (#529): one this version fills, and never on an open line
+    if (p.distribution !== undefined) {
+        if (p.closed !== true) return false;
+        if (!storedDistribution(p, 1) || !canLayOut(p)) return false;
+    }
     if (!p.points.every(isPoint)) return false;
     const spacing: unknown = p.spacing;
     if (typeof spacing !== "object" || spacing === null) return false;
@@ -118,16 +148,32 @@ export function isLineParams(params: unknown): params is LineParams {
     if (sp.mode !== "keep" && sp.mode !== "path") return false;
     if (!Array.isArray(sp.groups) || sp.groups.length !== 1) return false;
     if (!sp.groups.every(isGroup)) return false;
-    return sp.mode === "keep" || ANCHORS.includes(sp.anchor);
+    // A closed line has no ends to lay a run from
+    if (sp.mode === "path") return !p.closed && ANCHORS.includes(sp.anchor);
+    return true;
 }
 
-/** The path through the line's points */
-export function linePath(p: LineParams): Path {
-    const segments = p.points
-        .slice(1)
-        .map((b, i) => ({ type: "line" as const, a: p.points[i]!, b }));
-    return makePath(segments);
+/** Each segment's ends, in order; a closed line's last runs from its last point to its first */
+export function lineSegments(p: LineParams): (readonly [XY, XY])[] {
+    const pts = p.points;
+    const segments = pts.slice(1).map((b, i) => [pts[i]!, b] as const);
+    if (isClosed(p)) segments.push([pts.at(-1)!, pts[0]!]);
+    return segments;
 }
+
+/** The path through the line's points, round to its first again when closed */
+export function linePath(p: LineParams): Path {
+    const segments = lineSegments(p).map(([a, b]) => ({
+        type: "line" as const,
+        a,
+        b,
+    }));
+    return makePath(segments, isClosed(p));
+}
+
+/** How many gaps `n` marchers have along the line: one per marcher on a closed line (#529) */
+export const gapCount = (p: LineParams, n: number): number =>
+    isClosed(p) ? n : n - 1;
 
 /** The interval a typed spacing keeps, in field units; null in Fit */
 export function typedInterval(p: LineParams): number | null {
@@ -139,12 +185,13 @@ export function typedInterval(p: LineParams): number | null {
  * line works out to
  */
 export function lineInterval(p: LineParams, n: number): number {
-    return typedInterval(p) ?? (n > 1 ? linePath(p).length / (n - 1) : 0);
+    const gaps = gapCount(p, n);
+    return typedInterval(p) ?? (n > 1 ? linePath(p).length / gaps : 0);
 }
 
 /** Each segment's length, in order */
 const segmentLengths = (p: LineParams): number[] =>
-    p.points.slice(1).map((b, i) => length(sub(b, p.points[i]!)));
+    lineSegments(p).map(([a, b]) => length(sub(b, a)));
 
 /**
  * How many gaps each segment holds when every corner holds a marcher (#524): a whole number each,
@@ -155,7 +202,7 @@ export function cornerGaps(p: LineParams, n: number): number[] | null {
     if (p.corners === false || p.points.length < 3) return null;
     if (p.spacing.mode === "path") return null;
     const lengths = segmentLengths(p);
-    const gaps = n - 1;
+    const gaps = gapCount(p, n);
     const total = lengths.reduce((sum, l) => sum + l, 0);
     if (gaps < lengths.length || !(total > 0)) return null;
     const ideal = lengths.map((l) => (gaps * l) / total);
@@ -216,8 +263,7 @@ export function cornerOffInterval(p: LineParams, n: number): boolean {
 function cornerSpots(p: LineParams, gaps: readonly number[]): Slot[] {
     const spots: Slot[] = [];
     let s = 0;
-    p.points.slice(1).forEach((b, i) => {
-        const a = p.points[i]!;
+    lineSegments(p).forEach(([a, b], i) => {
         const d = sub(b, a);
         const l = length(d);
         for (let j = 0; j < gaps[i]!; j++) {
@@ -226,6 +272,8 @@ function cornerSpots(p: LineParams, gaps: readonly number[]): Slot[] {
         }
         s += l;
     });
+    // A closed line's last segment ends on its first spot
+    if (isClosed(p)) return spots;
     const last = p.points.at(-1)!;
     spots.push({ x: last.x, y: last.y, s });
     return spots;
@@ -239,12 +287,16 @@ export function lineSpots(p: LineParams, n: number): Slot[] {
     const interval = typedInterval(p);
     const corners = cornerGaps(p, n);
     if (corners) return cornerSpots(p, corners);
+    const closed = isClosed(p);
     if (interval === null) {
-        if (n === 1) return [at(path.length / 2)];
+        if (n === 1) return [at(closed ? 0 : path.length / 2)];
         return Array.from({ length: n }, (_, i) =>
-            at((path.length * i) / (n - 1)),
+            at((path.length * i) / gapCount(p, n)),
         );
     }
+    // A closed line's run goes round from its first point, its last gap back to it
+    if (closed)
+        return chordOffsets(path, 0, Array(n - 1).fill(interval)).map(at);
     const gaps = Array.from({ length: n - 1 }, () => interval);
     const run = chordOffsets(path, 0, gaps).at(-1)!;
     // Keep interval is sized to its run, which sits on it whole; on the path it sits at its anchor
@@ -260,19 +312,35 @@ export function lineSpots(p: LineParams, n: number): Slot[] {
 
 /**
  * The line's frame: centered between its ends, turned along them, as long as they are apart and
- * with no depth. A line is never flipped: a flip reverses it instead.
+ * with no depth. A closed line's is turned the same way, around all its points (#529). A line is
+ * never flipped: a flip reverses it instead.
  */
 export function lineFrame(p: LineParams): ShapeFrame {
     const a = p.points[0]!;
     const b = p.points.at(-1)!;
     const d = sub(b, a);
-    return {
+    const open: ShapeFrame = {
         center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
         halfWidth: length(d) / 2,
         halfDepth: 0,
         rotation: length(d) > 0 ? Math.atan2(d.y, d.x) : 0,
         flipX: false,
         flipY: false,
+    };
+    if (!isClosed(p)) return open;
+    const local = p.points.map((q) => fieldToFrame(open, q));
+    const xs = local.map((q) => q.x);
+    const ys = local.map((q) => q.y);
+    const [left, right] = [Math.min(...xs), Math.max(...xs)];
+    const [top, bottom] = [Math.min(...ys), Math.max(...ys)];
+    return {
+        ...open,
+        center: frameToField(open, {
+            x: (left + right) / 2,
+            y: (top + bottom) / 2,
+        }),
+        halfWidth: (right - left) / 2,
+        halfDepth: (bottom - top) / 2,
     };
 }
 
@@ -409,8 +477,22 @@ export function dragPoint(
     env: ToolEnv,
 ): LineParams {
     const last = base.points.length - 1;
-    const end = index === 0 || index === last;
-    const other = base.points[index === 0 ? 1 : index - 1]!;
+    const closed = isClosed(base);
+    const end = !closed && (index === 0 || index === last);
+    // An end dropped on the other end closes the line (#529)
+    if (end && last >= 2) {
+        const otherEnd = base.points[index === 0 ? last : 0]!;
+        if (length(sub(to, otherEnd)) <= env.hitRadius)
+            return closeLine(
+                {
+                    ...base,
+                    points: base.points.filter((_, i) => i !== index),
+                },
+                n,
+                env,
+            );
+    }
+    const other = base.points[index === 0 ? (closed ? last : 1) : index - 1]!;
     const keep = base.spacing.mode === "keep" && n > 1;
     let point: XY | null;
     if (keep && end) {
@@ -446,9 +528,11 @@ function cornerOnIntervals(
 ): XY | null {
     const gaps = cornerGaps(p, n)!;
     const interval = typedInterval(p)!;
-    const a = p.points[index - 1]!;
-    const b = p.points[index + 1]!;
-    const total = gaps[index - 1]! + gaps[index]!;
+    const count = p.points.length;
+    const before = (index - 1 + count) % count;
+    const a = p.points[before]!;
+    const b = p.points[(index + 1) % count]!;
+    const total = gaps[before]! + gaps[index]!;
     let best: XY | null = null;
     for (let k = 1; k < total; k++)
         for (const q of circlesMeet(a, k * interval, b, (total - k) * interval))
@@ -475,9 +559,9 @@ function circlesMeet(a: XY, ra: number, b: XY, rb: number): XY[] {
 
 /** The line with a corner added halfway along segment `index`, so the line looks the same */
 export function splitSegment(p: LineParams, index: number): LineParams {
-    const a = p.points[index];
-    const b = p.points[index + 1];
-    if (!a || !b) return p;
+    const segment = lineSegments(p)[index];
+    if (!segment) return p;
+    const [a, b] = segment;
     const mid = corner({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
     return {
         ...p,
@@ -502,11 +586,15 @@ export function withInterval(
     env: ToolEnv,
 ): LineParams {
     const groups = [{ interval }];
-    if (p.spacing.mode === "path")
+    if (p.spacing.mode === "path" && !isClosed(p))
         return { ...p, spacing: { ...p.spacing, groups } };
     const kept: LineParams = { ...p, spacing: { mode: "keep", groups } };
     if (n <= 1) return kept;
     const gaps = cornerGaps(kept, n);
+    // A closed line can't set each segment on its own and still meet its first point: it's
+    // grown as a whole to n intervals round (#529), a corner off its interval noted
+    if (gaps && isClosed(p))
+        return scaled(kept, (n * interval) / linePath(p).length, env);
     if (gaps) return pinned(kept, onIntervals(kept, gaps, interval), env);
     if (p.points.length === 2)
         return scaled(kept, ((n - 1) * interval) / linePath(p).length, env);
@@ -542,12 +630,13 @@ function onIntervals(
 function runScale(p: LineParams, n: number, interval: number): number {
     const path = linePath(p);
     if (!(path.length > 0)) return 1;
+    const gaps = gapCount(p, n);
     // The run of chords on the line `k` times as big, against its length
     const over = (k: number) =>
-        chordOffsets(path, 0, Array(n - 1).fill(interval / k)).at(-1)! -
+        chordOffsets(path, 0, Array(gaps).fill(interval / k)).at(-1)! -
         path.length;
     let lo = 1e-6;
-    let hi = Math.max(1, ((n - 1) * interval) / path.length) * 2;
+    let hi = Math.max(1, (gaps * interval) / path.length) * 2;
     while (over(hi) > 0) hi *= 2;
     for (let i = 0; i < 60; i++) {
         const mid = (lo + hi) / 2;
@@ -558,7 +647,7 @@ function runScale(p: LineParams, n: number, interval: number): number {
 }
 
 /** The line `k` times as big, its pivot staying where it is on the field */
-function scaled(p: LineParams, k: number, env: ToolEnv): LineParams {
+export function scaled(p: LineParams, k: number, env: ToolEnv): LineParams {
     // A line with no length has no direction to grow along
     if (!(lineFrame(p).halfWidth > 1e-9) || !Number.isFinite(k)) return p;
     const first = p.points[0]!;
@@ -652,7 +741,7 @@ export function onLine(
         1e-9,
     );
     const near = (a: XY, b: XY) => fromSegment(at, a, b) <= reach;
-    if (p.points.slice(1).some((b, i) => near(p.points[i]!, b))) return true;
+    if (lineSegments(p).some(([a, b]) => near(a, b))) return true;
     // A run on the path can reach past the drawn line's ends
     const spots = lineSpots(p, n);
     return spots.length > 1 && near(spots[0]!, spots.at(-1)!);
@@ -686,3 +775,92 @@ export function lineInFrame(
 /** How far along the line a field point is, for keeping marchers' order along it */
 export const alongLine = (p: LineParams, point: XY): number =>
     linePath(p).project(point);
+
+/**
+ * The line closed (#529): its last point joined to its first, filled as its outline. A typed
+ * interval is kept, the line grown or shrunk from its pivot to n intervals round; a run on the
+ * path keeps its interval that way. Under three points there's nothing to close.
+ */
+export function closeLine(p: LineParams, n: number, env: ToolEnv): LineParams {
+    if (isClosed(p) || p.points.length < 3) return p;
+    const closed: LineParams = { ...p, closed: true };
+    const interval = typedInterval(p);
+    return interval === null ? closed : withInterval(closed, n, interval, env);
+}
+
+/**
+ * The line opened (#529) so its marchers keep their spots: from one of its spots round to the
+ * one before it, through every point between. Filled any other way, it opens to the spots its
+ * outline has. Fit shares a cornered line's gaps by its segments' lengths, which an open line can
+ * share out differently, so it opens at the first spot (from its first point) that gives the same
+ * spots, the corners switch as it is or turned over; failing that, at its first point.
+ */
+export function openLine(p: LineParams, n: number): LineParams {
+    if (!isClosed(p)) return p;
+    const { closed: _closed, distribution: _distribution, ...rest } = p;
+    if (n < 2) return rest;
+    const outline: LineParams = { ...rest, closed: true };
+    const path = linePath(outline);
+    const spots = lineSpots(outline, n);
+    const tolerance = 1e-6 * Math.max(1, path.length);
+    const same = (q: LineParams) => {
+        const now = lineSpots(q, n);
+        return spots.every((spot) =>
+            now.some((x) => length(sub(x, spot)) < tolerance),
+        );
+    };
+    const flipped = (q: LineParams): LineParams =>
+        q.corners === false
+            ? (({ corners: _c, ...r }) => r)(q)
+            : { ...q, corners: false };
+    let first: LineParams | null = null;
+    for (let k = 0; k < n; k++) {
+        const opened = openedAt(outline, path, spots, k);
+        if (!opened) continue;
+        first ??= opened;
+        if (same(opened)) return opened;
+        if (same(flipped(opened))) return flipped(opened);
+    }
+    return first ?? rest;
+}
+
+/**
+ * The closed line opened from spot `k` round to the spot before it, through the points between;
+ * null when that leaves under two points
+ */
+function openedAt(
+    outline: LineParams,
+    path: Path,
+    spots: readonly Slot[],
+    k: number,
+): LineParams | null {
+    const { closed: _closed, ...rest } = outline;
+    const L = path.length;
+    const sOf = (spot: Slot) => spot.s ?? path.project(spot);
+    const from = sOf(spots[k]!);
+    const span =
+        (((sOf(spots[(k - 1 + spots.length) % spots.length]!) - from) % L) +
+            L) %
+        L;
+    const eps = 1e-9 * Math.max(1, L);
+    // Each point's way along from the start, round from it
+    let along = 0;
+    const between = outline.points
+        .map((q, i) => {
+            if (i > 0) along += length(sub(q, outline.points[i - 1]!));
+            return { q, at: (((along - from) % L) + L) % L };
+        })
+        .filter(({ at }) => at > eps && at < span - eps)
+        .sort((a, b) => a.at - b.at)
+        .map(({ q }) => q);
+    const start = path.at(from);
+    const end = path.at(from + span);
+    const onPoint = (x: XY) =>
+        outline.points.find((q) => length(sub(q, x)) < eps);
+    const points = [
+        onPoint(start) ?? corner(start),
+        ...between,
+        onPoint(end) ?? corner(end),
+    ];
+    return points.length < 2 ? null : { ...rest, points };
+}

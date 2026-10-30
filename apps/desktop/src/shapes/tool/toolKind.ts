@@ -201,7 +201,8 @@ export interface ToolChoice<P> {
 /**
  * Drawing by clicking point after point (#524, spec #522), for a kind that opts in. A drag still
  * draws with {@link ToolKind.draw}; a click with no drag starts a run of points, each click adds
- * one, and Enter, a double-click or a click on the last point finishes it. Everything is pure.
+ * one, and Enter, a double-click or a click on the last point finishes it; a click on the first
+ * closes it, for a kind that can close. Everything is pure.
  */
 export interface ToolClickPoints<P> {
     /**
@@ -211,6 +212,11 @@ export interface ToolClickPoints<P> {
     land(previous: readonly XY[], at: XY, env: ToolEnv): XY;
     /** The shape through `points`, in order, or undefined while they aren't one yet */
     draw(points: readonly XY[], n: number, env: ToolEnv): P | undefined;
+    /**
+     * The shape through `points` closed, its last point joined to its first: what a click on the
+     * first point draws once there are three (#529). Absent: that click adds a point as any does.
+     */
+    close?(points: readonly XY[], n: number, env: ToolEnv): P | undefined;
 }
 
 /**

@@ -1,0 +1,400 @@
+import { describe, expect, it } from "vitest";
+import { lineTool } from "../lineTool";
+import { isLineParams, type LineParams } from "../lineGeometry";
+import { chipLayout } from "../../editor/chip";
+import {
+    edgeSplitOf,
+    switchModes,
+    withEdge,
+    withMode,
+} from "../../distribute/modes";
+import {
+    boxesAt,
+    type PlacedBox,
+    type PlacedRecipe,
+} from "../../placed/placedBox";
+import { placementOf } from "../../tool/shapePlacement";
+import type { ToolEnv } from "../../tool/toolKind";
+import {
+    edit,
+    finishPoints,
+    openTool,
+    pointerMove,
+    press,
+    release,
+    slotsOf,
+    targetsOf,
+    undo,
+    type ToolState,
+} from "../../tool/toolMachine";
+import type { ShapeContext, XY } from "../../types";
+
+/**
+ * Closing a Line and filling it (#529, spec #522), through the shape session with the real kind:
+ * a click on the first point, an end dropped on the other or Close in the editor closes it; a
+ * closed line has a gap per marcher, offers the host's Grid, Outline and Spread (with Edge), and
+ * Open turns it back into a line through the same spots.
+ */
+
+const STEP = 10;
+const half = STEP / 2;
+const snapHalf = (v: number) => Math.round(v / half) * half;
+const env: ToolEnv = {
+    stepPx: STEP,
+    snap: true,
+    pull: true,
+    constrain: false,
+    gridSnap: (p) => ({ x: snapHalf(p.x), y: snapHalf(p.y) }),
+    hitRadius: 3,
+};
+const ctx: ShapeContext = { stepPx: STEP, snapPoint: (p) => p };
+const marchers = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+        id: i + 1,
+        at: { x: 300 + i * 7, y: 300 },
+        drillRank: i,
+    }));
+
+/** A press and release where it pressed, the pointer moving there first as a hover does */
+function click(t: ToolState, at: XY): ToolState {
+    t = pointerMove(t, at, env);
+    t = press(t, at, env);
+    return release(t, ctx, { double: false });
+}
+
+/** Points clicked one after another, the run left going */
+function clicking(n: number, points: readonly XY[]): ToolState {
+    let t = openTool(lineTool, marchers(n));
+    for (const p of points) t = click(t, p);
+    return t;
+}
+
+const SQUARE = [
+    { x: 100, y: 100 },
+    { x: 140, y: 100 },
+    { x: 140, y: 140 },
+    { x: 100, y: 140 },
+];
+/** A 4 × 4 step square, closed by a click on its first point */
+const square = (n = 8) => click(clicking(n, SQUARE), { x: 101, y: 99 });
+
+const paramsOf = (t: ToolState) => t.params as LineParams;
+const pointsOf = (t: ToolState) =>
+    paramsOf(t).points.map(({ x, y }) => ({ x, y }));
+const spotsOf = (t: ToolState) => slotsOf(t, ctx).map(({ x, y }) => ({ x, y }));
+const dist = (a: XY, b: XY) => Math.hypot(a.x - b.x, a.y - b.y);
+/** Each spot to the next, the last back to the first */
+const gapsRound = (spots: readonly XY[]) =>
+    spots.map((s, i) => dist(s, spots[(i + 1) % spots.length]!));
+const expectNear = (a: readonly XY[], b: readonly XY[]) => {
+    expect(a).toHaveLength(b.length);
+    a.forEach((p, i) => {
+        expect(p.x).toBeCloseTo(b[i]!.x, 6);
+        expect(p.y).toBeCloseTo(b[i]!.y, 6);
+    });
+};
+/** The same spots, in any order */
+const expectSameSpots = (a: readonly XY[], b: readonly XY[]) => {
+    const key = (p: XY) => `${p.x.toFixed(6)},${p.y.toFixed(6)}`;
+    expect(a.map(key).sort()).toEqual(b.map(key).sort());
+};
+const choice = (key: string) => lineTool.choices!.find((c) => c.key === key)!;
+const picked = (t: ToolState, key: string, value: string) =>
+    edit(t, choice(key).pick(t.params, t.spots, value, env), ctx);
+const shown = (t: ToolState, key: string) =>
+    choice(key).shown?.(t.params, t.spots) ?? true;
+const interval = lineTool.params.find((p) => p.key === "interval")!;
+const inMode = (t: ToolState, mode: "files" | "outline" | "spread") =>
+    edit(t, withMode(lineTool, t.params, t.spots, mode, env), ctx);
+const modesOf = (t: ToolState) =>
+    switchModes(lineTool, { params: t.params, n: t.spots });
+const inside = (spots: readonly XY[]) =>
+    spots.every(
+        (s) =>
+            s.x >= 100 - 1e-6 &&
+            s.x <= 140 + 1e-6 &&
+            s.y >= 100 - 1e-6 &&
+            s.y <= 140 + 1e-6,
+    );
+
+describe("closing a line", () => {
+    it("closes with a click on the first point, as one undo step", () => {
+        const t = square();
+        expect(t.gesture).toBeNull();
+        expect(paramsOf(t).closed).toBe(true);
+        expect(pointsOf(t)).toEqual(SQUARE);
+        expect(targetsOf(t, ctx)).toHaveLength(8);
+        expect(t.past).toHaveLength(1);
+        expect(undo(t).params).toBeNull();
+    });
+
+    it("previews the closed line with the pointer on the first point", () => {
+        const t = pointerMove(clicking(8, SQUARE), { x: 101, y: 99 }, env);
+        expect(t.gesture?.type).toBe("points");
+        expect(paramsOf(t).closed).toBe(true);
+    });
+
+    it("closes when an end is dropped on the other, the two made one point", () => {
+        let t = finishPoints(clicking(8, [...SQUARE, { x: 100, y: 110 }]), ctx);
+        expect(paramsOf(t).closed).toBeFalsy();
+        const end = lineTool
+            .handles(t.params, t.spots)
+            .find((h) => h.key === "p4")!;
+        t = press(t, end.at, env);
+        t = pointerMove(t, { x: 101, y: 101 }, env);
+        t = release(t, ctx);
+        expect(paramsOf(t).closed).toBe(true);
+        expect(pointsOf(t)).toEqual(SQUARE);
+    });
+
+    it("closes and opens with the editor's choice, once there are three points", () => {
+        const two = finishPoints(clicking(8, SQUARE.slice(0, 2)), ctx);
+        expect(shown(two, "ends")).toBe(false);
+        const open = finishPoints(clicking(8, SQUARE), ctx);
+        expect(shown(open, "ends")).toBe(true);
+        expect(choice("ends").current(open.params, 8)).toBe("open");
+        const closed = picked(open, "ends", "closed");
+        expect(paramsOf(closed).closed).toBe(true);
+        expect(choice("ends").current(closed.params, 8)).toBe("closed");
+        expect(undo(closed).params).toBe(open.params);
+    });
+
+    it("has a gap for every marcher, the last back to the first", () => {
+        const t = square();
+        const spots = spotsOf(t);
+        expect(spots).toHaveLength(8);
+        // Every corner holds a marcher, two gaps a side
+        gapsRound(spots).forEach((g) => expect(g).toBeCloseTo(20, 6));
+        for (const c of SQUARE)
+            expect(spots.some((s) => dist(s, c) < 1e-6)).toBe(true);
+        expect(
+            chipLayout(lineTool, t.params, 8, env).intervals[0]!.display,
+        ).toBe("2");
+    });
+
+    it("runs the intervals round the corners with the switch off", () => {
+        // 10 marchers round 16 steps: every 1.6 steps along it, from the first corner
+        const spots = spotsOf(picked(square(10), "corners", "off"));
+        expect(spots).toHaveLength(10);
+        expectNear(spots.slice(0, 4), [
+            { x: 100, y: 100 },
+            { x: 116, y: 100 },
+            { x: 132, y: 100 },
+            { x: 140, y: 108 },
+        ]);
+    });
+
+    it("keeps a typed interval all the way round, grown from its pivot", () => {
+        let t = picked(square(10), "corners", "off");
+        t = edit(t, interval.type(t.params, 10, "3", env), ctx);
+        gapsRound(spotsOf(t)).forEach((g) => expect(g).toBeCloseTo(30, 6));
+        // Grown from its center, which stays put
+        const xs = pointsOf(t).map((p) => p.x);
+        expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(120, 6);
+    });
+
+    it("drops Interval on the path from the spacing menu once closed", () => {
+        const values = (t: ToolState) =>
+            choice("spacing")
+                .options(t.params, t.spots)
+                .map((o) => o.value);
+        expect(values(finishPoints(clicking(8, SQUARE), ctx))).toContain(
+            "path-start",
+        );
+        expect(values(square())).toEqual(["fit", "keep"]);
+    });
+});
+
+describe("filling a closed line", () => {
+    it("offers the host's modes only once it's closed", () => {
+        expect(modesOf(finishPoints(clicking(8, SQUARE), ctx))).toEqual([]);
+        expect(modesOf(square())).toEqual(["files", "outline", "spread"]);
+    });
+
+    it("is its outline until another mode is picked", () => {
+        const t = square();
+        expect(withMode(lineTool, t.params, 8, "outline", env)).toBe(t.params);
+    });
+
+    it("fills a grid inside it from the host's distributor", () => {
+        const t = inMode(square(9), "files");
+        const spots = spotsOf(t);
+        expect(spots).toHaveLength(9);
+        expect(inside(spots)).toBe(true);
+        // A square grid as wide as fits: 3 × 3, 2 steps apart, filling the square
+        const xs = [...new Set(spots.map((s) => Math.round(s.x * 1e6) / 1e6))];
+        expect(xs.sort((a, b) => a - b)).toEqual([100, 120, 140]);
+        expect(
+            chipLayout(lineTool, t.params, 9, env).intervals[0]!.display,
+        ).toBe("2");
+        // Its spacing follows the outline: the outline's menus are put away
+        expect(shown(t, "spacing")).toBe(false);
+        expect(shown(t, "corners")).toBe(false);
+        expect(pointsOf(t)).toEqual(SQUARE);
+    });
+
+    it("grows the outline from its pivot when Grid's spacing is typed", () => {
+        let t = inMode(square(9), "files");
+        t = edit(t, interval.type(t.params, 9, "3", env), ctx);
+        const xs = pointsOf(t).map((p) => p.x);
+        expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(60, 6);
+        expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(120, 6);
+        const spots = spotsOf(t);
+        expect(dist(spots[0]!, spots[1]!)).toBeCloseTo(30, 6);
+    });
+
+    it("leaves a short back rank when the grid has more spots than marchers", () => {
+        const spots = spotsOf(inMode(square(8), "files"));
+        expect(spots).toHaveLength(8);
+        expect(inside(spots)).toBe(true);
+        // 3 × 3 with one off the back rank, which runs along the line's frame (turned from its
+        // first point to its last, here down the field)
+        const backRank = spots.filter(
+            (s) => Math.abs(s.x - spots[0]!.x) < 1e-6,
+        );
+        expect(backRank).toHaveLength(2);
+    });
+
+    it("spreads over it, with its edge on", () => {
+        let t = inMode(square(12), "spread");
+        let spots = spotsOf(t);
+        expect(spots).toHaveLength(12);
+        expect(inside(spots)).toBe(true);
+        t = edit(t, withEdge(lineTool, t.params, 12, true, env), ctx);
+        spots = spotsOf(t);
+        expect(inside(spots)).toBe(true);
+        const split = edgeSplitOf(lineTool, t.params, 12)!;
+        expect(split.edge + split.inside).toBe(12);
+        // A spot on every corner
+        for (const c of SQUARE)
+            expect(spots.some((s) => dist(s, c) < 1e-6)).toBe(true);
+    });
+
+    it("fills an L the same way", () => {
+        const L = [
+            { x: 100, y: 100 },
+            { x: 120, y: 100 },
+            { x: 120, y: 120 },
+            { x: 140, y: 120 },
+            { x: 140, y: 140 },
+            { x: 100, y: 140 },
+        ];
+        const t = inMode(click(clicking(10, L), { x: 100, y: 100 }), "files");
+        const spots = spotsOf(t);
+        expect(spots).toHaveLength(10);
+        // None in the missing corner
+        expect(spots.some((s) => s.x > 120 + 1e-6 && s.y < 120 - 1e-6)).toBe(
+            false,
+        );
+    });
+});
+
+describe("opening a closed line", () => {
+    it("keeps the outline's spots", () => {
+        const closed = square();
+        const opened = picked(closed, "ends", "open");
+        expect(paramsOf(opened).closed).toBeFalsy();
+        expectNear(spotsOf(opened), spotsOf(closed));
+    });
+
+    it("keeps the outline's spots on uneven sides, corners held", () => {
+        const RECT = [
+            { x: 100, y: 100 },
+            { x: 150, y: 100 },
+            { x: 150, y: 120 },
+            { x: 100, y: 120 },
+        ];
+        const closed = click(clicking(9, RECT), { x: 100, y: 100 });
+        const opened = picked(closed, "ends", "open");
+        expectSameSpots(spotsOf(opened), spotsOf(closed));
+    });
+
+    it("opens a grid to the spots its outline has", () => {
+        const outline = spotsOf(square());
+        const opened = picked(inMode(square(), "files"), "ends", "open");
+        expect(paramsOf(opened).distribution).toBeUndefined();
+        expectNear(spotsOf(opened), outline);
+    });
+});
+
+describe("a placed closed line", () => {
+    const N = 9;
+    function recipeOf(t: ToolState): PlacedRecipe {
+        const placement = placementOf(t, ctx)!;
+        return {
+            ...placement.recipe,
+            id: 1,
+            timelineId: 10,
+            members: placement.members,
+            params: JSON.parse(JSON.stringify(placement.recipe.params)),
+        };
+    }
+    const readBack = (recipe: PlacedRecipe) => {
+        const at = new Map(recipe.members.map((m) => [m.marcherId, m]));
+        const [placed] = boxesAt({
+            recipes: [recipe],
+            endBeatOf: () => 8,
+            beat: 8,
+            positionOf: (id) => at.get(id),
+        });
+        return placed as PlacedBox<LineParams> | undefined;
+    };
+
+    it.each(["outline", "files", "spread"] as const)(
+        "reopens closed, in %s",
+        (mode) => {
+            const t = inMode(square(N), mode);
+            const recipe = recipeOf(t);
+            const placed = readBack(recipe)!;
+            expect(placed.kind).toBe(lineTool);
+            expect(placed.params.closed).toBe(true);
+            expect(placed.params).toEqual(JSON.parse(JSON.stringify(t.params)));
+            expect(
+                switchModes(lineTool, { params: placed.params, n: N }),
+            ).toHaveLength(3);
+            expectSameSpots(
+                lineTool.shape.generate(placed.params, N, ctx),
+                spotsOf(t),
+            );
+        },
+    );
+
+    it.each([
+        [
+            "a fill on an open line",
+            (p: LineParams) => {
+                const { closed: _closed, ...open } = p;
+                return open;
+            },
+        ],
+        [
+            "a fill this version doesn't know",
+            (p: LineParams) => ({ ...p, distribution: { mode: "rings" } }),
+        ],
+        [
+            "a closed line with a run on the path",
+            (p: LineParams) => ({
+                ...p,
+                spacing: {
+                    mode: "path",
+                    groups: [{ interval: 20 }],
+                    anchor: "start",
+                },
+            }),
+        ],
+        [
+            "a closed line of two points",
+            (p: LineParams) => ({ ...p, points: p.points.slice(0, 2) }),
+        ],
+    ])("reads %s as plain positions", (_name, change) => {
+        const recipe = recipeOf(inMode(square(N), "files"));
+        const { spots: _spots, ...params } = recipe.params as LineParams & {
+            spots: number;
+        };
+        const changed = change(params as LineParams);
+        expect(isLineParams(changed)).toBe(false);
+        expect(
+            readBack({ ...recipe, params: { ...changed, spots: N } }),
+        ).toBeUndefined();
+    });
+});

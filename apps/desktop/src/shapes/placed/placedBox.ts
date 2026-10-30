@@ -18,6 +18,7 @@ import { SHAPE_TOOLS } from "../tool/shapeTools";
 import type { ShapeContext, XY } from "../types";
 import { frameToField, pivotPoint } from "../frame/frame";
 import { pivotOf } from "../frame/pivot";
+import { closedOf } from "../distribute/modes";
 
 /**
  * Placed shapes (docs/timeline/research/shapes/07-placed-boxes.md): a shape's recipe, read back.
@@ -252,7 +253,7 @@ function placeOn<P>(
  * 2026-10-14 revision). An open kind (a line, an arc) keeps its holes.
  */
 export const canCloseUp = (box: PlacedBox): boolean =>
-    box.kind.closed !== undefined &&
+    closedOf(box.kind, box.params, box.spots) !== undefined &&
     box.recipe.members.length > 0 &&
     box.recipe.members.length < box.spots;
 
@@ -269,7 +270,7 @@ export function closedUpParams(
     env: ToolEnv,
 ): unknown {
     const { kind, params, spots } = box;
-    const closed = kind.closed;
+    const closed = closedOf(kind, params, spots);
     if (!closed || n <= 0 || n >= spots) return null;
     const d = closed.distribution(params, spots);
     const kept: Distribution =

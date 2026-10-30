@@ -300,3 +300,22 @@ The Line shape (spec #522, #523) stores a new kind:
    and `corners` came with #524). A build reads a Line only when it can lay out every field exactly as saved; anything
    newer reads as plain positions (decision 5), never as the nearest shape it understands. Each
    build widens its `readable` check as it learns a field.
+4. **A closed Line (#529).** `closed: true` joins the last point to the first: a closed line has
+   three points or more and a gap for every marcher (n gaps, an open line n − 1), and its spacing
+   is `fit` or `keep`, never `path` (a closed line has no ends to lay a run from). A closed line
+   stores the host's `distribution` as a closed kind does (amendment of 2026-10-22), in Grid
+   (`files`), Outline or Spread (with its `edge`); without one it's Outline. Outline is the line
+   itself, its corners and spacing laid out as above, so it ignores `oddGap`. Grid and Spread
+   fill the drawn points as a polygon in the line's frame (turned from its first point to its
+   last, around all its points), through the host's distributor: Grid is the widest square grid
+   with room for every marcher, any extra spots left off its back rank, and ignores `layout` and
+   `stagger`; Spread fills the polygon, its spacing whatever fits. A `distribution` on an open
+   line, one this build can't read, or `closed` that isn't a boolean reads as plain positions.
+
+Verification (#529): `lineClose.test.ts` closes a Line by a click on its first point, an end
+dropped on the other and the editor's choice; checks a gap for every marcher; fills a square and
+an L in Grid, Spread and Edge through the distributor; opens a cornered outline and a grid back to
+the outline's spots; places and reads back a closed Line in each mode; and refuses a fill on an
+open line, an unknown fill, a closed run on the path and a closed line of two points.
+`clickPoints.test.ts` covers the host's close-on-first-point with a fake kind, and a browser
+scenario in `line-tool.spec.mts` closes a clicked line, fills it in Grid, places and reopens it.

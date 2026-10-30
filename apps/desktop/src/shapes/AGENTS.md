@@ -20,6 +20,9 @@ ordinary positions it writes.
 - `box/`, `circle/`, `line/`: the drawable kinds (`boxTool`, `circleTool`, `lineTool`) and their
   geometry. The Line's frame follows from its points, so it checks its own recipes (`readable`)
   and declares its spacing menu as a kind choice (`ToolChoice`, shown by `editor/ChoiceMenu.tsx`).
+  A closed Line is filled through `line/lineFill.ts`; a kind closed only sometimes declares
+  `closed.when`, so host code reads a shape's fill through `closedOf` (`distribute/modes.ts`),
+  never `kind.closed` directly.
   `box/edgePull.ts` lands edges and corners on yard lines and hashes; `box/modeMemory.ts`
   remembers each fill mode's numbers.
 - `kinds/`: the older shape-model kinds (`ShapeKind` in `types.ts`) that generate spots. The box

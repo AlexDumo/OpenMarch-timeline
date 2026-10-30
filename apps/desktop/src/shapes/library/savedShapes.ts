@@ -11,6 +11,7 @@ import type { AnyToolKind, ToolEnv, ToolParam } from "../tool/toolKind";
 import type { ShapeToolEntry } from "../tool/shapeTools";
 import type { XY } from "../types";
 import { spacingNote, type ShapeLibraryRow } from "./shapeLibrary";
+import { closedOf, distributionOf } from "../distribute/modes";
 
 /**
  * A saved shape (#353, spec #344): a kind, its intervals and how it's filled (#393), under a
@@ -72,7 +73,7 @@ export function savedShapeOf(
 ): SavedShape {
     const base = baseKindOf(kind);
     const description = named.description?.trim();
-    const distribution = base.closed?.distribution(params, n);
+    const distribution = distributionOf(base, params, n) ?? undefined;
     return {
         id: named.id,
         name: named.name.trim(),
@@ -99,7 +100,7 @@ export function suggestedName(
     stepPx: number,
 ): string {
     const base = baseKindOf(kind);
-    const distribution = base.closed?.distribution(params, n);
+    const distribution = distributionOf(base, params, n) ?? undefined;
     const note = spacingNote(
         Object.values(intervalsOf(base, params, n, stepPx)),
         distribution,
@@ -120,7 +121,7 @@ export function withSavedDistribution(
     saved: SavedDistribution | undefined,
     env: ToolEnv,
 ): unknown {
-    const closed = kind.closed;
+    const closed = closedOf(kind, params, n);
     if (!closed || !saved || !closed.modes.includes(saved.mode)) return params;
     const start = closed.startMode(params, n, saved.mode);
     const files = start.mode === "files" ? start.layout.files : 1;
