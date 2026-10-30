@@ -25,6 +25,7 @@ function setup({
     moveTransform = undefined as MoveTransform | undefined,
     pressSelection = undefined as FieldEditorPorts["pressSelection"],
     doubleClickMarcher = undefined as FieldEditorPorts["doubleClickMarcher"],
+    reachesInside = undefined as FieldEditorPorts["reachesInside"],
 } = {}) {
     const clock = { now: 1000 };
     const state = {
@@ -58,6 +59,7 @@ function setup({
         takePress,
         pressSelection,
         doubleClickMarcher,
+        reachesInside,
         selectionBoxPadding: () => 10,
         openMenu: vi.fn(),
         showPositions: vi.fn((positions) => {
@@ -1224,6 +1226,7 @@ describe("FieldEditor marquee", () => {
         expect(editor.areaShape()).toEqual({
             kind: "marquee",
             rect: { left: 150, top: 50, right: 250, bottom: 150 },
+            subtract: false,
         });
         // Selects only on release
         expect(state.selected).toEqual([]);
@@ -1979,5 +1982,224 @@ describe("FieldEditor groups a press selects (#204)", () => {
         clock.now += 100;
         click(editor, 200, 100);
         expect(doubleClickMarcher).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("FieldEditor subtract (Alt) on a marquee or lasso", () => {
+    it("removes the marchers an Alt-marquee covers from the selection", () => {
+        const { editor, state } = setup({ selected: [1, 2, 3] });
+        dragThrough(
+            editor,
+            [
+                [150, 50],
+                [250, 150],
+            ],
+            { alt: true },
+        );
+        expect(state.selected).toEqual([1, 3]);
+    });
+
+    it("keeps the selection when an Alt-marquee covers nothing selected", () => {
+        const { editor, state, ports } = setup({ selected: [1] });
+        dragThrough(
+            editor,
+            [
+                [150, 50],
+                [250, 150],
+            ],
+            { alt: true },
+        );
+        expect(state.selected).toEqual([1]);
+        expect(ports.selection.set).not.toHaveBeenCalled();
+    });
+
+    it("removes the marchers an Alt-lasso closes around; the double-click's first click keeps the selection", () => {
+        const { editor, state } = setup({ selected: [1, 2, 3, 4] });
+        lasso(editor, AROUND_2_AND_3, { alt: true });
+        expect(state.selected).toEqual([1, 4]);
+    });
+
+    it("adds with Shift+Alt: add wins over subtract", () => {
+        const marquee = setup({ selected: [1] });
+        dragThrough(
+            marquee.editor,
+            [
+                [150, 50],
+                [250, 150],
+            ],
+            { shift: true, alt: true },
+        );
+        expect(marquee.state.selected).toEqual([1, 2]);
+        const loop = setup({ selected: [1] });
+        lasso(loop.editor, AROUND_2_AND_3, { shift: true, alt: true });
+        expect(loop.state.selected).toEqual([1, 2, 3]);
+    });
+
+    it("takes marchers one by one out of a placed box, as a marquee adds them one by one", () => {
+        // Marchers 1 and 2 are a placed box, selected whole
+        const group = (hit: number) => (hit <= 2 ? [1, 2] : null);
+        const { editor, state } = setup({
+            selected: [1, 2],
+            pressSelection: group,
+        });
+        dragThrough(
+            editor,
+            [
+                [150, 50],
+                [250, 150],
+            ],
+            { alt: true },
+        );
+        expect(state.selected).toEqual([1]);
+    });
+
+    it("tells the overlay the marquee and the lasso subtract", () => {
+        const marquee = setup();
+        marquee.editor.pointerDown(at(150, 50, { alt: true }));
+        marquee.editor.pointerMove(at(250, 150, { alt: true }));
+        expect(marquee.editor.areaShape()).toMatchObject({
+            kind: "marquee",
+            subtract: true,
+        });
+        marquee.editor.pointerCancel();
+        const adding = setup();
+        adding.editor.pointerDown(at(150, 50, { alt: true, shift: true }));
+        adding.editor.pointerMove(at(250, 150, { alt: true, shift: true }));
+        expect(adding.editor.areaShape()).toMatchObject({ subtract: false });
+        adding.editor.pointerCancel();
+        const loop = setup();
+        click(loop.editor, 150, 50, { alt: true });
+        loop.editor.pointerDown(at(150, 50, { alt: true }));
+        loop.editor.pointerMove(at(250, 50, { alt: true }));
+        expect(loop.editor.areaShape()).toMatchObject({
+            kind: "lasso",
+            subtract: true,
+        });
+        loop.editor.pointerCancel();
+    });
+});
+
+describe("FieldEditor reach inside a placed box ($mod)", () => {
+    // A gesture left running keeps listening for keys; end each one
+    let running: FieldEditor | undefined;
+    afterEach(() => running?.pointerCancel());
+
+    /**
+     * Marchers 1 and 2 are a placed box (recipe 7) that box selection applies to: a press on a
+     * member selects the box, Shift adds or removes it whole, and a press that reaches inside
+     * enters it and leaves the selection to the editor's rules.
+     */
+    function boxed({
+        selected = [] as number[],
+        isMac = false,
+        enabled = true,
+    } = {}) {
+        const box = { inside: null as number | null };
+        const pressSelection = vi.fn(
+            (hit: number, shift: boolean, reachInside: boolean) => {
+                if (!enabled || hit > 2) return null;
+                if (reachInside) {
+                    box.inside = 7;
+                    return null;
+                }
+                return shift ? [...t.state.selected, 1, 2] : [1, 2];
+            },
+        );
+        const t = setup({
+            selected,
+            isMac,
+            pressSelection,
+            reachesInside: (hit) => enabled && hit <= 2,
+            moveTransform: rulesOn({ rounding: undefined }),
+        });
+        running = t.editor;
+        return { ...t, box, pressSelection };
+    }
+
+    it("selects just the marcher a $mod-click lands on, and enters its box", () => {
+        const { editor, state, box } = boxed({ selected: [1, 2] });
+        click(editor, 200, 100, { ctrl: true });
+        expect(state.selected).toEqual([2]);
+        expect(box.inside).toBe(7);
+        // Cmd on a Mac
+        const mac = boxed({ selected: [1, 2], isMac: true });
+        click(mac.editor, 100, 100, { meta: true });
+        expect(mac.state.selected).toEqual([1]);
+        expect(mac.box.inside).toBe(7);
+    });
+
+    it("drags only that marcher from a $mod-press, free on both axes: the press used $mod", () => {
+        const { editor, state, box } = boxed({ selected: [1, 2] });
+        drag(editor, { x: 200, y: 100 }, { x: 237, y: 121 }, { ctrl: true });
+        expect(state.selected).toEqual([2]);
+        expect(box.inside).toBe(7);
+        expect(state.drops[0].positions).toEqual([{ id: 2, x: 237, y: 121 }]);
+    });
+
+    it("constrains the drag once $mod is released and pressed again", () => {
+        const { editor, state } = boxed();
+        editor.pointerDown(at(200, 100, { ctrl: true }));
+        editor.pointerMove(at(237, 121, { ctrl: true }));
+        expect(shown(state)).toEqual({ 2: { x: 237, y: 121 } });
+        key("keyup", { key: "Control" });
+        expect(shown(state)).toEqual({ 2: { x: 237, y: 121 } });
+        key("keydown", { key: "Control", ctrlKey: true });
+        expect(shown(state)).toEqual({ 2: { x: 237, y: 100 } });
+        editor.pointerUp(at(237, 121, { ctrl: true }));
+        expect(state.drops[0].positions).toEqual([{ id: 2, x: 237, y: 100 }]);
+    });
+
+    it("isn't a press choice on a loose marcher: a $mod-drag stays on one axis", () => {
+        const { editor, state, pressSelection } = boxed();
+        drag(editor, { x: 300, y: 100 }, { x: 337, y: 121 }, { ctrl: true });
+        expect(state.drops[0].positions).toEqual([{ id: 3, x: 337, y: 100 }]);
+        expect(pressSelection).toHaveBeenCalledWith(3, false, false);
+    });
+
+    it("toggles just the member with Shift+$mod", () => {
+        const { editor, state, box } = boxed({ selected: [1, 2] });
+        click(editor, 200, 100, { shift: true, ctrl: true });
+        expect(state.selected).toEqual([1]);
+        expect(box.inside).toBe(7);
+        click(editor, 200, 100, { shift: true, ctrl: true });
+        expect(state.selected).toEqual([1, 2]);
+        const fromOutside = boxed({ selected: [3] });
+        click(fromOutside.editor, 100, 100, { shift: true, ctrl: true });
+        expect(fromOutside.state.selected).toEqual([3, 1]);
+    });
+
+    it("adds the member and drags with Shift+$mod, at full speed and free: both keys are the press's", () => {
+        const { editor, state } = boxed({ selected: [3] });
+        drag(
+            editor,
+            { x: 100, y: 100 },
+            { x: 137, y: 121 },
+            { shift: true, ctrl: true },
+        );
+        expect(state.selected).toEqual([3, 1]);
+        expect(state.drops[0].positions).toEqual([
+            { id: 1, x: 137, y: 121 },
+            { id: 3, x: 337, y: 121 },
+        ]);
+    });
+
+    it("with box selection off, treats $mod on a member as on a loose marcher", () => {
+        const { editor, state, pressSelection } = boxed({ enabled: false });
+        drag(editor, { x: 200, y: 100 }, { x: 237, y: 121 }, { ctrl: true });
+        expect(state.selected).toEqual([2]);
+        expect(state.drops[0].positions).toEqual([{ id: 2, x: 237, y: 100 }]);
+        expect(pressSelection).toHaveBeenCalledWith(2, false, false);
+    });
+
+    it("never reaches inside on a Mac's Ctrl-click: it pans and selects nothing", () => {
+        const { editor, state, box, pressSelection } = boxed({
+            selected: [3],
+            isMac: true,
+        });
+        expect(editor.pointerDown(at(200, 100, { ctrl: true }))).toBe(false);
+        editor.pointerUp(at(200, 100, { ctrl: true }));
+        expect(state.selected).toEqual([3]);
+        expect(box.inside).toBeNull();
+        expect(pressSelection).not.toHaveBeenCalled();
     });
 });

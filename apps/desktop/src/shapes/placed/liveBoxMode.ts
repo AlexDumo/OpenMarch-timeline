@@ -1,6 +1,7 @@
 import type { PivotKey } from "../frame/frame";
 import type { QueryClient } from "@tanstack/react-query";
 import type { FieldMode, FieldPointer } from "@/field/editor/fieldEditor";
+import { hitRadius } from "@/field/editor/hitTest";
 import {
     drillNumbers,
     frameDrawing,
@@ -28,7 +29,11 @@ import { usePlacedBoxPreviewStore } from "./boxSelectionStore";
 import { outlineGapAt } from "../distribute/outlineGap";
 import type { AnyToolKind } from "../tool/toolKind";
 import type { XY } from "../types";
-import type { Roles } from "@/input/modifierRoles";
+import {
+    pressChoiceOf,
+    type PressChoice,
+    type Roles,
+} from "@/input/modifierRoles";
 import {
     setShapeDragging,
     setShapePointerOver,
@@ -36,6 +41,8 @@ import {
     useShapePointerStore,
     guideGesture,
 } from "../field/shapePointer";
+
+const REACH_INSIDE: ReadonlySet<PressChoice> = new Set(["reachInside"]);
 
 /** An odd-count outline's gap, the spot nobody stands on by design (#390) */
 function gapsOf(kind: AnyToolKind, params: unknown, n: number) {
@@ -115,7 +122,7 @@ const drawingOf = memoDrawing(
 /**
  * A selected placed shape of any kind, edited in place (07-placed-boxes.md), as a field editor
  * mode: it claims presses on its handles and inside it. Its handles resize it (a box's stretch it),
- * a drag inside moves it, and each gesture is saved when it ends, as one undo step. A double click on a member goes inside the box. Other presses go through the editor's
+ * a drag inside moves it, and each gesture is saved when it ends, as one undo step. A double click on a member goes inside the box. A $mod press on a member (reach inside) and other presses go through the editor's
  * rules as usual. The selection box's own handles (#198) are off while it's on.
  */
 export class LiveBoxMode implements FieldMode {
@@ -146,7 +153,33 @@ export class LiveBoxMode implements FieldMode {
     }
 
     claims(pointer: FieldPointer): boolean {
-        return this.pressed(pointer) !== null;
+        return !this.reachesMember(pointer) && this.pressed(pointer) !== null;
+    }
+
+    /**
+     * A press that reaches inside ($mod) on one of the box's members: the field editor's, which
+     * picks that marcher out of the box. The pivot, drawn over a member, still takes its press.
+     */
+    private reachesMember(pointer: FieldPointer): boolean {
+        if (!pressChoiceOf(pointer, "field", { applicable: REACH_INSIDE }))
+            return false;
+        const field = currentShapeField();
+        if (!field) return false;
+        const env = toolEnvFor(field);
+        const { kind, params, spots, recipe } = this.live.box;
+        const target = shapeTargetAt(kind, params, spots, pointer.field, {
+            ...env,
+            reachInside: true,
+        });
+        if (target?.type === "pivot") return false;
+        // Where the field editor finds a marcher under the press
+        const reach = hitRadius(field.zoom());
+        const drawn = field.drawn(recipe.members.map((m) => m.marcherId));
+        return [...drawn.values()].some(
+            (at) =>
+                Math.hypot(at.x - pointer.field.x, at.y - pointer.field.y) <=
+                reach,
+        );
     }
 
     press(pointer: FieldPointer): void {

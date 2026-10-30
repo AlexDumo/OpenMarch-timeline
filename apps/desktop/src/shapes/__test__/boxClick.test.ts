@@ -116,4 +116,43 @@ describe("clicking a marcher with boxes on the field", () => {
             }),
         ).toEqual({ select: [1, 2, 3, 4], inside: null });
     });
+
+    it("reaching inside ($mod) enters the box and leaves the selection to the canvas, with or without Shift", () => {
+        for (const shift of [false, true]) {
+            expect(
+                clickOnMarcher({
+                    marcherId: 2,
+                    shift,
+                    reachInside: true,
+                    selected: new Set([1, 2, 3, 4]),
+                    box,
+                    inside: null,
+                }),
+            ).toEqual({ select: null, inside: 7 });
+        }
+        // From inside another box
+        expect(
+            clickOnMarcher({
+                marcherId: 3,
+                shift: false,
+                reachInside: true,
+                selected: new Set([8]),
+                box,
+                inside: 9,
+            }),
+        ).toEqual({ select: null, inside: 7 });
+    });
+
+    it("reaching inside on a marcher in no box is the canvas's, as a click is", () => {
+        expect(
+            clickOnMarcher({
+                marcherId: 9,
+                shift: false,
+                reachInside: true,
+                selected: new Set(),
+                box: null,
+                inside: 7,
+            }),
+        ).toEqual({ select: null, inside: null });
+    });
 });
