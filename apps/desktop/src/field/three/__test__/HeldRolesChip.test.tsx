@@ -13,7 +13,7 @@ import fr from "../../../../i18n/fr.json";
 import ja from "../../../../i18n/ja.json";
 import ptBR from "../../../../i18n/pt-BR.json";
 import { GESTURE_CHIP_KEYS, gestureChipSegments } from "../heldRoleChipText";
-import HeldRolesChip from "../HeldRolesChip";
+import HeldRolesChip, { HeldRolesChipBelowTip } from "../HeldRolesChip";
 
 const { chipT } = vi.hoisted(() => ({
     chipT: (key: string) =>
@@ -217,5 +217,22 @@ describe("HeldRolesChip", () => {
         rendered.mockClear();
         for (let x = 1; x <= 5; x++) sync(MOVE, NONE, { x, y: x });
         expect(rendered).not.toHaveBeenCalled();
+    });
+});
+
+describe("with a drag readout showing", () => {
+    it("stacks under the readout instead of floating over it at the pointer", () => {
+        render(
+            <IsPlayingProvider>
+                <HeldRolesChip belowTip />
+                <HeldRolesChipBelowTip />
+            </IsPlayingProvider>,
+        );
+        sync(MOVE, ALL, { x: 10, y: 10 });
+        const chips = screen.getAllByTestId("heldRolesChip");
+        expect(chips).toHaveLength(1);
+        // The stacked one sits in the readout's column, not at the pointer
+        expect(chips[0].style.left).toBe("");
+        expect(chips[0].textContent).toContain("Shift fine");
     });
 });

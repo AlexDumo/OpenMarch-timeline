@@ -18,7 +18,7 @@ import { dotSizes, SELECTION_COLOR } from "./selectionRing";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import { GUIDE_INK, GUIDE_INK_TEXT } from "./guideInk";
-import HeldRolesChip from "./HeldRolesChip";
+import HeldRolesChip, { HeldRolesChipBelowTip } from "./HeldRolesChip";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -141,7 +141,7 @@ export default function FieldOverlay({
 
     return (
         <>
-            <HeldRolesChip />
+            <HeldRolesChip belowTip={modeDrawing?.tip !== undefined} />
             <svg
                 className="pointer-events-none absolute inset-0 h-full w-full"
                 data-testid="fieldOverlay"
@@ -878,12 +878,19 @@ function ModeDrawing({
                             height={TIP_BOX.height}
                             overflow="visible"
                         >
-                            <div
-                                className="rounded-6 border-stroke bg-bg-1 bg-modal text-text shadow-modal inline-flex items-center gap-2 border px-6 py-2 whitespace-nowrap tabular-nums"
-                                style={{ fontSize: TIP_PX }}
-                                data-testid="fieldShapeTip"
-                            >
-                                <GlyphText text={drawing.tip.text} size={12} />
+                            <div className="flex flex-col items-start gap-4">
+                                <div
+                                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-text shadow-modal inline-flex items-center gap-2 border px-6 py-2 whitespace-nowrap tabular-nums"
+                                    style={{ fontSize: TIP_PX }}
+                                    data-testid="fieldShapeTip"
+                                >
+                                    <GlyphText
+                                        text={drawing.tip.text}
+                                        size={12}
+                                    />
+                                </div>
+                                {/* The held-roles chip stacks under the readout, never over it */}
+                                <HeldRolesChipBelowTip />
                             </div>
                         </foreignObject>
                     );
