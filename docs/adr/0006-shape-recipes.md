@@ -1,7 +1,8 @@
 # 0006: Shapes are stored as recipes beside the positions they place
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-10
+- Accepted: 2026-10-29
 
 ## Context
 
@@ -39,9 +40,10 @@ and a group transition into a shape breaks UI-9's one-transition-per-marcher rul
    They are not stored separately: a member nudged after placement simply stands somewhere else,
    and reopening the recipe shows it as moved by hand. Editing the recipe moves each member to
    its new spot plus its override, unless the designer resets the overrides.
-4. **A marcher belongs to at most one recipe per move.** Placing marchers with a new shape
-   removes them from older recipes of the same move; a recipe left with no members is deleted.
-   Both happen in the same edit as the positions, so it is one undo step.
+4. *(Revised 2026-10-29, see below.)* **A marcher belongs to at most one recipe at a beat.**
+   Placing marchers with a new shape removes them from the other recipes at the beat it's placed
+   at; a recipe left with no members is deleted. Both happen in the same edit as the positions,
+   so it is one undo step.
 5. **Kinds own their parameters.** `params` is whatever the kind declares, read by kind id and
    version. An unknown kind or version (a file from a newer app) is shown as a plain group of
    positions: the recipe can't be reopened, but nothing is lost.
@@ -51,7 +53,8 @@ and a group transition into a shape breaks UI-9's one-transition-per-marcher rul
 - New kinds and parameters never need a migration.
 - A file opened in an older app keeps every position; the recipe tables are ignored there.
 - Recipes can go stale when other edits move the move's end: they belong to the move by id, so
-  resizing or splitting a move keeps them attached to the move that holds those positions.
+  resizing a move keeps them attached to it, and splitting or merging moves carries them to the
+  move that holds those positions (Revision, 2026-10-29).
 - Follow the leader can later use a recipe's path as its route (README decision 5).
 
 ## Verification
@@ -249,3 +252,27 @@ scenario places an outline on an odd count with its gap moved and finds it in th
 For layouts, `layoutCatalogue.test.ts` checks every version from 1 to 120 marchers against the
 full-block-minus-pattern rule, `boxLayouts.test.ts` saves a Stagger box and reads it back, and a
 browser scenario finds the picked layout in the recipe.
+
+## Revision, 2026-10-29: membership at a beat, splits and merges
+
+Accepted with the shape host (#363). The pre-main review (#462, #463) tightened decision 4 and
+the consequence about splits. None of this changes the schema.
+
+1. **A recipe lists only marchers whose positions are in its move.** A member placed by a
+   selection over several moves is left out of a recipe whose move doesn't hold it.
+2. **One recipe per marcher at a beat.** Saving a recipe takes its members out of the other
+   recipes of every move **ending at** the beat it's placed at (a move split off a page's shares
+   it, UI-25), not of a move that only passes over that beat: an Expert move on another layer
+   keeps its shape. Decision 4 is replaced by this rule.
+3. **Splits and merges carry recipes.** Splitting marchers off a move moves a recipe they make up
+   the whole of to the new move, and drops them from any other recipe of the old move. Merging a
+   move into another re-points its recipes to the target, and their members leave the target's
+   other recipes.
+4. **A later page gets its own copy on any edit there.** A recipe shown at a later moment
+   (Revision, 2026-10-14) is saved as a copy on that later move by any edit made there that
+   changes the box, a pivot change included (#492, #499); the earlier page keeps its recipe.
+5. **Saved shapes match kind and version.** A saved shape whose kind version this app doesn't
+   have is skipped, not migrated, and the library says how many need a newer OpenMarch.
+
+Verification: the db-function `shapeRecipes.test.ts` covers rules 1 to 3, including the split
+and merge cases (UI-25) with undo; `boxMembership.test.ts` and `box-tool.spec.mts` cover rule 4.
