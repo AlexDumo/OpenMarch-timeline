@@ -6258,3 +6258,26 @@ test("a placed box stays drawn where it was dropped, every frame, while the drag
         [],
     );
 });
+
+test("a drag waiting for the one before it to be saved is saved on its own page, even after the next page is shown (review of #512)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+    const { S, before, grab } = await selectPlacedBox(show);
+    // Slower still: the second save must still be waiting when the next page shows
+    await slowDown(page, 8);
+    for (let i = 0; i < 2; i++) {
+        const from = { x: grab.x + i * 4 * S, y: grab.y };
+        await drag(
+            page,
+            await toScreen(page, from),
+            await toScreen(page, { x: from.x + 4 * S, y: from.y }),
+        );
+    }
+    // On to the next page while the second drag still waits for the first
+    await page.keyboard.press("e");
+    await waitForIdle(page, 1000);
+    const after = await savedPositions(show, 0);
+    expect(stepsAcross(before, after, S)).toEqual(after.map(() => 8));
+});

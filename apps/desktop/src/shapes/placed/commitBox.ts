@@ -57,7 +57,8 @@ let unsaved = 0;
  * shape held from an earlier move gets its own copy on this one; the earlier one stays.
  *
  * The shape is shown as saved at once (`useSavingBoxStore`), and saves run one at a time: each
- * starts from the shape as the last one read it back, so quick edits add up.
+ * starts from the shape as the last one read it back, so quick edits add up. Each goes to the edit
+ * window it was made in, even when it waited and the timeline moved on meanwhile.
  */
 export function commitBox(
     box: PlacedBox,
@@ -78,10 +79,22 @@ export function commitBox(
         origins,
     );
     useSavingBoxStore.setState({ box: savedAs(box, params, shown) });
+    const at: SaveAt = {
+        plan: planCanvasEdit(),
+        beat: displayedBeat(useTimelineSelectionStore.getState()),
+        waits: unsaved > 0,
+    };
     unsaved++;
     saving = saving
         .then(() =>
-            saveBox(storedBox(box), params, queryClient, layOutAgain, origins),
+            saveBox(
+                storedBox(box, at.beat),
+                params,
+                at,
+                queryClient,
+                layOutAgain,
+                origins,
+            ),
         )
         .catch((e: unknown) => console.error("Couldn't save the shape", e))
         .finally(() => {
@@ -90,6 +103,14 @@ export function commitBox(
             if (unsaved === 0) useSavingBoxStore.setState({ box: null });
         });
     return saving;
+}
+
+/** Where a save goes: the edit window and beat it was made at */
+interface SaveAt {
+    readonly plan: CanvasEditPlan;
+    readonly beat: number;
+    /** It waits for an earlier save, so the timeline may have moved on by the time it runs */
+    readonly waits: boolean;
 }
 
 /** `box` drawn with `params`, its members on the spots `targets` gives them */
@@ -115,9 +136,8 @@ function savedAs(
  * `box` as it's stored now: a save before this one moved it, or gave it its own copy on this move.
  * The same marchers find it; `box` itself when they don't (a save failed)
  */
-function storedBox(box: PlacedBox): PlacedBox {
+function storedBox(box: PlacedBox, beat: number): PlacedBox {
     const ids = new Set(box.recipe.members.map((m) => m.marcherId));
-    const beat = displayedBeat(useTimelineSelectionStore.getState());
     return (
         placedBoxesAt(beat).find(
             (b) =>
@@ -130,6 +150,7 @@ function storedBox(box: PlacedBox): PlacedBox {
 async function saveBox(
     box: PlacedBox,
     params: unknown,
+    at: SaveAt,
     queryClient: QueryClient,
     layOutAgain?: boolean,
     origins?: ReadonlyMap<number, XY>,
@@ -157,11 +178,13 @@ async function saveBox(
             // Changed on a later page it's carried onto: that page gets its own copy, even when
             // nobody moves (a pivot change), and the earlier page keeps its own
             setAll:
-                carriedOnto(planCanvasEdit(), box) &&
+                carriedOnto(at.plan, box) &&
                 !sameParams(next, box.recipe.params),
         },
         queryClient,
         tolgee.t("shapes.placed.editError", "Error editing the shape"),
+        // One that waited goes where it was made, and leaves the playhead where it was moved to
+        at.waits ? at.plan : null,
     );
     // Read back, positions and recipe both, before the next save starts from it
     await timelinePositionsSettled();
