@@ -85,12 +85,10 @@ import tolgee from "@/global/singletons/Tolgee";
 import type { TimelineKeyframe } from "./TimelineKeyframes";
 import { useKeyframeUnsetMenu } from "@/timeline/timelineUnset";
 import {
-    useKeepToggle,
     useMarcherNameOf,
     usePageKeepStates,
 } from "@/timeline/useKeepLaterPages";
-import { useSelectedPage } from "@/context/SelectedPageContext";
-import { keepHereMenu, usePageKeepChains } from "./PageKeepChain";
+import { usePageKeepChains } from "./PageKeepChain";
 import { setAsShownMenu } from "@/timeline/timelineSetAsShown";
 import { describeMoveClips } from "./moveClipText";
 import { useMoveNotesStore } from "@/stores/MoveNotesStore";
@@ -260,19 +258,9 @@ export default function TimelineModePanel() {
     );
     // #306: a diamond's right-click Unset actions at its count
     const keyframeMenu = useKeyframeUnsetMenu(selectedIdList, isPlaying);
-    // UI-18 keep later pages: the chains on the page boxes, and the page box menu's entries
-    // (named up to three; K's target says so, from the current page)
+    // UI-18 keep later pages: the chains on the page boxes (named up to three)
     const keepStates = usePageKeepStates(pages, selectedIdList);
-    const keepK = useKeepToggle(
-        keepStates,
-        pages,
-        useSelectedPage()?.selectedPage?.id,
-    );
-    const keepChains = usePageKeepChains(keepStates, keepNameOf, keepK);
-    const keepHere = useMemo(
-        () => keepHereMenu(keepStates, keepK),
-        [keepStates, keepK],
-    );
+    const keepChains = usePageKeepChains(keepStates, keepNameOf);
     // Holds (#466): Set as shown on a page box, for the selected marchers Not set there
     const setAsShown = useMemo(() => setAsShownMenu(keepStates), [keepStates]);
     const { tracks: timelines, current: tracksCurrent } =
@@ -545,7 +533,6 @@ export default function TimelineModePanel() {
                     keyframes={keyframes}
                     keyframeMenu={keyframeMenu}
                     keepChains={keepChains}
-                    keepHere={keepHere}
                     setAsShown={setAsShown}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={

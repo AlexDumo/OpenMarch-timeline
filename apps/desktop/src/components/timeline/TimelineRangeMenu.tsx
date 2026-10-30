@@ -13,8 +13,6 @@ import {
     CursorTextIcon,
     DiamondIcon,
     FlagIcon,
-    LinkBreakIcon,
-    LinkSimpleIcon,
     ArrowsMergeIcon,
     ArrowsSplitIcon,
     PencilSimpleIcon,
@@ -38,14 +36,11 @@ import type { TimelineBeatRange } from "./TimelineViewModel";
  */
 
 /**
- * The menus' entry style; `data-[disabled]` dims a Radix-disabled one (Keep here, Follow again).
+ * The menus' entry style; `data-[disabled]` dims a Radix-disabled one.
  * Entries with a reason dim themselves (`MenuItemWithReason`).
  */
 export const TIMELINE_MENU_ITEM_CLASS =
     "rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50";
-
-/** A shortcut after an entry's words, as the transport's popover shows Ctrl+M */
-const SHORTCUT_CLASS = "text-text-subtitle ml-auto pl-16 font-mono text-[11px]";
 
 /**
  * A small switch in front of a checkbox entry's words, drawn from the entry's `data-state`. It's
@@ -161,14 +156,6 @@ function MenuItemWithReason({
         </>
     );
 }
-
-/** The entry's key, right-aligned and quiet; nothing without one. */
-const MenuShortcut = ({ keys }: { keys?: string }) =>
-    keys ? (
-        <span className={SHORTCUT_CLASS} data-testid="timeline-menu-shortcut">
-            {keys}
-        </span>
-    ) : null;
 
 /** The menus' panel style */
 export const TIMELINE_MENU_CONTENT_CLASS =
@@ -359,11 +346,6 @@ export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
      */
     readonly onDeleteWithMoves?: (pageId: string | number) => void;
     /**
-     * **Keep selected marchers here** and **Let selected marchers follow again** on a page box
-     * (UI-18 keep later pages), above the deletes. Without it, the menu has no such entries.
-     */
-    readonly keepHere?: TimelineKeepHereMenu;
-    /**
      * **Set as shown** on a page box (holds, fork #466). Without it, the menu has no such entry.
      */
     readonly setAsShown?: TimelineSetAsShownMenu;
@@ -379,23 +361,6 @@ export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
     readonly extraFor?: (
         pageId: string | number,
     ) => readonly TimelineMenuEntry[];
-}
-
-/** The page box menu's keep entries (UI-18 keep later pages), by page id. */
-export interface TimelineKeepHereMenu {
-    /**
-     * Whether some selected marchers follow on the page (Keep applies) or were kept there
-     * (Follow again applies); null when no marchers are selected, so neither entry shows
-     */
-    readonly stateFor: (pageId: string | number) => {
-        readonly canKeep: boolean;
-        readonly canFollow: boolean;
-        /** The key that runs the entry from here (**K**), shown after it */
-        readonly keepShortcut?: string;
-        readonly followShortcut?: string;
-    } | null;
-    readonly onKeep: (pageId: string | number) => void;
-    readonly onFollow: (pageId: string | number) => void;
 }
 
 /** The page box menu's **Set as shown** entry (holds, fork #466), by page id. */
@@ -499,7 +464,6 @@ export function useTimelineRangeMenu({
         const canDelete =
             (menu?.onDeleteFlag !== undefined ||
                 menu?.onDeleteWithMoves !== undefined ||
-                menu?.keepHere !== undefined ||
                 menu?.setAsShown !== undefined ||
                 menu?.subset !== undefined ||
                 menu?.extraFor !== undefined) &&
@@ -510,10 +474,6 @@ export function useTimelineRangeMenu({
     };
     const disabledReason = menu?.disabledReason ?? null;
     const moves = open ? movesOf(open.target) : null;
-    const keepState =
-        open && menu?.keepHere && open.target.pageId !== undefined
-            ? menu.keepHere.stateFor(open.target.pageId)
-            : null;
     const setAsShownReason =
         open && menu?.setAsShown && open.target.pageId !== undefined
             ? menu.setAsShown.reasonFor(open.target.pageId)
@@ -583,53 +543,6 @@ export function useTimelineRangeMenu({
                                         "Set as shown",
                                     )}
                                 </MenuItemWithReason>
-                                {!keepState && (
-                                    <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
-                                )}
-                            </>
-                        )}
-                        {keepState && (
-                            <>
-                                <DropdownMenu.Item
-                                    data-testid="timeline-range-menu-keep-here"
-                                    disabled={!keepState.canKeep}
-                                    aria-keyshortcuts={keepState.keepShortcut}
-                                    onSelect={() =>
-                                        menu?.keepHere?.onKeep(
-                                            open.target.pageId!,
-                                        )
-                                    }
-                                    className={TIMELINE_MENU_ITEM_CLASS}
-                                >
-                                    <LinkBreakIcon size={14} />
-                                    {tolgee.t(
-                                        "timeline.rangeMenu.keepHere",
-                                        "Keep selected marchers here",
-                                    )}
-                                    <MenuShortcut
-                                        keys={keepState.keepShortcut}
-                                    />
-                                </DropdownMenu.Item>
-                                <DropdownMenu.Item
-                                    data-testid="timeline-range-menu-follow-again"
-                                    disabled={!keepState.canFollow}
-                                    aria-keyshortcuts={keepState.followShortcut}
-                                    onSelect={() =>
-                                        menu?.keepHere?.onFollow(
-                                            open.target.pageId!,
-                                        )
-                                    }
-                                    className={TIMELINE_MENU_ITEM_CLASS}
-                                >
-                                    <LinkSimpleIcon size={14} />
-                                    {tolgee.t(
-                                        "timeline.rangeMenu.followAgain",
-                                        "Let selected marchers follow again",
-                                    )}
-                                    <MenuShortcut
-                                        keys={keepState.followShortcut}
-                                    />
-                                </DropdownMenu.Item>
                                 <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
                             </>
                         )}

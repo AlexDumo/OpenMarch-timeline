@@ -775,17 +775,6 @@ const STATIC_ACTIONS = {
         defaultBindings: ["$mod+A", "Control+A"],
     },
 
-    // UI-18 keep later pages: K keeps the selection where it holds on this page, or lets it
-    // follow again (timeline mode)
-    toggleKeepOnPage: {
-        labelKey: "actions.timeline.toggleKeepOnPage",
-        category: "timeline",
-        editsDrill: true,
-        scope: "canvas",
-        defaultBindings: ["K"],
-        ignoreRepeat: true,
-    },
-
     // Set vs Following (#304): the selected marchers Set on the count shown lose that
     // coordinate and follow from earlier; later pages keep their spots. Unbound
     timelineUnsetHere: {

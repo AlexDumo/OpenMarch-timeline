@@ -93,6 +93,13 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
         ]),
     // Saved shapes, the show's copies (ADR 0006, saved shapes)
     28: (db) => dropTables(db, ["saved_shapes"]),
+    // Kept spots removed (holds, #467): the table comes back empty, as 0018 made it
+    29: (db) =>
+        db.exec(`CREATE TABLE \`timeline_kept_assignments\` (
+	\`assignment_id\` integer PRIMARY KEY NOT NULL,
+	\`created_at\` text DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+	FOREIGN KEY (\`assignment_id\`) REFERENCES \`timeline_assignments\`(\`id\`) ON UPDATE no action ON DELETE cascade
+)`),
 };
 
 /**

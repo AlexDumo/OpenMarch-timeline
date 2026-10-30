@@ -20,10 +20,6 @@ import {
     createTimelineAssignmentsInTransaction,
     type DatabaseTimelineAssignment,
 } from "./timelineAssignments";
-import {
-    keptAmong,
-    markAssignmentsKeptInTransaction,
-} from "./timelineKeptMarkers";
 
 /**
  * **Split at playhead** (docs/timeline/ui.md UI-27): one move becomes two that meet at a count,
@@ -39,8 +35,7 @@ import {
  * - A new move ("Move N", or unnamed over a page's box) runs over `[s, beat)`. Each transition of
  *   the original gets a shapeless direct counterpart there whose destinations are the resolver's
  *   positions at `beat`, one slot per marcher in it, and the rows that started before `beat`
- *   (cut at `beat` where they crossed it), on their own layers. A kept row split in two is kept in
- *   both halves, as Basic's split leaves it (`splitMovesAtBeatInTransaction`).
+ *   (cut at `beat` where they crossed it), on their own layers.
  * - A row that another move on a higher layer cuts into several visible pieces before `beat`
  *   (spec R-2) keeps only its last piece in that counterpart. Each earlier piece starts from
  *   where the other move left the marcher, so it heads somewhere else: it gets a row of its own,
@@ -165,10 +160,6 @@ export async function splitTimelineAtBeatInTransaction({
         beat,
         allowSharedRanges,
     );
-    const kept = await keptAmong(
-        tx,
-        rows.map((r) => r.id),
-    );
 
     // Where everyone is, from the rows as they are now: read before anything is written
     const resolver = createResolver((await readTimelineTables(tx)).snapshot);
@@ -203,7 +194,6 @@ export async function splitTimelineAtBeatInTransaction({
             s0,
             rows,
             plans,
-            kept,
             changed,
             allowSharedRanges,
         }),
@@ -231,7 +221,6 @@ async function writeSplit({
     s0,
     rows,
     plans,
-    kept,
     changed,
     allowSharedRanges,
 }: {
@@ -241,15 +230,13 @@ async function writeSplit({
     s0: number;
     rows: readonly Row[];
     plans: readonly TransitionPlan[];
-    kept: ReadonlySet<number>;
     changed: ReadonlyMap<number, number>;
     allowSharedRanges: boolean;
 }): Promise<SplitTimelineResult> {
     const L = schema.timelines;
     const T = schema.timeline_transitions;
     const A = schema.timeline_assignments;
-    // 1. Rows ending at or before the beat leave the original (their kept markers go with
-    //    them); rows crossing it now start there
+    // 1. Rows ending at or before the beat leave the original; rows crossing it now start there
     const leaving = rows.filter((r) => r.end_beat <= beat).map((r) => r.id);
     if (leaving.length > 0) await tx.delete(A).where(inArray(A.id, leaving));
     const crossing = rows
@@ -288,7 +275,6 @@ async function writeSplit({
         s0,
         beat,
         plans,
-        kept,
         allowSharedRanges,
     });
 
@@ -370,13 +356,11 @@ async function writeBeforeMove(
         s0,
         beat,
         plans,
-        kept,
         allowSharedRanges,
     }: {
         s0: number;
         beat: number;
         plans: readonly TransitionPlan[];
-        kept: ReadonlySet<number>;
         allowSharedRanges: boolean;
     },
 ): Promise<DatabaseTimeline> {
@@ -388,7 +372,7 @@ async function writeBeforeMove(
     });
     for (const { t, first, earlier } of plans)
         for (const rows of [first, ...earlier])
-            await writeFirstHalfTransition(tx, { before, t, rows, kept });
+            await writeFirstHalfTransition(tx, { before, t, rows });
 
     return before;
 }
@@ -400,12 +384,10 @@ async function writeFirstHalfTransition(
         before,
         t,
         rows,
-        kept,
     }: {
         before: DatabaseTimeline;
         t: DatabaseTimelineTransition;
         rows: readonly FirstHalfRow[];
-        kept: ReadonlySet<number>;
     },
 ): Promise<void> {
     if (rows.length === 0) return;
@@ -425,7 +407,7 @@ async function writeFirstHalfTransition(
             },
         ],
     });
-    const made = await createTimelineAssignmentsInTransaction({
+    await createTimelineAssignmentsInTransaction({
         tx,
         newAssignments: rows.map((f, slot) => ({
             marcherId: f.row.marcher_id,
@@ -436,10 +418,6 @@ async function writeFirstHalfTransition(
             layer: f.row.layer,
         })),
     });
-    await markAssignmentsKeptInTransaction(
-        tx,
-        made.filter((_, i) => kept.has(rows[i]!.row.id)).map((a) => a.id),
-    );
 }
 
 /** The visible pieces of `row` (spec R-2: an assignment cut by higher layers), in order. */
