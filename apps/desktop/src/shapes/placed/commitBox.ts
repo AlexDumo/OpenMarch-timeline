@@ -16,6 +16,10 @@ import { liveTargets } from "./liveBox";
 import type { PlacedBox } from "./placedBox";
 import { useSavingBoxStore } from "./boxSelectionStore";
 import { placedBoxesAt, placedBoxesRead } from "./placedBoxStore";
+import {
+    historyStepsPending,
+    queueHistoryStep,
+} from "@/shortcuts/handlers/historyQueue";
 
 /** Whether two recipe params say the same, whatever their key order (keys set to undefined are left out) */
 export function sameParams(a: unknown, b: unknown): boolean {
@@ -46,8 +50,6 @@ export function carriedOnto(plan: CanvasEditPlan, box: PlacedBox): boolean {
     return plan.beat > box.endBeat + 1e-9 && start >= box.endBeat - 1e-9;
 }
 
-/** Saves of placed shapes, one at a time, each read back before the next starts */
-let saving: Promise<void> = Promise.resolve();
 /** Saves asked for and not yet read back */
 let unsaved = 0;
 
@@ -59,6 +61,9 @@ let unsaved = 0;
  * The shape is shown as saved at once (`useSavingBoxStore`), and saves run one at a time: each
  * starts from the shape as the last one read it back, so quick edits add up. Each goes to the edit
  * window it was made in, even when it waited and the timeline moved on meanwhile.
+ *
+ * They run in the queue undo and redo presses do (`queueHistoryStep`), so an undo pressed while
+ * saves wait undoes the last of them, and an edit after an undo goes on from what it left (#513).
  */
 export function commitBox(
     box: PlacedBox,
@@ -82,27 +87,30 @@ export function commitBox(
     const at: SaveAt = {
         plan: planCanvasEdit(),
         beat: displayedBeat(useTimelineSelectionStore.getState()),
-        waits: unsaved > 0,
+        waits: unsaved > 0 || historyStepsPending(),
     };
     unsaved++;
-    saving = saving
-        .then(() =>
-            saveBox(
+    return queueHistoryStep(async () => {
+        try {
+            // What ran before it (a save, an undo) read back first, as it starts from that
+            await timelinePositionsSettled();
+            await placedBoxesRead();
+            await saveBox(
                 storedBox(box, at.beat),
                 params,
                 at,
                 queryClient,
                 layOutAgain,
                 origins,
-            ),
-        )
-        .catch((e: unknown) => console.error("Couldn't save the shape", e))
-        .finally(() => {
+            );
+        } catch (e) {
+            console.error("Couldn't save the shape", e);
+        } finally {
             unsaved--;
             // The box read back is the one selected again
             if (unsaved === 0) useSavingBoxStore.setState({ box: null });
-        });
-    return saving;
+        }
+    }, undefined);
 }
 
 /** Where a save goes: the edit window and beat it was made at */
