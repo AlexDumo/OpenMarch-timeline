@@ -14,3 +14,17 @@ describe("isWindowTooSmall", () => {
         expect(isWindowTooSmall(1400, 499)).toBe(true);
     });
 });
+
+describe("isWindowTooSmall with an on-screen keyboard", () => {
+    it("ignores the height the keyboard takes", () => {
+        expect(isWindowTooSmall(1024, 400, { keyboardMayBeOpen: true })).toBe(
+            false,
+        );
+    });
+
+    it("still counts the width", () => {
+        expect(isWindowTooSmall(700, 900, { keyboardMayBeOpen: true })).toBe(
+            true,
+        );
+    });
+});

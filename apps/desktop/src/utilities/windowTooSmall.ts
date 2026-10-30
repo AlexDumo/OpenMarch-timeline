@@ -14,6 +14,16 @@
 export const MIN_WINDOW_WIDTH = 744;
 export const MIN_WINDOW_HEIGHT = 500;
 
-export function isWindowTooSmall(width: number, height: number): boolean {
-    return width < MIN_WINDOW_WIDTH || height < MIN_WINDOW_HEIGHT;
+/**
+ * Whether the window is too small to edit in. While an on-screen keyboard
+ * may be open, only the width counts: the keyboard makes the window shorter
+ * for as long as someone types.
+ */
+export function isWindowTooSmall(
+    width: number,
+    height: number,
+    { keyboardMayBeOpen = false }: { keyboardMayBeOpen?: boolean } = {},
+): boolean {
+    if (width < MIN_WINDOW_WIDTH) return true;
+    return !keyboardMayBeOpen && height < MIN_WINDOW_HEIGHT;
 }

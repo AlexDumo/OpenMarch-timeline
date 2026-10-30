@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { T, useTolgee } from "@tolgee/react";
 import {
@@ -14,6 +14,7 @@ import { isMacPlatform } from "@/shortcuts/platform";
 import { useIsTouchMode } from "@/stores/InputModeStore";
 import { isWebBuild } from "@/utilities/webBuild";
 import {
+    isWindowTooSmall,
     MIN_WINDOW_HEIGHT,
     MIN_WINDOW_WIDTH,
 } from "@/utilities/windowTooSmall";
@@ -41,6 +42,35 @@ function useTextEntryFocused() {
     return focused;
 }
 
+/** Radix's open dialogs and alert dialogs (src/shortcuts/context.ts) */
+const OPEN_DIALOG_SELECTOR =
+    '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]';
+
+/**
+ * Keeps the notice the top layer while it shows: a dialog that opens after
+ * it (an error, a menu's Open) would otherwise take focus and the keyboard
+ * from behind it, unseen. Returns a key that changes to mount the notice
+ * again, on top.
+ */
+function useStaysTopLayer(
+    shown: boolean,
+    contentRef: RefObject<HTMLDivElement | null>,
+) {
+    const [layer, setLayer] = useState(0);
+    useEffect(() => {
+        if (!shown) return;
+        const observer = new MutationObserver(() => {
+            const open = document.querySelectorAll(OPEN_DIALOG_SELECTOR);
+            const top = open[open.length - 1];
+            if (top && contentRef.current && !contentRef.current.contains(top))
+                setLayer((n) => n + 1);
+        });
+        observer.observe(document.body, { childList: true });
+        return () => observer.disconnect();
+    }, [shown, contentRef]);
+    return layer;
+}
+
 /**
  * Covers the app while the window is too small to edit in, and says how to
  * make room. It is a modal alert dialog, so it sits above every other layer
@@ -58,9 +88,9 @@ export default function WindowTooSmallNotice({
     const textEntryFocused = useTextEntryFocused();
     // A tablet's on-screen keyboard can make the window shorter while typing
     const keyboardMayBeOpen = isTouchMode && textEntryFocused;
-    const tooSmall =
-        size.width < MIN_WINDOW_WIDTH ||
-        (size.height < MIN_WINDOW_HEIGHT && !keyboardMayBeOpen);
+    const tooSmall = isWindowTooSmall(size.width, size.height, {
+        keyboardMayBeOpen,
+    });
     const [shown, setShown] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
 
@@ -72,6 +102,8 @@ export default function WindowTooSmallNotice({
         const timer = setTimeout(() => setShown(true), SHOW_DELAY_MS);
         return () => clearTimeout(timer);
     }, [tooSmall]);
+
+    const layer = useStaysTopLayer(shown, contentRef);
 
     // In the desktop app the window can't be smaller than the minimum, so
     // zoom is what made it too small
@@ -85,7 +117,7 @@ export default function WindowTooSmallNotice({
           : "layout.windowTooSmall.hintDesktop";
 
     return (
-        <AlertDialog.Root open={shown}>
+        <AlertDialog.Root key={layer} open={shown}>
             <AlertDialog.Portal>
                 <AlertDialog.Content
                     ref={contentRef}
@@ -96,10 +128,10 @@ export default function WindowTooSmallNotice({
                         contentRef.current?.focus();
                     }}
                     onEscapeKeyDown={(event) => event.preventDefault()}
-                    className="bg-bg-1 text-text fixed inset-0 z-[100000] flex items-center justify-center overflow-auto p-24 font-sans outline-hidden"
+                    className="bg-bg-1 text-text fixed inset-0 z-[1000000000] flex overflow-auto p-24 pt-48 font-sans outline-hidden"
                 >
                     <WindowControls />
-                    <div className="flex max-w-[26rem] flex-col items-center gap-12 text-center">
+                    <div className="m-auto flex max-w-[26rem] flex-col items-center gap-12 text-center">
                         <ArrowsOutIcon size={40} className="text-accent" />
                         <AlertDialog.Title className="text-h4">
                             {t("layout.windowTooSmall.title")}
@@ -143,7 +175,7 @@ function WindowControls() {
     const { t } = useTolgee(["language"]);
     if (isWebBuild) return null;
     return (
-        <div className="main-app-titlebar absolute inset-x-0 top-0 flex h-40 justify-end">
+        <div className="main-app-titlebar fixed inset-x-0 top-0 flex h-40 justify-end">
             {!window.electron.isMacOS && (
                 <div className="titlebar-button flex">
                     <button
