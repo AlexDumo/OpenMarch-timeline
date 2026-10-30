@@ -4,7 +4,11 @@ import { curveTool, lineTool } from "../../line/lineTool";
 import { rowTool } from "../../__test__/fakeRowKind";
 import { SHAPE_TOOLS } from "../shapeTools";
 import { toolId } from "../toolKind";
-import { basicShapeRows, toggleStar } from "../../library/shapeLibrary";
+import {
+    basicShapeRows,
+    starredRows,
+    toggleStar,
+} from "../../library/shapeLibrary";
 import {
     clickRing,
     latchRing,
@@ -90,21 +94,13 @@ describe("the favorites ring's slots", () => {
         expect(toggleStar(["line"], toolId(curveTool), rows)).toEqual({
             stars: ["line", "curve"],
         });
-        const slots = ringSlots(
-            [
-                {
-                    id: toolId(lineTool),
-                    label: "Line",
-                    kind: lineTool,
-                },
-                {
-                    id: toolId(curveTool),
-                    label: "Curve",
-                    kind: curveTool,
-                },
-            ],
-            SHAPE_TOOLS,
-        );
+        let stars = toggleStar([], toolId(lineTool), rows);
+        if (!("stars" in stars)) throw new Error("expected room to star");
+        let starred = stars.stars;
+        stars = toggleStar(starred, toolId(curveTool), rows);
+        if (!("stars" in stars)) throw new Error("expected room to star");
+        starred = stars.stars;
+        const slots = ringSlots(starredRows(starred, rows), SHAPE_TOOLS);
         expect(slots.slice(0, 2).map((s) => s.label)).toEqual([
             "Line",
             "Curve",

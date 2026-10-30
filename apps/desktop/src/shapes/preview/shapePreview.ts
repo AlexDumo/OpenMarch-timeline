@@ -75,7 +75,10 @@ export function shapePreview(kind: AnyToolKind): ShapePreview {
     const openOutline =
         outline !== null && (kind.outlineOpen?.(params, n) ?? false);
     const preview = {
-        ...fitToView(spots, outline && standOff(outline, spots)),
+        ...fitToView(
+            spots,
+            outline && (openOutline ? outline : standOff(outline, spots)),
+        ),
         ...(openOutline ? { openOutline: true as const } : {}),
     };
     PREVIEWS.set(kind, preview);

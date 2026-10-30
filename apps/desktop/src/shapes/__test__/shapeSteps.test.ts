@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { boxTool } from "../box/boxTool";
 import { boxBlock, filesOf, ranksOf, type BoxParams } from "../box/boxGeometry";
-import { hasGroups } from "../line/lineGeometry";
+import { hasGroups, type LineParams } from "../line/lineGeometry";
 import { curveTool, lineTool } from "../line/lineTool";
 import { fillAhead, shapeSteps, startingParams } from "../command/shapeSteps";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
@@ -197,18 +197,33 @@ describe("the line's steps (#530)", () => {
         ]);
     });
 
-    it('fills the interval from "2*3+4*2" and from "2"', () => {
+    it('fills the interval from "2*3+4*2" and from "3"', () => {
         const mixed = shapeSteps(lineTool, start(), N, env, ["2*3+4*2"]);
         expect(mixed.steps[0]!.invalid).toBe(false);
-        expect(hasGroups(mixed.params as never)).toBe(true);
-        const plain = shapeSteps(lineTool, start(), N, env, ["2"]);
+        expect(hasGroups(mixed.params as LineParams)).toBe(true);
+        expect((mixed.params as LineParams).spacing).toEqual({
+            mode: "keep",
+            groups: [
+                { count: 2, interval: 30 },
+                { count: 4, interval: 20 },
+            ],
+        });
+        const plain = shapeSteps(lineTool, start(), N, env, ["3"]);
         expect(plain.steps[0]!.invalid).toBe(false);
+        expect((plain.params as LineParams).spacing).toEqual({
+            mode: "keep",
+            groups: [{ interval: 30 }],
+        });
     });
 
-    it('fills the curve the same way from "2"', () => {
-        const { steps } = shapeSteps(curveTool, start(), N, env, ["2"]);
+    it('fills the curve the same way from "3"', () => {
+        const { steps, params } = shapeSteps(curveTool, start(), N, env, ["3"]);
         expect(steps).toHaveLength(1);
         expect(steps[0]!.invalid).toBe(false);
+        expect((params as LineParams).spacing).toEqual({
+            mode: "keep",
+            groups: [{ interval: 30 }],
+        });
     });
 
     it("leaves fillAhead unchanged for a one-liner that starts with a number", () => {

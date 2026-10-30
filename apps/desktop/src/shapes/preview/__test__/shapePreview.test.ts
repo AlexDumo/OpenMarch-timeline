@@ -1,12 +1,52 @@
 import { describe, expect, it } from "vitest";
 import { boxTool } from "../../box/boxTool";
+import { circleTool } from "../../circle/circleTool";
 import { rowTool } from "../../__test__/fakeRowKind";
 import { curveTool, lineTool } from "../../line/lineTool";
 import { savedToolKind } from "../../library/savedShapes";
-import { PREVIEW_SPOTS, PREVIEW_VIEW, shapePreview } from "../shapePreview";
+import {
+    PREVIEW_SPOTS,
+    PREVIEW_VIEW,
+    shapePreview,
+    type ShapePreview,
+} from "../shapePreview";
 
 const inView = ({ x, y }: { x: number; y: number }) =>
     x >= 0 && x <= PREVIEW_VIEW && y >= 0 && y <= PREVIEW_VIEW;
+
+/** Distance from `p` to the segment from `a` to `b` */
+const distToSegment = (
+    p: { x: number; y: number },
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    return Math.abs(dy * p.x - dx * p.y + b.x * a.y - b.y * a.x) / len;
+};
+
+const openOutlineMatchesDots = ({ spots, outline }: ShapePreview) => {
+    const xs = spots.map((s) => s.x);
+    const ys = spots.map((s) => s.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const tol = 0.6;
+    for (const p of outline!) {
+        expect(p.x).toBeGreaterThanOrEqual(minX - tol);
+        expect(p.x).toBeLessThanOrEqual(maxX + tol);
+        expect(p.y).toBeGreaterThanOrEqual(minY - tol);
+        expect(p.y).toBeLessThanOrEqual(maxY + tol);
+    }
+    const first = outline![0]!;
+    const last = outline![outline!.length - 1]!;
+    expect(first.x).toBeCloseTo(spots[0]!.x, 1);
+    expect(first.y).toBeCloseTo(spots[0]!.y, 1);
+    expect(last.x).toBeCloseTo(spots[spots.length - 1]!.x, 1);
+    expect(last.y).toBeCloseTo(spots[spots.length - 1]!.y, 1);
+};
 
 const size = (points: readonly { x: number; y: number }[]) => {
     const xs = points.map((p) => p.x);
@@ -71,14 +111,36 @@ describe("a shape's preview (#378)", () => {
         expect(row.depth).toBeLessThan(row.width / 3);
     });
 
-    it("draws the curve bowed, not as the straight line's picture", () => {
-        const line = shapePreview(lineTool);
+    it("draws the curve bowed, not as a straight chord", () => {
         const curve = shapePreview(curveTool);
         expect(curve.openOutline).toBe(true);
-        const lineMid = line.outline![Math.floor(line.outline!.length / 2)]!;
-        const curveMid = curve.outline![Math.floor(curve.outline!.length / 2)]!;
-        expect(Math.abs(curveMid.y - lineMid.y)).toBeGreaterThan(0.5);
-        expect(curve.outline).not.toEqual(line.outline);
+        const outline = curve.outline!;
+        const start = outline[0]!;
+        const end = outline[outline.length - 1]!;
+        const mid = outline[Math.floor(outline.length / 2)]!;
+        const chord = Math.hypot(end.x - start.x, end.y - start.y);
+        expect(distToSegment(mid, start, end)).toBeGreaterThan(chord * 0.1);
+        expect(curve.outline).not.toEqual(shapePreview(lineTool).outline);
+    });
+
+    it("keeps open outlines on the dots, without the closed-shape stand-off", () => {
+        openOutlineMatchesDots(shapePreview(lineTool));
+        openOutlineMatchesDots(shapePreview(curveTool));
+    });
+
+    it("still stands closed previews off their dots (#382)", () => {
+        const closed = [shapePreview(boxTool), shapePreview(circleTool)];
+        for (const preview of closed) {
+            expect(preview.openOutline).toBeUndefined();
+            const xs = preview.outline!.map((p) => p.x);
+            const ys = preview.outline!.map((p) => p.y);
+            for (const { x, y } of preview.spots) {
+                expect(x - Math.min(...xs)).toBeGreaterThan(2);
+                expect(Math.max(...xs) - x).toBeGreaterThan(2);
+                expect(y - Math.min(...ys)).toBeGreaterThan(2);
+                expect(Math.max(...ys) - y).toBeGreaterThan(2);
+            }
+        }
     });
 
     it("keeps the dots clear of the outline, so the line reads as the shape (#382)", () => {

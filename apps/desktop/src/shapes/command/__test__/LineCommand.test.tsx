@@ -123,8 +123,6 @@ const question = () =>
     screen.getByTestId("docked-command-bar").querySelector("label")!
         .textContent;
 const key = (k: string) => fireEvent.keyDown(answer(), { key: k });
-const type = (text: string) =>
-    fireEvent.change(answer(), { target: { value: text } });
 
 async function choose(query: string) {
     act(() => {
@@ -143,7 +141,9 @@ describe("Line and Curve in the command bar", () => {
     });
     afterEach(() => {
         offs.splice(0).forEach((off) => off());
-        act(() => useCommandBarStore.setState({ palette: null, docked: null }));
+        void act(() =>
+            useCommandBarStore.setState({ palette: null, docked: null }),
+        );
         cleanup();
     });
 
@@ -193,12 +193,19 @@ describe("Line and Curve in the command bar", () => {
         expect(answer().value.replace(/\s/g, "")).toBe("2x3+4x2");
         key("Enter");
         expect(hasGroups(line.shape!)).toBe(true);
+        expect(line.shape!.spacing).toEqual({
+            mode: "keep",
+            groups: [
+                { count: 2, interval: 30 },
+                { count: 4, interval: 20 },
+            ],
+        });
         expect(line.finish.mock.calls[0]![0]![0]!.replace(/\s/g, "")).toBe(
             "2x3+4x2",
         );
     });
 
-    it('a one-liner "line 2" fills the interval step', async () => {
+    it('a one-liner "line 3" fills the interval step', async () => {
         const { line } = withLineKinds();
         render(
             <TolgeeProvider tolgee={tolgee} fallback="">
@@ -206,13 +213,17 @@ describe("Line and Curve in the command bar", () => {
                 <DockedCommandBar />
             </TolgeeProvider>,
         );
-        await choose("line 2");
-        expect(answer().value).toBe("2");
+        await choose("line 3");
+        expect(answer().value).toBe("3");
         key("Enter");
-        expect(line.finish).toHaveBeenCalledWith(["2"]);
+        expect(line.finish).toHaveBeenCalledWith(["3"]);
+        expect(line.shape!.spacing).toEqual({
+            mode: "keep",
+            groups: [{ interval: 30 }],
+        });
     });
 
-    it('a one-liner "curve 2" fills the Curve interval step', async () => {
+    it('a one-liner "curve 3" fills the Curve interval step', async () => {
         const { curve } = withLineKinds();
         render(
             <TolgeeProvider tolgee={tolgee} fallback="">
@@ -220,9 +231,13 @@ describe("Line and Curve in the command bar", () => {
                 <DockedCommandBar />
             </TolgeeProvider>,
         );
-        await choose("curve 2");
-        expect(answer().value).toBe("2");
+        await choose("curve 3");
+        expect(answer().value).toBe("3");
         key("Enter");
-        expect(curve.finish).toHaveBeenCalledWith(["2"]);
+        expect(curve.finish).toHaveBeenCalledWith(["3"]);
+        expect(curve.shape!.spacing).toEqual({
+            mode: "keep",
+            groups: [{ interval: 30 }],
+        });
     });
 });
