@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { useTolgee } from "@tolgee/react";
+import { T, useTolgee } from "@tolgee/react";
 import { ArrowsOutIcon } from "@phosphor-icons/react";
 import { isTextEntry } from "@/hooks/useOnScreenKeyboard";
+import Keycaps from "@/components/ui/Keycaps";
+import { formatBindingKeys } from "@/shortcuts/bindings";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { isWebBuild } from "@/utilities/webBuild";
 import {
@@ -42,7 +44,8 @@ export default function WindowTooSmallNotice({
 
     if (!shown) return null;
 
-    const zoomOut = isMacPlatform() ? "⌘−" : "Ctrl+−";
+    // The View menu's Zoom Out (electron/main/application-menu.ts)
+    const zoomOut = formatBindingKeys("$mod+Minus", isMacPlatform());
     return (
         <div
             role="alertdialog"
@@ -64,9 +67,14 @@ export default function WindowTooSmallNotice({
                     })}
                 </p>
                 <p className="text-body text-text-subtitle">
-                    {isWebBuild
-                        ? t("layout.windowTooSmall.hintWeb", { zoomOut })
-                        : t("layout.windowTooSmall.hintDesktop", { zoomOut })}
+                    <T
+                        keyName={
+                            isWebBuild
+                                ? "layout.windowTooSmall.hintWeb"
+                                : "layout.windowTooSmall.hintDesktop"
+                        }
+                        params={{ keys: () => <Keycaps keys={zoomOut} /> }}
+                    />
                 </p>
                 <p className="text-sub text-text-subtitle">
                     {t("layout.windowTooSmall.current", {
