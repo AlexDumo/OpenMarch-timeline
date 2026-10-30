@@ -154,8 +154,8 @@ export interface Measure<P> {
 }
 
 export interface DragModifiers {
-    /** Constrain: angles to 45°, for example */
-    readonly shift: boolean;
+    /** The `constrain` role: angles to 45°, for example */
+    readonly constrain: boolean;
 }
 
 export type IssueLevel = "error" | "warning" | "info";

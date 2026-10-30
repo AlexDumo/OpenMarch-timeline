@@ -11,7 +11,7 @@ import {
     useActionHandlerGroup,
 } from "@/shortcuts/useActionHandler";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
-import { toolEnvFor } from "./toolEnv";
+import { nudgeEnvFor } from "./toolEnv";
 import { cancelGesture, edit, redo } from "./toolMachine";
 import { updateTool, useShapeToolStore } from "./shapeToolStore";
 
@@ -48,7 +48,7 @@ export function ShapeToolKeys(): null {
         const px =
             resolveNudgeDistance(nudge, rounding) *
             field.fieldProperties.pixelsPerStep;
-        const env = toolEnvFor(field, { shift: false, alt: !nudge.snap });
+        const env = nudgeEnvFor(field, nudge);
         updateTool((tool) => {
             if (tool.params === null || tool.gesture) return tool;
             const params = tool.kind.move(

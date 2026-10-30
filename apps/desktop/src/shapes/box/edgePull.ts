@@ -73,7 +73,7 @@ export function pullEdges(
     env: ToolEnv,
 ): Pulled {
     // Cmd/Ctrl snaps nothing; Alt keeps the pull, off the ladder (owner on #453)
-    if (!field || env.pull === false || env.shift) return {};
+    if (!field || env.pull === false || env.constrain) return {};
     const half = env.stepPx / 2;
     const own = [x, y] as const;
     const gaps = own.map((a) => (a.moves ? a.count - 1 : 0));

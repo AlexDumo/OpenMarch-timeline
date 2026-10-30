@@ -18,7 +18,7 @@ const half = STEP / 2;
 const env: ToolEnv = {
     stepPx: STEP,
     snap: true,
-    shift: false,
+    constrain: false,
     gridSnap: (p) => ({
         x: Math.round(p.x / half) * half,
         y: Math.round(p.y / half) * half,

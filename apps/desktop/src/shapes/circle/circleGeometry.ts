@@ -171,7 +171,7 @@ export function radiusHandlePoint(p: CircleParams, n: number): XY {
     return frameToField(frame, HANDLE_LOCAL(frame.halfWidth));
 }
 
-/** The circle with its center on the half-step grid, unless snapping is off (Alt) */
+/** The circle with its center on the half-step grid, unless snapping is off (`fine` or the Snap toggle) */
 const snapped = (p: CircleParams, env: ToolEnv): CircleParams =>
     env.snap ? { ...p, center: env.gridSnap(p.center) } : p;
 

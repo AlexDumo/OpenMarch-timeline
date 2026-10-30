@@ -26,14 +26,14 @@ const LINES = {
     x: [-160, -80, 0, 80, 160],
     y: [0, -280, -560],
 };
-/** Alt: fine control, off the half-step ladder, still pulled (owner on #453) */
-const ALT = { snap: false, fine: true };
-/** Cmd/Ctrl: no snapping at all */
+/** fine: off the half-step ladder, still pulled (owner on #453) */
+const FINE = { snap: false, fine: true };
+/** The Snap toggle off: no snapping at all */
 const NO_SNAP = { snap: false, pull: false };
 const env = (over: Partial<ToolEnv> = {}): ToolEnv => ({
     stepPx: STEP,
     snap: true,
-    shift: false,
+    constrain: false,
     gridSnap: (p) => ({ x: snapHalf(p.x), y: snapHalf(p.y) }),
     hitRadius: 3,
     fieldLines: LINES,
@@ -129,21 +129,21 @@ describe("stretching a box onto a line", () => {
         onHalves(stretch(three, 3, "e", { x: 83, y: -100 }).across);
     });
 
-    it("with Alt, still lands the edge on the line: 2⅔ exactly (owner on #453)", () => {
-        const alt = stretch(row(7), 7, "e", { x: 162, y: -100 }, ALT);
-        exact(alt.across, (8 / 3) * STEP);
-        exact(edges(alt, 7).right, 160);
+    it("with fine, still lands the edge on the line: 2⅔ exactly (owner on #453)", () => {
+        const fine = stretch(row(7), 7, "e", { x: 162, y: -100 }, FINE);
+        exact(fine.across, (8 / 3) * STEP);
+        exact(edges(fine, 7).right, 160);
         // Away from lines, hundredths rather than half steps
-        const free = stretch(row(7), 7, "e", { x: 131.3, y: -100 }, ALT);
+        const free = stretch(row(7), 7, "e", { x: 131.3, y: -100 }, FINE);
         // 131.3 over 6 gaps, to hundredths of a 10-unit step
         exact(free.across, 21.9);
     });
 
-    it("doesn't pull with Cmd/Ctrl or Shift, or a 45° box with no corner near a line", () => {
-        const mod = stretch(row(7), 7, "e", { x: 162, y: -100 }, NO_SNAP);
-        expect(Math.abs(mod.across - (8 / 3) * STEP)).toBeGreaterThan(1e-3);
+    it("doesn't pull with the Snap toggle off or constrain, or a 45° box with no corner near a line", () => {
+        const noSnap = stretch(row(7), 7, "e", { x: 162, y: -100 }, NO_SNAP);
+        expect(Math.abs(noSnap.across - (8 / 3) * STEP)).toBeGreaterThan(1e-3);
         onHalves(
-            stretch(row(7), 7, "e", { x: 162, y: -100 }, { shift: true })
+            stretch(row(7), 7, "e", { x: 162, y: -100 }, { constrain: true })
                 .across,
         );
         const turned = { ...row(7), rotation: Math.PI / 4 };
@@ -231,31 +231,31 @@ describe("drawing a box onto a line", () => {
         exact(edges(p, 7).left, 0);
     });
 
-    it("drawn with Alt, still lands on the line (owner on #453)", () => {
-        const alt = drawBox(
+    it("drawn with fine, still lands on the line (owner on #453)", () => {
+        const fine = drawBox(
             { x: 0, y: -100 },
             { x: 162, y: -99 },
             7,
-            env(ALT),
+            env(FINE),
         )!;
-        exact(alt.across, (8 / 3) * STEP);
+        exact(fine.across, (8 / 3) * STEP);
     });
 
-    it("doesn't pull with Shift or Cmd/Ctrl", () => {
-        const shift = drawBox(
+    it("doesn't pull with constrain or the Snap toggle off", () => {
+        const equal = drawBox(
             { x: 0, y: -100 },
             { x: 162, y: -99 },
             7,
-            env({ shift: true }),
+            env({ constrain: true }),
         )!;
-        onHalves(shift.across);
-        const mod = drawBox(
+        onHalves(equal.across);
+        const noSnap = drawBox(
             { x: 0, y: -100 },
             { x: 162, y: -99 },
             7,
             env(NO_SNAP),
         )!;
-        expect(Math.abs(mod.across - (8 / 3) * STEP)).toBeGreaterThan(1e-3);
+        expect(Math.abs(noSnap.across - (8 / 3) * STEP)).toBeGreaterThan(1e-3);
     });
 });
 
@@ -334,14 +334,14 @@ describe("stretching a turned box onto a line (#446)", () => {
         exact(out.deep, (HD - cross.y) / 2);
     });
 
-    it("steps by half steps away from lines; Alt still pulls, Cmd/Ctrl doesn't", () => {
+    it("steps by half steps away from lines; fine still pulls, the Snap toggle off doesn't", () => {
         const p = turned(15, { x: HW, y: -HD }, { x: 50, y: -150 });
         const to = field(p, { x: HW + 9, y: 0 });
         onHalves(stretch(p, N, "e", to).across);
         const near = turned(15, { x: HW, y: -HD }, { x: 76, y: -150 });
         const u = field(near, { x: HW + 1, y: -HD }).x - 76;
         const t = field(near, { x: HW + 4 / u - 1, y: 0 });
-        expect(hasCorner(stretch(near, N, "e", t, ALT), { x: 80 })).toBe(true);
+        expect(hasCorner(stretch(near, N, "e", t, FINE), { x: 80 })).toBe(true);
         expect(hasCorner(stretch(near, N, "e", t, NO_SNAP), { x: 80 })).toBe(
             false,
         );

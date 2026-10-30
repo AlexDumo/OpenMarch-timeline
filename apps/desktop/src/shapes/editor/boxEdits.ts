@@ -438,7 +438,7 @@ export function scrubSize(
     return inVersion(base, spots, next.version, env);
 }
 
-/** The rotation dragged `distance` px clockwise: 1° per 2 px in 15° steps, whole degrees with Shift, free with Alt */
+/** The rotation dragged `distance` px clockwise: 1° per 2 px in 15° steps, whole degrees with `fine`, free with the Snap toggle off */
 export const scrubRotation = (
     base: BoxParams,
     distance: number,

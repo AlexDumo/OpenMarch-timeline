@@ -32,7 +32,7 @@ const snapHalf = (v: number) => Math.round(v / half) * half;
 const env = (over: Partial<ToolEnv> = {}): ToolEnv => ({
     stepPx: STEP,
     snap: true,
-    shift: false,
+    constrain: false,
     gridSnap: (p) => ({ x: snapHalf(p.x), y: snapHalf(p.y) }),
     hitRadius: 3,
     ...over,
@@ -144,17 +144,17 @@ describe("drawing a box", () => {
         expect(backRank[0]!.x).toBe(box.center.x);
     });
 
-    it("Shift makes the intervals equal", () => {
+    it("constrain makes the intervals equal", () => {
         const box = drawBox(
             { x: 0, y: 0 },
             { x: 120, y: 40 },
             4,
-            env({ shift: true }),
+            env({ constrain: true }),
         )!;
         expect(box.across).toBe(box.deep);
     });
 
-    it("Alt rounds to hundredths of a step, not half steps (#411)", () => {
+    it("fine rounds to hundredths of a step, not half steps (#411)", () => {
         const box = drawBox(
             { x: 0, y: 0 },
             { x: 83, y: 83 },

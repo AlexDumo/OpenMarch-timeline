@@ -14,7 +14,7 @@ const closeXY = (a: XY, b: XY, eps = 1e-6) => {
     close(a.x, b.x, eps);
     close(a.y, b.y, eps);
 };
-const noShift = { shift: false };
+const noConstrain = { constrain: false };
 
 const ring = (n: number, center: XY, r: number): XY[] =>
     Array.from({ length: n }, (_, i) =>
@@ -94,19 +94,26 @@ describe("circle kind", () => {
 
     it("drags the radius handle to set the radius and start", () => {
         const to = xy(base.center.x + 30, base.center.y);
-        const p = circleKind.drag(base, "radius", to, noShift, 6, ctx);
+        const p = circleKind.drag(base, "radius", to, noConstrain, 6, ctx);
         close(p.r, 30);
         close(p.start, 0);
         const snapped = circleKind.drag(
             base,
             "radius",
             xy(base.center.x + 30, base.center.y + 2),
-            { shift: true },
+            { constrain: true },
             6,
             ctx,
         );
         close(snapped.start, 0);
-        const moved = circleKind.drag(base, "move", xy(0, 0), noShift, 6, ctx);
+        const moved = circleKind.drag(
+            base,
+            "move",
+            xy(0, 0),
+            noConstrain,
+            6,
+            ctx,
+        );
         closeXY(moved.center, xy(0, 0));
         expect(moved.r).toBe(base.r);
     });
@@ -228,7 +235,7 @@ describe("block kind", () => {
             base,
             "across",
             xy(60 + out, 7),
-            noShift,
+            noConstrain,
             12,
             ctx,
         );
@@ -237,7 +244,7 @@ describe("block kind", () => {
             base,
             "deep",
             xy(3, -45 - out),
-            noShift,
+            noConstrain,
             12,
             ctx,
         );
@@ -246,13 +253,13 @@ describe("block kind", () => {
         expect(rotate.at.y).toBeLessThan(-30);
         // The rotate handle where it already is keeps the rotation
         close(
-            blockKind.drag(base, "rotate", rotate.at, noShift, 12, ctx)
+            blockKind.drag(base, "rotate", rotate.at, noConstrain, 12, ctx)
                 .rotation,
             0,
         );
         // Dragged to the block's right: a quarter turn
         close(
-            blockKind.drag(base, "rotate", xy(50, 0), noShift, 12, ctx)
+            blockKind.drag(base, "rotate", xy(50, 0), noConstrain, 12, ctx)
                 .rotation,
             Math.PI / 2,
         );
@@ -261,7 +268,7 @@ describe("block kind", () => {
                 base,
                 "rotate",
                 xy(50, -12),
-                { shift: true },
+                { constrain: true },
                 12,
                 ctx,
             ).rotation,
@@ -351,13 +358,13 @@ describe("curve kind", () => {
     it("drags one control point and keeps the others", () => {
         const handles = curveKind.handles(base, 5, ctx);
         expect(handles.map((h) => h.key)).toEqual(["p0", "p1", "p2", "move"]);
-        const p = curveKind.drag(base, "p1", xy(50, 80), noShift, 5, ctx);
+        const p = curveKind.drag(base, "p1", xy(50, 80), noConstrain, 5, ctx);
         expect(p.points).toEqual([xy(0, 0), xy(50, 80), xy(100, 0)]);
         const moved = curveKind.drag(
             base,
             "move",
             xy(handles[3]!.at.x + 10, handles[3]!.at.y),
-            noShift,
+            noConstrain,
             5,
             ctx,
         );

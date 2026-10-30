@@ -301,7 +301,7 @@ describe("line kind", () => {
         close(dist(slots[0]!, slots[1]!), dist(slots[2]!, slots[3]!));
     });
 
-    it("drags an end with Shift to a 45° direction", () => {
+    it("drags an end with constrain to a 45° direction", () => {
         const params: LineParams = {
             a: xy(0, 0),
             b: xy(10, 0),
@@ -311,7 +311,7 @@ describe("line kind", () => {
             params,
             "b",
             xy(10, 9),
-            { shift: true },
+            { constrain: true },
             2,
             ctx,
         );
@@ -333,7 +333,7 @@ describe("line kind", () => {
             params,
             "move",
             xy(handle.at.x, handle.at.y + 10),
-            { shift: false },
+            { constrain: false },
             2,
             ctx,
         );
@@ -420,7 +420,7 @@ describe("arc kind", () => {
             params,
             "b",
             xy(30, 0),
-            { shift: false },
+            { constrain: false },
             3,
             ctx,
         );

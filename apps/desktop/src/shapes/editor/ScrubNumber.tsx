@@ -1,5 +1,6 @@
 import clsx from "clsx";
-import { isMacPlatform } from "@/shortcuts/platform";
+import { startGestureKeys, type GestureKeys } from "@/input/gestureKeys";
+import { heldKeysOf } from "@/input/modifierRoles";
 import { Tip } from "./Tip";
 import tolgee from "@/global/singletons/Tolgee";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
@@ -65,12 +66,18 @@ export function ScrubNumber({
         y: number;
         axis: ScrubAxis | null;
         dragging: boolean;
+        /** The held roles, from the press; a role key mid-drag scrubs again where it is */
+        keys: GestureKeys;
+        /** The last drag, from the press */
+        last: { dx: number; dy: number } | null;
     } | null>(null);
     const [dragging, setDragging] = useState(false);
     const [typing, setTyping] = useState<string | null>(null);
     const wrapper = useRef<HTMLSpanElement>(null);
     // Tab from the number before opens this one for typing, whatever it shows (review of #459)
     const idle = typing === null;
+    // Unmounted mid-drag: stop following the keyboard
+    useEffect(() => () => press.current?.keys.dispose(), []);
     useEffect(() => {
         const el = wrapper.current;
         if (!el || !idle) return;
@@ -134,18 +141,30 @@ export function ScrubNumber({
         // reaches the number for typing
         e.preventDefault();
         e.currentTarget.setPointerCapture(e.pointerId);
-        press.current = {
+        press.current?.keys.dispose();
+        const p = {
             x: e.clientX,
             y: e.clientY,
             axis: axis === "both" ? null : axis,
             dragging: false,
+            keys: startGestureKeys({
+                context: "shape",
+                press: heldKeysOf(e),
+                onRolesChange: (roles) => {
+                    if (press.current !== p || !p.axis || !p.last) return;
+                    onScrub({ ...p.last, axis: p.axis, roles });
+                },
+            }),
+            last: null as { dx: number; dy: number } | null,
         };
+        press.current = p;
     };
     const move = (e: PointerEvent<HTMLButtonElement>) => {
         const p = press.current;
         if (!p) return;
         const dx = e.clientX - p.x;
         const dy = e.clientY - p.y;
+        p.keys.update(heldKeysOf(e));
         if (!p.dragging) {
             if (Math.max(Math.abs(dx), Math.abs(dy)) < SCRUB_SLOP_PX) return;
             p.dragging = true;
@@ -154,19 +173,14 @@ export function ScrubNumber({
         }
         p.axis = lockedAxis(p.axis, dx, dy) ?? p.axis;
         if (!p.axis) return;
-        onScrub({
-            dx,
-            dy,
-            axis: p.axis,
-            alt: e.altKey,
-            shift: e.shiftKey,
-            mod: isMacPlatform() ? e.metaKey : e.ctrlKey,
-        });
+        p.last = { dx, dy };
+        onScrub({ dx, dy, axis: p.axis, roles: p.keys.roles() });
     };
     const up = (keep: boolean) => {
         const p = press.current;
         press.current = null;
         if (!p) return;
+        p.keys.dispose();
         if (p.dragging) {
             setDragging(false);
             onScrubEnd(keep);
