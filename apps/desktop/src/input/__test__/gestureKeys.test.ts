@@ -1,0 +1,109 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { startGestureKeys, type GestureKeys } from "../gestureKeys";
+import { NO_KEYS, type HeldKeys } from "../modifierRoles";
+
+const held = (keys: Partial<HeldKeys>): HeldKeys => ({ ...NO_KEYS, ...keys });
+const key = (type: "keydown" | "keyup", init: KeyboardEventInit) =>
+    window.dispatchEvent(new KeyboardEvent(type, init));
+
+describe("startGestureKeys", () => {
+    let gesture: GestureKeys | undefined;
+    afterEach(() => gesture?.dispose());
+
+    it("reads the held roles at the press", () => {
+        gesture = startGestureKeys({
+            context: "field",
+            press: held({ shift: true, meta: true }),
+            isMac: true,
+            track: false,
+        });
+        expect(gesture.roles()).toEqual({
+            fine: true,
+            constrain: true,
+            fromCenter: false,
+        });
+    });
+
+    it("ignores a key the press used until it's released, then reads it when pressed again", () => {
+        gesture = startGestureKeys({
+            context: "field",
+            press: held({ shift: true }),
+            usedByPress: ["Shift"],
+            isMac: true,
+            track: false,
+        });
+        expect(gesture.roles().fine).toBe(false);
+        expect(gesture.update(held({ shift: true }))).toBe(false);
+        expect(gesture.roles().fine).toBe(false);
+
+        expect(gesture.update(NO_KEYS)).toBe(false);
+        expect(gesture.update(held({ shift: true }))).toBe(true);
+        expect(gesture.roles().fine).toBe(true);
+    });
+
+    it("calls back when a key mid-drag changes the roles, without a pointer move", () => {
+        const onRolesChange = vi.fn();
+        gesture = startGestureKeys({
+            context: "shape",
+            press: held({ shift: true }),
+            usedByPress: ["Shift"],
+            onRolesChange,
+            isMac: true,
+        });
+        key("keyup", { key: "Shift" });
+        expect(onRolesChange).not.toHaveBeenCalled();
+
+        key("keydown", { key: "Shift", shiftKey: true });
+        expect(onRolesChange).toHaveBeenLastCalledWith({
+            fine: true,
+            constrain: false,
+            fromCenter: false,
+        });
+
+        key("keydown", { key: "Alt", shiftKey: true, altKey: true });
+        expect(onRolesChange).toHaveBeenLastCalledWith({
+            fine: true,
+            constrain: false,
+            fromCenter: true,
+        });
+        expect(onRolesChange).toHaveBeenCalledTimes(2);
+    });
+
+    it("drops every role on window blur", () => {
+        const onRolesChange = vi.fn();
+        gesture = startGestureKeys({
+            context: "field",
+            press: held({ shift: true }),
+            onRolesChange,
+            isMac: true,
+        });
+        window.dispatchEvent(new Event("blur"));
+        expect(onRolesChange).toHaveBeenLastCalledWith({
+            fine: false,
+            constrain: false,
+            fromCenter: false,
+        });
+    });
+
+    it("ORs in the on-screen toggles", () => {
+        gesture = startGestureKeys({
+            context: "field",
+            press: NO_KEYS,
+            onScreen: () => new Set(["fine"]),
+            track: false,
+        });
+        expect(gesture.roles().fine).toBe(true);
+    });
+
+    it("stops following the keyboard once disposed", () => {
+        const onRolesChange = vi.fn();
+        startGestureKeys({
+            context: "field",
+            press: NO_KEYS,
+            onRolesChange,
+            isMac: true,
+        }).dispose();
+        key("keydown", { key: "Shift", shiftKey: true });
+        expect(onRolesChange).not.toHaveBeenCalled();
+    });
+});
