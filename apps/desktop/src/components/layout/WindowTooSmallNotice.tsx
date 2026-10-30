@@ -1,13 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { T, useTolgee } from "@tolgee/react";
-import { ArrowsOutIcon } from "@phosphor-icons/react";
-import { isTextEntry } from "@/hooks/useOnScreenKeyboard";
+import {
+    ArrowsOutIcon,
+    MinusIcon,
+    SquareIcon,
+    XIcon,
+} from "@phosphor-icons/react";
 import Keycaps from "@/components/ui/Keycaps";
+import { isTextEntry } from "@/hooks/useOnScreenKeyboard";
 import { formatBindingKeys } from "@/shortcuts/bindings";
 import { isMacPlatform } from "@/shortcuts/platform";
+import { useIsTouchMode } from "@/stores/InputModeStore";
 import { isWebBuild } from "@/utilities/webBuild";
 import {
-    isWindowTooSmall,
     MIN_WINDOW_HEIGHT,
     MIN_WINDOW_WIDTH,
 } from "@/utilities/windowTooSmall";
@@ -16,10 +22,31 @@ import {
  * or a tablet turning doesn't flash it. */
 const SHOW_DELAY_MS = 300;
 
+/** Whether a text field has focus, kept current. */
+function useTextEntryFocused() {
+    const [focused, setFocused] = useState(() =>
+        isTextEntry(document.activeElement),
+    );
+    useEffect(() => {
+        const update = () => setFocused(isTextEntry(document.activeElement));
+        // focusout fires before focus lands on the next element
+        const onFocusOut = () => setTimeout(update);
+        document.addEventListener("focusin", update);
+        document.addEventListener("focusout", onFocusOut);
+        return () => {
+            document.removeEventListener("focusin", update);
+            document.removeEventListener("focusout", onFocusOut);
+        };
+    }, []);
+    return focused;
+}
+
 /**
  * Covers the app while the window is too small to edit in, and says how to
- * make room. The app stays mounted underneath, so nothing is lost and it
- * comes straight back when the window grows.
+ * make room. It is a modal alert dialog, so it sits above every other layer
+ * and the app's shortcuts and focus stay out of reach behind it. The app
+ * stays mounted underneath, so nothing is lost and it comes straight back
+ * when the window grows.
  */
 export default function WindowTooSmallNotice({
     size,
@@ -27,11 +54,15 @@ export default function WindowTooSmallNotice({
     size: { width: number; height: number };
 }) {
     const { t } = useTolgee(["language"]);
-    // An on-screen keyboard may shrink the window while typing
+    const isTouchMode = useIsTouchMode();
+    const textEntryFocused = useTextEntryFocused();
+    // A tablet's on-screen keyboard can make the window shorter while typing
+    const keyboardMayBeOpen = isTouchMode && textEntryFocused;
     const tooSmall =
-        isWindowTooSmall(size.width, size.height) &&
-        !isTextEntry(document.activeElement);
+        size.width < MIN_WINDOW_WIDTH ||
+        (size.height < MIN_WINDOW_HEIGHT && !keyboardMayBeOpen);
     const [shown, setShown] = useState(false);
+    const contentRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (!tooSmall) {
@@ -42,47 +73,102 @@ export default function WindowTooSmallNotice({
         return () => clearTimeout(timer);
     }, [tooSmall]);
 
-    if (!shown) return null;
-
+    // In the desktop app the window can't be smaller than the minimum, so
+    // zoom is what made it too small
+    const zoomedIn = !isWebBuild && window.electron.getZoomFactor() > 1;
     // The View menu's Zoom Out (electron/main/application-menu.ts)
     const zoomOut = formatBindingKeys("$mod+Minus", isMacPlatform());
+    const hintKey = isWebBuild
+        ? "layout.windowTooSmall.hintWeb"
+        : zoomedIn
+          ? "layout.windowTooSmall.hintZoomed"
+          : "layout.windowTooSmall.hintDesktop";
+
     return (
-        <div
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="window-too-small-title"
-            aria-describedby="window-too-small-body"
-            data-testid="window-too-small"
-            className="bg-bg-1 text-text fixed inset-0 z-[1000] flex items-center justify-center overflow-auto p-24 font-sans"
-        >
-            <div className="flex max-w-[26rem] flex-col items-center gap-12 text-center">
-                <ArrowsOutIcon size={40} className="text-accent" />
-                <h1 id="window-too-small-title" className="text-h4">
-                    {t("layout.windowTooSmall.title")}
-                </h1>
-                <p id="window-too-small-body" className="text-body">
-                    {t("layout.windowTooSmall.body", {
-                        minWidth: MIN_WINDOW_WIDTH,
-                        minHeight: MIN_WINDOW_HEIGHT,
-                    })}
-                </p>
-                <p className="text-body text-text-subtitle">
-                    <T
-                        keyName={
-                            isWebBuild
-                                ? "layout.windowTooSmall.hintWeb"
-                                : "layout.windowTooSmall.hintDesktop"
-                        }
-                        params={{ keys: () => <Keycaps keys={zoomOut} /> }}
-                    />
-                </p>
-                <p className="text-sub text-text-subtitle">
-                    {t("layout.windowTooSmall.current", {
-                        width: size.width,
-                        height: size.height,
-                    })}
-                </p>
-            </div>
+        <AlertDialog.Root open={shown}>
+            <AlertDialog.Portal>
+                <AlertDialog.Content
+                    ref={contentRef}
+                    data-testid="window-too-small"
+                    // An alert dialog focuses its Cancel button, and this has none
+                    onOpenAutoFocus={(event) => {
+                        event.preventDefault();
+                        contentRef.current?.focus();
+                    }}
+                    onEscapeKeyDown={(event) => event.preventDefault()}
+                    className="bg-bg-1 text-text fixed inset-0 z-[100000] flex items-center justify-center overflow-auto p-24 font-sans outline-hidden"
+                >
+                    <WindowControls />
+                    <div className="flex max-w-[26rem] flex-col items-center gap-12 text-center">
+                        <ArrowsOutIcon size={40} className="text-accent" />
+                        <AlertDialog.Title className="text-h4">
+                            {t("layout.windowTooSmall.title")}
+                        </AlertDialog.Title>
+                        <AlertDialog.Description className="text-body">
+                            {t("layout.windowTooSmall.body", {
+                                minWidth: MIN_WINDOW_WIDTH,
+                                minHeight: MIN_WINDOW_HEIGHT,
+                            })}
+                        </AlertDialog.Description>
+                        <p className="text-body text-text-subtitle">
+                            <T
+                                keyName={hintKey}
+                                params={{
+                                    keys: () => <Keycaps keys={zoomOut} />,
+                                }}
+                            />
+                        </p>
+                        {/* Zoomed in, the size in page pixels isn't the window's */}
+                        {!zoomedIn && (
+                            <p className="text-sub text-text-subtitle">
+                                {t("layout.windowTooSmall.current", {
+                                    width: size.width,
+                                    height: size.height,
+                                })}
+                            </p>
+                        )}
+                    </div>
+                </AlertDialog.Content>
+            </AlertDialog.Portal>
+        </AlertDialog.Root>
+    );
+}
+
+/**
+ * The desktop app's window is frameless and the notice covers the title
+ * bar, so it brings a drag strip and the title bar's window buttons along
+ * (macOS draws its own traffic lights).
+ */
+function WindowControls() {
+    const { t } = useTolgee(["language"]);
+    if (isWebBuild) return null;
+    return (
+        <div className="main-app-titlebar absolute inset-x-0 top-0 flex h-40 justify-end">
+            {!window.electron.isMacOS && (
+                <div className="titlebar-button flex">
+                    <button
+                        className="hover:text-accent focus-visible:text-accent cursor-pointer px-16 py-8 outline-hidden"
+                        aria-label={t("layout.windowTooSmall.minimize")}
+                        onClick={() => window.electron.minimizeWindow()}
+                    >
+                        <MinusIcon size={20} />
+                    </button>
+                    <button
+                        className="hover:text-accent focus-visible:text-accent cursor-pointer px-16 py-8 outline-hidden"
+                        aria-label={t("layout.windowTooSmall.maximize")}
+                        onClick={() => window.electron.maximizeWindow()}
+                    >
+                        <SquareIcon size={20} />
+                    </button>
+                    <button
+                        className="hover:text-red focus-visible:text-red cursor-pointer px-16 py-8 pr-24 outline-hidden"
+                        aria-label={t("layout.windowTooSmall.close")}
+                        onClick={() => window.electron.closeWindow()}
+                    >
+                        <XIcon size={20} />
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
