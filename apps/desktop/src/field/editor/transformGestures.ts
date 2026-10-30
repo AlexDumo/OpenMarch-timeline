@@ -1,8 +1,7 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
-import type { GestureKeys } from "@/input/gestureKeys";
 import type { Roles } from "@/input/modifierRoles";
 import type { FieldGesture, FieldPoint, FieldPointer } from "./fieldEditor";
-import { fieldKeys, type FieldKeys } from "./fieldKeys";
+import { FieldDrag, type FieldKeys } from "./fieldKeys";
 import {
     centerOf,
     rotatePositions,
@@ -29,26 +28,23 @@ import type { FieldRect } from "./selectionArea";
  */
 abstract class HandleGesture implements FieldGesture {
     abstract readonly kind: FieldTestGesture;
-    protected track = PRECISION_START;
-    private readonly keys: GestureKeys;
-    /** The last positions shown, and where the pointer was for them. */
-    private shown: { at: FieldPoint; positions: MarcherPosition[] } | null =
-        null;
+    private readonly drag: FieldDrag<MarcherPosition[]>;
 
     constructor(
         protected readonly origin: FieldPointer,
         protected readonly starts: readonly MarcherPosition[],
         private readonly host: MoveGestureHost,
-        keys: FieldKeys = fieldKeys(origin),
+        keys: FieldKeys,
     ) {
-        this.keys = keys(() => {
-            if (this.shown) this.show(this.shown.at);
-        });
+        this.drag = new FieldDrag(
+            keys,
+            (at, roles) => this.positionsAt(at, roles),
+            (positions) => host.show(positions),
+        );
     }
 
     move(pointer: FieldPointer): void {
-        this.keys.update(pointer);
-        this.show(pointer.field);
+        this.drag.move(pointer);
     }
 
     /**
@@ -56,33 +52,12 @@ abstract class HandleGesture implements FieldGesture {
      * the pointer drops them where they're drawn, whatever keys changed since.
      */
     end(pointer: FieldPointer): void {
-        const still =
-            this.shown !== null &&
-            this.shown.at.x === pointer.field.x &&
-            this.shown.at.y === pointer.field.y;
-        if (!still) this.keys.update(pointer);
-        this.keys.dispose();
-        this.host.drop(
-            still
-                ? this.shown!.positions
-                : this.positionsAt(pointer.field, this.keys.roles()),
-        );
+        this.host.drop(this.drag.end(pointer));
     }
 
     cancel(): void {
-        this.keys.dispose();
+        this.drag.cancel();
         this.host.cancel();
-    }
-
-    /** The held roles at the press, before any move. */
-    protected pressRoles(): Roles {
-        return this.keys.roles();
-    }
-
-    private show(at: FieldPoint) {
-        const positions = this.positionsAt(at, this.keys.roles());
-        this.shown = { at, positions };
-        this.host.show(positions);
     }
 
     /** Where the marchers go for the pointer at `at`, with these roles held. */
@@ -95,6 +70,7 @@ abstract class HandleGesture implements FieldGesture {
 /** A corner or middle handle: scales the selection from the opposite side. */
 export class ScaleGesture extends HandleGesture {
     readonly kind: FieldTestGesture = "scale";
+    private track = PRECISION_START;
 
     constructor(
         origin: FieldPointer,
@@ -103,7 +79,7 @@ export class ScaleGesture extends HandleGesture {
         private readonly handle: Exclude<HandleId, "rot">,
         /** The marchers' bounds at the press. */
         private readonly box: FieldRect,
-        keys?: FieldKeys,
+        keys: FieldKeys,
     ) {
         super(origin, starts, host, keys);
     }
@@ -126,41 +102,33 @@ export class ScaleGesture extends HandleGesture {
 }
 
 /**
- * The rotate handle: turns the selection about its box's center by the angle
- * the pointer turns through, snapped to 15°, or with fine to whole degrees at
- * a quarter speed. Fine turning on goes on slowly from the angle drawn
- * (snapped), with no jump.
+ * The angle a rotate handle draws as the pointer turns about `center`,
+ * snapped to 15°, or with fine to whole degrees at a quarter speed. Fine
+ * turning on goes on slowly from the angle drawn (snapped), with no jump.
+ * The selection's and an item's rotate handles both turn by it.
  */
-export class RotateGesture extends HandleGesture {
-    readonly kind: FieldTestGesture = "rotate";
-    readonly center: FieldPoint;
+export class RotationDrag {
     /** The angle the pointer has turned through, at full speed. */
     private turned = 0;
-    private last: FieldPoint;
-    private fine: boolean;
-    /** The angle drawn at the last event, in degrees. */
+    private track = PRECISION_START;
+    /** Fine at the last event; on from the press, it anchors at the start, which changes nothing. */
+    private fine = false;
+    /** The angle drawn at the last event, in degrees clockwise. */
     private drawn = 0;
 
     constructor(
-        origin: FieldPointer,
-        starts: readonly MarcherPosition[],
-        host: MoveGestureHost,
-        /** The marchers' bounds at the press. */
-        readonly box: FieldRect,
-        keys?: FieldKeys,
-    ) {
-        super(origin, starts, host, keys);
-        this.center = centerOf(box);
-        this.last = origin.field;
-        this.fine = this.pressRoles().fine;
-    }
+        private readonly center: FieldPoint,
+        /** Where the pointer was at the press. */
+        private last: FieldPoint,
+    ) {}
 
-    /** The angle drawn, in degrees clockwise: the overlay turns the box by it until the release. */
+    /** The angle drawn, in degrees clockwise. */
     angle(): number {
         return this.drawn;
     }
 
-    protected positionsAt(at: FieldPoint, roles: Roles) {
+    /** The angle drawn for the pointer at `at`, with these roles held. */
+    turnTo(at: FieldPoint, roles: Roles): number {
         this.turned += turnBetween(this.center, this.last, at);
         this.last = at;
         if (roles.fine && !this.fine)
@@ -173,6 +141,42 @@ export class RotateGesture extends HandleGesture {
         );
         this.track = moved.track;
         this.drawn = snapRotation(moved.delta.x, roles);
-        return rotatePositions(this.starts, this.center, this.drawn);
+        return this.drawn;
+    }
+}
+
+/**
+ * The rotate handle: turns the selection about its box's center by the
+ * angle {@link RotationDrag} draws.
+ */
+export class RotateGesture extends HandleGesture {
+    readonly kind: FieldTestGesture = "rotate";
+    readonly center: FieldPoint;
+    private readonly rotation: RotationDrag;
+
+    constructor(
+        origin: FieldPointer,
+        starts: readonly MarcherPosition[],
+        host: MoveGestureHost,
+        /** The marchers' bounds at the press. */
+        readonly box: FieldRect,
+        keys: FieldKeys,
+    ) {
+        super(origin, starts, host, keys);
+        this.center = centerOf(box);
+        this.rotation = new RotationDrag(this.center, origin.field);
+    }
+
+    /** The angle drawn, in degrees clockwise: the overlay turns the box by it until the release. */
+    angle(): number {
+        return this.rotation.angle();
+    }
+
+    protected positionsAt(at: FieldPoint, roles: Roles) {
+        return rotatePositions(
+            this.starts,
+            this.center,
+            this.rotation.turnTo(at, roles),
+        );
     }
 }

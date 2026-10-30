@@ -1,5 +1,9 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
-import type { RoleKey } from "@/input/modifierRoles";
+import {
+    pressChoiceOf,
+    type PressChoice,
+    type RoleKey,
+} from "@/input/modifierRoles";
 import {
     startLasso,
     startMarquee,
@@ -1010,7 +1014,7 @@ export class FieldEditor {
     private startMove(press: FieldPress): FieldGesture | null {
         const selection = this.ports.selection.get();
         let ids: readonly number[];
-        let added = false;
+        let usedByPress: readonly RoleKey[] = [];
         if (press.hit !== null) {
             const chosen = this.ports.pressSelection?.(
                 press.hit,
@@ -1021,13 +1025,20 @@ export class FieldEditor {
                 this.write(chosen);
                 return null;
             }
-            added =
-                !chosen && press.start.shift && !selection.includes(press.hit);
+            // The add choice applies only when the press adds the marcher;
+            // then its key is the press's, no role until pressed again
+            const add = pressChoiceOf(press.start, "field", {
+                applicable: new Set<PressChoice>(
+                    !chosen && !selection.includes(press.hit) ? ["add"] : [],
+                ),
+                isMac: this.options.isMac ?? false,
+            });
+            if (add) usedByPress = [add.key];
             ids =
                 chosen ??
                 (selection.includes(press.hit)
                     ? selection
-                    : added
+                    : add
                       ? [...selection, press.hit]
                       : [press.hit]);
             this.write(ids);
@@ -1049,7 +1060,7 @@ export class FieldEditor {
                 cancel: () => this.endLive(),
             },
             this.options.moveTransform,
-            this.keysFor(press.start, added ? ["Shift"] : []),
+            this.keysFor(press.start, usedByPress),
         );
     }
 

@@ -1,8 +1,7 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
-import type { GestureKeys } from "@/input/gestureKeys";
 import type { Roles } from "@/input/modifierRoles";
 import type { FieldGesture, FieldPoint, FieldPointer } from "./fieldEditor";
-import { fieldKeys, type FieldKeys } from "./fieldKeys";
+import { FieldDrag, type FieldKeys } from "./fieldKeys";
 import { PRECISION_START, anchorAt, precisionDelta } from "./moveRules";
 
 /** A marcher's position, in field units. */
@@ -43,75 +42,55 @@ export type MoveGestureHost = {
  * released. The editor saves the drop and owns what's drawn meanwhile. While
  * fine is on they move at a quarter of the pointer's speed (#197, user story
  * 39), carrying on from where they're drawn when fine turns on (snapped,
- * when rounding is on) or off. A role key pressed or released mid-drag
- * redraws them at the last pointer, with no pointer move.
+ * when rounding is on) or off. Constrain filters that drag afterwards: it
+ * keeps an axis while it's held and leaves no offset once it's released. A
+ * role key pressed or released mid-drag redraws them at the last pointer,
+ * with no pointer move.
  */
 export class MoveGesture implements FieldGesture {
     readonly kind: FieldTestGesture = "move";
     private track = PRECISION_START;
-    private fine: boolean;
-    private readonly keys: GestureKeys;
+    /** Fine at the last event; on from the press, it anchors at the start, which changes nothing. */
+    private fine = false;
+    private readonly drag: FieldDrag<MarcherPosition[]>;
     /**
-     * How far the first marcher was drawn from its start, at the last event.
-     * On a locked axis it's 0, so unlocking mid-drag with fine on trails the
-     * pointer by the whole distance dragged along that axis.
+     * How far the first marcher was drawn from its start at the last event,
+     * without constrain, so fine turning on never folds the axis constrain
+     * keeps into the lag. Lock X and Lock Y are in it: on a locked axis it's
+     * 0, so unlocking mid-drag with fine on trails the pointer by the whole
+     * distance dragged along that axis.
      */
     private drawn: FieldPoint = { x: 0, y: 0 };
-    /** The last positions shown, and where the pointer was for them. */
-    private shown: {
-        at: FieldPoint;
-        positions: MarcherPosition[];
-    } | null = null;
 
     constructor(
         private readonly origin: FieldPointer,
         private readonly starts: readonly MarcherPosition[],
         private readonly host: MoveGestureHost,
         private readonly transform: MoveTransform = followPointer,
-        keys: FieldKeys = fieldKeys(origin),
+        keys: FieldKeys,
     ) {
-        this.keys = keys(() => {
-            if (this.shown) this.show(this.shown.at);
-        });
-        this.fine = this.keys.roles().fine;
-    }
-
-    move(pointer: FieldPointer): void {
-        this.keys.update(pointer);
-        this.show(pointer.field);
-    }
-
-    /**
-     * Drops the marchers. A release where the last move left the pointer
-     * drops them where they're drawn: a key pressed or released since then
-     * has redrawn them already, and one the release reports that no keyboard
-     * event did mustn't change the drop (user stories 41 and 42).
-     */
-    end(pointer: FieldPointer): void {
-        const still =
-            this.shown !== null &&
-            this.shown.at.x === pointer.field.x &&
-            this.shown.at.y === pointer.field.y;
-        if (!still) this.keys.update(pointer);
-        this.keys.dispose();
-        this.host.drop(
-            still ? this.shown!.positions : this.positionsAt(pointer.field),
+        this.drag = new FieldDrag(
+            keys,
+            (at, roles) => this.positionsAt(at, roles),
+            (positions) => host.show(positions),
         );
     }
 
+    move(pointer: FieldPointer): void {
+        this.drag.move(pointer);
+    }
+
+    /** Drops the marchers; a release where the last move left the pointer drops what's drawn. */
+    end(pointer: FieldPointer): void {
+        this.host.drop(this.drag.end(pointer));
+    }
+
     cancel(): void {
-        this.keys.dispose();
+        this.drag.cancel();
         this.host.cancel();
     }
 
-    private show(at: FieldPoint) {
-        const positions = this.positionsAt(at);
-        this.shown = { at, positions };
-        this.host.show(positions);
-    }
-
-    private positionsAt(at: FieldPoint) {
-        const roles = this.keys.roles();
+    private positionsAt(at: FieldPoint, roles: Roles) {
         // Fine on: the slow drag starts from where the marchers are drawn
         if (roles.fine && !this.fine)
             this.track = anchorAt(this.track, this.drawn);
@@ -122,11 +101,17 @@ export class MoveGesture implements FieldGesture {
             roles.fine,
         );
         this.track = moved.track;
-        const positions = this.transform(moved.delta, roles, this.starts);
+        const free = this.transform(
+            moved.delta,
+            { ...roles, constrain: false },
+            this.starts,
+        );
         this.drawn = {
-            x: positions[0].x - this.starts[0].x,
-            y: positions[0].y - this.starts[0].y,
+            x: free[0].x - this.starts[0].x,
+            y: free[0].y - this.starts[0].y,
         };
-        return positions;
+        return roles.constrain
+            ? this.transform(moved.delta, roles, this.starts)
+            : free;
     }
 }

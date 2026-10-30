@@ -1,15 +1,14 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
-import type { GestureKeys } from "@/input/gestureKeys";
 import type { Roles } from "@/input/modifierRoles";
 import type { FieldGesture, FieldPoint, FieldPointer } from "./fieldEditor";
-import { fieldKeys, type FieldKeys } from "./fieldKeys";
+import { FieldDrag, type FieldKeys } from "./fieldKeys";
 import {
     rotatePoint,
-    snapRotation,
-    turnBetween,
     type HandleId,
     type SelectionFrame,
 } from "./groupTransform";
+import { PRECISION_START, precisionDelta } from "./moveRules";
+import { RotationDrag } from "./transformGestures";
 
 /**
  * Resizing and turning one item's Outline with its handles (C2.1, props-spec
@@ -67,43 +66,39 @@ const PULLS: Record<Exclude<HandleId, "rot">, FieldPoint> = {
     w: { x: -1, y: 0 },
 };
 
-/** A role key pressed or released mid-drag redraws the Outline at the last pointer. */
+/**
+ * As the selection's handles do: while fine is on the pointer counts at a
+ * quarter of its speed, a role key pressed or released mid-drag redraws the
+ * Outline at the last pointer, and a release where the last move left the
+ * pointer saves what's drawn.
+ */
 abstract class ItemHandleGesture implements FieldGesture {
     abstract readonly kind: FieldTestGesture;
-    private readonly keys: GestureKeys;
-    /** Where the pointer was at the last move. */
-    private last: FieldPoint | null = null;
+    private readonly drag: FieldDrag<ItemSize>;
 
     constructor(
         protected readonly frame: ItemFrame,
         private readonly host: ItemTransformHost,
-        press: FieldPointer,
-        keys: FieldKeys = fieldKeys(press),
+        keys: FieldKeys,
     ) {
-        this.keys = keys(() => {
-            if (this.last) this.show(this.last);
-        });
+        this.drag = new FieldDrag(
+            keys,
+            (at, roles) => this.sizeAt(at, roles),
+            (size) => host.show(size),
+        );
     }
 
     move(pointer: FieldPointer): void {
-        this.keys.update(pointer);
-        this.show(pointer.field);
+        this.drag.move(pointer);
     }
 
     end(pointer: FieldPointer): void {
-        this.keys.update(pointer);
-        this.keys.dispose();
-        this.host.save(this.sizeAt(pointer.field, this.keys.roles()));
+        this.host.save(this.drag.end(pointer));
     }
 
     cancel(): void {
-        this.keys.dispose();
+        this.drag.cancel();
         this.host.cancel();
-    }
-
-    private show(at: FieldPoint) {
-        this.last = at;
-        this.host.show(this.sizeAt(at, this.keys.roles()));
     }
 
     protected abstract sizeAt(at: FieldPoint, roles: Roles): ItemSize;
@@ -111,25 +106,41 @@ abstract class ItemHandleGesture implements FieldGesture {
 
 /**
  * A side or corner: the Outline's sides it pulls follow the pointer, the
- * opposite ones following too, so the center stays where it is.
+ * opposite ones following too, so the center stays where it is. Nothing
+ * snaps, so fine needs no re-anchoring: the slow drag goes on from wherever
+ * the pointer had taken the sides.
  */
 export class ItemResizeGesture extends ItemHandleGesture {
     readonly kind: FieldTestGesture = "scale";
+    private track = PRECISION_START;
 
     constructor(
-        origin: FieldPointer,
+        private readonly origin: FieldPointer,
         frame: ItemFrame,
         host: ItemTransformHost,
         private readonly handle: Exclude<HandleId, "rot">,
-        keys?: FieldKeys,
+        keys: FieldKeys,
     ) {
-        super(frame, host, origin, keys);
+        super(frame, host, keys);
     }
 
-    protected sizeAt(at: FieldPoint): ItemSize {
+    protected sizeAt(at: FieldPoint, roles: Roles): ItemSize {
         const { center, width, depth, rotation } = this.frame;
-        // The pointer in the Outline's own frame, unturned about its center
-        const local = rotatePoint(at, center, -rotation);
+        const moved = precisionDelta(
+            this.track,
+            { x: at.x - this.origin.field.x, y: at.y - this.origin.field.y },
+            roles.fine,
+        );
+        this.track = moved.track;
+        // Where the pointer counts as being, unturned about the center into the Outline's own frame
+        const local = rotatePoint(
+            {
+                x: this.origin.field.x + moved.delta.x,
+                y: this.origin.field.y + moved.delta.y,
+            },
+            center,
+            -rotation,
+        );
         const pulls = PULLS[this.handle];
         const half = (offset: number, pull: number, size: number) =>
             pull === 0
@@ -144,29 +155,27 @@ export class ItemResizeGesture extends ItemHandleGesture {
 }
 
 /**
- * The rotate handle: turns the Outline about its center by the angle the
- * pointer turns through, snapped to 15°, or to whole degrees with fine.
+ * The rotate handle: turns the Outline about its center by the angle
+ * {@link RotationDrag} draws, as the selection's rotate handle does: snapped
+ * to 15°, or to whole degrees at a quarter speed with fine.
  */
 export class ItemRotateGesture extends ItemHandleGesture {
     readonly kind: FieldTestGesture = "rotate";
-    private turned = 0;
-    private lastPoint: FieldPoint;
+    private readonly rotation: RotationDrag;
 
     constructor(
         origin: FieldPointer,
         frame: ItemFrame,
         host: ItemTransformHost,
-        keys?: FieldKeys,
+        keys: FieldKeys,
     ) {
-        super(frame, host, origin, keys);
-        this.lastPoint = origin.field;
+        super(frame, host, keys);
+        this.rotation = new RotationDrag(frame.center, origin.field);
     }
 
     protected sizeAt(at: FieldPoint, roles: Roles): ItemSize {
-        const { center, width, depth, rotation } = this.frame;
-        this.turned += turnBetween(center, this.lastPoint, at);
-        this.lastPoint = at;
-        const turn = snapRotation(this.turned, roles);
+        const { width, depth, rotation } = this.frame;
+        const turn = this.rotation.turnTo(at, roles);
         // Raw, not wrapped to [0, 360): an Outline change eases through the raw angle (so a
         // spin can be drawn), and 350° turned 20° must ease 20°, not back 340°
         return { width, depth, rotation: rotation + turn };

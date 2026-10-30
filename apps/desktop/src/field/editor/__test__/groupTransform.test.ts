@@ -275,6 +275,9 @@ const scaleOf = (positions: MarcherPosition[]) => ({
 const key = (type: "keydown" | "keyup", init: KeyboardEventInit) =>
     window.dispatchEvent(new KeyboardEvent(type, init));
 
+/** The held roles of a press at `origin`, off a Mac. */
+const keysAt = (origin: FieldPointer) => fieldKeys(origin, { isMac: false });
+
 describe("ScaleGesture", () => {
     it("shows and drops the scaled formation", () => {
         const h = host();
@@ -284,6 +287,7 @@ describe("ScaleGesture", () => {
             h,
             "e",
             BOX,
+            keysAt(pointer(200, 250)),
         );
         gesture.move(pointer(250, 270));
         expect(last(h.show).map((p) => p.x)).toEqual([100, 250, 175]);
@@ -299,6 +303,7 @@ describe("ScaleGesture", () => {
             h,
             "e",
             BOX,
+            keysAt(pointer(200, 250)),
         );
         gesture.move(pointer(240, 250));
         gesture.move(pointer(280, 250, { shift: true }));
@@ -314,6 +319,7 @@ describe("ScaleGesture", () => {
             h,
             "se",
             BOX,
+            keysAt(pointer(200, 250)),
         );
         gesture.move(pointer(250, 250));
         const shown = last(h.show);
@@ -343,6 +349,31 @@ describe("ScaleGesture", () => {
         expect(scaled({ ctrl: true }, true)).toEqual({ x: 1.4, y: 1.4 });
         expect(scaled({ shift: true })).toEqual({ x: 1.1, y: 1.1 });
     });
+
+    describe("keys pressed or released mid-drag, with no pointer move", () => {
+        let gesture: ScaleGesture | undefined;
+        afterEach(() => gesture?.cancel());
+
+        it("flips a corner's proportional scaling while Ctrl is down, and back when it's up", () => {
+            const h = host();
+            const origin = pointer(200, 250);
+            gesture = new ScaleGesture(
+                origin,
+                FORMATION,
+                h,
+                "se",
+                BOX,
+                keysAt(origin),
+            );
+            gesture.move(pointer(250, 250));
+            expect(scaleOf(last(h.show))).toEqual({ x: 1.4, y: 1.4 });
+            key("keydown", { key: "Control", ctrlKey: true });
+            expect(scaleOf(last(h.show))).toEqual({ x: 1.5, y: 1 });
+            key("keyup", { key: "Control" });
+            expect(scaleOf(last(h.show))).toEqual({ x: 1.4, y: 1.4 });
+            expect(h.show).toHaveBeenCalledTimes(3);
+        });
+    });
 });
 
 describe("RotateGesture", () => {
@@ -369,7 +400,7 @@ describe("RotateGesture", () => {
 
     it("snaps to 15°, and to whole degrees with fine (Shift)", () => {
         const h = host();
-        const gesture = new RotateGesture(rot, FORMATION, h, BOX);
+        const gesture = new RotateGesture(rot, FORMATION, h, BOX, keysAt(rot));
         gesture.move(round(20));
         gesture.move(round(37));
         expect(gesture.angle()).toBe(30);
@@ -383,14 +414,14 @@ describe("RotateGesture", () => {
 
     it("isn't freed by Alt or constrain: 15° steps until the Snap toggle", () => {
         const h = host();
-        const gesture = new RotateGesture(rot, FORMATION, h, BOX);
+        const gesture = new RotateGesture(rot, FORMATION, h, BOX, keysAt(rot));
         gesture.move(round(37, { alt: true, ctrl: true }));
         expect(gesture.angle()).toBe(30);
     });
 
     it("turns past half a turn", () => {
         const h = host();
-        const gesture = new RotateGesture(rot, FORMATION, h, BOX);
+        const gesture = new RotateGesture(rot, FORMATION, h, BOX, keysAt(rot));
         for (let degrees = 30; degrees <= 270; degrees += 30)
             gesture.move(round(degrees));
         expect(gesture.angle()).toBe(270);
@@ -398,7 +429,7 @@ describe("RotateGesture", () => {
 
     it("turns at a quarter speed with fine, in whole degrees, from the angle drawn (user story 51)", () => {
         const h = host();
-        const gesture = new RotateGesture(rot, FORMATION, h, BOX);
+        const gesture = new RotateGesture(rot, FORMATION, h, BOX, keysAt(rot));
         gesture.move(round(37));
         expect(gesture.angle()).toBe(30);
         // Pressing Shift where the pointer is: no jump, from the snapped 30°
@@ -414,7 +445,7 @@ describe("RotateGesture", () => {
 
         it("re-anchors when fine turns on from a keydown, and goes on at a quarter speed", () => {
             const h = host();
-            gesture = new RotateGesture(rot, FORMATION, h, BOX);
+            gesture = new RotateGesture(rot, FORMATION, h, BOX, keysAt(rot));
             gesture.move(round(37));
             expect(gesture.angle()).toBe(30);
             key("keydown", { key: "Shift", shiftKey: true });
@@ -431,7 +462,7 @@ describe("RotateGesture", () => {
 
     it("drops the formation at the angle drawn", () => {
         const h = host();
-        const gesture = new RotateGesture(rot, FORMATION, h, BOX);
+        const gesture = new RotateGesture(rot, FORMATION, h, BOX, keysAt(rot));
         gesture.move(round(90));
         gesture.end(round(90));
         expect(heading(last(h.drop)) - home).toBeCloseTo(90);

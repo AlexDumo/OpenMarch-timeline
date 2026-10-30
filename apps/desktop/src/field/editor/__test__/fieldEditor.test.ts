@@ -923,6 +923,72 @@ describe("FieldEditor modifier roles (version A)", () => {
         expect(shown(state)).toEqual({ 1: { x: 150, y: 100 } });
     });
 
+    it("follows a key that went down between the press and the drag start: Ctrl up with no move frees the axis", () => {
+        const { editor, state } = setup({
+            moveTransform: rulesOn({ rounding: undefined }),
+        });
+        running = editor;
+        editor.pointerDown(at(100, 100));
+        // Ctrl goes down inside the click slop, before any gesture listens
+        key("keydown", { key: "Control", ctrlKey: true });
+        editor.pointerMove(at(101, 100, { ctrl: true }));
+        editor.pointerMove(at(137, 121, { ctrl: true }));
+        expect(shown(state)).toEqual({ 1: { x: 137, y: 100 } });
+        key("keyup", { key: "Control" });
+        expect(shown(state)).toEqual({ 1: { x: 137, y: 121 } });
+        editor.pointerUp(at(137, 121));
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 137, y: 121 }]);
+    });
+
+    it("frees the press's Shift released inside the click slop: pressed again mid-drag, it's fine", () => {
+        const { editor, state } = setup({ selected: [2] });
+        running = editor;
+        editor.pointerDown(at(100, 100, { shift: true }));
+        // Shift comes up before the drag starts; no gesture listens yet
+        key("keyup", { key: "Shift" });
+        editor.pointerMove(at(100, 140));
+        expect(state.selected).toEqual([2, 1]);
+        expect(shown(state)).toEqual({
+            1: { x: 100, y: 140 },
+            2: { x: 200, y: 140 },
+        });
+        key("keydown", { key: "Shift", shiftKey: true });
+        expect(shown(state)).toEqual({
+            1: { x: 100, y: 140 },
+            2: { x: 200, y: 140 },
+        });
+        editor.pointerMove(at(100, 180, { shift: true }));
+        expect(shown(state)).toEqual({
+            1: { x: 100, y: 150 },
+            2: { x: 200, y: 150 },
+        });
+    });
+
+    it("applies constrain after fine, as a filter: releasing $mod leaves no lasting offset", () => {
+        const { editor, state } = setup({
+            isMac: true,
+            moveTransform: rulesOn({ rounding: undefined }),
+        });
+        running = editor;
+        editor.pointerDown(at(100, 100, { meta: true }));
+        editor.pointerMove(at(180, 120, { meta: true }));
+        expect(shown(state)).toEqual({ 1: { x: 180, y: 100 } });
+        // Fine on while constrain keeps y: no jump
+        key("keydown", { key: "Shift", shiftKey: true, metaKey: true });
+        expect(shown(state)).toEqual({ 1: { x: 180, y: 100 } });
+        // A quarter of (40, 20) on the free drag, then y kept
+        editor.pointerMove(at(220, 140, { meta: true, shift: true }));
+        expect(shown(state)).toEqual({ 1: { x: 190, y: 100 } });
+        // Cmd up: the free fine spot, y included
+        key("keyup", { key: "Meta", shiftKey: true });
+        expect(shown(state)).toEqual({ 1: { x: 190, y: 125 } });
+        // On at a quarter speed on both axes, with no extra offset
+        editor.pointerMove(at(260, 160, { shift: true }));
+        expect(shown(state)).toEqual({ 1: { x: 200, y: 130 } });
+        editor.pointerUp(at(260, 160, { shift: true }));
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 200, y: 130 }]);
+    });
+
     it("adds an unselected marcher on a Shift-press and drags it at full speed until Shift is pressed again (the press rule)", () => {
         const { editor, state } = setup({ selected: [2] });
         running = editor;
