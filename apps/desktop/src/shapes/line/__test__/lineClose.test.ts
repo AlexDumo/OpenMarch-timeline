@@ -294,6 +294,99 @@ describe("filling a closed line", () => {
         expect(rows.size).toBeLessThan(grid.length / 2);
     });
 
+    it("centres Grid's spots in the outline, no rank left empty", () => {
+        const RECT = [
+            { x: 100, y: 100 },
+            { x: 160, y: 100 },
+            { x: 160, y: 130 },
+            { x: 100, y: 130 },
+        ];
+        const spots = spotsOf(
+            inMode(click(clicking(9, RECT), { x: 101, y: 99 }), "files"),
+        );
+        expect(spots).toHaveLength(9);
+        const mid = (vs: number[]) => (Math.min(...vs) + Math.max(...vs)) / 2;
+        expect(mid(spots.map((s) => s.x))).toBeCloseTo(130, 6);
+        expect(mid(spots.map((s) => s.y))).toBeCloseTo(115, 6);
+        // The grid's phase with the fewest spots that still fit: two ranks of 5, 15 apart, one
+        // off the back, never a back rank of one
+        const ranks = new Map<string, number>();
+        for (const s of spots)
+            ranks.set(s.y.toFixed(6), (ranks.get(s.y.toFixed(6)) ?? 0) + 1);
+        expect([...ranks.values()]).toEqual([4, 5]);
+        // Spread over the outline: no third of it left empty
+        for (const third of [0, 1, 2])
+            expect(
+                spots.some(
+                    (s) =>
+                        s.x >= 100 + third * 20 - 1e-6 &&
+                        s.x <= 120 + third * 20 + 1e-6,
+                ),
+            ).toBe(true);
+    });
+
+    // Grid's spots on a polygon are part of the recipe format (ADR 0006): a change to them
+    // needs a new version, as the spread generator's do
+    it.each([
+        [
+            "a 6 × 3 step rectangle",
+            [
+                [100, 100],
+                [160, 100],
+                [160, 130],
+                [100, 130],
+            ],
+            9,
+            [
+                [115, 107.5],
+                [130, 107.5],
+                [145, 107.5],
+                [160, 107.5],
+                [100, 122.5],
+                [115, 122.5],
+                [130, 122.5],
+                [145, 122.5],
+                [160, 122.5],
+            ],
+        ],
+        [
+            "a hexagon, re-centred once its back rank comes off",
+            [
+                [105, 100],
+                [115, 100],
+                [120, 112.5],
+                [115, 125],
+                [105, 125],
+                [100, 112.5],
+            ],
+            10,
+            [
+                [103.75, 103.125],
+                [110, 103.125],
+                [116.25, 103.125],
+                [103.75, 109.375],
+                [110, 109.375],
+                [116.25, 109.375],
+                [103.75, 115.625],
+                [110, 115.625],
+                [116.25, 115.625],
+                [110, 121.875],
+            ],
+        ],
+    ])("keeps Grid's spots in %s", (_name, outline, n, want) => {
+        const params: LineParams = {
+            points: outline.map(([x, y]) => ({ x: x!, y: y!, tension: 0 })),
+            closed: true,
+            spacing: { mode: "fit" },
+            distribution: { mode: "files", oddGap: "center" },
+        };
+        expect(isLineParams(params)).toBe(true);
+        expectNear(
+            lineTool.shape.generate(params, n, ctx),
+            want.map(([x, y]) => ({ x: x!, y: y! })),
+        );
+    });
+
     it("fills an L the same way", () => {
         const L = [
             { x: 100, y: 100 },

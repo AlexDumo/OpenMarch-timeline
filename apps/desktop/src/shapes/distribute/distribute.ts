@@ -766,14 +766,25 @@ const GRID_PHASES: readonly XY[] = [
 
 /**
  * The square grid's spots `apart` apart inside `region` (a drawn outline, #529), centered on its
- * frame and sitting on it whichever way of {@link GRID_PHASES} takes most; from the back, left to
- * right
+ * frame, from the back, left to right. It sits on the frame whichever way of {@link GRID_PHASES}
+ * takes most spots, or with `n`, the way with the fewest that still has room for `n` (so as few
+ * as can come off the back); the first way of a tie. Laying out (with `n`), a spot a hair outside
+ * counts: the search for the spacing ends with the grid's widest spots on the outline, each a
+ * float error off it by how many spacings it is from the center, and they all count alike.
  */
-function gridInside(region: Region, apart: number): FrameSpot[] {
+function gridInside(region: Region, apart: number, n?: number): FrameSpot[] {
     const { left, top, right, bottom } = region.bounds;
     const cx = (left + right) / 2;
     const cy = (top + bottom) / 2;
+    const slack =
+        n === undefined ? 0 : 1e-6 * Math.max(right - left, bottom - top);
+    const inside = (p: XY) =>
+        region.contains(p) || region.edgeDistance(p) >= -slack;
     let best: FrameSpot[] = [];
+    const better = (spots: FrameSpot[]) =>
+        n === undefined || best.length < n
+            ? spots.length > best.length
+            : spots.length >= n && spots.length < best.length;
     for (const phase of GRID_PHASES) {
         const spots: FrameSpot[] = [];
         const rows = Math.ceil((bottom - top) / 2 / apart) + 1;
@@ -784,10 +795,10 @@ function gridInside(region: Region, apart: number): FrameSpot[] {
                     x: cx + (i + phase.x) * apart,
                     y: cy + (j + phase.y) * apart,
                 };
-                if (region.contains(p))
+                if (inside(p))
                     spots.push({ ...p, row: j + rows, col: i + cols });
             }
-        if (spots.length > best.length) best = spots;
+        if (better(spots)) best = spots;
     }
     return best;
 }
@@ -835,14 +846,17 @@ function searchGrid(region: Region, n: number): number {
 }
 
 /**
- * Grid on a drawn outline (#529): `n` spots of the widest square grid that fits it, rank by rank
- * from the back, left to right. Spots the grid has over `n` come off the back rank, from its ends
- * in turn (a short back, as the box's Grid has), then the next.
+ * Grid on a drawn outline (#529): `n` spots of the widest square grid that fits it, at the phase
+ * with the fewest spots that fit, rank by rank from the back, left to right. Spots the grid has
+ * over `n` come off the back rank, from its ends in turn (a short back, as the box's Grid has),
+ * then the next; a rank that empties moves the rest back half a rank each, so they stay centred
+ * in the outline where they still fit it. These spots are part of the Line recipe's format (ADR
+ * 0006): any change to them needs a new version.
  */
 function gridSpots(region: Region, n: number): FrameSpot[] {
     const apart = gridSpacing(region, n);
     if (!(apart > 0)) return [];
-    const spots = gridInside(region, apart);
+    const spots = gridInside(region, apart, n);
     const ranks: FrameSpot[][] = [];
     for (const s of spots) {
         const rank = ranks.at(-1);
@@ -860,5 +874,10 @@ function gridSpots(region: Region, n: number): FrameSpot[] {
         }
         if (extra === 0) break;
     }
-    return ranks.flat();
+    const emptied = ranks.filter((rank) => rank.length === 0).length;
+    const left = ranks.flat();
+    if (emptied === 0) return left;
+
+    const centred = left.map((s) => ({ ...s, y: s.y - (emptied * apart) / 2 }));
+    return centred.every((s) => region.contains(s)) ? centred : left;
 }

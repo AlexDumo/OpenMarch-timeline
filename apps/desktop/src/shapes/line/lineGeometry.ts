@@ -401,11 +401,11 @@ export function lineSpots(p: LineParams, n: number): Slot[] {
 }
 
 /**
- * A closed line's turn (#529): its sides' directions taken a quarter turn at a time, so a side and
- * the one square to it agree, and averaged by length, within an eighth of a turn of 0. It doesn't
- * depend on which point was clicked first or which way round: a rectangle's is its sides', one
- * drawn square to the field 0, so its ranks square to the field like a box's. 0 when no side leads
- * (a regular octagon).
+ * A closed line's turn (#529), within an eighth of a turn of 0: its sides' directions taken a
+ * quarter turn at a time, so a side and the one square to it agree, averaged by length. It doesn't
+ * depend on which point was clicked first or which way round. Only when sides square to each other
+ * make up most of the outline (a rectangle, turned or not) does it follow them; anything else (a
+ * triangle, a hexagon) stands square to the field, so its ranks square to the field like a box's.
  */
 function closedTurn(p: LineParams): number {
     let x = 0;
@@ -416,7 +416,7 @@ function closedTurn(p: LineParams): number {
         x += length(d) * Math.cos(angle);
         y += length(d) * Math.sin(angle);
     }
-    if (Math.hypot(x, y) < 1e-9 * Math.max(1, linePath(p).length)) return 0;
+    if (Math.hypot(x, y) < linePath(p).length / 2) return 0;
     const turn = Math.atan2(y, x) / 4;
     // A rectangle square to the field is 0, not float noise either side of it
     return Math.abs(turn) < 1e-12 ? 0 : turn;

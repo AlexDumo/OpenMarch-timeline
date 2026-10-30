@@ -324,9 +324,11 @@ The Line shape (spec #522, #523) stores a new kind:
    `distribution` as a closed kind does (amendment of 2026-10-22), in Grid (`files`), Outline or
    Spread (with its `edge`); without one it's Outline. Outline is the line itself, its corners
    and spacing laid out as above, so it ignores `oddGap`. Grid and Spread fill the drawn points
-   as a polygon, through the host's distributor, in a frame square to the field: the turn from the
-   first point to the last, taken to the nearest quarter turn of 0, so the same outline fills the
-   same way however it was clicked and its ranks square to the field like a box's. Grid is the
+   as a polygon, through the host's distributor, in a frame that doesn't depend on which point was
+   clicked first or which way round: turned with its sides when sides square to each other make
+   up most of the outline (their directions a quarter turn at a time, averaged by length, within
+   an eighth of a turn of 0), else square to the field, so its ranks square to the field like a
+   box's and the back rank is at the back. Grid is the
    widest square grid with room for every marcher, at the grid's phase with the fewest spots,
    extra spots left off its back rank and the spots left re-centred in the outline; it ignores
    `layout` and `stagger`. Grid's spots on a polygon are part of the format, like the spread

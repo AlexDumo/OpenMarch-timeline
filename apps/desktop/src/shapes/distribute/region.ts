@@ -187,7 +187,10 @@ export function polygonRegion(
     const xs = outline.map((p) => p.x);
     const ys = outline.map((p) => p.y);
     return {
-        contains: (p) => contains(p) || toEdge(p) <= 1e-9,
+        // On the edge counts as inside, to a hair of the outline's size, so a spot on the
+        // boundary counts the same on every side whatever the float error
+        contains: (p) =>
+            contains(p) || toEdge(p) <= 1e-9 * Math.max(1, perimeter),
         edgeDistance: (p) => (contains(p) ? toEdge(p) : -toEdge(p)),
         area: Math.abs(twiceArea) / 2,
         perimeter,
