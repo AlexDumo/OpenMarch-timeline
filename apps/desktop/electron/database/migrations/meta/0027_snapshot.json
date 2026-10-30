@@ -1,7 +1,7 @@
 {
     "version": "6",
     "dialect": "sqlite",
-    "id": "a21e0843-73a2-41d6-8ab0-9ad737d0eb25",
+    "id": "1a38aeff-3cd3-45f1-a978-0364633ab47e",
     "prevId": "087ae8cf-5c77-491b-a963-2bfa26d0b87b",
     "tables": {
         "audio_files": {
@@ -104,22 +104,6 @@
                     "primaryKey": false,
                     "notNull": false,
                     "autoincrement": false
-                },
-                "tempo_pin": {
-                    "name": "tempo_pin",
-                    "type": "integer",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false,
-                    "default": 0
-                },
-                "tempo_hold": {
-                    "name": "tempo_hold",
-                    "type": "integer",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false,
-                    "default": 0
                 },
                 "created_at": {
                     "name": "created_at",
@@ -1531,13 +1515,6 @@
                     "notNull": false,
                     "autoincrement": false
                 },
-                "number_override": {
-                    "name": "number_override",
-                    "type": "integer",
-                    "primaryKey": false,
-                    "notNull": false,
-                    "autoincrement": false
-                },
                 "created_at": {
                     "name": "created_at",
                     "type": "text",
@@ -2280,6 +2257,171 @@
             "compositePrimaryKeys": {},
             "uniqueConstraints": {},
             "checkConstraints": {}
+        },
+        "timeline_shape_recipe_marchers": {
+            "name": "timeline_shape_recipe_marchers",
+            "columns": {
+                "id": {
+                    "name": "id",
+                    "type": "integer",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "recipe_id": {
+                    "name": "recipe_id",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "marcher_id": {
+                    "name": "marcher_id",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "slot": {
+                    "name": "slot",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "x": {
+                    "name": "x",
+                    "type": "real",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "y": {
+                    "name": "y",
+                    "type": "real",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {
+                "timeline_shape_recipe_marchers_marcher": {
+                    "name": "timeline_shape_recipe_marchers_marcher",
+                    "columns": ["marcher_id"],
+                    "isUnique": false
+                },
+                "timeline_shape_recipe_marchers_recipe_id_marcher_id_unique": {
+                    "name": "timeline_shape_recipe_marchers_recipe_id_marcher_id_unique",
+                    "columns": ["recipe_id", "marcher_id"],
+                    "isUnique": true
+                }
+            },
+            "foreignKeys": {
+                "timeline_shape_recipe_marchers_recipe_id_timeline_shape_recipes_id_fk": {
+                    "name": "timeline_shape_recipe_marchers_recipe_id_timeline_shape_recipes_id_fk",
+                    "tableFrom": "timeline_shape_recipe_marchers",
+                    "tableTo": "timeline_shape_recipes",
+                    "columnsFrom": ["recipe_id"],
+                    "columnsTo": ["id"],
+                    "onDelete": "cascade",
+                    "onUpdate": "no action"
+                },
+                "timeline_shape_recipe_marchers_marcher_id_marchers_id_fk": {
+                    "name": "timeline_shape_recipe_marchers_marcher_id_marchers_id_fk",
+                    "tableFrom": "timeline_shape_recipe_marchers",
+                    "tableTo": "marchers",
+                    "columnsFrom": ["marcher_id"],
+                    "columnsTo": ["id"],
+                    "onDelete": "cascade",
+                    "onUpdate": "no action"
+                }
+            },
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
+        "timeline_shape_recipes": {
+            "name": "timeline_shape_recipes",
+            "columns": {
+                "id": {
+                    "name": "id",
+                    "type": "integer",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "timeline_id": {
+                    "name": "timeline_id",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                },
+                "kind": {
+                    "name": "kind",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "kind_version": {
+                    "name": "kind_version",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "params": {
+                    "name": "params",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "order_mode": {
+                    "name": "order_mode",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "reverse": {
+                    "name": "reverse",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false,
+                    "default": false
+                },
+                "created_at": {
+                    "name": "created_at",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false,
+                    "default": "(CURRENT_TIMESTAMP)"
+                }
+            },
+            "indexes": {},
+            "foreignKeys": {
+                "timeline_shape_recipes_timeline_id_timelines_id_fk": {
+                    "name": "timeline_shape_recipes_timeline_id_timelines_id_fk",
+                    "tableFrom": "timeline_shape_recipes",
+                    "tableTo": "timelines",
+                    "columnsFrom": ["timeline_id"],
+                    "columnsTo": ["id"],
+                    "onDelete": "cascade",
+                    "onUpdate": "no action"
+                }
+            },
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {
+                "timeline_shape_recipes_params_check": {
+                    "name": "timeline_shape_recipes_params_check",
+                    "value": "json_valid(params)"
+                }
+            }
         },
         "timeline_shapes": {
             "name": "timeline_shapes",

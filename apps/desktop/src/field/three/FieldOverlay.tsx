@@ -1,12 +1,11 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { memo, useCallback, useMemo, useSyncExternalStore } from "react";
+import { GlyphText } from "@/shapes/editor/GlyphText";
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
-import type { FieldEditor } from "@/field/editor/fieldEditor";
+import type { FieldEditor, FieldModeDrawing } from "@/field/editor/fieldEditor";
 import type { AreaShape } from "@/field/editor/areaGestures";
 import { HANDLE_SIZE, type HandleId } from "@/field/editor/groupTransform";
 import type { FieldRect } from "@/field/editor/selectionArea";
-import type { LineToolShape } from "@/field/editor/lineTool";
 import type { PropToolShape } from "@/field/editor/propTool";
-import { DOT_RADIUS } from "@/field/editor/hitTest";
 import type { FieldMarchers } from "./fieldMarchers";
 import type { FieldItems } from "./fieldItems";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
@@ -16,6 +15,9 @@ import {
     type DrawnSelectionBox,
 } from "./selectionFrame";
 import { dotSizes, SELECTION_COLOR } from "./selectionRing";
+import { DOT_RADIUS } from "@/field/editor/hitTest";
+import { resolveMarcherLook } from "@/entity-components/appearance";
+import { GUIDE_INK, GUIDE_INK_TEXT } from "./guideInk";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -25,32 +27,64 @@ const MARQUEE_WIDTH = 2;
 const LASSO_WIDTH = 2;
 const LASSO_DASH = "5 5";
 /**
- * The line tool's look, in field units, so they scale with the field: a
- * 3-wide line, 2-wide pathways dashed 5 on, 3 off, and dots of radius 3 at
- * each pathway's middle and end. Its marchers' outlines are squares just
- * outside the dot, 1.5 wide, dashed 3 on, 5 off.
+ * A mode's look (the shape tool, a selected placed box): the outline 1 CSS px
+ * wide, dashed 6 on, 4 off; spots of radius 4 field units, 1.5 wide; walks 1
+ * field unit wide; handles 9 CSS px squares with a 1.5 px rim. As on Fabric.
  */
-const LINE_WIDTH = 3;
-const PATH_WIDTH = 2;
-const PATH_DASH = [5, 3];
-const PATH_DOT_RADIUS = 3;
-const OUTLINE_WIDTH = 1.5;
-const OUTLINE_DASH = [3, 5];
-/** How far a line marcher's outline's center line sits outside its dot. */
-const OUTLINE_GAP = 0.25;
+const SHAPE_OUTLINE_WIDTH = 1;
+const SHAPE_OUTLINE_DASH = "6 4";
+const SPOT_RADIUS = 4;
+const SPOT_WIDTH = 1.5;
+const WALK_WIDTH = 1;
+const SHAPE_HANDLE_SIZE = 9;
+const SHAPE_HANDLE_WIDTH = 1.5;
 
 /** The prop tool's line while drawing, in CSS px. */
 const PROP_PREVIEW_WIDTH = 2;
 
 /** The rotate handle's connecting line, in CSS px. */
 const ROTATE_LINE_WIDTH = 1;
+/** A shape's rotate knob, center dot and pivot, in CSS px (08-shape-system-ux.md). */
+const KNOB_RADIUS = 5;
+const CENTER_DOT_RADIUS = 5;
+const CENTER_DOT_RING = 2.5;
+const PIVOT_RADIUS = 4;
+const PIVOT_COLOR = "#facc15";
+/** The pivot's crosshair once it's out of the center (#350): its arms and ring, in CSS px */
+const PIVOT_MARK_ARM = 9;
+const PIVOT_MARK_RING = 5;
+/**
+ * The guide along a field line a shape's edge is on (#425, #427): a solid line across the whole
+ * canvas at any zoom, named at the canvas edge, over a dark edge that carries it on turf and
+ * images; the shape's side on it 2½ times the outline, so a snap is plain to see. In the guide
+ * ink (`guideInk.ts`).
+ */
+const GUIDE_WIDTH = 1.5;
+const GUIDE_CASING = "rgba(0, 0, 0, 0.35)";
+const GUIDE_CASING_WIDTH = GUIDE_WIDTH + 2;
+const GUIDE_EDGE_WIDTH = 2.5 * SHAPE_OUTLINE_WIDTH;
+/** A corner or center on a guide with no side along it (#446): a ring in CSS px, as the pivot's */
+const GUIDE_MARK_RADIUS = 6;
+const GUIDE_MARK_WIDTH = GUIDE_EDGE_WIDTH;
+/** A guide's name tag at the canvas edge, in CSS px */
+const GUIDE_LABEL_PX = 12;
+const GUIDE_LABEL_HEIGHT = 20;
+const GUIDE_LABEL_INSET = 6;
+/** How strong an open shape's controls are while the pointer is away from it (#403) */
+const CALM_CONTROLS_OPACITY = 0.25;
+/** Spot labels and the pointer tip, in CSS px. */
+const SPOT_LABEL_PX = 10;
+const TIP_PX = 12;
+const TIP_OFFSET_PX = 14;
+/** Room for the tip's pill; it lays itself out inside, from the top left */
+const TIP_BOX = { width: 360, height: 32 };
 
 /**
  * The SVG overlay over the field (ADR 0005 D-2): what the editor draws on top
  * of the WebGL field in screen space. The selection box around a selection of
  * two or more marchers (#193) with its scale and rotate handles (#198), the
- * marquee and lasso while one is drawn (#195), and the line tool's line,
- * previews and outlined marchers (#203).
+ * marquee and lasso while one is drawn (#195), and what a mode draws: the
+ * shape tool's box, or a selected placed box's (#204).
  *
  * It reads the camera from the view store, as the WebGL camera does, and
  * re-renders only when what it draws changes: with no box, playback doesn't
@@ -92,8 +126,8 @@ export default function FieldOverlay({
     const area = useSyncExternalStore(subscribeEditor, () =>
         editor.areaShape(),
     );
-    const lineTool = useSyncExternalStore(subscribeEditor, () =>
-        editor.lineToolShape(),
+    const modeDrawing = useSyncExternalStore(subscribeEditor, () =>
+        editor.modeDrawing(),
     );
     const propTool = useSyncExternalStore(subscribeEditor, () =>
         editor.propToolShape(),
@@ -109,14 +143,14 @@ export default function FieldOverlay({
                 <Marquee rect={area.rect} theme={theme} />
             )}
             {area?.kind === "lasso" && <Lasso lasso={area} theme={theme} />}
-            {propTool && <PropToolPreview tool={propTool} theme={theme} />}
-            {lineTool && (
-                <LineToolPreview
-                    tool={lineTool}
-                    marchers={marchers}
+            {modeDrawing && (
+                <ModeDrawing
+                    drawing={modeDrawing}
                     theme={theme}
+                    marchers={marchers}
                 />
             )}
+            {propTool && <PropToolPreview tool={propTool} theme={theme} />}
         </svg>
     );
 }
@@ -278,109 +312,573 @@ function Lasso({
 }
 
 /**
- * The line tool: its marchers outlined (dashed, the theme's shape color),
- * the line in the shape color, and dashed pathways in the temporary path
- * color from each marcher to where the line puts it.
+ * What a mode draws (#204): the shape's outline, dashed, the spots its
+ * marchers will stand on, a faint line from each marcher to its spot, and its
+ * handles, in the theme's shape color.
  */
-function LineToolPreview({
-    tool,
+/** How see-through a start ghost is (#417; the owner picked ghosts over rings in the lab) */
+const GHOST_OPACITY = 0.35;
+
+/**
+ * Where an open shape's marchers start (#346, #417): a faint, see-through dot in each marcher's
+ * own color, at the start flag
+ */
+const StartMarks = memo(function StartMarks({
+    drawing,
+    theme,
     marchers,
+    looks,
+    scale,
+}: {
+    drawing: FieldModeDrawing;
+    theme: FieldTheme;
+    marchers: FieldMarchers;
+    /** The marchers' appearance version */
+    looks: number;
+    /** The dots' size step at this zoom (`dotSizes`) */
+    scale: number;
+}) {
+    const ringIds = drawing.ringIds;
+    const ringKey = ringIds?.join(",");
+    const { ids } = marchers;
+    // Each ring's color, worked out again only when whose rings or their looks change (#455)
+    const colors = useMemo(() => {
+        const shape = rgbaToString(theme.shape);
+        const index = new Map(marchers.ids.map((id, i) => [id, i]));
+        return (ringIds ?? []).map((id) => {
+            const row = index.get(id);
+            const look =
+                row === undefined
+                    ? null
+                    : resolveMarcherLook(marchers.stacks[row] ?? [], theme);
+            return look
+                ? rgbaToString(
+                      look.shape === "cross" ? look.crossColor : look.fill,
+                  )
+                : shape;
+        });
+        // ringIds by content, marchers by their versions
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ringKey, theme, marchers, looks, ids]);
+    const shape = rgbaToString(theme.shape);
+    const r = DOT_RADIUS * scale;
+    return (
+        <>
+            {drawing.rings?.map((point, i) => (
+                <circle
+                    key={i}
+                    cx={point.x}
+                    cy={point.y}
+                    r={r}
+                    fill={colors[i] ?? shape}
+                    opacity={GHOST_OPACITY}
+                    data-testid="fieldShapeStartGhost"
+                />
+            ))}
+        </>
+    );
+});
+
+/**
+ * A guide's name at the canvas edge (#427): at the top for a line side to side, at the left for
+ * one front to back, kept inside the canvas
+ */
+function GuideLabel({
+    text,
+    at,
+    upright,
+    width,
+    height,
+}: {
+    text: string;
+    at: { x: number; y: number };
+    upright: boolean;
+    width: number;
+    height: number;
+}) {
+    // About the width of the text in DM Sans at this size, with room either side
+    const w = text.length * GUIDE_LABEL_PX * 0.55 + 16;
+    const h = GUIDE_LABEL_HEIGHT;
+    const clamp = (v: number, max: number) =>
+        Math.max(GUIDE_LABEL_INSET, Math.min(max - GUIDE_LABEL_INSET, v));
+    const x = upright ? clamp(at.x - w / 2, width - w) : GUIDE_LABEL_INSET;
+    const y = upright ? GUIDE_LABEL_INSET : clamp(at.y - h / 2, height - h);
+    return (
+        <g data-testid="fieldShapeGuideLabel">
+            <rect
+                x={x}
+                y={y}
+                width={w}
+                height={h}
+                rx={h / 2}
+                fill={GUIDE_INK}
+            />
+            <text
+                x={x + w / 2}
+                y={y + h / 2}
+                fontSize={GUIDE_LABEL_PX}
+                fontWeight={600}
+                fontFamily="DM Sans, sans-serif"
+                fill={GUIDE_INK_TEXT}
+                textAnchor="middle"
+                dominantBaseline="central"
+            >
+                {text}
+            </text>
+        </g>
+    );
+}
+
+/**
+ * The controls fade while the pointer is away from the shape (#403), and come back over it: at
+ * once for people who ask their system for less motion
+ */
+export const controlsStyle = (
+    calm: boolean | undefined,
+): { opacity: number; transition?: string } =>
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
+        ? { opacity: calm ? CALM_CONTROLS_OPACITY : 1 }
+        : {
+              opacity: calm ? CALM_CONTROLS_OPACITY : 1,
+              transition: "opacity 150ms ease-out",
+          };
+
+/**
+ * The shape's outline, where its marchers start, their walks and its spots, in field units
+ * under the view's transform: the outline's stroke stays in CSS px (#455)
+ */
+const ShapeBody = memo(function ShapeBody({
+    drawing,
+    theme,
+    marchers,
+    looks,
+    scale,
+}: {
+    drawing: FieldModeDrawing;
+    theme: FieldTheme;
+    marchers: FieldMarchers;
+    /** The marchers' appearance version: their looks changed, so the ghosts redraw */
+    looks: number;
+    scale: number;
+}) {
+    const shape = rgbaToString(theme.shape);
+    const walk = rgbaToString({ ...theme.shape, a: 0.4 });
+    const fill = rgbaToString({ ...theme.shape, a: 0.06 });
+    const open = drawing.stage === "open";
+    const dots = drawing.stage === "drawing";
+    return (
+        <>
+            {drawing.outline && (
+                <polygon
+                    points={drawing.outline
+                        .map((p) => `${p.x},${p.y}`)
+                        .join(" ")}
+                    // The faint fill shows with the controls, on hover (#403)
+                    fill={open && !drawing.calm ? fill : "none"}
+                    stroke={shape}
+                    strokeWidth={SHAPE_OUTLINE_WIDTH}
+                    strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
+                    vectorEffect="non-scaling-stroke"
+                />
+            )}
+            <StartMarks
+                drawing={drawing}
+                theme={theme}
+                marchers={marchers}
+                looks={looks}
+                scale={scale}
+            />
+            {drawing.walks.map(({ from: a, to: b }, i) => {
+                return (
+                    <line
+                        key={i}
+                        x1={a.x}
+                        y1={a.y}
+                        x2={b.x}
+                        y2={b.y}
+                        stroke={walk}
+                        strokeWidth={WALK_WIDTH}
+                    />
+                );
+            })}
+            {drawing.spots.map((p, i) => {
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={SPOT_RADIUS}
+                        // Solid while drawn and once open (#403): the spots are where everyone will
+                        // stand, unlike the hollow start rings
+                        fill={dots || open ? shape : "none"}
+                        stroke={dots || open ? "white" : shape}
+                        strokeWidth={SPOT_WIDTH}
+                    />
+                );
+            })}
+        </>
+    );
+});
+
+/** The spots on a guide and an outline's gaps, in field units over the guides (#455) */
+const ShapeOnGuides = memo(function ShapeOnGuides({
+    drawing,
     theme,
 }: {
-    tool: LineToolShape;
-    marchers: FieldMarchers;
+    drawing: FieldModeDrawing;
     theme: FieldTheme;
 }) {
-    const view = useFieldViewStore();
-    // Where the outlined marchers are drawn, as a string so the snapshot is stable
-    const outlined = useSyncExternalStore(marchers.subscribe, () =>
-        JSON.stringify(drawnAt(marchers, tool.marchers)),
-    );
     const shape = rgbaToString(theme.shape);
-    const path = rgbaToString(theme.tempPath);
+    const controls = controlsStyle(drawing.calm);
+    return (
+        <>
+            {drawing.onGuides?.map((p, i) => {
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={SPOT_RADIUS}
+                        fill={GUIDE_INK}
+                        stroke="white"
+                        strokeWidth={SPOT_WIDTH}
+                    />
+                );
+            })}
+            {drawing.gaps?.map((p, i) => {
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={SPOT_RADIUS}
+                        fill="none"
+                        stroke={shape}
+                        strokeWidth={SPOT_WIDTH}
+                        strokeDasharray="1.5 1.5"
+                        style={controls}
+                        data-testid="fieldShapeGap"
+                    />
+                );
+            })}
+        </>
+    );
+});
+
+function ModeDrawing({
+    drawing,
+    theme,
+    marchers,
+}: {
+    drawing: FieldModeDrawing;
+    theme: FieldTheme;
+    marchers: FieldMarchers;
+}) {
+    const view = useFieldViewStore();
+    const shape = rgbaToString(theme.shape);
     const z = view.zoom;
     const at = (point: { x: number; y: number }) =>
         fieldToElement(view, point.x, point.y);
-    const half = (DOT_RADIUS * dotSizes(z).scale + OUTLINE_GAP) * z;
-    const { line } = tool;
+    const half = SHAPE_HANDLE_SIZE / 2;
+    const controls = controlsStyle(drawing.calm);
+    // What scales with the field is drawn in field units under the view's transform, and redrawn
+    // only when the drawing changes, not on every pan or zoom frame (#455)
+    const transform = `translate(${view.panX} ${view.panY}) scale(${z})`;
     return (
-        <g data-testid="fieldLineTool">
-            {(JSON.parse(outlined) as { x: number; y: number }[]).map(
-                (point, i) => {
-                    const center = at(point);
-                    return (
-                        <rect
-                            key={i}
-                            x={center.x - half}
-                            y={center.y - half}
-                            width={half * 2}
-                            height={half * 2}
-                            fill="none"
-                            stroke={shape}
-                            strokeWidth={OUTLINE_WIDTH * z}
-                            strokeDasharray={OUTLINE_DASH.map(
-                                (d) => d * z,
-                            ).join(" ")}
-                        />
-                    );
-                },
-            )}
-            {line && (
-                <line
-                    x1={at(line.start).x}
-                    y1={at(line.start).y}
-                    x2={at(line.end).x}
-                    y2={at(line.end).y}
-                    stroke={shape}
-                    strokeWidth={LINE_WIDTH * z}
+        <g data-testid="fieldShapeMode" data-stage={drawing.stage}>
+            <g transform={transform}>
+                <ShapeBody
+                    drawing={drawing}
+                    theme={theme}
+                    marchers={marchers}
+                    looks={marchers.appearanceVersion}
+                    scale={dotSizes(z).scale}
                 />
-            )}
-            {tool.previews.map(({ id, from, to }) => {
-                const a = at(from);
-                const b = at(to);
+            </g>
+            {drawing.guides?.map(({ from, to }, i) => {
+                const upright = Math.abs(at(from).x - at(to).x) < 1e-6;
+                // Across the whole canvas, at any zoom
+                const p = at(from);
+                const a = upright ? { x: p.x, y: 0 } : { x: 0, y: p.y };
+                const b = upright
+                    ? { x: p.x, y: view.height }
+                    : { x: view.width, y: p.y };
                 return (
-                    <g key={id}>
+                    <g key={i} data-testid="fieldShapeGuide">
                         <line
                             x1={a.x}
                             y1={a.y}
                             x2={b.x}
                             y2={b.y}
-                            stroke={path}
-                            strokeWidth={PATH_WIDTH * z}
-                            strokeDasharray={PATH_DASH.map((d) => d * z).join(
-                                " ",
-                            )}
+                            stroke={GUIDE_CASING}
+                            strokeWidth={GUIDE_CASING_WIDTH}
                         />
-                        <circle
-                            cx={(a.x + b.x) / 2}
-                            cy={(a.y + b.y) / 2}
-                            r={PATH_DOT_RADIUS * z}
-                            // Midpoints are white whatever the theme
-                            fill="white"
-                            stroke={path}
-                            strokeWidth={PATH_WIDTH * z}
-                        />
-                        <circle
-                            cx={b.x}
-                            cy={b.y}
-                            r={PATH_DOT_RADIUS * z}
-                            fill={path}
+                        <line
+                            x1={a.x}
+                            y1={a.y}
+                            x2={b.x}
+                            y2={b.y}
+                            stroke={GUIDE_INK}
+                            strokeWidth={GUIDE_WIDTH}
                         />
                     </g>
                 );
             })}
+            {drawing.guideEdges?.map(({ from, to }, i) => {
+                const a = at(from);
+                const b = at(to);
+                return (
+                    <line
+                        key={i}
+                        x1={a.x}
+                        y1={a.y}
+                        x2={b.x}
+                        y2={b.y}
+                        stroke={GUIDE_INK}
+                        strokeWidth={GUIDE_EDGE_WIDTH}
+                        strokeLinecap="round"
+                        data-testid="fieldShapeGuideEdge"
+                    />
+                );
+            })}
+            {drawing.guideMarks?.map((point, i) => {
+                // A turned box's corner or a center on the line: no side shows it, so a ring does
+                const p = at(point);
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={GUIDE_MARK_RADIUS}
+                        fill="none"
+                        stroke={GUIDE_INK}
+                        strokeWidth={GUIDE_MARK_WIDTH}
+                        data-testid="fieldShapeGuideMark"
+                    />
+                );
+            })}
+            <g transform={transform}>
+                <ShapeOnGuides drawing={drawing} theme={theme} />
+            </g>
+            {drawing.labels?.map(({ at: point, text }, i) => {
+                const p = at(point);
+                return (
+                    <text
+                        key={i}
+                        x={p.x}
+                        y={p.y - (SPOT_RADIUS + 2) * z}
+                        fontSize={SPOT_LABEL_PX}
+                        fontFamily="DM Sans, sans-serif"
+                        textAnchor="middle"
+                        fill={shape}
+                        data-testid="fieldShapeSpotLabel"
+                    >
+                        {text}
+                    </text>
+                );
+            })}
+            {drawing.knob &&
+                (() => {
+                    const a = at(drawing.knob.stem);
+                    const b = at(drawing.knob.at);
+                    return (
+                        <g data-testid="fieldShapeKnob" style={controls}>
+                            <line
+                                x1={a.x}
+                                y1={a.y}
+                                x2={b.x}
+                                y2={b.y}
+                                stroke={shape}
+                                strokeWidth={ROTATE_LINE_WIDTH}
+                                strokeDasharray="3 3"
+                            />
+                            <circle
+                                cx={b.x}
+                                cy={b.y}
+                                r={KNOB_RADIUS}
+                                fill="white"
+                                stroke={shape}
+                                strokeWidth={SHAPE_HANDLE_WIDTH}
+                            />
+                        </g>
+                    );
+                })()}
+            {drawing.handles.map((point, i) => {
+                const p = at(point);
+                return (
+                    <rect
+                        key={i}
+                        x={p.x - half}
+                        y={p.y - half}
+                        width={SHAPE_HANDLE_SIZE}
+                        height={SHAPE_HANDLE_SIZE}
+                        fill="white"
+                        stroke={shape}
+                        strokeWidth={SHAPE_HANDLE_WIDTH}
+                        style={controls}
+                        data-testid="fieldShapeHandle"
+                    />
+                );
+            })}
+            {drawing.centerDot &&
+                (() => {
+                    const p = at(drawing.centerDot);
+                    return (
+                        <circle
+                            cx={p.x}
+                            cy={p.y}
+                            r={CENTER_DOT_RADIUS}
+                            fill="white"
+                            stroke={shape}
+                            strokeWidth={CENTER_DOT_RING}
+                            style={controls}
+                            data-testid="fieldShapeCenterDot"
+                        />
+                    );
+                })()}
+            {drawing.pivotMark &&
+                (() => {
+                    const p = at(drawing.pivotMark);
+                    const r = PIVOT_MARK_ARM;
+                    const cross = `M ${p.x - r} ${p.y} H ${p.x + r} M ${p.x} ${p.y - r} V ${p.y + r}`;
+                    return (
+                        <g data-testid="fieldShapePivotMark" style={controls}>
+                            {/* A dark edge under the yellow, so it reads on grass and on white */}
+                            <path d={cross} stroke="black" strokeWidth={3.5} />
+                            <circle
+                                cx={p.x}
+                                cy={p.y}
+                                r={PIVOT_MARK_RING}
+                                fill="none"
+                                stroke="black"
+                                strokeWidth={3.5}
+                            />
+                            <path
+                                d={cross}
+                                stroke={PIVOT_COLOR}
+                                strokeWidth={1.5}
+                            />
+                            <circle
+                                cx={p.x}
+                                cy={p.y}
+                                r={PIVOT_MARK_RING}
+                                fill="none"
+                                stroke={PIVOT_COLOR}
+                                strokeWidth={1.5}
+                            />
+                        </g>
+                    );
+                })()}
+            {drawing.pivotPreview &&
+                (() => {
+                    // A cell of the editor's pivot menu pointed at (#437): the pivot mark a
+                    // little larger on a soft halo, at full strength even while the shape is calm
+                    const p = at(drawing.pivotPreview);
+                    const r = PIVOT_MARK_ARM * 1.3;
+                    const ring = PIVOT_MARK_RING * 1.3;
+                    const cross = `M ${p.x - r} ${p.y} H ${p.x + r} M ${p.x} ${p.y - r} V ${p.y + r}`;
+                    return (
+                        <g
+                            data-testid="fieldShapePivotPreview"
+                            pointerEvents="none"
+                        >
+                            <circle
+                                cx={p.x}
+                                cy={p.y}
+                                r={r + 4}
+                                fill={PIVOT_COLOR}
+                                fillOpacity={0.25}
+                            />
+                            <path d={cross} stroke="black" strokeWidth={4} />
+                            <circle
+                                cx={p.x}
+                                cy={p.y}
+                                r={ring}
+                                fill="none"
+                                stroke="black"
+                                strokeWidth={4}
+                            />
+                            <path
+                                d={cross}
+                                stroke={PIVOT_COLOR}
+                                strokeWidth={2}
+                            />
+                            <circle
+                                cx={p.x}
+                                cy={p.y}
+                                r={ring}
+                                fill="none"
+                                stroke={PIVOT_COLOR}
+                                strokeWidth={2}
+                            />
+                        </g>
+                    );
+                })()}
+            {drawing.pivot &&
+                (() => {
+                    const a = at(drawing.pivot.at);
+                    const b = at(drawing.pivot.to);
+                    return (
+                        <g data-testid="fieldShapePivot">
+                            <line
+                                x1={a.x}
+                                y1={a.y}
+                                x2={b.x}
+                                y2={b.y}
+                                stroke={PIVOT_COLOR}
+                                strokeWidth={ROTATE_LINE_WIDTH}
+                                strokeDasharray="4 3"
+                            />
+                            <circle
+                                cx={a.x}
+                                cy={a.y}
+                                r={PIVOT_RADIUS}
+                                fill={PIVOT_COLOR}
+                                stroke="black"
+                                strokeWidth={1}
+                            />
+                        </g>
+                    );
+                })()}
+            {drawing.tip &&
+                (() => {
+                    const p = at(drawing.tip.at);
+                    // A solid pill, so the readout reads over any part of the field (owner)
+                    return (
+                        <foreignObject
+                            x={p.x + TIP_OFFSET_PX}
+                            y={p.y + TIP_OFFSET_PX}
+                            width={TIP_BOX.width}
+                            height={TIP_BOX.height}
+                            overflow="visible"
+                        >
+                            <div
+                                className="rounded-6 border-stroke bg-bg-1 bg-modal text-text shadow-modal inline-flex items-center gap-2 border px-6 py-2 whitespace-nowrap tabular-nums"
+                                style={{ fontSize: TIP_PX }}
+                                data-testid="fieldShapeTip"
+                            >
+                                <GlyphText text={drawing.tip.text} size={12} />
+                            </div>
+                        </foreignObject>
+                    );
+                })()}
+            {/* The guides' names last, over every line, edge and spot, so nothing crosses
+                their text (owner on #427) */}
+            {drawing.guides?.map(({ from, to, label }, i) => {
+                if (!label) return null;
+                const upright = Math.abs(at(from).x - at(to).x) < 1e-6;
+                const p = at(from);
+                return (
+                    <GuideLabel
+                        key={i}
+                        text={label}
+                        at={upright ? { x: p.x, y: 0 } : { x: 0, y: p.y }}
+                        upright={upright}
+                        width={view.width}
+                        height={view.height}
+                    />
+                );
+            })}
         </g>
     );
-}
-
-/** Where the marchers in `ids` are drawn, skipping any not drawn or hidden. */
-function drawnAt(marchers: FieldMarchers, ids: readonly number[]) {
-    const wanted = new Set(ids);
-    const points: { x: number; y: number }[] = [];
-    const { ids: drawn, positions, hidden } = marchers;
-    for (let i = 0; i < drawn.length; i++) {
-        if (!wanted.has(drawn[i]) || hidden?.[i]) continue;
-        points.push({ x: positions[i * 2], y: positions[i * 2 + 1] });
-    }
-    return points;
 }

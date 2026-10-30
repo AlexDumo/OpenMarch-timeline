@@ -3,6 +3,7 @@ import { FileTab } from "./tabs/FileTab";
 import { CollisionsTab } from "./tabs/CollisionsTab";
 import AlignmentTab from "./tabs/AlignmentTab";
 import ViewTab from "./tabs/ViewTab";
+import ShapesTab from "@/shapes/tool/ShapesTab";
 import { useEffect, useState } from "react";
 import { T } from "@tolgee/react";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
@@ -57,6 +58,12 @@ export default function Topbar() {
                         <TabItem value="alignment">
                             <T keyName="inspector.shape.alignmentTab" />
                         </TabItem>
+                        <TabItem
+                            value="shapes"
+                            data-testid="toolbar-shapes-tab"
+                        >
+                            <T keyName="inspector.shape.shapesTab" />
+                        </TabItem>
 
                         <TabItem value="select">
                             <T keyName="inspector.shape.selectTab" />
@@ -85,6 +92,10 @@ export default function Topbar() {
 
                     <TabContent value="alignment">
                         <AlignmentTab />
+                    </TabContent>
+
+                    <TabContent value="shapes">
+                        <ShapesTab />
                     </TabContent>
 
                     <TabContent value="select">

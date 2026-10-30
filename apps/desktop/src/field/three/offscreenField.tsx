@@ -20,6 +20,7 @@ import type { FieldImageSize } from "@/db-functions/fieldFloor";
 import type { PositionSource } from "@/timeline/positionBuffer";
 import type { AppearanceStepsByMarcherId } from "@/services/appearance/appearanceSteps";
 import { FieldDimming } from "./fieldDimming";
+import { FieldFollowing } from "./fieldFollowing";
 import { FieldDrawContext, type FieldDraw } from "./fieldDrawContext";
 import { FieldMarchers } from "./fieldMarchers";
 import { cameraBounds, type FieldView } from "./fieldView";
@@ -151,11 +152,13 @@ export async function createOffscreenField(
                 <MarchersLayer
                     marchers={marchers}
                     dimming={NO_DIMMING}
+                    following={NO_FOLLOWING}
                     theme={args.fieldProperties.theme}
                 />
                 <LabelsLayer
                     marchers={marchers}
                     dimming={NO_DIMMING}
+                    following={NO_FOLLOWING}
                     labels={args.labels}
                     theme={args.fieldProperties.theme}
                     atlas={atlases.label}
@@ -233,6 +236,8 @@ const MOUNT_TIMEOUT_MS = 20_000;
 
 /** Nobody is dimmed in an export. */
 const NO_DIMMING = new FieldDimming();
+/** Nobody is drawn as Following in an export: it looks like the show (#300). */
+const NO_FOLLOWING = new FieldFollowing();
 
 /** Resolves once everything under it has mounted: a parent's effects run after its children's. */
 function Mounted({

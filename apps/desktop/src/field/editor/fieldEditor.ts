@@ -24,7 +24,6 @@ import {
     type ItemFrame,
     type ItemSize,
 } from "./itemTransform";
-import { LineTool, type LineToolShape, type StepGrid } from "./lineTool";
 import { PropTool, type PropToolShape } from "./propTool";
 import type { OutlineType } from "@/db-functions/items";
 import type { DrawnOutline } from "@/items/itemOutlines";
@@ -86,6 +85,8 @@ export type FieldEditorPorts = {
      * anything with it. The app may act on the press here (story 60: the
      * first press after a paused preview clears the preview) and returns
      * true when it takes it, so the editor selects, drags and drops nothing.
+     * A right-click calls it too, before it opens the menu, and goes on
+     * whatever it returns (#315).
      */
     takePress?(): boolean;
     /**
@@ -106,12 +107,14 @@ export type FieldEditorPorts = {
      */
     drop(positions: readonly MarcherPosition[]): Promise<DropResult>;
     /**
-     * The line tool finished a line (#203): where it puts its marchers, for
-     * the app to apply (Shift+Enter).
+     * The selection a press on marcher `hit` makes instead of the editor's
+     * rules, or null for the editor's rules: a click on a placed box's member
+     * selects the whole box. Asked once per press, when it becomes a click or
+     * a drag.
      */
-    lineFinished?(targets: readonly MarcherPosition[]): void;
-    /** The step grid line points round to; null before the field loads. */
-    stepGrid?(): StepGrid | null;
+    pressSelection?(hit: number, shift: boolean): readonly number[] | null;
+    /** A double-click on marcher `id`: the second click came after a click on it. */
+    doubleClickMarcher?(id: number): void;
     /**
      * Whether a marcher row is an item (a prop or equipment, C2.1). Items are
      * hit by their Outline ({@link itemAt}), not by a dot at their center.
@@ -132,6 +135,12 @@ export type FieldEditorPorts = {
     snap?(point: FieldPoint): FieldPoint;
     /** The prop tool finished an Outline: for the app to make the prop. */
     propDrawn?(outline: DrawnOutline): void;
+    /**
+     * A right-click (a right press released under the click slop, with no
+     * open shape) asks for the field's menu here (#315), after selecting the
+     * marcher clicked if it wasn't selected.
+     */
+    openMenu?(at: FieldPointer): void;
 };
 
 export type DropResult = "saved" | "refused";
@@ -179,18 +188,148 @@ export type FieldPress = {
     hit: number | null;
     /** The selection box's handle pressed on (#198), which wins over a marcher under it. */
     handle: HandleId | null;
-    /** The second press of a double-click on empty field. */
+    /** The second press of a double-click on empty field, or on the marcher `hit`. */
     double: boolean;
 };
 
-/** The last click, for telling a double-click. */
-type LastClick = { time: number; screen: FieldPoint; hit: number | null };
+/**
+ * The last click, for telling a double-click: on a marcher (`hit`), on empty
+ * field (null), or one a mode took (`mode`).
+ */
+type LastClick = {
+    time: number;
+    screen: FieldPoint;
+    hit: number | null;
+    mode?: boolean;
+};
 
 export type FieldCursor =
     | "default"
     | "pointer"
     | "crosshair"
+    | "move"
+    | "grab"
     | ReturnType<typeof handleCursor>;
+
+/**
+ * What a field mode draws over the field, in field units: a shape's outline
+ * (closed), the spots its marchers will stand on, a line from each marcher to
+ * its spot, and the handles that reshape it.
+ */
+export type FieldModeDrawing = {
+    outline: readonly FieldPoint[] | null;
+    spots: readonly FieldPoint[];
+    walks: readonly { from: FieldPoint; to: FieldPoint }[];
+    handles: readonly FieldPoint[];
+    /**
+     * Where the shape's marchers start the move (08-shape-system-ux.md, "Marcher styling"), drawn
+     * as faint ghosts of them (#417): at the start flag, the same points the walks leave from
+     */
+    rings?: readonly FieldPoint[];
+    /** The marcher at each of `rings`, whose ghost is drawn in its own color */
+    ringIds?: readonly number[];
+    /**
+     * Spots the shape leaves empty on purpose, drawn as dashed rings: an odd-count outline's gap
+     * (#390), which a click on another spot between corners moves
+     */
+    gaps?: readonly FieldPoint[];
+    /**
+     * The shape's look at this stage (docs/timeline/research/shapes/08-shape-system-ux.md,
+     * "Marcher styling"): while it's drawn, a dashed outline and solid spots; once open, a solid
+     * outline with a faint fill. Dashed rings when absent.
+     */
+    stage?: "drawing" | "open";
+    /** Who will stand on each spot */
+    labels?: readonly { at: FieldPoint; text: string }[];
+    /** The rotate knob and the foot of its stem on the shape's back edge */
+    knob?: { at: FieldPoint; stem: FieldPoint };
+    /** The dot that moves the whole shape */
+    centerDot?: FieldPoint;
+    /**
+     * The shape's pivot once it's out of the center (#350): a yellow crosshair that drags on its
+     * own. At the center the center dot is the pivot.
+     */
+    pivotMark?: FieldPoint;
+    /**
+     * Where the pivot a cell of the shape editor's pivot menu points at would be (#437): a
+     * preview only, drawn at full strength even while the shape is calm
+     */
+    pivotPreview?: FieldPoint;
+    /** While turning: what it turns around, and the pointer */
+    pivot?: { at: FieldPoint; to: FieldPoint };
+    /** A note by the pointer: the angle, or where the shape is in drill terms */
+    tip?: { at: FieldPoint; text: string };
+    /** The spots are part way to where they're going: a glide is running (#387) */
+    gliding?: boolean;
+    /**
+     * The pointer is away from the shape and its controls (#403): the handles, knob, center dot,
+     * pivot and gap rings are drawn faint, so the spots read clearly
+     */
+    calm?: boolean;
+    /**
+     * While a stretch, a draw or a move has the shape's corner, edge or center on one of the
+     * field's lines (#425, #446): a guide
+     * along each such line, drawn across the whole canvas
+     */
+    guides?: readonly {
+        from: FieldPoint;
+        to: FieldPoint;
+        /** The line as the coordinate sheet writes it: "On 50", "12 BE BH" (#427) */
+        label?: string;
+    }[];
+    /** The shape's sides that lie on a guide's line, drawn thicker in the guide's color */
+    guideEdges?: readonly { from: FieldPoint; to: FieldPoint }[];
+    /**
+     * The shape's corners or center on a guide's line with no side along it (a turned box's
+     * corner, a center), ringed in the guide's color (#446)
+     */
+    guideMarks?: readonly FieldPoint[];
+    /** The spots standing on a guide, tinted */
+    onGuides?: readonly FieldPoint[];
+};
+
+/**
+ * A tool that takes edit presses before the editor's own rules (the shape
+ * tool, a selected placed box). The editor asks it about every edit press
+ * after `takePress`; a press it claims goes to it until the release, and the
+ * editor selects, drags and drops nothing. The rest go through the editor's
+ * rules as usual. Navigation's presses never reach it.
+ */
+export interface FieldMode {
+    /** Whether the mode takes this press. */
+    claims(pointer: FieldPointer): boolean;
+    press(pointer: FieldPointer): void;
+    move(pointer: FieldPointer): void;
+    /**
+     * The press it claimed ended. `click` when it moved less than the click
+     * slop; `double` when that click came soon after another click it took.
+     */
+    release(pointer: FieldPointer, click: { double: boolean } | null): void;
+    /** The press it claimed was lost: nothing is saved. */
+    cancel(): void;
+    /** The cursor over `pointer` with no button down, or null for the editor's. */
+    cursorAt(pointer: FieldPointer): FieldCursor | null;
+    /** The pointer left the field with no button down. */
+    leave?(): void;
+    /** What it draws over the field, or null for nothing. */
+    drawing(): FieldModeDrawing | null;
+    /** Calls `listener` when its drawing or cursor changes. Returns the unsubscribe. */
+    subscribe(listener: () => void): () => void;
+    /**
+     * Whether the selection box's handles (#198), and a drag from inside the
+     * box, are off while the mode is on: it has its own.
+     */
+    readonly ownsSelectionBox: boolean;
+    /** Whether the inspector's typed rotation is refused while it's on. */
+    readonly locksSelection: boolean;
+    /**
+     * Whether the field's menu (#315) stays shut while it's on: the open shape, being edited, is
+     * what the field is about. A selected placed box leaves it open, for its marchers.
+     */
+    readonly blocksFieldMenu?: boolean;
+    /** What `activeGesture` reports while one of its presses is held, and while it's on when `always`. */
+    readonly gesture: { kind: FieldTestGesture; always: boolean };
+}
 
 /** A rotation typed into the inspector (user story 54), until it's saved. */
 type TypedRotation = {
@@ -221,14 +360,20 @@ export class FieldEditor {
     private typed: TypedRotation | null = null;
     /** Counts typed rotations ended, saved or not, so the inspector's input starts over after each. */
     private rotationsEnded = 0;
-    /** The line tool, while it's on (#203). */
-    private lineTool: LineTool | null = null;
+    /** The mode taking presses first, while one is on. */
+    private mode: FieldMode | null = null;
+    private unsubscribeMode: (() => void) | null = null;
+    /** A press the mode claimed, until its release. */
+    private modePress: { start: FieldPointer; double: boolean } | null = null;
     /** The prop tool, while it's on (C2.1). */
     private propTool: PropTool | null = null;
     /** The prop tool's last press, for telling its double-clicks. */
     private lastToolPress: { time: number; screen: FieldPoint } | null = null;
-    /** A right press during the line tool, until its release: a click clears the line. */
-    private rightPress: FieldPointer | null = null;
+    /**
+     * A right press, until its release: navigation pans with it, and a click
+     * (one that never moved past the slop) opens the field's menu (#315).
+     */
+    private rightPress: { start: FieldPointer; dragged: boolean } | null = null;
     private readonly listeners = new Set<() => void>();
     private readonly now: () => number;
     private readonly areaPorts: AreaPorts;
@@ -256,9 +401,12 @@ export class FieldEditor {
      */
     pointerDown(pointer: FieldPointer): boolean {
         if (!this.isEditButton(pointer)) {
-            // Navigation pans with it; a right-click (no drag) clears the line tool's line
+            // Navigation pans with it; a right-click (no drag) opens the
+            // menu. A Mac's Ctrl-click only pans (#194)
             this.rightPress =
-                pointer.button === 2 && this.lineTool ? pointer : null;
+                pointer.button === 2
+                    ? { start: pointer, dragged: false }
+                    : null;
             return false;
         }
         this.cancelGesture();
@@ -278,16 +426,25 @@ export class FieldEditor {
             }
             return true;
         }
-        if (taken || this.lineTool) {
+        if (taken) {
             // Captured all the same, so its moves and release do nothing either.
             // Nor is it half of a double-click: the next press can't start a lasso
             this.press = null;
             this.lastClick = null;
             this.ignoredButton = pointer.button;
-            // The line tool's presses draw its line and never select (story 20).
-            // Ctrl/Cmd+click doesn't touch the line
-            if (!taken && !pointer.ctrl && !pointer.meta)
-                this.lineTool?.press(pointer);
+            return true;
+        }
+        if (this.mode?.claims(pointer)) {
+            const last = this.lastClick;
+            this.press = null;
+            this.modePress = {
+                start: pointer,
+                // The first click may have been the editor's: the click
+                // on a box's member that turned the mode on
+                double: last !== null && this.isSoonAfter(last, pointer),
+            };
+            this.mode.press(pointer);
+            this.emit();
             return true;
         }
         // A press on the field saves a rotation typed in the inspector first
@@ -298,18 +455,21 @@ export class FieldEditor {
             start: pointer,
             hit,
             handle,
-            double: hit === null && !handle && this.isDoubleClick(pointer),
+            double: !handle && this.isDoubleClick(pointer, hit),
         };
         return true;
     }
 
     pointerMove(pointer: FieldPointer): void {
+        // A right press that went past the slop panned, even if it comes back
+        if (this.rightPress && isPastSlop(this.rightPress.start, pointer))
+            this.rightPress.dragged = true;
         if (this.propTool) {
             this.propTool.move(pointer);
             return;
         }
-        if (this.lineTool) {
-            this.lineTool.move(pointer);
+        if (this.modePress) {
+            this.mode?.move(pointer);
             return;
         }
         if (this.gesture) {
@@ -319,6 +479,11 @@ export class FieldEditor {
         if (this.ignoredButton !== null) return;
         const press = this.press;
         if (!press) {
+            const modeCursor = this.mode?.cursorAt(pointer) ?? null;
+            if (modeCursor) {
+                this.setHover(modeCursor);
+                return;
+            }
             const handle = this.handleAt(pointer.field);
             this.setHover(
                 handle
@@ -347,8 +512,42 @@ export class FieldEditor {
         if (pointer.button === 2) {
             const right = this.rightPress;
             this.rightPress = null;
-            // A right-drag panned: the line stays, so the user can pan to its far end
-            if (right && !isPastSlop(right, pointer)) this.lineTool?.clear();
+            // A right-drag panned, and no menu opens
+            if (!right || right.dragged || isPastSlop(right.start, pointer))
+                return;
+            // Mid-press or mid-drag of the left button, the right one does
+            // nothing more; nor while the prop tool draws, a mode's press is
+            // held or the open shape is being edited
+            if (
+                !this.gesture &&
+                !this.press &&
+                !this.propTool &&
+                !this.modePress &&
+                !this.blocksFieldMenu()
+            )
+                this.openMenu(pointer);
+            return;
+        }
+        const modePress = this.modePress;
+        if (modePress) {
+            if (pointer.button !== modePress.start.button) return;
+            this.modePress = null;
+            const click = !isPastSlop(modePress.start, pointer);
+            // A double-click's second click starts no third
+            this.lastClick =
+                click && !modePress.double
+                    ? {
+                          time: this.now(),
+                          screen: modePress.start.screen,
+                          hit: null,
+                          mode: true,
+                      }
+                    : null;
+            this.mode?.release(
+                pointer,
+                click ? { double: modePress.double } : null,
+            );
+            this.emit();
             return;
         }
         if (this.propTool) {
@@ -394,11 +593,18 @@ export class FieldEditor {
                   hit: press.hit,
               };
         this.click(press, pointer.shift);
+        if (press.double && press.hit !== null)
+            this.ports.doubleClickMarcher?.(press.hit);
     }
 
     /** The pointer was lost (capture lost, the window lost focus): nothing is clicked or dropped. */
     pointerCancel(): void {
         // The last click stays: the renderer also cancels after every release
+        if (this.modePress) {
+            this.modePress = null;
+            this.mode?.cancel();
+            this.emit();
+        }
         this.press = null;
         this.ignoredButton = null;
         this.cancelGesture();
@@ -406,6 +612,7 @@ export class FieldEditor {
 
     /** The pointer left the field with no button down. */
     pointerLeave(): void {
+        this.mode?.leave?.();
         this.setHover("default");
     }
 
@@ -421,33 +628,45 @@ export class FieldEditor {
         );
     }
 
+    /** Selects the marchers in `ids` that are drawn and can be selected (an app action, such as "Select box"). */
+    select(ids: readonly number[]): void {
+        const wanted = new Set(ids);
+        const { ids: drawn, hidden } = this.ports.marchers();
+        this.write(
+            drawn.filter(
+                (id, i) =>
+                    wanted.has(id) && !hidden?.[i] && this.ports.canSelect(id),
+            ),
+        );
+    }
+
     /** The gesture in progress, for the field test API and the overlay; a press that's still a click has none. */
     activeGesture(): FieldTestGesture | null {
         if (this.propTool) return "prop";
-        if (this.lineTool) return "line";
+        if (this.mode && (this.modePress || this.mode.gesture.always))
+            return this.mode.gesture.kind;
         return this.gesture?.kind ?? null;
     }
 
     /**
-     * Turns the line tool on for `ids` (the app's alignment event, L), or
-     * off with null. Turning it on ends any press or gesture.
+     * Turns a mode on, replacing any other, or off with null. A new mode ends
+     * any press or gesture, and the one it replaces loses its press.
      */
-    setLineTool(ids: readonly number[] | null): void {
-        if (ids === null) {
-            if (!this.lineTool) return;
-            this.lineTool = null;
-            this.emit();
-            return;
+    setMode(mode: FieldMode | null): void {
+        if (mode === this.mode) return;
+        if (this.modePress) {
+            this.modePress = null;
+            this.mode?.cancel();
         }
-        this.cancelGesture();
-        this.press = null;
-        this.lastClick = null;
-        this.lineTool = new LineTool(ids, {
-            marchers: () => this.drawnPositions(ids),
-            grid: () => this.ports.stepGrid?.() ?? null,
-            finished: (targets) => this.ports.lineFinished?.(targets),
-            changed: () => this.emit(),
-        });
+        this.unsubscribeMode?.();
+        this.unsubscribeMode = null;
+        this.mode = mode;
+        if (mode) {
+            this.cancelGesture();
+            this.press = null;
+            this.lastClick = null;
+            this.unsubscribeMode = mode.subscribe(() => this.emit());
+        }
         this.emit();
     }
 
@@ -491,14 +710,19 @@ export class FieldEditor {
         return this.propTool?.shape() ?? null;
     }
 
-    /** The marchers were drawn again: a finished line lines them up from where they are now. */
-    refreshLineTool(): void {
-        this.lineTool?.refresh();
+    /** What the mode draws over the field, or null with no mode or nothing drawn. */
+    modeDrawing(): FieldModeDrawing | null {
+        return this.mode?.drawing() ?? null;
     }
 
-    /** The line tool's line, previews and marchers, or null when it's off. */
-    lineToolShape(): LineToolShape | null {
-        return this.lineTool?.shape() ?? null;
+    /** Whether a mode (the open shape) keeps the field's menu shut (#315). */
+    blocksFieldMenu(): boolean {
+        return this.mode?.blocksFieldMenu ?? false;
+    }
+
+    /** Whether a mode with its own handles is on, so the selection box has none. */
+    modeOwnsSelectionBox(): boolean {
+        return this.mode?.ownsSelectionBox ?? false;
     }
 
     /** The marquee or lasso being drawn, for the overlay; null during any other gesture. */
@@ -538,19 +762,24 @@ export class FieldEditor {
     }
 
     /**
-     * Turns the selection `degrees` clockwise about its box's center, from
+     * Turns the selection `degrees` clockwise about its box's center (or the
+     * point `around` picks on that box, the Transform section's pivot), from
      * where it was when the typing started, as the rotate handle does (user
      * story 54). Drawn until {@link endRotation} saves it. Refused during a
-     * drag and while the line tool is on. Over a drop still saving it starts
-     * from where that drop is drawn, and is dropped if that drop is refused.
+     * drag and while a mode that locks the selection is on. Over a drop still
+     * saving it starts from where that drop is drawn, and is dropped if that
+     * drop is refused.
      */
-    rotateSelection(degrees: number): void {
-        if (this.gesture || this.lineTool) return;
+    rotateSelection(
+        degrees: number,
+        around: (box: FieldRect) => FieldPoint = centerOf,
+    ): void {
+        if (this.gesture || this.modePress || this.mode?.locksSelection) return;
         if (!this.typed) {
             const starts = this.drawnPositions(this.ports.selection.get());
             const box = boundsOf(starts);
             if (starts.length < 2 || !box) return;
-            this.typed = { starts, center: centerOf(box), degrees: 0 };
+            this.typed = { starts, center: around(box), degrees: 0 };
         }
         this.typed.degrees = degrees;
         this.showLive(
@@ -602,7 +831,7 @@ export class FieldEditor {
 
     /** The cursor the field shows. */
     cursor(): FieldCursor {
-        return this.lineTool || this.propTool ? "crosshair" : this.hover;
+        return this.propTool ? "crosshair" : this.hover;
     }
 
     /** Calls `listener` whenever the gesture or cursor changes. Returns the unsubscribe. */
@@ -653,6 +882,7 @@ export class FieldEditor {
      * marchers as drawn, or null with fewer than two.
      */
     private selectionFrame(): SelectionFrame | null {
+        if (this.modeOwnsSelectionBox()) return null;
         const item = this.selectedItem();
         if (item) return itemSelectionFrame(item.frame);
         const starts = this.drawnPositions(this.ports.selection.get());
@@ -726,11 +956,19 @@ export class FieldEditor {
         return this.area;
     }
 
-    private isDoubleClick(pointer: FieldPointer) {
+    /** Whether a press on `hit` (null: empty field) is the second of a double-click. */
+    private isDoubleClick(pointer: FieldPointer, hit: number | null) {
         const last = this.lastClick;
         return (
             last !== null &&
-            last.hit === null &&
+            !last.mode &&
+            last.hit === hit &&
+            this.isSoonAfter(last, pointer)
+        );
+    }
+
+    private isSoonAfter(last: LastClick, pointer: FieldPointer) {
+        return (
             this.now() - last.time <= DOUBLE_CLICK_MS &&
             Math.hypot(
                 pointer.screen.x - last.screen.x,
@@ -753,13 +991,27 @@ export class FieldEditor {
         const selection = this.ports.selection.get();
         let ids: readonly number[];
         if (press.hit !== null) {
-            ids = selection.includes(press.hit)
-                ? selection
-                : press.start.shift
-                  ? [...selection, press.hit]
-                  : [press.hit];
+            const chosen = this.ports.pressSelection?.(
+                press.hit,
+                press.start.shift,
+            );
+            if (chosen && press.start.shift) {
+                // Shift adds or removes a whole group; the press is done
+                this.write(chosen);
+                return null;
+            }
+            ids =
+                chosen ??
+                (selection.includes(press.hit)
+                    ? selection
+                    : press.start.shift
+                      ? [...selection, press.hit]
+                      : [press.hit]);
             this.write(ids);
-        } else if (this.insideSelectionBox(selection, press.start.field)) {
+        } else if (
+            !this.modeOwnsSelectionBox() &&
+            this.insideSelectionBox(selection, press.start.field)
+        ) {
             ids = selection;
         } else return null;
 
@@ -870,9 +1122,35 @@ export class FieldEditor {
         this.ports.drop(positions).then(settle, () => settle());
     }
 
+    /**
+     * The field's menu at a right-click (#315): it acts on the selection, so a
+     * marcher clicked that isn't selected is selected first. Empty field (a
+     * dimmed marcher, a handle) keeps the selection. A paused preview is
+     * cleared first, as a press clears it (story 60), so the marcher is found
+     * where it stands at the playhead, the count the menu's actions edit.
+     */
+    private openMenu(pointer: FieldPointer) {
+        this.ports.takePress?.();
+        const hit = this.handleAt(pointer.field)
+            ? null
+            : this.marcherAt(pointer.field);
+        if (hit !== null && !this.ports.selection.get().includes(hit))
+            this.write([hit]);
+        this.ports.openMenu?.(pointer);
+    }
+
     private click(press: FieldPress, shift: boolean) {
+        const chosen =
+            press.hit === null
+                ? null
+                : this.ports.pressSelection?.(press.hit, shift);
         this.write(
-            selectionAfterClick(this.ports.selection.get(), press.hit, shift),
+            chosen ??
+                selectionAfterClick(
+                    this.ports.selection.get(),
+                    press.hit,
+                    shift,
+                ),
         );
     }
 

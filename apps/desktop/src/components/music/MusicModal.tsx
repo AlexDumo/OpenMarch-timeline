@@ -39,8 +39,10 @@ export default function MusicModal({
     label?: string | React.ReactNode;
     buttonClassName?: string;
 }) {
+    const { t } = useTolgee();
     return (
         <SidebarModalLauncher
+            name={t("sidebar.music")}
             contents={<MusicModalContents />}
             newContentId="music"
             buttonLabel={label}

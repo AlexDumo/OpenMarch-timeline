@@ -1,7 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTolgee } from "@tolgee/react";
 import * as RadixDialog from "@radix-ui/react-dialog";
-import { MagnifyingGlassIcon } from "@phosphor-icons/react";
+import {
+    CaretRightIcon,
+    MagnifyingGlassIcon,
+    XIcon,
+} from "@phosphor-icons/react";
+import { useIsTouchMode } from "@/stores/InputModeStore";
+import { useShowShortcutHints } from "@/stores/KeyboardSeenStore";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { bindingFromEvent, platformBinding } from "../bindings";
 import { getEffectiveBindings } from "../keymap";
@@ -10,6 +16,16 @@ import { isMacPlatform } from "../platform";
 import { searchItems } from "../search";
 import { useActionHandler } from "../useActionHandler";
 import { getActionPaletteItems } from "./actionSource";
+import {
+    closePalette,
+    dockCommand,
+    flattenTree,
+    itemsAt,
+    oneLinerAnswers,
+    openPalette,
+    closeDockedCommand,
+    useCommandBarStore,
+} from "./commandBar";
 import {
     getPaletteItems,
     subscribeToPaletteSources,
@@ -48,36 +64,75 @@ function pickSuggested(
         .slice(0, SUGGESTED_COUNT);
 }
 
+/** How a listed item is chosen, beyond the item itself */
+interface Choice {
+    /** The branch ids above it, when search found it below the branch shown */
+    path?: readonly string[];
+    /** A one-liner's answers, filled ahead into its command's steps */
+    prefill?: readonly string[];
+}
+
 /**
- * Browsing: "Suggested", then every other item under its group heading.
- * Searching: one ranked list, runnable items first. Indexes are positions in the returned `items`.
+ * Browsing: "Suggested" (at the top level), then every other item under its group heading.
+ * Searching: one ranked list of the whole tree below the branch shown, runnable items first, a
+ * one-liner ("box 4x3 2") ahead of everything. Indexes are positions in the returned `items`.
  */
 function arrange(
     all: readonly PaletteItem[],
     query: string,
     usage: ReadonlyMap<string, number>,
     suggestedHeading: string,
-): { items: PaletteItem[]; sections: Section[] } {
+    browsingBranch: boolean,
+): {
+    items: PaletteItem[];
+    sections: Section[];
+    choices: Map<PaletteItem, Choice>;
+} {
+    const choices = new Map<PaletteItem, Choice>();
     if (query.trim() !== "") {
+        const tree = flattenTree(all);
+        tree.forEach(({ item, path }) => choices.set(item, { path }));
+        const oneLiners = tree.flatMap(({ item, path, name }) => {
+            if (!item.command) return [];
+            const prefill = oneLinerAnswers(query, [
+                name,
+                ...(item.keywords ?? []),
+            ]);
+            if (!prefill) return [];
+            const filled = {
+                ...item,
+                id: `${item.id}:filled`,
+                label: `${item.label} ${prefill.join(" · ")}`,
+            };
+            choices.set(filled, { path, prefill });
+            return [filled];
+        });
         const matches = searchItems(
-            all,
+            tree.map((f) => f.item),
             query,
             (item) => [item.label, item.group, ...(item.keywords ?? [])],
             (item) => Math.min(3, Math.log10(1 + (usage.get(item.id) ?? 0))),
         );
         const items = [
+            ...oneLiners.filter((item) => !item.disabled),
             ...matches.filter((item) => !item.disabled),
             ...matches.filter((item) => item.disabled),
+            ...oneLiners.filter((item) => item.disabled),
         ];
         return {
             items,
             sections: [
                 { items: items.map((item, index) => ({ item, index })) },
             ],
+            choices,
         };
     }
-    const suggested = pickSuggested(all, usage);
-    const rest = all.filter((item) => !suggested.includes(item));
+    const suggested = browsingBranch ? [] : pickSuggested(all, usage);
+    // Each group once, where it first appears: a source's branch joins its actions' group
+    const groups = [...new Set(all.map((item) => item.group))];
+    const rest = all
+        .filter((item) => !suggested.includes(item))
+        .sort((a, b) => groups.indexOf(a.group) - groups.indexOf(b.group));
     const items = [...suggested, ...rest];
     const sections: Section[] = [];
     items.forEach((item, index) => {
@@ -87,7 +142,7 @@ function arrange(
         if (last?.heading === heading) last.items.push({ item, index });
         else sections.push({ heading, items: [{ item, index }] });
     });
-    return { items, sections };
+    return { items, sections, choices };
 }
 
 /** Opens with the openCommandPalette action (⌘K / Ctrl+K). Mount once, app-wide. */
@@ -96,8 +151,13 @@ export default function CommandPalette() {
     const { t: tolgeeT } = useTolgee();
     const t: Translate = (key, params) => tolgeeT(key, params as never);
     const overrides = useShortcutOverridesStore((s) => s.overrides);
-    const [open, setOpen] = useState(false);
+    const palette = useCommandBarStore((s) => s.palette);
+    const open = palette !== null;
+    const path = useMemo(() => palette?.path ?? [], [palette]);
     const [query, setQuery] = useState("");
+    const isTouch = useIsTouchMode();
+    // Shortcut keycaps only once a keyboard has been used (or with a mouse layout)
+    const showHints = useShowShortcutHints();
     const [activeIndex, setActiveIndex] = useState(0);
     const [sourcesVersion, setSourcesVersion] = useState(0);
     const pendingRun = useRef<(() => void) | null>(null);
@@ -106,19 +166,31 @@ export default function CommandPalette() {
     // so effects must re-run once the list element actually exists.
     const [inner, setInner] = useState<HTMLDivElement | null>(null);
     const highlightRef = useRef<HTMLDivElement>(null);
-    const lastArrangement = useRef<ReturnType<typeof arrange>>({
+    const lastArrangement = useRef<
+        ReturnType<typeof arrange> & { trail: readonly PaletteItem[] }
+    >({
         items: [],
         sections: [],
+        choices: new Map(),
+        trail: [],
     });
     const [usage, setUsage] = useState<ReadonlyMap<string, number>>(
         () => new Map(),
     );
 
-    useActionHandler("openCommandPalette", () => {
+    // `/` and ⌘K open the same bar (#354); a command docked at the field is cancelled first
+    const openBar = () => {
+        const { docked } = useCommandBarStore.getState();
+        if (docked) {
+            docked.run.cancel();
+            closeDockedCommand(docked.run);
+        }
         setQuery("");
         setUsage(getPaletteUsageScores());
-        setOpen(true);
-    });
+        openPalette();
+    };
+    useActionHandler("openCommandPalette", openBar);
+    useActionHandler("openCommandBar", openBar);
     usePaletteSource("actions", (context) =>
         getActionPaletteItems(context, overrides),
     );
@@ -128,20 +200,25 @@ export default function CommandPalette() {
         [],
     );
 
-    const { items, sections } = useMemo(
+    const { items, sections, choices, trail } = useMemo(
         () => {
             // While closing, keep the last results so the exit animation doesn't show an empty list.
             if (!open) return lastArrangement.current;
-            lastArrangement.current = arrange(
-                getPaletteItems({ t }),
-                query,
-                usage,
-                t("commandPalette.suggested"),
-            );
+            const branch = itemsAt(getPaletteItems({ t }), path);
+            lastArrangement.current = {
+                ...arrange(
+                    branch.items,
+                    query,
+                    usage,
+                    t("commandPalette.suggested"),
+                    branch.trail.length > 0,
+                ),
+                trail: branch.trail,
+            };
             return lastArrangement.current;
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [open, query, usage, overrides, sourcesVersion, tolgeeT],
+        [open, path, query, usage, overrides, sourcesVersion, tolgeeT],
     );
     const selectable = useMemo(
         () => items.flatMap((item, index) => (item.disabled ? [] : [index])),
@@ -167,7 +244,10 @@ export default function CommandPalette() {
         highlight.dataset.animate = String(animateHighlight.current);
         highlight.style.transform = `translateY(${row.offsetTop}px)`;
         animateHighlight.current = true;
-        row.scrollIntoView?.({ block: "nearest" });
+        // Opening (or new results) starts at the top, group heading included
+        if (activeIndex === selectable[0]) {
+            if (listRef.current) listRef.current.scrollTop = 0;
+        } else row.scrollIntoView?.({ block: "nearest" });
     }, [activeIndex, items, selectable, inner]);
 
     // Animate the list height as results change (heights can't transition from `auto`).
@@ -184,12 +264,31 @@ export default function CommandPalette() {
         return () => observer.disconnect();
     }, [inner]);
 
+    const pendingDock = useRef(false);
     const choose = (item: PaletteItem | undefined) => {
         if (!item || item.disabled) return;
+        const choice = choices.get(item) ?? {};
+        const above = choice.path ?? path;
+        if (item.children) {
+            // Into the branch: Shape › lists the shape kinds
+            setQuery("");
+            openPalette([...above, item.id]);
+            return;
+        }
+        if (item.command) {
+            const run = item.command.begin();
+            if (!run) return;
+            recordPaletteUsage(item.id.replace(/:filled$/, ""));
+            pendingRun.current = () =>
+                dockCommand(run, choice.prefill ?? [], above);
+            pendingDock.current = true;
+            closePalette();
+            return;
+        }
         recordPaletteUsage(item.id);
         // Run once the palette has closed so focus restoration can't steal focus from what the action opens.
-        pendingRun.current = item.run;
-        setOpen(false);
+        pendingRun.current = item.run ?? null;
+        closePalette();
     };
 
     const isToggleShortcut = (event: React.KeyboardEvent) => {
@@ -220,9 +319,17 @@ export default function CommandPalette() {
         else if (event.key === "Enter") {
             event.preventDefault();
             choose(items[activeIndex]);
+        } else if (
+            event.key === "Backspace" &&
+            query === "" &&
+            path.length > 0
+        ) {
+            // Out of the branch, back up the tree
+            event.preventDefault();
+            openPalette(path.slice(0, -1));
         } else if (isToggleShortcut(event)) {
             event.preventDefault();
-            setOpen(false);
+            closePalette();
         }
     };
 
@@ -231,16 +338,22 @@ export default function CommandPalette() {
         : undefined;
 
     return (
-        <RadixDialog.Root open={open} onOpenChange={setOpen}>
+        <RadixDialog.Root
+            open={open}
+            onOpenChange={(next) => (next ? openPalette(path) : closePalette())}
+        >
             {/* Overlay and Content must be direct Portal children so Radix waits for their exit animations. */}
             <RadixDialog.Portal>
                 <RadixDialog.Overlay className="command-palette palette-overlay" />
                 <RadixDialog.Content
                     className="command-palette palette-shell"
                     aria-describedby={undefined}
-                    onCloseAutoFocus={() => {
+                    onCloseAutoFocus={(event) => {
                         const run = pendingRun.current;
                         pendingRun.current = null;
+                        // The docked bar takes the focus, not what had it before
+                        if (pendingDock.current) event.preventDefault();
+                        pendingDock.current = false;
                         run?.();
                     }}
                 >
@@ -250,6 +363,16 @@ export default function CommandPalette() {
                     <div className="palette-panel rounded-6 border-stroke bg-modal shadow-fg-1 backdrop-blur-32 border">
                         <div className="palette-input-row">
                             <MagnifyingGlassIcon size={20} aria-hidden />
+                            {trail.map((branch) => (
+                                <span
+                                    key={branch.id}
+                                    className="palette-crumb"
+                                    data-testid="palette-crumb"
+                                >
+                                    {branch.label}
+                                    <CaretRightIcon size={12} aria-hidden />
+                                </span>
+                            ))}
                             <input
                                 autoFocus
                                 role="combobox"
@@ -266,6 +389,14 @@ export default function CommandPalette() {
                                 onKeyDown={onKeyDown}
                                 className="palette-input"
                             />
+                            {isTouch && (
+                                <RadixDialog.Close
+                                    aria-label={t("commandPalette.close")}
+                                    className="hover:text-text flex size-44 shrink-0 items-center justify-center rounded-full"
+                                >
+                                    <XIcon size={22} />
+                                </RadixDialog.Close>
+                            )}
                         </div>
                         <div ref={listRef} className="palette-list">
                             <div
@@ -287,7 +418,7 @@ export default function CommandPalette() {
                                 )}
                                 {sections.map((section, sectionIndex) => (
                                     <div
-                                        key={section.heading ?? sectionIndex}
+                                        key={`${sectionIndex}:${section.heading ?? ""}`}
                                         role="group"
                                         aria-label={section.heading}
                                     >
@@ -349,16 +480,26 @@ export default function CommandPalette() {
                                                                 }
                                                             </span>
                                                         )}
+                                                    {item.children && (
+                                                        <CaretRightIcon
+                                                            size={14}
+                                                            className="palette-item-branch"
+                                                            aria-hidden
+                                                        />
+                                                    )}
                                                     {!section.heading && (
                                                         <span className="palette-item-group">
                                                             {item.group}
                                                         </span>
                                                     )}
-                                                    {item.shortcut && (
-                                                        <Keycaps
-                                                            keys={item.shortcut}
-                                                        />
-                                                    )}
+                                                    {showHints &&
+                                                        item.shortcut && (
+                                                            <Keycaps
+                                                                keys={
+                                                                    item.shortcut
+                                                                }
+                                                            />
+                                                        )}
                                                 </div>
                                             ),
                                         )}
@@ -366,21 +507,24 @@ export default function CommandPalette() {
                                 ))}
                             </div>
                         </div>
-                        <div className="palette-footer" aria-hidden>
-                            <span className="palette-footer-hint">
-                                <kbd className="keycap">↑</kbd>
-                                <kbd className="keycap">↓</kbd>
-                                {t("commandPalette.navigate")}
-                            </span>
-                            <span className="palette-footer-hint">
-                                <kbd className="keycap">↵</kbd>
-                                {t("commandPalette.run")}
-                            </span>
-                            <span className="palette-footer-hint">
-                                <kbd className="keycap">Esc</kbd>
-                                {t("commandPalette.close")}
-                            </span>
-                        </div>
+                        {/* Keyboard hints mean nothing without a keyboard */}
+                        {!isTouch && (
+                            <div className="palette-footer" aria-hidden>
+                                <span className="palette-footer-hint">
+                                    <kbd className="keycap">↑</kbd>
+                                    <kbd className="keycap">↓</kbd>
+                                    {t("commandPalette.navigate")}
+                                </span>
+                                <span className="palette-footer-hint">
+                                    <kbd className="keycap">↵</kbd>
+                                    {t("commandPalette.run")}
+                                </span>
+                                <span className="palette-footer-hint">
+                                    <kbd className="keycap">Esc</kbd>
+                                    {t("commandPalette.close")}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </RadixDialog.Content>
             </RadixDialog.Portal>

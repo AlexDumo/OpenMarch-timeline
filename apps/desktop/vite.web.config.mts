@@ -3,6 +3,7 @@ import path from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { parse as parseYaml } from "yaml";
 import { version } from "./package.json";
 import { DEMOS } from "./web/demos";
 
@@ -18,10 +19,94 @@ import { DEMOS } from "./web/demos";
  * channel; the nightly build says so next to the version. The fork's
  * "preview" channel also offers the example shows in `web/public/demos/` on
  * the start page.
+ *
+ * The fork's "lab" channel is a test build for lab.openmarch.com (see
+ * `web/LAB.md`): it offers the example shows too, loads everything relative
+ * to its folder (the lab serves each test at `/x/<test id>/`), and keeps what
+ * it stores apart from every other test on that origin, by `LAB_TEST_ID`.
+ * It opens straight into an example show, which `LAB_MANIFEST`, the test's
+ * `lab/<id>/experiment.md`, may name.
  */
 
 const channel = process.env.WEB_CHANNEL ?? "dev";
-const examples = channel === "preview" ? DEMOS : [];
+const isLab = channel === "lab";
+const labTestId = process.env.LAB_TEST_ID ?? "";
+if (isLab && !/^[a-z0-9-]+$/.test(labTestId))
+    throw new Error(
+        "WEB_CHANNEL=lab needs LAB_TEST_ID, the lab test's id (a-z, 0-9 and -)",
+    );
+const examples = channel === "preview" || isLab ? DEMOS : [];
+
+/**
+ * A field from the front matter of the lab test's manifest, the path in
+ * `LAB_MANIFEST` (from the repository root; CI sets it to the test being
+ * published). Only plain one-word values (`show: part1`), so no YAML parser.
+ */
+function labManifestField(name: string): string | undefined {
+    const manifest = process.env.LAB_MANIFEST;
+    if (!isLab || !manifest) return undefined;
+    const text = fs.readFileSync(
+        path.resolve(__dirname, "..", "..", manifest),
+        "utf8",
+    );
+    const frontMatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1] ?? "";
+    return new RegExp(`^${name}:[ \\t]*["']?([\\w-]+)`, "m").exec(
+        frontMatter,
+    )?.[1];
+}
+
+/**
+ * What a lab build opens straight away (`web/renderer/lab.ts`): the example
+ * show the manifest's `show` names (an id in `web/demos.ts`), or the first,
+ * in the editor mode its `mode` names ("basic" or "expert", the default).
+ */
+const labShow = isLab ? (labManifestField("show") ?? DEMOS[0].id) : "";
+const labMode = isLab ? (labManifestField("mode") ?? "expert") : "";
+if (isLab && !DEMOS.some((demo) => demo.id === labShow))
+    throw new Error(
+        `The lab manifest's show "${labShow}" isn't one of web/demos.ts: ${DEMOS.map((demo) => demo.id).join(", ")}`,
+    );
+if (isLab && labMode !== "basic" && labMode !== "expert")
+    throw new Error(
+        `The lab manifest's mode "${labMode}" isn't "basic" or "expert"`,
+    );
+
+/**
+ * What names this build's browser storage (see `web/renderer/channel.ts`).
+ * Lab tests all share one origin, so each test gets its own.
+ */
+const storageNamespace = isLab ? `lab-${labTestId}` : channel;
+/**
+ * Scripts the lab's feedback widget loads into a lab build's page, which the
+ * content security policy must allow: Clerk's browser script, which signs
+ * the widget's requests to the lab's API in.
+ */
+const labScriptHosts = isLab ? ["https://clerk.openmarch.com"] : [];
+
+/**
+ * The versions a lab test compares (web/LAB.md, "Comparing versions"): the
+ * `variants` in the front matter of the manifest `LAB_MANIFEST` names, a path
+ * from the repository root. CI sets it to the test being published. Without
+ * it, outside the lab channel, or with fewer than two versions, the build has
+ * no version switch.
+ */
+function labVariants(): { id: string; label: string; description: string }[] {
+    const manifest = process.env.LAB_MANIFEST;
+    if (!isLab || !manifest) return [];
+    const text = fs.readFileSync(
+        path.resolve(__dirname, "..", "..", manifest),
+        "utf8",
+    );
+    const frontMatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1] ?? "";
+    const variants = (parseYaml(frontMatter)?.variants ?? []).map(
+        (v: { id: unknown; label?: unknown; description?: unknown }) => ({
+            id: String(v.id),
+            label: String(v.label ?? v.id),
+            description: String(v.description ?? ""),
+        }),
+    );
+    return variants.length >= 2 ? variants : [];
+}
 
 const web = (file: string) => path.join(__dirname, "web", file);
 const outDir = path.join(__dirname, "dist-web");
@@ -33,7 +118,8 @@ const outDir = path.join(__dirname, "dist-web");
  */
 const writeHeaders = (): Plugin => ({
     name: "openmarch-web-headers",
-    apply: "build",
+    // The lab serves its builds itself and ignores the file.
+    apply: (_config, { command }) => command === "build" && !isLab,
     closeBundle() {
         fs.writeFileSync(
             path.join(outDir, "_headers"),
@@ -49,18 +135,38 @@ const writeHeaders = (): Plugin => ({
     },
 });
 
-/** Copies the example shows into the preview build; other builds leave them out. */
-const copyExamples = (): Plugin => ({
-    name: "openmarch-web-examples",
-    apply: "build",
-    closeBundle() {
-        for (const example of examples) {
-            const target = path.join(outDir, example.file);
-            fs.mkdirSync(path.dirname(target), { recursive: true });
-            fs.copyFileSync(web(path.join("public", example.file)), target);
-        }
-    },
-});
+/**
+ * Copies the example shows into the preview and lab builds, and serves them
+ * from the dev server; other builds leave them out.
+ */
+const copyExamples = (): Plugin => {
+    let building = false;
+    return {
+        name: "openmarch-web-examples",
+        configResolved(config) {
+            building = config.command === "build";
+        },
+        configureServer(server) {
+            server.middlewares.use((req, res, next) => {
+                const pathname = (req.url ?? "").split("?")[0];
+                const example = examples.find((e) => pathname === `/${e.file}`);
+                if (!example) return next();
+                res.setHeader("Content-Type", "application/octet-stream");
+                fs.createReadStream(
+                    web(path.join("public", example.file)),
+                ).pipe(res);
+            });
+        },
+        closeBundle() {
+            if (!building) return;
+            for (const example of examples) {
+                const target = path.join(outDir, example.file);
+                fs.mkdirSync(path.dirname(target), { recursive: true });
+                fs.copyFileSync(web(path.join("public", example.file)), target);
+            }
+        },
+    };
+};
 
 /**
  * `electron` is two different modules here. Main-process code, which runs in
@@ -102,13 +208,57 @@ const webEntry = (): Plugin => ({
                 )
                 .replace(
                     "script-src 'self'",
-                    "script-src 'self' 'wasm-unsafe-eval'",
+                    [
+                        "script-src 'self' 'wasm-unsafe-eval'",
+                        ...labScriptHosts,
+                    ].join(" "),
                 )
-                .replace(/<title>[^<]*<\/title>/, "<title>OpenMarch</title>"),
+                .replace(/<title>[^<]*<\/title>/, "<title>OpenMarch</title>")
+                .replace(
+                    /<meta\s+name="viewport"\s+content="[^"]*"\s*\/>/,
+                    `<meta name="viewport" content="${WEB_VIEWPORT}" />`,
+                )
+                .replace("</head>", `    ${HOME_SCREEN_TAGS}\n    </head>`),
     },
 });
 
+/**
+ * `maximum-scale=1` stops iOS Safari zooming the page into a text field
+ * whose font is under 16px (iOS ignores it for pinch-zoom, for
+ * accessibility; `web/renderer/touchGestures.ts` stops that instead) and
+ * stops Android Chrome's page pinch-zoom. `viewport-fit=cover` lets the app
+ * reach under the notch and home indicator in home-screen mode, where
+ * `env(safe-area-inset-*)` pads it back (src/styles/index.css).
+ */
+const WEB_VIEWPORT =
+    "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover";
+
+/**
+ * "Add to Home Screen" (iPadOS Safari, Android Chrome): opens full screen
+ * like an app, with the app icon. The files are in `web/public/`. Electron
+ * shares index.html, so these are added only here.
+ *
+ * The status bar style is "default", not "black-translucent": on iPadOS 17,
+ * black-translucent moves the page up under the status bar but still takes
+ * the bar's height off the page, leaving a strip at the bottom of the screen
+ * that isn't part of the page (measured on an iPad 7: a 790 px page on an
+ * 810 px screen). iPadOS reads this when the app is added to the Home
+ * Screen, so a change needs the app removed and added again.
+ */
+const HOME_SCREEN_TAGS = [
+    '<link rel="manifest" href="/manifest.webmanifest" />',
+    '<link rel="apple-touch-icon" href="/apple-touch-icon.png" />',
+    '<meta name="mobile-web-app-capable" content="yes" />',
+    '<meta name="apple-mobile-web-app-capable" content="yes" />',
+    '<meta name="apple-mobile-web-app-title" content="OpenMarch" />',
+    '<meta name="apple-mobile-web-app-status-bar-style" content="default" />',
+    '<meta name="theme-color" content="#ecebf0" media="(prefers-color-scheme: light)" />',
+    '<meta name="theme-color" content="#0f0e13" media="(prefers-color-scheme: dark)" />',
+].join("\n        ");
+
 export default defineConfig({
+    // A lab build is served from a folder, so its URLs are relative.
+    base: isLab ? "./" : "/",
     resolve: {
         alias: [
             { find: /^@\//, replacement: path.join(__dirname, "src") + "/" },
@@ -121,6 +271,13 @@ export default defineConfig({
             { find: /^(node:)?path$/, replacement: web("worker/path.ts") },
             { find: /^(node:)?sqlite$/, replacement: web("worker/sqlite.ts") },
             { find: /^(node:)?crypto$/, replacement: web("worker/crypto.ts") },
+            // @mediabunny/aac-encoder imports it only under Node. Left to Vite's shared
+            // browser-external stub, it ties the main chunk and the app chunk into a
+            // cycle and the app fails to start.
+            {
+                find: /^(node:)?worker_threads$/,
+                replacement: web("renderer/workerThreads.ts"),
+            },
             {
                 find: "@sentry/electron/renderer",
                 replacement: web("renderer/sentry.ts"),
@@ -147,18 +304,26 @@ export default defineConfig({
         "process.env.PLAYWRIGHT_SESSION": JSON.stringify(""),
         "import.meta.env.VITE_PUBLIC_WEB_BUILD": JSON.stringify("true"),
         "import.meta.env.VITE_PUBLIC_WEB_CHANNEL": JSON.stringify(channel),
+        "import.meta.env.VITE_PUBLIC_WEB_STORAGE_NAMESPACE":
+            JSON.stringify(storageNamespace),
         "import.meta.env.VITE_PUBLIC_APP_VERSION": JSON.stringify(version),
+        __LAB_VARIANTS__: JSON.stringify(labVariants()),
         "import.meta.env.VITE_PUBLIC_WEB_EXAMPLES": JSON.stringify(
             JSON.stringify(examples),
         ),
+        "import.meta.env.VITE_PUBLIC_LAB_SHOW": JSON.stringify(labShow),
+        "import.meta.env.VITE_PUBLIC_LAB_MODE": JSON.stringify(labMode),
         // No analytics on the web (PostHog stays uninitialized; Sentry is
         // stubbed in renderer/sentry.ts).
         "import.meta.env.VITE_PUBLIC_POSTHOG_KEY": JSON.stringify(""),
     },
     optimizeDeps: {
         // Loads its .wasm next to itself, which pre-bundling breaks.
-        exclude: ["@sqlite.org/sqlite-wasm"],
+        // The migrator reads files with `fs`, which must reach worker/fs.ts.
+        exclude: ["@sqlite.org/sqlite-wasm", "drizzle-orm/migrator"],
     },
+    // Home-screen icons and manifest (see HOME_SCREEN_TAGS), and the favicon.
+    publicDir: web("public"),
     build: {
         outDir,
         emptyOutDir: true,

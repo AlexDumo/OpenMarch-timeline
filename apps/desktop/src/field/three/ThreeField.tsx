@@ -17,8 +17,8 @@ import { DEFAULT_FIELD_THEME, type FieldProperties } from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
+import { LABEL_SIZE_SCALE, useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useIsPreviewMode } from "@/stores/PreviewModeStore";
-import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     allItemsQueryOptions,
     allMarcherRowsQueryOptions,
@@ -59,7 +59,17 @@ import { VisualsFieldEditor } from "@/field/editor/visualsFieldEditor";
 import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { takeFieldPress } from "@/field/takeFieldPress";
-import { publishLinePreviews, useFieldLineTool } from "@/field/fieldLineTool";
+import { setShapeField } from "@/shapes/field/shapeField";
+import { useShapeFieldModes } from "@/shapes/field/useShapeFieldModes";
+import { boxPressSelection, enterBox } from "@/shapes/placed/boxSelection";
+import {
+    drawnPlacedBoxes,
+    PlacedBoxesOverlay,
+} from "@/shapes/placed/PlacedBoxesOverlay";
+import { ShapeEditor } from "@/shapes/editor/ShapeEditorBar";
+import FavoritesRing from "@/shapes/tool/FavoritesRing";
+import DockedCommandBar from "@/shortcuts/palette/DockedCommandBar";
+import { useShapeFocus } from "@/shapes/field/useShapeFocus";
 import { useFieldItemWrites } from "@/field/fieldItemWrites";
 import {
     snapToRounding,
@@ -73,6 +83,7 @@ import { dropMarchersOnTimeline } from "@/field/fieldDrop";
 import { FieldMarchers } from "./fieldMarchers";
 import { FieldItems } from "./fieldItems";
 import FieldOverlay from "./FieldOverlay";
+import FieldContextMenu, { useFieldMenu } from "./FieldContextMenu";
 import { attachFieldPointerInput } from "./fieldPointerInput";
 import { cameraBounds, useFieldViewStore } from "./fieldView";
 import {
@@ -90,10 +101,11 @@ import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
 import MarchersLayer from "./layers/MarchersLayer";
 import ItemsLayer from "./layers/ItemsLayer";
-import LabelsLayer from "./layers/LabelsLayer";
+import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
 import { useTimelineVisuals } from "./useTimelineVisuals";
+import { drawnFollowing } from "./fieldFollowing";
 import {
     KeptMarksOverlay,
     KeptMarksPlacer,
@@ -224,6 +236,15 @@ function ThreeFieldView() {
     const startOver = useCallback(() => setCanvasKey((key) => key + 1), []);
 
     const marchers = useMemo(() => new FieldMarchers(), []);
+    // The View tab's label form: full drill numbers ("OT12"), or the number only ("12")
+    const { labelForm, labelSize, labelPosition } = useUiSettingsStore(
+        useShallow((s) => ({
+            labelForm: s.uiSettings.marcherLabels ?? "auto",
+            labelSize: s.uiSettings.marcherLabelSize ?? "normal",
+            labelPosition: s.uiSettings.marcherLabelPosition ?? "above",
+        })),
+    );
+    const numbersOnly = labelForm === "numbers";
     const items = useMemo(() => new FieldItems(marchers), [marchers]);
     const itemLabels = useFieldItems(items, beats);
     const saveItem = useFieldItemWrites(items);
@@ -233,10 +254,26 @@ function ThreeFieldView() {
             new Map(
                 (marcherRows ?? []).map((marcher) => [
                     marcher.id,
-                    itemLabels.get(marcher.id) ?? marcher.drill_number,
+                    itemLabels.get(marcher.id) ??
+                        (numbersOnly
+                            ? String(marcher.drill_order)
+                            : marcher.drill_number),
                 ]),
             ),
-        [marcherRows, itemLabels],
+        [marcherRows, numbersOnly, itemLabels],
+    );
+    const labelStyle = useMemo(
+        (): LabelStyle => ({
+            form:
+                labelForm === "auto"
+                    ? "auto"
+                    : labelForm === "off"
+                      ? "off"
+                      : "fixed",
+            scale: LABEL_SIZE_SCALE[labelSize],
+            beside: labelPosition === "beside",
+        }),
+        [labelForm, labelSize, labelPosition],
     );
     const atlases = useMemo(
         () => ({
@@ -280,7 +317,8 @@ function ThreeFieldView() {
         marcherIds,
         fieldProperties,
     });
-    const { dimming } = timeline;
+    const { dimming, following } = timeline;
+    useShapeFocus(dimming);
     const keptMarks = useFieldKeptMarks({
         enabled: timeline.ready,
         isPlaying,
@@ -333,6 +371,10 @@ function ThreeFieldView() {
         moveMarchers,
         fieldProperties,
     };
+    // #315: where a right-click opens the field's menu (`useFieldMenu`, below
+    // the editor), and whether it's open: a press that closes it does nothing more
+    const openMenuAt = useRef((_at: { x: number; y: number }) => {});
+    const menuShown = useRef(false);
 
     const editor = useMemo(
         () =>
@@ -362,7 +404,7 @@ function ThreeFieldView() {
                             useTimelineSelectionStore.getState(),
                             id,
                         ),
-                    takePress: takeFieldPress,
+                    takePress: () => menuShown.current || takeFieldPress(),
                     selectionBoxPadding: () =>
                         selectionBoxPadding(useFieldViewStore.getState().zoom),
                     showPositions: (positions) =>
@@ -373,9 +415,10 @@ function ThreeFieldView() {
                             positions,
                             latest.current.moveMarchers,
                         ),
-                    // #203: the line tool's previews are the alignment event's, which Shift+Enter applies
-                    lineFinished: publishLinePreviews,
-                    stepGrid: () => latest.current.fieldProperties ?? null,
+                    // #204: a click on a placed box's member selects the whole box
+                    pressSelection: (hit, shift) =>
+                        boxPressSelection(hit, shift, selection.current),
+                    doubleClickMarcher: enterBox,
                     // C2.1: items are hit anywhere inside their Outline
                     isItem: (id) => items.isItem(id),
                     itemAt: (point) => items.itemAt(point),
@@ -393,6 +436,8 @@ function ThreeFieldView() {
                     snap: (point) =>
                         snapToRounding(point, latest.current.fieldProperties),
                     propDrawn: (outline) => latest.current.propDrawn(outline),
+                    // #315: a right-click opens the field's menu there
+                    openMenu: (at) => openMenuAt.current(at.screen),
                 },
                 {
                     isMac: isMacPlatform(),
@@ -428,13 +473,26 @@ function ThreeFieldView() {
     useEffect(() => editor.selectionChanged(), [editor, selectedIds]);
     const pageId = selectedPage?.id;
     useEffect(() => editor.cancelRotation(), [editor, pageId]);
-    useFieldLineTool(editor);
+    // #204: the shape tool and placed boxes read this field
+    useEffect(() => {
+        setShapeField({
+            fieldProperties: () => latest.current.fieldProperties,
+            zoom: () => useFieldViewStore.getState().zoom,
+            marchers: () => latest.current.marcherRows,
+            drawn: (ids) => marchers.drawn(ids),
+        });
+        return () => setShapeField(null);
+    }, [marchers]);
+    useShapeFieldModes(editor, isPlaying);
     useFieldPropTool(editor);
-    // A finished line follows its marchers to another page
-    useEffect(
-        () => marchers.subscribe(() => editor.refreshLineTool()),
-        [marchers, editor],
-    );
+    const menu = useFieldMenu({
+        marchers,
+        editor,
+        hasSelection: selectedIds.length > 0,
+    });
+    openMenuAt.current = menu.openAt;
+    menuShown.current = menu.at !== null;
+    const timelineMode = useTimelineResolverStore((s) => s.resolver !== null);
 
     useEffect(() => {
         installFieldTestApi(
@@ -455,16 +513,20 @@ function ThreeFieldView() {
                         selectionHandles(box, useFieldViewStore.getState().zoom)
                     );
                 },
-                lineTool: () => editor.lineToolShape(),
+                modeDrawing: () => editor.modeDrawing(),
+                placedBoxes: drawnPlacedBoxes,
                 items,
                 propTool: () => editor.propToolShape(),
                 fieldImage: () => latest.current.fieldImage,
                 theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,
                 dimmed: (id) => dimming.isDimmed(id),
+                opacity: (id) => dimming.opacityOf(id),
+                labelShown: (id) => dimming.labelShown(id),
+                following: (id) => drawnFollowing(dimming, following, id),
             }),
         );
         return () => installFieldTestApi(undefined);
-    }, [marchers, items, editor, dimming]);
+    }, [marchers, items, editor, dimming, following]);
 
     // Navigation (#194): wheel, pan drags and touch anywhere on the field
     useEffect(() => {
@@ -602,14 +664,18 @@ function ThreeFieldView() {
                         <MarchersLayer
                             marchers={marchers}
                             dimming={dimming}
+                            following={following}
                             theme={fieldProperties.theme}
                         />
                         <LabelsLayer
                             marchers={marchers}
                             dimming={dimming}
+                            following={following}
                             labels={labels}
                             theme={fieldProperties.theme}
                             atlas={atlases.label}
+                            style={labelStyle}
+                            holdAutoSize={isPlaying}
                         />
                         <OverlayLayer
                             plan={timeline.collisions}
@@ -624,6 +690,13 @@ function ThreeFieldView() {
                     </Canvas>
                 )}
                 {fieldProperties && (
+                    <PlacedBoxesOverlay
+                        isPlaying={isPlaying}
+                        theme={fieldProperties.theme}
+                        stepPx={fieldProperties.pixelsPerStep}
+                    />
+                )}
+                {fieldProperties && (
                     <FieldOverlay
                         marchers={marchers}
                         items={items}
@@ -631,9 +704,21 @@ function ThreeFieldView() {
                         theme={fieldProperties.theme}
                     />
                 )}
+                {fieldProperties && (
+                    <ShapeEditor stepPx={fieldProperties.pixelsPerStep} />
+                )}
+                <FavoritesRing />
+                {/* A command asking its parameters docks here, over the field's top (#354) */}
+                <DockedCommandBar />
                 <KeptMarksOverlay
                     marks={keptMarks}
                     elements={keptMarkElements}
+                />
+                <FieldContextMenu
+                    at={menu.at}
+                    onClose={menu.close}
+                    selectedCount={selectedIds.length}
+                    timelineMode={timelineMode}
                 />
             </div>
             <KeptMarkTooltipView tooltip={keptMarkTooltip} />

@@ -12,8 +12,14 @@ import {
 } from "@/hooks/queries/useHistory";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { isWebBuild } from "@/utilities/webBuild";
+import { useTolgee } from "@tolgee/react";
+
+/** Icon buttons; a finger-sized hit area in touch mode, unchanged with a mouse. */
+const buttonClassName =
+    "hover:text-accent focus-visible:text-accent flex items-center justify-center outline-hidden duration-150 ease-out disabled:opacity-50 touch:size-44 touch:[&>svg]:size-24";
 
 export default function FileControls() {
+    const { t } = useTolgee();
     // Preview edits nothing, so it has nothing to undo
     const preview = useIsPreviewMode();
     const databaseReady = useDatabaseReady();
@@ -22,14 +28,16 @@ export default function FileControls() {
     const { mutate: performHistoryAction } = usePerformHistoryAction();
 
     return (
-        <div className="titlebar-button flex w-fit gap-8">
+        <div className="titlebar-button touch:gap-0 flex w-fit items-center gap-8">
             {!preview && (
                 <>
                     {/* The browser has its own reload. */}
                     {!isWebBuild && (
                         <button
                             onClick={() => window.location.reload()}
-                            className="hover:text-accent focus-visible:text-accent outline-hidden duration-150 ease-out disabled:opacity-50"
+                            aria-label={t("titlebar.reload")}
+                            title={t("titlebar.reload")}
+                            className={buttonClassName}
                         >
                             <ArrowCounterClockwiseIcon size={18} />
                         </button>
@@ -37,14 +45,18 @@ export default function FileControls() {
                     <button
                         disabled={!canUndo}
                         onClick={() => performHistoryAction("undo")}
-                        className="hover:text-accent focus-visible:text-accent outline-hidden duration-150 ease-out disabled:opacity-50"
+                        aria-label={t("actions.edit.undo")}
+                        title={t("actions.edit.undo")}
+                        className={buttonClassName}
                     >
                         <ArrowUUpLeftIcon size={18} />
                     </button>
                     <button
                         disabled={!canRedo}
                         onClick={() => performHistoryAction("redo")}
-                        className="hover:text-accent focus-visible:text-accent outline-hidden duration-150 ease-out disabled:opacity-50"
+                        aria-label={t("actions.edit.redo")}
+                        title={t("actions.edit.redo")}
+                        className={buttonClassName}
                     >
                         <ArrowUUpRightIcon size={18} />
                     </button>

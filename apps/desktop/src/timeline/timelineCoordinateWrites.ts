@@ -3,7 +3,7 @@ import {
     type TimelineMarcherMove,
     type TimelineMovePage,
 } from "@/db-functions/timelineMoves";
-import type { DbConnection } from "@/db-functions/types";
+import type { DbConnection, DbTransaction } from "@/db-functions/types";
 import { withTimelineWriteLock } from "@/db-functions/history";
 import {
     useTimelineSelectionStore,
@@ -267,21 +267,53 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     marcherIds,
     transform,
     plan = planCanvasEdit(),
+    afterWrite,
+    writesShapes,
+    setUnmoved = false,
+    setAll = false,
+    keepPlayhead = false,
 }: {
     db: DbConnection;
     marcherIds: readonly number[];
     transform: (current: CoordinateRecord[]) => R[];
     plan?: CanvasEditPlan;
+    /**
+     * Inside isolation, leave the playhead where it is rather than taking it to the edit's end:
+     * for an edit written to an earlier plan after the playhead moved on (a shape placed on a scrub)
+     */
+    keepPlayhead?: boolean;
+    /** App data written in the same edit, such as a shape recipe (ADR 0006) */
+    afterWrite?: (
+        tx: DbTransaction,
+        timelineId: number | null,
+    ) => Promise<void | boolean>;
+    /** `afterWrite` saves shape recipes itself, so placed boxes aren't kept up to date around it */
+    writesShapes?: boolean;
+    /**
+     * When the edit moves anyone, write the marchers it leaves where they are too, as stays, so
+     * every one is in the move: a shape's members, the one at its pivot included. An edit that
+     * moves nobody still writes nothing for them, unless `setAll`.
+     */
+    setUnmoved?: boolean;
+    /** With `setUnmoved`, write them even when the edit moves nobody (`moveMarchersAndOfferFollowUp`) */
+    setAll?: boolean;
 }): Promise<R[]> {
     if (!plan.ok) throw plan.error;
-    snapIsolatedPlayheadToEnd();
-    const next = transform(timelineCoordinateRecords(plan.beat, marcherIds));
+    if (!keepPlayhead) snapIsolatedPlayheadToEnd();
+    const current = timelineCoordinateRecords(plan.beat, marcherIds);
+    const next = transform(current);
     const moves = toTimelineMoves(next);
     // Basic's locked marchers are dropped there (UI-19)
     await moveMarchersAndOfferFollowUp({
         database: db,
         target: plan.target,
         moves,
+        afterWrite,
+        writesShapes,
+        ...(setUnmoved && {
+            setUnmovedFrom: new Map(current.map((c) => [c.marcher_id, c])),
+            setAll,
+        }),
     });
     return next;
 }

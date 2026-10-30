@@ -391,7 +391,7 @@ describeDbTests("timeline mode: Move them too", (it) => {
         await timelineResolverSettled();
         await new Promise((r) => setTimeout(r, 200));
         expect(info.mock.calls.map((c) => c[0])).toEqual([
-            `Pages ${pages[2]!.name}–${pages[3]!.name} followed`,
+            `Pages ${pages[2]!.name}–${pages[3]!.name} were holding this form, so they changed too`,
         ]);
     });
 
@@ -426,11 +426,11 @@ describeDbTests("timeline mode: Move them too", (it) => {
         expect(at(ot5, pages[3]!)).toEqual([320, 180]);
         expect(at(ot4, pages[3]!)).toEqual([250, 100]);
         expect(info.mock.calls.map((c) => c[0])).toEqual([
-            `Page ${pages[1]!.name} is no longer a stop`,
+            `Page ${pages[1]!.name} is no longer a keyframe`,
         ]);
         expect(info.mock.calls[0]![1]).toMatchObject({
             id: expect.stringMatching(/^timeline-edit-\d+$/),
-            action: { label: `Keep Page ${pages[1]!.name} as a stop` },
+            action: { label: `Keep Page ${pages[1]!.name} as a keyframe` },
         });
     });
 
@@ -449,7 +449,7 @@ describeDbTests("timeline mode: Move them too", (it) => {
         // Everyone followed
         expect(at(marchers[0]!, pages[3]!)).toEqual([100, 250]);
         expect(info.mock.calls.map((c) => c[0])).toEqual([
-            `Pages ${pages[2]!.name}–${pages[3]!.name} followed`,
+            `Pages ${pages[2]!.name}–${pages[3]!.name} were holding this form, so they changed too`,
         ]);
     });
 

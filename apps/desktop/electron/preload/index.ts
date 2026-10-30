@@ -436,6 +436,9 @@ const APP_API = {
      */
     openView3d: (options?: { background?: boolean }) =>
         ipcRenderer.invoke("view3d:open", options) as Promise<boolean>,
+    /** Whether a 3D View window is open now, for an editor that just (re)loaded. */
+    isView3dOpen: () =>
+        ipcRenderer.invoke("view3d:is-open") as Promise<boolean>,
     /** Sends a clock, selection or invalidate to the 3D View, through main. */
     publishToView3d: <C extends View3dPublishChannel>(
         channel: C,

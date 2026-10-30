@@ -492,8 +492,9 @@ test("3D View follows the editor and saves the venue", async ({
 
     // Undo in the editor reverts each change; redo puts it back.
     await editor.getByRole("tab", { name: "File" }).click();
-    const undo = editor.getByRole("button", { name: "Undo", exact: true });
-    const redo = editor.getByRole("button", { name: "Redo", exact: true });
+    // The File tab's buttons, which show their words (the title bar's are icons)
+    const undo = editor.getByRole("button").filter({ hasText: /^Undo$/ });
+    const redo = editor.getByRole("button").filter({ hasText: /^Redo$/ });
     await undo.click();
     await expectVenue(view3d, kit, kitLighting, webgl);
     await undo.click();
@@ -549,4 +550,47 @@ test("3D View follows the editor and saves the venue", async ({
     const mainNetwork = mainSeen.filter((url) => !isLocalUrl(url));
     expect(networkUrls, "window requests seen by Playwright").toEqual([]);
     expect(mainNetwork, "window requests seen by main").toEqual([]);
+});
+
+test("3D View keeps following an editor that reloads", async ({
+    electronApp,
+}) => {
+    test.setTimeout(180_000);
+    const { app, page: editor } = electronApp;
+    await app.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()[0]?.setBounds({
+            x: 0,
+            y: 0,
+            width: 1600,
+            height: 1000,
+        });
+    });
+    await expect(editor.getByTestId("timeline-page-ruler")).toBeVisible({
+        timeout: 20_000,
+    });
+    const view3d = await openView3d(app, editor, []);
+    await selectPage(editor, "2");
+    await expectWindowPage(view3d, "2");
+
+    // What the title bar's Reload button, the plugin reload and the error
+    // screen do: the editor reloads, and the window stays open.
+    await editor.reload();
+    await expect(editor.getByTestId("timeline-page-ruler")).toBeVisible({
+        timeout: 20_000,
+    });
+    expect(view3d.isClosed()).toBe(false);
+
+    // The reloaded editor still drives the window: seek, then play.
+    await selectPage(editor, "3");
+    await expectWindowPage(view3d, "3");
+    await expectPausedInSync(editor, view3d);
+    await editor.getByTestId("timeline-initial-page").click();
+    await expectWindowPage(view3d, "0");
+    await editor.getByTestId("timeline-play").click();
+    await expect(view3d.getByTestId("view3d-sync-readout")).toHaveAttribute(
+        "data-playing",
+        "true",
+    );
+    await editor.getByTestId("timeline-play").click();
+    await expectPausedInSync(editor, view3d);
 });

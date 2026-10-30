@@ -179,31 +179,6 @@ test("flip across and down", async ({ show }) => {
     await expectCanvasMatchesShow(show);
 });
 
-test("make a circle", async ({ show }) => {
-    const { page } = show;
-    await selectAll(page);
-    await press(page, "o");
-
-    // Every marcher moves onto one circle
-    await expect
-        .poll(async () => {
-            const saved = await savedPositions(show, 0);
-            const cx = saved.reduce((sum, p) => sum + p.x, 0) / saved.length;
-            const cy = saved.reduce((sum, p) => sum + p.y, 0) / saved.length;
-            const radii = saved.map((p) => Math.hypot(p.x - cx, p.y - cy));
-            const moved = saved.some(
-                (p, i) => p.x !== PAGE_0[i][1] || p.y !== PAGE_0[i][2],
-            );
-            return (
-                moved &&
-                Math.max(...radii) - Math.min(...radii) < 0.5 &&
-                Math.min(...radii) > 1
-            );
-        })
-        .toBe(true);
-    await expectCanvasMatchesShow(show);
-});
-
 test("set the selected marcher to the next page", async ({ show }) => {
     const { page } = show;
     await selectPage(show, "Page 1");

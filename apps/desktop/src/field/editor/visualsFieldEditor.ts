@@ -106,7 +106,9 @@ export class VisualsFieldEditor extends FieldEditor {
         return !this.readOnly && super.canTransform();
     }
 
-    override rotateSelection(degrees: number): void {
-        if (!this.readOnly) super.rotateSelection(degrees);
+    override rotateSelection(
+        ...args: Parameters<FieldEditor["rotateSelection"]>
+    ): void {
+        if (!this.readOnly) super.rotateSelection(...args);
     }
 }

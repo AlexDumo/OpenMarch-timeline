@@ -43,6 +43,17 @@ To compare with the old field, use the pinned pre-switch build's harness
 (fork branch `field-renderer-pre-209`): its README there runs these specs once
 per field and composes the old field against the new one.
 
+`following-look.spec.mts` checks Set vs Following's look (#300, #301): two
+tests assert the dashed edge (at the opening zoom and 3×) and the fill for
+every shape and style on white, and
+the rest capture a contact sheet (every shape and style, Set beside
+Following, on white, dark and, with `TURF_IMAGE` naming a field image, turf,
+at the opening zoom and 3×, plus an isolated move) to `RENDER_OUT/<label>/`:
+
+```bash
+TURF_IMAGE=~/turf.png pnpm exec playwright test --project=render following-look
+```
+
 ## Video export comparisons
 
 `video-compare.spec.mts` (#207) exports converted demo shows through the

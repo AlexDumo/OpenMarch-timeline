@@ -278,6 +278,21 @@ edit used to choose layers its own way, and the inspector let a designer type on
 - **Follow the leader.** Founders depend on layers, so an edit that changes a marcher's ranking can
   change an FTL move's founders and targets (spec §6.2); the migration can too.
 
+**Amendment (2026-10-29, project owner): keyframes are stored move ends, and Set as shown.** Part
+of the holds design (`docs/timeline/research/holds/`, fork issues #466–#479); the rest of its part
+1 (kept spots removed, Clear this page) lands with #467 and #469.
+
+- **A keyframe is the end of one of the marcher's own moves, where that move is in charge as it
+  ends** (spec §6.2), whether or not the marcher moved. A span cut short by a higher layer is not
+  one (§4, `SpanInfo.assignmentEnd`). This replaces the motion test of fork #332: a stored move that
+  goes nowhere is designer intent (amendment 2026-10-08), so it shows a keyframe and can be removed
+  (fork #468).
+- **Set as shown** is in the page box menu. For each selected marcher that is Not set on that page,
+  it writes an ordinary one-slot move over the page box, ending at the spot the marcher shows there,
+  so the page becomes Set and later edits of earlier pages no longer carry into it. Nothing is
+  marked kept (fork #466). Until #467 removes them, kept spots stay as the 2026-10-09 amendment
+  describes, and a kept span is still not a keyframe.
+
 Cases, a simulator and animations: `docs/timeline/research/layer-priority/README.md`.
 
 Beat editing can still make two timelines share a range (and, since the 2026-10-16 amendment, would
@@ -386,6 +401,11 @@ export function createTimelineOracleForTesting(host: TimelineSnapshot): Oracle;
   many marchers on each edit; walking `explain()` span by span would pull
   origins, FTL entries and diagnostics for each one. The reference oracle is
   unchanged.
+- **Amendment (2026-10-22, project owner): `SpanInfo.assignmentEnd`.** Each span
+  also carries its assignment's `end_beat` (null for holds), from the resolver
+  and the reference oracle alike. Additive. A span stops before its row's end
+  where a higher layer cuts in (R-2); the timeline's keyframes (fork #332) count
+  only a span that ends where its row does, since no row ends at a cut.
 
 ### 5. Change-log listener contract (desktop)
 

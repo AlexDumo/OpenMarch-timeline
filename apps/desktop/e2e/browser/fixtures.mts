@@ -24,6 +24,13 @@ const blankShow = path.join(migrationsFolder, "_blank.dots");
 
 /** The renderer is served from disk under this origin; nothing listens on it. */
 const APP_ORIGIN = "https://app.openmarch.test";
+
+/**
+ * Errors the browser harness itself causes, allowed in every browser scenario: the time-stretch
+ * worklet (#216) can't load, because the route that serves the renderer from disk doesn't see
+ * AudioWorklet module requests.
+ */
+const HARNESS_PAGE_ERRORS = [/Audio worklet error/];
 const VIEWPORT = { width: 1600, height: 1000 };
 
 const requireBuilt = (file: string, script: string) => {
@@ -91,11 +98,20 @@ async function openInBrowser(
             localStorage.setItem(key, value);
     }, storage);
     if (initScript) await context.addInitScript(initScript);
-    const page = await context.newPage();
 
-    await page.exposeFunction(
+    // On the context, not the page, so a second window (Settings, #418)
+    // reaches the same show and the same served renderer
+    await context.exposeFunction(
         "__omIpcInvoke",
         async (channel: string, args: unknown[]) => {
+            // The main process opens the Settings window; here it's a page
+            // of the same context, so it shares local storage as it does in
+            // Electron
+            if (channel === "settings:open") {
+                const settings = await context.newPage();
+                await settings.goto(`${APP_ORIGIN}/#settings`);
+                return { ok: true, value: undefined };
+            }
             try {
                 return { ok: true, value: await host.invoke(channel, args) };
             } catch (error) {
@@ -103,14 +119,14 @@ async function openInBrowser(
             }
         },
     );
-    await page.exposeFunction(
+    await context.exposeFunction(
         "__omIpcSend",
         (channel: string, args: unknown[]) => host.send(channel, args),
     );
 
     // Serve the built renderer from disk and block everything else, so a
     // test never depends on the network or on a free port.
-    await page.route("**/*", async (route) => {
+    await context.route("**/*", async (route) => {
         const url = new URL(route.request().url());
         if (url.protocol === "data:" || url.protocol === "blob:")
             return route.fallback();
@@ -124,6 +140,7 @@ async function openInBrowser(
         return route.fulfill({ path: file });
     });
 
+    const page = await context.newPage();
     await page.goto(APP_ORIGIN);
     const reader = new DatabaseSync(databasePath, { readOnly: true });
     return {
@@ -493,9 +510,12 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             await app.close();
         }
 
+        const allowed = [
+            ...allowedPageErrors,
+            ...(target === "browser" ? HARNESS_PAGE_ERRORS : []),
+        ];
         const unexpected = pageErrors.filter(
-            (message) =>
-                !allowedPageErrors.some((allowed) => allowed.test(message)),
+            (message) => !allowed.some((pattern) => pattern.test(message)),
         );
         expect(unexpected, "The page logged or threw errors").toEqual([]);
     },

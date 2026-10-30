@@ -85,28 +85,27 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
     25: (db) => dropTables(db, ["item_placement_marchers", "item_placements"]),
     // Artwork slot assignments (C2.4)
     26: (db) => dropTables(db, ["item_artwork_slots"]),
-    // PROTOTYPE tempo mode: pins, holds and measure numbers. The history triggers name the
-    // columns; the migration service recreates every trigger
-    27: (db) => {
+    // Shape recipes (ADR 0006)
+    27: (db) =>
+        dropTables(db, [
+            "timeline_shape_recipe_marchers",
+            "timeline_shape_recipes",
+        ]),
+    // Saved shapes, the show's copies (ADR 0006, saved shapes)
+    28: (db) => dropTables(db, ["saved_shapes"]),
+    // Tempo mode (ADR 0007): pins, holds, measure numbers, meters and the music offset.
+    // The history triggers name the columns; the migration service recreates every trigger
+    29: (db) => {
         const triggers = db
             .prepare(
-                "SELECT name FROM sqlite_schema WHERE type = 'trigger' AND tbl_name IN ('beats', 'measures')",
-            )
-            .all() as { name: string }[];
-        for (const { name } of triggers) db.exec(`DROP TRIGGER \`${name}\``);
-        db.exec("ALTER TABLE beats DROP COLUMN tempo_pin");
-        db.exec("ALTER TABLE beats DROP COLUMN tempo_hold");
-        db.exec("ALTER TABLE measures DROP COLUMN number_override");
-    },
-    // PROTOTYPE tempo mode: the music offset in history, and meters with groupings
-    28: (db) => {
-        const triggers = db
-            .prepare(
-                "SELECT name FROM sqlite_schema WHERE type = 'trigger' AND tbl_name IN ('measures', 'tempo_settings')",
+                "SELECT name FROM sqlite_schema WHERE type = 'trigger' AND tbl_name IN ('beats', 'measures', 'tempo_settings')",
             )
             .all() as { name: string }[];
         for (const { name } of triggers) db.exec(`DROP TRIGGER \`${name}\``);
         dropTables(db, ["tempo_settings"]);
+        db.exec("ALTER TABLE beats DROP COLUMN tempo_pin");
+        db.exec("ALTER TABLE beats DROP COLUMN tempo_hold");
+        db.exec("ALTER TABLE measures DROP COLUMN number_override");
         db.exec("ALTER TABLE measures DROP COLUMN meter");
         db.exec("ALTER TABLE measures DROP COLUMN grouping");
     },

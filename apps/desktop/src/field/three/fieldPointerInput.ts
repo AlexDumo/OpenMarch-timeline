@@ -51,14 +51,6 @@ export function attachFieldPointerInput(
         if (event.pointerType === "touch") return;
         editor.pointerUp(pointer(event));
     };
-    // Navigation captures right presses on the field's root, so their release
-    // doesn't reach the canvas: the editor hears it here (a right-click
-    // clears the line tool's line, #203)
-    const rightUp = (event: PointerEvent) => {
-        if (event.pointerType === "touch" || event.button !== 2) return;
-        if (event.target === element) return;
-        editor.pointerUp(pointer(event));
-    };
     const cancel = (event: PointerEvent) => {
         if (event.pointerId !== captured) return;
         captured = null;
@@ -78,7 +70,7 @@ export function attachFieldPointerInput(
     // After a release, too, when the editor has nothing left to cancel
     element.addEventListener("lostpointercapture", cancel);
     element.addEventListener("pointerleave", leave);
-    document.addEventListener("pointerup", rightUp, true);
+    const detachRight = listenForCapturedRightPresses(element, editor, pointer);
     const unsubscribe = editor.subscribe(showCursor);
     showCursor();
     return () => {
@@ -88,9 +80,55 @@ export function attachFieldPointerInput(
         element.removeEventListener("pointercancel", cancel);
         element.removeEventListener("lostpointercapture", cancel);
         element.removeEventListener("pointerleave", leave);
-        document.removeEventListener("pointerup", rightUp, true);
+        detachRight();
         unsubscribe();
         editor.pointerCancel();
         element.style.cursor = "";
+    };
+}
+
+/**
+ * Navigation captures right presses on the field's root, so their moves and
+ * release don't reach the canvas: the editor hears them here (a right-click
+ * clears the line tool's line, #203, or opens the menu, #315; a right-drag
+ * that panned does neither). Only a right press that started on the field:
+ * one from elsewhere (the timeline) moving over it isn't the field's. Returns
+ * the detach.
+ */
+function listenForCapturedRightPresses(
+    element: HTMLElement,
+    editor: FieldEditor,
+    pointer: (event: PointerEvent) => FieldPointer,
+): () => void {
+    /** The pointer of the right press the field saw, until its release. */
+    let pressed: number | null = null;
+    const down = (event: PointerEvent) => {
+        if (event.pointerType !== "touch" && event.button === 2)
+            pressed = event.pointerId;
+    };
+    const move = (event: PointerEvent) => {
+        if (event.pointerId !== pressed || !(event.buttons & 2)) return;
+        if (event.target === element) return;
+        editor.pointerMove(pointer(event));
+    };
+    const up = (event: PointerEvent) => {
+        if (event.pointerId !== pressed || event.button !== 2) return;
+        pressed = null;
+        if (event.target === element) return;
+        editor.pointerUp(pointer(event));
+    };
+    // A mouse keeps one pointer id: a press that never ends mustn't linger
+    const cancel = (event: PointerEvent) => {
+        if (event.pointerId === pressed) pressed = null;
+    };
+    element.addEventListener("pointerdown", down);
+    document.addEventListener("pointermove", move, true);
+    document.addEventListener("pointerup", up, true);
+    document.addEventListener("pointercancel", cancel, true);
+    return () => {
+        element.removeEventListener("pointerdown", down);
+        document.removeEventListener("pointermove", move, true);
+        document.removeEventListener("pointerup", up, true);
+        document.removeEventListener("pointercancel", cancel, true);
     };
 }

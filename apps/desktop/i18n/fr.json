@@ -29,10 +29,6 @@
             "setSelectedToPrevious": "Copier les positions de la page précédente (sélection)",
             "setSelectedToPreviousSuccess": "{count, plural, other {Coordonnée'{{count, plural, one {} other {s}}} de {{count}} marcheur{{count, plural, one {} other {s}}} sur la page {{currentPage}} définie avec succès aux coordonnées de la page précédente {{previousPage}}'}}"
         },
-        "cursor": {
-            "defaultMode": "Mode sélection",
-            "lineMode": "Créer une ligne"
-        },
         "edit": {
             "noRedoAvailable": "Aucune action à rétablir",
             "noUndoAvailable": "Aucune action à annuler",
@@ -79,10 +75,18 @@
             "selectAll": "Tout sélectionner"
         },
         "shape": {
-            "applyQuick": "Aligner sur la forme",
-            "create": "Créer une forme",
+            "apply": "Placer les marcheurs sur la forme",
+            "block": "Forme : Bloc",
+            "circle": "Forme : Cercle",
             "delete": "Supprime les formes sélectionnées actuelles",
-            "noMarchersSelected": "Aucun marcheur sélectionné"
+            "keywords": "forme figure formation set placer shape",
+            "noMarchersSelected": "Aucun marcheur sélectionné",
+            "quarterTurn": "Forme : Tourner de 90° dans le sens horaire",
+            "recalculate": "Forme : Recalculer qui va où",
+            "evenOut": "Forme : égaliser le contour",
+            "expand": "Forme : agrandir, en gardant les proportions",
+            "shrink": "Forme : réduire, en gardant les proportions",
+            "ring": "Anneau des favoris : maintenez pour choisir une forme, touchez pour le garder ouvert"
         },
         "swap": {
             "error": "Impossible d'échanger les marcheurs {{marcher1}} et {{marcher2}}",
@@ -100,6 +104,7 @@
             "focusTimeline": "Modifier la chronologie",
             "hideNextPaths": "Masquer les trajectoires de la page suivante",
             "openCommandPalette": "Palette de commandes",
+            "openCommandBar": "Barre de commandes",
             "openSettings": "Paramètres…",
             "showNextPaths": "Afficher les trajectoires de la page suivante",
             "toggleNextPaths": "Basculer les trajectoires de la page suivante"
@@ -195,11 +200,18 @@
         "save": "Sauvegarder"
     },
     "commandPalette": {
+        "back": "Retour",
+        "cancel": "Annuler",
         "close": "Fermer",
+        "done": "Terminé",
         "empty": "Aucune commande ne correspond.",
         "navigate": "Naviguer",
+        "next": "Suivant",
+        "notUnderstood": "Non compris — réessayez",
         "placeholder": "Rechercher des commandes…",
         "run": "Exécuter",
+        "shape": "Forme",
+        "stepOf": "{step} sur {count}",
         "suggested": "Suggestions",
         "title": "Palette de commandes",
         "unavailable": "Indisponible pour le moment"
@@ -461,7 +473,9 @@
             "top": "Haut",
             "useHashes": "Utiliser les hachages",
             "width": "Largeur",
-            "widthHeight": "l/h"
+            "widthHeight": "l/h",
+            "stepSizeWarningThresholdRatio": "{label} ({steps} à 5)",
+            "stepSizeWarningThreshold": "Seuil d'alerte de taille de pas"
         },
         "messages": {
             "fieldRatio": "{ratio} ou {decimal}",
@@ -517,7 +531,8 @@
             "stepsFromFrontToHomeLabel": "Nombre de pas depuis la ligne de touche avant jusqu'à l'extérieur du numéro de la maison (plus près de la ligne de touche avant)",
             "stepsFromFrontToHomeLabelTop": "Nombre de pas depuis la ligne de touche avant jusqu'à l'intérieur du numéro de domicile (plus proche du centre du terrain)",
             "stepSize": "La taille de chaque étape sur le terrain en pouces ou centimètres",
-            "useHashes": "Utilisez des hachures pour les points de contrôle Y, comme un terrain de football. Si non coché, des lignes seront utilisées."
+            "useHashes": "Utilisez des hachures pour les points de contrôle Y, comme un terrain de football. Si non coché, des lignes seront utilisées.",
+            "stepSizeWarningThreshold": "Les marcheurs dont la taille de pas dépasse cette distance sont signalés par un chemin de couleur d'alerte. Mettez 0 pour désactiver."
         },
         "units": {
             "steps": "pas"
@@ -577,14 +592,7 @@
         "valueMissing": "Veuillez entrer une valeur."
     },
     "inspector": {
-        "alignment": {
-            "applyCoordinates": "Appliquer coordonnées",
-            "cancelUpdates": "Annuler",
-            "createShape": "Créer Forme",
-            "drawLine": "Tracer une ligne."
-        },
         "marcher": {
-            "createLine": "Créer la Ligne",
             "drillNumber": "Numéro de parcours",
             "errorLoadingCoords": "Erreur de chargement des coordonnées",
             "loading": "Chargement du marcheur",
@@ -610,7 +618,8 @@
                 "success": "Page scindée avec succès"
             },
             "subset": "Sous-ensemble",
-            "title": "Page {pageNumber}"
+            "title": "Page {pageNumber}",
+            "playing": "Lecture…"
         },
         "shape": {
             "addSegmentButton": "Ajouter",
@@ -637,11 +646,6 @@
             "ungroupShapeButton": "Dissocier",
             "ungroupShapeTooltip": "Supprimer cette forme pour cette page. Ne déplacera pas les marcheurs de leur position actuelle",
             "viewTab": "Vue"
-        },
-        "shapes": {
-            "moreShapesComingSoon": "Davantage de formes bientôt disponibles !",
-            "selectShape": "Sélectionner Forme",
-            "title": "Formes"
         },
         "title": "Inspecteur"
     },
@@ -1138,13 +1142,421 @@
         "shortcuts.tapBeats": "Marquer les temps",
         "title": "Paramètres",
         "tolgeeApiKeyPlaceholder": "Clé API Tolgee",
-        "tolgeeDevToolsToggle": "Tolgee Traduction In-Context"
+        "tolgeeDevToolsToggle": "Tolgee Traduction In-Context",
+        "field": "Terrain",
+        "field.description": "L'apparence du terrain.",
+        "field.gridLines": "Lignes de grille",
+        "field.halfLines": "Demi-lignes",
+        "field.labelPosition": "Position des étiquettes",
+        "field.labelPosition.above": "Au-dessus du point",
+        "field.labelPosition.beside": "À côté du point",
+        "field.labelSize": "Taille des étiquettes",
+        "field.labelSize.large": "Grande",
+        "field.labelSize.normal": "Normale",
+        "field.labelSize.small": "Petite",
+        "field.shapeFocus": "Pendant la création de formes",
+        "field.shapeFocus.drawing": "Estomper seulement pendant le dessin",
+        "field.shapeFocus.drawing.description": "Les marcheurs hors d'une forme ouverte s'estompent seulement pendant que vous la dessinez.",
+        "field.shapeFocus.rest": "Estomper le reste",
+        "field.shapeFocus.rest.description": "Les marcheurs hors d'une forme ouverte s'estompent tant qu'elle est ouverte.",
+        "field.stepSizeWarnings": "Alertes de taille de pas",
+        "field.stepSizeWarnings.description": "Signale les mouvements dont les pas sont trop grands pour être marchés, et affiche toujours leurs chemins."
     },
     "shapes": {
+        "box": {
+            "left": {
+                "closeUp": "Resserrer",
+                "hint": "Leurs places restent vides. Annuler les remet.",
+                "many": "{count} ont quitté le bloc",
+                "one": "{name} a quitté le bloc",
+                "resplit": "Rediviser"
+            },
+            "params": {
+                "fewerAcross": "Un de moins latéralement",
+                "moreAcross": "Un de plus latéralement",
+                "short": "{count} en moins",
+                "size": "Taille, latéralement × d'avant en arrière",
+                "spacingAcross": "Espacement latéral, en pas",
+                "spacingDeep": "Espacement d'avant en arrière, en pas"
+            }
+        },
         "circle": "Cercle",
+        "command": {
+            "fill": "Remplissage : {modes}",
+            "layout": "Disposition : {layouts}"
+        },
+        "distribute": {
+            "hint": {
+                "add": "ajoutez-en {count}",
+                "remove": "retirez-en {count}"
+            },
+            "layout": {
+                "full": "Complet",
+                "notched": "Encoché",
+                "rounded": "Arrondi",
+                "shortBack": "Arrière court",
+                "stagger": "En quinconce"
+            },
+            "version": {
+                "frontToBack": "{counts}, d'avant en arrière",
+                "leftToRight": "{counts}, de gauche à droite",
+                "short": "{across} × {deep}, {short} en moins",
+                "staggered": "{across} × {deep} en quinconce",
+                "straight": "{across} × {deep} droit"
+            }
+        },
+        "edit": {
+            "away": {
+                "dismiss": "Abandonner",
+                "dismissTip": "Abandonner la forme (annuler la rétablit)",
+                "goBack": "Revenir",
+                "text": "Forme ouverte à {moment}"
+            },
+            "closeUp": {
+                "label": "Resserrer",
+                "title": "Resserrer : remplir {count, plural, one {# place vide} other {# places vides}} avec les marcheurs restants"
+            },
+            "drawHint": "Glissez sur le terrain pour dessiner : {shape} · Échap pour annuler",
+            "drawnOn": "depuis {page}",
+            "edge": {
+                "label": "Bord",
+                "tip": "Bord : {edge} répartis le long du contour, {inside} dispersés à l'intérieur",
+                "tipEdgeOnly": "Bord : trop peu de marcheurs pour l'intérieur, les {edge} se placent donc sur le bord"
+            },
+            "empty": "{count} vides",
+            "flipAcross": "Retourner latéralement",
+            "flipDeep": "Retourner d'avant en arrière",
+            "expand": "Agrandir, en gardant les proportions",
+            "shrink": "Réduire, en gardant les proportions",
+            "shrinkFloor": "Réduire : aucun espacement ne peut descendre sous un demi-pas",
+            "scaleHint": "Cliquer, maintenir pour répéter, ou glisser",
+            "gap": {
+                "menu": "Reste",
+                "spacing": "{count, plural, one {{value} pas} other {{value} pas}}",
+                "spacingTip": "Le côté {side} a un marcheur de moins, donc ses marcheurs sont à {spacing} les uns des autres.",
+                "side": {
+                    "back": "Arrière",
+                    "front": "Avant",
+                    "left": "Gauche",
+                    "right": "Droite"
+                },
+                "sideLabel": "Côté de l'écart",
+                "style": {
+                    "gap": "Laisse un écart",
+                    "spread": "Répartit également"
+                },
+                "styleLabel": "Ce côté",
+                "tipGap": "Cliquez sur un marcheur du contour (pas un coin) pour y déplacer l'espace.",
+                "tipSpread": "Cliquez sur un marcheur d'un autre côté (pas un coin) pour répartir ce côté à la place."
+            },
+            "layout": {
+                "aria": "Disposition : {label}",
+                "cantMake": "{label} ne peut pas faire {count}",
+                "label": "Disposition",
+                "needs": "{label} demande {count, plural, one {# marcheur} other {# marcheurs}} : {hint}",
+                "needsEither": "{label} demande {a} ou {b} marcheurs : {hint}",
+                "showVersions": "Afficher les versions {label}"
+            },
+            "mode": {
+                "files": "Grille",
+                "label": "Remplissage",
+                "outline": "Contour",
+                "spread": "Dispersion"
+            },
+            "pathways": {
+                "hide": "Masquer les chemins depuis le drapeau de départ",
+                "show": "Afficher les chemins depuis le drapeau de départ"
+            },
+            "pivot": {
+                "aria": "Pivot : {pivot}",
+                "custom": "Pivot : là où il a été glissé sur le terrain",
+                "label": "Pivot",
+                "names": {
+                    "c": "centre",
+                    "e": "droite",
+                    "n": "arrière",
+                    "ne": "arrière droit",
+                    "nw": "arrière gauche",
+                    "s": "avant",
+                    "se": "avant droit",
+                    "sw": "avant gauche",
+                    "w": "gauche"
+                },
+                "tip": "Tourner et retourner autour de : {pivot}"
+            },
+            "place": "Placer",
+            "quarterTurn": "Tourner de 90° dans le sens horaire",
+            "ratioLock": {
+                "locked": "Espacements liés : cliquez pour les délier",
+                "unlocked": "Lier les deux espacements"
+            },
+            "evenOut": {
+                "label": "Égaliser",
+                "tip": "Répartir les marcheurs aussi régulièrement que le bloc le permet",
+                "already": "Les marcheurs sont déjà aussi réguliers que le bloc le permet"
+            },
+            "recalculate": {
+                "already": "Qui va où est déjà au plus court trajet",
+                "closeUpFirst": "Recalculer qui va où : resserrez d'abord les places vides",
+                "label": "Recalculer",
+                "title": "Recalculer qui va où, au plus court trajet"
+            },
+            "reshuffle": {
+                "label": "Remélanger",
+                "title": "Remélanger : une nouvelle disposition"
+            },
+            "scrubTip": "{label} : cliquez pour saisir, glissez pour modifier",
+            "snapTip": "Caler sur le demi-pas le plus proche",
+            "snapLabel": "{label} : caler sur le demi-pas le plus proche",
+            "aboutValue": "{label} : environ {value}",
+            "seed": {
+                "copied": "Copiée",
+                "copy": "Copier la graine",
+                "copyFailed": "Échec de la copie",
+                "count": "pour {count} marcheurs",
+                "hint": "Même graine et même nombre dans la même forme : même dispersion. L'espacement ne fait que la mettre à l'échelle.",
+                "label": "Graine"
+            },
+            "steps": "pas",
+            "turn": "Rotation, en degrés dans le sens horaire"
+        },
+        "field": {
+            "stepLimit": "{steps} à 5"
+        },
+        "frame": {
+            "scale": {
+                "apart": "{spacings} d'écart",
+                "size": "{sizes} pas"
+            }
+        },
+        "kinds": {
+            "arc": {
+                "hint": {
+                    "bend": "Courber"
+                },
+                "label": "Arc",
+                "validate": {
+                    "flat": "L'arc est plat, c'est donc une ligne droite",
+                    "sameSpot": "Les extrémités de l'arc sont au même endroit"
+                }
+            },
+            "block": {
+                "across": "Latéralement",
+                "deep": "En profondeur",
+                "files": "Files",
+                "hint": {
+                    "files": "Files",
+                    "intervalAcross": "Intervalle latéral",
+                    "intervalDeep": "Intervalle en profondeur",
+                    "turn": "Tourner"
+                },
+                "keepIntervals": {
+                    "label": "Garder les intervalles",
+                    "locked": "Intervalles verrouillés : faire glisser le côté ajoute ou retire des files. Cliquez pour étirer les intervalles à la place",
+                    "unlocked": "Faire glisser le côté étire les intervalles. Cliquez pour les verrouiller, et il ajoutera ou retirera des files"
+                },
+                "label": "Bloc",
+                "pattern": "Motif",
+                "ranks": {
+                    "grid": "Grille",
+                    "label": "Rangs",
+                    "staggered": "En quinconce"
+                },
+                "readout": {
+                    "interval": "Intervalle",
+                    "intervalValue": "{across} × {deep} pas",
+                    "ranksFiles": "Rangs × files"
+                },
+                "rotation": "Rotation",
+                "shortRank": {
+                    "center": "Centre",
+                    "label": "Rang court",
+                    "left": "Gauche",
+                    "right": "Droite"
+                },
+                "size": "Taille",
+                "validate": {
+                    "lastRankOne": "Avec {files, plural, one {# file} other {# files}}, le dernier rang a 1 marcheur",
+                    "noFiles": "Un bloc doit avoir au moins 1 file"
+                }
+            },
+            "circle": {
+                "hint": {
+                    "radius": "Rayon, et point de départ du marcheur 1"
+                },
+                "label": "Cercle",
+                "params": {
+                    "interval": "Espacement entre voisins, en pas"
+                },
+                "readout": {
+                    "circumference": "Circonférence"
+                },
+                "validate": {
+                    "noRadius": "Le cercle n'a pas de rayon",
+                    "overlap": "Les intervalles font tout le tour du cercle, donc des marcheurs se chevauchent",
+                    "partFilled": "{count, plural, one {# marcheur à cet intervalle occupe} other {# marcheurs à cet intervalle occupent}} {run} des {total} pas du cercle. Ouvrez le verrou de taille pour que le cercle se ferme."
+                }
+            },
+            "curve": {
+                "hint": {
+                    "point": "Point (double-cliquez pour le retirer)"
+                },
+                "label": "Courbe",
+                "validate": {
+                    "points": "La courbe doit avoir au moins 2 points différents"
+                }
+            },
+            "fill": {
+                "edgeField": "Bord (0 = auto)",
+                "group": "Remplissage",
+                "hint": {
+                    "size": "Taille"
+                },
+                "label": "Rempli",
+                "layout": "Disposition",
+                "readout": {
+                    "about": "Environ",
+                    "apart": "{steps} pas d'écart",
+                    "edge": "Bord",
+                    "edgeAuto": "{count} (auto)"
+                },
+                "validate": {
+                    "noSize": "La forme n'a pas de taille"
+                }
+            },
+            "line": {
+                "label": "Ligne",
+                "validate": {
+                    "sameSpot": "Les extrémités de la ligne sont au même endroit"
+                }
+            },
+            "measure": {
+                "angle": "Angle",
+                "depth": "Profondeur",
+                "radius": "Rayon",
+                "sweep": "Ouverture",
+                "width": "Largeur"
+            },
+            "path": {
+                "readout": {
+                    "interval": "Intervalle",
+                    "length": "Longueur",
+                    "run": "Parcours"
+                },
+                "spacing": "Espacement"
+            }
+        },
+        "library": {
+            "addNamed": "Ajouter {name} à ma bibliothèque",
+            "addTip": "Ajouter à ma bibliothèque, pour tous les spectacles",
+            "close": "Fermer",
+            "deleteNamed": "Supprimer {name}",
+            "deleteTip": "Supprimer cette forme enregistrée",
+            "dismiss": "Ignorer",
+            "draw": "Dessiner : {name}",
+            "full": "{max} formes sont en favori, le maximum que l'anneau peut contenir. Retirez-en une d'abord pour mettre {name} en favori.",
+            "group": {
+                "basic": "De base",
+                "saved": "Enregistrées"
+            },
+            "intro": "Mettez une forme en favori pour la garder dans l'onglet Formes et l'anneau de formes, jusqu'à {max}.",
+            "note": {
+                "apart": "espacés de {spacing}",
+                "modeSpacing": "{mode} {spacing}",
+                "showOnly": "ce spectacle uniquement",
+                "stagger": "en quinconce {fraction}",
+                "staggerLeft": "en quinconce {fraction} à gauche"
+            },
+            "savedEmpty": "Enregistrez une forme depuis sa ligne ⋯ ou l'inspecteur pour la garder ici, pour tous les spectacles.",
+            "savedNewer": "{count, plural, one {# forme enregistrée nécessite} other {# formes enregistrées nécessitent}} une version plus récente d'OpenMarch.",
+            "star": "Mettre en favori",
+            "starNamed": "Mettre {name} en favori",
+            "title": "Formes",
+            "unstar": "Retirer des favoris",
+            "unstarNamed": "Retirer {name} des favoris"
+        },
+        "placed": {
+            "editError": "Erreur lors de la modification de la forme",
+            "fillError": "Erreur lors du remplissage de la forme",
+            "label": "{name} · {interval} pas",
+            "left": {
+                "many": "{count} ont quitté {shape}",
+                "one": "{name} a quitté {shape}"
+            },
+            "selectWhole": "Sélectionner : {shape}",
+            "summary": {
+                "empty": "{count, plural, one {# vide} other {# vides}}",
+                "steps": "{interval} pas"
+            }
+        },
+        "save": {
+            "ariaLabel": "Enregistrer cette forme dans votre bibliothèque",
+            "button": "Enregistrer",
+            "cancel": "Annuler",
+            "descriptionLabel": "Description de la forme enregistrée (facultatif)",
+            "descriptionPlaceholder": "Description (facultatif)",
+            "nameLabel": "Nom de la forme enregistrée",
+            "savedAs": "Enregistrée sous {name}",
+            "tip": "Enregistrer cette forme dans votre bibliothèque, en favori"
+        },
+        "saved": {
+            "copyFailed": "Impossible de copier la forme enregistrée dans le spectacle",
+            "deleteFailed": "Impossible de supprimer la forme enregistrée du spectacle"
+        },
+        "spacing": {
+            "empty": "Saisissez un intervalle en pas",
+            "noGaps": "Un parcours doit avoir au moins 1 écart",
+            "notInterval": "« {part} » n'est pas un intervalle. Saisissez des pas (2), une liste (4,4,2) ou pas x écarts (4x3)",
+            "notPositive": "Un intervalle doit dépasser 0 pas",
+            "repeating": "{needed, plural, one {# écart nécessaire} other {# écarts nécessaires}}, {given} saisis : reprise depuis le premier",
+            "unused": "{needed, plural, one {# écart nécessaire} other {# écarts nécessaires}}, {given} saisis : les {unused} derniers sont inutilisés"
+        },
         "square": "Carré",
+        "tool": {
+            "moment": {
+                "count": "temps {count}",
+                "home": "début"
+            },
+            "placeError": "Erreur lors du placement de la forme",
+            "ring": {
+                "hint": "Cliquez sur une forme, ou ailleurs pour fermer",
+                "starred": "En favori"
+            },
+            "section": {
+                "box": "Bloc",
+                "title": "Formes"
+            },
+            "selectMarchersFirst": "Sélectionnez d'abord des marcheurs",
+            "tab": {
+                "greyed": "{name} : {reason}",
+                "kinds": "Types de forme",
+                "library": "Bibliothèque",
+                "libraryTip": "Ouvrir la bibliothèque de formes pour mettre des formes en favori",
+                "ringHint": "Maintenez {key} sur le terrain pour l'anneau de formes"
+            }
+        },
+        "transform": {
+            "flipAcross": "Retourner ↔",
+            "flipAcrossTip": "Retourner latéralement autour du pivot",
+            "flipDeep": "Retourner ↕",
+            "flipDeepTip": "Retourner d'avant en arrière autour du pivot",
+            "title": "Transformer"
+        },
         "triangle": "Triangle",
+        "validate": {
+            "noPosition": "La forme a un emplacement sans position",
+            "offField": "{count, plural, one {# marcheur se retrouverait} other {# marcheurs se retrouveraient}} hors du terrain",
+            "sameSpot": "{count, plural, one {# marcheur se retrouverait} other {# marcheurs se retrouveraient}} au même endroit",
+            "stepsTooLong": "{count, plural, one {# marcheur a besoin de pas plus longs que la limite de {limit} ({longest}, en orange).} other {# marcheurs ont besoin de pas plus longs que la limite de {limit} (le plus long : {longest}, en orange).}} Réglez la limite dans Champ › Personnaliser.",
+            "tooClose": "{count, plural, one {# marcheur est} other {# marcheurs sont}} à moins de {min, plural, one {# pas} other {# pas}}"
+        },
         "x": "X"
+    },
+    "shortcutsDialog": {
+        "shape": {
+            "fineControl": "Contrôle fin, toujours aimanté aux lignes de verges et aux hashes",
+            "noSnapping": "Faire glisser une forme sans aimantation"
+        }
     },
     "tags": {
         "title": "Étiquettes"
@@ -1162,6 +1574,28 @@
         "audio": "Audio",
         "controls": {
             "label": "Contrôles de lecture"
+        },
+        "holdMarks": {
+            "holds": "Les marcheurs sélectionnés tiennent depuis la page {page}",
+            "holdsFromStart": "Les marcheurs sélectionnés tiennent depuis le début",
+            "holdsFromStartHint": "Ils restent là où ils ont commencé",
+            "holdsHere": "Les marcheurs sélectionnés tiennent sur cette page",
+            "holdsHereHint": "Ils restent là où leur dernier mouvement les a laissés",
+            "holdsHint": "Ils restent là où la page {page} les a laissés",
+            "kept": "Les marcheurs sélectionnés sont conservés ici",
+            "keptHint": "Ils restent ici quand les pages précédentes changent",
+            "mixed": "Certains marcheurs sélectionnés tiennent depuis la page {page}",
+            "mixedFromStart": "Certains marcheurs sélectionnés tiennent depuis le début",
+            "mixedHere": "Certains marcheurs sélectionnés tiennent sur cette page",
+            "mixedHint": "Certains ont leur propre mouvement ici",
+            "moves": "Les marcheurs sélectionnés bougent sur cette page",
+            "movesHint": "Ils ont leur propre mouvement ici"
+        },
+        "keep": {
+            "followed": {
+                "keepOne": "Garder la page {page} comme avant",
+                "keepPages": "Garder les pages {first}–{last} comme avant"
+            }
         },
         "label": "Chronologie",
         "masterVolume": "Volume principal",
@@ -1219,7 +1653,16 @@
         "view": {
             "gridLines": "Lignes de grille",
             "halfLines": "Demi-lignes",
+            "labels": "Étiquettes",
+            "labelsAuto": "Auto (plus petites si serré)",
+            "labelsNames": "Numéros de drill",
+            "labelsNumbers": "Numéros seuls",
+            "labelsOff": "Désactivé",
             "nextPaths": "Prochains chemins",
+            "shapes": "Formes",
+            "shapesAlways": "Toujours",
+            "shapesOff": "Désactivé",
+            "shapesSelected": "Si sélectionné",
             "uiSettingsToolbar": "Barre d'outils des paramètres de l'interface utilisateur"
         }
     },

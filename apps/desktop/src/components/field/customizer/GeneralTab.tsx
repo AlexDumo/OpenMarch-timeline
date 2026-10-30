@@ -111,7 +111,29 @@ export function GeneralTab({
                     />
                 </FormField>
                 <FormField
-                    label={t("fieldProperties.labels.stepSizeWarningThreshold")}
+                    // Also as drill writers say it, "4 to 5", as the shape tool's warning does
+                    label={
+                        currentFieldProperties.stepSizeWarningThresholdInches >
+                        0
+                            ? t(
+                                  "fieldProperties.labels.stepSizeWarningThresholdRatio",
+                                  "{label} ({steps} to 5)",
+                                  {
+                                      label: t(
+                                          "fieldProperties.labels.stepSizeWarningThreshold",
+                                      ),
+                                      steps:
+                                          Math.round(
+                                              (180 /
+                                                  currentFieldProperties.stepSizeWarningThresholdInches) *
+                                                  10,
+                                          ) / 10,
+                                  },
+                              )
+                            : t(
+                                  "fieldProperties.labels.stepSizeWarningThreshold",
+                              )
+                    }
                     tooltip={t(
                         "fieldProperties.tooltips.stepSizeWarningThreshold",
                     )}

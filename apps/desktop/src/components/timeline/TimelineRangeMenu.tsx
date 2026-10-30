@@ -11,6 +11,7 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 import { TooltipClassName } from "@openmarch/ui";
 import {
     CursorTextIcon,
+    DiamondIcon,
     FlagIcon,
     LinkBreakIcon,
     LinkSimpleIcon,
@@ -40,7 +41,7 @@ import type { TimelineBeatRange } from "./TimelineViewModel";
  * The menus' entry style; `data-[disabled]` dims a Radix-disabled one (Keep here, Follow again).
  * Entries with a reason dim themselves (`MenuItemWithReason`).
  */
-const ITEM_CLASS =
+export const TIMELINE_MENU_ITEM_CLASS =
     "rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50";
 
 /** A shortcut after an entry's words, as the transport's popover shows Ctrl+M */
@@ -77,7 +78,7 @@ function MenuItemWithReason({
     reason,
     reasonTestId,
     onSelect,
-    className = ITEM_CLASS,
+    className = TIMELINE_MENU_ITEM_CLASS,
     children,
 }: {
     testId: string;
@@ -301,7 +302,7 @@ export function TimelineMoveMenuItems({
             <DropdownMenu.Item
                 data-testid="timeline-move-menu-rename"
                 onSelect={actions.onRename}
-                className={ITEM_CLASS}
+                className={TIMELINE_MENU_ITEM_CLASS}
             >
                 <CursorTextIcon size={14} />
                 Rename move…
@@ -329,7 +330,7 @@ export function TimelineMoveMenuItems({
                 reason={reason}
                 reasonTestId="timeline-move-menu-delete-reason"
                 onSelect={actions.onDelete}
-                className={`${ITEM_CLASS} text-red`}
+                className={`${TIMELINE_MENU_ITEM_CLASS} text-red`}
             >
                 <TrashIcon size={14} />
                 Delete move
@@ -363,6 +364,10 @@ export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
      */
     readonly keepHere?: TimelineKeepHereMenu;
     /**
+     * **Set as shown** on a page box (holds, fork #466). Without it, the menu has no such entry.
+     */
+    readonly setAsShown?: TimelineSetAsShownMenu;
+    /**
      * **Subset** on a page box (UI-9): a switch that shows whether the page is a subset, and
      * flips it. Without it, the menu has no such entry.
      */
@@ -391,6 +396,16 @@ export interface TimelineKeepHereMenu {
     } | null;
     readonly onKeep: (pageId: string | number) => void;
     readonly onFollow: (pageId: string | number) => void;
+}
+
+/** The page box menu's **Set as shown** entry (holds, fork #466), by page id. */
+export interface TimelineSetAsShownMenu {
+    /**
+     * Why the entry can't run on the page (no selected marcher is Not set there), or null when it
+     * can; undefined when no marchers are selected, so the entry doesn't show
+     */
+    readonly reasonFor: (pageId: string | number) => string | null | undefined;
+    readonly onSet: (pageId: string | number) => void;
 }
 
 /**
@@ -485,6 +500,7 @@ export function useTimelineRangeMenu({
             (menu?.onDeleteFlag !== undefined ||
                 menu?.onDeleteWithMoves !== undefined ||
                 menu?.keepHere !== undefined ||
+                menu?.setAsShown !== undefined ||
                 menu?.subset !== undefined ||
                 menu?.extraFor !== undefined) &&
             target.pageId !== undefined;
@@ -498,6 +514,10 @@ export function useTimelineRangeMenu({
         open && menu?.keepHere && open.target.pageId !== undefined
             ? menu.keepHere.stateFor(open.target.pageId)
             : null;
+    const setAsShownReason =
+        open && menu?.setAsShown && open.target.pageId !== undefined
+            ? menu.setAsShown.reasonFor(open.target.pageId)
+            : undefined;
     const pageExtra =
         open && menu?.extraFor && open.target.pageId !== undefined
             ? menu.extraFor(open.target.pageId)
@@ -545,6 +565,29 @@ export function useTimelineRangeMenu({
                                 <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
                             </>
                         )}
+                        {setAsShownReason !== undefined && (
+                            <>
+                                <MenuItemWithReason
+                                    testId="timeline-range-menu-set-as-shown"
+                                    reason={setAsShownReason}
+                                    reasonTestId="timeline-range-menu-set-as-shown-reason"
+                                    onSelect={() =>
+                                        menu?.setAsShown?.onSet(
+                                            open.target.pageId!,
+                                        )
+                                    }
+                                >
+                                    <DiamondIcon size={14} />
+                                    {tolgee.t(
+                                        "timeline.rangeMenu.setAsShown",
+                                        "Set as shown",
+                                    )}
+                                </MenuItemWithReason>
+                                {!keepState && (
+                                    <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                                )}
+                            </>
+                        )}
                         {keepState && (
                             <>
                                 <DropdownMenu.Item
@@ -556,7 +599,7 @@ export function useTimelineRangeMenu({
                                             open.target.pageId!,
                                         )
                                     }
-                                    className={ITEM_CLASS}
+                                    className={TIMELINE_MENU_ITEM_CLASS}
                                 >
                                     <LinkBreakIcon size={14} />
                                     {tolgee.t(
@@ -576,7 +619,7 @@ export function useTimelineRangeMenu({
                                             open.target.pageId!,
                                         )
                                     }
-                                    className={ITEM_CLASS}
+                                    className={TIMELINE_MENU_ITEM_CLASS}
                                 >
                                     <LinkSimpleIcon size={14} />
                                     {tolgee.t(
@@ -603,7 +646,7 @@ export function useTimelineRangeMenu({
                                             checked,
                                         )
                                     }
-                                    className={`${ITEM_CLASS} group`}
+                                    className={`${TIMELINE_MENU_ITEM_CLASS} group`}
                                 >
                                     <MenuSwitch />
                                     {tolgee.t(
@@ -621,7 +664,7 @@ export function useTimelineRangeMenu({
                                     onSelect={() =>
                                         menu.onDeleteFlag?.(open.target.pageId!)
                                     }
-                                    className={`${ITEM_CLASS} text-red`}
+                                    className={`${TIMELINE_MENU_ITEM_CLASS} text-red`}
                                 >
                                     <FlagIcon size={14} />
                                     Delete page
@@ -636,7 +679,7 @@ export function useTimelineRangeMenu({
                                             open.target.pageId!,
                                         )
                                     }
-                                    className={`${ITEM_CLASS} text-red`}
+                                    className={`${TIMELINE_MENU_ITEM_CLASS} text-red`}
                                 >
                                     <TrashIcon size={14} />
                                     {tolgee.t(

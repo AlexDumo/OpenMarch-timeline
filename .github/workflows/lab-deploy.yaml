@@ -134,11 +134,18 @@ jobs:
         if: steps.test.outputs.mode == 'publish'
         run: pnpm install --no-frozen-lockfile
 
+      # The web editor's own build, on its lab channel (apps/desktop/web/LAB.md)
       - name: Build the web test build
         if: steps.test.outputs.mode == 'publish'
+        env:
+          WEB_CHANNEL: lab
+          LAB_TEST_ID: ${{ steps.test.outputs.id }}
+          # Its show, editor mode and versions to compare, if it names them
+          # (apps/desktop/web/LAB.md)
+          LAB_MANIFEST: ${{ steps.test.outputs.manifest }}
         run: |
           pnpm turbo run build --filter="@openmarch/desktop^..."
-          pnpm --filter @openmarch/desktop run lab:build
+          pnpm --filter @openmarch/desktop run web:build
 
       - name: Publish to the lab
         if: steps.test.outputs.mode == 'publish'
@@ -152,7 +159,7 @@ jobs:
           node "$RUNNER_TEMP/deploy-experiment.mjs" \
             --lab "$LAB_URL" \
             --manifest "$MANIFEST" \
-            --build apps/desktop/web/dist \
+            --build apps/desktop/dist-web \
             --branch "$BRANCH" \
             --commit "$HEAD_SHA"
 

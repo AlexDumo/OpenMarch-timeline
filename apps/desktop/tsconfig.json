@@ -30,12 +30,7 @@
         "e2e",
         "vitest.setup.ts",
         "**/*.msw.ts",
-        "web/main.ts",
-        "web/host.ts",
-        "web/demos.ts",
-        "web/vite.config.mts",
-        "web/shims",
-        "web/dist"
+        "web/demos.ts"
     ],
     "references": [
         {

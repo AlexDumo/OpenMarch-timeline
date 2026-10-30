@@ -1,6 +1,6 @@
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import { resolveMarcherLook } from "@/entity-components/appearance";
-import type { FieldPoint } from "@/field/editor/fieldEditor";
+import type { FieldModeDrawing, FieldPoint } from "@/field/editor/fieldEditor";
 import type {
     FieldTestApi,
     FieldTestGesture,
@@ -10,10 +10,11 @@ import type {
     FieldTestLook,
     FieldTestPropTool,
     FieldTestMarcher,
+    FieldTestPlacedBox,
+    FieldTestShapeOverlay,
     ScreenPoint,
 } from "@/field/fieldTestApi";
 import { canvasPixelRatio, useFieldQualityStore } from "@/field/fieldQuality";
-import type { LineToolShape } from "@/field/editor/lineTool";
 import type { PropToolShape } from "@/field/editor/propTool";
 import type { FieldMarchers } from "./fieldMarchers";
 import type { FieldItems } from "./fieldItems";
@@ -36,13 +37,20 @@ export type ThreeFieldState = {
     theme(): FieldTheme;
     /** Whether a marcher is drawn dimmed (#201). */
     dimmed(id: number): boolean;
+    /** How opaque a marcher's dot is drawn, and whether its label is (#417) */
+    opacity(id: number): number;
+    labelShown(id: number): boolean;
+    /** Whether a marcher is drawn as Following (a dashed edge) (#300): never while dimmed or playing. */
+    following(id: number): boolean;
     /** The app's selection, as the editor reads it. */
     selection(): readonly number[];
     activeGesture(): FieldTestGesture | null;
     /** The selection box's handles as drawn, in field units, or null with no box (#198). */
     handles(): Record<FieldTestHandle, FieldPoint> | null;
-    /** The editor's line tool, or null when it's off (#203). */
-    lineTool(): LineToolShape | null;
+    /** What the editor's mode draws (the shape tool, a selected placed box), or null (#204). */
+    modeDrawing(): FieldModeDrawing | null;
+    /** The placed boxes outlined on the field (#204). */
+    placedBoxes(): readonly FieldTestPlacedBox[];
     /** The items drawn (C2.1). */
     items: FieldItems;
     /** The editor's prop tool, or null when it's off (C2.1). */
@@ -82,6 +90,9 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
                         screen.y < rect.bottom,
                     look: lookOf(stacks[i] ?? [], theme),
                     dimmed: field.dimmed(id),
+                    opacity: field.opacity(id),
+                    labelShown: field.labelShown(id),
+                    following: field.following(id),
                 };
             });
         },
@@ -108,22 +119,13 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
             };
         },
         fieldImage: () => field.fieldImage(),
-        lineTool() {
-            const tool = field.lineTool();
-            if (!tool) return null;
-            const { line } = tool;
-            return {
-                marchers: [...tool.marchers].sort((a, b) => a - b),
-                line: line && {
-                    start: { ...line.start },
-                    end: { ...line.end },
-                    drawing: line.drawing,
-                },
-                previews: tool.previews
-                    .map(({ id, to }) => ({ id, ...to }))
-                    .sort((a, b) => a.id - b.id),
-            };
-        },
+        shapeOverlay: () => shapeOverlayOf(field),
+        placedBoxes: () =>
+            field.placedBoxes().map(({ id, label, rect }) => ({
+                id,
+                label,
+                rect: { ...rect },
+            })),
         items: () => itemsOnScreen(field),
         propTool: () => propToolOf(field),
     };
@@ -153,6 +155,51 @@ function lookOf(
         fill: rgbaToString(look.fill),
         outline: rgbaToString(look.outline),
     };
+}
+
+/** What the editor's mode draws, with its handles in viewport CSS px (#204). */
+function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
+    const drawing = field.modeDrawing();
+    const element = field.element();
+    if (!drawing || !element) return null;
+    const rect = element.getBoundingClientRect();
+    const view = field.view();
+    const copy = (p: FieldPoint) => ({ x: p.x, y: p.y });
+    return {
+        outline: drawing.outline && drawing.outline.map(copy),
+        spots: drawing.spots.map(copy),
+        walks: drawing.walks.map(({ from, to }) => ({
+            from: copy(from),
+            to: copy(to),
+        })),
+        handles: drawing.handles.map(screen),
+        rings: (drawing.rings ?? []).map(copy),
+        gaps: (drawing.gaps ?? []).map(copy),
+        stage: drawing.stage ?? null,
+        knob: drawing.knob ? screen(drawing.knob.at) : null,
+        centerDot: drawing.centerDot ? screen(drawing.centerDot) : null,
+        pivotMark: drawing.pivotMark ? screen(drawing.pivotMark) : null,
+        pivotPreview: drawing.pivotPreview ? copy(drawing.pivotPreview) : null,
+        labels: (drawing.labels ?? []).map((l) => l.text),
+        tip: drawing.tip?.text ?? null,
+        gliding: drawing.gliding === true,
+        calm: drawing.calm === true,
+        guides: (drawing.guides ?? []).map(({ from, to, label }) => ({
+            from: copy(from),
+            to: copy(to),
+            label: label ?? null,
+        })),
+        guideEdges: (drawing.guideEdges ?? []).map(({ from, to }) => ({
+            from: copy(from),
+            to: copy(to),
+        })),
+        guideMarks: (drawing.guideMarks ?? []).map(copy),
+        onGuides: (drawing.onGuides ?? []).map(copy),
+    };
+    function screen(at: FieldPoint) {
+        const { x, y } = fieldToElement(view, at.x, at.y);
+        return { x: rect.x + x, y: rect.y + y };
+    }
 }
 
 /** The prop tool as the field shows it, or null when it's off. */

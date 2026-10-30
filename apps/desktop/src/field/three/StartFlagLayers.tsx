@@ -1,3 +1,8 @@
+import { useMemo } from "react";
+import {
+    useShowingShapeMarchers,
+    withoutShapeMarchers,
+} from "@/shapes/field/shapeOwnMarchers";
 import OverlayLayer from "./layers/OverlayLayer";
 import { useStartFlagOverlay } from "./useStartFlagOverlay";
 
@@ -16,7 +21,13 @@ const START_FLAG_DOTS_ORDER = 1.7;
 export default function StartFlagLayers(
     props: Parameters<typeof useStartFlagOverlay>[0],
 ) {
-    const plans = useStartFlagOverlay(props);
+    // An open shape's own marchers show its ghosts and walks instead (#417)
+    const members = useShowingShapeMarchers();
+    const marcherIds = useMemo(
+        () => withoutShapeMarchers(props.marcherIds, members),
+        [props.marcherIds, members],
+    );
+    const plans = useStartFlagOverlay({ ...props, marcherIds });
     return (
         <>
             <OverlayLayer

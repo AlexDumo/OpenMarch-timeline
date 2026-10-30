@@ -15,6 +15,24 @@ export type ActionCategory =
     | "timeline";
 export type ActionArgs = Readonly<Record<string, string | number | boolean>>;
 
+/**
+ * A number an action asks for before it runs (#354, spec #344 "The command bar"). Chosen from the
+ * palette, an action that declares params docks the command bar and asks them one at a time,
+ * then runs with the answers in its `args`, by `key`. The Shape branch asks its kinds' params the
+ * same way through the palette tree.
+ */
+export interface ActionParam {
+    /** Stable for the action: the answer's key in `args` */
+    readonly key: string;
+    /** i18n key of what it asks, e.g. "actions.timeline.pageCounts" */
+    readonly labelKey: string;
+    /** Counts are whole numbers; steps take halves ("2½"); degrees any number */
+    readonly unit: "count" | "steps" | "degrees";
+    /** The answer the bar starts from */
+    readonly default?: number;
+    readonly range?: { readonly min?: number; readonly max?: number };
+}
+
 export interface ActionDefinition {
     /** i18n key, e.g. "actions.alignment.lockX" */
     labelKey: string;
@@ -40,14 +58,24 @@ export interface ActionDefinition {
     defaultBindings: readonly string[];
     allowInInputs?: boolean;
     allowInModals?: boolean;
+    /**
+     * Left out of the command palette. Every action with a default shortcut is listed (#411)
+     * unless it can't work without its key held, or the palette reaches it another way; the
+     * definitions test lists those with why.
+     */
     hiddenFromPalette?: boolean;
     /** A held key runs the action once, not again on each repeat (for toggles) */
     ignoreRepeat?: boolean;
     args?: ActionArgs;
+    /** Joins `args` when the action is run from the command palette, which has no key to let go */
+    paletteArgs?: ActionArgs;
+    /** Asked in the command bar when chosen from the palette; the answers join `args` */
+    params?: readonly ActionParam[];
 }
 
 export type NudgeDirection = "up" | "down" | "left" | "right";
-export type NudgeStep = "grid" | "quarter" | "tenth" | "four";
+/** "one" is exactly one step, for the touch Move pad (no binding uses it). */
+export type NudgeStep = "grid" | "quarter" | "tenth" | "one" | "four";
 export interface NudgeArgs {
     direction: NudgeDirection;
     step: NudgeStep;
@@ -124,7 +152,6 @@ function buildNudgeActions(): Record<NudgeActionId, ActionDefinition> {
                 editsDrill: true,
                 scope: "canvas",
                 defaultBindings: variant.bindings(dir.letter, dir.arrow),
-                hiddenFromPalette: true,
                 args: {
                     direction: dir.direction,
                     step: variant.step,
@@ -148,7 +175,6 @@ function buildTapBeatsActions(): Record<TapBeatsActionId, ActionDefinition> {
             editsDrill: false,
             scope: "timeline",
             defaultBindings: [String(count)],
-            hiddenFromPalette: true,
             args: { count },
         };
     }
@@ -532,6 +558,16 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: ["Alt+C"],
     },
+    // #315: the field's right-click menu, from the keyboard, at the selection. Enabled only with
+    // a selection
+    openFieldMenu: {
+        labelKey: "actions.ui.openFieldMenu",
+        category: "ui",
+        editsDrill: false,
+        scope: "canvas",
+        defaultBindings: ["ContextMenu", "Shift+F10"],
+        hiddenFromPalette: true,
+    },
     focusTimeline: {
         labelKey: "actions.ui.focusTimeline",
         category: "ui",
@@ -603,6 +639,16 @@ const STATIC_ACTIONS = {
         allowInInputs: true,
         hiddenFromPalette: true,
     },
+    // #354: `/` opens the same bar as ⌘K. Its own action so it isn't taken from inputs, where a
+    // slash is typed
+    openCommandBar: {
+        labelKey: "actions.ui.openCommandBar",
+        category: "ui",
+        editsDrill: false,
+        scope: "global",
+        defaultBindings: ["Slash"],
+        hiddenFromPalette: true,
+    },
     exitTimelineFocus: {
         labelKey: "actions.ui.exitTimelineFocus",
         category: "ui",
@@ -613,14 +659,104 @@ const STATIC_ACTIONS = {
         hiddenFromPalette: true,
     },
 
-    // Cursor mode
-    applyQuickShape: {
-        labelKey: "actions.shape.applyQuick",
-        category: "cursor",
+    // Shape tool (docs/timeline/research/shapes/06-box-v1.md): select marchers, open a shape, draw
+    // it on the field, Enter places them. Escape is cancelAlignmentUpdates, which the open tool
+    // takes over (shapes/tool/ShapeToolKeys).
+    shapeBlock: {
+        labelKey: "actions.shape.block",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
         editsDrill: true,
         scope: "canvas",
-        defaultBindings: ["Shift+Enter"],
+        defaultBindings: ["B"],
+        args: { kind: "block" },
+        // The command bar lists Shape › Box instead (#354), which asks the box's numbers
+        hiddenFromPalette: true,
     },
+    shapeCircle: {
+        labelKey: "actions.shape.circle",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["O"],
+        args: { kind: "circle" },
+        // The command bar lists Shape › Circle instead, which asks the circle's numbers
+        hiddenFromPalette: true,
+    },
+    // The favorites ring (#351): hold to aim and let go to pick a shape, tap to keep it open.
+    // The ring takes the key's release, so a held key doesn't repeat it. From the palette it opens
+    // latched, as a tap does (#411).
+    openShapeRing: {
+        labelKey: "actions.shape.ring",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["R"],
+        ignoreRepeat: true,
+        paletteArgs: { latched: true },
+    },
+    applyShape: {
+        labelKey: "actions.shape.apply",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["Enter"],
+    },
+    // The floating editor's turn and Recalculate (#429), for the open or selected shape only. While
+    // one is shown, Alt+F and Alt+Shift+F (flipHorizontal/flipVertical) flip the shape instead of
+    // the marchers (shapes/editor/ShapeEditorBar)
+    shapeQuarterTurn: {
+        labelKey: "actions.shape.quarterTurn",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["Alt+R"],
+        // One press, one turn or recalculation: a held key doesn't repeat it (review)
+        ignoreRepeat: true,
+    },
+    shapeEvenOut: {
+        labelKey: "actions.shape.evenOut",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        // No key: every letter a designer would reach for is taken (Shift+E steps a beat)
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    // Expand and Shrink keeping the proportions (#489): from the palette and the editor's buttons,
+    // no key until one is asked for
+    shapeExpand: {
+        labelKey: "actions.shape.expand",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    shapeShrink: {
+        labelKey: "actions.shape.shrink",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    shapeRecalculate: {
+        labelKey: "actions.shape.recalculate",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["Shift+R"],
+        // One press, one turn or recalculation: a held key doesn't repeat it (review)
+        ignoreRepeat: true,
+    },
+
+    // Cursor mode
     cancelAlignmentUpdates: {
         labelKey: "actions.alignment.cancelUpdates",
         category: "cursor",
@@ -628,27 +764,14 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["Escape"],
     },
-    alignmentEventDefault: {
-        labelKey: "actions.cursor.defaultMode",
-        category: "cursor",
-        editsDrill: true,
-        scope: "canvas",
-        defaultBindings: ["V"],
-    },
-    alignmentEventLine: {
-        labelKey: "actions.cursor.lineMode",
-        category: "cursor",
-        editsDrill: true,
-        scope: "canvas",
-        defaultBindings: ["L"],
-    },
 
     // Select
+    // Global so it works right after clicking a set on the timeline (shape sims)
     selectAllMarchers: {
         labelKey: "actions.select.selectAll",
         category: "select",
         editsDrill: false,
-        scope: "canvas",
+        scope: "global",
         defaultBindings: ["$mod+A", "Control+A"],
     },
 
@@ -661,6 +784,28 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["K"],
         ignoreRepeat: true,
+    },
+
+    // Set vs Following (#304): the selected marchers Set on the count shown lose that
+    // coordinate and follow from earlier; later pages keep their spots. Unbound
+    timelineUnsetHere: {
+        labelKey: "actions.timeline.unsetHere",
+        keywordsKey: "actions.timeline.unsetHereKeywords",
+        category: "timeline",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+    },
+
+    // Set vs Following (#305): as Unset here, but the later pages that followed the spot follow
+    // back to the earlier one. Its handler names the pages ("Unset here and on Pages 3–5"). Unbound
+    timelineUnsetHereAndFollowing: {
+        labelKey: "actions.timeline.unsetHereAndFollowing",
+        keywordsKey: "actions.timeline.unsetHereKeywords",
+        category: "timeline",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
     },
 
     // Opens the transport's go-to box: type a page, a measure ("m23") or a rehearsal mark

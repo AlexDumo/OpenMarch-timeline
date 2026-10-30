@@ -19,6 +19,7 @@ import { allDatabasePagesQueryOptions } from "@/hooks/queries/usePages";
 import { allDatabaseMeasuresQueryOptions } from "@/hooks/queries/useMeasures";
 import { getUtility } from "@/db-functions/utility";
 import { getMarchers } from "@/db-functions/marcher";
+import { getPagesInOrder } from "@/db-functions/page";
 import { getSectionAppearances } from "@/db-functions/sectionAppearance";
 import { getMarcherTags, getTags } from "@/db-functions/tag";
 import { OPEN_STOPPED_STATUS } from "@om-electron/database/convertOnOpenGate";
@@ -208,6 +209,38 @@ describeDbTests("completeNewShow", (it) => {
 
         const utility = await getUtility({ db });
         expect(utility?.last_page_counts).toBe(6);
+    });
+
+    it("starts the second page on the second beat when tempo is skipped", async ({
+        task,
+        db,
+    }) => {
+        const wizardState: NewShowWizardState = {
+            start: { mode: "blank" },
+            project: {
+                projectName: "No Tempo Show",
+                fileLocation: `/tmp/no-tempo-${task.id}.dots`,
+            },
+            ensemble: {
+                activity: "Marching Band",
+            },
+            field: {
+                template:
+                    FieldPropertiesTemplates.COLLEGE_FOOTBALL_FIELD_NO_END_ZONES,
+                isCustom: false,
+            },
+            performers: { method: "skip", marchers: [] },
+            audio: { method: "skip" },
+            tempo: { method: "skip" },
+            draftFilePath: "/tmp/draft.dots",
+        };
+
+        await completeNewShow(wizardStateToFormState(wizardState), queryClient);
+
+        const pages = await getPagesInOrder({ tx: db });
+        expect(pages.map((page) => page.beatObject.position)).toEqual([
+            0, 1, 17, 33, 49, 65, 81, 97,
+        ]);
     });
 
     it("aborts when audio method is audio but no audio files exist", async ({

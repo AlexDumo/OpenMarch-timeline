@@ -8,20 +8,23 @@ import MobileExportModal from "../mobile/MobileExportModal";
 import AssetsModal from "@/components/assets/AssetsModal";
 import { isWebBuild } from "@/utilities/webBuild";
 import PropsModal from "@/components/items/PropsModal";
+import ShapeLibraryModal from "@/shapes/library/ShapeLibraryPanel";
 
 export default function Sidebar() {
     return (
         <div
             id="sidebar"
-            className="bg-fg-1 border-stroke rounded-6 flex h-full w-fit flex-col justify-between border px-8 py-16"
+            className="bg-fg-1 border-stroke rounded-6 touch:w-[88px] touch:overflow-y-auto touch:items-stretch flex h-full w-fit flex-col justify-between border px-8 py-16"
         >
             <div className="flex flex-col gap-16">
                 <MarchersModal />
-                <PropsModal />
+                {/* Shapes before Props (#485, tester request) */}
+                <ShapeLibraryModal />
                 <MusicModal />
                 <FieldModal />
                 <MetronomeModal />
                 <AppearanceModal />
+                <PropsModal />
                 {/* The Library lives in main; the web build has no Library IPC. */}
                 {!isWebBuild && <AssetsModal />}
             </div>

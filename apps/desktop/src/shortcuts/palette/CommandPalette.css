@@ -203,6 +203,104 @@
     gap: 6px;
 }
 
+/* ------------------------------------------------------------ the tree */
+
+/* The branch the palette is inside, before the input: "Shape ›" */
+.palette-crumb {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 4px;
+    color: var(--color-text);
+    font-size: 15px;
+    white-space: nowrap;
+}
+/* A row that opens a branch */
+.palette-item-branch {
+    flex-shrink: 0;
+    color: var(--color-text-subtitle);
+}
+
+/* ---------------------------------------------------------- docked bar */
+
+/* At the top of the field, over its edge, with no overlay: the field stays in view (#354) */
+.docked-bar {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    z-index: 20;
+    width: min(560px, calc(100% - 32px));
+    translate: -50% 0;
+    overflow: hidden;
+    animation: palette-in 200ms var(--palette-ease-out);
+}
+.docked-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 48px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--palette-divider);
+}
+.docked-bar-path {
+    display: inline-flex;
+    gap: 4px;
+}
+.docked-bar-question {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--color-text-subtitle);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.docked-bar-input {
+    flex: 1;
+    min-width: 72px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--palette-divider);
+    border-radius: 6px;
+    outline: none;
+    background: transparent;
+    color: var(--color-text);
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+    caret-color: var(--color-accent);
+}
+.docked-bar-input:focus {
+    border-color: var(--color-accent);
+}
+.docked-bar-input.docked-bar-invalid {
+    border-color: var(--color-red);
+}
+.docked-bar-steps {
+    display: flex;
+    gap: 6px;
+    margin: 0;
+    padding: 8px 16px;
+    list-style: none;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+.docked-bar-step {
+    padding: 2px 8px;
+    border-radius: 4px;
+    color: var(--color-text-subtitle);
+}
+.docked-bar-step-done {
+    color: var(--color-text);
+}
+.docked-bar-step-current {
+    background-image: var(--palette-highlight);
+    color: var(--color-text);
+}
+.docked-bar .palette-footer {
+    justify-content: space-between;
+    height: 32px;
+}
+
 /* ------------------------------------------------------------- keyframes */
 
 @keyframes palette-in {
@@ -243,6 +341,10 @@
     }
     .palette-shell[data-state="closed"] {
         animation-name: palette-fade-out;
+    }
+    .docked-bar {
+        animation-name: palette-fade-in;
+        animation-duration: 120ms;
     }
     .palette-highlight[data-animate="true"],
     .palette-list {

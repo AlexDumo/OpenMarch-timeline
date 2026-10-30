@@ -35,6 +35,14 @@ export {
 
 let transactionWithHistoryTail = Promise.resolve<void>(undefined);
 
+/**
+ * Counts new history entries made in this window: every transaction with
+ * history (not undo or redo, which move existing entries). Part of
+ * getLatestUndoEntryToken, because an undo followed by a new edit can put
+ * back exactly the same undo statements.
+ */
+let historyEpoch = 0;
+
 const withTransactionWithHistoryLock = async <T>(
     operation: () => Promise<T>,
 ): Promise<T> => {
@@ -106,6 +114,9 @@ export function afterHistoryCommit(callback: () => void): void {
  * @param db - The database connection
  * @param funcName - The name of the function to run in the transaction. This is for  logging.
  * @param func - The function to run in the transaction
+ * @param options.onUndoToken - Called after the commit with the undo token
+ *   (see getLatestUndoEntryToken) of the entry this transaction made, read
+ *   inside the transaction so no other write can be mistaken for it
  * @returns The result of the function
  */
 // eslint-disable-next-line max-lines-per-function
@@ -113,6 +124,7 @@ export const transactionWithHistory = async <T>(
     db: DbConnection,
     funcName: string,
     func: (tx: DbTransaction) => Promise<T>,
+    options: { onUndoToken?: (token: string | null) => void } = {},
 ): Promise<T> => {
     // eslint-disable-next-line max-lines-per-function
     async function runLockedTransactionWithHistory(): Promise<T> {
@@ -120,6 +132,8 @@ export const transactionWithHistory = async <T>(
         let touchedDisplayTables = false;
         const committed: (() => void)[] = [];
         commitCallbacks = committed;
+        // This transaction's undo entry, read before the commit
+        let undoEntry: string | null = null;
         // eslint-disable-next-line max-lines-per-function
         const output = await db.transaction(async (tx) => {
             const startMessage = `=========== start ${funcName} ============`;
@@ -222,6 +236,7 @@ export const transactionWithHistory = async <T>(
                     tx,
                     groupBefore,
                 );
+                if (options.onUndoToken) undoEntry = await latestUndoEntry(tx);
             } catch (err: any) {
                 // Remove the items from the history tables that were added by the transaction
                 error = err as Error;
@@ -236,11 +251,17 @@ export const transactionWithHistory = async <T>(
 
             return result!;
         });
+        historyEpoch++;
         // Only reached once the transaction has committed
         for (const callback of committed) callback();
         notifyTimelineBatch(drained);
         if (touchedDisplayTables) bumpTimelineDisplayVersion();
         notifyHistoryChange();
+        // Last, so a throwing caller can't stop the drained batch reaching its listeners. Same
+        // epoch a getLatestUndoEntryToken call right now would see.
+        options.onUndoToken?.(
+            undoEntry === null ? null : `${historyEpoch}\n${undoEntry}`,
+        );
         return output;
     }
 
@@ -792,6 +813,52 @@ export async function clearMostRecentRedo(db: DbConnection | DB) {
         DELETE FROM ${Constants.RedoHistoryTableName} WHERE history_group = ${maxGroup}
     `);
     mainProcessLog("info", `-------- Done clearing most recent redo --------`);
+}
+
+/**
+ * Identifies the newest entry on the undo stack (the one Undo would revert),
+ * or null when there is nothing to undo. Two equal tokens mean nothing has
+ * changed the history since: that entry is still the one Undo reverts. Use it
+ * to offer "undo that one thing" (e.g. a toast's Undo) only while it is
+ * still the latest.
+ *
+ * The token is this window's count of new entries (bumped by every
+ * transaction with history, not by undo or redo) plus the entry's group and
+ * statements:
+ * - undo then redo of that entry brings back the same group and statements
+ *   with no new entry, so the token matches again: it is the latest again;
+ * - undo then a new edit can reuse the group, sequences and even the
+ *   statements (same row ids), but it is a new entry, so the count differs;
+ * - writes recorded outside transactionWithHistory change the statements.
+ * It is conservative: undoing a later edit, which puts this entry back on
+ * top, still counts as a change (that later edit was a new entry).
+ */
+export async function getLatestUndoEntryToken(
+    db: DbConnection,
+): Promise<string | null> {
+    const entry = await latestUndoEntry(db);
+    return entry === null ? null : `${historyEpoch}\n${entry}`;
+}
+
+/** The newest undo entry's group and statements, or null if there is none. */
+async function latestUndoEntry(
+    db: DbConnection | DbTransaction,
+): Promise<string | null> {
+    const top = await db
+        .select({ group: max(schema.history_undo.history_group) })
+        .from(schema.history_undo)
+        .get();
+    const group = top?.group;
+    if (group == null) return null;
+    const rows = await db
+        .select({
+            sequence: schema.history_undo.sequence,
+            sql: schema.history_undo.sql,
+        })
+        .from(schema.history_undo)
+        .where(eq(schema.history_undo.history_group, group))
+        .orderBy(asc(schema.history_undo.sequence));
+    return `${group}\n${rows.map((r) => `${r.sequence}:${r.sql}`).join("\n")}`;
 }
 
 /**

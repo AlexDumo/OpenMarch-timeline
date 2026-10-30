@@ -102,6 +102,19 @@ describe("app menu actions (docs/adr/0003-menu-actions-ipc.md)", () => {
 });
 
 describe("the shortcuts list (UI-17 follow-up)", () => {
+    it("lists a shape drag's Alt (fine, still catching lines) and Mod (no snapping) for the platform (#453)", () => {
+        const shapes = (isMac: boolean) =>
+            shortcutGroups((key) => key, {}, isMac)
+                .find((g) => g.title === "Shapes")!
+                .rows.map((row) => row.keys);
+        expect(shapes(false)).toEqual(
+            expect.arrayContaining(["Alt + Drag", "Ctrl + Drag"]),
+        );
+        expect(shapes(true)).toEqual(
+            expect.arrayContaining(["Alt + Drag", "⌘ + Drag"]),
+        );
+    });
+
     it("groups every shortcut, playback first, with the timeline's own keys", () => {
         const groups = shortcutGroups((key) => key, {}, false);
         expect(groups[0]?.title).toBe("Playback");

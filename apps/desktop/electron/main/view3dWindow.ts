@@ -7,7 +7,8 @@
  * Sync (ADR 0002 D-4): main relays the editor's clock, selection and
  * invalidations to the window, and the window's `hello`, venue-change and
  * playback requests to the editor, without reading the payloads. It tells
- * the editor whether the window is open with `view3d:window-state`.
+ * the editor whether the window is open with `view3d:window-state`, and
+ * answers a reloaded editor's `view3d:is-open`.
  */
 import { BrowserWindow, ipcMain, shell } from "electron";
 import { basename, extname } from "node:path";
@@ -18,6 +19,7 @@ import type { LibraryStore } from "./library/store";
 import {
     VIEW3D_CAMERA_PROFILE_CHANNELS,
     VIEW3D_HELLO_CHANNEL,
+    VIEW3D_IS_OPEN_CHANNEL,
     VIEW3D_PLAYBACK_REQUEST_CHANNEL,
     VIEW3D_PUBLISH_CHANNELS,
     VIEW3D_VENUE_CHANGE_REQUEST_CHANNEL,
@@ -119,6 +121,11 @@ export function initView3dWindow(windowConfig: View3dWindowConfig) {
                 options !== null &&
                 (options as { background?: unknown }).background === true,
         }),
+    );
+    // A reloaded editor missed the window-state push, so it asks.
+    ipcMain.handle(
+        VIEW3D_IS_OPEN_CHANNEL,
+        (event) => isEditorSender(event.sender) && getView3dWindow() !== null,
     );
     ipcMain.handle("view3d:sql-read", handleSqlRead);
     ipcMain.handle("view3d:sql-read-batch", (event, queries: unknown) => {

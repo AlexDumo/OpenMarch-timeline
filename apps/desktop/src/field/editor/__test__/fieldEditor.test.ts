@@ -5,6 +5,7 @@ import {
     FieldEditor,
     type DropResult,
     type FieldEditorPorts,
+    type FieldMode,
     type FieldPoint,
     type FieldPointer,
 } from "../fieldEditor";
@@ -21,6 +22,8 @@ function setup({
     isMac = false,
     takePress = undefined as (() => boolean) | undefined,
     moveTransform = undefined as MoveTransform | undefined,
+    pressSelection = undefined as FieldEditorPorts["pressSelection"],
+    doubleClickMarcher = undefined as FieldEditorPorts["doubleClickMarcher"],
 } = {}) {
     const clock = { now: 1000 };
     const state = {
@@ -52,7 +55,10 @@ function setup({
         zoom: () => 2,
         canSelect: (id) => !dimmed.includes(id),
         takePress,
+        pressSelection,
+        doubleClickMarcher,
         selectionBoxPadding: () => 10,
+        openMenu: vi.fn(),
         showPositions: vi.fn((positions) => {
             state.shown = positions;
         }),
@@ -233,8 +239,9 @@ describe("FieldEditor click vs drag", () => {
 describe("FieldEditor buttons", () => {
     it("leaves the right and middle buttons to navigation", () => {
         const { editor, state } = setup();
+        // A right-click selects what it's on for the menu (#315), but the press is navigation's
         expect(editor.pointerDown(at(100, 100, { button: 2 }))).toBe(false);
-        editor.pointerUp(at(100, 100, { button: 2 }));
+        editor.pointerUp(at(100, 105, { button: 2 }));
         expect(editor.pointerDown(at(100, 100, { button: 1 }))).toBe(false);
         editor.pointerUp(at(100, 100, { button: 1 }));
         expect(state.selected).toEqual([]);
@@ -252,6 +259,182 @@ describe("FieldEditor buttons", () => {
         expect(pc.editor.pointerDown(at(100, 100, { ctrl: true }))).toBe(true);
         pc.editor.pointerUp(at(100, 100, { ctrl: true }));
         expect(pc.state.selected).toEqual([1]);
+    });
+});
+
+describe("FieldEditor right-click menu (#315)", () => {
+    const rightDown = (editor: FieldEditor, x: number, y: number) =>
+        editor.pointerDown(at(x, y, { button: 2 }));
+    const rightUp = (editor: FieldEditor, x: number, y: number) =>
+        editor.pointerUp(at(x, y, { button: 2 }));
+
+    it("opens the menu at a right-click that stays under the slop, and still leaves the press to navigation", () => {
+        const { editor, ports } = setup({ selected: [1] });
+        expect(rightDown(editor, EMPTY.x, EMPTY.y)).toBe(false);
+        expect(ports.openMenu).not.toHaveBeenCalled();
+        rightUp(editor, EMPTY.x + 1, EMPTY.y);
+        expect(ports.openMenu).toHaveBeenCalledTimes(1);
+        expect(ports.openMenu).toHaveBeenCalledWith(
+            expect.objectContaining({
+                screen: { x: (EMPTY.x + 1) * ZOOM, y: EMPTY.y * ZOOM },
+            }),
+        );
+    });
+
+    it("opens no menu after a right-drag, which panned", () => {
+        const { editor, ports, state } = setup({ selected: [1] });
+        rightDown(editor, EMPTY.x, EMPTY.y);
+        rightUp(editor, EMPTY.x + CLICK_SLOP / ZOOM, EMPTY.y);
+        expect(ports.openMenu).not.toHaveBeenCalled();
+        expect(state.selected).toEqual([1]);
+    });
+
+    it("opens no menu after a right-drag that came back to where it started", () => {
+        const { editor, ports } = setup();
+        rightDown(editor, EMPTY.x, EMPTY.y);
+        editor.pointerMove(at(EMPTY.x + 40, EMPTY.y, { button: 2 }));
+        rightUp(editor, EMPTY.x, EMPTY.y);
+        expect(ports.openMenu).not.toHaveBeenCalled();
+        // The next right-click opens it again
+        rightDown(editor, EMPTY.x, EMPTY.y);
+        rightUp(editor, EMPTY.x, EMPTY.y);
+        expect(ports.openMenu).toHaveBeenCalledTimes(1);
+    });
+
+    it("selects an unselected marcher right-clicked before opening the menu", () => {
+        const { editor, ports, state } = setup({ selected: [1, 2] });
+        let selectedWhenOpened: readonly number[] | null = null;
+        vi.mocked(ports.openMenu!).mockImplementation(() => {
+            selectedWhenOpened = state.selected;
+        });
+        rightDown(editor, 300, 100);
+        rightUp(editor, 300, 100);
+        expect(state.selected).toEqual([3]);
+        expect(selectedWhenOpened).toEqual([3]);
+    });
+
+    it("keeps the selection on a right-click on a selected marcher or on empty field", () => {
+        const { editor, ports, state } = setup({ selected: [1, 2] });
+        rightDown(editor, 200, 100);
+        rightUp(editor, 200, 100);
+        rightDown(editor, EMPTY.x, EMPTY.y);
+        rightUp(editor, EMPTY.x, EMPTY.y);
+        expect(state.selected).toEqual([1, 2]);
+        expect(ports.selection.set).not.toHaveBeenCalled();
+        expect(ports.openMenu).toHaveBeenCalledTimes(2);
+    });
+
+    it("treats a dimmed marcher as empty field: the selection stays", () => {
+        const { editor, ports, state } = setup({ selected: [1], dimmed: [3] });
+        rightDown(editor, 300, 100);
+        rightUp(editor, 300, 100);
+        expect(state.selected).toEqual([1]);
+        expect(ports.openMenu).toHaveBeenCalledTimes(1);
+    });
+
+    it("opens no menu on a Mac's Ctrl-click, which pans (#194)", () => {
+        const { editor, ports, state } = setup({ isMac: true });
+        expect(
+            editor.pointerDown(at(100, 100, { ctrl: true, button: 0 })),
+        ).toBe(false);
+        editor.pointerUp(at(100, 100, { ctrl: true, button: 0 }));
+        expect(ports.openMenu).not.toHaveBeenCalled();
+        expect(state.selected).toEqual([]);
+    });
+
+    it("opens no menu on a middle-click", () => {
+        const { editor, ports } = setup();
+        editor.pointerDown(at(EMPTY.x, EMPTY.y, { button: 1 }));
+        editor.pointerUp(at(EMPTY.x, EMPTY.y, { button: 1 }));
+        expect(ports.openMenu).not.toHaveBeenCalled();
+    });
+
+    it("opens no menu while the open shape is being edited", () => {
+        const { editor, ports, state } = setup({ selected: [1] });
+        editor.setMode({ ...fakeMode().mode, blocksFieldMenu: true });
+        rightDown(editor, 300, 100);
+        rightUp(editor, 300, 100);
+        expect(ports.openMenu).not.toHaveBeenCalled();
+        expect(state.selected).toEqual([1]);
+    });
+
+    it("opens the menu for a selected placed box's marchers, keeping the selection", () => {
+        const { editor, ports, state } = setup({ selected: [1, 2] });
+        editor.setMode(fakeMode().mode);
+        rightDown(editor, 200, 100);
+        rightUp(editor, 200, 100);
+        expect(ports.openMenu).toHaveBeenCalledTimes(1);
+        expect(state.selected).toEqual([1, 2]);
+    });
+
+    it("clears a paused preview first, then selects by where the marchers stand at the playhead (story 60)", () => {
+        // The preview holds marcher 3 at (300, 100); at the playhead it stands on EMPTY
+        let held = true;
+        const takePress = vi.fn(() => {
+            const was = held;
+            held = false;
+            return was;
+        });
+        const { editor, ports, state } = setup({ selected: [1], takePress });
+        ports.marchers = () => ({
+            ids: [1, 2, 3, 4],
+            positions: Float64Array.from([
+                100,
+                100,
+                200,
+                100,
+                ...(held ? [300, 100] : [EMPTY.x, EMPTY.y]),
+                400,
+                100,
+            ]),
+            hidden: Uint8Array.from([0, 0, 0, 0]),
+        });
+        // A right-drag pans and leaves the preview alone
+        rightDown(editor, 300, 100);
+        rightUp(editor, 310, 100);
+        expect(takePress).not.toHaveBeenCalled();
+        // On its held spot, marcher 3 isn't there any more: empty field
+        rightDown(editor, 300, 100);
+        rightUp(editor, 300, 100);
+        expect(takePress).toHaveBeenCalledTimes(1);
+        expect(state.selected).toEqual([1]);
+        expect(ports.openMenu).toHaveBeenCalledTimes(1);
+        // Where it stands at the playhead, it's selected
+        held = true;
+        rightDown(editor, EMPTY.x, EMPTY.y);
+        rightUp(editor, EMPTY.x, EMPTY.y);
+        expect(state.selected).toEqual([3]);
+        expect(ports.openMenu).toHaveBeenCalledTimes(2);
+    });
+
+    it("treats a handle as empty field, even over an unselected marcher: the selection stays", () => {
+        const { editor, ports, state } = setup({ selected: [1, 3] });
+        // Marcher 2 sits under the top middle handle of the box around 1 and 3
+        ports.marchers = () => ({
+            ids: [1, 2, 3, 4],
+            positions: Float64Array.from([
+                100, 100, 200, 90, 300, 100, 400, 100,
+            ]),
+            hidden: Uint8Array.from([0, 0, 0, 0]),
+        });
+        // A left press there takes the handle, not the marcher
+        editor.pointerDown(at(200, 90));
+        editor.pointerUp(at(200, 90));
+        expect(state.selected).toEqual([1, 3]);
+        rightDown(editor, 200, 90);
+        rightUp(editor, 200, 90);
+        expect(state.selected).toEqual([1, 3]);
+        expect(ports.openMenu).toHaveBeenCalledTimes(1);
+    });
+
+    it("opens no menu on a right-click during a left drag", () => {
+        const { editor, ports } = setup();
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(100, 150));
+        rightDown(editor, 100, 150);
+        rightUp(editor, 100, 150);
+        expect(ports.openMenu).not.toHaveBeenCalled();
+        expect(editor.activeGesture()).toBe("move");
     });
 });
 
@@ -1024,13 +1207,12 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
         expect(state.selected).toEqual(ALL);
     });
 
-    it("does nothing with its handles while the line tool is on (#203)", () => {
+    it("has no handles while a mode with its own is on (#204)", () => {
         const { editor, state } = setup({ selected: ALL });
-        editor.setLineTool(ALL);
+        editor.setMode(fakeMode({ claims: () => false }).mode);
         editor.pointerMove(at(HANDLE.e.x, HANDLE.e.y));
         expect(editor.cursor()).not.toBe("ew-resize");
         drag(editor, HANDLE.e, { x: 560, y: 100 });
-        expect(editor.activeGesture()).toBe("line");
         expect(state.drops).toEqual([]);
     });
 
@@ -1118,9 +1300,9 @@ describe("FieldEditor rotation typed into the inspector (user story 54)", () => 
         expect(editor.rotationVersion()).toBe(version + 1);
     });
 
-    it("refuses while the line tool is on", () => {
+    it("refuses while a mode that locks the selection is on", () => {
         const { editor, state } = setup({ selected: ALL });
-        editor.setLineTool(ALL);
+        editor.setMode(fakeMode().mode);
         editor.rotateSelection(90);
         expect(state.shown).toBeNull();
         expect(editor.typedRotation()).toBe(0);
@@ -1246,4 +1428,213 @@ describe("FieldEditor a pointer lost mid-gesture (#208)", () => {
             ]);
         },
     );
+});
+
+/** A mode that records what it's told; it claims every press unless `claims` says otherwise. */
+function fakeMode({
+    claims = (() => true) as (pointer: FieldPointer) => boolean,
+    cursor = null as ReturnType<FieldMode["cursorAt"]>,
+} = {}) {
+    const calls: string[] = [];
+    const listeners = new Set<() => void>();
+    const mode: FieldMode = {
+        claims,
+        press: (p) => calls.push(`press ${p.field.x},${p.field.y}`),
+        move: (p) => calls.push(`move ${p.field.x},${p.field.y}`),
+        release: (p, click) =>
+            calls.push(
+                `release ${p.field.x},${p.field.y} ${
+                    click ? (click.double ? "double" : "click") : "drag"
+                }`,
+            ),
+        cancel: () => calls.push("cancel"),
+        cursorAt: () => cursor,
+        drawing: () => null,
+        subscribe: (listener) => {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+        ownsSelectionBox: true,
+        locksSelection: true,
+        gesture: { kind: "shape", always: true },
+    };
+    return {
+        mode,
+        calls,
+        changed: () => listeners.forEach((listener) => listener()),
+    };
+}
+
+describe("FieldEditor modes (#204)", () => {
+    it("gives a claimed press to the mode, which selects and drops nothing", () => {
+        const { editor, state, ports } = setup({ selected: [2] });
+        const { mode, calls } = fakeMode();
+        editor.setMode(mode);
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(150, 120));
+        editor.pointerUp(at(150, 120));
+        expect(calls).toEqual([
+            "press 100,100",
+            "move 150,120",
+            "release 150,120 drag",
+        ]);
+        expect(ports.selection.set).not.toHaveBeenCalled();
+        expect(state.drops).toEqual([]);
+        expect(state.shown).toBeNull();
+    });
+
+    it("tells the mode a click, and a double-click", () => {
+        const { editor, clock } = setup();
+        const { mode, calls } = fakeMode();
+        editor.setMode(mode);
+        click(editor, 100, 100);
+        clock.now += DOUBLE_CLICK_MS - 1;
+        click(editor, 101, 100);
+        clock.now += 10;
+        click(editor, 101, 100);
+        expect(calls.filter((c) => c.startsWith("release"))).toEqual([
+            "release 100,100 click",
+            "release 101,100 double",
+            // A double-click's second click starts no third
+            "release 101,100 click",
+        ]);
+    });
+
+    it("leaves a press it doesn't claim to the editor's rules", () => {
+        const { editor, state } = setup();
+        const { mode, calls } = fakeMode({ claims: (p) => p.field.x > 350 });
+        editor.setMode(mode);
+        click(editor, 100, 100);
+        expect(state.selected).toEqual([1]);
+        click(editor, 400, 100);
+        expect(state.selected).toEqual([1]);
+        expect(calls).toEqual(["press 400,100", "release 400,100 click"]);
+    });
+
+    it("takes no press the app took first (story 60)", () => {
+        const { editor } = setup({ takePress: () => true });
+        const { mode, calls } = fakeMode();
+        editor.setMode(mode);
+        click(editor, 100, 100);
+        expect(calls).toEqual([]);
+    });
+
+    it("leaves panning presses to navigation", () => {
+        const { editor } = setup();
+        const { mode, calls } = fakeMode();
+        editor.setMode(mode);
+        expect(editor.pointerDown(at(100, 100, { button: 2 }))).toBe(false);
+        expect(calls).toEqual([]);
+    });
+
+    it("shows the mode's cursor, and the editor's where it has none", () => {
+        const { editor } = setup();
+        editor.setMode(fakeMode({ cursor: "crosshair" }).mode);
+        editor.pointerMove(at(100, 100));
+        expect(editor.cursor()).toBe("crosshair");
+        editor.setMode(fakeMode().mode);
+        editor.pointerMove(at(100, 100));
+        expect(editor.cursor()).toBe("pointer");
+    });
+
+    it("cancels the mode's press when the pointer is lost, or the mode is replaced", () => {
+        const { editor } = setup();
+        const first = fakeMode();
+        editor.setMode(first.mode);
+        editor.pointerDown(at(100, 100));
+        editor.pointerCancel();
+        editor.pointerDown(at(100, 100));
+        editor.setMode(null);
+        editor.pointerUp(at(100, 100));
+        expect(first.calls).toEqual([
+            "press 100,100",
+            "cancel",
+            "press 100,100",
+            "cancel",
+        ]);
+    });
+
+    it("reports the mode's gesture: always for the shape tool", () => {
+        const { editor } = setup();
+        expect(editor.activeGesture()).toBeNull();
+        editor.setMode(fakeMode().mode);
+        expect(editor.activeGesture()).toBe("shape");
+    });
+
+    it("tells its listeners when the mode changes what it draws", () => {
+        const { editor } = setup();
+        const fake = fakeMode();
+        editor.setMode(fake.mode);
+        const listener = vi.fn();
+        editor.subscribe(listener);
+        fake.changed();
+        expect(listener).toHaveBeenCalledTimes(1);
+        editor.setMode(null);
+        fake.changed();
+        expect(listener).toHaveBeenCalledTimes(2);
+    });
+
+    it("has no drag from inside the selection box while a mode owns it", () => {
+        const { editor, state } = setup({ selected: [1, 2, 3] });
+        editor.setMode(fakeMode({ claims: () => false }).mode);
+        editor.pointerDown(at(250, 105));
+        editor.pointerMove(at(250, 150));
+        expect(editor.activeGesture()).toBe("shape");
+        editor.pointerUp(at(250, 150));
+        expect(state.drops).toEqual([]);
+    });
+});
+
+describe("FieldEditor groups a press selects (#204)", () => {
+    // Marchers 1 and 2 are a placed box
+    const group = (hit: number, shift: boolean) =>
+        hit <= 2 ? (shift ? [3, 1, 2] : [1, 2]) : null;
+
+    it("selects what the app says a click on a marcher selects", () => {
+        const { editor, state } = setup({ pressSelection: group });
+        click(editor, 100, 100);
+        expect(state.selected).toEqual([1, 2]);
+        click(editor, 300, 100);
+        expect(state.selected).toEqual([3]);
+    });
+
+    it("drags the whole group from a press on one member", () => {
+        const { editor, state } = setup({ pressSelection: group });
+        editor.pointerDown(at(200, 100));
+        editor.pointerMove(at(200, 150));
+        editor.pointerUp(at(200, 150));
+        expect(state.selected).toEqual([1, 2]);
+        expect(state.drops[0].positions.map((p) => p.id)).toEqual([1, 2]);
+    });
+
+    it("adds a group with Shift and drags nothing", () => {
+        const { editor, state } = setup({
+            selected: [3],
+            pressSelection: group,
+        });
+        editor.pointerDown(at(100, 100, { shift: true }));
+        editor.pointerMove(at(100, 150, { shift: true }));
+        editor.pointerUp(at(100, 150, { shift: true }));
+        expect(state.selected).toEqual([3, 1, 2]);
+        expect(state.drops).toEqual([]);
+    });
+
+    it("tells the app about a double-click on a marcher, after the click", () => {
+        const doubleClickMarcher = vi.fn();
+        const { editor, state, clock } = setup({
+            pressSelection: group,
+            doubleClickMarcher,
+        });
+        click(editor, 100, 100);
+        clock.now += 100;
+        click(editor, 101, 100);
+        expect(doubleClickMarcher).toHaveBeenCalledWith(1);
+        expect(state.selected).toEqual([1, 2]);
+        // Two clicks on different marchers aren't a double-click
+        clock.now += 1000;
+        click(editor, 100, 100);
+        clock.now += 100;
+        click(editor, 200, 100);
+        expect(doubleClickMarcher).toHaveBeenCalledTimes(1);
+    });
 });

@@ -45,6 +45,7 @@ words:
   - swiftshader
   - marktime
   - stepoff
+  - menuitemradio
   - prefs
   - frameloop
   - powermetrics
@@ -264,6 +265,10 @@ words:
   - unmaximize
   - unpreview
   - unstub
+  - unstar
+  - unstarred
+  - unstarring
+  - unstars
   - uuidv
   - vertaal
   - viewbox
@@ -332,7 +337,6 @@ ignorePaths:
   - "**/dist-electron/**"
   - "**/dist-browser/**"
   - "**/dist-browser-host/**"
-  - apps/desktop/web/dist/**
   - "**/dist-web/**"
   - "**/wasm/pkg/**"
   - "**/release/**"

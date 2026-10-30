@@ -27,6 +27,9 @@ import {
     type NeighborPageDirection,
 } from "@/utilities/setMarchersToNeighborPage";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
+import type { PageBox } from "@/stores/TimelineSelectionStore";
+import { useBasicLocksStore } from "../basicLocks";
+import { moveMarchersAndOfferFollowUp } from "../timelineMoveThemToo";
 import { readShowTiming } from "@/timeline/showTiming";
 import { convertPagesToTimeline } from "@/test/convertPages";
 import { pageEndBeat } from "../timelineCanvas";
@@ -254,6 +257,161 @@ describeDbTests("sparse timeline writes: no-op writes write nothing", (it) => {
         expect(await undoRows(db)).toEqual(history);
     });
 });
+
+describeDbTests(
+    "sparse timeline writes: a shape's members are all set where it's edited",
+    (it) => {
+        it("with setUnmoved, an edit that moves anyone writes a stay for the one it leaves still (the member at a shape's pivot)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page3 = box(pages[3]!);
+            await transformMarchersInSelection({
+                db,
+                marcherIds: [1, 2, 3],
+                // Turned half way round marcher 2, which stays where it is
+                transform: (current) =>
+                    current.map((c) => ({ ...c, x: 300 - c.x })),
+                plan: planFor(page3),
+                setUnmoved: true,
+            });
+            await timelineResolverSettled();
+            for (const id of [1, 2, 3])
+                expect(await rowsOf(db, id), `marcher ${id}`).toEqual([
+                    [page3.start, page3.end, 0],
+                ]);
+            expect(at(2, page3.end)).toEqual([150, 100]);
+            expect(at(1, page3.end)).toEqual([200, 100]);
+            expect(await rowsOf(db, 4)).toEqual([]);
+        });
+
+        it("with setUnmoved, an edit that moves nobody still writes nothing", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page3 = box(pages[3]!);
+            const before = await snapshot(db);
+            const history = await undoRows(db);
+            await transformMarchersInSelection({
+                db,
+                marcherIds: [1, 2],
+                transform: (current) => current,
+                plan: planFor(page3),
+                setUnmoved: true,
+            });
+            await timelineResolverSettled();
+            expect(await snapshot(db)).toEqual(before);
+            expect(await undoRows(db)).toEqual(history);
+        });
+
+        it("Basic's point writer writes a stay with keepUnchanged, and nothing without it", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page3 = box(pages[3]!);
+            const target = {
+                kind: "point" as const,
+                beat: page3.end,
+                box: { start: page3.start, end: page3.end },
+            };
+            const moves = [
+                { marcherId: 1, x: 120, y: 140 },
+                { marcherId: 2, x: 150, y: 100 },
+            ];
+            await moveMarchersInTarget({ db, target, moves });
+            await timelineResolverSettled();
+            expect(await rowsOf(db, 2)).toEqual([]);
+            await moveMarchersInTarget({
+                db,
+                target,
+                moves: [{ marcherId: 1, x: 130, y: 140 }, moves[1]!],
+                keepUnchanged: true,
+            });
+            await timelineResolverSettled();
+            expect(await rowsOf(db, 2)).toEqual([[page3.start, page3.end, 0]]);
+            expect(at(2, page3.end)).toEqual([150, 100]);
+        });
+
+        it("a second edit with keepUnchanged keeps the stay the first wrote, in Basic's point writer and the range writer", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page3 = box(pages[3]!);
+            const page4 = box(pages[4]!);
+            const point = {
+                kind: "point" as const,
+                beat: page3.end,
+                box: { start: page3.start, end: page3.end },
+            };
+            const still = { marcherId: 2, x: 150, y: 100 };
+            for (const x of [130, 160])
+                await moveMarchersInTarget({
+                    db,
+                    target: point,
+                    moves: [{ marcherId: 1, x, y: 140 }, still],
+                    keepUnchanged: true,
+                });
+            await timelineResolverSettled();
+            expect(await rowsOf(db, 2)).toEqual([[page3.start, page3.end, 0]]);
+            expect(at(1, page3.end)).toEqual([160, 140]);
+
+            for (const x of [130, 160])
+                await move(db, page4, [{ marcherId: 1, x, y: 180 }]).then(() =>
+                    moveMarchersInTarget({
+                        db,
+                        target: { kind: "range", ...page4 },
+                        moves: [{ marcherId: 1, x: x + 5, y: 180 }, still],
+                        keepUnchanged: true,
+                    }),
+                );
+            await timelineResolverSettled();
+            expect(await rowsOf(db, 2)).toEqual([
+                [page3.start, page3.end, 0],
+                [page4.start, page4.end, 0],
+            ]);
+            expect(at(2, page4.end)).toEqual([150, 100]);
+        });
+
+        it("in Basic, a shape edit whose only mover is locked writes no stays for the others", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page3 = box(pages[3]!);
+            useBasicLocksStore.setState({
+                boxes: [{ start: page3.start, end: page3.end } as PageBox],
+                locked: new Map([[0, new Map([[1, "shape" as never]])]]),
+            });
+            try {
+                await moveMarchersAndOfferFollowUp({
+                    database: db,
+                    target: {
+                        kind: "point",
+                        beat: page3.end,
+                        box: { start: page3.start, end: page3.end },
+                    },
+                    moves: [
+                        { marcherId: 1, x: 130, y: 140 },
+                        { marcherId: 2, x: 150, y: 100 },
+                    ],
+                    setUnmovedFrom: new Map([
+                        [1, { x: 100, y: 100 }],
+                        [2, { x: 150, y: 100 }],
+                    ]),
+                });
+            } finally {
+                useBasicLocksStore.setState({ boxes: [], locked: new Map() });
+            }
+            await timelineResolverSettled();
+            expect(await rowsOf(db, 1)).toEqual([]);
+            expect(await rowsOf(db, 2)).toEqual([]);
+        });
+    },
+);
 
 describeDbTests("sparse timeline writes: a drag back clears the move", (it) => {
     it("drag away and back on an inherited page deletes the move and its timeline, and the page follows again", async ({
@@ -602,7 +760,7 @@ describeDbTests("sparse timeline writes: the pass-through toast", (it) => {
         expect(at(1, page2.end)).toEqual([200, 200]);
     });
 
-    it("Keep Page N as a stop works with no rows underneath: the long move goes and page 3 alone moves", async ({
+    it("Keep Page N as a keyframe works with no rows underneath: the long move goes and page 3 alone moves", async ({
         db,
         marchersAndPages: _,
     }) => {

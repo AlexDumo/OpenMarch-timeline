@@ -100,12 +100,12 @@ describe("timeline pass-through messages (research/ownership/10, defined-coordin
         expect(narrowingFlag({ start: 16, end: 32 }, boxes)).toBeNull();
     });
 
-    it("says which pages are no longer stops, without marcher names", () => {
+    it("says which pages are no longer keyframes, without marcher names", () => {
         expect(passThroughMessage(pass([16]), boxes, english)).toBe(
-            "Page 2 is no longer a stop",
+            "Page 2 is no longer a keyframe",
         );
         expect(passThroughMessage(pass([16, 32]), boxes, english)).toBe(
-            "Pages 2–3 are no longer stops",
+            "Pages 2–3 are no longer keyframes",
         );
         // What catches up after the window is ordinary carry-forward, not a lost stop
         expect(
@@ -114,22 +114,22 @@ describe("timeline pass-through messages (research/ownership/10, defined-coordin
                 boxes,
                 english,
             ),
-        ).toBe("Pages 2–3 are no longer stops");
+        ).toBe("Pages 2–3 are no longer keyframes");
         // A flag with no named page
         expect(passThroughMessage(pass([20]), boxes, english)).toBe(
-            "The sets inside this move are no longer stops",
+            "The pages inside this move are no longer keyframes",
         );
     });
 
     it("labels the action by what it restores: every flag inside the drag", () => {
         expect(keepStopsLabel(pass([16]), boxes, english)).toBe(
-            "Keep Page 2 as a stop",
+            "Keep Page 2 as a keyframe",
         );
         expect(keepStopsLabel(pass([16, 32]), boxes, english)).toBe(
-            "Keep Pages 2–3 as stops",
+            "Keep Pages 2–3 as keyframes",
         );
         expect(keepStopsLabel(pass([20]), boxes, english)).toBe(
-            "Keep them as stops",
+            "Keep them as keyframes",
         );
     });
 

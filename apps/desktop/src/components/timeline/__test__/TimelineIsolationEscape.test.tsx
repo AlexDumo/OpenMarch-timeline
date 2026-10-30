@@ -1,6 +1,9 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { closeShapeTool, openShapeTool } from "@/shapes/tool/shapeToolStore";
+import type { ToolState } from "@/shapes/tool/toolMachine";
+import { momentOf } from "@/shapes/tool/shapeMoment";
 import { useIsolationEscape } from "../TimelineIsolationBar";
 
 /**
@@ -19,7 +22,10 @@ function Listener() {
     return null;
 }
 
-afterEach(cleanup);
+afterEach(() => {
+    cleanup();
+    closeShapeTool();
+});
 beforeEach(() => {
     selection.marchers = [];
     const store = useTimelineSelectionStore.getState();
@@ -55,5 +61,22 @@ describe("Esc in isolation (UI-14 round-2 review)", () => {
         render(<Listener />);
         fireEvent.keyDown(window, { key: "Escape" });
         expect(useTimelineSelectionStore.getState().selection).toBe(before);
+    });
+
+    it("an open shape keeps its Esc", () => {
+        useTimelineSelectionStore.getState().isolate(7);
+        openShapeTool({} as ToolState, null);
+        render(<Listener />);
+        fireEvent.keyDown(window, { key: "Escape" });
+        expect(isolated()).not.toBeNull();
+    });
+
+    it("leaves while a shape waits out of sight (#416): its keys aren't listening", () => {
+        openShapeTool({} as ToolState, null, momentOf());
+        // The shape was opened outside isolation, so isolating leaves its moment
+        useTimelineSelectionStore.getState().isolate(7);
+        render(<Listener />);
+        fireEvent.keyDown(window, { key: "Escape" });
+        expect(isolated()).toBeNull();
     });
 });
