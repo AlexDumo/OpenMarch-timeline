@@ -83,6 +83,9 @@ function sameShape(kind: AnyToolKind, spots: number, a: unknown, b: unknown) {
         sameFrame(kind.frameOf(a, spots), kind.frameOf(b, spots)) &&
         samePivot(pivotOf(a), pivotOf(b)) &&
         layoutOf(kind, a, spots) === layoutOf(kind, b, spots) &&
+        // A line's corner moves inside the same frame (#524)
+        JSON.stringify(kind.outline?.(a, spots)) ===
+            JSON.stringify(kind.outline?.(b, spots)) &&
         kind.params.every(
             (p) => p.value?.(a, spots, 1) === p.value?.(b, spots, 1),
         )
@@ -96,7 +99,7 @@ export const newLayout = (box: PlacedBox, params: unknown): boolean =>
 
 /**
  * Ends the gesture: `changed` when there is something to save. A double click on the pivot sends
- * it back to the center (#350).
+ * it back to the center (#350); a click on a handle that adds a point adds it (#524).
  */
 export function releaseLive(
     live: LiveBox,
@@ -105,10 +108,14 @@ export function releaseLive(
     live: LiveBox;
     changed: boolean;
 } {
-    const centered =
-        click?.double && live.gesture ? centerPivot(live.gesture) : null;
-    const params = centered === null ? live.params : centered;
     const { kind, spots } = live.box;
+    const g = live.gesture;
+    const centered = click?.double && g ? centerPivot(g) : null;
+    const clicked =
+        click && g?.type === "handle"
+            ? (kind.clickHandle?.(g.base, spots, g.key) ?? null)
+            : null;
+    const params = centered ?? clicked ?? live.params;
     return {
         live: { ...live, params, gesture: null },
         changed: !sameShape(kind, spots, params, live.box.params),

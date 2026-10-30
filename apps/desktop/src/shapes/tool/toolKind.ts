@@ -78,6 +78,8 @@ export interface ToolHandle {
     readonly key: string;
     readonly at: XY;
     readonly cursor: string;
+    /** A handle that adds a point (a Line's segment midpoint, #524), drawn smaller and round */
+    readonly adds?: boolean;
 }
 
 /** A parameter's direction mark: ↔ across, ↕ deep */
@@ -244,6 +246,23 @@ export interface ToolChoice<P> {
     current(params: P, n: number): string;
     /** The params with `value` picked */
     pick(params: P, n: number, value: string, env: ToolEnv): P;
+    /** Hidden while this is false (the corners switch on a line with no corner); shown when absent */
+    shown?(params: P, n: number): boolean;
+}
+
+/**
+ * Drawing by clicking point after point (#524, spec #522), for a kind that opts in. A drag still
+ * draws with {@link ToolKind.draw}; a click with no drag starts a run of points, each click adds
+ * one, and Enter, a double-click or a click on the last point finishes it. Everything is pure.
+ */
+export interface ToolClickPoints<P> {
+    /**
+     * Where a point clicked at `at` lands, after `previous` (the points placed so far, landed):
+     * on the grid or a field line, at 45° from the last with `constrain`
+     */
+    land(previous: readonly XY[], at: XY, env: ToolEnv): XY;
+    /** The shape through `points`, in order, or undefined while they aren't one yet */
+    draw(points: readonly XY[], n: number, env: ToolEnv): P | undefined;
 }
 
 /**
@@ -289,11 +308,23 @@ export interface ToolKind<P> {
         env: ToolEnv,
         previous?: P,
     ): P | undefined;
+    /**
+     * Click point after point to draw (#524); absent for kinds drawn by one drag only (the box,
+     * the circle)
+     */
+    readonly clickPoints?: ToolClickPoints<P>;
     handles(params: P, n: number): readonly ToolHandle[];
+    /**
+     * What a click on handle `key` does, rather than nothing: a Line's midpoint handle splits its
+     * segment (#524). Null or absent: a click does nothing.
+     */
+    clickHandle?(params: P, n: number, key: string): P | null;
     /** The params with handle `key` dragged to `to`, starting from `base` (the params at press) */
     dragHandle(base: P, n: number, key: string, to: XY, env: ToolEnv): P;
     /** The shape's outline on the field; the frame's four corners when absent */
     outline?(params: P, n: number): readonly XY[];
+    /** Whether the outline is open, drawn without joining its last point to its first (a line) */
+    outlineOpen?(params: P, n: number): boolean;
     /**
      * The points pulled onto the field's lines while the shape is moved (#446): a box's corners,
      * then its center. None when absent, so the shape moves on the grid alone.

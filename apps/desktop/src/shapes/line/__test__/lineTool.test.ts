@@ -780,11 +780,8 @@ describe("a placed line", () => {
                 }),
             ],
             [
-                "three points",
-                (p: LineParams) => ({
-                    ...p,
-                    points: [...p.points, { x: 0, y: 0, tension: 0 }],
-                }),
+                "a corners switch that isn't on or off",
+                (p: LineParams) => ({ ...p, corners: "yes" }),
             ],
             ["a closed line", (p: LineParams) => ({ ...p, closed: true })],
             [

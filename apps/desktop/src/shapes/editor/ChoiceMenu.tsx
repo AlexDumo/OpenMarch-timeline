@@ -24,14 +24,19 @@ export function ChoiceMenus({
 }) {
     return (
         <>
-            {(target.kind.choices ?? []).map((choice) => (
-                <ChoiceMenu
-                    key={choice.key}
-                    choice={choice}
-                    target={target}
-                    envFor={envFor}
-                />
-            ))}
+            {(target.kind.choices ?? [])
+                .filter(
+                    (choice) =>
+                        choice.shown?.(target.params, target.spots) ?? true,
+                )
+                .map((choice) => (
+                    <ChoiceMenu
+                        key={choice.key}
+                        choice={choice}
+                        target={target}
+                        envFor={envFor}
+                    />
+                ))}
         </>
     );
 }
