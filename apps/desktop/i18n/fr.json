@@ -14,8 +14,12 @@
             "lockY": "Verrouiller l'axe Y",
             "lockYOff": "Déverrouiller le mouvement Y",
             "lockYOn": "Verrouiller mouvement en Y",
+            "snapOff": "Désactiver le magnétisme",
+            "snapOn": "Activer le magnétisme",
             "snapToCustomFraction": "Aligner sur la grille",
-            "snapToWhole": "Aligner avec l'entier le plus proche"
+            "snapToWhole": "Aligner avec l'entier le plus proche",
+            "toggleSnap": "Activer ou désactiver le magnétisme",
+            "toggleSnapKeywords": "magnétisme aimant grille libre snap"
         },
         "batchEdit": {
             "noNextPage": "Impossible de définir les coordonnées des marcheurs sur la page suivante. Il n'y a pas de page suivante.",
@@ -1267,6 +1271,10 @@
                 "hide": "Masquer les chemins depuis le drapeau de départ",
                 "show": "Afficher les chemins depuis le drapeau de départ"
             },
+            "snap": {
+                "off": "Le magnétisme est désactivé : le réactiver",
+                "on": "Désactiver le magnétisme"
+            },
             "pivot": {
                 "aria": "Pivot : {pivot}",
                 "custom": "Pivot : là où il a été glissé sur le terrain",
@@ -1634,6 +1642,7 @@
             "lockMarchersAriaLabel": "Déplacement du curseur et ajustement des marcheurs",
             "placeAllMarchers": "Placer tous les marcheurs",
             "placeSelectedMarchers": "Placer les marcheurs sélectionnés",
+            "snapToggleCaption": "Magnétisme",
             "toNextPagePositions": "...aux positions suivantes de la page",
             "toPreviousPagePositions": "...aux positions précédentes de la page"
         },

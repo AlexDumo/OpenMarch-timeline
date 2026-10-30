@@ -441,18 +441,21 @@ function ThreeFieldView() {
                 },
                 {
                     isMac: isMacPlatform(),
-                    // #197: snapping and Lock X/Y, read as they are on each move; fine and
-                    // constrain come from the held roles
+                    // #197: snapping, the Snap toggle and Lock X/Y, read as they are on each
+                    // move; fine and constrain come from the held roles
                     moveTransform: ruledMove(() => {
-                        const { coordinateRounding, lockX, lockY } =
+                        const { coordinateRounding, lockX, lockY, snap } =
                             useUiSettingsStore.getState().uiSettings;
                         return {
                             rounding: coordinateRounding,
                             lockX,
                             lockY,
                             grid: latest.current.fieldProperties ?? null,
+                            snap,
                         };
                     }),
+                    // Off, a rotate handle turns freely (modifier roles, version A)
+                    snap: () => useUiSettingsStore.getState().uiSettings.snap,
                 },
             ),
         [marchers, items],

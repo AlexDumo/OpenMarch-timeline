@@ -157,7 +157,8 @@ export class ItemResizeGesture extends ItemHandleGesture {
 /**
  * The rotate handle: turns the Outline about its center by the angle
  * {@link RotationDrag} draws, as the selection's rotate handle does: snapped
- * to 15°, or to whole degrees at a quarter speed with fine.
+ * to 15°, or to whole degrees at a quarter speed with fine; free with the
+ * Snap toggle off.
  */
 export class ItemRotateGesture extends ItemHandleGesture {
     readonly kind: FieldTestGesture = "rotate";
@@ -168,9 +169,11 @@ export class ItemRotateGesture extends ItemHandleGesture {
         frame: ItemFrame,
         host: ItemTransformHost,
         keys: FieldKeys,
+        /** The Snap toggle, read on every event; on when omitted. */
+        snap?: () => boolean,
     ) {
         super(frame, host, keys);
-        this.rotation = new RotationDrag(frame.center, origin.field);
+        this.rotation = new RotationDrag(frame.center, origin.field, snap);
     }
 
     protected sizeAt(at: FieldPoint, roles: Roles): ItemSize {

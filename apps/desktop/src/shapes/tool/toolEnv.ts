@@ -8,6 +8,7 @@ import type { FieldLines, ToolEnv } from "./toolKind";
 import { useLastLayoutStore } from "./lastLayout";
 import type { Roles } from "@/input/modifierRoles";
 import type { NudgeArgs } from "@/shortcuts/definitions";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 
 /** How far from a handle a press still takes it, in screen pixels */
 export const HANDLE_REACH_PX = 10;
@@ -41,16 +42,21 @@ export const NO_ROLES: Roles = {
     fromCenter: false,
 };
 
+/** The Snap toggle as it is now (`UiSettings.snap`) */
+const snapToggleOn = () => useUiSettingsStore.getState().uiSettings.snap;
+
 /**
  * The tool's view of the field for one pointer event, with the roles held then (version A,
- * docs/timeline/research/shapes/modifier-roles.md). `snapOn` is the Snap toggle. A dragged pivot
- * snaps to every marcher drawn, and to `spots` (an open shape's, where its marchers will stand).
+ * docs/timeline/research/shapes/modifier-roles.md). `snapOn` is the Snap toggle, read from the
+ * settings when the env is made unless given, so a change mid-drag applies on the next move. A
+ * dragged pivot snaps to every marcher drawn, and to `spots` (an open shape's, where its marchers
+ * will stand).
  */
 export function toolEnvFor(
     field: ShapeField,
     roles: Roles = NO_ROLES,
     {
-        snapOn = true,
+        snapOn = snapToggleOn(),
         spots,
     }: { snapOn?: boolean; spots?: () => readonly XY[] } = {},
 ): ToolEnv {
@@ -89,7 +95,7 @@ export function toolEnvFor(
 
 /**
  * The env a keyboard nudge moves a shape with: the Fine and Tenth nudges are `fine`, the Free ones
- * move with snapping off, as the Snap toggle would
+ * move with snapping off, as the Snap toggle does; with the toggle off, none snaps
  */
 export function nudgeEnvFor(
     field: ShapeField,
@@ -100,6 +106,6 @@ export function nudgeEnvFor(
     return toolEnvFor(
         field,
         { ...NO_ROLES, fine },
-        { snapOn: nudge.snap || fine },
+        { snapOn: snapToggleOn() && (nudge.snap || fine) },
     );
 }

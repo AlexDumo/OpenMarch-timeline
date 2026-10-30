@@ -14,8 +14,12 @@
             "lockY": "Y 軸 をロック",
             "lockYOff": "Y方向の移動のロックを解除",
             "lockYOn": "Y の動きをロック",
+            "snapOff": "スナップをオフ",
+            "snapOn": "スナップをオン",
             "snapToCustomFraction": "グリッドにスナップ",
-            "snapToWhole": "最も近い 整数 に スナップ"
+            "snapToWhole": "最も近い 整数 に スナップ",
+            "toggleSnap": "スナップの切り替え",
+            "toggleSnapKeywords": "スナップ マグネット グリッド snap"
         },
         "batchEdit": {
             "noNextPage": "進行中の座標を 次のページには設定できません 。次のページがありません",
@@ -1267,6 +1271,10 @@
                 "hide": "スタートフラグからのパスを非表示",
                 "show": "スタートフラグからのパスを表示"
             },
+            "snap": {
+                "off": "スナップはオフです：オンに戻す",
+                "on": "スナップをオフ"
+            },
             "pivot": {
                 "aria": "ピボット：{pivot}",
                 "custom": "ピボット：フィールド上でドラッグした位置",
@@ -1634,6 +1642,7 @@
             "lockMarchersAriaLabel": "カーソル 移動 と マーチャー スナップ",
             "placeAllMarchers": "すべての行進者を配置",
             "placeSelectedMarchers": "選択された行進者を配置",
+            "snapToggleCaption": "スナップ",
             "toNextPagePositions": "次の ページ位置 に進む",
             "toPreviousPagePositions": "...前のページ位置へ"
         },

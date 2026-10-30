@@ -28,7 +28,9 @@ export function useNudgeActionHandlers() {
                 marcherPages: getSelectedMarcherPages(),
                 direction: nudge.direction,
                 distance,
-                snap: nudge.snap,
+                // The Snap toggle off: no nudge snaps (modifier roles, version A)
+                snap:
+                    nudge.snap && useUiSettingsStore.getState().uiSettings.snap,
                 fieldProperties,
                 snapDenominatorX: 1.0 / distance,
                 snapDenominatorY: 1.0 / distance,

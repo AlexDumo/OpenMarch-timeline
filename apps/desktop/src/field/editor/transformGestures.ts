@@ -103,9 +103,10 @@ export class ScaleGesture extends HandleGesture {
 
 /**
  * The angle a rotate handle draws as the pointer turns about `center`,
- * snapped to 15°, or with fine to whole degrees at a quarter speed. Fine
- * turning on goes on slowly from the angle drawn (snapped), with no jump.
- * The selection's and an item's rotate handles both turn by it.
+ * snapped to 15°, or with fine to whole degrees at a quarter speed; free
+ * with the Snap toggle off. Fine turning on goes on slowly from the angle
+ * drawn (snapped), with no jump. The selection's and an item's rotate
+ * handles both turn by it.
  */
 export class RotationDrag {
     /** The angle the pointer has turned through, at full speed. */
@@ -120,6 +121,8 @@ export class RotationDrag {
         private readonly center: FieldPoint,
         /** Where the pointer was at the press. */
         private last: FieldPoint,
+        /** The Snap toggle, read on every event; on when omitted. */
+        private readonly snap: () => boolean = () => true,
     ) {}
 
     /** The angle drawn, in degrees clockwise. */
@@ -140,7 +143,10 @@ export class RotationDrag {
             roles.fine,
         );
         this.track = moved.track;
-        this.drawn = snapRotation(moved.delta.x, roles);
+        this.drawn = snapRotation(moved.delta.x, {
+            fine: roles.fine,
+            snap: this.snap(),
+        });
         return this.drawn;
     }
 }
@@ -161,10 +167,12 @@ export class RotateGesture extends HandleGesture {
         /** The marchers' bounds at the press. */
         readonly box: FieldRect,
         keys: FieldKeys,
+        /** The Snap toggle, read on every event; on when omitted. */
+        snap?: () => boolean,
     ) {
         super(origin, starts, host, keys);
         this.center = centerOf(box);
-        this.rotation = new RotationDrag(this.center, origin.field);
+        this.rotation = new RotationDrag(this.center, origin.field, snap);
     }
 
     /** The angle drawn, in degrees clockwise: the overlay turns the box by it until the release. */

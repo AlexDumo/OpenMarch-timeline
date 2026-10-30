@@ -14,8 +14,12 @@
             "lockY": "Lock Y axis",
             "lockYOff": "Unlock Y movement",
             "lockYOn": "Lock Y movement",
+            "snapOff": "Turn snapping off",
+            "snapOn": "Turn snapping on",
             "snapToCustomFraction": "Snap to grid",
-            "snapToWhole": "Snap to nearest whole"
+            "snapToWhole": "Snap to nearest whole",
+            "toggleSnap": "Toggle snapping",
+            "toggleSnapKeywords": "snap magnet grid free"
         },
         "batchEdit": {
             "noNextPage": "Cannot set marcher coordinates to next page. There is no next page",
@@ -2013,6 +2017,10 @@
                 "hide": "Hide the pathways from the start flag",
                 "show": "Show the pathways from the start flag"
             },
+            "snap": {
+                "off": "Snapping is off: turn it back on",
+                "on": "Turn snapping off"
+            },
             "pivot": {
                 "aria": "Pivot: {pivot}",
                 "custom": "Pivot: where it was dragged on the field",
@@ -2583,6 +2591,7 @@
             "lockMarchersAriaLabel": "Cursor movement and marcher snap",
             "placeAllMarchers": "Place all marchers",
             "placeSelectedMarchers": "Place selected marchers",
+            "snapToggleCaption": "Snapping",
             "toNextPagePositions": "...to next page positions",
             "toPreviousPagePositions": "...to previous page positions"
         },
