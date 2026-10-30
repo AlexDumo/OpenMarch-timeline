@@ -9,7 +9,8 @@ Port the remaining field behavior and the outputs that draw the field.
   first press after a paused preview only clearing it, and dimmed marchers
   that still can't be selected, including while a tool is active.
 - **#203 Line tool.** The line tool (L) as today, with its previews in the
-  overlay.
+  overlay. **Removed since:** the shape work (#181) deletes the line tool
+  (owner, 2026-10-15); what follows about it is kept for the record.
 - **#204 Box shape tool.** Rebuilt on the editor and overlay from box v1's
   design (fork PR #181): its state machine and geometry. #181 stays held and
   isn't merged on Fabric.
@@ -82,6 +83,8 @@ object last under the pointer (the field grid, or a marcher), and
 list.
 
 ### #203 Line tool
+
+**Removed** with #181 (owner, 2026-10-15). Kept for the record.
 
 **Files.** `src/field/editor/lineTool.ts`: the pure rules (`lineOrder`,
 `orderAlongLine`, `spacedAlong`, `lineUp`, `roundToStep`, which uses

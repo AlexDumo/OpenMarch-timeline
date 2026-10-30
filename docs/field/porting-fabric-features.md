@@ -134,7 +134,7 @@ listed. #237 (#198) and #238 (#203) touch `MarcherRotationInput.tsx` and
 
 | Work                                                                                                                                            | Fabric seams                                                                                                            | Plan                                        |
 | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| **#181** `shapes/box-v1`: box shape tool, with placed boxes (#187 `shapes/placed-boxes`) and box selection (#188 `shapes/box-select`) merged in | Many; see [below](#box-v1-181-with-187-and-188)                                                                         | Port on hold (#204); decisions first        |
+| **#181** `shapes/box-v1`: box shape tool, with placed boxes (#187 `shapes/placed-boxes`) and box selection (#188 `shapes/box-select`) merged in | Many; see [below](#box-v1-181-with-187-and-188)                                                                         | Ported on #181 itself (#204), 2026-10-15    |
 | **#182** `tempo/rebase-main`: tempo lab                                                                                                         | Mounts `<TapTheBeatPanel />` in Fabric's `Canvas.tsx`. Nothing else.                                                    | Mount it beside the field instead           |
 | **#114** `timeline/p8-12-replan` (docs only)                                                                                                    | None of its own; the P8.12 plan it records names `Canvas.tsx` and the canvas listeners as readers of `useSelectedPage`. | Update the plan's list                      |
 | P7.11 spec-shape handles (on `main` and `field-renderer`, not a PR)                                                                             | `useTimelineShapeCanvas.ts`, `TimelineShapeOverlay.ts`, `isTimelineShapeHandle` in `canvasListeners.selection.ts`       | Dropped; deleted in #209 (owner decision)   |
@@ -178,7 +178,7 @@ A later port can take `timelineShapeCanvas.ts` (`shapeOutline`,
 
 **What it does.** The Shape tool's box (B, or the inspector's Box button):
 drag a footprint, marchers fill it on half steps, handles stretch the
-intervals, ± and `[` `]` change the file count, Enter places and Esc
+intervals, ± changes the file count, Enter places and Esc
 cancels. Placed boxes are saved as recipes, outlined on the field by the View
 tab's **Shapes** setting, and kept true to the field as members move. A click
 on a member selects the whole box (Figma-like), a double click selects that
@@ -212,7 +212,19 @@ components, `db-functions/shapeRecipes.ts`, and
 | `shortcuts/handlers/useCursorActionHandlers.ts`                                                                                                               | Fabric's select-all path also writes the app's selection; the line tool's actions are removed                                | Drop the select-all change: on the new field `selectAllMarchers` calls `activeFieldEditor()?.selectAll()`, which writes the app's selection. The removed `applyQuickShape` and `alignmentEventDefault` handlers go with the line tool decision below.                     |
 | `OpenMarchCanvas.refreshMarcherLabels`, `CanvasMarcher.labelBeside/labelNumbersOnly/labelFontSize/labelsOff`, `canvasObjects/labelForms.ts` (`crowdedLabels`) | Fabric text objects per marcher                                                                                              | `LabelsLayer` (one `TextBatch`): text, size, offset and visibility per label, recomputed in a store subscription when positions or settings change, not per frame. Settings through `useFieldDraw()` so exports can choose. Move `labelForms.ts` out of `canvasObjects/`. |
 
-**Decide before porting** (the guide doesn't decide these):
+**Ported (2026-10-15, rebased onto `main` 2026-10-16).** #181 was ported
+by this table (#204): `FieldMode` on `FieldEditor` (`setMode`, the shape tool
+and a selected placed box), `pressSelection` and `doubleClickMarcher` ports
+for the box click rules, an SVG `ModeDrawing` in `FieldOverlay`, placed boxes
+in `shapes/placed/PlacedBoxesOverlay.tsx`, label forms in `LabelsLayer`, and
+`shapes/field/shapeField.ts` in place of `window.canvas`. Scenarios:
+`e2e/browser/tests/box-tool.spec.mts`. The decisions below were taken as
+follows: the recipes migration is `0027_acoustic_stone_men` (renumbered from
+`0023` as `main` gained migrations; `0028_fast_polaris` adds `saved_shapes`), the recipe ADR is
+`0006-shape-recipes.md`, the line tool is removed (owner, 2026-10-15), and
+the rules table has rows for placed boxes and the box tool's Alt.
+
+**Decided when porting** (kept for the record):
 
 - **Migration number.** #181 adds `0021_mature_havok` (the recipe tables).
   Fork `main` already has `0021_blue_dust` from #148, and #147 queues

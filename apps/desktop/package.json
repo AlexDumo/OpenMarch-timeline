@@ -169,7 +169,8 @@
         "vite-plugin-electron": "^0.29.0",
         "vite-plugin-electron-renderer": "^0.14.6",
         "vitest": "^4.0.0",
-        "wrangler": "^4.94.0"
+        "wrangler": "^4.94.0",
+        "yaml": "^2.8.3"
     },
     "engines": {
         "node": ">=24"

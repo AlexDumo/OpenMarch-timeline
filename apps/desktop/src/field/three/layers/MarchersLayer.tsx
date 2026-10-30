@@ -16,7 +16,7 @@ import {
     followingAmount,
     type FieldFollowing,
 } from "../fieldFollowing";
-import { DIMMED_OPACITY, type FieldDimming } from "../fieldDimming";
+import type { FieldDimming } from "../fieldDimming";
 import { useFieldDraw } from "../fieldDrawContext";
 import { MARCHER_SHAPE, writeMarcherLooks } from "../marcherLooks";
 import { dotSizes, SELECTION_RGBA01 } from "../selectionRing";
@@ -379,7 +379,7 @@ export default function MarchersLayer({
             const opacities = opacity.array as Float32Array;
             const amounts = followingLook.array as Float32Array;
             marchers.ids.forEach((id, i) => {
-                opacities[i] = dimming.isDimmed(id) ? DIMMED_OPACITY : 1;
+                opacities[i] = dimming.opacityOf(id);
                 amounts[i] = followingAmount(dimming, following, id);
             });
             opacity.needsUpdate = true;

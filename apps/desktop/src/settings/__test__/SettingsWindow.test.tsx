@@ -55,6 +55,7 @@ describe("SettingsWindow", () => {
             "input",
             "mouse",
             "timeline",
+            "field",
             "view3d",
             "shortcuts",
             "plugins",

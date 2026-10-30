@@ -30,27 +30,26 @@ import {
 /** How long a trackpad pointer rests on the button before its hint shows (touch layout). */
 const HOVER_HINT_MS = 600;
 
-export type ActionButtonProps = Omit<
-    React.ButtonHTMLAttributes<HTMLButtonElement>,
-    "onClick"
-> & {
-    action: ActionId;
-    /** Overrides the generated tooltip */
-    tooltip?: string;
-    /** Selects the toggle on/off label for toggle actions */
-    toggleState?: "on" | "off";
-    /**
-     * A short word or two shown with the icon in touch mode, where the tooltip
-     * can't be seen. Give it to icon-only buttons.
-     */
-    caption?: string;
-    /** Called after the action runs, e.g. to close the menu the button sits in */
-    onRun?: () => void;
-};
+export type ActionButtonProps =
+    React.ButtonHTMLAttributes<HTMLButtonElement> & {
+        action: ActionId;
+        /** Overrides the generated tooltip */
+        tooltip?: string;
+        /** Selects the toggle on/off label for toggle actions */
+        toggleState?: "on" | "off";
+        /**
+         * A short word or two shown with the icon in touch mode, where the tooltip
+         * can't be seen. Give it to icon-only buttons.
+         */
+        caption?: string;
+        /** Called after the action runs, e.g. to close the menu the button sits in */
+        onRun?: () => void;
+    };
 
 /**
  * A button that runs a registered action; its tooltip shows the current shortcut.
  * Disabled while the action has no enabled handler, so a click never silently does nothing.
+ * An `onClick` runs first, and `preventDefault` there keeps the action from running.
  */
 export default function ActionButton({
     action,
@@ -61,6 +60,7 @@ export default function ActionButton({
     children,
     className,
     disabled,
+    onClick,
     ...rest
 }: ActionButtonProps) {
     const { t } = useTolgee();
@@ -136,7 +136,10 @@ export default function ActionButton({
                 ref={setAnchor}
                 disabled={disabled || !runnable}
                 title={title}
-                onClick={() => {
+                onClick={(event) => {
+                    // A caller's onClick can take the click over with preventDefault
+                    onClick?.(event);
+                    if (event.defaultPrevented) return;
                     runAction(action);
                     onRun?.();
                 }}

@@ -29,6 +29,7 @@ import {
 } from "../registry";
 import { isActionOffInWorkspace } from "../workspaceActions";
 import { isPreviewMode } from "@/stores/PreviewModeStore";
+import { paramsCommand } from "./commandBar";
 import type { PaletteContext, PaletteItem } from "./sources";
 
 const CATEGORY_ICONS: Record<ActionCategory, Icon> = {
@@ -64,7 +65,6 @@ const PALETTE_CATEGORY_ORDER: readonly ActionCategory[] = [
 
 /** The most common drill-writing actions, shown in "Suggested" until usage history takes over. */
 const SUGGESTED_ACTIONS: readonly ActionId[] = [
-    "alignmentEventLine",
     "openExportDialog",
     "alignHorizontally",
     "alignVertically",
@@ -89,9 +89,10 @@ export function getActionPaletteItems(
         .map((id: ActionId) => {
             const def = getActionDefinition(id);
             const CategoryIcon = CATEGORY_ICONS[def.category];
+            const label = actionLabelNow(id) ?? getActionLabel(id, t);
             return {
                 id: `action:${id}`,
-                label: actionLabelNow(id) ?? getActionLabel(id, t),
+                label,
                 group: t(`settings.shortcuts.category.${def.category}`),
                 icon: <CategoryIcon size={18} />,
                 keywords: def.keywordsKey
@@ -111,7 +112,19 @@ export function getActionPaletteItems(
                 suggestedRank: SUGGESTED_ACTIONS.includes(id)
                     ? SUGGESTED_ACTIONS.indexOf(id)
                     : undefined,
-                run: () => runAction(id),
+                // An action with typed params asks them in the docked bar first (#354)
+                ...(def.params
+                    ? {
+                          command: paramsCommand(
+                              [label],
+                              def.params.map(({ labelKey, ...param }) => ({
+                                  ...param,
+                                  label: t(labelKey),
+                              })),
+                              (values) => runAction(id, values),
+                          ),
+                      }
+                    : { run: () => runAction(id, def.paletteArgs) }),
             };
         });
 }

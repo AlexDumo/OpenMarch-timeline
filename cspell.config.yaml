@@ -38,6 +38,7 @@ words:
   - swiftshader
   - marktime
   - stepoff
+  - menuitemradio
   - prefs
   - frameloop
   - powermetrics
@@ -257,6 +258,10 @@ words:
   - unmaximize
   - unpreview
   - unstub
+  - unstar
+  - unstarred
+  - unstarring
+  - unstars
   - uuidv
   - vertaal
   - viewbox

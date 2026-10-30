@@ -129,7 +129,6 @@ export function TimelineLoopButton() {
                 data-testid="timeline-loop"
                 aria-label="Loop"
                 aria-pressed={looping}
-                aria-keyshortcuts={shortcut?.replace(/\s*\+\s*/g, "+")}
                 // Not `disabled` in isolation, so the tooltip still says why it can't turn off
                 aria-disabled={isolated || undefined}
                 // Keeps keyboard focus off, so Space after a click is still Play

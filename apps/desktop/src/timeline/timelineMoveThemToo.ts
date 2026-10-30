@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { db } from "@/global/database/db";
 import {
     moveMarchersInTarget,
+    samePosition,
     shapeBackedTransitionIds,
     shiftSlotDestinations,
     type SlotShift,
@@ -10,7 +11,7 @@ import {
     type TimelineMarcherMove,
     type TimelineMoveResult,
 } from "@/db-functions/timelineMoves";
-import type { DbConnection } from "@/db-functions/types";
+import type { DbConnection, DbTransaction } from "@/db-functions/types";
 import { keptTransitionIds } from "@/db-functions/timelineKeptMarkers";
 import {
     useTimelineSelectionStore,
@@ -32,6 +33,10 @@ import { editedMarcherEnds, type CarrySpan } from "./timelineCarryForward";
 import { toastTimelineError } from "./timelineErrorMessages";
 import { toastPassThrough } from "./timelinePassThrough";
 import { offerOnlyThisPage, ownMovers } from "./timelineOnlyThisPage";
+import { boxMembershipEdit } from "@/shapes/placed/boxMembership";
+import { showLeftBoxToast } from "@/shapes/placed/leftBoxToast";
+import { invalidatePlacedBoxes } from "@/shapes/placed/placedBoxStore";
+import { editingPositionAt } from "./timelineIsolationPlan";
 import {
     resolverSpans,
     timelineResolverSettled,
@@ -293,11 +298,36 @@ export async function moveMarchersAndOfferFollowUp({
     target,
     moves: requested,
     clearOwn,
+    setUnmovedFrom,
+    afterWrite,
+    writesShapes = false,
+    setAll = false,
 }: {
     database?: DbConnection;
     target: TimelineEditTarget;
     moves: readonly TimelineMarcherMove[];
     clearOwn?: boolean;
+    /**
+     * Where each marcher stands now: when the moves that are written (Basic's locked marchers
+     * left out) move any of them, the ones they leave where they are are written as stays
+     * (`moveMarchersInTarget`'s `keepUnchanged`)
+     */
+    setUnmovedFrom?: ReadonlyMap<number, { x: number; y: number }>;
+    /**
+     * With `setUnmovedFrom`, write the stays even when nobody moves, unless Basic leaves some of
+     * them out (a copy of a shape without them would drop them from it)
+     */
+    setAll?: boolean;
+    /** App data written in the same edit (`moveMarchersInTarget`) */
+    afterWrite?: (
+        tx: DbTransaction,
+        timelineId: number | null,
+    ) => Promise<void | boolean>;
+    /**
+     * The edit saves shape recipes itself (the Shape tool's Place, filling a box), so placed
+     * boxes aren't kept up to date around it
+     */
+    writesShapes?: boolean;
 }): Promise<TimelineMoveResult> {
     let start: EditStart | null = null;
     let owned: Set<number> = new Set();
@@ -309,12 +339,31 @@ export async function moveMarchersAndOfferFollowUp({
             marcherIds: editable.locked,
         });
     const moves = editable.moves;
+    const keepUnchanged =
+        setUnmovedFrom !== undefined &&
+        ((setAll && editable.locked.length === 0) ||
+            moves.some((m) => {
+                const c = setUnmovedFrom.get(m.marcherId);
+                return !c || !samePosition([c.x, c.y], [m.x, m.y]);
+            }));
     const marcherIds = moves.map((m) => m.marcherId);
+    // Placed boxes follow the edit: moved together, or left with holes (07-placed-boxes.md)
+    const membership = writesShapes ? null : membershipFor(target, moves);
     const result = await moveMarchersInTarget({
         db: database,
         target,
         moves,
         clearOwn,
+        keepUnchanged,
+        afterWrite: membership
+            ? async (tx, timelineId) => {
+                  const own = afterWrite
+                      ? (await afterWrite(tx, timelineId)) !== false
+                      : false;
+                  const boxes = await membership.afterWrite(tx, timelineId);
+                  return own || boxes;
+              }
+            : afterWrite,
         onStart: () => {
             start = readEditStart(target, marcherIds);
             owned = ownMovers(target, marcherIds);
@@ -322,6 +371,18 @@ export async function moveMarchersAndOfferFollowUp({
     });
     const mark = editHistoryMark();
     toastLockedMarchers(editable.locked.length, true);
+    // The resolver's change re-reads them (`PlacedBoxesOverlay`), except where nobody moves (#455)
+    if (writesShapes) invalidatePlacedBoxes();
+    if (membership && membership.leaves.length > 0)
+        showLeftBoxToast(membership.leaves, (refill, save) =>
+            moveMarchersAndOfferFollowUp({
+                database,
+                target,
+                moves: refill,
+                afterWrite: save,
+                writesShapes: true,
+            }),
+        );
     toastPassThrough(result);
     // The pass-through toast and its Keep as a stop win: Move them too would replace it (same id)
     if (result.passThrough) return result;
@@ -345,4 +406,39 @@ export async function moveMarchersAndOfferFollowUp({
             console.error("Couldn't check the edit's later moves", e),
         );
     return result;
+}
+
+/** The moment an edit writes at: its move's end, or beat 0 for homes */
+function beatOfTarget(target: TimelineEditTarget): number | undefined {
+    if (target.kind === "home") return 0;
+    if (target.kind === "range") return target.end;
+    if (target.kind === "point") return target.beat;
+    return useTimelineSelectionStore
+        .getState()
+        .storedTimelines?.find((t) => t.id === target.timelineId)?.end;
+}
+
+/** Placed box membership for an edit, reading where marchers stand from the resolver */
+function membershipFor(
+    target: TimelineEditTarget,
+    moves: readonly TimelineMarcherMove[],
+) {
+    const beat = beatOfTarget(target);
+    if (beat === undefined) return null;
+    return boxMembershipEdit({
+        moves,
+        beat,
+        // Read inside the edit, when the resolver has every earlier write but not this one
+        positionOf: (id) => {
+            const resolver = useTimelineResolverStore.getState().resolver;
+            if (!resolver) return undefined;
+            // A marcher the resolver doesn't know isn't on a spot: never fail the edit over it
+            try {
+                const [x, y] = editingPositionAt(resolver, id, beat);
+                return { x, y };
+            } catch {
+                return undefined;
+            }
+        },
+    });
 }

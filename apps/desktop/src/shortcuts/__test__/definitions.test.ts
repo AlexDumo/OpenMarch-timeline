@@ -6,7 +6,31 @@ import {
     ACTION_IDS,
     NUDGE_ACTION_IDS,
     TAP_BEATS_ACTION_IDS,
+    type ActionId,
 } from "../definitions";
+
+/**
+ * The actions with a default shortcut that the command palette leaves out (#411), and why. Every
+ * other action with a shortcut is listed (once it has a handler).
+ */
+const NOT_IN_PALETTE: Partial<Record<ActionId, string>> = {
+    holdFasterPlayback: "plays faster only while its key is held",
+    holdSlowerPlayback: "plays slower only while its key is held",
+    openCommandPalette: "opens the palette itself",
+    openCommandBar: "opens the palette itself",
+    exitTimelineFocus:
+        "Escape on the timeline; the palette lists Focus canvas, which does the same",
+    timelinePlayPause:
+        "Space on the timeline; the palette lists Play / stop, which does the same",
+    timelinePreviousPage:
+        "← on the timeline; the palette lists Previous page, which does the same",
+    timelineNextPage:
+        "→ on the timeline; the palette lists Next page, which does the same",
+    openFieldMenu:
+        "the keyboard's right-click: opens the field's menu at the selection, which the palette would cover",
+    shapeBlock: "listed as Shape › Box, which asks the box's numbers",
+    shapeCircle: "listed as Shape › Circle, which asks the circle's numbers",
+};
 
 function lookup(key: string): unknown {
     return key
@@ -71,6 +95,18 @@ describe("ACTIONS", () => {
             "W",
             "ArrowUp",
         ]);
+    });
+
+    it("lists every action with a default shortcut in the palette, except those that can't work from it (#411)", () => {
+        const hidden = ACTION_IDS.filter(
+            (id) =>
+                ACTIONS[id].defaultBindings.length > 0 &&
+                (ACTIONS[id] as { hiddenFromPalette?: boolean })
+                    .hiddenFromPalette,
+        );
+        expect(hidden.sort()).toEqual(
+            (Object.keys(NOT_IN_PALETTE) as ActionId[]).sort(),
+        );
     });
 
     it("generates 24 nudge actions and 9 tap-beat actions", () => {

@@ -241,3 +241,18 @@ export const timelineExists = async (
         .from(schema.timelines)
         .where(eq(schema.timelines.id, id))
         .get()) !== undefined;
+
+/** The end beats of the moves `ids`, by id; moves that are gone are left out */
+export const readTimelineEndBeats = async (
+    db: DbConnection | DbTransaction,
+    ids: readonly number[],
+): Promise<Map<number, number>> => {
+    const wanted = [...new Set(ids)];
+    if (wanted.length === 0) return new Map();
+    const rows = await db
+        .select({ id: schema.timelines.id, end: schema.timelines.end_beat })
+        .from(schema.timelines)
+        .where(inArray(schema.timelines.id, wanted))
+        .all();
+    return new Map(rows.map((r) => [r.id, r.end]));
+};
