@@ -34,7 +34,6 @@ import type {
 } from "./TimelineKeyframes";
 import type {
     TimelineAddMarchersMenu,
-    TimelineKeepHereMenu,
     TimelineSetAsShownMenu,
     TimelineMenuEntry,
     TimelineMenuTarget,
@@ -267,8 +266,6 @@ export interface TimelineProps {
      * (`useClipDrops`)
      */
     readonly pageMoves?: ReadonlySet<string | number>;
-    /** The page box menu's **Keep selected marchers here** and **Let selected marchers follow again** */
-    readonly keepHere?: TimelineKeepHereMenu;
     /** The page box menu's **Set as shown** (holds, fork #466) */
     readonly setAsShown?: TimelineSetAsShownMenu;
     /** UI-19 Basic: the selected marchers' mid-page positions, spec beats */
@@ -650,7 +647,6 @@ export function Timeline(props: TimelineProps) {
         onDeletePageWithMoves,
         onSetPageSubset,
         onOpenRange,
-        keepHere,
         setAsShown,
         pageMenuExtra,
     } = props;
@@ -741,7 +737,6 @@ export function Timeline(props: TimelineProps) {
         onDeletePageFlag ||
         onDeletePageWithMoves ||
         onSetPageSubset ||
-        keepHere ||
         setAsShown
     );
     const disabledReason = addSelectedMarchers?.disabledReason;
@@ -756,7 +751,6 @@ export function Timeline(props: TimelineProps) {
                       ...(deleteWithMoves
                           ? { onDeleteWithMoves: deleteWithMoves }
                           : {}),
-                      ...(keepHere ? { keepHere } : {}),
                       ...(setAsShown ? { setAsShown } : {}),
                       ...(subsetMenu ? { subset: subsetMenu } : {}),
                       ...(pageExtra ? { extraFor: pageExtra } : {}),
@@ -769,7 +763,6 @@ export function Timeline(props: TimelineProps) {
             deleteWithMoves,
             disabledReason,
             hasMarchersMenu,
-            keepHere,
             setAsShown,
             subsetMenu,
             pageExtra,

@@ -107,14 +107,6 @@ import StartFlagLayers from "./StartFlagLayers";
 import { useTimelineVisuals } from "./useTimelineVisuals";
 import { drawnFollowing } from "./fieldFollowing";
 import {
-    KeptMarksOverlay,
-    KeptMarksPlacer,
-    KeptMarkTooltipView,
-    useFieldKeptMarks,
-    useKeptMarkTooltip,
-    type KeptMarkElements,
-} from "./KeptMarks";
-import {
     currentFieldQuality,
     useFieldQuality,
     useGpuCrashWatch,
@@ -305,7 +297,7 @@ function ThreeFieldView() {
         selection.current = selectedIds;
     }, [selectedIds]);
 
-    // #201: the timeline's pathways, isolation scene, collisions, dimming and kept marks
+    // #201: the timeline's pathways, isolation scene, collisions and dimming
     const marcherIds = useMemo(
         () => marcherRows?.map((marcher) => marcher.id),
         [marcherRows],
@@ -319,20 +311,7 @@ function ThreeFieldView() {
     });
     const { dimming, following } = timeline;
     useShapeFocus(dimming);
-    const keptMarks = useFieldKeptMarks({
-        enabled: timeline.ready,
-        isPlaying,
-        pages,
-        pageId: selectedPage?.id,
-        marcherIds,
-    });
-    const keptMarkElements = useRef<KeptMarkElements>(new Map());
     const root = useRef<HTMLDivElement>(null);
-    const keptMarkTooltip = useKeptMarkTooltip({
-        target: root,
-        marks: keptMarks,
-        marchers,
-    });
 
     // The field test API and the editor read the latest of these, not the render they came from
     const element = useRef<HTMLElement | null>(null);
@@ -682,11 +661,6 @@ function ThreeFieldView() {
                             renderOrder={COLLISIONS_ORDER}
                             atlas={atlases.collision}
                         />
-                        <KeptMarksPlacer
-                            marks={keptMarks}
-                            marchers={marchers}
-                            elements={keptMarkElements}
-                        />
                     </Canvas>
                 )}
                 {fieldProperties && (
@@ -710,10 +684,6 @@ function ThreeFieldView() {
                 <FavoritesRing />
                 {/* A command asking its parameters docks here, over the field's top (#354) */}
                 <DockedCommandBar />
-                <KeptMarksOverlay
-                    marks={keptMarks}
-                    elements={keptMarkElements}
-                />
                 <FieldContextMenu
                     at={menu.at}
                     onClose={menu.close}
@@ -721,7 +691,6 @@ function ThreeFieldView() {
                     timelineMode={timelineMode}
                 />
             </div>
-            <KeptMarkTooltipView tooltip={keptMarkTooltip} />
         </div>
     );
 }

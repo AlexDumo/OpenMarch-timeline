@@ -4,7 +4,6 @@ import { useBatchEditActionHandlers } from "./handlers/useBatchEditActionHandler
 import { useCursorActionHandlers } from "./handlers/useCursorActionHandlers";
 import { useFileActionHandlers } from "./handlers/useFileActionHandlers";
 import { useHistoryActionHandlers } from "./handlers/useHistoryActionHandlers";
-import { useKeepActionHandlers } from "./handlers/useKeepActionHandlers";
 import { useNavigationActionHandlers } from "./handlers/useNavigationActionHandlers";
 import { useNudgeActionHandlers } from "./handlers/useNudgeActionHandlers";
 import { useTimelineActionEffects } from "./handlers/useTimelineActionEffects";
@@ -36,7 +35,6 @@ export function EditorActionHandlers() {
     useUiActionHandlers();
     useCursorActionHandlers();
     useShapeToolActions();
-    useKeepActionHandlers();
     useUnsetActionHandlers();
     useTimelineActionEffects();
     // Mounted after the handlers above, so the open shape tool's keys are on top, and a selected

@@ -989,72 +989,47 @@ from it. The spec still wins on the model; this file decides presentation.
     the start"), a link to that page, or "Moves on this page".
   - **Keep later pages** (owner, 2026-10-09, after a study of three prototypes,
     `research/defined-coordinates/10-keep-later-pages-study.md`; timeline mode only). After page 2
-    is written and pages 3–4 follow it, the designer can keep some marchers where they are on page 3,
-    so that editing page 2 no longer moves them there. A kept spot is stored (ADR 0001 amendment
-    2026-10-09): the marcher's own move over the page that goes nowhere, marked kept. Pages after
-    it follow the kept spot. Marchers that have never moved follow the start, so they can be kept
-    too, ahead of any move (wp19, after the final study): a later first move then doesn't reach the
-    kept page. They get no chain on the page boxes (lead, wp19: it showed on every box); the
-    inspector, the page box menu and **K** offer to keep them, and a kept one shows the kept chip.
-    - **Chains on the page boxes.** With marchers selected, a page box they follow into can show a
-      chain as a quiet outline. A box where they were kept shows a broken chain on a filled accent
-      chip. A box with some of each shows a broken chain outlined in the accent with a filled kept
-      count. Linked and kept are meant to differ at a glance (wp19). Nothing shows without a
-      selection (owner). Kept and mixed chains always show; a linked one only on the selected page,
-      the page **K** works on, and while its box is hovered (V-223). The chain sits at the bottom
-      left of its box, 14 px in from the flag before it (past the
-      start flag's pennant; the playhead's **+** moves past any chain it would cover, also from a
-      beat before the flag zoomed out): 16 px where the page number leaves room, else 12 px. It
-      never covers the number (owner, 2026-10-12). Where it can't fit, a kept chain becomes a dot (a
-      ring for a mix; in a box only just wide enough for a one-digit number it touches the number)
-      and the box's tooltip takes its words, ending "Right-click the page to …" (V-222). Its tooltip
-      names the marchers a click changes, up to three ("OT1, OT2 and 4 others" past that): "Keep OT1
-      and OT8 on Page 3 · They won't follow Page 2 any more", "OT1 and OT8 kept on Page 3 · Click to
-      follow Page 2 again", or "2 of the 8 selected are kept on Page 3 (OT1, OT8) · Click to keep
-      the other 6 too". It counts the selection only. The chain that **K** would toggle adds "(K)"
-      to its tooltip. A click keeps or lets follow again exactly those marchers, as one undo step.
-      On a mixed chain a click keeps the rest (_lead default_). A press never selects, scrubs or
-      drags the box, and a right-click opens the box's menu.
-    - **The inspector line** on a page they follow into: "Hold from Page 2 → · **Keep here**" (or
-      "Hold from the start → · **Keep here**"). The link's tooltip says "Go to Page 2, where these
-      marchers last moved". Where
-      they were kept: "Kept on this page · **Follow again**". Mixed selections say "Some of these
-      marchers are kept on this page" or "Some of these marchers hold here", with the buttons on
-      their own row. Each button has a tooltip that names the marchers: "Keep OT1 and OT8 on Page 3,
-      so editing Page 2 won't move them here", with the count of the selection when not all apply
-      ("Keep OT1 (1 of the 2 selected)…"), and "(K)" on the button K would run. A
-      quiet line under it names the later pages that follow from this page: "Pages 3–4 follow these
-      marchers" ("…some of these marchers" when not all follow into all of them). Marchers that
-      haven't moved yet don't count there: every later page follows them.
-    - **The page box menu** has **Keep selected marchers here** and **Let selected marchers follow
-      again** above the deletes, each enabled by the selection's state on that page. Neither shows
-      without a selection. The entry **K** would run from the current page shows a quiet "K" on its
-      right.
-    - **K** works from the current page (the page box the playhead is in). Where some selected
-      marchers hold on it (they follow, or were kept there), K toggles keep there, for those. Where
-      they all move on it, K toggles keep on the next page. Toggling keeps the ones that follow, or,
-      when none does, lets the kept ones follow again (wp19, after the final study, where K on a
-      held page 3 kept page 4). It shows
-      no toast; the chain and the inspector line show the result. It doesn't fire while typing in a
-      field. The `?` shortcuts list (UI-17) shows it under Timeline. The Alt-drag shortcut from the
-      study was dropped (owner).
+    is written and pages 3–4 follow it, the designer can set some marchers where they are on page 3,
+    so that editing page 2 no longer moves them there. **Since holds ticket #467 (ADR 0001
+    amendment 2026-10-29) this is Set as shown, not a stored kept spot:** it writes an ordinary move
+    of the marcher's own over the page, ending where it shows there, so the page is Set. Keep,
+    Follow again, **K**, the kept chip, the mixed badge, the dot for a narrow box and the kept mark
+    on the field are gone, and a file's kept table is dropped (its undo and redo history too, where
+    that history named the table). Pages after a set page follow it. Marchers that have never moved
+    follow the start, so they can be set too, ahead of any move (wp19): a later first move then
+    doesn't reach that page. They get no chain on the page boxes (lead, wp19: it showed on every
+    box); the inspector and the page box menu offer Set as shown.
+    - **Chains on the page boxes.** With marchers selected, a page box they follow into (Not set)
+      can show a chain as a quiet outline. Nothing shows without a selection (owner). It shows only
+      on the selected page and while its box is hovered (V-223). The chain sits at the bottom left of
+      its box, 14 px in from the flag before it (past the start flag's pennant; the playhead's **+**
+      moves past any chain it would cover, also from a beat before the flag zoomed out): 16 px where
+      the page number leaves room, else 12 px. It never covers the number (owner, 2026-10-12). Where
+      it can't fit, the box's tooltip takes its words, ending "Right-click the page to …" (V-222).
+      Its tooltip names the marchers a click changes, up to three ("OT1, OT2 and 4 others" past
+      that): "OT1 and OT8 hold where Page 2 left them · Changes to Page 2 carry onto Page 3. Click to
+      set them as shown here instead". It counts the selection only. A click sets exactly those
+      marchers as shown, as one undo step. A press never selects, scrubs or drags the box, and a
+      right-click opens the box's menu. The Not-set bars of #477 replace the chain.
+    - **The inspector line** on a page they follow into: "Hold from Page 2 → · **Set as shown**" (or
+      "Hold from the start → · **Set as shown**"). The link's tooltip says "Go to Page 2, where these
+      marchers last moved". Mixed selections say "Some of these marchers hold here", with the button
+      on its own row. The button's tooltip names the marchers: "Set OT1 and OT8 on Page 3 where they
+      are shown, so editing Page 2 won't move them here", with the count of the selection when not
+      all apply ("Set OT1 (1 of the 2 selected)…"). A quiet line under it names the later pages that
+      follow from this page: "Pages 3–4 follow these marchers" ("…some of these marchers" when not
+      all follow into all of them). Marchers that haven't moved yet don't count there: every later
+      page follows them.
+    - **The page box menu** has **Set as shown** (holds, #466) above the deletes. It doesn't show
+      without a selection.
     - **After an edit: "Pages 3–4 followed" · Only Page 2.** When an edit changes an existing move on
       page 2 and carries into later pages for some of the marchers it moved, one surprise toast says
       so. **Only Page 2**, as its own undo step, keeps those marchers on page 3 at their spots from
-      before the edit, so pages 3–4 look as they did. Their kept move walks back from the edited spot,
-      and the chain shows it as kept. A page's first move stays silent, because its later pages
-      following is what the designer meant. Kept marchers don't follow, so they don't count.
-      Consecutive nudges share one toast, and Only Page 2 goes back to before the first (V-184).
-      The pass-through and **Move them too** toasts win.
-    - **Kept marchers on the field** (owner chose mock-up D over opacity, 2026-10-09; wp20). On the
-      current page, each marcher kept there gets a small broken chain beside its dot, whatever is
-      selected: the kept chip's symbol in the accent on a small white rounded square, so it reads
-      over yard lines. It sits just right of the dot, clear of the drill number, and stays small at
-      any zoom (10–16 px on screen, _lead default_). Hovering the mark or the dot shows "Kept on
-      Page 3 · won't follow Page 2" ("… won't follow earlier pages" when kept ahead of any move).
-      It follows keep, follow again, undo and page changes, and goes when the kept move is edited
-      into an ordinary move. Hidden while playing or scrubbing and while a move is isolated
-      (_lead default_). Page mode shows nothing (V-191).
+      before the edit, so pages 3–4 look as they did. It writes the same ordinary move as Set as
+      shown, which walks back from the edited spot (holds decision 1). A page's first move stays
+      silent, because its later pages following is what the designer meant. Consecutive nudges share
+      one toast, and Only Page 2 goes back to before the first (V-184). The pass-through and **Move
+      them too** toasts win.
   - **The page box's words are a tooltip** (a narrow box's chain words: a label and a hint, after a
     short hover or on keyboard focus; a press closes it), like the transport's tooltips (UI-17).
   - **Page mode** (until the flip) gets the same rule on its dense rows. An edit on page N also
@@ -1250,7 +1225,7 @@ from it. The spec still wins on the model; this file decides presentation.
     the move, and when all of them are (that would only rename it). The entry shows, disabled,
     with no marchers selected too, so it can be found (_lead default_, V-337).
   - **No motion changes** (owner). Each chosen marcher's transition moves to the new timeline as it
-    is: destination and path, and a kept marker with it, as one undoable edit
+    is: destination and path, as one undoable edit
     (`splitMarchersIntoNewMove`). Who plays follows spec §6.2: a split move is not a page's own move,
     so it ranks above page moves, and against other moves by its start and end like any move. So a
     split can change who plays where a split-off marcher also has an earlier-starting move running
@@ -1258,9 +1233,7 @@ from it. The spec still wins on the model; this file decides presentation.
     marchers and the count their motion changes from. Until the layer-priority change lands, the split
     keeps each row's stored layer. A converted page's shared transition (one slot per marcher, P9.10)
     is split slot by slot: each leaving marcher gets its own one-slot transition with its slot's
-    destination and the same path, and the old one is compacted, so no slot is left vacant. A kept
-    marcher (Keep, defined coordinates 10) stays kept in the new move, and **Follow again** on the
-    page box takes its kept move back from there too, deleting the split move if that empties it. A
+    destination and the same path, and the old one is compacted, so no slot is left vacant. A
     transition into a shape, a follow-the-leader one, or one whose marchers are in an inheriting
     follow-the-leader order can't be split apart; the split is refused naming the marchers who move
     together ("…move into one shape together with … Select them all, or none of them"), and selecting
@@ -1405,8 +1378,8 @@ from it. The spec still wins on the model; this file decides presentation.
     move's start to the playhead; each of the move's transitions gets a shapeless direct
     counterpart there whose destinations are where its marchers were at the playhead, with the
     rows that began before it, cut at the playhead, on their own layers. Rows ending at or before
-    the playhead leave the original, and a transition nobody takes any more goes with them. A kept
-    row split in two is kept in both halves, as Basic's split leaves it. Refused before any write:
+    the playhead leave the original, and a transition nobody takes any more goes with them. Refused
+    before any write:
     a move already over either half (one timeline per range; on a page's box that would also take
     over the page's move), and a move with nobody moving before or after the playhead.
   - **Motion.** A direct path is a straight line at a constant speed per count, so the halves play
