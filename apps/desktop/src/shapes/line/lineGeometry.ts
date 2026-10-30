@@ -12,10 +12,11 @@ import type { ToolEnv } from "../tool/toolKind";
 import type { Slot, XY } from "../types";
 
 /**
- * A Line as the shape host draws it (#523, spec #522): points the line passes through, and how
- * its marchers are spaced along it. This first version draws two points with straight segments
- * between them; the params already hold what later versions add (more points with tensions, a
- * closed flag, interval groups), so recipes saved now read the same then. Everything here is pure.
+ * A Line as the shape host draws it (#523, #524, spec #522): points the line passes through, with
+ * straight segments between them, and how its marchers are spaced along it. Every corner holds a
+ * marcher unless the corners switch is off. The params already hold what later versions add
+ * (tensions, a closed flag, interval groups), so recipes saved now read the same then. Everything
+ * here is pure.
  */
 
 /** A point the line passes through. Tension 0 is a corner; above 0 a smooth point (later) */
@@ -53,11 +54,16 @@ export type LineSpacing =
       };
 
 export interface LineParams {
-    /** In order from the first marcher's end; two for now */
+    /** In order from the first marcher's end; two or more */
     readonly points: readonly LinePoint[];
     /** A closed line joins its last point to its first (later); open when absent */
     readonly closed?: boolean;
     readonly spacing: LineSpacing;
+    /**
+     * False: the intervals run around the corners. Absent (or true): every corner holds a marcher
+     * (#524)
+     */
+    readonly corners?: boolean;
 }
 
 const FIT: LineSpacing = { mode: "fit" };
@@ -85,20 +91,21 @@ const isGroup = (g: unknown): g is LineGroup =>
 
 const ANCHORS: readonly unknown[] = ["start", "center", "end"];
 // `pivot` is the host's (ADR 0006, amendment of 2026-10-20), stored beside the kind's own numbers
-const KEYS = new Set(["points", "closed", "spacing", "pivot"]);
+const KEYS = new Set(["points", "closed", "spacing", "corners", "pivot"]);
 
 /**
  * Whether `params` is a line this version can lay out exactly as it was saved. Anything a newer
- * build adds (more points, tensions, closing, mixed groups, Measured, corners) is refused, so the
- * recipe shows as plain positions instead of being misread and rewritten on the first edit (ADR
- * 0006, decision 5). Each later ticket widens this as it adds the layout.
+ * build adds (tensions, closing, mixed groups, Measured) is refused, so the recipe shows as plain
+ * positions instead of being misread and rewritten on the first edit (ADR 0006, decision 5). Each
+ * later ticket widens this as it adds the layout.
  */
 export function isLineParams(params: unknown): params is LineParams {
     if (typeof params !== "object" || params === null) return false;
     if (Object.keys(params).some((key) => !KEYS.has(key))) return false;
     const p = params as Partial<LineParams>;
     if (p.closed !== undefined && p.closed !== false) return false;
-    if (!Array.isArray(p.points) || p.points.length !== 2) return false;
+    if (p.corners !== undefined && typeof p.corners !== "boolean") return false;
+    if (!Array.isArray(p.points) || p.points.length < 2) return false;
     if (!p.points.every(isPoint)) return false;
     const spacing: unknown = p.spacing;
     if (typeof spacing !== "object" || spacing === null) return false;
@@ -135,12 +142,109 @@ export function lineInterval(p: LineParams, n: number): number {
     return typedInterval(p) ?? (n > 1 ? linePath(p).length / (n - 1) : 0);
 }
 
+/** Each segment's length, in order */
+const segmentLengths = (p: LineParams): number[] =>
+    p.points.slice(1).map((b, i) => length(sub(b, p.points[i]!)));
+
+/**
+ * How many gaps each segment holds when every corner holds a marcher (#524): a whole number each,
+ * in proportion to its length, at least one. Null when the corners don't hold marchers: the switch
+ * is off, there's no corner, the run is laid on the path, or there are fewer gaps than segments.
+ */
+export function cornerGaps(p: LineParams, n: number): number[] | null {
+    if (p.corners === false || p.points.length < 3) return null;
+    if (p.spacing.mode === "path") return null;
+    const lengths = segmentLengths(p);
+    const gaps = n - 1;
+    const total = lengths.reduce((sum, l) => sum + l, 0);
+    if (gaps < lengths.length || !(total > 0)) return null;
+    const ideal = lengths.map((l) => (gaps * l) / total);
+    const counts = ideal.map((x) => Math.max(1, Math.floor(x + 1e-9)));
+    let sum = counts.reduce((a, b) => a + b, 0);
+    // Largest remainders first, and never under one gap a segment
+    while (sum < gaps) {
+        const i = argMax(ideal.map((x, k) => x - counts[k]!));
+        counts[i]!++;
+        sum++;
+    }
+    while (sum > gaps) {
+        const i = argMax(
+            ideal.map((x, k) => (counts[k]! > 1 ? counts[k]! - x : -Infinity)),
+        );
+        counts[i]!--;
+        sum--;
+    }
+    return counts;
+}
+
+const argMax = (xs: readonly number[]): number =>
+    xs.reduce((best, x, i) => (x > xs[best]! ? i : best), 0);
+
+/**
+ * In Fit with every corner holding a marcher, the narrowest and widest interval of its segments,
+ * in field units; null otherwise
+ */
+export function intervalRange(
+    p: LineParams,
+    n: number,
+): { readonly min: number; readonly max: number } | null {
+    const gaps = p.spacing.mode === "fit" ? cornerGaps(p, n) : null;
+    if (!gaps) return null;
+    const each = segmentLengths(p).map((l, i) => l / gaps[i]!);
+    return { min: Math.min(...each), max: Math.max(...each) };
+}
+
+/**
+ * In Keep interval with every corner holding a marcher, whether a segment isn't a whole number of
+ * intervals long: a corner dragged with `fine` (#524)
+ */
+export function cornerOffInterval(p: LineParams, n: number): boolean {
+    const interval = typedInterval(p);
+    const gaps = interval === null ? null : cornerGaps(p, n);
+    if (!gaps) return false;
+    return segmentLengths(p).some(
+        (l, i) => Math.abs(l - gaps[i]! * interval!) > 1e-6 * Math.max(1, l),
+    );
+}
+
+/**
+ * The spots of a line whose corners hold marchers: segment by segment from its first point, each
+ * `gaps[i]` gaps, evenly in Fit or `interval` apart in Keep interval, then the last point
+ */
+function cornerSpots(
+    p: LineParams,
+    gaps: readonly number[],
+    interval: number | null,
+): Slot[] {
+    const spots: Slot[] = [];
+    let s = 0;
+    p.points.slice(1).forEach((b, i) => {
+        const a = p.points[i]!;
+        const d = sub(b, a);
+        const l = length(d);
+        for (let j = 0; j < gaps[i]!; j++) {
+            const along = Math.min(
+                l,
+                interval === null ? (l * j) / gaps[i]! : interval * j,
+            );
+            const t = l > 0 ? along / l : 0;
+            spots.push({ x: a.x + d.x * t, y: a.y + d.y * t, s: s + along });
+        }
+        s += l;
+    });
+    const last = p.points.at(-1)!;
+    spots.push({ x: last.x, y: last.y, s });
+    return spots;
+}
+
 /** The `n` spots along the line, tagged with their distance along it */
 export function lineSpots(p: LineParams, n: number): Slot[] {
     if (n <= 0) return [];
     const path = linePath(p);
     const at = (s: number): Slot => ({ ...path.at(s), s });
     const interval = typedInterval(p);
+    const corners = cornerGaps(p, n);
+    if (corners) return cornerSpots(p, corners, interval);
     if (interval === null) {
         if (n === 1) return [at(path.length / 2)];
         return Array.from({ length: n }, (_, i) =>
@@ -253,6 +357,33 @@ export function drawLine(
 }
 
 /**
+ * Where a clicked point lands (#524): the first on a field line or the grid, each next one too, or
+ * at 45° from the last with constrain
+ */
+export function landClicked(previous: readonly XY[], at: XY, env: ToolEnv): XY {
+    const last = previous.at(-1);
+    return last ? endAt(last, at, env) : landPoint(at, env);
+}
+
+/**
+ * A line through clicked points, in Fit (#524), a point landed on the one before it dropped;
+ * undefined while that leaves under two, or a line under half a step long
+ */
+export function drawPoints(
+    clicked: readonly XY[],
+    env: ToolEnv,
+): LineParams | undefined {
+    const points = clicked.filter(
+        (q, i) =>
+            i === 0 || q.x !== clicked[i - 1]!.x || q.y !== clicked[i - 1]!.y,
+    );
+    if (points.length < 2) return undefined;
+    const p: LineParams = { points: points.map(corner), spacing: FIT };
+    if (linePath(p).length < halfStep(env) - 1e-9) return undefined;
+    return p;
+}
+
+/**
  * Which way an end dragged to `to` points from the fixed end `other`, in Keep interval: the
  * offset on half steps (an end kept off the grid still turns square to the field), or at 45° with
  * constrain. Null for no direction.
@@ -271,8 +402,10 @@ function directionFrom(other: XY, to: XY, env: ToolEnv): XY | null {
 }
 
 /**
- * Point `index` dragged to `to`. In Fit and on the path the point goes there (landed); in Keep
- * interval the line turns about its other end, its length (so its interval) kept.
+ * Point `index` dragged to `to`. In Fit and on the path the point goes there (landed). In Keep
+ * interval an end turns about its neighbor, its segment's length (so its intervals) kept, and a
+ * corner holding a marcher lands where each of its two segments is a whole number of intervals
+ * long (#524); `fine` frees it.
  */
 export function dragPoint(
     base: LineParams,
@@ -281,13 +414,19 @@ export function dragPoint(
     to: XY,
     env: ToolEnv,
 ): LineParams {
-    const other = base.points[index === 0 ? base.points.length - 1 : 0]!;
-    let point: XY;
-    if (base.spacing.mode === "keep" && n > 1) {
+    const last = base.points.length - 1;
+    const end = index === 0 || index === last;
+    const other = base.points[index === 0 ? 1 : index - 1]!;
+    const keep = base.spacing.mode === "keep" && n > 1;
+    let point: XY | null;
+    if (keep && end) {
         const u = directionFrom(other, to, env);
         if (!u) return base;
         const was = length(sub(base.points[index]!, other));
         point = { x: other.x + u.x * was, y: other.y + u.y * was };
+    } else if (keep && env.snap && !end && cornerGaps(base, n)) {
+        point = cornerOnIntervals(base, n, index, to);
+        if (!point) return base;
     } else {
         point = endAt(other, to, env);
         if (length(sub(point, other)) < 1e-9) return base;
@@ -301,9 +440,66 @@ export function dragPoint(
 }
 
 /**
+ * Where corner `index` can stand with its neighbors where they are and each of its two segments a
+ * whole number of the typed interval long, the gaps between them as many as now: the spot nearest
+ * `to`, or null when there's none
+ */
+function cornerOnIntervals(
+    p: LineParams,
+    n: number,
+    index: number,
+    to: XY,
+): XY | null {
+    const gaps = cornerGaps(p, n)!;
+    const interval = typedInterval(p)!;
+    const a = p.points[index - 1]!;
+    const b = p.points[index + 1]!;
+    const total = gaps[index - 1]! + gaps[index]!;
+    let best: XY | null = null;
+    for (let k = 1; k < total; k++)
+        for (const q of circlesMeet(a, k * interval, b, (total - k) * interval))
+            if (!best || length(sub(q, to)) < length(sub(best, to))) best = q;
+    return best;
+}
+
+/** Where the circle about `a` of radius `ra` meets the one about `b` of radius `rb` */
+function circlesMeet(a: XY, ra: number, b: XY, rb: number): XY[] {
+    const d = sub(b, a);
+    const l = length(d);
+    if (l < 1e-9 || l > ra + rb + 1e-9 || l < Math.abs(ra - rb) - 1e-9)
+        return [];
+    const along = (l * l + ra * ra - rb * rb) / (2 * l);
+    const h = Math.sqrt(Math.max(0, ra * ra - along * along));
+    const u = { x: d.x / l, y: d.y / l };
+    const mid = { x: a.x + u.x * along, y: a.y + u.y * along };
+    if (h < 1e-9) return [mid];
+    return [
+        { x: mid.x - u.y * h, y: mid.y + u.x * h },
+        { x: mid.x + u.y * h, y: mid.y - u.x * h },
+    ];
+}
+
+/** The line with a corner added halfway along segment `index`, so the line looks the same */
+export function splitSegment(p: LineParams, index: number): LineParams {
+    const a = p.points[index];
+    const b = p.points[index + 1];
+    if (!a || !b) return p;
+    const mid = corner({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+    return {
+        ...p,
+        points: [
+            ...p.points.slice(0, index + 1),
+            mid,
+            ...p.points.slice(index + 1),
+        ],
+    };
+}
+
+/**
  * The line as long as `n` marchers `interval` apart need, grown or shrunk from its pivot (or the
- * run's anchor, `env.anchor`), in Keep interval. A line on the path keeps its drawn length and
- * takes the interval.
+ * run's anchor, `env.anchor`), in Keep interval. With every corner holding a marcher each segment
+ * becomes a whole number of intervals long, its direction kept (#524). A line on the path keeps
+ * its drawn length and takes the interval.
  */
 export function withInterval(
     p: LineParams,
@@ -315,34 +511,84 @@ export function withInterval(
     if (p.spacing.mode === "path")
         return { ...p, spacing: { ...p.spacing, groups } };
     const kept: LineParams = { ...p, spacing: { mode: "keep", groups } };
-    return n > 1 ? resized(kept, (n - 1) * interval, env) : kept;
+    if (n <= 1) return kept;
+    const gaps = cornerGaps(kept, n);
+    if (gaps) return pinned(kept, onIntervals(kept, gaps, interval), env);
+    if (p.points.length === 2)
+        return scaled(kept, ((n - 1) * interval) / linePath(p).length, env);
+    return scaled(kept, runScale(kept, n, interval), env);
+}
+
+/** Each segment `gaps[i]` intervals long, in its own direction, from the first point */
+function onIntervals(
+    p: LineParams,
+    gaps: readonly number[],
+    interval: number,
+): LineParams {
+    let at: XY = p.points[0]!;
+    const points = p.points.map((q, i) => {
+        if (i === 0) return q;
+        const a = p.points[i - 1]!;
+        const d = sub(q, a);
+        const l = length(d);
+        const want = gaps[i - 1]! * interval;
+        at =
+            l > 0
+                ? { x: at.x + (d.x / l) * want, y: at.y + (d.y / l) * want }
+                : at;
+        return { ...q, ...at };
+    });
+    return { ...p, points };
 }
 
 /**
- * The line `size` long from end to end, its pivot staying where it is on the field: every point
- * keeps its place along and across the frame, stretched along it
+ * How much bigger the line must be for `n` marchers `interval` apart around its corners to reach
+ * from end to end
  */
-function resized(p: LineParams, size: number, env: ToolEnv): LineParams {
-    const frame = lineFrame(p);
+function runScale(p: LineParams, n: number, interval: number): number {
+    const path = linePath(p);
+    if (!(path.length > 0)) return 1;
+    // The run of chords on the line `k` times as big, against its length
+    const over = (k: number) =>
+        chordOffsets(path, 0, Array(n - 1).fill(interval / k)).at(-1)! -
+        path.length;
+    let lo = 1e-6;
+    let hi = Math.max(1, ((n - 1) * interval) / path.length) * 2;
+    while (over(hi) > 0) hi *= 2;
+    for (let i = 0; i < 60; i++) {
+        const mid = (lo + hi) / 2;
+        if (over(mid) > 0) lo = mid;
+        else hi = mid;
+    }
+    return hi;
+}
+
+/** The line `k` times as big, its pivot staying where it is on the field */
+function scaled(p: LineParams, k: number, env: ToolEnv): LineParams {
     // A line with no length has no direction to grow along
-    if (!(frame.halfWidth > 1e-9)) return p;
-    const key = env.pivot ?? pivotOf(p);
-    const fixed = env.anchor ?? pivotPoint(frame, key);
-    const grown = { ...frame, halfWidth: size / 2 };
-    const now = pivotPoint(grown, key);
-    const moved = {
-        ...grown,
-        center: {
-            x: grown.center.x + fixed.x - now.x,
-            y: grown.center.y + fixed.y - now.y,
-        },
+    if (!(lineFrame(p).halfWidth > 1e-9) || !Number.isFinite(k)) return p;
+    const first = p.points[0]!;
+    const grown = {
+        ...p,
+        points: p.points.map((q) => ({
+            ...q,
+            x: first.x + (q.x - first.x) * k,
+            y: first.y + (q.y - first.y) * k,
+        })),
     };
-    const k = grown.halfWidth / frame.halfWidth;
-    const points = p.points.map((q) => {
-        const local = fieldToFrame(frame, q);
-        return { ...q, ...frameToField(moved, { x: local.x * k, y: local.y }) };
-    });
-    return { ...p, points };
+    return pinned(p, grown, env);
+}
+
+/** `next` moved so its pivot is where `was`'s is on the field (or the run's anchor) */
+function pinned(was: LineParams, next: LineParams, env: ToolEnv): LineParams {
+    const key = env.pivot ?? pivotOf(was);
+    const fixed = env.anchor ?? pivotPoint(lineFrame(was), key);
+    const now = pivotPoint(lineFrame(next), key);
+    const d = sub(fixed, now);
+    return {
+        ...next,
+        points: next.points.map((q) => ({ ...q, x: q.x + d.x, y: q.y + d.y })),
+    };
 }
 
 /** The line in another spacing mode, its points as they are; Keep interval sized to its run */

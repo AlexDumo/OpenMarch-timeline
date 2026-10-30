@@ -137,7 +137,8 @@ export function guideDrawing(
     const type = gesture?.type;
     // A spacing drag grows the shape from its pivot, so its center can land on a line too (#452)
     const moving = type === "move" || type === "center" || type === "scrub";
-    if (type !== "draw" && type !== "handle" && !moving) return {};
+    const drawing = type === "draw" || type === "points";
+    if (!drawing && type !== "handle" && !moving) return {};
     if (!kind.snapPoints) return {};
     const { fieldProperties } = field;
     const { width, height } = fieldProperties;

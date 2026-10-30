@@ -172,9 +172,10 @@ const drawingOf = memoDrawing(
                 rings,
                 ringIds,
             };
-        // While a drag draws a new shape: its spots and a dashed outline, no walks yet (06). Every
-        // other gesture holds who goes where, so the walks follow it live.
-        const drawing = tool.gesture?.type === "draw";
+        // While a drag or clicked points draw a new shape: its spots and a dashed outline, no walks
+        // yet (06). Every other gesture holds who goes where, so the walks follow it live.
+        const drawing =
+            tool.gesture?.type === "draw" || tool.gesture?.type === "points";
         const targets = drawing ? [] : targetsNow(tool, field);
         const names = drillNumbers(field);
         const env = toolEnvFor(field);
@@ -182,12 +183,15 @@ const drawingOf = memoDrawing(
         const g =
             tool.gesture &&
             tool.gesture.type !== "draw" &&
+            tool.gesture.type !== "points" &&
             tool.gesture.type !== "edit"
                 ? tool.gesture
                 : null;
+        const handles = drawing ? [] : tool.kind.handles(tool.params, n);
         return {
             stage: drawing ? ("drawing" as const) : ("open" as const),
             outline: shapeOutline(tool.kind, tool.params, n),
+            openOutline: tool.kind.outlineOpen?.(tool.params, n) ?? false,
             spots,
             walks: walks
                 ? targets.map((t) => ({ from: t.from, to: t.to }))
@@ -205,9 +209,8 @@ const drawingOf = memoDrawing(
                           text: names.get(t.id) ?? "",
                       }))
                     : [],
-            handles: drawing
-                ? []
-                : tool.kind.handles(tool.params, n).map((h) => h.at),
+            handles: handles.filter((h) => !h.adds).map((h) => h.at),
+            addHandles: handles.filter((h) => h.adds).map((h) => h.at),
             ...(drawing
                 ? {}
                 : frameDrawing(
@@ -415,6 +418,11 @@ export const shapeToolMode: FieldMode = {
         const field = currentShapeField();
         if (!tool || !field) return null;
         const env = envOf(field, tool);
+        // Between clicked points the next segment follows the pointer (#524)
+        if (tool.gesture?.type === "points") {
+            updateTool((t) => pointerMove(t, pointer.field, envOf(field, t)));
+            return "crosshair";
+        }
         // The editor asks for the cursor as the pointer moves, so this is where hovering is seen
         hoverAt(tool, pointer.field, env.hitRadius);
         const target = pressTarget(tool, pointer.field, env);

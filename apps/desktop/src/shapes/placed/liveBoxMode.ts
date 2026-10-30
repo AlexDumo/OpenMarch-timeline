@@ -93,6 +93,7 @@ const drawingOf = memoDrawing(
         return {
             stage: "open" as const,
             outline: shapeOutline(kind, live.params, n),
+            openOutline: kind.outlineOpen?.(live.params, n) ?? false,
             // While a gesture goes, where the marchers will stand, and who
             spots: targets,
             walks: [],
@@ -104,7 +105,14 @@ const drawingOf = memoDrawing(
                       }))
                     : [],
             calm,
-            handles: kind.handles(live.params, n).map((h) => h.at),
+            handles: kind
+                .handles(live.params, n)
+                .filter((h) => !h.adds)
+                .map((h) => h.at),
+            addHandles: kind
+                .handles(live.params, n)
+                .filter((h) => h.adds)
+                .map((h) => h.at),
             gaps: gapsOf(kind, live.params, n),
             ...frameDrawing(
                 kind,

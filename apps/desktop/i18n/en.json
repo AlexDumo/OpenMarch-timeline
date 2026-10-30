@@ -1993,6 +1993,8 @@
                 "text": "Shape open at {moment}"
             },
             "drawHint": "Drag on the field to draw a {shape} · Esc to cancel",
+            "drawPointsHint": "Drag on the field to draw a {shape}, or click point after point · Esc to cancel",
+            "pointsHint": "Click to add a point · Enter or a click on the last point finishes · Esc to cancel",
             "drawnOn": "from {page}",
             "edge": {
                 "label": "Edge",
