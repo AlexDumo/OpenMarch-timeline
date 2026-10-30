@@ -441,7 +441,8 @@ function ThreeFieldView() {
                 },
                 {
                     isMac: isMacPlatform(),
-                    // #197: snapping, Shift, Alt and Lock X/Y, read as they are on each move
+                    // #197: snapping and Lock X/Y, read as they are on each move; fine and
+                    // constrain come from the held roles
                     moveTransform: ruledMove(() => {
                         const { coordinateRounding, lockX, lockY } =
                             useUiSettingsStore.getState().uiSettings;
