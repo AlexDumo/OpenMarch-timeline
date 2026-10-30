@@ -73,6 +73,7 @@ export class MoveGesture implements FieldGesture {
             keys,
             (at, roles) => this.positionsAt(at, roles),
             (positions) => host.show(positions),
+            "one axis",
         );
     }
 

@@ -40,6 +40,7 @@ abstract class HandleGesture implements FieldGesture {
             keys,
             (at, roles) => this.positionsAt(at, roles),
             (positions) => host.show(positions),
+            "one axis",
         );
     }
 

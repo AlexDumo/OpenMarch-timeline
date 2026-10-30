@@ -376,6 +376,15 @@
         "videoResolution": "Resolución"
     },
     "field": {
+        "gestureChip": {
+            "constrain": "restringir",
+            "constrain45": "45°",
+            "constrainEqualSpacings": "espaciados iguales",
+            "constrainOneAxis": "un eje",
+            "fine": "fino",
+            "fromCenter": "desde el centro",
+            "snapOff": "Ajuste desactivado"
+        },
         "general": {
             "exportField": "Exportar campo",
             "exportField.tooltip": "Exportar este campo a un archivo para usar en otros proyectos",

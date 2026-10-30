@@ -544,6 +544,15 @@
             "softwareGl": "Graphics run in software here, so these numbers are a lower bound.",
             "title": "Field benchmark"
         },
+        "gestureChip": {
+            "constrain": "constrain",
+            "constrain45": "45°",
+            "constrainEqualSpacings": "equal spacings",
+            "constrainOneAxis": "one axis",
+            "fine": "fine",
+            "fromCenter": "from center",
+            "snapOff": "Snap off"
+        },
         "general": {
             "exportField": "Export Field",
             "exportField.tooltip": "Export this field to a file to use in other projects",

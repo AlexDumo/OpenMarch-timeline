@@ -18,6 +18,7 @@ import { dotSizes, SELECTION_COLOR } from "./selectionRing";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import { GUIDE_INK, GUIDE_INK_TEXT } from "./guideInk";
+import HeldRolesChip from "./HeldRolesChip";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -139,28 +140,33 @@ export default function FieldOverlay({
     );
 
     return (
-        <svg
-            className="pointer-events-none absolute inset-0 h-full w-full"
-            data-testid="fieldOverlay"
-        >
-            <SelectionBox frame={JSON.parse(box) as DrawnSelectionBox | null} />
-            {area?.kind === "marquee" && (
-                <Marquee
-                    rect={area.rect}
-                    subtract={area.subtract}
-                    theme={theme}
+        <>
+            <HeldRolesChip />
+            <svg
+                className="pointer-events-none absolute inset-0 h-full w-full"
+                data-testid="fieldOverlay"
+            >
+                <SelectionBox
+                    frame={JSON.parse(box) as DrawnSelectionBox | null}
                 />
-            )}
-            {area?.kind === "lasso" && <Lasso lasso={area} theme={theme} />}
-            {modeDrawing && (
-                <ModeDrawing
-                    drawing={modeDrawing}
-                    theme={theme}
-                    marchers={marchers}
-                />
-            )}
-            {propTool && <PropToolPreview tool={propTool} theme={theme} />}
-        </svg>
+                {area?.kind === "marquee" && (
+                    <Marquee
+                        rect={area.rect}
+                        subtract={area.subtract}
+                        theme={theme}
+                    />
+                )}
+                {area?.kind === "lasso" && <Lasso lasso={area} theme={theme} />}
+                {modeDrawing && (
+                    <ModeDrawing
+                        drawing={modeDrawing}
+                        theme={theme}
+                        marchers={marchers}
+                    />
+                )}
+                {propTool && <PropToolPreview tool={propTool} theme={theme} />}
+            </svg>
+        </>
     );
 }
 

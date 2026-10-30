@@ -1,5 +1,7 @@
 import { CLICK_SLOP, type FieldPointer } from "@/field/editor/fieldEditor";
 import { startGestureKeys } from "@/input/gestureKeys";
+import { clearGestureChip, syncGestureChip } from "@/input/gestureChipSync";
+import type { GestureChipScreen } from "@/input/gestureChipStore";
 import {
     pressChoiceOf,
     REACH_INSIDE,
@@ -34,28 +36,47 @@ export function holdGesture<A>(
     rerun: (last: A, roles: Roles) => void,
     usedByPress: readonly RoleKey[] = [],
     isMac?: boolean,
+    chip?: {
+        constrainWord?: string;
+        screen?: () => GestureChipScreen | undefined;
+    },
 ): HeldGesture<A> {
     let last: A | null = null;
     let ended = false;
+    const touchChip = (roles: Roles) => {
+        if (!chip || ended || last === null) return;
+        syncGestureChip(roles, {
+            dragging: true,
+            constrainWord: chip.constrainWord,
+            screen: chip.screen?.(),
+        });
+    };
     const keys = startGestureKeys({
         context: "shape",
         press,
         usedByPress,
         isMac,
         onRolesChange: (roles) => {
-            if (!ended && last !== null) rerun(last, roles);
+            if (!ended && last !== null) {
+                rerun(last, roles);
+                touchChip(roles);
+            }
         },
     });
     return {
         roles: keys.roles,
         move(next, at) {
             keys.update(next);
-            if (at !== null) last = at;
+            if (at !== null) {
+                last = at;
+                touchChip(keys.roles());
+            }
             return keys.roles();
         },
         end() {
             ended = true;
             keys.dispose();
+            if (chip) clearGestureChip();
         },
     };
 }
@@ -77,6 +98,7 @@ export function pressShapeKeys(
     grabs: () => ShapeTarget | { type: "draw" } | null,
     rerun: (at: XY, roles: Roles) => void,
     isMac: boolean,
+    constrainWord?: string,
 ): { held: HeldFieldGesture; reachInside: boolean } {
     const reach = pressChoiceOf(pointer, "shape", {
         applicable: REACH_INSIDE,
@@ -84,11 +106,13 @@ export function pressShapeKeys(
     });
     const target = reach ? grabs() : null;
     const pulled = target?.type === "pivot" && target.pulled === true;
+    let lastScreen: GestureChipScreen = pointer.screen;
     const held = holdGesture<XY>(
         pointer,
         rerun,
         pulled && reach ? [reach.key] : [],
         isMac,
+        { constrainWord, screen: () => lastScreen },
     );
     let dragging = false;
     return {
@@ -96,6 +120,7 @@ export function pressShapeKeys(
             roles: held.roles,
             end: held.end,
             move(p) {
+                lastScreen = p.screen;
                 dragging ||=
                     Math.hypot(
                         p.screen.x - pointer.screen.x,

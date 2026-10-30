@@ -376,6 +376,15 @@
         "videoResolution": "解像度"
     },
     "field": {
+        "gestureChip": {
+            "constrain": "制約",
+            "constrain45": "45°",
+            "constrainEqualSpacings": "等間隔",
+            "constrainOneAxis": "1軸",
+            "fine": "微調整",
+            "fromCenter": "中心から",
+            "snapOff": "スナップオフ"
+        },
         "general": {
             "exportField": "フィールドをエクスポート",
             "exportField.tooltip": "このフィールドをファイルにエクスポートして、他のプロジェクトで使用",
