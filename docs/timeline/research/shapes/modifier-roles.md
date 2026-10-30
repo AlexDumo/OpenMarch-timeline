@@ -2,7 +2,7 @@
 
 # Modifier roles: one map from keys to what they mean
 
-Status: accepted 2026-10-29 (version A), after review with the owner, for the shape host (`shapes/host`). The implementation ticket is linked from the pull request.
+Status: accepted 2026-10-29 (version A), after review with the owner, for the shape host (built on `shapes/host`, merged to fork `main` as #363). The implementation ticket is linked from the pull request.
 
 ## Why
 
