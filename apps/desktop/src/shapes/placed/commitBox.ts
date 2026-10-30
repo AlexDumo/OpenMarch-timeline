@@ -4,11 +4,18 @@ import type { XY } from "../types";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import {
     planCanvasEdit,
+    timelinePositionsSettled,
     type CanvasEditPlan,
 } from "@/timeline/timelineCoordinateWrites";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
 import { writePlacement } from "../tool/shapePlacement";
 import { liveTargets } from "./liveBox";
 import type { PlacedBox } from "./placedBox";
+import { useSavingBoxStore } from "./boxSelectionStore";
+import { placedBoxesAt, placedBoxesRead } from "./placedBoxStore";
 
 /** Whether two recipe params say the same, whatever their key order (keys set to undefined are left out) */
 export function sameParams(a: unknown, b: unknown): boolean {
@@ -39,18 +46,92 @@ export function carriedOnto(plan: CanvasEditPlan, box: PlacedBox): boolean {
     return plan.beat > box.endBeat + 1e-9 && start >= box.endBeat - 1e-9;
 }
 
+/** Saves of placed shapes, one at a time, each read back before the next starts */
+let saving: Promise<void> = Promise.resolve();
+/** Saves asked for and not yet read back */
+let unsaved = 0;
+
 /**
  * Saves a selected placed shape drawn with `params` through `writePlacement`: its members move to
  * their spots in it and its recipe is saved, as one edit at the edit window (a canvas edit). A
  * shape held from an earlier move gets its own copy on this one; the earlier one stays.
+ *
+ * The shape is shown as saved at once (`useSavingBoxStore`), and saves run one at a time: each
+ * starts from the shape as the last one read it back, so quick edits add up.
  */
-export async function commitBox(
+export function commitBox(
     box: PlacedBox,
     params: unknown,
     queryClient: QueryClient,
     /** Lay the members out again by least travel (Recalculate, Close up) */
     layOutAgain?: boolean,
     /** Where members come from when laid out again (Recalculate: the start flag) */
+    origins?: ReadonlyMap<number, XY>,
+): Promise<void> {
+    const field = currentShapeField();
+    if (!field) return Promise.resolve();
+    const shown = liveTargets(
+        box,
+        params,
+        shapeContextFor(field),
+        layOutAgain,
+        origins,
+    );
+    useSavingBoxStore.setState({ box: savedAs(box, params, shown) });
+    unsaved++;
+    saving = saving
+        .then(() =>
+            saveBox(storedBox(box), params, queryClient, layOutAgain, origins),
+        )
+        .catch((e: unknown) => console.error("Couldn't save the shape", e))
+        .finally(() => {
+            unsaved--;
+            // The box read back is the one selected again
+            if (unsaved === 0) useSavingBoxStore.setState({ box: null });
+        });
+    return saving;
+}
+
+/** `box` drawn with `params`, its members on the spots `targets` gives them */
+function savedAs(
+    box: PlacedBox,
+    params: unknown,
+    targets: ReturnType<typeof liveTargets>,
+): PlacedBox {
+    const { members, spots } = targets;
+    return {
+        ...box,
+        params,
+        spots,
+        recipe: {
+            ...box.recipe,
+            params: { ...(params as object), spots },
+            members,
+        },
+    };
+}
+
+/**
+ * `box` as it's stored now: a save before this one moved it, or gave it its own copy on this move.
+ * The same marchers find it; `box` itself when they don't (a save failed)
+ */
+function storedBox(box: PlacedBox): PlacedBox {
+    const ids = new Set(box.recipe.members.map((m) => m.marcherId));
+    const beat = displayedBeat(useTimelineSelectionStore.getState());
+    return (
+        placedBoxesAt(beat).find(
+            (b) =>
+                b.recipe.members.length === ids.size &&
+                b.recipe.members.every((m) => ids.has(m.marcherId)),
+        ) ?? box
+    );
+}
+
+async function saveBox(
+    box: PlacedBox,
+    params: unknown,
+    queryClient: QueryClient,
+    layOutAgain?: boolean,
     origins?: ReadonlyMap<number, XY>,
 ): Promise<void> {
     const field = currentShapeField();
@@ -82,4 +163,7 @@ export async function commitBox(
         queryClient,
         tolgee.t("shapes.placed.editError", "Error editing the shape"),
     );
+    // Read back, positions and recipe both, before the next save starts from it
+    await timelinePositionsSettled();
+    await placedBoxesRead();
 }
