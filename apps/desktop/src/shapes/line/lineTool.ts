@@ -237,6 +237,7 @@ export const lineTool: ToolKind<LineParams> = {
     shape: lineShape,
     params: [INTERVAL],
     choices: [SPACING, CORNERS],
+    ordered: true,
     readable: isLineParams,
     scaling: "interval",
     draw: (from, to, _n, env) => drawLine(from, to, env),
