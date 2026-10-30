@@ -169,6 +169,31 @@ export interface ToolParam<P> {
     widen?(params: P, n: number, by: number, env: ToolEnv): P | null;
 }
 
+/** One answer in a kind's menu ({@link ToolChoice}) */
+export interface ToolChoiceOption {
+    /** Stable for the kind: tests and a later command step name the answer by it */
+    readonly value: string;
+    readonly label: string;
+}
+
+/**
+ * A menu of the kind's own (a Line's spacing, #523), declared once so the floating editor shows it
+ * without knowing the kind, as it does the kind's numbers. Picking an answer is one change of the
+ * shape. Everything is pure.
+ */
+export interface ToolChoice<P> {
+    /** Stable for the kind */
+    readonly key: string;
+    /** What it is, for its tooltip and screen readers: "Spacing" */
+    readonly label: string;
+    /** The answers, in the order the menu lists them */
+    options(params: P, n: number): readonly ToolChoiceOption[];
+    /** The answer the shape has now: one of {@link options}' values */
+    current(params: P, n: number): string;
+    /** The params with `value` picked */
+    pick(params: P, n: number, value: string, env: ToolEnv): P;
+}
+
 /**
  * How one kind of shape is drawn and edited with the pointer. The tool's state machine
  * (`toolMachine.ts`) owns the gestures and calls these; a kind never sees a pointer event.
@@ -179,6 +204,14 @@ export interface ToolKind<P> {
     readonly shape: AnyShapeKind;
     /** Its numbers, in the order the chip shows them (#344) */
     readonly params: readonly ToolParam<P>[];
+    /** Its own menus, shown under the floating editor beside how it's filled (#523) */
+    readonly choices?: readonly ToolChoice<P>[];
+    /**
+     * Whether params read back from a recipe are a shape of this kind this app can lay out. Absent:
+     * they have a center, as every frame-based kind stores (ADR 0006). A kind whose frame follows
+     * from its points (a Line) checks its own.
+     */
+    readable?(params: unknown): boolean;
     /**
      * What scaling changes (#344): `interval` kinds change their spacings in half steps,
      * `footprint` kinds (no regular spacing) their size in steps
@@ -212,8 +245,11 @@ export interface ToolKind<P> {
      * then its center. None when absent, so the shape moves on the grid alone.
      */
     snapPoints?(params: P, n: number): readonly XY[];
-    /** Whether a press at `at` grabs the whole shape to move it */
-    contains(params: P, n: number, at: XY): boolean;
+    /**
+     * Whether a press at `at` grabs the whole shape to move it. `env` gives the field's scale, for
+     * kinds whose body is a reach around a line rather than an area.
+     */
+    contains(params: P, n: number, at: XY, env?: ToolEnv): boolean;
     /** `base` moved by `delta` */
     move(base: P, n: number, delta: XY, env: ToolEnv): P;
     /**
