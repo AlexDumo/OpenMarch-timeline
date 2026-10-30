@@ -107,7 +107,7 @@ export function useBoxSelection({ isPlaying }: { isPlaying: boolean }): void {
     const recipes = usePlacedBoxStore((s) => s.recipes);
     const version = useTimelineResolverStore((s) => s.version);
     const beat = usePlacedBoxBeat();
-    const timelines = useTimelineSelectionStore((s) => s.storedTimelines);
+    const ends = usePlacedBoxStore((s) => s.ends);
     const saving = useSavingBoxStore((s) => s.box);
     useEffect(() => {
         const ids = new Set((selected ?? []).map((m) => m.id));
@@ -134,5 +134,5 @@ export function useBoxSelection({ isPlaying }: { isPlaying: boolean }): void {
             selected: box,
             ...(stillInside ? {} : { inside: null }),
         });
-    }, [enabled, selected, recipes, version, beat, timelines, saving]);
+    }, [enabled, selected, recipes, ends, version, beat, saving]);
 }
