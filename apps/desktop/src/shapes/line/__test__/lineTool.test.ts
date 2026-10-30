@@ -16,6 +16,8 @@ import {
     type PlacedRecipe,
 } from "../../placed/placedBox";
 import { placementOf } from "../../tool/shapePlacement";
+import { boxLabel } from "../../placed/PlacedBoxesOverlay";
+import { placedBoxSummary } from "../../placed/placedBoxText";
 import { SHAPE_TOOLS } from "../../tool/shapeTools";
 import { kindPickGate } from "../../tool/pickKind";
 import type { ToolEnv } from "../../tool/toolKind";
@@ -336,6 +338,281 @@ describe("Interval on the path", () => {
     });
 });
 
+describe("mixed intervals (#526)", () => {
+    /** `n` marchers on a Fit line from 100 to 150, its center at 125 */
+    const fitLine = (n: number) =>
+        drawn(n, { x: 100, y: 100 }, { x: 150, y: 100 });
+    const groups = lineTool.groups!;
+    const gapsOf = (t: ToolState) => {
+        const at = spotsOf(t);
+        return at.slice(1).map((q, i) => dist(at[i]!, q) / STEP);
+    };
+    const expectGaps = (t: ToolState, steps: number[]) => {
+        const gaps = gapsOf(t);
+        expect(gaps).toHaveLength(steps.length);
+        gaps.forEach((g, i) => expect(g).toBeCloseTo(steps[i]!, 6));
+    };
+    /** The group chips as the editor shows them */
+    const chips = (t: ToolState) =>
+        chipLayout(lineTool, t.params, t.spots, env).groups?.map(
+            (g) =>
+                `${g.count}${g.rest ? " rest" : ""}${g.grown ? ` +${g.grown}` : ""}${g.dropped ? " dropped" : ""} × ${g.interval}`,
+        ) ?? null;
+    const typedIn = (
+        t: ToolState,
+        index: number,
+        part: "count" | "interval",
+        text: string,
+    ) => edit(t, groups.type(t.params, t.spots, index, part, text, env), ctx);
+
+    it("lays 2*3+4*2 as 2 marchers at 3 steps, then 4 at 2, the length following from the pivot", () => {
+        const t = typed(fitLine(6), "2*3+4*2");
+        expect(paramsOf(t).spacing).toEqual({
+            mode: "keep",
+            groups: [
+                { count: 2, interval: 30 },
+                { count: 4, interval: 20 },
+            ],
+        });
+        // The seam between the groups is the larger interval
+        expectGaps(t, [3, 3, 2, 2, 2]);
+        expect(pointsOf(t)).toEqual([
+            { x: 65, y: 100 },
+            { x: 185, y: 100 },
+        ]);
+        expect(chips(t)).toEqual(["2 × 3", "4 × 2"]);
+        // The single interval number gives way to the groups
+        expect(chipText(t)).toEqual([]);
+    });
+
+    it("reads x and , too", () => {
+        const t = typed(fitLine(6), "2x3, 4x2");
+        expectGaps(t, [3, 3, 2, 2, 2]);
+    });
+
+    it("puts the rest at the start, the end or the middle, by where it's typed", () => {
+        expectGaps(typed(fitLine(6), "2.5+3*4"), [2.5, 2.5, 4, 4, 4]);
+        expectGaps(typed(fitLine(6), "3*4+2.5"), [4, 4, 4, 2.5, 2.5]);
+        const both = typed(fitLine(7), "2*3+2+2*3");
+        expectGaps(both, [3, 3, 2, 2, 3, 3]);
+        expect(chips(both)).toEqual(["2 × 3", "3 rest × 2", "2 × 3"]);
+    });
+
+    it("grows the last group to take extra marchers, and marks it", () => {
+        const t = typed(fitLine(10), "2*3+4*2");
+        expectGaps(t, [3, 3, 2, 2, 2, 2, 2, 2, 2]);
+        expect(chips(t)).toEqual(["2 × 3", "8 +4 × 2"]);
+        // The typed count is kept
+        expect(paramsOf(t).spacing).toMatchObject({
+            groups: [{ count: 2 }, { count: 4 }],
+        });
+    });
+
+    it("drops groups from the end with too few marchers", () => {
+        expect(chips(typed(fitLine(4), "2*3+4*2"))).toEqual(["2 × 3", "2 × 2"]);
+        const two = typed(fitLine(2), "2*3+4*2");
+        expect(chips(two)).toEqual(["2 × 3", "0 dropped × 2"]);
+        expectGaps(two, [3]);
+    });
+
+    it("keeps exact fractions in a group", () => {
+        const t = typed(fitLine(4), "2*1 2/3+2");
+        expectGaps(t, [5 / 3, 2, 2]);
+        expect(chips(t)).toEqual(["2 × 1⅔", "2 rest × 2"]);
+    });
+
+    it("goes back to one interval for everyone when a plain number is typed", () => {
+        let t = typed(fitLine(6), "2*3+4*2");
+        t = typed(t, "2");
+        expect(paramsOf(t).spacing).toEqual({
+            mode: "keep",
+            groups: [{ interval: 20 }],
+        });
+        expect(chips(t)).toBeNull();
+        expect(chipText(t)).toEqual([{ display: "2", derived: false }]);
+    });
+
+    it("refuses a list it can't read", () => {
+        const t = fitLine(6);
+        expect(interval.type(t.params, t.spots, "2+3", env)).toBeNull();
+        expect(interval.type(t.params, t.spots, "2⅔x3", env)).toBeNull();
+    });
+
+    it("lays the groups on the drawn line from the anchor, on the path", () => {
+        let t = drawn(6, { x: 0, y: 100 }, { x: 200, y: 100 });
+        t = picked(t, "path-start");
+        t = typed(t, "2*3+4*2");
+        expect(pointsOf(t)).toEqual([
+            { x: 0, y: 100 },
+            { x: 200, y: 100 },
+        ]);
+        expect(spotsOf(t)[0]).toEqual({ x: 0, y: 100 });
+        expectGaps(t, [3, 3, 2, 2, 2]);
+        // Back to Keep interval, the groups kept and the line sized to them
+        t = picked(t, "keep");
+        expectGaps(t, [3, 3, 2, 2, 2]);
+        const [a, b] = pointsOf(t);
+        expect(dist(a!, b!)).toBeCloseTo(120, 6);
+    });
+
+    it("widens every group at once when scaled", () => {
+        const t = typed(fitLine(6), "2*3+4*2");
+        const wider = interval.widen!(
+            t.params,
+            t.spots,
+            0.5,
+            env,
+        ) as LineParams;
+        expect(wider.spacing).toMatchObject({
+            groups: [{ interval: 35 }, { interval: 25 }],
+        });
+        const squeezed = interval.widen!(t.params, t.spots, -2, env);
+        expect(squeezed).toBeNull();
+    });
+
+    describe("its group chips", () => {
+        const drumline = () => typed(fitLine(6), "2*3+4*2");
+
+        it("types a group's count or interval", () => {
+            let t = typedIn(drumline(), 0, "count", "3");
+            expect(chips(t)).toEqual(["3 × 3", "3 × 2"]);
+            t = typedIn(t, 1, "interval", "2½");
+            expect(chips(t)).toEqual(["3 × 3", "3 × 2½"]);
+            expectGaps(t, [3, 3, 3, 2.5, 2.5]);
+        });
+
+        it("takes the full list typed into any of its numbers", () => {
+            const t = typedIn(drumline(), 1, "interval", "2.5+3*4");
+            expect(chips(t)).toEqual(["3 rest × 2½", "3 × 4"]);
+        });
+
+        it("refuses a count that isn't a whole number of marchers", () => {
+            const t = drumline();
+            for (const text of ["0", "1.5", "abc"])
+                expect(
+                    groups.type(t.params, t.spots, 0, "count", text, env),
+                    text,
+                ).toBeNull();
+        });
+
+        it("drags a group's count and interval", () => {
+            const t = drumline();
+            const roles = { fine: false, constrain: false, fromCenter: false };
+            const more = groups.scrub(
+                t.params,
+                t.spots,
+                0,
+                "count",
+                { dx: 33, dy: 0, axis: "x", roles },
+                env,
+            );
+            expect(chips(edit(t, more, ctx))).toEqual(["4 × 3", "2 × 2"]);
+            const wider = groups.scrub(
+                t.params,
+                t.spots,
+                1,
+                "interval",
+                { dx: 8, dy: 0, axis: "x", roles },
+                env,
+            );
+            expect(chips(edit(t, wider, ctx))).toEqual(["2 × 3", "4 × 2½"]);
+        });
+
+        it("gives a typed count to the rest when its count is set", () => {
+            let t = typed(fitLine(6), "2*3+2");
+            expect(chips(t)).toEqual(["2 × 3", "4 rest × 2"]);
+            t = typedIn(t, 1, "count", "3");
+            expect(chips(t)).toEqual(["2 × 3", "4 +1 × 2"]);
+        });
+
+        it("adds a group at the end with +, taking a marcher from the last", () => {
+            const t = edit(
+                drumline(),
+                groups.add(drumline().params, 6, env),
+                ctx,
+            );
+            expect(chips(t)).toEqual(["2 × 3", "3 × 2", "1 × 2"]);
+        });
+
+        it("adds a group that gets a marcher, even when the last has only 1", () => {
+            let t = typed(fitLine(6), "5*3+1*2");
+            t = edit(t, groups.add(t.params, 6, env), ctx);
+            expect(chips(t)).toEqual(["4 × 3", "1 × 2", "1 × 2"]);
+        });
+
+        it("adds a group that gets a marcher when the counts already take everyone", () => {
+            let t = typed(fitLine(4), "2*3+4*2");
+            expect(chips(t)).toEqual(["2 × 3", "2 × 2"]);
+            t = edit(t, groups.add(t.params, 4, env), ctx);
+            expect(chips(t)).toEqual(["2 × 3", "1 × 2", "1 × 2"]);
+        });
+
+        it("adds no group when every group already has just 1 marcher", () => {
+            const t = typed(fitLine(2), "1*3+1*2");
+            expect(groups.add(t.params, 2, env)).toBe(t.params);
+        });
+
+        const roles = { fine: false, constrain: false, fromCenter: false };
+        const countDragged = (t: ToolState, index: number, dx: number) =>
+            groups.scrub(
+                t.params,
+                t.spots,
+                index,
+                "count",
+                { dx, dy: 0, axis: "x", roles },
+                env,
+            ) as LineParams;
+        const storedCounts = (p: LineParams) =>
+            p.spacing.mode === "fit"
+                ? []
+                : p.spacing.groups.map((g) => g.count);
+
+        it("drags a dropped or grown group's count from its typed count", () => {
+            const dropped = typed(fitLine(2), "2*3+4*2");
+            expect(countDragged(dropped, 1, 1)).toBe(dropped.params);
+            expect(storedCounts(countDragged(dropped, 1, 33))).toEqual([2, 6]);
+            const grown = typed(fitLine(10), "2*3+4*2");
+            expect(storedCounts(countDragged(grown, 1, 33))).toEqual([2, 6]);
+        });
+
+        it("keeps a group's count at 999 or under", () => {
+            const t = typed(fitLine(6), "998*3+2");
+            expect(
+                groups.type(t.params, 6, 0, "count", "1000", env),
+            ).toBeNull();
+            expect(storedCounts(countDragged(t, 0, 2000))).toEqual([
+                999,
+                undefined,
+            ]);
+            expect(interval.type(t.params, 6, "1000*3+2", env)).toBeNull();
+        });
+
+        it("adds a group after the rest with +", () => {
+            const rest = typed(fitLine(6), "2*3+2");
+            const t = edit(rest, groups.add(rest.params, 6, env), ctx);
+            expect(chips(t)).toEqual(["2 × 3", "3 rest × 2", "1 × 2"]);
+        });
+
+        it("removes a group, back to one interval for everyone at the last one", () => {
+            let t = edit(
+                drumline(),
+                groups.remove(drumline().params, 6, 0, env),
+                ctx,
+            );
+            expect(chips(t)).toBeNull();
+            expect(chipText(t)).toEqual([{ display: "2", derived: false }]);
+            t = typed(fitLine(7), "2*3+2+2*3");
+            t = edit(t, groups.remove(t.params, 7, 1, env), ctx);
+            expect(chips(t)).toEqual(["2 × 3", "5 +3 × 3"]);
+        });
+
+        it("undoes a group edit as one step", () => {
+            const t = typedIn(drumline(), 0, "count", "3");
+            expect(chips(undo(t))).toEqual(["2 × 3", "4 × 2"]);
+        });
+    });
+});
+
 describe("the session around a line", () => {
     it("undoes and redoes a typed interval", () => {
         const t = drawn(5, { x: 100, y: 100 }, { x: 150, y: 100 });
@@ -435,6 +712,46 @@ describe("a placed line", () => {
             expect(dist(at[i - 1]!, at[i]!)).toBeCloseTo(20, 6);
     });
 
+    it("saves its groups and reopens with them exactly", () => {
+        const t = typed(
+            drawn(7, { x: 100, y: 100 }, { x: 150, y: 100 }),
+            "2*3+2+2*1 2/3",
+        );
+        const recipe = recipeOf(t);
+        expect(recipe.params).toMatchObject({
+            spacing: {
+                mode: "keep",
+                groups: [
+                    { count: 2, interval: 30 },
+                    { interval: 20 },
+                    { count: 2, interval: 50 / 3 },
+                ],
+            },
+        });
+        const placed = readBack(recipe);
+        expect(placed.kind).toBe(lineTool);
+        expect(placed.params).toEqual(JSON.parse(JSON.stringify(t.params)));
+        expect(
+            chipLayout(lineTool, placed.params, 7, env).groups?.map(
+                (g) => `${g.count} × ${g.interval}`,
+            ),
+        ).toEqual(["2 × 3", "3 × 2", "2 × 1⅔"]);
+    });
+
+    it("labels a placed grouped line with its groups", () => {
+        const t = typed(
+            drawn(6, { x: 100, y: 100 }, { x: 150, y: 100 }),
+            "2*3+4*2",
+        );
+        const placed = readBack(recipeOf(t));
+        expect(boxLabel(placed, STEP)).toBe("Line · 2 × 3 + 4 × 2 steps");
+        expect(placedBoxSummary(placed, STEP)).toBe("2 × 3 + 4 × 2 steps");
+        // A plain line keeps its one interval
+        expect(boxLabel(readBack(recipeOf(keptLine())), STEP)).toBe(
+            "Line · 2 steps",
+        );
+    });
+
     describe("a line saved by a newer build reads as plain positions", () => {
         const saved = () => {
             const recipe = recipeOf(keptLine());
@@ -468,16 +785,43 @@ describe("a placed line", () => {
             ],
             ["a closed line", (p: LineParams) => ({ ...p, closed: true })],
             [
-                "counted groups",
-                () => ({
-                    points: [
-                        { x: 0, y: 0, tension: 0 },
-                        { x: 50, y: 0, tension: 0 },
-                    ],
+                "two groups without a count",
+                (p: LineParams) => ({
+                    ...p,
                     spacing: {
                         mode: "keep",
-                        groups: [{ interval: 30, count: 2 }, { interval: 20 }],
+                        groups: [{ interval: 30 }, { interval: 20 }],
                     },
+                }),
+            ],
+            [
+                "a count that isn't a whole number of marchers",
+                (p: LineParams) => ({
+                    ...p,
+                    spacing: {
+                        mode: "keep",
+                        groups: [
+                            { interval: 30, count: 1.5 },
+                            { interval: 20 },
+                        ],
+                    },
+                }),
+            ],
+            [
+                "a group of no marchers",
+                (p: LineParams) => ({
+                    ...p,
+                    spacing: {
+                        mode: "keep",
+                        groups: [{ interval: 30, count: 0 }, { interval: 20 }],
+                    },
+                }),
+            ],
+            [
+                "no groups",
+                (p: LineParams) => ({
+                    ...p,
+                    spacing: { mode: "keep", groups: [] },
                 }),
             ],
             [

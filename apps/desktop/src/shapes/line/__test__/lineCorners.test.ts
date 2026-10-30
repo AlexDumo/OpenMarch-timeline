@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { lineTool } from "../lineTool";
-import { isLineParams, type LineParams } from "../lineGeometry";
+import {
+    cornerOffInterval,
+    isLineParams,
+    type LineParams,
+} from "../lineGeometry";
 import { chipLayout } from "../../editor/chip";
 import {
     liveTargets,
@@ -471,5 +475,159 @@ describe("a placed line with corners", () => {
         const out = releaseLive(live, { double: false });
         expect(out.changed).toBe(true);
         expect((out.live.params as LineParams).points).toHaveLength(5);
+    });
+});
+
+describe("mixed intervals on a line with corners (#526)", () => {
+    // 7 marchers on an L of 4 steps each way, typed 3 at 2 steps then 4 at 3: gaps 2 2 3 3 3 3
+    // (the seam takes the larger), the corner at the seam nearest halfway: 2 2 3 | 3 3 3
+    const GAPS = [2, 2, 3, 3, 3, 3];
+    const drawnL = () =>
+        clicked(7, [
+            { x: 0, y: 0 },
+            { x: 40, y: 0 },
+            { x: 40, y: 40 },
+        ]);
+    const L = () => typed(drawnL(), "3*2+4*3");
+    const gapsOf = (t: ToolState) => {
+        const at = spotsOf(t);
+        return at.slice(1).map((q, i) => dist(at[i]!, q) / STEP);
+    };
+    const expectGaps = (t: ToolState, steps: readonly number[]) => {
+        const gaps = gapsOf(t);
+        expect(gaps).toHaveLength(steps.length);
+        gaps.forEach((g, i) => expect(g).toBeCloseTo(steps[i]!, 6));
+    };
+    /** Distances from the first point that a whole run of the gaps reaches */
+    const seams = GAPS.map((_, i) =>
+        GAPS.slice(0, i + 1).reduce((a, b) => a + b * STEP, 0),
+    );
+    const onSeam = (l: number) => seams.some((s) => Math.abs(s - l) < 1e-6);
+
+    it("lays the groups' gaps in order along the line, each segment a whole run, a marcher on the corner", () => {
+        const t = L();
+        expect(paramsOf(t).spacing).toEqual({
+            mode: "keep",
+            groups: [
+                { interval: 20, count: 3 },
+                { interval: 30, count: 4 },
+            ],
+        });
+        const [a, b, c] = pointsOf(t);
+        expect(dist(a!, b!)).toBeCloseTo(70, 6);
+        expect(dist(b!, c!)).toBeCloseTo(90, 6);
+        // Each leg keeps its direction
+        expect(b!.y - a!.y).toBeCloseTo(0, 6);
+        expect(c!.x - b!.x).toBeCloseTo(0, 6);
+        expectGaps(t, GAPS);
+        expect(spotsOf(t)[3]).toEqual(b);
+        expect(cornerOffInterval(t.params as LineParams, 7)).toBe(false);
+    });
+
+    it("moves a dragged corner onto a seam between the gaps, its neighbors staying", () => {
+        const t = L();
+        const [a, , c] = pointsOf(t);
+        const moved = onHandle(t, "p1", { x: a!.x + 30, y: a!.y + 60 });
+        const [p0, p1, p2] = pointsOf(moved);
+        expect(p0).toEqual(a);
+        expect(p2).toEqual(c);
+        expect(onSeam(dist(p0!, p1!))).toBe(true);
+        expect(dist(p0!, p1!) + dist(p1!, p2!)).toBeCloseTo(160, 6);
+        expect(cornerOffInterval(paramsOf(moved), 7)).toBe(false);
+        // The same gaps in the same order, the corner on a marcher
+        expectGaps(moved, GAPS);
+        expect(spotsOf(moved).some((s) => dist(s, p1!) < 1e-6)).toBe(true);
+    });
+
+    it("scales a segment's gaps to fit when fine leaves its corner off a seam", () => {
+        const t = L();
+        const [a] = pointsOf(t);
+        const to = { x: a!.x + 61.3, y: a!.y + 4.1 };
+        const moved = onHandle(t, "p1", to, fine);
+        expect(pointsOf(moved)[1]).toEqual(to);
+        // The group chips stand in for the interval chip; the line knows its corner is off
+        expect(cornerOffInterval(paramsOf(moved), 7)).toBe(true);
+        const spots = spotsOf(moved);
+        expect(spots).toHaveLength(7);
+        expect(spots.some((s) => dist(s, to) < 1e-6)).toBe(true);
+        for (let i = 0; i < spots.length; i++)
+            for (let j = i + 1; j < spots.length; j++)
+                expect(dist(spots[i]!, spots[j]!)).toBeGreaterThan(1);
+        // The short first leg keeps its gaps' proportions: 2 2 3
+        const g = gapsOf(moved);
+        expect(g[1]! / g[0]!).toBeCloseTo(1, 6);
+        expect(g[2]! / g[0]!).toBeCloseTo(1.5, 6);
+    });
+
+    it("runs the groups' gaps around the corner with corners off, and back on", () => {
+        const off = cornersOff(L());
+        expect(paramsOf(off).spacing).toEqual(paramsOf(L()).spacing);
+        expectGaps(off, GAPS);
+        expectNear(
+            [spotsOf(off)[0]!, spotsOf(off).at(-1)!],
+            [pointsOf(off)[0]!, pointsOf(off).at(-1)!],
+        );
+        const on = edit(
+            off,
+            corners.pick(off.params, off.spots, "on", env),
+            ctx,
+        );
+        expect(paramsOf(on).corners).toBeUndefined();
+        expect(paramsOf(on).spacing).toEqual(paramsOf(L()).spacing);
+        expectGaps(on, GAPS);
+        expect(spotsOf(on)[3]).toEqual(pointsOf(on)[1]);
+    });
+
+    it("gives each segment its marchers by length in Fit, the groups left behind", () => {
+        const spacing = lineTool.choices!.find((c) => c.key === "spacing")!;
+        const t = L();
+        const fit = edit(t, spacing.pick(t.params, t.spots, "fit", env), ctx);
+        expect(paramsOf(fit).spacing).toEqual({ mode: "fit" });
+        expect(pointsOf(fit)).toEqual(pointsOf(t));
+        // 70 then 90 over 6 gaps: 3 even gaps on each leg
+        const [a, b, c] = pointsOf(fit);
+        expectGaps(fit, [7 / 3, 7 / 3, 7 / 3, 3, 3, 3]);
+        expect(spotsOf(fit)[3]).toEqual(b);
+        expect([spotsOf(fit)[0], spotsOf(fit)[6]]).toEqual([a, c]);
+    });
+
+    it("is placed and reopened with its points, groups and corners exactly", () => {
+        for (const t of [L(), cornersOff(L())]) {
+            const placement = placementOf(t, ctx)!;
+            const recipe: PlacedRecipe = {
+                ...placement.recipe,
+                id: 1,
+                timelineId: 10,
+                members: placement.members,
+                params: JSON.parse(JSON.stringify(placement.recipe.params)),
+            };
+            const { spots: _spots, ...params } = recipe.params as LineParams & {
+                spots: number;
+            };
+            expect(isLineParams(params)).toBe(true);
+            const at = new Map(recipe.members.map((m) => [m.marcherId, m]));
+            const [placed] = boxesAt({
+                recipes: [recipe],
+                endBeatOf: () => 8,
+                beat: 8,
+                positionOf: (id) => at.get(id),
+            }) as PlacedBox<LineParams>[];
+            expect(placed).toBeDefined();
+            expect(placed!.params.points).toEqual(paramsOf(t).points);
+            expect(placed!.params.spacing).toEqual(paramsOf(t).spacing);
+            expect(placed!.params.corners).toBe(paramsOf(t).corners);
+            // Everyone on a spot, and the group chips back
+            const spots = slotsOf(t, ctx);
+            placement.members.forEach((m) =>
+                expect(
+                    spots.some((s) => dist(s, { x: m.x, y: m.y }) < 1e-6),
+                ).toBe(true),
+            );
+            expect(
+                chipLayout(lineTool, placed!.params, 7, env).groups?.map(
+                    (g) => `${g.count} × ${g.interval}`,
+                ),
+            ).toEqual(["3 × 2", "4 × 3"]);
+        }
     });
 });

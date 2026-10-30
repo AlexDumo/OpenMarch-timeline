@@ -283,39 +283,64 @@ The Line shape (spec #522, #523) stores a new kind:
 
 1. **Line recipes are `line`, version 2.** Version 1 is the old shape-model line. Version 2's
    params are `points` (two or more, each `x`, `y` and a `tension`: 0 is a corner, above 0 a
-   smooth point), `closed` (open when absent), `corners` (false when the intervals run around
-   the corners; when absent or true every corner holds a marcher in Fit and Keep interval, as long
-   as there is at least one gap per segment; on the path, or with fewer gaps than segments, the
-   intervals run around the corners whatever it says, #524), `spacing` and the host's
-   `pivot`. `spacing` is `{ mode: "fit" }`
-   (the interval follows from the drawn points), `{ mode: "keep", groups }` (Keep interval) or
-   `{ mode: "path", groups, anchor }` (Interval on the path, `anchor` one of `start`, `center`,
-   `end`). A group is `{ interval, count? }`: the interval is the straight distance between
-   neighbors in field units, and a group with no `count` is the rest.
-2. **A Line stores no frame.** Its frame (center, size, turn) follows from its points, so the
+   smooth point), `closed` (open when absent), `corners`, `spacing` and the host's `pivot`.
+   `spacing` is `{ mode: "fit" }` (the interval follows from the drawn points),
+   `{ mode: "keep", groups }` (Keep interval) or `{ mode: "path", groups, anchor }` (Interval on
+   the path, `anchor` one of `start`, `center`, `end`). A group is `{ interval, count? }`: the
+   interval is the straight distance between neighbors in field units, `count` a whole number of
+   marchers from 1, and a group with no `count` is the rest; at most one group in a list is the
+   rest (#526). The groups give the line's gaps in order from its first point. Recipes store the
+   parsed groups, never the typed text, so the interval list's change of meaning (count ×
+   interval, from interval × gaps) changes no saved data.
+2. **Corners.** `corners` is false when the intervals run around the corners. Absent or true,
+   every corner holds a marcher in Fit and Keep interval, as long as there is at least one gap per
+   segment; on the path, or with fewer gaps than segments, the intervals run around the corners
+   whatever it says (#524). With corners holding marchers, each segment holds a whole number of the
+   line's gaps, in order along it: in Fit and with one interval for everyone, in proportion to
+   the segments' lengths; with groups, each corner at the seam between gaps nearest its share of
+   the line. Keep interval makes each segment as long as the gaps it holds (a whole run of the
+   groups, crossing group seams when they fall mid-segment) and a corner drag lands where both of
+   its segments are whole runs. A segment left off its run (a corner dragged with `fine`) scales
+   its gaps to fit, which is even spacing with one interval. In Fit the groups don't apply: each
+   segment's marchers spread evenly over it.
+3. **A Line stores no frame.** Its frame (center, size, turn) follows from its points, so the
    frame amendment's stored center doesn't apply. A kind whose frame follows from its own numbers
    declares a `readable` check, used instead of the stored-center check when a recipe is read.
-3. **Version 2 grows without a new version.** Tensions, `closed`, counted groups, and the
-   Measured setting still to come are all optional fields or wider values of these (more points
-   and `corners` came with #524). A build reads a Line only when it can lay out every field exactly as saved; anything
-   newer reads as plain positions (decision 5), never as the nearest shape it understands. Each
-   build widens its `readable` check as it learns a field.
-4. **A closed Line (#529).** `closed: true` joins the last point to the first: a closed line has
+4. **Version 2 grows without a new version.** Tensions and the Measured setting still to come
+   are optional fields or wider values of these. A build reads a Line only when it can lay out
+   every field exactly as saved; anything newer reads as plain positions (decision 5), never as
+   the nearest shape it understands. Each build widens its `readable` check as it learns a field:
+   the first Line build read two straight points and a single group with no count; more points
+   and `corners` came with #524, any number of groups, counted or with one rest, with #526, and
+   `closed` with its `distribution` with #529. Smooth points (tension above 0) are still refused.
+5. **A closed Line (#529).** `closed: true` joins the last point to the first: a closed line has
    three points or more and a gap for every marcher (n gaps, an open line n − 1), and its spacing
-   is `fit` or `keep`, never `path` (a closed line has no ends to lay a run from). A closed line
-   stores the host's `distribution` as a closed kind does (amendment of 2026-10-22), in Grid
-   (`files`), Outline or Spread (with its `edge`); without one it's Outline. Outline is the line
-   itself, its corners and spacing laid out as above, so it ignores `oddGap`. Grid and Spread
-   fill the drawn points as a polygon in the line's frame (turned from its first point to its
-   last, around all its points), through the host's distributor: Grid is the widest square grid
-   with room for every marcher, any extra spots left off its back rank, and ignores `layout` and
-   `stagger`; Spread fills the polygon, its spacing whatever fits. A `distribution` on an open
-   line, one this build can't read, or `closed` that isn't a boolean reads as plain positions.
+   is `fit` or `keep`, never `path` (a closed line has no ends to lay a run from). Its groups run
+   once round the outline from the first point, so the closing segment, from the last point back
+   to the first, holds the gaps that fall on it, and the closing gap (last marcher to first) is
+   the seam between the last group and the first. Keep interval grows or shrinks the whole
+   outline from its pivot to its gaps round (its segments can't each be set on their own and
+   still meet the first point), noting a corner left off its run. A closed line stores the host's
+   `distribution` as a closed kind does (amendment of 2026-10-22), in Grid (`files`), Outline or
+   Spread (with its `edge`); without one it's Outline. Outline is the line itself, its corners
+   and spacing laid out as above, so it ignores `oddGap`. Grid and Spread fill the drawn points
+   as a polygon, through the host's distributor, in a frame square to the field: the turn from the
+   first point to the last, taken to the nearest quarter turn of 0, so the same outline fills the
+   same way however it was clicked and its ranks square to the field like a box's. Grid is the
+   widest square grid with room for every marcher, at the grid's phase with the fewest spots,
+   extra spots left off its back rank and the spots left re-centred in the outline; it ignores
+   `layout` and `stagger`. Grid's spots on a polygon are part of the format, like the spread
+   generator's: any change to them needs a new version. Spread fills the polygon, its spacing
+   whatever fits. A `distribution` on an open line, one this build can't read, or `closed` that
+   isn't a boolean reads as plain positions. Opening a closed line keeps its spots and its
+   spacing, groups included, as far as an open line can lay them out the same.
 
 Verification (#529): `lineClose.test.ts` closes a Line by a click on its first point, an end
 dropped on the other and the editor's choice; checks a gap for every marcher; fills a square and
-an L in Grid, Spread and Edge through the distributor; opens a cornered outline and a grid back to
-the outline's spots; places and reads back a closed Line in each mode; and refuses a fill on an
-open line, an unknown fill, a closed run on the path and a closed line of two points.
-`clickPoints.test.ts` covers the host's close-on-first-point with a fake kind, and a browser
-scenario in `line-tool.spec.mts` closes a clicked line, fills it in Grid, places and reopens it.
+an L in Grid, Spread and Edge through the distributor; pins Grid's spots on two outlines; checks
+the same outline clicked from different corners fills the same; opens a cornered outline and a
+grid back to the outline's spots; places and reads back a closed Line in each mode; and refuses a
+fill on an open line, an unknown fill, a closed run on the path and a closed line of two points.
+The session tests close and reopen a Line with mixed groups. `clickPoints.test.ts` covers the
+host's close-on-first-point with a fake kind, and a browser scenario in `line-tool.spec.mts`
+closes a clicked line, fills it in Grid, places and reopens it.

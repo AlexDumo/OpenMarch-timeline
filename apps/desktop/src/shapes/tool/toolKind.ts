@@ -171,6 +171,58 @@ export interface ToolParam<P> {
     widen?(params: P, n: number, by: number, env: ToolEnv): P | null;
 }
 
+/** One group of a kind's interval list as the floating editor shows it (#526) */
+export interface ToolGroup {
+    /** Marchers in it as laid out: "2" */
+    readonly count: string;
+    /** Its interval in steps: "3", "1⅔" */
+    readonly interval: string;
+    /** No count was given: it takes the marchers the other groups don't */
+    readonly rest: boolean;
+    /** Marchers it took past its count, as the last group with no rest to take them; 0 if none */
+    readonly grown: number;
+    /** Too few marchers to reach it: it's dropped off the end */
+    readonly dropped: boolean;
+}
+
+/** Which number of a group: how many marchers, or the steps between them */
+export type GroupPart = "count" | "interval";
+
+/**
+ * A kind's mixed intervals (#526, spec #522): groups of marchers, each at its own interval, which
+ * the floating editor shows as a chip each (`2 × 3 │ 4 × 2`) in place of the kind's single
+ * interval. Everything is pure.
+ */
+export interface ToolGroups<P> {
+    /** The groups, or null when the shape has one interval for everyone (its interval number) */
+    shown(params: P, n: number, stepPx: number): readonly ToolGroup[] | null;
+    /**
+     * `text` typed over group `index`'s count or interval; a whole list typed there (`2*3+4*2`)
+     * replaces the list. Null when the text isn't understood.
+     */
+    type(
+        params: P,
+        n: number,
+        index: number,
+        part: GroupPart,
+        text: string,
+        env: ToolEnv,
+    ): P | null;
+    /** Group `index`'s count or interval dragged by `move` from `base`, the params at the press */
+    scrub(
+        base: P,
+        n: number,
+        index: number,
+        part: GroupPart,
+        move: ScrubMove,
+        env: ToolEnv,
+    ): P;
+    /** The params with a group added at the end (the chip's +) */
+    add(params: P, n: number, env: ToolEnv): P;
+    /** The params without group `index`; one group left is everyone at its interval */
+    remove(params: P, n: number, index: number, env: ToolEnv): P;
+}
+
 /** One answer in a kind's menu ({@link ToolChoice}) */
 export interface ToolChoiceOption {
     /** Stable for the kind: tests and a later command step name the answer by it */
@@ -231,6 +283,8 @@ export interface ToolKind<P> {
     readonly params: readonly ToolParam<P>[];
     /** Its own menus, shown under the floating editor beside how it's filled (#523) */
     readonly choices?: readonly ToolChoice<P>[];
+    /** Its mixed intervals, when it can be spaced by groups of marchers (#526) */
+    readonly groups?: ToolGroups<P>;
     /**
      * Its spots run in an order along it (a Line, #528): the host offers who goes where by Least
      * travel, Keep order or Reverse. Absent: always least travel.

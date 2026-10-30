@@ -55,6 +55,25 @@ export function intervalsOf(
 }
 
 /**
+ * Why a shape of `kind` can't be saved, or null when it can. A saved shape keeps one number per
+ * interval parameter, so a Line spaced by groups at different intervals (#526) would come back
+ * at only one of them: it isn't offered until saved shapes can keep groups.
+ */
+export function whyNotSavable(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    stepPx: number,
+): string | null {
+    const groups = baseKindOf(kind).groups?.shown(params, n, stepPx);
+    if (!groups || new Set(groups.map((g) => g.interval)).size < 2) return null;
+    return tolgee.t(
+        "shapes.save.mixedIntervals",
+        "Lines with mixed intervals can't be saved yet",
+    );
+}
+
+/**
  * What saving a shape of `kind` keeps: the kind, its intervals and how it's filled, under `name`,
  * with `description` when there is one, dated `at`
  */
