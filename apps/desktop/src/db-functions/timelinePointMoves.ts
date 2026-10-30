@@ -277,6 +277,7 @@ const planPoint = async (
     beat: number,
     move: TimelineMarcherMove,
     clearOwn: boolean,
+    keepUnchanged: boolean,
 ): Promise<void> => {
     const { marcherId } = move;
     const rows = state.rowsOf(marcherId);
@@ -290,7 +291,8 @@ const planPoint = async (
         plan.cleared.push(marcherId);
         return;
     }
-    if (samePosition(point, await at(beat))) return;
+    const still = samePosition(point, await at(beat));
+    if (still && !keepUnchanged) return;
 
     const inside = rows.find((r) => r.start < beat && beat < r.end);
     if (inside) {
@@ -315,6 +317,9 @@ const planPoint = async (
     }
 
     const ending = rows.find((r) => r.end === beat);
+    // Kept still: its own ending here already sets it, a stay included, which the clear below
+    // would take for a move back onto its start
+    if (ending && still) return;
     if (ending) {
         // Back onto where the move starts: the point goes
         if (samePosition(point, await at(ending.start))) {
@@ -437,12 +442,18 @@ export async function setPositionsAtBeatInTransaction({
     box,
     moves,
     clearOwn = false,
+    keepUnchanged = false,
 }: {
     tx: DbTransaction;
     beat: number;
     box: { start: number; end: number };
     moves: readonly TimelineMarcherMove[];
     clearOwn?: boolean;
+    /**
+     * Write a marcher left where it is too, as a stay, rather than nothing: a shape's members
+     * are all set where it's edited, the one at the pivot included
+     */
+    keepUnchanged?: boolean;
 }): Promise<TimelineMoveResult> {
     if (moves.length === 0)
         return { homes: [], slots: [], convertedTransitionIds: [] };
@@ -457,7 +468,7 @@ export async function setPositionsAtBeatInTransaction({
     );
     const plan = emptyPlan();
     for (const move of moves)
-        await planPoint(plan, state, box, beat, move, clearOwn);
+        await planPoint(plan, state, box, beat, move, clearOwn, keepUnchanged);
     return await writePlan(tx, plan);
 }
 

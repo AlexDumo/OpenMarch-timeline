@@ -4,6 +4,7 @@ import {
     CursorClickIcon,
     DatabaseIcon,
     GearSixIcon,
+    GridFourIcon,
     HandPointingIcon,
     KeyboardIcon,
     PaletteIcon,
@@ -18,6 +19,7 @@ import { getActionLabel, type Translate } from "@/shortcuts/labels";
 import GeneralSettings from "@/components/launchpage/settings/GeneralSettings";
 import AppearanceSettings from "@/components/launchpage/settings/AppearanceSettings";
 import MouseSettings from "@/components/launchpage/settings/MouseSettings";
+import FieldSettings from "@/components/launchpage/settings/FieldSettings";
 import TimelineSettings from "@/components/launchpage/settings/TimelineSettings";
 import View3dSettings from "@/components/launchpage/settings/View3dSettings";
 import InputSettings from "@/components/launchpage/settings/InputSettings";
@@ -34,6 +36,7 @@ export type SettingsSectionId =
     | "input"
     | "mouse"
     | "timeline"
+    | "field"
     | "view3d"
     | "shortcuts"
     | "plugins"
@@ -127,6 +130,21 @@ const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
             "settings.timeline.waveformStyle.simplified",
             "settings.timeline.waveformStyle.precise",
             "settings.timeline.waveformStyle.hidden",
+        ],
+    },
+    {
+        id: "field",
+        labelKey: "settings.field",
+        Icon: GridFourIcon,
+        Component: FieldSettings,
+        descriptionKey: "settings.field.description",
+        searchKeys: [
+            "settings.field.gridLines",
+            "settings.field.halfLines",
+            "settings.field.labelSize",
+            "settings.field.labelPosition",
+            "settings.field.stepSizeWarnings",
+            "settings.field.shapeFocus",
         ],
     },
     {

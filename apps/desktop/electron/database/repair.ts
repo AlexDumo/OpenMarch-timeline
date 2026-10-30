@@ -69,6 +69,9 @@ const DEPENDENT_TABLE_COPY_ORDER = [
     "item_placement_marchers",
     // Artwork slot assignments after their item and beat
     "item_artwork_slots",
+    // Shape recipes after their moves, then their members (ADR 0006)
+    "timeline_shape_recipes",
+    "timeline_shape_recipe_marchers",
 ];
 
 /**

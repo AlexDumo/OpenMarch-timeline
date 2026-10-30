@@ -72,7 +72,10 @@ export function actionIgnoresRepeat(id: ActionId): boolean {
     return top(id)?.ignoresRepeat?.() ?? false;
 }
 
-/** Runs the action's handler (its `press` for a key press, when it has one); null if it can't run */
+/**
+ * Runs the action's handler (its `press` for a key press, when it has one) with its definition's
+ * `args`, and `args` (a command's answers) over them; null if it can't run
+ */
 function runHandler(
     id: ActionId,
     byKey: boolean,
@@ -83,11 +86,12 @@ function runHandler(
         return null;
     runListeners.forEach((listener) => listener(id));
     const run = byKey && handler.press ? handler.press : handler.run;
-    run(args ?? getActionDefinition(id).args);
+    const own = getActionDefinition(id).args;
+    run(args ? { ...own, ...args } : own);
     return handler;
 }
 
-/** Runs the action; `args` replaces the definition's args (e.g. an exact nudge distance). */
+/** Runs the action with its definition's `args`, and `args` (a command's answers) over them */
 export function runAction(id: ActionId, args?: ActionArgs): boolean {
     return runHandler(id, false, args) !== null;
 }

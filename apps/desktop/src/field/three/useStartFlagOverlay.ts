@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import type { FieldProperties } from "@openmarch/core";
+import type { FieldProperties, Resolver } from "@openmarch/core";
 import {
     useStartFlagKeyStore,
     useStartFlagLevelsInEffect,
@@ -14,7 +14,11 @@ import {
     startFlagLevelsDrawAnything,
     type StartFlagLevels,
 } from "@/timeline/startFlagLevels";
-import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import { marcherSetBeats } from "@/timeline/timelineSetFollowing";
+import {
+    resolverSpans,
+    useTimelineResolverStore,
+} from "@/timeline/timelineStore";
 import {
     levelDraws,
     planStartFlagMarcher,
@@ -30,15 +34,19 @@ const sameDeps = (a: readonly unknown[], b: readonly unknown[] | null) =>
     a.every((d, i) => Object.is(d, b[i]));
 
 /**
- * Each marcher's dot (and route) kept per resolver version, window and warnings, so changing the
- * selection or the levels only samples the marchers that weren't sampled yet.
+ * Each marcher's dot (and route, with its squares) kept per resolver version, window and
+ * warnings, so changing the selection or the levels only samples the marchers that weren't
+ * sampled yet. A marcher's Set beats (for its route squares) are kept per resolver version, so
+ * moving the window doesn't work them out again.
  */
 class StartFlagPieces {
     private context: readonly unknown[] | null = null;
     private readonly pieces = new Map<string, StartFlagMarcherPlan | null>();
+    private setBeatsContext: readonly unknown[] | null = null;
+    private readonly setBeats = new Map<number, readonly number[]>();
 
     plan(input: {
-        window: StartFlagWindow;
+        window: StartFlagWindow & { readonly resolver: Resolver };
         version: number;
         marcherIds: readonly number[];
         selectedIds: ReadonlySet<number>;
@@ -47,9 +55,13 @@ class StartFlagPieces {
         dotsOnly: boolean;
     }): StartFlagOverlay {
         const { window, levels, selectedIds } = input;
+        const setBeatsContext = [window.resolver, input.version];
+        if (!sameDeps(setBeatsContext, this.setBeatsContext)) {
+            this.setBeats.clear();
+            this.setBeatsContext = setBeatsContext;
+        }
         const context = [
-            window.resolver,
-            input.version,
+            ...setBeatsContext,
             window.fromBeat,
             window.toBeat,
             window.stepSizeWarnings,
@@ -66,15 +78,34 @@ class StartFlagPieces {
             const withPath =
                 !input.dotsOnly &&
                 levelDraws(levels.paths, marcherId, selectedIds);
-            const key = `${withPath ? "path" : "dot"}:${marcherId}`;
+            // Squares only on a selected marcher's route
+            const squares = withPath && selectedIds.has(marcherId);
+            const key = `${withPath ? "path" : "dot"}${squares ? "+squares" : ""}:${marcherId}`;
             let piece = this.pieces.get(key);
             if (piece === undefined) {
-                piece = planStartFlagMarcher(window, marcherId, withPath);
+                piece = planStartFlagMarcher(
+                    window,
+                    marcherId,
+                    withPath,
+                    squares ? this.setBeatsOf(window, marcherId) : null,
+                );
                 this.pieces.set(key, piece);
             }
             if (piece) marchers.push(piece);
         }
         return startFlagOverlayOf(marchers);
+    }
+
+    private setBeatsOf(
+        { resolver }: { readonly resolver: Resolver },
+        marcherId: number,
+    ): readonly number[] {
+        let beats = this.setBeats.get(marcherId);
+        if (!beats) {
+            beats = marcherSetBeats(resolverSpans(resolver, marcherId));
+            this.setBeats.set(marcherId, beats);
+        }
+        return beats;
     }
 }
 

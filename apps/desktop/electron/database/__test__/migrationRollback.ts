@@ -85,8 +85,16 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
     25: (db) => dropTables(db, ["item_placement_marchers", "item_placements"]),
     // Artwork slot assignments (C2.4)
     26: (db) => dropTables(db, ["item_artwork_slots"]),
-    // Kept spots removed (holds, #467): the table comes back empty, as 0018 made it
+    // Shape recipes (ADR 0006)
     27: (db) =>
+        dropTables(db, [
+            "timeline_shape_recipe_marchers",
+            "timeline_shape_recipes",
+        ]),
+    // Saved shapes, the show's copies (ADR 0006, saved shapes)
+    28: (db) => dropTables(db, ["saved_shapes"]),
+    // Kept spots removed (holds, #467): the table comes back empty, as 0018 made it
+    29: (db) =>
         db.exec(`CREATE TABLE \`timeline_kept_assignments\` (
 	\`assignment_id\` integer PRIMARY KEY NOT NULL,
 	\`created_at\` text DEFAULT (CURRENT_TIMESTAMP) NOT NULL,

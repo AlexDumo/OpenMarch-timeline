@@ -20,6 +20,10 @@ import {
 import { joinList } from "@/timeline/timelineRangeWords";
 import { nextMoveNameInTransaction, readMoveWords } from "./timelineMoveNames";
 import type { TimelinePathParams } from "./timelineTransitionsInTransaction";
+import {
+    moveShapeRecipesInTransaction,
+    splitShapeRecipesInTransaction,
+} from "./shapeRecipes";
 
 /**
  * Splitting a move and merging moves back (docs/timeline/ui.md UI-25, project owner 2026-10-16).
@@ -336,6 +340,13 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
             })),
         });
     }
+    // The marchers' shapes (ADR 0006) follow them, as a merge's do
+    await splitShapeRecipesInTransaction({
+        tx,
+        from: timelineId,
+        to: timeline!.id,
+        marcherIds: [...chosen],
+    });
     return {
         fromTimelineId: timelineId,
         timeline: timeline!,
@@ -457,6 +468,9 @@ export const mergeMovesInTransaction = async ({
         transitions.map((t) => t.id),
         targetId,
     );
+    // Its shapes (ADR 0006) come over too, rather than going with it. A fit keeps destinations,
+    // so their spots still hold at the target's end.
+    await moveShapeRecipesInTransaction({ tx, from: sourceId, to: targetId });
     await deleteTimelinesInTransaction({
         tx,
         timelineIds: new Set([sourceId]),

@@ -70,6 +70,30 @@ export interface UiSettings {
         /** In steps, the offset from the center-front point to round to on the Y-axis */
         referencePointY?: number;
     };
+    /**
+     * Marcher labels on the field: full drill numbers, numbers only, off, or `auto` (full drill
+     * numbers, shrunk as far as a smallest readable size where they would touch)
+     */
+    marcherLabels?: MarcherLabelForm;
+    /** Marcher labels' size on the field */
+    marcherLabelSize?: MarcherLabelSize;
+    /** Marcher labels above their dots, or beside them (to the right) */
+    marcherLabelPosition?: "above" | "beside";
+    /**
+     * When placed shapes (a box after Place) show their outline and label on the field: while
+     * any member is selected, always, or never
+     */
+    shapes?: ShapeOutlines;
+    /**
+     * While a shape is open, who isn't in it is faded (`rest`, the default) or only while the
+     * shape is being drawn (`drawing`) (docs/timeline/research/shapes/08-shape-system-ux.md)
+     */
+    shapeFocus?: ShapeFocus;
+    /**
+     * Whether an open shape shows its walks and start rings (#403): the floating editor's
+     * Pathways toggle. Off by default.
+     */
+    shapeWalks?: boolean;
     /** Whether props show their names on the canvas, unless `propNameOverrides` says otherwise */
     showPropNames: boolean;
     /** Per prop: whether its name shows. Key is the item id. */
@@ -81,6 +105,18 @@ export interface UiSettings {
     /** Tolgee API Key for In-Context Translating */
     tolgeeApiKey?: string;
 }
+
+export type MarcherLabelForm = "auto" | "names" | "numbers" | "off";
+export type MarcherLabelSize = "small" | "normal" | "large";
+export type ShapeOutlines = "selected" | "always" | "off";
+export type ShapeFocus = "rest" | "drawing";
+
+/** How much each label size scales the labels' normal size */
+export const LABEL_SIZE_SCALE: Record<MarcherLabelSize, number> = {
+    small: 0.7,
+    normal: 1,
+    large: 1.4,
+};
 
 // Default settings that will be used if no localStorage data exists
 export const defaultSettings: UiSettings = {
@@ -115,6 +151,10 @@ export const defaultSettings: UiSettings = {
         nearestYSteps: 0,
         referencePointY: undefined,
     },
+    marcherLabels: "auto",
+    shapes: "selected",
+    shapeFocus: "rest",
+    shapeWalks: false,
     showPropNames: false,
     propNameOverrides: {},
     hiddenPropIds: {},

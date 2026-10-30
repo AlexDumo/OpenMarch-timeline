@@ -822,12 +822,18 @@ export const moveMarchersInRangeInTransaction = async ({
     moves,
     clearOwn = false,
     into,
+    keepUnchanged = false,
 }: {
     tx: DbTransaction;
     range: BeatRange;
     moves: readonly TimelineMarcherMove[];
     /** Delete the marchers' own moves over the page box `range` (set to previous page) */
     clearOwn?: boolean;
+    /**
+     * Add a marcher left where it is to the range's move too, as a stay, rather than skip it: a
+     * shape's members are all set where it's edited, the one at the pivot included
+     */
+    keepUnchanged?: boolean;
     /** The selected move over `range` that added marchers join (UI-25) */
     into?: number;
 }): Promise<TimelineMoveResult> => {
@@ -874,6 +880,7 @@ export const moveMarchersInRangeInTransaction = async ({
         }
         // In the range's timeline already: `skipUnchanged` below drops a move that changes nothing
         if (
+            !keepUnchanged &&
             !timelineOf.has(move.marcherId) &&
             samePosition(point, await positionAt(move.marcherId, range.end))
         )
@@ -1051,6 +1058,80 @@ const wroteSomething = (r: TimelineMoveResult): boolean =>
     r.convertedTransitionIds.length > 0 ||
     (r.cleared?.length ?? 0) > 0;
 
+/** The move whose beat range is exactly `range`, if there is one */
+async function timelineWithRange(
+    tx: DbTransaction,
+    range: { readonly start: number; readonly end: number },
+): Promise<number | null> {
+    const row = await tx
+        .select({ id: schema.timelines.id })
+        .from(schema.timelines)
+        .where(
+            and(
+                eq(schema.timelines.start_beat, range.start),
+                eq(schema.timelines.end_beat, range.end),
+            ),
+        )
+        .get();
+    return row?.id ?? null;
+}
+
+/**
+ * The move, among those ending at `endBeat` (and starting at `startBeat` when given), that most
+ * of `marcherIds` are in (the lowest id on a tie), or null for none: where an edit's positions
+ * belong when several moves share its counts (UI-25)
+ */
+async function timelineHoldingMost(
+    tx: DbTransaction,
+    marcherIds: readonly number[],
+    endBeat: number,
+    startBeat?: number,
+): Promise<number | null> {
+    const t = schema.timelines;
+    const tr = schema.timeline_transitions;
+    const a = schema.timeline_assignments;
+    const rows = await tx
+        .selectDistinct({ timelineId: t.id, marcherId: a.marcher_id })
+        .from(a)
+        .innerJoin(tr, eq(tr.id, a.transition_id))
+        .innerJoin(t, eq(t.id, tr.timeline_id))
+        .where(
+            and(
+                inArray(a.marcher_id, [...new Set(marcherIds)]),
+                eq(t.end_beat, endBeat),
+                startBeat === undefined
+                    ? undefined
+                    : eq(t.start_beat, startBeat),
+            ),
+        )
+        .all();
+    const counts = new Map<number, number>();
+    for (const r of rows)
+        counts.set(r.timelineId, (counts.get(r.timelineId) ?? 0) + 1);
+    let best: number | null = null;
+    for (const [id, n] of counts)
+        if (
+            best === null ||
+            n > counts.get(best)! ||
+            (n === counts.get(best)! && id < best)
+        )
+            best = id;
+    return best;
+}
+
+/** The move that ends at `beat`, if there is one (where a point edit's positions belong) */
+async function timelineEndingAt(
+    tx: DbTransaction,
+    beat: number,
+): Promise<number | null> {
+    const row = await tx
+        .select({ id: schema.timelines.id })
+        .from(schema.timelines)
+        .where(eq(schema.timelines.end_beat, beat))
+        .get();
+    return row?.id ?? null;
+}
+
 /**
  * A canvas move as one undoable edit (UI-9 Editing, Home; UI-10): the homes for `{kind: "home"}`,
  * the endings in the timeline for `{kind: "timeline"}` (`moveMarchersInTimelineInTransaction`),
@@ -1064,7 +1145,9 @@ export const moveMarchersInTarget = async ({
     target,
     moves,
     clearOwn = false,
+    keepUnchanged = false,
     onStart,
+    afterWrite,
 }: {
     db: DbConnection;
     target: TimelineEditTarget;
@@ -1075,23 +1158,41 @@ export const moveMarchersInTarget = async ({
      */
     clearOwn?: boolean;
     /**
+     * Range and point moves only: write a marcher left where it is as a stay in the move, not
+     * nothing (a shape's members)
+     */
+    keepUnchanged?: boolean;
+    /**
      * Called inside the edit before it writes, when every earlier write has reached the resolver,
      * so it can read the positions the edit starts from (**Move them too**)
      */
     onStart?: () => void;
+    /**
+     * Called inside the edit after the positions are written, with the move they belong to
+     * (`null` for homes), so app data about them (a shape recipe, ADR 0006) is part of the same
+     * undo step. Not called for a range with no move to hold the positions. Resolving to `false`
+     * says it wrote nothing, so an edit that changed no positions either is still no undo step.
+     */
+    afterWrite?: (
+        tx: DbTransaction,
+        timelineId: number | null,
+    ) => Promise<void | boolean>;
 }): Promise<TimelineMoveResult> => {
     if (moves.length === 0)
         return { homes: [], slots: [], convertedTransitionIds: [] };
     try {
         return await transactionWithHistory(db, "moveMarchers", async (tx) => {
             onStart?.();
-            if (target.kind === "timeline")
-                return await moveMarchersInTimelineInTransaction({
+            if (target.kind === "timeline") {
+                const result = await moveMarchersInTimelineInTransaction({
                     tx,
                     timelineId: target.timelineId,
                     moves,
                     ghosts: target.ghosts ?? false,
                 });
+                await afterWrite?.(tx, target.timelineId);
+                return result;
+            }
             if (target.kind === "range" || target.kind === "point") {
                 const result =
                     target.kind === "range"
@@ -1100,6 +1201,7 @@ export const moveMarchersInTarget = async ({
                               range: { start: target.start, end: target.end },
                               moves,
                               clearOwn,
+                              keepUnchanged,
                               ...(target.timelineId === undefined
                                   ? {}
                                   : { into: target.timelineId }),
@@ -1110,9 +1212,43 @@ export const moveMarchersInTarget = async ({
                               box: target.box,
                               moves,
                               clearOwn,
+                              keepUnchanged,
                           });
-                // An edit that writes nothing can't be an undo step
-                if (!wroteSomething(result)) throw new NothingWritten(result);
+                // The selected move, else the one the marchers are in, since a move split off
+                // the page's shares its counts (UI-25)
+                const marcherIds = moves.map((m) => m.marcherId);
+                const timelineId = !afterWrite
+                    ? null
+                    : target.kind === "range"
+                      ? (target.timelineId ??
+                        (await timelineHoldingMost(
+                            tx,
+                            marcherIds,
+                            target.end,
+                            target.start,
+                        )) ??
+                        (await timelineWithRange(tx, target)))
+                      : // Basic edits only moves over the page box (an Expert move is
+                        // refused), so those first, should a file hold others
+                        ((await timelineHoldingMost(
+                            tx,
+                            marcherIds,
+                            target.beat,
+                            target.box.start,
+                        )) ??
+                        (await timelineHoldingMost(
+                            tx,
+                            marcherIds,
+                            target.beat,
+                        )) ??
+                        (await timelineEndingAt(tx, target.beat)));
+                const wroteAppData =
+                    afterWrite && timelineId !== null
+                        ? (await afterWrite(tx, timelineId)) !== false
+                        : false;
+                // An edit that writes nothing (and no app data beside it) can't be an undo step
+                if (!wroteAppData && !wroteSomething(result))
+                    throw new NothingWritten(result);
                 return result;
             }
             refuseDuplicateMarchers(moves);
@@ -1125,6 +1261,7 @@ export const moveMarchersInTarget = async ({
                     home: [m.x, m.y],
                 })),
             });
+            await afterWrite?.(tx, null);
             return {
                 homes: moves.map((m) => m.marcherId),
                 slots: [],

@@ -3,6 +3,7 @@ import path from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { parse as parseYaml } from "yaml";
 import { version } from "./package.json";
 import { DEMOS } from "./web/demos";
 
@@ -81,6 +82,31 @@ const storageNamespace = isLab ? `lab-${labTestId}` : channel;
  * the widget's requests to the lab's API in.
  */
 const labScriptHosts = isLab ? ["https://clerk.openmarch.com"] : [];
+
+/**
+ * The versions a lab test compares (web/LAB.md, "Comparing versions"): the
+ * `variants` in the front matter of the manifest `LAB_MANIFEST` names, a path
+ * from the repository root. CI sets it to the test being published. Without
+ * it, outside the lab channel, or with fewer than two versions, the build has
+ * no version switch.
+ */
+function labVariants(): { id: string; label: string; description: string }[] {
+    const manifest = process.env.LAB_MANIFEST;
+    if (!isLab || !manifest) return [];
+    const text = fs.readFileSync(
+        path.resolve(__dirname, "..", "..", manifest),
+        "utf8",
+    );
+    const frontMatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1] ?? "";
+    const variants = (parseYaml(frontMatter)?.variants ?? []).map(
+        (v: { id: unknown; label?: unknown; description?: unknown }) => ({
+            id: String(v.id),
+            label: String(v.label ?? v.id),
+            description: String(v.description ?? ""),
+        }),
+    );
+    return variants.length >= 2 ? variants : [];
+}
 
 const web = (file: string) => path.join(__dirname, "web", file);
 const outDir = path.join(__dirname, "dist-web");
@@ -281,6 +307,7 @@ export default defineConfig({
         "import.meta.env.VITE_PUBLIC_WEB_STORAGE_NAMESPACE":
             JSON.stringify(storageNamespace),
         "import.meta.env.VITE_PUBLIC_APP_VERSION": JSON.stringify(version),
+        __LAB_VARIANTS__: JSON.stringify(labVariants()),
         "import.meta.env.VITE_PUBLIC_WEB_EXAMPLES": JSON.stringify(
             JSON.stringify(examples),
         ),

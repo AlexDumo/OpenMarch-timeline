@@ -4,8 +4,9 @@
 > the `lab` channel in `vite.web.config.mts` (with `LAB_TEST_ID`,
 > `LAB_MANIFEST` and the `VITE_PUBLIC_LAB_*` values) and its wording in the
 > app (`webChannel === "lab"`), `renderer/lab.ts` and its calls in
-> `renderer/index.ts`, the example shows (`demos.ts`, `public/demos/`, which
-> the fork's `preview` channel uses too), `lab/` and
+> `renderer/index.ts`, the version switch (`variants.ts`, `src/lab/`), the
+> example shows (`demos.ts`, `public/demos/`, which the fork's `preview`
+> channel uses too), `lab/` and
 > `.github/workflows/lab-deploy.yaml`. They exist so testers can try features
 > that are still in development, in a browser, and give feedback. They live
 > on the fork.
@@ -99,6 +100,42 @@ adds its feedback widget to the page (a script before `</body>` in
 (`keepLabWidgetOut` in `renderer/lab.ts`, which claims the widget's
 `om-lab-widget` element first); Settings keeps it. The manifest format and
 the lab itself are in the `OpenMarch/om-lab` repository.
+
+## Comparing versions
+
+A test can build two or more versions of a behavior into one build, so
+testers try them side by side on the same show instead of in two builds
+(switching keeps the show and its edits as they are). List them in the manifest's front matter;
+the first is the one testers start on:
+
+```yaml
+variants:
+  - id: play-on
+    label: A
+    description: What the app does now
+  - id: from-flag
+    label: B
+    description: Space plays from the start flag
+```
+
+The build then shows a **Version** switch at the bottom left (`variants.ts`). It
+sets the URL's `variant` parameter without reloading, so a reload keeps it
+and the feedback (which records the page's URL) says which version was on.
+App code reads the version with `useLabVariant()` or `getLabVariant()` from
+`src/lab/labVariant.ts`, which is `null` with no `variant` in the URL,
+meaning the current behavior:
+
+```ts
+if (getLabVariant() === "from-flag") return playFromStartFlag();
+```
+
+Ask in the questions which version testers preferred and why. Once a version
+wins, build it without the switch.
+
+Locally, point the build at the manifest:
+`WEB_CHANNEL=lab LAB_TEST_ID=<id> LAB_MANIFEST=lab/<id>/experiment.md pnpm run web:build`
+(the manifest path is from the repository root). Other channels ignore
+`LAB_MANIFEST`.
 
 ## Demo shows
 

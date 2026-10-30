@@ -98,7 +98,7 @@ User-facing docs in `apps/website` and release notes.
 
 Release-note items collected so far:
 
-- Kept spots are removed (holds, fork #467; migration 0027): Keep, Follow again and K are gone,
+- Kept spots are removed (holds, fork #467; migration 0029): Keep, Follow again and K are gone,
   and a page kept where it was is now an ordinary move (Set as shown). Undo history from before
   this update was cleared in files that used Keep.
 

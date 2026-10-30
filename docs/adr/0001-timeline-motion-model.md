@@ -315,12 +315,12 @@ removed by the next amendment (#467); Clear this page lands with #469.
   playhead carried markers, and Basic's split page copied them; they now carry only the rows.
 - **In the 2026-10-16 amendment's list of writers of a page's move, Set as shown replaces "kept
   spots".**
-- **Migration 0027** (`0027_drop_kept_assignments`, after main's latest, 0026) drops the table.
-  Fork nightlies and the lab build already shipped migration 0018, so a file's stored undo or redo
-  history may name the table. Replaying such a step would fail with "no such table", so in a file
-  whose history names it (`instr(sql, 'timeline_kept_assignments')` in either stack) the same
-  migration clears **both** stacks and resets the history groups (owner, 2026-10-28). A file whose
-  history doesn't name the table keeps it. The release notes say so. A kept spot's move stays as
+- **Migration 0029** (`0029_drop_kept_assignments`, after the shape host's 0027 and 0028) drops
+  the table. Fork nightlies and the lab build already shipped migration 0018, so a file's stored
+  undo or redo history may name the table. Replaying such a step would fail with "no such
+  table", so in a file whose history names it (`instr(sql, 'timeline_kept_assignments')` in either
+  stack) the same migration clears **both** stacks and resets the history groups (owner,
+  2026-10-28). A file whose history doesn't name the table keeps it. The release notes say so. A kept spot's move stays as
   an ordinary move, so the show plays the same.
   - It is a timeline-only migration: a page-era file converts first, and the conversion deletes
     any kept rows with the timeline rows it replaces, if the table exists.

@@ -1,4 +1,4 @@
-import { DIMMED_OPACITY, sameMembers, type FieldDimming } from "./fieldDimming";
+import { sameMembers, type FieldDimming } from "./fieldDimming";
 
 /**
  * Which marchers the field draws as Following (`FOLLOWING_LOOK`) because they're Following at the
@@ -170,9 +170,12 @@ export const drawnFollowing = (
     id: number,
 ): boolean => !dimming.isDimmed(id) && following.isFollowing(id);
 
-/** How opaque a marcher's label is drawn: isolation's dim, or solid (Following too). */
+/**
+ * How opaque a marcher's label is drawn: as its dot (isolation's dim, an open
+ * shape's fade or hidden members), solid when Following.
+ */
 export const labelOpacity = (dimming: FieldDimming, id: number): number =>
-    dimming.isDimmed(id) ? DIMMED_OPACITY : 1;
+    dimming.opacityOf(id);
 
 /**
  * How much lighter a marcher's label is drawn (`TextLabel.weight`): 0 (bold)

@@ -17,6 +17,10 @@ adds what is specific to the Electron + React app.
 - The field is `src/field/`: a renderer-free editor (`editor/`) and a React Three Fiber renderer (`three/`) with an SVG overlay ([ADR 0005](../../docs/adr/0005-three-field-renderer.md), [docs/field](../../docs/field/README.md)). Keep editing rules in the editor, with Vitest tests there, and check behavior through browser scenarios that read the field test API (`window.fieldTest`) and saved data, never three.js objects.
 - Features started on the old Fabric field port by [docs/field/porting-fabric-features.md](../../docs/field/porting-fabric-features.md).
 
+## Shapes
+
+- The shape tool lives in `src/shapes/` (spec [08-shape-system-ux.md](../../docs/timeline/research/shapes/08-shape-system-ux.md)). Read `src/shapes/AGENTS.md` for the map, the shape host contract and the test seams before changing it.
+
 ## Web Editor
 
 - `web/` and `vite.web.config.mts` build the app for the browser (editor.openmarch.com): the main process's database code runs in a worker. Read `web/README.md` before changing the preload, IPC channels, `database.services.ts`, or anything that opens or saves files.
@@ -40,6 +44,7 @@ adds what is specific to the Electron + React app.
 ## Fork-only Code
 
 - `apps/desktop/view3d-web/` (the 3D View web preview, with real demo shows) and the `view3d-web:*` scripts in `package.json` are fork-only. They may sit on the fork's `main`, but delete them from any branch before opening a PR to `OpenMarch/OpenMarch`; `view3d-web/README.md` lists everything to remove.
+- Lab test versions are fork-only: `src/lab/labVariant.ts`, `web/variants.ts`, the `labVariants()` / `__LAB_VARIANTS__` wiring in `vite.web.config.mts` (with its `yaml` devDependency), `LAB_MANIFEST` in `.github/workflows/lab-deploy.yaml`, and the `lab/*/experiment.md` manifests. Delete them, and the `initVariants`/`mountVariantSwitch` calls in `web/renderer/index.ts`, from any branch before opening a PR to `OpenMarch/OpenMarch`.
 
 ## Generated Or Derived Files
 

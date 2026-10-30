@@ -106,6 +106,21 @@ describe("ShortcutDispatcher", () => {
         expect(notCancelled).toBe(true);
     });
 
+    it("leaves an Escape that closes a menu to the menu", () => {
+        const cancel = handle("cancelAlignmentUpdates");
+        document.body.innerHTML = `<div role="listbox" data-state="open"></div>`;
+        // Like Radix: the layer goes as soon as the press reaches the document
+        const close = () => (document.body.innerHTML = "");
+        document.addEventListener("keydown", close, true);
+        render(<ShortcutDispatcher />);
+        fireEvent.keyDown(document.body, { key: "Escape", code: "Escape" });
+        document.removeEventListener("keydown", close, true);
+        expect(cancel).not.toHaveBeenCalled();
+        // With nothing open, Escape is the app's again
+        fireEvent.keyDown(document.body, { key: "Escape", code: "Escape" });
+        expect(cancel).toHaveBeenCalledTimes(1);
+    });
+
     it("routes Escape by focussed component", () => {
         const cancel = handle("cancelAlignmentUpdates");
         const exit = handle("exitTimelineFocus");

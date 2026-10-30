@@ -130,6 +130,65 @@ jobs:
           path: apps/desktop/playwright-report/
           retention-days: 30
 
+  # Browser scenarios: the renderer in headless Chromium.
+  desktop-browser-e2e:
+    needs: check-changes
+    if: needs.check-changes.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4.1.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install project dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+
+      - name: Build workspace packages
+        run: pnpm turbo run build --filter=@openmarch/desktop^...
+
+      - name: Build browser harness
+        working-directory: apps/desktop
+        run: pnpm run build:browser
+
+      # The shape scenarios and the field and timeline ones the shape work rewrote; the whole
+      # suite takes about 16 minutes, over this job's budget
+      - name: Run browser scenarios
+        working-directory: apps/desktop
+        run: |
+          specs=$(ls e2e/browser/tests/box-tool.spec.mts e2e/browser/tests/*circle*.spec.mts e2e/browser/tests/*shape*.spec.mts e2e/browser/tests/timeline-interactions.spec.mts e2e/browser/tests/field-actions.spec.mts 2>/dev/null | sort -u)
+          echo "Specs: $specs"
+          pnpm run e2e:browser $specs
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ failure() }}
+        with:
+          name: desktop-browser-playwright-report-${{ github.run_number }}
+          path: apps/desktop/playwright-report/
+          retention-days: 14
+
   # Summary job for required status checks
   # Mark THIS job as required in GitHub branch protection settings
   all-checks-passed:
@@ -139,17 +198,20 @@ jobs:
       - basic-checks
       - test
       - desktop-e2e
+      - desktop-browser-e2e
     steps:
       - name: Check all job results
         run: |
           echo "basic-checks: ${{ needs.basic-checks.result }}"
           echo "test: ${{ needs.test.result }}"
           echo "desktop-e2e: ${{ needs.desktop-e2e.result }}"
+          echo "desktop-browser-e2e: ${{ needs.desktop-browser-e2e.result }}"
 
           # Fail if any job failed (skipped jobs are OK)
           if [[ "${{ needs.basic-checks.result }}" != "success" && "${{ needs.basic-checks.result }}" != "skipped" ]] || \
              [[ "${{ needs.test.result }}" != "success" && "${{ needs.test.result }}" != "skipped" ]] || \
-             [[ "${{ needs.desktop-e2e.result }}" != "success" && "${{ needs.desktop-e2e.result }}" != "skipped" ]]; then
+             [[ "${{ needs.desktop-e2e.result }}" != "success" && "${{ needs.desktop-e2e.result }}" != "skipped" ]] || \
+             [[ "${{ needs.desktop-browser-e2e.result }}" != "success" && "${{ needs.desktop-browser-e2e.result }}" != "skipped" ]]; then
             echo "One or more jobs failed or were cancelled"
             exit 1
           fi

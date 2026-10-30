@@ -35,6 +35,13 @@ export type FieldTestMarcher = {
      */
     dimmed: boolean;
     /**
+     * How opaque the dot is drawn: 1, dimmed by isolation, a faint dot outside an open shape,
+     * or 0 for the open shape's own marchers once it's drawn (#417).
+     */
+    opacity: number;
+    /** Whether its label is drawn (not for an open shape's faint or hidden marchers) */
+    labelShown: boolean;
+    /**
      * Drawn as Following (a dashed edge) because it has no coordinate of its own on the count shown
      * (#300, Set vs Following). Reports the drawn look: false while playing,
      * and false when dimmed, which takes over. A Following marcher can still
@@ -71,9 +78,10 @@ export type FieldTestHandle =
     | "rot";
 
 /**
- * What the user is doing on the field right now. `line` covers the whole line
- * tool, from choosing it until it applies or cancels, and `prop` the prop
- * tool, from the Props panel's Draw until it's turned off.
+ * What the user is doing on the field right now. `shape` covers the whole
+ * shape tool, from opening it until it places or cancels; `box` is a drag on a
+ * selected placed box (its handles, or inside it); `prop` the prop tool, from
+ * the Props panel's Draw until it's turned off.
  */
 export type FieldTestGesture =
     | "marquee"
@@ -82,7 +90,8 @@ export type FieldTestGesture =
     | "scale"
     | "rotate"
     | "pan"
-    | "line"
+    | "shape"
+    | "box"
     | "prop";
 
 /** How the field draws on this machine (the new field only, #205). */
@@ -126,8 +135,13 @@ export interface FieldTestApi {
      * null when none is shown (no image, hidden, or not loaded yet).
      */
     fieldImage(): FieldTestImage | null;
-    /** The line tool (L) while it's on, or null when it's off (#203). */
-    lineTool?(): FieldTestLineTool | null;
+    /**
+     * What the shape tool, or a selected placed box, draws over the field
+     * (#204), or null when neither is on the field.
+     */
+    shapeOverlay?(): FieldTestShapeOverlay | null;
+    /** The placed boxes outlined on the field (the View tab's Shapes setting). */
+    placedBoxes?(): FieldTestPlacedBox[];
     /**
      * The props and equipment drawn (C2.1), by ascending marcher id. Items Off
      * field at the beat shown, or hidden by the user, are left out.
@@ -161,24 +175,65 @@ export type FieldTestItem = {
     screen: ScreenPoint;
 };
 
-/** The line tool as the field shows it. Positions are in field units. */
-export type FieldTestLineTool = {
-    /** The marchers it lines up (outlined on the field), ascending. */
-    marchers: number[];
-    /**
-     * The line drawn, or null before the first click and after a right-click.
-     * `drawing` while its end follows the pointer, before the second click.
-     */
-    line: {
-        start: { x: number; y: number };
-        end: { x: number; y: number };
-        drawing: boolean;
-    } | null;
-    /**
-     * Where the dashed previews put each marcher, by ascending id: what
-     * Shift+Enter applies. Empty until a line is finished.
-     */
-    previews: { id: number; x: number; y: number }[];
+/**
+ * A shape drawn over the field: by the open shape tool, or a selected placed
+ * box edited in place. Field positions are in field units.
+ */
+export type FieldTestShapeOverlay = {
+    /** The shape's outline, a closed polygon; null before one is drawn. */
+    outline: { x: number; y: number }[] | null;
+    /** Where its marchers will stand. */
+    spots: { x: number; y: number }[];
+    /** From each marcher to its spot; empty during a gesture. */
+    walks: { from: { x: number; y: number }; to: { x: number; y: number } }[];
+    /** The hollow rings where its marchers start (at the start flag), field units. */
+    rings: { x: number; y: number }[];
+    /** Spots it leaves empty on purpose (an odd-count outline's gap), field units. */
+    gaps: { x: number; y: number }[];
+    /** Its handles, in the viewport. */
+    handles: ScreenPoint[];
+    /** Drawing (a drag draws it) or open; null for a mode that doesn't say. */
+    stage: "drawing" | "open" | null;
+    /** The rotate knob and the center dot, in the viewport; null when not drawn. */
+    knob: ScreenPoint | null;
+    centerDot: ScreenPoint | null;
+    /** The pivot's crosshair once it's out of the center (#350), or null at the center */
+    pivotMark: ScreenPoint | null;
+    /** The pivot a cell of the editor's pivot menu points at (#437), in field units; null without one */
+    pivotPreview: { x: number; y: number } | null;
+    /** Who will stand on each spot, as labeled. */
+    labels: string[];
+    /** The readout by the pointer during a gesture ("7½ × 2 steps · ↔ 2½ ↕ 2 apart"), or null. */
+    tip: string | null;
+    /** The spots are still gliding to where they're going after a change (#387). */
+    gliding: boolean;
+    /** The controls are faint: the pointer is away from the shape (#403). */
+    calm: boolean;
+    /** Guides along the field's lines the shape's edges are on, field units (#425). */
+    guides: {
+        from: { x: number; y: number };
+        to: { x: number; y: number };
+        label: string | null;
+    }[];
+    /** The shape's sides on a guide's line, drawn thicker, field units (#425). */
+    guideEdges: {
+        from: { x: number; y: number };
+        to: { x: number; y: number };
+    }[];
+    /** The shape's corners or center on a guide with no side along it, ringed, field units (#446). */
+    guideMarks: { x: number; y: number }[];
+    /** The spots standing on a guide, tinted, field units (#425). */
+    onGuides: { x: number; y: number }[];
+};
+
+/** A placed box outlined on the field. */
+export type FieldTestPlacedBox = {
+    /** Its recipe's id. */
+    id: number;
+    /** The label under it, such as "8 × 4". */
+    label: string;
+    /** Its outline's corners, in field units: left, top, right, bottom. */
+    rect: { left: number; top: number; right: number; bottom: number };
 };
 
 export type FieldTestImage = {

@@ -45,6 +45,9 @@ export const tablesWithHistory = [
     schema.item_placement_marchers,
     // Which Artwork sits on each item slot (ADR 0002 D-10)
     schema.item_artwork_slots,
+    // Shape recipes beside the positions they placed (ADR 0006)
+    schema.timeline_shape_recipes,
+    schema.timeline_shape_recipe_marchers,
 ];
 
 /**
