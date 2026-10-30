@@ -500,12 +500,16 @@ export async function takeMarchersOutOfRangeInTransaction({
     return await carryOut(tx, plan, range);
 }
 
-/** What `takeMarchersIntoOwnMoveInTransaction` did, marcher ids ascending. */
+/**
+ * What `takeMarchersIntoOwnMoveInTransaction` did, marcher ids ascending. Remove keyframe's take
+ * (`takePartOfGroupsApartInTransaction`) reads `timelineId` to tidy a move of their own that its
+ * refused join leaves empty.
+ */
 export interface TakenIntoOwnMove {
     /** The marchers now in a move of their own */
     taken: number[];
     /** The marchers left in the move, one entry each */
-    skipped: MoveMemberSkip[];
+    stayed: MoveMemberSkip[];
     /** Their move: the move itself when they were its whole membership, null when nobody went */
     timelineId: number | null;
 }
@@ -513,28 +517,32 @@ export interface TakenIntoOwnMove {
 /**
  * **Into a move of their own**: `marcherIds` leave move `timelineId` for a new move over the same
  * counts, with their rows, destinations and paths as they were, so nobody's motion changes (see
- * the module comment). Shape and follow-the-leader members stay and are listed in `skipped`, as
- * `planRemovalFromRange` plans them; a transition into a stored shape that some leave is switched
- * to individual points first. When they are the move's whole membership it already is their own,
- * and nothing is written. Marchers with no row in the move are ignored.
+ * the module comment). Shape and follow-the-leader members stay and are listed in `stayed`, as
+ * `planRemovalFromRange` plans them (a caller that already has that plan for the move's counts
+ * passes it as `plan`); a transition into a stored shape that some leave is switched to individual
+ * points first. When they are the move's whole membership it already is their own, and nothing is
+ * written. Marchers with no row in the move are ignored. Split by marcher's refusal
+ * (`splitRefusal`) throws (E-ARGS), so callers that can't have that check it first.
  */
 export async function takeMarchersIntoOwnMoveInTransaction({
     tx,
     timelineId,
     marcherIds,
+    plan,
 }: {
     tx: DbTransaction;
     timelineId: number;
     marcherIds: readonly number[];
+    plan?: RemovalPlan;
 }): Promise<TakenIntoOwnMove> {
     const move = await readTimeline(tx, timelineId);
-    const none = (skipped: MoveMemberSkip[]): TakenIntoOwnMove => ({
+    const none = (stayed: MoveMemberSkip[]): TakenIntoOwnMove => ({
         taken: [],
-        skipped,
+        stayed,
         timelineId: null,
     });
     if (!move) return none([]);
-    const plan = await planRemovalFromRange({
+    plan ??= await planRemovalFromRange({
         tx,
         marcherIds,
         range: { start: move.start_beat, end: move.end_beat },
@@ -545,7 +553,7 @@ export async function takeMarchersIntoOwnMoveInTransaction({
     const rows = await rowsIn(tx, timelineId);
     const going = new Set(taken);
     if (rows.every((r) => going.has(r.row.marcher_id)))
-        return { taken, skipped: plan.skipped, timelineId };
+        return { taken, stayed: plan.skipped, timelineId };
     // Only transitions shared with someone who stays are switched; a whole one keeps its shape
     const staying = new Set(
         rows
@@ -564,7 +572,7 @@ export async function takeMarchersIntoOwnMoveInTransaction({
         timelineId,
         marcherIds: taken,
     });
-    return { taken, skipped: plan.skipped, timelineId: split.timeline.id };
+    return { taken, stayed: plan.skipped, timelineId: split.timeline.id };
 }
 
 const REASON_WORDS: Record<MoveMemberSkipReason, [string, string]> = {

@@ -1,19 +1,31 @@
 import { expect } from "vitest";
-import { asc, eq, getTableName } from "drizzle-orm";
-import { createResolver, type Resolver } from "@openmarch/core";
+import { asc, eq } from "drizzle-orm";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
 import { convertPagesToTimeline } from "@/test/convertPages";
-import { readTimelineTables } from "@/timeline/timelineRows";
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { createTimelineShapesInTransaction } from "../timelineShapes";
 import {
+    createTimelineTransitionsInTransaction,
     setTimelineTransitionDestinationInTransaction,
     updateTimelineTransitionsInTransaction,
 } from "../timelineTransitionsInTransaction";
 import { saveShapeRecipeInTransaction } from "../shapeRecipes";
 import { splitTimelineAtBeat } from "../timelineSplitAtBeat";
+import { splitMarchersIntoNewMove } from "../timelineSplitMoves";
+import { resizeTimeline } from "../timelineResize";
+import { removeAssignmentRowsInTransaction } from "../timelineMembership";
+import { createTimelineAssignmentsInTransaction } from "../timelineAssignments";
 import { unsetMarchersAt } from "../timelineUnset";
+import {
+    PAGE2,
+    dataOf,
+    expectSameSteps,
+    page2,
+    resolverOf,
+    stepsOf,
+    timelineRange,
+} from "./timelineUnsetJoinHelpers";
 
 keepFixturesInPageMode("its tests convert the show themselves");
 
@@ -25,79 +37,6 @@ keepFixturesInPageMode("its tests convert the show themselves");
  * keep both halves. Shape and follow-the-leader members can't be taken out: they keep the plain
  * Remove, and the result names them.
  */
-
-const TABLES = [
-    schema.timelines,
-    schema.timeline_shapes,
-    schema.timeline_transitions,
-    schema.timeline_assignments,
-    schema.timeline_slot_destinations,
-    schema.timeline_shape_recipes,
-    schema.timeline_shape_recipe_marchers,
-];
-
-const dataOf = async (db: DbConnection) => {
-    const out: Record<string, unknown[]> = {};
-    for (const table of TABLES)
-        out[getTableName(table)] = await db.select().from(table).all();
-    return out;
-};
-
-const resolverOf = async (db: DbConnection): Promise<Resolver> =>
-    createResolver((await readTimelineTables(db)).snapshot);
-
-const PAGE2 = { start: 9, end: 17 };
-
-/** Each marcher's step length on each count of page 2. */
-const stepsOf = (r: Resolver, marcherIds: readonly number[]) =>
-    new Map(
-        marcherIds.map((id) => [
-            id,
-            Array.from({ length: PAGE2.end - PAGE2.start }, (_, i) => {
-                const [x0, y0] = r.positionAt(id, PAGE2.start + i);
-                const [x1, y1] = r.positionAt(id, PAGE2.start + i + 1);
-                return Math.hypot(x1 - x0, y1 - y0);
-            }),
-        ]),
-    );
-
-const expectSameSteps = (
-    a: ReturnType<typeof stepsOf>,
-    b: ReturnType<typeof stepsOf>,
-) => {
-    expect([...b.keys()]).toEqual([...a.keys()]);
-    for (const [id, steps] of a)
-        steps.forEach((step, i) =>
-            expect(
-                b.get(id)![i],
-                `marcher ${id}, count ${PAGE2.start + i}`,
-            ).toBeCloseTo(step, 6),
-        );
-};
-
-/** Page 2's own timeline, its one transition and its members, ascending. */
-const page2 = async (db: DbConnection) => {
-    const timeline = (await db
-        .select()
-        .from(schema.timelines)
-        .where(eq(schema.timelines.start_beat, 9))
-        .get())!;
-    const transition = (await db
-        .select()
-        .from(schema.timeline_transitions)
-        .where(eq(schema.timeline_transitions.timeline_id, timeline.id))
-        .get())!;
-    const members = (
-        await db
-            .select({ id: schema.timeline_assignments.marcher_id })
-            .from(schema.timeline_assignments)
-            .where(eq(schema.timeline_assignments.transition_id, transition.id))
-            .all()
-    )
-        .map((r) => r.id)
-        .sort((a, b) => a - b);
-    return { timeline, transition, members };
-};
 
 /** `marcherId`'s rows over page 2, as `[start, end]`, in order. */
 const rowsOnPage2 = async (db: DbConnection, marcherId: number) =>
@@ -111,16 +50,6 @@ const rowsOnPage2 = async (db: DbConnection, marcherId: number) =>
     )
         .filter((r) => r.start_beat < PAGE2.end && r.end_beat > PAGE2.start)
         .map((r) => [r.start_beat, r.end_beat]);
-
-const timelineRange = async (db: DbConnection, id: number) =>
-    await db
-        .select({
-            start: schema.timelines.start_beat,
-            end: schema.timelines.end_beat,
-        })
-        .from(schema.timelines)
-        .where(eq(schema.timelines.id, id))
-        .get();
 
 /** Page 2 split at the playhead, count 13, with its steps before and after the split. */
 const splitPage2 = async (db: DbConnection) => {
@@ -159,7 +88,7 @@ describeDbTests(
             expect(result.unset).toEqual([one]);
             expect(result.joined).toEqual([one]);
             expect(result.notJoined).toEqual([]);
-            expect(result.skipped).toBeUndefined();
+            expect(result.notTakenApart).toBeUndefined();
             const r = await resolverOf(db);
             expectSameSteps(
                 new Map([[one, even.get(one)!]]),
@@ -240,9 +169,11 @@ describeDbTests(
 
             expect(result.unset).toEqual([shaped, free]);
             expect(result.joined).toEqual([free]);
-            expect(result.skipped?.refusal).toBe("inShapeOrFollowTheLeader");
-            expect(result.skipped?.marcherIds).toEqual([shaped]);
-            expect(result.skipped?.message).toMatch(/is in a shape/);
+            expect(result.notTakenApart?.refusal).toBe(
+                "inShapeOrFollowTheLeader",
+            );
+            expect(result.notTakenApart?.marcherIds).toEqual([shaped]);
+            expect(result.notTakenApart?.message).toMatch(/is in a shape/);
             expectSameSteps(
                 new Map([[free, even.get(free)!]]),
                 stepsOf(await resolverOf(db), [free]),
@@ -311,9 +242,227 @@ describeDbTests(
 
             expect(result.unset).toEqual([one]);
             expect(result.joined).toEqual([]);
-            expect(result.skipped?.marcherIds).toEqual([one]);
-            expect(result.skipped?.message).toMatch(/follows the leader/);
+            expect(result.notTakenApart?.marcherIds).toEqual([one]);
+            expect(result.notTakenApart?.message).toMatch(/follows the leader/);
             expect(await rowsOnPage2(db, one)).toEqual([[13, 17]]);
+        });
+
+        it("a member who follows the leader on a later page keeps the plain Remove and is named", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { members } = await splitPage2(db);
+            const one = members[0]!;
+            // Page 3 (from count 17) walks follow-the-leader in the order of the move before it
+            // (R-12), so split by marcher won't break up the shared transitions of page 2's halves
+            const page3 = (await db
+                .select()
+                .from(schema.timeline_transitions)
+                .innerJoin(
+                    schema.timelines,
+                    eq(
+                        schema.timelines.id,
+                        schema.timeline_transitions.timeline_id,
+                    ),
+                )
+                .where(eq(schema.timelines.start_beat, PAGE2.end))
+                .get())!.timeline_transitions;
+            await transactionWithHistory(db, "ftl", async (tx) => {
+                const [shape] = await createTimelineShapesInTransaction({
+                    tx,
+                    newShapes: [
+                        {
+                            kind: "line",
+                            geometry: {
+                                points: [
+                                    [100, 300],
+                                    [900, 340],
+                                ],
+                            },
+                        },
+                    ],
+                });
+                await setTimelineTransitionDestinationInTransaction({
+                    tx,
+                    transitionId: page3.id,
+                    destination: { kind: "shape", shapeId: shape!.id },
+                });
+                await updateTimelineTransitionsInTransaction({
+                    tx,
+                    modifiedTransitions: [
+                        {
+                            id: page3.id,
+                            pathStyle: "follow_the_leader",
+                            pathParams: { waypoints: [] },
+                            orderMode: "inherit",
+                        },
+                    ],
+                });
+            });
+
+            const result = await unsetMarchersAt({
+                db,
+                beat: 13,
+                marcherIds: [one],
+            });
+
+            expect(result.unset).toEqual([one]);
+            expect(result.joined).toEqual([]);
+            expect(result.notTakenApart?.marcherIds).toEqual([one]);
+            expect(result.notTakenApart?.message).toMatch(/follows the leader/);
+            expect(await rowsOnPage2(db, one)).toEqual([[13, 17]]);
+        });
+
+        it("every member of the half before selected, but the half after has others: they're taken out of it and join", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { after, members, split, even, halves } =
+                await splitPage2(db);
+            const [one, ...others] = members as [number, ...number[]];
+            // `one` alone in a move of its own before the split; the half after keeps everyone
+            const own = await splitMarchersIntoNewMove({
+                db,
+                timelineId: split.before.id,
+                marcherIds: [one],
+            });
+
+            const result = await unsetMarchersAt({
+                db,
+                beat: 13,
+                marcherIds: [one],
+            });
+
+            expect(result.unset).toEqual([one]);
+            expect(result.joined).toEqual([one]);
+            expect(result.notJoined).toEqual([]);
+            expect(result.notTakenApart).toBeUndefined();
+            const r = await resolverOf(db);
+            expectSameSteps(
+                new Map([[one, even.get(one)!]]),
+                stepsOf(r, [one]),
+            );
+            expectSameSteps(
+                new Map(others.map((id) => [id, halves.get(id)!])),
+                stepsOf(r, others),
+            );
+            expect(await rowsOnPage2(db, one)).toEqual([[9, 17]]);
+            // Its own move before the split is one with its move after now
+            expect(await timelineRange(db, own.timeline.id)).toBeUndefined();
+            expect(await timelineRange(db, after.id)).toEqual({
+                start: 13,
+                end: 17,
+            });
+        });
+
+        it("a join refused after the take keeps the plain Remove, reports why, and leaves no empty move behind", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await convertPagesToTimeline(db);
+            const { timeline, members } = await page2(db);
+            // As in #470's "second move" case: `a` also has a move of its own over [9, 17), so
+            // its move after the split can't be fitted back over the counts
+            const [a, b] = members as [number, number];
+            const page1 = (await db
+                .select()
+                .from(schema.timelines)
+                .where(eq(schema.timelines.end_beat, 9))
+                .get())!;
+            const off = await splitMarchersIntoNewMove({
+                db,
+                timelineId: page1.id,
+                marcherIds: [a],
+            });
+            await resizeTimeline({
+                db,
+                timelineId: off.timeline.id,
+                start: page1.start_beat,
+                end: 17,
+            });
+            const split = await splitTimelineAtBeat({
+                db,
+                timelineId: timeline.id,
+                beat: 13,
+            });
+            await resizeTimeline({
+                db,
+                timelineId: off.timeline.id,
+                start: 9,
+                end: 17,
+            });
+            // `a` and `b` share a transition of their own in the half before the split, so it
+            // goes whole into their own move, and Remove leaves it there with two vacant slots
+            const r0 = await resolverOf(db);
+            await transactionWithHistory(db, "pair", async (tx) => {
+                const rows = (
+                    await tx.select().from(schema.timeline_assignments).all()
+                ).filter(
+                    (r) =>
+                        (r.marcher_id === a || r.marcher_id === b) &&
+                        r.start_beat === 9 &&
+                        r.end_beat === 13,
+                );
+                expect(rows).toHaveLength(2);
+                await removeAssignmentRowsInTransaction({
+                    tx,
+                    removed: rows,
+                    compact: true,
+                });
+                const [pair] = await createTimelineTransitionsInTransaction({
+                    tx,
+                    newTransitions: [
+                        {
+                            timelineId: split.before.id,
+                            slotCount: 2,
+                            destination: {
+                                kind: "individual",
+                                points: [
+                                    r0.positionAt(a, 13),
+                                    r0.positionAt(b, 13),
+                                ],
+                            },
+                            pathStyle: "direct",
+                            pathParams: null,
+                            orderMode: "inherit",
+                        },
+                    ],
+                });
+                await createTimelineAssignmentsInTransaction({
+                    tx,
+                    newAssignments: [a, b].map((marcherId, slotIndex) => ({
+                        marcherId,
+                        transitionId: pair!.id,
+                        slotIndex,
+                        startBeat: 9,
+                        endBeat: 13,
+                        layer: rows.find((r) => r.marcher_id === marcherId)!
+                            .layer,
+                    })),
+                });
+            });
+            const before = await db.select().from(schema.timelines).all();
+
+            const result = await unsetMarchersAt({
+                db,
+                beat: 13,
+                marcherIds: [a, b],
+            });
+
+            expect(result.unset).toEqual([a, b]);
+            expect(result.joined).toEqual([]);
+            expect(result.notJoined).toEqual([
+                { marcherIds: [a, b], reason: "secondMove" },
+            ]);
+            // Both halves stay for the others, and the only new move is theirs after the count
+            expect(await timelineRange(db, split.before.id)).toEqual({
+                start: 9,
+                end: 13,
+            });
+            const added = (await db.select().from(schema.timelines).all())
+                .filter((t) => !before.some((o) => o.id === t.id))
+                .map((t) => ({ start: t.start_beat, end: t.end_beat }));
+            expect(added).toEqual([{ start: 13, end: 17 }]);
         });
     },
 );

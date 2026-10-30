@@ -12,6 +12,7 @@ import { setAsShownOnPageInTransaction } from "./timelineSetAsShown";
 import type { TimelineEditRefusedError } from "@/timeline/timelineEditRefusals";
 import {
     joinMovesAtInTransaction,
+    deleteEmptiedOwnMoves,
     readMoveEnds,
     takePartOfGroupsApartInTransaction,
     type NotJoined,
@@ -42,7 +43,8 @@ import { skippedRefusal } from "./timelineMoveCuts";
  * Where only part of the move's membership was selected (R4, #471), those marchers are first taken
  * out of both halves into moves of their own (`takePartOfGroupsApartInTransaction`), which then
  * join; the others keep both halves. Shape and follow-the-leader members can't be taken out: they
- * keep the plain Remove, and `skipped` names them.
+ * keep the plain Remove, and `notTakenApart` names them. Where their join is refused, the
+ * emptied move of their own before the count is deleted (`deleteEmptiedOwnMoves`).
  *
  * Callers pass the marchers that are Set on the count (`timelineSetFollowing`); a marcher with no
  * move ending there is skipped. Nobody to unset writes nothing and adds no undo step.
@@ -61,7 +63,7 @@ export interface UnsetResult {
      * (#471) and kept the plain Remove, with the refusal's message (`skippedRefusal`), for the
      * toast after the rest was written
      */
-    skipped?: TimelineEditRefusedError;
+    notTakenApart?: TimelineEditRefusedError;
 }
 
 const ascending = (ids: Iterable<number>) =>
@@ -95,7 +97,7 @@ export async function unsetMarchersAtInTransaction({
     const result: UnsetResult = { unset: [], joined: [], notJoined: [] };
     if (marcherIds.length === 0) return result;
     // Part of a group: take them out of both halves first, so their own moves join below
-    const kept = await takePartOfGroupsApartInTransaction({
+    const apart = await takePartOfGroupsApartInTransaction({
         tx,
         beat,
         marcherIds,
@@ -130,8 +132,9 @@ export async function unsetMarchersAtInTransaction({
     const join = await joinMovesAtInTransaction({ tx, beat, ends });
     result.joined = join.joined;
     result.notJoined = join.notJoined;
-    const skipped = await skippedRefusal(tx, kept);
-    if (skipped) result.skipped = skipped;
+    await deleteEmptiedOwnMoves(tx, apart.ownMovesBefore);
+    const notTaken = await skippedRefusal(tx, apart.leftInGroup);
+    if (notTaken) result.notTakenApart = notTaken;
 
     if (box) {
         const resolver = createResolver(

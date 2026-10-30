@@ -673,7 +673,7 @@ describeDbTests(
             );
 
             expect(result.taken).toEqual([a, b]);
-            expect(result.skipped).toEqual([]);
+            expect(result.stayed).toEqual([]);
             expect(result.timelineId).not.toBe(pageMove.id);
             const own = (await db
                 .select()
@@ -705,7 +705,7 @@ describeDbTests(
 
             expect(result).toEqual({
                 taken: all,
-                skipped: [],
+                stayed: [],
                 timelineId: pageMove.id,
             });
             expect(await dataOf(db)).toEqual(before);
@@ -743,7 +743,7 @@ describeDbTests(
             );
             expect(alone).toEqual({
                 taken: [],
-                skipped: [
+                stayed: [
                     { marcherId: a, timelineId: pageMove.id, reason: "shape" },
                 ],
                 timelineId: null,
@@ -758,7 +758,7 @@ describeDbTests(
                 }),
             );
             expect(both.taken).toEqual([b]);
-            expect(both.skipped.map((s) => s.marcherId)).toEqual([a]);
+            expect(both.stayed.map((s) => s.marcherId)).toEqual([a]);
             expect(await membersOf(db, pageMove.id)).toContain(a);
             expect(await membersOf(db, both.timelineId!)).toEqual([b]);
         });
