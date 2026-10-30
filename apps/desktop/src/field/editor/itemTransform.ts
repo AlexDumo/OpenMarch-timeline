@@ -71,7 +71,8 @@ const PULLS: Record<Exclude<HandleId, "rot">, FieldPoint> = {
  * As the selection's handles do: while fine is on a resize counts the
  * pointer at a quarter of its speed (a turn doesn't slow), a role key pressed
  * or released mid-drag redraws the Outline at the last pointer, and a release
- * where the last move left the pointer saves what's drawn. Neither handle reads constrain or from center.
+ * where the last move left the pointer saves what's drawn. Neither handle reads
+ * constrain or from center.
  */
 abstract class ItemHandleGesture implements FieldGesture {
     abstract readonly kind: FieldTestGesture;
