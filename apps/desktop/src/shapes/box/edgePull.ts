@@ -94,11 +94,11 @@ interface Pull {
  * would fling it); only a
  * line beyond the fixed edge, at least a half step apart, counts. From the center (`fromCenter`)
  * the moving edge is half the gaps from it, so its detent and reach are half as far; both corners
- * of each moving edge can still land. Each field axis takes the nearest such line, a corner near
- * a line each way landing on their crossing. fine still pulls,
- * the ladder giving hundredths; the Snap toggle off doesn't (owner on #453), nor constrain while it
- * equalizes a corner's spacings. On a side handle constrain only flips the ratio lock, so the edge
- * still lands on the line, as with the lock button.
+ * of each moving edge can still land, by moving that edge (never the far side). Each field axis
+ * takes the nearest such line, a corner near a line each way landing on their crossing. fine
+ * still pulls, the ladder giving hundredths; the Snap toggle off doesn't (owner on #453), nor
+ * constrain while it equalizes a corner's spacings. On a side handle constrain only flips the
+ * ratio lock, so the edge still lands on the line, as with the lock button.
  */
 export function pullEdges(
     x: PullAxis,
@@ -211,8 +211,10 @@ function cornerPulls(
                 const b = sy.follows * v[axis];
                 if (Math.abs(a) < EPS && Math.abs(b) < EPS) continue;
                 const fixed = o[axis] + sx.at * u[axis] + sy.at * v[axis];
-                // The edge this line moves most is the one it sets
+                // The edge this line moves most is the one it sets, and only the corner's own: a
+                // line setting the far side, mirrored across the center, isn't taken
                 const i = Math.abs(a) >= Math.abs(b) ? 0 : 1;
+                if ((i === 0 ? sx : sy).follows !== 1) continue;
                 for (const line of field.lines[axis]) {
                     const pull = {
                         corner,

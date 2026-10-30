@@ -464,6 +464,20 @@ describe("from the center (fromCenter)", () => {
         });
     });
 
+    it("doesn't pull the far side, mirrored across the press, onto a line", () => {
+        // 4 files from 50: the dragged edge 18½ short of the 50, the far one 1½ past the 40
+        const p = drawBox(
+            { x: 50, y: -100 },
+            { x: 98.5, y: -90 },
+            4,
+            env(CENTER),
+        )!;
+        // On the half steps, as with no line there: 3 steps apart, 5 to 95
+        expect(p.files).toBe(4);
+        expect(p.across).toBe(30);
+        exact(edges(p, 4).left, 5);
+    });
+
     describe("a 3 × 3 box turned 30°, its se corner dragged", () => {
         const N = 9;
         /** 3 × 3, 2 steps apart, turned 30°, around `center` */
