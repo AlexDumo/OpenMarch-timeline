@@ -9,10 +9,12 @@ import {
 import { countsText } from "@/timeline/timelineRangeWords";
 import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
-import { refuse } from "./timelineErrors";
+import { NothingToDo, refuse } from "./timelineErrors";
 import { readPageGrid } from "./timelineRipple";
 import { isPageBox } from "./timelineMoves";
 import { addMarchersToTimelineInTransaction } from "./timelineMembership";
+import { readHeldMarks } from "./timelineHeldMarks";
+import { overlapsBox } from "@/timeline/basicSimple";
 import { updateTimelineSlotDestinationInTransaction } from "./timelineTransitionsInTransaction";
 
 /**
@@ -31,15 +33,17 @@ import { updateTimelineSlotDestinationInTransaction } from "./timelineTransition
  * edit, so it walks there). Stored kept spots, which these once wrote, are gone (holds decision
  * 1, #467).
  *
- * Marchers already Set on the page (their own move there) and marchers partway through a longer
- * move at one of the box's flags are left untouched and reported. The command is one undo step;
+ * Marchers already Set on the page (their own move there), marchers **Held** over any of it (a
+ * Held hold is a decision already: they stand still there on purpose, #472), and marchers partway
+ * through a longer move at one of the box's flags are left untouched and reported. The command is one undo step;
  * one that would write nothing opens no edit.
  */
 
 /** A marcher Set as shown left alone, with its state on the box. */
 export interface SetAsShownSkip {
     marcherId: number;
-    state: Exclude<PageBoxState, "follows">;
+    /** `held`: Held over some of the box (a stored mark, with no row there) */
+    state: Exclude<PageBoxState, "follows"> | "held";
 }
 
 /** What **Set as shown** did, marcher ids ascending. */
@@ -48,13 +52,6 @@ export interface SetAsShownResult {
     changed: number[];
     /** The others, with why */
     skipped: SetAsShownSkip[];
-}
-
-/** Thrown inside an edit that turned out to write nothing, so it rolls back with no undo step. */
-class NothingToDo extends Error {
-    constructor(readonly result: SetAsShownResult) {
-        super("nothing to set as shown");
-    }
 }
 
 const ascending = (ids: Iterable<number>) => [...ids].sort((a, b) => a - b);
@@ -115,7 +112,7 @@ export async function setAsShownOnPage({
             },
         );
     } catch (e) {
-        if (e instanceof NothingToDo) return e.result;
+        if (e instanceof NothingToDo) return e.result as SetAsShownResult;
         throw e;
     }
 }
@@ -146,13 +143,22 @@ export async function setAsShownOnPageInTransaction({
             marcherIds,
         })
     )[0]!;
+    // The resolver's view counts a Held marcher as Not set (it has no row there); its mark says
+    // otherwise
+    const held = new Set(
+        (await readHeldMarks(tx, [...states.keys()]))
+            .filter((m) => overlapsBox(m, pageBox))
+            .map((m) => m.marcherId),
+    );
+    const stateOf = (id: number) =>
+        held.has(id) ? ("held" as const) : states.get(id)!;
     const toSet = ascending(
-        [...states].filter(([, s]) => s === "follows").map(([id]) => id),
+        [...states.keys()].filter((id) => stateOf(id) === "follows"),
     );
     const result: SetAsShownResult = {
         changed: toSet,
         skipped: ascending(states.keys()).flatMap((marcherId) => {
-            const state = states.get(marcherId)!;
+            const state = stateOf(marcherId);
             return state === "follows" ? [] : [{ marcherId, state }];
         }),
     };

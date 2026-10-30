@@ -1,14 +1,23 @@
 import { eq, inArray } from "drizzle-orm";
 import { schema } from "@/global/database/db";
-import { marcherSimpleOnBox, type BasicRow } from "@/timeline/basicSimple";
+import {
+    marcherSimpleOnBox,
+    overlapsBox,
+    type BasicRow,
+} from "@/timeline/basicSimple";
 import { countsText } from "@/timeline/timelineRangeWords";
 import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
-import { refuse } from "./timelineErrors";
+import { NothingToDo, refuse } from "./timelineErrors";
 import { readPageGrid } from "./timelineRipple";
 import { readBasicRows } from "./basicRows";
 import { clearOwnPageMoves, isPageBox } from "./timelineMoves";
-import { readHeldMarks } from "./timelineHeldMarks";
+import {
+    readArrival,
+    readHeldMarks,
+    type HeldArrival,
+    type HeldMark,
+} from "./timelineHeldMarks";
 
 /**
  * **Hold from previous page** on a page box, in timeline mode (holds, fork #472; holds README
@@ -22,17 +31,27 @@ import { readHeldMarks } from "./timelineHeldMarks";
  *
  * - The marcher's own moves inside the box go first, as Basic's Set to previous page removes them:
  *   a converted page's shared slot is compacted (`clearOwnPageMoves` with `tidyShared`).
- * - A Held hold starting at `end` (the next page held from this page's arrival, which this
- *   removes) is taken into the new one, since touching holds are one hold.
+ * - Touching holds are one hold: a Held hold ending at `start` (the previous page, Held already)
+ *   grows over the box, and one starting at `end` (the next page held from this page's arrival,
+ *   which this removes) is taken in. So holding Page 2 then Page 3 gives what Page 3 then Page 2
+ *   does.
+ * - The arrival is the move a drag inside the hold edits, found as the drag finds it
+ *   (`readArrival`: the highest-layer row ending at `start`, whose move ends there), so every hold
+ *   made here is one its drags can reach.
  *
  * Left alone and reported, with why:
- * - `noArrival`: no move of the marcher ends at `start` (a borrowed hold, #474, or the first page);
+ * - `noArrival`: no move of the marcher arrives at `start` (`readArrival`; a borrowed hold, #474,
+ *   or the first page);
  * - `held`: it is Held over some of the box already;
  * - `crossesFlag`: a move of its runs over one of the box's flags (taking it out of part of a move
  *   is #469's cut in time);
  * - `expertMoves`: its moves in the box overlap, or use a path Basic doesn't edit;
  * - `shape`: a shape or a placed shape's recipe holds it on this page (fork #436 decisions 6–14:
- *   skipped and named until #504).
+ *   skipped and named until #504);
+ * - `followLeader`: it follows the leader on this page;
+ * - `arrivalShape`, `arrivalFollowLeader`: the arrival is a shape's move (a shape destination, or a
+ *   placed shape's recipe holds the marcher there) or a follow-the-leader move, which a drag inside
+ *   the hold would rewrite (owner's rule: skipped and named, #434 / #436).
  *
  * One undo step; a run that holds nobody opens no edit.
  */
@@ -43,7 +62,10 @@ export type HoldFromPreviousSkipReason =
     | "held"
     | "crossesFlag"
     | "expertMoves"
-    | "shape";
+    | "shape"
+    | "followLeader"
+    | "arrivalShape"
+    | "arrivalFollowLeader";
 
 /** A marcher Hold from previous page left alone, with why. */
 export interface HoldFromPreviousSkip {
@@ -57,13 +79,6 @@ export interface HoldFromPreviousResult {
     held: number[];
     /** The others, with why */
     skipped: HoldFromPreviousSkip[];
-}
-
-/** Thrown inside an edit that turned out to write nothing, so it rolls back with no undo step. */
-class NothingToDo extends Error {
-    constructor(readonly result: HoldFromPreviousResult) {
-        super("nothing to hold");
-    }
 }
 
 /**
@@ -95,7 +110,7 @@ export async function holdFromPreviousPage({
             },
         );
     } catch (e) {
-        if (e instanceof NothingToDo) return e.result;
+        if (e instanceof NothingToDo) return e.result as HoldFromPreviousResult;
         throw e;
     }
 }
@@ -118,32 +133,64 @@ export async function holdFromPreviousPageInTransaction({
     const ids = [...new Set(marcherIds)].sort((x, y) => x - y);
     const rows = await readBasicRows(tx, { marcherIds: ids });
     const marks = await readHeldMarks(tx, ids);
-    const inShapeRecipe = await marchersInRecipesOf(
-        tx,
-        rows.filter((r) => overlaps(r, pageBox)).map((r) => r.timelineId),
-    );
+    const arrivals = new Map<number, HeldArrival>();
+    for (const id of ids) {
+        const arrival = await readArrival(tx, id, pageBox.start);
+        if (arrival) arrivals.set(id, arrival);
+    }
+    const inRecipe = await marchersInRecipesOf(tx, [
+        ...rows.filter((r) => overlapsBox(r, pageBox)).map((r) => r.timelineId),
+    ]);
+    const inArrivalRecipe = await marcherRecipeTimelines(tx, [
+        ...new Set([...arrivals.values()].map((a) => a.timelineId)),
+    ]);
 
     const result: HoldFromPreviousResult = { held: [], skipped: [] };
     const toRemove: number[] = [];
-    const toJoin: number[] = [];
+    const replaced: number[] = [];
+    const newMarks: {
+        marcher_id: number;
+        start_beat: number;
+        end_beat: number;
+    }[] = [];
     for (const marcherId of ids) {
         const own = rows.filter((r) => r.marcherId === marcherId);
-        const inBox = own.filter((r) => overlaps(r, pageBox));
+        const inBox = own.filter((r) => overlapsBox(r, pageBox));
         const ownMarks = marks.filter((m) => m.marcherId === marcherId);
-        const reason = skipReason(
-            pageBox,
-            own,
+        // Touching holds are one hold
+        const previous = ownMarks.find((m) => m.end === pageBox.start);
+        const next = ownMarks.find((m) => m.start === pageBox.end);
+        const arrival = arrivals.get(marcherId);
+        const reason = skipReason({
+            box: pageBox,
             inBox,
-            ownMarks,
-            inShapeRecipe.get(marcherId),
-        );
+            marks: ownMarks,
+            inShapeRecipe: inRecipe.has(marcherId),
+            // A hold joining the previous one grows out of that one's arrival, checked when made
+            arrival: previous
+                ? "joined"
+                : arrival
+                  ? {
+                        ...arrival,
+                        inRecipe:
+                            inArrivalRecipe
+                                .get(arrival.timelineId)
+                                ?.has(marcherId) ?? false,
+                    }
+                  : null,
+        });
         if (reason) {
             result.skipped.push({ marcherId, reason });
             continue;
         }
         toRemove.push(...inBox.map((r) => r.assignmentId));
-        const next = ownMarks.find((m) => m.start === pageBox.end);
-        if (next) toJoin.push(next.id);
+        if (previous) replaced.push(previous.id);
+        if (next) replaced.push(next.id);
+        newMarks.push({
+            marcher_id: marcherId,
+            start_beat: previous?.start ?? pageBox.start,
+            end_beat: next?.end ?? pageBox.end,
+        });
         result.held.push(marcherId);
     }
     if (result.held.length === 0) return result;
@@ -158,43 +205,40 @@ export async function holdFromPreviousPageInTransaction({
         await clearOwnPageMoves(tx, removed, { tidyShared: true });
     }
     const h = schema.timeline_held_marks;
-    const joined = new Map(
-        marks
-            .filter((m) => toJoin.includes(m.id))
-            .map((m) => [m.marcherId, m.end]),
-    );
-    if (toJoin.length > 0) await tx.delete(h).where(inArray(h.id, toJoin));
-    await tx.insert(h).values(
-        result.held.map((marcherId) => ({
-            marcher_id: marcherId,
-            start_beat: pageBox.start,
-            end_beat: joined.get(marcherId) ?? pageBox.end,
-        })),
-    );
+    if (replaced.length > 0) await tx.delete(h).where(inArray(h.id, replaced));
+    await tx.insert(h).values(newMarks);
     return result;
 }
 
-const overlaps = (row: BasicRow, box: { start: number; end: number }) =>
-    row.start < box.end && row.end > box.start;
-
 /** Why a marcher can't be Held over `box`, or null when it can. */
-function skipReason(
-    box: { start: number; end: number },
-    rows: readonly BasicRow[],
-    inBox: readonly BasicRow[],
-    marks: readonly { start: number; end: number }[],
-    inShapeRecipe: boolean | undefined,
-): HoldFromPreviousSkipReason | null {
-    if (marks.some((m) => m.start < box.end && box.start < m.end))
-        return "held";
+function skipReason({
+    box,
+    inBox,
+    marks,
+    inShapeRecipe,
+    arrival,
+}: {
+    box: { start: number; end: number };
+    inBox: readonly BasicRow[];
+    marks: readonly HeldMark[];
+    inShapeRecipe: boolean;
+    /** The move the hold grows out of, "joined" when it joins the previous hold */
+    arrival: (HeldArrival & { inRecipe: boolean }) | "joined" | null;
+}): HoldFromPreviousSkipReason | null {
+    if (marks.some((m) => overlapsBox(m, box))) return "held";
     const verdict = marcherSimpleOnBox(inBox, box);
     if (!verdict.simple) {
         if (verdict.reason === "crossesFlag") return "crossesFlag";
+        if (inBox.some((r) => r.pathStyle === "follow_the_leader"))
+            return "followLeader";
         if (verdict.reason === "shape") return "shape";
         return "expertMoves";
     }
     if (inShapeRecipe) return "shape";
-    if (!rows.some((r) => r.end === box.start)) return "noArrival";
+    if (arrival === null) return "noArrival";
+    if (arrival === "joined") return null;
+    if (arrival.pathStyle === "follow_the_leader") return "arrivalFollowLeader";
+    if (arrival.shapeId !== null || arrival.inRecipe) return "arrivalShape";
     return null;
 }
 
@@ -202,15 +246,31 @@ function skipReason(
 async function marchersInRecipesOf(
     tx: DbTransaction,
     timelineIds: readonly number[],
-): Promise<Map<number, boolean>> {
-    if (timelineIds.length === 0) return new Map();
+): Promise<Set<number>> {
+    const byTimeline = await marcherRecipeTimelines(tx, timelineIds);
+    return new Set([...byTimeline.values()].flatMap((ids) => [...ids]));
+}
+
+/** For each of `timelineIds` with a placed shape's recipe, the marchers it holds. */
+async function marcherRecipeTimelines(
+    tx: DbTransaction,
+    timelineIds: readonly number[],
+): Promise<Map<number, Set<number>>> {
+    const out = new Map<number, Set<number>>();
+    if (timelineIds.length === 0) return out;
     const r = schema.timeline_shape_recipes;
     const m = schema.timeline_shape_recipe_marchers;
     const rows = await tx
-        .select({ marcherId: m.marcher_id })
+        .select({ timelineId: r.timeline_id, marcherId: m.marcher_id })
         .from(m)
         .innerJoin(r, eq(r.id, m.recipe_id))
         .where(inArray(r.timeline_id, [...new Set(timelineIds)]))
         .all();
-    return new Map(rows.map((row) => [row.marcherId, true]));
+    for (const row of rows) {
+        if (row.timelineId === null) continue;
+        const ids = out.get(row.timelineId) ?? new Set<number>();
+        ids.add(row.marcherId);
+        out.set(row.timelineId, ids);
+    }
+    return out;
 }

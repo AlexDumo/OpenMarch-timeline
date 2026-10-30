@@ -50,6 +50,18 @@ const SKIP_WORDS: Record<
         key: "timeline.holdFromPrevious.shape",
         defaultValue: "{names}: in a shape on this page",
     },
+    followLeader: {
+        key: "timeline.holdFromPrevious.followLeader",
+        defaultValue: "{names}: follows the leader on this page",
+    },
+    arrivalShape: {
+        key: "timeline.holdFromPrevious.arrivalShape",
+        defaultValue: "{names}: the move before {page} ends in a shape",
+    },
+    arrivalFollowLeader: {
+        key: "timeline.holdFromPrevious.arrivalFollowLeader",
+        defaultValue: "{names}: the move before {page} follows the leader",
+    },
 };
 
 /**

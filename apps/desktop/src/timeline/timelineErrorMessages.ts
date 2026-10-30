@@ -5,6 +5,7 @@ import { conToastError } from "@/utilities/utils";
 import { toast } from "sonner";
 import { toastBasicLock } from "./basicLockToast";
 import type { NotJoined } from "@/db-functions/timelineJoinAtBeat";
+import { joinList } from "./timelineRangeWords";
 import {
     marcherNamesText,
     type KeepTranslate,
@@ -107,7 +108,7 @@ export const TIMELINE_ERROR_MESSAGES: Readonly<
     "E-H1": {
         key: "timeline.errors.moveInHeldHold",
         defaultMessage:
-            "That would put a move inside a Held hold. Drag inside the hold to move the whole hold, or edit a page outside it.",
+            "That would put a move inside a Held hold. Clear this page to remove the hold, or drag inside it to move it.",
     },
     "E-H3": {
         key: "timeline.errors.heldHoldsOverlap",
@@ -165,6 +166,51 @@ export function isLegacyConversionViolation(error: unknown): boolean {
         spansByTimeline.set(match[2]!, spans);
     }
     return [...spansByTimeline.values()].some((spans) => spans.size > 1);
+}
+
+/**
+ * An E-H1 refusal that knows who (`TimelineCommitViolationError.held`): it names the marchers and
+ * the page they are Held on, and the way out. `.one` for one marcher, `.many` for several.
+ */
+export const HELD_CONFLICT_MESSAGES: Readonly<
+    Record<"one" | "many", TimelineErrorMessage>
+> = {
+    one: {
+        key: "timeline.errors.heldConflict.one",
+        defaultMessage:
+            "{names} is Held on {pages}. Clear this page to remove the hold, or drag inside it to move it.",
+    },
+    many: {
+        key: "timeline.errors.heldConflict.many",
+        defaultMessage:
+            "{names} are Held on {pages}. Clear this page to remove the holds, or drag inside them to move them.",
+    },
+};
+
+/** An E-H1's message naming who and where, or null when the error doesn't say. */
+function heldConflictMessage(
+    error: unknown,
+    translate: TimelineTranslate,
+): string | null {
+    if (!(error instanceof TimelineCommitViolationError)) return null;
+    const held = error.held;
+    if (!held || held.names.length === 0 || held.pages.length === 0)
+        return null;
+    const names = held.names;
+    const message = HELD_CONFLICT_MESSAGES[names.length === 1 ? "one" : "many"];
+    return translate(message.key, message.defaultMessage, {
+        names:
+            marcherNamesText(
+                names.map((_, i) => i),
+                (i) => names[i],
+                (key, defaultValue, params) =>
+                    translate(key, defaultValue, params),
+            ) ?? names.join(", "),
+        pages:
+            held.pages.length === 1
+                ? `Page ${held.pages[0]}`
+                : `Pages ${joinList(held.pages)}`,
+    });
 }
 
 export const TIMELINE_NOT_READY_MESSAGE: TimelineErrorMessage = {
@@ -233,11 +279,20 @@ export function notJoinedMessage(
         .join(" ");
 }
 
-/** Looks a message up by key and default; the Tolgee singleton by default, anything in tests. */
-export type TimelineTranslate = (key: string, defaultMessage: string) => string;
+/**
+ * Looks a message up by key and default, filling in `params`; the Tolgee singleton by default,
+ * anything in tests.
+ */
+export type TimelineTranslate = (
+    key: string,
+    defaultMessage: string,
+    params?: Record<string, string>,
+) => string;
 
-const defaultTranslate: TimelineTranslate = (key, defaultMessage) =>
-    tolgee.t(key, defaultMessage);
+const defaultTranslate: TimelineTranslate = (key, defaultMessage, params) =>
+    params
+        ? tolgee.t(key, defaultMessage, params)
+        : tolgee.t(key, defaultMessage);
 
 /** The spec error code of a timeline refusal, or null for an error that isn't one. */
 export function timelineErrorCode(error: unknown): string | null {
@@ -289,6 +344,10 @@ export function timelineErrorMessage(
     if (code === "E-ARGS") {
         const own = argsMessage((error as Error).message);
         if (own) return own;
+    }
+    if (code === "E-H1") {
+        const held = heldConflictMessage(error, translate);
+        if (held) return held;
     }
     const mapped =
         code === "E-DB"

@@ -17,6 +17,7 @@ import {
     notifyTimelineBatch,
 } from "./timelineChanges";
 import { timelineHistoryFocus } from "./timelineHistoryFocus";
+import { dropHeldMarksWithoutArrivalInTransaction } from "./timelineHeldMarks";
 import {
     bumpTimelineDisplayVersion,
     historyStatementTable,
@@ -178,6 +179,9 @@ export const transactionWithHistory = async <T>(
 
                 // Execute the function
                 result = await func(tx);
+                // Held marks whose arrival the edit removed go with it, in its undo step (ADR
+                // 0001 amendment 2026-10-30). Never in undo or redo replay, which restore them
+                await dropHeldMarksWithoutArrivalInTransaction(tx);
 
                 const groupAfter =
                     (

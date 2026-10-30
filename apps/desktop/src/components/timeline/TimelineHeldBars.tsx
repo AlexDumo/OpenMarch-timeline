@@ -58,15 +58,30 @@ export const TimelineHeldBars = memo(function TimelineHeldBars({
     );
 });
 
-/** "Held · Page 3", then, with more than one marcher selected, "2 of 3 selected". */
+/**
+ * "Held · Page 3", or "Held · Pages 2–3" for a hold over several pages (joined holds), then, with
+ * more than one marcher selected, "2 of 3 selected".
+ */
 function heldBarLabel(
     bar: SelectionHeldBar,
     pages: readonly TimelinePageMarker[],
 ): string {
-    const { pageLabel } = getPageCountAt({ pages }, bar.end);
-    const title = tolgee.t("timeline.heldBar.title", "Held · Page {page}", {
-        page: pageLabel,
-    });
+    // The first count inside the hold is the one after its start
+    const first = getPageCountAt({ pages }, bar.start + 1).pageLabel;
+    const last = getPageCountAt({ pages }, bar.end).pageLabel;
+    const title =
+        first === last
+            ? tolgee.t("timeline.heldBar.title", "Held · Page {page}", {
+                  page: last,
+              })
+            : tolgee.t(
+                  "timeline.heldBar.titleRange",
+                  "Held · Pages {first}–{last}",
+                  {
+                      first,
+                      last,
+                  },
+              );
     if (bar.total === 1) return title;
     return `${title}. ${tolgee.t(
         "timeline.heldBar.detail",

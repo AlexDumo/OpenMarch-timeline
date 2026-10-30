@@ -529,7 +529,6 @@ export const timeline_slot_destinations = sqliteTable(
 );
 
 /**
-/**
  * A **Held** hold (holds README decision 2; ADR 0001 amendment 2026-10-30): one marcher stands
  * still on purpose over `[start_beat, end_beat)`, where it has no move. Editing a count inside
  * it edits the move that arrives at `start_beat`, so the whole hold moves. App data, kept apart
