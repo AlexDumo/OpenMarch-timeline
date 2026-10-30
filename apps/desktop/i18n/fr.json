@@ -1675,6 +1675,37 @@
             "uiSettingsToolbar": "Barre d'outils des paramètres de l'interface utilisateur"
         }
     },
+    "touch": {
+        "modifiers": {
+            "add": "Ajouter",
+            "addHint": "Ajouter : maintenez, ou touchez pour le garder actif. Toucher des marcheurs les ajoute à la sélection",
+            "constrain": "Égal",
+            "constrainHint": "Égal : maintenez, ou touchez pour le garder actif. Espacements égaux, un seul axe, rotations régulières",
+            "explain": {
+                "add": "Touchez des marcheurs pour les ajouter ou les retirer.",
+                "constrain": "Espacements égaux, un seul axe, rotations régulières.",
+                "fine": "Les glissements vont lentement, hors de la grille.",
+                "fromCenter": "Les blocs se dessinent et se redimensionnent depuis leur centre.",
+                "grip": "Glissez pour déplacer.",
+                "help": "Gestes.",
+                "snap": "Aimantation aux pas et aux lignes, active ou non."
+            },
+            "fine": "Précis",
+            "fineHint": "Précis : maintenez, ou touchez pour le garder actif. Les glissements vont lentement, hors de la grille",
+            "fromCenter": "Depuis le centre",
+            "fromCenterHint": "Depuis le centre : maintenez, ou touchez pour le garder actif. Les blocs se dessinent et se redimensionnent depuis leur centre",
+            "grip": "Déplacer ces boutons",
+            "gripTitle": "Glissez pour déplacer",
+            "help": "À quoi servent ces boutons",
+            "helpList": {
+                "add": "<b>Ajouter</b> toucher ajoute à la sélection · <b>Sans aimant</b> déplace librement",
+                "fine": "<b>Précis</b> glissements lents et exacts · <b>Égal</b> espacements égaux",
+                "fromCenter": "<b>Depuis le centre</b> les blocs grandissent depuis le milieu",
+                "toggles": "<b>Touchez</b> un bouton pour le garder actif, ou <b>maintenez-le</b> pendant que vous glissez"
+            },
+            "noSnap": "Sans aimant"
+        }
+    },
     "versionCheck": {
         "error": {
             "fetchFailed": "Une erreur s'est produite lors de la récupération de la version.",

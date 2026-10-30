@@ -3177,24 +3177,34 @@
         "marcherRemoved": "Removed {name}",
         "modifiers": {
             "add": "Add",
-            "addOff": "Add: hold, or tap to keep on. Tapping marchers adds them to the selection",
-            "addOn": "Add, on. Tap to turn off",
-            "addOnNote": "Add on: tap marchers to add or remove.",
+            "addHint": "Add: hold, or tap to keep on. Tapping marchers adds them to the selection",
             "clearLine": "Clear line",
+            "constrain": "Equal",
+            "constrainHint": "Equal: hold, or tap to keep on. Equal spacings, one axis, steady turns",
             "explain": {
-                "alt": "Move and turn without snapping.",
+                "add": "Tap marchers to add or remove them.",
+                "constrain": "Equal spacings, one axis, steady turns.",
                 "drag": "What dragging on empty field does.",
+                "fine": "Drags go slowly, off the grid.",
+                "fromCenter": "Boxes draw and resize from their center.",
                 "grip": "Drag to move.",
                 "help": "Gestures.",
-                "shift": "Tap marchers to add or remove them."
+                "snap": "Snapping to steps and lines, on or off."
             },
+            "fine": "Fine",
+            "fineHint": "Fine: hold, or tap to keep on. Drags go slowly, off the grid",
+            "fromCenter": "From center",
+            "fromCenterHint": "From center: hold, or tap to keep on. Boxes draw and resize from their center",
             "grip": "Move these buttons",
             "gripTitle": "Drag to move",
             "help": "What these buttons do",
-            "noSnap": "No snap",
-            "noSnapOff": "No snap: hold, or tap to keep on. Moving and turning don't snap to steps",
-            "noSnapOn": "No snap, on. Tap to turn off",
-            "noSnapOnNote": "No snap on."
+            "helpList": {
+                "add": "<b>Add</b> taps add to the selection · <b>No snap</b> moves freely",
+                "fine": "<b>Fine</b> slow, exact drags · <b>Equal</b> equal spacings",
+                "fromCenter": "<b>From center</b> boxes grow from the middle",
+                "toggles": "<b>Tap</b> a button to keep it on, or <b>hold</b> it while you drag"
+            },
+            "noSnap": "No snap"
         },
         "openSettings": "Open Settings",
         "readout": {

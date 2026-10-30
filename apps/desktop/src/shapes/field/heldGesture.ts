@@ -7,14 +7,16 @@ import {
     type RoleKey,
     type Roles,
 } from "@/input/modifierRoles";
+import { onScreenRoles, subscribeOnScreen } from "@/stores/TouchModifierStore";
 import type { ShapeTarget } from "../frame/gestures";
 import type { XY } from "../types";
 
 /**
  * The held roles of one shape gesture, from its press to its end (version A,
  * docs/timeline/research/shapes/modifier-roles.md), and the move to run again when a role key is
- * pressed or released mid-drag. Until a move hands it `last`, the press is still a click, and a key
- * changes nothing.
+ * pressed or released mid-drag. The touch pill's role toggles count as held keys, and a toggle
+ * latched or let go mid-drag runs the move again too. Until a move hands it `last`, the press is
+ * still a click, and a key changes nothing.
  */
 export interface HeldGesture<A> {
     /** The held roles now */
@@ -41,6 +43,8 @@ export function holdGesture<A>(
         context: "shape",
         press,
         usedByPress,
+        onScreen: onScreenRoles,
+        onScreenChange: subscribeOnScreen,
         isMac,
         onRolesChange: (roles) => {
             if (!ended && last !== null) rerun(last, roles);
