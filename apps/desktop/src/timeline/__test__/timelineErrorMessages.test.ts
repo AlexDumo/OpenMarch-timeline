@@ -1,10 +1,14 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { Tolgee, FormatSimple } from "@tolgee/react";
+import { FormatIcu } from "@tolgee/format-icu";
+import { toast } from "sonner";
 import { TimelineCommitViolationError } from "@/db-functions/timelineChanges";
 import { TimelineWriteError } from "@/db-functions/timelineErrors";
 import { TIMELINE_INSPECTOR_STRINGS } from "@/components/inspector/timelineInspectorStrings";
 import { conToastError } from "@/utilities/utils";
+import { TimelineEditRefusedError } from "../timelineEditRefusals";
 import {
     TIMELINE_DB_ERROR_MESSAGE,
     TIMELINE_ERROR_MESSAGES,
@@ -25,6 +29,7 @@ import {
  */
 
 vi.mock("@/utilities/utils", () => ({ conToastError: vi.fn() }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), warning: vi.fn() } }));
 
 afterEach(() => vi.mocked(conToastError).mockReset());
 
@@ -222,6 +227,19 @@ describe("toastTimelineError", () => {
         );
     });
 
+    it("shows marchers a holds command left in their move as a warning, since the rest was done", () => {
+        const error = new TimelineEditRefusedError("inShapeOrFollowTheLeader", {
+            marcherIds: [3],
+            message: "B3 is in a shape, so it keeps its move here.",
+        });
+        toastTimelineError(error);
+        expect(toast.warning).toHaveBeenCalledWith(
+            "B3 is in a shape, so it keeps its move here.",
+            { id: "timeline-refused-inShapeOrFollowTheLeader" },
+        );
+        expect(toast.error).not.toHaveBeenCalled();
+    });
+
     it("uses the fallback for an error that isn't a timeline refusal", () => {
         const error = new Error("boom");
         toastTimelineError(error, "Error moving marchers");
@@ -321,5 +339,34 @@ describe("en.json", () => {
     it("carries every inspector string", () => {
         for (const [key, text] of Object.entries(TIMELINE_INSPECTOR_STRINGS))
             expect(lookup(key), key).toBe(text);
+    });
+
+    it("words the holds skip notice as the write does, with the marcher names as parameters", async () => {
+        const key = "timeline.edit.inShapeOrFollowTheLeader";
+        const tolgee = Tolgee()
+            .use(FormatSimple())
+            .use(FormatIcu())
+            .init({
+                language: "en",
+                staticData: { en: { [key]: lookup(key) as string } },
+            });
+        await tolgee.run();
+        const say = (shapeNames: string[], leaderNames: string[]): string =>
+            tolgee.t(key, {
+                count: shapeNames.length + leaderNames.length,
+                shapeCount: shapeNames.length,
+                shapeNames: shapeNames.join(" and "),
+                leaderCount: leaderNames.length,
+                leaderNames: leaderNames.join(" and "),
+            });
+        expect(say(["B1"], [])).toBe(
+            "B1 is in a shape, so it keeps its move here.",
+        );
+        expect(say([], ["T1", "T2"])).toBe(
+            "T1 and T2 follow the leader, so they keep their move here.",
+        );
+        expect(say(["B1", "B2"], ["T1"])).toBe(
+            "B1 and B2 are in a shape, and T1 follows the leader, so they keep their move here.",
+        );
     });
 });

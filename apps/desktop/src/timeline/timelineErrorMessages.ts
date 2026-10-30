@@ -224,10 +224,16 @@ export function notJoinedMessage(
 }
 
 /** Looks a message up by key and default; the Tolgee singleton by default, anything in tests. */
-export type TimelineTranslate = (key: string, defaultMessage: string) => string;
+export type TimelineTranslate = (
+    key: string,
+    defaultMessage: string,
+    params?: Readonly<Record<string, string | number>>,
+) => string;
 
-const defaultTranslate: TimelineTranslate = (key, defaultMessage) =>
-    tolgee.t(key, defaultMessage);
+const defaultTranslate: TimelineTranslate = (key, defaultMessage, params) =>
+    params
+        ? tolgee.t(key, defaultMessage, params)
+        : tolgee.t(key, defaultMessage);
 
 /** The spec error code of a timeline refusal, or null for an error that isn't one. */
 export function timelineErrorCode(error: unknown): string | null {
@@ -261,13 +267,18 @@ export function timelineErrorMessage(
             TIMELINE_NOT_READY_MESSAGE.key,
             TIMELINE_NOT_READY_MESSAGE.defaultMessage,
         );
-    // A canvas move the selection refuses (UI-9, P8.15): its own key and default
+    // A canvas move the selection refuses (UI-9, P8.15): its own key, default and parameters
     if (
         error instanceof Error &&
         error.name === "TimelineEditRefusedError" &&
         typeof (error as Error & { key?: unknown }).key === "string"
-    )
-        return translate((error as Error & { key: string }).key, error.message);
+    ) {
+        const { key, params } = error as Error & {
+            key: string;
+            params?: Readonly<Record<string, string | number>>;
+        };
+        return translate(key, error.message, params);
+    }
     if (code === null)
         return (
             fallback ??
@@ -307,10 +318,14 @@ export function toastTimelineError(
             return;
         }
         // One toast per reason: a burst of refused nudges replaces it instead of stacking
+        const id = `timeline-refused-${String(refusal)}`;
+        // Marchers a holds command left alone while it did the rest: a warning, not an error
+        if (refusal === "inShapeOrFollowTheLeader") {
+            toast.warning(timelineErrorMessage(error, { fallback }), { id });
+            return;
+        }
         console.error(error);
-        toast.error(timelineErrorMessage(error, { fallback }), {
-            id: `timeline-refused-${String(refusal)}`,
-        });
+        toast.error(timelineErrorMessage(error, { fallback }), { id });
         return;
     }
     const cause =

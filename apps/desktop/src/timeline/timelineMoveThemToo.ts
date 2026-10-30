@@ -292,7 +292,7 @@ export async function moveMarchersAndOfferFollowUp({
     database = db,
     target,
     moves: requested,
-    clearOwn,
+    clearPage,
     setUnmovedFrom,
     afterWrite,
     writesShapes = false,
@@ -301,7 +301,7 @@ export async function moveMarchersAndOfferFollowUp({
     database?: DbConnection;
     target: TimelineEditTarget;
     moves: readonly TimelineMarcherMove[];
-    clearOwn?: boolean;
+    clearPage?: boolean;
     /**
      * Where each marcher stands now: when the moves that are written (Basic's locked marchers
      * left out) move any of them, the ones they leave where they are are written as stays
@@ -348,7 +348,7 @@ export async function moveMarchersAndOfferFollowUp({
         db: database,
         target,
         moves,
-        clearOwn,
+        clearPage,
         keepUnchanged,
         afterWrite: membership
             ? async (tx, timelineId) => {
@@ -366,6 +366,9 @@ export async function moveMarchersAndOfferFollowUp({
     });
     const mark = editHistoryMark();
     toastLockedMarchers(editable.locked.length, true);
+    // Clear this page or a drag back left shape and follow-the-leader members in their move: say
+    // who and why (a warning, since the rest was written)
+    if (result.skipped) toastTimelineError(result.skipped);
     // The resolver's change re-reads them (`PlacedBoxesOverlay`), except where nobody moves (#455)
     if (writesShapes) invalidatePlacedBoxes();
     if (membership && membership.leaves.length > 0)

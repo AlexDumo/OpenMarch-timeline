@@ -328,6 +328,30 @@ removed by the next amendment (#467); Clear this page lands with #469.
     list, `DISPLAY_TABLES` and the query invalidation map.
   - An older build opening a migrated file errors on its kept queries.
 
+**Amendment (2026-10-30, project owner): Clear this page, and cut and remove.** _Accepted (owner,
+2026-10-30, with #469)._ Part 1 of the holds design (`docs/timeline/research/holds/` decision 16
+and `02-adr-amendment-draft.md`; fork #469).
+
+- **Clear this page** is Set to previous page in timeline mode, renamed. It leaves the page with no
+  move of the marcher's own, so the page is Not set. Re-linking a page is this command; there is no
+  separate control.
+  - For a marcher in a shared or longer move, the move is first **cut in time at the page's
+    flags**. This may create a timeline over exactly the page box, which is allowed in the same way
+    as a split by marcher (`allowSharedRanges`). The other members keep their stored layers, since
+    layer derivation isn't built. The marcher is then removed from that page's part, and the slot
+    is compacted.
+  - The Expert drag back in a shared move does the same.
+  - **Shape and follow-the-leader members are skipped,** by the command and by the drag back. The
+    rest still applies, and the skipped marchers are named through `TimelineEditRefusedError` (its
+    `marcherIds`) in a warning. This is interim until fork #504.
+- **Holds rely on transitions only through two operations:** cut a move in time at a count, and
+  remove a marcher from a move for a range of counts (`db-functions/timelineMoveCuts.ts`). How
+  shapes and transitions provide them is left to the shape and transition ownership model (fork
+  #434, #436), a later amendment.
+- **A part of a cut never takes over a page's move.** A page's move is the oldest timeline over its
+  box, so the cut move's id stays with a part that doesn't land on a range a newer move has; when
+  both parts would, neither keeps it.
+
 Cases, a simulator and animations: `docs/timeline/research/layer-priority/README.md`.
 
 Beat editing can still make two timelines share a range (and, since the 2026-10-16 amendment, would

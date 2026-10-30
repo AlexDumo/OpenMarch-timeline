@@ -18,16 +18,16 @@
             "snapToWhole": "Snap to nearest whole"
         },
         "batchEdit": {
+            "clearThisPageAll": "Clear this page (all marchers)",
+            "clearThisPageAllSuccess": "{count, plural, one {Page {currentPage} is Not set for {count} marcher} other {Page {currentPage} is Not set for {count} marchers}}",
+            "clearThisPageSelected": "Clear this page (selected)",
+            "clearThisPageSelectedSuccess": "{count, plural, one {Page {currentPage} is Not set for {count} marcher} other {Page {currentPage} is Not set for {count} marchers}}",
             "noNextPage": "Cannot set marcher coordinates to next page. There is no next page",
             "noPreviousPage": "Cannot set marcher coordinates to previous page. There is no previous page",
             "setAllToNext": "Copy positions from next page (all marchers)",
             "setAllToNextSuccess": "Successfully set all {count} marcher coordinates on page {currentPage} to the coordinates of the next page {nextPage}",
-            "setAllToPrevious": "Copy positions from previous page (all marchers)",
-            "setAllToPreviousSuccess": "Successfully set all {count} marcher coordinates on page {currentPage} to the coordinates of the previous page {previousPage}",
             "setSelectedToNext": "Copy positions from next page (selected)",
-            "setSelectedToNextSuccess": "{count, plural, one {Successfully set {count} marcher coordinate on page {currentPage} to the coordinates of the next page {nextPage}} other {Successfully set {count} marcher coordinates on page {currentPage} to the coordinates of the next page {nextPage}}}",
-            "setSelectedToPrevious": "Copy positions from previous page (selected)",
-            "setSelectedToPreviousSuccess": "{count, plural, other {Successfully set {count} marcher coordinates on page {currentPage} to the coordinates of the previous page {previousPage}}}"
+            "setSelectedToNextSuccess": "{count, plural, one {Successfully set {count} marcher coordinate on page {currentPage} to the coordinates of the next page {nextPage}} other {Successfully set {count} marcher coordinates on page {currentPage} to the coordinates of the next page {nextPage}}}"
         },
         "edit": {
             "noRedoAvailable": "No action to redo",
@@ -2358,6 +2358,7 @@
             "label": "Playback Controls"
         },
         "edit": {
+            "inShapeOrFollowTheLeader": "{shapeCount, plural, =0 {} one {{shapeNames} is in a shape} other {{shapeNames} are in a shape}}{leaderCount, plural, =0 {} other {{shapeCount, plural, =0 {} other {, and }}}}{leaderCount, plural, =0 {} one {{leaderNames} follows the leader} other {{leaderNames} follow the leader}}, so {count, plural, one {it keeps its} other {they keep their}} move here.",
             "passThrough": {
                 "catchUp": "Now catches up to the set at the end of {caughtUp}",
                 "keepStops": {
@@ -2564,8 +2565,8 @@
             "lockMarchersAriaLabel": "Cursor movement and marcher snap",
             "placeAllMarchers": "Place all marchers",
             "placeSelectedMarchers": "Place selected marchers",
-            "toNextPagePositions": "...to next page positions",
-            "toPreviousPagePositions": "...to previous page positions"
+            "clearThisPage": "Clear this page",
+            "toNextPagePositions": "...to next page positions"
         },
         "select": {
             "drillPrefixesLabel": "Select drill prefixes",
