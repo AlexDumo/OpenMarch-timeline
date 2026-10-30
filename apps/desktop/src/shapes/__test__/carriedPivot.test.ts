@@ -25,7 +25,7 @@ import { writePlacement } from "../tool/shapePlacement";
 
 /**
  * A box placed on one page and only carried onto the next (its marchers stand still there), then
- * edited on that later page with nobody moving: a pivot change (#492, #499). `commitBox` asks for
+ * edited on that later page with nobody moving: a pivot change (#492, #499; the fallback is #501). `commitBox` asks for
  * `setAll` there, so the later page gets its own copy and the earlier page keeps its pivot; but
  * when Basic locks some of the members on the later page, a copy without them would drop them
  * from the shape, so the change falls back to the shared recipe.
@@ -48,7 +48,7 @@ const BOX: ShapeRecipeRecord = {
 
 const resolver = () => useTimelineResolverStore.getState().resolver!;
 
-/** Pages 1–4 with three marchers placed in a box on page 2, held through page 3 */
+/** Pages 1–4 with three marchers placed in a box on page 2, the only page they move on */
 const show = async (db: DbConnection) => {
     const pages = [...(await readShowTiming(db)).pages].sort(
         (a, b) => a.order - b.order,
@@ -66,24 +66,23 @@ const show = async (db: DbConnection) => {
         x: 100 + 20 * i,
         y: 50,
     }));
-    let recipeId: number | null = null;
-    let timelineId: number | null = null;
+    let saved: { recipeId: number; timelineId: number | null } | undefined;
     await moveMarchersInTarget({
         db,
         target: { kind: "range", ...PAGE2 },
         moves: members.map(({ marcherId, x, y }) => ({ marcherId, x, y })),
-        afterWrite: async (tx, timeline) => {
-            timelineId = timeline;
-            recipeId = await saveShapeRecipeInTransaction({
+        afterWrite: async (tx, timelineId) => {
+            const recipeId = await saveShapeRecipeInTransaction({
                 tx,
-                timelineId: timeline,
+                timelineId,
                 recipe: BOX,
                 members,
             });
+            saved = { recipeId, timelineId };
         },
     });
     await timelineResolverSettled();
-    return { ids, members, recipeId: recipeId!, timelineId };
+    return { ids, members, ...saved! };
 };
 
 /** Basic's edit at page 3's flag, as `planCanvasEdit` returns it */
@@ -123,6 +122,9 @@ const page3Rows = (db: DbConnection) =>
         )
         .all();
 
+const rowCount = async (db: DbConnection) =>
+    (await db.select().from(schema.timeline_assignments).all()).length;
+
 const undoSteps = async (db: DbConnection) =>
     new Set(
         (await db.select().from(schema.history_undo).all()).map(
@@ -157,7 +159,9 @@ describeDbTests("a pivot change on a page a box is carried onto", (it) => {
             timelineId: placed.timelineId,
             pivot: "nw",
         });
-        expect(after.find((r) => r.id !== placed.recipeId)?.pivot).toBe("se");
+        const copy = after.find((r) => r.id !== placed.recipeId);
+        expect(copy?.pivot).toBe("se");
+        expect(copy?.timelineId).not.toBe(placed.timelineId);
         expect(await undoSteps(db)).toBe(steps + 1);
     });
 
@@ -166,17 +170,21 @@ describeDbTests("a pivot change on a page a box is carried onto", (it) => {
         marchersAndPages: _,
     }) => {
         const placed = await show(db);
+        // Stands in for a real lock (an Expert move of that marcher across page 3's flag): the
+        // write only reads the store
         useBasicLocksStore.setState({
             boxes: [PAGE3 as PageBox],
             locked: new Map([
-                [0, new Map([[placed.ids[0]!, "shape" as never]])],
+                [0, new Map([[placed.ids[0]!, "crossesFlag" as const]])],
             ]),
         });
         const steps = await undoSteps(db);
+        const rows = await rowCount(db);
         expect(await changePivot(placed, "se")).toBe(true);
         await timelineResolverSettled();
 
         expect(await page3Rows(db)).toEqual([]);
+        expect(await rowCount(db)).toBe(rows);
         expect(await pivots(db)).toEqual([
             {
                 id: placed.recipeId,
