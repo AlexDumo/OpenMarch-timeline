@@ -1344,10 +1344,10 @@ export function SnapButton() {
         <IconButton
             label={
                 on
-                    ? tolgee.t("shapes.edit.snap.on", "Turn snapping off")
+                    ? tolgee.t("shapes.edit.snap.on", "Turn Snap off")
                     : tolgee.t(
                           "shapes.edit.snap.off",
-                          "Snapping is off: turn it back on",
+                          "Snap off: turn it back on",
                       )
             }
             shortcut={getActionShortcutLabel("toggleSnap", { overrides })}

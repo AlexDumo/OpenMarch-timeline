@@ -28,8 +28,8 @@ export interface ToolEnv {
     /** The `fine` role is held: the ladder off and the pulls on (owner on #453), whole degrees */
     readonly fine?: boolean;
     /**
-     * The `constrain` role is held: the gesture's own constraint (equal spacings, 45° ends, the
-     * block handle's 15°)
+     * The `constrain` role is held: the gesture's own constraint (a box's equal spacings, or its
+     * ratio lock flipped on a side handle; one axis on a move)
      */
     readonly constrain: boolean;
     /**

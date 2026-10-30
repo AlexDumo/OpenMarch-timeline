@@ -383,7 +383,7 @@
             "fromCenter": "depuis le centre",
             "keepRatio": "garder les proportions",
             "oneAxis": "un axe",
-            "snapOff": "Magnétisme désactivé",
+            "snapOff": "Sans magnétisme",
             "wholeDegrees": "degrés entiers"
         },
         "general": {
@@ -1576,7 +1576,7 @@
             "fineControl": "Contrôle fin en faisant glisser des marcheurs"
         },
         "shape": {
-            "constrain": "Contraindre (espacements égaux, 45°, un axe)",
+            "constrain": "Contraindre (espacements égaux, un axe, inverse la mise à l'échelle proportionnelle)",
             "fineControl": "Contrôle fin, toujours aimanté aux lignes de verges et aux hashes",
             "fromCenter": "Dessiner ou redimensionner une boîte depuis le centre"
         }
@@ -1695,30 +1695,30 @@
             "add": "Ajouter",
             "addHint": "Ajouter : maintenez, ou touchez pour le garder actif. Toucher des marcheurs les ajoute à la sélection",
             "constrain": "Égal",
-            "constrainHint": "Égal : maintenez, ou touchez pour le garder actif. Espacements égaux, un seul axe, rotations régulières",
+            "constrainHint": "Égal : maintenez, ou touchez pour le garder actif. Espacements égaux, un seul axe en déplaçant, inverse la mise à l'échelle proportionnelle",
             "explain": {
                 "add": "Touchez des marcheurs pour les ajouter ou les retirer.",
-                "constrain": "Espacements égaux, un seul axe, rotations régulières.",
-                "fine": "Les glissements vont lentement, hors de la grille.",
+                "constrain": "Espacements égaux, un seul axe en déplaçant, inverse la mise à l'échelle proportionnelle.",
+                "fine": "Les marcheurs vont lentement, hors de la grille. Les formes quittent les demi-pas mais restent aimantées aux lignes. Les rotations vont degré par degré.",
                 "fromCenter": "Les blocs se dessinent et se redimensionnent depuis leur centre.",
                 "grip": "Glissez pour déplacer.",
                 "help": "Gestes.",
-                "snap": "Aimantation aux pas et aux lignes, active ou non."
+                "snap": "Magnétisme aux pas et aux lignes, actif ou non."
             },
             "fine": "Précis",
-            "fineHint": "Précis : maintenez, ou touchez pour le garder actif. Les glissements vont lentement, hors de la grille",
+            "fineHint": "Précis : maintenez, ou touchez pour le garder actif. Les marcheurs vont lentement, hors de la grille ; les formes quittent les demi-pas ; les rotations vont degré par degré",
             "fromCenter": "Depuis le centre",
             "fromCenterHint": "Depuis le centre : maintenez, ou touchez pour le garder actif. Les blocs se dessinent et se redimensionnent depuis leur centre",
             "grip": "Déplacer ces boutons",
             "gripTitle": "Glissez pour déplacer",
             "help": "À quoi servent ces boutons",
             "helpList": {
-                "add": "<b>Ajouter</b> toucher ajoute à la sélection · <b>Sans aimant</b> déplace librement",
-                "fine": "<b>Précis</b> glissements lents et exacts · <b>Égal</b> espacements égaux",
+                "add": "<b>Ajouter</b> toucher ajoute à la sélection · <b>Sans magnétisme</b> déplace librement",
+                "fine": "<b>Précis</b> glissements et rotations exacts · <b>Égal</b> espacements égaux",
                 "fromCenter": "<b>Depuis le centre</b> les blocs grandissent depuis le milieu",
                 "toggles": "<b>Touchez</b> un bouton pour le garder actif, ou <b>maintenez-le</b> pendant que vous glissez"
             },
-            "noSnap": "Sans aimant"
+            "noSnap": "Sans magnétisme"
         }
     },
     "versionCheck": {

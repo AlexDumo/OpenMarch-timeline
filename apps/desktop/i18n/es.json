@@ -383,7 +383,7 @@
             "fromCenter": "desde el centro",
             "keepRatio": "mantener proporción",
             "oneAxis": "un eje",
-            "snapOff": "Alineación desactivada",
+            "snapOff": "Sin alineación",
             "wholeDegrees": "grados enteros"
         },
         "general": {
@@ -1576,7 +1576,7 @@
             "fineControl": "Control fino al arrastrar marchadores"
         },
         "shape": {
-            "constrain": "Restringir (espaciados iguales, 45°, un eje)",
+            "constrain": "Restringir (espaciados iguales, un eje, invierte el escalado proporcional)",
             "fineControl": "Control fino, que sigue ajustándose a las líneas de yardas y los hashes",
             "fromCenter": "Dibujar o redimensionar una caja desde el centro"
         }
@@ -1695,30 +1695,30 @@
             "add": "Añadir",
             "addHint": "Añadir: mantén pulsado o toca para dejarlo activo. Tocar marchadores los añade a la selección",
             "constrain": "Igual",
-            "constrainHint": "Igual: mantén pulsado o toca para dejarlo activo. Espaciados iguales, un solo eje, giros regulares",
+            "constrainHint": "Igual: mantén pulsado o toca para dejarlo activo. Espaciados iguales, un solo eje al mover, invierte el escalado proporcional",
             "explain": {
                 "add": "Toca marchadores para añadirlos o quitarlos.",
-                "constrain": "Espaciados iguales, un solo eje, giros regulares.",
-                "fine": "Los arrastres van despacio, fuera de la cuadrícula.",
+                "constrain": "Espaciados iguales, un solo eje al mover, invierte el escalado proporcional.",
+                "fine": "Los marchadores van despacio, fuera de la cuadrícula. Las formas dejan los medios pasos pero siguen ajustándose a las líneas. Los giros van de grado en grado.",
                 "fromCenter": "Los bloques se dibujan y cambian de tamaño desde su centro.",
                 "grip": "Arrastra para mover.",
                 "help": "Gestos.",
-                "snap": "Ajuste a pasos y líneas, activado o desactivado."
+                "snap": "Alineación con pasos y líneas, activada o desactivada."
             },
             "fine": "Fino",
-            "fineHint": "Fino: mantén pulsado o toca para dejarlo activo. Los arrastres van despacio, fuera de la cuadrícula",
+            "fineHint": "Fino: mantén pulsado o toca para dejarlo activo. Los marchadores van despacio, fuera de la cuadrícula; las formas dejan los medios pasos; los giros van de grado en grado",
             "fromCenter": "Desde el centro",
             "fromCenterHint": "Desde el centro: mantén pulsado o toca para dejarlo activo. Los bloques se dibujan y cambian de tamaño desde su centro",
             "grip": "Mover estos botones",
             "gripTitle": "Arrastra para mover",
             "help": "Qué hacen estos botones",
             "helpList": {
-                "add": "<b>Añadir</b> tocar añade a la selección · <b>Sin ajuste</b> mueve libremente",
-                "fine": "<b>Fino</b> arrastres lentos y precisos · <b>Igual</b> espaciados iguales",
+                "add": "<b>Añadir</b> tocar añade a la selección · <b>Sin alineación</b> mueve libremente",
+                "fine": "<b>Fino</b> arrastres y giros precisos · <b>Igual</b> espaciados iguales",
                 "fromCenter": "<b>Desde el centro</b> los bloques crecen desde el medio",
                 "toggles": "<b>Toca</b> un botón para dejarlo activo, o <b>mantenlo pulsado</b> mientras arrastras"
             },
-            "noSnap": "Sin ajuste"
+            "noSnap": "Sin alineación"
         }
     },
     "versionCheck": {

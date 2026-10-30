@@ -73,7 +73,7 @@ const EXTRA_ROWS: Readonly<Record<string, readonly Row[]>> = {
             keys: "Shift + Drag",
         },
         {
-            label: "Constrain (equal spacings, 45°, one axis)",
+            label: "Constrain (equal spacings, one axis, flips proportional scaling)",
             labelKey: "shortcutsDialog.shape.constrain",
             keys: "Mod + Drag",
         },
