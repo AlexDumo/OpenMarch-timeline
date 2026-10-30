@@ -113,8 +113,10 @@ export function releaseLive(
     const { kind, spots } = live.box;
     const g = live.gesture;
     const centered = click?.double && g ? centerPivot(g) : null;
+    // A double-click's first click already did the handle's click (and was saved), as in the
+    // drawn shape: the second doesn't do it again
     const clicked =
-        click && g?.type === "handle"
+        click && !click.double && g?.type === "handle"
             ? (kind.clickHandle?.(g.base, spots, g.key) ?? null)
             : null;
     const params = centered ?? clicked ?? live.params;

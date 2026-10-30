@@ -53,3 +53,15 @@ export function mirroredAt(points: readonly XY[], i: number): XY {
         return sub(scale(points.at(-1)!, 2), points.at(-2)!);
     return points[i]!;
 }
+
+/** {@link catmullRomControls} of the span from point `i` of `points` to the next, mirrored past the ends */
+export const catmullRomSpan = (
+    points: readonly XY[],
+    i: number,
+): { readonly c1: XY; readonly c2: XY } =>
+    catmullRomControls(
+        mirroredAt(points, i - 1),
+        points[i]!,
+        points[i + 1]!,
+        mirroredAt(points, i + 2),
+    );

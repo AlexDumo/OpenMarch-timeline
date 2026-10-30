@@ -6,7 +6,7 @@ import {
 } from "../frame/frame";
 import { linePull } from "../frame/edgeGuides";
 import { pivotOf } from "../frame/pivot";
-import { catmullRomControls, mirroredAt } from "../geometry/catmullRom";
+import { catmullRomSpan } from "../geometry/catmullRom";
 import { makePath, type Path, type Segment } from "../geometry/path";
 import { cross, dot, lerp } from "../geometry/vec";
 import { chordOffsets, groupGaps } from "../spacing";
@@ -156,12 +156,7 @@ export function lineSegments(p: LineParams): Segment[] {
         const a = points[i]!;
         const line: Segment = { type: "line", a, b };
         if (a.tension === 0 && b.tension === 0) return line;
-        const full = catmullRomControls(
-            mirroredAt(points, i - 1),
-            a,
-            b,
-            mirroredAt(points, i + 2),
-        );
+        const full = catmullRomSpan(points, i);
         const c1 = lerp(a, full.c1, a.tension);
         const c2 = lerp(b, full.c2, b.tension);
         // Handles along the segment and inside it (an end beside a corner) bend nothing
@@ -339,7 +334,7 @@ export function cornerGaps(p: LineParams, n: number): number[] | null {
     const ideal = lengths.map((l) => (gaps * l) / total);
     const counts = ideal.map((x) => Math.max(1, Math.floor(x + 1e-9)));
     let left = sum(counts);
-    // Largest remainders first, and never under one gap a segment
+    // Largest remainders first, and never under one gap a stretch
     while (left < gaps) {
         const i = argMax(ideal.map((x, k) => x - counts[k]!));
         counts[i]!++;
@@ -356,8 +351,8 @@ export function cornerGaps(p: LineParams, n: number): number[] | null {
 }
 
 /**
- * How many of `gaps`, in order, each segment holds: each corner at the seam whose share of the run
- * is nearest its share of the line, at least one gap a segment
+ * How many of `gaps`, in order, each stretch of `lengths` holds: each corner at the seam whose
+ * share of the run is nearest its share of the line, at least one gap a stretch
  */
 function seamGaps(
     lengths: readonly number[],
@@ -372,7 +367,7 @@ function seamGaps(
     lengths.slice(0, -1).forEach((l, i) => {
         along += l;
         const want = (along / total) * run;
-        // Room for one gap in each segment still to come
+        // Room for one gap in each stretch still to come
         const last = gaps.length - (lengths.length - 1 - i);
         let best = seam + 1;
         let at = reach + gaps[seam]!;
@@ -393,9 +388,9 @@ function seamGaps(
 }
 
 /**
- * The gaps each segment holds, in field units, when every corner holds a marcher: in Fit even
- * shares (1 each, scaled to the segment), typed the line's gaps in order along it ({@link
- * lineGaps}), {@link cornerGaps} of them a segment. Null when the corners don't hold marchers.
+ * The gaps each stretch holds, in field units, when every corner holds a marcher: in Fit even
+ * shares (1 each, scaled to the stretch), typed the line's gaps in order along it ({@link
+ * lineGaps}), {@link cornerGaps} of them a stretch. Null when the corners don't hold marchers.
  */
 export function cornerRuns(p: LineParams, n: number): number[][] | null {
     const counts = cornerGaps(p, n);
@@ -409,7 +404,7 @@ const argMax = (xs: readonly number[]): number =>
     xs.reduce((best, x, i) => (x > xs[best]! ? i : best), 0);
 
 /**
- * In Fit with every corner holding a marcher, the narrowest and widest interval of its runs, in
+ * In Fit with every corner holding a marcher, the narrowest and widest interval of its stretches, in
  * field units; null otherwise
  */
 export function intervalRange(
@@ -627,6 +622,30 @@ export function drawLine(
 }
 
 /**
+ * A Curve drawn by a drag (#525): its two ends and, between them, a smooth point a quarter as far
+ * off the line as they are apart, to the left of the way it was dragged, so it starts as a gentle
+ * bow rather than straight; straight while the drag is too short for the bow to land between its
+ * ends, undefined while it's under half a step
+ */
+export function drawCurve(
+    from: XY,
+    to: XY,
+    env: ToolEnv,
+): LineParams | undefined {
+    const line = drawLine(from, to, env, SMOOTH);
+    if (!line) return undefined;
+    const [a, b] = line.points as [LinePoint, LinePoint];
+    const d = sub(b, a);
+    const bow = landPoint(
+        { x: (a.x + b.x) / 2 + d.y / 4, y: (a.y + b.y) / 2 - d.x / 4 },
+        env,
+    );
+    const onEnd = (q: XY) => q.x === bow.x && q.y === bow.y;
+    if (onEnd(a) || onEnd(b)) return line;
+    return { ...line, points: [a, withTension(SMOOTH)(bow), b] };
+}
+
+/**
  * Where a clicked point lands (#524): the first on a field line or the grid, each next one too, or
  * at 45° from the last with constrain
  */
@@ -799,8 +818,8 @@ export function splitSegment(p: LineParams, index: number): LineParams {
 
 /**
  * The line as long as `n` marchers `interval` apart need, grown or shrunk from its pivot (or the
- * run's anchor, `env.anchor`), in Keep interval. With every corner holding a marcher each segment
- * becomes a whole number of intervals long, its direction kept (#524). A line on the path keeps
+ * run's anchor, `env.anchor`), in Keep interval. With every corner holding a marcher each stretch
+ * becomes a whole number of intervals long, its direction and shape kept (#524). A line on the path keeps
  * its drawn length and takes the interval. One group of {@link withGroups}.
  */
 export function withInterval(
@@ -814,7 +833,7 @@ export function withInterval(
 
 /**
  * The line spaced by `groups` (#526), sized to them from its pivot (or `env.anchor`): in Keep
- * interval as long as their gaps add up to, and with every corner holding a marcher each segment
+ * interval as long as their gaps add up to, and with every corner holding a marcher each stretch
  * as long as its run of the gaps ({@link cornerRuns}), its direction kept (#524). A line on the
  * path keeps its drawn length and takes the groups.
  */
@@ -1060,21 +1079,10 @@ export function setTension(
  * way to the next point, or from the one before for the last
  */
 function fullHandle(p: LineParams, index: number): XY {
-    const points = p.points;
-    const last = points.length - 1;
-    if (index < last)
-        return catmullRomControls(
-            mirroredAt(points, index - 1),
-            points[index]!,
-            points[index + 1]!,
-            mirroredAt(points, index + 2),
-        ).c1;
-    return catmullRomControls(
-        mirroredAt(points, index - 2),
-        points[index - 1]!,
-        points[index]!,
-        mirroredAt(points, index + 1),
-    ).c2;
+    const last = p.points.length - 1;
+    return index < last
+        ? catmullRomSpan(p.points, index).c1
+        : catmullRomSpan(p.points, index - 1).c2;
 }
 
 /**

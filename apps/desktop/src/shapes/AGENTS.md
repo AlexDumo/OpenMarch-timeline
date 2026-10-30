@@ -21,7 +21,9 @@ ordinary positions it writes.
   geometry. The Line's frame follows from its points, so it checks its own recipes (`readable`)
   and declares its spacing menu as a kind choice (`ToolChoice`, shown by `editor/ChoiceMenu.tsx`).
   The Curve (`curveTool`) is a preset of the Line (`ToolKind.preset`): its points start smooth, it
-  saves Line recipes, and pickers know it by `toolId`.
+  saves Line recipes, and pickers know it by `toolId`. A picker that arms or highlights a kind
+  threads `toolId(kind)`, never `kind.shape.id`, which a preset shares with its kind; code that
+  reads recipes or saved shapes back skips presets (`PLACED_KINDS`, `savedShapes.ts`).
   `box/edgePull.ts` lands edges and corners on yard lines and hashes; `box/modeMemory.ts`
   remembers each fill mode's numbers.
 - `kinds/`: the older shape-model kinds (`ShapeKind` in `types.ts`) that generate spots. The box

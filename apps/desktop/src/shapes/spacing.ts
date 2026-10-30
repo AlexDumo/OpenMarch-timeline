@@ -243,16 +243,23 @@ function nextAtChord(path: Path, s: number, gap: number): number {
     // A chord is never longer than its arc, so the answer is at least `gap` along. On a straight
     // stretch it is exactly that.
     let lo = s + gap;
-    if (far(lo) >= gap * (1 - 1e-12)) return lo;
-    // March out in quarter gaps until the point is far enough, then bisect that step. A path
-    // that never gets that far (a gap wider than a small circle) falls back to the arc length.
-    const step = gap / 4;
     let hi = lo;
-    for (let i = 0; ; i++) {
-        hi = lo + step;
-        if (far(hi) >= gap) break;
-        lo = hi;
-        if (i === 4096) return s + gap;
+    const reach = far(lo);
+    if (Math.abs(reach - gap) <= gap * 1e-12) return lo;
+    if (reach > gap) {
+        // A curve's measured length runs a little short where it bends hard, so the chord can
+        // overshoot: the answer is back toward `s`
+        lo = s;
+    } else {
+        // March out in quarter gaps until the point is far enough, then bisect that step. A path
+        // that never gets that far (a gap wider than a small circle) falls back to the arc length.
+        const step = gap / 4;
+        for (let i = 0; ; i++) {
+            hi = lo + step;
+            if (far(hi) >= gap) break;
+            lo = hi;
+            if (i === 4096) return s + gap;
+        }
     }
     while (hi - lo > gap * 1e-9) {
         const mid = (lo + hi) / 2;

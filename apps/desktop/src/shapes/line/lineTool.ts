@@ -23,6 +23,7 @@ import {
     curveInFrame,
     dragPoint,
     dragTension,
+    drawCurve,
     drawLine,
     drawPoints,
     hasGroups,
@@ -41,7 +42,6 @@ import {
     SMOOTH,
     splitSegment,
     tensionHandle,
-    typedInterval,
     withGroups,
     withInterval,
     withLineFrame,
@@ -445,11 +445,11 @@ const CORNERS: ToolChoice<LineParams> = {
             ? withGroups(next, n, next.spacing.groups, env)
             : next;
     },
-    // Corners hold marchers only in Fit and Keep interval, with a gap for every run between
+    // Corners hold marchers only in Fit and Keep interval, with a gap for every stretch between
     // corners (n - 1 gaps); smooth points aren't corners (#525)
     shown: (p, n) => {
-        const runs = lineStretches(p).length;
-        return runs > 1 && p.spacing.mode !== "path" && n > runs;
+        const stretches = lineStretches(p).length;
+        return stretches > 1 && p.spacing.mode !== "path" && n > stretches;
     },
 };
 
@@ -593,15 +593,16 @@ export const lineTool: ToolKind<LineParams> = {
 
 /**
  * The Curve (#525, spec #522): a preset of the Line, the same kind and recipe, whose points start
- * smooth. A drag draws two smooth points (straight until a midpoint is pulled out), clicks draw a
- * curve through the points, and a shape turned into a Curve arches across its frame. Placed, it
+ * smooth. A drag draws a gentle bow (a smooth middle point a quarter of the way out, to the left
+ * of the drag), clicks draw a curve through the points, and a shape turned into a Curve arches across its frame. Placed, it
  * reads back as a Line.
  */
 export const curveTool: ToolKind<LineParams> = {
     ...lineTool,
     preset: "curve",
+    keywords: ["curve", "arc-like", "smooth"],
     shape: curveShape,
-    draw: (from, to, _n, env) => drawLine(from, to, env, SMOOTH),
+    draw: (from, to, _n, env) => drawCurve(from, to, env),
     clickPoints: {
         land: landClicked,
         draw: (points, _n, env) => drawPoints(points, env, SMOOTH),

@@ -13,7 +13,13 @@ Terms the code, docs and issues use. Add a term when a design decision settles i
 - **Path**: a shape whose marchers stand along a line, open or closed. A code and docs word, not
   shown in the UI. Only a closed path can be filled.
 - **Point**: a point a Line passes through. It has a **tension**: 0 is a **corner**, more makes
-  the line pass smoothly through it.
+  the line pass smoothly through it. The two ends always hold a marcher, smooth or not; a smooth
+  point between them never does.
+- **Stretch**: the part of a Line from an end or a corner to the next corner or end, smooth points
+  inside it. With corners holding marchers, each stretch holds a whole run of the line's gaps.
+  _Avoid_: segment (one point to the next), run (the marchers' gaps).
+- **Curve**: a preset of the Line whose points start smooth. It saves a Line recipe and reads
+  back as a Line.
 - **Group**: a run of marchers at one interval in an interval list. `2*3` is a group of 2
   marchers at 3 steps.
 - **The rest**: the one group in a list without a count. It takes every marcher the counted

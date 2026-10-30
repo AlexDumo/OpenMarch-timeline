@@ -3,13 +3,16 @@ import { curveTool, lineTool } from "../lineTool";
 import {
     isLineParams,
     linePath,
+    lineSpots,
     MAX_TENSION,
     SMOOTH,
     type LineParams,
 } from "../lineGeometry";
 import { chipLayout } from "../../editor/chip";
+import { sameParams } from "../../placed/commitBox";
 import {
     liveTargets,
+    moveLive,
     openLive,
     pressLive,
     releaseLive,
@@ -314,6 +317,136 @@ describe("spots along a curve", () => {
     });
 });
 
+describe("a curve with mixed intervals", () => {
+    const N = 6;
+    /** A corner, then an arm bending through a smooth point; spaced `2*3+4*2` */
+    const hook = () => {
+        let t = clicked(lineTool, N, [
+            { x: 0, y: 0 },
+            { x: 40, y: 0 },
+            { x: 55, y: 25 },
+            { x: 40, y: 50 },
+        ]);
+        t = onHandle(t, "p2");
+        expect(tensions(t)).toEqual([0, 0, SMOOTH, 0]);
+        return typed(t, "2*3+4*2");
+    };
+    // 2 marchers 3 apart, then 4 marchers 2 apart, the seam the larger
+    const GAPS = [3, 3, 2, 2, 2].map((g) => g * STEP);
+    const smoothPoint = (t: ToolState) => paramsOf(t).points[2]!;
+    const cornerPoint = (t: ToolState) => paramsOf(t).points[1]!;
+
+    it("keeps each group's interval straight across, in order, the corner on a marcher (Keep interval)", () => {
+        const t = hook();
+        expect(paramsOf(t).spacing).toMatchObject({ mode: "keep" });
+        expect(paramsOf(t).spacing).toMatchObject({
+            groups: [
+                { count: 2, interval: 3 * STEP },
+                { count: 4, interval: 2 * STEP },
+            ],
+        });
+        const spots = spotsOf(t);
+        expect(spots).toHaveLength(N);
+        gapsOf(spots).forEach((g, i) => expect(g).toBeCloseTo(GAPS[i]!, 6));
+        expect(spots.some((s) => dist(s, cornerPoint(t)) < 1e-6)).toBe(true);
+        for (const s of spots)
+            expect(dist(s, smoothPoint(t))).toBeGreaterThan(0.5);
+        for (const s of spots) expect(offLine(t, s)).toBeLessThan(1e-6);
+        // Its stretches are whole runs of the gaps: the corner isn't off its interval
+        expect(interval.note!(t.params, t.spots)).toBeNull();
+    });
+
+    it("spreads each stretch's marchers evenly in Fit, the corner on a marcher", () => {
+        const t = picked(hook(), "spacing", "fit");
+        expect(paramsOf(t).spacing).toEqual({ mode: "fit" });
+        const spots = spotsOf(t);
+        expect(spots).toHaveLength(N);
+        const corner = spots.findIndex((s) => dist(s, cornerPoint(t)) < 1e-6);
+        expect(corner).toBeGreaterThan(0);
+        const gaps = gapsOf(spots);
+        for (const run of [gaps.slice(0, corner), gaps.slice(corner)])
+            for (const g of run) expect(g).toBeCloseTo(run[0]!, 6);
+        for (const s of spots)
+            expect(dist(s, smoothPoint(t))).toBeGreaterThan(0.5);
+    });
+
+    it("is placed and reopened with its tensions and groups exactly, everyone on a spot", () => {
+        const t = hook();
+        const placement = placementOf(t, ctx)!;
+        const recipe: PlacedRecipe = {
+            ...placement.recipe,
+            id: 1,
+            timelineId: 10,
+            members: placement.members,
+            params: JSON.parse(JSON.stringify(placement.recipe.params)),
+        };
+        const { spots: _spots, ...saved } = recipe.params as LineParams & {
+            spots: number;
+        };
+        expect(isLineParams(saved)).toBe(true);
+        const at = new Map(recipe.members.map((m) => [m.marcherId, m]));
+        const [placed] = boxesAt({
+            recipes: [recipe],
+            endBeatOf: () => 8,
+            beat: 8,
+            positionOf: (id) => at.get(id),
+        }) as PlacedBox<LineParams>[];
+        expect(placed!.kind).toBe(lineTool);
+        expect(placed!.params.points).toEqual(paramsOf(t).points);
+        expect(placed!.params.spacing).toEqual(paramsOf(t).spacing);
+        const spots = spotsOf(t);
+        const { members } = liveTargets(placed!, placed!.params, ctx);
+        expect(members).toHaveLength(N);
+        for (const m of members)
+            expect(spots.some((s) => dist(s, m) < 1e-6)).toBe(true);
+        expect(
+            chipLayout(lineTool, placed!.params, N, env).groups?.map(
+                (g) => `${g.count} × ${g.interval}`,
+            ),
+        ).toEqual(["2 × 3", "4 × 2"]);
+    });
+});
+
+describe("a run on the path along a curve", () => {
+    /** A curve bending hard near its start and gently toward its end */
+    const lopsided = (
+        anchor: "start" | "center" | "end",
+        groups: { interval: number; count?: number }[],
+    ): LineParams => ({
+        points: [
+            { x: 0, y: 0, tension: 0 },
+            { x: 15, y: -30, tension: SMOOTH },
+            { x: 120, y: 0, tension: 0 },
+        ],
+        spacing: { mode: "path", groups, anchor },
+    });
+    const along = (p: LineParams, at: XY) => linePath(p).project(at);
+    const ONE = [{ interval: 15 }];
+    const MIXED = [{ interval: 10, count: 3 }, { interval: 25 }];
+
+    for (const [name, groups, gaps] of [
+        ["one interval", ONE, [15, 15, 15]],
+        ["groups", MIXED, [10, 10, 25]],
+    ] as const) {
+        it(`ends the run on the line's end with the end anchor (${name})`, () => {
+            const p = lopsided("end", [...groups]);
+            const spots = lineSpots(p, 4);
+            expect(dist(spots.at(-1)!, { x: 120, y: 0 })).toBeLessThan(1e-6);
+            gapsOf(spots).forEach((g, i) => expect(g).toBeCloseTo(gaps[i]!, 6));
+        });
+
+        it(`centers the run with as much path spare before as after (${name})`, () => {
+            const p = lopsided("center", [...groups]);
+            const spots = lineSpots(p, 4);
+            const before = along(p, spots[0]!);
+            const after = linePath(p).length - along(p, spots.at(-1)!);
+            expect(before).toBeGreaterThan(1);
+            expect(before).toBeCloseTo(after, 3);
+            gapsOf(spots).forEach((g, i) => expect(g).toBeCloseTo(gaps[i]!, 6));
+        });
+    }
+});
+
 describe("the Curve", () => {
     it("is in the Shapes tab after the Line, a preset of the same kind", () => {
         const entry = SHAPE_TOOLS.find((e) => e.kind === curveTool)!;
@@ -332,15 +465,30 @@ describe("the Curve", () => {
         expect(PLACED_KINDS).not.toContain(curveTool);
     });
 
-    it("draws two smooth points with a drag, bent by pulling a midpoint out", () => {
+    it("draws a gentle bow with a drag: a smooth middle point a quarter of the way out, to the left", () => {
         let t = openTool(curveTool, marchers(5));
         t = press(t, { x: 0, y: 0 }, env);
         t = pointerMove(t, { x: 80, y: 0 }, env);
         t = release(t, ctx, null);
-        expect(tensions(t)).toEqual([SMOOTH, SMOOTH]);
-        t = onHandle(t, "m0", { x: 40, y: -30 });
         expect(tensions(t)).toEqual([SMOOTH, SMOOTH, SMOOTH]);
-        expect(paramsOf(t).points[1]).toMatchObject({ x: 40, y: -30 });
+        // Dragged left to right, the bow rises toward the top of the screen
+        expect(paramsOf(t).points.map(({ x, y }) => ({ x, y }))).toEqual([
+            { x: 0, y: 0 },
+            { x: 40, y: -20 },
+            { x: 80, y: 0 },
+        ]);
+        // Dragged the other way, it bows the other way
+        let back = openTool(curveTool, marchers(5));
+        back = press(back, { x: 80, y: 0 }, env);
+        back = pointerMove(back, { x: 0, y: 0 }, env);
+        back = release(back, ctx, null);
+        expect(paramsOf(back).points[1]).toMatchObject({ x: 40, y: 20 });
+        // The Line still draws straight
+        let line = openTool(lineTool, marchers(5));
+        line = press(line, { x: 0, y: 0 }, env);
+        line = pointerMove(line, { x: 80, y: 0 }, env);
+        line = release(line, ctx, null);
+        expect(tensions(line)).toEqual([0, 0]);
     });
 
     it("turns a shape into an arch across its frame, every point smooth", () => {
@@ -406,5 +554,54 @@ describe("a placed curve", () => {
         const out = releaseLive(live, { double: false });
         expect(out.changed).toBe(true);
         expect((out.live.params as LineParams).points[1]!.tension).toBe(0);
+    });
+
+    const handleAt = (placed: PlacedBox<LineParams>, key: string) =>
+        lineTool.handles(placed.params, N).find((h) => h.key === key)!.at;
+
+    it("toggles a point only once on a double-click: the second click changes nothing", () => {
+        // The first click was saved; the second press, on the box read back, is the double
+        const placed = readBack(recipeOf(arch()));
+        const live = pressLive(openLive(placed), handleAt(placed, "p1"), env)!;
+        const out = releaseLive(live, { double: true });
+        expect(out.changed).toBe(false);
+        expect((out.live.params as LineParams).points[1]!.tension).toBe(SMOOTH);
+    });
+
+    it("leaves a point as it was when it's dragged out and back: a drag, not a click", () => {
+        const placed = readBack(recipeOf(arch()));
+        const p1 = handleAt(placed, "p1");
+        let live = pressLive(openLive(placed), p1, env)!;
+        live = moveLive(live, { x: p1.x + 40, y: p1.y }, env);
+        live = moveLive(live, p1, env);
+        // The editor tells a press that went past the slop as a drag
+        const out = releaseLive(live, null);
+        expect(out.changed).toBe(false);
+        expect((out.live.params as LineParams).points[1]!.tension).toBe(SMOOTH);
+    });
+
+    it("saves a tension handle dragged on the placed curve on release", () => {
+        const placed = readBack(recipeOf(arch()));
+        let live = pressLive(openLive(placed), handleAt(placed, "t1"), env)!;
+        expect(live.gesture).toMatchObject({ type: "handle", key: "t1" });
+        live = moveLive(live, { x: 60, y: -40 }, env);
+        const out = releaseLive(live, null);
+        expect(out.changed).toBe(true);
+        const tension = (out.live.params as LineParams).points[1]!.tension;
+        expect(tension).toBeGreaterThan(SMOOTH);
+        const { members } = liveTargets(placed, out.live.params, ctx);
+        expect(members).toHaveLength(N);
+    });
+
+    it("saves every point made a corner from the Points menu on the placed curve", () => {
+        const placed = readBack(recipeOf(arch()));
+        const next = choice("points").pick(placed.params, N, "corner", env);
+        expect(sameParams(next, placed.params)).toBe(false);
+        expect(next.points.map((q) => q.tension)).toEqual([0, 0, 0, 0]);
+        // Every member on a spot of the line with corners, one on each corner
+        const { members } = liveTargets(placed, next, ctx);
+        expect(members).toHaveLength(N);
+        for (const q of next.points.slice(1, -1))
+            expect(members.some((m) => dist(m, q) < 1e-6)).toBe(true);
     });
 });
