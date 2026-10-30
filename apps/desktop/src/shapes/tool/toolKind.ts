@@ -28,6 +28,11 @@ export interface ToolEnv {
      * block handle's 15°)
      */
     readonly constrain: boolean;
+    /**
+     * The `fromCenter` role is held: a box is drawn from its center out, and a handle resizes it
+     * about its center, the opposite side moving the other way. Corner to corner when absent.
+     */
+    readonly fromCenter?: boolean;
     /** The nearest spot on the half-step grid */
     readonly gridSnap: (p: XY) => XY;
     /** How far from a handle a press still takes it, in field units */

@@ -273,6 +273,48 @@ test("B opens the box tool, and a drag draws a box edge to edge on half steps, m
     expect((await readField(page)).selection).toEqual(ALL);
 });
 
+test("change: with Alt held, a drag draws the box from its center: the press is its middle, the pointer a corner", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await selectAll(page);
+    await page.keyboard.press("b");
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+
+    const pressed = { x: cf.x - 15 * S, y: cf.y - 25 * S };
+    await page.keyboard.down("Alt");
+    await drag(
+        page,
+        await toScreen(page, pressed),
+        await toScreen(page, { x: pressed.x + 5 * S, y: pressed.y + 3 * S }),
+    );
+    await page.keyboard.up("Alt");
+
+    const drawn = (await shapeOverlay(page))!;
+    expect(drawn.spots).toHaveLength(ALL.length);
+    for (const spot of drawn.spots) {
+        expect(onHalfSteps(spot.x, cf.x, S)).toBe(true);
+        expect(onHalfSteps(spot.y, cf.y, S)).toBe(true);
+    }
+    // Grown both ways from the press: 10 steps wide and 6 deep, as the drag corner to corner
+    // draws, centered within a quarter step (an even count stays on the half steps)
+    const xs = drawn.spots.map((p) => p.x);
+    const ys = drawn.spots.map((p) => p.y);
+    const middle = {
+        x: (Math.min(...xs) + Math.max(...xs)) / 2,
+        y: (Math.min(...ys) + Math.max(...ys)) / 2,
+    };
+    expect(Math.abs(middle.x - pressed.x)).toBeLessThanOrEqual(S / 4 + CLOSE);
+    expect(Math.abs(middle.y - pressed.y)).toBeLessThanOrEqual(S / 4 + CLOSE);
+    expect(Math.min(...xs)).toBeLessThan(pressed.x - 4 * S);
+    expect(Math.min(...ys)).toBeLessThan(pressed.y - 2 * S);
+    expect(await readout(page)).toMatch(/^4 × 2 · /);
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+});
+
 test("handles stretch the intervals with files and ranks fixed, + adds a file, and a drag inside moves the box", async ({
     show,
 }) => {

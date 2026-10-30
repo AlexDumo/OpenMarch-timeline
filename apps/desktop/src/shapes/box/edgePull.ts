@@ -26,6 +26,11 @@ export type PullAxis =
           readonly count: number;
           /** The interval the half-step ladder gives this axis, for a corner whose other axis is pulled */
           readonly ladder: number | undefined;
+          /**
+           * `anchor` is the box's center rather than its fixed edge (`fromCenter`): the opposite edge
+           * moves the other way, so the moving edge is half the span from it
+           */
+          readonly fromCenter?: boolean;
       }
     | {
           readonly moves: false;
@@ -79,9 +84,12 @@ export function pullEdges(
     if (env.constrain && x.moves && y.moves) return {};
     const half = env.stepPx / 2;
     const own = [x, y] as const;
-    const gaps = own.map((a) => (a.moves ? a.count - 1 : 0));
+    // The gaps between the anchor and the moving edge: half of them from the center
+    const gaps = own.map((a) =>
+        a.moves ? (a.count - 1) / (a.fromCenter ? 2 : 1) : 0,
+    );
     const sign = own.map((a) => (a.moves && a.to < a.anchor ? -1 : 1));
-    if (own.every((a, i) => !a.moves || gaps[i]! < 1)) return {};
+    if (own.every((a, i) => !a.moves || gaps[i]! <= 0)) return {};
     // Where a point is on the field: o + px·u + py·v
     const o = field.toField({ x: 0, y: 0 });
     const ux = field.toField({ x: 1, y: 0 });
@@ -93,15 +101,20 @@ export function pullEdges(
     /** Whether `e` puts axis `i`'s moving edge beyond its fixed edge, a half step or more apart */
     const fits = (i: number, e: number) => {
         const a = own[i]!;
-        if (!a.moves || gaps[i]! < 1) return false;
+        if (!a.moves || gaps[i]! <= 0) return false;
         return (
             (e - a.anchor) * sign[i]! > 0 &&
             Math.abs(e - a.anchor) / gaps[i]! >= half - EPS
         );
     };
-    // The box's corners: on each axis the fixed edge and the moving one (null), or both edges
+    // The box's corners: on each axis the fixed edge and the moving one (null), or both edges.
+    // From the center only the moving edge's corners: the far side isn't the anchor.
     const sides = own.map((a) =>
-        a.moves ? [a.anchor, null] : [a.edges[0], a.edges[1]],
+        a.moves
+            ? a.fromCenter
+                ? [null]
+                : [a.anchor, null]
+            : [a.edges[0], a.edges[1]],
     );
     const raw = own.map((a) => (a.moves ? a.to : 0));
     /** Where axis `i`'s moving edge is on its half-step ladder, or as dragged with no ladder */
