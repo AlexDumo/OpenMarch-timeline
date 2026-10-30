@@ -401,8 +401,31 @@ export function lineSpots(p: LineParams, n: number): Slot[] {
 }
 
 /**
+ * A closed line's turn (#529): its sides' directions taken a quarter turn at a time, so a side and
+ * the one square to it agree, and averaged by length, within an eighth of a turn of 0. It doesn't
+ * depend on which point was clicked first or which way round: a rectangle's is its sides', one
+ * drawn square to the field 0, so its ranks square to the field like a box's. 0 when no side leads
+ * (a regular octagon).
+ */
+function closedTurn(p: LineParams): number {
+    let x = 0;
+    let y = 0;
+    for (const [a, b] of lineSegments(p)) {
+        const d = sub(b, a);
+        const angle = 4 * Math.atan2(d.y, d.x);
+        x += length(d) * Math.cos(angle);
+        y += length(d) * Math.sin(angle);
+    }
+    if (Math.hypot(x, y) < 1e-9 * Math.max(1, linePath(p).length)) return 0;
+    const turn = Math.atan2(y, x) / 4;
+    // A rectangle square to the field is 0, not float noise either side of it
+    return Math.abs(turn) < 1e-12 ? 0 : turn;
+}
+
+/**
  * The line's frame: centered between its ends, turned along them, as long as they are apart and
- * with no depth. A closed line's is turned the same way, around all its points (#529). A line is
+ * with no depth. A closed line's is around all its points, turned square to the field
+ * ({@link closedTurn}), so the same outline fills the same way however it was clicked. A line is
  * never flipped: a flip reverses it instead.
  */
 export function lineFrame(p: LineParams): ShapeFrame {
@@ -418,14 +441,15 @@ export function lineFrame(p: LineParams): ShapeFrame {
         flipY: false,
     };
     if (!isClosed(p)) return open;
-    const local = p.points.map((q) => fieldToFrame(open, q));
+    const turned: ShapeFrame = { ...open, rotation: closedTurn(p) };
+    const local = p.points.map((q) => fieldToFrame(turned, q));
     const xs = local.map((q) => q.x);
     const ys = local.map((q) => q.y);
     const [left, right] = [Math.min(...xs), Math.max(...xs)];
     const [top, bottom] = [Math.min(...ys), Math.max(...ys)];
     return {
-        ...open,
-        center: frameToField(open, {
+        ...turned,
+        center: frameToField(turned, {
             x: (left + right) / 2,
             y: (top + bottom) / 2,
         }),

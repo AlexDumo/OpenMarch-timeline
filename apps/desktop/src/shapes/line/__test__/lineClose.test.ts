@@ -247,11 +247,10 @@ describe("filling a closed line", () => {
         const spots = spotsOf(inMode(square(8), "files"));
         expect(spots).toHaveLength(8);
         expect(inside(spots)).toBe(true);
-        // 3 × 3 with one off the back rank, which runs along the line's frame (turned from its
-        // first point to its last, here down the field)
-        const backRank = spots.filter(
-            (s) => Math.abs(s.x - spots[0]!.x) < 1e-6,
-        );
+        // 3 × 3 with one off the back rank, which runs across the field at the back (the
+        // frame square to the field, as a box's)
+        const back = Math.min(...spots.map((s) => s.y));
+        const backRank = spots.filter((s) => Math.abs(s.y - back) < 1e-6);
         expect(backRank).toHaveLength(2);
     });
 
@@ -268,6 +267,31 @@ describe("filling a closed line", () => {
         // A spot on every corner
         for (const c of SQUARE)
             expect(spots.some((s) => dist(s, c) < 1e-6)).toBe(true);
+    });
+
+    it("fills the same outline the same way however it was clicked", () => {
+        // A 6 × 3 step rectangle, clicked from three corners, both ways round
+        const A = { x: 100, y: 100 };
+        const B = { x: 160, y: 100 };
+        const C = { x: 160, y: 130 };
+        const D = { x: 100, y: 130 };
+        const orders = [
+            [A, B, C, D],
+            [C, B, A, D],
+            [B, C, D, A],
+        ];
+        const closedFrom = (pts: XY[], n: number) =>
+            click(clicking(n, pts), { x: pts[0]!.x + 1, y: pts[0]!.y });
+        for (const mode of ["files", "spread"] as const) {
+            const [first, ...others] = orders.map((pts) =>
+                spotsOf(inMode(closedFrom(pts, 9), mode)),
+            );
+            for (const spots of others) expectSameSpots(spots, first!);
+        }
+        // Ranks square to the field: Grid's rows run across it
+        const grid = spotsOf(inMode(closedFrom(orders[1]!, 8), "files"));
+        const rows = new Set(grid.map((s) => s.y.toFixed(6)));
+        expect(rows.size).toBeLessThan(grid.length / 2);
     });
 
     it("fills an L the same way", () => {
