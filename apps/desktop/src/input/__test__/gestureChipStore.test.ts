@@ -65,4 +65,31 @@ describe("gestureChipStore", () => {
         );
         expect(useGestureChipStore.getState().roles).toBe(shown);
     });
+
+    it("belongs to the gesture that showed it: another gesture's sync shows its own, and only the owner's clear hides it", () => {
+        const TURN: HonoredRoles = {
+            context: "shape",
+            fine: "wholeDegrees",
+            snaps: true,
+        };
+        const roles = { fine: true, constrain: false, fromCenter: false };
+        const first = {};
+        const second = {};
+        syncGestureChip(MOVE, roles, { x: 0, y: 0 }, first);
+        // A gesture that starts before the first ends names what it reads, not the first's roles
+        syncGestureChip(TURN, roles, { x: 5, y: 5 }, second);
+        expect(useGestureChipStore.getState()).toMatchObject({
+            active: true,
+            honored: TURN,
+            screen: { x: 5, y: 5 },
+        });
+        // The first ending leaves the second's chip up
+        clearGestureChip(first);
+        expect(useGestureChipStore.getState()).toMatchObject({
+            active: true,
+            honored: TURN,
+        });
+        clearGestureChip(second);
+        expect(useGestureChipStore.getState().active).toBe(false);
+    });
 });

@@ -53,12 +53,14 @@ export function holdGesture<A>(
     let last: A | null = null;
     let ended = false;
     let chipShown = false;
+    /** This gesture, as the chip's owner */
+    const owner = {};
     const touchChip = (roles: Roles) => {
         if (!chip || ended) return;
         if (!chipShown && last === null && !holdsHonored(chip.honored, roles))
             return;
         chipShown = true;
-        syncGestureChip(chip.honored, roles, chip.screen());
+        syncGestureChip(chip.honored, roles, chip.screen(), owner);
     };
     const keys = startGestureKeys({
         context: "shape",
@@ -84,7 +86,7 @@ export function holdGesture<A>(
         end() {
             ended = true;
             keys.dispose();
-            if (chip) clearGestureChip();
+            if (chip) clearGestureChip(owner);
         },
     };
 }

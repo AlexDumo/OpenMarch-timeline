@@ -70,7 +70,7 @@ export class FieldDrag<T> {
     ) {
         this.keys = keys((roles) => {
             if (this.shown) this.drawAt(this.shown.at);
-            syncGestureChip(this.honored, roles, this.lastScreen);
+            syncGestureChip(this.honored, roles, this.lastScreen, this);
         });
     }
 
@@ -78,7 +78,7 @@ export class FieldDrag<T> {
         this.lastScreen = pointer.screen;
         this.keys.update(pointer);
         this.drawAt(pointer.field);
-        syncGestureChip(this.honored, this.keys.roles(), pointer.screen);
+        syncGestureChip(this.honored, this.keys.roles(), pointer.screen, this);
     }
 
     /** Stops following the keys, and returns what the release drops. */
@@ -90,7 +90,7 @@ export class FieldDrag<T> {
             shown.at.y === pointer.field.y;
         if (!still) this.keys.update(pointer);
         this.keys.dispose();
-        clearGestureChip();
+        clearGestureChip(this);
         return still
             ? shown.drawn
             : this.draw(pointer.field, this.keys.roles());
@@ -99,7 +99,7 @@ export class FieldDrag<T> {
     /** Stops following the keys; nothing is dropped. */
     cancel(): void {
         this.keys.dispose();
-        clearGestureChip();
+        clearGestureChip(this);
     }
 
     private drawAt(at: FieldPoint) {
