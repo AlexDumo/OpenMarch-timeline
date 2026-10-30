@@ -54,7 +54,7 @@ import {
     useFieldQualityStore,
 } from "@/field/fieldQuality";
 import { FieldEditor } from "@/field/editor/fieldEditor";
-import { ruledMove } from "@/field/editor/moveRules";
+import { settingsMoveOptions } from "@/field/editor/settingsMoveOptions";
 import { VisualsFieldEditor } from "@/field/editor/visualsFieldEditor";
 import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
@@ -441,18 +441,11 @@ function ThreeFieldView() {
                 },
                 {
                     isMac: isMacPlatform(),
-                    // #197: snapping and Lock X/Y, read as they are on each move; fine and
-                    // constrain come from the held roles
-                    moveTransform: ruledMove(() => {
-                        const { coordinateRounding, lockX, lockY } =
-                            useUiSettingsStore.getState().uiSettings;
-                        return {
-                            rounding: coordinateRounding,
-                            lockX,
-                            lockY,
-                            grid: latest.current.fieldProperties ?? null,
-                        };
-                    }),
+                    // #197: snapping, the Snap toggle and Lock X/Y, read as they are on each
+                    // move; off, the Snap toggle frees a rotate handle too
+                    ...settingsMoveOptions(
+                        () => latest.current.fieldProperties ?? null,
+                    ),
                 },
             ),
         [marchers, items],

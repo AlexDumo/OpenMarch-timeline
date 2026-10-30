@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+    act,
+    cleanup,
+    fireEvent,
+    render,
+    screen,
+} from "@testing-library/react";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import type { Roles } from "@/input/modifierRoles";
 import * as platform from "@/shortcuts/platform";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import type { ShapeField } from "../../field/shapeField";
 import { toolEnvFor } from "../../tool/toolEnv";
 import { boxTool } from "../../box/boxTool";
@@ -16,7 +23,7 @@ import { stubPointerCapture } from "./pointerEvents";
  * Dragging Expand or Shrink scrubs the shape bigger or smaller (#489), reading held roles
  * (version A): with Shift (fine) a spacing goes in hundredths of a step. A role key pressed or
  * released mid-drag scrubs again where the pointer is, and the keyboard stops being followed when
- * the press ends. Off a Mac here, so $mod is Ctrl.
+ * the press ends. With the Snap toggle off it scrubs freely. Off a Mac here, so $mod is Ctrl.
  */
 
 const fieldProperties =
@@ -38,6 +45,9 @@ beforeEach(() => {
 
 afterEach(() => {
     cleanup();
+    act(() => {
+        useUiSettingsStore.getState().setSnap(true);
+    });
     restorePointerCapture();
     vi.restoreAllMocks();
 });
@@ -110,6 +120,41 @@ describe("dragging Expand", () => {
         fireEvent.keyDown(window, { key: "Shift", shiftKey: true });
         expect(preview).not.toHaveBeenCalled();
         fireEvent.pointerCancel(button);
+    });
+});
+
+describe("dragging Expand with the Snap toggle", () => {
+    it("off, scrubs freely: half a step per 8 px, not whole steps of the rule", () => {
+        act(() => {
+            useUiSettingsStore.getState().setSnap(false);
+        });
+        const { button, gap } = shown();
+        fireEvent.pointerDown(button, { button: 0, clientX: 0, clientY: 0 });
+        fireEvent.pointerMove(button, { clientX: 20, clientY: 0 });
+        expect(gap()).toBeCloseTo(3.25, 9);
+        fireEvent.pointerUp(button);
+    });
+
+    it("on, goes in half steps", () => {
+        const { button, gap } = shown();
+        fireEvent.pointerDown(button, { button: 0, clientX: 0, clientY: 0 });
+        fireEvent.pointerMove(button, { clientX: 20, clientY: 0 });
+        expect(gap()).toBe(3);
+        fireEvent.pointerUp(button);
+    });
+
+    it("turned off mid-drag, scrubs freely from the next move", () => {
+        const { button, gap } = shown();
+        fireEvent.pointerDown(button, { button: 0, clientX: 0, clientY: 0 });
+        fireEvent.pointerMove(button, { clientX: 20, clientY: 0 });
+        expect(gap()).toBe(3);
+        act(() => {
+            useUiSettingsStore.getState().setSnap(false);
+        });
+        fireEvent.pointerMove(button, { clientX: 21, clientY: 0 });
+        // A spacing keeps 600ths of a step
+        expect(gap()).toBeCloseTo(2 + (21 * 0.5) / 8, 2);
+        fireEvent.pointerUp(button);
     });
 });
 
