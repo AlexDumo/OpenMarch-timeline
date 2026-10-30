@@ -328,9 +328,9 @@ removed by the next amendment (#467); Clear this page lands with #469.
     list, `DISPLAY_TABLES` and the query invalidation map.
   - An older build opening a migrated file errors on its kept queries.
 
-**Amendment (2026-10-30, project owner): Clear this page, and cut and remove.** _Proposed (owner to
-accept with #469)._ Part 1 of the holds design (`docs/timeline/research/holds/` decision 16 and
-`02-adr-amendment-draft.md`; fork #469).
+**Amendment (2026-10-30, project owner): Clear this page, and cut and remove.** _Accepted (owner,
+2026-10-30, with #469)._ Part 1 of the holds design (`docs/timeline/research/holds/` decision 16
+and `02-adr-amendment-draft.md`; fork #469).
 
 - **Clear this page** is Set to previous page in timeline mode, renamed. It leaves the page with no
   move of the marcher's own, so the page is Not set. Re-linking a page is this command; there is no
@@ -343,7 +343,7 @@ accept with #469)._ Part 1 of the holds design (`docs/timeline/research/holds/` 
   - The Expert drag back in a shared move does the same.
   - **Shape and follow-the-leader members are skipped,** by the command and by the drag back. The
     rest still applies, and the skipped marchers are named through `TimelineEditRefusedError` (its
-    `marcherIds`) in a warning. This is interim until fork #434.
+    `marcherIds`) in a warning. This is interim until fork #504.
 - **Holds rely on transitions only through two operations:** cut a move in time at a count, and
   remove a marcher from a move for a range of counts (`db-functions/timelineMoveCuts.ts`). How
   shapes and transitions provide them is left to the shape and transition ownership model (fork
