@@ -112,6 +112,8 @@ export function ScrubNumber({
                     autoFocus
                     aria-label={label}
                     data-testid={testId && `${testId}-input`}
+                    // Being typed: a menu round it leaves Esc to it
+                    data-editing
                     className="rounded-4 border-accent bg-fg-1 text-sub text-text w-[5ch] border px-2 text-center tabular-nums outline-none"
                     style={{ width: `${Math.max(typing.length, 3) + 1}ch` }}
                     value={typing}

@@ -45,36 +45,25 @@ export function groupSummary(
     return shown.join(" + ");
 }
 
-/** The marchers a group takes, numbered along the shape from 1: null for a dropped group */
-export interface GroupRange {
-    readonly from: number;
-    readonly to: number;
-}
-
-/** Each group's marchers, numbered along the shape from 1, in order */
-export function groupRanges(
-    groups: readonly ToolGroup[],
-): (GroupRange | null)[] {
-    let next = 1;
-    return groups.map((g) => {
-        const count = Number(g.count);
-        if (!(count > 0)) return null;
-        const range = { from: next, to: next + count - 1 };
-        next += count;
-        return range;
-    });
-}
-
-/** A group's marchers in words: "Marchers 1–2", "Marcher 3", "No marchers left" */
-export function rangeText(range: GroupRange | null): string {
-    if (range === null)
-        return tolgee.t("shapes.groups.noMarchers", "No marchers left");
-    if (range.from === range.to)
-        return tolgee.t("shapes.groups.oneMarcher", "Marcher {n}", {
-            n: range.from,
-        });
-    return tolgee.t("shapes.groups.marchers", "Marchers {from}–{to}", {
-        from: range.from,
-        to: range.to,
+/**
+ * Each group's marchers in words, by where they stand along the shape (review of #577): "First 2",
+ * "Next 3", "Last 3". Not drill numbers: on a placed shape, or after Least travel, the first spot
+ * needn't be B1. The group at the end, counted or the rest, is the last; one alone is "All 8"; a
+ * group dropped off the end has "No marchers left".
+ */
+export function groupPlaces(groups: readonly ToolGroup[]): string[] {
+    const counts = groups.map((g) => Number(g.count));
+    const first = counts.findIndex((c) => c > 0);
+    const last = counts.findLastIndex((c) => c > 0);
+    return counts.map((count, i) => {
+        if (!(count > 0))
+            return tolgee.t("shapes.groups.noMarchers", "No marchers left");
+        if (i === first && i === last)
+            return tolgee.t("shapes.groups.all", "All {count}", { count });
+        if (i === first)
+            return tolgee.t("shapes.groups.first", "First {count}", { count });
+        if (i === last)
+            return tolgee.t("shapes.groups.last", "Last {count}", { count });
+        return tolgee.t("shapes.groups.next", "Next {count}", { count });
     });
 }

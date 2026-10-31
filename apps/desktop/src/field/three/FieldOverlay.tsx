@@ -19,6 +19,12 @@ import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import { GUIDE_INK, GUIDE_INK_TEXT } from "./guideInk";
 import { shapeAlone, useMarchersHidden } from "@/shapes/field/marchersHidden";
+import {
+    GROUP_LABEL_HEIGHT,
+    GROUP_LABEL_PX,
+    groupLabelWidth,
+    placeGroupLabels,
+} from "@/shapes/field/groupDrawing";
 import HeldRolesChip, { HeldRolesChipBelowTip } from "./HeldRolesChip";
 
 /** The selection border width, in CSS px. */
@@ -58,13 +64,13 @@ const SHAPE_HANDLE_WIDTH = 1.5;
  * labels are small pills in CSS px.
  */
 const GROUP_RING_RADIUS = SPOT_RADIUS + 2.5;
+/** A seam's label: the rule between two groups, in a neutral ink */
+const GROUP_SEAM_INK = "#4b5563";
 const GROUP_RING_LOOK = {
     faint: { width: 1.25, opacity: 0.6, fill: 0 },
     lit: { width: 2, opacity: 1, fill: 0.3 },
     dim: { width: 1, opacity: 0.2, fill: 0 },
 } as const;
-const GROUP_LABEL_PX = 10;
-const GROUP_LABEL_HEIGHT = 14;
 
 /** The prop tool's line while drawing, in CSS px. */
 const PROP_PREVIEW_WIDTH = 2;
@@ -650,30 +656,35 @@ const ShapeOnGuides = memo(function ShapeOnGuides({
     );
 });
 
-/** A gap of the group pointed at, labeled with its interval (#526 follow-up): a small pill */
+/**
+ * A gap of the group pointed at, labeled with its interval (#526 follow-up): a small pill in its
+ * group's color. A seam, the rule between two groups, is a neutral pill with a dashed edge.
+ */
 function GroupGapLabel({
     text,
     at,
     color,
+    seam,
 }: {
     text: string;
     at: { x: number; y: number };
     color: string;
+    seam: boolean;
 }) {
-    // About the width of the text in DM Sans at this size, with room either side
-    const w = text.length * GROUP_LABEL_PX * 0.6 + 8;
+    const w = groupLabelWidth(text);
     const h = GROUP_LABEL_HEIGHT;
     return (
-        <g data-testid="fieldShapeGroupLabel">
+        <g data-testid="fieldShapeGroupLabel" data-seam={seam || undefined}>
             <rect
                 x={at.x - w / 2}
                 y={at.y - h / 2}
                 width={w}
                 height={h}
                 rx={h / 2}
-                fill={color}
-                stroke="white"
+                fill={seam ? "white" : color}
+                stroke={seam ? GROUP_SEAM_INK : "white"}
                 strokeWidth={1}
+                strokeDasharray={seam ? "2 2" : undefined}
             />
             <text
                 x={at.x}
@@ -681,7 +692,7 @@ function GroupGapLabel({
                 fontSize={GROUP_LABEL_PX}
                 fontWeight={600}
                 fontFamily="DM Sans, sans-serif"
-                fill="white"
+                fill={seam ? GROUP_SEAM_INK : "white"}
                 textAnchor="middle"
                 dominantBaseline="central"
             >
@@ -786,14 +797,22 @@ function ModeDrawing({
             <g transform={transform}>
                 <ShapeOnGuides drawing={drawing} theme={theme} />
             </g>
-            {drawing.groupLabels?.map(({ at: point, text, color }, i) => (
-                <GroupGapLabel
-                    key={`group-${i}`}
-                    text={text}
-                    at={at(point)}
-                    color={color}
-                />
-            ))}
+            {drawing.groupLabels &&
+                placeGroupLabels(
+                    drawing.groupLabels,
+                    at,
+                    GROUP_RING_RADIUS * z,
+                    // Clear of the spots' names, drawn above them
+                    drawing.labels?.length ? SPOT_LABEL_PX + 1 : 0,
+                ).map(({ at: p, text, color, seam }, i) => (
+                    <GroupGapLabel
+                        key={`group-${i}`}
+                        text={text}
+                        at={p}
+                        color={color}
+                        seam={seam}
+                    />
+                ))}
             {drawing.labels?.map(({ at: point, text }, i) => {
                 const p = at(point);
                 return (

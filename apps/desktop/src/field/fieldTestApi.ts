@@ -248,8 +248,11 @@ export type FieldTestShapeOverlay = {
         shade: "faint" | "lit" | "dim";
         group: number;
     }[];
-    /** Each gap of the group pointed at, labeled with its interval ("3", "↔ 2½"), field units. */
-    groupLabels: { x: number; y: number; text: string }[];
+    /**
+     * Each gap of the group pointed at, labeled with its interval ("3", "↔ 2½"), at its middle in
+     * field units; a `seam` is where the group meets a neighbor, with the interval there.
+     */
+    groupLabels: { x: number; y: number; text: string; seam: boolean }[];
 };
 
 /** A placed box outlined on the field. */

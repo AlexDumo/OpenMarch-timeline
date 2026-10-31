@@ -14,10 +14,9 @@ import {
     type GroupTarget,
 } from "./GroupChips";
 import {
-    groupRanges,
+    groupPlaces,
     groupSummary,
     groupSummaryStyle,
-    rangeText,
     type GroupSummaryStyle,
 } from "./groupSummary";
 import { useEditorMenu, useMenuFocus } from "./menuFocus";
@@ -30,8 +29,8 @@ export const GROUP_MENU_ATTRIBUTE = "data-shape-group-menu";
 /**
  * A kind's mixed intervals once there are two groups or more (owner feedback on #526): one quiet
  * button in the floating editor, "Multiple intervals" (or the groups summed up, `2·3 + 4·2`, with
- * the `numbers` style), opening a menu with a row per group. Each row names the marchers it takes
- * and its count and interval, typed or dragged as the chips were, with × to remove it; Add group
+ * the `numbers` style), opening a menu with a row per group. Each row says where its marchers
+ * stand along the shape ("First 2", "Next 3", "Last 3") and gives its count and interval, typed or dragged as the chips were, with × to remove it; Add group
  * sits below, and a field at the top takes a whole list (`2*3+4*2`). Each group has a color: while
  * the menu is open the field rings every group's spots in it, and the group whose row is pointed
  * at, focused or edited lights up with its gaps labeled.
@@ -87,7 +86,7 @@ export function GroupMenu({
         summary === "numbers"
             ? groupSummary(groups)
             : tolgee.t("shapes.groups.multiple", "Multiple intervals");
-    const ranges = groupRanges(groups);
+    const places = groupPlaces(groups);
     const leaveRow = (i: number) => (e: FocusEvent) => {
         const next = e.relatedTarget as Node | null;
         if (!next || !e.currentTarget.contains(next))
@@ -105,11 +104,21 @@ export function GroupMenu({
                 <Popover.Trigger asChild>
                     <button
                         type="button"
-                        aria-label={tolgee.t(
-                            "shapes.groups.menuLabel",
-                            "Intervals: {groups}",
-                            { groups: groupSummary(groups, groups.length) },
-                        )}
+                        // The name starts with what the button says; the numbers say it all
+                        aria-label={
+                            summary === "numbers"
+                                ? undefined
+                                : tolgee.t(
+                                      "shapes.groups.menuLabel",
+                                      "Multiple intervals: {groups}",
+                                      {
+                                          groups: groupSummary(
+                                              groups,
+                                              groups.length,
+                                          ),
+                                      },
+                                  )
+                        }
                         {...focus.trigger}
                         data-testid="shape-groups-menu"
                         data-group-menu-trigger
@@ -127,6 +136,20 @@ export function GroupMenu({
                     align="start"
                     sideOffset={6}
                     {...focus.content}
+                    aria-label={tolgee.t(
+                        "shapes.groups.menuName",
+                        "Interval groups",
+                    )}
+                    // Esc in a number or the list being typed is theirs: it puts the typing back
+                    // and leaves the menu open. Radix hears it first, on the document
+                    onEscapeKeyDown={(e) => {
+                        if (
+                            (e.target as Element | null)?.closest?.(
+                                "[data-editing]",
+                            )
+                        )
+                            e.preventDefault();
+                    }}
                     // Focus back on the button isn't leaving: its tooltip closing can put it there.
                     // Found by its mark, as the tooltip may have drawn the button again
                     onFocusOutside={(e) => {
@@ -186,7 +209,7 @@ export function GroupMenu({
                                     className="text-text/60 min-w-[96px]"
                                     data-testid={`shape-group-${i}-marchers`}
                                 >
-                                    {rangeText(ranges[i] ?? null)}
+                                    {places[i]}
                                 </span>
                                 <span className="flex items-center gap-2">
                                     {g.rest && (
@@ -258,7 +281,12 @@ export function GroupMenu({
                                             { n: i + 1 },
                                         )}
                                         testId={`shape-group-${i}-remove`}
-                                        onClick={() => remove(i)}
+                                        onClick={() => {
+                                            remove(i);
+                                            // The row that moves up isn't the one pointed at
+                                            setHovered(null);
+                                            setFocused(null);
+                                        }}
                                     >
                                         <XIcon size={10} />
                                     </GroupButton>
@@ -283,7 +311,8 @@ export function GroupMenu({
 
 /**
  * The whole list as typed (`2*3+4*2`), at the top of the group menu: Enter applies a list typed
- * over it (a plain `2` is everyone at 2), Esc puts it back. Not understood, it stays to fix.
+ * over it (a plain `2` is everyone at 2), Esc puts it back. Not understood, it stays to fix; left,
+ * a list understood is applied and one that isn't goes.
  */
 function ListField({
     text,
@@ -312,17 +341,19 @@ function ListField({
             aria-invalid={wrong || undefined}
             value={shown}
             data-group-list
+            data-editing={draft !== null || undefined}
             data-testid="shape-groups-list"
             onChange={(e) => {
                 setDraft(e.target.value);
                 setWrong(false);
             }}
             onBlur={() => {
+                if (draft !== null) onType(draft);
                 setDraft(null);
                 setWrong(false);
             }}
             onKeyDown={(e) => {
-                // Esc with nothing typed closes the menu
+                // Esc with nothing typed closes the menu (the popover's own Esc)
                 if (e.key === "Escape" && draft === null) return;
                 // The keys are the list's: Enter doesn't also place the shape, nor Space play
                 e.stopPropagation();

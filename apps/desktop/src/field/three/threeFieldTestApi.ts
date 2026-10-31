@@ -210,9 +210,10 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
             shade,
             group,
         })),
-        groupLabels: (drawing.groupLabels ?? []).map(({ at, text }) => ({
+        groupLabels: (drawing.groupLabels ?? []).map(({ at, text, seam }) => ({
             ...copy(at),
             text,
+            seam,
         })),
     };
     function screen(at: FieldPoint) {

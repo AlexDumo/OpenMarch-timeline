@@ -3,7 +3,16 @@ import { lineTool } from "../../line/lineTool";
 import { drawLine, type LineParams } from "../../line/lineGeometry";
 import type { ToolEnv } from "../../tool/toolKind";
 import type { XY } from "../../types";
-import { GROUP_COLORS, groupColor, groupDrawing } from "../groupDrawing";
+import {
+    GROUP_COLORS,
+    GROUP_LABEL_HEIGHT,
+    GROUP_LABEL_ROOM,
+    groupColor,
+    groupDrawing,
+    groupLabelWidth,
+    placeGroupLabels,
+    type GroupGapLabel,
+} from "../groupDrawing";
 
 /**
  * What the field draws of a Line's interval groups while the editor's group menu is open (owner
@@ -118,7 +127,8 @@ describe("a line's groups on the field", () => {
             "dim",
             "dim",
         ]);
-        expect(groupLabels!.map((l) => l.text)).toEqual(["2", "2"]);
+        const gapsOnly = groupLabels!.filter((l) => !l.seam);
+        expect(gapsOnly.map((l) => l.text)).toEqual(["2", "2"]);
         expect(groupLabels![0]!.at.x).toBeCloseTo(
             (spots[2]!.x + spots[3]!.x) / 2,
         );
@@ -138,6 +148,174 @@ describe("a line's groups on the field", () => {
             { lit: 0 },
             STEP,
         );
-        expect(groupLabels!.map((l) => l.text)).toEqual(["↔ 3"]);
+        expect(groupLabels!.map((l) => [l.text, l.seam])).toEqual([
+            ["↔ 3", false],
+            ["↔ 3", true],
+        ]);
+        expect(groupLabels![0]!.whole).toBe("↔ 2 at 3");
+    });
+
+    it("labels the seams either side of the lit group with the larger interval there", () => {
+        const { groupLabels } = groupDrawing(
+            lineTool,
+            p,
+            8,
+            spots,
+            { lit: 1 },
+            STEP,
+        );
+        const seams = groupLabels!.filter((l) => l.seam);
+        // 2 at 3 | 3 at 2 | the rest at 4: the seams take 3 and 4
+        expect(seams.map((l) => l.text)).toEqual(["3", "4"]);
+        expect(seams[0]!.from).toEqual(spots[1]);
+        expect(seams[0]!.to).toEqual(spots[2]);
+        expect(seams[1]!.from).toEqual(spots[4]);
+        expect(seams[1]!.to).toEqual(spots[5]);
+        expect(groupLabels!.every((l) => l.whole === "3 at 2")).toBe(true);
+    });
+
+    it("has one seam for a group at an end", () => {
+        const { groupLabels } = groupDrawing(
+            lineTool,
+            p,
+            8,
+            spots,
+            { lit: 2 },
+            STEP,
+        );
+        expect(groupLabels!.filter((l) => l.seam).map((l) => l.text)).toEqual([
+            "4",
+        ]);
+    });
+});
+
+describe("the lit group's labels set beside the line", () => {
+    const gapLabel = (
+        from: XY,
+        to: XY,
+        more: Partial<GroupGapLabel> = {},
+    ): GroupGapLabel => ({
+        from,
+        to,
+        at: { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 },
+        text: "3",
+        color: "#E69F00",
+        seam: false,
+        whole: "3 at 3",
+        ...more,
+    });
+    const same = (p: XY) => p;
+    const RING = 6;
+
+    it("moves a gap's pill up off a level line by the ring and half its height", () => {
+        const [placed] = placeGroupLabels(
+            [gapLabel({ x: 0, y: 100 }, { x: 60, y: 100 })],
+            same,
+            RING,
+        );
+        expect(placed!.at.x).toBeCloseTo(30);
+        expect(placed!.at.y).toBeCloseTo(
+            100 - (RING + GROUP_LABEL_HEIGHT / 2 + 2),
+        );
+        expect(placed!.text).toBe("3");
+    });
+
+    it("moves it to the left of an upright line by the ring and half its width", () => {
+        const [placed] = placeGroupLabels(
+            [gapLabel({ x: 50, y: 0 }, { x: 50, y: 60 })],
+            same,
+            RING,
+        );
+        expect(placed!.at.x).toBeCloseTo(
+            50 - (RING + groupLabelWidth("3") / 2 + 2),
+        );
+        expect(placed!.at.y).toBeCloseTo(30);
+    });
+
+    it("keeps to the same side whichever way the line runs, and puts seams on the other", () => {
+        const placed = placeGroupLabels(
+            [
+                gapLabel({ x: 60, y: 100 }, { x: 0, y: 100 }),
+                gapLabel({ x: 60, y: 100 }, { x: 120, y: 100 }, { seam: true }),
+            ],
+            same,
+            RING,
+        );
+        expect(placed[0]!.at.y).toBeLessThan(100);
+        expect(placed[1]!.at.y).toBeGreaterThan(100);
+        expect(placed[1]!.seam).toBe(true);
+    });
+
+    it("clears what stands above the rings when it moves up, and only then", () => {
+        const placed = placeGroupLabels(
+            [
+                gapLabel({ x: 0, y: 100 }, { x: 60, y: 100 }),
+                gapLabel({ x: 60, y: 100 }, { x: 120, y: 100 }, { seam: true }),
+            ],
+            same,
+            RING,
+            11,
+        );
+        expect(placed[0]!.at.y).toBeCloseTo(
+            100 - (RING + GROUP_LABEL_HEIGHT / 2 + 2 + 11),
+        );
+        expect(placed[1]!.at.y).toBeCloseTo(
+            100 + (RING + GROUP_LABEL_HEIGHT / 2 + 2),
+        );
+    });
+
+    it("works on screen: the gap and the shift are in CSS px", () => {
+        const zoomed = (p: XY) => ({ x: p.x * 2, y: p.y * 2 });
+        const [placed] = placeGroupLabels(
+            [gapLabel({ x: 0, y: 50 }, { x: 30, y: 50 })],
+            zoomed,
+            RING,
+        );
+        expect(placed!.at.x).toBeCloseTo(30);
+        expect(placed!.at.y).toBeCloseTo(
+            100 - (RING + GROUP_LABEL_HEIGHT / 2 + 2),
+        );
+    });
+
+    it("draws one label for the group at its middle when its gaps are shorter than a pill and some room", () => {
+        const w = groupLabelWidth("3");
+        const step = w + GROUP_LABEL_ROOM - 1;
+        const spotsAt = [0, 1, 2, 3].map((k) => ({ x: k * step, y: 0 }));
+        const labels = [1, 2, 3].map((k) =>
+            gapLabel(spotsAt[k - 1]!, spotsAt[k]!),
+        );
+        const seam = gapLabel(
+            { x: 3 * step, y: 0 },
+            { x: 4 * step, y: 0 },
+            { seam: true, text: "4" },
+        );
+        const placed = placeGroupLabels([...labels, seam], same, RING);
+        expect(placed.map((l) => l.text)).toEqual(["3 at 3", "4"]);
+        // Three gaps: the middle one's middle
+        expect(placed[0]!.at.x).toBeCloseTo(1.5 * step);
+        expect(placed[0]!.at.y).toBeLessThan(0);
+    });
+
+    it("puts the one label on the middle spot when the group has an even number of gaps", () => {
+        const step = 10;
+        const spotsAt = [0, 1, 2].map((k) => ({ x: k * step, y: 0 }));
+        const placed = placeGroupLabels(
+            [1, 2].map((k) => gapLabel(spotsAt[k - 1]!, spotsAt[k]!)),
+            same,
+            RING,
+        );
+        expect(placed).toHaveLength(1);
+        expect(placed[0]!.at.x).toBeCloseTo(step);
+    });
+
+    it("keeps a label per gap when the gaps are wide enough", () => {
+        const step = groupLabelWidth("3") + GROUP_LABEL_ROOM + 1;
+        const spotsAt = [0, 1, 2].map((k) => ({ x: k * step, y: 0 }));
+        const placed = placeGroupLabels(
+            [1, 2].map((k) => gapLabel(spotsAt[k - 1]!, spotsAt[k]!)),
+            same,
+            RING,
+        );
+        expect(placed.map((l) => l.text)).toEqual(["3", "3"]);
     });
 });

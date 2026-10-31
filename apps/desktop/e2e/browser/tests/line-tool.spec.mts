@@ -411,12 +411,12 @@ test("change: typing 2*3+4*2 spaces the line in groups, shown in the group menu,
     await expect(menu).toBeVisible();
     await expect(menu.getByTestId("shape-groups-list")).toHaveValue("2*3+4*2");
     await expect(menu.getByTestId("shape-group-0-marchers")).toHaveText(
-        "Marchers 1–2",
+        "First 2",
     );
     await expect(menu.getByTestId("shape-group-0-count")).toHaveText("2");
     await expect(menu.getByTestId("shape-group-0-interval")).toHaveText("3");
     await expect(menu.getByTestId("shape-group-1-marchers")).toHaveText(
-        "Marchers 3–8",
+        "Last 6",
     );
     await expect(menu.getByTestId("shape-group-1-count")).toHaveText("6");
     await expect(menu.getByTestId("shape-group-1-grown")).toHaveText("+2");
@@ -437,7 +437,8 @@ test("change: typing 2*3+4*2 spaces the line in groups, shown in the group menu,
             ),
         )
         .toEqual([...Array(2).fill("0faint"), ...Array(6).fill("1faint")]);
-    // A row pointed at lights its group, dims the other and labels its gap
+    // A row pointed at lights its group, dims the other and labels its gap, and the seam with the
+    // other group with the larger interval there
     await menu.getByTestId("shape-group-0-marchers").hover();
     await expect
         .poll(async () =>
@@ -447,7 +448,10 @@ test("change: typing 2*3+4*2 spaces the line in groups, shown in the group menu,
         )
         .toEqual([...Array(2).fill("0lit"), ...Array(6).fill("1dim")]);
     const lit = (await shapeOverlay(page))!;
-    expect(lit.groupLabels.map((l) => l.text)).toEqual(["3"]);
+    expect(lit.groupLabels.map((l) => [l.text, l.seam])).toEqual([
+        ["3", false],
+        ["3", true],
+    ]);
     const [a, b] = lit.groupMarks;
     expect(lit.groupLabels[0]!.x).toBeCloseTo((a!.x + b!.x) / 2);
     expect(lit.groupLabels[0]!.y).toBeCloseTo((a!.y + b!.y) / 2);
@@ -528,7 +532,7 @@ test("change: the group menu takes a whole list, edits a row in place, and remov
     );
     await expect(menu.getByTestId("shape-group-2-count")).toHaveText("3");
     await expect(menu.getByTestId("shape-group-2-marchers")).toHaveText(
-        "Marchers 6–8",
+        "Last 3",
     );
     // Nonsense stays to fix, and changes nothing
     await list.fill("2**");
@@ -549,12 +553,15 @@ test("change: the group menu takes a whole list, edits a row in place, and remov
     gaps((await shapeOverlay(page))!.spots).forEach((gap, i) =>
         expect(Math.abs(gap - expected[i]! * S)).toBeLessThan(CLOSE),
     );
-    // Its gaps labeled with the axis-free interval while the row has focus
+    // Its gaps labeled with the axis-free interval while the row has focus, and its seams with
+    // the larger interval either side
     await expect
         .poll(async () =>
-            (await shapeOverlay(page))!.groupLabels.map((l) => l.text),
+            (await shapeOverlay(page))!.groupLabels.map(
+                (l) => `${l.text}${l.seam ? " seam" : ""}`,
+            ),
         )
-        .toEqual(["2½", "2½"]);
+        .toEqual(["2½", "2½", "3 seam", "4 seam"]);
 
     // Removing groups down to one: the menu goes and the interval number is back, with focus
     await menu.getByTestId("shape-group-2-remove").click();

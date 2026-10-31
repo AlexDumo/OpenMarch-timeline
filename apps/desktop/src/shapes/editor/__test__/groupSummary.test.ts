@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ToolGroup } from "../../tool/toolKind";
-import { groupRanges, groupSummary, rangeText } from "../groupSummary";
+import { groupPlaces, groupSummary } from "../groupSummary";
 
 /**
  * How the floating editor sums up two or more interval groups (owner feedback on #526): the
@@ -53,23 +53,36 @@ describe("the groups summed up", () => {
 });
 
 describe("each group's marchers", () => {
-    it("numbers them along the shape from 1", () => {
-        const ranges = groupRanges([
-            group(2, "3"),
-            group(1, "2"),
-            group(5, "4", { rest: true }),
-            group(0, "1"),
-        ]);
-        expect(ranges).toEqual([
-            { from: 1, to: 2 },
-            { from: 3, to: 3 },
-            { from: 4, to: 8 },
-            null,
-        ]);
-        expect(ranges.map(rangeText)).toEqual([
-            "Marchers 1–2",
-            "Marcher 3",
-            "Marchers 4–8",
+    it("names them by where they stand along the shape, not by drill number", () => {
+        expect(
+            groupPlaces([
+                group(2, "3"),
+                group(1, "2"),
+                group(3, "4"),
+                group(5, "4", { rest: true }),
+            ]),
+        ).toEqual(["First 2", "Next 1", "Next 3", "Last 5"]);
+    });
+
+    it("calls the group at the end the last, counted or the rest", () => {
+        expect(
+            groupPlaces([group(2, "3"), group(6, "2", { grown: 2 })]),
+        ).toEqual(["First 2", "Last 6"]);
+        expect(
+            groupPlaces([
+                group(2, "3"),
+                group(3, "2", { rest: true }),
+                group(3, "4"),
+            ]),
+        ).toEqual(["First 2", "Next 3", "Last 3"]);
+    });
+
+    it("skips a group dropped off the end when finding the last", () => {
+        expect(
+            groupPlaces([group(4, "3"), group(4, "2"), group(0, "4")]),
+        ).toEqual(["First 4", "Last 4", "No marchers left"]);
+        expect(groupPlaces([group(8, "3"), group(0, "2")])).toEqual([
+            "All 8",
             "No marchers left",
         ]);
     });

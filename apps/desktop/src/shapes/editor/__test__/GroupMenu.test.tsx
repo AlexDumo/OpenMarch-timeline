@@ -147,9 +147,9 @@ describe("a line's interval groups in the floating editor", () => {
         ).toBe("2*3+3*2+4");
         const row = (i: number, part: string) =>
             screen.getByTestId(`shape-group-${i}-${part}`);
-        expect(row(0, "marchers").textContent).toBe("Marchers 1–2");
-        expect(row(1, "marchers").textContent).toBe("Marchers 3–5");
-        expect(row(2, "marchers").textContent).toBe("Marchers 6–8");
+        expect(row(0, "marchers").textContent).toBe("First 2");
+        expect(row(1, "marchers").textContent).toBe("Next 3");
+        expect(row(2, "marchers").textContent).toBe("Last 3");
         expect(row(2, "count").textContent).toBe("3");
         expect(screen.getByTestId("shape-group-2").dataset.rest).toBe("true");
         expect([0, 1, 2].map((i) => row(i, "color").dataset.color)).toEqual(
@@ -205,6 +205,97 @@ describe("a line's interval groups in the floating editor", () => {
         fireEvent.keyDown(list, { key: "Enter" });
         expect(screen.getByTestId("shape-group-2").dataset.rest).toBe("true");
         expect(screen.getByTestId("shape-group-0-count").textContent).toBe("1");
+    });
+
+    it("names the button and the menu by what they show", () => {
+        renderEditor();
+        typeInto("shape-editor-interval", "2*3+4*2");
+        const button = screen.getByTestId("shape-groups-menu");
+        expect(button.getAttribute("aria-label")).toBe(
+            "Multiple intervals: 2·3 + 6·2",
+        );
+        expect(openMenu().getAttribute("aria-label")).toBe("Interval groups");
+    });
+
+    it("takes the numbers summary as the button's name with the numbers style", () => {
+        localStorage.setItem("openmarch:groupSummary", "numbers");
+        renderEditor();
+        typeInto("shape-editor-interval", "2*3+4*2");
+        const button = screen.getByTestId("shape-groups-menu");
+        expect(button.hasAttribute("aria-label")).toBe(false);
+        expect(button.textContent).toBe("2·3 + 6·2");
+    });
+
+    it("puts a list being typed back on Esc, and keeps the menu open", () => {
+        renderEditor();
+        typeInto("shape-editor-interval", "2*3+4*2");
+        const menu = openMenu();
+        const list = menu.querySelector<HTMLInputElement>("[data-group-list]")!;
+        act(() => list.focus());
+        fireEvent.change(list, { target: { value: "5*1" } });
+        fireEvent.keyDown(list, { key: "Escape" });
+        expect(screen.getByTestId("shape-groups-content")).toBeTruthy();
+        expect(list.value).toBe("2*3+4*2");
+    });
+
+    it("cancels a row's number being typed on Esc, and keeps the menu open", () => {
+        renderEditor();
+        typeInto("shape-editor-interval", "2*3+4*2");
+        openMenu();
+        fireEvent.click(screen.getByTestId("shape-group-1-interval"), {
+            detail: 0,
+        });
+        const input = screen.getByTestId("shape-group-1-interval-input");
+        act(() => input.focus());
+        fireEvent.change(input, { target: { value: "7" } });
+        fireEvent.keyDown(input, { key: "Escape" });
+        expect(screen.getByTestId("shape-groups-content")).toBeTruthy();
+        expect(screen.queryByTestId("shape-group-1-interval-input")).toBeNull();
+        expect(screen.getByTestId("shape-group-1-interval").textContent).toBe(
+            "2",
+        );
+    });
+
+    it("closes on Esc with nothing being typed", async () => {
+        renderEditor();
+        typeInto("shape-editor-interval", "2*3+4*2");
+        const menu = openMenu();
+        const list = menu.querySelector<HTMLInputElement>("[data-group-list]")!;
+        act(() => list.focus());
+        fireEvent.keyDown(list, { key: "Escape" });
+        await waitFor(() =>
+            expect(screen.queryByTestId("shape-groups-content")).toBeNull(),
+        );
+    });
+
+    it("applies a list understood when the field is left, and drops one that isn't", () => {
+        renderEditor();
+        typeInto("shape-editor-interval", "2*3+4*2");
+        const menu = openMenu();
+        const list = menu.querySelector<HTMLInputElement>("[data-group-list]")!;
+        act(() => list.focus());
+        fireEvent.change(list, { target: { value: "2**" } });
+        fireEvent.blur(list);
+        expect(list.value).toBe("2*3+4*2");
+        fireEvent.change(list, { target: { value: "1*3+2*2+5" } });
+        fireEvent.blur(list);
+        expect(screen.getByTestId("shape-group-2").dataset.rest).toBe("true");
+        expect(list.value).toBe("1*3+2*2+5");
+    });
+
+    it("lights nothing after × until a row is pointed at again", () => {
+        renderEditor();
+        typeInto("shape-editor-interval", "2*3+3*2+4");
+        openMenu();
+        fireEvent.pointerEnter(screen.getByTestId("shape-group-1"));
+        const remove = screen.getByTestId("shape-group-1-remove");
+        act(() => remove.focus());
+        expect(useShapePointerStore.getState().groupMenu).toEqual({ lit: 1 });
+        fireEvent.click(remove);
+        expect(screen.queryByTestId("shape-group-2")).toBeNull();
+        expect(useShapePointerStore.getState().groupMenu).toEqual({
+            lit: null,
+        });
     });
 
     it("adds a group from the menu", () => {
