@@ -12,6 +12,7 @@ import { useTimelineSelectionHost } from "./useTimelineSelectionHost";
 import { useTimelinePageBridge } from "./useTimelinePageBridge";
 import { useDeselectDimmedMarchers } from "./useTimelineDimming";
 import { useTimelinePlaybackDriver } from "./useTimelinePlaybackDriver";
+import { useHeldMarksHost } from "./useHeldMarks";
 import { useBasicModeGuards } from "./useBasicModeGuards";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { useCollisionDetection } from "@/hooks/useCollisionDetection";
@@ -117,6 +118,8 @@ export default function TimelineResolverHost() {
     useBasicModeGuards(true);
     // UI-19: the marchers Basic can't edit, per page
     useBasicLocksHost(true);
+    // Holds (#472): the Held marks the timeline's Held bars read
+    useHeldMarksHost(db, true);
     // #226: the selected page's collisions, for both fields and the Collisions tab
     useCollisionDetection();
     // The console API can write fixtures into the file: development builds only

@@ -100,6 +100,8 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
 	\`created_at\` text DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
 	FOREIGN KEY (\`assignment_id\`) REFERENCES \`timeline_assignments\`(\`id\`) ON UPDATE no action ON DELETE cascade
 )`),
+    // Held marks (ADR 0001 amendment 2026-10-30)
+    30: (db) => dropTables(db, ["timeline_held_marks"]),
 };
 
 /**

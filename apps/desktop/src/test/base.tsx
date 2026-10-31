@@ -19,6 +19,7 @@ import {
 } from "./sqlProxyTestUtil";
 import {
     addLaterMarcherColumns,
+    laterTableStatements,
     convertFixtureFile,
     pageEraBlankPath,
     timelineFixtureMode,
@@ -133,6 +134,10 @@ const loadSqlIntoDatabase = async (
     // drop all triggers
     await dropAllUndoTriggers(orm as unknown as any);
     for (const file of loaded) await db.exec(fs.readFileSync(file, "utf-8"));
+    // A page-mode fixture gets the later tables timeline edits read, with their undo triggers
+    if (!timelineFixtureMode())
+        for (const statement of laterTableStatements())
+            await db.exec(statement);
     await createAllUndoTriggers(orm as unknown as any);
     const updatedDbBuffer = db.export();
     fs.writeFileSync(dbPath, updatedDbBuffer);

@@ -529,6 +529,38 @@ export const timeline_slot_destinations = sqliteTable(
 );
 
 /**
+ * A **Held** hold (holds README decision 2; ADR 0001 amendment 2026-10-30): one marcher stands
+ * still on purpose over `[start_beat, end_beat)`, where it has no move. Editing a count inside
+ * it edits the move that arrives at `start_beat`, so the whole hold moves. App data, kept apart
+ * from the motion tables: not in `timeline_change_log`, never read by the
+ * resolver (the marcher holds there anyway, spec R-6). No move of the marcher overlaps a mark
+ * (H-1) and one marcher's marks don't overlap (H-3), checked at commit
+ * (`timeline_held_violations`). A rowid key, so undo restores the same row (C-2).
+ */
+export const timeline_held_marks = sqliteTable(
+    "timeline_held_marks",
+    {
+        id: integer().primaryKey(),
+        marcher_id: integer()
+            .notNull()
+            .references(() => marchers.id, { onDelete: "cascade" }),
+        start_beat: integer().notNull(),
+        end_beat: integer().notNull(),
+    },
+    (table) => [
+        unique().on(table.marcher_id, table.start_beat),
+        check(
+            "timeline_held_marks_start_beat_check",
+            sql`typeof(start_beat) = 'integer' AND start_beat >= 0`,
+        ),
+        check(
+            "timeline_held_marks_end_beat_check",
+            sql`typeof(end_beat) = 'integer' AND end_beat > start_beat`,
+        ),
+    ],
+);
+
+/**
  * A placed shape's **recipe** (ADR 0006): the Shape tool kind and parameters that laid out its
  * marchers at the end of a move (`timeline_id`), or their homes (`NULL`), so the shape can be
  * reopened and edited. The positions themselves are ordinary destinations; this row only

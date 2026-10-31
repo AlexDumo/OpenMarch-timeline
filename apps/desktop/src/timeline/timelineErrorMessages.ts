@@ -5,6 +5,7 @@ import { conToastError } from "@/utilities/utils";
 import { toast } from "sonner";
 import { toastBasicLock } from "./basicLockToast";
 import type { NotJoined } from "@/db-functions/timelineJoinAtBeat";
+import { joinList } from "./timelineRangeWords";
 import {
     marcherNamesText,
     type KeepTranslate,
@@ -16,8 +17,8 @@ import {
  * error code a timeline write can fail with to a short message a person can act on, so the
  * toasts never show a raw code, a SQLite message or a stack.
  *
- * - The spec's codes (`E-S1`, `E-P1`, `E-T1` to `E-T6`, `E-A1` to `E-A3`) and the app's `E-D2` and
- *   `E-N2` each have a message. The combined codes the database reports when one trigger checks
+ * - The spec's codes (`E-S1`, `E-P1`, `E-T1` to `E-T6`, `E-A1` to `E-A3`), the app's `E-D2` and
+ *   `E-N2`, and the Held marks' `E-H1` and `E-H3` each have a message. The combined codes the database reports when one trigger checks
  *   two invariants (`E-A1/E-A2`, `E-T3/E-T4`) have their own, which name both halves.
  * - `E-ARGS` is a refusal the write path words itself ("slot 3 is already taken"): its own message
  *   is shown, without the code prefix.
@@ -104,6 +105,16 @@ export const TIMELINE_ERROR_MESSAGES: Readonly<
         defaultMessage:
             "That marcher's move doesn't fit the transition: it must stay inside the transition's range, and use a slot the transition has.",
     },
+    "E-H1": {
+        key: "timeline.errors.moveInHeldHold",
+        defaultMessage:
+            "That would put a move inside a Held hold. Clear this page to remove the hold, or drag inside it to move it.",
+    },
+    "E-H3": {
+        key: "timeline.errors.heldHoldsOverlap",
+        defaultMessage:
+            "A marcher can't have two Held holds over the same counts.",
+    },
     "E-A3": {
         key: "timeline.errors.assignmentOverlap",
         defaultMessage:
@@ -156,6 +167,52 @@ export function isLegacyConversionViolation(error: unknown): boolean {
     }
     return [...spansByTimeline.values()].some((spans) => spans.size > 1);
 }
+
+/**
+ * An E-H1 refusal that knows who (`TimelineCommitViolationError.held`): it names the marchers and
+ * the page they are Held on, and the way out. `.one` for one marcher, `.many` for several.
+ */
+export const HELD_CONFLICT_MESSAGES: Readonly<
+    Record<"one" | "many", TimelineErrorMessage>
+> = {
+    one: {
+        key: "timeline.errors.heldConflict.one",
+        defaultMessage:
+            "{names} is Held on {pages}. Clear this page to remove the hold, or drag inside it to move it.",
+    },
+    many: {
+        key: "timeline.errors.heldConflict.many",
+        defaultMessage:
+            "{names} are Held on {pages}. Clear this page to remove the holds, or drag inside them to move them.",
+    },
+};
+
+/** An E-H1's message naming who and where, or null when the error doesn't say. */
+function heldConflictMessage(
+    error: unknown,
+    translate: TimelineTranslate,
+): string | null {
+    if (!(error instanceof TimelineCommitViolationError)) return null;
+    const held = error.held;
+    if (!held || held.names.length === 0 || held.pages.length === 0)
+        return null;
+    const names = held.names;
+    const message = HELD_CONFLICT_MESSAGES[names.length === 1 ? "one" : "many"];
+    return translate(message.key, message.defaultMessage, {
+        names:
+            marcherNamesText(
+                names.map((_, i) => i),
+                (i) => names[i],
+                (key, defaultValue, params) =>
+                    translate(key, defaultValue, params),
+            ) ?? names.join(", "),
+        pages: heldPagesText(held.pages),
+    });
+}
+
+/** Held pages by name, as the hold messages say them: "Page 3", "Pages 3 and 4". */
+export const heldPagesText = (pages: readonly string[]): string =>
+    pages.length === 1 ? `Page ${pages[0]}` : `Pages ${joinList(pages)}`;
 
 export const TIMELINE_NOT_READY_MESSAGE: TimelineErrorMessage = {
     key: "timeline.errors.notReady",
@@ -223,7 +280,10 @@ export function notJoinedMessage(
         .join(" ");
 }
 
-/** Looks a message up by key and default; the Tolgee singleton by default, anything in tests. */
+/**
+ * Looks a message up by key and default, filling in `params`; the Tolgee singleton by default,
+ * anything in tests.
+ */
 export type TimelineTranslate = (
     key: string,
     defaultMessage: string,
@@ -290,6 +350,10 @@ export function timelineErrorMessage(
     if (code === "E-ARGS") {
         const own = argsMessage((error as Error).message);
         if (own) return own;
+    }
+    if (code === "E-H1") {
+        const held = heldConflictMessage(error, translate);
+        if (held) return held;
     }
     const mapped =
         code === "E-DB"

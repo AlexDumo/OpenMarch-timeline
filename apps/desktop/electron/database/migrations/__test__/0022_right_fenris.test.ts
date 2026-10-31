@@ -45,6 +45,7 @@ const LATER_TABLES = [
     "timeline_shape_recipes",
     "timeline_shape_recipe_marchers",
     "saved_shapes",
+    "timeline_held_marks",
 ];
 
 const CUE_TABLES = [
