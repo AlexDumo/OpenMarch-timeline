@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { FieldModeDrawing } from "@/field/editor/fieldEditor";
 import {
+    drawnSelection,
     HIDE_MARCHERS_TAP_MS,
     isHiding,
     marchersHiddenNow,
@@ -8,6 +9,7 @@ import {
     pressHideMarchers,
     releaseHide,
     shapeAlone,
+    shapeMarcherIds,
     SHOWN,
     toggleHide,
     toggleHideMarchers,
@@ -182,7 +184,7 @@ describe("only the drawing changes", () => {
         expect(useBoxSelectionStore.getState()).toBe(selection);
     });
 
-    it("draws the shape alone: outline, handles and guides, no spots, ghosts or walks", () => {
+    it("draws the shape alone: outline, handles, guides and start ghosts, no spots or walks (#568)", () => {
         const p = { x: 1, y: 2 };
         const drawing: FieldModeDrawing = {
             outline: [p, p, p],
@@ -200,8 +202,9 @@ describe("only the drawing changes", () => {
         const alone = shapeAlone(drawing);
         expect(alone.spots).toEqual([]);
         expect(alone.walks).toEqual([]);
-        expect(alone.rings ?? []).toEqual([]);
-        expect(alone.ringIds ?? []).toEqual([]);
+        // The ghosts show where the shape's marchers were: they stay
+        expect(alone.rings).toBe(drawing.rings);
+        expect(alone.ringIds).toBe(drawing.ringIds);
         expect(alone.gaps ?? []).toEqual([]);
         expect(alone.labels ?? []).toEqual([]);
         expect(alone.onGuides ?? []).toEqual([]);
@@ -209,5 +212,32 @@ describe("only the drawing changes", () => {
         expect(alone.handles).toBe(drawing.handles);
         expect(alone.guides).toBe(drawing.guides);
         expect(alone.centerDot).toBe(drawing.centerDot);
+    });
+});
+
+describe("whose dots hide (#568)", () => {
+    it("the open shape's marchers, ahead of a selected placed shape's members", () => {
+        expect([
+            ...shapeMarcherIds([{ id: 1 }, { id: 2 }], [{ marcherId: 9 }]),
+        ]).toEqual([1, 2]);
+    });
+
+    it("a selected placed shape's members with no shape open, and nobody with neither", () => {
+        expect([
+            ...shapeMarcherIds(null, [{ marcherId: 3 }, { marcherId: 4 }]),
+        ]).toEqual([3, 4]);
+        expect(shapeMarcherIds(null, null).size).toBe(0);
+    });
+});
+
+describe("the selection rings the field draws (#558)", () => {
+    it("leaves out the marchers hidden with their shape", () => {
+        expect(drawnSelection([1, 2, 3], new Set([2]))).toEqual([1, 3]);
+    });
+
+    it("is the selection itself when none of it is hidden", () => {
+        const selected = [1, 3];
+        expect(drawnSelection(selected, null)).toBe(selected);
+        expect(drawnSelection(selected, new Set([2]))).toBe(selected);
     });
 });
