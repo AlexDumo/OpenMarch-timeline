@@ -33,7 +33,9 @@ a way to place the selected marchers.
   to place.
 - Type an interval in the floating editor (2) to fix it, or a mixed list such
   as `2*3+4*2` (2 marchers at 3 steps, then 4 at 2). A group with no count is
-  "the rest": `2.5+3*4`.
+  "the rest": `2.5+3*4`. With more than one group, open **Multiple intervals**:
+  each group is a row you can edit, and pointing at a row lights its marchers
+  on the field with their intervals.
 - Pick **Curve**, or click a point to make it smooth.
 - Move a placed line into another one and try **Who goes where**.
 
