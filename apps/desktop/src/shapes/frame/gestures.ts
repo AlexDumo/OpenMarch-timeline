@@ -102,6 +102,8 @@ export function shapeTargetAt(
     n: number,
     at: XY,
     env: ToolEnv,
+    /** The handle selected by a click (#557), whose own handles show around it */
+    selected?: string | null,
 ): ShapeTarget | null {
     const controls = frameControls(kind, params, n, env);
     // Drawn over everything, so it wins over a handle on the marcher it sits on
@@ -112,7 +114,7 @@ export function shapeTargetAt(
     if (env.reachInside && near(controls.center, at, env.hitRadius))
         return { type: "pivot", pulled: true };
     let best: { key: string; d: number } | undefined;
-    for (const h of kind.handles(params, n)) {
+    for (const h of kind.handles(params, n, selected)) {
         const d = Math.hypot(h.at.x - at.x, h.at.y - at.y);
         if (d <= env.hitRadius && (!best || d < best.d))
             best = { key: h.key, d };
@@ -151,8 +153,9 @@ export function startShapeGesture(
     n: number,
     at: XY,
     env: ToolEnv,
+    selected?: string | null,
 ): ShapeGesture | null {
-    const target = shapeTargetAt(kind, params, n, at, env);
+    const target = shapeTargetAt(kind, params, n, at, env, selected);
     if (!target) return null;
     switch (target.type) {
         case "handle":
@@ -174,6 +177,43 @@ export function startShapeGesture(
             };
         }
     }
+}
+
+/**
+ * Which handle is selected once `gesture` ends (#557), from `selected` at its press. A click on a
+ * handle that selects selects it (a double-click's first click already did); a click or drag on a
+ * handle on the selection's bar keeps it, as does a drag of the selected handle, a move or a turn,
+ * which keep every handle where it is in the shape. Any other click, or a drag of another handle
+ * (which can add or reorder a kind's points), clears it.
+ */
+export function selectionAfter(
+    kind: AnyToolKind,
+    n: number,
+    gesture: ShapeGesture,
+    click: { readonly double: boolean } | null | undefined,
+    selected: string | null | undefined,
+): string | null {
+    const was = selected ?? null;
+    if (gesture.type !== "handle") return click ? null : was;
+    if (gesture.key === was) return was;
+    const handle = kind
+        .handles(gesture.base, n, was)
+        .find((h) => h.key === gesture.key);
+    if (handle?.bar) return was;
+    return click && handle?.selects ? handle.key : null;
+}
+
+/** `selected` if `params` still has that handle, else null: an undo or edit can take it away */
+export function selectionIn(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    selected: string | null | undefined,
+): string | null {
+    if (!selected || params === null) return null;
+    return kind.handles(params, n, selected).some((h) => h.key === selected)
+        ? selected
+        : null;
 }
 
 /** The shape as `gesture` has it with the pointer at `at`, its pivot kept */

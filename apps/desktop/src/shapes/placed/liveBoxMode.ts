@@ -9,6 +9,7 @@ import {
     drillNumbers,
     frameDrawing,
     guideDrawing,
+    handleDrawing,
     memoDrawing,
     shapeCursor,
     SPOT_LABEL_LIMIT,
@@ -23,6 +24,7 @@ import { toolEnvFor } from "../tool/toolEnv";
 import { pressShapeKeys, type HeldFieldGesture } from "../field/heldGesture";
 import { commitBox } from "./commitBox";
 import {
+    clearLiveSelection,
     liveTargets,
     moveLive,
     openLive,
@@ -105,14 +107,7 @@ const drawingOf = memoDrawing(
                       }))
                     : [],
             calm,
-            handles: kind
-                .handles(live.params, n)
-                .filter((h) => !h.adds)
-                .map((h) => h.at),
-            addHandles: kind
-                .handles(live.params, n)
-                .filter((h) => h.adds)
-                .map((h) => h.at),
+            ...handleDrawing(kind, live.params, n, live.selected),
             gaps: gapsOf(kind, live.params, n),
             ...frameDrawing(
                 kind,
@@ -134,6 +129,21 @@ const drawingOf = memoDrawing(
         };
     },
 );
+
+/** The live mode of the selected placed shape, for its keys; null with none selected */
+let activeLive: LiveBoxMode | null = null;
+
+/** Sets the selected placed shape's live mode, or null when none is selected */
+export const setActiveLiveBox = (mode: LiveBoxMode | null): void => {
+    activeLive = mode;
+};
+
+/**
+ * Escape on a selected placed shape with a handle selected (#557): clears that, and says whether
+ * there was one, so the same press doesn't also deselect the shape
+ */
+export const clearLiveBoxSelection = (): boolean =>
+    activeLive?.clearSelection() ?? false;
 
 /**
  * A selected placed shape of any kind, edited in place (07-placed-boxes.md), as a field editor
@@ -165,8 +175,16 @@ export class LiveBoxMode implements FieldMode {
     /** The box was saved or changed elsewhere; mid-gesture, the gesture's own box stays */
     setBox(box: PlacedBox): void {
         if (this.live.gesture) return;
-        this.live = openLive(box);
+        this.live = openLive(box, this.live.selected);
         this.emit();
+    }
+
+    /** Escape with a handle selected (#557): clears it, and says whether there was one */
+    clearSelection(): boolean {
+        if (!this.live.selected) return false;
+        this.live = clearLiveSelection(this.live);
+        this.emit();
+        return true;
     }
 
     claims(pointer: FieldPointer, press: FieldModePress): boolean {
@@ -192,10 +210,14 @@ export class LiveBoxMode implements FieldMode {
         const field = currentShapeField();
         if (!field) return false;
         const { kind, params, spots } = this.live.box;
-        const target = shapeTargetAt(kind, params, spots, pointer.field, {
-            ...toolEnvFor(field),
-            reachInside: true,
-        });
+        const target = shapeTargetAt(
+            kind,
+            params,
+            spots,
+            pointer.field,
+            { ...toolEnvFor(field), reachInside: true },
+            this.live.selected,
+        );
         return !target || !OWN_CONTROLS.has(target.type);
     }
 
@@ -212,6 +234,7 @@ export class LiveBoxMode implements FieldMode {
                     this.live.box.spots,
                     pointer.field,
                     { ...toolEnvFor(field), reachInside: true },
+                    this.live.selected,
                 ),
             (at, roles) => this.rerun(at, roles),
             isMac,
@@ -262,7 +285,7 @@ export class LiveBoxMode implements FieldMode {
 
     cancel(): void {
         this.endHeld();
-        this.live = openLive(this.live.box);
+        this.live = openLive(this.live.box, this.live.selected);
         this.emit();
     }
 
@@ -280,11 +303,18 @@ export class LiveBoxMode implements FieldMode {
             this.live.box.spots,
             pointer.field,
             toolEnvFor(field),
+            this.live.selected,
         );
         // The editor asks for the cursor as the pointer moves, so this is where hovering is seen
         setShapePointerOver(target !== null);
         return target
-            ? shapeCursor(kind, this.live.params, this.live.box.spots, target)
+            ? shapeCursor(
+                  kind,
+                  this.live.params,
+                  this.live.box.spots,
+                  target,
+                  this.live.selected,
+              )
             : null;
     }
 

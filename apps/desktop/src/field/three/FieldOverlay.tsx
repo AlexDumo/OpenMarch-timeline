@@ -44,6 +44,9 @@ const WALK_WIDTH = 1;
 const SHAPE_HANDLE_SIZE = 9;
 /** A handle that adds a point (a line's midpoint, #524): a small ring, over the center dot */
 const ADD_HANDLE_RADIUS = 3;
+/** An end of a selected point's tangent bar (#557): a round knob on a thin line from the point */
+const BAR_HANDLE_RADIUS = 4;
+const BAR_LINE_WIDTH = 1;
 const SHAPE_HANDLE_WIDTH = 1.5;
 
 /** The prop tool's line while drawing, in CSS px. */
@@ -753,6 +756,51 @@ function ModeDrawing({
                         style={controls}
                         data-testid="fieldShapeHandle"
                     />
+                );
+            })}
+            {drawing.selectedHandles?.map((point, i) => {
+                const p = at(point);
+                return (
+                    <rect
+                        key={i}
+                        x={p.x - half}
+                        y={p.y - half}
+                        width={SHAPE_HANDLE_SIZE}
+                        height={SHAPE_HANDLE_SIZE}
+                        fill={shape}
+                        stroke={shape}
+                        strokeWidth={SHAPE_HANDLE_WIDTH}
+                        style={controls}
+                        data-testid="fieldShapeSelectedHandle"
+                    />
+                );
+            })}
+            {drawing.barHandles?.map(({ at: point, from }, i) => {
+                const p = at(point);
+                const a = at(from);
+                return (
+                    <g
+                        key={i}
+                        style={controls}
+                        data-testid="fieldShapeBarHandle"
+                    >
+                        <line
+                            x1={a.x}
+                            y1={a.y}
+                            x2={p.x}
+                            y2={p.y}
+                            stroke={shape}
+                            strokeWidth={BAR_LINE_WIDTH}
+                        />
+                        <circle
+                            cx={p.x}
+                            cy={p.y}
+                            r={BAR_HANDLE_RADIUS}
+                            fill={shape}
+                            stroke="white"
+                            strokeWidth={SHAPE_HANDLE_WIDTH}
+                        />
+                    </g>
                 );
             })}
             {drawing.centerDot &&

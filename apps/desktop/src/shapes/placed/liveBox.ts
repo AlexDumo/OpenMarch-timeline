@@ -5,6 +5,8 @@ import { pivotOf } from "../frame/pivot";
 import {
     centerPivot,
     dragShape,
+    selectionAfter,
+    selectionIn,
     startShapeGesture,
     type ShapeGesture,
 } from "../frame/gestures";
@@ -33,12 +35,19 @@ export interface LiveBox {
     readonly gesture: LiveGesture | null;
     /** Where the pointer is during a gesture, for the guides drawn by it */
     readonly pointer?: XY;
+    /** The handle selected by a click (a Line's point, #557); null or absent when none is */
+    readonly selected?: string | null;
 }
 
-export const openLive = (box: PlacedBox): LiveBox => ({
+/** The box as saved; `selected` kept when the box still has that handle (it was saved again) */
+export const openLive = (
+    box: PlacedBox,
+    selected?: string | null,
+): LiveBox => ({
     box,
     params: box.params,
     gesture: null,
+    selected: selectionIn(box.kind, box.params, box.spots, selected),
 });
 
 /** The gesture a press at `at` starts, or null when the box doesn't take it */
@@ -49,6 +58,7 @@ export function pressLive(live: LiveBox, at: XY, env: ToolEnv): LiveBox | null {
         live.box.spots,
         at,
         env,
+        live.selected,
     );
     return gesture ? { ...live, gesture, pointer: at } : null;
 }
@@ -97,6 +107,10 @@ function sameShape(kind: AnyToolKind, spots: number, a: unknown, b: unknown) {
     );
 }
 
+/** Escape with a handle selected (#557): nothing selected. Unchanged when nothing is. */
+export const clearLiveSelection = (live: LiveBox): LiveBox =>
+    live.selected ? { ...live, selected: null } : live;
+
 /** Whether `params` lays `box` out on a new lattice, so its members are laid out again */
 export const newLayout = (box: PlacedBox, params: unknown): boolean =>
     layoutOf(box.kind, params, box.spots) !==
@@ -104,7 +118,9 @@ export const newLayout = (box: PlacedBox, params: unknown): boolean =>
 
 /**
  * Ends the gesture: `changed` when there is something to save. A double click on the pivot sends
- * it back to the center (#350); a click on a handle that adds a point adds it (#524).
+ * it back to the center (#350), and on a handle does what its kind says (a Line's point switches
+ * between corner and smooth, #557); a click on a handle that adds a point adds it (#524), and on
+ * one that selects selects it.
  */
 export function releaseLive(
     live: LiveBox,
@@ -115,6 +131,10 @@ export function releaseLive(
 } {
     const { kind, spots } = live.box;
     const g = live.gesture;
+    const doubled =
+        click?.double && g?.type === "handle"
+            ? (kind.doubleClickHandle?.(g.base, spots, g.key) ?? null)
+            : null;
     const centered = click?.double && g ? centerPivot(g) : null;
     // A double-click's first click already did the handle's click (and was saved), as in the
     // drawn shape: the second doesn't do it again
@@ -122,9 +142,12 @@ export function releaseLive(
         click && !click.double && g?.type === "handle"
             ? (kind.clickHandle?.(g.base, spots, g.key) ?? null)
             : null;
-    const params = centered ?? clicked ?? live.params;
+    const params = doubled ?? centered ?? clicked ?? live.params;
+    const selected = g
+        ? selectionAfter(kind, spots, g, click, live.selected)
+        : (live.selected ?? null);
     return {
-        live: { ...live, params, gesture: null },
+        live: { ...live, params, gesture: null, selected },
         changed: !sameShape(kind, spots, params, live.box.params),
     };
 }

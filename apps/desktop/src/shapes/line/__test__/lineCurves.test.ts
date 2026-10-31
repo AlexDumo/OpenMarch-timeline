@@ -28,12 +28,14 @@ import { SHAPE_TOOLS } from "../../tool/shapeTools";
 import { toolId, type AnyToolKind, type ToolEnv } from "../../tool/toolKind";
 import {
     edit,
+    clearSelection,
     finishPoints,
     openTool,
     pointerMove,
     press,
     release,
     slotsOf,
+    switchKind,
     undo,
     type ToolState,
 } from "../../tool/toolMachine";
@@ -41,8 +43,8 @@ import type { ShapeContext, XY } from "../../types";
 
 /**
  * Smooth points and the Curve (#525, spec #522): each point has a tension, 0 a corner and more a
- * smooth point the line bends through. A click on a point toggles it, its tension handle sets how
- * round, the Points menu sets every point; smooth points never hold a marcher, and spots stay
+ * smooth point the line bends through. A click on a point selects it, a double-click toggles it,
+ * the ends of a selected point's tangent bar set how round (#557), the Points menu sets every point; smooth points never hold a marcher, and spots stay
  * evenly apart straight across along the curve. Curve is a preset of the Line whose points start
  * smooth. Driven through the shape session with the real Line kind.
  */
@@ -83,23 +85,39 @@ function clicked(
     return finishPoints(t, ctx);
 }
 
-/** A handle pressed and dragged to `to`, or clicked where it is when `to` is absent */
-function onHandle(t: ToolState, key: string, to?: XY): ToolState {
-    const h = t.kind.handles(t.params, t.spots);
+/**
+ * A handle pressed and dragged to `to`, or clicked where it is when `to` is absent (`double` for a
+ * double-click's second click). An end of a point's tangent bar (`t1`, `tb1`) shows once its point
+ * is selected, so the point is clicked first when it isn't.
+ */
+function onHandle(
+    t: ToolState,
+    key: string,
+    to?: XY,
+    double = false,
+): ToolState {
+    const tangent = /^tb?(\d+)$/.exec(key);
+    if (tangent && t.selected !== `p${tangent[1]}`)
+        t = onHandle(t, `p${tangent[1]}`);
+    const h = t.kind.handles(t.params, t.spots, t.selected);
     const at = h.find((x) => x.key === key)!.at;
     t = press(t, at, env);
     expect(t.gesture).toMatchObject({ type: "handle", key });
-    if (!to) return release(t, ctx, { double: false });
+    if (!to) return release(t, ctx, { double });
     t = pointerMove(t, to, env);
     return release(t, ctx, null);
 }
+
+/** Point `key` double-clicked: made smooth, or a corner again (#557) */
+const switched = (t: ToolState, key: string) =>
+    onHandle(onHandle(t, key), key, undefined, true);
 
 const paramsOf = (t: ToolState) => t.params as LineParams;
 const tensions = (t: ToolState) => paramsOf(t).points.map((q) => q.tension);
 const spotsOf = (t: ToolState) => slotsOf(t, ctx).map(({ x, y }) => ({ x, y }));
 const dist = (a: XY, b: XY) => Math.hypot(a.x - b.x, a.y - b.y);
 const handleKeys = (t: ToolState) =>
-    t.kind.handles(t.params, t.spots).map((h) => h.key);
+    t.kind.handles(t.params, t.spots, t.selected).map((h) => h.key);
 const gapsOf = (spots: readonly XY[]) =>
     spots.slice(1).map((p, i) => dist(spots[i]!, p));
 /** How far `at` is from the line drawn through `t`'s outline */
@@ -168,22 +186,23 @@ describe("a point's tension", () => {
 });
 
 describe("setting a point's tension", () => {
-    it("turns a corner smooth on a click of its handle, and back with another", () => {
-        let t = onHandle(L(), "p1");
+    it("turns a corner smooth on a double-click of its handle, and back with another", () => {
+        let t = switched(L(), "p1");
         expect(tensions(t)).toEqual([0, SMOOTH, 0]);
         // One undo step
+        expect(t.past).toHaveLength(L().past.length + 1);
         expect(tensions(undo(t))).toEqual([0, 0, 0]);
-        t = onHandle(t, "p1");
+        t = switched(t, "p1");
         expect(tensions(t)).toEqual([0, 0, 0]);
     });
 
     it("gives a smooth point a tension handle, dragged out for rounder and back to a corner", () => {
-        let t = onHandle(L(), "p1");
-        expect(handleKeys(t)).toContain("t1");
+        let t = switched(L(), "p1");
+        expect(handleKeys(t)).toEqual(expect.arrayContaining(["t1", "tb1"]));
         expect(handleKeys(L())).not.toContain("t1");
         const p1 = paramsOf(t).points[1]!;
         const at = t.kind
-            .handles(t.params, t.spots)
+            .handles(t.params, t.spots, "p1")
             .find((h) => h.key === "t1")!.at;
         // Twice as far out from the point: twice the tension
         const out = {
@@ -197,11 +216,11 @@ describe("setting a point's tension", () => {
             x: p1.x + (at.x - p1.x) * 0.53,
             y: p1.y + (at.y - p1.y) * 0.53,
         };
-        const t2 = onHandle(onHandle(L(), "p1"), "t1", back);
+        const t2 = onHandle(switched(L(), "p1"), "t1", back);
         expect(tensions(t2)[1]).toBeCloseTo(0.5, 9);
         // Behind the point: a corner again, its handle gone
         const behind = { x: p1.x - (at.x - p1.x), y: p1.y - (at.y - p1.y) };
-        const t3 = onHandle(onHandle(L(), "p1"), "t1", behind);
+        const t3 = onHandle(switched(L(), "p1"), "t1", behind);
         expect(tensions(t3)[1]).toBe(0);
         expect(handleKeys(t3)).not.toContain("t1");
     });
@@ -214,14 +233,14 @@ describe("setting a point's tension", () => {
         expect(tensions(smooth)).toEqual([SMOOTH, SMOOTH, SMOOTH]);
         expect(points.current(smooth.params, smooth.spots)).toBe("smooth");
         expect(tensions(picked(smooth, "points", "corner"))).toEqual([0, 0, 0]);
-        const mixed = onHandle(t, "p1");
+        const mixed = switched(t, "p1");
         expect(points.current(mixed.params, mixed.spots)).toBe("mixed");
         expect(
             points.options(mixed.params, mixed.spots).map((o) => o.value),
         ).toEqual(["corner", "smooth", "mixed"]);
         // A smooth point made smooth keeps its tension
         const t1 = mixed.kind
-            .handles(mixed.params, mixed.spots)
+            .handles(mixed.params, mixed.spots, "p1")
             .find((h) => h.key === "t1")!.at;
         const rounder = onHandle(mixed, "t1", {
             x: 40 + (t1.x - 40) * 1.5,
@@ -240,7 +259,7 @@ describe("setting a point's tension", () => {
         const corners = choice("corners");
         const t = L();
         expect(corners.shown!(t.params, t.spots)).toBe(true);
-        const smooth = onHandle(t, "p1");
+        const smooth = switched(t, "p1");
         expect(corners.shown!(smooth.params, smooth.spots)).toBe(false);
     });
 
@@ -286,7 +305,7 @@ describe("spots along a curve", () => {
             { x: 60, y: 30 },
             { x: 100, y: 30 },
         ]);
-        t = onHandle(t, "p2");
+        t = switched(t, "p2");
         expect(tensions(t)).toEqual([0, 0, SMOOTH, 0]);
         const spots = spotsOf(t);
         expect(spots.some((s) => dist(s, { x: 40, y: 0 }) < 1e-9)).toBe(true);
@@ -307,7 +326,7 @@ describe("spots along a curve", () => {
             { x: 55, y: 25 },
             { x: 40, y: 50 },
         ]);
-        t = onHandle(t, "p2");
+        t = switched(t, "p2");
         t = typed(t, "2");
         for (const g of gapsOf(spotsOf(t))) expect(g).toBeCloseTo(2 * STEP, 6);
         // The corner holds a marcher, and isn't off its interval
@@ -327,7 +346,7 @@ describe("a curve with mixed intervals", () => {
             { x: 55, y: 25 },
             { x: 40, y: 50 },
         ]);
-        t = onHandle(t, "p2");
+        t = switched(t, "p2");
         expect(tensions(t)).toEqual([0, 0, SMOOTH, 0]);
         return typed(t, "2*3+4*2");
     };
@@ -545,27 +564,34 @@ describe("a placed curve", () => {
             expect(spots.some((s) => dist(s, m) < 1e-6)).toBe(true);
     });
 
-    it("saves a point clicked smooth or a corner on release", () => {
-        const placed = readBack(recipeOf(arch()));
-        const p1 = lineTool
-            .handles(placed.params, N)
-            .find((h) => h.key === "p1")!;
-        const live = pressLive(openLive(placed), p1.at, env)!;
-        const out = releaseLive(live, { double: false });
-        expect(out.changed).toBe(true);
-        expect((out.live.params as LineParams).points[1]!.tension).toBe(0);
-    });
+    const handleAt = (
+        placed: PlacedBox<LineParams>,
+        key: string,
+        selected?: string,
+    ) =>
+        lineTool.handles(placed.params, N, selected).find((h) => h.key === key)!
+            .at;
 
-    const handleAt = (placed: PlacedBox<LineParams>, key: string) =>
-        lineTool.handles(placed.params, N).find((h) => h.key === key)!.at;
-
-    it("toggles a point only once on a double-click: the second click changes nothing", () => {
-        // The first click was saved; the second press, on the box read back, is the double
+    it("selects a point clicked, saving nothing, and switches it on a double-click", () => {
         const placed = readBack(recipeOf(arch()));
-        const live = pressLive(openLive(placed), handleAt(placed, "p1"), env)!;
-        const out = releaseLive(live, { double: true });
-        expect(out.changed).toBe(false);
-        expect((out.live.params as LineParams).points[1]!.tension).toBe(SMOOTH);
+        const p1 = handleAt(placed, "p1");
+        const first = releaseLive(pressLive(openLive(placed), p1, env)!, {
+            double: false,
+        });
+        expect(first.changed).toBe(false);
+        expect(first.live.selected).toBe("p1");
+        expect((first.live.params as LineParams).points[1]!.tension).toBe(
+            SMOOTH,
+        );
+        // The second click is the double: the point turns a corner, saved once, still selected
+        const second = releaseLive(pressLive(first.live, p1, env)!, {
+            double: true,
+        });
+        expect(second.changed).toBe(true);
+        expect(second.live.selected).toBe("p1");
+        expect((second.live.params as LineParams).points[1]!.tension).toBe(0);
+        // Read back after the save, the selection stays on the point
+        expect(openLive(placed, second.live.selected).selected).toBe("p1");
     });
 
     it("leaves a point as it was when it's dragged out and back: a drag, not a click", () => {
@@ -582,13 +608,22 @@ describe("a placed curve", () => {
 
     it("saves a tension handle dragged on the placed curve on release", () => {
         const placed = readBack(recipeOf(arch()));
-        let live = pressLive(openLive(placed), handleAt(placed, "t1"), env)!;
+        // Only the selected point shows its tangent bar
+        expect(
+            lineTool.handles(placed.params, N).some((h) => h.key === "t1"),
+        ).toBe(false);
+        let live = pressLive(
+            openLive(placed, "p1"),
+            handleAt(placed, "t1", "p1"),
+            env,
+        )!;
         expect(live.gesture).toMatchObject({ type: "handle", key: "t1" });
         live = moveLive(live, { x: 60, y: -40 }, env);
         const out = releaseLive(live, null);
         expect(out.changed).toBe(true);
         const tension = (out.live.params as LineParams).points[1]!.tension;
         expect(tension).toBeGreaterThan(SMOOTH);
+        expect(out.live.selected).toBe("p1");
         const { members } = liveTargets(placed, out.live.params, ctx);
         expect(members).toHaveLength(N);
     });
@@ -603,5 +638,116 @@ describe("a placed curve", () => {
         expect(members).toHaveLength(N);
         for (const q of next.points.slice(1, -1))
             expect(members.some((m) => dist(m, q) < 1e-6)).toBe(true);
+    });
+});
+
+describe("selecting a point (#557)", () => {
+    const at = (t: ToolState, key: string) =>
+        t.kind
+            .handles(t.params, t.spots, t.selected)
+            .find((h) => h.key === key)!;
+    const arch = () => clicked(curveTool, 5, ARCH);
+
+    it("selects a point on a click, changing nothing, and shows only its tangent bar", () => {
+        const t = arch();
+        // Nothing selected: no point shows a tension handle
+        expect(handleKeys(t).filter((k) => k.startsWith("t"))).toEqual([]);
+        const selected = onHandle(t, "p1");
+        expect(selected.selected).toBe("p1");
+        expect(selected.params).toBe(t.params);
+        expect(selected.past).toHaveLength(t.past.length);
+        // Its bar: an end each way along the curve, on a line through the point
+        const p1 = paramsOf(t).points[1]!;
+        const ahead = at(selected, "t1");
+        const back = at(selected, "tb1");
+        expect(ahead.bar).toEqual({ x: p1.x, y: p1.y });
+        expect(back.bar).toEqual({ x: p1.x, y: p1.y });
+        const cross =
+            (ahead.at.x - p1.x) * (back.at.y - p1.y) -
+            (ahead.at.y - p1.y) * (back.at.x - p1.x);
+        expect(Math.abs(cross)).toBeLessThan(1e-6);
+        expect(ahead.at.x).toBeGreaterThan(p1.x);
+        expect(back.at.x).toBeLessThan(p1.x);
+        // No other point's bar
+        expect(handleKeys(selected).filter((k) => k.startsWith("t"))).toEqual([
+            "t1",
+            "tb1",
+        ]);
+        // Another point clicked moves the selection
+        expect(onHandle(selected, "p2").selected).toBe("p2");
+    });
+
+    it("gives an end point a bar both ways, and a selected corner none", () => {
+        const t = onHandle(arch(), "p0");
+        const q = paramsOf(t).points[0]!;
+        const ahead = at(t, "t0").at;
+        const back = at(t, "tb0").at;
+        expect(dist(ahead, q)).toBeCloseTo(dist(back, q), 9);
+        expect((ahead.x + back.x) / 2).toBeCloseTo(q.x, 9);
+        const corner = onHandle(L(), "p1");
+        expect(corner.selected).toBe("p1");
+        expect(handleKeys(corner).filter((k) => k.startsWith("t"))).toEqual([]);
+    });
+
+    it("sets the tension live from either end of the bar, as one undo step, keeping the selection", () => {
+        const t = onHandle(arch(), "p1");
+        const p1 = paramsOf(t).points[1]!;
+        const back = at(t, "tb1").at;
+        let g = press(t, back, env);
+        // Twice as far out the back way: twice the tension, while the pointer is still down
+        g = pointerMove(
+            g,
+            { x: p1.x + (back.x - p1.x) * 2, y: p1.y + (back.y - p1.y) * 2 },
+            env,
+        );
+        expect(g.gesture).not.toBeNull();
+        expect(tensions(g)[1]).toBeCloseTo(2 * SMOOTH, 6);
+        const done = release(g, ctx, null);
+        expect(done.selected).toBe("p1");
+        expect(done.past).toHaveLength(t.past.length + 1);
+        expect(tensions(undo(done))[1]).toBe(SMOOTH);
+        // A click on an end of the bar keeps the point selected
+        expect(onHandle(t, "t1").selected).toBe("p1");
+    });
+
+    it("switches a point on a double-click as one undo step, and keeps it selected", () => {
+        const t = arch();
+        const s = switched(t, "p1");
+        expect(tensions(s)).toEqual([SMOOTH, 0, SMOOTH]);
+        expect(s.past).toHaveLength(t.past.length + 1);
+        expect(s.selected).toBe("p1");
+        // A corner now: no bar
+        expect(handleKeys(s).filter((k) => k.startsWith("t"))).toEqual([]);
+    });
+
+    it("moves a point dragged without selecting or switching it", () => {
+        const t = arch();
+        const p1 = at(t, "p1").at;
+        const moved = onHandle(t, "p1", { x: p1.x, y: p1.y - 10 });
+        expect(moved.selected ?? null).toBeNull();
+        expect(tensions(moved)).toEqual(tensions(t));
+        expect(paramsOf(moved).points[1]).toMatchObject({ y: p1.y - 10 });
+        // Dragged out and back: still a drag, nothing selected or switched
+        let g = press(t, p1, env);
+        g = pointerMove(g, { x: p1.x + 20, y: p1.y }, env);
+        g = pointerMove(g, p1, env);
+        const back = release(g, ctx, null);
+        expect(back.selected ?? null).toBeNull();
+        expect(back.params).toEqual(t.params);
+        // The selected point dragged stays selected, its bar going with it
+        const s = onHandle(t, "p1");
+        const dragged = onHandle(s, "p1", { x: p1.x, y: p1.y - 10 });
+        expect(dragged.selected).toBe("p1");
+    });
+
+    it("clears the selection on a click on the empty field, Escape, undo or another kind", () => {
+        const t = onHandle(arch(), "p1");
+        expect(click(t, { x: 200, y: 200 }).selected).toBeNull();
+        const cleared = clearSelection(t);
+        expect(cleared.selected).toBeNull();
+        expect(clearSelection(cleared)).toBe(cleared);
+        const s = switched(arch(), "p1");
+        expect(undo(s).selected).toBeNull();
+        expect(switchKind(t, lineTool, ctx, env).selected).toBeNull();
     });
 });

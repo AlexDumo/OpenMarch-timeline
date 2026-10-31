@@ -10,6 +10,7 @@ import {
     drillNumbers,
     frameDrawing,
     guideDrawing,
+    handleDrawing,
     memoDrawing,
     shapeCursor,
     SPOT_LABEL_LIMIT,
@@ -187,7 +188,6 @@ const drawingOf = memoDrawing(
             tool.gesture.type !== "edit"
                 ? tool.gesture
                 : null;
-        const handles = drawing ? [] : tool.kind.handles(tool.params, n);
         return {
             stage: drawing ? ("drawing" as const) : ("open" as const),
             outline: shapeOutline(tool.kind, tool.params, n),
@@ -209,8 +209,9 @@ const drawingOf = memoDrawing(
                           text: names.get(t.id) ?? "",
                       }))
                     : [],
-            handles: handles.filter((h) => !h.adds).map((h) => h.at),
-            addHandles: handles.filter((h) => h.adds).map((h) => h.at),
+            ...(drawing
+                ? { handles: [] }
+                : handleDrawing(tool.kind, tool.params, n, tool.selected)),
             ...(drawing
                 ? {}
                 : frameDrawing(
@@ -433,7 +434,13 @@ export const shapeToolMode: FieldMode = {
         const target = pressTarget(tool, pointer.field, env);
         setShapePointerOver(target.type !== "draw");
         if (target.type === "draw") return "crosshair";
-        return shapeCursor(tool.kind, tool.params, tool.spots, target);
+        return shapeCursor(
+            tool.kind,
+            tool.params,
+            tool.spots,
+            target,
+            tool.selected,
+        );
     },
     leave() {
         setShapePointerOver(false);

@@ -254,6 +254,13 @@ export type FieldModeDrawing = {
     handles: readonly FieldPoint[];
     /** Handles that add a point (a line's segment midpoints, #524), drawn smaller and round */
     addHandles?: readonly FieldPoint[];
+    /** Handles selected by a click (a line's point, #557), drawn filled over `handles` */
+    selectedHandles?: readonly FieldPoint[];
+    /**
+     * Handles on the ends of a selected point's bar (its tangent, #557): each drawn round at `at`,
+     * at the end of a line from `from`
+     */
+    barHandles?: readonly { at: FieldPoint; from: FieldPoint }[];
     /** The outline is open: drawn without joining its last point to its first (a line, #524) */
     openOutline?: boolean;
     /**

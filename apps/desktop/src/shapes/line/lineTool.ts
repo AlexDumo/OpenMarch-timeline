@@ -48,6 +48,7 @@ import {
     lineSegments,
     lineStretches,
     moveLine,
+    type TangentSide,
     onLine,
     openLine,
     segmentMidpoint,
@@ -71,8 +72,12 @@ import {
 const POINT_KEY = /^p(\d+)$/;
 /** A handle's key for the midpoint of segment `i`, from point `i` to the next (#524) */
 const MIDPOINT_KEY = /^m(\d+)$/;
-/** A handle's key for smooth point `i`'s tension (#525) */
+/**
+ * A handle's key for an end of smooth point `i`'s tangent bar (#525, #557): `t<i>` toward the next
+ * point, `tb<i>` back toward the one before
+ */
 const TENSION_KEY = /^t(\d+)$/;
+const TENSION_BACK_KEY = /^tb(\d+)$/;
 
 /** The point whose handle `key` is (`p<i>`, or `t<i>` with `pattern`), or -1 */
 const pointOf = (p: LineParams, key: string, pattern = POINT_KEY): number => {
@@ -94,6 +99,17 @@ const keptInterval = (
     next.spacing.mode === "keep" && n > 1
         ? withGroups(next, n, next.spacing.groups, env)
         : next;
+
+/** The point and side of the tangent bar end whose handle `key` is, or null */
+function tangentOf(
+    p: LineParams,
+    key: string,
+): { index: number; side: TangentSide } | null {
+    const forward = pointOf(p, key, TENSION_KEY);
+    if (forward >= 0) return { index: forward, side: 1 };
+    const back = pointOf(p, key, TENSION_BACK_KEY);
+    return back >= 0 ? { index: back, side: -1 } : null;
+}
 
 /** The segment whose midpoint handle `key` is, or -1 */
 const midpointOf = (p: LineParams, key: string): number => {
@@ -663,8 +679,9 @@ function pointsKind(p: LineParams): "corner" | "smooth" | "mixed" {
  * clicking point after point, every point and every segment's midpoint a handle, moved from its
  * body, and turned and flipped through its frame like every shape. Drawn in Fit; typing an interval
  * keeps it, the length following from the pivot. Every corner holds a marcher unless switched off.
- * A click on a point makes it smooth, or a corner again; a smooth point's tension handle sets how
- * round the line bends through it. A typed list (`2*3+4*2`, #526) spaces it in groups of
+ * A click on a point selects it; a selected smooth point shows its tangent bar, whose ends set how
+ * round the line bends through it, and a double-click makes a point smooth, or a corner again
+ * (#557). A typed list (`2*3+4*2`, #526) spaces it in groups of
  * marchers, each a chip in the editor.
  */
 export const lineTool: ToolKind<LineParams> = {
@@ -685,7 +702,7 @@ export const lineTool: ToolKind<LineParams> = {
             return p && closeLine(p, n, env);
         },
     },
-    handles(params) {
+    handles(params, _n, selected) {
         const frame = lineFrame(params);
         const last = params.points.length - 1;
         const closed = isClosed(params);
@@ -698,6 +715,7 @@ export const lineTool: ToolKind<LineParams> = {
                 !closed && (i === 0 || i === last)
                     ? resizeCursor(frame, { x: i === last ? 1 : -1, y: 0 })
                     : "move",
+            selects: true,
         }));
         const midpoints = lineSegments(params).map((_segment, i) => ({
             key: `m${i}`,
@@ -705,10 +723,24 @@ export const lineTool: ToolKind<LineParams> = {
             cursor: "pointer",
             adds: true,
         }));
-        const tensions = params.points.flatMap((_q, i) => {
-            const at = tensionHandle(params, i);
-            return at ? [{ key: `t${i}`, at, cursor: "pointer" }] : [];
-        });
+        // Only the selected point's tangent bar, so the line stays clean while you edit (#557)
+        const index = selected ? pointOf(params, selected) : -1;
+        const bar = params.points[index];
+        const tensions = bar
+            ? ([1, -1] as const).flatMap((side) => {
+                  const at = tensionHandle(params, index, side);
+                  return at
+                      ? [
+                            {
+                                key: `${side === 1 ? "t" : "tb"}${index}`,
+                                at,
+                                cursor: "pointer",
+                                bar: { x: bar.x, y: bar.y },
+                            },
+                        ]
+                      : [];
+              })
+            : [];
         return [...points, ...midpoints, ...tensions];
     },
     dragHandle(base, n, key, to, env) {
@@ -722,17 +754,24 @@ export const lineTool: ToolKind<LineParams> = {
                 to,
                 env,
             );
-        const tension = pointOf(base, key, TENSION_KEY);
-        if (tension >= 0)
-            return keptInterval(dragTension(base, tension, to, env), n, env);
+        const tension = tangentOf(base, key);
+        if (tension)
+            return keptInterval(
+                dragTension(base, tension.index, to, env, tension.side),
+                n,
+                env,
+            );
         const index = pointOf(base, key);
         if (index < 0) return base;
         return dragPoint(base, n, index, to, env);
     },
-    // A midpoint clicked splits its segment; a point clicked turns smooth, or a corner again
-    clickHandle(params, n, key) {
+    // A midpoint clicked splits its segment; a point clicked is selected by the host (#557)
+    clickHandle(params, _n, key) {
         const segment = midpointOf(params, key);
-        if (segment >= 0) return splitSegment(params, segment);
+        return segment >= 0 ? splitSegment(params, segment) : null;
+    },
+    // A point double-clicked turns smooth, or a corner again (#557)
+    doubleClickHandle(params, n, key) {
         const index = pointOf(params, key);
         if (index < 0) return null;
         const smooth = params.points[index]!.tension > 0;

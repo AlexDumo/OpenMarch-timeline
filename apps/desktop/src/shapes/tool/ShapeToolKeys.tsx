@@ -12,7 +12,7 @@ import {
 } from "@/shortcuts/useActionHandler";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { nudgeEnvFor } from "./toolEnv";
-import { edit, finishPoints, redo } from "./toolMachine";
+import { clearSelection, edit, finishPoints, redo } from "./toolMachine";
 import { updateTool, useShapeToolStore } from "./shapeToolStore";
 import { cancelShapeGesture } from "./shapeToolMode";
 
@@ -27,7 +27,8 @@ const NUDGE_DIRECTIONS = {
  * The keys the open shape tool takes over. Mounted only while it's open, after the editor's own
  * handlers, so these sit on top of them and the keys go back once the tool closes.
  *
- * - Escape: a gesture goes back to where it started; otherwise the tool closes, placing nothing.
+ * - Escape: a gesture goes back to where it started; a selected point (#557) is cleared;
+ *   otherwise the tool closes, placing nothing.
  * - Enter while clicking a line's points finishes the line (#524); otherwise it's Place.
  *   That is an undo step: undo right after it brings the shape back ({@link DiscardedShapeKeys}).
  * - Undo and Redo step through the shape's own edits; the show is untouched until Place.
@@ -38,6 +39,8 @@ export function ShapeToolKeys(): null {
     useActionHandler("cancelAlignmentUpdates", () => {
         const { tool } = useShapeToolStore.getState();
         if (tool?.gesture) cancelShapeGesture();
+        // A selected point first (#557), then the shape
+        else if (tool?.selected) updateTool(clearSelection);
         else discardShapeTool();
     });
     // Enter while clicking points finishes the line rather than placing it (#524). Registered

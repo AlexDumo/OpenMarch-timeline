@@ -15,7 +15,9 @@ Terms the code, docs and issues use. Add a term when a design decision settles i
 - **Point**: a point a Line passes through. It has a **tension**: 0 is a **corner**, more makes
   the line pass smoothly through it. The two ends always hold a marcher, smooth or not; a smooth
   point between them never does. A **closed** Line joins its last point to its first and has no
-  ends: only its corners hold marchers, and it has a gap for every marcher.
+  ends: only its corners hold marchers, and it has a gap for every marcher. A click selects a
+  point; a selected smooth point shows its **tangent bar**, a short line through it along the
+  curve whose ends set its tension. A double-click switches a point between corner and smooth.
 - **Stretch**: the part of a Line from an end or a corner to the next corner or end, smooth points
   inside it. With corners holding marchers, each stretch holds a whole run of the line's gaps. A
   closed Line's stretches wrap round: the last runs from its last corner past the first point to

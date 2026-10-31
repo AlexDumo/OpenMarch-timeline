@@ -9,6 +9,8 @@ import { carryPivot } from "../frame/pivot";
 import {
     centerPivot,
     dragShape,
+    selectionAfter,
+    selectionIn,
     shapeTargetAt,
     startShapeGesture,
     type ShapeGesture,
@@ -106,6 +108,11 @@ export interface ToolState extends ToolSnapshot {
      */
     readonly spots: number;
     readonly gesture: Gesture | null;
+    /**
+     * The handle selected by a click, such as a Line's point showing its tangent bar (#557); null
+     * or absent when none is. Not an undo step: undo, redo and a new shape clear it.
+     */
+    readonly selected?: string | null;
     /** Where the pointer is during a gesture, for the guides drawn by it */
     readonly pointer?: XY;
     readonly past: readonly ToolSnapshot[];
@@ -222,7 +229,14 @@ export function pressTarget(
 ): ShapeTarget | { type: "draw" } {
     if (state.params === null) return { type: "draw" };
     return (
-        shapeTargetAt(state.kind, state.params, state.spots, at, env) ?? {
+        shapeTargetAt(
+            state.kind,
+            state.params,
+            state.spots,
+            at,
+            env,
+            state.selected,
+        ) ?? {
             type: "draw",
         }
     );
@@ -236,7 +250,14 @@ export function press(state: ToolState, at: XY, env: ToolEnv): ToolState {
     const onShape =
         state.params === null
             ? null
-            : startShapeGesture(state.kind, state.params, state.spots, at, env);
+            : startShapeGesture(
+                  state.kind,
+                  state.params,
+                  state.spots,
+                  at,
+                  env,
+                  state.selected,
+              );
     const click =
         onShape?.type === "handle"
             ? (state.kind.clickHandle?.(
@@ -258,7 +279,13 @@ export function press(state: ToolState, at: XY, env: ToolEnv): ToolState {
                   ? { first: state.kind.clickPoints.land([], at, env) }
                   : {}),
           };
-    return { ...state, gesture, pointer: at };
+    return {
+        ...state,
+        gesture,
+        pointer: at,
+        // A new shape drawn has nothing selected
+        ...(onShape ? {} : { selected: null }),
+    };
 }
 
 type PointsGesture = Extract<Gesture, { type: "points" }>;
@@ -350,8 +377,10 @@ export function pointerMove(state: ToolState, at: XY, env: ToolEnv): ToolState {
 
 /**
  * Ends the gesture: one undo step if it changed anything, and who goes where worked out again. A
- * double click on the pivot sends it back to the center (#350); a click on an outline's spot
- * between corners moves its gap there (#390).
+ * double click on the pivot sends it back to the center (#350), and on a handle does what its kind
+ * says (a Line's point switches between corner and smooth, #557); a click on an outline's spot
+ * between corners moves its gap there (#390). A click on a handle that selects selects it
+ * (`selectionAfter`).
  */
 export function release(
     state: ToolState,
@@ -381,12 +410,31 @@ export function release(
             },
         };
     if (click?.double && g.type !== "draw" && g.type !== "edit") {
-        const centered = centerPivot(g);
-        if (centered !== null) state = { ...state, params: centered };
+        const doubled =
+            g.type === "handle"
+                ? (state.kind.doubleClickHandle?.(g.base, state.spots, g.key) ??
+                  null)
+                : null;
+        const changed = doubled ?? centerPivot(g);
+        if (changed !== null) state = { ...state, params: changed };
     } else if (click && "click" in g && g.click !== undefined)
         // A click moves nothing else, even if the pointer slipped a little
         state = { ...state, params: g.click };
-    const ended = { ...state, gesture: null };
+    const ended: ToolState = {
+        ...state,
+        gesture: null,
+        ...(g.type === "draw" || g.type === "edit"
+            ? {}
+            : {
+                  selected: selectionAfter(
+                      state.kind,
+                      state.spots,
+                      g,
+                      click,
+                      state.selected,
+                  ),
+              }),
+    };
     if (state.params === g.before.params) return ended;
     const next = pushHistory(ended, g.before);
     return g.type === "draw" || !holdsSpots(state, g.before.params, ctx)
@@ -448,6 +496,11 @@ function holdsSpots(
     return was.every((s, i) => s.row === now[i]!.row && s.col === now[i]!.col);
 }
 
+/** Escape with a handle selected (#557): nothing selected. Unchanged when nothing is. */
+export function clearSelection(state: ToolState): ToolState {
+    return state.selected ? { ...state, selected: null } : state;
+}
+
 /** Escape during a gesture: everything as it was at the press */
 export function cancelGesture(state: ToolState): ToolState {
     const g = state.gesture;
@@ -467,7 +520,13 @@ export function edit(
 ): ToolState {
     if (state.gesture || params === state.params) return state;
     params = carryPivot(state.params, params);
-    const next = pushHistory({ ...state, params }, snapshot(state));
+    const selected = selectionIn(
+        state.kind,
+        params,
+        state.spots,
+        state.selected,
+    );
+    const next = pushHistory({ ...state, params, selected }, snapshot(state));
     return holdsSpots(next, state.params, ctx) ? next : reassign(next, ctx);
 }
 
@@ -504,7 +563,10 @@ export function switchKind(
         kind.fromFrame(state.kind.frameOf(state.params, n), n, env),
     );
     return reassign(
-        pushHistory({ ...state, kind, params }, snapshot(state)),
+        pushHistory(
+            { ...state, kind, params, selected: null },
+            snapshot(state),
+        ),
         ctx,
     );
 }
@@ -554,6 +616,7 @@ export function undo(state: ToolState): ToolState {
     return {
         ...state,
         ...previous,
+        selected: null,
         past: state.past.slice(0, -1),
         future: [...state.future, snapshot(state)],
     };
@@ -565,6 +628,7 @@ export function redo(state: ToolState): ToolState {
     return {
         ...state,
         ...next,
+        selected: null,
         past: [...state.past, snapshot(state)],
         future: state.future.slice(0, -1),
     };
