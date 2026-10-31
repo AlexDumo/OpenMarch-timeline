@@ -610,10 +610,10 @@ test("change: a right-click on a point opens its menu: switching off following t
     expect(await checked("marcher-follow")).toBe("true");
     await expect(caption).toHaveText("Line puts a marcher here");
     expect(await checked("marcher-always")).toBe("true");
-    await expect(menu.getByTestId("shape-menu-marcher-always")).toHaveAttribute(
-        "aria-disabled",
-        "true",
-    );
+    // Greyed while following, but still operable: no aria-disabled
+    await expect(
+        menu.getByTestId("shape-menu-marcher-always"),
+    ).not.toHaveAttribute("aria-disabled", "true");
     await expect(
         menu.getByTestId("shape-menu-delete").locator("svg"),
     ).toHaveCount(1);
