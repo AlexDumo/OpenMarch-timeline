@@ -311,6 +311,53 @@ export interface ToolChoice<P> {
     shown?(params: P, n: number): boolean;
 }
 
+/** One entry in a handle's menu ({@link ToolHandleMenu}) */
+export interface ToolMenuItem {
+    /** Stable for the kind: tests and {@link ToolHandleMenu.pick} name the entry by it */
+    readonly value: string;
+    readonly label: string;
+    /**
+     * Whether it's the answer the shape has now, for an entry that is one of a set of answers:
+     * the menu ticks it. Absent for an entry that just does something.
+     */
+    readonly checked?: boolean;
+    /** Why it can't be picked now, shown with it dimmed; absent when it can */
+    readonly disabled?: string;
+    /** A double-click on the handle does this too: the menu shows the double-click beside it */
+    readonly doubleClick?: boolean;
+}
+
+/** A run of a handle menu's entries, set apart from the others, with a heading when it has one */
+export interface ToolMenuSection {
+    readonly label?: string;
+    readonly items: readonly ToolMenuItem[];
+}
+
+/**
+ * A handle's right-click menu (#569): a Line's point or segment. Long-press opens it on touch and
+ * Ctrl-click on a Mac, as everywhere on the field. Everything is pure.
+ */
+export interface ToolHandleMenu<P> {
+    /** The menu for handle `key`, or null when it has none */
+    sections(
+        params: P,
+        n: number,
+        key: string,
+    ): readonly ToolMenuSection[] | null;
+    /**
+     * Entry `value` picked on handle `key`: the shape after it (one undo step when it changed),
+     * and the handle selected after it when that changes (null for none); absent keeps the
+     * selection, as an edit does. Null when it does nothing.
+     */
+    pick(
+        params: P,
+        n: number,
+        key: string,
+        value: string,
+        env: ToolEnv,
+    ): { readonly params: P; readonly selected?: string | null } | null;
+}
+
 /**
  * Drawing by clicking point after point (#524, spec #522), for a kind that opts in. A drag still
  * draws with {@link ToolKind.draw}; a click with no drag starts a run of points, each click adds
@@ -429,6 +476,8 @@ export interface ToolKind<P> {
      * smooth (#557). Its first click has already done what a click does. Null or absent: nothing.
      */
     doubleClickHandle?(params: P, n: number, key: string): P | null;
+    /** Right-click menus on its handles (#569); absent: the field's own menu, where it opens */
+    readonly menu?: ToolHandleMenu<P>;
     /** The params with handle `key` dragged to `to`, starting from `base` (the params at press) */
     dragHandle(base: P, n: number, key: string, to: XY, env: ToolEnv): P;
     /** The shape's outline on the field; the frame's four corners when absent */

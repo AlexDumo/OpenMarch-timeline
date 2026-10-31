@@ -73,7 +73,7 @@ export const TimelineMenuClose = createContext<(() => void) | null>(null);
  * pressed (touch). Screen readers hear the reason as the entry's description. Escape closes the
  * tip and the menu together (`TimelineMenuClose`).
  */
-function MenuItemWithReason({
+export function MenuItemWithReason({
     testId,
     reason,
     reasonTestId,

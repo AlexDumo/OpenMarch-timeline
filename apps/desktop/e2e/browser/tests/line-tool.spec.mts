@@ -545,6 +545,120 @@ test("change: clicks draw an L, its corner holds a marcher until switched off, a
     expect(reopened.addHandles).toHaveLength(2);
 });
 
+test("change: a right-click on a point opens its menu: its corner keeps the spacing even, or holds a marcher with the switch off; a segment's menu adds a point", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await page.keyboard.press("l");
+
+    // The L from the corners scenario: 8 marchers, one on the corner until it says otherwise
+    const y = cf.y - 20 * S;
+    const a = { x: cf.x - 14 * S, y };
+    const b = { x: cf.x - 6 * S, y };
+    const c = { x: cf.x - 6 * S, y: y + 5 * S };
+    const click = async (p: Point) => {
+        const at = await toScreen(page, p);
+        await page.mouse.move(at.x, at.y, { steps: 4 });
+        await page.mouse.click(at.x, at.y);
+    };
+    await click(a);
+    await click(b);
+    await click(c);
+    await click(c);
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    const onCorner = (spots: readonly Point[]) =>
+        spots.some((s) => Math.hypot(s.x - b.x, s.y - b.y) < CLOSE);
+    expect(onCorner((await shapeOverlay(page))!.spots)).toBe(true);
+
+    const menu = page.getByTestId("shape-menu");
+    /** A right-click at field point `p`, or at a viewport point when `screen` */
+    const rightClick = async (p: Point, screen = false) => {
+        const at = screen ? p : await toScreen(page, p);
+        await page.mouse.move(at.x, at.y, { steps: 4 });
+        await page.mouse.click(at.x, at.y, { button: "right" });
+        await expect(menu).toBeVisible();
+    };
+    const pick = async (value: string) => {
+        await menu.getByTestId(`shape-menu-${value}`).click();
+        await expect(menu).toBeHidden();
+    };
+    const checked = (value: string) =>
+        menu.getByTestId(`shape-menu-${value}`).getAttribute("aria-checked");
+
+    // The corner's menu: Corner ticked, Smooth with its double-click, and the marcher answers
+    await rightClick(b);
+    await expect(menu).toHaveAttribute("data-handle", "p1");
+    expect(await checked("corner")).toBe("true");
+    await expect(
+        menu.getByTestId("shape-menu-smooth").locator(".keycaps"),
+    ).toHaveText("Double-click");
+    await expect(menu).toContainText("Marcher on this point");
+    expect(await checked("marcher-line")).toBe("true");
+    // The field's own menu stays shut while the shape is open
+    await expect(page.getByTestId("field-menu")).toHaveCount(0);
+    // Escape closes it with nothing changed
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+
+    // Keep spacing even: the intervals run straight through the corner
+    await rightClick(b);
+    await pick("marcher-even");
+    await expect
+        .poll(async () => onCorner((await shapeOverlay(page))!.spots))
+        .toBe(false);
+    await rightClick(b);
+    expect(await checked("marcher-even")).toBe("true");
+    await page.keyboard.press("Escape");
+
+    // With the corners switch off, Always a marcher puts one back on it
+    const corners = page.getByTestId("shape-choice-corners");
+    await corners.click();
+    await page
+        .getByTestId("shape-choice-corners-content")
+        .getByRole("menuitemradio", { name: "Intervals run around corners" })
+        .click();
+    await expect(corners).toHaveAttribute("data-value", "off");
+    await rightClick(b);
+    await pick("marcher-always");
+    await expect
+        .poll(async () => onCorner((await shapeOverlay(page))!.spots))
+        .toBe(true);
+
+    // A segment's middle: Add point here, the new point selected
+    const [middle] = (await shapeOverlay(page))!.addHandles!;
+    await rightClick(middle!, true);
+    await expect(menu).toHaveAttribute("data-handle", "m0");
+    await pick("add");
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.handles.length)
+        .toBe(4);
+    expect((await shapeOverlay(page))!.selectedHandles).toHaveLength(1);
+    const shown = (await shapeOverlay(page))!;
+    expect(onCorner(shown.spots)).toBe(true);
+
+    // Placed, the corner keeps its answer
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect.poll(() => onSpots(show, shown.spots)).toBe(true);
+    await waitForIdle(page);
+    const [recipe] = await recipes(show);
+    const stored = JSON.parse(recipe.params);
+    expect(stored.corners).toBe(false);
+    expect(stored.points).toHaveLength(4);
+    expect(stored.points[2].marcher).toBe(true);
+    expect(
+        stored.points.filter((p: { marcher?: boolean }) => "marcher" in p),
+    ).toHaveLength(1);
+});
+
 test("change: a click on the first point closes a clicked line, Grid fills it, and it places and reopens closed in Grid", async ({
     show,
 }) => {

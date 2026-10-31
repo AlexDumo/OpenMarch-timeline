@@ -331,8 +331,9 @@ The Line shape (spec #522, #523) stores a new kind:
    understands. Each build widens its `readable` check as it learns a field: the first Line build
    read two straight points and a single group with no count; more points and `corners` came with
    #524, any number of groups, counted or with one rest, with #526, tensions from 0 to 2 with
-   #525, `measured` (`"x"` or `"y"`, with any of these) with #527, and `closed` with its
-   `distribution` with #529, together with tensions and groups. A closed line is never measured
+   #525, `measured` (`"x"` or `"y"`, with any of these) with #527, `closed` with its
+   `distribution` with #529, together with tensions and groups, and a point's `marcher` with
+   #569 (decision 7). From #569 a point with any other field reads as plain positions. A closed line is never measured
    along an axis (it always turns back), so it's laid out by the true distance whatever its
    `measured` says.
 6. **A closed Line (#529).** `closed: true` joins the last point to the first: a closed line has
@@ -367,6 +368,26 @@ The Line shape (spec #522, #523) stores a new kind:
    can't read, or `closed` that isn't a boolean reads as plain positions. Opening a closed line
    keeps its spots and its spacing, groups included, as far as an open line can lay them out the
    same; a new end inside a curved segment is as smooth as the smoother of its points.
+
+7. **A point's marcher (#569).** A point may store `marcher`, true or false, from its menu's
+   Marcher on this point: true (Always a marcher) holds a marcher there whatever `corners` says,
+   smooth or not; false (Keep spacing even) forces none, so the intervals run straight through
+   it. Absent (As the line) is decision 2's rule, so a Line saved before reads unchanged. It works
+   either way round the switch: a corner can opt out of `corners` absent or true, and a point can
+   opt in with `corners: false`. Decision 2's stretches then run between the points that hold a
+   marcher (the ends, the points saying true, and the corners not saying false while the switch is
+   on), and everything decision 2 says of corners holding marchers (Fit's shares, Keep interval's
+   whole runs, measured ↔ or ↕, a closed line's stretches round from its first held point) is
+   said of them. An open line's ends always hold a marcher, so their `marcher` means nothing and
+   isn't written. On the path, and in a closed line's Grid and Spread, no point holds a marcher
+   by its own answer, as no corner does. `marcher` is the only field a point has besides `x`, `y`
+   and `tension`.
+
+Verification (#569): `linePointMenu.test.ts` opts a corner out with the switch on and in with it
+off, in Fit, on a closed line both ways, measured ↔ with each stretch even that way, and in Keep
+interval with the stretch a whole number of intervals; puts a marcher on a smooth point; ignores
+the answer on the path; refuses a non-boolean `marcher` and an unknown point field; and reads a
+placed Line's answer back as saved.
 
 Verification (#529): `lineClose.test.ts` closes a Line by a click on its first point, an end
 dropped on the other and the editor's choice; checks a gap for every marcher; fills a square and

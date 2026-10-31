@@ -412,6 +412,12 @@ export interface FieldMode {
      * what the field is about. A selected placed box leaves it open, for its marchers.
      */
     readonly blocksFieldMenu?: boolean;
+    /**
+     * A right-click (a Mac's Ctrl-click, a long press on touch) at `pointer`, with no press held:
+     * the mode opens its own menu there (a Line's point, #569) and returns true, or returns false
+     * for the field's rules. Absent: always the field's.
+     */
+    openMenu?(pointer: FieldPointer): boolean;
     /** What `activeGesture` reports while one of its presses is held, and while it's on when `always`. */
     readonly gesture: { kind: FieldTestGesture; always: boolean };
 }
@@ -464,7 +470,8 @@ export class FieldEditor {
     private lastToolPress: { time: number; screen: FieldPoint } | null = null;
     /**
      * A right press, until its release: navigation pans with it, and a click
-     * (one that never moved past the slop) opens the field's menu (#315).
+     * (one that never moved past the slop) opens the field's menu (#315). A
+     * Mac's Ctrl-press too, whose click opens only a mode's menu (#569).
      */
     private rightPress: { start: FieldPointer; dragged: boolean } | null = null;
     private readonly listeners = new Set<() => void>();
@@ -495,9 +502,10 @@ export class FieldEditor {
     pointerDown(pointer: FieldPointer): boolean {
         if (!this.isEditButton(pointer)) {
             // Navigation pans with it; a right-click (no drag) opens the
-            // menu. A Mac's Ctrl-click only pans (#194)
+            // menu. A Mac's Ctrl-click pans (#194), and opens only a mode's
+            // menu (a Line's point, #569)
             this.rightPress =
-                pointer.button === 2
+                pointer.button === 2 || this.isMacCtrl(pointer)
                     ? { start: pointer, dragged: false }
                     : null;
             return false;
@@ -615,23 +623,23 @@ export class FieldEditor {
     }
 
     pointerUp(pointer: FieldPointer): void {
-        if (pointer.button === 2) {
+        const macCtrl =
+            this.rightPress !== null &&
+            this.rightPress.start.button === 0 &&
+            pointer.button === 0;
+        if (pointer.button === 2 || macCtrl) {
             const right = this.rightPress;
             this.rightPress = null;
             // A right-drag panned, and no menu opens
             if (!right || right.dragged || isPastSlop(right.start, pointer))
                 return;
             // Mid-press or mid-drag of the left button, the right one does
-            // nothing more; nor while the prop tool draws, a mode's press is
-            // held or the open shape is being edited
-            if (
-                !this.gesture &&
-                !this.press &&
-                !this.propTool &&
-                !this.modePress &&
-                !this.blocksFieldMenu()
-            )
-                this.openMenu(pointer);
+            // nothing more; nor while the prop tool draws or a mode's press
+            // is held. A mode's own menu first; then the field's, unless the
+            // open shape is being edited (a Mac's Ctrl-click has none)
+            if (!this.menuFree()) return;
+            if (this.mode?.openMenu?.(pointer)) return;
+            if (!macCtrl && !this.blocksFieldMenu()) this.openMenu(pointer);
             return;
         }
         const modePress = this.modePress;
@@ -699,6 +707,30 @@ export class FieldEditor {
         this.click(press, pointer.shift || press.add === true);
         if (press.double && press.hit !== null)
             this.ports.doubleClickMarcher?.(press.hit);
+    }
+
+    /**
+     * A long press on touch at `pointer` (#569): a mode's menu, as a right-click opens it. Touch
+     * is otherwise navigation's, so the field's own menu doesn't open this way.
+     */
+    longPress(pointer: FieldPointer): void {
+        if (this.menuFree()) this.mode?.openMenu?.(pointer);
+    }
+
+    /** No press, drag or prop tool that a menu would cut into */
+    private menuFree(): boolean {
+        return (
+            !this.gesture && !this.press && !this.propTool && !this.modePress
+        );
+    }
+
+    /** A Mac's Ctrl+press: a right-click there, which pans (#194) */
+    private isMacCtrl(pointer: FieldPointer): boolean {
+        return (
+            (this.options.isMac ?? false) &&
+            pointer.button === 0 &&
+            pointer.ctrl
+        );
     }
 
     /** The pointer was lost (capture lost, the window lost focus): nothing is clicked or dropped. */

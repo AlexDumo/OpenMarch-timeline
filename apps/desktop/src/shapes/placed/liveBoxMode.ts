@@ -28,6 +28,7 @@ import {
     liveTargets,
     moveLive,
     openLive,
+    pickLive,
     pressLive,
     releaseLive,
     reopenLive,
@@ -41,6 +42,7 @@ import {
     useSavingBoxStore,
 } from "./boxSelectionStore";
 import { outlineGapAt } from "../distribute/outlineGap";
+import { openHandleMenu } from "../field/handleMenu";
 import type { AnyToolKind } from "../tool/toolKind";
 import type { XY } from "../types";
 import type { Roles } from "@/input/modifierRoles";
@@ -305,6 +307,45 @@ export class LiveBoxMode implements FieldMode {
         }
         this.emit();
         if (!out.changed && out.enter) this.enterAt(pointer);
+    }
+
+    /** A right-click on a handle with a menu (a Line's point or segment, #569) opens it */
+    openMenu(pointer: FieldPointer): boolean {
+        const field = currentShapeField();
+        if (!field || this.live.gesture) return false;
+        const { kind, spots } = this.live.box;
+        const target = shapeTargetAt(
+            kind,
+            this.live.params,
+            spots,
+            pointer.field,
+            toolEnvFor(field),
+            this.live.selected,
+        );
+        return openHandleMenu(
+            kind,
+            this.live.params,
+            spots,
+            target,
+            pointer.screen,
+            (key, value) => this.pickMenu(key, value),
+        );
+    }
+
+    /** An entry of a handle's menu picked: saved as one undo step when it changed something */
+    private pickMenu(key: string, value: string): void {
+        const field = currentShapeField();
+        if (!field) return;
+        const before = this.live;
+        const out = pickLive(before, key, value, toolEnvFor(field));
+        this.live = out.live;
+        if (out.changed) {
+            this.saved = out.live.params;
+            void commitBox(before.box, out.live.params, this.queryClient);
+            const saving = useSavingBoxStore.getState().box;
+            if (saving) this.live = openLive(saving, this.live.selected);
+        }
+        this.emit();
     }
 
     cancel(): void {

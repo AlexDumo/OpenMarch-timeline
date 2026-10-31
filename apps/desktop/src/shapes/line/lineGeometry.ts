@@ -35,6 +35,12 @@ import type { Slot, XY } from "../types";
  */
 export interface LinePoint extends XY {
     readonly tension: number;
+    /**
+     * Whether a marcher stands on this point whatever the line's corners switch says (#569): true
+     * always one, false none forced here, so the intervals run straight through. Absent: as the
+     * line ({@link holdsMarcher}). An open line's ends always hold one.
+     */
+    readonly marcher?: boolean;
 }
 
 /** The tension a point made smooth starts with: the plain Catmull-Rom curve (#525) */
@@ -117,9 +123,15 @@ const withTension =
     (tension: number) =>
     ({ x, y }: XY): LinePoint => ({ x, y, tension });
 
+/** A point's own fields: anything else is a later build's (ADR 0006, decision 5) */
+const POINT_KEYS = new Set(["x", "y", "tension", "marcher"]);
+
 const isPoint = (q: unknown): q is LinePoint =>
     typeof q === "object" &&
     q !== null &&
+    Object.keys(q).every((key) => POINT_KEYS.has(key)) &&
+    ((q as LinePoint).marcher === undefined ||
+        typeof (q as LinePoint).marcher === "boolean") &&
     Number.isFinite((q as LinePoint).x) &&
     Number.isFinite((q as LinePoint).y) &&
     Number.isFinite((q as LinePoint).tension) &&
@@ -277,31 +289,46 @@ export function segmentMidpoint(p: LineParams, index: number): XY {
 }
 
 /**
- * The stretches between the points that hold a marcher (#524, #525): from an end or a corner to
- * the next, smooth points inside them. The ends always hold a marcher, smooth or not. `from` and
- * `to` are point indices. A closed line's run from corner to corner round from its first corner,
- * the last back past its first point to that corner (`to` counting on past the last point, #529);
- * with no corner, one stretch from its first point all the way round.
+ * Whether point `index` holds a marcher, in a line whose held points do (Fit and Keep interval,
+ * {@link cornerGaps}): an open line's ends always; a point with its own answer (#569) as it says,
+ * so one can opt out of the corners switch or in with it off; any other point when it's a corner
+ * and the switch is on. A smooth point holds none unless it says so.
+ */
+export function holdsMarcher(p: LineParams, index: number): boolean {
+    const q = p.points[index];
+    if (!q) return false;
+    const last = p.points.length - 1;
+    if (!isClosed(p) && (index === 0 || index === last)) return true;
+    if (q.marcher !== undefined) return q.marcher;
+    return q.tension === 0 && p.corners !== false;
+}
+
+/**
+ * The stretches between the points that hold a marcher (#524, #525, #569,
+ * {@link holdsMarcher}): from an end or a held point to the next, the points that hold none
+ * inside them. `from` and `to` are point indices. A closed line's run from held point to held
+ * point round from its first, the last back past its first point to that one (`to` counting on
+ * past the last point, #529); with none, one stretch from its first point all the way round.
  */
 export function lineStretches(
     p: LineParams,
 ): { readonly from: number; readonly to: number }[] {
     const count = p.points.length;
     if (isClosed(p)) {
-        const corners = p.points.flatMap((q, i) =>
-            q.tension === 0 ? [i] : [],
+        const held = p.points.flatMap((_, i) =>
+            holdsMarcher(p, i) ? [i] : [],
         );
-        if (corners.length === 0) return [{ from: 0, to: count }];
-        return corners.map((from, k) => ({
+        if (held.length === 0) return [{ from: 0, to: count }];
+        return held.map((from, k) => ({
             from,
-            to: corners[k + 1] ?? corners[0]! + count,
+            to: held[k + 1] ?? held[0]! + count,
         }));
     }
     const last = count - 1;
     const stretches: { from: number; to: number }[] = [];
     let from = 0;
     for (let i = 1; i <= last; i++) {
-        if (i < last && p.points[i]!.tension > 0) continue;
+        if (!holdsMarcher(p, i)) continue;
         stretches.push({ from, to: i });
         from = i;
     }
@@ -598,16 +625,17 @@ export function lineInterval(p: LineParams, n: number): number {
  * Fit) they're in proportion to the stretches' lengths; with groups (#526) each corner takes the
  * seam between gaps nearest it along the run, so a stretch that is a whole run of the groups' gaps
  * holds exactly those. Measured ↔ or ↕ (#527), a stretch's length is how far it goes that way.
- * Null when the corners don't hold marchers: the switch is off, there's no corner, the run is laid
- * on the path, or there are fewer gaps than stretches. A closed line's stretches have n gaps
- * between them, round from its first corner (#529).
+ * Null when no point between the ends holds a marcher ({@link holdsMarcher}: the switch off or no
+ * corner, and no point asking for one, #569), the run is laid on the path (whatever the points
+ * say), or there are fewer gaps than stretches. A closed line's stretches have n gaps between
+ * them, round from its first held point (#529).
  */
 export function cornerGaps(p: LineParams, n: number): number[] | null {
-    if (p.corners === false || p.spacing.mode === "path") return null;
-    const corner = isClosed(p)
-        ? p.points.some((q) => q.tension === 0)
+    if (p.spacing.mode === "path") return null;
+    const held = isClosed(p)
+        ? p.points.some((_, i) => holdsMarcher(p, i))
         : lineStretches(p).length > 1;
-    if (!corner) return null;
+    if (!held) return null;
     const axis = measuredAxis(p);
     const lengths = axis
         ? stretchExtents(p, axis)
@@ -1260,7 +1288,8 @@ function stretchesAt(p: LineParams, index: number) {
  * stretches whose lengths {@link cornerOnIntervals} can make whole runs of gaps
  */
 function straightCorner(p: LineParams, n: number, index: number): boolean {
-    if (p.points[index]!.tension !== 0 || !cornerGaps(p, n)) return false;
+    if (p.points[index]!.tension !== 0 || !holdsMarcher(p, index)) return false;
+    if (!cornerGaps(p, n)) return false;
     const { before, after } = stretchesAt(p, index);
     const segments = lineSegments(p);
     return [before, after].every(
@@ -1683,6 +1712,113 @@ export function setTension(
     return {
         ...p,
         points: p.points.map((q, i) => (i === index ? { ...q, tension } : q)),
+    };
+}
+
+/** A point's own answer to whether it holds a marcher dropped: it follows the line again */
+const followsLine = ({ marcher: _marcher, ...q }: LinePoint): LinePoint => q;
+
+/**
+ * The line with point `index` holding a marcher always (true), never forced to (false), or as the
+ * line says (undefined), from the point's menu (#569). Keep interval is sized to its run again,
+ * since its stretches change.
+ */
+export function setPointMarcher(
+    p: LineParams,
+    n: number,
+    index: number,
+    marcher: boolean | undefined,
+    env: SizeEnv,
+): LineParams {
+    const was = p.points[index];
+    if (!was || was.marcher === marcher) return p;
+    const next: LineParams = {
+        ...p,
+        points: p.points.map((q, i) =>
+            i !== index
+                ? q
+                : marcher === undefined
+                  ? followsLine(q)
+                  : { ...q, marcher },
+        ),
+    };
+    return keptToRun(next, n, env);
+}
+
+/** The fewest points a line can have: two open, three closed (#529) */
+export const minPoints = (p: LineParams): number => (isClosed(p) ? 3 : 2);
+
+/**
+ * The line without point `index` (#569), never under {@link minPoints}; Keep interval sized to
+ * its run again
+ */
+export function deletePoint(
+    p: LineParams,
+    n: number,
+    index: number,
+    env: SizeEnv,
+): LineParams {
+    if (!p.points[index] || p.points.length <= minPoints(p)) return p;
+    const next = { ...p, points: p.points.filter((_, i) => i !== index) };
+    // A new end holds a marcher whatever it said
+    const last = next.points.length - 1;
+    const points = isClosed(next)
+        ? next.points
+        : next.points.map((q, i) =>
+              i === 0 || i === last ? followsLine(q) : q,
+          );
+    return keptToRun({ ...next, points }, n, env);
+}
+
+/**
+ * A closed line opened at point `index` (#569): that point both of its ends, the others in order
+ * round from it, its fill dropped. Keep interval sized to its run again (an open line has one
+ * gap fewer).
+ */
+export function openAt(
+    p: LineParams,
+    n: number,
+    index: number,
+    env: SizeEnv,
+): LineParams {
+    const at = p.points[index];
+    if (!isClosed(p) || !at) return p;
+    const { closed: _closed, distribution: _distribution, ...rest } = p;
+    const end = followsLine(at);
+    const points = [
+        end,
+        ...p.points.slice(index + 1),
+        ...p.points.slice(0, index),
+        end,
+    ];
+    return keptToRun({ ...rest, points }, n, env);
+}
+
+/** Whether segment `index` runs straight from its point to the next */
+export const segmentStraight = (p: LineParams, index: number): boolean =>
+    lineSegments(p)[index]?.type === "line";
+
+/**
+ * The line with segment `index` straight (both its points corners) or curved (both smooth, a
+ * corner made {@link SMOOTH}) (#569)
+ */
+export function setSegmentCurved(
+    p: LineParams,
+    index: number,
+    curved: boolean,
+): LineParams {
+    const count = p.points.length;
+    if (index < 0 || index >= lineSegments(p).length) return p;
+    const ends = new Set([index, (index + 1) % count]);
+    const tension = (q: LinePoint) =>
+        curved ? (q.tension > 0 ? q.tension : SMOOTH) : 0;
+    if (p.points.every((q, i) => !ends.has(i) || q.tension === tension(q)))
+        return p;
+    return {
+        ...p,
+        points: p.points.map((q, i) =>
+            ends.has(i) ? { ...q, tension: tension(q) } : q,
+        ),
     };
 }
 

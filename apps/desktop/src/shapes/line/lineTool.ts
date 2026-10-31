@@ -14,7 +14,9 @@ import type {
     ToolChoice,
     ToolEnv,
     ToolGroups,
+    ToolHandleMenu,
     ToolKind,
+    ToolMenuSection,
     ToolParam,
 } from "../tool/toolKind";
 import { curveShape, lineShape } from "./lineShape";
@@ -35,6 +37,7 @@ import {
     closeLine,
     cornerOffInterval,
     curveInFrame,
+    deletePoint,
     dragPoint,
     dragTension,
     drawCurve,
@@ -50,14 +53,18 @@ import {
     lineInterval,
     measuredAxis,
     measuredBlock,
+    minPoints,
+    openAt,
     lineOutline,
     lineSegments,
-    lineStretches,
     moveLine,
     type TangentSide,
     onLine,
     openLine,
     segmentMidpoint,
+    segmentStraight,
+    setPointMarcher,
+    setSegmentCurved,
     setTension,
     SMOOTH,
     splitSegment,
@@ -638,10 +645,285 @@ const CORNERS: ToolChoice<LineParams> = {
     // corners (n - 1 gaps; n round a closed line, #529); smooth points aren't corners (#525)
     shown: (p, n) => {
         if (p.spacing.mode === "path" || isFilled(p)) return false;
-        const stretches = lineStretches(p).length;
-        if (isClosed(p))
-            return p.points.some((q) => q.tension === 0) && n >= stretches;
-        return stretches > 1 && n > stretches;
+        const between = isClosed(p) ? p.points : p.points.slice(1, -1);
+        const corners = between.filter((q) => q.tension === 0).length;
+        if (isClosed(p)) return corners > 0 && n >= corners;
+        return corners > 0 && n > corners + 1;
+    },
+};
+
+/** Why a point's own marcher answer does nothing now (#569), or undefined when it counts */
+function marcherReason(p: LineParams): string | undefined {
+    if (p.spacing.mode === "path")
+        return tolgee.t(
+            "shapes.kinds.line.menu.marcherPath",
+            "Interval on the path runs past every point",
+        );
+    if (isFilled(p))
+        return tolgee.t(
+            "shapes.kinds.line.menu.marcherFilled",
+            "A filled line's spots follow its fill",
+        );
+    return undefined;
+}
+
+/** The point menu's answers to whether a marcher stands on the point (#569) */
+const MARCHER_VALUES = {
+    "marcher-line": undefined,
+    "marcher-always": true,
+    "marcher-even": false,
+} as const;
+
+/** Right-click on point `index` (#569) */
+function pointMenu(p: LineParams, index: number): ToolMenuSection[] {
+    const q = p.points[index]!;
+    const smoothPoint = q.tension > 0;
+    const closed = isClosed(p);
+    const last = p.points.length - 1;
+    const end = !closed && (index === 0 || index === last);
+    const sections: ToolMenuSection[] = [
+        {
+            items: [
+                {
+                    value: "corner",
+                    label: tolgee.t("shapes.kinds.line.menu.corner", "Corner"),
+                    checked: !smoothPoint,
+                    doubleClick: smoothPoint,
+                },
+                {
+                    value: "smooth",
+                    label: tolgee.t("shapes.kinds.line.menu.smooth", "Smooth"),
+                    checked: smoothPoint,
+                    doubleClick: !smoothPoint,
+                },
+                ...(smoothPoint
+                    ? [
+                          {
+                              value: "roundness",
+                              label: tolgee.t(
+                                  "shapes.kinds.line.menu.roundness",
+                                  "Roundness",
+                              ),
+                          },
+                      ]
+                    : []),
+            ],
+        },
+    ];
+    // An open line's ends always hold a marcher
+    if (!end) {
+        const disabled = marcherReason(p);
+        const labels = {
+            "marcher-line": tolgee.t(
+                "shapes.kinds.line.menu.marcherLine",
+                "As the line",
+            ),
+            "marcher-always": tolgee.t(
+                "shapes.kinds.line.menu.marcherAlways",
+                "Always a marcher",
+            ),
+            "marcher-even": tolgee.t(
+                "shapes.kinds.line.menu.marcherEven",
+                "Keep spacing even",
+            ),
+        };
+        sections.push({
+            label: tolgee.t(
+                "shapes.kinds.line.menu.marcher",
+                "Marcher on this point",
+            ),
+            items: (
+                Object.keys(MARCHER_VALUES) as (keyof typeof MARCHER_VALUES)[]
+            ).map((value) => ({
+                value,
+                label: labels[value],
+                checked: q.marcher === MARCHER_VALUES[value],
+                ...(disabled ? { disabled } : {}),
+            })),
+        });
+    }
+    const fewest = p.points.length <= minPoints(p);
+    sections.push({
+        items: [
+            {
+                value: "delete",
+                label: tolgee.t(
+                    "shapes.kinds.line.menu.delete",
+                    "Delete point",
+                ),
+                ...(fewest
+                    ? {
+                          disabled: closed
+                              ? tolgee.t(
+                                    "shapes.kinds.line.menu.fewestClosed",
+                                    "A closed line needs at least three points",
+                                )
+                              : tolgee.t(
+                                    "shapes.kinds.line.menu.fewestOpen",
+                                    "A line needs at least two points",
+                                ),
+                      }
+                    : {}),
+            },
+        ],
+    });
+    if (closed)
+        sections.push({
+            items: [
+                {
+                    value: "open",
+                    label: tolgee.t("shapes.kinds.line.menu.open", "Open here"),
+                },
+            ],
+        });
+    else if (end)
+        sections.push({
+            items: [
+                {
+                    value: "close",
+                    label: tolgee.t(
+                        "shapes.kinds.line.menu.close",
+                        "Close line",
+                    ),
+                    ...(p.points.length < 3
+                        ? {
+                              disabled: tolgee.t(
+                                  "shapes.kinds.line.menu.closeFew",
+                                  "A line needs three points to close",
+                              ),
+                          }
+                        : {}),
+                },
+            ],
+        });
+    return sections;
+}
+
+/** Right-click on segment `index`'s middle (#569) */
+function segmentMenu(p: LineParams, index: number): ToolMenuSection[] {
+    const straight = segmentStraight(p, index);
+    // Smooth points in a straight run still make a straight segment
+    const curves = !segmentStraight(setSegmentCurved(p, index, true), index);
+    return [
+        {
+            items: [
+                {
+                    value: "add",
+                    label: tolgee.t(
+                        "shapes.kinds.line.menu.add",
+                        "Add point here",
+                    ),
+                },
+            ],
+        },
+        {
+            items: [
+                {
+                    value: "straight",
+                    label: tolgee.t(
+                        "shapes.kinds.line.menu.straight",
+                        "Straight",
+                    ),
+                    checked: straight,
+                },
+                {
+                    value: "curved",
+                    label: tolgee.t("shapes.kinds.line.menu.curved", "Curved"),
+                    checked: !straight,
+                    ...(curves
+                        ? {}
+                        : {
+                              disabled: tolgee.t(
+                                  "shapes.kinds.line.menu.noCurve",
+                                  "The line runs straight through here",
+                              ),
+                          }),
+                },
+            ],
+        },
+    ];
+}
+
+/**
+ * Right-click menus on a Line's points and segments (#569): a point's corner or smooth, its
+ * roundness, whether a marcher stands on it, deleting it and closing or opening the line there; a
+ * segment's new point and whether it's straight or curved.
+ */
+const MENU: ToolHandleMenu<LineParams> = {
+    sections(p, _n, key) {
+        const index = pointOf(p, key);
+        if (index >= 0) return pointMenu(p, index);
+        const segment = midpointOf(p, key);
+        return segment >= 0 ? segmentMenu(p, segment) : null;
+    },
+    pick(p, n, key, value, env) {
+        const segment = midpointOf(p, key);
+        if (segment >= 0) {
+            if (value === "add")
+                return {
+                    params: splitSegment(p, segment),
+                    selected: `p${segment + 1}`,
+                };
+            if (value === "straight" || value === "curved")
+                return {
+                    params: keptInterval(
+                        setSegmentCurved(p, segment, value === "curved"),
+                        n,
+                        env,
+                    ),
+                };
+            return null;
+        }
+        const index = pointOf(p, key);
+        if (index < 0) return null;
+        switch (value) {
+            case "corner":
+                return {
+                    params: keptInterval(setTension(p, index, 0), n, env),
+                };
+            // Smooth shows the point's bar straight away, as Roundness does
+            case "smooth":
+                return {
+                    params:
+                        p.points[index]!.tension > 0
+                            ? p
+                            : keptInterval(
+                                  setTension(p, index, SMOOTH),
+                                  n,
+                                  env,
+                              ),
+                    selected: key,
+                };
+            case "roundness":
+                return p.points[index]!.tension > 0
+                    ? { params: p, selected: key }
+                    : null;
+            case "marcher-line":
+            case "marcher-always":
+            case "marcher-even":
+                if (marcherReason(p)) return null;
+                return {
+                    params: setPointMarcher(
+                        p,
+                        n,
+                        index,
+                        MARCHER_VALUES[value],
+                        env,
+                    ),
+                };
+            // The points after it move up one: nothing stays selected
+            case "delete":
+                return {
+                    params: deletePoint(p, n, index, env),
+                    selected: null,
+                };
+            case "close":
+                return { params: closeLine(p, n, env) };
+            case "open":
+                return { params: openAt(p, n, index, env), selected: null };
+            default:
+                return null;
+        }
     },
 };
 
@@ -652,8 +934,8 @@ const CORNERS: ToolChoice<LineParams> = {
  * keeps it, the length following from the pivot. Every corner holds a marcher unless switched off.
  * A click on a point selects it; a selected smooth point shows its tangent bar, whose ends set how
  * round the line bends through it, and a double-click makes a point smooth, or a corner again
- * (#557). A typed list (`2*3+4*2`, #526) spaces it in groups of
- * marchers, each a chip in the editor.
+ * (#557). A right-click on a point or a segment's middle opens its menu (#569). A typed list
+ * (`2*3+4*2`, #526) spaces it in groups of marchers, each a chip in the editor.
  */
 export const lineTool: ToolKind<LineParams> = {
     shape: lineShape,
@@ -748,6 +1030,7 @@ export const lineTool: ToolKind<LineParams> = {
         const smooth = params.points[index]!.tension > 0;
         return keptInterval(setTension(params, index, smooth ? 0 : SMOOTH), n);
     },
+    menu: MENU,
     outline: (params) => lineOutline(params),
     outlineOpen: (params) => params.closed !== true,
     snapPoints: (params) => {

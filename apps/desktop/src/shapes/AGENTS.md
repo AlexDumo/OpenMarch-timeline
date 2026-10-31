@@ -61,7 +61,11 @@ ordinary positions it writes.
 - The host keeps which handle a click selected (`selects` on a `ToolHandle`, #557) and hands its
   key back to `handles`, so a kind shows more around it (a Line's tangent bar, handles with
   `bar`); `selectionAfter` in `frame/gestures.ts` is the rule both the open and placed shape
-  follow. `clickHandle` is a click, `doubleClickHandle` a double-click's second click. An undo or
+  follow. `clickHandle` is a click, `doubleClickHandle` a double-click's second click.
+- A kind's `menu` (`ToolHandleMenu`, #569) is a handle's right-click menu (a Line's point or
+  segment): the modes' `openMenu` opens it through `field/handleMenu.ts` on a right-click, a Mac's
+  Ctrl-click or a long press, `editor/HandleMenu.tsx` shows it, and a pick is `pickMenu` on the
+  open shape (one undo step) or `pickLive` on a placed one (one save). An undo or
   redo clears the selection (a key names a point by index); a placed shape keeps it only through
   its own save (`reopenLive`).
 - The spot count comes from the host. Spots and who goes where are separate steps.
