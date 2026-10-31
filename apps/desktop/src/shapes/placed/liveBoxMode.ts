@@ -332,10 +332,16 @@ export class LiveBoxMode implements FieldMode {
         );
     }
 
-    /** An entry of a handle's menu picked: saved as one undo step when it changed something */
-    private pickMenu(key: string, value: string): void {
+    /**
+     * An entry of a handle's menu picked: saved as one undo step when it changed something. The
+     * shape after it, for the menu.
+     */
+    private pickMenu(
+        key: string,
+        value: string,
+    ): { params: unknown; n: number } | null {
         const field = currentShapeField();
-        if (!field) return;
+        if (!field) return null;
         const before = this.live;
         const out = pickLive(before, key, value, toolEnvFor(field));
         this.live = out.live;
@@ -346,6 +352,7 @@ export class LiveBoxMode implements FieldMode {
             if (saving) this.live = openLive(saving, this.live.selected);
         }
         this.emit();
+        return { params: this.live.params, n: this.live.box.spots };
     }
 
     cancel(): void {

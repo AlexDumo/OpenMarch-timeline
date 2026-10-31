@@ -113,7 +113,7 @@ describe("a point's marcher override (#569)", () => {
         expect(out.points[1]).toEqual(corner(40, 0, { marcher: false }));
         expect(isLineParams(out)).toBe(true);
         expect(isLineParams(marcherAt(L(), 1, true))).toBe(true);
-        // As the line again drops the field
+        // Following the line again drops the field
         const back = setPointMarcher(out, 8, 1, undefined, {});
         expect("marcher" in back.points[1]!).toBe(false);
     });
@@ -240,26 +240,103 @@ describe("a point's marcher override (#569)", () => {
 });
 
 describe("a Line's point menu (#569)", () => {
-    it("offers corner or smooth, the marcher answers, delete, and the double-click beside the switch", () => {
+    it("offers the corner type as an either/or with its double-click hint, following the line's marchers, and delete", () => {
         const menu = menuOf(L(), "p1");
         expect(menu.map((s) => s.items.map((i) => i.value))).toEqual([
             ["corner", "smooth"],
-            ["marcher-line", "marcher-always", "marcher-even"],
+            ["marcher-follow", "marcher-always", "marcher-even"],
             ["delete"],
         ]);
-        expect(menu[1]!.label).toBe("Marcher on this point");
-        expect(item(L(), "p1", "corner")).toMatchObject({
-            checked: true,
-            doubleClick: false,
+        expect(menu[0]).toMatchObject({
+            label: "Corner type",
+            look: "segmented",
+            hint: "Double-click a point to swap",
         });
-        expect(item(L(), "p1", "smooth")).toMatchObject({
-            checked: false,
-            doubleClick: true,
+        expect(menu[1]).toMatchObject({
+            label: "Marcher on this point",
+            look: "follow",
         });
-        expect(item(L(), "p1", "marcher-line")?.checked).toBe(true);
+        expect(item(L(), "p1", "marcher-follow")).toMatchObject({
+            label: "Follow line's marchers",
+            toggle: true,
+        });
+        expect(item(L(), "p1", "marcher-always")?.label).toBe("Marcher");
+        expect(item(L(), "p1", "marcher-even")?.label).toBe("Even spacing");
+        expect(item(L(), "p1", "corner")?.checked).toBe(true);
+        expect(item(L(), "p1", "smooth")?.checked).toBe(false);
+        expect(item(L(), "p1", "delete")).toMatchObject({
+            icon: "trash",
+            destructive: true,
+        });
+    });
+
+    it("follows the line while the point has no answer of its own, saying what the line does", () => {
+        // A corner with every corner holding a marcher: the line puts one here
+        expect(item(L(), "p1", "marcher-follow")?.checked).toBe(true);
+        expect(menuOf(L(), "p1")[1]!.caption).toBe("Line puts a marcher here");
+        expect(item(L(), "p1", "marcher-always")?.checked).toBe(true);
+        expect(item(L(), "p1", "marcher-even")?.checked).toBe(false);
+        // With the switch off, or on a smooth point, the line keeps the spacing even
+        const off = L({ corners: false });
+        expect(menuOf(off, "p1")[1]!.caption).toBe(
+            "Line keeps spacing even here",
+        );
+        expect(item(off, "p1", "marcher-even")?.checked).toBe(true);
+        expect(item(off, "p1", "marcher-always")?.checked).toBe(false);
+        const smooth = {
+            ...L(),
+            points: L().points.map((q, i) =>
+                i === 1 ? { ...q, tension: SMOOTH } : q,
+            ),
+        };
+        expect(item(smooth, "p1", "marcher-even")?.checked).toBe(true);
+    });
+
+    it("greys the marcher answers out with why when too few marchers hold every point", () => {
+        // Four stretches need at least four gaps: three marchers have two
+        const zigzag = L({
+            points: [
+                corner(0, 0),
+                corner(40, 0),
+                corner(40, 40),
+                corner(80, 40),
+                corner(80, 80),
+            ],
+        });
+        const section = lineTool.menu!.sections(zigzag, 3, "p1")![1]!;
+        const reason = "Too few marchers for one on every point";
+        expect(section.caption).toBe(reason);
+        for (const value of ["marcher-always", "marcher-even"])
+            expect(section.items.find((i) => i.value === value)).toMatchObject({
+                disabled: reason,
+                checked: false,
+            });
+        // With enough marchers the answers count again
+        expect(lineTool.menu!.sections(zigzag, 8, "p1")![1]!.caption).toBe(
+            "Line puts a marcher here",
+        );
+    });
+
+    it("shows a point's own answer with following off, and what the line would do", () => {
         const even = marcherAt(L(), 1, false);
+        expect(item(even, "p1", "marcher-follow")?.checked).toBe(false);
         expect(item(even, "p1", "marcher-even")?.checked).toBe(true);
-        expect(item(even, "p1", "marcher-line")?.checked).toBe(false);
+        expect(item(even, "p1", "marcher-always")?.checked).toBe(false);
+        expect(menuOf(even, "p1")[1]!.caption).toBe(
+            "Line would put a marcher here",
+        );
+        // An answer that agrees with the line is still the point's own
+        const always = marcherAt(L(), 1, true);
+        expect(item(always, "p1", "marcher-follow")?.checked).toBe(false);
+        expect(item(always, "p1", "marcher-always")?.checked).toBe(true);
+        const offEven = marcherAt(L({ corners: false }), 1, true);
+        expect(menuOf(offEven, "p1")[1]!.caption).toBe(
+            "Line would keep spacing even here",
+        );
+        // Nothing hands the point back but the switch
+        expect(itemsOf(even, "p1").map((i) => i.value)).not.toContain(
+            "marcher-line",
+        );
     });
 
     it("offers Roundness only on a smooth point", () => {
@@ -275,7 +352,7 @@ describe("a Line's point menu (#569)", () => {
 
     it("leaves the marcher answers off an open line's ends, and offers Close line there", () => {
         const values = itemsOf(L(), "p0").map((i) => i.value);
-        expect(values).not.toContain("marcher-line");
+        expect(values).not.toContain("marcher-always");
         expect(values).toContain("close");
         expect(item(L(), "p2", "close")?.disabled).toBeUndefined();
         expect(itemsOf(L(), "p1").map((i) => i.value)).not.toContain("close");
@@ -293,7 +370,7 @@ describe("a Line's point menu (#569)", () => {
         expect(item(triangle, "p0", "delete")?.disabled).toBeTruthy();
     });
 
-    it("greys out the marcher answers on the path and on a filled line", () => {
+    it("greys out the marcher section on the path and on a filled line, though a stored answer can be dropped", () => {
         const path = L({
             spacing: {
                 mode: "path",
@@ -301,19 +378,51 @@ describe("a Line's point menu (#569)", () => {
                 anchor: "start",
             },
         });
-        expect(item(path, "p1", "marcher-always")?.disabled).toBeTruthy();
-        expect(lineTool.menu!.pick(path, 4, "p1", "marcher-always", env)).toBe(
-            null,
-        );
+        const reason = "Interval on the path runs past every point";
+        expect(menuOf(path, "p1")[1]!.caption).toBe(reason);
+        for (const value of [
+            "marcher-follow",
+            "marcher-always",
+            "marcher-even",
+        ])
+            expect(item(path, "p1", value)?.disabled).toBe(reason);
+        for (const value of [
+            "marcher-follow",
+            "marcher-always",
+            "marcher-even",
+        ])
+            expect(lineTool.menu!.pick(path, 4, "p1", value, env)).toBe(null);
         const filled = square({ distribution: filesDistribution(2) });
         expect(item(filled, "p1", "marcher-always")?.disabled).toBeTruthy();
+        // The line's setting counts for nothing there, so nothing is marked for it
+        expect(item(filled, "p1", "marcher-always")?.checked).toBe(false);
+        expect(item(filled, "p1", "marcher-even")?.checked).toBe(false);
+        // A stored answer still shows, and following again drops it
+        const set = marcherAt(L(), 1, false);
+        const pathSet = { ...set, spacing: path.spacing };
+        expect(item(pathSet, "p1", "marcher-even")).toMatchObject({
+            checked: true,
+            disabled: reason,
+        });
+        expect(item(pathSet, "p1", "marcher-follow")).toMatchObject({
+            checked: false,
+        });
+        expect(item(pathSet, "p1", "marcher-follow")?.disabled).toBeUndefined();
+        const back = lineTool.menu!.pick(
+            pathSet,
+            4,
+            "p1",
+            "marcher-follow",
+            env,
+        )!.params as LineParams;
+        expect("marcher" in back.points[1]!).toBe(false);
     });
 
     it("offers Open here on a closed line's points, not Close line", () => {
         const values = itemsOf(square(), "p2").map((i) => i.value);
         expect(values).toContain("open");
         expect(values).not.toContain("close");
-        expect(values).toContain("marcher-line");
+        expect(values).toContain("marcher-always");
     });
 
     it("turns a point smooth and selects it, as one undo step", () => {
@@ -346,10 +455,44 @@ describe("a Line's point menu (#569)", () => {
         let t = opened(L(), 4);
         t = pickMenu(t, "p1", "marcher-even", ctx, env);
         expect(paramsOf(t).points[1]!.marcher).toBe(false);
-        t = pickMenu(t, "p1", "marcher-line", ctx, env);
+        // Following the line again drops the point's answer
+        t = pickMenu(t, "p1", "marcher-follow", ctx, env);
         expect("marcher" in paramsOf(t).points[1]!).toBe(false);
         t = undo(t);
         expect(paramsOf(t).points[1]!.marcher).toBe(false);
+    });
+
+    it("switches following off to the other answer than the line's, in one click", () => {
+        let t = opened(L(), 4);
+        const past = t.past.length;
+        t = pickMenu(t, "p1", "marcher-follow", ctx, env);
+        // The line puts a marcher on the corner: switched off, the point keeps the spacing even
+        expect(paramsOf(t).points[1]!.marcher).toBe(false);
+        expect(t.past).toHaveLength(past + 1);
+        let off = opened(L({ corners: false }), 4);
+        off = pickMenu(off, "p1", "marcher-follow", ctx, env);
+        expect(paramsOf(off).points[1]!.marcher).toBe(true);
+    });
+
+    it("sets the line's own answer over it when picked while following", () => {
+        let t = opened(L(), 4);
+        const past = t.past.length;
+        // The line puts a marcher here already: picked from the greyed answers, it's the point's
+        t = pickMenu(t, "p1", "marcher-always", ctx, env);
+        expect(paramsOf(t).points[1]!.marcher).toBe(true);
+        expect(t.past).toHaveLength(past + 1);
+    });
+
+    it("does nothing for the answer the point has already: no undo step", () => {
+        const set = marcherAt(L(), 1, false);
+        expect(lineTool.menu!.pick(set, 4, "p1", "marcher-even", env)).toBe(
+            null,
+        );
+        let t = opened(set, 4);
+        const past = t.past.length;
+        t = pickMenu(t, "p1", "marcher-even", ctx, env);
+        expect(t.params).toBe(set);
+        expect(t.past).toHaveLength(past);
     });
 
     it("deletes a point, never under the fewest, clearing the selection", () => {
@@ -445,6 +588,14 @@ describe("the menu on a placed Line (#569)", () => {
         const after = out.live.params as LineParams;
         expect(after.points[1]!.marcher).toBe(false);
         expect(placed(after).params.points[1]!.marcher).toBe(false);
+        // The answer it has already saves nothing
+        const again = pickLive(
+            openLive(placed(after)),
+            "p1",
+            "marcher-even",
+            env,
+        );
+        expect(again.changed).toBe(false);
     });
 
     it("selects the point Smooth turns, and saves nothing for Roundness", () => {

@@ -321,15 +321,36 @@ export interface ToolMenuItem {
      * the menu ticks it. Absent for an entry that just does something.
      */
     readonly checked?: boolean;
+    /**
+     * An on/off switch rather than an answer, on when `checked`: a `"follow"` section's "Follow
+     * line's marchers" (#568)
+     */
+    readonly toggle?: true;
+    /** A picture in front of the label, for an entry that does something */
+    readonly icon?: "trash";
+    /** It removes something: the menu draws it red when highlighted */
+    readonly destructive?: boolean;
     /** Why it can't be picked now, shown with it dimmed; absent when it can */
     readonly disabled?: string;
-    /** A double-click on the handle does this too: the menu shows the double-click beside it */
-    readonly doubleClick?: boolean;
 }
 
 /** A run of a handle menu's entries, set apart from the others, with a heading when it has one */
 export interface ToolMenuSection {
     readonly label?: string;
+    /**
+     * `"segmented"`: its answers (entries with `checked`) are one either/or, side by side (Corner |
+     * Smooth, #568), picked without closing the menu so the change shows; its other entries list
+     * under them (Roundness). `"follow"`: its {@link ToolMenuItem.toggle} entry is a switch to
+     * follow the shape's own answer, with {@link caption} under it, and its answers an either/or
+     * under that, greyed while the switch is on with the shape's answer marked; picking one, greyed
+     * or not, sets it over the shape's (a point's marcher, #568). Both stay open on a pick. A plain
+     * list when absent. The label of a `"follow"` section names its answers rather than showing.
+     */
+    readonly look?: "segmented" | "follow";
+    /** A quiet line under its either/or: another way to do the same ("Double-click a point to swap") */
+    readonly hint?: string;
+    /** A `"follow"` section's line under its switch: what the shape does, or why it can't be set */
+    readonly caption?: string;
     readonly items: readonly ToolMenuItem[];
 }
 
