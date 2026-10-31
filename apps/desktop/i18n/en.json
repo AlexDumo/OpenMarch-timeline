@@ -2270,12 +2270,6 @@
                     "label": "Corners",
                     "on": "Marcher on every corner",
                     "off": "Intervals run around corners"
-                },
-                "points": {
-                    "label": "Points",
-                    "corner": "Corners",
-                    "smooth": "Smooth",
-                    "mixed": "Corners and smooth points"
                 }
             },
             "measure": {
