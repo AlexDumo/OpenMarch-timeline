@@ -113,7 +113,7 @@ describe("a point's marcher override (#569)", () => {
         expect(out.points[1]).toEqual(corner(40, 0, { marcher: false }));
         expect(isLineParams(out)).toBe(true);
         expect(isLineParams(marcherAt(L(), 1, true))).toBe(true);
-        // As the line again drops the field
+        // Remove override drops the field
         const back = setPointMarcher(out, 8, 1, undefined, {});
         expect("marcher" in back.points[1]!).toBe(false);
     });
@@ -240,26 +240,74 @@ describe("a point's marcher override (#569)", () => {
 });
 
 describe("a Line's point menu (#569)", () => {
-    it("offers corner or smooth, the marcher answers, delete, and the double-click beside the switch", () => {
+    it("offers the corner type as an either/or with its double-click hint, the marcher answers, and delete", () => {
         const menu = menuOf(L(), "p1");
         expect(menu.map((s) => s.items.map((i) => i.value))).toEqual([
             ["corner", "smooth"],
-            ["marcher-line", "marcher-always", "marcher-even"],
+            ["marcher-always", "marcher-even"],
             ["delete"],
         ]);
+        expect(menu[0]).toMatchObject({
+            label: "Corner type",
+            look: "segmented",
+            hint: "Double-click a point to swap",
+        });
         expect(menu[1]!.label).toBe("Marcher on this point");
-        expect(item(L(), "p1", "corner")).toMatchObject({
+        expect(item(L(), "p1", "corner")?.checked).toBe(true);
+        expect(item(L(), "p1", "smooth")?.checked).toBe(false);
+        expect(item(L(), "p1", "delete")).toMatchObject({
+            icon: "trash",
+            destructive: true,
+        });
+    });
+
+    it("ticks the line setting's answer softly while the point has none of its own", () => {
+        // A corner with every corner holding a marcher: the line puts one here
+        expect(item(L(), "p1", "marcher-always")).toMatchObject({
             checked: true,
-            doubleClick: false,
+            source: "setting",
+            note: "line setting",
         });
-        expect(item(L(), "p1", "smooth")).toMatchObject({
+        expect(item(L(), "p1", "marcher-even")).toMatchObject({
             checked: false,
-            doubleClick: true,
         });
-        expect(item(L(), "p1", "marcher-line")?.checked).toBe(true);
+        expect(item(L(), "p1", "marcher-even")?.source).toBeUndefined();
+        // With the switch off, or on a smooth point, the line keeps the spacing even
+        const off = L({ corners: false });
+        expect(item(off, "p1", "marcher-even")).toMatchObject({
+            checked: true,
+            source: "setting",
+        });
+        expect(item(off, "p1", "marcher-always")?.checked).toBe(false);
+        const smooth = {
+            ...L(),
+            points: L().points.map((q, i) =>
+                i === 1 ? { ...q, tension: SMOOTH } : q,
+            ),
+        };
+        expect(item(smooth, "p1", "marcher-even")?.source).toBe("setting");
+    });
+
+    it("shows a point's own answer as an override, with Remove override under it", () => {
         const even = marcherAt(L(), 1, false);
-        expect(item(even, "p1", "marcher-even")?.checked).toBe(true);
-        expect(item(even, "p1", "marcher-line")?.checked).toBe(false);
+        expect(item(even, "p1", "marcher-even")).toMatchObject({
+            checked: true,
+            source: "override",
+        });
+        expect(item(even, "p1", "marcher-even")?.note).toBeUndefined();
+        expect(item(even, "p1", "marcher-always")?.checked).toBe(false);
+        expect(itemsOf(even, "p1").map((i) => i.value)).toContain(
+            "marcher-line",
+        );
+        expect(item(even, "p1", "marcher-line")).toMatchObject({
+            label: "Remove override",
+            icon: "reset",
+        });
+        expect(item(even, "p1", "marcher-line")?.checked).toBeUndefined();
+        // An override that agrees with the line is still one
+        const always = marcherAt(L(), 1, true);
+        expect(item(always, "p1", "marcher-always")?.source).toBe("override");
+        expect(item(L(), "p1", "marcher-line")).toBeUndefined();
     });
 
     it("offers Roundness only on a smooth point", () => {
@@ -275,7 +323,7 @@ describe("a Line's point menu (#569)", () => {
 
     it("leaves the marcher answers off an open line's ends, and offers Close line there", () => {
         const values = itemsOf(L(), "p0").map((i) => i.value);
-        expect(values).not.toContain("marcher-line");
+        expect(values).not.toContain("marcher-always");
         expect(values).toContain("close");
         expect(item(L(), "p2", "close")?.disabled).toBeUndefined();
         expect(itemsOf(L(), "p1").map((i) => i.value)).not.toContain("close");
@@ -307,13 +355,24 @@ describe("a Line's point menu (#569)", () => {
         );
         const filled = square({ distribution: filesDistribution(2) });
         expect(item(filled, "p1", "marcher-always")?.disabled).toBeTruthy();
+        // The line's setting counts for nothing there, so nothing is ticked for it
+        expect(item(filled, "p1", "marcher-always")?.checked).toBe(false);
+        expect(item(filled, "p1", "marcher-even")?.checked).toBe(false);
+        // An override still shows, and Remove override is greyed out with it
+        const set = marcherAt(L(), 1, false);
+        const pathSet = { ...set, spacing: path.spacing };
+        expect(item(pathSet, "p1", "marcher-even")).toMatchObject({
+            checked: true,
+            source: "override",
+        });
+        expect(item(pathSet, "p1", "marcher-line")?.disabled).toBeTruthy();
     });
 
     it("offers Open here on a closed line's points, not Close line", () => {
         const values = itemsOf(square(), "p2").map((i) => i.value);
         expect(values).toContain("open");
         expect(values).not.toContain("close");
-        expect(values).toContain("marcher-line");
+        expect(values).toContain("marcher-always");
     });
 
     it("turns a point smooth and selects it, as one undo step", () => {

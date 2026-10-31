@@ -592,23 +592,43 @@ test("change: a right-click on a point opens its menu: its corner keeps the spac
     const checked = (value: string) =>
         menu.getByTestId(`shape-menu-${value}`).getAttribute("aria-checked");
 
-    // The corner's menu: Corner ticked, Smooth with its double-click, and the marcher answers
+    // The corner's menu: Corner | Smooth as one either/or with its double-click hint, and the
+    // marcher answers with the line's setting ticked softly
     await rightClick(b);
     await expect(menu).toHaveAttribute("data-handle", "p1");
+    const cornerType = menu.getByRole("group", { name: "Corner type" });
+    await expect(cornerType).toBeVisible();
     expect(await checked("corner")).toBe("true");
-    await expect(
-        menu.getByTestId("shape-menu-smooth").locator(".keycaps"),
-    ).toHaveText("Double-click");
+    expect(await checked("smooth")).toBe("false");
+    await expect(menu.getByTestId("shape-menu-hint")).toHaveText(
+        "Double-click a point to swap",
+    );
     await expect(menu).toContainText("Marcher on this point");
-    expect(await checked("marcher-line")).toBe("true");
+    expect(await checked("marcher-always")).toBe("true");
+    await expect(menu.getByTestId("shape-menu-marcher-always-note")).toHaveText(
+        "line setting",
+    );
+    await expect(menu.getByTestId("shape-menu-marcher-line")).toHaveCount(0);
+    await expect(
+        menu.getByTestId("shape-menu-delete").locator("svg"),
+    ).toHaveCount(1);
     // The field's own menu stays shut while the shape is open
     await expect(page.getByTestId("field-menu")).toHaveCount(0);
-    // Escape closes it with nothing changed
+    // Smooth swaps in place: the menu stays open with Roundness, and Corner swaps back
+    await menu.getByTestId("shape-menu-smooth").click();
+    await expect(menu).toBeVisible();
+    await expect.poll(() => checked("smooth")).toBe("true");
+    await expect(menu.getByTestId("shape-menu-roundness")).toBeVisible();
+    await menu.getByTestId("shape-menu-corner").click();
+    await expect.poll(() => checked("corner")).toBe("true");
+    await expect(menu.getByTestId("shape-menu-roundness")).toHaveCount(0);
+    // Escape closes it
     await page.keyboard.press("Escape");
     await expect(menu).toBeHidden();
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    expect(onCorner((await shapeOverlay(page))!.spots)).toBe(true);
 
-    // Keep spacing even: the intervals run straight through the corner
+    // Keep spacing even, an override: the intervals run straight through the corner
     await rightClick(b);
     await pick("marcher-even");
     await expect
@@ -616,9 +636,16 @@ test("change: a right-click on a point opens its menu: its corner keeps the spac
         .toBe(false);
     await rightClick(b);
     expect(await checked("marcher-even")).toBe("true");
-    await page.keyboard.press("Escape");
+    await expect(
+        menu.getByTestId("shape-menu-marcher-even-override"),
+    ).toHaveText("Override");
+    // Remove override hands the point back to the line: a marcher on the corner again
+    await pick("marcher-line");
+    await expect
+        .poll(async () => onCorner((await shapeOverlay(page))!.spots))
+        .toBe(true);
 
-    // With the corners switch off, Always a marcher puts one back on it
+    // With the corners switch off, Marcher here puts one back on it
     const corners = page.getByTestId("shape-choice-corners");
     await corners.click();
     await page
@@ -627,6 +654,10 @@ test("change: a right-click on a point opens its menu: its corner keeps the spac
         .click();
     await expect(corners).toHaveAttribute("data-value", "off");
     await rightClick(b);
+    expect(await checked("marcher-even")).toBe("true");
+    await expect(
+        menu.getByTestId("shape-menu-marcher-even-note"),
+    ).toBeVisible();
     await pick("marcher-always");
     await expect
         .poll(async () => onCorner((await shapeOverlay(page))!.spots))

@@ -65,7 +65,9 @@ ordinary positions it writes.
 - A kind's `menu` (`ToolHandleMenu`, #569) is a handle's right-click menu (a Line's point or
   segment): the modes' `openMenu` opens it through `field/handleMenu.ts` on a right-click, a Mac's
   Ctrl-click or a long press, `editor/HandleMenu.tsx` shows it, and a pick is `pickMenu` on the
-  open shape (one undo step) or `pickLive` on a placed one (one save). An undo or
+  open shape (one undo step) or `pickLive` on a placed one (one save). A `segmented` section
+  (Corner | Smooth) is picked with the menu kept open: the mode's pick returns the shape after it
+  and `openHandleMenu` rebuilds the sections. An undo or
   redo clears the selection (a key names a point by index); a placed shape keeps it only through
   its own save (`reopenLive`).
 - The spot count comes from the host. Spots and who goes where are separate steps.

@@ -379,9 +379,10 @@ The Line shape (spec #522, #523) stores a new kind:
    run again wherever the spots don't stay.
 
 7. **A point's marcher (#569).** A point may store `marcher`, true or false, from its menu's
-   Marcher on this point: true (Always a marcher) holds a marcher there whatever `corners` says,
-   smooth or not; false (Keep spacing even) forces none, so the intervals run straight through
-   it. Absent (As the line) is decision 2's rule, so a Line saved before reads unchanged. It works
+   Marcher on this point, shown as an override of the line's setting (#568): true (Marcher here)
+   holds a marcher there whatever `corners` says, smooth or not; false (Keep spacing even) forces
+   none, so the intervals run straight through it. Absent (no override; Remove override clears
+   it) is decision 2's rule, so a Line saved before reads unchanged. It works
    either way round the switch: a corner can opt out of `corners` absent or true, and a point can
    opt in with `corners: false`. Decision 2's stretches then run between the points that hold a
    marcher (the ends, the points saying true, and the corners not saying false while the switch is

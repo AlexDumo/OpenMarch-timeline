@@ -16,6 +16,7 @@ import type {
     ToolGroups,
     ToolHandleMenu,
     ToolKind,
+    ToolMenuItem,
     ToolMenuSection,
     ToolParam,
 } from "../tool/toolKind";
@@ -44,6 +45,7 @@ import {
     drawLine,
     drawPoints,
     hasGroups,
+    holdsMarcher,
     intervalRange,
     isClosed,
     landClicked,
@@ -674,6 +676,91 @@ const MARCHER_VALUES = {
     "marcher-even": false,
 } as const;
 
+/** Whether point `index` would hold a marcher with no answer of its own: the line's setting */
+function lineGivesMarcher(p: LineParams, index: number): boolean {
+    const points = p.points.map((q, i) => {
+        if (i !== index) return q;
+        const { marcher: _marcher, ...rest } = q;
+        return rest;
+    });
+    return holdsMarcher({ ...p, points }, index);
+}
+
+/**
+ * The point's marcher answers (#569, #568): Marcher here or Keep spacing even. With no answer of
+ * its own the one the line's setting gives is ticked softly, "line setting"; picking either sets
+ * an override, ticked strongly with a Remove override under it that hands the point back to the
+ * line. Greyed out, with why, where the answer does nothing.
+ */
+function marcherSection(p: LineParams, index: number): ToolMenuSection {
+    const own = p.points[index]!.marcher;
+    const disabled = marcherReason(p);
+    // Where the answer counts for nothing, the line's setting isn't shown as one either
+    const now = own ?? (disabled ? undefined : lineGivesMarcher(p, index));
+    const source: ToolMenuItem["source"] =
+        own === undefined ? "setting" : "override";
+    const answer = (
+        value: "marcher-always" | "marcher-even",
+        label: string,
+    ): ToolMenuItem => {
+        const checked = now === MARCHER_VALUES[value];
+        return {
+            value,
+            label,
+            checked,
+            ...(checked
+                ? {
+                      source,
+                      ...(source === "setting"
+                          ? {
+                                note: tolgee.t(
+                                    "shapes.kinds.line.menu.lineSetting",
+                                    "line setting",
+                                ),
+                            }
+                          : {}),
+                  }
+                : {}),
+            ...(disabled ? { disabled } : {}),
+        };
+    };
+    return {
+        label: tolgee.t(
+            "shapes.kinds.line.menu.marcher",
+            "Marcher on this point",
+        ),
+        items: [
+            answer(
+                "marcher-always",
+                tolgee.t(
+                    "shapes.kinds.line.menu.marcherAlways",
+                    "Marcher here",
+                ),
+            ),
+            answer(
+                "marcher-even",
+                tolgee.t(
+                    "shapes.kinds.line.menu.marcherEven",
+                    "Keep spacing even",
+                ),
+            ),
+            ...(own === undefined
+                ? []
+                : [
+                      {
+                          value: "marcher-line",
+                          label: tolgee.t(
+                              "shapes.kinds.line.menu.marcherLine",
+                              "Remove override",
+                          ),
+                          icon: "reset",
+                          ...(disabled ? { disabled } : {}),
+                      } as const,
+                  ]),
+        ],
+    };
+}
+
 /** Right-click on point `index` (#569) */
 function pointMenu(p: LineParams, index: number): ToolMenuSection[] {
     const q = p.points[index]!;
@@ -683,18 +770,22 @@ function pointMenu(p: LineParams, index: number): ToolMenuSection[] {
     const end = !closed && (index === 0 || index === last);
     const sections: ToolMenuSection[] = [
         {
+            label: tolgee.t("shapes.kinds.line.menu.cornerType", "Corner type"),
+            look: "segmented",
+            hint: tolgee.t(
+                "shapes.kinds.line.menu.swapHint",
+                "Double-click a point to swap",
+            ),
             items: [
                 {
                     value: "corner",
                     label: tolgee.t("shapes.kinds.line.menu.corner", "Corner"),
                     checked: !smoothPoint,
-                    doubleClick: smoothPoint,
                 },
                 {
                     value: "smooth",
                     label: tolgee.t("shapes.kinds.line.menu.smooth", "Smooth"),
                     checked: smoothPoint,
-                    doubleClick: !smoothPoint,
                 },
                 ...(smoothPoint
                     ? [
@@ -711,37 +802,7 @@ function pointMenu(p: LineParams, index: number): ToolMenuSection[] {
         },
     ];
     // An open line's ends always hold a marcher
-    if (!end) {
-        const disabled = marcherReason(p);
-        const labels = {
-            "marcher-line": tolgee.t(
-                "shapes.kinds.line.menu.marcherLine",
-                "As the line",
-            ),
-            "marcher-always": tolgee.t(
-                "shapes.kinds.line.menu.marcherAlways",
-                "Always a marcher",
-            ),
-            "marcher-even": tolgee.t(
-                "shapes.kinds.line.menu.marcherEven",
-                "Keep spacing even",
-            ),
-        };
-        sections.push({
-            label: tolgee.t(
-                "shapes.kinds.line.menu.marcher",
-                "Marcher on this point",
-            ),
-            items: (
-                Object.keys(MARCHER_VALUES) as (keyof typeof MARCHER_VALUES)[]
-            ).map((value) => ({
-                value,
-                label: labels[value],
-                checked: q.marcher === MARCHER_VALUES[value],
-                ...(disabled ? { disabled } : {}),
-            })),
-        });
-    }
+    if (!end) sections.push(marcherSection(p, index));
     const fewest = p.points.length <= minPoints(p);
     sections.push({
         items: [
@@ -751,6 +812,8 @@ function pointMenu(p: LineParams, index: number): ToolMenuSection[] {
                     "shapes.kinds.line.menu.delete",
                     "Delete point",
                 ),
+                icon: "trash",
+                destructive: true,
                 ...(fewest
                     ? {
                           disabled: closed

@@ -321,15 +321,33 @@ export interface ToolMenuItem {
      * the menu ticks it. Absent for an entry that just does something.
      */
     readonly checked?: boolean;
+    /**
+     * Where a ticked answer comes from (#568): `"setting"`, the shape's own setting gives it (the
+     * tick soft, with {@link note}); `"override"`, set on this handle over that setting (the tick
+     * strong, with an Override badge). Absent for a plain answer.
+     */
+    readonly source?: "setting" | "override";
+    /** A small word after the label: where a soft answer comes from ("line setting") */
+    readonly note?: string;
+    /** A picture in front of the label, for an entry that does something */
+    readonly icon?: "trash" | "reset";
+    /** It removes something: the menu draws it red when highlighted */
+    readonly destructive?: boolean;
     /** Why it can't be picked now, shown with it dimmed; absent when it can */
     readonly disabled?: string;
-    /** A double-click on the handle does this too: the menu shows the double-click beside it */
-    readonly doubleClick?: boolean;
 }
 
 /** A run of a handle menu's entries, set apart from the others, with a heading when it has one */
 export interface ToolMenuSection {
     readonly label?: string;
+    /**
+     * `"segmented"`: its answers (entries with `checked`) are one either/or, side by side (Corner |
+     * Smooth, #568), picked without closing the menu so the change shows; its other entries list
+     * under them (Roundness). A plain list when absent.
+     */
+    readonly look?: "segmented";
+    /** A quiet line under its entries: another way to do the same ("Double-click a point to swap") */
+    readonly hint?: string;
     readonly items: readonly ToolMenuItem[];
 }
 
