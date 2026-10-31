@@ -287,48 +287,47 @@ function ListField({
     const [wrong, setWrong] = useState(false);
     const stepPx = envFor()?.stepPx;
     const shown = draft ?? (stepPx ? text(stepPx) : "");
+    // No tooltip: focused, it would cover the menu's button
     const label = tolgee.t(
         "shapes.groups.list",
         "All groups as a list: count * steps, + between groups",
     );
     return (
-        <Tip label={label}>
-            <input
-                type="text"
-                inputMode="decimal"
-                spellCheck={false}
-                aria-label={label}
-                aria-invalid={wrong || undefined}
-                value={shown}
-                data-group-list
-                data-testid="shape-groups-list"
-                onChange={(e) => {
-                    setDraft(e.target.value);
-                    setWrong(false);
-                }}
-                onBlur={() => {
+        <input
+            type="text"
+            inputMode="decimal"
+            spellCheck={false}
+            aria-label={label}
+            aria-invalid={wrong || undefined}
+            value={shown}
+            data-group-list
+            data-testid="shape-groups-list"
+            onChange={(e) => {
+                setDraft(e.target.value);
+                setWrong(false);
+            }}
+            onBlur={() => {
+                setDraft(null);
+                setWrong(false);
+            }}
+            onKeyDown={(e) => {
+                // Esc with nothing typed closes the menu
+                if (e.key === "Escape" && draft === null) return;
+                // The keys are the list's: Enter doesn't also place the shape, nor Space play
+                e.stopPropagation();
+                if (e.key === "Enter") {
+                    if (draft === null || onType(draft)) setDraft(null);
+                    else setWrong(true);
+                } else if (e.key === "Escape") {
+                    e.preventDefault();
                     setDraft(null);
                     setWrong(false);
-                }}
-                onKeyDown={(e) => {
-                    // Esc with nothing typed closes the menu
-                    if (e.key === "Escape" && draft === null) return;
-                    // The keys are the list's: Enter doesn't also place the shape, nor Space play
-                    e.stopPropagation();
-                    if (e.key === "Enter") {
-                        if (draft === null || onType(draft)) setDraft(null);
-                        else setWrong(true);
-                    } else if (e.key === "Escape") {
-                        e.preventDefault();
-                        setDraft(null);
-                        setWrong(false);
-                    }
-                }}
-                className={clsx(
-                    "rounded-4 border-stroke bg-bg-1 w-full border px-6 py-2 font-mono",
-                    wrong && "border-red",
-                )}
-            />
-        </Tip>
+                }
+            }}
+            className={clsx(
+                "rounded-4 border-stroke bg-bg-1 w-full border px-6 py-2 font-mono",
+                wrong && "border-red",
+            )}
+        />
     );
 }
