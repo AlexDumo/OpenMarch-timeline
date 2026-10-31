@@ -96,6 +96,8 @@ import { EdgeToggle } from "./EdgeToggle";
 import { ModeMenu } from "./ModeMenu";
 import { ChoiceMenus } from "./ChoiceMenu";
 import { GroupChips } from "./GroupChips";
+import { GROUP_MENU_ATTRIBUTE, GroupMenu } from "./GroupMenu";
+import { useFocusCarry } from "./focusCarry";
 import { OrderMenu } from "./OrderMenu";
 import { OutlineGap } from "./OutlineGap";
 import { PivotMenu } from "./PivotGrid";
@@ -292,6 +294,14 @@ function ShapeEditorBar({
     });
     useEffect(() => () => releaseHideMarchers(Date.now(), true), []);
 
+    // One interval number, a single counted group's chips, or the group menu: focus stays there
+    // as one becomes another (owner feedback on #526)
+    const groupCount = layout.groups?.length ?? 0;
+    const intervalsCarry = useFocusCarry<HTMLSpanElement>(
+        groupCount > 1 ? "menu" : groupCount === 1 ? "chips" : "number",
+        (el) => el.closest(`[${GROUP_MENU_ATTRIBUTE}]`) !== null,
+    );
+
     const whatRow = useRef<HTMLSpanElement>(null);
     const doRow = useRef<HTMLSpanElement>(null);
     const twoRows = useTwoRows(whatRow, doRow, place.fieldWidth, place.held);
@@ -353,48 +363,61 @@ function ShapeEditorBar({
                             </span>
                         )}
                     </span>
-                    {layout.groups && (
-                        <>
-                            <Divider />
-                            <GroupChips
-                                target={live}
-                                groups={layout.groups}
-                                envFor={envFor}
-                                onScrubbing={setShapeScrubbing}
-                            />
-                            <span className="text-text/60">
-                                {tolgee.t("shapes.edit.steps", "steps")}
-                            </span>
-                        </>
-                    )}
-                    {layout.intervals.length > 0 && (
-                        <>
-                            <Divider />
-                            <span className="flex items-center gap-2">
-                                {layout.intervals.map((x) => (
-                                    <NumberChip
-                                        key={x.param.key}
-                                        param={x.param}
-                                        display={x.display}
-                                        note={null}
-                                        canLess={false}
-                                        canMore={false}
-                                        glyph={paramGlyph(
-                                            x.param,
-                                            params,
-                                            spots,
-                                        )}
-                                        derived={x.derived}
-                                        actions={numbers}
-                                    />
-                                ))}
+                    <span className="contents" {...intervalsCarry}>
+                        {layout.groups && layout.groups.length > 1 && (
+                            <>
+                                <Divider />
+                                <GroupMenu
+                                    target={live}
+                                    groups={layout.groups}
+                                    envFor={envFor}
+                                    onScrubbing={setShapeScrubbing}
+                                />
+                            </>
+                        )}
+                        {layout.groups?.length === 1 && (
+                            <>
+                                <Divider />
+                                <GroupChips
+                                    target={live}
+                                    groups={layout.groups}
+                                    envFor={envFor}
+                                    onScrubbing={setShapeScrubbing}
+                                />
                                 <span className="text-text/60">
                                     {tolgee.t("shapes.edit.steps", "steps")}
                                 </span>
-                                {layout.ratioLock && <RatioLockButton />}
-                            </span>
-                        </>
-                    )}
+                            </>
+                        )}
+                        {layout.intervals.length > 0 && (
+                            <>
+                                <Divider />
+                                <span className="flex items-center gap-2">
+                                    {layout.intervals.map((x) => (
+                                        <NumberChip
+                                            key={x.param.key}
+                                            param={x.param}
+                                            display={x.display}
+                                            note={null}
+                                            canLess={false}
+                                            canMore={false}
+                                            glyph={paramGlyph(
+                                                x.param,
+                                                params,
+                                                spots,
+                                            )}
+                                            derived={x.derived}
+                                            actions={numbers}
+                                        />
+                                    ))}
+                                    <span className="text-text/60">
+                                        {tolgee.t("shapes.edit.steps", "steps")}
+                                    </span>
+                                    {layout.ratioLock && <RatioLockButton />}
+                                </span>
+                            </>
+                        )}
+                    </span>
                     {target.drawnOn && (
                         <span className="text-text/50">
                             {tolgee.t("shapes.edit.drawnOn", "from {page}", {

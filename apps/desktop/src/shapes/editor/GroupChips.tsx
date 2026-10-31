@@ -16,22 +16,22 @@ import { Tip } from "./Tip";
  * them replaces the list. The rest shows the marchers it takes, quieter; a group grown to take
  * extra marchers is marked "+4", and one dropped off the end fades.
  */
-export function GroupChips({
-    target,
-    groups,
-    envFor,
-    onScrubbing,
-}: {
-    target: Pick<
-        ShapeEditTarget,
-        "kind" | "params" | "spots" | "apply" | "begin" | "preview" | "end"
-    >;
-    groups: readonly ToolGroup[];
-    /** The field's tool environment with `roles` held; null with no field */
-    envFor: (roles?: Roles) => ToolEnv | null;
-    /** An interval's drag began or ended, for the field to show the lines it lands on */
-    onScrubbing?: (on: boolean) => void;
-}) {
+/** What a group control edits: the open shape, or a placed one, as the editor holds it */
+export type GroupTarget = Pick<
+    ShapeEditTarget,
+    "kind" | "params" | "spots" | "apply" | "begin" | "preview" | "end"
+>;
+
+/**
+ * The edits of a kind's interval groups, shared by the chips and the group menu: a count or
+ * interval typed (a whole list typed there replaces the list), dragged (one undo step from the
+ * press through begin, preview and end), a group added or removed. Null for a kind without groups.
+ */
+export function useGroupEdits(
+    target: GroupTarget,
+    envFor: (roles?: Roles) => ToolEnv | null,
+    onScrubbing?: (on: boolean, index: number, part: GroupPart) => void,
+) {
     const kindGroups = target.kind.groups;
     // The shape at the press of a drag
     const base = useRef<unknown>(null);
@@ -57,7 +57,7 @@ export function GroupChips({
         onScrubStart: () => {
             base.current = target.params;
             target.begin();
-            if (part === "interval") onScrubbing?.(true);
+            onScrubbing?.(true, index, part);
         },
         onScrub: (m: ScrubMove) => {
             const env = envFor(m.roles);
@@ -74,7 +74,7 @@ export function GroupChips({
                 );
         },
         onScrubEnd: (keep: boolean) => {
-            onScrubbing?.(false);
+            onScrubbing?.(false, index, part);
             target.end(keep);
         },
     });
@@ -82,6 +82,47 @@ export function GroupChips({
         const env = envFor();
         if (env) target.apply(edit(target.params, env));
     };
+    const add = () => change((p, env) => kindGroups.add(p, target.spots, env));
+    const remove = (index: number) =>
+        change((p, env) => kindGroups.remove(p, target.spots, index, env));
+    /** A whole list typed; false keeps it open to fix */
+    const typeList = (text: string) => {
+        const env = envFor();
+        const next =
+            env && kindGroups.typeList(target.params, target.spots, text, env);
+        if (next == null) return false;
+        if (next !== target.params) target.apply(next);
+        return true;
+    };
+    return { kindGroups, type, scrub, add, remove, typeList };
+}
+
+/**
+ * A kind's mixed intervals in the floating editor (#526, spec #522): a chip per group,
+ * `2 × 3 │ 4 × 2`, its count and interval each typed or dragged like every number, with × to
+ * remove the group and + after the last to add one. Typing a whole list (`2*3+4*2`) into any of
+ * them replaces the list. The rest shows the marchers it takes, quieter; a group grown to take
+ * extra marchers is marked "+4", and one dropped off the end fades. With two groups or more the
+ * editor shows the group menu instead (`GroupMenu`); the chips are a single counted group's.
+ */
+export function GroupChips({
+    target,
+    groups,
+    envFor,
+    onScrubbing,
+}: {
+    target: GroupTarget;
+    groups: readonly ToolGroup[];
+    /** The field's tool environment with `roles` held; null with no field */
+    envFor: (roles?: Roles) => ToolEnv | null;
+    /** An interval's drag began or ended, for the field to show the lines it lands on */
+    onScrubbing?: (on: boolean) => void;
+}) {
+    const edits = useGroupEdits(target, envFor, (on, _i, part) => {
+        if (part === "interval" || !on) onScrubbing?.(on);
+    });
+    if (!edits) return null;
+    const { type, scrub, add, remove } = edits;
 
     return (
         <span className="flex items-center gap-2" data-testid="shape-groups">
@@ -151,16 +192,7 @@ export function GroupChips({
                                     { n: i + 1 },
                                 )}
                                 testId={`shape-group-${i}-remove`}
-                                onClick={() =>
-                                    change((p, env) =>
-                                        kindGroups.remove(
-                                            p,
-                                            target.spots,
-                                            i,
-                                            env,
-                                        ),
-                                    )
-                                }
+                                onClick={() => remove(i)}
                             >
                                 <XIcon size={10} />
                             </GroupButton>
@@ -171,9 +203,7 @@ export function GroupChips({
             <GroupButton
                 label={tolgee.t("shapes.groups.add", "Add a group")}
                 testId="shape-group-add"
-                onClick={() =>
-                    change((p, env) => kindGroups.add(p, target.spots, env))
-                }
+                onClick={add}
             >
                 <PlusIcon size={12} />
             </GroupButton>
@@ -182,7 +212,7 @@ export function GroupChips({
 }
 
 /** A group's count, named for what it is: typed, the rest, grown or dropped */
-function countLabel(g: ToolGroup, i: number): string {
+export function countLabel(g: ToolGroup, i: number): string {
     const n = i + 1;
     if (g.rest)
         return tolgee.t(
@@ -199,7 +229,7 @@ function countLabel(g: ToolGroup, i: number): string {
     return tolgee.t("shapes.groups.count", "Group {n} marchers", { n });
 }
 
-function GroupButton({
+export function GroupButton({
     label,
     testId,
     onClick,

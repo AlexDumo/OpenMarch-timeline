@@ -229,5 +229,8 @@ export function shapeAlone(drawing: FieldModeDrawing): FieldModeDrawing {
         gaps: undefined,
         labels: undefined,
         onGuides: undefined,
+        // The interval groups ring the spots, so they go with them
+        groupMarks: undefined,
+        groupLabels: undefined,
     };
 }
