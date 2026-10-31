@@ -109,9 +109,13 @@
             "quarterTurn": "Shape: Turn 90° clockwise",
             "recalculate": "Shape: Recalculate who goes where",
             "evenOut": "Shape: Even out the outline",
+            "hideMarchers": "Shape: Hide the marchers (hold to peek, tap to keep hidden)",
+            "hideMarchersKeywords": "hide show marchers spots walks alone peek eye",
             "expand": "Shape: Expand, keeping the proportions",
             "shrink": "Shape: Shrink, keeping the proportions",
-            "keywords": "shape form formation set place"
+            "keywords": "shape form formation set place",
+            "line": "Shape: Line",
+            "curve": "Shape: Curve"
         },
         "swap": {
             "error": "Could not swap marchers {marcher1} and {marcher2}",
@@ -2002,6 +2006,8 @@
                 "text": "Shape open at {moment}"
             },
             "drawHint": "Drag on the field to draw a {shape} · Esc to cancel",
+            "drawPointsHint": "Drag on the field to draw a {shape}, or click point after point · Esc to cancel",
+            "pointsHint": "Click to add a point · Enter or a click on the last point finishes · Esc to cancel",
             "drawnOn": "from {page}",
             "edge": {
                 "label": "Edge",
@@ -2053,6 +2059,10 @@
             "ratioLock": {
                 "locked": "Spacings locked together: click to unlock",
                 "unlocked": "Lock the two spacings together"
+            },
+            "hideMarchers": {
+                "hide": "Hide the marchers",
+                "show": "Show the marchers"
             },
             "evenOut": {
                 "label": "Even out",
@@ -2243,6 +2253,23 @@
                 "label": "Line",
                 "validate": {
                     "sameSpot": "The line's ends are on the same spot"
+                },
+                "params": {
+                    "interval": "Spacing between neighbors, in steps",
+                    "cornerOff": "corner off its interval"
+                },
+                "spacing": {
+                    "label": "Spacing",
+                    "fit": "Fit",
+                    "keep": "Keep interval",
+                    "pathStart": "Interval on the path, from the start",
+                    "pathCenter": "Interval on the path, centered",
+                    "pathEnd": "Interval on the path, from the end"
+                },
+                "corners": {
+                    "label": "Corners",
+                    "on": "Marcher on every corner",
+                    "off": "Intervals run around corners"
                 }
             },
             "measure": {

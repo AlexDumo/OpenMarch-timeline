@@ -2,7 +2,12 @@ import { turnShape } from "../frame/gestures";
 import { pivotOf } from "../frame/pivot";
 import { pivotPoint } from "../frame/frame";
 import type { XY } from "../types";
-import type { AnyToolKind, ToolEnv, ToolParam } from "../tool/toolKind";
+import type {
+    AnyToolKind,
+    ToolEnv,
+    ToolGroup,
+    ToolParam,
+} from "../tool/toolKind";
 
 /** One number in the floating chip, worked out from its kind's declaration */
 export interface ChipNumber {
@@ -27,6 +32,11 @@ export interface ChipNumber {
 export interface ChipLayout {
     readonly values: readonly ChipNumber[];
     readonly intervals: readonly ChipNumber[];
+    /**
+     * The kind's interval groups (#526), shown in place of its intervals; null for a shape with
+     * one interval for everyone
+     */
+    readonly groups: readonly ToolGroup[] | null;
     /** Offer the lock that keeps the spacings in proportion: the kind has one and both show */
     readonly ratioLock: boolean;
 }
@@ -47,10 +57,12 @@ export function chipLayout(
             more: param.stepper?.by(params, n, 1, env) ?? null,
             derived: param.derived?.(params, n, env.stepPx) ?? false,
         }));
-    const intervals = numbers.filter((x) => x.param.interval);
+    const groups = kind.groups?.shown(params, n, env.stepPx) ?? null;
+    const intervals = groups ? [] : numbers.filter((x) => x.param.interval);
     return {
         values: numbers.filter((x) => !x.param.interval),
         intervals,
+        groups,
         ratioLock:
             kind.ratioLock === true &&
             (kind.ratioLockFor?.(params, n) ?? true) &&

@@ -11,6 +11,7 @@ import type { AnyToolKind, ToolEnv, ToolParam } from "../tool/toolKind";
 import type { ShapeToolEntry } from "../tool/shapeTools";
 import type { XY } from "../types";
 import { spacingNote, type ShapeLibraryRow } from "./shapeLibrary";
+import { closedOf, distributionOf } from "../distribute/modes";
 
 /**
  * A saved shape (#353, spec #344): a kind, its intervals and how it's filled (#393), under a
@@ -54,6 +55,25 @@ export function intervalsOf(
 }
 
 /**
+ * Why a shape of `kind` can't be saved, or null when it can. A saved shape keeps one number per
+ * interval parameter, so a Line spaced by groups at different intervals (#526) would come back
+ * at only one of them: it isn't offered until saved shapes can keep groups.
+ */
+export function whyNotSavable(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    stepPx: number,
+): string | null {
+    const groups = baseKindOf(kind).groups?.shown(params, n, stepPx);
+    if (!groups || new Set(groups.map((g) => g.interval)).size < 2) return null;
+    return tolgee.t(
+        "shapes.save.mixedIntervals",
+        "Lines with mixed intervals can't be saved yet",
+    );
+}
+
+/**
  * What saving a shape of `kind` keeps: the kind, its intervals and how it's filled, under `name`,
  * with `description` when there is one, dated `at`
  */
@@ -72,7 +92,7 @@ export function savedShapeOf(
 ): SavedShape {
     const base = baseKindOf(kind);
     const description = named.description?.trim();
-    const distribution = base.closed?.distribution(params, n);
+    const distribution = distributionOf(base, params, n) ?? undefined;
     return {
         id: named.id,
         name: named.name.trim(),
@@ -99,7 +119,7 @@ export function suggestedName(
     stepPx: number,
 ): string {
     const base = baseKindOf(kind);
-    const distribution = base.closed?.distribution(params, n);
+    const distribution = distributionOf(base, params, n) ?? undefined;
     const note = spacingNote(
         Object.values(intervalsOf(base, params, n, stepPx)),
         distribution,
@@ -120,7 +140,7 @@ export function withSavedDistribution(
     saved: SavedDistribution | undefined,
     env: ToolEnv,
 ): unknown {
-    const closed = kind.closed;
+    const closed = closedOf(kind, params, n);
     if (!closed || !saved || !closed.modes.includes(saved.mode)) return params;
     const start = closed.startMode(params, n, saved.mode);
     const files = start.mode === "files" ? start.layout.files : 1;
@@ -193,6 +213,8 @@ export function savedToolKind(
         ...base,
         saved,
         base,
+        // Its picture fills a square with its own intervals (`fromFrame` below), not the kind's
+        pictureParams: undefined,
         // The command bar starts from each parameter's default: the saved intervals here
         params: base.params.map((p) =>
             p.interval && saved.intervals[p.key] !== undefined
@@ -251,7 +273,10 @@ export function newerSavedShapes(
     const byId = new Map([...show, ...library].map((s) => [s.id, s]));
     let n = 0;
     for (const saved of byId.values()) {
-        const kinds = tools.filter((t) => t.kind.shape.id === saved.kind);
+        // Presets save their kind's recipe, so a saved shape is always its kind's
+        const kinds = tools.filter(
+            (t) => !t.kind.preset && t.kind.shape.id === saved.kind,
+        );
         if (kinds.every((t) => t.kind.shape.version < saved.kindVersion)) n++;
     }
     return n;
@@ -272,9 +297,11 @@ export function savedShapeRows(
     const rows = (shapes: readonly SavedShape[], inLibrary: boolean) =>
         shapes.flatMap((saved): ShapeLibraryRow[] => {
             // Its kind at the version it was saved with, as placed shapes are read back: another
-            // version's intervals may mean something else, so it's left out rather than guessed
+            // version's intervals may mean something else, so it's left out rather than guessed.
+            // Never a preset (the Curve is a Line), as placed shapes are read back (PLACED_KINDS)
             const base = tools.find(
                 (t) =>
+                    !t.kind.preset &&
                     t.kind.shape.id === saved.kind &&
                     t.kind.shape.version === saved.kindVersion,
             )?.kind;
