@@ -228,8 +228,12 @@ const INTERVAL: ToolParam<LineParams> = {
     display(p, n, stepPx) {
         if (isFilled(p)) return formatSteps(fillInterval(p, n) / stepPx);
         const range = intervalRange(p, n);
-        if (range && isRange(p, n))
-            return `${formatSteps(range.min / stepPx)}–${formatSteps(range.max / stepPx)}`;
+        if (range && isRange(p, n)) {
+            const min = formatSteps(range.min / stepPx);
+            const max = formatSteps(range.max / stepPx);
+            // Segments a hair apart read the same: one number, not "2–2"
+            if (min !== max) return `${min}–${max}`;
+        }
         return formatSteps(lineInterval(p, n) / stepPx);
     },
     note: (p, n) =>
@@ -408,7 +412,8 @@ const GROUPS: ToolGroups<LineParams> = {
 /** Whether a cornered Fit line's segments have different intervals */
 function isRange(p: LineParams, n: number): boolean {
     const range = intervalRange(p, n);
-    return range !== null && range.max - range.min > 1e-6 * range.max;
+    // A hair apart (a curve's chords, a click off the grid) isn't a range
+    return range !== null && range.max - range.min > 1e-3 * range.max;
 }
 
 const ANCHORS: readonly LineAnchor[] = ["start", "center", "end"];
