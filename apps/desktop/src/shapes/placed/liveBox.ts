@@ -131,7 +131,8 @@ export type LiveClick = {
  * Ends the gesture: `changed` when there is something to save, `enter` when the click goes inside
  * the box. A double click on the pivot sends it back to the center (#350), and on a handle does
  * what its kind says (a Line's point switches between corner and smooth, #557), going nowhere
- * even when that changes nothing (an end of a tangent bar); a click on a handle that adds a point
+ * even when that changes nothing (an end of a tangent bar). A kind with no handle double-click (a
+ * Box, a Circle) goes inside there, as before #557. A click on a handle that adds a point
  * adds it (#524), and on one that selects selects it. A double-click whose first click was the
  * editor's (the click on a member that selected the box) is no handle's: it goes inside the box.
  */
@@ -170,7 +171,12 @@ export function releaseLive(
     return {
         live: { ...live, params, gesture: null, selected },
         changed,
-        enter: !!click?.double && !changed && g?.type !== "handle",
+        // Only a kind whose handles take a double-click keeps it from going inside: a Box's or a
+        // Circle's handle sits on a member, whose double-click goes inside as anywhere else
+        enter:
+            !!click?.double &&
+            !changed &&
+            (g?.type !== "handle" || !kind.doubleClickHandle),
     };
 }
 
