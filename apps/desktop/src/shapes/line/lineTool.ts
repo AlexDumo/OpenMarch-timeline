@@ -1,4 +1,5 @@
 import tolgee from "@/global/singletons/Tolgee";
+import type { XY } from "../types";
 import { fieldToFrame, resizeCursor } from "../frame/frame";
 import { formatSteps, parseSteps } from "../editor/format";
 import {
@@ -16,6 +17,7 @@ import type {
     ToolGroups,
     ToolHandleMenu,
     ToolKind,
+    ToolMenuItem,
     ToolMenuSection,
     ToolParam,
 } from "../tool/toolKind";
@@ -34,6 +36,7 @@ import {
     withFillInterval,
 } from "./lineFill";
 import {
+    cornerGaps,
     closeLine,
     cornerOffInterval,
     curveInFrame,
@@ -44,6 +47,7 @@ import {
     drawLine,
     drawPoints,
     hasGroups,
+    holdsMarcher,
     intervalRange,
     isClosed,
     landClicked,
@@ -653,7 +657,11 @@ const CORNERS: ToolChoice<LineParams> = {
 };
 
 /** Why a point's own marcher answer does nothing now (#569), or undefined when it counts */
-function marcherReason(p: LineParams): string | undefined {
+function marcherReason(
+    p: LineParams,
+    n: number,
+    index: number,
+): string | undefined {
     if (p.spacing.mode === "path")
         return tolgee.t(
             "shapes.kinds.line.menu.marcherPath",
@@ -664,18 +672,125 @@ function marcherReason(p: LineParams): string | undefined {
             "shapes.kinds.line.menu.marcherFilled",
             "A filled line's spots follow its fill",
         );
+    // Held points only hold marchers with a gap for every stretch: too few marchers, and the
+    // answer would change nothing
+    if (cornerGaps(withPointMarcher(p, index, true), n) === null)
+        return tolgee.t(
+            "shapes.kinds.line.menu.marcherTooFew",
+            "Too few marchers for one on every point",
+        );
     return undefined;
 }
 
+/** `p` with point `index`'s own marcher answer set to `marcher` */
+const withPointMarcher = (
+    p: LineParams,
+    index: number,
+    marcher: boolean,
+): LineParams => ({
+    ...p,
+    points: p.points.map((q, i) => (i === index ? { ...q, marcher } : q)),
+});
+
 /** The point menu's answers to whether a marcher stands on the point (#569) */
 const MARCHER_VALUES = {
-    "marcher-line": undefined,
     "marcher-always": true,
     "marcher-even": false,
 } as const;
 
+/** Whether point `index` would hold a marcher with no answer of its own: the line's setting */
+function lineGivesMarcher(p: LineParams, index: number): boolean {
+    const points = p.points.map((q, i) => {
+        if (i !== index) return q;
+        const { marcher: _marcher, ...rest } = q;
+        return rest;
+    });
+    return holdsMarcher({ ...p, points }, index);
+}
+
+/** What the line does on a point, said as it is (following) or as it would be (overridden) */
+function lineCaption(gives: boolean, follows: boolean): string {
+    if (follows)
+        return gives
+            ? tolgee.t(
+                  "shapes.kinds.line.menu.linePuts",
+                  "Line puts a marcher here",
+              )
+            : tolgee.t(
+                  "shapes.kinds.line.menu.lineKeeps",
+                  "Line keeps spacing even here",
+              );
+    return gives
+        ? tolgee.t(
+              "shapes.kinds.line.menu.lineWouldPut",
+              "Line would put a marcher here",
+          )
+        : tolgee.t(
+              "shapes.kinds.line.menu.lineWouldKeep",
+              "Line would keep spacing even here",
+          );
+}
+
+/**
+ * Whether a marcher stands on the point (#569, look #568): Follow line's marchers, on while the
+ * point has no answer of its own, with what the line does under it; Marcher | Even spacing under
+ * that, greyed with the line's answer marked while following, the point's own answer when not.
+ * Where the answer does nothing the section is greyed out with why, but a stored answer can still
+ * be dropped by following again.
+ */
+function marcherSection(
+    p: LineParams,
+    n: number,
+    index: number,
+): ToolMenuSection {
+    const own = p.points[index]!.marcher;
+    const follows = own === undefined;
+    const disabled = marcherReason(p, n, index);
+    const gives = lineGivesMarcher(p, index);
+    // Where the answer counts for nothing, the line's setting isn't shown as one either
+    const now = own ?? (disabled ? undefined : gives);
+    const answer = (
+        value: keyof typeof MARCHER_VALUES,
+        label: string,
+    ): ToolMenuItem => ({
+        value,
+        label,
+        checked: now === MARCHER_VALUES[value],
+        ...(disabled ? { disabled } : {}),
+    });
+    return {
+        label: tolgee.t(
+            "shapes.kinds.line.menu.marcher",
+            "Marcher on this point",
+        ),
+        look: "follow",
+        caption: disabled ?? lineCaption(gives, follows),
+        items: [
+            {
+                value: "marcher-follow",
+                label: tolgee.t(
+                    "shapes.kinds.line.menu.marcherFollow",
+                    "Follow line's marchers",
+                ),
+                toggle: true,
+                checked: follows,
+                // Following again only drops what the point said
+                ...(disabled && follows ? { disabled } : {}),
+            },
+            answer(
+                "marcher-always",
+                tolgee.t("shapes.kinds.line.menu.marcherAlways", "Marcher"),
+            ),
+            answer(
+                "marcher-even",
+                tolgee.t("shapes.kinds.line.menu.marcherEven", "Even spacing"),
+            ),
+        ],
+    };
+}
+
 /** Right-click on point `index` (#569) */
-function pointMenu(p: LineParams, index: number): ToolMenuSection[] {
+function pointMenu(p: LineParams, n: number, index: number): ToolMenuSection[] {
     const q = p.points[index]!;
     const smoothPoint = q.tension > 0;
     const closed = isClosed(p);
@@ -683,18 +798,22 @@ function pointMenu(p: LineParams, index: number): ToolMenuSection[] {
     const end = !closed && (index === 0 || index === last);
     const sections: ToolMenuSection[] = [
         {
+            label: tolgee.t("shapes.kinds.line.menu.cornerType", "Corner type"),
+            look: "segmented",
+            hint: tolgee.t(
+                "shapes.kinds.line.menu.swapHint",
+                "Double-click a point to swap",
+            ),
             items: [
                 {
                     value: "corner",
                     label: tolgee.t("shapes.kinds.line.menu.corner", "Corner"),
                     checked: !smoothPoint,
-                    doubleClick: smoothPoint,
                 },
                 {
                     value: "smooth",
                     label: tolgee.t("shapes.kinds.line.menu.smooth", "Smooth"),
                     checked: smoothPoint,
-                    doubleClick: !smoothPoint,
                 },
                 ...(smoothPoint
                     ? [
@@ -711,37 +830,7 @@ function pointMenu(p: LineParams, index: number): ToolMenuSection[] {
         },
     ];
     // An open line's ends always hold a marcher
-    if (!end) {
-        const disabled = marcherReason(p);
-        const labels = {
-            "marcher-line": tolgee.t(
-                "shapes.kinds.line.menu.marcherLine",
-                "As the line",
-            ),
-            "marcher-always": tolgee.t(
-                "shapes.kinds.line.menu.marcherAlways",
-                "Always a marcher",
-            ),
-            "marcher-even": tolgee.t(
-                "shapes.kinds.line.menu.marcherEven",
-                "Keep spacing even",
-            ),
-        };
-        sections.push({
-            label: tolgee.t(
-                "shapes.kinds.line.menu.marcher",
-                "Marcher on this point",
-            ),
-            items: (
-                Object.keys(MARCHER_VALUES) as (keyof typeof MARCHER_VALUES)[]
-            ).map((value) => ({
-                value,
-                label: labels[value],
-                checked: q.marcher === MARCHER_VALUES[value],
-                ...(disabled ? { disabled } : {}),
-            })),
-        });
-    }
+    if (!end) sections.push(marcherSection(p, n, index));
     const fewest = p.points.length <= minPoints(p);
     sections.push({
         items: [
@@ -751,6 +840,8 @@ function pointMenu(p: LineParams, index: number): ToolMenuSection[] {
                     "shapes.kinds.line.menu.delete",
                     "Delete point",
                 ),
+                icon: "trash",
+                destructive: true,
                 ...(fewest
                     ? {
                           disabled: closed
@@ -850,9 +941,9 @@ function segmentMenu(p: LineParams, index: number): ToolMenuSection[] {
  * segment's new point and whether it's straight or curved.
  */
 const MENU: ToolHandleMenu<LineParams> = {
-    sections(p, _n, key) {
+    sections(p, n, key) {
         const index = pointOf(p, key);
-        if (index >= 0) return pointMenu(p, index);
+        if (index >= 0) return pointMenu(p, n, index);
         const segment = midpointOf(p, key);
         return segment >= 0 ? segmentMenu(p, segment) : null;
     },
@@ -899,19 +990,34 @@ const MENU: ToolHandleMenu<LineParams> = {
                 return p.points[index]!.tension > 0
                     ? { params: p, selected: key }
                     : null;
-            case "marcher-line":
-            case "marcher-always":
-            case "marcher-even":
-                if (marcherReason(p)) return null;
+            // Following again drops the point's answer, even where it does nothing; switching it
+            // off sets the other answer than the line's, so the override is one click
+            case "marcher-follow": {
+                const follows = p.points[index]!.marcher === undefined;
+                if (follows && marcherReason(p, n, index)) return null;
                 return {
                     params: setPointMarcher(
                         p,
                         n,
                         index,
-                        MARCHER_VALUES[value],
+                        follows ? !lineGivesMarcher(p, index) : undefined,
                         env,
                     ),
                 };
+            }
+            // Picked while following, the line's own answer is set over it all the same
+            case "marcher-always":
+            case "marcher-even": {
+                if (marcherReason(p, n, index)) return null;
+                const next = setPointMarcher(
+                    p,
+                    n,
+                    index,
+                    MARCHER_VALUES[value],
+                    env,
+                );
+                return next === p ? null : { params: next };
+            }
             // The points after it move up one: nothing stays selected
             case "delete":
                 return {
@@ -1049,7 +1155,20 @@ export const lineTool: ToolKind<LineParams> = {
     settle: settleLine,
     fromFrame: lineInFrame,
     closed: lineClosed,
+    pictureParams: (_n, env) => zigzag(env, 0),
 };
+
+/** The picture's zigzag (owner, 2026-10-31): six points across the square, corners or smooth */
+const ZIGZAG: readonly XY[] = [
+    { x: -4.5, y: 1.5 },
+    { x: -2.7, y: -1.5 },
+    { x: -0.9, y: 1.5 },
+    { x: 0.9, y: -1.5 },
+    { x: 2.7, y: 1.5 },
+    { x: 4.5, y: -1.5 },
+];
+const zigzag = (env: ToolEnv, tension: number): LineParams =>
+    drawPoints(ZIGZAG, env, tension)!;
 
 /**
  * The Curve (#525, spec #522): a preset of the Line, the same kind and recipe, whose points start
@@ -1072,4 +1191,5 @@ export const curveTool: ToolKind<LineParams> = {
         },
     },
     fromFrame: curveInFrame,
+    pictureParams: (_n, env) => zigzag(env, SMOOTH),
 };

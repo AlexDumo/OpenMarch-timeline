@@ -56,18 +56,20 @@ export function shapePreview(kind: AnyToolKind): ShapePreview {
     if (known) return known;
     const n = PREVIEW_SPOTS;
     // A saved shape's kind sets the saved intervals as it fills the frame
-    const params = kind.fromFrame(
-        {
-            center: { x: 0, y: 0 },
-            halfWidth: HALF,
-            halfDepth: HALF,
-            rotation: 0,
-            flipX: false,
-            flipY: false,
-        },
-        n,
-        ENV,
-    );
+    const params =
+        kind.pictureParams?.(n, ENV) ??
+        kind.fromFrame(
+            {
+                center: { x: 0, y: 0 },
+                halfWidth: HALF,
+                halfDepth: HALF,
+                rotation: 0,
+                flipX: false,
+                flipY: false,
+            },
+            n,
+            ENV,
+        );
     const spots = kind.shape
         .generate(params, n, CTX)
         .map(({ x, y }): XY => ({ x, y }));

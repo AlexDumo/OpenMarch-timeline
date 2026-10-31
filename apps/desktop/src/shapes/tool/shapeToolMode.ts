@@ -431,7 +431,7 @@ export const shapeToolMode: FieldMode = {
             pointer.screen,
             (key, value) => {
                 const now = currentShapeField();
-                if (!now) return;
+                if (!now) return null;
                 updateTool((t) =>
                     pickMenu(
                         t,
@@ -441,6 +441,8 @@ export const shapeToolMode: FieldMode = {
                         envOf(now, t),
                     ),
                 );
+                const after = useShapeToolStore.getState().tool;
+                return after ? { params: after.params, n: after.spots } : null;
             },
         );
     },
