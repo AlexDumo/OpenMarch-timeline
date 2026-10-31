@@ -12,6 +12,7 @@ import type { AnyToolKind } from "../tool/toolKind";
 import { useBoxSelectionStore } from "./boxSelectionStore";
 import { commitBox } from "./commitBox";
 import { leaveBox, selectOnField } from "./boxSelection";
+import { clearLiveBoxSelection } from "./liveBoxMode";
 
 const DIRECTIONS = {
     up: { x: 0, y: -1 },
@@ -48,7 +49,8 @@ export function stepPlacedBoxFiles(
  * - The nudge keys move the whole shape through its kind, every member the same distance, so it
  *   keeps its form (the plain nudge rounds each marcher on its own, which bends a box on half
  *   steps).
- * - Escape inside a box selects the whole box again, and on a box selected whole deselects it.
+ * - Escape with a handle selected (a Line's point, #557) clears that; inside a box it selects the
+ *   whole box again, and on a box selected whole deselects it.
  */
 export function PlacedBoxKeys(): null {
     const queryClient = useQueryClient();
@@ -79,7 +81,12 @@ export function PlacedBoxKeys(): null {
     // On top of the app's Escape, so it must handle a box selected whole too: it deselects
     useActionHandler(
         "cancelAlignmentUpdates",
-        () => (inside ? leaveBox() : selectOnField([])),
+        () => {
+            // A selected point first (#557), then the box
+            if (clearLiveBoxSelection()) return;
+            if (inside) leaveBox();
+            else selectOnField([]);
+        },
         { enabled: inside || selected },
     );
     return null;

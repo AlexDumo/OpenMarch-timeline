@@ -140,6 +140,11 @@ export interface FieldTestApi {
      * (#204), or null when neither is on the field.
      */
     shapeOverlay?(): FieldTestShapeOverlay | null;
+    /**
+     * False while the marchers, their labels and paths, and the shape's spots
+     * and walks are hidden so a shape is seen on its own (#558, H)
+     */
+    marchersShown?(): boolean;
     /** The placed boxes outlined on the field (the View tab's Shapes setting). */
     placedBoxes?(): FieldTestPlacedBox[];
     /**
@@ -194,6 +199,10 @@ export type FieldTestShapeOverlay = {
     handles: ScreenPoint[];
     /** Its handles that add a point (a line's segment midpoints, #524), in the viewport. */
     addHandles: ScreenPoint[];
+    /** Handles selected by a click (a line's point, #557), also in `handles` */
+    selectedHandles: ScreenPoint[];
+    /** The ends of a selected point's bar (its tangent, #557), each with the point it runs from */
+    barHandles: { at: ScreenPoint; from: ScreenPoint }[];
     /** Drawing (a drag draws it) or open; null for a mode that doesn't say. */
     stage: "drawing" | "open" | null;
     /** The rotate knob and the center dot, in the viewport; null when not drawn. */

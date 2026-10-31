@@ -5,12 +5,15 @@ import { pivotOf } from "../frame/pivot";
 import {
     centerPivot,
     dragShape,
+    selectionAfter,
+    selectionIn,
     startShapeGesture,
     type ShapeGesture,
 } from "../frame/gestures";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { ShapeContext, XY } from "../types";
 import type { PlacedBox } from "./placedBox";
+import { sameParams } from "./commitBox";
 import { distributionOf } from "../distribute/modes";
 import { leastTravelOnto } from "../leastTravel";
 import { placedAlong, placedOrderChoice } from "./placedOrder";
@@ -33,12 +36,19 @@ export interface LiveBox {
     readonly gesture: LiveGesture | null;
     /** Where the pointer is during a gesture, for the guides drawn by it */
     readonly pointer?: XY;
+    /** The handle selected by a click (a Line's point, #557); null or absent when none is */
+    readonly selected?: string | null;
 }
 
-export const openLive = (box: PlacedBox): LiveBox => ({
+/** The box as saved; `selected` kept when the box still has that handle (it was saved again) */
+export const openLive = (
+    box: PlacedBox,
+    selected?: string | null,
+): LiveBox => ({
     box,
     params: box.params,
     gesture: null,
+    selected: selectionIn(box.kind, box.params, box.spots, selected),
 });
 
 /** The gesture a press at `at` starts, or null when the box doesn't take it */
@@ -49,6 +59,7 @@ export function pressLive(live: LiveBox, at: XY, env: ToolEnv): LiveBox | null {
         live.box.spots,
         at,
         env,
+        live.selected,
     );
     return gesture ? { ...live, gesture, pointer: at } : null;
 }
@@ -97,24 +108,54 @@ function sameShape(kind: AnyToolKind, spots: number, a: unknown, b: unknown) {
     );
 }
 
+/** Escape with a handle selected (#557): nothing selected. Unchanged when nothing is. */
+export const clearLiveSelection = (live: LiveBox): LiveBox =>
+    live.selected ? { ...live, selected: null } : live;
+
 /** Whether `params` lays `box` out on a new lattice, so its members are laid out again */
 export const newLayout = (box: PlacedBox, params: unknown): boolean =>
     layoutOf(box.kind, params, box.spots) !==
     layoutOf(box.kind, box.params, box.spots);
 
 /**
- * Ends the gesture: `changed` when there is something to save. A double click on the pivot sends
- * it back to the center (#350); a click on a handle that adds a point adds it (#524).
+ * A click as the field editor tells it: `double` for a double-click's second click, and `ownFirst`
+ * when its first click was this box's too, not the editor's click that selected the box (absent:
+ * this box's)
+ */
+export type LiveClick = {
+    readonly double: boolean;
+    readonly ownFirst?: boolean;
+};
+
+/**
+ * Ends the gesture: `changed` when there is something to save, `enter` when the click goes inside
+ * the box. A double click on the pivot sends it back to the center (#350), and on a handle does
+ * what its kind says (a Line's point switches between corner and smooth, #557), going nowhere
+ * even when that changes nothing (an end of a tangent bar). A kind with no handle double-click (a
+ * Box, a Circle) goes inside there, as before #557. A click on a handle that adds a point
+ * adds it (#524), and on one that selects selects it. A double-click whose first click was the
+ * editor's (the click on a member that selected the box) is no handle's: it goes inside the box.
  */
 export function releaseLive(
     live: LiveBox,
-    click?: { readonly double: boolean } | null,
+    click?: LiveClick | null,
 ): {
     live: LiveBox;
     changed: boolean;
+    enter: boolean;
 } {
     const { kind, spots } = live.box;
     const g = live.gesture;
+    if (click?.double && click.ownFirst === false && g?.type === "handle")
+        return {
+            live: { ...live, gesture: null },
+            changed: false,
+            enter: true,
+        };
+    const doubled =
+        click?.double && g?.type === "handle"
+            ? (kind.doubleClickHandle?.(g.base, spots, g.key) ?? null)
+            : null;
     const centered = click?.double && g ? centerPivot(g) : null;
     // A double-click's first click already did the handle's click (and was saved), as in the
     // drawn shape: the second doesn't do it again
@@ -122,11 +163,37 @@ export function releaseLive(
         click && !click.double && g?.type === "handle"
             ? (kind.clickHandle?.(g.base, spots, g.key) ?? null)
             : null;
-    const params = centered ?? clicked ?? live.params;
+    const params = doubled ?? centered ?? clicked ?? live.params;
+    const selected = g
+        ? selectionAfter(kind, spots, g, click, live.selected, params)
+        : (live.selected ?? null);
+    const changed = !sameShape(kind, spots, params, live.box.params);
     return {
-        live: { ...live, params, gesture: null },
-        changed: !sameShape(kind, spots, params, live.box.params),
+        live: { ...live, params, gesture: null, selected },
+        changed,
+        // Only a kind whose handles take a double-click keeps it from going inside: a Box's or a
+        // Circle's handle sits on a member, whose double-click goes inside as anywhere else
+        enter:
+            !!click?.double &&
+            !changed &&
+            (g?.type !== "handle" || !kind.doubleClickHandle),
     };
+}
+
+/**
+ * The box read again (`box`): the selection stays when it's the box as it was, or as this box
+ * last `saved` it, and is cleared when it comes back changed from outside (an undo or redo, which
+ * can put another point under the same key), as the open shape's undo does
+ */
+export function reopenLive(
+    live: LiveBox,
+    box: PlacedBox,
+    saved?: unknown,
+): LiveBox {
+    const ours =
+        sameParams(box.params, live.box.params) ||
+        (saved !== undefined && sameParams(box.params, saved));
+    return openLive(box, ours ? live.selected : null);
 }
 
 /** The box with `delta` more files (fewer when negative), same intervals */

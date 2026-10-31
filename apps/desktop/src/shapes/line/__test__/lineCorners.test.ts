@@ -261,6 +261,13 @@ describe("corners", () => {
             { x: 40, y: 40 },
         ]);
         expect(chip(even)).toMatchObject({ display: "2", derived: false });
+        // Segments a hair apart read as one number, not "2–2"
+        const near = clicked(5, [
+            { x: 0, y: 0 },
+            { x: 40, y: 0 },
+            { x: 40, y: 40.003 },
+        ]);
+        expect(chip(near)).toMatchObject({ display: "2", derived: false });
     });
 
     it("switch off, the intervals running around the corner", () => {

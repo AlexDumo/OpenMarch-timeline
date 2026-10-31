@@ -92,6 +92,11 @@ export type FieldEditorPorts = {
     /** False for a marcher that can't be selected or hit (one dimmed outside the isolated move). */
     canSelect(id: number): boolean;
     /**
+     * True while the marchers are hidden so a shape is seen on its own (#558): no press or hover
+     * lands on a performer, as if none were there. Items still show, and are still hit.
+     */
+    marchersHidden?(): boolean;
+    /**
      * Called once at the start of every edit press, before the editor does
      * anything with it. The app may act on the press here (story 60: the
      * first press after a paused preview clears the preview) and returns
@@ -254,6 +259,13 @@ export type FieldModeDrawing = {
     handles: readonly FieldPoint[];
     /** Handles that add a point (a line's segment midpoints, #524), drawn smaller and round */
     addHandles?: readonly FieldPoint[];
+    /** Handles selected by a click (a line's point, #557), drawn filled over `handles` */
+    selectedHandles?: readonly FieldPoint[];
+    /**
+     * Handles on the ends of a selected point's bar (its tangent, #557): each drawn round at `at`,
+     * at the end of a line from `from`
+     */
+    barHandles?: readonly { at: FieldPoint; from: FieldPoint }[];
     /** The outline is open: drawn without joining its last point to its first (a line, #524) */
     openOutline?: boolean;
     /**
@@ -353,9 +365,14 @@ export interface FieldMode {
     move(pointer: FieldPointer): void;
     /**
      * The press it claimed ended. `click` when it moved less than the click
-     * slop; `double` when that click came soon after another click it took.
+     * slop; `double` when that click came soon after another click, and
+     * `ownFirst` when that first click was the mode's too, not the editor's
+     * (the click on a member that turned a placed box's mode on).
      */
-    release(pointer: FieldPointer, click: { double: boolean } | null): void;
+    release(
+        pointer: FieldPointer,
+        click: { double: boolean; ownFirst: boolean } | null,
+    ): void;
     /** The press it claimed was lost: nothing is saved. */
     cancel(): void;
     /** The cursor over `pointer` with no button down, or null for the editor's. */
@@ -420,7 +437,8 @@ export class FieldEditor {
      */
     private modePress: {
         start: FieldPointer;
-        double: boolean;
+        /** What its release tells the mode if it's a click */
+        click: { double: boolean; ownFirst: boolean };
         dragged: boolean;
     } | null = null;
     /** The prop tool, while it's on (C2.1). */
@@ -505,7 +523,10 @@ export class FieldEditor {
                 start: pointer,
                 // The first click may have been the editor's: the click
                 // on a box's member that turned the mode on
-                double: last !== null && this.isSoonAfter(last, pointer),
+                click: {
+                    double: last !== null && this.isSoonAfter(last, pointer),
+                    ownFirst: last?.mode === true,
+                },
                 dragged: false,
             };
             this.mode.press(pointer, modePress);
@@ -603,7 +624,7 @@ export class FieldEditor {
                 !modePress.dragged && !isPastSlop(modePress.start, pointer);
             // A double-click's second click starts no third
             this.lastClick =
-                click && !modePress.double
+                click && !modePress.click.double
                     ? {
                           time: this.now(),
                           screen: modePress.start.screen,
@@ -611,10 +632,7 @@ export class FieldEditor {
                           mode: true,
                       }
                     : null;
-            this.mode?.release(
-                pointer,
-                click ? { double: modePress.double } : null,
-            );
+            this.mode?.release(pointer, click ? modePress.click : null);
             this.emit();
             return;
         }
@@ -1322,16 +1340,19 @@ export class FieldEditor {
     /**
      * The marcher a press at `point` lands on: a performer's dot, else an
      * item whose Outline holds it, so a performer on a platform is still
-     * pressed.
+     * pressed. Every press, drag, menu and hover finds performers here, so
+     * hidden ones (#558) are passed over in this one place.
      */
     private marcherAt(point: FieldPoint) {
         const isItem = this.ports.isItem ?? (() => false);
-        const performer = marcherAt(
-            this.ports.marchers(),
-            point,
-            hitRadius(this.ports.zoom()),
-            (id) => !isItem(id) && this.ports.canSelect(id),
-        );
+        const performer = this.ports.marchersHidden?.()
+            ? null
+            : marcherAt(
+                  this.ports.marchers(),
+                  point,
+                  hitRadius(this.ports.zoom()),
+                  (id) => !isItem(id) && this.ports.canSelect(id),
+              );
         if (performer !== null) return performer;
         const item = this.ports.itemAt?.(point) ?? null;
         return item !== null && this.ports.canSelect(item) ? item : null;

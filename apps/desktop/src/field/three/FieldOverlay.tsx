@@ -18,6 +18,7 @@ import { dotSizes, SELECTION_COLOR } from "./selectionRing";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import { GUIDE_INK, GUIDE_INK_TEXT } from "./guideInk";
+import { shapeAlone, useMarchersHidden } from "@/shapes/field/marchersHidden";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -44,6 +45,9 @@ const WALK_WIDTH = 1;
 const SHAPE_HANDLE_SIZE = 9;
 /** A handle that adds a point (a line's midpoint, #524): a small ring, over the center dot */
 const ADD_HANDLE_RADIUS = 3;
+/** An end of a selected point's tangent bar (#557): a round knob on a thin line from the point */
+const BAR_HANDLE_RADIUS = 4;
+const BAR_LINE_WIDTH = 1;
 const SHAPE_HANDLE_WIDTH = 1.5;
 
 /** The prop tool's line while drawing, in CSS px. */
@@ -133,8 +137,14 @@ export default function FieldOverlay({
     const area = useSyncExternalStore(subscribeEditor, () =>
         editor.areaShape(),
     );
-    const modeDrawing = useSyncExternalStore(subscribeEditor, () =>
+    const drawn = useSyncExternalStore(subscribeEditor, () =>
         editor.modeDrawing(),
+    );
+    // Held or latched H shows the shape on its own (#558)
+    const hideMarchers = useMarchersHidden();
+    const modeDrawing = useMemo(
+        () => (drawn && hideMarchers ? shapeAlone(drawn) : drawn),
+        [drawn, hideMarchers],
     );
     const propTool = useSyncExternalStore(subscribeEditor, () =>
         editor.propToolShape(),
@@ -753,6 +763,51 @@ function ModeDrawing({
                         style={controls}
                         data-testid="fieldShapeHandle"
                     />
+                );
+            })}
+            {drawing.selectedHandles?.map((point, i) => {
+                const p = at(point);
+                return (
+                    <rect
+                        key={i}
+                        x={p.x - half}
+                        y={p.y - half}
+                        width={SHAPE_HANDLE_SIZE}
+                        height={SHAPE_HANDLE_SIZE}
+                        fill={shape}
+                        stroke={shape}
+                        strokeWidth={SHAPE_HANDLE_WIDTH}
+                        style={controls}
+                        data-testid="fieldShapeSelectedHandle"
+                    />
+                );
+            })}
+            {drawing.barHandles?.map(({ at: point, from }, i) => {
+                const p = at(point);
+                const a = at(from);
+                return (
+                    <g
+                        key={i}
+                        style={controls}
+                        data-testid="fieldShapeBarHandle"
+                    >
+                        <line
+                            x1={a.x}
+                            y1={a.y}
+                            x2={p.x}
+                            y2={p.y}
+                            stroke={shape}
+                            strokeWidth={BAR_LINE_WIDTH}
+                        />
+                        <circle
+                            cx={p.x}
+                            cy={p.y}
+                            r={BAR_HANDLE_RADIUS}
+                            fill={shape}
+                            stroke="white"
+                            strokeWidth={SHAPE_HANDLE_WIDTH}
+                        />
+                    </g>
                 );
             })}
             {drawing.centerDot &&

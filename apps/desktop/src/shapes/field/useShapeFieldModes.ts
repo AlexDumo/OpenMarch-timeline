@@ -8,7 +8,7 @@ import {
     previewPlacedBox,
     useBoxSelectionStore,
 } from "../placed/boxSelectionStore";
-import { LiveBoxMode } from "../placed/liveBoxMode";
+import { LiveBoxMode, setActiveLiveBox } from "../placed/liveBoxMode";
 import {
     closeShapeTool,
     useShapeHidden,
@@ -48,6 +48,10 @@ export function useShapeFieldModes(
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [boxId, queryClient],
     );
+    useEffect(() => {
+        setActiveLiveBox(live);
+        return () => setActiveLiveBox(null);
+    }, [live]);
     useEffect(() => {
         if (box) live?.setBox(box);
         // The box read back (or another one) replaces a number drag's preview

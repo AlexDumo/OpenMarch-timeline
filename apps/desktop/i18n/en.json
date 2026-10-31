@@ -109,6 +109,8 @@
             "quarterTurn": "Shape: Turn 90° clockwise",
             "recalculate": "Shape: Recalculate who goes where",
             "evenOut": "Shape: Even out the outline",
+            "hideMarchers": "Shape: Hide the marchers (hold to peek, tap to keep hidden)",
+            "hideMarchersKeywords": "hide show marchers spots walks alone peek eye",
             "expand": "Shape: Expand, keeping the proportions",
             "shrink": "Shape: Shrink, keeping the proportions",
             "keywords": "shape form formation set place",
@@ -2047,6 +2049,10 @@
             "ratioLock": {
                 "locked": "Spacings locked together: click to unlock",
                 "unlocked": "Lock the two spacings together"
+            },
+            "hideMarchers": {
+                "hide": "Hide the marchers",
+                "show": "Show the marchers"
             },
             "evenOut": {
                 "label": "Even out",

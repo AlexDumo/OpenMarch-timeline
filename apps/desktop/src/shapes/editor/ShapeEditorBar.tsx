@@ -39,6 +39,8 @@ import {
     EqualsIcon,
     MagnetIcon,
     PathIcon,
+    EyeIcon,
+    EyeSlashIcon,
 } from "@phosphor-icons/react";
 import {
     fieldToElement,
@@ -109,6 +111,13 @@ import { outlineGapOf } from "../distribute/outlineGap";
 import type { XY } from "../types";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import tolgee from "@/global/singletons/Tolgee";
+import {
+    isHiding,
+    pressHideMarchers,
+    releaseHideMarchers,
+    toggleHideMarchers,
+    useMarchersHiddenStore,
+} from "../field/marchersHidden";
 
 /** How long the editor stays still after a press on it ends, so a second click lands */
 const PRESS_HOLD_MS = 450;
@@ -272,6 +281,16 @@ function ShapeEditorBar({
         enabled: evenState === "uneven",
         ignoreRepeat: true,
     });
+
+    // The shape on its own (#558): hold H to hide the marchers, tap to keep them hidden. The
+    // button and the palette turn the latch over. A key still down when the editor goes (the show
+    // plays) is let go, so it doesn't stay hidden once the editor is back
+    useActionHandler("shapeHideMarchers", () => toggleHideMarchers(), {
+        onPress: () => pressHideMarchers(),
+        onRelease: (reason) =>
+            releaseHideMarchers(Date.now(), reason === "lost"),
+    });
+    useEffect(() => () => releaseHideMarchers(Date.now(), true), []);
 
     const whatRow = useRef<HTMLSpanElement>(null);
     const doRow = useRef<HTMLSpanElement>(null);
@@ -901,6 +920,7 @@ const EndControls = memo(function EndControls({
     return (
         <>
             <span className="flex items-center gap-2">
+                <HideMarchersButton />
                 <SnapButton />
                 {canPlace && <PathwaysButton />}
                 <SaveShapeButton
@@ -1378,6 +1398,38 @@ function useTwoRows(
 
 function Divider() {
     return <span className="bg-stroke h-16 w-px" aria-hidden />;
+}
+
+/**
+ * The eye (#558): shows whether the marchers, the shape's spots and its walks are hidden, held or
+ * latched, and turns the latch over. Its tooltip shows the key, which is held to peek.
+ */
+function HideMarchersButton() {
+    const hidden = useMarchersHiddenStore(isHiding);
+    const overrides = useShortcutOverridesStore((s) => s.overrides);
+    return (
+        <IconButton
+            label={
+                hidden
+                    ? tolgee.t(
+                          "shapes.edit.hideMarchers.show",
+                          "Show the marchers",
+                      )
+                    : tolgee.t(
+                          "shapes.edit.hideMarchers.hide",
+                          "Hide the marchers",
+                      )
+            }
+            shortcut={getActionShortcutLabel("shapeHideMarchers", {
+                overrides,
+            })}
+            pressed={hidden}
+            onClick={toggleHideMarchers}
+            testId="shape-editor-hide-marchers"
+        >
+            {hidden ? <EyeSlashIcon size={14} /> : <EyeIcon size={14} />}
+        </IconButton>
+    );
 }
 
 /**

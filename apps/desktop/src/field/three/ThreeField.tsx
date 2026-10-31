@@ -6,6 +6,7 @@ import {
     useMemo,
     useRef,
     useState,
+    type ReactNode,
     type RefObject,
 } from "react";
 import clsx from "clsx";
@@ -108,6 +109,10 @@ import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
+import {
+    marchersHiddenNow,
+    useMarchersHidden,
+} from "@/shapes/field/marchersHidden";
 import { useTimelineVisuals } from "./useTimelineVisuals";
 import { drawnFollowing } from "./fieldFollowing";
 import {
@@ -408,6 +413,8 @@ function ThreeFieldView() {
                             useTimelineSelectionStore.getState(),
                             id,
                         ),
+                    // #558: hidden marchers aren't there to press while a shape is seen alone
+                    marchersHidden: marchersHiddenNow,
                     takePress: () => menuShown.current || takeFieldPress(),
                     selectionBoxPadding: () =>
                         selectionBoxPadding(useFieldViewStore.getState().zoom),
@@ -654,38 +661,40 @@ function ThreeFieldView() {
                             plan={timeline.focus}
                             renderOrder={FOCUS_ORDER}
                         />
-                        <OverlayLayer
-                            plan={timeline.paths}
-                            renderOrder={PATHS_ORDER}
-                        />
-                        <StartFlagLayers
-                            enabled={timeline.ready}
-                            isPlaying={isPlaying}
-                            marcherIds={marcherIds}
-                            selectedIds={selectedIds}
-                            fieldProperties={fieldProperties}
-                        />
-                        <MarchersLayer
-                            marchers={marchers}
-                            dimming={dimming}
-                            following={following}
-                            theme={fieldProperties.theme}
-                        />
-                        <LabelsLayer
-                            marchers={marchers}
-                            dimming={dimming}
-                            following={following}
-                            labels={labels}
-                            theme={fieldProperties.theme}
-                            atlas={atlases.label}
-                            style={labelStyle}
-                            holdAutoSize={isPlaying}
-                        />
-                        <OverlayLayer
-                            plan={timeline.collisions}
-                            renderOrder={COLLISIONS_ORDER}
-                            atlas={atlases.collision}
-                        />
+                        <MarchersShown>
+                            <OverlayLayer
+                                plan={timeline.paths}
+                                renderOrder={PATHS_ORDER}
+                            />
+                            <StartFlagLayers
+                                enabled={timeline.ready}
+                                isPlaying={isPlaying}
+                                marcherIds={marcherIds}
+                                selectedIds={selectedIds}
+                                fieldProperties={fieldProperties}
+                            />
+                            <MarchersLayer
+                                marchers={marchers}
+                                dimming={dimming}
+                                following={following}
+                                theme={fieldProperties.theme}
+                            />
+                            <LabelsLayer
+                                marchers={marchers}
+                                dimming={dimming}
+                                following={following}
+                                labels={labels}
+                                theme={fieldProperties.theme}
+                                atlas={atlases.label}
+                                style={labelStyle}
+                                holdAutoSize={isPlaying}
+                            />
+                            <OverlayLayer
+                                plan={timeline.collisions}
+                                renderOrder={COLLISIONS_ORDER}
+                                atlas={atlases.collision}
+                            />
+                        </MarchersShown>
                         <KeptMarksPlacer
                             marks={keptMarks}
                             marchers={marchers}
@@ -825,6 +834,15 @@ function usePreviewFit(
             cancelAnimationFrame(frame);
         };
     }, [preview, ready, settled]);
+}
+
+/**
+ * The marchers, their labels, paths, start flag positions and collisions, hidden while a shape is
+ * seen on its own (#558, hold or tap H). Its own component, so only this group redraws.
+ */
+function MarchersShown({ children }: { children: ReactNode }) {
+    const hidden = useMarchersHidden();
+    return <group visible={!hidden}>{children}</group>;
 }
 
 /**

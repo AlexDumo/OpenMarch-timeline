@@ -1687,40 +1687,60 @@ export function setTension(
 }
 
 /**
- * Where point `index`'s handles would be at tension 1, on the side its tension handle shows: the
- * way to the next point, or from the one before for an open line's last
+ * Which way from a smooth point one end of its tangent bar sits (#557): `1` toward the next point,
+ * `-1` back toward the one before
  */
-function fullHandle(p: LineParams, index: number): XY {
-    const last = p.points.length - 1;
+export type TangentSide = 1 | -1;
+
+/**
+ * Where point `index`'s handle on `side` would be at tension 1: the curve's own handle there, or,
+ * at an open line's end, where there's no segment that way, the other side's mirrored through the
+ * point so the bar still runs both ways
+ */
+function fullHandle(p: LineParams, index: number, side: TangentSide): XY {
+    const count = p.points.length;
     const closed = isClosed(p);
-    return index < last || closed
-        ? catmullRomSpan(p.points, index, closed).c1
-        : catmullRomSpan(p.points, index - 1).c2;
+    const has = (s: TangentSide) =>
+        closed || (s === 1 ? index < count - 1 : index > 0);
+    const own = (s: TangentSide) =>
+        s === 1
+            ? catmullRomSpan(p.points, index, closed).c1
+            : catmullRomSpan(p.points, (index - 1 + count) % count, closed).c2;
+    if (has(side)) return own(side);
+    const q = p.points[index]!;
+    const other = own(side === 1 ? -1 : 1);
+    return { x: 2 * q.x - other.x, y: 2 * q.y - other.y };
 }
 
 /**
- * Where smooth point `index`'s tension handle sits: along the line's way through it, as far out
- * as its tension takes the curve's handle (#525); null for a corner
+ * Where one end of smooth point `index`'s tangent bar sits (#525, #557): along the line's way
+ * through it on `side`, as far out as its tension takes the curve's handle; null for a corner
  */
-export function tensionHandle(p: LineParams, index: number): XY | null {
+export function tensionHandle(
+    p: LineParams,
+    index: number,
+    side: TangentSide = 1,
+): XY | null {
     const q = p.points[index];
     if (!q || q.tension === 0) return null;
-    return lerp(q, fullHandle(p, index), q.tension);
+    return lerp(q, fullHandle(p, index, side), q.tension);
 }
 
 /**
- * Point `index`'s tension handle dragged to `to`: the tension as far out along the curve's way
- * as the pointer went, in tenths when snapping, 0 (a corner) at or behind the point (#525)
+ * One end of point `index`'s tangent bar dragged to `to`: the tension as far out along the curve's
+ * way on `side` as the pointer went, in tenths when snapping, 0 (a corner) at or behind the point
+ * (#525, #557)
  */
 export function dragTension(
     base: LineParams,
     index: number,
     to: XY,
     env: ToolEnv,
+    side: TangentSide = 1,
 ): LineParams {
     const q = base.points[index];
     if (!q) return base;
-    const d = sub(fullHandle(base, index), q);
+    const d = sub(fullHandle(base, index, side), q);
     const l2 = dot(d, d);
     if (!(l2 > 1e-12)) return base;
     let tension = Math.min(MAX_TENSION, Math.max(0, dot(sub(to, q), d) / l2));
