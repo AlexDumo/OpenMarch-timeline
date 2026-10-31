@@ -25,7 +25,7 @@ import type { FieldRect } from "./selectionArea";
  * Lock X and Lock Y don't apply to handles (rules table: Lock X / Lock Y).
  * While fine is on a scale handle counts the pointer at a quarter of its
  * speed (`precisionDelta`, #197); a rotation turns at full speed in whole
- * degrees. As in a move, a role key pressed or released
+ * degrees. Alt (from center) scales about the box's center. As in a move, a role key pressed or released
  * mid-drag redraws the marchers at the last pointer. Each handle declares the
  * roles it reads, for the chip.
  */
@@ -74,17 +74,15 @@ abstract class HandleGesture implements FieldGesture {
 
 /**
  * A corner scales proportionally, and constrain frees its ratio; a middle handle scales one axis,
- * which constrain doesn't change. Nothing snaps.
+ * and constrain keeps the ratio. Either scales from the center with from center. Nothing snaps.
  */
-const scaleHonors = (handle: Exclude<HandleId, "rot">): HonoredRoles =>
-    handle.length === 2
-        ? {
-              context: "field",
-              fine: "fine",
-              constrain: "freeRatio",
-              snaps: false,
-          }
-        : { context: "field", fine: "fine", snaps: false };
+const scaleHonors = (handle: Exclude<HandleId, "rot">): HonoredRoles => ({
+    context: "field",
+    fine: "fine",
+    constrain: handle.length === 2 ? "freeRatio" : "keepRatio",
+    fromCenter: "fromCenter",
+    snaps: false,
+});
 
 /** A rotate handle reads fine (whole degrees, at full speed) and snaps to 15°; constrain does nothing */
 export const ROTATE_HONORS: HonoredRoles = {
@@ -93,7 +91,7 @@ export const ROTATE_HONORS: HonoredRoles = {
     snaps: true,
 };
 
-/** A corner or middle handle: scales the selection from the opposite side. */
+/** A corner or middle handle: scales the selection from the opposite side, or from its center. */
 export class ScaleGesture extends HandleGesture {
     readonly kind: FieldTestGesture = "scale";
     private track = PRECISION_START;
@@ -119,10 +117,16 @@ export class ScaleGesture extends HandleGesture {
             roles.fine,
         );
         this.track = moved.track;
-        // A corner scales proportionally; constrain flips that, freeing each axis
+        // Constrain flips the handle's default: a corner's proportion, a side's one axis
         return scalePositions(
             this.starts,
-            scaleFor(this.handle, this.box, moved.delta, roles.constrain),
+            scaleFor(
+                this.handle,
+                this.box,
+                moved.delta,
+                roles.constrain,
+                roles.fromCenter,
+            ),
         );
     }
 }
