@@ -6,7 +6,6 @@ import {
     useMemo,
     useRef,
     useState,
-    type ReactNode,
     type RefObject,
 } from "react";
 import clsx from "clsx";
@@ -111,10 +110,7 @@ import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
-import {
-    marchersHiddenNow,
-    useMarchersHidden,
-} from "@/shapes/field/marchersHidden";
+import { useShapeMarchersHidden } from "@/shapes/field/marchersHidden";
 import { useTimelineVisuals } from "./useTimelineVisuals";
 import { drawnFollowing } from "./fieldFollowing";
 import {
@@ -321,22 +317,33 @@ function ThreeFieldView() {
         () => marcherRows?.map((marcher) => marcher.id),
         [marcherRows],
     );
+    // #558: the edited shape's marchers, while it's seen on its own
+    const hiddenIds = useShapeMarchersHidden();
     const timeline = useTimelineVisuals({
         isPlaying,
         selectedPage,
         pages,
         marcherIds,
         fieldProperties,
+        hiddenIds,
     });
     const { dimming, following } = timeline;
     useShapeFocus(dimming);
-    const keptMarks = useFieldKeptMarks({
+    const allKeptMarks = useFieldKeptMarks({
         enabled: timeline.ready,
         isPlaying,
         pages,
         pageId: selectedPage?.id,
         marcherIds,
     });
+    // #558: the shape's hidden marchers take their kept marks with them
+    const keptMarks = useMemo(
+        () =>
+            hiddenIds
+                ? allKeptMarks.filter((mark) => !hiddenIds.has(mark.marcherId))
+                : allKeptMarks,
+        [allKeptMarks, hiddenIds],
+    );
     const keptMarkElements = useRef<KeptMarkElements>(new Map());
     const root = useRef<HTMLDivElement>(null);
     const keptMarkTooltip = useKeptMarkTooltip({
@@ -415,8 +422,8 @@ function ThreeFieldView() {
                             useTimelineSelectionStore.getState(),
                             id,
                         ),
-                    // #558: hidden marchers aren't there to press while a shape is seen alone
-                    marchersHidden: marchersHiddenNow,
+                    // #558: the shape's hidden marchers aren't there to press while it's seen alone
+                    marcherHidden: (id) => dimming.isHidden(id),
                     takePress: () => menuShown.current || takeFieldPress(),
                     selectionBoxPadding: () =>
                         selectionBoxPadding(useFieldViewStore.getState().zoom),
@@ -469,7 +476,7 @@ function ThreeFieldView() {
                     ),
                 },
             ),
-        [marchers, items],
+        [marchers, items, dimming],
     );
     useEffect(() => {
         setActiveFieldEditor(editor);
@@ -665,40 +672,38 @@ function ThreeFieldView() {
                             plan={timeline.focus}
                             renderOrder={FOCUS_ORDER}
                         />
-                        <MarchersShown>
-                            <OverlayLayer
-                                plan={timeline.paths}
-                                renderOrder={PATHS_ORDER}
-                            />
-                            <StartFlagLayers
-                                enabled={timeline.ready}
-                                isPlaying={isPlaying}
-                                marcherIds={marcherIds}
-                                selectedIds={selectedIds}
-                                fieldProperties={fieldProperties}
-                            />
-                            <MarchersLayer
-                                marchers={marchers}
-                                dimming={dimming}
-                                following={following}
-                                theme={fieldProperties.theme}
-                            />
-                            <LabelsLayer
-                                marchers={marchers}
-                                dimming={dimming}
-                                following={following}
-                                labels={labels}
-                                theme={fieldProperties.theme}
-                                atlas={atlases.label}
-                                style={labelStyle}
-                                holdAutoSize={isPlaying}
-                            />
-                            <OverlayLayer
-                                plan={timeline.collisions}
-                                renderOrder={COLLISIONS_ORDER}
-                                atlas={atlases.collision}
-                            />
-                        </MarchersShown>
+                        <OverlayLayer
+                            plan={timeline.paths}
+                            renderOrder={PATHS_ORDER}
+                        />
+                        <StartFlagLayers
+                            enabled={timeline.ready}
+                            isPlaying={isPlaying}
+                            marcherIds={marcherIds}
+                            selectedIds={selectedIds}
+                            fieldProperties={fieldProperties}
+                        />
+                        <MarchersLayer
+                            marchers={marchers}
+                            dimming={dimming}
+                            following={following}
+                            theme={fieldProperties.theme}
+                        />
+                        <LabelsLayer
+                            marchers={marchers}
+                            dimming={dimming}
+                            following={following}
+                            labels={labels}
+                            theme={fieldProperties.theme}
+                            atlas={atlases.label}
+                            style={labelStyle}
+                            holdAutoSize={isPlaying}
+                        />
+                        <OverlayLayer
+                            plan={timeline.collisions}
+                            renderOrder={COLLISIONS_ORDER}
+                            atlas={atlases.collision}
+                        />
                         <KeptMarksPlacer
                             marks={keptMarks}
                             marchers={marchers}
@@ -840,15 +845,6 @@ function usePreviewFit(
             cancelAnimationFrame(frame);
         };
     }, [preview, ready, settled]);
-}
-
-/**
- * The marchers, their labels, paths, start flag positions and collisions, hidden while a shape is
- * seen on its own (#558, hold or tap H). Its own component, so only this group redraws.
- */
-function MarchersShown({ children }: { children: ReactNode }) {
-    const hidden = useMarchersHidden();
-    return <group visible={!hidden}>{children}</group>;
 }
 
 /**

@@ -27,7 +27,7 @@ function setup({
     pressSelection = undefined as FieldEditorPorts["pressSelection"],
     doubleClickMarcher = undefined as FieldEditorPorts["doubleClickMarcher"],
     reachesInside = undefined as FieldEditorPorts["reachesInside"],
-    marchersHidden = undefined as FieldEditorPorts["marchersHidden"],
+    marcherHidden = undefined as FieldEditorPorts["marcherHidden"],
 } = {}) {
     const clock = { now: 1000 };
     const state = {
@@ -62,7 +62,7 @@ function setup({
         pressSelection,
         doubleClickMarcher,
         reachesInside,
-        marchersHidden,
+        marcherHidden,
         selectionBoxPadding: () => 10,
         openMenu: vi.fn(),
         showPositions: vi.fn((positions) => {
@@ -171,10 +171,12 @@ describe("FieldEditor click selection", () => {
     });
 });
 
-describe("FieldEditor with the marchers hidden (#558, a shape seen on its own)", () => {
+describe("FieldEditor with a shape's marchers hidden (#558, a shape seen on its own)", () => {
     const slop = CLICK_SLOP / ZOOM;
+    // Marchers 1 and 2 are the shape's, hidden; 3 and 4 aren't
+    const shapes = (id: number) => id === 1 || id === 2;
     const hiddenSetup = (selected: number[] = []) =>
-        setup({ selected, marchersHidden: () => true });
+        setup({ selected, marcherHidden: shapes });
 
     it("a click on a hidden marcher is a click on empty field", () => {
         const { editor, state } = hiddenSetup([2]);
@@ -197,14 +199,24 @@ describe("FieldEditor with the marchers hidden (#558, a shape seen on its own)",
         expect(editor.cursor()).toBe("default");
     });
 
+    it("hits the marchers the shape doesn't move as usual", () => {
+        const { editor, state } = hiddenSetup();
+        editor.pointerMove(at(300, 100));
+        expect(editor.cursor()).toBe("pointer");
+        click(editor, 300, 100);
+        expect(state.selected).toEqual([3]);
+    });
+
     it("hits them again once they show", () => {
         let hidden = true;
-        const { editor, state } = setup({ marchersHidden: () => hidden });
+        const { editor, state } = setup({
+            marcherHidden: (id) => hidden && shapes(id),
+        });
         click(editor, 100, 100);
         expect(state.selected).toEqual([]);
         hidden = false;
-        click(editor, 300, 100);
-        expect(state.selected).toEqual([3]);
+        click(editor, 100, 100);
+        expect(state.selected).toEqual([1]);
     });
 });
 

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { create } from "zustand";
 import type { FieldModeDrawing } from "@/field/editor/fieldEditor";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -14,9 +15,11 @@ import {
 export const HIDE_MARCHERS_TAP_MS = 250;
 
 /**
- * Seeing a shape on its own (#558): while a shape is edited, holding H hides the marchers, the
- * shape's spots and its walks, and letting go shows them again; a tap keeps them hidden until the
- * next tap. Only the drawing changes, so it is no edit, undo step or selection change. Not saved:
+ * Seeing a shape on its own (#558): while a shape is edited, holding H hides the marchers the shape
+ * moves (its spots, their walks, dots, labels, paths and collision marks), and letting go shows
+ * them again; a tap keeps them hidden until the next tap. Only that shape's marchers hide, so its
+ * line can be edited without its dots following along: everyone else stays as shape editing draws
+ * them (faded), and the start ghosts still show where the shape's marchers were. Only the drawing changes, so it is no edit, undo step or selection change. Not saved:
  * every shape session starts with the marchers shown (owner).
  */
 export interface MarchersHiddenState {
@@ -132,9 +135,9 @@ export const isShapeInSight = (s: ShapeSight): boolean =>
     !(s.open && s.away);
 
 /**
- * Whether the field hides the marchers, the shape's spots and its walks now: held or latched, with
- * a shape in sight ({@link isShapeInSight}). With none (out of sight, or nothing edited) they show,
- * whatever the key.
+ * Whether the field hides the shape's marchers, spots and walks now: held or latched, with a shape
+ * in sight ({@link isShapeInSight}). With none (out of sight, or nothing edited) they show, whatever
+ * the key.
  */
 export function useMarchersHidden(): boolean {
     const hiding = useMarchersHiddenStore(isHiding);
@@ -149,7 +152,7 @@ export function useMarchersHidden(): boolean {
     return hiding && inSight;
 }
 
-/** {@link useMarchersHidden} outside React (the field editor, the field test API) */
+/** {@link useMarchersHidden} outside React (the field test API, the kept marks' tooltip) */
 export const marchersHiddenNow = (): boolean =>
     isHiding(useMarchersHiddenStore.getState()) &&
     isShapeInSight({
@@ -162,16 +165,42 @@ export const marchersHiddenNow = (): boolean =>
     });
 
 /**
- * The shape's drawing on its own: its outline, handles and guides, without its spots (on a guide,
- * left empty or labelled), its marchers' start ghosts or their walks
+ * The marchers the edited shape moves, whose dots follow it as it's edited: the open shape's, or
+ * else the selected placed shape's members. Ids for {@link useShapeMarchersHidden}.
+ */
+export function shapeMarcherIds(
+    open: readonly { readonly id: number }[] | null,
+    placed: readonly { readonly marcherId: number }[] | null,
+): ReadonlySet<number> {
+    if (open) return new Set(open.map((m) => m.id));
+    return new Set((placed ?? []).map((m) => m.marcherId));
+}
+
+/**
+ * The marchers the field hides now (#558): the edited shape's ({@link shapeMarcherIds}) while
+ * {@link useMarchersHidden}, else null. Everyone else is drawn as usual.
+ */
+export function useShapeMarchersHidden(): ReadonlySet<number> | null {
+    const hidden = useMarchersHidden();
+    const open = useShapeToolStore((s) => s.tool?.marchers ?? null);
+    const placed = useBoxSelectionStore(
+        (s) => s.selected?.recipe.members ?? null,
+    );
+    return useMemo(
+        () => (hidden ? shapeMarcherIds(open, placed) : null),
+        [hidden, open, placed],
+    );
+}
+
+/**
+ * The shape's drawing on its own: its outline, handles, guides and its marchers' start ghosts
+ * (where they were), without its spots (on a guide, left empty or labelled) or their walks
  */
 export function shapeAlone(drawing: FieldModeDrawing): FieldModeDrawing {
     return {
         ...drawing,
         spots: [],
         walks: [],
-        rings: undefined,
-        ringIds: undefined,
         gaps: undefined,
         labels: undefined,
         onGuides: undefined,
