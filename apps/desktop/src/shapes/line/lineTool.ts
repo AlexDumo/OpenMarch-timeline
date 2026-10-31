@@ -42,6 +42,8 @@ import {
     lineFrame,
     lineInFrame,
     lineInterval,
+    measuredAxis,
+    measuredBlock,
     lineOutline,
     lineSegments,
     lineStretches,
@@ -56,8 +58,11 @@ import {
     withGroups,
     withInterval,
     withLineFrame,
+    withMeasured,
+    settleLine,
     withSpacing,
     type LineAnchor,
+    type LineMeasured,
     type LineGroup,
     type LineParams,
 } from "./lineGeometry";
@@ -192,7 +197,11 @@ const INTERVAL: ToolParam<LineParams> = {
     blends: true,
     default: 2,
     range: { min: 0.5 },
-    glyph: "↔",
+    // What it measures: none for the true distance, the box's marks for ↔ and ↕
+    glyph: (p) => {
+        const axis = measuredAxis(p);
+        return axis === "x" ? "↔" : axis === "y" ? "↕" : null;
+    },
     shown: (_p, n) => n > 1,
     // Off the half steps in Fit, or uneven around corners, it shows as about so much; a filled
     // line's follows its outline (#529)
@@ -480,6 +489,76 @@ const SPACING: ToolChoice<LineParams> = {
     shown: (p) => !isFilled(p),
 };
 
+/** Why a line can't be measured along `axis`, or undefined when it can */
+function measuredReason(p: LineParams, axis: LineMeasured): string | undefined {
+    const block = measuredBlock(p, axis);
+    if (block === null) return undefined;
+    if (axis === "x")
+        return block === "none"
+            ? tolgee.t(
+                  "shapes.kinds.line.measured.noX",
+                  "The line doesn't go side to side",
+              )
+            : block === "square"
+              ? tolgee.t(
+                    "shapes.kinds.line.measured.squareX",
+                    "Part of the line runs straight front to back",
+                )
+              : tolgee.t(
+                    "shapes.kinds.line.measured.turnsX",
+                    "The line turns back side to side",
+                );
+    return block === "none"
+        ? tolgee.t(
+              "shapes.kinds.line.measured.noY",
+              "The line doesn't go front to back",
+          )
+        : block === "square"
+          ? tolgee.t(
+                "shapes.kinds.line.measured.squareY",
+                "Part of the line runs straight side to side",
+            )
+          : tolgee.t(
+                "shapes.kinds.line.measured.turnsY",
+                "The line turns back front to back",
+            );
+}
+
+/**
+ * The Measured menu (spec #522): what the interval measures. The true distance between neighbors
+ * is the default; ↔ puts neighbors the interval apart side to side, x exactly on the step grid,
+ * and ↕ front to back. Each is greyed out, with why, on a line that doesn't go one way that way.
+ * It shows what the intervals measure now: a line whose part turned square to its setting is laid
+ * out by the true distance until it goes one way again, and shows that.
+ */
+const MEASURED: ToolChoice<LineParams> = {
+    key: "measured",
+    get label() {
+        return tolgee.t("shapes.kinds.line.measured.label", "Measured");
+    },
+    options: (p) => [
+        {
+            value: "true",
+            label: tolgee.t("shapes.kinds.line.measured.true", "True distance"),
+        },
+        {
+            value: "x",
+            label: tolgee.t("shapes.kinds.line.measured.x", "↔ Side to side"),
+            disabled: measuredReason(p, "x"),
+        },
+        {
+            value: "y",
+            label: tolgee.t("shapes.kinds.line.measured.y", "↕ Front to back"),
+            disabled: measuredReason(p, "y"),
+        },
+    ],
+    current: (p) => measuredAxis(p) ?? "true",
+    pick: (p, n, value, env) =>
+        withMeasured(p, n, value === "x" || value === "y" ? value : null, env),
+    // A closed line always turns back, so it's measured by the true distance (#529)
+    shown: (p) => !isClosed(p),
+};
+
 /**
  * The corners switch (#524): every corner holds a marcher, or the intervals run around the
  * corners. Only on a line with a corner, where corners can hold marchers (`cornerGaps`).
@@ -591,7 +670,7 @@ function pointsKind(p: LineParams): "corner" | "smooth" | "mixed" {
 export const lineTool: ToolKind<LineParams> = {
     shape: lineShape,
     params: [INTERVAL],
-    choices: [ENDS, SPACING, CORNERS, POINTS],
+    choices: [ENDS, SPACING, MEASURED, CORNERS, POINTS],
     groups: GROUPS,
     ordered: true,
     readable: isLineParams,
@@ -673,6 +752,7 @@ export const lineTool: ToolKind<LineParams> = {
     move: (base, _n, delta, env) => moveLine(base, delta, env),
     frameOf: (params) => lineFrame(params),
     withFrame: (params, _n, frame) => withLineFrame(params, frame),
+    settle: settleLine,
     fromFrame: lineInFrame,
     closed: lineClosed,
 };

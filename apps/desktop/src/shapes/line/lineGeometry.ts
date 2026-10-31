@@ -73,6 +73,12 @@ export type LineSpacing =
           readonly anchor: LineAnchor;
       };
 
+/**
+ * What an interval measures (spec #522, "Measured"): `x` (↔) is how far neighbors are apart side
+ * to side, `y` (↕) front to back. Absent is the true distance, straight across.
+ */
+export type LineMeasured = "x" | "y";
+
 export interface LineParams {
     /** In order from the first marcher's end; two or more */
     readonly points: readonly LinePoint[];
@@ -92,6 +98,8 @@ export interface LineParams {
      * line itself) when absent. Only on a closed line.
      */
     readonly distribution?: Distribution;
+    /** The true distance when absent (#527) */
+    readonly measured?: LineMeasured;
 }
 
 /** Whether `p` joins its last point to its first */
@@ -133,14 +141,15 @@ const KEYS = new Set([
     "spacing",
     "corners",
     "distribution",
+    "measured",
     "pivot",
 ]);
 
 /**
  * Whether `params` is a line this version can lay out exactly as it was saved. Anything a newer
- * build adds (Measured, say) is refused, so the recipe shows as plain positions instead of being
- * misread and rewritten on the first edit (ADR 0006, decision 5). Each later ticket widens this as
- * it adds the layout.
+ * build adds is refused, so the recipe shows as plain positions instead of being misread and
+ * rewritten on the first edit (ADR 0006, decision 5). Each later ticket widens this as it adds
+ * the layout.
  */
 export function isLineParams(params: unknown): params is LineParams {
     if (typeof params !== "object" || params === null) return false;
@@ -148,6 +157,8 @@ export function isLineParams(params: unknown): params is LineParams {
     const p = params as Partial<LineParams>;
     if (p.closed !== undefined && typeof p.closed !== "boolean") return false;
     if (p.corners !== undefined && typeof p.corners !== "boolean") return false;
+    if (p.measured !== undefined && p.measured !== "x" && p.measured !== "y")
+        return false;
     if (!Array.isArray(p.points) || p.points.length < (p.closed ? 3 : 2))
         return false;
     // A closed line's fill (#529): one this version fills, and never on an open line
@@ -397,14 +408,185 @@ export function lineGaps(p: LineParams, n: number): number[] | null {
     return [...gaps, Math.max(first.interval, last.interval)];
 }
 
+const coord = (q: XY, axis: LineMeasured) => (axis === "x" ? q.x : q.y);
+
+/**
+ * How the drawn line moves along `axis`, step by step from its first point: each straight segment
+ * one step, each curve sampled finely (`line` false)
+ */
+function axisSteps(
+    p: LineParams,
+    axis: LineMeasured,
+): { readonly d: number; readonly line: boolean }[] {
+    return lineSegments(p).flatMap(
+        (segment): { d: number; line: boolean }[] => {
+            if (segment.type === "line")
+                return [
+                    {
+                        d: coord(segment.b, axis) - coord(segment.a, axis),
+                        line: true,
+                    },
+                ];
+            const path = makePath([segment]);
+            const points = path.polyline(path.length / 32);
+            return points.slice(1).map((q, i) => ({
+                d: coord(q, axis) - coord(points[i]!, axis),
+                line: false,
+            }));
+        },
+    );
+}
+
+/**
+ * Why the line can't be measured along `axis` (↔ or ↕), or null when it can: over its whole drawn
+ * path (curves sampled) it has to keep going one way that way, so each spot has one place on it.
+ * `none`: it doesn't go that way at all; `turns`: it turns back; `square`: a straight part of it
+ * stands still that way (runs square to it).
+ */
+export function measuredBlock(
+    p: LineParams,
+    axis: LineMeasured,
+): "none" | "turns" | "square" | null {
+    const steps = axisSteps(p, axis);
+    if (steps.every(({ d }) => Math.abs(d) < 1e-9)) return "none";
+    if (p.closed) return "turns";
+    const on = steps.some(({ d }) => d > 1e-9);
+    const back = steps.some(({ d }) => d < -1e-9);
+    if (on && back) return "turns";
+    return steps.some(({ d, line }) => line && Math.abs(d) < 1e-9)
+        ? "square"
+        : null;
+}
+
+/**
+ * What the line's intervals measure as it's laid out: its Measured setting, or the true distance
+ * (null) when that's absent or the line no longer goes one way along it (a part turned square)
+ */
+export function measuredAxis(p: LineParams): LineMeasured | null {
+    return p.measured && measuredBlock(p, p.measured) === null
+        ? p.measured
+        : null;
+}
+
+/** How far apart `a` and `b` are along `axis` */
+const extent = (a: XY, b: XY, axis: LineMeasured) =>
+    Math.abs(coord(b, axis) - coord(a, axis));
+
+/** The line's length along `axis`, end to end */
+const axisLength = (p: LineParams, axis: LineMeasured) =>
+    extent(p.points[0]!, p.points.at(-1)!, axis);
+
+/** Each stretch's length along `axis` ({@link lineStretches}) */
+const stretchExtents = (p: LineParams, axis: LineMeasured): number[] =>
+    lineStretches(p).map(({ from, to }) =>
+        extent(p.points[from]!, p.points[to]!, axis),
+    );
+
+/**
+ * Where each of `gaps` puts a neighbor, from `from`: within a run of equal gaps `start + i * gap`
+ * rather than a running sum, so a spot on the grid isn't pushed off it by rounding
+ */
+function offsetsOf(gaps: readonly number[], from: number): number[] {
+    const out = [from];
+    let start = from;
+    let gap = NaN;
+    let i = 0;
+    for (const g of gaps) {
+        if (g !== gap) {
+            start = out.at(-1)!;
+            gap = g;
+            i = 0;
+        }
+        out.push(start + ++i * g);
+    }
+    return out;
+}
+
+/**
+ * The spot on `segments` (a line going one way along `axis`) where that coordinate is `c`,
+ * exactly: on the segment that reaches it, or past an end along the end segment. Tagged with its
+ * distance along them from `s0`.
+ */
+function atCoord(
+    segments: readonly Segment[],
+    axis: LineMeasured,
+    c: number,
+    s0 = 0,
+): Slot {
+    let s = s0;
+    for (let i = 0; i < segments.length; i++) {
+        const path = makePath([segments[i]!]);
+        const a = path.at(0);
+        const b = path.at(path.length);
+        const ca = coord(a, axis);
+        const cb = coord(b, axis);
+        // Past this segment's far end: on to the next
+        if (i < segments.length - 1 && (cb - c) * (cb - ca) < 0) {
+            s += path.length;
+            continue;
+        }
+        if (segments[i]!.type === "line") {
+            const t = (c - ca) / (cb - ca);
+            return { ...lerp(a, b, t), [axis]: c, s: s + path.length * t };
+        }
+        // Along a curve, found on it; past its ends along its end tangents
+        const way = Math.sign(cb - ca);
+        const off = (at: number) => (coord(path.at(at), axis) - c) * way;
+        const span = Math.max(path.length, 1e-9);
+        let lo = 0;
+        let hi = path.length;
+        for (let k = 0; k < 60 && off(lo) > 0; k++) lo -= span;
+        for (let k = 0; k < 60 && off(hi) < 0; k++) hi += span;
+        for (let k = 0; k < 60; k++) {
+            const mid = (lo + hi) / 2;
+            if (off(mid) < 0) lo = mid;
+            else hi = mid;
+        }
+        const at = (lo + hi) / 2;
+        return { ...path.at(at), [axis]: c, s: s + at };
+    }
+    const first = segments[0] ? makePath([segments[0]]).at(0) : { x: 0, y: 0 };
+    return { ...first, s: s0 };
+}
+
+/**
+ * Neighbors `gaps` apart along `axis` (scaled to fit, in order), from one end of `segments` to
+ * the other, tagged from `from`: a stretch between corners of a measured line
+ */
+function axisRunSpots(
+    segments: readonly Segment[],
+    axis: LineMeasured,
+    gaps: readonly number[],
+    from: number,
+): Slot[] {
+    const path = makePath(segments);
+    const first = coord(path.at(0), axis);
+    const last = coord(path.at(path.length), axis);
+    const total = Math.abs(last - first);
+    const way = Math.sign(last - first);
+    const whole = sum(gaps);
+    let k = whole > 0 ? total / whole : 0;
+    // A stretch as long as its run takes its gaps as they are, so each lands on the grid
+    if (Math.abs(k - 1) < 1e-9) k = 1;
+    const offsets = offsetsOf(
+        gaps.map((gap) => gap * k),
+        0,
+    );
+    // The last on the end exactly
+    offsets[gaps.length] = total;
+    return offsets.map((o) => atCoord(segments, axis, first + way * o, from));
+}
+
 /**
  * The interval between neighbors, in field units: the typed one, or in Fit the one the drawn
- * line works out to
+ * line works out to, measured as the line measures it
  */
 export function lineInterval(p: LineParams, n: number): number {
     const typed = typedInterval(p);
     if (typed !== null) return typed;
     if (n <= 1) return 0;
+    const axis = measuredAxis(p);
+    if (axis) return axisLength(p, axis) / (n - 1);
     const gaps = gapCount(p, n);
     // Along a curve, the straight distance between neighbors (#525)
     return smooth(p) ? evenChord(linePath(p), gaps) : linePath(p).length / gaps;
@@ -415,9 +597,10 @@ export function lineInterval(p: LineParams, n: number): number {
  * holds a marcher (#524): a whole number each, at least one. With one interval for everyone (or in
  * Fit) they're in proportion to the stretches' lengths; with groups (#526) each corner takes the
  * seam between gaps nearest it along the run, so a stretch that is a whole run of the groups' gaps
- * holds exactly those. Null when the corners don't hold marchers: the switch is off, there's no
- * corner, the run is laid on the path, or there are fewer gaps than stretches. A closed line's
- * stretches have n gaps between them, round from its first corner (#529).
+ * holds exactly those. Measured ↔ or ↕ (#527), a stretch's length is how far it goes that way.
+ * Null when the corners don't hold marchers: the switch is off, there's no corner, the run is laid
+ * on the path, or there are fewer gaps than stretches. A closed line's stretches have n gaps
+ * between them, round from its first corner (#529).
  */
 export function cornerGaps(p: LineParams, n: number): number[] | null {
     if (p.corners === false || p.spacing.mode === "path") return null;
@@ -425,7 +608,10 @@ export function cornerGaps(p: LineParams, n: number): number[] | null {
         ? p.points.some((q) => q.tension === 0)
         : lineStretches(p).length > 1;
     if (!corner) return null;
-    const lengths = stretchPaths(p).map((path) => path.length);
+    const axis = measuredAxis(p);
+    const lengths = axis
+        ? stretchExtents(p, axis)
+        : stretchPaths(p).map((path) => path.length);
     const gaps = gapCount(p, n);
     const total = sum(lengths);
     if (gaps < lengths.length || !(total > 0)) return null;
@@ -512,17 +698,26 @@ export function intervalRange(
 ): { readonly min: number; readonly max: number } | null {
     const gaps = p.spacing.mode === "fit" ? cornerGaps(p, n) : null;
     if (!gaps) return null;
-    const each = stretchPaths(p).map((path, i) => evenChord(path, gaps[i]!));
+    const axis = measuredAxis(p);
+    const each = axis
+        ? stretchExtents(p, axis).map((l, i) => l / gaps[i]!)
+        : stretchPaths(p).map((path, i) => evenChord(path, gaps[i]!));
     return { min: Math.min(...each), max: Math.max(...each) };
 }
 
 /**
  * In Keep interval with every corner holding a marcher, whether a stretch isn't as long as its run
- * of gaps, straight across (a whole number of intervals): a corner dragged with `fine` (#524)
+ * of gaps, straight across (a whole number of intervals): a corner dragged with `fine` (#524).
+ * Measured ↔ or ↕, as long that way.
  */
 export function cornerOffInterval(p: LineParams, n: number): boolean {
     const runs = p.spacing.mode === "fit" ? null : cornerRuns(p, n);
     if (!runs) return false;
+    const axis = measuredAxis(p);
+    if (axis)
+        return stretchExtents(p, axis).some(
+            (l, i) => Math.abs(l - sum(runs[i]!)) > 1e-6 * Math.max(l, 1),
+        );
     return stretchPaths(p).some(
         (path, i) => Math.abs(chordScale(path, runs[i]!) - 1) > 1e-6,
     );
@@ -533,16 +728,26 @@ export function cornerOffInterval(p: LineParams, n: number): boolean {
  * holding its run of gaps straight across, then the last point. In Keep interval a stretch is as
  * long as its run, so the gaps are as typed; a corner `fine` left off its interval scales its
  * stretches' gaps to fit (even gaps, with one interval) instead of running past the corner and
- * stacking marchers on it. A closed line's start at its first corner and end back on it (#529).
+ * stacking marchers on it. Measured ↔ or ↕ (#527), each stretch holds its gaps that way. A closed
+ * line's start at its first corner and end back on it (#529).
  */
 function cornerSpots(p: LineParams, runs: readonly number[][]): Slot[] {
     const spots: Slot[] = [];
+    const axis = measuredAxis(p);
     const segments = lineSegments(p);
-    const from = lineStretches(p)[0]!.from;
+    const stretches = lineStretches(p);
     const whole = makePath(segments).length;
-    let s = sum(segments.slice(0, from).map((g) => makePath([g]).length));
+    let s = sum(
+        segments.slice(0, stretches[0]!.from).map((g) => makePath([g]).length),
+    );
     stretchPaths(p).forEach((path, i) => {
-        spots.push(...runSpots(path, runs[i]!, s).slice(0, -1));
+        const { from, to } = stretches[i]!;
+        spots.push(
+            ...(axis
+                ? axisRunSpots(segments.slice(from, to), axis, runs[i]!, s)
+                : runSpots(path, runs[i]!, s)
+            ).slice(0, -1),
+        );
         s += path.length;
     });
     if (isClosed(p))
@@ -552,14 +757,20 @@ function cornerSpots(p: LineParams, runs: readonly number[][]): Slot[] {
     return spots;
 }
 
-/** The `n` spots along the line, tagged with their distance along it */
-export function lineSpots(p: LineParams, n: number): Slot[] {
+/**
+ * The `n` spots along the line, tagged with their distance along it. Measured ↔ or ↕ (#527),
+ * neighbors are their gaps apart that way, exactly; with `stepPx`, a centered run starts a whole
+ * number of half steps from the line's start that way, so it stays on the grid with it.
+ */
+export function lineSpots(p: LineParams, n: number, stepPx?: number): Slot[] {
     if (n <= 0) return [];
     const path = linePath(p);
     const at = (s: number): Slot => ({ ...path.at(s), s });
     const corners = cornerRuns(p, n);
     if (corners) return cornerSpots(p, corners);
     const closed = isClosed(p);
+    const axis = measuredAxis(p);
+    if (axis) return measuredSpots(p, n, axis, stepPx);
     const gaps = lineGaps(p, n);
     if (gaps === null) {
         if (n === 1) return [at(closed ? 0 : path.length / 2)];
@@ -577,6 +788,41 @@ export function lineSpots(p: LineParams, n: number): Slot[] {
     // Keep interval is sized to its run, which sits on it whole; on the path it sits at its anchor
     const anchor = p.spacing.mode === "path" ? p.spacing.anchor : "center";
     return anchoredSpots(p, gaps, anchor);
+}
+
+/** {@link lineSpots} on a line measured along `axis`, its corners holding no marchers */
+function measuredSpots(
+    p: LineParams,
+    n: number,
+    axis: LineMeasured,
+    stepPx: number | undefined,
+): Slot[] {
+    const segments = lineSegments(p);
+    const first = coord(p.points[0]!, axis);
+    const total = axisLength(p, axis);
+    const way = Math.sign(coord(p.points.at(-1)!, axis) - first);
+    const at = (c: number) => atCoord(segments, axis, first + way * c);
+    const gaps = lineGaps(p, n);
+    if (gaps === null) {
+        if (n === 1) return [at(total / 2)];
+        return Array.from({ length: n }, (_, i) =>
+            // The last spot is exactly on the end
+            i === n - 1 ? at(total) : at((total * i) / (n - 1)),
+        );
+    }
+    const run = sum(gaps);
+    // Keep interval is sized to its run, which sits on it whole; on the path it sits at its anchor
+    const anchor = p.spacing.mode === "path" ? p.spacing.anchor : "center";
+    let from =
+        anchor === "start"
+            ? 0
+            : anchor === "end"
+              ? total - run
+              : (total - run) / 2;
+    // A centered run starts on a half step from the start
+    if (stepPx && anchor === "center")
+        from = Math.round(from / (stepPx / 2)) * (stepPx / 2);
+    return offsetsOf(gaps, from).map(at);
 }
 
 const reversed = (segment: Segment): Segment =>
@@ -773,7 +1019,29 @@ export function drawLine(
     const a = landPoint(from, env);
     const b = endAt(a, to, env);
     if (length(sub(b, a)) < halfStep(env) - 1e-9) return undefined;
-    return { points: [a, b].map(withTension(tension)), spacing: FIT };
+    const line: LineParams = {
+        points: [a, b].map(withTension(tension)),
+        spacing: FIT,
+    };
+    return tension === 0 && yardToYard(a, b, env)
+        ? { ...line, measured: "x" }
+        : line;
+}
+
+/**
+ * Whether a line from `a` to `b` runs diagonally from one yard line to another (spec #522): such
+ * a line starts measured side to side (↔), the common diagonal needing no setting
+ */
+function yardToYard(a: XY, b: XY, env: ToolEnv): boolean {
+    const yards = env.fieldLines?.x ?? [];
+    const onYard = (x: number) =>
+        yards.some((line) => Math.abs(line - x) < 1e-6);
+    return (
+        Math.abs(a.x - b.x) > 1e-6 &&
+        Math.abs(a.y - b.y) > 1e-6 &&
+        onYard(a.x) &&
+        onYard(b.x)
+    );
 }
 
 /**
@@ -855,7 +1123,9 @@ function directionFrom(other: XY, to: XY, env: ToolEnv): XY | null {
  * interval an end turns about its neighbor, its segment's length (so its intervals) kept, and a
  * corner holding a marcher between straight segments lands where each of them is a whole number
  * of intervals long (#524); `fine` frees it. A smooth point, or a corner beside a curve, goes
- * where it's dragged. An end dropped on the other end closes the line (#529).
+ * where it's dragged. Measured ↔ or ↕ in Keep interval (#527), an end keeps how far it is that
+ * way and takes the pointer's place the other way, and a corner lands a whole run of gaps that way
+ * from the point before it. An end dropped on the other end closes the line (#529).
  */
 export function dragPoint(
     base: LineParams,
@@ -881,8 +1151,13 @@ export function dragPoint(
     }
     const other = base.points[index === 0 ? (closed ? last : 1) : index - 1]!;
     const keep = base.spacing.mode === "keep" && n > 1;
+    const axis = keep ? measuredAxis(base) : null;
     let point: XY | null;
-    if (keep && end) {
+    if (axis && end) {
+        point = measuredEnd(base.points[index]!, other, to, axis, env);
+    } else if (axis && env.snap && !end && straightCorner(base, n, index)) {
+        point = cornerOnAxis(base, n, index, to, axis, env);
+    } else if (keep && end) {
         const u = directionFrom(other, to, env);
         if (!u) return base;
         const was = length(sub(base.points[index]!, other));
@@ -900,6 +1175,69 @@ export function dragPoint(
         i === index ? { ...q, x: point.x, y: point.y } : q,
     );
     return { ...base, points };
+}
+
+/** The other axis */
+const across = (axis: LineMeasured): LineMeasured => (axis === "x" ? "y" : "x");
+
+/** The point `along` that way on `axis` and `side` the other way */
+const pointOn = (axis: LineMeasured, along: number, side: number): XY =>
+    axis === "x" ? { x: along, y: side } : { x: side, y: along };
+
+/**
+ * Where an end of a line measured along `axis` goes, dragged to `to` in Keep interval: where it is
+ * that way, so its run keeps its length, and where the pointer lands the other way; with
+ * constrain, level with `other` or at 45° from it, whichever is nearer
+ */
+function measuredEnd(
+    was: XY,
+    other: XY,
+    to: XY,
+    axis: LineMeasured,
+    env: ToolEnv,
+): XY {
+    const side = across(axis);
+    let c = coord(landPoint(to, env), side);
+    if (env.constrain) {
+        const reach = extent(was, other, axis);
+        const o = coord(other, side);
+        c = [o, o - reach, o + reach].reduce((best, v) =>
+            Math.abs(v - coord(to, side)) < Math.abs(best - coord(to, side))
+                ? v
+                : best,
+        );
+    }
+    return pointOn(axis, coord(was, axis), c);
+}
+
+/**
+ * Where corner `index` of a line measured along `axis` can stand in Keep interval: a whole run of
+ * the gaps its two stretches hold from the point before it that way, at the seam nearest `to`, and
+ * where the pointer lands the other way
+ */
+function cornerOnAxis(
+    p: LineParams,
+    n: number,
+    index: number,
+    to: XY,
+    axis: LineMeasured,
+    env: ToolEnv,
+): XY {
+    const runs = cornerRuns(p, n)!;
+    const r = lineStretches(p).findIndex((stretch) => stretch.to === index);
+    const both = [...runs[r]!, ...runs[r + 1]!];
+    const a = p.points[index - 1]!;
+    const way = Math.sign(coord(p.points[index + 1]!, axis) - coord(a, axis));
+    const seams = offsetsOf(both, 0).slice(1, -1);
+    const want = (coord(to, axis) - coord(a, axis)) * way;
+    const best = seams.reduce((b, o) =>
+        Math.abs(o - want) < Math.abs(b - want) ? o : b,
+    );
+    return pointOn(
+        axis,
+        coord(a, axis) + way * best,
+        coord(landPoint(to, env), across(axis)),
+    );
 }
 
 /**
@@ -1010,7 +1348,7 @@ export function withInterval(
     p: LineParams,
     n: number,
     interval: number,
-    env: Pick<ToolEnv, "pivot" | "anchor">,
+    env: SizeEnv,
 ): LineParams {
     return withGroups(p, n, [{ interval }], env);
 }
@@ -1019,18 +1357,21 @@ export function withInterval(
  * The line spaced by `groups` (#526), sized to them from its pivot (or `env.anchor`): in Keep
  * interval as long as their gaps add up to, and with every corner holding a marcher each stretch
  * as long as its run of the gaps ({@link cornerRuns}), its direction kept (#524). A line on the
- * path keeps its drawn length and takes the groups.
+ * path keeps its drawn length and takes the groups. Measured ↔ or ↕ (#527), the lengths are that
+ * way, and when snapping its start then slides along it onto the grid that way, so every spot
+ * lands on it.
  */
 export function withGroups(
     p: LineParams,
     n: number,
     groups: readonly LineGroup[],
-    env: Pick<ToolEnv, "pivot" | "anchor">,
+    env: SizeEnv,
 ): LineParams {
     if (p.spacing.mode === "path" && !isClosed(p))
         return { ...p, spacing: { ...p.spacing, groups } };
     const kept: LineParams = { ...p, spacing: { mode: "keep", groups } };
     if (n <= 1) return kept;
+    const axis = measuredAxis(kept);
     const runs = cornerRuns(kept, n);
     const gaps = lineGaps(kept, n)!;
     const size = sum(gaps);
@@ -1040,22 +1381,66 @@ export function withGroups(
         return smooth(p)
             ? scaled(kept, runScale(kept, gaps), env)
             : scaled(kept, size / linePath(p).length, env);
-    if (runs) return pinned(kept, onIntervals(kept, runs), env);
+    if (runs)
+        return onGrid(pinned(kept, onIntervals(kept, runs), env), axis, env);
+    if (axis)
+        return onGrid(
+            scaled(kept, size / axisLength(kept, axis), env),
+            axis,
+            env,
+        );
     if (p.points.length === 2)
         return scaled(kept, size / linePath(p).length, env);
     return scaled(kept, runScale(kept, gaps), env);
 }
 
+/** What sizing a line in Keep interval needs: where it grows from, and the grid */
+export type SizeEnv = Pick<ToolEnv, "pivot" | "anchor"> &
+    Partial<Pick<ToolEnv, "snap" | "gridSnap">>;
+
+/**
+ * A line measured along `axis` slid along itself (first point to last) until its start is on the
+ * grid that way, when snapping: exactly, so its spots are too
+ */
+function onGrid(
+    p: LineParams,
+    axis: LineMeasured | null,
+    env: SizeEnv,
+): LineParams {
+    if (!axis || !env.snap || !env.gridSnap) return p;
+    const first = p.points[0]!;
+    const off = coord(env.gridSnap(first), axis) - coord(first, axis);
+    const d = sub(p.points.at(-1)!, first);
+    const k = off / coord(d, axis);
+    if (off === 0 || !Number.isFinite(k)) return p;
+    return {
+        ...p,
+        points: p.points.map((q) => ({
+            ...q,
+            ...pointOn(
+                axis,
+                coord(q, axis) + off,
+                coord(q, across(axis)) + coord(d, across(axis)) * k,
+            ),
+        })),
+    };
+}
+
 /**
  * Each stretch (corner to corner) scaled about its start so its run of gaps reaches it end to end
- * straight across, in its own direction and shape, from the first point
+ * straight across (measured ↔ or ↕, that way), in its own direction and shape, from the first
+ * point
  */
 function onIntervals(p: LineParams, runs: readonly number[][]): LineParams {
     const points = [...p.points];
     const paths = stretchPaths(p);
+    const axis = measuredAxis(p);
+    const extents = axis ? stretchExtents(p, axis) : [];
     let at: XY = p.points[0]!;
     lineStretches(p).forEach(({ from, to }, r) => {
-        const fit = chordScale(paths[r]!, runs[r]!);
+        const fit = axis
+            ? extents[r]! / sum(runs[r]!)
+            : chordScale(paths[r]!, runs[r]!);
         const k = fit > 0 ? 1 / fit : 1;
         const start = p.points[from]!;
         for (let i = from + 1; i <= to; i++) {
@@ -1151,6 +1536,42 @@ export function withSpacing(
     return { ...p, spacing: { mode: "path", groups, anchor: mode } };
 }
 
+/**
+ * The line measured along `axis` (↔, ↕) or by the true distance (null), from the Measured menu
+ * (#527). The typed interval (or groups) stays the same, now measured the new way, so Keep interval
+ * resizes; Fit leaves the line as it is. A line that doesn't go one way along `axis` can't take it.
+ */
+export function withMeasured(
+    p: LineParams,
+    n: number,
+    axis: LineMeasured | null,
+    env: SizeEnv,
+): LineParams {
+    if ((p.measured ?? null) === axis) return p;
+    if (axis && measuredBlock(p, axis) !== null) return p;
+    const { measured: _was, ...rest } = p;
+    const next: LineParams = axis ? { ...rest, measured: axis } : rest;
+    return keptToRun(next, n, env);
+}
+
+/**
+ * A line in Keep interval sized to its run again (its groups as they are), after a change that can
+ * leave it longer or shorter than its marchers need; anything else as it is
+ */
+export function keptToRun(p: LineParams, n: number, env: SizeEnv): LineParams {
+    return p.spacing.mode === "keep" && n > 1
+        ? withGroups(p, n, p.spacing.groups, env)
+        : p;
+}
+
+/**
+ * After a turn or flip (the kind's `settle`): a line in Keep interval measured ↔ or ↕ covers a
+ * different distance that way once turned, so it's sized to its run again (#527)
+ */
+export function settleLine(p: LineParams, n: number, env: SizeEnv): LineParams {
+    return measuredAxis(p) ? keptToRun(p, n, env) : p;
+}
+
 /** The line moved by `delta`, its first point on the half-step grid when snapping */
 export function moveLine(
     base: LineParams,
@@ -1202,7 +1623,7 @@ export function onLine(
     if (isClosed(p)) outline.push(outline[0]!);
     if (outline.slice(1).some((b, i) => near(outline[i]!, b))) return true;
     // A run on the path can reach past the drawn line's ends
-    const spots = lineSpots(p, n);
+    const spots = lineSpots(p, n, env?.stepPx);
     return spots.length > 1 && near(spots[0]!, spots.at(-1)!);
 }
 

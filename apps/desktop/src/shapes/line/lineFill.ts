@@ -94,8 +94,11 @@ export function fillSpots(p: LineParams, n: number): Slot[] {
 }
 
 /** The line's spots however it's filled */
-export const lineFillSpots = (p: LineParams, n: number): Slot[] =>
-    isFilled(p) ? fillSpots(p, n) : lineSpots(p, n);
+export const lineFillSpots = (
+    p: LineParams,
+    n: number,
+    stepPx?: number,
+): Slot[] => (isFilled(p) ? fillSpots(p, n) : lineSpots(p, n, stepPx));
 
 /**
  * A filled line with its spacing set to `interval` (field units): the outline grown or shrunk

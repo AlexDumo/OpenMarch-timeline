@@ -37,7 +37,7 @@ export const lineShape: ShapeKind<LineParams> = {
         const outline = lineOutline(p);
         return [isClosed(p) ? [...outline, outline[0]!] : outline];
     },
-    generate: (p, n) => lineFillSpots(p, n),
+    generate: (p, n, ctx) => lineFillSpots(p, n, ctx.stepPx),
     /** From the first point along the line, the way the spots go */
     orderKey: (p, point) => [alongLine(p, point)],
 };

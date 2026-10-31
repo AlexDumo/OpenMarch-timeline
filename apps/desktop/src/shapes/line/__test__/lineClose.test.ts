@@ -610,3 +610,14 @@ describe("a placed closed line", () => {
         ).toBeUndefined();
     });
 });
+
+describe("a closed line and Measured (#527)", () => {
+    it("is laid out by the true distance and hides the Measured menu", () => {
+        const t = square();
+        const measured = edit(t, { ...paramsOf(t), measured: "x" }, ctx);
+        expect(isLineParams(measured.params)).toBe(true);
+        expectNear(spotsOf(measured), spotsOf(t));
+        expect(shown(t, "measured")).toBe(false);
+        expect(shown(clicking(8, SQUARE), "measured")).toBe(true);
+    });
+});
