@@ -824,10 +824,6 @@ test("change: Curve in the Shapes tab draws a line bending through smooth points
     await click(c);
     await click(c);
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
-    await expect(page.getByTestId("shape-choice-points")).toHaveAttribute(
-        "data-value",
-        "smooth",
-    );
 
     // Three points, no tension handle until one is selected (#557); the outline follows the curve
     const drawn = (await shapeOverlay(page))!;
@@ -868,11 +864,20 @@ test("change: Curve in the Shapes tab draws a line bending through smooth points
     const t3 = (await drawnMarchers(page)).find((m) => m.id === 3)!.screen;
     await page.mouse.click(t3.x, t3.y);
     await expect(page.getByTestId("placed-box-readout")).toBeVisible();
-    await expect(page.getByTestId("shape-choice-points")).toHaveAttribute(
-        "data-value",
-        "smooth",
-    );
-    expect((await shapeOverlay(page))!.handles).toHaveLength(3);
+    const reopened = (await shapeOverlay(page))!;
+    expect(reopened.handles).toHaveLength(3);
+    // Still no marcher on its smooth top, and nothing saved changed it
+    expect(
+        reopened.spots.every(
+            (s) => Math.hypot(s.x - top.x, s.y - top.y) > 0.25 * S,
+        ),
+    ).toBe(true);
+    const [again] = await recipes(show);
+    expect(
+        JSON.parse(again.params).points.map(
+            (p: { tension: number }) => p.tension,
+        ),
+    ).toEqual([1, 1, 1]);
 });
 
 test("change: a click on a Curve's point selects it and shows its tangent bar, whose ends set its tension live; a double-click makes it a corner", async ({
@@ -904,8 +909,6 @@ test("change: a click on a Curve's point selects it and shows its tangent bar, w
     await click(c);
     const readout = page.getByTestId("shape-tool-readout");
     await expect(readout).toBeVisible();
-    const points = page.getByTestId("shape-choice-points");
-    await expect(points).toHaveAttribute("data-value", "smooth");
     const drawn = (await shapeOverlay(page))!;
     expect(drawn.selectedHandles).toEqual([]);
     expect(drawn.barHandles).toEqual([]);
@@ -952,12 +955,15 @@ test("change: a click on a Curve's point selects it and shows its tangent bar, w
     const topAt = await toScreen(page, top);
     await page.waitForTimeout(600);
     await page.mouse.dblclick(topAt.x, topAt.y);
-    await expect(points).toHaveAttribute("data-value", "mixed");
+    // A selected corner has no bar, and the line turns sharply at it
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.barHandles.length)
+        .toBe(0);
     const corner = (await shapeOverlay(page))!;
     expect(corner.selectedHandles).toHaveLength(1);
-    expect(corner.barHandles).toEqual([]);
+    expect(corner.outline).not.toEqual(rounder.outline);
+    // Undo makes it smooth again, as round as it was
     await page.keyboard.press("ControlOrMeta+z");
-    await expect(points).toHaveAttribute("data-value", "smooth");
     await expect
         .poll(async () => (await shapeOverlay(page))!.outline)
         .toEqual(rounder.outline);
@@ -973,7 +979,6 @@ test("change: a click on a Curve's point selects it and shows its tangent bar, w
     expect(moved.selectedHandles).toEqual([]);
     expect(moved.barHandles).toEqual([]);
     expect(moved.outline).not.toEqual(rounder.outline);
-    await expect(points).toHaveAttribute("data-value", "smooth");
 
     // Placed, the tension dragged is saved
     await page.keyboard.press("Enter");
