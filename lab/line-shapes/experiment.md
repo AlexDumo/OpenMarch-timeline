@@ -18,6 +18,7 @@ questions:
   - Did reaching Line and Curve from the favorites ring and the command bar (try `line 2*3+4*2`) work?
   - Was clicking a point to see its curve, and double-clicking to switch corner and smooth, easier to read than before?
   - Did holding or tapping H to hide the marchers do what you wanted? Do the menu pictures help?
+  - Did the right-click menu on points and segments have what you needed? Did Marcher on this point and Open here do what you expected?
   - Anything that felt wrong, slow or confusing?
 ---
 
@@ -46,6 +47,10 @@ a way to place the selected marchers.
 - Click a point to select it. A smooth point shows a bar through it; drag
   either end to change its curve. Double-click a point to switch it between a
   corner and smooth.
+- Right-click a point for Corner / Smooth, Roundness, Marcher on this point
+  (As the line, Always a marcher, Keep spacing even), Delete point, and Close
+  line or Open here. Right-click a segment for Add point here and Straight /
+  Curved.
 - Hold H (or press the eye in the editor bar) to hide the shape's own marchers
   while you edit it; the other marchers and where they started stay. Tap H to
   keep them hidden until the next tap.
