@@ -405,11 +405,11 @@ describe("RotateGesture", () => {
         gesture.move(round(37));
         expect(gesture.angle()).toBe(30);
         expect(heading(last(h.show)) - home).toBeCloseTo(30);
-        // Fine on re-anchors on the 30° drawn, then a quarter speed: 30 + 44 / 4
-        gesture.move(round(37, { shift: true }));
-        expect(gesture.angle()).toBe(30);
+        // Fine: the pointer's own angle, in whole degrees
+        gesture.move(round(37.4, { shift: true }));
+        expect(gesture.angle()).toBe(37);
         gesture.move(round(81, { shift: true }));
-        expect(gesture.angle()).toBe(41);
+        expect(gesture.angle()).toBe(81);
     });
 
     it("isn't freed by Alt or constrain: 15° steps until the Snap toggle", () => {
@@ -427,36 +427,51 @@ describe("RotateGesture", () => {
         expect(gesture.angle()).toBe(270);
     });
 
-    it("turns at a quarter speed with fine, in whole degrees, from the angle drawn (user story 51)", () => {
+    it("turns at full speed with fine, in whole degrees (user story 51)", () => {
         const h = host();
         const gesture = new RotateGesture(rot, FORMATION, h, BOX, keysAt(rot));
         gesture.move(round(37));
         expect(gesture.angle()).toBe(30);
-        // Pressing Shift where the pointer is: no jump, from the snapped 30°
+        // Fine doesn't slow the pointer: 40° more turns 40°
         gesture.move(round(37, { shift: true }));
-        expect(gesture.angle()).toBe(30);
+        expect(gesture.angle()).toBe(37);
         gesture.move(round(77, { shift: true }));
-        expect(gesture.angle()).toBe(40);
+        expect(gesture.angle()).toBe(77);
+        // Fine from the press turns at full speed too
+        const fromPress = new RotateGesture(
+            rot,
+            FORMATION,
+            host(),
+            BOX,
+            keysAt(rot),
+        );
+        fromPress.move(round(53.2, { shift: true }));
+        expect(fromPress.angle()).toBe(53);
     });
 
     describe("keys pressed or released mid-drag, with no pointer move", () => {
         let gesture: RotateGesture | undefined;
         afterEach(() => gesture?.cancel());
 
-        it("re-anchors when fine turns on from a keydown, and goes on at a quarter speed", () => {
+        it("re-runs the angle at the last pointer when fine turns on or off, with no jump", () => {
             const h = host();
             gesture = new RotateGesture(rot, FORMATION, h, BOX, keysAt(rot));
             gesture.move(round(37));
             expect(gesture.angle()).toBe(30);
             key("keydown", { key: "Shift", shiftKey: true });
-            // Re-run at the last pointer: still the 30° drawn, no jump to 37°
-            expect(gesture.angle()).toBe(30);
+            // Re-run at the last pointer: whole degrees where the pointer is
+            expect(gesture.angle()).toBe(37);
             expect(h.show).toHaveBeenCalledTimes(2);
-            gesture.move(round(77, { shift: true }));
-            expect(gesture.angle()).toBe(40);
             // Shift up: back to 15° steps where the pointer is
             key("keyup", { key: "Shift" });
-            expect(gesture.angle()).toBe(45);
+            expect(gesture.angle()).toBe(30);
+            // And down again: the same 37°, nothing carried over
+            key("keydown", { key: "Shift", shiftKey: true });
+            expect(gesture.angle()).toBe(37);
+            gesture.move(round(77, { shift: true }));
+            expect(gesture.angle()).toBe(77);
+            key("keyup", { key: "Shift" });
+            expect(gesture.angle()).toBe(75);
         });
     });
 

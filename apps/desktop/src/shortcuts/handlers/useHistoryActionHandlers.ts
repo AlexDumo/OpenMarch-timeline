@@ -59,8 +59,9 @@ export function useHistoryActionHandlers() {
     });
 
     // Undo and redo presses run through upstream's shared queue (historyQueue), in order, each on
-    // the stack the previous one left. Its touch gestures and toast Undo are meant to use it too;
-    // the fork's toast Undo buttons and title bar buttons still call the action directly.
+    // the stack the previous one left. Placed-shape saves (commitBox) run in it too, so an undo
+    // waits for them. Its touch gestures and toast Undo are meant to use it too; the fork's toast
+    // Undo buttons and title bar buttons still call the action directly.
     useEffect(
         () =>
             setHistoryPerformer((direction) =>

@@ -20,6 +20,7 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { LABEL_SIZE_SCALE, useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useIsPreviewMode } from "@/stores/PreviewModeStore";
+import { onScreenToggles } from "@/stores/TouchModifierStore";
 import {
     allItemsQueryOptions,
     allMarcherRowsQueryOptions,
@@ -88,6 +89,7 @@ import { dropMarchersOnTimeline } from "@/field/fieldDrop";
 import { FieldMarchers } from "./fieldMarchers";
 import { FieldItems } from "./fieldItems";
 import FieldOverlay from "./FieldOverlay";
+import TouchModifierButtons from "@/components/canvas/touch/TouchModifierButtons";
 import FieldContextMenu, { useFieldMenu } from "./FieldContextMenu";
 import { attachFieldPointerInput } from "./fieldPointerInput";
 import { cameraBounds, useFieldViewStore } from "./fieldView";
@@ -458,6 +460,8 @@ function ThreeFieldView() {
                 },
                 {
                     isMac: isMacPlatform(),
+                    // The touch pill's Fine, Equal, From center and Add
+                    onScreen: onScreenToggles,
                     // #197: snapping, the Snap toggle and Lock X/Y, read as they are on each
                     // move; off, the Snap toggle frees a rotate handle too
                     ...settingsMoveOptions(
@@ -720,6 +724,8 @@ function ThreeFieldView() {
                 {fieldProperties && (
                     <ShapeEditor stepPx={fieldProperties.pixelsPerStep} />
                 )}
+                {/* Fine, Equal, From center, Add and Snap for a tablet: touch layout only */}
+                {!preview && <TouchModifierButtons marchers={marchers} />}
                 <FavoritesRing />
                 {/* A command asking its parameters docks here, over the field's top (#354) */}
                 <DockedCommandBar />

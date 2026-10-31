@@ -116,6 +116,52 @@ describe("startGestureKeys", () => {
         expect(gesture.roles().fine).toBe(true);
     });
 
+    it("never blocks an on-screen toggle with the press rule: that's only for keys", () => {
+        gesture = startGestureKeys({
+            context: "field",
+            press: held({ shift: true }),
+            usedByPress: ["Shift"],
+            onScreen: () => new Set(["fine"]),
+            track: false,
+        });
+        expect(gesture.roles().fine).toBe(true);
+    });
+
+    it("calls back when an on-screen toggle changes the roles mid-drag, until disposed", () => {
+        let on = new Set<"fine">();
+        const listeners = new Set<() => void>();
+        const toggle = (next: Set<"fine">) => {
+            on = next;
+            for (const changed of listeners) changed();
+        };
+        const onRolesChange = vi.fn();
+        gesture = startGestureKeys({
+            context: "shape",
+            press: NO_KEYS,
+            onScreen: () => on,
+            onScreenChange: (changed) => {
+                listeners.add(changed);
+                return () => listeners.delete(changed);
+            },
+            onRolesChange,
+            track: false,
+        });
+        toggle(new Set(["fine"]));
+        expect(onRolesChange).toHaveBeenLastCalledWith({
+            fine: true,
+            constrain: false,
+            fromCenter: false,
+        });
+        // A change that leaves the roles as they were calls nothing
+        toggle(new Set(["fine"]));
+        expect(onRolesChange).toHaveBeenCalledTimes(1);
+
+        gesture.dispose();
+        expect(listeners.size).toBe(0);
+        toggle(new Set());
+        expect(onRolesChange).toHaveBeenCalledTimes(1);
+    });
+
     it("stops following the keyboard once disposed", () => {
         const onRolesChange = vi.fn();
         startGestureKeys({

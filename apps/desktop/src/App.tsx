@@ -86,24 +86,11 @@ import {
     type InspectorChoices,
 } from "./utilities/inspectorLayout";
 import InspectorDock from "@/components/layout/InspectorDock";
+import WindowTooSmallNotice from "@/components/layout/WindowTooSmallNotice";
+import { useWindowSize } from "./hooks/useWindowSize";
 
 // The field's own chunk, so the launch page doesn't load three.js
 const ThreeField = lazy(() => import("@/field/three/ThreeField"));
-
-/** The window's size, kept current. */
-function useWindowSize() {
-    const read = () => ({
-        width: window.innerWidth,
-        height: window.innerHeight,
-    });
-    const [size, setSize] = useState(read);
-    useEffect(() => {
-        const onResize = () => setSize(read());
-        window.addEventListener("resize", onResize);
-        return () => window.removeEventListener("resize", onResize);
-    }, []);
-    return size;
-}
 
 export const queryClient = new QueryClient({
     defaultOptions: {
@@ -368,6 +355,7 @@ function App() {
                     <ShortcutsDialog />
                     <MusicXmlChecksDialog />
                     <LongPressGuard />
+                    <WindowTooSmallNotice size={windowSize} />
                     {/* Always show LaunchPage when no file is selected, regardless of database state */}
                     {!databaseIsReady ? (
                         <SelectedAudioFileProvider>

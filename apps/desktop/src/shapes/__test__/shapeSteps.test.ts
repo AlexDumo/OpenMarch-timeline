@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { boxTool } from "../box/boxTool";
 import { boxBlock, filesOf, ranksOf, type BoxParams } from "../box/boxGeometry";
