@@ -1,11 +1,6 @@
 import { Fragment, useEffect, useId, type ReactNode } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import {
-    ArrowCounterClockwiseIcon,
-    CheckIcon,
-    TrashIcon,
-} from "@phosphor-icons/react";
-import { useTolgee } from "@tolgee/react";
+import { CheckIcon, TrashIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import {
     KEEP_MENU_EVENTS,
@@ -17,45 +12,41 @@ import {
 import type { ToolMenuItem, ToolMenuSection } from "../tool/toolKind";
 import { closeHandleMenu, useHandleMenuStore } from "../field/handleMenu";
 
-/**
- * A tick in front of the answer the shape has now; room for one in front of the others. Soft for
- * an answer the shape's setting gives, in the accent for one set over it (#568).
- */
+/** A tick in front of the answer the shape has now; room for one in front of the others */
 const Tick = ({ item }: { item: ToolMenuItem }) =>
     item.checked === undefined ? null : (
-        <span
-            aria-hidden="true"
-            data-tick={item.checked ? (item.source ?? "plain") : undefined}
-            className={clsx(
-                "inline-flex w-[14px] shrink-0",
-                item.source === "setting" && "text-text-subtitle opacity-60",
-                item.source === "override" && "text-accent",
-            )}
-        >
-            {item.checked && (
-                <CheckIcon
-                    size={14}
-                    weight={item.source === "override" ? "bold" : "regular"}
-                />
-            )}
+        <span aria-hidden="true" className="inline-flex w-[14px] shrink-0">
+            {item.checked && <CheckIcon size={14} />}
         </span>
     );
 
-const ICONS = {
-    trash: TrashIcon,
-    reset: ArrowCounterClockwiseIcon,
-} as const;
+const ICONS = { trash: TrashIcon } as const;
 
 /** Corner | Smooth side by side, as the app's segmented switches look (`SegmentedTextSwitch`) */
 const SEGMENTS_CLASS =
     "bg-fg-1 border-stroke mx-4 flex gap-2 rounded-full border p-2 shadow-inner";
 const SEGMENT_CLASS = clsx(
-    "text-text-subtitle flex flex-1 cursor-default items-center justify-center rounded-full border border-transparent px-12 py-2 text-[12px] outline-hidden select-none",
+    "text-text-subtitle flex flex-1 cursor-default items-center justify-center rounded-full border border-transparent px-12 py-2 text-[12px] whitespace-nowrap outline-hidden select-none",
     "transition-colors duration-150 ease-out",
     "data-[highlighted]:text-accent data-[highlighted]:ring-accent data-[highlighted]:ring-1",
     "data-[state=checked]:bg-fg-2 data-[state=checked]:text-text data-[state=checked]:border-accent",
     "data-[disabled]:opacity-50",
 );
+/**
+ * The answers greyed while the switch above follows the shape: the shape's answer marked softly,
+ * each still picked to set it (#568)
+ */
+const FOLLOWED_SEGMENTS_CLASS = clsx(
+    "opacity-60",
+    "[&>[data-state=checked]]:bg-transparent [&>[data-state=checked]]:text-text-subtitle [&>[data-state=checked]]:border-dashed [&>[data-state=checked]]:border-text-subtitle/60",
+);
+/** A switch drawn in a menu row, as the app's `Switch` looks, smaller */
+const TRACK_CLASS =
+    "border-stroke bg-fg-2 relative ml-auto inline-flex h-[18px] w-[30px] shrink-0 items-center rounded-full border transition-colors duration-150 ease-out";
+const THUMB_CLASS =
+    "bg-text/80 block size-[13px] translate-x-[2px] rounded-full transition-transform duration-100";
+/** A quiet line under a switch or an either/or */
+const NOTE_CLASS = "text-text-subtitle px-8 text-[11px]";
 
 /**
  * A shape handle's right-click menu (#569, look #568): a Line's point (its corner type as a
@@ -66,7 +57,6 @@ const SEGMENT_CLASS = clsx(
  * changing closes it (`useShapeFieldModes`).
  */
 export default function HandleMenu() {
-    const { t } = useTolgee();
     const menu = useHandleMenuStore((s) => s.menu);
     const labelId = useId();
     // The context-menu key and a Mac's Ctrl-click also fire the browser's own menu
@@ -93,22 +83,6 @@ export default function HandleMenu() {
                     </span>
                 )}
                 {item.label}
-                {item.checked && item.source === "setting" && item.note && (
-                    <span
-                        data-testid={`${testId}-note`}
-                        className="text-text-subtitle text-[11px]"
-                    >
-                        {item.note}
-                    </span>
-                )}
-                {item.checked && item.source === "override" && (
-                    <span
-                        data-testid={`${testId}-override`}
-                        className="bg-accent/15 text-accent rounded-4 ml-auto px-4 py-[1px] text-[10px] font-medium"
-                    >
-                        {t("shapes.menu.override", "Override")}
-                    </span>
-                )}
             </>
         );
         const className = clsx(
@@ -181,15 +155,105 @@ export default function HandleMenu() {
                     ))}
                 </DropdownMenu.RadioGroup>
                 {section.hint && (
+                    // Smaller than the section's name and tucked under its switch: it belongs to it
                     <p
                         id={hintId}
                         data-testid="shape-menu-hint"
-                        className="text-text-subtitle px-8 text-[11px]"
+                        className="text-text-subtitle -mt-2 mb-4 px-8 text-center text-[10px] opacity-80"
                     >
                         {section.hint}
                     </p>
                 )}
                 {others.map(entry)}
+            </>
+        );
+    };
+
+    /**
+     * Follow the shape's answer as a switch, what the shape does under it, then its answers side by
+     * side: greyed while following, though focusable and picked to set one over the shape's. Every
+     * pick keeps the menu open, so the change shows.
+     */
+    const follow = (section: ToolMenuSection, id: string): ReactNode => {
+        const toggle = section.items.find((i) => i.toggle);
+        const answers = section.items.filter(
+            (i) => !i.toggle && i.checked !== undefined,
+        );
+        const following = toggle?.checked === true;
+        const captionId = `${id}-caption`;
+        return (
+            <>
+                {toggle && (
+                    <DropdownMenu.CheckboxItem
+                        data-testid={`shape-menu-${toggle.value}`}
+                        checked={toggle.checked === true}
+                        disabled={toggle.disabled !== undefined}
+                        aria-describedby={
+                            section.caption ? captionId : undefined
+                        }
+                        onSelect={(event) => {
+                            event.preventDefault();
+                            menu.pick(toggle.value);
+                        }}
+                        className={clsx(TIMELINE_MENU_ITEM_CLASS, "group")}
+                    >
+                        {toggle.label}
+                        <span
+                            aria-hidden="true"
+                            className={clsx(
+                                TRACK_CLASS,
+                                "group-data-[state=checked]:bg-accent group-data-[state=checked]:border-accent",
+                            )}
+                        >
+                            <span
+                                className={clsx(
+                                    THUMB_CLASS,
+                                    "group-data-[state=checked]:translate-x-[13px] group-data-[state=checked]:bg-white",
+                                )}
+                            />
+                        </span>
+                    </DropdownMenu.CheckboxItem>
+                )}
+                {section.caption && (
+                    <p
+                        id={captionId}
+                        data-testid="shape-menu-caption"
+                        className={clsx(NOTE_CLASS, "-mt-4")}
+                    >
+                        {section.caption}
+                    </p>
+                )}
+                <DropdownMenu.RadioGroup
+                    aria-label={section.label}
+                    value={answers.find((i) => i.checked)?.value ?? ""}
+                    data-following={following || undefined}
+                    className={clsx(
+                        SEGMENTS_CLASS,
+                        "mt-2",
+                        following && FOLLOWED_SEGMENTS_CLASS,
+                    )}
+                >
+                    {answers.map((item) => (
+                        <DropdownMenu.RadioItem
+                            key={item.value}
+                            value={item.value}
+                            data-testid={`shape-menu-${item.value}`}
+                            disabled={item.disabled !== undefined}
+                            // Greyed, not off: a click sets it over the shape's
+                            {...(following && item.disabled === undefined
+                                ? { "aria-disabled": true }
+                                : {})}
+                            onSelect={(event) => {
+                                event.preventDefault();
+                                if (following || !item.checked)
+                                    menu.pick(item.value);
+                            }}
+                            className={SEGMENT_CLASS}
+                        >
+                            {item.label}
+                        </DropdownMenu.RadioItem>
+                    ))}
+                </DropdownMenu.RadioGroup>
             </>
         );
     };
@@ -229,7 +293,11 @@ export default function HandleMenu() {
                                 {i > 0 && (
                                     <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
                                 )}
-                                {section.look === "segmented" ? (
+                                {section.look === "follow" ? (
+                                    <div className="flex min-w-[232px] flex-col gap-4 pb-4">
+                                        {follow(section, `${labelId}-${i}`)}
+                                    </div>
+                                ) : section.look === "segmented" ? (
                                     <div className="flex flex-col gap-4">
                                         {section.label && (
                                             <DropdownMenu.Label

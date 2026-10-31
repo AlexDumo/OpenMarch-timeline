@@ -671,7 +671,6 @@ function marcherReason(p: LineParams): string | undefined {
 
 /** The point menu's answers to whether a marcher stands on the point (#569) */
 const MARCHER_VALUES = {
-    "marcher-line": undefined,
     "marcher-always": true,
     "marcher-even": false,
 } as const;
@@ -686,77 +685,79 @@ function lineGivesMarcher(p: LineParams, index: number): boolean {
     return holdsMarcher({ ...p, points }, index);
 }
 
+/** What the line does on a point, said as it is (following) or as it would be (overridden) */
+function lineCaption(gives: boolean, follows: boolean): string {
+    if (follows)
+        return gives
+            ? tolgee.t(
+                  "shapes.kinds.line.menu.linePuts",
+                  "Line puts a marcher here",
+              )
+            : tolgee.t(
+                  "shapes.kinds.line.menu.lineKeeps",
+                  "Line keeps spacing even here",
+              );
+    return gives
+        ? tolgee.t(
+              "shapes.kinds.line.menu.lineWouldPut",
+              "Line would put a marcher here",
+          )
+        : tolgee.t(
+              "shapes.kinds.line.menu.lineWouldKeep",
+              "Line would keep spacing even here",
+          );
+}
+
 /**
- * The point's marcher answers (#569, #568): Marcher here or Keep spacing even. With no answer of
- * its own the one the line's setting gives is ticked softly, "line setting"; picking either sets
- * an override, ticked strongly with a Remove override under it that hands the point back to the
- * line. Greyed out, with why, where the answer does nothing.
+ * Whether a marcher stands on the point (#569, look #568): Follow line's marchers, on while the
+ * point has no answer of its own, with what the line does under it; Marcher | Even spacing under
+ * that, greyed with the line's answer marked while following, the point's own answer when not.
+ * Where the answer does nothing the section is greyed out with why, but a stored answer can still
+ * be dropped by following again.
  */
 function marcherSection(p: LineParams, index: number): ToolMenuSection {
     const own = p.points[index]!.marcher;
+    const follows = own === undefined;
     const disabled = marcherReason(p);
+    const gives = lineGivesMarcher(p, index);
     // Where the answer counts for nothing, the line's setting isn't shown as one either
-    const now = own ?? (disabled ? undefined : lineGivesMarcher(p, index));
-    const source: ToolMenuItem["source"] =
-        own === undefined ? "setting" : "override";
+    const now = own ?? (disabled ? undefined : gives);
     const answer = (
-        value: "marcher-always" | "marcher-even",
+        value: keyof typeof MARCHER_VALUES,
         label: string,
-    ): ToolMenuItem => {
-        const checked = now === MARCHER_VALUES[value];
-        return {
-            value,
-            label,
-            checked,
-            ...(checked
-                ? {
-                      source,
-                      ...(source === "setting"
-                          ? {
-                                note: tolgee.t(
-                                    "shapes.kinds.line.menu.lineSetting",
-                                    "line setting",
-                                ),
-                            }
-                          : {}),
-                  }
-                : {}),
-            ...(disabled ? { disabled } : {}),
-        };
-    };
+    ): ToolMenuItem => ({
+        value,
+        label,
+        checked: now === MARCHER_VALUES[value],
+        ...(disabled ? { disabled } : {}),
+    });
     return {
         label: tolgee.t(
             "shapes.kinds.line.menu.marcher",
             "Marcher on this point",
         ),
+        look: "follow",
+        caption: disabled ?? lineCaption(gives, follows),
         items: [
+            {
+                value: "marcher-follow",
+                label: tolgee.t(
+                    "shapes.kinds.line.menu.marcherFollow",
+                    "Follow line's marchers",
+                ),
+                toggle: true,
+                checked: follows,
+                // Following again only drops what the point said
+                ...(disabled && follows ? { disabled } : {}),
+            },
             answer(
                 "marcher-always",
-                tolgee.t(
-                    "shapes.kinds.line.menu.marcherAlways",
-                    "Marcher here",
-                ),
+                tolgee.t("shapes.kinds.line.menu.marcherAlways", "Marcher"),
             ),
             answer(
                 "marcher-even",
-                tolgee.t(
-                    "shapes.kinds.line.menu.marcherEven",
-                    "Keep spacing even",
-                ),
+                tolgee.t("shapes.kinds.line.menu.marcherEven", "Even spacing"),
             ),
-            ...(own === undefined
-                ? []
-                : [
-                      {
-                          value: "marcher-line",
-                          label: tolgee.t(
-                              "shapes.kinds.line.menu.marcherLine",
-                              "Remove override",
-                          ),
-                          icon: "reset",
-                          ...(disabled ? { disabled } : {}),
-                      } as const,
-                  ]),
         ],
     };
 }
@@ -962,19 +963,34 @@ const MENU: ToolHandleMenu<LineParams> = {
                 return p.points[index]!.tension > 0
                     ? { params: p, selected: key }
                     : null;
-            case "marcher-line":
-            case "marcher-always":
-            case "marcher-even":
-                if (marcherReason(p)) return null;
+            // Following again drops the point's answer, even where it does nothing; switching it
+            // off sets the other answer than the line's, so the override is one click
+            case "marcher-follow": {
+                const follows = p.points[index]!.marcher === undefined;
+                if (follows && marcherReason(p)) return null;
                 return {
                     params: setPointMarcher(
                         p,
                         n,
                         index,
-                        MARCHER_VALUES[value],
+                        follows ? !lineGivesMarcher(p, index) : undefined,
                         env,
                     ),
                 };
+            }
+            // Picked while following, the line's own answer is set over it all the same
+            case "marcher-always":
+            case "marcher-even": {
+                if (marcherReason(p)) return null;
+                const next = setPointMarcher(
+                    p,
+                    n,
+                    index,
+                    MARCHER_VALUES[value],
+                    env,
+                );
+                return next === p ? null : { params: next };
+            }
             // The points after it move up one: nothing stays selected
             case "delete":
                 return {

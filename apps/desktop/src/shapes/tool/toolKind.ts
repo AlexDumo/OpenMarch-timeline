@@ -322,15 +322,12 @@ export interface ToolMenuItem {
      */
     readonly checked?: boolean;
     /**
-     * Where a ticked answer comes from (#568): `"setting"`, the shape's own setting gives it (the
-     * tick soft, with {@link note}); `"override"`, set on this handle over that setting (the tick
-     * strong, with an Override badge). Absent for a plain answer.
+     * An on/off switch rather than an answer, on when `checked`: a `"follow"` section's "Follow
+     * line's marchers" (#568)
      */
-    readonly source?: "setting" | "override";
-    /** A small word after the label: where a soft answer comes from ("line setting") */
-    readonly note?: string;
+    readonly toggle?: true;
     /** A picture in front of the label, for an entry that does something */
-    readonly icon?: "trash" | "reset";
+    readonly icon?: "trash";
     /** It removes something: the menu draws it red when highlighted */
     readonly destructive?: boolean;
     /** Why it can't be picked now, shown with it dimmed; absent when it can */
@@ -343,11 +340,17 @@ export interface ToolMenuSection {
     /**
      * `"segmented"`: its answers (entries with `checked`) are one either/or, side by side (Corner |
      * Smooth, #568), picked without closing the menu so the change shows; its other entries list
-     * under them (Roundness). A plain list when absent.
+     * under them (Roundness). `"follow"`: its {@link ToolMenuItem.toggle} entry is a switch to
+     * follow the shape's own answer, with {@link caption} under it, and its answers an either/or
+     * under that, greyed while the switch is on with the shape's answer marked; picking one, greyed
+     * or not, sets it over the shape's (a point's marcher, #568). Both stay open on a pick. A plain
+     * list when absent. The label of a `"follow"` section names its answers rather than showing.
      */
-    readonly look?: "segmented";
-    /** A quiet line under its entries: another way to do the same ("Double-click a point to swap") */
+    readonly look?: "segmented" | "follow";
+    /** A quiet line under its either/or: another way to do the same ("Double-click a point to swap") */
     readonly hint?: string;
+    /** A `"follow"` section's line under its switch: what the shape does, or why it can't be set */
+    readonly caption?: string;
     readonly items: readonly ToolMenuItem[];
 }
 
