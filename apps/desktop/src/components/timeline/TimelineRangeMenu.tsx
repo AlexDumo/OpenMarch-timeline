@@ -12,6 +12,7 @@ import { TooltipClassName } from "@openmarch/ui";
 import {
     CursorTextIcon,
     DiamondIcon,
+    EraserIcon,
     PauseIcon,
     FlagIcon,
     ArrowsMergeIcon,
@@ -356,6 +357,11 @@ export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
      */
     readonly holdFromPrevious?: TimelinePageCommandMenu;
     /**
+     * **Clear Page N** on a page box, and **Clear Page N, Pages N–M follow back** where a later
+     * page would (#573). Without it, the menu has no such entries.
+     */
+    readonly clearPage?: TimelineClearPageMenu;
+    /**
      * **Subset** on a page box (UI-9): a switch that shows whether the page is a subset, and
      * flips it. Without it, the menu has no such entry.
      */
@@ -377,6 +383,15 @@ export interface TimelinePageCommandMenu {
      */
     readonly reasonFor: (pageId: string | number) => string | null | undefined;
     readonly onSet: (pageId: string | number) => void;
+}
+
+/** The page box menu's **Clear Page N** entries (#573), by page id. */
+export interface TimelineClearPageMenu {
+    /** The entries' labels on the page, read when its menu opens; undefined for none (home) */
+    readonly labelsFor: (
+        pageId: string | number,
+    ) => { clear: string; followBack: string | null } | undefined;
+    readonly onClear: (pageId: string | number, followBack: boolean) => void;
 }
 
 /**
@@ -478,6 +493,7 @@ export function useTimelineRangeMenu({
                 menu?.onDeleteWithMoves !== undefined ||
                 menu?.setAsShown !== undefined ||
                 menu?.holdFromPrevious !== undefined ||
+                menu?.clearPage !== undefined ||
                 menu?.subset !== undefined ||
                 menu?.extraFor !== undefined) &&
             target.pageId !== undefined;
@@ -494,6 +510,10 @@ export function useTimelineRangeMenu({
     const holdReason =
         open && menu?.holdFromPrevious && open.target.pageId !== undefined
             ? menu.holdFromPrevious.reasonFor(open.target.pageId)
+            : undefined;
+    const clearLabels =
+        open && menu?.clearPage && open.target.pageId !== undefined
+            ? menu.clearPage.labelsFor(open.target.pageId)
             : undefined;
     const pageExtra =
         open && menu?.extraFor && open.target.pageId !== undefined
@@ -583,6 +603,41 @@ export function useTimelineRangeMenu({
                                         "Hold from previous page",
                                     )}
                                 </MenuItemWithReason>
+                                {clearLabels === undefined && (
+                                    <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                                )}
+                            </>
+                        )}
+                        {clearLabels !== undefined && (
+                            <>
+                                <DropdownMenu.Item
+                                    data-testid="timeline-range-menu-clear-page"
+                                    className={TIMELINE_MENU_ITEM_CLASS}
+                                    onSelect={() =>
+                                        menu?.clearPage?.onClear(
+                                            open.target.pageId!,
+                                            false,
+                                        )
+                                    }
+                                >
+                                    <EraserIcon size={14} />
+                                    {clearLabels.clear}
+                                </DropdownMenu.Item>
+                                {clearLabels.followBack !== null && (
+                                    <DropdownMenu.Item
+                                        data-testid="timeline-range-menu-clear-page-follow-back"
+                                        className={TIMELINE_MENU_ITEM_CLASS}
+                                        onSelect={() =>
+                                            menu?.clearPage?.onClear(
+                                                open.target.pageId!,
+                                                true,
+                                            )
+                                        }
+                                    >
+                                        <EraserIcon size={14} />
+                                        {clearLabels.followBack}
+                                    </DropdownMenu.Item>
+                                )}
                                 <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
                             </>
                         )}

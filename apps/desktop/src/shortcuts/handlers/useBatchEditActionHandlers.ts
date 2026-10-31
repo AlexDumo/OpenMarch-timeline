@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTolgee } from "@tolgee/react";
@@ -11,8 +12,20 @@ import {
     type NeighborPageDirection,
     type NeighborPageScope,
 } from "@/utilities/setMarchersToNeighborPage";
+import {
+    clearPageScopedLabel,
+    useClearPageLabels,
+    useClearPagePage,
+} from "@/timeline/timelineClearPage";
 import { useActionHandler } from "../useActionHandler";
 import { useEditorReadiness } from "./useEditorReadiness";
+
+/** Clear this page's partial result is a quiet message, not a warning (#573) */
+const clearPageNotify = {
+    success: (message: string) => toast.success(message),
+    error: (message: string) => toast.error(message),
+    note: (message: string) => toast.message(message),
+};
 
 /** "Set all or selected marchers to the previous or next page" (`setMarchersToNeighborPage`, P7.6). */
 export function useBatchEditActionHandlers() {
@@ -28,29 +41,32 @@ export function useBatchEditActionHandlers() {
     const enabled = ready && !!pages && pages.length > 0;
     const hasSelection = enabled && selectedMarchers.length > 0;
 
-    const run = (direction: NeighborPageDirection, scope: NeighborPageScope) =>
+    const run = (
+        direction: NeighborPageDirection,
+        scope: NeighborPageScope,
+        followBack = false,
+    ) =>
         void setMarchersToNeighborPage({
             direction,
             scope,
             selectedPage: selectedPage!,
             pages,
             selectedMarcherIds: selectedMarchers.map((m) => m.id),
+            followBack,
             performerIds: performers?.map((m) => m.id),
             writeTimeline: moveMarchersToNeighborPageAsync,
-            notify: toast,
+            notify: clearPageNotify,
             t: (key, params) => t(key, params),
         });
 
-    useActionHandler(
-        "setAllMarchersToPreviousPage",
-        () => run("previous", "all"),
-        { enabled },
-    );
-    useActionHandler(
-        "setSelectedMarchersToPreviousPage",
-        () => run("previous", "selected"),
-        { enabled: hasSelection },
-    );
+    useClearPageActionHandlers({
+        run: (scope, followBack) => run("previous", scope, followBack),
+        enabled,
+        hasSelection,
+        selectedPage,
+        selectedMarchers,
+        performers,
+    });
     useActionHandler("setAllMarchersToNextPage", () => run("next", "all"), {
         enabled,
     });
@@ -58,5 +74,72 @@ export function useBatchEditActionHandlers() {
         "setSelectedMarchersToNextPage",
         () => run("next", "selected"),
         { enabled: hasSelection },
+    );
+}
+
+/**
+ * Clear this page's four actions (#573): **Clear Page N** for all or the selected marchers, named
+ * for the selected page in the palette, and **Clear Page N, Pages N–M follow back**, on only when
+ * a later page would follow back (`useClearPageLabels`).
+ */
+function useClearPageActionHandlers({
+    run,
+    enabled,
+    hasSelection,
+    selectedPage,
+    selectedMarchers,
+    performers,
+}: {
+    run: (scope: NeighborPageScope, followBack: boolean) => void;
+    enabled: boolean;
+    hasSelection: boolean;
+    selectedPage: Parameters<typeof useClearPagePage>[0];
+    selectedMarchers: readonly { readonly id: number }[];
+    performers: readonly { readonly id: number }[] | undefined;
+}) {
+    const selectedIds = useMemo(
+        () => selectedMarchers.map((m) => m.id),
+        [selectedMarchers],
+    );
+    const performerIds = useMemo(
+        () => (performers ?? []).map((m) => m.id),
+        [performers],
+    );
+    const clearPage = useClearPagePage(selectedPage);
+    const all = useClearPageLabels(clearPage, performerIds);
+    const selected = useClearPageLabels(clearPage, selectedIds);
+    useActionHandler("setAllMarchersToPreviousPage", () => run("all", false), {
+        enabled,
+        label: all ? clearPageScopedLabel(all.clear, "all") : undefined,
+    });
+    useActionHandler(
+        "setSelectedMarchersToPreviousPage",
+        () => run("selected", false),
+        {
+            enabled: hasSelection,
+            label: selected
+                ? clearPageScopedLabel(selected.clear, "selected")
+                : undefined,
+        },
+    );
+    useActionHandler(
+        "setAllMarchersToPreviousPageAndFollowing",
+        () => run("all", true),
+        {
+            enabled: enabled && !!all?.followBack,
+            label: all?.followBack
+                ? clearPageScopedLabel(all.followBack, "all")
+                : undefined,
+        },
+    );
+    useActionHandler(
+        "setSelectedMarchersToPreviousPageAndFollowing",
+        () => run("selected", true),
+        {
+            enabled: hasSelection && !!selected?.followBack,
+            label: selected?.followBack
+                ? clearPageScopedLabel(selected.followBack, "selected")
+                : undefined,
+        },
     );
 }

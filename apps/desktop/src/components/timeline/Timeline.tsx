@@ -37,6 +37,7 @@ import type {
     TimelineAddMarchersMenu,
     TimelineSetAsShownMenu,
     TimelinePageCommandMenu,
+    TimelineClearPageMenu,
     TimelineMenuEntry,
     TimelineMenuTarget,
     TimelineMoveCommands,
@@ -274,6 +275,8 @@ export interface TimelineProps {
     readonly setAsShown?: TimelineSetAsShownMenu;
     /** **Hold from previous page** on a page box (holds, fork #472) */
     readonly holdFromPrevious?: TimelinePageCommandMenu;
+    /** **Clear Page N** on a page box (#573) */
+    readonly clearPage?: TimelineClearPageMenu;
     /** UI-19 Basic: the selected marchers' mid-page positions, spec beats */
     readonly basicPoints?: readonly TimelineBasicPoint[];
     /** UI-19 Basic: **Remove this count's position**, by its spec beat */
@@ -655,6 +658,7 @@ export function Timeline(props: TimelineProps) {
         onOpenRange,
         setAsShown,
         holdFromPrevious,
+        clearPage,
         pageMenuExtra,
     } = props;
     // A clip's stored spec range, else the view range mapped back (as the menu's Add does)
@@ -745,7 +749,8 @@ export function Timeline(props: TimelineProps) {
         onDeletePageWithMoves ||
         onSetPageSubset ||
         setAsShown ||
-        holdFromPrevious
+        holdFromPrevious ||
+        clearPage
     );
     const disabledReason = addSelectedMarchers?.disabledReason;
     const addMarchersMenu = useMemo<
@@ -761,6 +766,7 @@ export function Timeline(props: TimelineProps) {
                           : {}),
                       ...(setAsShown ? { setAsShown } : {}),
                       ...(holdFromPrevious ? { holdFromPrevious } : {}),
+                      ...(clearPage ? { clearPage } : {}),
                       ...(subsetMenu ? { subset: subsetMenu } : {}),
                       ...(pageExtra ? { extraFor: pageExtra } : {}),
                       onAdd: addMarchers,
@@ -774,6 +780,7 @@ export function Timeline(props: TimelineProps) {
             hasMarchersMenu,
             setAsShown,
             holdFromPrevious,
+            clearPage,
             subsetMenu,
             pageExtra,
         ],

@@ -1,7 +1,7 @@
 import { StartFlagPositionsButton } from "./StartFlagPositionsButton";
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTolgee } from "@tolgee/react";
 import {
     pageFlagMoveLimits,
@@ -14,6 +14,7 @@ import {
     movePageFlagMutationOptions,
     useAddPageFlag,
 } from "@/hooks/queries/usePageFlags";
+import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { updatePagesMutationOptions } from "@/hooks/queries/usePages";
 import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
 import { useTimingObjects } from "@/hooks";
@@ -92,6 +93,7 @@ import {
 import { usePageKeepChains } from "./PageKeepChain";
 import { setAsShownMenu } from "@/timeline/timelineSetAsShown";
 import { holdFromPreviousMenu } from "@/timeline/timelineHoldFromPrevious";
+import { clearPageMenu } from "@/timeline/timelineClearPage";
 import { describeMoveClips } from "./moveClipText";
 import { useMoveNotesStore } from "@/stores/MoveNotesStore";
 import { useClearLeftoverMoveSelection } from "./useMoveMemberSelection";
@@ -271,6 +273,17 @@ export default function TimelineModePanel() {
     const holdFromPrevious = useMemo(
         () => holdFromPreviousMenu(keepStates, selectedIdList, keepNameOf),
         [keepStates, selectedIdList, keepNameOf],
+    );
+    // #573: Clear Page N, for the selected marchers or every performer when none is selected
+    const { data: performers } = useQuery(allMarchersQueryOptions());
+    const clearPage = useMemo(
+        () =>
+            clearPageMenu({
+                pages,
+                selectedIds: selectedIdList,
+                performerIds: (performers ?? []).map((m) => m.id),
+            }),
+        [pages, selectedIdList, performers],
     );
     const { tracks: timelines, current: tracksCurrent } =
         useTimelineTracksState({
@@ -545,6 +558,7 @@ export default function TimelineModePanel() {
                     keepChains={keepChains}
                     setAsShown={setAsShown}
                     holdFromPrevious={holdFromPrevious}
+                    clearPage={clearPage}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={
                         basic ? undefined : commands.commitTimelineRange

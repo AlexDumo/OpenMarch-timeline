@@ -27,6 +27,14 @@ import {
     type NeighborPageDirection,
 } from "@/utilities/setMarchersToNeighborPage";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
+import { setAsShownOnPage } from "@/db-functions/timelineSetAsShown";
+import {
+    clearFollowingPages,
+    clearPageFollowingLabel,
+    clearPageLabel,
+    clearPageMenu,
+    clearPageScopedLabel,
+} from "../timelineClearPage";
 import type { PageBox } from "@/stores/TimelineSelectionStore";
 import { useBasicLocksStore } from "../basicLocks";
 import { moveMarchersAndOfferFollowUp } from "../timelineMoveThemToo";
@@ -159,6 +167,14 @@ const timelineCount = async (db: DbConnection) =>
     (await db.select().from(schema.timelines).all()).length;
 
 const fieldProperties = new FieldProperties(mockNCAAFieldProperties);
+
+/** English with the parameters filled in, as the labels' defaults read */
+const english = (
+    _key: string,
+    defaultValue: string,
+    params: Record<string, string> = {},
+) =>
+    defaultValue.replace(/\{(\w+)\}/g, (_, name: string) => params[name] ?? "");
 
 describeDbTests("sparse timeline writes: no-op writes write nothing", (it) => {
     it("align on an inherited page writes no row for a marcher it leaves still, so an upstream edit still carries it (owner bug via align, 07a §3)", async ({
@@ -599,6 +615,7 @@ describeDbTests(
             page: Page,
             direction: NeighborPageDirection,
             selected: number[],
+            followBack = false,
         ) => {
             const writeTimeline = vi.fn(
                 (request: TimelineNeighborPageRequest) =>
@@ -611,6 +628,7 @@ describeDbTests(
                 selectedPage: page,
                 pages,
                 selectedMarcherIds: selected,
+                followBack,
                 writeTimeline,
                 notify,
                 t,
@@ -661,7 +679,15 @@ describeDbTests(
             await move(db, page3, [{ marcherId: 1, x: 300, y: 300 }]);
             expect(await rowsOf(db, 1)).toHaveLength(2);
 
-            const { result } = await run(db, pages, pages[3]!, "previous", [1]);
+            // Page 4 follows back too, so the marcher has nothing after Page 2
+            const { result } = await run(
+                db,
+                pages,
+                pages[3]!,
+                "previous",
+                [1],
+                true,
+            );
             expect(result).toBe(1);
             expect(await rowsOf(db, 1)).toEqual([[page2.start, page2.end, 0]]);
             expect(at(1, page3.end)).toEqual([200, 200]);
@@ -669,6 +695,193 @@ describeDbTests(
             // An edit on page 2 now carries through page 3
             await move(db, page2, [{ marcherId: 1, x: 220, y: 240 }]);
             expect(at(1, page3.end)).toEqual([220, 240]);
+        });
+
+        it("#573's open question: a later page that takes the cleared page's spot follows back to the page before", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page2 = box(pages[2]!);
+            const page3 = box(pages[3]!);
+            const page4 = box(pages[4]!);
+            await move(db, page2, [{ marcherId: 1, x: 200, y: 200 }]);
+            await move(db, page3, [{ marcherId: 1, x: 300, y: 300 }]);
+            // Page 4 has no move of its own: it shows Page 3's spot
+            expect(at(1, page4.end)).toEqual([300, 300]);
+
+            await run(db, pages, pages[3]!, "previous", [1], true);
+
+            expect(at(1, page3.end)).toEqual([200, 200]);
+            expect(at(1, page4.end)).toEqual([200, 200]);
+            expect(await rowsOf(db, 1)).toEqual([[page2.start, page2.end, 0]]);
+        });
+
+        it("plain Clear Page N keeps the later page where it was, with a move of its own, in one undo step (#573)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page2 = box(pages[2]!);
+            const page3 = box(pages[3]!);
+            const page4 = box(pages[4]!);
+            await move(db, page2, [{ marcherId: 1, x: 200, y: 200 }]);
+            await move(db, page3, [{ marcherId: 1, x: 300, y: 300 }]);
+            const before = await snapshot(db);
+            const steps = async () =>
+                new Set((await undoRows(db)).map((r) => r.history_group)).size;
+            const history = await steps();
+
+            const { result, notify } = await run(
+                db,
+                pages,
+                pages[3]!,
+                "previous",
+                [1],
+            );
+
+            expect(result).toBe(1);
+            expect(notify.success).not.toHaveBeenCalled();
+            // Page 3 is Not set; Page 4 walks back to where it stood
+            expect(at(1, page3.end)).toEqual([200, 200]);
+            expect(at(1, page4.end)).toEqual([300, 300]);
+            expect(await rowsOf(db, 1)).toEqual([
+                [page2.start, page2.end, 0],
+                [page4.start, page4.end, 0],
+            ]);
+            expect(await steps()).toBe(history + 1);
+
+            const undo = await performUndo(db);
+            expect(undo.success, undo.error?.message).toBe(true);
+            await timelineResolverSettled();
+            expect(await snapshot(db)).toEqual(before);
+        });
+
+        it("the follow-back item shows only when a later page takes the page's spot, and names those pages (#573)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page2 = box(pages[2]!);
+            const page3 = box(pages[3]!);
+            const boxes = pages
+                .slice(1)
+                .map((p) => ({ ...box(p), name: p.name }));
+            const following = (marcherIds: number[]) =>
+                clearFollowingPages({
+                    resolver: resolver(),
+                    boxes,
+                    marcherIds,
+                    box: page3,
+                });
+            // Nothing of its own on Page 3: nothing to clear
+            expect(following([1])).toBeNull();
+
+            await move(db, page2, [{ marcherId: 1, x: 200, y: 200 }]);
+            await move(db, page3, [{ marcherId: 1, x: 300, y: 300 }]);
+            const later = pages.slice(4).map((p) => p.name);
+            expect(following([1, 2])).toEqual(later);
+            expect(
+                clearPageFollowingLabel(pages[3]!.name, later, english),
+            ).toBe(
+                later.length === 1
+                    ? `Clear Page ${pages[3]!.name}, Page ${later[0]} follows back`
+                    : `Clear Page ${pages[3]!.name}, Pages ${later[0]}–${later.at(-1)} follow back`,
+            );
+            expect(clearPageLabel(pages[3]!.name, english)).toBe(
+                `Clear Page ${pages[3]!.name}`,
+            );
+
+            // The next page Set: it doesn't follow, so only Clear Page 3 is offered
+            await move(db, box(pages[4]!), [{ marcherId: 1, x: 350, y: 300 }]);
+            expect(following([1])).toBeNull();
+        });
+
+        it("the page box menu's Clear Page N entries: the selection, or every performer with words that say so (#573)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            await move(db, box(pages[2]!), [{ marcherId: 1, x: 200, y: 200 }]);
+            await move(db, box(pages[3]!), [{ marcherId: 1, x: 300, y: 300 }]);
+            useTimelineSelectionStore.setState({
+                pageBoxes: pages
+                    .slice(1)
+                    .map((p) => ({ ...box(p), name: p.name })),
+            });
+            const page = pages[3]!;
+            const later = pages.slice(4).map((p) => p.name);
+            const run = vi.fn(() => Promise.resolve(1));
+
+            const selected = clearPageMenu({
+                pages,
+                selectedIds: [1],
+                performerIds: [1, 2, 3, 4],
+                run,
+            });
+            expect(selected.labelsFor(pages[0]!.id)).toBeUndefined();
+            expect(selected.labelsFor(page.id)).toEqual({
+                clear: clearPageLabel(page.name),
+                followBack: clearPageFollowingLabel(page.name, later),
+            });
+            selected.onClear(String(page.id), true);
+            expect(run).toHaveBeenCalledExactlyOnceWith({
+                page,
+                pages,
+                scope: "selected",
+                marcherIds: [1],
+                followBack: true,
+            });
+
+            const all = clearPageMenu({
+                pages,
+                selectedIds: [],
+                performerIds: [1, 2, 3, 4],
+                run,
+            });
+            expect(all.labelsFor(page.id)?.clear).toBe(
+                clearPageScopedLabel(clearPageLabel(page.name), "all"),
+            );
+            // Marcher 2 has nothing of its own on Page 3, so only Marcher 1 makes the item show
+            expect(all.labelsFor(page.id)?.followBack).toBe(
+                clearPageScopedLabel(
+                    clearPageFollowingLabel(page.name, later),
+                    "all",
+                ),
+            );
+            all.onClear(page.id, false);
+            expect(run).toHaveBeenLastCalledWith({
+                page,
+                pages,
+                scope: "all",
+                marcherIds: [1, 2, 3, 4],
+                followBack: false,
+            });
+        });
+
+        it("a page whose own move goes nowhere offers no follow-back item", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page3 = box(pages[3]!);
+            await setAsShownOnPage({
+                db,
+                pageBox: page3,
+                marcherIds: [1],
+            });
+            await timelineResolverSettled();
+            expect(await rowsOf(db, 1)).toEqual([[page3.start, page3.end, 0]]);
+            expect(
+                clearFollowingPages({
+                    resolver: resolver(),
+                    boxes: pages
+                        .slice(1)
+                        .map((p) => ({ ...box(p), name: p.name })),
+                    marcherIds: [1],
+                    box: page3,
+                }),
+            ).toBeNull();
         });
 
         it("set to previous clears an own move that already goes nowhere (a stay)", async ({
@@ -746,8 +959,15 @@ describeDbTests(
             ]);
             const target = at(1, page2.end);
             const midPage2 = at(1, page2.start + 3);
+            const page4 = box(pages[4]!);
+            const onPage4 = at(1, page4.end);
             await run(db, pages, pages[3]!, "previous", [1]);
-            expect(await rowsOf(db, 1)).toEqual([[page2.start, page2.end, 0]]);
+            // Page 4 keeps where it was, with a move of its own (#573)
+            expect(await rowsOf(db, 1)).toEqual([
+                [page2.start, page2.end, 0],
+                [page4.start, page4.end, 0],
+            ]);
+            expect(at(1, page4.end)).toEqual(onPage4);
             expect(at(1, page3.end)).toEqual(target);
             expect(at(1, page2.end)).toEqual(target);
             expect(at(1, page2.start + 3)).toEqual(midPage2);
