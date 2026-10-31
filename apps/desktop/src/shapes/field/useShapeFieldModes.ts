@@ -10,6 +10,7 @@ import {
     useBoxSelectionStore,
 } from "../placed/boxSelectionStore";
 import { LiveBoxMode, setActiveLiveBox } from "../placed/liveBoxMode";
+import { closeHandleMenu } from "./handleMenu";
 import {
     closeShapeTool,
     useShapeHidden,
@@ -66,6 +67,8 @@ export function useShapeFieldModes(
     useEffect(() => {
         // The pointer was over the last shape, if any; the next cursor check finds the new one
         resetShapePointer();
+        // A handle's menu is for the shape it was opened on (#569)
+        closeHandleMenu();
         editor.setMode(toolOpen ? (hidden ? null : shapeToolMode) : live);
     }, [editor, toolOpen, hidden, live]);
     useEffect(() => () => editor.setMode(null), [editor]);

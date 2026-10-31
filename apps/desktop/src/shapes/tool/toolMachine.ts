@@ -537,6 +537,37 @@ export function edit(
     return holdsSpots(next, state.params, ctx) ? next : reassign(next, ctx);
 }
 
+/**
+ * Entry `value` of handle `key`'s right-click menu picked (#569): an {@link edit} (one undo step
+ * when the shape changed), then the handle the kind selects after it, when it says
+ */
+export function pickMenu(
+    state: ToolState,
+    key: string,
+    value: string,
+    ctx: ShapeContext,
+    env: ToolEnv,
+): ToolState {
+    if (state.gesture || state.params === null) return state;
+    const out = state.kind.menu?.pick(
+        state.params,
+        state.spots,
+        key,
+        value,
+        env,
+    );
+    if (!out) return state;
+    const next = edit(state, out.params, ctx);
+    if (out.selected === undefined) return next;
+    const selected = selectionIn(
+        state.kind,
+        next.params,
+        state.spots,
+        out.selected,
+    );
+    return selected === (next.selected ?? null) ? next : { ...next, selected };
+}
+
 /** A number's drag starts: the shape follows {@link previewEdit} until {@link release} */
 export function beginEdit(state: ToolState): ToolState {
     if (state.gesture || state.params === null) return state;

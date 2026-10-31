@@ -425,6 +425,56 @@ describe("FieldEditor right-click menu (#315)", () => {
         expect(state.selected).toEqual([1]);
     });
 
+    it("opens the mode's own menu first, where it has one (a Line's point, #569)", () => {
+        const { editor, ports } = setup({ selected: [1] });
+        const openMenu = vi.fn(() => true);
+        editor.setMode({
+            ...fakeMode().mode,
+            blocksFieldMenu: true,
+            openMenu,
+        });
+        rightDown(editor, 300, 100);
+        rightUp(editor, 300, 100);
+        expect(openMenu).toHaveBeenCalledTimes(1);
+        expect(ports.openMenu).not.toHaveBeenCalled();
+    });
+
+    it("opens the field's menu where the mode has none of its own", () => {
+        const { editor, ports } = setup({ selected: [1] });
+        const openMenu = vi.fn(() => false);
+        editor.setMode({ ...fakeMode().mode, openMenu });
+        rightDown(editor, 300, 100);
+        rightUp(editor, 300, 100);
+        expect(openMenu).toHaveBeenCalledTimes(1);
+        expect(ports.openMenu).toHaveBeenCalledTimes(1);
+    });
+
+    it("opens only the mode's menu on a Mac's Ctrl-click, which still pans (#194, #569)", () => {
+        const { editor, ports } = setup({ isMac: true });
+        const openMenu = vi.fn(() => false);
+        editor.setMode({ ...fakeMode().mode, openMenu });
+        expect(
+            editor.pointerDown(at(100, 100, { ctrl: true, button: 0 })),
+        ).toBe(false);
+        editor.pointerUp(at(100, 100, { ctrl: true, button: 0 }));
+        expect(openMenu).toHaveBeenCalledTimes(1);
+        expect(ports.openMenu).not.toHaveBeenCalled();
+        // A Ctrl-drag panned: no menu
+        editor.pointerDown(at(100, 100, { ctrl: true, button: 0 }));
+        editor.pointerMove(at(160, 100, { ctrl: true, button: 0 }));
+        editor.pointerUp(at(160, 100, { ctrl: true, button: 0 }));
+        expect(openMenu).toHaveBeenCalledTimes(1);
+    });
+
+    it("opens the mode's menu on a long press, not the field's", () => {
+        const { editor, ports } = setup({ selected: [1] });
+        const openMenu = vi.fn(() => false);
+        editor.setMode({ ...fakeMode().mode, openMenu });
+        editor.longPress(at(300, 100));
+        expect(openMenu).toHaveBeenCalledTimes(1);
+        expect(ports.openMenu).not.toHaveBeenCalled();
+    });
+
     it("opens the menu for a selected placed box's marchers, keeping the selection", () => {
         const { editor, ports, state } = setup({ selected: [1, 2] });
         editor.setMode(fakeMode().mode);
