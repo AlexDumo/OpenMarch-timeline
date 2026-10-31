@@ -80,6 +80,18 @@ export interface ToolHandle {
     readonly cursor: string;
     /** A handle that adds a point (a Line's segment midpoint, #524), drawn smaller and round */
     readonly adds?: boolean;
+    /**
+     * A click selects it (a Line's point, #557): the host keeps which one is selected, draws it
+     * filled, and hands its key back to {@link ToolKind.handles}. A click elsewhere, or Escape,
+     * clears it.
+     */
+    readonly selects?: boolean;
+    /**
+     * A handle at one end of a bar through this point (a smooth point's tangent, #557), drawn
+     * round on the end of a line from here. Shown only while its point is selected, and it keeps
+     * the selection when it's clicked or dragged.
+     */
+    readonly bar?: XY;
 }
 
 /** A parameter's direction mark: ↔ across, ↕ deep */
@@ -374,12 +386,25 @@ export interface ToolKind<P> {
      * the circle)
      */
     readonly clickPoints?: ToolClickPoints<P>;
-    handles(params: P, n: number): readonly ToolHandle[];
+    /**
+     * The handles to draw and grab. `selected` is the key of the handle selected by a click (one
+     * with {@link ToolHandle.selects}), so a kind can show more around it (#557).
+     */
+    handles(
+        params: P,
+        n: number,
+        selected?: string | null,
+    ): readonly ToolHandle[];
     /**
      * What a click on handle `key` does, rather than nothing: a Line's midpoint handle splits its
      * segment (#524). Null or absent: a click does nothing.
      */
     clickHandle?(params: P, n: number, key: string): P | null;
+    /**
+     * What a double-click on handle `key` does: a Line's point switches between a corner and
+     * smooth (#557). Its first click has already done what a click does. Null or absent: nothing.
+     */
+    doubleClickHandle?(params: P, n: number, key: string): P | null;
     /** The params with handle `key` dragged to `to`, starting from `base` (the params at press) */
     dragHandle(base: P, n: number, key: string, to: XY, env: ToolEnv): P;
     /** The shape's outline on the field; the frame's four corners when absent */

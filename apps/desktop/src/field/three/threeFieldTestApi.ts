@@ -178,6 +178,11 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
         })),
         handles: drawing.handles.map(screen),
         addHandles: (drawing.addHandles ?? []).map(screen),
+        selectedHandles: (drawing.selectedHandles ?? []).map(screen),
+        barHandles: (drawing.barHandles ?? []).map((h) => ({
+            at: screen(h.at),
+            from: screen(h.from),
+        })),
         rings: (drawing.rings ?? []).map(copy),
         gaps: (drawing.gaps ?? []).map(copy),
         stage: drawing.stage ?? null,

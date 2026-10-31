@@ -1829,7 +1829,13 @@ function fakeMode({
         release: (p, click) =>
             calls.push(
                 `release ${p.field.x},${p.field.y} ${
-                    click ? (click.double ? "double" : "click") : "drag"
+                    click
+                        ? click.double
+                            ? click.ownFirst
+                                ? "double"
+                                : "double after the editor's click"
+                            : "click"
+                        : "drag"
                 }`,
             ),
         cancel: () => calls.push("cancel"),
@@ -1882,6 +1888,22 @@ describe("FieldEditor modes (#204)", () => {
             "release 101,100 double",
             // A double-click's second click starts no third
             "release 101,100 click",
+        ]);
+    });
+
+    it("tells the mode when a double-click's first click was the editor's, not its own", () => {
+        const { editor, state, clock } = setup();
+        let claiming = false;
+        const { mode, calls } = fakeMode({ claims: () => claiming });
+        editor.setMode(mode);
+        // The editor's click selects the marcher (which turns a placed box's mode on)
+        click(editor, 100, 100);
+        expect(state.selected).toEqual([1]);
+        claiming = true;
+        clock.now += DOUBLE_CLICK_MS - 1;
+        click(editor, 101, 100);
+        expect(calls.filter((c) => c.startsWith("release"))).toEqual([
+            "release 101,100 double after the editor's click",
         ]);
     });
 
