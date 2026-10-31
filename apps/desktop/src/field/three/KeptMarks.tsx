@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import {
-    marchersHiddenNow,
-    useMarchersHidden,
-} from "@/shapes/field/marchersHidden";
 import { useFrame, useThree } from "@react-three/fiber";
 import { TooltipClassName } from "@openmarch/ui";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -70,14 +66,11 @@ export function KeptMarksOverlay({
     marks: readonly TimelineKeptMark[];
     elements: RefObject<KeptMarkElements>;
 }) {
-    // Hidden with the marchers while a shape is seen on its own (#558), still placed
-    const hidden = useMarchersHidden();
     if (marks.length === 0) return null;
     return (
         <svg
             className="pointer-events-none absolute inset-0 h-full w-full"
             data-testid="field-kept-marks"
-            style={hidden ? { display: "none" } : undefined}
         >
             {marks.map((mark) => (
                 <g
@@ -227,8 +220,7 @@ export function useKeptMarkTooltip({
         }
         let over: TimelineKeptMark | null = null;
         const markUnder = (event: PointerEvent): TimelineKeptMark | null => {
-            // Hidden with the marchers while a shape is seen alone (#558)
-            if (event.buttons > 0 || marchersHiddenNow()) return null;
+            if (event.buttons > 0) return null;
             const view = useFieldViewStore.getState();
             const rect = element.getBoundingClientRect();
             const x = (event.clientX - rect.left - view.panX) / view.zoom;

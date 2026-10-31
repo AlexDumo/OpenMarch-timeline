@@ -141,8 +141,10 @@ export interface FieldTestApi {
      */
     shapeOverlay?(): FieldTestShapeOverlay | null;
     /**
-     * False while the marchers, their labels and paths, and the shape's spots
-     * and walks are hidden so a shape is seen on its own (#558, H)
+     * False while the edited shape's marchers (their dots, labels and paths,
+     * and the shape's spots and walks) are hidden so the shape is seen on its
+     * own (#558, H). Everyone else, and the start ghosts, still show: read
+     * who's hidden from each marcher's `opacity` (0)
      */
     marchersShown?(): boolean;
     /** The placed boxes outlined on the field (the View tab's Shapes setting). */

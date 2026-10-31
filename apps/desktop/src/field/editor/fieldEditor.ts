@@ -93,10 +93,10 @@ export type FieldEditorPorts = {
     /** False for a marcher that can't be selected or hit (one dimmed outside the isolated move). */
     canSelect(id: number): boolean;
     /**
-     * True while the marchers are hidden so a shape is seen on its own (#558): no press or hover
-     * lands on a performer, as if none were there. Items still show, and are still hit.
+     * True for a marcher hidden so the shape it's in is seen on its own (#558): no press or hover
+     * lands on it, as if it weren't there. Everyone else, and items, are hit as usual.
      */
-    marchersHidden?(): boolean;
+    marcherHidden?(id: number): boolean;
     /**
      * Called once at the start of every edit press, before the editor does
      * anything with it. The app may act on the press here (story 60: the
@@ -486,7 +486,9 @@ export class FieldEditor {
         this.areaPorts = {
             marchers: () => ports.marchers(),
             zoom: () => ports.zoom(),
-            canSelect: (id) => ports.canSelect(id),
+            // A marcher hidden with its shape (#558) is out of reach, as it is for a click
+            canSelect: (id) =>
+                ports.canSelect(id) && !ports.marcherHidden?.(id),
             isItem: (id) => ports.isItem?.(id) ?? false,
             selection: () => ports.selection.get(),
             select: (ids) => this.write(ids),
@@ -759,7 +761,10 @@ export class FieldEditor {
         this.write(
             ids.filter(
                 (id, i) =>
-                    !hidden?.[i] && !isItem(id) && this.ports.canSelect(id),
+                    !hidden?.[i] &&
+                    !isItem(id) &&
+                    this.ports.canSelect(id) &&
+                    !this.ports.marcherHidden?.(id),
             ),
         );
     }
@@ -1407,14 +1412,13 @@ export class FieldEditor {
      */
     private marcherAt(point: FieldPoint) {
         const isItem = this.ports.isItem ?? (() => false);
-        const performer = this.ports.marchersHidden?.()
-            ? null
-            : marcherAt(
-                  this.ports.marchers(),
-                  point,
-                  hitRadius(this.ports.zoom()),
-                  (id) => !isItem(id) && this.ports.canSelect(id),
-              );
+        const hidden = this.ports.marcherHidden ?? (() => false);
+        const performer = marcherAt(
+            this.ports.marchers(),
+            point,
+            hitRadius(this.ports.zoom()),
+            (id) => !isItem(id) && !hidden(id) && this.ports.canSelect(id),
+        );
         if (performer !== null) return performer;
         const item = this.ports.itemAt?.(point) ?? null;
         return item !== null && this.ports.canSelect(item) ? item : null;
