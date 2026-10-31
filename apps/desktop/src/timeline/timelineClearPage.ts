@@ -101,7 +101,8 @@ const inShapeOf = (
  *
  * - the run of boxes it follows into with no move of its own (`followingPages`), or
  * - the next page alone, when a move of its runs through that page's flag (plain Clear cuts it
- *   there; the pages after are unchanged either way).
+ *   there; the pages after are unchanged either way), unless that move starts after another move
+ *   of its own that ends after the page: it starts from there, so following back changes nothing.
  *
  * A marcher whose Held hold starts at the next page doesn't count: the clear drops that hold and
  * it follows back with either item (holds decision 17).
@@ -164,11 +165,13 @@ export function clearFollowingPages({
     const flag = next?.range ? next.flag : undefined;
     if (!next || flag === undefined) return null;
     const cut = cleared.some((id) => {
-        const across = spansOf(id).filter(
-            (s) => s.kind !== "hold" && s.start < flag && s.end > flag,
-        );
+        const spans = spansOf(id).filter((s) => s.kind !== "hold");
+        const across = spans.filter((s) => s.start < flag && s.end > flag);
         return (
             across.length === 1 &&
+            // It starts from where a move of the marcher's own after the page leaves it, so
+            // clearing the page doesn't change it
+            !spans.some((s) => s.end > box.end && s.end <= across[0]!.start) &&
             transitionOf(across[0]!)?.style !== "follow_the_leader" &&
             (transitionOf(across[0]!)?.dest ?? null) === null &&
             !inShapeOf(skips, id, (t) => t.start < flag && t.end > flag)
@@ -252,6 +255,60 @@ export function clearPageLabelsNow(
         boxes: useTimelineSelectionStore.getState().pageBoxes,
         skips: clearPageSkipsNow(),
     });
+}
+
+/**
+ * Reads the follow-back label for clearing marchers from a page (`clearFollowingPages`), or null
+ * when nothing would follow back or there's no page, from the show as it is now. It keeps its last
+ * answers until the show, the page, the marcher list or the language changes, so the command
+ * palette's enabled and label reads of one action run the check once.
+ *
+ * @param check the follow-back check, for tests
+ */
+export function clearPageFollowBackReader(
+    check: typeof clearFollowingPages = clearFollowingPages,
+): (
+    page: ClearPagePage | null,
+    marcherIds: readonly number[],
+) => string | null {
+    const cache = new Map<
+        readonly number[],
+        { key: readonly unknown[]; label: string | null }
+    >();
+    return (page, marcherIds) => {
+        if (!page) return null;
+        const { resolver, version } = useTimelineResolverStore.getState();
+        const boxes = useTimelineSelectionStore.getState().pageBoxes;
+        const skips = clearPageSkipsNow();
+        const key = [
+            page,
+            resolver,
+            version,
+            boxes,
+            skips.held,
+            skips.transitions,
+            skips.recipes,
+            skips.timelines,
+            tolgee.getLanguage(),
+        ];
+        const hit = cache.get(marcherIds);
+        if (hit && hit.key.every((k, i) => k === key[i])) return hit.label;
+        const following = check({
+            resolver,
+            boxes,
+            marcherIds,
+            box: page.box,
+            skips,
+        });
+        const label = following
+            ? clearPageFollowingLabel(page.name, following)
+            : null;
+        // One entry per marcher list in use (all and selected); an old list goes
+        cache.delete(marcherIds);
+        cache.set(marcherIds, { key, label });
+        if (cache.size > 2) cache.delete(cache.keys().next().value!);
+        return label;
+    };
 }
 
 function clearPageLabels({

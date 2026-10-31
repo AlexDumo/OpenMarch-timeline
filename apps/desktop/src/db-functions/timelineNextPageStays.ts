@@ -9,7 +9,9 @@ import {
     cutMoveAtBeatInTransaction,
     planRemovalFromRange,
     rowsIn,
+    takeMarchersIntoOwnMoveInTransaction,
 } from "./timelineMoveCuts";
+import { splitRefusal } from "./timelineSplitMoves";
 import { updateTimelineSlotDestinationInTransaction } from "./timelineTransitionsInTransaction";
 
 /**
@@ -23,9 +25,10 @@ import { updateTimelineSlotDestinationInTransaction } from "./timelineTransition
  *
  * Clear Page N also keeps a next page that a move left over from its cut runs through
  * (`cutMovesAcross`): a marcher whose move crosses the next page's flag is partway through it
- * there, so Set as shown leaves it alone. That move is cut at the flag
- * (`cutMoveAtBeatInTransaction`) and the marcher's part before it ends at the old spot, so the
+ * there, so Set as shown leaves it alone. The marcher is taken into a move of its own, which is
+ * cut at the flag (`cutMoveAtBeatInTransaction`), and its part before ends at the old spot, so the
  * pages after walk on from there as before (holds decision 16: other pages keep their motion).
+ * Others sharing the move keep it as it was.
  */
 
 /** The first page box starting on or after `beat`, or null past the last page. */
@@ -118,8 +121,12 @@ async function nextPageMoved(
 
 /**
  * Each of `at`'s marchers with one row crossing `beat` has its move cut there and its part before
- * ending at its spot in `at`. A shape or follow-the-leader member (who stays in its move,
- * `planRemovalFromRange`), a row into a stored shape, or more than one row there is left as it is.
+ * ending at its spot in `at`. They are taken out of a move they share into one of their own first
+ * (`takeMarchersIntoOwnMoveInTransaction`), so only their move is cut: the others in it keep their
+ * move, any shape recipe and their motion, which a cut would change for a path that isn't direct
+ * (`splitTimelineAtBeatInTransaction` samples it). A shape or follow-the-leader member (who stays
+ * in its move, `planRemovalFromRange`), a row into a stored shape, more than one row there, or a
+ * move split by marcher refuses to break up (`splitRefusal`), is left as it is.
  *
  * @returns the marchers kept
  */
@@ -142,27 +149,40 @@ async function keepThroughMovesAcrossInTransaction(
             crossing.filter((o) => o.row.marcher_id === r.row.marcher_id)
                 .length === 1,
     );
-    if (once.length === 0) return [];
-    for (const timelineId of new Set(once.map((r) => r.timelineId)))
-        await cutMoveAtBeatInTransaction({ tx, timelineId, beat });
-    const ids = once.map((r) => r.row.marcher_id);
-    const ending = (
-        await rowsIn(tx, null, {
-            marcherIds: ids,
-            range: { start: beat - 1, end: beat },
-        })
-    ).filter((r) => r.row.end_beat === beat);
     const kept: number[] = [];
-    for (const r of ending) {
-        const point = at.get(r.row.marcher_id);
-        if (!point || r.shapeId !== null) continue;
-        await updateTimelineSlotDestinationInTransaction({
+    for (const timelineId of new Set(once.map((r) => r.timelineId))) {
+        const ids = once
+            .filter((r) => r.timelineId === timelineId)
+            .map((r) => r.row.marcher_id);
+        if (await splitRefusal(tx, timelineId, ids)) continue;
+        const own = await takeMarchersIntoOwnMoveInTransaction({
             tx,
-            transitionId: r.row.transition_id,
-            slotIndex: r.row.slot_index,
-            point,
+            timelineId,
+            marcherIds: ids,
         });
-        kept.push(r.row.marcher_id);
+        if (own.timelineId === null) continue;
+        await cutMoveAtBeatInTransaction({
+            tx,
+            timelineId: own.timelineId,
+            beat,
+        });
+        const ending = (
+            await rowsIn(tx, null, {
+                marcherIds: own.taken,
+                range: { start: beat - 1, end: beat },
+            })
+        ).filter((r) => r.row.end_beat === beat);
+        for (const r of ending) {
+            const point = at.get(r.row.marcher_id);
+            if (!point || r.shapeId !== null) continue;
+            await updateTimelineSlotDestinationInTransaction({
+                tx,
+                transitionId: r.row.transition_id,
+                slotIndex: r.row.slot_index,
+                point,
+            });
+            kept.push(r.row.marcher_id);
+        }
     }
     return kept;
 }

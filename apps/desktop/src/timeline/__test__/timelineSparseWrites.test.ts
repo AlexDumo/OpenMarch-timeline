@@ -34,6 +34,7 @@ import { keepFixturesInPageMode } from "@/test/timelineMode";
 import { setAsShownOnPage } from "@/db-functions/timelineSetAsShown";
 import {
     clearFollowingPages,
+    clearPageFollowBackReader,
     clearPageFollowingLabel,
     clearPageLabel,
     clearPageMenu,
@@ -49,6 +50,8 @@ import type { PageBox } from "@/stores/TimelineSelectionStore";
 import { useBasicLocksStore } from "../basicLocks";
 import { moveMarchersAndOfferFollowUp } from "../timelineMoveThemToo";
 import { readShowTiming } from "@/timeline/showTiming";
+import { updatePages } from "@/db-functions/page";
+import { useEditorModeStore } from "@/stores/EditorModeStore";
 import { convertPagesToTimeline } from "@/test/convertPages";
 import { pageEndBeat } from "../timelineCanvas";
 import {
@@ -831,6 +834,182 @@ describeDbTests(
             expect(at(1, page4.end)).toEqual(page4Spot);
         });
 
+        it("plain Clear Page N cuts only the cleared marchers' move at the next page's flag: others sharing it, a shape member and an arc keep their move, recipe and motion (#573 re-review)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page2 = box(pages[2]!);
+            const page3 = box(pages[3]!);
+            const page4 = box(pages[4]!);
+            const page5 = box(pages[5]!);
+            await move(db, page2, [{ marcherId: 1, x: 200, y: 200 }]);
+            // One move from Page 3's start to Page 5's end shared by Marchers 1-3, on an arc
+            await move(db, { start: page3.start, end: page5.end }, [
+                { marcherId: 1, x: 500, y: 500 },
+                { marcherId: 2, x: 450, y: 100 },
+                { marcherId: 3, x: 400, y: 300 },
+            ]);
+            const shared = (
+                await db.select().from(schema.timelines).all()
+            ).find(
+                (t) => t.start_beat === page3.start && t.end_beat === page5.end,
+            )!;
+            await transactionWithHistory(db, "test", async (tx) => {
+                await tx
+                    .update(schema.timeline_transitions)
+                    .set({ path_style: "arc", path_params: '{"bulge":0.3}' })
+                    .where(
+                        eq(schema.timeline_transitions.timeline_id, shared.id),
+                    );
+                // Marcher 3 in a shape recipe of that move
+                const [recipe] = await tx
+                    .insert(schema.timeline_shape_recipes)
+                    .values({
+                        timeline_id: shared.id,
+                        kind: "line",
+                        kind_version: 1,
+                        params: "{}",
+                        order_mode: "keep",
+                    })
+                    .returning();
+                await tx.insert(schema.timeline_shape_recipe_marchers).values({
+                    recipe_id: recipe!.id,
+                    marcher_id: 3,
+                    slot: 0,
+                    x: 400,
+                    y: 300,
+                });
+            });
+            await timelineResolverSettled();
+            const page4Spot = at(1, page4.end);
+            const beats = Array.from(
+                { length: page5.end - page3.start + 1 },
+                (_, i) => page3.start + i,
+            );
+            const others = () =>
+                [2, 3].map((id) => beats.map((b) => at(id, b)));
+            const theirMoves = async () =>
+                (
+                    await db
+                        .select({
+                            marcher: schema.timeline_assignments.marcher_id,
+                            start: schema.timeline_assignments.start_beat,
+                            end: schema.timeline_assignments.end_beat,
+                            timeline: schema.timeline_transitions.timeline_id,
+                            style: schema.timeline_transitions.path_style,
+                        })
+                        .from(schema.timeline_assignments)
+                        .innerJoin(
+                            schema.timeline_transitions,
+                            eq(
+                                schema.timeline_transitions.id,
+                                schema.timeline_assignments.transition_id,
+                            ),
+                        )
+                        .all()
+                ).filter((r) => r.marcher !== 1);
+            const recipes = async () =>
+                (
+                    await db.select().from(schema.timeline_shape_recipes).all()
+                ).map((r) => r.timeline_id);
+
+            // Follow back makes only the cut at the cleared page's flag (holds decision 16)
+            await run(db, pages, pages[3]!, "previous", [1], true);
+            const afterPageCut = {
+                rows: await theirMoves(),
+                recipes: await recipes(),
+                motion: others(),
+            };
+            expect(
+                afterPageCut.rows.map((r) => [r.marcher, r.start, r.end]),
+            ).toEqual(
+                expect.arrayContaining([
+                    [2, page3.start, page3.end],
+                    [2, page3.end, page5.end],
+                    [3, page3.start, page3.end],
+                    [3, page3.end, page5.end],
+                ]),
+            );
+            expect(afterPageCut.rows).toHaveLength(4);
+            const undo = await performUndo(db);
+            expect(undo.success, undo.error?.message).toBe(true);
+            await timelineResolverSettled();
+
+            // Plain Clear keeps Page 4 for Marcher 1 and adds nothing for the others
+            await run(db, pages, pages[3]!, "previous", [1]);
+
+            expect(at(1, page3.end)).toEqual([200, 200]);
+            expect(at(1, page4.end)).toEqual(page4Spot);
+            expect(at(1, page5.end)).toEqual([500, 500]);
+            expect(await theirMoves()).toEqual(afterPageCut.rows);
+            expect(await recipes()).toEqual(afterPageCut.recipes);
+            expect(others()).toEqual(afterPageCut.motion);
+        });
+
+        /**
+         * Marcher 1's own move on Page 3, then a move from Page 4's start to Page 5's end shared
+         * with Marcher 2, which starts from Page 3's spot; Clear Page 3 for Marcher 1
+         */
+        const clearOneOfShared = async (
+            db: DbConnection,
+            before?: () => Promise<void>,
+        ) => {
+            let pages = await setUp(db);
+            const page3 = box(pages[3]!);
+            const page4 = box(pages[4]!);
+            const page5 = box(pages[5]!);
+            await move(db, box(pages[2]!), [{ marcherId: 1, x: 200, y: 200 }]);
+            await move(db, page3, [{ marcherId: 1, x: 300, y: 300 }]);
+            await move(db, { start: page4.start, end: page5.end }, [
+                { marcherId: 1, x: 500, y: 500 },
+                { marcherId: 2, x: 450, y: 100 },
+            ]);
+            await before?.();
+            pages = [...(await readShowTiming(db)).pages].sort(
+                (a, b) => a.order - b.order,
+            );
+            const page4Spot = at(1, page4.end);
+            const beats = Array.from(
+                { length: page5.end - page3.start + 1 },
+                (_, i) => page3.start + i,
+            );
+            const marcher2 = beats.map((b) => at(2, b));
+            await run(db, pages, pages[3]!, "previous", [1]);
+            expect(at(1, page3.end)).toEqual([200, 200]);
+            expect(at(1, page4.end)).toEqual(page4Spot);
+            expect(at(1, page5.end)).toEqual([500, 500]);
+            // Marcher 2 keeps its one row, and walks as before
+            expect(await rowsOf(db, 2)).toEqual([[page4.start, page5.end, 0]]);
+            expect(beats.map((b) => at(2, b))).toEqual(marcher2);
+        };
+
+        it("plain Clear Page N's cut at the next flag when the next page is a subset (#573 re-review)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await clearOneOfShared(db, async () => {
+                const pages = [...(await readShowTiming(db)).pages].sort(
+                    (a, b) => a.order - b.order,
+                );
+                await updatePages({
+                    db,
+                    modifiedPages: [{ id: pages[4]!.id, is_subset: true }],
+                });
+                await timelineResolverSettled();
+            });
+        });
+
+        it("plain Clear Page N's cut at the next flag in Basic mode (#573 re-review)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await clearOneOfShared(db, async () => {
+                useEditorModeStore.setState({ mode: "basic", loaded: true });
+            });
+            useEditorModeStore.setState({ mode: null, loaded: false });
+        });
+
         it("the follow-back item shows only when a later page takes the page's spot, and names those pages (#573)", async ({
             db,
             marchersAndPages: _,
@@ -931,6 +1110,74 @@ describeDbTests(
                 marcherIds: [1, 2, 3, 4],
                 followBack: false,
             });
+        });
+
+        it("no follow-back item for a move through the next page's flag that starts after a move of the marcher's own: following back changes nothing (#573 re-review)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page3 = box(pages[3]!);
+            const page4 = box(pages[4]!);
+            const page5 = box(pages[5]!);
+            await move(db, box(pages[2]!), [{ marcherId: 1, x: 200, y: 200 }]);
+            await move(db, page3, [{ marcherId: 1, x: 300, y: 300 }]);
+            // A keyframe inside Page 4, then a move from it through Page 5's flag
+            const keyframe = page4.start + 2;
+            await move(db, { start: page4.start, end: keyframe }, [
+                { marcherId: 1, x: 350, y: 350 },
+            ]);
+            await move(db, { start: keyframe, end: page5.end }, [
+                { marcherId: 1, x: 500, y: 500 },
+            ]);
+            const page4Spot = at(1, page4.end);
+            const boxes = pages
+                .slice(1)
+                .map((p) => ({ ...box(p), name: p.name }));
+
+            expect(
+                clearFollowingPages({
+                    resolver: resolver(),
+                    boxes,
+                    marcherIds: [1],
+                    box: page3,
+                }),
+            ).toBeNull();
+            // Plain Clear leaves Page 4 where following back would too
+            await run(db, pages, pages[3]!, "previous", [1]);
+            expect(at(1, page4.end)).toEqual(page4Spot);
+        });
+
+        it("the palette's follow-back reader runs the check once for its enabled and label reads, and again after an edit (#573 re-review)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page3 = box(pages[3]!);
+            await move(db, box(pages[2]!), [{ marcherId: 1, x: 200, y: 200 }]);
+            await move(db, page3, [{ marcherId: 1, x: 300, y: 300 }]);
+            useTimelineSelectionStore.setState({
+                pageBoxes: pages
+                    .slice(1)
+                    .map((p) => ({ ...box(p), name: p.name })),
+            });
+            const check = vi.fn(clearFollowingPages);
+            const read = clearPageFollowBackReader(check);
+            const page = { name: pages[3]!.name, box: page3 };
+            const ids = [1];
+            const later = pages.slice(4).map((p) => p.name);
+
+            for (let i = 0; i < 3; i++)
+                expect(read(page, ids)).toBe(
+                    clearPageFollowingLabel(page.name, later),
+                );
+            expect(check).toHaveBeenCalledTimes(1);
+            expect(read(null, ids)).toBeNull();
+
+            // The next page Set: nothing follows back any more
+            await move(db, box(pages[4]!), [{ marcherId: 1, x: 350, y: 300 }]);
+            expect(read(page, ids)).toBeNull();
+            expect(check).toHaveBeenCalledTimes(2);
         });
 
         it("a page whose own move goes nowhere offers no follow-back item", async ({

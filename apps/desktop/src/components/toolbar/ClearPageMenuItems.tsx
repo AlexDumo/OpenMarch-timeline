@@ -14,8 +14,8 @@ import {
  * **Clear Page N** and, when a later page would follow back, **Clear Page N, Pages N–M follow
  * back** (#573), for all marchers (the Alignment tab's "Place all marchers ▾") or the selected ones
  * (the inspector's "Place selected marchers ▾"). Mounted inside the open menu, so the follow-back
- * check runs only while it shows; the command palette reads the same labels only when it opens
- * (`clearPageLabelsNow`).
+ * check runs only while it shows; the command palette reads the follow-back label only when it
+ * opens (`clearPageFollowBackReader`).
  */
 export default function ClearPageMenuItems({
     scope,
