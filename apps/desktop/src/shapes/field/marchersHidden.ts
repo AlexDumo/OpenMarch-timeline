@@ -1,9 +1,12 @@
 import { create } from "zustand";
 import type { FieldModeDrawing } from "@/field/editor/fieldEditor";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { isVisualsView, useIsVisualsView } from "@/stores/WorkspaceViewStore";
+import { usePreviewModeStore } from "@/stores/PreviewModeStore";
 import { useBoxSelectionStore } from "../placed/boxSelectionStore";
 import {
-    isShapeHidden,
-    useShapeHidden,
+    isShapeAway,
+    useShapeAway,
     useShapeToolStore,
 } from "../tool/shapeToolStore";
 
@@ -102,19 +105,61 @@ useBoxSelectionStore.subscribe((state, prev) => {
     if (state.selected?.recipe.id !== prev.selected?.recipe.id) showMarchers();
 });
 
+/** What decides whether the shape being edited is on the field to be seen */
+export interface ShapeSight {
+    /** A shape tool is open */
+    readonly open: boolean;
+    /** A placed shape is selected */
+    readonly placed: boolean;
+    /** The open shape's moment is somewhere else (#416) */
+    readonly away: boolean;
+    readonly playing: boolean;
+    readonly visuals: boolean;
+    readonly preview: boolean;
+}
+
 /**
- * Whether the field hides the marchers, the shape's spots and its walks now. A shape waiting out
- * of sight (playing, away from its moment, Visuals or Preview, #416) shows them, whatever the key.
+ * Whether a shape is edited and in sight: an open shape, or else a selected placed one, while the
+ * Editor shows and the show is still. Playing, Visuals and Preview put either out of sight, and an
+ * open shape is also out of sight away from its moment (#416). The one rule for the field and the
+ * field test API, so the two can't drift.
+ */
+export const isShapeInSight = (s: ShapeSight): boolean =>
+    (s.open || s.placed) &&
+    !s.playing &&
+    !s.visuals &&
+    !s.preview &&
+    !(s.open && s.away);
+
+/**
+ * Whether the field hides the marchers, the shape's spots and its walks now: held or latched, with
+ * a shape in sight ({@link isShapeInSight}). With none (out of sight, or nothing edited) they show,
+ * whatever the key.
  */
 export function useMarchersHidden(): boolean {
     const hiding = useMarchersHiddenStore(isHiding);
-    const shapeAway = useShapeHidden();
-    return hiding && !shapeAway;
+    const inSight = isShapeInSight({
+        open: useShapeToolStore((s) => s.tool !== null),
+        placed: useBoxSelectionStore((s) => s.selected !== null),
+        away: useShapeAway(),
+        playing: useTimelineSelectionStore((s) => s.playback !== null),
+        visuals: useIsVisualsView(),
+        preview: usePreviewModeStore((s) => s.isPreview),
+    });
+    return hiding && inSight;
 }
 
-/** {@link useMarchersHidden} outside React (the field test API) */
+/** {@link useMarchersHidden} outside React (the field editor, the field test API) */
 export const marchersHiddenNow = (): boolean =>
-    isHiding(useMarchersHiddenStore.getState()) && !isShapeHidden();
+    isHiding(useMarchersHiddenStore.getState()) &&
+    isShapeInSight({
+        open: useShapeToolStore.getState().tool !== null,
+        placed: useBoxSelectionStore.getState().selected !== null,
+        away: isShapeAway(),
+        playing: useTimelineSelectionStore.getState().playback !== null,
+        visuals: isVisualsView(),
+        preview: usePreviewModeStore.getState().isPreview,
+    });
 
 /**
  * The shape's drawing on its own: its outline, handles and guides, without its spots (on a guide,

@@ -109,7 +109,10 @@ import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
-import { useMarchersHidden } from "@/shapes/field/marchersHidden";
+import {
+    marchersHiddenNow,
+    useMarchersHidden,
+} from "@/shapes/field/marchersHidden";
 import { useTimelineVisuals } from "./useTimelineVisuals";
 import { drawnFollowing } from "./fieldFollowing";
 import {
@@ -410,6 +413,8 @@ function ThreeFieldView() {
                             useTimelineSelectionStore.getState(),
                             id,
                         ),
+                    // #558: hidden marchers aren't there to press while a shape is seen alone
+                    marchersHidden: marchersHiddenNow,
                     takePress: () => menuShown.current || takeFieldPress(),
                     selectionBoxPadding: () =>
                         selectionBoxPadding(useFieldViewStore.getState().zoom),
@@ -832,13 +837,6 @@ function usePreviewFit(
 }
 
 /**
- * Keeps the view store's size and field in step with the canvas, opens the
- * show fitted once it's `ready`, and points the camera at the store's view.
- * Until the view has `settled`, a resize fits it again. After that a resize
- * keeps the zoom and where the field sits from the top-left; in Preview it
- * fits the field again, unless a glide is following the pane.
- */
-/**
  * The marchers, their labels, paths, start flag positions and collisions, hidden while a shape is
  * seen on its own (#558, hold or tap H). Its own component, so only this group redraws.
  */
@@ -847,6 +845,13 @@ function MarchersShown({ children }: { children: ReactNode }) {
     return <group visible={!hidden}>{children}</group>;
 }
 
+/**
+ * Keeps the view store's size and field in step with the canvas, opens the
+ * show fitted once it's `ready`, and points the camera at the store's view.
+ * Until the view has `settled`, a resize fits it again. After that a resize
+ * keeps the zoom and where the field sits from the top-left; in Preview it
+ * fits the field again, unless a glide is following the pane.
+ */
 function FieldCamera({
     fieldProperties,
     ready,

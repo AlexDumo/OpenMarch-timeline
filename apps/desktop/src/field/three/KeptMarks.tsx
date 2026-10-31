@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { useMarchersHidden } from "@/shapes/field/marchersHidden";
+import {
+    marchersHiddenNow,
+    useMarchersHidden,
+} from "@/shapes/field/marchersHidden";
 import { useFrame, useThree } from "@react-three/fiber";
 import { TooltipClassName } from "@openmarch/ui";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -224,7 +227,8 @@ export function useKeptMarkTooltip({
         }
         let over: TimelineKeptMark | null = null;
         const markUnder = (event: PointerEvent): TimelineKeptMark | null => {
-            if (event.buttons > 0) return null;
+            // Hidden with the marchers while a shape is seen alone (#558)
+            if (event.buttons > 0 || marchersHiddenNow()) return null;
             const view = useFieldViewStore.getState();
             const rect = element.getBoundingClientRect();
             const x = (event.clientX - rect.left - view.panX) / view.zoom;

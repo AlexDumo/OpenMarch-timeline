@@ -92,6 +92,11 @@ export type FieldEditorPorts = {
     /** False for a marcher that can't be selected or hit (one dimmed outside the isolated move). */
     canSelect(id: number): boolean;
     /**
+     * True while the marchers are hidden so a shape is seen on its own (#558): no press or hover
+     * lands on a performer, as if none were there. Items still show, and are still hit.
+     */
+    marchersHidden?(): boolean;
+    /**
      * Called once at the start of every edit press, before the editor does
      * anything with it. The app may act on the press here (story 60: the
      * first press after a paused preview clears the preview) and returns
@@ -1322,16 +1327,19 @@ export class FieldEditor {
     /**
      * The marcher a press at `point` lands on: a performer's dot, else an
      * item whose Outline holds it, so a performer on a platform is still
-     * pressed.
+     * pressed. Every press, drag, menu and hover finds performers here, so
+     * hidden ones (#558) are passed over in this one place.
      */
     private marcherAt(point: FieldPoint) {
         const isItem = this.ports.isItem ?? (() => false);
-        const performer = marcherAt(
-            this.ports.marchers(),
-            point,
-            hitRadius(this.ports.zoom()),
-            (id) => !isItem(id) && this.ports.canSelect(id),
-        );
+        const performer = this.ports.marchersHidden?.()
+            ? null
+            : marcherAt(
+                  this.ports.marchers(),
+                  point,
+                  hitRadius(this.ports.zoom()),
+                  (id) => !isItem(id) && this.ports.canSelect(id),
+              );
         if (performer !== null) return performer;
         const item = this.ports.itemAt?.(point) ?? null;
         return item !== null && this.ports.canSelect(item) ? item : null;

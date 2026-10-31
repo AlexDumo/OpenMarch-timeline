@@ -3,6 +3,7 @@ import type { FieldModeDrawing } from "@/field/editor/fieldEditor";
 import {
     HIDE_MARCHERS_TAP_MS,
     isHiding,
+    marchersHiddenNow,
     pressHide,
     pressHideMarchers,
     releaseHide,
@@ -21,6 +22,9 @@ import {
     useShapeToolStore,
 } from "../tool/shapeToolStore";
 import { openTool } from "../tool/toolMachine";
+import { useWorkspaceViewStore } from "@/stores/WorkspaceViewStore";
+import { usePreviewModeStore } from "@/stores/PreviewModeStore";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { polyTool, rowTool } from "./fakeRowKind";
 
 /**
@@ -41,6 +45,8 @@ afterEach(() => {
     closeShapeTool();
     useBoxSelectionStore.setState({ selected: null });
     useMarchersHiddenStore.setState(SHOWN, true);
+    useWorkspaceViewStore.setState({ view: "editor" });
+    usePreviewModeStore.setState({ isPreview: false });
 });
 
 describe("the hide key", () => {
@@ -120,6 +126,48 @@ describe("each shape session starts with the marchers shown", () => {
         toggleHideMarchers();
         useBoxSelectionStore.setState({ selected: null });
         expect(hiding()).toBe(false);
+    });
+});
+
+describe("a shape out of sight shows the marchers", () => {
+    const placed = { recipe: { id: 1 } } as unknown as PlacedBox;
+
+    it("a selected placed shape in Visuals or Preview shows them, and back in the Editor hides them again", () => {
+        useBoxSelectionStore.setState({ selected: placed });
+        toggleHideMarchers();
+        expect(marchersHiddenNow()).toBe(true);
+        useWorkspaceViewStore.setState({ view: "visuals" });
+        expect(marchersHiddenNow()).toBe(false);
+        useWorkspaceViewStore.setState({ view: "editor" });
+        usePreviewModeStore.setState({ isPreview: true });
+        expect(marchersHiddenNow()).toBe(false);
+        usePreviewModeStore.setState({ isPreview: false });
+        expect(marchersHiddenNow()).toBe(true);
+    });
+
+    it("a selected placed shape shows them while the show plays", () => {
+        useBoxSelectionStore.setState({ selected: placed });
+        toggleHideMarchers();
+        const before = useTimelineSelectionStore.getState().playback;
+        useTimelineSelectionStore.setState({ playback: {} as never });
+        try {
+            expect(marchersHiddenNow()).toBe(false);
+        } finally {
+            useTimelineSelectionStore.setState({ playback: before });
+        }
+    });
+
+    it("an open shape in Visuals shows them", () => {
+        openShapeTool(openTool(rowTool, marchers), null, null);
+        toggleHideMarchers();
+        expect(marchersHiddenNow()).toBe(true);
+        useWorkspaceViewStore.setState({ view: "visuals" });
+        expect(marchersHiddenNow()).toBe(false);
+    });
+
+    it("with no shape on the field nothing is hidden, whatever the latch", () => {
+        useMarchersHiddenStore.setState({ ...SHOWN, latched: true });
+        expect(marchersHiddenNow()).toBe(false);
     });
 });
 
