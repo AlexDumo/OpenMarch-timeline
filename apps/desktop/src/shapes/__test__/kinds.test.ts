@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { assignSlots } from "../assign";
 import { dist, polar, xy } from "../geometry/vec";
