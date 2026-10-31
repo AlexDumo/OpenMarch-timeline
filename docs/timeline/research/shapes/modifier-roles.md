@@ -190,8 +190,8 @@ Details:
   the half steps an hour later.
 - A shortcut (to pick; Blender uses Shift+Tab, which we use for focus order, so likely a letter
   combination checked against `keymap.ts`).
-- Covers shape and marcher drags on the field. The keyboard "free" nudge (Alt+arrow today) can
-  follow the toggle instead of needing its own binding.
+- Covers shape and marcher drags on the field, and arrow nudges on marchers: with Snap off, no
+  nudge snaps to the grid (owner, 2026-10-30).
 - A held override (hold a key to flip snap for one drag, like Blender's Ctrl) is left out until
   someone asks, because it brings back the key shortage.
 - The timeline keeps its held Alt = no snap: scrubbing past a flag is a single moment, not a
@@ -352,7 +352,7 @@ Roles are not actions: nothing fires on a keypress. They don't go into `ACTIONS`
 2. **Conflict detection.** Within a context, two held roles can't share a key. A modifier plus a
    letter is a shortcut and a modifier alone is a role, so they can't collide. The Snap toggle's
    shortcut is an ordinary action and goes through `keymap.ts` like any other.
-3. **Keyboard nudges** (`NUDGE_VARIANTS` in `definitions.ts`) already use Shift = fine, so they agree with version A and don't change.
+3. **Keyboard nudges** (`NUDGE_VARIANTS` in `definitions.ts`) already use Shift = fine, so they agree with version A. On marchers they follow the Snap toggle too: with Snap off, no nudge snaps.
 
 **Settings › Shortcuts later: yes**, as a short "While dragging" section above the actions: one row
 per held role with a three-way key picker (Shift / Alt / ⌘ or Ctrl). Picking a key another role
@@ -392,7 +392,7 @@ Things the decision settles:
 - **Rotation:** default 15° steps, Shift (fine) = whole degrees, Snap off = free. Whole degrees
   stay on Shift, as today.
 - **Arrow nudges:** Shift+arrow is already the fine nudge, so the arrow keys already agree with
-  version A and don't change.
+  version A. On marchers they follow the Snap toggle: with Snap off, no nudge snaps.
 - **Snap toggle:** resets on restart and on opening a file; covers shape and marcher drags on the
   field; the timeline keeps its held Alt. The shortcut is picked from the free keys in the
   shortcuts registry when it's built.

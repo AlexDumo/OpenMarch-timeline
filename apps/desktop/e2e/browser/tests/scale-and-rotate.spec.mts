@@ -14,10 +14,12 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 import type { FieldTestHandle } from "../../../src/field/fieldTestApi";
 
 // Scaling and rotating a selection with the selection box's handles (#198;
-// #189 user stories 46 to 55, rules table rows Handles, Shift, Alt, Lock X /
-// Lock Y, Click vs drag): corners scale uniformly and Shift frees them;
-// middle handles scale one axis; rotation snaps to 15° and Shift frees it;
-// Alt works at a quarter of the pointer's speed; no flipping; the box fits
+// #189 user stories 46 to 55, rules table rows Handles, Lock X / Lock Y,
+// Click vs drag; keys from the modifier roles design, version A): corners
+// scale uniformly and constrain (Cmd/Ctrl) frees them; middle handles scale
+// one axis; rotation snaps to 15°, fine (Shift) turns it in whole degrees at
+// the pointer's full speed, and the Snap toggle off (Shift+M) turns it freely;
+// fine scales at a quarter of the pointer's speed; no flipping; the box fits
 // the marchers again after each transform. A transform is dropped through the
 // same timeline rules as a move.
 //
@@ -246,14 +248,14 @@ test("a corner handle scales the formation uniformly from the opposite corner, a
     await expectCanvasMatchesShow(show);
 });
 
-test("Shift frees a corner handle: dragged across, only the width changes", async ({
+test("change: constrain (Cmd/Ctrl) frees a corner handle: dragged across, only the width changes", async ({
     show,
 }) => {
     const { page } = show;
     await selectAll(page);
     const before = spread(asPositions(PAGE_0));
 
-    await dragHandle(page, "se", { x: 120, y: 0 }, { hold: ["Shift"] });
+    await dragHandle(page, "se", { x: 120, y: 0 }, { hold: ["ControlOrMeta"] });
 
     const after = spread(await savedChange(show));
     expect(after.width / before.width).toBeGreaterThan(1.2);
@@ -279,14 +281,14 @@ test("a middle handle scales one axis only", async ({ show }) => {
     await expectCanvasMatchesShow(show);
 });
 
-test("change: Shift does nothing on a middle handle: it still scales one axis", async ({
+test("change: constrain does nothing on a middle handle: it still scales one axis", async ({
     show,
 }) => {
     const { page } = show;
     await selectAll(page);
     const before = spread(asPositions(PAGE_0));
 
-    await dragHandle(page, "s", { x: 60, y: 80 }, { hold: ["Shift"] });
+    await dragHandle(page, "s", { x: 60, y: 80 }, { hold: ["ControlOrMeta"] });
 
     const saved = await savedChange(show);
     expect(spread(saved).height / before.height).toBeGreaterThan(1.2);
@@ -318,11 +320,26 @@ test("rotation snaps to 15°, about the box's center", async ({ show }) => {
     await expectCanvasMatchesShow(show);
 });
 
-test("Shift rotates freely", async ({ show }) => {
+test("change: Alt and constrain leave rotation in 15° steps", async ({
+    show,
+}) => {
     const { page } = show;
     await selectAll(page);
 
-    await turnRotateHandle(page, 37, { hold: ["Shift"] });
+    await turnRotateHandle(page, 37, { hold: ["Alt", "ControlOrMeta"] });
+
+    expect(turned(await savedChange(show))).toBeCloseTo(30, 0);
+    await expectCanvasMatchesShow(show);
+});
+
+test("change: with the Snap toggle off (Shift+M), rotation turns freely", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectAll(page);
+    await page.keyboard.press("Shift+M");
+
+    await turnRotateHandle(page, 37);
 
     const degrees = turned(await savedChange(show));
     expect(Math.abs(degrees - 37)).toBeLessThan(1.5);
@@ -352,7 +369,7 @@ test("the box fits the marchers again after a rotation", async ({ show }) => {
     expect(handles!.ne.x - right).toBeLessThan(25);
 });
 
-test("change: Alt scales at a quarter of the pointer's speed", async ({
+test("change: fine (Shift) scales at a quarter of the pointer's speed", async ({
     show,
 }) => {
     const { page } = show;
@@ -360,7 +377,7 @@ test("change: Alt scales at a quarter of the pointer's speed", async ({
     const scale = await canvasScale(page);
     const before = spread(asPositions(PAGE_0));
 
-    await dragHandle(page, "e", { x: 200, y: 0 }, { hold: ["Alt"] });
+    await dragHandle(page, "e", { x: 200, y: 0 }, { hold: ["Shift"] });
 
     const after = spread(await savedChange(show));
     // A quarter of the pointer's 200 px
@@ -368,15 +385,19 @@ test("change: Alt scales at a quarter of the pointer's speed", async ({
     await expectCanvasMatchesShow(show);
 });
 
-test("change: Alt rotates at a quarter of the pointer's speed, with no snapping", async ({
+test("change: fine (Shift) rotates in whole degrees, at the pointer's full speed", async ({
     show,
 }) => {
     const { page } = show;
     await selectAll(page);
 
-    await turnRotateHandle(page, 74, { hold: ["Alt"] });
+    await turnRotateHandle(page, 37, { hold: ["Shift"] });
 
-    expect(Math.abs(turned(await savedChange(show)) - 18.5)).toBeLessThan(1.5);
+    // All of the pointer's 37°, not a 15° step (30° or 45°)
+    const degrees = turned(await savedChange(show));
+    expect(Math.abs(degrees - 37)).toBeLessThan(1.5);
+    // Within the thousandths positions save at
+    expect(Math.abs(degrees - Math.round(degrees))).toBeLessThan(0.1);
     await expectCanvasMatchesShow(show);
 });
 
@@ -422,7 +443,14 @@ test("Lock X and Lock Y don't hold a handle", async ({ show }) => {
     await selectAll(page);
     const before = spread(asPositions(PAGE_0));
 
-    await dragHandle(page, "se", { x: 100, y: 100 }, { hold: ["Shift"] });
+    await dragHandle(
+        page,
+        "se",
+        { x: 100, y: 100 },
+        {
+            hold: ["ControlOrMeta"],
+        },
+    );
 
     const after = spread(await savedChange(show));
     expect(after.width / before.width).toBeGreaterThan(1.2);

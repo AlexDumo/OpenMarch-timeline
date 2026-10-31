@@ -35,6 +35,7 @@ import { SelectedAudioFileProvider } from "@/context/SelectedAudioFileContext";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
 import TitleBar from "@/components/titlebar/TitleBar";
 import { useUiSettingsStore } from "./stores/UiSettingsStore";
+import { useSnapOnWhenFileOpens } from "./hooks/useSnapOnWhenFileOpens";
 import CanvasZoomControls from "@/components/canvas/CanvasZoomControls";
 import Plugin from "./global/classes/Plugin";
 import Sidebar from "@/components/sidebar/Sidebar";
@@ -238,6 +239,9 @@ function App() {
     useEffect(() => {
         fetchUiSettings();
     }, [fetchUiSettings]);
+
+    // A forgotten Snap toggle doesn't carry into the file just opened or made
+    useSnapOnWhenFileOpens(databaseIsReady);
 
     /**
      * Invalidate history queries when a mutation is added.
