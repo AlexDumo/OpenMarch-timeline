@@ -4,7 +4,11 @@ import type { XY } from "@openmarch/core";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { mockNCAAFieldProperties } from "@/__mocks__/globalMocks";
 import { FieldProperties } from "@openmarch/core";
-import { performUndo, transactionWithHistory } from "@/db-functions/history";
+import {
+    performRedo,
+    performUndo,
+    transactionWithHistory,
+} from "@/db-functions/history";
 import { createTimelineAssignmentsInTransaction } from "@/db-functions/timelineAssignments";
 import {
     moveMarchersFromFlagInstead,
@@ -34,7 +38,13 @@ import {
     clearPageLabel,
     clearPageMenu,
     clearPageScopedLabel,
+    clearPageSkipsNow,
 } from "../timelineClearPage";
+import { holdFromPreviousPage } from "@/db-functions/timelineHoldFromPrevious";
+import { readAllShapeRecipes } from "@/db-functions/shapeRecipes";
+import { refreshHeldMarks, useHeldMarksStore } from "../useHeldMarks";
+import { readStoredTimelineMemberships } from "../useTimelineSelectionHost";
+import { usePlacedBoxStore } from "@/shapes/placed/placedBoxStore";
 import type { PageBox } from "@/stores/TimelineSelectionStore";
 import { useBasicLocksStore } from "../basicLocks";
 import { moveMarchersAndOfferFollowUp } from "../timelineMoveThemToo";
@@ -48,6 +58,7 @@ import {
     type TimelineNeighborPageRequest,
 } from "../timelineCoordinateWrites";
 import {
+    getTimelineHost,
     startTimelineResolver,
     stopTimelineResolver,
     timelineResolverSettled,
@@ -73,6 +84,8 @@ keepFixturesInPageMode("its tests write timeline rows themselves");
 afterEach(() => {
     stopTimelineResolver();
     useTimelineSelectionStore.getState().reset();
+    useHeldMarksStore.setState({ marks: [] });
+    usePlacedBoxStore.setState({ recipes: [], ends: new Map() });
 });
 
 const TABLES = [
@@ -757,6 +770,67 @@ describeDbTests(
             expect(await snapshot(db)).toEqual(before);
         });
 
+        it("plain Clear Page N keeps the next page's spot when a move left over from the cut runs past it, and the pages after it as they were (#573 review)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page2 = box(pages[2]!);
+            const page3 = box(pages[3]!);
+            const page4 = box(pages[4]!);
+            const page5 = box(pages[5]!);
+            await move(db, page2, [{ marcherId: 1, x: 200, y: 200 }]);
+            // One move from Page 3's start to Page 5's end, shared with Marcher 2
+            await move(db, { start: page3.start, end: page5.end }, [
+                { marcherId: 1, x: 500, y: 500 },
+                { marcherId: 2, x: 450, y: 100 },
+            ]);
+            const page4Spot = at(1, page4.end);
+            const marcher2 = [page3.end, page4.end, page5.end].map((b) =>
+                at(2, b),
+            );
+            expect(page4Spot).not.toEqual([200, 200]);
+            const before = await snapshot(db);
+            const steps = async () =>
+                new Set((await undoRows(db)).map((r) => r.history_group)).size;
+            const history = await steps();
+
+            // Plain Clear keeps Page 4, so following back would change something: offered
+            expect(
+                clearFollowingPages({
+                    resolver: resolver(),
+                    boxes: pages
+                        .slice(1)
+                        .map((p) => ({ ...box(p), name: p.name })),
+                    marcherIds: [1],
+                    box: page3,
+                }),
+            ).not.toBeNull();
+
+            const { result } = await run(db, pages, pages[3]!, "previous", [1]);
+
+            expect(result).toBe(1);
+            expect(at(1, page3.end)).toEqual([200, 200]);
+            expect(at(1, page4.end)).toEqual(page4Spot);
+            expect(at(1, page5.end)).toEqual([500, 500]);
+            // Other members' motion is unchanged (holds decision 16)
+            expect(
+                [page3.end, page4.end, page5.end].map((b) => at(2, b)),
+            ).toEqual(marcher2);
+            expect(await steps()).toBe(history + 1);
+
+            const after = await snapshot(db);
+            const undo = await performUndo(db);
+            expect(undo.success, undo.error?.message).toBe(true);
+            await timelineResolverSettled();
+            expect(await snapshot(db)).toEqual(before);
+            const redo = await performRedo(db);
+            expect(redo.success, redo.error?.message).toBe(true);
+            await timelineResolverSettled();
+            expect(await snapshot(db)).toEqual(after);
+            expect(at(1, page4.end)).toEqual(page4Spot);
+        });
+
         it("the follow-back item shows only when a later page takes the page's spot, and names those pages (#573)", async ({
             db,
             marchersAndPages: _,
@@ -882,6 +956,136 @@ describeDbTests(
                     box: page3,
                 }),
             ).toBeNull();
+        });
+
+        it("a later Held hold starting at the next page offers no follow-back item: plain Clear already lets it follow back (#573 review)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page4 = box(pages[4]!);
+            await move(db, box(pages[2]!), [{ marcherId: 1, x: 200, y: 200 }]);
+            await move(db, box(pages[3]!), [{ marcherId: 1, x: 300, y: 300 }]);
+            await move(db, page4, [{ marcherId: 1, x: 400, y: 400 }]);
+            await holdFromPreviousPage({
+                db,
+                pageBox: page4,
+                marcherIds: [1],
+            });
+            await timelineResolverSettled();
+            await refreshHeldMarks(db);
+            const boxes = pages
+                .slice(1)
+                .map((p) => ({ ...box(p), name: p.name }));
+            useTimelineSelectionStore.setState({ pageBoxes: boxes });
+
+            expect(
+                clearFollowingPages({
+                    resolver: resolver(),
+                    boxes,
+                    marcherIds: [1],
+                    box: box(pages[3]!),
+                    skips: { held: useHeldMarksStore.getState().marks },
+                }),
+            ).toBeNull();
+            const menu = clearPageMenu({
+                pages,
+                selectedIds: [1],
+                performerIds: [1, 2, 3, 4],
+                run: vi.fn(() => Promise.resolve(1)),
+            });
+            expect(menu.labelsFor(pages[3]!.id)?.followBack).toBeNull();
+        });
+
+        it("shape and follow-the-leader members, whom the clear skips, offer no follow-back item (#573 review)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const page3 = box(pages[3]!);
+            await move(db, box(pages[2]!), [
+                { marcherId: 1, x: 200, y: 200 },
+                { marcherId: 2, x: 250, y: 200 },
+            ]);
+            await move(db, page3, [
+                { marcherId: 1, x: 300, y: 300 },
+                { marcherId: 2, x: 350, y: 300 },
+            ]);
+            const boxes = pages
+                .slice(1)
+                .map((p) => ({ ...box(p), name: p.name }));
+            useTimelineSelectionStore.setState({ pageBoxes: boxes });
+            const following = (marcherIds: number[]) =>
+                clearFollowingPages({
+                    resolver: resolver(),
+                    boxes,
+                    marcherIds,
+                    box: page3,
+                    skips: clearPageSkipsNow(),
+                });
+            expect(following([1])).not.toBeNull();
+            const page3Move = (
+                await db.select().from(schema.timelines).all()
+            ).find((t) => t.start_beat === page3.start)!;
+
+            // Marcher 1 in a shape on Page 3's move
+            await transactionWithHistory(db, "test", async (tx) => {
+                const [recipe] = await tx
+                    .insert(schema.timeline_shape_recipes)
+                    .values({
+                        timeline_id: page3Move.id,
+                        kind: "line",
+                        kind_version: 1,
+                        params: "{}",
+                        order_mode: "keep",
+                    })
+                    .returning();
+                await tx.insert(schema.timeline_shape_recipe_marchers).values({
+                    recipe_id: recipe!.id,
+                    marcher_id: 1,
+                    slot: 0,
+                    x: 300,
+                    y: 300,
+                });
+            });
+            usePlacedBoxStore.setState({
+                recipes: await readAllShapeRecipes(db),
+            });
+            useTimelineSelectionStore.setState({
+                storedTimelines: await readStoredTimelineMemberships(db),
+            });
+            expect(following([1])).toBeNull();
+            expect(following([1, 2])).not.toBeNull();
+
+            // Marcher 2 follows the leader on Page 3 (only the transition's style is read)
+            const transitions = getTimelineHost()!.snapshot.transitions;
+            const ftl = resolver()
+                .spanInfos(2)
+                .find((sp) => sp.start === page3.start)!.transitionId!;
+            expect(
+                clearFollowingPages({
+                    resolver: resolver(),
+                    boxes,
+                    marcherIds: [2],
+                    box: page3,
+                    skips: {
+                        transitions: {
+                            ...transitions,
+                            [ftl]: {
+                                ...transitions[ftl]!,
+                                style: "follow_the_leader",
+                            },
+                        },
+                    },
+                }),
+            ).toBeNull();
+            const menu = clearPageMenu({
+                pages,
+                selectedIds: [1],
+                performerIds: [1, 2, 3, 4],
+                run: vi.fn(() => Promise.resolve(1)),
+            });
+            expect(menu.labelsFor(pages[3]!.id)?.followBack).toBeNull();
         });
 
         it("set to previous clears an own move that already goes nowhere (a stay)", async ({

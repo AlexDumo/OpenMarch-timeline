@@ -7,8 +7,12 @@ import {
 } from "./registry";
 
 interface HandlerOptions {
-    /** When false the action is skipped by shortcuts and greyed out in the palette. Default true. */
-    enabled?: boolean;
+    /**
+     * When false the action is skipped by shortcuts and greyed out in the palette. A function is
+     * read only when asked (a key press, the palette, a button's render), for a check too costly to
+     * run on every change. Default true.
+     */
+    enabled?: boolean | (() => boolean);
     /**
      * When true, a held key runs the action once rather than on each repeat, as the definition's
      * `ignoreRepeat` does, but it can change with state (navigation while playing). A function is
@@ -24,9 +28,10 @@ interface HandlerOptions {
     onRelease?: (reason: ReleaseReason) => void;
     /**
      * The label shown in the palette instead of the definition's, for one that names state (a
-     * page range). Translated by the caller. Default: the definition's label.
+     * page range). Translated by the caller. A function is read only when the palette asks, for
+     * one too costly to work out on every change. Default: the definition's label.
      */
-    label?: string;
+    label?: string | (() => string | undefined);
 }
 
 export function useActionHandler(
@@ -68,16 +73,23 @@ export function useActionHandlerGroup(
         pressRef.current = options.onPress;
         releaseRef.current = options.onRelease;
     });
+    // A function is read when asked, so a new one each render tells nobody
     useLayoutEffect(() => {
         if (labelRef.current === options.label) return;
+        const quiet =
+            typeof labelRef.current === "function" &&
+            typeof options.label === "function";
         labelRef.current = options.label;
-        notifyActionHandlersChanged();
+        if (!quiet) notifyActionHandlersChanged();
     }, [options.label]);
     useLayoutEffect(() => {
         if (enabledRef.current === enabled) return;
+        const quiet =
+            typeof enabledRef.current === "function" &&
+            typeof enabled === "function";
         enabledRef.current = enabled;
         // Lets subscribers such as ActionButton re-read isActionEnabled().
-        notifyActionHandlersChanged();
+        if (!quiet) notifyActionHandlersChanged();
     }, [enabled]);
 
     const idsKey = ids.join("|");
@@ -87,7 +99,10 @@ export function useActionHandlerGroup(
         const unregister = idList.map((id) =>
             registerActionHandler(id as ActionId, {
                 run: (args) => runRef.current(id as ActionId, args),
-                isEnabled: () => enabledRef.current,
+                isEnabled: () => {
+                    const on = enabledRef.current;
+                    return typeof on === "function" ? on() : on;
+                },
                 ignoresRepeat: () => {
                     const ignore = ignoreRepeatRef.current;
                     return typeof ignore === "function" ? ignore() : ignore;
@@ -98,7 +113,10 @@ export function useActionHandlerGroup(
                 release: hasRelease
                     ? (reason) => releaseRef.current?.(reason)
                     : undefined,
-                label: () => labelRef.current,
+                label: () => {
+                    const label = labelRef.current;
+                    return typeof label === "function" ? label() : label;
+                },
             }),
         );
         return () => unregister.forEach((off) => off());

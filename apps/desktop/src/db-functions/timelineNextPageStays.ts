@@ -5,6 +5,12 @@ import { readPageGrid } from "./timelineRipple";
 import { FIRST_PAGE_ID } from "./rowMappers";
 import { samePosition } from "./timelineMoves";
 import { setAsShownOnPageInTransaction } from "./timelineSetAsShown";
+import {
+    cutMoveAtBeatInTransaction,
+    planRemovalFromRange,
+    rowsIn,
+} from "./timelineMoveCuts";
+import { updateTimelineSlotDestinationInTransaction } from "./timelineTransitionsInTransaction";
 
 /**
  * Keeps the page after an edit where it was, for an edit that takes a spot back: **Remove
@@ -14,6 +20,12 @@ import { setAsShownOnPageInTransaction } from "./timelineSetAsShown";
  * walks somewhere, so its end is a keyframe like any other (holds decision 15), and the pages
  * after it follow it. Without this step the later pages follow back to the earlier spot (**…,
  * Pages N–M follow back**).
+ *
+ * Clear Page N also keeps a next page that a move left over from its cut runs through
+ * (`cutMovesAcross`): a marcher whose move crosses the next page's flag is partway through it
+ * there, so Set as shown leaves it alone. That move is cut at the flag
+ * (`cutMoveAtBeatInTransaction`) and the marcher's part before it ends at the old spot, so the
+ * pages after walk on from there as before (holds decision 16: other pages keep their motion).
  */
 
 /** The first page box starting on or after `beat`, or null past the last page. */
@@ -57,16 +69,42 @@ export async function readNextPageSpots(
 /**
  * After the edit: the marchers in `spots` that now stand elsewhere at the next page's end get a
  * move of their own over it, back to their old spot, unless in `except`. Marchers Set or Held
- * there are left alone (`setAsShownOnPageInTransaction`).
+ * there are left alone (`setAsShownOnPageInTransaction`), and so are those partway through a move
+ * at its flag, unless `cutMovesAcross` (see the module comment).
  *
- * @returns the marchers given a move, ascending
+ * @returns the marchers kept, ascending
  */
 export async function keepNextPageInTransaction(
     tx: DbTransaction,
     spots: NextPageSpots | null,
     except: ReadonlySet<number> = new Set(),
+    { cutMovesAcross = false }: { cutMovesAcross?: boolean } = {},
 ): Promise<number[]> {
     if (!spots) return [];
+    const at = await nextPageMoved(tx, spots, except);
+    if (at.size === 0) return [];
+    const { changed } = await setAsShownOnPageInTransaction({
+        tx,
+        pageBox: spots.box,
+        marcherIds: [...at.keys()],
+        at,
+    });
+    if (!cutMovesAcross) return changed;
+    const set = new Set(changed);
+    const cut = await keepThroughMovesAcrossInTransaction(
+        tx,
+        spots.box.end,
+        new Map([...at].filter(([id]) => !set.has(id))),
+    );
+    return [...changed, ...cut].sort((a, b) => a - b);
+}
+
+/** The marchers in `spots`, not in `except`, standing elsewhere at the box's end now, with their old spot */
+async function nextPageMoved(
+    tx: DbTransaction,
+    spots: NextPageSpots,
+    except: ReadonlySet<number>,
+): Promise<Map<number, XY>> {
     const resolver = createResolver((await readTimelineTables(tx)).snapshot);
     const at = new Map<number, XY>();
     for (const [id, spot] of spots.before)
@@ -75,12 +113,56 @@ export async function keepNextPageInTransaction(
             !samePosition(spot, resolver.positionAt(id, spots.box.end))
         )
             at.set(id, spot);
+    return at;
+}
+
+/**
+ * Each of `at`'s marchers with one row crossing `beat` has its move cut there and its part before
+ * ending at its spot in `at`. A shape or follow-the-leader member (who stays in its move,
+ * `planRemovalFromRange`), a row into a stored shape, or more than one row there is left as it is.
+ *
+ * @returns the marchers kept
+ */
+async function keepThroughMovesAcrossInTransaction(
+    tx: DbTransaction,
+    beat: number,
+    at: ReadonlyMap<number, XY>,
+): Promise<number[]> {
     if (at.size === 0) return [];
-    const { changed } = await setAsShownOnPageInTransaction({
-        tx,
-        pageBox: spots.box,
-        marcherIds: [...at.keys()],
-        at,
-    });
-    return changed;
+    const marcherIds = [...at.keys()];
+    const range = { start: beat, end: beat + 1 };
+    const { skipped } = await planRemovalFromRange({ tx, marcherIds, range });
+    const stay = new Set(skipped.map((s) => s.marcherId));
+    const crossing = (await rowsIn(tx, null, { marcherIds, range })).filter(
+        (r) => r.row.start_beat < beat && !stay.has(r.row.marcher_id),
+    );
+    const once = crossing.filter(
+        (r) =>
+            r.shapeId === null &&
+            crossing.filter((o) => o.row.marcher_id === r.row.marcher_id)
+                .length === 1,
+    );
+    if (once.length === 0) return [];
+    for (const timelineId of new Set(once.map((r) => r.timelineId)))
+        await cutMoveAtBeatInTransaction({ tx, timelineId, beat });
+    const ids = once.map((r) => r.row.marcher_id);
+    const ending = (
+        await rowsIn(tx, null, {
+            marcherIds: ids,
+            range: { start: beat - 1, end: beat },
+        })
+    ).filter((r) => r.row.end_beat === beat);
+    const kept: number[] = [];
+    for (const r of ending) {
+        const point = at.get(r.row.marcher_id);
+        if (!point || r.shapeId !== null) continue;
+        await updateTimelineSlotDestinationInTransaction({
+            tx,
+            transitionId: r.row.transition_id,
+            slotIndex: r.row.slot_index,
+            point,
+        });
+        kept.push(r.row.marcher_id);
+    }
+    return kept;
 }

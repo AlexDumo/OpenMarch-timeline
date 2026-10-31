@@ -1349,6 +1349,9 @@ export const moveMarchersInTarget = async ({
                                 .map((m) => m.marcherId)
                                 .filter((id) => !result.cleared?.includes(id)),
                         ]),
+                        // A move left over from the cut that runs through the next page's
+                        // flag is cut there too, so the page keeps its spot
+                        { cutMovesAcross: true },
                     );
                     if (kept.length > 0) result.keptLaterPages = kept;
                 }

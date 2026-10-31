@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { toast } from "sonner";
-import type { Resolver } from "@openmarch/core";
+import type { Resolver, SpanInfo, TransitionRow } from "@openmarch/core";
 import tolgee from "@/global/singletons/Tolgee";
 import type Page from "@/global/classes/Page";
 import type { TimelineClearPageMenu } from "@/components/timeline/TimelineRangeMenu";
@@ -12,7 +12,12 @@ import { samePosition } from "@/db-functions/timelineMoves";
 import {
     useTimelineSelectionStore,
     type PageBox,
+    type StoredTimelineMembership,
 } from "@/stores/TimelineSelectionStore";
+import type { HeldMark } from "@/db-functions/timelineHeldMarks";
+import { usePlacedBoxStore } from "@/shapes/placed/placedBoxStore";
+import { useHeldMarksStore } from "./useHeldMarks";
+import { getTimelineHost } from "./timelineStore";
 import { pageEndBeat } from "./timelineCanvas";
 import { followingPages, pageKeepStates } from "./timelineKeepLater";
 import { keepPagesOfBoxes } from "./timelineOnlyThisPage";
@@ -41,43 +46,135 @@ const tolgeeTranslate: Translate = (key, defaultValue, params) =>
     tolgee.t(key, defaultValue, params);
 
 /**
- * The later pages that would follow back if `marcherIds` were cleared from the page box `box`, in
- * page order, or null when none would. A marcher counts when it has a move of its own over the
- * page that leaves it somewhere else than where the page starts (so the clear moves it), and the
- * pages after are the run of boxes it follows into with no move of its own (`followingPages`).
+ * What makes the clear leave a marcher as it is, or follow back either way, as the renderer reads
+ * it (`clearPageSkipsNow`). Each is optional, so a caller without it counts nobody for it.
+ */
+export interface ClearPageSkips {
+    /** The stored Held marks (`useHeldMarksStore`) */
+    readonly held?: readonly HeldMark[];
+    /** The resolver's transitions, for follow-the-leader and shape-backed rows */
+    readonly transitions?: Readonly<Record<number, TransitionRow>>;
+    /** The shape recipes and their members (`usePlacedBoxStore`) */
+    readonly recipes?: readonly {
+        readonly timelineId: number | null;
+        readonly members: readonly { readonly marcherId: number }[];
+    }[];
+    /** The stored moves and who is in them (`storedTimelines`), to place the recipes */
+    readonly timelines?: readonly StoredTimelineMembership[] | null;
+}
+
+/** `ClearPageSkips` from the stores as they are now. */
+export function clearPageSkipsNow(): ClearPageSkips {
+    return {
+        held: useHeldMarksStore.getState().marks,
+        transitions: getTimelineHost()?.snapshot.transitions,
+        recipes: usePlacedBoxStore.getState().recipes,
+        timelines: useTimelineSelectionStore.getState().storedTimelines,
+    };
+}
+
+/** Whether `marcherId` is in a shape recipe of a move that `over` says yes to. */
+const inShapeOf = (
+    skips: ClearPageSkips,
+    marcherId: number,
+    over: (move: StoredTimelineMembership) => boolean,
+): boolean =>
+    (skips.recipes ?? []).some(
+        (r) =>
+            r.timelineId !== null &&
+            r.members.some((m) => m.marcherId === marcherId) &&
+            (skips.timelines ?? []).some(
+                (t) =>
+                    t.id === r.timelineId &&
+                    t.marcherIds.has(marcherId) &&
+                    over(t),
+            ),
+    );
+
+/**
+ * The later pages that would follow back if `marcherIds` were cleared from the page box `box`
+ * instead of keeping them (plain **Clear Page N**), in page order, or null when following back
+ * would change nothing. A marcher counts when the clear takes it out of the page and moves it
+ * (it has a move of its own over the page that leaves it somewhere else than where the page
+ * starts, and isn't a shape or follow-the-leader member, whom the clear leaves), and plain Clear
+ * would keep the next page for it (`keepNextPageInTransaction`):
+ *
+ * - the run of boxes it follows into with no move of its own (`followingPages`), or
+ * - the next page alone, when a move of its runs through that page's flag (plain Clear cuts it
+ *   there; the pages after are unchanged either way).
+ *
+ * A marcher whose Held hold starts at the next page doesn't count: the clear drops that hold and
+ * it follows back with either item (holds decision 17).
  */
 export function clearFollowingPages({
     resolver,
     boxes,
     marcherIds,
     box,
+    skips = {},
 }: {
     resolver: Resolver | null;
     boxes: readonly PageBox[];
     marcherIds: readonly number[];
     box: PageBoxRange;
+    skips?: ClearPageSkips;
 }): string[] | null {
     if (!resolver || marcherIds.length === 0) return null;
     const pages = keepPagesOfBoxes(boxes);
-    const page = pages.find(
+    const index = pages.findIndex(
         (p) => p.range?.start === box.start && p.flag === box.end,
     );
+    const page = pages[index];
     if (!page) return null;
     const spansOf = (id: number) => resolverSpans(resolver, id);
-    const cleared = marcherIds.filter(
-        (id) =>
-            spansOf(id).some(
-                (s) =>
-                    s.kind !== "hold" && s.start < box.end && s.end > box.start,
+    const transitionOf = (s: SpanInfo) =>
+        s.transitionId === null
+            ? undefined
+            : skips.transitions?.[s.transitionId];
+    const heldNext = new Set(
+        (skips.held ?? [])
+            .filter((m) => m.start === box.end)
+            .map((m) => m.marcherId),
+    );
+    const cleared = marcherIds.filter((id) => {
+        if (heldNext.has(id)) return false;
+        const own = spansOf(id).filter(
+            (s) => s.kind !== "hold" && s.start < box.end && s.end > box.start,
+        );
+        return (
+            own.length > 0 &&
+            !own.some((s) => transitionOf(s)?.style === "follow_the_leader") &&
+            !inShapeOf(
+                skips,
+                id,
+                (t) => t.start < box.end && t.end > box.start,
             ) &&
             !samePosition(
                 resolver.positionAt(id, box.end),
                 resolver.positionAt(id, box.start),
-            ),
-    );
+            )
+        );
+    });
     if (cleared.length === 0) return null;
     const states = pageKeepStates({ pages, marcherIds: cleared, spansOf });
-    return followingPages(states, page.id)?.names ?? null;
+    const following = followingPages(states, page.id)?.names;
+    if (following) return following;
+    // A move running through the next page's flag, which plain Clear cuts there
+    const next = pages[index + 1];
+    const flag = next?.range ? next.flag : undefined;
+    if (!next || flag === undefined) return null;
+    const cut = cleared.some((id) => {
+        const across = spansOf(id).filter(
+            (s) => s.kind !== "hold" && s.start < flag && s.end > flag,
+        );
+        return (
+            across.length === 1 &&
+            transitionOf(across[0]!)?.style !== "follow_the_leader" &&
+            (transitionOf(across[0]!)?.dest ?? null) === null &&
+            !inShapeOf(skips, id, (t) => t.start < flag && t.end > flag)
+        );
+    });
+    return cut ? [next.name] : null;
 }
 
 /** "Clear Page 3" */
@@ -139,8 +236,46 @@ export interface ClearPageLabels {
 }
 
 /**
+ * The labels for clearing `marcherIds` from `page` (its name and box), from the show as it is now;
+ * null without a page box (the first page). For labels read on demand (the command palette), so
+ * the follow-back check doesn't run on every edit while nothing shows them.
+ */
+export function clearPageLabelsNow(
+    page: ClearPagePage | null,
+    marcherIds: readonly number[],
+): ClearPageLabels | null {
+    if (!page) return null;
+    return clearPageLabels({
+        page,
+        marcherIds,
+        resolver: useTimelineResolverStore.getState().resolver,
+        boxes: useTimelineSelectionStore.getState().pageBoxes,
+        skips: clearPageSkipsNow(),
+    });
+}
+
+function clearPageLabels({
+    page,
+    ...check
+}: {
+    page: ClearPagePage;
+    marcherIds: readonly number[];
+    resolver: Resolver | null;
+    boxes: readonly PageBox[];
+    skips: ClearPageSkips;
+}): ClearPageLabels {
+    const following = clearFollowingPages({ ...check, box: page.box });
+    return {
+        clear: clearPageLabel(page.name),
+        followBack: following
+            ? clearPageFollowingLabel(page.name, following)
+            : null,
+    };
+}
+
+/**
  * The labels for clearing `marcherIds` from `page` (its name and box), kept current with the show;
- * null without a page box (the first page).
+ * null without a page box (the first page). Mount it only while the labels show (an open menu).
  */
 export function useClearPageLabels(
     page: ClearPagePage | null,
@@ -149,26 +284,40 @@ export function useClearPageLabels(
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const version = useTimelineResolverStore((s) => s.version);
     const boxes = useTimelineSelectionStore((s) => s.pageBoxes);
+    const held = useHeldMarksStore((s) => s.marks);
+    const recipes = usePlacedBoxStore((s) => s.recipes);
+    const timelines = useTimelineSelectionStore((s) => s.storedTimelines);
     const name = page?.name;
     const start = page?.box.start;
     const end = page?.box.end;
     return useMemo(() => {
-        void version; // a new version means new spans
+        void version; // a new version means new spans and transitions
         if (name === undefined || start === undefined || end === undefined)
             return null;
-        const following = clearFollowingPages({
+        return clearPageLabels({
+            page: { name, box: { start, end } },
+            marcherIds,
             resolver,
             boxes,
-            marcherIds,
-            box: { start, end },
+            skips: {
+                held,
+                recipes,
+                timelines,
+                transitions: getTimelineHost()?.snapshot.transitions,
+            },
         });
-        return {
-            clear: clearPageLabel(name),
-            followBack: following
-                ? clearPageFollowingLabel(name, following)
-                : null,
-        };
-    }, [resolver, version, boxes, marcherIds, name, start, end]);
+    }, [
+        resolver,
+        version,
+        boxes,
+        held,
+        recipes,
+        timelines,
+        marcherIds,
+        name,
+        start,
+        end,
+    ]);
 }
 
 /** The page Clear this page acts on, as `useClearPageLabels` reads it. */
@@ -229,19 +378,18 @@ export function clearPageMenu({
             const first = page?.beats[0];
             if (!page || page.previousPageId === null || !first)
                 return undefined;
-            const following = clearFollowingPages({
-                resolver: useTimelineResolverStore.getState().resolver,
-                boxes: useTimelineSelectionStore.getState().pageBoxes,
+            const labels = clearPageLabelsNow(
+                {
+                    name: page.name,
+                    box: { start: first.index, end: pageEndBeat(page) },
+                },
                 marcherIds,
-                box: { start: first.index, end: pageEndBeat(page) },
-            });
+            )!;
             const say = (label: string) =>
                 scope === "all" ? clearPageScopedLabel(label, "all") : label;
             return {
-                clear: say(clearPageLabel(page.name)),
-                followBack: following
-                    ? say(clearPageFollowingLabel(page.name, following))
-                    : null,
+                clear: say(labels.clear),
+                followBack: labels.followBack ? say(labels.followBack) : null,
             };
         },
         onClear: (pageId, followBack) => {

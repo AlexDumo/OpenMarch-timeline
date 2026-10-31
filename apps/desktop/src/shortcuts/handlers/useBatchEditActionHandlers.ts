@@ -14,7 +14,7 @@ import {
 } from "@/utilities/setMarchersToNeighborPage";
 import {
     clearPageScopedLabel,
-    useClearPageLabels,
+    clearPageLabelsNow,
     useClearPagePage,
 } from "@/timeline/timelineClearPage";
 import { useActionHandler } from "../useActionHandler";
@@ -80,7 +80,7 @@ export function useBatchEditActionHandlers() {
 /**
  * Clear this page's four actions (#573): **Clear Page N** for all or the selected marchers, named
  * for the selected page in the palette, and **Clear Page N, Pages N–M follow back**, on only when
- * a later page would follow back (`useClearPageLabels`).
+ * a later page would follow back. Their labels are read only when asked (`clearPageLabelsNow`).
  */
 function useClearPageActionHandlers({
     run,
@@ -106,40 +106,55 @@ function useClearPageActionHandlers({
         [performers],
     );
     const clearPage = useClearPagePage(selectedPage);
-    const all = useClearPageLabels(clearPage, performerIds);
-    const selected = useClearPageLabels(clearPage, selectedIds);
+    // Read when the palette asks, so the follow-back check doesn't run on every edit
+    const all = () => clearPageLabelsNow(clearPage, performerIds);
+    const selected = () => clearPageLabelsNow(clearPage, selectedIds);
     useActionHandler("setAllMarchersToPreviousPage", () => run("all", false), {
         enabled,
-        label: all ? clearPageScopedLabel(all.clear, "all") : undefined,
+        label: () => {
+            const labels = all();
+            return labels
+                ? clearPageScopedLabel(labels.clear, "all")
+                : undefined;
+        },
     });
     useActionHandler(
         "setSelectedMarchersToPreviousPage",
         () => run("selected", false),
         {
             enabled: hasSelection,
-            label: selected
-                ? clearPageScopedLabel(selected.clear, "selected")
-                : undefined,
+            label: () => {
+                const labels = selected();
+                return labels
+                    ? clearPageScopedLabel(labels.clear, "selected")
+                    : undefined;
+            },
         },
     );
     useActionHandler(
         "setAllMarchersToPreviousPageAndFollowing",
         () => run("all", true),
         {
-            enabled: enabled && !!all?.followBack,
-            label: all?.followBack
-                ? clearPageScopedLabel(all.followBack, "all")
-                : undefined,
+            enabled: () => enabled && !!all()?.followBack,
+            label: () => {
+                const followBack = all()?.followBack;
+                return followBack
+                    ? clearPageScopedLabel(followBack, "all")
+                    : undefined;
+            },
         },
     );
     useActionHandler(
         "setSelectedMarchersToPreviousPageAndFollowing",
         () => run("selected", true),
         {
-            enabled: hasSelection && !!selected?.followBack,
-            label: selected?.followBack
-                ? clearPageScopedLabel(selected.followBack, "selected")
-                : undefined,
+            enabled: () => hasSelection && !!selected()?.followBack,
+            label: () => {
+                const followBack = selected()?.followBack;
+                return followBack
+                    ? clearPageScopedLabel(followBack, "selected")
+                    : undefined;
+            },
         },
     );
 }
