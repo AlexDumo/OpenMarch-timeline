@@ -13,6 +13,9 @@ questions:
   - Was typing mixed intervals (for example 2*3+4*2, or 2.5+3*4 for the last 3 at 4 steps) quick? Did the group chips make sense?
   - When your list didn't add up to the marchers selected, did the last group growing (marked +N) make sense?
   - Did the Who goes where menu (Least travel, Keep order, Reverse) do what you expected when moving one line into another?
+  - Did Measured (true distance, ↔ side to side, ↕ front to back) put marchers where you expected, and were the greyed-out reasons clear?
+  - Was closing a line (click its first point, or drop an end on the other) and filling it (Grid, Outline, Spread) natural? Did Open bring it back the way you expected?
+  - Did reaching Line and Curve from the favorites ring and the command bar (try `line 2*3+4*2`) work?
   - Anything that felt wrong, slow or confusing?
 ---
 
@@ -31,8 +34,15 @@ a way to place the selected marchers.
 - Pick **Curve**, or click a point to make it smooth.
 - Move a placed line into another one and try **Who goes where**.
 
+- In the Measured menu, try ↔ or ↕ on a line that goes one way across the
+  field: the steps land exactly on the grid that way.
+- Click the first point again (or drop an end on the other) to close the line,
+  then pick Grid, Outline or Spread to fill it.
+- Put Line or Curve in the favorites ring, or press ⌘K and type `line 2*3+4*2`.
+
 **Not in this build yet**
 
-- Measured (side to side ↔ / front to back ↕), closing a line and filling it,
-  and Line and Curve in the favorites ring and command bar are still in review
-  and will be added to this build when they land.
+- From your last feedback: clicking a point to see its curve with a
+  double-click to switch corner and smooth (#557), hiding the marchers for a
+  moment (#558), pictures in the menus (#559) and dropping the Points menu
+  (#560).
