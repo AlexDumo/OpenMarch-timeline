@@ -459,11 +459,12 @@ test("change: clicks draw an L, its corner holds a marcher until switched off, a
         "click point after point",
     );
 
-    // An L of 8 steps then 6: 8 marchers, 4 gaps on the long leg and 3 on the short one
+    // An L of 8 steps then 5: 8 marchers, 4 gaps of 2 on the long leg and 3 of 1⅔ on the short
+    // one. Around the corner instead they're 13/7 apart, so none stands on it.
     const y = cf.y - 20 * S;
     const a = { x: cf.x - 14 * S, y };
     const b = { x: cf.x - 6 * S, y };
-    const c = { x: cf.x - 6 * S, y: y + 6 * S };
+    const c = { x: cf.x - 6 * S, y: y + 5 * S };
     const click = async (p: Point) => {
         const at = await toScreen(page, p);
         await page.mouse.move(at.x, at.y, { steps: 4 });
@@ -484,7 +485,9 @@ test("change: clicks draw an L, its corner holds a marcher until switched off, a
     // A click on the last point finishes the line
     await click(c);
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
-    await expect.poll(() => interval(page, "shape-tool-readout")).toBe("2");
+    await expect
+        .poll(() => interval(page, "shape-tool-readout"))
+        .toBe("1⅔–2");
 
     const drawn = (await shapeOverlay(page))!;
     expect(drawn.handles).toHaveLength(3);
