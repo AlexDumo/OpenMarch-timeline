@@ -16,7 +16,7 @@ import AlignmentTab from "../AlignmentTab";
 
 /**
  * The Snap toggle's button sits beside Lock X and Lock Y in the toolbar's alignment tab: a click
- * runs Toggle snapping, and it shows pressed while snapping is off, as the floating editor's Snap
+ * runs Toggle Snap, and it shows pressed while snapping is off, as the floating editor's Snap
  * button does, so a forgotten off state is in plain sight.
  */
 
@@ -58,13 +58,13 @@ describe("the toolbar's Snap button", () => {
         const button = screen.getByTestId("toolbar-snap-toggle");
         expect(button.getAttribute("aria-pressed")).toBe("false");
         expect(button.classList.contains("text-accent")).toBe(false);
-        expect(button.title).toContain("Turn snapping off");
+        expect(button.title).toContain("Turn Snap off");
 
         fireEvent.click(button);
         expect(snapOn()).toBe(false);
         expect(button.getAttribute("aria-pressed")).toBe("true");
         expect(button.classList.contains("text-accent")).toBe(true);
-        expect(button.title).toContain("Snapping is off: turn it back on");
+        expect(button.title).toContain("Snap off: turn it back on");
 
         fireEvent.click(button);
         expect(snapOn()).toBe(true);

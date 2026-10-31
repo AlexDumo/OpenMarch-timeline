@@ -21,6 +21,7 @@ export function SelectWholeShape() {
     const selected = useSelectedMarchers()?.selectedMarchers ?? [];
     // Re-read when the boxes or the moment change
     usePlacedBoxStore((s) => s.recipes);
+    usePlacedBoxStore((s) => s.ends);
     useTimelineResolverStore((s) => s.version);
     const beat = usePlacedBoxBeat();
     const ids = new Set(selected.map((m) => m.id));

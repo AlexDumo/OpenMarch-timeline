@@ -1,4 +1,5 @@
 import type { FieldProperties, Resolver } from "@openmarch/core";
+import { SELECTION_RGBA01 } from "./three/selectionRing";
 import type {
     StartFlagLevel,
     StartFlagLevels,
@@ -37,6 +38,35 @@ export const START_FLAG_DOT_COLOR: Rgba = [0, 0, 0, 1];
 export const START_FLAG_PATH_WIDTH = 1;
 export const START_FLAG_PATH_COLOR: Rgba = [0.5, 0.5, 0.5, 1];
 
+/**
+ * Route squares (holds decision 9, fork #479): on a selected marcher's drawn route, a small square
+ * at each spot where a coordinate is set, the way After Effects draws a motion path. In field
+ * units, like the dots: a little wider than a dot, so a dot on a set spot sits inside its square.
+ * Outlined in the selection blue, since only selected marchers get them, with a white inside that
+ * keeps them visible on a green field (owner, 2026-10-30, from the research in fork #521).
+ */
+export const ROUTE_SQUARE_SIZE = 4.5;
+export const ROUTE_SQUARE_OUTLINE = 0.75;
+const [selR, selG, selB] = SELECTION_RGBA01 as [number, number, number];
+export const ROUTE_SQUARE_COLOR: Rgba = [selR, selG, selB, 1];
+export const ROUTE_SQUARE_FILL: Rgba = [1, 1, 1, 1];
+
+/**
+ * Where a selected marcher came from (owner, 2026-10-29): the last move it started before the
+ * start flag, drawn behind S dotted and lighter than the route, with lighter squares at its set
+ * spots. Shown even when the marcher stands still at S. Screen pixels, like the route.
+ */
+export const ROUTE_TAIL_COLOR: Rgba = [0.75, 0.75, 0.75, 1];
+export const ROUTE_TAIL_DASH: readonly [number, number] = [2, 4];
+/** The selection blue, 55% of the way to white. */
+const towardWhite = (c: number) => c + (1 - c) * 0.55;
+export const ROUTE_TAIL_SQUARE_COLOR: Rgba = [
+    towardWhite(selR),
+    towardWhite(selG),
+    towardWhite(selB),
+    1,
+];
+
 export type StartFlagOverlayInput = {
     readonly resolver: Pick<
         Resolver,
@@ -54,6 +84,11 @@ export type StartFlagOverlayInput = {
     readonly levels: StartFlagLevels;
     readonly stepSizeWarnings: boolean;
     readonly fieldProperties: FieldProperties;
+    /**
+     * A marcher's Set beats (`marcherSetBeats`: the ends of its own moves, the timeline's
+     * keyframes), for the squares on the selected marchers' routes. Without it, no squares.
+     */
+    readonly setBeatsOf?: (marcherId: number) => readonly number[];
 };
 
 /**
@@ -69,7 +104,7 @@ export type StartFlagOverlay = {
 /** The window and drawing inputs every marcher shares. */
 export type StartFlagWindow = Omit<
     StartFlagOverlayInput,
-    "marcherIds" | "selectedIds" | "levels"
+    "marcherIds" | "selectedIds" | "levels" | "setBeatsOf"
 >;
 
 /** One marcher's share of the overlay. */
@@ -80,6 +115,16 @@ export type StartFlagMarcherPlan = {
     readonly paths: readonly StrokePlan[];
     /** Its route's too-fast stretches (field units); empty when its path isn't drawn */
     readonly warnings: readonly StrokePlan[];
+    /**
+     * A square at each set spot on its route (field units, drawn over the warnings and under the
+     * dots); empty when its path isn't drawn or no Set beats were given
+     */
+    readonly squares: readonly StrokePlan[];
+    /**
+     * The move it came from, behind the start flag (screen units, dotted and light); empty unless
+     * it has squares
+     */
+    readonly tail: readonly StrokePlan[];
 };
 
 /** Whether a level draws for this marcher. */
@@ -204,20 +249,125 @@ function warnedRoute(window: StartFlagWindow, marcherId: number): Route {
     return route;
 }
 
+/**
+ * A filled square centered on `(x, y)`: one butt-capped segment as wide as it is long.
+ */
+const filledSquare = (
+    x: number,
+    y: number,
+    size: number,
+    color: Rgba,
+): StrokePlan => ({
+    points: [
+        { x: x - size / 2, y },
+        { x: x + size / 2, y },
+    ],
+    color,
+    width: size,
+    dash: null,
+    round: false,
+});
+
+/**
+ * The squares on a marcher's route over the window: one at each Set beat in `[fromBeat, toBeat]`.
+ * The start flag gets one only when a coordinate is set on that count (a move end, or home):
+ * standing there on a spot set earlier doesn't count (owner, 2026-10-29). Each is an outline square with a white one inside.
+ */
+function routeSquares(
+    window: StartFlagWindow,
+    marcherId: number,
+    setBeats: readonly number[],
+): StrokePlan[] {
+    const { resolver, fromBeat, toBeat } = window;
+    const beats = setBeats.filter((b) => b >= fromBeat && b <= toBeat);
+    // Home is always set (`isSetAt`), though no move ends there
+    if (fromBeat === 0 && beats[0] !== 0) beats.unshift(0);
+    return beats.flatMap((beat) =>
+        outlinedSquare(
+            resolver.positionAt(marcherId, beat),
+            ROUTE_SQUARE_COLOR,
+        ),
+    );
+}
+
+/** An outline square with a white one inside it, centered on `[x, y]`. */
+function outlinedSquare([x, y]: readonly [number, number], color: Rgba) {
+    const inner = ROUTE_SQUARE_SIZE - 2 * ROUTE_SQUARE_OUTLINE;
+    return [
+        filledSquare(x, y, ROUTE_SQUARE_SIZE, color),
+        filledSquare(x, y, inner, ROUTE_SQUARE_FILL),
+    ];
+}
+
+/**
+ * Where the marcher came from: the last move it started before the start flag, from that move's
+ * start up to the start flag (or the move's end, when it arrived before it), dotted and light,
+ * with a light square where it left from and one where it arrived before the start flag. Empty
+ * when no move starts before the start flag.
+ */
+function routeTail(
+    window: StartFlagWindow,
+    marcherId: number,
+    setBeats: readonly number[],
+): { tail: StrokePlan[]; squares: StrokePlan[] } {
+    const { resolver, fromBeat } = window;
+    let from: number | null = null;
+    let to = 0;
+    for (const span of resolver.spanInfos(marcherId))
+        if (
+            span.kind !== "hold" &&
+            Number.isFinite(span.start) &&
+            span.start < fromBeat &&
+            (from === null || span.start > from)
+        ) {
+            from = span.start;
+            to = Math.min(span.end, fromBeat);
+        }
+    if (from === null) return { tail: [], squares: [] };
+    const path = sampleTimelinePath(
+        resolver,
+        marcherId,
+        from,
+        to,
+        PATH_DRAW_TOLERANCE,
+    );
+    if (!path || path.points.length < 2) return { tail: [], squares: [] };
+    const spots = [from, ...setBeats.filter((b) => b > from && b < fromBeat)];
+    return {
+        tail: [
+            {
+                points: path.points,
+                color: ROUTE_TAIL_COLOR,
+                width: START_FLAG_PATH_WIDTH,
+                dash: ROUTE_TAIL_DASH,
+                round: true,
+            },
+        ],
+        squares: spots.flatMap((beat) =>
+            outlinedSquare(
+                resolver.positionAt(marcherId, beat),
+                ROUTE_TAIL_SQUARE_COLOR,
+            ),
+        ),
+    };
+}
+
 /** Home (beat 0) has no window, and neither does S at or past P. */
 const emptyWindow = ({ fromBeat, toBeat }: StartFlagWindow) =>
     !(fromBeat < toBeat) || toBeat <= 0;
 
 /**
  * One marcher's start flag position over the window: its dot where it is at the start flag and,
- * with `withPath`, the route it walks to the playhead as the resolver samples it. `null` when it
- * doesn't move across the window, the window is empty, or the resolver doesn't know it yet
- * (marcher rows ahead of a resolver rebuild).
+ * with `withPath`, the route it walks to the playhead as the resolver samples it, with a square
+ * at each of `setBeats` on it (pass them for a selected marcher only). `null` when it doesn't
+ * move across the window, the window is empty, or the resolver doesn't know it yet (marcher rows
+ * ahead of a resolver rebuild).
  */
 export function planStartFlagMarcher(
     window: StartFlagWindow,
     marcherId: number,
     withPath: boolean,
+    setBeats: readonly number[] | null = null,
 ): StartFlagMarcherPlan | null {
     const { resolver, fromBeat, toBeat } = window;
     if (emptyWindow(window) || !knows(resolver, marcherId)) return null;
@@ -241,6 +391,19 @@ export function planStartFlagMarcher(
             strokeWidth: 0,
         },
         ...route,
+        ...(withPath && setBeats
+            ? (() => {
+                  const behind = routeTail(window, marcherId, setBeats);
+                  return {
+                      // Behind the start flag first, so the route draws over it
+                      squares: [
+                          ...behind.squares,
+                          ...routeSquares(window, marcherId, setBeats),
+                      ],
+                      tail: behind.tail,
+                  };
+              })()
+            : { squares: [], tail: [] }),
     };
 }
 
@@ -251,22 +414,37 @@ export function startFlagOverlayOf(
     const dots: DotPlan[] = [];
     const paths: StrokePlan[] = [];
     const warnings: StrokePlan[] = [];
+    const squares: StrokePlan[] = [];
+    const tails: StrokePlan[] = [];
     for (const marcher of marchers) {
         dots.push(marcher.dot);
+        tails.push(...marcher.tail);
         paths.push(...marcher.paths);
         warnings.push(...marcher.warnings);
+        squares.push(...marcher.squares);
     }
     return {
-        dots: { units: "field", strokes: warnings, dots, labels: [] },
-        paths: { units: "screen", strokes: paths, dots: [], labels: [] },
+        dots: {
+            units: "field",
+            strokes: [...warnings, ...squares],
+            dots,
+            labels: [],
+        },
+        paths: {
+            units: "screen",
+            strokes: [...tails, ...paths],
+            dots: [],
+            labels: [],
+        },
     };
 }
 
 /**
  * Start flag positions over the window `[fromBeat, toBeat)`: a dot where each marcher the dots
  * level covers is at the start flag, and, for those the paths level covers too, the route it
- * walks to the playhead as the resolver samples it (curves and several moves included). Marchers
- * who don't move across the window get neither. Empty plans at home or when S isn't before P.
+ * walks to the playhead as the resolver samples it (curves and several moves included), with
+ * squares at the set spots of the selected marchers' routes (`setBeatsOf`). Marchers who don't
+ * move across the window get neither. Empty plans at home or when S isn't before P.
  */
 export function planStartFlagOverlay(
     input: StartFlagOverlayInput,
@@ -281,6 +459,9 @@ export function planStartFlagOverlay(
                 input,
                 marcherId,
                 levelDraws(levels.paths, marcherId, selectedIds),
+                selectedIds.has(marcherId)
+                    ? (input.setBeatsOf?.(marcherId) ?? null)
+                    : null,
             );
             if (marcher) marchers.push(marcher);
         }

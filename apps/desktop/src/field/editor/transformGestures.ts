@@ -1,4 +1,5 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
+import type { HonoredRoles } from "@/input/gestureChipStore";
 import type { Roles } from "@/input/modifierRoles";
 import type { FieldGesture, FieldPoint, FieldPointer } from "./fieldEditor";
 import { FieldDrag, type FieldKeys } from "./fieldKeys";
@@ -12,7 +13,7 @@ import {
     type HandleId,
 } from "./groupTransform";
 import type { MarcherPosition, MoveGestureHost } from "./moveGesture";
-import { PRECISION_START, anchorAt, precisionDelta } from "./moveRules";
+import { PRECISION_START, precisionDelta } from "./moveRules";
 import type { FieldRect } from "./selectionArea";
 
 /**
@@ -22,9 +23,11 @@ import type { FieldRect } from "./selectionArea";
  * positions, the drop and its pending save, snap-back, one undo step.
  *
  * Lock X and Lock Y don't apply to handles (rules table: Lock X / Lock Y).
- * While fine is on the pointer counts at a quarter of its speed
- * (`precisionDelta`, #197). As in a move, a role key pressed or released
- * mid-drag redraws the marchers at the last pointer.
+ * While fine is on a scale handle counts the pointer at a quarter of its
+ * speed (`precisionDelta`, #197); a rotation turns at full speed in whole
+ * degrees. As in a move, a role key pressed or released
+ * mid-drag redraws the marchers at the last pointer. Each handle declares the
+ * roles it reads, for the chip.
  */
 abstract class HandleGesture implements FieldGesture {
     abstract readonly kind: FieldTestGesture;
@@ -35,11 +38,13 @@ abstract class HandleGesture implements FieldGesture {
         protected readonly starts: readonly MarcherPosition[],
         private readonly host: MoveGestureHost,
         keys: FieldKeys,
+        honored: HonoredRoles,
     ) {
         this.drag = new FieldDrag(
             keys,
             (at, roles) => this.positionsAt(at, roles),
             (positions) => host.show(positions),
+            honored,
         );
     }
 
@@ -67,6 +72,27 @@ abstract class HandleGesture implements FieldGesture {
     ): MarcherPosition[];
 }
 
+/**
+ * A corner scales proportionally, and constrain frees its ratio; a middle handle scales one axis,
+ * which constrain doesn't change. Nothing snaps.
+ */
+const scaleHonors = (handle: Exclude<HandleId, "rot">): HonoredRoles =>
+    handle.length === 2
+        ? {
+              context: "field",
+              fine: "fine",
+              constrain: "freeRatio",
+              snaps: false,
+          }
+        : { context: "field", fine: "fine", snaps: false };
+
+/** A rotate handle reads fine (whole degrees, at full speed) and snaps to 15°; constrain does nothing */
+export const ROTATE_HONORS: HonoredRoles = {
+    context: "field",
+    fine: "wholeDegrees",
+    snaps: true,
+};
+
 /** A corner or middle handle: scales the selection from the opposite side. */
 export class ScaleGesture extends HandleGesture {
     readonly kind: FieldTestGesture = "scale";
@@ -81,7 +107,7 @@ export class ScaleGesture extends HandleGesture {
         private readonly box: FieldRect,
         keys: FieldKeys,
     ) {
-        super(origin, starts, host, keys);
+        super(origin, starts, host, keys, scaleHonors(handle));
     }
 
     protected positionsAt(at: FieldPoint, roles: Roles) {
@@ -103,17 +129,15 @@ export class ScaleGesture extends HandleGesture {
 
 /**
  * The angle a rotate handle draws as the pointer turns about `center`,
- * snapped to 15°, or with fine to whole degrees at a quarter speed; free
- * with the Snap toggle off. Fine turning on goes on slowly from the angle
- * drawn (snapped), with no jump. The selection's and an item's rotate
- * handles both turn by it.
+ * snapped to 15°, or with fine to whole degrees, at full speed either way
+ * (owner, 2026-10-30: nobody needs finer than a degree); free with the Snap
+ * toggle off. Fine on or off redraws the angle the pointer has turned, so
+ * it never jumps. The selection's and an item's rotate handles both turn
+ * by it.
  */
 export class RotationDrag {
-    /** The angle the pointer has turned through, at full speed. */
+    /** The angle the pointer has turned through. */
     private turned = 0;
-    private track = PRECISION_START;
-    /** Fine at the last event; on from the press, it anchors at the start, which changes nothing. */
-    private fine = false;
     /** The angle drawn at the last event, in degrees clockwise. */
     private drawn = 0;
 
@@ -134,16 +158,7 @@ export class RotationDrag {
     turnTo(at: FieldPoint, roles: Roles): number {
         this.turned += turnBetween(this.center, this.last, at);
         this.last = at;
-        if (roles.fine && !this.fine)
-            this.track = anchorAt(this.track, { x: this.drawn, y: 0 });
-        this.fine = roles.fine;
-        const moved = precisionDelta(
-            this.track,
-            { x: this.turned, y: 0 },
-            roles.fine,
-        );
-        this.track = moved.track;
-        this.drawn = snapRotation(moved.delta.x, {
+        this.drawn = snapRotation(this.turned, {
             fine: roles.fine,
             snap: this.snap(),
         });
@@ -170,7 +185,7 @@ export class RotateGesture extends HandleGesture {
         /** The Snap toggle, read on every event; on when omitted. */
         snap?: () => boolean,
     ) {
-        super(origin, starts, host, keys);
+        super(origin, starts, host, keys, ROTATE_HONORS);
         this.center = centerOf(box);
         this.rotation = new RotationDrag(this.center, origin.field, snap);
     }

@@ -370,7 +370,7 @@ export function cancelShapeGesture(): void {
  * The open shape tool on the field (docs/timeline/research/shapes/06-box-v1.md): a field editor
  * mode that takes every edit press while the tool is open and hands it to the tool's state
  * machine, so nothing selects, drags or lassos underneath. Navigation keeps its presses (right and
- * middle drags, the wheel). Alt is a held role here (version A, through `pressShapeKeys`), not a
+ * middle drags, the wheel). Alt is `fromCenter` here (version A, through `pressShapeKeys`), not a
  * pan.
  */
 export const shapeToolMode: FieldMode = {
@@ -382,10 +382,11 @@ export const shapeToolMode: FieldMode = {
         endHeld();
         const pressed = pressShapeKeys(
             pointer,
-            () =>
+            { kind: tool.kind, params: tool.params, n: tool.spots },
+            (reachInside) =>
                 pressTarget(tool, pointer.field, {
                     ...envOf(field, tool),
-                    reachInside: true,
+                    reachInside,
                 }),
             rerun,
             isMac,

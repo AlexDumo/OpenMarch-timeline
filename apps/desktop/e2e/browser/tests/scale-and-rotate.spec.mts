@@ -17,9 +17,9 @@ import type { FieldTestHandle } from "../../../src/field/fieldTestApi";
 // #189 user stories 46 to 55, rules table rows Handles, Lock X / Lock Y,
 // Click vs drag; keys from the modifier roles design, version A): corners
 // scale uniformly and constrain (Cmd/Ctrl) frees them; middle handles scale
-// one axis; rotation snaps to 15°, fine (Shift) turns it in whole degrees, and
-// the Snap toggle off (Shift+M) turns it freely; fine works at a quarter of
-// the pointer's speed; no flipping; the box fits
+// one axis; rotation snaps to 15°, fine (Shift) turns it in whole degrees at
+// the pointer's full speed, and the Snap toggle off (Shift+M) turns it freely;
+// fine scales at a quarter of the pointer's speed; no flipping; the box fits
 // the marchers again after each transform. A transform is dropped through the
 // same timeline rules as a move.
 //
@@ -385,16 +385,17 @@ test("change: fine (Shift) scales at a quarter of the pointer's speed", async ({
     await expectCanvasMatchesShow(show);
 });
 
-test("change: fine (Shift) rotates at a quarter of the pointer's speed, in whole degrees", async ({
+test("change: fine (Shift) rotates in whole degrees, at the pointer's full speed", async ({
     show,
 }) => {
     const { page } = show;
     await selectAll(page);
 
-    await turnRotateHandle(page, 74, { hold: ["Shift"] });
+    await turnRotateHandle(page, 37, { hold: ["Shift"] });
 
+    // All of the pointer's 37°, not a 15° step (30° or 45°)
     const degrees = turned(await savedChange(show));
-    expect(Math.abs(degrees - 18.5)).toBeLessThan(1.5);
+    expect(Math.abs(degrees - 37)).toBeLessThan(1.5);
     // Within the thousandths positions save at
     expect(Math.abs(degrees - Math.round(degrees))).toBeLessThan(0.1);
     await expectCanvasMatchesShow(show);

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
 import { boxShape } from "../box/boxShape";
 import { boxTool } from "../box/boxTool";

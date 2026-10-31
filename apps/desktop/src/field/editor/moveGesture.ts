@@ -1,4 +1,5 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
+import type { HonoredRoles } from "@/input/gestureChipStore";
 import type { Roles } from "@/input/modifierRoles";
 import type { FieldGesture, FieldPoint, FieldPointer } from "./fieldEditor";
 import { FieldDrag, type FieldKeys } from "./fieldKeys";
@@ -34,6 +35,14 @@ export type MoveGestureHost = {
     drop(positions: readonly MarcherPosition[]): void;
     /** Nothing is dropped: the marchers go back. */
     cancel(): void;
+};
+
+/** A move reads fine and constrain (one axis), and snaps to the rounding grid; not from center */
+const MOVE_HONORS: HonoredRoles = {
+    context: "field",
+    fine: "fine",
+    constrain: "oneAxis",
+    snaps: true,
 };
 
 /**
@@ -73,6 +82,7 @@ export class MoveGesture implements FieldGesture {
             keys,
             (at, roles) => this.positionsAt(at, roles),
             (positions) => host.show(positions),
+            MOVE_HONORS,
         );
     }
 

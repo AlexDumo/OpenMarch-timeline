@@ -14,11 +14,11 @@
             "lockY": "Lock Y axis",
             "lockYOff": "Unlock Y movement",
             "lockYOn": "Lock Y movement",
-            "snapOff": "Turn snapping off",
-            "snapOn": "Snapping is off: turn it back on",
+            "snapOff": "Turn Snap off",
+            "snapOn": "Snap off: turn it back on",
             "snapToCustomFraction": "Snap to grid",
             "snapToWhole": "Snap to nearest whole",
-            "toggleSnap": "Toggle snapping",
+            "toggleSnap": "Toggle Snap",
             "toggleSnapKeywords": "snap magnet grid free"
         },
         "batchEdit": {
@@ -547,6 +547,16 @@
             "running": "Running: {kind}…",
             "softwareGl": "Graphics run in software here, so these numbers are a lower bound.",
             "title": "Field benchmark"
+        },
+        "gestureChip": {
+            "equalSpacings": "equal spacings",
+            "fine": "fine",
+            "freeRatio": "free ratio",
+            "fromCenter": "from center",
+            "keepRatio": "keep ratio",
+            "oneAxis": "one axis",
+            "snapOff": "Snap off",
+            "wholeDegrees": "whole degrees"
         },
         "general": {
             "exportField": "Export Field",
@@ -2024,8 +2034,8 @@
                 "show": "Show the pathways from the start flag"
             },
             "snap": {
-                "off": "Snapping is off: turn it back on",
-                "on": "Turn snapping off"
+                "off": "Snap off: turn it back on",
+                "on": "Turn Snap off"
             },
             "pivot": {
                 "aria": "Pivot: {pivot}",
@@ -2260,12 +2270,6 @@
                     "label": "Corners",
                     "on": "Marcher on every corner",
                     "off": "Intervals run around corners"
-                },
-                "points": {
-                    "label": "Points",
-                    "corner": "Corners",
-                    "smooth": "Smooth",
-                    "mixed": "Corners and smooth points"
                 }
             },
             "measure": {
@@ -2619,12 +2623,12 @@
         "alignment": {
             "lockXCaption": "Lock X",
             "lockYCaption": "Lock Y",
-            "snapCaption": "Snap",
+            "snapCaption": "Snap to grid",
             "alignMarchersAriaLabel": "Align marchers",
             "lockMarchersAriaLabel": "Cursor movement and marcher snap",
             "placeAllMarchers": "Place all marchers",
             "placeSelectedMarchers": "Place selected marchers",
-            "snapToggleCaption": "Snapping",
+            "snapToggleCaption": "Snap",
             "toNextPagePositions": "...to next page positions",
             "toPreviousPagePositions": "...to previous page positions"
         },
@@ -3181,7 +3185,18 @@
     "layout": {
         "closeSettings": "Close settings",
         "hideInspector": "Hide inspector",
-        "showInspector": "Show inspector"
+        "showInspector": "Show inspector",
+        "windowTooSmall": {
+            "body": "OpenMarch needs a window at least {minWidth} × {minHeight} to fit the field, the timeline and the Inspector.",
+            "close": "Close",
+            "current": "This window is {width} × {height}.",
+            "hintDesktop": "Maximize the window or make it bigger. If you zoomed in, zoom out with <keys></keys>.",
+            "hintWeb": "Make the browser window bigger, zoom out with <keys></keys>, or turn your tablet sideways. Phones are too small for now.",
+            "hintZoomed": "The page is zoomed in. Zoom out with <keys></keys>, or make the window bigger.",
+            "maximize": "Maximize",
+            "minimize": "Minimize",
+            "title": "Make the window bigger"
+        }
     },
     "touch": {
         "dragMode": {
@@ -3201,7 +3216,7 @@
         "gestures": {
             "fingers": "<b>1 finger</b> moves · <b>2</b> zoom",
             "holdMarcher": "<b>Hold a marcher</b> adds it",
-            "modifiers": "<b>Add</b> taps to add · <b>No snap</b> moves freely",
+            "modifiers": "<b>Add</b> taps to add · <b>Snap off</b> moves freely",
             "penSelects": "{device, select, pencil {<b>Pencil</b>} other {<b>Pen</b>}} or <b>hold + drag</b> selects",
             "undoRedo": "<b>2-finger tap</b> undo · <b>3</b> redo"
         },
@@ -3210,24 +3225,34 @@
         "marcherRemoved": "Removed {name}",
         "modifiers": {
             "add": "Add",
-            "addOff": "Add: hold, or tap to keep on. Tapping marchers adds them to the selection",
-            "addOn": "Add, on. Tap to turn off",
-            "addOnNote": "Add on: tap marchers to add or remove.",
+            "addHint": "Add: hold, or tap to keep on. Tapping marchers adds them to the selection",
             "clearLine": "Clear line",
+            "constrain": "Equal",
+            "constrainHint": "Equal: hold, or tap to keep on. Equal spacings, one axis when moving, flips proportional scaling",
             "explain": {
-                "alt": "Move and turn without snapping.",
+                "add": "Tap marchers to add or remove them.",
+                "constrain": "Equal spacings, one axis when moving, flips proportional scaling.",
                 "drag": "What dragging on empty field does.",
+                "fine": "Marchers move slowly, off the grid. Shapes leave the half steps but still catch lines. Turns go by whole degrees.",
+                "fromCenter": "Boxes draw and resize from their center.",
                 "grip": "Drag to move.",
                 "help": "Gestures.",
-                "shift": "Tap marchers to add or remove them."
+                "snap": "Turns Snap to steps and lines on or off."
             },
+            "fine": "Fine",
+            "fineHint": "Fine: hold, or tap to keep on. Marchers move slowly, off the grid; shapes leave the half steps; turns go by whole degrees",
+            "fromCenter": "From center",
+            "fromCenterHint": "From center: hold, or tap to keep on. Boxes draw and resize from their center",
             "grip": "Move these buttons",
             "gripTitle": "Drag to move",
             "help": "What these buttons do",
-            "noSnap": "No snap",
-            "noSnapOff": "No snap: hold, or tap to keep on. Moving and turning don't snap to steps",
-            "noSnapOn": "No snap, on. Tap to turn off",
-            "noSnapOnNote": "No snap on."
+            "helpList": {
+                "add": "<b>Add</b> taps add to the selection · <b>Snap off</b> moves freely",
+                "fine": "<b>Fine</b> exact drags and turns · <b>Equal</b> equal spacings",
+                "fromCenter": "<b>From center</b> boxes grow from the middle",
+                "toggles": "<b>Tap</b> a button to keep it on, or <b>hold</b> it while you drag"
+            },
+            "noSnap": "Snap off"
         },
         "openSettings": "Open Settings",
         "readout": {
@@ -3243,9 +3268,14 @@
         "undone": "Undone"
     },
     "shortcutsDialog": {
+        "movement": {
+            "constrain": "Move on one axis while dragging",
+            "fineControl": "Fine control while dragging marchers"
+        },
         "shape": {
+            "constrain": "Constrain (equal spacings, one axis, flips proportional scaling)",
             "fineControl": "Fine control, still catching yard lines and hashes",
-            "noSnapping": "Drag a shape without snapping"
+            "fromCenter": "Draw or resize a box from center"
         }
     }
 }

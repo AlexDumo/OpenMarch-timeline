@@ -1,5 +1,7 @@
+// @vitest-environment node
 import { afterEach, describe, expect, it } from "vitest";
 import {
+    historyStepsPending,
     queueHistoryAction,
     queueHistoryStep,
     setHistoryPerformer,
@@ -101,5 +103,19 @@ describe("queueHistoryAction", () => {
         }, "fallback");
         expect(await failed).toBe("fallback");
         expect(await queueHistoryAction("undo")).toBe(true);
+    });
+
+    it("says a step is pending from when it's queued until it's done, thrown or not", async () => {
+        install(1);
+        expect(historyStepsPending()).toBe(false);
+        const failed = queueHistoryStep(async () => {
+            throw new Error("boom");
+        }, null);
+        const press = queueHistoryAction("undo");
+        expect(historyStepsPending()).toBe(true);
+        await failed;
+        expect(historyStepsPending()).toBe(true);
+        await press;
+        expect(historyStepsPending()).toBe(false);
     });
 });

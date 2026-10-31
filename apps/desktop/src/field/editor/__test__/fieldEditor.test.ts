@@ -11,6 +11,7 @@ import {
 } from "../fieldEditor";
 import type { MarcherPosition, MoveTransform } from "../moveGesture";
 import { ruledMove, type MoveRules } from "../moveRules";
+import { watchKeyListeners } from "@/shapes/__test__/keyListeners";
 
 /**
  * Marchers 1 to 4 in a row 100 field units apart, at zoom 2 (2 CSS px per
@@ -1074,7 +1075,25 @@ describe("FieldEditor modifier roles (version A)", () => {
         ]);
     });
 
-    it("drags fine from a Shift-press that changed no selection: on a selected marcher, or inside the box", () => {
+    it.each([
+        ["cancelled", (editor: FieldEditor) => editor.pointerCancel()],
+        ["released", (editor: FieldEditor) => editor.pointerUp(at(137, 121))],
+    ])("stops following the keys once %s", (_, end) => {
+        const keyListeners = watchKeyListeners();
+        const { editor, ports } = setup({ moveTransform: rulesOn() });
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(137, 121));
+        expect(keyListeners()).toBeGreaterThan(0);
+        end(editor);
+        expect(keyListeners()).toBe(0);
+        const drawn = vi.mocked(ports.showPositions).mock.calls.length;
+        key("keydown", { key: "Shift", shiftKey: true });
+        key("keyup", { key: "Shift" });
+        expect(ports.showPositions).toHaveBeenCalledTimes(drawn);
+        vi.restoreAllMocks();
+    });
+
+    it("drags fine from a Shift-press on a selected marcher: it changed no selection", () => {
         const onSelected = setup({ selected: [1, 2] });
         drag(
             onSelected.editor,
@@ -1089,19 +1108,21 @@ describe("FieldEditor modifier roles (version A)", () => {
             { id: 1, x: 100, y: 110 },
             { id: 2, x: 200, y: 110 },
         ]);
+    });
 
-        const inBox = setup({ selected: [1, 3] });
-        drag(
-            inBox.editor,
-            { x: 250, y: 100 },
-            { x: 250, y: 140 },
-            {
-                shift: true,
-            },
-        );
-        expect(inBox.state.drops[0].positions).toEqual([
-            { id: 1, x: 100, y: 110 },
-            { id: 3, x: 300, y: 110 },
+    it("drags at full speed from a Shift-press that adds the rest of a partly selected box: the press used Shift", () => {
+        // Marchers 1 and 2 are a placed box; 1 is selected, so Shift adds 2
+        const { editor, state } = setup({
+            selected: [1],
+            moveTransform: rulesOn(),
+            pressSelection: (hit, shift) => (hit <= 2 && shift ? [1, 2] : null),
+        });
+        running = editor;
+        drag(editor, { x: 100, y: 100 }, { x: 137, y: 121 }, { shift: true });
+        expect(state.selected).toEqual([1, 2]);
+        expect(state.drops[0].positions).toEqual([
+            { id: 1, x: 140, y: 120 },
+            { id: 2, x: 240, y: 120 },
         ]);
     });
 });
@@ -1298,6 +1319,41 @@ describe("FieldEditor marquee", () => {
         expect(ports.selection.set).not.toHaveBeenCalled();
     });
 
+    it("starts inside a multi-selection's box with Shift or Alt: adding or subtracting (owner decision, 2026-10-30)", () => {
+        // A block of 1 to 3 selected; the press is on empty field between 2 and 3
+        const subtract = setup({ selected: [1, 2, 3] });
+        subtract.editor.pointerDown(at(250, 100, { alt: true }));
+        subtract.editor.pointerMove(at(150, 150, { alt: true }));
+        expect(subtract.editor.activeGesture()).toBe("marquee");
+        subtract.editor.pointerUp(at(150, 150, { alt: true }));
+        expect(subtract.state.selected).toEqual([1, 3]);
+        expect(subtract.state.drops).toEqual([]);
+
+        const add = setup({ selected: [1, 3] });
+        add.editor.pointerDown(at(250, 100, { shift: true }));
+        add.editor.pointerMove(at(450, 150, { shift: true }));
+        expect(add.editor.activeGesture()).toBe("marquee");
+        add.editor.pointerUp(at(450, 150, { shift: true }));
+        expect(add.state.selected).toEqual([1, 3, 4]);
+        expect(add.state.drops).toEqual([]);
+    });
+
+    it("starts a lasso inside a multi-selection's box with Alt", () => {
+        const { editor, state } = setup({ selected: [1, 2, 3] });
+        lasso(
+            editor,
+            [
+                [250, 95],
+                [150, 50],
+                [150, 150],
+                [250, 105],
+            ],
+            { alt: true },
+        );
+        expect(state.selected).toEqual([1, 3]);
+        expect(state.drops).toEqual([]);
+    });
+
     it("starts outside a multi-selection's box", () => {
         const { editor, state } = setup({ selected: [1, 3] });
         dragThrough(editor, [
@@ -1451,12 +1507,13 @@ describe("FieldEditor lasso", () => {
         expect(triple.editor.activeGesture()).toBe("marquee");
     });
 
-    it("doesn't start inside a multi-selection's box", () => {
+    it("starts inside a multi-selection's box with Shift, which adds (owner decision, 2026-10-30)", () => {
         const { editor } = setup({ selected: [1, 3] });
         click(editor, 250, 100, { shift: true });
         editor.pointerDown(at(250, 100, { shift: true }));
         editor.pointerMove(at(250, 200, { shift: true }));
-        expect(editor.activeGesture()).toBe("move");
+        expect(editor.activeGesture()).toBe("lasso");
+        editor.pointerCancel();
     });
 });
 
@@ -1509,7 +1566,7 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
         let running: FieldEditor | undefined;
         afterEach(() => running?.pointerCancel());
 
-        it("re-runs a rotation: Shift down keeps the angle drawn, Shift up snaps it to 15° again", () => {
+        it("re-runs a rotation: Shift down draws whole degrees where the pointer is, Shift up snaps it to 15° again", () => {
             const { editor, state } = setup({ selected: ALL });
             running = editor;
             editor.pointerDown(at(HANDLE.rot.x, HANDLE.rot.y));
@@ -1522,10 +1579,10 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
             editor.pointerMove(pointer);
             expect(editor.rotationFrame()?.angle).toBe(30);
             key("keydown", { key: "Shift", shiftKey: true });
-            expect(editor.rotationFrame()?.angle).toBe(30);
+            expect(editor.rotationFrame()?.angle).toBe(37);
             key("keyup", { key: "Shift" });
             expect(editor.rotationFrame()?.angle).toBe(30);
-            // Fine re-anchors on the 30° drawn: 40° more turns 10°, in whole degrees
+            // Fine at full speed: 40° more turns 40°, in whole degrees
             key("keydown", { key: "Shift", shiftKey: true });
             const further = ((77 - 90) * Math.PI) / 180;
             editor.pointerMove(
@@ -1533,10 +1590,10 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
                     shift: true,
                 }),
             );
-            expect(editor.rotationFrame()?.angle).toBe(40);
+            expect(editor.rotationFrame()?.angle).toBe(77);
             // Shift up with no move: 15° steps again
             key("keyup", { key: "Shift" });
-            expect(editor.rotationFrame()?.angle).toBe(45);
+            expect(editor.rotationFrame()?.angle).toBe(75);
             editor.pointerUp(
                 at(250 + 30 * Math.cos(further), 100 + 30 * Math.sin(further)),
             );

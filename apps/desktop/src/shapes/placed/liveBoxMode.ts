@@ -36,7 +36,10 @@ import {
 } from "./liveBox";
 import type { PlacedBox } from "./placedBox";
 import { enterBox } from "./boxSelection";
-import { usePlacedBoxPreviewStore } from "./boxSelectionStore";
+import {
+    usePlacedBoxPreviewStore,
+    useSavingBoxStore,
+} from "./boxSelectionStore";
 import { outlineGapAt } from "../distribute/outlineGap";
 import type { AnyToolKind } from "../tool/toolKind";
 import type { XY } from "../types";
@@ -238,13 +241,18 @@ export class LiveBoxMode implements FieldMode {
         if (!field) return;
         const { held, reachInside } = pressShapeKeys(
             pointer,
-            () =>
+            {
+                kind: this.live.box.kind,
+                params: this.live.box.params,
+                n: this.live.box.spots,
+            },
+            (reachInside) =>
                 shapeTargetAt(
                     this.live.box.kind,
                     this.live.box.params,
                     this.live.box.spots,
                     pointer.field,
-                    { ...toolEnvFor(field), reachInside: true },
+                    { ...toolEnvFor(field), reachInside },
                     this.live.selected,
                 ),
             (at, roles) => this.rerun(at, roles),
@@ -288,11 +296,15 @@ export class LiveBoxMode implements FieldMode {
         const before = this.live;
         const out = releaseLive(before, click);
         this.live = out.live;
-        this.emit();
         if (out.changed) {
             this.saved = out.live.params;
             void commitBox(before.box, out.live.params, this.queryClient);
-        } else if (out.enter) this.enterAt(pointer);
+            // The next press goes on from the shape as saved, before the selection hears of it
+            const saving = useSavingBoxStore.getState().box;
+            if (saving) this.live = openLive(saving, this.live.selected);
+        }
+        this.emit();
+        if (!out.changed && out.enter) this.enterAt(pointer);
     }
 
     cancel(): void {

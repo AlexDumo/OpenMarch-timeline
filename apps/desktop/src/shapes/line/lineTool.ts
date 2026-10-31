@@ -22,7 +22,6 @@ import {
     cornersPictures,
     endsPictures,
     measuredPictures,
-    pointsPictures,
     spacingPictures,
 } from "./linePictures";
 import {
@@ -647,61 +646,6 @@ const CORNERS: ToolChoice<LineParams> = {
 };
 
 /**
- * The points menu (#525): every point a corner, or every point smooth so the line bends through
- * them. A line with both says so; a point's own handle changes one point.
- */
-const POINTS: ToolChoice<LineParams> = {
-    key: "points",
-    get label() {
-        return tolgee.t("shapes.kinds.line.points.label", "Points");
-    },
-    options: (p) => [
-        {
-            value: "corner",
-            label: tolgee.t("shapes.kinds.line.points.corner", "Corners"),
-            picture: pointsPictures().corner,
-        },
-        {
-            value: "smooth",
-            label: tolgee.t("shapes.kinds.line.points.smooth", "Smooth"),
-            picture: pointsPictures().smooth,
-        },
-        ...(pointsKind(p) === "mixed"
-            ? [
-                  {
-                      value: "mixed",
-                      label: tolgee.t(
-                          "shapes.kinds.line.points.mixed",
-                          "Corners and smooth points",
-                      ),
-                      picture: pointsPictures().mixed,
-                  },
-              ]
-            : []),
-    ],
-    current: (p) => pointsKind(p),
-    pick(p, n, value, env) {
-        if (value !== "corner" && value !== "smooth") return p;
-        const points = p.points.map((q) => ({
-            ...q,
-            // A smooth point made smooth keeps its own tension
-            tension: value === "corner" ? 0 : q.tension || SMOOTH,
-        }));
-        if (points.every((q, i) => q.tension === p.points[i]!.tension))
-            return p;
-        return keptInterval({ ...p, points }, n, env);
-    },
-    // Two points make a straight line however smooth they are
-    shown: (p) => p.points.length > 2,
-};
-
-/** Whether every point is a corner, every one is smooth, or there are both */
-function pointsKind(p: LineParams): "corner" | "smooth" | "mixed" {
-    if (p.points.every((q) => q.tension === 0)) return "corner";
-    return p.points.every((q) => q.tension > 0) ? "smooth" : "mixed";
-}
-
-/**
  * The Line (#523, #524, #525, spec #522): a line of marchers drawn with one drag (two points) or by
  * clicking point after point, every point and every segment's midpoint a handle, moved from its
  * body, and turned and flipped through its frame like every shape. Drawn in Fit; typing an interval
@@ -714,7 +658,7 @@ function pointsKind(p: LineParams): "corner" | "smooth" | "mixed" {
 export const lineTool: ToolKind<LineParams> = {
     shape: lineShape,
     params: [INTERVAL],
-    choices: [ENDS, SPACING, MEASURED, CORNERS, POINTS],
+    choices: [ENDS, SPACING, MEASURED, CORNERS],
     groups: GROUPS,
     ordered: true,
     readable: isLineParams,

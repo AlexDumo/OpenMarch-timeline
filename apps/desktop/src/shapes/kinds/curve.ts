@@ -164,7 +164,7 @@ export const curveKind: ShapeKind<CurveParams> = {
         if (!match) return p;
         const index = Number(match[1]);
         if (index >= p.points.length) return p;
-        // Shift: the leg from the previous point (the next one, for the first) at 45° steps
+        // Constrain: the leg from the previous point (the next one, for the first) at 45° steps
         const neighbor = p.points[index === 0 ? 1 : index - 1];
         const target =
             constrain && neighbor ? snapAngle(neighbor, to, Math.PI / 4) : to;

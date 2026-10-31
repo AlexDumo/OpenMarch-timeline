@@ -9,7 +9,6 @@ import {
     type LineParams,
 } from "../lineGeometry";
 import { chipLayout } from "../../editor/chip";
-import { sameParams } from "../../placed/commitBox";
 import {
     liveTargets,
     moveLive,
@@ -45,7 +44,7 @@ import type { ShapeContext, XY } from "../../types";
 /**
  * Smooth points and the Curve (#525, spec #522): each point has a tension, 0 a corner and more a
  * smooth point the line bends through. A click on a point selects it, a double-click toggles it,
- * the ends of a selected point's tangent bar set how round (#557), the Points menu sets every point; smooth points never hold a marcher, and spots stay
+ * the ends of a selected point's tangent bar set how round (#557); smooth points never hold a marcher, and spots stay
  * evenly apart straight across along the curve. Curve is a preset of the Line whose points start
  * smooth. Driven through the shape session with the real Line kind.
  */
@@ -226,34 +225,8 @@ describe("setting a point's tension", () => {
         expect(handleKeys(t3)).not.toContain("t1");
     });
 
-    it("sets every point from the Points menu, which says when there are both", () => {
-        const points = choice("points");
-        const t = L();
-        expect(points.current(t.params, t.spots)).toBe("corner");
-        const smooth = picked(t, "points", "smooth");
-        expect(tensions(smooth)).toEqual([SMOOTH, SMOOTH, SMOOTH]);
-        expect(points.current(smooth.params, smooth.spots)).toBe("smooth");
-        expect(tensions(picked(smooth, "points", "corner"))).toEqual([0, 0, 0]);
-        const mixed = switched(t, "p1");
-        expect(points.current(mixed.params, mixed.spots)).toBe("mixed");
-        expect(
-            points.options(mixed.params, mixed.spots).map((o) => o.value),
-        ).toEqual(["corner", "smooth", "mixed"]);
-        // A smooth point made smooth keeps its tension
-        const t1 = mixed.kind
-            .handles(mixed.params, mixed.spots, "p1")
-            .find((h) => h.key === "t1")!.at;
-        const rounder = onHandle(mixed, "t1", {
-            x: 40 + (t1.x - 40) * 1.5,
-            y: t1.y * 1.5,
-        });
-        expect(tensions(rounder)[1]).toBeCloseTo(1.5, 9);
-        const kept = picked(rounder, "points", "smooth");
-        expect(tensions(kept)[1]).toBe(tensions(rounder)[1]);
-        // Not on a straight line of two points, which can't bend
-        const two = clicked(lineTool, 5, [ARCH[0]!, ARCH[2]!]);
-        expect(points.shown!(two.params, two.spots)).toBe(false);
-        expect(points.shown!(t.params, t.spots)).toBe(true);
+    it("has no Points menu: a double-click switches a point instead (#560)", () => {
+        expect(lineTool.choices!.map((c) => c.key)).not.toContain("points");
     });
 
     it("hides the corners switch on a line whose only corner turned smooth", () => {
@@ -627,18 +600,6 @@ describe("a placed curve", () => {
         expect(out.live.selected).toBe("p1");
         const { members } = liveTargets(placed, out.live.params, ctx);
         expect(members).toHaveLength(N);
-    });
-
-    it("saves every point made a corner from the Points menu on the placed curve", () => {
-        const placed = readBack(recipeOf(arch()));
-        const next = choice("points").pick(placed.params, N, "corner", env);
-        expect(sameParams(next, placed.params)).toBe(false);
-        expect(next.points.map((q) => q.tension)).toEqual([0, 0, 0, 0]);
-        // Every member on a spot of the line with corners, one on each corner
-        const { members } = liveTargets(placed, next, ctx);
-        expect(members).toHaveLength(N);
-        for (const q of next.points.slice(1, -1))
-            expect(members.some((m) => dist(m, q) < 1e-6)).toBe(true);
     });
 
     /** An open Line through four corners, its ends apart */

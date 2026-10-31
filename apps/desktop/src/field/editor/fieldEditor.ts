@@ -1,6 +1,7 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
 import {
     pressChoiceOf,
+    type HeldRole,
     REACH_INSIDE,
     type PressChoice,
     type RoleKey,
@@ -188,6 +189,20 @@ export type FieldEditorOptions = {
     moveTransform?: MoveTransform;
     /** The Snap toggle, read on every pointer event; off, a rotation turns freely. On when omitted. */
     snap?: () => boolean;
+    /**
+     * The touch pill's toggles (`onScreenToggles` in `TouchModifierStore`): its held roles count
+     * as held keys for every drag, a toggle changed mid-drag re-runs it as a key does, and the
+     * press rule never blocks them. `add` is the add press choice at every press, as Shift is: a
+     * click, a press-drag and a marquee or lasso add to the selection.
+     */
+    onScreen?: FieldOnScreen;
+};
+
+/** On-screen toggles for the field editor, read live; see {@link FieldEditorOptions.onScreen}. */
+export type FieldOnScreen = {
+    roles(): ReadonlySet<HeldRole>;
+    subscribe(changed: () => void): () => void;
+    add(): boolean;
 };
 
 /**
@@ -226,6 +241,8 @@ export type FieldPress = {
     handle: HandleId | null;
     /** The second press of a double-click on empty field, or on the marcher `hit`. */
     double: boolean;
+    /** The pill's Add was on at the press: the add choice, as Shift is. */
+    add?: boolean;
 };
 
 /**
@@ -542,6 +559,7 @@ export class FieldEditor {
             hit,
             handle,
             double: !handle && this.isDoubleClick(pointer, hit),
+            add: this.options.onScreen?.add() ?? false,
         };
         return true;
     }
@@ -678,7 +696,7 @@ export class FieldEditor {
                   screen: press.start.screen,
                   hit: press.hit,
               };
-        this.click(press, pointer.shift);
+        this.click(press, pointer.shift || press.add === true);
         if (press.double && press.hit !== null)
             this.ports.doubleClickMarcher?.(press.hit);
     }
@@ -930,8 +948,9 @@ export class FieldEditor {
      * The gesture a press becomes once it moves past the click slop, or null
      * when the press does nothing more. A handle of the selection box scales
      * or rotates the selection (#198). A move starts from a marcher, or from
-     * empty field inside a multi-selection's box (owner decision, #196);
-     * marquee and lasso (#195) start from the rest of the empty field: a lasso
+     * empty field inside a multi-selection's box (owner decision, #196) with
+     * no add or subtract choice; marquee and lasso (#195) start from the rest
+     * of the empty field, and from inside the box with one: a lasso
      * after a double-click, else a marquee. A press on a marcher that moves
      * nothing (Shift took a group or a box's member out) is done, and starts
      * no marquee.
@@ -1060,11 +1079,17 @@ export class FieldEditor {
 
     /** A marquee, or a lasso after a double-click, from empty field. */
     private startArea(press: FieldPress): FieldGesture {
+        const start = this.areaStart(press);
         const isMac = this.options.isMac ?? false;
         this.area = press.double
-            ? startLasso(this.areaPorts, press.start, isMac)
-            : startMarquee(this.areaPorts, press.start, isMac);
+            ? startLasso(this.areaPorts, start, isMac)
+            : startMarquee(this.areaPorts, start, isMac);
         return this.area;
+    }
+
+    /** The keys an area from `press` starts with: the pill's Add adds, as Shift at the press does. */
+    private areaStart(press: FieldPress): FieldPointer {
+        return press.add ? { ...press.start, shift: true } : press.start;
     }
 
     /** Whether a press on `hit` (null: empty field) is the second of a double-click. */
@@ -1098,7 +1123,8 @@ export class FieldEditor {
      * - Shift on a marcher that takes it out (a group, or a box's member)
      *   moves nothing: the press is done;
      * - pressing empty field inside a multi-selection's box moves the
-     *   selection.
+     *   selection, unless the press adds or subtracts (Shift, the pill's Add,
+     *   or Alt): that starts a marquee or lasso (owner decision, 2026-10-30).
      *
      * A Shift that added the marcher was the press's (the press rule): the
      * drag goes at full speed until Shift is released and pressed again. So is
@@ -1112,27 +1138,29 @@ export class FieldEditor {
         let ids: readonly number[];
         let usedByPress: readonly RoleKey[] = [];
         if (press.hit !== null) {
+            // The pill's Add is Shift at the press, with no key
+            const adding = press.start.shift || press.add === true;
             const reach = this.reachInside(press.start, press.hit);
             const chosen = this.ports.pressSelection?.(
                 press.hit,
-                press.start.shift,
+                adding,
                 reach !== null,
             );
-            const shiftChose = chosen != null && press.start.shift;
+            const shiftChose = chosen != null && adding;
             if (shiftChose && !chosen.includes(press.hit)) {
                 // Shift took a group (or a box's member) out; the press is done
                 this.write(chosen);
                 return null;
             }
             // The add choice applies only when the press adds the marcher (or
-            // Shift adds its whole group); then its key is the press's, no
-            // role until pressed again
+            // Shift adds its group, or the rest of a partly selected box);
+            // then its key is the press's, no role until pressed again. The
+            // pill's Add uses no key, so nothing waits on the press rule
+            const applies = shiftChose
+                ? chosen.some((id) => !selection.includes(id))
+                : !chosen && !selection.includes(press.hit);
             const add = pressChoiceOf(press.start, "field", {
-                applicable: new Set<PressChoice>(
-                    (!chosen || shiftChose) && !selection.includes(press.hit)
-                        ? ["add"]
-                        : [],
-                ),
+                applicable: new Set<PressChoice>(applies ? ["add"] : []),
                 isMac: this.options.isMac ?? false,
             });
             usedByPress = [add, reach].flatMap((c) => (c ? [c.key] : []));
@@ -1143,12 +1171,13 @@ export class FieldEditor {
                 chosen ??
                 (keeps
                     ? selection
-                    : add
+                    : add || (applies && press.add)
                       ? [...selection, press.hit]
                       : [press.hit]);
             this.write(ids);
         } else if (
             !this.modeOwnsSelectionBox() &&
+            areaChoice(this.areaStart(press), this.options.isMac) === null &&
             this.insideSelectionBox(selection, press.start.field)
         ) {
             ids = selection;
@@ -1193,6 +1222,7 @@ export class FieldEditor {
         return fieldKeys(press, {
             usedByPress,
             isMac: this.options.isMac ?? false,
+            onScreen: this.options.onScreen,
         });
     }
 

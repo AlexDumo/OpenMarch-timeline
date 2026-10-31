@@ -1,4 +1,5 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
+import type { HonoredRoles } from "@/input/gestureChipStore";
 import type { Roles } from "@/input/modifierRoles";
 import type { FieldGesture, FieldPoint, FieldPointer } from "./fieldEditor";
 import { FieldDrag, type FieldKeys } from "./fieldKeys";
@@ -8,7 +9,7 @@ import {
     type SelectionFrame,
 } from "./groupTransform";
 import { PRECISION_START, precisionDelta } from "./moveRules";
-import { RotationDrag } from "./transformGestures";
+import { ROTATE_HONORS, RotationDrag } from "./transformGestures";
 
 /**
  * Resizing and turning one item's Outline with its handles (C2.1, props-spec
@@ -67,10 +68,11 @@ const PULLS: Record<Exclude<HandleId, "rot">, FieldPoint> = {
 };
 
 /**
- * As the selection's handles do: while fine is on the pointer counts at a
- * quarter of its speed, a role key pressed or released mid-drag redraws the
- * Outline at the last pointer, and a release where the last move left the
- * pointer saves what's drawn.
+ * As the selection's handles do: while fine is on a resize counts the
+ * pointer at a quarter of its speed (a turn doesn't slow), a role key pressed
+ * or released mid-drag redraws the Outline at the last pointer, and a release
+ * where the last move left the pointer saves what's drawn. Neither handle reads
+ * constrain or from center.
  */
 abstract class ItemHandleGesture implements FieldGesture {
     abstract readonly kind: FieldTestGesture;
@@ -80,11 +82,13 @@ abstract class ItemHandleGesture implements FieldGesture {
         protected readonly frame: ItemFrame,
         private readonly host: ItemTransformHost,
         keys: FieldKeys,
+        honored: HonoredRoles,
     ) {
         this.drag = new FieldDrag(
             keys,
             (at, roles) => this.sizeAt(at, roles),
             (size) => host.show(size),
+            honored,
         );
     }
 
@@ -121,7 +125,11 @@ export class ItemResizeGesture extends ItemHandleGesture {
         private readonly handle: Exclude<HandleId, "rot">,
         keys: FieldKeys,
     ) {
-        super(frame, host, keys);
+        super(frame, host, keys, {
+            context: "field",
+            fine: "fine",
+            snaps: false,
+        });
     }
 
     protected sizeAt(at: FieldPoint, roles: Roles): ItemSize {
@@ -157,8 +165,8 @@ export class ItemResizeGesture extends ItemHandleGesture {
 /**
  * The rotate handle: turns the Outline about its center by the angle
  * {@link RotationDrag} draws, as the selection's rotate handle does: snapped
- * to 15°, or to whole degrees at a quarter speed with fine; free with the
- * Snap toggle off.
+ * to 15°, or to whole degrees with fine, at full speed; free with the Snap
+ * toggle off.
  */
 export class ItemRotateGesture extends ItemHandleGesture {
     readonly kind: FieldTestGesture = "rotate";
@@ -172,7 +180,7 @@ export class ItemRotateGesture extends ItemHandleGesture {
         /** The Snap toggle, read on every event; on when omitted. */
         snap?: () => boolean,
     ) {
-        super(frame, host, keys);
+        super(frame, host, keys, ROTATE_HONORS);
         this.rotation = new RotationDrag(frame.center, origin.field, snap);
     }
 

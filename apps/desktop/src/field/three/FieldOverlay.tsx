@@ -19,6 +19,7 @@ import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import { GUIDE_INK, GUIDE_INK_TEXT } from "./guideInk";
 import { shapeAlone, useMarchersHidden } from "@/shapes/field/marchersHidden";
+import HeldRolesChip, { HeldRolesChipBelowTip } from "./HeldRolesChip";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -151,28 +152,33 @@ export default function FieldOverlay({
     );
 
     return (
-        <svg
-            className="pointer-events-none absolute inset-0 h-full w-full"
-            data-testid="fieldOverlay"
-        >
-            <SelectionBox frame={JSON.parse(box) as DrawnSelectionBox | null} />
-            {area?.kind === "marquee" && (
-                <Marquee
-                    rect={area.rect}
-                    subtract={area.subtract}
-                    theme={theme}
+        <>
+            <HeldRolesChip belowTip={modeDrawing?.tip !== undefined} />
+            <svg
+                className="pointer-events-none absolute inset-0 h-full w-full"
+                data-testid="fieldOverlay"
+            >
+                <SelectionBox
+                    frame={JSON.parse(box) as DrawnSelectionBox | null}
                 />
-            )}
-            {area?.kind === "lasso" && <Lasso lasso={area} theme={theme} />}
-            {modeDrawing && (
-                <ModeDrawing
-                    drawing={modeDrawing}
-                    theme={theme}
-                    marchers={marchers}
-                />
-            )}
-            {propTool && <PropToolPreview tool={propTool} theme={theme} />}
-        </svg>
+                {area?.kind === "marquee" && (
+                    <Marquee
+                        rect={area.rect}
+                        subtract={area.subtract}
+                        theme={theme}
+                    />
+                )}
+                {area?.kind === "lasso" && <Lasso lasso={area} theme={theme} />}
+                {modeDrawing && (
+                    <ModeDrawing
+                        drawing={modeDrawing}
+                        theme={theme}
+                        marchers={marchers}
+                    />
+                )}
+                {propTool && <PropToolPreview tool={propTool} theme={theme} />}
+            </svg>
+        </>
     );
 }
 
@@ -958,12 +964,19 @@ function ModeDrawing({
                             height={TIP_BOX.height}
                             overflow="visible"
                         >
-                            <div
-                                className="rounded-6 border-stroke bg-bg-1 bg-modal text-text shadow-modal inline-flex items-center gap-2 border px-6 py-2 whitespace-nowrap tabular-nums"
-                                style={{ fontSize: TIP_PX }}
-                                data-testid="fieldShapeTip"
-                            >
-                                <GlyphText text={drawing.tip.text} size={12} />
+                            <div className="flex flex-col items-start gap-4">
+                                <div
+                                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-text shadow-modal inline-flex items-center gap-2 border px-6 py-2 whitespace-nowrap tabular-nums"
+                                    style={{ fontSize: TIP_PX }}
+                                    data-testid="fieldShapeTip"
+                                >
+                                    <GlyphText
+                                        text={drawing.tip.text}
+                                        size={12}
+                                    />
+                                </div>
+                                {/* The held-roles chip stacks under the readout, never over it */}
+                                <HeldRolesChipBelowTip />
                             </div>
                         </foreignObject>
                     );
