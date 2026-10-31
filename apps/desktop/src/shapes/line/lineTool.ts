@@ -19,6 +19,13 @@ import type {
 } from "../tool/toolKind";
 import { curveShape, lineShape } from "./lineShape";
 import {
+    cornersPictures,
+    endsPictures,
+    measuredPictures,
+    pointsPictures,
+    spacingPictures,
+} from "./linePictures";
+import {
     fillInterval,
     isFilled,
     lineClosed,
@@ -420,10 +427,12 @@ const ENDS: ToolChoice<LineParams> = {
         {
             value: "open",
             label: tolgee.t("shapes.kinds.line.ends.open", "Open"),
+            picture: endsPictures().open,
         },
         {
             value: "closed",
             label: tolgee.t("shapes.kinds.line.ends.closed", "Closed"),
+            picture: endsPictures().closed,
         },
     ],
     current: (p) => (isClosed(p) ? "closed" : "open"),
@@ -442,6 +451,7 @@ const PATH_OPTIONS = () => [
             "shapes.kinds.line.spacing.pathStart",
             "Interval on the path, from the start",
         ),
+        picture: spacingPictures()["path-start"],
     },
     {
         value: "path-center",
@@ -449,6 +459,7 @@ const PATH_OPTIONS = () => [
             "shapes.kinds.line.spacing.pathCenter",
             "Interval on the path, centered",
         ),
+        picture: spacingPictures()["path-center"],
     },
     {
         value: "path-end",
@@ -456,6 +467,7 @@ const PATH_OPTIONS = () => [
             "shapes.kinds.line.spacing.pathEnd",
             "Interval on the path, from the end",
         ),
+        picture: spacingPictures()["path-end"],
     },
 ];
 
@@ -469,10 +481,12 @@ const SPACING: ToolChoice<LineParams> = {
         {
             value: "fit",
             label: tolgee.t("shapes.kinds.line.spacing.fit", "Fit"),
+            picture: spacingPictures().fit,
         },
         {
             value: "keep",
             label: tolgee.t("shapes.kinds.line.spacing.keep", "Keep interval"),
+            picture: spacingPictures().keep,
         },
         // A closed line has no ends to lay a run from (#529)
         ...(isClosed(p) ? [] : PATH_OPTIONS()),
@@ -540,16 +554,19 @@ const MEASURED: ToolChoice<LineParams> = {
         {
             value: "true",
             label: tolgee.t("shapes.kinds.line.measured.true", "True distance"),
+            picture: measuredPictures().true,
         },
         {
             value: "x",
             label: tolgee.t("shapes.kinds.line.measured.x", "↔ Side to side"),
             disabled: measuredReason(p, "x"),
+            picture: measuredPictures().x,
         },
         {
             value: "y",
             label: tolgee.t("shapes.kinds.line.measured.y", "↕ Front to back"),
             disabled: measuredReason(p, "y"),
+            picture: measuredPictures().y,
         },
     ],
     current: (p) => measuredAxis(p) ?? "true",
@@ -575,6 +592,7 @@ const CORNERS: ToolChoice<LineParams> = {
                 "shapes.kinds.line.corners.on",
                 "Marcher on every corner",
             ),
+            picture: cornersPictures().on,
         },
         {
             value: "off",
@@ -582,6 +600,7 @@ const CORNERS: ToolChoice<LineParams> = {
                 "shapes.kinds.line.corners.off",
                 "Intervals run around corners",
             ),
+            picture: cornersPictures().off,
         },
     ],
     current: (p) => (p.corners === false ? "off" : "on"),
@@ -619,10 +638,12 @@ const POINTS: ToolChoice<LineParams> = {
         {
             value: "corner",
             label: tolgee.t("shapes.kinds.line.points.corner", "Corners"),
+            picture: pointsPictures().corner,
         },
         {
             value: "smooth",
             label: tolgee.t("shapes.kinds.line.points.smooth", "Smooth"),
+            picture: pointsPictures().smooth,
         },
         ...(pointsKind(p) === "mixed"
             ? [
@@ -632,6 +653,7 @@ const POINTS: ToolChoice<LineParams> = {
                           "shapes.kinds.line.points.mixed",
                           "Corners and smooth points",
                       ),
+                      picture: pointsPictures().mixed,
                   },
               ]
             : []),

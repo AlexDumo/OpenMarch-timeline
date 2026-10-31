@@ -67,6 +67,10 @@ export function ModeMenu({
                         data-mode={current.mode}
                         className="rounded-4 hover:bg-fg-2 flex min-h-24 items-center gap-4 px-4 py-2"
                     >
+                        <ModePicture
+                            mode={current.mode}
+                            testId="shape-mode-menu-picture"
+                        />
                         <span>{modeLabel(current.mode)}</span>
                         <CaretDownIcon size={10} />
                     </button>
