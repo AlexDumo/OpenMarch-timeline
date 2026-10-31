@@ -101,27 +101,34 @@ describe("a shape's preview (#378)", () => {
         expect(shapePreview(boxTool)).toBe(shapePreview(boxTool));
     });
 
-    it("draws the line from its spots and open outline along the path", () => {
+    it("draws the line as a zigzag along its open outline (owner, 2026-10-31)", () => {
         const preview = shapePreview(lineTool);
         expect(preview.spots).toHaveLength(PREVIEW_SPOTS);
-        expect(preview.outline).not.toBeNull();
         expect(preview.openOutline).toBe(true);
         expect(preview.spots.every(inView)).toBe(true);
         expect(preview.outline!.every(inView)).toBe(true);
-        const row = size(preview.spots);
-        expect(row.depth).toBeLessThan(row.width / 3);
+        // Its corners: the outline turns back up and down across the picture
+        const ys = preview.outline!.map((p) => p.y);
+        const turns = ys.filter(
+            (y, i) =>
+                i > 0 &&
+                i < ys.length - 1 &&
+                (y - ys[i - 1]!) * (ys[i + 1]! - y) < 0,
+        );
+        expect(turns.length).toBeGreaterThanOrEqual(4);
     });
 
-    it("draws the curve bowed, not as a straight chord", () => {
+    it("draws the curve as the same zigzag, smooth: a wave", () => {
         const curve = shapePreview(curveTool);
+        const line = shapePreview(lineTool);
         expect(curve.openOutline).toBe(true);
-        const outline = curve.outline!;
-        const start = outline[0]!;
-        const end = outline[outline.length - 1]!;
-        const mid = outline[Math.floor(outline.length / 2)]!;
-        const chord = Math.hypot(end.x - start.x, end.y - start.y);
-        expect(distToSegment(mid, start, end)).toBeGreaterThan(chord * 0.1);
-        expect(curve.outline).not.toEqual(shapePreview(lineTool).outline);
+        expect(curve.outline!.every(inView)).toBe(true);
+        // Smooth: drawn through many more points than the zigzag's corners
+        expect(curve.outline!.length).toBeGreaterThan(line.outline!.length * 2);
+        expect(size(curve.outline!).width).toBeCloseTo(
+            size(line.outline!).width,
+            0,
+        );
     });
 
     it("keeps open outlines on the dots, without the closed-shape stand-off", () => {
