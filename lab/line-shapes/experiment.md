@@ -40,9 +40,10 @@ a way to place the selected marchers.
   then pick Grid, Outline or Spread to fill it.
 - Put Line or Curve in the favorites ring, or press ⌘K and type `line 2*3+4*2`.
 
+- Open any menu in the shape editor: each choice now has a small picture.
+
 **Not in this build yet**
 
 - From your last feedback: clicking a point to see its curve with a
   double-click to switch corner and smooth (#557), hiding the marchers for a
-  moment (#558), pictures in the menus (#559) and dropping the Points menu
-  (#560).
+  moment (#558) and dropping the Points menu (#560).
