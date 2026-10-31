@@ -61,7 +61,12 @@ import {
 } from "../frame/shapeEditorStore";
 import { HANDLE_REACH_PX, toolEnvFor } from "../tool/toolEnv";
 import type { Roles } from "@/input/modifierRoles";
-import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
+import {
+    paramGlyph,
+    type AnyToolKind,
+    type ParamGlyph,
+    type ToolEnv,
+} from "../tool/toolKind";
 import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 import { ShapeAwayChip } from "./ShapeAwayChip";
 import { GlyphText } from "./GlyphText";
@@ -94,7 +99,12 @@ import { OutlineGap } from "./OutlineGap";
 import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
 import { ScaleButtons, scaledOnce, scaleOnce } from "./ScaleButtons";
-import { distributionOf, edgeSplitOf, layoutOf } from "../distribute/modes";
+import {
+    closedOf,
+    distributionOf,
+    edgeSplitOf,
+    layoutOf,
+} from "../distribute/modes";
 import { outlineGapOf } from "../distribute/outlineGap";
 import type { XY } from "../types";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
@@ -307,7 +317,7 @@ function ShapeEditorBar({
                                 note={x.note}
                                 canLess={x.less !== null}
                                 canMore={x.more !== null}
-                                glyph={false}
+                                glyph={null}
                                 actions={numbers}
                             />
                         ))}
@@ -350,7 +360,11 @@ function ShapeEditorBar({
                                         note={null}
                                         canLess={false}
                                         canMore={false}
-                                        glyph
+                                        glyph={paramGlyph(
+                                            x.param,
+                                            params,
+                                            spots,
+                                        )}
                                         derived={x.derived}
                                         actions={numbers}
                                     />
@@ -471,7 +485,8 @@ function evenStateOf(
     spots: number,
 ): EvenState {
     const env = envFor();
-    const evened = env && kind.closed?.evenOut?.(params, spots, env);
+    const evened =
+        env && closedOf(kind, params, spots)?.evenOut?.(params, spots, env);
     if (evened === undefined || evened === null) return "none";
     return evened === params ? "even" : "uneven";
 }
@@ -479,11 +494,11 @@ function evenStateOf(
 /** "Even out": the shape as even as its frame allows, as one undo step (owner on #459) */
 const evenOut = (target: ShapeEditTarget) =>
     applyWith(target, (env) => {
-        const evened = target.kind.closed?.evenOut?.(
+        const evened = closedOf(
+            target.kind,
             target.params,
             target.spots,
-            env,
-        );
+        )?.evenOut?.(target.params, target.spots, env);
         return evened ?? target.params;
     });
 
@@ -598,8 +613,8 @@ const NumberChip = memo(function NumberChip({
     note: string | null;
     canLess: boolean;
     canMore: boolean;
-    /** The spacings show their glyph */
-    glyph: boolean;
+    /** The mark the spacings show before them, if any */
+    glyph: ParamGlyph | null;
     /** Shown as about so much: pressing it snaps it to a half step (owner on #459) */
     derived?: boolean;
     actions: ReturnType<typeof numberActions>;
@@ -607,9 +622,9 @@ const NumberChip = memo(function NumberChip({
     const scrub = useMemo(() => actions.scrub(param), [actions, param]);
     return (
         <span className="flex items-center gap-2">
-            {glyph && param.glyph && (
+            {glyph && (
                 <span className="text-text/60" aria-hidden>
-                    <GlyphText text={param.glyph} />
+                    <GlyphText text={glyph} />
                 </span>
             )}
             {param.stepper && (
@@ -929,8 +944,12 @@ const fillShown = (kind: AnyToolKind, params: unknown, spots: number) => {
         outlineGapOf(kind, params, spots),
         // Edge's tip says how many stand on the edge, which the proportions change (#450)
         edgeSplitOf(kind, params, spots),
-        // The kind's own menus show the answer the shape has (#523)
-        kind.choices?.map((c) => c.current(params, spots)),
+        // The kind's own menus show the answer the shape has (#523), and only while they apply
+        // (a Line's Open or closed from its third point, #529)
+        kind.choices?.map((c) => [
+            c.current(params, spots),
+            c.shown?.(params, spots) ?? true,
+        ]),
         flipX,
         flipY,
     ]);

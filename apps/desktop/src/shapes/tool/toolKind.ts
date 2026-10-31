@@ -129,9 +129,10 @@ export interface ToolParam<P> {
     readonly range?: { readonly min?: number; readonly max?: number };
     /**
      * A mark before the number in the chip, so its direction reads without words: ↔ across, ↕
-     * deep. Drawn as an icon (`GlyphText`), never as text a font may make an emoji.
+     * deep. Drawn as an icon (`GlyphText`), never as text a font may make an emoji. A function
+     * when it depends on the shape (a Line's Measured setting); read through {@link paramGlyph}.
      */
-    readonly glyph?: ParamGlyph;
+    readonly glyph?: ParamGlyph | ((params: P, n: number) => ParamGlyph | null);
     /** Hidden while this is false (a spacing with only one spot that way) */
     shown?(params: P, n: number): boolean;
     /** The number as shown: "6 × 2", "2" */
@@ -169,6 +170,16 @@ export interface ToolParam<P> {
      * (under half a step). The pivot is the host's: where the shape grows from doesn't matter.
      */
     widen?(params: P, n: number, by: number, env: ToolEnv): P | null;
+}
+
+/** The mark a number shows before it for `params`, if any ({@link ToolParam.glyph}) */
+export function paramGlyph<P>(
+    param: Pick<ToolParam<P>, "glyph">,
+    params: P,
+    n: number,
+): ParamGlyph | null {
+    const { glyph } = param;
+    return (typeof glyph === "function" ? glyph(params, n) : glyph) ?? null;
 }
 
 /** One group of a kind's interval list as the floating editor shows it (#526) */
@@ -228,6 +239,8 @@ export interface ToolChoiceOption {
     /** Stable for the kind: tests and a later command step name the answer by it */
     readonly value: string;
     readonly label: string;
+    /** Why it can't be picked now, shown with it greyed out; absent when it can */
+    readonly disabled?: string;
 }
 
 /**
@@ -253,7 +266,8 @@ export interface ToolChoice<P> {
 /**
  * Drawing by clicking point after point (#524, spec #522), for a kind that opts in. A drag still
  * draws with {@link ToolKind.draw}; a click with no drag starts a run of points, each click adds
- * one, and Enter, a double-click or a click on the last point finishes it. Everything is pure.
+ * one, and Enter, a double-click or a click on the last point finishes it; a click on the first
+ * closes it, for a kind that can close. Everything is pure.
  */
 export interface ToolClickPoints<P> {
     /**
@@ -263,6 +277,11 @@ export interface ToolClickPoints<P> {
     land(previous: readonly XY[], at: XY, env: ToolEnv): XY;
     /** The shape through `points`, in order, or undefined while they aren't one yet */
     draw(points: readonly XY[], n: number, env: ToolEnv): P | undefined;
+    /**
+     * The shape through `points` closed, its last point joined to its first: what a click on the
+     * first point draws once there are three (#529). Absent: that click adds a point as any does.
+     */
+    close?(points: readonly XY[], n: number, env: ToolEnv): P | undefined;
 }
 
 /**

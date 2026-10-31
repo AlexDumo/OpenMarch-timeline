@@ -1,5 +1,5 @@
 import tolgee from "@/global/singletons/Tolgee";
-import { resizeCursor } from "../frame/frame";
+import { fieldToFrame, resizeCursor } from "../frame/frame";
 import { formatSteps, parseSteps } from "../editor/format";
 import {
     COUNT_RATE,
@@ -19,6 +19,14 @@ import type {
 } from "../tool/toolKind";
 import { curveShape, lineShape } from "./lineShape";
 import {
+    fillInterval,
+    isFilled,
+    lineClosed,
+    lineRegion,
+    withFillInterval,
+} from "./lineFill";
+import {
+    closeLine,
     cornerOffInterval,
     curveInFrame,
     dragPoint,
@@ -28,15 +36,20 @@ import {
     drawPoints,
     hasGroups,
     intervalRange,
+    isClosed,
     landClicked,
     isLineParams,
     lineFrame,
     lineInFrame,
     lineInterval,
+    measuredAxis,
+    measuredBlock,
     lineOutline,
+    lineSegments,
     lineStretches,
     moveLine,
     onLine,
+    openLine,
     segmentMidpoint,
     setTension,
     SMOOTH,
@@ -45,8 +58,11 @@ import {
     withGroups,
     withInterval,
     withLineFrame,
+    withMeasured,
+    settleLine,
     withSpacing,
     type LineAnchor,
+    type LineMeasured,
     type LineGroup,
     type LineParams,
 } from "./lineGeometry";
@@ -83,16 +99,36 @@ const keptInterval = (
 const midpointOf = (p: LineParams, key: string): number => {
     const match = MIDPOINT_KEY.exec(key);
     const index = match ? Number(match[1]) : -1;
-    return index >= 0 && index < p.points.length - 1 ? index : -1;
+    // A closed line's last segment runs back to its first point (#529)
+    const segments = p.points.length - (isClosed(p) ? 0 : 1);
+    return index >= 0 && index < segments ? index : -1;
 };
 
 /** Whether `steps` is on the half-step ladder */
 const onHalves = (steps: number) =>
     Math.abs(steps * 2 - Math.round(steps * 2)) < 1e-6;
 
+/**
+ * The line with its spacing set to `interval`: a filled line's outline grown to it (#529), else
+ * the line kept at it
+ */
+const spacedAt = (
+    p: LineParams,
+    n: number,
+    interval: number,
+    env: ToolEnv,
+): LineParams =>
+    isFilled(p)
+        ? (withFillInterval(p, n, interval, env) ?? p)
+        : withInterval(p, n, interval, env);
+
+/** The spacing as shown: a filled line's (#529), else the line's interval */
+const spacingOf = (p: LineParams, n: number): number =>
+    isFilled(p) ? fillInterval(p, n) : lineInterval(p, n);
+
 /** An interval set as typed: kept as it is (1⅔, 1.37), not on half steps (#411, #423) */
 const typed = (p: LineParams, n: number, steps: number, env: ToolEnv) =>
-    withInterval(p, n, snapInterval(steps * env.stepPx, env, true), env);
+    spacedAt(p, n, snapInterval(steps * env.stepPx, env, true), env);
 
 /** The line's groups, in Fit the one interval it works out to */
 const groupsOf = (p: LineParams, n: number): readonly LineGroup[] =>
@@ -161,39 +197,51 @@ const INTERVAL: ToolParam<LineParams> = {
     blends: true,
     default: 2,
     range: { min: 0.5 },
-    glyph: "↔",
+    // What it measures: none for the true distance, the box's marks for ↔ and ↕
+    glyph: (p) => {
+        const axis = measuredAxis(p);
+        return axis === "x" ? "↔" : axis === "y" ? "↕" : null;
+    },
     shown: (_p, n) => n > 1,
-    // Off the half steps in Fit, or uneven around corners, it shows as about so much
+    // Off the half steps in Fit, or uneven around corners, it shows as about so much; a filled
+    // line's follows its outline (#529)
     derived: (p, n, stepPx) =>
-        p.spacing.mode === "fit" &&
-        (!onHalves(lineInterval(p, n) / stepPx) || isRange(p, n)),
+        isFilled(p)
+            ? !onHalves(fillInterval(p, n) / stepPx)
+            : p.spacing.mode === "fit" &&
+              (!onHalves(lineInterval(p, n) / stepPx) || isRange(p, n)),
     snap: (p, n, env) =>
-        withInterval(
+        spacedAt(
             p,
             n,
-            snapInterval(lineInterval(p, n), { ...env, snap: true }),
+            snapInterval(spacingOf(p, n), { ...env, snap: true }),
             env,
         ),
     // A cornered Fit line shows its narrowest and widest segment: "2–2½" (#524)
     display(p, n, stepPx) {
+        if (isFilled(p)) return formatSteps(fillInterval(p, n) / stepPx);
         const range = intervalRange(p, n);
         if (range && isRange(p, n))
             return `${formatSteps(range.min / stepPx)}–${formatSteps(range.max / stepPx)}`;
         return formatSteps(lineInterval(p, n) / stepPx);
     },
     note: (p, n) =>
-        cornerOffInterval(p, n)
+        !isFilled(p) && cornerOffInterval(p, n)
             ? tolgee.t(
                   "shapes.kinds.line.params.cornerOff",
                   "corner off its interval",
               )
             : null,
-    value: (p, n, stepPx) => lineInterval(p, n) / stepPx,
-    // The full list syntax (#526): `2*3+4*2` switches to groups
-    type: (p, n, text, env) => typedList(p, n, text, env),
+    value: (p, n, stepPx) => spacingOf(p, n) / stepPx,
+    // The full list syntax (#526): `2*3+4*2` switches to groups; a filled line has one spacing
+    type(p, n, text, env) {
+        if (!isFilled(p)) return typedList(p, n, text, env);
+        const steps = parseSteps(text);
+        return steps === null ? null : typed(p, n, steps, env);
+    },
     // With groups, every interval in proportion: the smallest one set to `steps`
     set: (p, n, steps, env) =>
-        hasGroups(p)
+        hasGroups(p) && !isFilled(p)
             ? eachInterval(
                   p,
                   n,
@@ -204,7 +252,7 @@ const INTERVAL: ToolParam<LineParams> = {
               )
             : typed(p, n, steps, env),
     scrub(base, n, m, env) {
-        const was = lineInterval(base, n) / env.stepPx;
+        const was = spacingOf(base, n) / env.stepPx;
         const steps = scrubValue(
             was,
             scrubDistance("x", m.dx, m.dy),
@@ -213,15 +261,10 @@ const INTERVAL: ToolParam<LineParams> = {
         );
         // A drag that ends where it started changes nothing; it doesn't round the value
         if (steps === was) return base;
-        return withInterval(
-            base,
-            n,
-            snapInterval(steps * env.stepPx, env),
-            env,
-        );
+        return spacedAt(base, n, snapInterval(steps * env.stepPx, env), env);
     },
     widen(p, n, by, env) {
-        if (hasGroups(p))
+        if (hasGroups(p) && !isFilled(p))
             return eachInterval(
                 p,
                 n,
@@ -229,9 +272,9 @@ const INTERVAL: ToolParam<LineParams> = {
                 (interval) => snapInterval(interval, env),
                 env,
             );
-        const steps = lineInterval(p, n) / env.stepPx + by;
+        const steps = spacingOf(p, n) / env.stepPx + by;
         if (steps < 0.5 - 1e-9) return null;
-        return withInterval(p, n, snapInterval(steps * env.stepPx, env), env);
+        return spacedAt(p, n, snapInterval(steps * env.stepPx, env), env);
     },
 };
 
@@ -265,7 +308,8 @@ const counted = (g: LineGroup, count: number): LineGroup => ({
  */
 const GROUPS: ToolGroups<LineParams> = {
     shown(p, n, stepPx) {
-        if (!hasGroups(p) || p.spacing.mode === "fit") return null;
+        if (!hasGroups(p) || p.spacing.mode === "fit" || isFilled(p))
+            return null;
         const { groups } = p.spacing;
         return layGroups(groups, n).map(({ count, grown }, i) => ({
             count: String(count),
@@ -362,13 +406,66 @@ function isRange(p: LineParams, n: number): boolean {
 
 const ANCHORS: readonly LineAnchor[] = ["start", "center", "end"];
 
+/**
+ * Open or closed (#529): Close joins the last point to the first, so the line can be filled like
+ * a box; Open turns it back into a line through the spots its outline has. Shown once there are
+ * three points to close.
+ */
+const ENDS: ToolChoice<LineParams> = {
+    key: "ends",
+    get label() {
+        return tolgee.t("shapes.kinds.line.ends.label", "Open or closed");
+    },
+    options: () => [
+        {
+            value: "open",
+            label: tolgee.t("shapes.kinds.line.ends.open", "Open"),
+        },
+        {
+            value: "closed",
+            label: tolgee.t("shapes.kinds.line.ends.closed", "Closed"),
+        },
+    ],
+    current: (p) => (isClosed(p) ? "closed" : "open"),
+    pick(p, n, value, env) {
+        if (value === "closed") return closeLine(p, n, env);
+        return value === "open" ? openLine(p, n) : p;
+    },
+    shown: (p) => isClosed(p) || p.points.length > 2,
+};
+
+/** Interval on the path, from each anchor */
+const PATH_OPTIONS = () => [
+    {
+        value: "path-start",
+        label: tolgee.t(
+            "shapes.kinds.line.spacing.pathStart",
+            "Interval on the path, from the start",
+        ),
+    },
+    {
+        value: "path-center",
+        label: tolgee.t(
+            "shapes.kinds.line.spacing.pathCenter",
+            "Interval on the path, centered",
+        ),
+    },
+    {
+        value: "path-end",
+        label: tolgee.t(
+            "shapes.kinds.line.spacing.pathEnd",
+            "Interval on the path, from the end",
+        ),
+    },
+];
+
 /** The spacing menu (05-interval-modes.md): Fit, Keep interval, or Interval on the path */
 const SPACING: ToolChoice<LineParams> = {
     key: "spacing",
     get label() {
         return tolgee.t("shapes.kinds.line.spacing.label", "Spacing");
     },
-    options: () => [
+    options: (p) => [
         {
             value: "fit",
             label: tolgee.t("shapes.kinds.line.spacing.fit", "Fit"),
@@ -377,27 +474,8 @@ const SPACING: ToolChoice<LineParams> = {
             value: "keep",
             label: tolgee.t("shapes.kinds.line.spacing.keep", "Keep interval"),
         },
-        {
-            value: "path-start",
-            label: tolgee.t(
-                "shapes.kinds.line.spacing.pathStart",
-                "Interval on the path, from the start",
-            ),
-        },
-        {
-            value: "path-center",
-            label: tolgee.t(
-                "shapes.kinds.line.spacing.pathCenter",
-                "Interval on the path, centered",
-            ),
-        },
-        {
-            value: "path-end",
-            label: tolgee.t(
-                "shapes.kinds.line.spacing.pathEnd",
-                "Interval on the path, from the end",
-            ),
-        },
+        // A closed line has no ends to lay a run from (#529)
+        ...(isClosed(p) ? [] : PATH_OPTIONS()),
     ],
     current: (p) =>
         p.spacing.mode === "path" ? `path-${p.spacing.anchor}` : p.spacing.mode,
@@ -405,8 +483,80 @@ const SPACING: ToolChoice<LineParams> = {
         if (value === "fit" || value === "keep")
             return withSpacing(p, n, value, env);
         const anchor = ANCHORS.find((a) => value === `path-${a}`);
-        return anchor ? withSpacing(p, n, anchor, env) : p;
+        return anchor && !isClosed(p) ? withSpacing(p, n, anchor, env) : p;
     },
+    // A filled line's spacing follows its outline (#529)
+    shown: (p) => !isFilled(p),
+};
+
+/** Why a line can't be measured along `axis`, or undefined when it can */
+function measuredReason(p: LineParams, axis: LineMeasured): string | undefined {
+    const block = measuredBlock(p, axis);
+    if (block === null) return undefined;
+    if (axis === "x")
+        return block === "none"
+            ? tolgee.t(
+                  "shapes.kinds.line.measured.noX",
+                  "The line doesn't go side to side",
+              )
+            : block === "square"
+              ? tolgee.t(
+                    "shapes.kinds.line.measured.squareX",
+                    "Part of the line runs straight front to back",
+                )
+              : tolgee.t(
+                    "shapes.kinds.line.measured.turnsX",
+                    "The line turns back side to side",
+                );
+    return block === "none"
+        ? tolgee.t(
+              "shapes.kinds.line.measured.noY",
+              "The line doesn't go front to back",
+          )
+        : block === "square"
+          ? tolgee.t(
+                "shapes.kinds.line.measured.squareY",
+                "Part of the line runs straight side to side",
+            )
+          : tolgee.t(
+                "shapes.kinds.line.measured.turnsY",
+                "The line turns back front to back",
+            );
+}
+
+/**
+ * The Measured menu (spec #522): what the interval measures. The true distance between neighbors
+ * is the default; ↔ puts neighbors the interval apart side to side, x exactly on the step grid,
+ * and ↕ front to back. Each is greyed out, with why, on a line that doesn't go one way that way.
+ * It shows what the intervals measure now: a line whose part turned square to its setting is laid
+ * out by the true distance until it goes one way again, and shows that.
+ */
+const MEASURED: ToolChoice<LineParams> = {
+    key: "measured",
+    get label() {
+        return tolgee.t("shapes.kinds.line.measured.label", "Measured");
+    },
+    options: (p) => [
+        {
+            value: "true",
+            label: tolgee.t("shapes.kinds.line.measured.true", "True distance"),
+        },
+        {
+            value: "x",
+            label: tolgee.t("shapes.kinds.line.measured.x", "↔ Side to side"),
+            disabled: measuredReason(p, "x"),
+        },
+        {
+            value: "y",
+            label: tolgee.t("shapes.kinds.line.measured.y", "↕ Front to back"),
+            disabled: measuredReason(p, "y"),
+        },
+    ],
+    current: (p) => measuredAxis(p) ?? "true",
+    pick: (p, n, value, env) =>
+        withMeasured(p, n, value === "x" || value === "y" ? value : null, env),
+    // A closed line always turns back, so it's measured by the true distance (#529)
+    shown: (p) => !isClosed(p),
 };
 
 /**
@@ -446,10 +596,13 @@ const CORNERS: ToolChoice<LineParams> = {
             : next;
     },
     // Corners hold marchers only in Fit and Keep interval, with a gap for every stretch between
-    // corners (n - 1 gaps); smooth points aren't corners (#525)
+    // corners (n - 1 gaps; n round a closed line, #529); smooth points aren't corners (#525)
     shown: (p, n) => {
+        if (p.spacing.mode === "path" || isFilled(p)) return false;
         const stretches = lineStretches(p).length;
-        return stretches > 1 && p.spacing.mode !== "path" && n > stretches;
+        if (isClosed(p))
+            return p.points.some((q) => q.tension === 0) && n >= stretches;
+        return stretches > 1 && n > stretches;
     },
 };
 
@@ -517,7 +670,7 @@ function pointsKind(p: LineParams): "corner" | "smooth" | "mixed" {
 export const lineTool: ToolKind<LineParams> = {
     shape: lineShape,
     params: [INTERVAL],
-    choices: [SPACING, CORNERS, POINTS],
+    choices: [ENDS, SPACING, MEASURED, CORNERS, POINTS],
     groups: GROUPS,
     ordered: true,
     readable: isLineParams,
@@ -526,20 +679,27 @@ export const lineTool: ToolKind<LineParams> = {
     clickPoints: {
         land: landClicked,
         draw: (points, _n, env) => drawPoints(points, env),
+        // A click on the first point closes the line (#529)
+        close(points, n, env) {
+            const p = drawPoints(points, env);
+            return p && closeLine(p, n, env);
+        },
     },
     handles(params) {
         const frame = lineFrame(params);
         const last = params.points.length - 1;
+        const closed = isClosed(params);
         const points = params.points.map((at, i) => ({
             key: `p${i}`,
             at: { x: at.x, y: at.y },
-            // An end along the line, however it's turned; a corner any way
+            // An end along the line, however it's turned; a corner (every point of a closed
+            // line) any way
             cursor:
-                i === 0 || i === last
+                !closed && (i === 0 || i === last)
                     ? resizeCursor(frame, { x: i === last ? 1 : -1, y: 0 })
                     : "move",
         }));
-        const midpoints = params.points.slice(1).map((_b, i) => ({
+        const midpoints = lineSegments(params).map((_segment, i) => ({
             key: `m${i}`,
             at: segmentMidpoint(params, i),
             cursor: "pointer",
@@ -584,11 +744,17 @@ export const lineTool: ToolKind<LineParams> = {
         const { center } = lineFrame(params);
         return [...params.points.map(({ x, y }) => ({ x, y })), center];
     },
-    contains: onLine,
+    // A closed line is grabbed inside it too, as a box is (#529)
+    contains: (params, n, at, env) =>
+        onLine(params, n, at, env) ||
+        (isClosed(params) &&
+            lineRegion(params).contains(fieldToFrame(lineFrame(params), at))),
     move: (base, _n, delta, env) => moveLine(base, delta, env),
     frameOf: (params) => lineFrame(params),
     withFrame: (params, _n, frame) => withLineFrame(params, frame),
+    settle: settleLine,
     fromFrame: lineInFrame,
+    closed: lineClosed,
 };
 
 /**
@@ -606,6 +772,10 @@ export const curveTool: ToolKind<LineParams> = {
     clickPoints: {
         land: landClicked,
         draw: (points, _n, env) => drawPoints(points, env, SMOOTH),
+        close(points, n, env) {
+            const p = drawPoints(points, env, SMOOTH);
+            return p && closeLine(p, n, env);
+        },
     },
     fromFrame: curveInFrame,
 };
