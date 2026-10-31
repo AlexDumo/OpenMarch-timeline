@@ -12,17 +12,23 @@ declare module "vitest" {
 
 /**
  * Makes one folder per run for the test databases the fixtures build, so every worker
- * reuses them. Emptied before each watch-mode rerun, so a changed migration, fixture or
- * converter never hits a database the old code built.
+ * reuses them. Each watch-mode rerun gets a new folder, so a changed migration, fixture or
+ * converter never hits a database the old code built, and a run still copying from the old
+ * folder keeps it until teardown.
  */
 export default function setup(project: TestProject) {
     const parent = path.join(os.tmpdir(), "openmarch-test");
     fs.mkdirSync(parent, { recursive: true });
-    const dir = fs.mkdtempSync(path.join(parent, "fixture-cache-"));
-    project.provide("fixtureCacheDir", dir);
-    project.onTestsRerun(() => {
-        fs.rmSync(dir, { recursive: true, force: true });
-        fs.mkdirSync(dir, { recursive: true });
-    });
-    return () => fs.rmSync(dir, { recursive: true, force: true });
+    const dirs: string[] = [];
+    const startNewFolder = () => {
+        const dir = fs.mkdtempSync(path.join(parent, "fixture-cache-"));
+        dirs.push(dir);
+        project.provide("fixtureCacheDir", dir);
+    };
+    startNewFolder();
+    project.onTestsRerun(startNewFolder);
+    return () => {
+        for (const dir of dirs)
+            fs.rmSync(dir, { recursive: true, force: true });
+    };
 }

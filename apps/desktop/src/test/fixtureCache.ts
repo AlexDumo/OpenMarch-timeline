@@ -13,7 +13,7 @@ import { inject } from "vitest";
  *
  * Because one file's build is every file's database, `build` must not depend on anything a
  * test file changes: no `vi.mock` of the code it runs (migrations, undo triggers, convert on
- * open) and no fake timers.
+ * open), and no fake `Date` or `setTimeout` while it runs (faking only animation frames is fine).
  */
 const builtInThisProcess = new Map<string, Promise<string>>();
 
@@ -41,7 +41,7 @@ async function cachedDatabasePath(
         throw new Error(
             "No fixture cache folder: run with apps/desktop/vitest.config.ts (its globalSetup makes it)",
         );
-    const file = path.join(dir, `${key.replace(/[^a-z0-9+-]+/gi, "_")}.dots`);
+    const file = path.join(dir, `${encodeURIComponent(key)}.dots`);
     if (fs.existsSync(file)) return file;
     const partial = `${file}.${randomUUID()}.partial`;
     await build(partial);

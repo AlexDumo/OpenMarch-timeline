@@ -34,7 +34,8 @@ default) and throws under `--no-isolate`. History tests check the timeline data 
 
 Each of those databases is built once per run and copied for every test
 (`apps/desktop/src/test/fixtureCache.ts`), so a test file must not `vi.mock` the code that builds
-them (migrations, undo triggers, convert on open) or rely on fake timers while they're built.
+them (migrations, undo triggers, convert on open), or fake `Date` or `setTimeout` while they're
+built (faking only animation frames is fine).
 
 Test files run in jsdom by default. A `.ts` test that needs no DOM can start with
 `// @vitest-environment node`, which skips building the browser environment for that file.
