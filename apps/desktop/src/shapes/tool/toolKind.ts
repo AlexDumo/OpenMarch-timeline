@@ -249,6 +249,20 @@ export interface ToolGroups<P> {
         move: ScrubMove,
         env: ToolEnv,
     ): P;
+    /**
+     * The whole list as it's typed (`2*3+4*2`), what the group menu's list field starts from
+     */
+    text(params: P, n: number, stepPx: number): string;
+    /**
+     * A whole list typed in the group menu's list field: `2*3+4*2` replaces the groups, a plain
+     * `2` is everyone at 2. Null when the text isn't understood.
+     */
+    typeList(params: P, n: number, text: string, env: ToolEnv): P | null;
+    /**
+     * What the intervals measure, when it isn't the true distance: `x` side to side (↔), `y`
+     * front to back (↕). The field labels each gap of a group pointed at with it.
+     */
+    axis?(params: P): "x" | "y" | null;
     /** The params with a group added at the end (the chip's +) */
     add(params: P, n: number, env: ToolEnv): P;
     /** The params without group `index`; one group left is everyone at its interval */

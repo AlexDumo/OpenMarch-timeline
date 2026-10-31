@@ -43,6 +43,8 @@ import {
 } from "./boxSelectionStore";
 import { outlineGapAt } from "../distribute/outlineGap";
 import { openHandleMenu } from "../field/handleMenu";
+import { groupDrawing } from "../field/groupDrawing";
+import type { GroupMenuState } from "../field/shapePointer";
 import type { AnyToolKind } from "../tool/toolKind";
 import type { XY } from "../types";
 import type { Roles } from "@/input/modifierRoles";
@@ -77,10 +79,12 @@ interface Shown {
     readonly pivotPreview: PivotKey | null;
     /** A spacing number is being dragged: guides as for a move (#452) */
     readonly scrubbing: boolean;
+    /** The editor's group menu is open, and the group lit (#526 follow-up) */
+    readonly groupMenu: GroupMenuState | null;
 }
 
 const drawingOf = memoDrawing(
-    ({ live: saved, preview, calm, scrubbing }: Shown) => {
+    ({ live: saved, preview, calm, scrubbing, groupMenu }: Shown) => {
         const live =
             preview && !saved.gesture ? { ...saved, params: preview } : saved;
         const changing = live.gesture !== null || preview !== null;
@@ -133,6 +137,17 @@ const drawingOf = memoDrawing(
                 env,
                 field,
             ),
+            // The members stand on the spots, laid out in order along the shape
+            ...(groupMenu
+                ? groupDrawing(
+                      kind,
+                      live.params,
+                      n,
+                      kind.shape.generate(live.params, n, ctx),
+                      groupMenu,
+                      env.stepPx,
+                  )
+                : {}),
         };
     },
 );
@@ -393,13 +408,15 @@ export class LiveBoxMode implements FieldMode {
     drawing() {
         const preview = usePlacedBoxPreviewStore.getState().params;
         const calm = shapeCalm(this.live.gesture !== null);
-        const { pivotPreview, scrubbing } = useShapePointerStore.getState();
+        const { pivotPreview, scrubbing, groupMenu } =
+            useShapePointerStore.getState();
         if (
             this.shown?.live !== this.live ||
             this.shown.preview !== preview ||
             this.shown.calm !== calm ||
             this.shown.pivotPreview !== pivotPreview ||
-            this.shown.scrubbing !== scrubbing
+            this.shown.scrubbing !== scrubbing ||
+            this.shown.groupMenu !== groupMenu
         )
             this.shown = {
                 live: this.live,
@@ -407,6 +424,7 @@ export class LiveBoxMode implements FieldMode {
                 calm,
                 pivotPreview,
                 scrubbing,
+                groupMenu,
             };
         return drawingOf(this.shown);
     }

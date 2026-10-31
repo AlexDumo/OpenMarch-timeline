@@ -34,6 +34,8 @@ import {
 import { updateTool, useShapeToolStore } from "./shapeToolStore";
 import { ShapeGlide } from "./spotGlide";
 import { openHandleMenu } from "../field/handleMenu";
+import { groupDrawing } from "../field/groupDrawing";
+import type { GroupMenuState } from "../field/shapePointer";
 import {
     setShapePointerOver,
     shapeCalm,
@@ -73,6 +75,8 @@ interface Shown {
     readonly pivotPreview: PivotKey | null;
     /** A spacing number is being dragged: guides as for a move (#452) */
     readonly scrubbing: boolean;
+    /** The editor's group menu is open, and the group lit (#526 follow-up) */
+    readonly groupMenu: GroupMenuState | null;
 }
 let shown: Shown | null = null;
 const shownNow = (): Shown | null => {
@@ -81,16 +85,26 @@ const shownNow = (): Shown | null => {
     const { hover } = useSpotHover.getState();
     const calm = shapeCalm(!!tool.gesture);
     const walks = useUiSettingsStore.getState().uiSettings.shapeWalks ?? false;
-    const { pivotPreview, scrubbing } = useShapePointerStore.getState();
+    const { pivotPreview, scrubbing, groupMenu } =
+        useShapePointerStore.getState();
     if (
         shown?.tool !== tool ||
         shown.hover !== hover ||
         shown.calm !== calm ||
         shown.walks !== walks ||
         shown.pivotPreview !== pivotPreview ||
-        shown.scrubbing !== scrubbing
+        shown.scrubbing !== scrubbing ||
+        shown.groupMenu !== groupMenu
     )
-        shown = { tool, hover, calm, walks, pivotPreview, scrubbing };
+        shown = {
+            tool,
+            hover,
+            calm,
+            walks,
+            pivotPreview,
+            scrubbing,
+            groupMenu,
+        };
     return shown;
 };
 
@@ -156,7 +170,7 @@ function hoverAt(tool: ToolState, at: XY, radius: number): void {
 }
 
 const drawingOf = memoDrawing(
-    ({ tool, hover, calm, walks, scrubbing }: Shown) => {
+    ({ tool, hover, calm, walks, scrubbing, groupMenu }: Shown) => {
         const field = currentShapeField();
         if (!field) return null;
         const n = tool.spots;
@@ -233,6 +247,16 @@ const drawingOf = memoDrawing(
                 env,
                 field,
             ),
+            ...(drawing
+                ? {}
+                : groupDrawing(
+                      tool.kind,
+                      tool.params,
+                      n,
+                      spots,
+                      groupMenu,
+                      env.stepPx,
+                  )),
             ...(hover && !tool.gesture
                 ? { labels: [{ at: hover.at, text: hover.text }] }
                 : {}),

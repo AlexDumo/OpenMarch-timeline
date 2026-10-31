@@ -350,6 +350,31 @@ export type FieldModeDrawing = {
     guideMarks?: readonly FieldPoint[];
     /** The spots standing on a guide, tinted */
     onGuides?: readonly FieldPoint[];
+    /**
+     * While the floating editor's menu of a Line's interval groups is open: each spot ringed in
+     * its group's color (a CSS color), faint, or with a group pointed at that group lit and the
+     * others dim
+     */
+    groupMarks?: readonly {
+        at: FieldPoint;
+        color: string;
+        shade: "faint" | "lit" | "dim";
+        group: number;
+    }[];
+    /**
+     * Each gap of the group pointed at, labeled with its interval at its middle ("3", "↔ 2½"), and
+     * each `seam` where it meets a neighbor with the interval there; the overlay sets them beside
+     * the line, one label (`whole`, "2 at 3") for the group when its gaps are too short for one each
+     */
+    groupLabels?: readonly {
+        at: FieldPoint;
+        text: string;
+        color: string;
+        from: FieldPoint;
+        to: FieldPoint;
+        seam: boolean;
+        whole: string;
+    }[];
 };
 
 /** What the editor knows of a press it asks a {@link FieldMode} to claim. */

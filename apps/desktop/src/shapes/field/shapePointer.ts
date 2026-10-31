@@ -10,7 +10,9 @@ import type { PivotKey } from "../frame/frame";
  * keyboard focus is inside the floating editor, typing a number counting. `pivotPreview`: the
  * pivot a cell of the editor's pivot menu points at, under the pointer or keyboard focus (#437):
  * shown on the field, never stored. `scrubbing`: a spacing number in the editor is being dragged,
- * so the field shows the guides a corner or center lands on (#452).
+ * so the field shows the guides a corner or center lands on (#452). `groupMenu`: the editor's menu
+ * of a Line's interval groups is open, and the group whose row is pointed at, focused or edited
+ * (`lit`, null for none), for the field to color each group's spots (#526 follow-up).
  */
 export const useShapePointerStore = create<{
     over: boolean;
@@ -18,13 +20,27 @@ export const useShapePointerStore = create<{
     editorFocus: boolean;
     pivotPreview: PivotKey | null;
     scrubbing: boolean;
+    groupMenu: GroupMenuState | null;
 }>(() => ({
     over: false,
     dragging: false,
     editorFocus: false,
     pivotPreview: null,
     scrubbing: false,
+    groupMenu: null,
 }));
+
+/** The editor's group menu while it's open: the group lit on the field, or null for none */
+export interface GroupMenuState {
+    readonly lit: number | null;
+}
+
+/** Notes the group menu opening, closing (null) or lighting another group */
+export function setGroupMenu(groupMenu: GroupMenuState | null): void {
+    const was = useShapePointerStore.getState().groupMenu;
+    if (was?.lit !== groupMenu?.lit || (was === null) !== (groupMenu === null))
+        useShapePointerStore.setState({ groupMenu });
+}
 
 /** Notes whether a spacing number in the floating editor is being dragged (#452) */
 export function setShapeScrubbing(scrubbing: boolean): void {
@@ -68,6 +84,7 @@ export function resetShapePointer(): void {
     setShapeDragging(false);
     setPivotPreview(null);
     setShapeScrubbing(false);
+    setGroupMenu(null);
 }
 
 /**
