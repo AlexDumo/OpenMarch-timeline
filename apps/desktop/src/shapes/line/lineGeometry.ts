@@ -9,7 +9,12 @@ import { pivotOf } from "../frame/pivot";
 import { catmullRomSpan } from "../geometry/catmullRom";
 import { makePath, type Path, type Segment } from "../geometry/path";
 import { cross, dot, lerp } from "../geometry/vec";
-import { chordOffsets, groupGaps } from "../spacing";
+import { chordOffsets, groupGaps, layGroups } from "../spacing";
+import {
+    canLayOut,
+    storedDistribution,
+    type Distribution,
+} from "../distribute/distribution";
 import type { ToolEnv } from "../tool/toolKind";
 import type { Slot, XY } from "../types";
 
@@ -19,9 +24,9 @@ import type { Slot, XY } from "../types";
  * intervals (#526). A point with no tension is a corner, where the line turns sharply; a point with
  * tension is smooth, and the line bends through it (centripetal Catmull-Rom, the tension scaling
  * its handles). Every corner holds a marcher unless the corners switch is off; a smooth point
- * between the ends never does, and the two ends always hold one, smooth or not. The params already
- * hold what later versions add (a closed flag), so recipes saved now read the same then.
- * Everything here is pure.
+ * between the ends never does, and the two ends always hold one, smooth or not. A closed line
+ * (#529) joins its last point to its first and runs smoothly round through a smooth first point;
+ * it can be filled like a box (`lineFill.ts`). Everything here is pure.
  */
 
 /**
@@ -77,7 +82,10 @@ export type LineMeasured = "x" | "y";
 export interface LineParams {
     /** In order from the first marcher's end; two or more */
     readonly points: readonly LinePoint[];
-    /** A closed line joins its last point to its first (later); open when absent */
+    /**
+     * A closed line joins its last point to its first (#529): its marchers have a gap on every
+     * stretch, n gaps for n marchers, and it can be filled like a box. Open when absent.
+     */
     readonly closed?: boolean;
     readonly spacing: LineSpacing;
     /**
@@ -85,9 +93,18 @@ export interface LineParams {
      * (#524)
      */
     readonly corners?: boolean;
+    /**
+     * How a closed line is filled, the host's (ADR 0006, amendment of 2026-10-22): Outline (the
+     * line itself) when absent. Only on a closed line.
+     */
+    readonly distribution?: Distribution;
     /** The true distance when absent (#527) */
     readonly measured?: LineMeasured;
 }
+
+/** Whether `p` joins its last point to its first */
+export const isClosed = (p: Pick<LineParams, "closed">): boolean =>
+    p.closed === true;
 
 const FIT: LineSpacing = { mode: "fit" };
 
@@ -123,25 +140,32 @@ const KEYS = new Set([
     "closed",
     "spacing",
     "corners",
+    "distribution",
     "measured",
     "pivot",
 ]);
 
 /**
  * Whether `params` is a line this version can lay out exactly as it was saved. Anything a newer
- * build adds (closing) is refused, so the recipe shows as plain positions instead of
- * being misread and rewritten on the first edit (ADR 0006, decision 5). Each later ticket widens
- * this as it adds the layout.
+ * build adds is refused, so the recipe shows as plain positions instead of being misread and
+ * rewritten on the first edit (ADR 0006, decision 5). Each later ticket widens this as it adds
+ * the layout.
  */
 export function isLineParams(params: unknown): params is LineParams {
     if (typeof params !== "object" || params === null) return false;
     if (Object.keys(params).some((key) => !KEYS.has(key))) return false;
     const p = params as Partial<LineParams>;
-    if (p.closed !== undefined && p.closed !== false) return false;
+    if (p.closed !== undefined && typeof p.closed !== "boolean") return false;
     if (p.corners !== undefined && typeof p.corners !== "boolean") return false;
     if (p.measured !== undefined && p.measured !== "x" && p.measured !== "y")
         return false;
-    if (!Array.isArray(p.points) || p.points.length < 2) return false;
+    if (!Array.isArray(p.points) || p.points.length < (p.closed ? 3 : 2))
+        return false;
+    // A closed line's fill (#529): one this version fills, and never on an open line
+    if (p.distribution !== undefined) {
+        if (p.closed !== true) return false;
+        if (!storedDistribution(p, 1) || !canLayOut(p)) return false;
+    }
     if (!p.points.every(isPoint)) return false;
     const spacing: unknown = p.spacing;
     if (typeof spacing !== "object" || spacing === null) return false;
@@ -159,21 +183,27 @@ export function isLineParams(params: unknown): params is LineParams {
         (g) => g.count === undefined,
     );
     if (rests.length > 1) return false;
-    return sp.mode === "keep" || ANCHORS.includes(sp.anchor);
+    if (sp.mode === "keep") return true;
+    // A closed line has no ends to lay a run from
+    return !p.closed && ANCHORS.includes(sp.anchor);
 }
 
 /**
  * The line's segments, from each point to the next: straight where it doesn't bend, else a cubic
  * whose handles are the Catmull-Rom curve's at each smooth point, scaled by its tension (none at a
- * corner)
+ * corner). A closed line's last runs from its last point to its first, its curve's neighbors
+ * wrapping round (#529).
  */
 export function lineSegments(p: LineParams): Segment[] {
     const points = p.points;
-    return points.slice(1).map((b, i): Segment => {
+    const closed = isClosed(p);
+    const count = closed ? points.length : points.length - 1;
+    return Array.from({ length: count }, (_, i): Segment => {
         const a = points[i]!;
+        const b = points[(i + 1) % points.length]!;
         const line: Segment = { type: "line", a, b };
         if (a.tension === 0 && b.tension === 0) return line;
-        const full = catmullRomSpan(points, i);
+        const full = catmullRomSpan(points, i, closed);
         const c1 = lerp(a, full.c1, a.tension);
         const c2 = lerp(b, full.c2, b.tension);
         // Handles along the segment and inside it (an end beside a corner) bend nothing
@@ -189,22 +219,54 @@ export function lineSegments(p: LineParams): Segment[] {
     });
 }
 
-/** The path through the line's points */
+/** The path through the line's points, round to its first again when closed */
 export function linePath(p: LineParams): Path {
-    return makePath(lineSegments(p));
+    return makePath(lineSegments(p), isClosed(p));
 }
+
+/** How many gaps `n` marchers have along the line: one per marcher on a closed line (#529) */
+export const gapCount = (p: LineParams, n: number): number =>
+    isClosed(p) ? n : n - 1;
 
 /** Whether any point of the line is smooth */
 const smooth = (p: LineParams) => p.points.some((q) => q.tension > 0);
 
+/** How many pieces a curved segment of a closed outline is cut into */
+const CURVE_PIECES = 32;
+
 /**
  * The points a stretch of the line can be drawn through: its points when it's straight from point
- * to point, else about 24 a segment along its curves
+ * to point, else about 24 a segment along its curves. A closed line's go once round, the last
+ * not repeating the first ({@link closedOutline}).
  */
 export function lineOutline(p: LineParams): XY[] {
+    if (isClosed(p)) return closedOutline(p).points;
     if (!smooth(p)) return p.points.map(({ x, y }) => ({ x, y }));
     const path = linePath(p);
     return path.polyline(path.length / (24 * (p.points.length - 1)));
+}
+
+/**
+ * A closed line's outline as a polygon (#529): every point, and along each curved segment
+ * {@link CURVE_PIECES} pieces of it, so a region filled from it follows the curve as drawn.
+ * `corners` are the indices in `points` of the line's corners (tension 0).
+ */
+export function closedOutline(p: LineParams): {
+    readonly points: XY[];
+    readonly corners: number[];
+} {
+    const points: XY[] = [];
+    const corners: number[] = [];
+    lineSegments(p).forEach((segment, i) => {
+        if (p.points[i]!.tension === 0) corners.push(points.length);
+        const { x, y } = p.points[i]!;
+        points.push({ x, y });
+        if (segment.type === "line") return;
+        const path = makePath([segment]);
+        for (let k = 1; k < CURVE_PIECES; k++)
+            points.push(path.at((path.length * k) / CURVE_PIECES));
+    });
+    return { points, corners };
 }
 
 /** Where segment `index`'s midpoint handle sits: halfway along it, on its curve */
@@ -217,12 +279,25 @@ export function segmentMidpoint(p: LineParams, index: number): XY {
 /**
  * The stretches between the points that hold a marcher (#524, #525): from an end or a corner to
  * the next, smooth points inside them. The ends always hold a marcher, smooth or not. `from` and
- * `to` are point indices.
+ * `to` are point indices. A closed line's run from corner to corner round from its first corner,
+ * the last back past its first point to that corner (`to` counting on past the last point, #529);
+ * with no corner, one stretch from its first point all the way round.
  */
 export function lineStretches(
     p: LineParams,
 ): { readonly from: number; readonly to: number }[] {
-    const last = p.points.length - 1;
+    const count = p.points.length;
+    if (isClosed(p)) {
+        const corners = p.points.flatMap((q, i) =>
+            q.tension === 0 ? [i] : [],
+        );
+        if (corners.length === 0) return [{ from: 0, to: count }];
+        return corners.map((from, k) => ({
+            from,
+            to: corners[k + 1] ?? corners[0]! + count,
+        }));
+    }
+    const last = count - 1;
     const stretches: { from: number; to: number }[] = [];
     let from = 0;
     for (let i = 1; i <= last; i++) {
@@ -233,11 +308,16 @@ export function lineStretches(
     return stretches;
 }
 
-/** Each stretch's path, in order */
+/** Each stretch's path, in order; a closed line's segments taken round past its last */
 function stretchPaths(p: LineParams): Path[] {
     const segments = lineSegments(p);
     return lineStretches(p).map(({ from, to }) =>
-        makePath(segments.slice(from, to)),
+        makePath(
+            Array.from(
+                { length: to - from },
+                (_, i) => segments[(from + i) % segments.length]!,
+            ),
+        ),
     );
 }
 
@@ -312,10 +392,20 @@ export function typedInterval(p: LineParams): number | null {
     return Math.min(...p.spacing.groups.map((g) => g.interval));
 }
 
-/** The gaps between the `n` marchers in a typed spacing, in field units; null in Fit */
+/**
+ * The gaps between the `n` marchers in a typed spacing, in field units, in order from the first
+ * point; null in Fit. A closed line's run goes once round (#529): its last gap, from the last
+ * marcher back to the first, is the seam between the last group and the first.
+ */
 export function lineGaps(p: LineParams, n: number): number[] | null {
     if (p.spacing.mode === "fit") return null;
-    return groupGaps(p.spacing.groups, n, (g) => g.interval);
+    const { groups } = p.spacing;
+    const gaps = groupGaps(groups, n, (g) => g.interval);
+    if (!isClosed(p) || n < 2) return gaps;
+    const laid = layGroups(groups, n);
+    const first = groups[laid.findIndex((g) => g.count > 0)]!;
+    const last = groups[laid.findLastIndex((g) => g.count > 0)]!;
+    return [...gaps, Math.max(first.interval, last.interval)];
 }
 
 const coord = (q: XY, axis: LineMeasured) => (axis === "x" ? q.x : q.y);
@@ -497,10 +587,9 @@ export function lineInterval(p: LineParams, n: number): number {
     if (n <= 1) return 0;
     const axis = measuredAxis(p);
     if (axis) return axisLength(p, axis) / (n - 1);
+    const gaps = gapCount(p, n);
     // Along a curve, the straight distance between neighbors (#525)
-    return smooth(p)
-        ? evenChord(linePath(p), n - 1)
-        : linePath(p).length / (n - 1);
+    return smooth(p) ? evenChord(linePath(p), gaps) : linePath(p).length / gaps;
 }
 
 /**
@@ -510,16 +599,20 @@ export function lineInterval(p: LineParams, n: number): number {
  * seam between gaps nearest it along the run, so a stretch that is a whole run of the groups' gaps
  * holds exactly those. Measured ↔ or ↕ (#527), a stretch's length is how far it goes that way.
  * Null when the corners don't hold marchers: the switch is off, there's no corner, the run is laid
- * on the path, or there are fewer gaps than stretches.
+ * on the path, or there are fewer gaps than stretches. A closed line's stretches have n gaps
+ * between them, round from its first corner (#529).
  */
 export function cornerGaps(p: LineParams, n: number): number[] | null {
     if (p.corners === false || p.spacing.mode === "path") return null;
-    if (lineStretches(p).length < 2) return null;
+    const corner = isClosed(p)
+        ? p.points.some((q) => q.tension === 0)
+        : lineStretches(p).length > 1;
+    if (!corner) return null;
     const axis = measuredAxis(p);
     const lengths = axis
         ? stretchExtents(p, axis)
         : stretchPaths(p).map((path) => path.length);
-    const gaps = n - 1;
+    const gaps = gapCount(p, n);
     const total = sum(lengths);
     if (gaps < lengths.length || !(total > 0)) return null;
     if (hasGroups(p)) return seamGaps(lengths, lineGaps(p, n)!);
@@ -587,7 +680,7 @@ function seamGaps(
 export function cornerRuns(p: LineParams, n: number): number[][] | null {
     const counts = cornerGaps(p, n);
     if (!counts) return null;
-    const gaps = lineGaps(p, n) ?? Array<number>(n - 1).fill(1);
+    const gaps = lineGaps(p, n) ?? Array<number>(gapCount(p, n)).fill(1);
     let at = 0;
     return counts.map((count) => gaps.slice(at, (at += count)));
 }
@@ -635,24 +728,30 @@ export function cornerOffInterval(p: LineParams, n: number): boolean {
  * holding its run of gaps straight across, then the last point. In Keep interval a stretch is as
  * long as its run, so the gaps are as typed; a corner `fine` left off its interval scales its
  * stretches' gaps to fit (even gaps, with one interval) instead of running past the corner and
- * stacking marchers on it. Measured ↔ or ↕ (#527), each stretch holds its gaps that way.
+ * stacking marchers on it. Measured ↔ or ↕ (#527), each stretch holds its gaps that way. A closed
+ * line's start at its first corner and end back on it (#529).
  */
 function cornerSpots(p: LineParams, runs: readonly number[][]): Slot[] {
     const spots: Slot[] = [];
     const axis = measuredAxis(p);
     const segments = lineSegments(p);
-    let s = 0;
-    lineStretches(p).forEach(({ from, to }, i) => {
-        const stretch = segments.slice(from, to);
-        const path = makePath(stretch);
+    const stretches = lineStretches(p);
+    const whole = makePath(segments).length;
+    let s = sum(
+        segments.slice(0, stretches[0]!.from).map((g) => makePath([g]).length),
+    );
+    stretchPaths(p).forEach((path, i) => {
+        const { from, to } = stretches[i]!;
         spots.push(
             ...(axis
-                ? axisRunSpots(stretch, axis, runs[i]!, s)
+                ? axisRunSpots(segments.slice(from, to), axis, runs[i]!, s)
                 : runSpots(path, runs[i]!, s)
             ).slice(0, -1),
         );
         s += path.length;
     });
+    if (isClosed(p))
+        return spots.map((spot) => ({ ...spot, s: spot.s! % whole }));
     const last = p.points.at(-1)!;
     spots.push({ x: last.x, y: last.y, s });
     return spots;
@@ -669,17 +768,23 @@ export function lineSpots(p: LineParams, n: number, stepPx?: number): Slot[] {
     const at = (s: number): Slot => ({ ...path.at(s), s });
     const corners = cornerRuns(p, n);
     if (corners) return cornerSpots(p, corners);
+    const closed = isClosed(p);
     const axis = measuredAxis(p);
     if (axis) return measuredSpots(p, n, axis, stepPx);
     const gaps = lineGaps(p, n);
     if (gaps === null) {
-        if (n === 1) return [at(path.length / 2)];
-        // Along a curve, neighbors evenly apart straight across (#525)
-        if (smooth(p)) return runSpots(path, Array<number>(n - 1).fill(1));
+        if (n === 1) return [at(closed ? 0 : path.length / 2)];
+        const count = gapCount(p, n);
+        // Along a curve, neighbors evenly apart straight across (#525); a closed line's last
+        // back on its first
+        if (smooth(p))
+            return runSpots(path, Array<number>(count).fill(1)).slice(0, n);
         return Array.from({ length: n }, (_, i) =>
-            at((path.length * i) / (n - 1)),
+            at((path.length * i) / count),
         );
     }
+    // A closed line's run goes round from its first point, its last gap back to it
+    if (closed) return chordOffsets(path, 0, gaps.slice(0, -1)).map(at);
     // Keep interval is sized to its run, which sits on it whole; on the path it sits at its anchor
     const anchor = p.spacing.mode === "path" ? p.spacing.anchor : "center";
     return anchoredSpots(p, gaps, anchor);
@@ -777,20 +882,65 @@ function anchoredSpots(
 }
 
 /**
+ * A closed line's turn (#529), within an eighth of a turn of 0: the sides of its outline as drawn
+ * ({@link closedOutline}, a curve in short pieces), their directions taken a quarter turn at a
+ * time so a side and the one square to it agree, averaged by length. It doesn't depend on which
+ * point was clicked first or which way round. Only when sides square to each other make up most
+ * of the outline (a rectangle, turned or not) does it follow them; anything else (a triangle, a
+ * hexagon, a round curve) stands square to the field, so its ranks square to the field like a
+ * box's.
+ */
+function closedTurn(outline: readonly XY[]): number {
+    let x = 0;
+    let y = 0;
+    let around = 0;
+    outline.forEach((a, i) => {
+        const d = sub(outline[(i + 1) % outline.length]!, a);
+        const angle = 4 * Math.atan2(d.y, d.x);
+        x += length(d) * Math.cos(angle);
+        y += length(d) * Math.sin(angle);
+        around += length(d);
+    });
+    if (Math.hypot(x, y) < around / 2) return 0;
+    const turn = Math.atan2(y, x) / 4;
+    // A rectangle square to the field is 0, not float noise either side of it
+    return Math.abs(turn) < 1e-12 ? 0 : turn;
+}
+
+/**
  * The line's frame: centered between its ends, turned along them, as long as they are apart and
- * with no depth. A line is never flipped: a flip reverses it instead.
+ * with no depth. A closed line's is around its outline as drawn, turned square to the field
+ * ({@link closedTurn}), so the same outline fills the same way however it was clicked. A line is
+ * never flipped: a flip reverses it instead.
  */
 export function lineFrame(p: LineParams): ShapeFrame {
     const a = p.points[0]!;
     const b = p.points.at(-1)!;
     const d = sub(b, a);
-    return {
+    const open: ShapeFrame = {
         center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
         halfWidth: length(d) / 2,
         halfDepth: 0,
         rotation: length(d) > 0 ? Math.atan2(d.y, d.x) : 0,
         flipX: false,
         flipY: false,
+    };
+    if (!isClosed(p)) return open;
+    const outline = closedOutline(p).points;
+    const turned: ShapeFrame = { ...open, rotation: closedTurn(outline) };
+    const local = outline.map((q) => fieldToFrame(turned, q));
+    const xs = local.map((q) => q.x);
+    const ys = local.map((q) => q.y);
+    const [left, right] = [Math.min(...xs), Math.max(...xs)];
+    const [top, bottom] = [Math.min(...ys), Math.max(...ys)];
+    return {
+        ...turned,
+        center: frameToField(turned, {
+            x: (left + right) / 2,
+            y: (top + bottom) / 2,
+        }),
+        halfWidth: (right - left) / 2,
+        halfDepth: (bottom - top) / 2,
     };
 }
 
@@ -975,7 +1125,7 @@ function directionFrom(other: XY, to: XY, env: ToolEnv): XY | null {
  * of intervals long (#524); `fine` frees it. A smooth point, or a corner beside a curve, goes
  * where it's dragged. Measured ↔ or ↕ in Keep interval (#527), an end keeps how far it is that
  * way and takes the pointer's place the other way, and a corner lands a whole run of gaps that way
- * from the point before it.
+ * from the point before it. An end dropped on the other end closes the line (#529).
  */
 export function dragPoint(
     base: LineParams,
@@ -985,8 +1135,21 @@ export function dragPoint(
     env: ToolEnv,
 ): LineParams {
     const last = base.points.length - 1;
-    const end = index === 0 || index === last;
-    const other = base.points[index === 0 ? 1 : index - 1]!;
+    const closed = isClosed(base);
+    const end = !closed && (index === 0 || index === last);
+    if (end && last >= 2) {
+        const otherEnd = base.points[index === 0 ? last : 0]!;
+        if (length(sub(to, otherEnd)) <= env.hitRadius)
+            return closeLine(
+                {
+                    ...base,
+                    points: base.points.filter((_, i) => i !== index),
+                },
+                n,
+                env,
+            );
+    }
+    const other = base.points[index === 0 ? (closed ? last : 1) : index - 1]!;
     const keep = base.spacing.mode === "keep" && n > 1;
     const axis = keep ? measuredAxis(base) : null;
     let point: XY | null;
@@ -1078,19 +1241,33 @@ function cornerOnAxis(
 }
 
 /**
+ * The stretches either side of point `index`: the one ending on it and the one after, round a
+ * closed line (#529); undefined where there's none
+ */
+function stretchesAt(p: LineParams, index: number) {
+    const stretches = lineStretches(p);
+    const count = p.points.length;
+    const r = stretches.findIndex((stretch) => stretch.to % count === index);
+    if (r < 0) return { r, before: undefined, after: undefined };
+    const after = isClosed(p)
+        ? stretches[(r + 1) % stretches.length]
+        : stretches[r + 1];
+    return { r, before: stretches[r], after };
+}
+
+/**
  * Whether point `index` is a corner holding a marcher with a straight stretch on each side: the
  * stretches whose lengths {@link cornerOnIntervals} can make whole runs of gaps
  */
 function straightCorner(p: LineParams, n: number, index: number): boolean {
     if (p.points[index]!.tension !== 0 || !cornerGaps(p, n)) return false;
-    const stretches = lineStretches(p);
-    const r = stretches.findIndex((stretch) => stretch.to === index);
+    const { before, after } = stretchesAt(p, index);
     const segments = lineSegments(p);
-    return [stretches[r], stretches[r + 1]].every(
+    return [before, after].every(
         (stretch) =>
             stretch !== undefined &&
             stretch.to - stretch.from === 1 &&
-            segments[stretch.from]!.type === "line",
+            segments[stretch.from % segments.length]!.type === "line",
     );
 }
 
@@ -1106,11 +1283,12 @@ function cornerOnIntervals(
     to: XY,
 ): XY | null {
     const runs = cornerRuns(p, n)!;
-    const r = lineStretches(p).findIndex((stretch) => stretch.to === index);
-    const both = [...runs[r]!, ...runs[r + 1]!];
+    const { r } = stretchesAt(p, index);
+    const both = [...runs[r]!, ...runs[(r + 1) % runs.length]!];
     const whole = sum(both);
-    const a = p.points[index - 1]!;
-    const b = p.points[index + 1]!;
+    const count = p.points.length;
+    const a = p.points[(index - 1 + count) % count]!;
+    const b = p.points[(index + 1) % count]!;
     let best: XY | null = null;
     let ra = 0;
     for (let k = 1; k < both.length; k++) {
@@ -1143,9 +1321,10 @@ function circlesMeet(a: XY, ra: number, b: XY, rb: number): XY[] {
  * corners, so a straight line looks the same, else as smooth as the smoother end (#525)
  */
 export function splitSegment(p: LineParams, index: number): LineParams {
-    const a = p.points[index];
-    const b = p.points[index + 1];
-    if (!a || !b) return p;
+    if (index < 0 || index >= lineSegments(p).length) return p;
+    // A closed line's last segment runs back to its first point (#529)
+    const a = p.points[index]!;
+    const b = p.points[(index + 1) % p.points.length]!;
     const mid = withTension(Math.max(a.tension, b.tension))(
         segmentMidpoint(p, index),
     );
@@ -1188,16 +1367,22 @@ export function withGroups(
     groups: readonly LineGroup[],
     env: SizeEnv,
 ): LineParams {
-    if (p.spacing.mode === "path")
+    if (p.spacing.mode === "path" && !isClosed(p))
         return { ...p, spacing: { ...p.spacing, groups } };
     const kept: LineParams = { ...p, spacing: { mode: "keep", groups } };
     if (n <= 1) return kept;
     const axis = measuredAxis(kept);
     const runs = cornerRuns(kept, n);
+    const gaps = lineGaps(kept, n)!;
+    const size = sum(gaps);
+    // A closed line can't set each stretch on its own and still meet its first point: it's grown
+    // as a whole to its gaps round (#529), a corner off its interval noted
+    if (runs && isClosed(p))
+        return smooth(p)
+            ? scaled(kept, runScale(kept, gaps), env)
+            : scaled(kept, size / linePath(p).length, env);
     if (runs)
         return onGrid(pinned(kept, onIntervals(kept, runs), env), axis, env);
-    const gaps = lineGaps(kept, n)!;
-    const size = gaps.reduce((sum, gap) => sum + gap, 0);
     if (axis)
         return onGrid(
             scaled(kept, size / axisLength(kept, axis), env),
@@ -1296,7 +1481,7 @@ function runScale(p: LineParams, gaps: readonly number[]): number {
 }
 
 /** The line `k` times as big, its pivot staying where it is on the field */
-function scaled(
+export function scaled(
     p: LineParams,
     k: number,
     env: Pick<ToolEnv, "pivot" | "anchor">,
@@ -1435,6 +1620,7 @@ export function onLine(
     );
     const near = (a: XY, b: XY) => fromSegment(at, a, b) <= reach;
     const outline = lineOutline(p);
+    if (isClosed(p)) outline.push(outline[0]!);
     if (outline.slice(1).some((b, i) => near(outline[i]!, b))) return true;
     // A run on the path can reach past the drawn line's ends
     const spots = lineSpots(p, n, env?.stepPx);
@@ -1502,12 +1688,13 @@ export function setTension(
 
 /**
  * Where point `index`'s handles would be at tension 1, on the side its tension handle shows: the
- * way to the next point, or from the one before for the last
+ * way to the next point, or from the one before for an open line's last
  */
 function fullHandle(p: LineParams, index: number): XY {
     const last = p.points.length - 1;
-    return index < last
-        ? catmullRomSpan(p.points, index).c1
+    const closed = isClosed(p);
+    return index < last || closed
+        ? catmullRomSpan(p.points, index, closed).c1
         : catmullRomSpan(p.points, index - 1).c2;
 }
 
@@ -1544,3 +1731,106 @@ export function dragTension(
 /** How far along the line a field point is, for keeping marchers' order along it */
 export const alongLine = (p: LineParams, point: XY): number =>
     linePath(p).project(point);
+
+/**
+ * The line closed (#529): its last point joined to its first, filled as its outline. A typed
+ * interval or groups (#526) are kept, the line grown or shrunk from its pivot to its gaps round;
+ * a run on the path keeps its spacing that way. Under three points there's nothing to close.
+ */
+export function closeLine(
+    p: LineParams,
+    n: number,
+    env: Pick<ToolEnv, "pivot" | "anchor">,
+): LineParams {
+    if (isClosed(p) || p.points.length < 3) return p;
+    const closed: LineParams = { ...p, closed: true };
+    if (p.spacing.mode === "fit") return closed;
+    return withGroups(closed, n, p.spacing.groups, env);
+}
+
+/**
+ * The line opened (#529) so its marchers keep their spots: from one of its spots round to the
+ * one before it, through every point between. Filled any other way, it opens to the spots its
+ * outline has. Fit shares a cornered line's gaps by its stretches' lengths, which an open line can
+ * share out differently, and a curve's new ends bend it a little differently, so it opens at the
+ * first spot (from its first point) that gives the same spots, the corners switch as it is or
+ * turned over; failing that, at its first spot.
+ */
+export function openLine(p: LineParams, n: number): LineParams {
+    if (!isClosed(p)) return p;
+    const { closed: _closed, distribution: _distribution, ...rest } = p;
+    if (n < 2) return rest;
+    const outline: LineParams = { ...rest, closed: true };
+    const path = linePath(outline);
+    const spots = lineSpots(outline, n);
+    const tolerance = 1e-6 * Math.max(1, path.length);
+    const same = (q: LineParams) => {
+        const now = lineSpots(q, n);
+        return spots.every((spot) =>
+            now.some((x) => length(sub(x, spot)) < tolerance),
+        );
+    };
+    const flipped = (q: LineParams): LineParams =>
+        q.corners === false
+            ? (({ corners: _c, ...r }) => r)(q)
+            : { ...q, corners: false };
+    let first: LineParams | null = null;
+    for (let k = 0; k < n; k++) {
+        const opened = openedAt(outline, path, spots, k);
+        if (!opened) continue;
+        first ??= opened;
+        if (same(opened)) return opened;
+        if (same(flipped(opened))) return flipped(opened);
+    }
+    return first ?? rest;
+}
+
+/**
+ * The closed line opened from spot `k` round to the spot before it, through the points between;
+ * a new end inside a segment as smooth as the smoother of its points. Null when that leaves under
+ * two points.
+ */
+function openedAt(
+    outline: LineParams,
+    path: Path,
+    spots: readonly Slot[],
+    k: number,
+): LineParams | null {
+    const { closed: _closed, ...rest } = outline;
+    const L = path.length;
+    const sOf = (spot: Slot) => spot.s ?? path.project(spot);
+    const round = (s: number) => ((s % L) + L) % L;
+    const from = sOf(spots[k]!);
+    const span = round(
+        sOf(spots[(k - 1 + spots.length) % spots.length]!) - from,
+    );
+    const eps = 1e-9 * Math.max(1, L);
+    const count = outline.points.length;
+    // Each point's way along the path, and each segment's start
+    const starts: number[] = [];
+    let along = 0;
+    for (const segment of lineSegments(outline)) {
+        starts.push(along);
+        along += makePath([segment]).length;
+    }
+    const between = outline.points
+        .map((q, i) => ({ q, at: round(starts[i]! - from) }))
+        .filter(({ at }) => at > eps && at < span - eps)
+        .sort((a, b) => a.at - b.at)
+        .map(({ q }) => q);
+    /** The point at `s` along: one of the line's, or a new one on the segment there */
+    const pointAt = (s: number): LinePoint => {
+        const x = path.at(s);
+        const on = outline.points.find((q) => length(sub(q, x)) < eps);
+        if (on) return on;
+        const i = Math.max(
+            0,
+            starts.findLastIndex((t) => t <= round(s) + eps),
+        );
+        const a = outline.points[i]!;
+        const b = outline.points[(i + 1) % count]!;
+        return withTension(Math.max(a.tension, b.tension))(x);
+    };
+    const points = [pointAt(from), ...between, pointAt(from + span)];
+    return points.length < 2 ? null : { ...rest, points };
+}

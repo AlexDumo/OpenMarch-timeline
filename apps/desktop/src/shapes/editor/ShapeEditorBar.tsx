@@ -99,7 +99,12 @@ import { OutlineGap } from "./OutlineGap";
 import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
 import { ScaleButtons, scaledOnce, scaleOnce } from "./ScaleButtons";
-import { distributionOf, edgeSplitOf, layoutOf } from "../distribute/modes";
+import {
+    closedOf,
+    distributionOf,
+    edgeSplitOf,
+    layoutOf,
+} from "../distribute/modes";
 import { outlineGapOf } from "../distribute/outlineGap";
 import type { XY } from "../types";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
@@ -480,7 +485,8 @@ function evenStateOf(
     spots: number,
 ): EvenState {
     const env = envFor();
-    const evened = env && kind.closed?.evenOut?.(params, spots, env);
+    const evened =
+        env && closedOf(kind, params, spots)?.evenOut?.(params, spots, env);
     if (evened === undefined || evened === null) return "none";
     return evened === params ? "even" : "uneven";
 }
@@ -488,11 +494,11 @@ function evenStateOf(
 /** "Even out": the shape as even as its frame allows, as one undo step (owner on #459) */
 const evenOut = (target: ShapeEditTarget) =>
     applyWith(target, (env) => {
-        const evened = target.kind.closed?.evenOut?.(
+        const evened = closedOf(
+            target.kind,
             target.params,
             target.spots,
-            env,
-        );
+        )?.evenOut?.(target.params, target.spots, env);
         return evened ?? target.params;
     });
 
@@ -938,8 +944,12 @@ const fillShown = (kind: AnyToolKind, params: unknown, spots: number) => {
         outlineGapOf(kind, params, spots),
         // Edge's tip says how many stand on the edge, which the proportions change (#450)
         edgeSplitOf(kind, params, spots),
-        // The kind's own menus show the answer the shape has (#523)
-        kind.choices?.map((c) => c.current(params, spots)),
+        // The kind's own menus show the answer the shape has (#523), and only while they apply
+        // (a Line's Open or closed from its third point, #529)
+        kind.choices?.map((c) => [
+            c.current(params, spots),
+            c.shown?.(params, spots) ?? true,
+        ]),
         flipX,
         flipY,
     ]);

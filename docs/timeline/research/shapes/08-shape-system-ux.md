@@ -290,8 +290,16 @@ row: **Grid** (rows and files), **Outline** (round the edge, the middle empty) a
   of a box; the rest spread over the whole frame around them, right up to the edge, so the two read
   as one spread. Reshuffle moves only the inside. Turning it on or off keeps the frame. With too few
   marchers for an inside, everyone stands on the edge, and the tooltip says so; otherwise it says
-  how many stand on the edge and how many inside. Boxes and circles only; it's hidden for other
-  shapes.
+  how many stand on the edge and how many inside. Boxes, circles and closed Lines; it's hidden for
+  other shapes.
+- **A closed Line (#529)** is filled the same three ways. It closes by a click on its first point
+  while clicking points, an end dropped on the other, or Closed in its Open or closed menu.
+  **Outline** is the line itself, a marcher on every corner and a gap for every marcher (the last
+  back to the first), with its spacing menu. **Grid** is the widest square grid that has room for
+  everyone inside the drawn outline, any extra spots off its back rank; **Spread** (and Edge) fill
+  the drawn outline. In Grid and Spread the drawn outline is the shape, so the spacing is whatever
+  fits, and typing one grows the outline from its pivot. **Open** turns it back into a line
+  through the spots its outline has.
 
 ## The kind contract
 

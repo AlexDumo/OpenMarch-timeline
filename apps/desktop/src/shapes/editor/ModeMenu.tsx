@@ -35,7 +35,10 @@ export function ModeMenu({
             '[role="menuitemradio"][aria-checked="true"]',
         ),
     );
-    const modes = switchModes(target.kind);
+    const modes = switchModes(target.kind, {
+        params: target.params,
+        n: target.spots,
+    });
     const current = distributionOf(target.kind, target.params, target.spots);
     if (modes.length === 0 || !current) return null;
     const pick = (mode: DistributionMode) => {

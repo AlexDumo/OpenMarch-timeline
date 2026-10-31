@@ -78,6 +78,11 @@ export type Gesture =
           readonly pressed: boolean;
           /** The press is on the last point: its release finishes the line */
           readonly onLast: boolean;
+          /**
+           * The pointer is on the first point of three or more, and the kind can close: a click
+           * closes the line (#529), as the preview shows
+           */
+          readonly onFirst?: boolean;
           readonly before: ToolSnapshot;
       }
     /** A number in the floating editor being dragged: the shape follows it live */
@@ -275,6 +280,18 @@ function pressPoint(
     );
 }
 
+/** Whether a click at `at` would close the clicked points: on the first of three or more */
+function closesAt(
+    state: ToolState,
+    g: PointsGesture,
+    at: XY,
+    env: ToolEnv,
+): boolean {
+    if (!state.kind.clickPoints?.close || g.points.length < 3) return false;
+    const first = g.points[0]!;
+    return Math.hypot(at.x - first.x, at.y - first.y) <= env.hitRadius;
+}
+
 /** The line through the points clicked and the one the pointer would add, shown as it'd be */
 function previewPoints(
     state: ToolState,
@@ -285,11 +302,15 @@ function previewPoints(
     const draw = state.kind.clickPoints!;
     const next = draw.land(g.points, at, env);
     const drawn = draw.draw(g.points, state.spots, env);
-    const adding = draw.draw([...g.points, next], state.spots, env);
+    // On the first point, what a click there draws: the line closed
+    const onFirst = closesAt(state, g, at, env);
+    const adding = onFirst
+        ? draw.close!(g.points, state.spots, env)
+        : draw.draw([...g.points, next], state.spots, env);
     return {
         ...state,
         params: adding ?? drawn ?? g.before.params,
-        gesture: { ...g, next, drawn, adding },
+        gesture: { ...g, next, drawn, adding, onFirst },
     };
 }
 
@@ -381,6 +402,15 @@ function releasePoint(
     click?: { readonly double: boolean } | null,
 ): ToolState {
     if (!g.pressed) return state;
+    // A click on the first point closes the line and finishes it (#529)
+    if (g.onFirst && !g.onLast && g.adding !== undefined)
+        return reassign(
+            pushHistory(
+                { ...state, params: g.adding, gesture: null },
+                g.before,
+            ),
+            ctx,
+        );
     if (click?.double || g.onLast || g.next === null)
         return finishPoints(state, ctx);
     const last = g.points.at(-1)!;

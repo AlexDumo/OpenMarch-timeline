@@ -54,14 +54,25 @@ export function mirroredAt(points: readonly XY[], i: number): XY {
     return points[i]!;
 }
 
-/** {@link catmullRomControls} of the span from point `i` of `points` to the next, mirrored past the ends */
+/** Point `i` of `points` taken round a closed loop, the last point's next the first */
+const wrappedAt = (points: readonly XY[], i: number): XY =>
+    points[((i % points.length) + points.length) % points.length]!;
+
+/**
+ * {@link catmullRomControls} of the span from point `i` of `points` to the next, mirrored past the
+ * ends; with `closed`, round the loop instead, the last span back to the first point and the
+ * neighbors wrapping, so the curve runs smoothly through the first point too
+ */
 export const catmullRomSpan = (
     points: readonly XY[],
     i: number,
-): { readonly c1: XY; readonly c2: XY } =>
-    catmullRomControls(
-        mirroredAt(points, i - 1),
-        points[i]!,
-        points[i + 1]!,
-        mirroredAt(points, i + 2),
+    closed = false,
+): { readonly c1: XY; readonly c2: XY } => {
+    const at = closed ? wrappedAt : mirroredAt;
+    return catmullRomControls(
+        at(points, i - 1),
+        wrappedAt(points, i),
+        wrappedAt(points, i + 1),
+        at(points, i + 2),
     );
+};

@@ -534,6 +534,8 @@ export const padTool: ToolKind<PadParams> = {
  */
 export interface PolyParams {
     readonly points: readonly XY[];
+    /** Closed by a click on the first point (#529) */
+    readonly closed?: true;
 }
 
 const polyLength = (points: readonly XY[]) =>
@@ -610,6 +612,10 @@ export const polyTool: ToolKind<PolyParams> = {
         land: (_previous, at, env) => env.gridSnap(at),
         draw: (points, _n, env) =>
             points.length < 2 ? undefined : polyOf(points, env),
+        close: (points, _n, env) => {
+            const p = polyOf(points, env);
+            return p && { ...p, closed: true };
+        },
     },
     handles: (p) =>
         p.points.map((at, i) => ({ key: `p${i}`, at, cursor: "move" })),
