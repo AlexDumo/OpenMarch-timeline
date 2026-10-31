@@ -3,12 +3,7 @@ import type {
     ToolChoicePictureLine,
 } from "../tool/toolKind";
 import type { XY } from "../types";
-import {
-    lineOutline,
-    MAX_TENSION,
-    type LineParams,
-    type LinePoint,
-} from "./lineGeometry";
+import { lineOutline, type LineParams, type LinePoint } from "./lineGeometry";
 import { lineFillSpots } from "./lineFill";
 
 /**
@@ -157,30 +152,4 @@ export const cornersPictures = once(() => {
             5,
         );
     return { on: of(true), off: of(false) };
-});
-
-/**
- * The points menu on a zigzag: sharp corners, smooth bends (as round as a point goes, so the bend
- * reads at menu size), or both
- */
-export const pointsPictures = once(() => {
-    const at: readonly XY[] = [
-        { x: 0, y: 12 },
-        { x: 8, y: 0 },
-        { x: 16, y: 12 },
-        { x: 24, y: 0 },
-    ];
-    const of = (tension: (i: number) => number) =>
-        sketch(
-            {
-                points: at.map((q, i) => ({ ...q, tension: tension(i) })),
-                spacing: { mode: "fit" },
-            },
-            0,
-        );
-    return {
-        corner: of(() => 0),
-        smooth: of(() => MAX_TENSION),
-        mixed: of((i) => (i === 2 ? MAX_TENSION : 0)),
-    };
 });
