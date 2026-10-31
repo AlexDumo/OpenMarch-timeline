@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { FieldModeDrawing } from "@/field/editor/fieldEditor";
 import {
+    drawnSelection,
     HIDE_MARCHERS_TAP_MS,
     isHiding,
     marchersHiddenNow,
@@ -226,5 +227,17 @@ describe("whose dots hide (#568)", () => {
             ...shapeMarcherIds(null, [{ marcherId: 3 }, { marcherId: 4 }]),
         ]).toEqual([3, 4]);
         expect(shapeMarcherIds(null, null).size).toBe(0);
+    });
+});
+
+describe("the selection rings the field draws (#558)", () => {
+    it("leaves out the marchers hidden with their shape", () => {
+        expect(drawnSelection([1, 2, 3], new Set([2]))).toEqual([1, 3]);
+    });
+
+    it("is the selection itself when none of it is hidden", () => {
+        const selected = [1, 3];
+        expect(drawnSelection(selected, null)).toBe(selected);
+        expect(drawnSelection(selected, new Set([2]))).toBe(selected);
     });
 });

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { create } from "zustand";
 import type { FieldModeDrawing } from "@/field/editor/fieldEditor";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -152,7 +152,7 @@ export function useMarchersHidden(): boolean {
     return hiding && inSight;
 }
 
-/** {@link useMarchersHidden} outside React (the field test API, the kept marks' tooltip) */
+/** {@link useMarchersHidden} outside React (the field test API) */
 export const marchersHiddenNow = (): boolean =>
     isHiding(useMarchersHiddenStore.getState()) &&
     isShapeInSight({
@@ -186,10 +186,35 @@ export function useShapeMarchersHidden(): ReadonlySet<number> | null {
     const placed = useBoxSelectionStore(
         (s) => s.selected?.recipe.members ?? null,
     );
-    return useMemo(
-        () => (hidden ? shapeMarcherIds(open, placed) : null),
-        [hidden, open, placed],
-    );
+    const last = useRef<ReadonlySet<number> | null>(null);
+    return useMemo(() => {
+        const next = hidden ? shapeMarcherIds(open, placed) : null;
+        // A save reads the box back as a new array: keep the set, so nothing downstream replans
+        if (!sameIds(last.current, next)) last.current = next;
+        return last.current;
+    }, [hidden, open, placed]);
+}
+
+const sameIds = (
+    a: ReadonlySet<number> | null,
+    b: ReadonlySet<number> | null,
+): boolean =>
+    a === b ||
+    (a !== null &&
+        b !== null &&
+        a.size === b.size &&
+        [...a].every((id) => b.has(id)));
+
+/**
+ * The selection the field draws rings for: the selected marchers that aren't hidden with their
+ * shape (#558), so no ring follows the line while H is down. The same array when none are hidden.
+ */
+export function drawnSelection(
+    selected: readonly number[],
+    hidden: ReadonlySet<number> | null,
+): readonly number[] {
+    if (!hidden || !selected.some((id) => hidden.has(id))) return selected;
+    return selected.filter((id) => !hidden.has(id));
 }
 
 /**

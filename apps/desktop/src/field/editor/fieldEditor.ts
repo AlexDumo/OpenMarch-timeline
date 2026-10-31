@@ -479,7 +479,9 @@ export class FieldEditor {
         this.areaPorts = {
             marchers: () => ports.marchers(),
             zoom: () => ports.zoom(),
-            canSelect: (id) => ports.canSelect(id),
+            // A marcher hidden with its shape (#558) is out of reach, as it is for a click
+            canSelect: (id) =>
+                ports.canSelect(id) && !ports.marcherHidden?.(id),
             isItem: (id) => ports.isItem?.(id) ?? false,
             selection: () => ports.selection.get(),
             select: (ids) => this.write(ids),
@@ -727,7 +729,10 @@ export class FieldEditor {
         this.write(
             ids.filter(
                 (id, i) =>
-                    !hidden?.[i] && !isItem(id) && this.ports.canSelect(id),
+                    !hidden?.[i] &&
+                    !isItem(id) &&
+                    this.ports.canSelect(id) &&
+                    !this.ports.marcherHidden?.(id),
             ),
         );
     }

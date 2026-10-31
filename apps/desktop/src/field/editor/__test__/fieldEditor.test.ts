@@ -207,6 +207,18 @@ describe("FieldEditor with a shape's marchers hidden (#558, a shape seen on its 
         expect(state.selected).toEqual([3]);
     });
 
+    it("a marquee and select-all leave the hidden marchers out", () => {
+        const marquee = hiddenSetup();
+        dragThrough(marquee.editor, [
+            [50, 50],
+            [450, 150],
+        ]);
+        expect(marquee.state.selected).toEqual([3, 4]);
+        const all = hiddenSetup();
+        all.editor.selectAll();
+        expect(all.state.selected).toEqual([3, 4]);
+    });
+
     it("hits them again once they show", () => {
         let hidden = true;
         const { editor, state } = setup({

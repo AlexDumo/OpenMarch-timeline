@@ -110,7 +110,10 @@ import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
-import { useShapeMarchersHidden } from "@/shapes/field/marchersHidden";
+import {
+    drawnSelection,
+    useShapeMarchersHidden,
+} from "@/shapes/field/marchersHidden";
 import { useTimelineVisuals } from "./useTimelineVisuals";
 import { drawnFollowing } from "./fieldFollowing";
 import {
@@ -645,6 +648,7 @@ function ThreeFieldView() {
                             editor={editor}
                             marchers={marchers}
                             selectedIds={selectedIds}
+                            hiddenIds={hiddenIds}
                         />
                         <PlayheadDriver
                             marchers={marchers}
@@ -909,10 +913,12 @@ function EditorInput({
     editor,
     marchers,
     selectedIds,
+    hiddenIds,
 }: {
     editor: FieldEditor;
     marchers: FieldMarchers;
     selectedIds: readonly number[];
+    hiddenIds: ReadonlySet<number> | null;
 }) {
     const canvas = useThree((s) => s.gl.domElement);
     const invalidate = useThree((s) => s.invalidate);
@@ -926,10 +932,15 @@ function EditorInput({
     // A drag moves marchers outside the playhead's fills: draw them
     useEffect(() => marchers.subscribe(invalidate), [marchers, invalidate]);
 
+    // A marcher hidden with its shape (#558) hides its selection ring too, so no ring follows the line
+    const ringIds = useMemo(
+        () => drawnSelection(selectedIds, hiddenIds),
+        [selectedIds, hiddenIds],
+    );
     useEffect(() => {
-        marchers.setSelection(selectedIds);
+        marchers.setSelection(ringIds);
         invalidate();
-    }, [marchers, selectedIds, invalidate]);
+    }, [marchers, ringIds, invalidate]);
 
     return null;
 }
