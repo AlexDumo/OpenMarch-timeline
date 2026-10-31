@@ -21,6 +21,7 @@ import { rolesOf, type Roles } from "@/input/modifierRoles";
 import { pressShapeKeys, type HeldFieldGesture } from "../field/heldGesture";
 import {
     cancelGesture,
+    pickMenu,
     pointerMove,
     press,
     pressTarget,
@@ -32,6 +33,7 @@ import {
 } from "./toolMachine";
 import { updateTool, useShapeToolStore } from "./shapeToolStore";
 import { ShapeGlide } from "./spotGlide";
+import { openHandleMenu } from "../field/handleMenu";
 import {
     setShapePointerOver,
     shapeCalm,
@@ -415,6 +417,33 @@ export const shapeToolMode: FieldMode = {
         updateTool((t) => release(t, shapeContextFor(field), click));
     },
     cancel: cancelShapeGesture,
+    // A right-click on a handle with a menu (a Line's point or segment, #569) opens it
+    openMenu(pointer) {
+        const tool = useShapeToolStore.getState().tool;
+        const field = currentShapeField();
+        if (!tool || !field || tool.gesture || tool.params === null)
+            return false;
+        return openHandleMenu(
+            tool.kind,
+            tool.params,
+            tool.spots,
+            pressTarget(tool, pointer.field, envOf(field, tool)),
+            pointer.screen,
+            (key, value) => {
+                const now = currentShapeField();
+                if (!now) return;
+                updateTool((t) =>
+                    pickMenu(
+                        t,
+                        key,
+                        value,
+                        shapeContextFor(now),
+                        envOf(now, t),
+                    ),
+                );
+            },
+        );
+    },
     cursorAt(pointer) {
         const tool = useShapeToolStore.getState().tool;
         const field = currentShapeField();

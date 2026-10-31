@@ -181,6 +181,34 @@ export function releaseLive(
 }
 
 /**
+ * Entry `value` of handle `key`'s right-click menu picked (#569): `changed` when there is
+ * something to save. The selection is what the kind says after it, else kept where the shape
+ * still has it.
+ */
+export function pickLive(
+    live: LiveBox,
+    key: string,
+    value: string,
+    env: ToolEnv,
+): { live: LiveBox; changed: boolean } {
+    const { kind, spots } = live.box;
+    if (live.gesture) return { live, changed: false };
+    const out = kind.menu?.pick(live.params, spots, key, value, env);
+    if (!out) return { live, changed: false };
+    const selected = selectionIn(
+        kind,
+        out.params,
+        spots,
+        out.selected === undefined ? live.selected : out.selected,
+    );
+    return {
+        live: { ...live, params: out.params, selected },
+        // A point's marcher answer changes neither its outline nor its frame: any number counts
+        changed: !sameParams(out.params, live.box.params),
+    };
+}
+
+/**
  * The box read again (`box`): the selection stays when it's the box as it was, or as this box
  * last `saved` it, and is cleared when it comes back changed from outside (an undo or redo, which
  * can put another point under the same key), as the open shape's undo does

@@ -72,6 +72,7 @@ import {
     PlacedBoxesOverlay,
 } from "@/shapes/placed/PlacedBoxesOverlay";
 import { ShapeEditor } from "@/shapes/editor/ShapeEditorBar";
+import HandleMenu from "@/shapes/editor/HandleMenu";
 import FavoritesRing from "@/shapes/tool/FavoritesRing";
 import DockedCommandBar from "@/shortcuts/palette/DockedCommandBar";
 import { useShapeFocus } from "@/shapes/field/useShapeFocus";
@@ -742,6 +743,8 @@ function ThreeFieldView() {
                     marks={keptMarks}
                     elements={keptMarkElements}
                 />
+                {/* A Line's point and segment menus (#569) */}
+                <HandleMenu />
                 <FieldContextMenu
                     at={menu.at}
                     onClose={menu.close}
