@@ -352,8 +352,8 @@ and `02-adr-amendment-draft.md`; fork #469).
   box, so the cut move's id stays with a part that doesn't land on a range a newer move has; when
   both parts would, neither keeps it.
 
-**Amendment (2026-10-30, project owner): Held holds are stored.** _Proposed (for the owner to
-accept, with #472)._ Part 2 of the holds design
+**Amendment (2026-10-30, project owner): Held holds are stored.** _Accepted (owner, 2026-10-30,
+with #472)._ Part 2 of the holds design
 (`docs/timeline/research/holds/`, fork issues #472–#476; the owner reviewed the draft on 2026-10-27
 and answered the validator's questions on 2026-10-28). On a given count a marcher is **Set** (a
 keyframe), **Held** or **Not set**. A designer can mark a stretch where a marcher stands still as
