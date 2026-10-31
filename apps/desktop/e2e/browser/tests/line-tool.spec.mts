@@ -485,7 +485,10 @@ test("change: clicks draw an L, its corner holds a marcher until switched off, a
     // A click on the last point finishes the line
     await click(c);
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
-    await expect.poll(() => interval(page, "shape-tool-readout")).toBe("1⅔–2");
+    // Clicked points land a hair off the grid, so the short leg can read 1.67
+    await expect
+        .poll(() => interval(page, "shape-tool-readout"))
+        .toMatch(/^1(⅔|\.67)–2$/);
 
     const drawn = (await shapeOverlay(page))!;
     expect(drawn.handles).toHaveLength(3);
