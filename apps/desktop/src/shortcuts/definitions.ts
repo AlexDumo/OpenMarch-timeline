@@ -435,6 +435,23 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["Shift+P"],
     },
+    // #573: as Clear this page, but the later pages that showed the page's spot follow back to
+    // the page before instead of keeping where they were. Its handler names the pages ("Clear
+    // Page 3, Pages 4–6 follow back"). Unbound
+    setAllMarchersToPreviousPageAndFollowing: {
+        labelKey: "actions.batchEdit.clearThisPageAllAndFollowing",
+        category: "batchEdit",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    setSelectedMarchersToPreviousPageAndFollowing: {
+        labelKey: "actions.batchEdit.clearThisPageSelectedAndFollowing",
+        category: "batchEdit",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+    },
     setAllMarchersToNextPage: {
         labelKey: "actions.batchEdit.setAllToNext",
         category: "batchEdit",
