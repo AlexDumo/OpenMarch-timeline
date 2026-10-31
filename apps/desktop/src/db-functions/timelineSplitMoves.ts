@@ -150,6 +150,76 @@ export function splitMembershipBlocker(
     return null;
 }
 
+/** Why split by marcher can't break up a shared transition (`splitRefusal`). */
+export interface SplitRefusal {
+    /** Into a shape, or follow the leader (its own path, or an inheriting order elsewhere, R-12) */
+    reason: "shape" | "followTheLeader";
+    /** The transition's marchers that would leave, ascending */
+    leaving: number[];
+    /** Its marchers that would stay, ascending */
+    staying: number[];
+}
+
+/**
+ * **Preview** (changes nothing): why splitting `marcherIds` out of move `timelineId`
+ * (`splitMarchersIntoNewMoveInTransaction`) is refused for a transition they share with a marcher
+ * who stays, or `null` when it isn't: the transition goes into a shape, or follows the leader, or
+ * one of its marchers (who stay too) is in an inheriting follow-the-leader transition anywhere in
+ * the show, whose order R-12 reads from these slots. The first such transition, in row order. With
+ * `storedShapesSwitched`, a shared transition into a stored shape isn't refused, since the caller
+ * switches it to individual points first (`takeMarchersIntoOwnMoveInTransaction`).
+ */
+export async function splitRefusal(
+    tx: DbTransaction,
+    timelineId: number,
+    marcherIds: readonly number[],
+    { storedShapesSwitched = false }: { storedShapesSwitched?: boolean } = {},
+): Promise<SplitRefusal | null> {
+    const chosen = new Set(marcherIds);
+    const byTransition = new Map<number, MemberRow[]>();
+    for (const row of await memberRows(tx, timelineId)) {
+        const list = byTransition.get(row.transition.id) ?? [];
+        list.push(row);
+        byTransition.set(row.transition.id, list);
+    }
+    const shared = [...byTransition.values()].filter((list) => {
+        const n = list.filter((r) =>
+            chosen.has(r.assignment.marcher_id),
+        ).length;
+        return n > 0 && n < list.length;
+    });
+    if (shared.length === 0) return null;
+    // Read once, only when a shared transition has to be split slot by slot
+    const ftl = await marchersInInheritingFollowTheLeader(tx);
+    const ids = (list: MemberRow[], leaving: boolean) =>
+        [
+            ...new Set(
+                list
+                    .filter(
+                        (r) => chosen.has(r.assignment.marcher_id) === leaving,
+                    )
+                    .map((r) => r.assignment.marcher_id),
+            ),
+        ].sort((a, b) => a - b);
+    for (const list of shared) {
+        const tr = list[0]!.transition;
+        const reason =
+            tr.dest_shape_id !== null && !storedShapesSwitched
+                ? "shape"
+                : tr.path_style === "follow_the_leader" ||
+                    list.some((r) => ftl.has(r.assignment.marcher_id))
+                  ? "followTheLeader"
+                  : null;
+        if (reason)
+            return {
+                reason,
+                leaving: ids(list, true),
+                staying: ids(list, false),
+            };
+    }
+    return null;
+}
+
 /**
  * **Split N selected into new move** (UI-25): the selected marchers that are members of timeline
  * `timelineId` leave it for a new move over the same range, named "Move N" (UI-14), with their
@@ -194,48 +264,29 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
     }
     const whole: number[] = [];
     const peeled: MemberRow[] = [];
-    // Read once, only when a shared transition has to be split slot by slot
-    const shared = [...byTransition.values()].some((list) => {
-        const n = list.filter((r) =>
-            chosen.has(r.assignment.marcher_id),
-        ).length;
-        return n > 0 && n < list.length;
-    });
-    const ftl = shared
-        ? await marchersInInheritingFollowTheLeader(tx)
-        : new Set<number>();
+    const refusal = await splitRefusal(tx, timelineId, [...chosen]);
+    if (refusal) {
+        const labels = await marcherLabels(tx, [
+            ...refusal.leaving,
+            ...refusal.staying,
+        ]);
+        const why =
+            refusal.reason === "shape"
+                ? "move into one shape together"
+                : "follow the leader together";
+        refuse(
+            `${labelList(labels, refusal.leaving)} ${why} with ${labelList(
+                labels,
+                refusal.staying,
+            )}, so they can't be split apart. Select them all, or none of them.`,
+        );
+    }
     for (const [transitionId, list] of byTransition) {
         const leaving = list.filter((r) => chosen.has(r.assignment.marcher_id));
         if (leaving.length === 0) continue;
         if (leaving.length === list.length) {
             whole.push(transitionId);
             continue;
-        }
-        const tr = list[0]!.transition;
-        const ordered = list.some((r) => ftl.has(r.assignment.marcher_id));
-        if (
-            tr.dest_shape_id !== null ||
-            tr.path_style === "follow_the_leader" ||
-            ordered
-        ) {
-            const labels = await marcherLabels(tx, [
-                ...new Set(list.map((r) => r.assignment.marcher_id)),
-            ]);
-            const why =
-                tr.dest_shape_id !== null
-                    ? "move into one shape together"
-                    : "follow the leader together";
-            refuse(
-                `${labelList(
-                    labels,
-                    leaving.map((r) => r.assignment.marcher_id),
-                )} ${why} with ${labelList(
-                    labels,
-                    list
-                        .filter((r) => !chosen.has(r.assignment.marcher_id))
-                        .map((r) => r.assignment.marcher_id),
-                )}, so they can't be split apart. Select them all, or none of them.`,
-            );
         }
         peeled.push(...leaving);
     }

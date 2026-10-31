@@ -348,6 +348,13 @@ and `02-adr-amendment-draft.md`; fork #469).
   remove a marcher from a move for a range of counts (`db-functions/timelineMoveCuts.ts`). How
   shapes and transitions provide them is left to the shape and transition ownership model (fork
   #434, #436), a later amendment.
+- _Accepted (owner, 2026-10-30, with #471):_ **Part of a group (R4, fork #471):** Remove keyframe at
+  a split first **takes the selected marchers into a move of their own** over the same counts, in
+  each half (`takeMarchersIntoOwnMoveInTransaction`, a split by marcher as in UI-25, with a shared
+  transition into a stored shape switched to individual points first). Nobody's motion changes.
+  It skips the same shape and follow-the-leader members as a removal, and every refusal,
+  including split by marcher's own, is decided before anything is written. It is the only other
+  way holds change a move's membership.
 - **A part of a cut never takes over a page's move.** A page's move is the oldest timeline over its
   box, so the cut move's id stays with a part that doesn't land on a range a newer move has; when
   both parts would, neither keeps it.

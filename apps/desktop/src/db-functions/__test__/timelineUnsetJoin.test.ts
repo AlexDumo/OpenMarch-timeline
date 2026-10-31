@@ -1,10 +1,8 @@
 import { expect } from "vitest";
-import { asc, eq, getTableName } from "drizzle-orm";
-import { createResolver, type Resolver } from "@openmarch/core";
-import { DbConnection, describeDbTests, schema } from "@/test/base";
+import { eq } from "drizzle-orm";
+import { describeDbTests, schema } from "@/test/base";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
 import { convertPagesToTimeline } from "@/test/convertPages";
-import { readTimelineTables } from "@/timeline/timelineRows";
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { createTimelineShapesInTransaction } from "../timelineShapes";
 import {
@@ -16,6 +14,15 @@ import { splitTimelineAtBeat } from "../timelineSplitAtBeat";
 import { splitMarchersIntoNewMove } from "../timelineSplitMoves";
 import { unsetMarchersAt } from "../timelineUnset";
 import { resizeTimeline } from "../timelineResize";
+import {
+    PAGE2,
+    dataOf,
+    expectSameSteps,
+    page2,
+    resolverOf,
+    stepsOf,
+    timelineRange,
+} from "./timelineUnsetJoinHelpers";
 
 keepFixturesInPageMode("its tests convert the show themselves");
 
@@ -24,99 +31,9 @@ keepFixturesInPageMode("its tests convert the show themselves");
  * `marchersAndPages` show (pages 1 to 6 of 8 counts, so page 2's box is `[9, 17)` and page 3's
  * `[17, 25)`), Split at playhead at count 13 and Remove keyframe there with the whole move
  * selected walks the marchers along the original path at even speed again, instead of standing
- * still until 13 and then going at double speed (#362 Repro, question 14).
+ * still until 13 and then going at double speed (#362 Repro, question 14). Part of a group is
+ * `timelineUnsetJoinPart.test.ts` (#471).
  */
-
-const TABLES = [
-    schema.timelines,
-    schema.timeline_shapes,
-    schema.timeline_transitions,
-    schema.timeline_assignments,
-    schema.timeline_slot_destinations,
-    schema.timeline_shape_recipes,
-    schema.timeline_shape_recipe_marchers,
-];
-
-const dataOf = async (db: DbConnection) => {
-    const out: Record<string, unknown[]> = {};
-    for (const table of TABLES)
-        out[getTableName(table)] = await db.select().from(table).all();
-    return out;
-};
-
-const resolverOf = async (db: DbConnection): Promise<Resolver> =>
-    createResolver((await readTimelineTables(db)).snapshot);
-
-/** Each marcher's step length on each count of `[start, end)`. */
-const stepsOf = (
-    r: Resolver,
-    marcherIds: readonly number[],
-    { start, end }: { start: number; end: number },
-) =>
-    new Map(
-        marcherIds.map((id) => [
-            id,
-            Array.from({ length: end - start }, (_, i) => {
-                const [x0, y0] = r.positionAt(id, start + i);
-                const [x1, y1] = r.positionAt(id, start + i + 1);
-                return Math.hypot(x1 - x0, y1 - y0);
-            }),
-        ]),
-    );
-
-const expectSameSteps = (
-    a: ReturnType<typeof stepsOf>,
-    b: ReturnType<typeof stepsOf>,
-) => {
-    expect([...b.keys()]).toEqual([...a.keys()]);
-    for (const [id, steps] of a)
-        steps.forEach((step, i) => expect(b.get(id)![i]).toBeCloseTo(step, 6));
-};
-
-/** Page 2's own timeline, over [9, 17), its one transition and its members. */
-const page2 = async (db: DbConnection) => {
-    const timeline = (await db
-        .select()
-        .from(schema.timelines)
-        .where(eq(schema.timelines.start_beat, 9))
-        .get())!;
-    expect(timeline.end_beat).toBe(17);
-    const transition = (await db
-        .select()
-        .from(schema.timeline_transitions)
-        .where(eq(schema.timeline_transitions.timeline_id, timeline.id))
-        .get())!;
-    const members = (
-        await db
-            .select({ id: schema.timeline_assignments.marcher_id })
-            .from(schema.timeline_assignments)
-            .where(eq(schema.timeline_assignments.transition_id, transition.id))
-            .all()
-    )
-        .map((r) => r.id)
-        .sort((a, b) => a - b);
-    return { timeline, transition, members };
-};
-
-const timelineRange = async (db: DbConnection, id: number) =>
-    await db
-        .select({
-            start: schema.timelines.start_beat,
-            end: schema.timelines.end_beat,
-        })
-        .from(schema.timelines)
-        .where(eq(schema.timelines.id, id))
-        .get();
-
-const rowsOfMarcher = (db: DbConnection, marcherId: number) =>
-    db
-        .select()
-        .from(schema.timeline_assignments)
-        .where(eq(schema.timeline_assignments.marcher_id, marcherId))
-        .orderBy(asc(schema.timeline_assignments.start_beat))
-        .all();
-
-const PAGE2 = { start: 9, end: 17 };
 
 describeDbTests(
     "Remove keyframe joins the halves after a split (#470)",
@@ -234,37 +151,6 @@ describeDbTests(
                 start: 17,
                 end: 25,
             });
-        });
-
-        it("does not join for part of the move's marchers (that is #471): they stand still, then walk", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            await convertPagesToTimeline(db);
-            const { timeline, members } = await page2(db);
-            await splitTimelineAtBeat({
-                db,
-                timelineId: timeline.id,
-                beat: 13,
-            });
-            const one = members[0]!;
-
-            const result = await unsetMarchersAt({
-                db,
-                beat: 13,
-                marcherIds: [one],
-            });
-
-            expect(result.unset).toEqual([one]);
-            expect(result.joined).toEqual([]);
-            expect(await timelineRange(db, timeline.id)).toEqual({
-                start: 13,
-                end: 17,
-            });
-            const rows = await rowsOfMarcher(db, one);
-            expect(
-                rows.some((r) => r.start_beat === 13 && r.end_beat === 17),
-            ).toBe(true);
         });
 
         it("joins each of two moves after the count, and deletes the removed move once", async ({
