@@ -93,6 +93,22 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
         ]),
     // Saved shapes, the show's copies (ADR 0006, saved shapes)
     28: (db) => dropTables(db, ["saved_shapes"]),
+    // Tempo mode (ADR 0007): pins, holds, measure numbers, meters and the music offset.
+    // The history triggers name the columns; the migration service recreates every trigger
+    29: (db) => {
+        const triggers = db
+            .prepare(
+                "SELECT name FROM sqlite_schema WHERE type = 'trigger' AND tbl_name IN ('beats', 'measures', 'tempo_settings')",
+            )
+            .all() as { name: string }[];
+        for (const { name } of triggers) db.exec(`DROP TRIGGER \`${name}\``);
+        dropTables(db, ["tempo_settings"]);
+        db.exec("ALTER TABLE beats DROP COLUMN tempo_pin");
+        db.exec("ALTER TABLE beats DROP COLUMN tempo_hold");
+        db.exec("ALTER TABLE measures DROP COLUMN number_override");
+        db.exec("ALTER TABLE measures DROP COLUMN meter");
+        db.exec("ALTER TABLE measures DROP COLUMN grouping");
+    },
 };
 
 /**

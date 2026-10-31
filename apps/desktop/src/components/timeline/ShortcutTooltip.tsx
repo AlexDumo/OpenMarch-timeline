@@ -112,6 +112,8 @@ export function ShortcutTooltip({
                         // Above the transport, so it never covers the page boxes under it
                         side={side}
                         sideOffset={4}
+                        // kept clear of the window's edges, not just inside them
+                        collisionPadding={8}
                         className={TooltipClassName}
                     >
                         {!hideLabel && (

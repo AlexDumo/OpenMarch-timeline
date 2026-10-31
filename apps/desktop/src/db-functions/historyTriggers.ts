@@ -50,6 +50,8 @@ export const tablesWithHistory = [
     // Shape recipes beside the positions they placed (ADR 0006)
     schema.timeline_shape_recipes,
     schema.timeline_shape_recipe_marchers,
+    // PROTOTYPE tempo mode: the music offset tempo edits change
+    schema.tempo_settings,
 ];
 
 /**

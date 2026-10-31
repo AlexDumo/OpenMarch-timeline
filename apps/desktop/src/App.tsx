@@ -31,6 +31,7 @@ import {
 } from "@/shortcuts/ActionHandlers";
 import TimelineContainer from "@/components/timeline/TimelineContainer";
 import { TimelineSplitter } from "@/components/timeline/TimelineSplitter";
+import { useTempoModeStore } from "@/tempo/tempoModeStore";
 import { SelectedAudioFileProvider } from "@/context/SelectedAudioFileContext";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
 import TitleBar from "@/components/titlebar/TitleBar";
@@ -310,9 +311,16 @@ function App() {
         void injectTolgeeApiKey();
     }, []);
 
-    const timelineFocussedClass = clsx({
-        "opacity-30": focussedComponent === "timeline",
-    });
+    // PROTOTYPE (tempo mode): the tempo lanes are the only thing in focus; the rest steps back and
+    // takes no input until tempo mode is done
+    const tempoMode = useTempoModeStore((s) => s.on);
+    const timelineFocussedClass = clsx(
+        "transition-opacity duration-200",
+        {
+            "opacity-30": focussedComponent === "timeline",
+        },
+        tempoMode && "pointer-events-none opacity-30 select-none",
+    );
 
     return (
         <ErrorBoundary>
@@ -403,6 +411,9 @@ function App() {
                                                                 className={
                                                                     timelineFocussedClass
                                                                 }
+                                                                inert={
+                                                                    tempoMode
+                                                                }
                                                             >
                                                                 <Toolbar />
                                                             </div>
@@ -411,7 +422,11 @@ function App() {
                                                             className={clsx(
                                                                 "relative flex h-full min-h-0 min-w-0 gap-8",
                                                                 timelineFocussedClass,
+                                                                // the taller tempo pane can leave the sidebar short
+                                                                tempoMode &&
+                                                                    "overflow-hidden",
                                                             )}
+                                                            inert={tempoMode}
                                                         >
                                                             {!preview &&
                                                                 !visuals && (
@@ -447,6 +462,7 @@ function App() {
                                                             className={
                                                                 timelineFocussedClass
                                                             }
+                                                            inert={tempoMode}
                                                         >
                                                             {visuals ? (
                                                                 <VisualsInspector />

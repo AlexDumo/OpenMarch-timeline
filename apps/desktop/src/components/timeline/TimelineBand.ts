@@ -11,6 +11,8 @@ export interface TimelineBandGeometry {
     beatCount: number;
     /** The beats a drag pulls to: page lines and downbeats (`snapSeekBeat`). */
     snapBeats: readonly number[];
+    /** The room left of beat 0 (the home page's column): x -leadingInset is the scroll's left edge */
+    leadingInset: number;
 }
 
 /**
@@ -20,5 +22,12 @@ export interface TimelineBandGeometry {
  */
 export interface TimelineBand {
     height: number;
+    /**
+     * The band is what's being edited (tempo mode): the timeline quiets its page row and offers no
+     * page editing (moving page flags, adding pages at the playhead) while it shows
+     */
+    focus?: boolean;
+    /** A row the timeline draws over its transport while the band shows: the band's own header */
+    header?: ReactNode;
     render(geometry: TimelineBandGeometry): ReactNode;
 }

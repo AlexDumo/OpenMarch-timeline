@@ -1,0 +1,139 @@
+import { describe, expect, it } from "vitest";
+import {
+    assignTaps,
+    moveBeatTo,
+    movePinsWithMusic,
+    pinBeats,
+    rampLengths,
+    regroupMeasures,
+    retime,
+    startsOf,
+    tempoSegments,
+} from "../tempoMath";
+
+/** beat 0 plus n counts of `len` seconds */
+const even = (n: number, len = 0.5) => [0, ...Array<number>(n).fill(len)];
+
+describe("moveBeatTo", () => {
+    it("stretches the counts before and slides the rest when nothing is locked after", () => {
+        const r = moveBeatTo(even(8), new Set(), 5, 2.4)!;
+        const s = startsOf(r.durations);
+        expect(s[5]).toBeCloseTo(2.4);
+        expect(s[3]).toBeCloseTo(1.2);
+        expect(r.durations[6]).toBeCloseTo(0.5);
+        expect(r.locks.has(5)).toBe(true);
+    });
+    it("keeps the next lock where it is", () => {
+        const r = moveBeatTo(even(8), new Set([7]), 5, 2.4)!;
+        const s = startsOf(r.durations);
+        expect(s[7]).toBeCloseTo(3);
+        expect(s[6]).toBeCloseTo(2.7);
+    });
+    it("refuses a move past 400 BPM", () => {
+        expect(moveBeatTo(even(8), new Set([4]), 5, 1.55)).toBeNull();
+    });
+});
+
+describe("retime", () => {
+    it("absorbs a tempo change before the next lock", () => {
+        const r = retime(even(8), new Set([8]), 1, 3, rampLengths(2, 100));
+        expect(startsOf(r.durations)[8]).toBeCloseTo(3.5);
+        expect(r.note).toBeUndefined();
+    });
+    it("scales the edit when the lock is right after it", () => {
+        const r = retime(even(8), new Set([3]), 1, 3, rampLengths(2, 100));
+        expect(startsOf(r.durations)[3]).toBeCloseTo(1);
+        expect(r.note).toBeDefined();
+    });
+    it("slides everything with no lock after", () => {
+        const r = retime(even(8), new Set(), 1, 3, rampLengths(2, 60));
+        expect(startsOf(r.durations)[8]).toBeCloseTo(4.5);
+    });
+    it("leaves fixed counts (holds) alone, in the edit and in the stretch to the lock", () => {
+        const d = even(8);
+        d[2] = 4; // a hold inside the edit
+        d[5] = 3; // a hold between the edit and the lock
+        const r = retime(d, new Set([8]), 1, 4, rampLengths(3, 100), {
+            fixed: new Set([2, 5]),
+        });
+        expect(r.durations[2]).toBe(4);
+        expect(r.durations[5]).toBe(3);
+        expect(r.durations[1]).toBeCloseTo(0.6);
+        expect(startsOf(r.durations)[8]).toBeCloseTo(startsOf(d)[8]!);
+        expect(r.note).toBeUndefined();
+    });
+    it("fits the edit to a lock right after it without touching a hold in it", () => {
+        const d = even(8);
+        d[2] = 4;
+        const r = retime(d, new Set([3]), 1, 3, rampLengths(2, 100), {
+            fixed: new Set([2]),
+        });
+        expect(r.durations[2]).toBe(4);
+        expect(startsOf(r.durations)[3]).toBeCloseTo(4.5);
+        expect(r.note).toBeDefined();
+    });
+});
+
+describe("taps", () => {
+    it("assigns taps to consecutive counts and to every other count", () => {
+        const s = startsOf(even(16));
+        expect(assignTaps(s, [1.02, 1.5, 2.01]).map((p) => p.beat)).toEqual([
+            3, 4, 5,
+        ]);
+        expect(assignTaps(s, [0.02, 1.0, 2.0]).map((p) => p.beat)).toEqual([
+            1, 3, 5,
+        ]);
+    });
+    it("pins tapped counts", () => {
+        const r = pinBeats(even(16), new Set(), [
+            { beat: 3, seconds: 1.1 },
+            { beat: 4, seconds: 1.7 },
+        ]);
+        const s = startsOf(r.durations);
+        expect(s[3]).toBeCloseTo(1.1);
+        expect(s[4]).toBeCloseTo(1.7);
+    });
+});
+
+describe("tempoSegments", () => {
+    it("finds steady runs and ramps", () => {
+        const d = [
+            0,
+            ...rampLengths(8, 120),
+            ...rampLengths(8, 120, 80),
+            ...rampLengths(8, 80),
+        ];
+        const segs = tempoSegments(d);
+        expect(segs[0]).toMatchObject({ from: 1, to: 10, ramp: false });
+        expect(segs.some((s) => s.ramp)).toBe(true);
+        expect(segs[segs.length - 1]!.to).toBe(25);
+    });
+});
+
+describe("regroupMeasures", () => {
+    it("regroups a run of 4-count measures into 3s", () => {
+        const r = regroupMeasures([1, 5, 9, 13, 17, 19], 21, 5, 3);
+        expect(r).toEqual({
+            from: 5,
+            to: 17,
+            starts: [5, 8, 11, 14],
+            leftover: 0,
+        });
+    });
+});
+
+describe("movePinsWithMusic", () => {
+    it("moves every pinned count earlier with the music, the counts before the first pin taking it up", () => {
+        // pins at counts 5 and 9; the music moves 0.4 s earlier
+        const d = movePinsWithMusic(even(12), new Set([5, 9]), 0.4)!;
+        const s = startsOf(d);
+        expect(s[1]).toBeCloseTo(0);
+        expect(s[5]).toBeCloseTo(2 - 0.4);
+        expect(s[9]).toBeCloseTo(4 - 0.4);
+        expect(d[6]).toBeCloseTo(0.5);
+    });
+
+    it("does nothing without pins", () => {
+        expect(movePinsWithMusic(even(8), new Set(), 0.4)).toBeNull();
+    });
+});

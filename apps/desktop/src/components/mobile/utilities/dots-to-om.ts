@@ -3,6 +3,7 @@
  * Uses getOrmConnection() — throws "Db is not open" if no show is open.
  */
 
+import { readAudioOffsetSeconds } from "@/tempo/audioOffset";
 import { asc } from "drizzle-orm";
 import {
     formatValidationErrors,
@@ -307,6 +308,15 @@ async function fetchDotsData(db: DB): Promise<DotsData> {
         rows: await readShowRows(db),
         snapshot: await readTimelinePageSnapshot(db),
     }));
+    // PROTOTYPE (tempo mode): the offset in the show's history, else the workspace setting
+    if (rows.workspaceSettings)
+        rows.workspaceSettings = {
+            ...rows.workspaceSettings,
+            audioOffsetSeconds: await readAudioOffsetSeconds(
+                db as never,
+                rows.workspaceSettings.audioOffsetSeconds,
+            ),
+        };
     const positionRows = await sampleTimelinePagePositions(snapshot);
     return { ...rows, positionRows };
 }

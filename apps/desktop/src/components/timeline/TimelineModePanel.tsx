@@ -1,4 +1,7 @@
+import clsx from "clsx";
 import { StartFlagPositionsButton } from "./StartFlagPositionsButton";
+import { TEMPO_BAND, useTempoModeStore } from "@/tempo/TempoBand";
+import { TempoModeButton } from "@/tempo/TempoModeButton";
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -149,8 +152,15 @@ const LOOP_BUTTONS = (
     </>
 );
 const SPEED_BUTTON = <TimelineSpeedButton />;
+/** PROTOTYPE (tempo mode): Play loops the selected measures, so no Loop button; no start flag */
+const TEMPO_VIEW_CONTROLS = <TempoModeButton />;
 /** First on the transport's right in both modes, before Fit: start flag positions (fork #331) */
-const LEADING_VIEW_CONTROLS = <StartFlagPositionsButton />;
+const LEADING_VIEW_CONTROLS = (
+    <>
+        <TempoModeButton />
+        <StartFlagPositionsButton />
+    </>
+);
 const EXPERT_VIEW_CONTROLS = <TimelineCompactButton />;
 
 /** The store's selection as the timeline draws it (spec beats; `Timeline` maps them to its axis) */
@@ -196,7 +206,9 @@ export default function TimelineModePanel() {
     const { beats, pages, measures, countGrid } = useTimingObjects()!;
     // UI-19: Basic is this timeline with its page boxes holding the music, and none of the
     // Expert parts (clips, the loop, isolation, moves): docs/timeline/research/basic-mode
-    const basic = useIsBasicMode();
+    // PROTOTYPE (tempo mode): the timeline shows the tempo lanes in place of the clips, in Basic too
+    const tempoMode = useTempoModeStore((s) => s.on);
+    const basic = useIsBasicMode() && !tempoMode;
     const basicExtras = useBasicTimelineExtras(pages);
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
     // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis, in
@@ -208,7 +220,8 @@ export default function TimelineModePanel() {
     );
     const musicEnd = useMusicEndSeconds();
     const waveform = useMemo(() => {
-        if (!envelope || waveformHidden) return null;
+        // Tempo mode draws the music in its own lane: one waveform, not two
+        if (!envelope || waveformHidden || tempoMode) return null;
         const through =
             musicEnd === null ? 0 : musicEndBeat(countGrid, musicEnd);
         const peaks = peaksByBeat(
@@ -221,7 +234,15 @@ export default function TimelineModePanel() {
         if (basic && !peaks.some((beat) => beat.some((peak) => peak > 0)))
             return null;
         return { peaksByBeat: peaks };
-    }, [envelope, beats, countGrid, musicEnd, waveformHidden, basic]);
+    }, [
+        envelope,
+        beats,
+        countGrid,
+        musicEnd,
+        waveformHidden,
+        basic,
+        tempoMode,
+    ]);
     const zoomFitted = useUiSettingsStore(
         (s) => s.uiSettings.timelineZoomFitted,
     );
@@ -530,15 +551,24 @@ export default function TimelineModePanel() {
                     {...(basic ? basicExtras : {})}
                     zoomFitted={zoomFitted}
                     onZoomFittedChange={setZoomFitted}
-                    className="w-full"
+                    // Tempo mode is a focused mode: the timeline is framed in the accent
+                    className={clsx(
+                        "w-full",
+                        tempoMode && "ring-accent ring-2",
+                    )}
                     beats={beats}
                     pages={pages}
                     measures={measures}
-                    timelines={basic ? NO_CLIPS : offPage}
+                    timelines={basic || tempoMode ? NO_CLIPS : offPage}
+                    band={tempoMode ? TEMPO_BAND : undefined}
                     pageMoves={pageMoves}
-                    transportAccessories={basic ? SPEED_BUTTON : LOOP_BUTTONS}
+                    transportAccessories={
+                        basic || tempoMode ? SPEED_BUTTON : LOOP_BUTTONS
+                    }
                     transportSecondary={SOUND_BUTTON}
-                    transportLeadingViewControls={LEADING_VIEW_CONTROLS}
+                    transportLeadingViewControls={
+                        tempoMode ? TEMPO_VIEW_CONTROLS : LEADING_VIEW_CONTROLS
+                    }
                     transportViewControls={
                         basic ? undefined : EXPERT_VIEW_CONTROLS
                     }

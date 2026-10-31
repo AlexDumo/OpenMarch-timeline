@@ -1,4 +1,9 @@
 import AudioSelector from "./AudioSelector";
+import {
+    tempoSettingsKey,
+    useAudioOffsetSeconds,
+    writeAudioOffset,
+} from "@/tempo/audioOffset";
 import MusicXmlSelector from "./MusicXmlSelector";
 import { SidebarModalLauncher } from "../sidebar/SidebarModal";
 import { BooksIcon, XIcon } from "@phosphor-icons/react";
@@ -188,33 +193,34 @@ function AudioOffsetInput() {
         updateWorkspaceSettingsMutationOptions(queryClient),
     );
     const [audioOffsetValue, setAudioOffsetValue] = useState("");
+    // PROTOTYPE (tempo mode): the offset lives in the show's history (tempo/audioOffset.ts)
+    const effectiveOffset = useAudioOffsetSeconds();
 
-    // Update local state when settings change
+    // Update local state when the offset changes
     useEffect(() => {
-        if (settings) {
-            setAudioOffsetValue(settings.audioOffsetSeconds.toString());
-        }
-    }, [settings]);
+        setAudioOffsetValue(effectiveOffset.toString());
+    }, [effectiveOffset]);
 
     const handleBlur = useCallback(
         (e: React.FocusEvent<HTMLInputElement>) => {
             e.preventDefault();
             const parsedValue = parseFloat(e.target.value);
 
-            if (!isNaN(parsedValue) && settings) {
-                updateSettings({
-                    ...settings,
-                    audioOffsetSeconds: parsedValue,
-                });
-            } else if (e.target.value === "" && settings) {
-                // If empty, set to 0
-                updateSettings({
-                    ...settings,
-                    audioOffsetSeconds: 0,
-                });
-            }
+            const next = !isNaN(parsedValue)
+                ? parsedValue
+                : e.target.value === ""
+                  ? 0
+                  : null;
+            if (next !== null && next !== effectiveOffset)
+                void writeAudioOffset(next).then(() =>
+                    queryClient.invalidateQueries({
+                        queryKey: tempoSettingsKey,
+                    }),
+                );
+            void settings;
+            void updateSettings;
         },
-        [settings, updateSettings],
+        [settings, updateSettings, effectiveOffset, queryClient],
     );
 
     const handleChange = useCallback(

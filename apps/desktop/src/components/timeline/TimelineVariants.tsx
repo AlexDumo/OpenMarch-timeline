@@ -674,10 +674,13 @@ const TimelineSurface = memo(function TimelineSurface({
     const showWaveform = model.waveform.peaksByBeat.some(
         (peaks) => peaks.length > 0,
     );
+    // A focused band (tempo mode) has its own measure row, so the timeline leaves its own out
+    const measureRow = basic || !props.band?.focus;
     const rowsLayout = getTimelineRows({
         expanded,
         showWaveform,
         rowCount: rows.length,
+        measureRow,
     });
     // Basic (UI-19): under each box's header (the page row) its body: the measure numbers, the
     // waveform, then the count ticks along the bottom. With no waveform (no audio, or hidden in
@@ -689,7 +692,7 @@ const TimelineSurface = memo(function TimelineSurface({
     const { rowPitch, trackHeight, clipHitHeight } = rowsLayout;
     // The measure row under the page boxes (as `getTimelineRows`), where the simple-defaults
     // study's mid-page ticks sit
-    const railHeight = expanded ? 20 : 17;
+    const railHeight = measureRow ? (expanded ? 20 : 17) : 0;
     const audioTop = basic ? basicAudioTop : rowsLayout.audioTop;
     const waveformHeight = basic
         ? basicWaveformHeight
@@ -764,7 +767,8 @@ const TimelineSurface = memo(function TimelineSurface({
         isPlaying: props.isPlaying,
         positionBeat,
         livePositionBeat: props.livePositionBeat,
-        loop: props.playLoops ? (props.loop ?? null) : null,
+        // A focused band (tempo mode) loops its own selection, not the loop's bar
+        loop: props.playLoops && !band?.focus ? (props.loop ?? null) : null,
         selectionRange,
     });
     // Endless counts rule 7: say how wide a screen is, for the room past the end
@@ -777,9 +781,10 @@ const TimelineSurface = memo(function TimelineSurface({
             0,
         ),
     );
-    const appendAtPlayhead = props.isPlaying
-        ? undefined
-        : props.appendAtPlayhead;
+    // A band being edited (tempo mode) is the only thing in focus: no page editing beside it
+    const bandFocus = !!band?.focus;
+    const appendAtPlayhead =
+        props.isPlaying || bandFocus ? undefined : props.appendAtPlayhead;
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = useLatestCallback(props.onSelectionChange);
     // UI-12: clicks and scrubs land on a nearby downbeat or page line; Basic's on any count
@@ -948,6 +953,7 @@ const TimelineSurface = memo(function TimelineSurface({
 
     return (
         <TimelineShell
+            header={band?.header}
             viewportRef={viewportRef}
             className={className}
             pinnedHeight={audioTop}
@@ -977,6 +983,7 @@ const TimelineSurface = memo(function TimelineSurface({
                         playLoops={props.playLoops}
                         onPlayFromPlayhead={props.onPlayFromPlayhead}
                         onPlayOn={props.onPlayOn}
+                        playOnly={props.playOnly}
                         onNavigate={onNavigate}
                         onFit={
                             props.onPixelsPerBeatChange ? zoom.fit : undefined
@@ -987,7 +994,12 @@ const TimelineSurface = memo(function TimelineSurface({
             }
         >
             <div
-                className="relative"
+                className={clsx(
+                    "relative",
+                    // The page row steps back while a band is edited (tempo mode)
+                    bandFocus &&
+                        "[&_[data-testid=timeline-page-ruler]]:opacity-50",
+                )}
                 style={{ width: surfaceWidth, height: surfaceHeight }}
                 onContextMenu={rangeMenu.onContextMenu}
                 onDoubleClick={(event) => {
@@ -1079,6 +1091,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             pixelsPerBeat,
                             beatCount: model.beatCount,
                             snapBeats: seekSnapBeats,
+                            leadingInset: initialPageWidth,
                         })}
                     </div>
                     {/* The clips dropping out of a page box (`useClipDrops`), over the pinned
@@ -1145,11 +1158,13 @@ const TimelineSurface = memo(function TimelineSurface({
                             onSelectionChange={onSelectionChange}
                             onSeek={props.onSeek}
                             initialPageWidth={initialPageWidth}
-                            showMeasures={expanded}
+                            showMeasures={expanded && measureRow}
                             seekSnapBeats={seekSnapBeats}
                             scrubLine={pointer.scrubLine}
                             pageFlagMove={
-                                props.isPlaying ? undefined : props.pageFlagMove
+                                props.isPlaying || bandFocus
+                                    ? undefined
+                                    : props.pageFlagMove
                             }
                             height={pinnedHeight}
                             flagSnapPlayhead={playheadAt}
@@ -1170,14 +1185,19 @@ const TimelineSurface = memo(function TimelineSurface({
                             pixelsPerBeat={pixelsPerBeat}
                             width={width}
                         />
-                        <TimelineRehearsalMarkers
-                            model={model}
-                            pixelsPerBeat={pixelsPerBeat}
-                            // Basic's measure row is at the top of the box bodies, as expanded's
-                            top={TIMELINE_PAGE_ROW_BOTTOM + (expanded ? 2 : 1)}
-                            compact={!expanded}
-                            onSeek={props.onSeek}
-                        />
+                        {measureRow && (
+                            <TimelineRehearsalMarkers
+                                model={model}
+                                pixelsPerBeat={pixelsPerBeat}
+                                // Basic's measure row is at the top of the box bodies, as expanded's
+                                top={
+                                    TIMELINE_PAGE_ROW_BOTTOM +
+                                    (expanded ? 2 : 1)
+                                }
+                                compact={!expanded}
+                                onSeek={props.onSeek}
+                            />
+                        )}
                         {basic && props.expertMarks && (
                             <TimelineBasicExpertMarks
                                 pages={model.pages}
@@ -1202,6 +1222,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             />
                         )}
                         {props.isPlaying &&
+                            !bandFocus &&
                             props.returnBeat !== undefined &&
                             showsReturnMarker(
                                 props.returnBeat,
@@ -1231,7 +1252,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             isPlaying={props.isPlaying}
                             scrubLine={pointer.scrubLine}
                             onAddPage={
-                                props.isPlaying
+                                props.isPlaying || bandFocus
                                     ? undefined
                                     : props.onAddPageFlag
                             }
@@ -1260,7 +1281,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             pixelsPerBeat={pixelsPerBeat}
                             height={pinnedHeight}
                         />
-                        {props.loop && (
+                        {props.loop && !bandFocus && (
                             <TimelineLoopBar
                                 loop={props.loop}
                                 beatCount={model.beatCount}
@@ -1277,7 +1298,8 @@ const TimelineSurface = memo(function TimelineSurface({
                                     height={pinnedHeight}
                                 />
                             )}
-                        {selectionRange && !basic && (
+                        {/* A focused band (tempo mode) has one playhead: no start flag or window */}
+                        {selectionRange && !basic && !bandFocus && (
                             <TimelineSelectionRange
                                 range={selectionRange}
                                 startFlagBeatIndex={
@@ -1288,6 +1310,8 @@ const TimelineSurface = memo(function TimelineSurface({
                                 beatCount={model.beatCount}
                                 pixelsPerBeat={pixelsPerBeat}
                                 height={pinnedHeight}
+                                // PROTOTYPE (tempo mode): the band's count handles win over the flag
+                                grabHeight={bandFocus ? trackTop : undefined}
                                 snapBeats={snapBeats}
                                 onCommit={commitSelection}
                                 onLineDrag={props.onSeek}
@@ -1296,7 +1320,7 @@ const TimelineSurface = memo(function TimelineSurface({
                                 scrubLine={pointer.scrubLine}
                             />
                         )}
-                        {selectionRange && !basic && (
+                        {selectionRange && !basic && !bandFocus && (
                             <TimelineSelectionActions
                                 model={model}
                                 range={selectionRange}

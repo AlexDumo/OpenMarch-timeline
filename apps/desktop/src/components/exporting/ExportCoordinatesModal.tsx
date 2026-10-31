@@ -1,4 +1,5 @@
 /* eslint-disable no-control-regex */
+import { useAudioOffsetSeconds } from "@/tempo/audioOffset";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MarcherCoordinateSheetPreview from "./MarcherCoordinateSheet";
 import {
@@ -58,7 +59,6 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useShallow } from "zustand/react/shallow";
 import { notesHtmlToPlainText, truncateHtmlNotes } from "@/utilities/notesText";
 import Constants from "@/global/Constants";
-import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSettings";
 import { db } from "@/global/database/db";
 import { showEndTime } from "@/timeline/timeMap";
 import {
@@ -1157,9 +1157,8 @@ function VideoExport() {
     // Each marcher's appearance over the show, as the field draws it (#207)
     const appearanceSteps = useMarcherAppearanceSteps(true);
     const fieldImage = useFieldImage();
-    const { data: workspaceSettings } = useQuery(
-        workspaceSettingsQueryOptions(),
-    );
+    // PROTOTYPE (tempo mode): the offset in the show's history, else the workspace setting
+    const audioOffsetSeconds = useAudioOffsetSeconds();
     const { data: selectedAudioFile } = useQuery({
         queryKey: ["selectedAudioFileDetails"],
         queryFn: async () =>
@@ -1418,7 +1417,7 @@ function VideoExport() {
                 backgroundImage: fieldImage.image,
                 backgroundImageSize: fieldImage.size,
                 audioData: audioFile.data,
-                audioOffsetSeconds: workspaceSettings?.audioOffsetSeconds ?? 0,
+                audioOffsetSeconds,
                 width,
                 height,
                 fps: frameRate,
@@ -1497,7 +1496,7 @@ function VideoExport() {
         appearanceSteps,
         fieldImage.image,
         fieldImage.size,
-        workspaceSettings?.audioOffsetSeconds,
+        audioOffsetSeconds,
         frameRate,
         videoTheme,
         measures,

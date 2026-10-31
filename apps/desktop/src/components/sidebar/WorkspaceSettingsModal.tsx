@@ -1,4 +1,9 @@
 import React, { useState, useCallback } from "react";
+import {
+    tempoSettingsKey,
+    useAudioOffsetSeconds,
+    writeAudioOffset,
+} from "@/tempo/audioOffset";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     workspaceSettingsQueryOptions,
@@ -53,6 +58,7 @@ export default function WorkspaceSettingsModal({
 function WorkspaceSettingsModalContents() {
     const { toggleOpen } = useSidebarModalStore();
     const queryClient = useQueryClient();
+    const effectiveOffset = useAudioOffsetSeconds();
     const { t } = useTolgee();
     const { data: settings, isLoading } = useQuery(
         workspaceSettingsQueryOptions(),
@@ -90,12 +96,12 @@ function WorkspaceSettingsModalContents() {
                 defaultBeatsPerMeasure:
                     settings.defaultBeatsPerMeasure.toString(),
                 defaultNewPageCounts: settings.defaultNewPageCounts.toString(),
-                audioOffsetSeconds: settings.audioOffsetSeconds.toString(),
+                audioOffsetSeconds: effectiveOffset.toString(),
                 pageNumberOffset: settings.pageNumberOffset.toString(),
                 measurementOffset: settings.measurementOffset.toString(),
             });
         }
-    }, [settings]);
+    }, [settings, effectiveOffset]);
 
     const handleFieldChange = useCallback(
         (field: keyof WorkspaceSettings, value: number) => {
@@ -117,7 +123,19 @@ function WorkspaceSettingsModalContents() {
                 toggleOpen();
             },
         });
-    }, [localSettings, updateSettings, t, toggleOpen]);
+        // PROTOTYPE (tempo mode): the offset lives in the show's history (tempo/audioOffset.ts)
+        if (localSettings.audioOffsetSeconds !== effectiveOffset)
+            void writeAudioOffset(localSettings.audioOffsetSeconds).then(() =>
+                queryClient.invalidateQueries({ queryKey: tempoSettingsKey }),
+            );
+    }, [
+        localSettings,
+        updateSettings,
+        t,
+        toggleOpen,
+        effectiveOffset,
+        queryClient,
+    ]);
 
     const handleReset = useCallback(() => {
         setLocalSettings(defaultWorkspaceSettings);
@@ -145,14 +163,14 @@ function WorkspaceSettingsModalContents() {
                 defaultBeatsPerMeasure:
                     settings.defaultBeatsPerMeasure.toString(),
                 defaultNewPageCounts: settings.defaultNewPageCounts.toString(),
-                audioOffsetSeconds: settings.audioOffsetSeconds.toString(),
+                audioOffsetSeconds: effectiveOffset.toString(),
                 pageNumberOffset: settings.pageNumberOffset.toString(),
                 measurementOffset: settings.measurementOffset.toString(),
             });
         }
         // Cancel always works: drop any edits and close
         toggleOpen();
-    }, [settings, toggleOpen]);
+    }, [settings, effectiveOffset, toggleOpen]);
 
     if (isLoading) {
         return (

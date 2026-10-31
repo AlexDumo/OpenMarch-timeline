@@ -173,6 +173,7 @@ export const TimelineTransport = memo(function TimelineTransport({
     playLoops = false,
     onPlayFromPlayhead,
     onPlayOn,
+    playOnly,
     onNavigate,
     onFit,
     fitted = false,
@@ -195,6 +196,8 @@ export const TimelineTransport = memo(function TimelineTransport({
     onPlayFromPlayhead?: () => void;
     /** Alt+click on Play (Alt+Space): plays on from the start flag (Expert, UI-26) */
     onPlayOn?: () => void;
+    /** PROTOTYPE (tempo mode): Play's one action, as its tooltip names it */
+    playOnly?: string;
     onNavigate?: (direction: TimelineNavigation) => void;
     /** Fit the show in view, or back to the zoom from before fitting */
     onFit?: () => void;
@@ -219,10 +222,12 @@ export const TimelineTransport = memo(function TimelineTransport({
     const tight = width > 0 && width < TRANSPORT_TIGHT_PX;
     // While playing, the count being marched: the beat the playhead is in lands on the next count,
     // so a loop's first count reads as its own page's count 1, not the previous page's last
-    // (UI-17 follow-up; the paused playhead rests on a landed count)
+    // (UI-17 follow-up; the paused playhead rests on a landed count). The measure's beat is the
+    // one playing, as the music has it (jo: "m2 beat 3" while beat 2 played)
     const readoutText = getPlayheadReadout(
         model,
         isPlaying ? Math.min(positionBeat + 1, model.beatCount) : positionBeat,
+        positionBeat,
     );
     const mod = isMac() ? "⌘" : "Ctrl";
     const [goTo, setGoTo] = useState<string | null>(null);
@@ -345,6 +350,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                         playLoops={playLoops}
                         onPlayFromPlayhead={onPlayFromPlayhead}
                         onPlayOn={onPlayOn}
+                        playOnly={playOnly}
                     />
                     <TransportNavigationButton
                         direction="next"
@@ -411,6 +417,7 @@ export const TimelineTransport = memo(function TimelineTransport({
  * it, edge to edge, so the controls never take the timeline's width.
  */
 export const TimelineShell = ({
+    header,
     transport,
     children,
     viewportRef,
@@ -418,6 +425,8 @@ export const TimelineShell = ({
     pinnedHeight = 0,
     overlay,
 }: {
+    /** A row over the transport (a band's header: tempo mode's) */
+    header?: ReactNode;
     transport?: ReactNode;
     children: ReactNode;
     viewportRef: RefObject<HTMLDivElement | null>;
@@ -433,6 +442,7 @@ export const TimelineShell = ({
             className,
         )}
     >
+        {header}
         {transport}
         {/* Its own stacking context: nothing on the timeline (+, the playhead) paints over a menu */}
         <section className="relative isolate flex min-h-0 min-w-0 flex-1 flex-col px-6 pt-4">
@@ -801,12 +811,15 @@ export const TimelineRuler = memo(function TimelineRuler({
     useEffect(() => {
         if (!pageFlagMove) setFlagPreview(null);
     }, [pageFlagMove]);
-    // Rehearsal tabs are never thinned; a number gives way to a tab near it (UI-12)
+    // Rehearsal tabs are never thinned; a number gives way to a tab near it (UI-12). A tab's own
+    // measure number goes just right of the tab when there's room before the next number or tab,
+    // so a renumbered measure (C at m. 101) stays readable (tempo mode prototype, marcus)
     const visibleMeasures = useMemo(() => {
-        const tabBeats = measures
-            .filter((measure) => measure.rehearsalMark?.trim())
-            .map((measure) => measure.atBeat);
-        return filterMarkersByMinimumSpacing(
+        const tabbed = measures.filter((measure) =>
+            measure.rehearsalMark?.trim(),
+        );
+        const tabBeats = tabbed.map((measure) => measure.atBeat);
+        const plain: MeasureNumberMarker[] = filterMarkersByMinimumSpacing(
             measures.filter(
                 (measure) =>
                     !measure.rehearsalMark?.trim() &&
@@ -818,6 +831,24 @@ export const TimelineRuler = memo(function TimelineRuler({
             ),
             pixelsPerBeat,
         );
+        const lefts = [...plain.map((m) => m.atBeat), ...tabBeats]
+            .map((beat) => beat * pixelsPerBeat)
+            .sort((a, b) => a - b);
+        const beside = tabbed.flatMap((measure) => {
+            const x = measure.atBeat * pixelsPerBeat;
+            // the tab: a 2 px bar, padding and its letters in 10 px mono
+            const tab = Math.max(
+                16,
+                measure.rehearsalMark!.trim().length * 6.5 + 10,
+            );
+            const digits = measure.label.replace(/^m/i, "").length;
+            const end = x + tab + 3 + digits * 6.5 + 4;
+            const next = lefts.find((left) => left > x + 0.5);
+            return next === undefined || next >= end
+                ? [{ ...measure, offsetPx: tab }]
+                : [];
+        });
+        return [...plain, ...beside];
     }, [measures, pixelsPerBeat]);
     const wordsId = useId();
     const scrub = useRulerScrub(
@@ -1144,6 +1175,11 @@ const TimelinePageBox = memo(function TimelinePageBox({
     );
 });
 
+/** A measure number to draw, `offsetPx` right of its bar line when a rehearsal tab is there */
+type MeasureNumberMarker = TimelineMeasureMarker & {
+    readonly offsetPx?: number;
+};
+
 /**
  * The measure numbers under the page boxes (`TimelineRuler`), or a show without measures' counts
  * of the playhead's page (UI-13, from `countsStart`, `countsTotal` of them)
@@ -1154,7 +1190,7 @@ const TimelineRulerNumbers = memo(function TimelineRulerNumbers({
     countsStart,
     pixelsPerBeat,
 }: {
-    visibleMeasures: readonly TimelineMeasureMarker[];
+    visibleMeasures: readonly MeasureNumberMarker[];
     countsTotal: number | null;
     countsStart: number | null;
     pixelsPerBeat: number;
@@ -1168,7 +1204,7 @@ const TimelineRulerNumbers = memo(function TimelineRulerNumbers({
             : [];
     return (
         // UI-12: measure numbers without the "M"; a measure with a rehearsal mark shows the
-        // mark instead (TimelineRehearsalMarkers)
+        // mark (TimelineRehearsalMarkers), with its number after it when there's room
         // Each number starts just right of its bar line, so the line doesn't cross it
         <div
             aria-hidden="true"
@@ -1180,7 +1216,10 @@ const TimelineRulerNumbers = memo(function TimelineRulerNumbers({
                     key={measure.id}
                     className="text-text absolute top-4 text-[10px] leading-none whitespace-nowrap opacity-75"
                     style={{
-                        left: beatToX(measure.atBeat, pixelsPerBeat) + 3,
+                        left:
+                            beatToX(measure.atBeat, pixelsPerBeat) +
+                            3 +
+                            (measure.offsetPx ?? 0),
                     }}
                 >
                     {measure.label.replace(/^m/i, "")}
@@ -2124,10 +2163,16 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     onInteractionChange,
     positionBeat,
     scrubLine,
+    grabHeight,
 }: {
     range: TimelineBeatRange;
     /** Where to draw the start flag when it isn't the range's start (UI-10, after Stop) */
     startFlagBeatIndex?: number;
+    /**
+     * How far down the start flag's line can be grabbed (default: all of it). A focused band
+     * (tempo mode) has its own handles under the ruler, which must win over the flag's line
+     */
+    grabHeight?: number;
     beatCount: number;
     pixelsPerBeat: number;
     height: number;
@@ -2491,7 +2536,10 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
                     className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize! disabled:cursor-default!"
-                    style={{ left: x, height }}
+                    style={{
+                        left: x,
+                        height: Math.min(height, grabHeight ?? height),
+                    }}
                 >
                     {/* UI-20: 2px, from the headroom strip down */}
                     <span
