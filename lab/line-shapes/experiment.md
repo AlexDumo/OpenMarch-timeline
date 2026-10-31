@@ -51,4 +51,4 @@ a way to place the selected marchers.
 
 **Not in this build yet**
 
-- Dropping the Points menu (#560), now that a double-click switches a point.
+- Nothing from your last feedback is left out: the Points menu is gone too (#560).
