@@ -1771,9 +1771,13 @@ export function deletePoint(
 }
 
 /**
- * A closed line opened at point `index` (#569): that point both of its ends, the others in order
- * round from it, its fill dropped. Keep interval sized to its run again (an open line has one
- * gap fewer).
+ * A closed line opened at point `index` (#569) so its marchers keep their spots: that point its
+ * start, holding one, round through every point to its end one gap back along the closing
+ * stretch, its fill dropped. When the point holds a spot it opens on it as {@link openLine} does,
+ * corners switch turned over if that's what keeps the spots; a curve's new ends bend it a little
+ * differently, so its spots stay only nearly. When it holds none (a smooth point, or one kept
+ * even through) the spots move along to start on it, the end the width of its gap back, and Keep
+ * interval is sized to its run again. Under two marchers it ends at the point before.
  */
 export function openAt(
     p: LineParams,
@@ -1784,14 +1788,42 @@ export function openAt(
     const at = p.points[index];
     if (!isClosed(p) || !at) return p;
     const { closed: _closed, distribution: _distribution, ...rest } = p;
-    const end = followsLine(at);
-    const points = [
-        end,
-        ...p.points.slice(index + 1),
-        ...p.points.slice(0, index),
-        end,
-    ];
-    return keptToRun({ ...rest, points }, n, env);
+    const outline: LineParams = { ...rest, closed: true };
+    const path = linePath(outline);
+    const L = path.length;
+    const from = segmentStarts(outline)[index]!;
+    const round = (s: number) => ((s % L) + L) % L;
+    const start = (q: LineParams): LineParams => ({
+        ...q,
+        points: [followsLine(at), ...q.points.slice(1)],
+    });
+    if (n < 2) {
+        const points = [
+            ...p.points.slice(index),
+            ...p.points.slice(0, index),
+        ].map((q, i, all) =>
+            i === 0 || i === all.length - 1 ? followsLine(q) : q,
+        );
+        return { ...rest, points };
+    }
+    const spots = lineSpots(outline, n);
+    const tolerance = 1e-6 * Math.max(1, L);
+    // How far round from the point each spot is, one on it nought
+    const ahead = spots.map((spot) => {
+        const d = round((spot.s ?? path.project(spot)) - from);
+        return d > L - tolerance ? 0 : d;
+    });
+    const k = ahead.findIndex((d) => d < tolerance);
+    if (k >= 0) {
+        const span = ahead[(k - 1 + n) % n]!;
+        const opened = start(openedOver(outline, path, from, span));
+        const same = sameSpots(spots, n, tolerance);
+        if (same(opened)) return opened;
+        if (same(flipCorners(opened))) return flipCorners(opened);
+        return keptToRun(opened, n, env);
+    }
+    const gap = Math.min(...ahead) + L - Math.max(...ahead);
+    return keptToRun(start(openedOver(outline, path, from, L - gap)), n, env);
 }
 
 /** Whether segment `index` runs straight from its point to the next */
@@ -1919,32 +1951,48 @@ export function openLine(p: LineParams, n: number): LineParams {
     const outline: LineParams = { ...rest, closed: true };
     const path = linePath(outline);
     const spots = lineSpots(outline, n);
-    const tolerance = 1e-6 * Math.max(1, path.length);
-    const same = (q: LineParams) => {
-        const now = lineSpots(q, n);
-        return spots.every((spot) =>
-            now.some((x) => length(sub(x, spot)) < tolerance),
-        );
-    };
-    const flipped = (q: LineParams): LineParams =>
-        q.corners === false
-            ? (({ corners: _c, ...r }) => r)(q)
-            : { ...q, corners: false };
+    const same = sameSpots(spots, n, 1e-6 * Math.max(1, path.length));
     let first: LineParams | null = null;
     for (let k = 0; k < n; k++) {
         const opened = openedAt(outline, path, spots, k);
         if (!opened) continue;
         first ??= opened;
         if (same(opened)) return opened;
-        if (same(flipped(opened))) return flipped(opened);
+        if (same(flipCorners(opened))) return flipCorners(opened);
     }
     return first ?? rest;
 }
 
+/** Whether a line's `n` spots are `spots`, each within `tolerance` */
+const sameSpots =
+    (spots: readonly XY[], n: number, tolerance: number) =>
+    (q: LineParams): boolean => {
+        const now = lineSpots(q, n);
+        return spots.every((spot) =>
+            now.some((x) => length(sub(x, spot)) < tolerance),
+        );
+    };
+
+/** The line with its corners switch turned over */
+const flipCorners = (q: LineParams): LineParams =>
+    q.corners === false
+        ? (({ corners: _c, ...r }) => r)(q)
+        : { ...q, corners: false };
+
+/** How far along a closed line each of its segments starts */
+function segmentStarts(outline: LineParams): number[] {
+    const starts: number[] = [];
+    let along = 0;
+    for (const segment of lineSegments(outline)) {
+        starts.push(along);
+        along += makePath([segment]).length;
+    }
+    return starts;
+}
+
 /**
- * The closed line opened from spot `k` round to the spot before it, through the points between;
- * a new end inside a segment as smooth as the smoother of its points. Null when that leaves under
- * two points.
+ * The closed line opened from spot `k` round to the spot before it ({@link openedOver}). Null when
+ * that leaves under two points.
  */
 function openedAt(
     outline: LineParams,
@@ -1952,7 +2000,6 @@ function openedAt(
     spots: readonly Slot[],
     k: number,
 ): LineParams | null {
-    const { closed: _closed, ...rest } = outline;
     const L = path.length;
     const sOf = (spot: Slot) => spot.s ?? path.project(spot);
     const round = (s: number) => ((s % L) + L) % L;
@@ -1960,15 +2007,27 @@ function openedAt(
     const span = round(
         sOf(spots[(k - 1 + spots.length) % spots.length]!) - from,
     );
+    const opened = openedOver(outline, path, from, span);
+    return opened.points.length < 2 ? null : opened;
+}
+
+/**
+ * The closed line opened from `from` along it, `span` round, through the points between; a new
+ * end inside a segment as smooth as the smoother of its points. Its ends say nothing of holding a
+ * marcher: an open line's always hold one.
+ */
+function openedOver(
+    outline: LineParams,
+    path: Path,
+    from: number,
+    span: number,
+): LineParams {
+    const { closed: _closed, ...rest } = outline;
+    const L = path.length;
+    const round = (s: number) => ((s % L) + L) % L;
     const eps = 1e-9 * Math.max(1, L);
     const count = outline.points.length;
-    // Each point's way along the path, and each segment's start
-    const starts: number[] = [];
-    let along = 0;
-    for (const segment of lineSegments(outline)) {
-        starts.push(along);
-        along += makePath([segment]).length;
-    }
+    const starts = segmentStarts(outline);
     const between = outline.points
         .map((q, i) => ({ q, at: round(starts[i]! - from) }))
         .filter(({ at }) => at > eps && at < span - eps)
@@ -1978,7 +2037,7 @@ function openedAt(
     const pointAt = (s: number): LinePoint => {
         const x = path.at(s);
         const on = outline.points.find((q) => length(sub(q, x)) < eps);
-        if (on) return on;
+        if (on) return followsLine(on);
         const i = Math.max(
             0,
             starts.findLastIndex((t) => t <= round(s) + eps),
@@ -1987,6 +2046,8 @@ function openedAt(
         const b = outline.points[(i + 1) % count]!;
         return withTension(Math.max(a.tension, b.tension))(x);
     };
-    const points = [pointAt(from), ...between, pointAt(from + span)];
-    return points.length < 2 ? null : { ...rest, points };
+    return {
+        ...rest,
+        points: [pointAt(from), ...between, pointAt(from + span)],
+    };
 }

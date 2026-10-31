@@ -367,7 +367,16 @@ The Line shape (spec #522, #523) stores a new kind:
    fills the polygon, its spacing whatever fits. A `distribution` on an open line, one this build
    can't read, or `closed` that isn't a boolean reads as plain positions. Opening a closed line
    keeps its spots and its spacing, groups included, as far as an open line can lay them out the
-   same; a new end inside a curved segment is as smooth as the smoother of its points.
+   same; a new end inside a curved segment is as smooth as the smoother of its points. Opened at
+   a point (its menu's Open here, #569), that point is the start and the end is one gap back
+   along the closing stretch, so n marchers keep n spots with n − 1 gaps and none stacked. When
+   the point holds a spot the spots stay, the corners switch turned over if that's what keeps
+   them, except where an open line can't lay them out the same: Fit shares gaps between held
+   points by their stretches' lengths, so a closed line whose shares were uneven can open with a
+   marcher moved along a side, and a curve's new ends bend it a little differently, so its spots
+   stay only nearly. When the point holds none (a smooth point, or one kept even through), the
+   spots move along to start on it, the end its gap's width back. Keep interval is sized to its
+   run again wherever the spots don't stay.
 
 7. **A point's marcher (#569).** A point may store `marcher`, true or false, from its menu's
    Marcher on this point: true (Always a marcher) holds a marcher there whatever `corners` says,
@@ -379,15 +388,21 @@ The Line shape (spec #522, #523) stores a new kind:
    on), and everything decision 2 says of corners holding marchers (Fit's shares, Keep interval's
    whole runs, measured ↔ or ↕, a closed line's stretches round from its first held point) is
    said of them. An open line's ends always hold a marcher, so their `marcher` means nothing and
-   isn't written. On the path, and in a closed line's Grid and Spread, no point holds a marcher
-   by its own answer, as no corner does. `marcher` is the only field a point has besides `x`, `y`
-   and `tension`.
+   isn't written. On the path, and in a closed line filled as Grid (`files`), Edge (Spread with
+   `edge`) or Spread, no point holds a marcher by its own answer, as no corner does. `marcher` is
+   the only field a point has besides `x`, `y` and `tension`. Builds from before #569 (lab and
+   nightly) don't recognise `marcher` and lay out such Lines as if every point followed the line:
+   that is the accepted one-way door.
 
 Verification (#569): `linePointMenu.test.ts` opts a corner out with the switch on and in with it
 off, in Fit, on a closed line both ways, measured ↔ with each stretch even that way, and in Keep
 interval with the stretch a whole number of intervals; puts a marcher on a smooth point; ignores
 the answer on the path; refuses a non-boolean `marcher` and an unknown point field; and reads a
-placed Line's answer back as saved.
+placed Line's answer back as saved. Open here starts on the point with nothing stacked and checks
+the spots: unchanged on a square in Fit (corners switch on or off), Keep interval and measured,
+nearly unchanged on a smooth circle, moved along with even gaps from a point holding none, and a
+marcher moved along a side where Fit's uneven shares can't open the same. A new end keeps no
+`marcher`, from Open here or the ends switch.
 
 Verification (#529): `lineClose.test.ts` closes a Line by a click on its first point, an end
 dropped on the other and the editor's choice; checks a gap for every marcher; fills a square and

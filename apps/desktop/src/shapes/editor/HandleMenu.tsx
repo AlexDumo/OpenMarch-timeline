@@ -1,4 +1,4 @@
-import { Fragment, useEffect } from "react";
+import { Fragment, useEffect, useId } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { CheckIcon } from "@phosphor-icons/react";
 import { useTolgee } from "@tolgee/react";
@@ -7,6 +7,7 @@ import {
     MenuItemWithReason,
     TIMELINE_MENU_CONTENT_CLASS,
     TIMELINE_MENU_ITEM_CLASS,
+    TimelineMenuClose,
 } from "@/components/timeline/TimelineRangeMenu";
 import Keycaps from "@/components/ui/Keycaps";
 import type { ToolMenuItem } from "../tool/toolKind";
@@ -30,6 +31,7 @@ const Tick = ({ checked }: { checked?: boolean }) =>
 export default function HandleMenu() {
     const { t } = useTolgee();
     const menu = useHandleMenuStore((s) => s.menu);
+    const labelId = useId();
     // The context-menu key and a Mac's Ctrl-click also fire the browser's own menu
     useEffect(() => {
         if (!menu) return;
@@ -59,6 +61,7 @@ export default function HandleMenu() {
                     testId={testId}
                     reason={item.disabled}
                     reasonTestId={`${testId}-reason`}
+                    checked={item.checked}
                     onSelect={() => {}}
                 >
                     {words}
@@ -112,19 +115,32 @@ export default function HandleMenu() {
                     {...KEEP_MENU_EVENTS}
                     className={TIMELINE_MENU_CONTENT_CLASS}
                 >
-                    {menu.sections.map((section, i) => (
-                        <Fragment key={section.items[0]?.value ?? i}>
-                            {i > 0 && (
-                                <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
-                            )}
-                            {section.label && (
-                                <DropdownMenu.Label className="text-text-subtitle px-8 pt-4 text-[11px]">
-                                    {section.label}
-                                </DropdownMenu.Label>
-                            )}
-                            {section.items.map(entry)}
-                        </Fragment>
-                    ))}
+                    {/* An open reason tip gets Escape first: this closes the menu with it */}
+                    <TimelineMenuClose.Provider value={closeHandleMenu}>
+                        {menu.sections.map((section, i) => (
+                            <Fragment key={section.items[0]?.value ?? i}>
+                                {i > 0 && (
+                                    <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                                )}
+                                {section.label ? (
+                                    // A labelled section's answers are read as one set, by its name
+                                    <DropdownMenu.Group
+                                        aria-labelledby={`${labelId}-${i}`}
+                                    >
+                                        <DropdownMenu.Label
+                                            id={`${labelId}-${i}`}
+                                            className="text-text-subtitle px-8 pt-4 text-[11px]"
+                                        >
+                                            {section.label}
+                                        </DropdownMenu.Label>
+                                        {section.items.map(entry)}
+                                    </DropdownMenu.Group>
+                                ) : (
+                                    section.items.map(entry)
+                                )}
+                            </Fragment>
+                        ))}
+                    </TimelineMenuClose.Provider>
                 </DropdownMenu.Content>
             </DropdownMenu.Portal>
         </DropdownMenu.Root>

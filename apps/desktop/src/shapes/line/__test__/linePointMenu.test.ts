@@ -6,6 +6,8 @@ import {
     isLineParams,
     lineSegments,
     lineSpots,
+    openAt,
+    openLine,
     setPointMarcher,
     SMOOTH,
     withInterval,
@@ -374,7 +376,7 @@ describe("a Line's point menu (#569)", () => {
             { x: 0, y: 40 },
             { x: 0, y: 0 },
             { x: 40, y: 0 },
-            { x: 40, y: 40 },
+            { x: 40, y: 20 },
         ]);
         // Its new ends hold a marcher anyway: they say nothing of their own
         expect("marcher" in open.points[0]!).toBe(false);
@@ -454,5 +456,211 @@ describe("the menu on a placed Line (#569)", () => {
         const round = pickLive(openLive(turned), "p1", "roundness", env);
         expect(round.changed).toBe(false);
         expect(round.live.selected).toBe("p1");
+    });
+});
+
+describe("Open here on a closed line (#569)", () => {
+    /** The closed line's spots, as {@link lineSpots} lays them */
+    const xy = (p: LineParams, n: number) =>
+        lineSpots(p, n).map(({ x, y }) => ({ x, y }));
+    const apart = (a: XY, b: XY) => Math.hypot(a.x - b.x, a.y - b.y);
+    /** The closest two of `at` are */
+    const closest = (at: readonly XY[]) =>
+        Math.min(
+            ...at.flatMap((a, i) => at.slice(i + 1).map((b) => apart(a, b))),
+        );
+    /** How far the furthest of `was` is from its nearest in `now` */
+    const furthest = (was: readonly XY[], now: readonly XY[]) =>
+        Math.max(...was.map((a) => Math.min(...now.map((b) => apart(a, b)))));
+    /** A circle of radius 20 through four smooth points, from its top */
+    const circle = (more: Partial<LineParams> = {}): LineParams => ({
+        points: [
+            corner(20, 0, { tension: SMOOTH }),
+            corner(40, 20, { tension: SMOOTH }),
+            corner(20, 40, { tension: SMOOTH }),
+            corner(0, 20, { tension: SMOOTH }),
+        ],
+        closed: true,
+        spacing: { mode: "fit" },
+        ...more,
+    });
+    const keep = (p: LineParams, n: number, interval: number) =>
+        withInterval(p, n, interval, {});
+
+    /**
+     * `closed` opened at point `index` for `n` marchers: an open line starting on that point, its
+     * ends saying nothing of a marcher, nothing stacked, and every spot where it was within `within`
+     */
+    function expectOpensKeepingSpots(
+        closed: LineParams,
+        n: number,
+        index: number,
+        within = 1e-6,
+    ): LineParams {
+        const open = openAt(closed, n, index, {});
+        expect(open.closed).toBeUndefined();
+        expect(isLineParams(open)).toBe(true);
+        expect(open.points[0]).toMatchObject({
+            x: closed.points[index]!.x,
+            y: closed.points[index]!.y,
+        });
+        expect("marcher" in open.points[0]!).toBe(false);
+        expect("marcher" in open.points.at(-1)!).toBe(false);
+        const was = xy(closed, n);
+        const now = xy(open, n);
+        expect(now).toHaveLength(n);
+        expect(near(now[0]!, closed.points[index]!)).toBe(true);
+        expect(closest(now)).toBeGreaterThan(closest(was) / 2);
+        expect(furthest(was, now)).toBeLessThan(within);
+        return open;
+    }
+
+    it("keeps a Fit square's spots at every corner, the end one gap back, nothing stacked", () => {
+        for (const n of [8, 12])
+            for (const index of [0, 1, 2, 3])
+                expectOpensKeepingSpots(square(), n, index);
+        const open = openAt(square(), 8, 1, {});
+        expect(open.points.map(({ x, y }) => ({ x, y }))).toEqual([
+            { x: 40, y: 0 },
+            { x: 40, y: 40 },
+            { x: 0, y: 40 },
+            { x: 0, y: 0 },
+            { x: 20, y: 0 },
+        ]);
+        // Uneven shares of the sides keep theirs where the open line shares them the same
+        expectOpensKeepingSpots(square(), 7, 1);
+        expectOpensKeepingSpots(square(), 11, 0);
+    });
+
+    it("shifts a Fit square's marchers along a side when an open line can't share its gaps the same", () => {
+        // Seven round four even sides share 2, 2, 2, 1 from the first corner. Opened at the third,
+        // the closed line has 2, 1, 2 from there, then one gap before the end; an open line shares
+        // by its sides' lengths alone, 2, 2, 1, 1
+        const open = openAt(square(), 7, 2, {});
+        expect(open.points[0]).toMatchObject({ x: 40, y: 40 });
+        const now = xy(open, 7);
+        expect(now).toHaveLength(7);
+        expect(near(now[0]!, { x: 40, y: 40 })).toBe(true);
+        expect(closest(now)).toBeGreaterThan(19);
+        // Every corner still holds one
+        for (const q of square().points)
+            expect(hasSpotOn(open, 7, q)).toBe(true);
+    });
+
+    it("keeps a Fit square's spots with the corners switch off", () => {
+        expectOpensKeepingSpots(square({ corners: false }), 8, 1);
+    });
+
+    it("keeps a Keep interval square's spots and size", () => {
+        const kept = keep(square(), 8, 5);
+        const open = expectOpensKeepingSpots(kept, 8, 2);
+        const s = lineSpots(open, 8);
+        s.slice(1).forEach((spot, i) =>
+            expect(apart(spot, s[i]!)).toBeCloseTo(5, 6),
+        );
+        expectOpensKeepingSpots(keep(square({ corners: false }), 8, 5), 8, 1);
+    });
+
+    it("keeps a square's spots measured side to side, which a closed line can't be", () => {
+        expectOpensKeepingSpots(square({ measured: "x" }), 8, 1);
+        expectOpensKeepingSpots(keep(square({ measured: "y" }), 8, 5), 8, 3);
+    });
+
+    it("keeps the spot of a corner that holds a marcher whatever it said, saying nothing as an end", () => {
+        expectOpensKeepingSpots(marcherAt(square(), 1, true), 8, 1);
+        expectOpensKeepingSpots(
+            marcherAt(square({ corners: false }), 2, true),
+            8,
+            2,
+        );
+    });
+
+    it("keeps a smooth circle's spots nearly, the new ends bending it a little, nothing stacked", () => {
+        // A tenth of the interval, about 15
+        expectOpensKeepingSpots(circle(), 8, 1, 2);
+        // In Keep interval sized to its run again, from its pivot, so the point moves a little
+        const ring = keep(circle(), 8, 8);
+        const open = openAt(ring, 8, 1, {});
+        expect(apart(open.points[0]!, ring.points[1]!)).toBeLessThan(0.1);
+        const now = xy(open, 8);
+        expect(furthest(xy(ring, 8), now)).toBeLessThan(1.5);
+        now.slice(1).forEach((spot, i) =>
+            expect(apart(spot, now[i]!)).toBeCloseTo(8, 3),
+        );
+    });
+
+    it("moves the spots along to start on a point that holds none, gaps as they were", () => {
+        // Six round a 160 square from its first corner: none on the next corner
+        const off = square({ corners: false });
+        expect(hasSpotOn(off, 6, { x: 40, y: 0 })).toBe(false);
+        const open = openAt(off, 6, 1, {});
+        expect(open.points[0]).toMatchObject({ x: 40, y: 0 });
+        lineSpots(open, 6).forEach((spot, i) =>
+            expect(spot.s).toBeCloseTo((160 * i) / 6, 6),
+        );
+        // A smooth point kept even through in Keep interval: the line sized to its run again
+        const ring = keep(circle(), 6, 8);
+        const opened = openAt(ring, 6, 1, {});
+        expect(apart(opened.points[0]!, ring.points[1]!)).toBeLessThan(0.5);
+        const s = lineSpots(opened, 6);
+        expect(closest(s)).toBeGreaterThan(7);
+        s.slice(1).forEach((spot, i) =>
+            expect(apart(spot, s[i]!)).toBeCloseTo(8, 3),
+        );
+    });
+
+    it("opens from the menu as one undo step, the selection cleared", () => {
+        let t = opened(square(), 8);
+        const past = t.past.length;
+        t = pickMenu(t, "p1", "open", ctx, env);
+        expect(paramsOf(t).closed).toBeUndefined();
+        expect(t.past).toHaveLength(past + 1);
+        expect(t.selected).toBeNull();
+        expectSame(xy(paramsOf(t), 8).slice(0, 1), [{ x: 40, y: 0 }]);
+    });
+});
+
+describe("Close/Open from the line's ends switch (#529, #569)", () => {
+    it("opens with ends that say nothing of a marcher", () => {
+        const open = openLine(marcherAt(square(), 0, true), 8);
+        expect(open.closed).toBeUndefined();
+        expect(open.points[0]).toMatchObject({ x: 0, y: 0 });
+        expect("marcher" in open.points[0]!).toBe(false);
+        expect("marcher" in open.points.at(-1)!).toBe(false);
+        expect(isLineParams(open)).toBe(true);
+    });
+});
+
+describe("the ticked answer picked again (#569)", () => {
+    /** A Keep interval L whose corner was dragged off its interval */
+    const offInterval = (): LineParams => {
+        const p = withInterval(L(), 4, 10, {});
+        return {
+            ...p,
+            points: p.points.map((q, i) =>
+                i === 1 ? { ...q, x: q.x + 3 } : q,
+            ),
+        };
+    };
+
+    it("changes nothing, not even a Keep interval line's size", () => {
+        const p = offInterval();
+        expect(cornerOffInterval(p, 4)).toBe(true);
+        expect(lineTool.menu!.pick(p, 4, "p1", "corner", env)).toBe(null);
+        expect(lineTool.menu!.pick(p, 4, "m0", "straight", env)).toBe(null);
+        let t = opened(p, 4);
+        const past = t.past.length;
+        t = pickMenu(t, "p1", "corner", ctx, env);
+        t = pickMenu(t, "m1", "straight", ctx, env);
+        expect(t.params).toBe(p);
+        expect(t.past).toHaveLength(past);
+    });
+
+    it("saves nothing on a placed Line", () => {
+        const curved: LineParams = {
+            ...L(),
+            points: L().points.map((q) => ({ ...q, tension: SMOOTH })),
+        };
+        expect(lineTool.menu!.pick(curved, 4, "m0", "curved", env)).toBe(null);
     });
 });

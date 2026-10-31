@@ -864,23 +864,24 @@ const MENU: ToolHandleMenu<LineParams> = {
                     params: splitSegment(p, segment),
                     selected: `p${segment + 1}`,
                 };
-            if (value === "straight" || value === "curved")
-                return {
-                    params: keptInterval(
-                        setSegmentCurved(p, segment, value === "curved"),
-                        n,
-                        env,
-                    ),
-                };
+            if (value === "straight" || value === "curved") {
+                const next = setSegmentCurved(p, segment, value === "curved");
+                // The ticked answer again changes nothing, not even a Keep interval line's size
+                return next === p
+                    ? null
+                    : { params: keptInterval(next, n, env) };
+            }
             return null;
         }
         const index = pointOf(p, key);
         if (index < 0) return null;
         switch (value) {
-            case "corner":
-                return {
-                    params: keptInterval(setTension(p, index, 0), n, env),
-                };
+            case "corner": {
+                const next = setTension(p, index, 0);
+                return next === p
+                    ? null
+                    : { params: keptInterval(next, n, env) };
+            }
             // Smooth shows the point's bar straight away, as Roundness does
             case "smooth":
                 return {
