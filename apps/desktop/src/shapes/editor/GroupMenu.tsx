@@ -120,6 +120,20 @@ export function GroupMenu({
                                   )
                         }
                         {...focus.trigger}
+                        // Focus lands here after a list is typed, where the interval was: Enter
+                        // still places the shape, as it did from the interval. Space and the
+                        // arrow down open the menu
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                                e.preventDefault();
+                                return;
+                            }
+                            if (e.key === "ArrowDown") {
+                                e.preventDefault();
+                                setOpen(true);
+                            }
+                            focus.trigger.onKeyDown(e);
+                        }}
                         data-testid="shape-groups-menu"
                         data-group-menu-trigger
                         data-summary={summary}

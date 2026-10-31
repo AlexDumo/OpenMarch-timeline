@@ -71,7 +71,7 @@ function typeInto(testId: string, text: string) {
 function openMenu() {
     const button = screen.getByTestId("shape-groups-menu");
     act(() => button.focus());
-    fireEvent.keyDown(button, { key: "Enter" });
+    fireEvent.keyDown(button, { key: " " });
     fireEvent.click(button);
     return screen.getByTestId("shape-groups-content");
 }
@@ -127,6 +127,30 @@ describe("a line's interval groups in the floating editor", () => {
         await waitFor(() => expect(document.activeElement).toBe(button));
         expect(screen.queryByTestId("shape-groups-content")).toBeNull();
         expect(tool().past.length).toBe(steps + 1);
+    });
+
+    it("leaves Enter on its button to place the shape, as from the interval; Space and the arrow down open it", () => {
+        renderEditor();
+        typeInto("shape-editor-interval", "2*3+4*2");
+        const button = screen.getByTestId("shape-groups-menu");
+        act(() => button.focus());
+        const reached = vi.fn();
+        document.addEventListener("keydown", reached);
+        const enter = new KeyboardEvent("keydown", {
+            key: "Enter",
+            bubbles: true,
+            cancelable: true,
+        });
+        act(() => {
+            button.dispatchEvent(enter);
+        });
+        document.removeEventListener("keydown", reached);
+        // Reaches the app's keys, and doesn't press the button
+        expect(reached).toHaveBeenCalled();
+        expect(enter.defaultPrevented).toBe(true);
+        expect(screen.queryByTestId("shape-groups-content")).toBeNull();
+        fireEvent.keyDown(button, { key: "ArrowDown" });
+        expect(screen.getByTestId("shape-groups-content")).toBeTruthy();
     });
 
     it("sums the groups up instead with the numbers style", () => {
