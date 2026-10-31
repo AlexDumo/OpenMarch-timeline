@@ -1,3 +1,4 @@
+import { keepShortcut } from "@/components/timeline/timelineHotkeys";
 import clsx from "clsx";
 import * as Popover from "@radix-ui/react-popover";
 import { CaretDownIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
@@ -125,7 +126,7 @@ export function GroupMenu({
                         // arrow down open the menu
                         onKeyDown={(e) => {
                             if (e.key === "Enter") {
-                                e.preventDefault();
+                                keepShortcut(e);
                                 return;
                             }
                             if (e.key === "ArrowDown") {

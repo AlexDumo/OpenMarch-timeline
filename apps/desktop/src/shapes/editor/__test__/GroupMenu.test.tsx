@@ -1,3 +1,4 @@
+import { shortcutStillRuns } from "@/components/timeline/timelineHotkeys";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
     act,
@@ -148,6 +149,7 @@ describe("a line's interval groups in the floating editor", () => {
         // Reaches the app's keys, and doesn't press the button
         expect(reached).toHaveBeenCalled();
         expect(enter.defaultPrevented).toBe(true);
+        expect(shortcutStillRuns(enter)).toBe(true);
         expect(screen.queryByTestId("shape-groups-content")).toBeNull();
         fireEvent.keyDown(button, { key: "ArrowDown" });
         expect(screen.getByTestId("shape-groups-content")).toBeTruthy();
