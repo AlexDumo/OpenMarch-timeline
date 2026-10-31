@@ -164,7 +164,7 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
     const drawn = field.modeDrawing();
     const element = field.element();
     if (!drawn || !element) return null;
-    // As drawn: on its own while H hides the marchers (#558)
+    // As drawn: on its own while H hides the shape's marchers (#558)
     const drawing = marchersHiddenNow() ? shapeAlone(drawn) : drawn;
     const rect = element.getBoundingClientRect();
     const view = field.view();
