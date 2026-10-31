@@ -47,9 +47,9 @@ a way to place the selected marchers.
 - Click a point to select it. A smooth point shows a bar through it; drag
   either end to change its curve. Double-click a point to switch it between a
   corner and smooth.
-- Right-click a point for Corner / Smooth, Roundness, Marcher on this point
-  (As the line, Always a marcher, Keep spacing even), Delete point, and Close
-  line or Open here. Right-click a segment for Add point here and Straight /
+- Right-click a point for Corner type (Corner | Smooth), Roundness, Follow
+  line's marchers (switch it off, or click the greyed Marcher | Even spacing,
+  to override this point), Delete point, and Close line or Open here. Right-click a segment for Add point here and Straight /
   Curved.
 - Hold H (or press the eye in the editor bar) to hide the shape's own marchers
   while you edit it; the other marchers and where they started stay. Tap H to
