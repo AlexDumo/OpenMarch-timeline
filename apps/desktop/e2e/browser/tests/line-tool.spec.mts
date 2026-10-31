@@ -375,7 +375,7 @@ test("change: a diagonal from yard line to yard line is measured ↔, placing ma
     );
 });
 
-test("change: typing 2*3+4*2 spaces the line in groups, shown as chips, placed and reopened as typed", async ({
+test("change: typing 2*3+4*2 spaces the line in groups, shown in the group menu, placed and reopened as typed", async ({
     show,
 }) => {
     const { page } = show;
@@ -398,15 +398,29 @@ test("change: typing 2*3+4*2 spaces the line in groups, shown as chips, placed a
     await page.getByTestId("shape-editor-interval-input").fill("2*3+4*2");
     await page.keyboard.press("Enter");
 
-    // 2 marchers at 3 steps, then the other 6 at 2: the last group grew by 2
-    const groups = readout.getByTestId("shape-groups");
-    await expect(groups).toBeVisible();
+    // Two groups: one quiet button in place of the interval, which keeps the focus
+    const menuButton = readout.getByTestId("shape-groups-menu");
+    await expect(menuButton).toHaveText("Multiple intervals");
+    await expect(menuButton).toBeFocused();
     await expect(readout.getByTestId("shape-editor-interval")).toBeHidden();
-    await expect(readout.getByTestId("shape-group-0-count")).toHaveText("2");
-    await expect(readout.getByTestId("shape-group-0-interval")).toHaveText("3");
-    await expect(readout.getByTestId("shape-group-1-count")).toHaveText("6");
-    await expect(readout.getByTestId("shape-group-1-grown")).toHaveText("+2");
-    await expect(readout.getByTestId("shape-group-1-interval")).toHaveText("2");
+    await expect(readout.getByTestId("shape-groups")).toHaveCount(0);
+
+    // 2 marchers at 3 steps, then the other 6 at 2: the last group grew by 2
+    await menuButton.click();
+    const menu = page.getByTestId("shape-groups-content");
+    await expect(menu).toBeVisible();
+    await expect(menu.getByTestId("shape-groups-list")).toHaveValue("2*3+4*2");
+    await expect(menu.getByTestId("shape-group-0-marchers")).toHaveText(
+        "Marchers 1–2",
+    );
+    await expect(menu.getByTestId("shape-group-0-count")).toHaveText("2");
+    await expect(menu.getByTestId("shape-group-0-interval")).toHaveText("3");
+    await expect(menu.getByTestId("shape-group-1-marchers")).toHaveText(
+        "Marchers 3–8",
+    );
+    await expect(menu.getByTestId("shape-group-1-count")).toHaveText("6");
+    await expect(menu.getByTestId("shape-group-1-grown")).toHaveText("+2");
+    await expect(menu.getByTestId("shape-group-1-interval")).toHaveText("2");
     const spaced = (await shapeOverlay(page))!;
     const expected = [3, 3, 2, 2, 2, 2, 2];
     const drawnGaps = gaps(spaced.spots);
@@ -414,6 +428,36 @@ test("change: typing 2*3+4*2 spaces the line in groups, shown as chips, placed a
     drawnGaps.forEach((gap, i) =>
         expect(Math.abs(gap - expected[i]! * S)).toBeLessThan(CLOSE),
     );
+
+    // Open, the field rings every spot faintly in its group's color
+    await expect
+        .poll(async () =>
+            (await shapeOverlay(page))!.groupMarks.map(
+                (m) => `${m.group}${m.shade}`,
+            ),
+        )
+        .toEqual([...Array(2).fill("0faint"), ...Array(6).fill("1faint")]);
+    // A row pointed at lights its group, dims the other and labels its gap
+    await menu.getByTestId("shape-group-0-marchers").hover();
+    await expect
+        .poll(async () =>
+            (await shapeOverlay(page))!.groupMarks.map(
+                (m) => `${m.group}${m.shade}`,
+            ),
+        )
+        .toEqual([...Array(2).fill("0lit"), ...Array(6).fill("1dim")]);
+    const lit = (await shapeOverlay(page))!;
+    expect(lit.groupLabels.map((l) => l.text)).toEqual(["3"]);
+    const [a, b] = lit.groupMarks;
+    expect(lit.groupLabels[0]!.x).toBeCloseTo((a!.x + b!.x) / 2);
+    expect(lit.groupLabels[0]!.y).toBeCloseTo((a!.y + b!.y) / 2);
+
+    // Closed, the field's colors go
+    await menuButton.click();
+    await expect(menu).toBeHidden();
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.groupMarks)
+        .toEqual([]);
 
     // Placed, the recipe stores the groups as typed
     await page.keyboard.press("Enter");
@@ -429,7 +473,7 @@ test("change: typing 2*3+4*2 spaces the line in groups, shown as chips, placed a
     expect(stored.groups[0].interval).toBeCloseTo(3 * S);
     expect(stored.groups[1].interval).toBeCloseTo(2 * S);
 
-    // Reopened from a member, the same chips
+    // Reopened from a member, the same groups
     await page.keyboard.press("Escape");
     await expect
         .poll(async () => (await readField(page)).selection)
@@ -438,9 +482,94 @@ test("change: typing 2*3+4*2 spaces the line in groups, shown as chips, placed a
     await page.mouse.click(t3.x, t3.y);
     const placed = page.getByTestId("placed-box-readout");
     await expect(placed).toBeVisible();
-    await expect(placed.getByTestId("shape-group-0-count")).toHaveText("2");
-    await expect(placed.getByTestId("shape-group-1-count")).toHaveText("6");
-    await expect(placed.getByTestId("shape-group-1-grown")).toHaveText("+2");
+    await placed.getByTestId("shape-groups-menu").click();
+    await expect(menu.getByTestId("shape-group-0-count")).toHaveText("2");
+    await expect(menu.getByTestId("shape-group-1-count")).toHaveText("6");
+    await expect(menu.getByTestId("shape-group-1-grown")).toHaveText("+2");
+    // The placed shape's members are ringed too
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.groupMarks.length)
+        .toBe(8);
+});
+
+test("change: the group menu takes a whole list, edits a row in place, and removing down to one group brings the interval back", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await page.keyboard.press("l");
+    const y = cf.y - 20 * S;
+    await drag(
+        page,
+        await toScreen(page, { x: cf.x - 14 * S, y }),
+        await toScreen(page, { x: cf.x - 3.5 * S, y }),
+    );
+    const readout = page.getByTestId("shape-tool-readout");
+    await readout.getByTestId("shape-editor-interval").click();
+    await page.getByTestId("shape-editor-interval-input").fill("2*3+4*2");
+    await page.keyboard.press("Enter");
+    const before = await undoSteps(show);
+
+    // A list typed at the top replaces the groups: three, the last the rest
+    await readout.getByTestId("shape-groups-menu").click();
+    const menu = page.getByTestId("shape-groups-content");
+    const list = menu.getByTestId("shape-groups-list");
+    await list.fill("2*3+3*2+4");
+    await list.press("Enter");
+    await expect(menu.getByTestId("shape-group-2")).toHaveAttribute(
+        "data-rest",
+        "true",
+    );
+    await expect(menu.getByTestId("shape-group-2-count")).toHaveText("3");
+    await expect(menu.getByTestId("shape-group-2-marchers")).toHaveText(
+        "Marchers 6–8",
+    );
+    // Nonsense stays to fix, and changes nothing
+    await list.fill("2**");
+    await list.press("Enter");
+    await expect(list).toHaveAttribute("aria-invalid", "true");
+    await list.press("Escape");
+    await expect(list).toHaveValue("2*3+3*2+4");
+
+    // The second group's interval typed in its row
+    await menu.getByTestId("shape-group-1-interval").click();
+    await page.getByTestId("shape-group-1-interval-input").fill("2.5");
+    await page.keyboard.press("Enter");
+    await expect(menu.getByTestId("shape-group-1-interval")).toHaveText("2½");
+    const expected = [3, 3, 2.5, 2.5, 4, 4, 4];
+    await expect
+        .poll(async () => gaps((await shapeOverlay(page))!.spots))
+        .toHaveLength(expected.length);
+    gaps((await shapeOverlay(page))!.spots).forEach((gap, i) =>
+        expect(Math.abs(gap - expected[i]! * S)).toBeLessThan(CLOSE),
+    );
+    // Its gaps labeled with the axis-free interval while the row has focus
+    await expect
+        .poll(async () =>
+            (await shapeOverlay(page))!.groupLabels.map((l) => l.text),
+        )
+        .toEqual(["2½", "2½"]);
+
+    // Removing groups down to one: the menu goes and the interval number is back, with focus
+    await menu.getByTestId("shape-group-2-remove").click();
+    await menu.getByTestId("shape-group-1-remove").click();
+    await expect(menu).toBeHidden();
+    await expect(readout.getByTestId("shape-groups-menu")).toBeHidden();
+    const single = readout.getByTestId("shape-editor-interval");
+    await expect(single).toBeVisible();
+    await expect(single).toHaveText("3");
+    await expect(single).toBeFocused();
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.groupMarks)
+        .toEqual([]);
+    // The open shape keeps its edits as one session: nothing written yet
+    expect(await undoSteps(show)).toBe(before);
 });
 
 test("change: clicks draw an L, its corner holds a marcher until switched off, and it places with every point", async ({

@@ -7,7 +7,12 @@ import {
     scrubValue,
     spacingRate,
 } from "../editor/scrub";
-import { layGroups, MAX_GROUP_COUNT, parseIntervals } from "../spacing";
+import {
+    formatIntervals,
+    layGroups,
+    MAX_GROUP_COUNT,
+    parseIntervals,
+} from "../spacing";
 import { snapInterval } from "../box/boxGeometry";
 import type {
     GroupPart,
@@ -367,6 +372,15 @@ const GROUPS: ToolGroups<LineParams> = {
         const interval = snapInterval(steps * env.stepPx, env, true);
         return withGroup(p, n, index, (g) => ({ ...g, interval }), env);
     },
+    text: (p, n, stepPx) =>
+        formatIntervals(
+            groupsOf(p, n).map((g) => ({
+                steps: g.interval / stepPx,
+                ...(g.count === undefined ? {} : { count: g.count }),
+            })),
+        ),
+    typeList: typedList,
+    axis: measuredAxis,
     scrub(base, n, index, part, m, env) {
         const distance = scrubDistance("x", m.dx, m.dy);
         if (part === "count") {

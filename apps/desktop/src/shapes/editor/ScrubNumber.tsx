@@ -239,6 +239,7 @@ export function ScrubNumber({
                             : label
                     }
                     data-testid={testId}
+                    data-scrub-number
                     className={clsx(
                         "rounded-4 min-h-24 px-4 tabular-nums select-none",
                         dragging

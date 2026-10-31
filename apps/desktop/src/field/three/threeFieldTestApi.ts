@@ -205,6 +205,15 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
         })),
         guideMarks: (drawing.guideMarks ?? []).map(copy),
         onGuides: (drawing.onGuides ?? []).map(copy),
+        groupMarks: (drawing.groupMarks ?? []).map(({ at, shade, group }) => ({
+            ...copy(at),
+            shade,
+            group,
+        })),
+        groupLabels: (drawing.groupLabels ?? []).map(({ at, text }) => ({
+            ...copy(at),
+            text,
+        })),
     };
     function screen(at: FieldPoint) {
         const { x, y } = fieldToElement(view, at.x, at.y);

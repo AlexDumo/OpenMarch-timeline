@@ -51,6 +51,21 @@ const BAR_HANDLE_RADIUS = 4;
 const BAR_LINE_WIDTH = 1;
 const SHAPE_HANDLE_WIDTH = 1.5;
 
+/**
+ * A Line's interval groups while the editor's group menu is open (#526 follow-up): a ring round
+ * each spot in its group's color, in field units like the spot; faint with no group pointed at,
+ * then the group pointed at drawn thick with a soft fill and the others nearly gone. Its gaps'
+ * labels are small pills in CSS px.
+ */
+const GROUP_RING_RADIUS = SPOT_RADIUS + 2.5;
+const GROUP_RING_LOOK = {
+    faint: { width: 1.25, opacity: 0.6, fill: 0 },
+    lit: { width: 2, opacity: 1, fill: 0.3 },
+    dim: { width: 1, opacity: 0.2, fill: 0 },
+} as const;
+const GROUP_LABEL_PX = 10;
+const GROUP_LABEL_HEIGHT = 14;
+
 /** The prop tool's line while drawing, in CSS px. */
 const PROP_PREVIEW_WIDTH = 2;
 
@@ -612,9 +627,69 @@ const ShapeOnGuides = memo(function ShapeOnGuides({
                     />
                 );
             })}
+            {drawing.groupMarks?.map(({ at, color, shade, group }, i) => {
+                const look = GROUP_RING_LOOK[shade];
+                return (
+                    <circle
+                        key={`group-${i}`}
+                        cx={at.x}
+                        cy={at.y}
+                        r={GROUP_RING_RADIUS}
+                        fill={color}
+                        fillOpacity={look.fill}
+                        stroke={color}
+                        strokeOpacity={look.opacity}
+                        strokeWidth={look.width}
+                        data-testid="fieldShapeGroupMark"
+                        data-shade={shade}
+                        data-group={group}
+                    />
+                );
+            })}
         </>
     );
 });
+
+/** A gap of the group pointed at, labeled with its interval (#526 follow-up): a small pill */
+function GroupGapLabel({
+    text,
+    at,
+    color,
+}: {
+    text: string;
+    at: { x: number; y: number };
+    color: string;
+}) {
+    // About the width of the text in DM Sans at this size, with room either side
+    const w = text.length * GROUP_LABEL_PX * 0.6 + 8;
+    const h = GROUP_LABEL_HEIGHT;
+    return (
+        <g data-testid="fieldShapeGroupLabel">
+            <rect
+                x={at.x - w / 2}
+                y={at.y - h / 2}
+                width={w}
+                height={h}
+                rx={h / 2}
+                fill={color}
+                stroke="white"
+                strokeWidth={1}
+            />
+            <text
+                x={at.x}
+                y={at.y}
+                fontSize={GROUP_LABEL_PX}
+                fontWeight={600}
+                fontFamily="DM Sans, sans-serif"
+                fill="white"
+                textAnchor="middle"
+                dominantBaseline="central"
+            >
+                {text}
+            </text>
+        </g>
+    );
+}
 
 function ModeDrawing({
     drawing,
@@ -711,6 +786,14 @@ function ModeDrawing({
             <g transform={transform}>
                 <ShapeOnGuides drawing={drawing} theme={theme} />
             </g>
+            {drawing.groupLabels?.map(({ at: point, text, color }, i) => (
+                <GroupGapLabel
+                    key={`group-${i}`}
+                    text={text}
+                    at={at(point)}
+                    color={color}
+                />
+            ))}
             {drawing.labels?.map(({ at: point, text }, i) => {
                 const p = at(point);
                 return (

@@ -38,7 +38,9 @@ ordinary positions it writes.
   a kind only describes its region.
 - `editor/`: the floating editor (`ShapeEditorBar.tsx`) and its controls: numbers you type or
   drag (`ScrubNumber`, `scrub.ts`, `format.ts` for exact fractions), a Line's interval groups
-  (`GroupChips`; the list syntax and groups-to-gaps layout are `spacing.ts`), the mode, layout and pivot
+  (one group's chips in `GroupChips`, two or more in `GroupMenu`, whose rows light their group
+  on the field through `field/groupDrawing.ts`; the list syntax and groups-to-gaps layout are
+  `spacing.ts`), the mode, layout and pivot
   menus, Recalculate, Reshuffle, Close up, and keeping the shape in view (`keepInView.ts`).
 - `field/`: how the shape code reads the three.js field (`shapeField.ts`, registered by the
   field, never `window.canvas`), pointer routing and the field modes it installs.

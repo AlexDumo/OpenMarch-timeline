@@ -237,6 +237,19 @@ export type FieldTestShapeOverlay = {
     guideMarks: { x: number; y: number }[];
     /** The spots standing on a guide, tinted, field units (#425). */
     onGuides: { x: number; y: number }[];
+    /**
+     * While the editor's menu of a Line's interval groups is open: each spot ringed in its
+     * group's color, field units, `faint` with no group pointed at, else that group `lit` and the
+     * rest `dim`.
+     */
+    groupMarks: {
+        x: number;
+        y: number;
+        shade: "faint" | "lit" | "dim";
+        group: number;
+    }[];
+    /** Each gap of the group pointed at, labeled with its interval ("3", "↔ 2½"), field units. */
+    groupLabels: { x: number; y: number; text: string }[];
 };
 
 /** A placed box outlined on the field. */
