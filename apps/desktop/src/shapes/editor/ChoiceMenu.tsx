@@ -4,6 +4,7 @@ import { CaretDownIcon } from "@phosphor-icons/react";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { ShapeEditTarget } from "./editTargets";
 import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
+import { ChoicePicture } from "./ChoicePicture";
 import { GlyphText } from "./GlyphText";
 import { Tip } from "./Tip";
 
@@ -60,8 +61,8 @@ function ChoiceMenu({
     );
     const options = choice.options(target.params, target.spots);
     const current = choice.current(target.params, target.spots);
-    const currentLabel =
-        options.find((o) => o.value === current)?.label ?? current;
+    const currentOption = options.find((o) => o.value === current);
+    const currentLabel = currentOption?.label ?? current;
     const pick = (value: string) => {
         setOpen(false);
         const env = envFor();
@@ -82,6 +83,12 @@ function ChoiceMenu({
                         data-value={current}
                         className="rounded-4 hover:bg-fg-2 flex min-h-24 items-center gap-4 px-4 py-2"
                     >
+                        {currentOption?.picture && (
+                            <ChoicePicture
+                                picture={currentOption.picture}
+                                testId={`shape-choice-${choice.key}-picture`}
+                            />
+                        )}
                         <span>
                             <GlyphText text={currentLabel} size={12} />
                         </span>
@@ -129,7 +136,7 @@ function ChoiceMenu({
                                 onClick={() => pick(option.value)}
                                 data-testid={`shape-choice-${choice.key}-${option.value}`}
                                 className={clsx(
-                                    "rounded-4 flex min-h-24 flex-col items-start px-4 py-2 text-left",
+                                    "rounded-4 flex min-h-24 items-center gap-8 px-4 py-2 text-left",
                                     option.value === current
                                         ? "bg-fg-2 text-accent"
                                         : option.disabled
@@ -137,17 +144,28 @@ function ChoiceMenu({
                                           : "hover:text-accent",
                                 )}
                             >
-                                <span className="flex items-center gap-4">
-                                    <GlyphText text={option.label} size={12} />
-                                </span>
-                                {option.disabled && (
-                                    <span
-                                        id={`shape-choice-${choice.key}-${option.value}-reason`}
-                                        className="text-text/60 text-xs"
-                                    >
-                                        {option.disabled}
-                                    </span>
+                                {option.picture && (
+                                    <ChoicePicture
+                                        picture={option.picture}
+                                        testId={`shape-choice-${choice.key}-${option.value}-picture`}
+                                    />
                                 )}
+                                <span className="flex flex-col items-start">
+                                    <span className="flex items-center gap-4">
+                                        <GlyphText
+                                            text={option.label}
+                                            size={12}
+                                        />
+                                    </span>
+                                    {option.disabled && (
+                                        <span
+                                            id={`shape-choice-${choice.key}-${option.value}-reason`}
+                                            className="text-text/60 text-xs"
+                                        >
+                                            {option.disabled}
+                                        </span>
+                                    )}
+                                </span>
                             </button>
                         ))}
                     </div>

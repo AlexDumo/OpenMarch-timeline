@@ -3,30 +3,38 @@ import * as Popover from "@radix-ui/react-popover";
 import { CaretDownIcon } from "@phosphor-icons/react";
 import tolgee from "@/global/singletons/Tolgee";
 import type { OrderChoice } from "../assign";
+import type { ToolChoicePicture } from "../tool/toolKind";
+import { ChoicePicture } from "./ChoicePicture";
+import { ORDER_PICTURES } from "./orderPictures";
 import type { ShapeEditTarget } from "./editTargets";
 import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
 import { Tip } from "./Tip";
 
 /** The answers, in the menu's order; Keep order only when offered */
-export function orderOptions(
-    keepOffered: boolean,
-): { value: OrderChoice; label: string }[] {
+export function orderOptions(keepOffered: boolean): {
+    value: OrderChoice;
+    label: string;
+    picture: ToolChoicePicture;
+}[] {
     return [
         {
             value: "nearest",
             label: tolgee.t("shapes.edit.order.nearest", "Least travel"),
+            picture: ORDER_PICTURES.nearest,
         },
         ...(keepOffered
             ? [
                   {
                       value: "keep" as const,
                       label: tolgee.t("shapes.edit.order.keep", "Keep order"),
+                      picture: ORDER_PICTURES.keep,
                   },
               ]
             : []),
         {
             value: "reverse",
             label: tolgee.t("shapes.edit.order.reverse", "Reverse"),
+            picture: ORDER_PICTURES.reverse,
         },
     ];
 }
@@ -70,6 +78,10 @@ export function OrderMenu({
                         data-value={order.current}
                         className="rounded-4 hover:bg-fg-2 flex min-h-24 items-center gap-4 px-4 py-2"
                     >
+                        <ChoicePicture
+                            picture={ORDER_PICTURES[order.current]}
+                            testId="shape-order-picture"
+                        />
                         <span>{currentLabel}</span>
                         <CaretDownIcon size={10} />
                     </button>
@@ -106,13 +118,17 @@ export function OrderMenu({
                                 onClick={() => pick(option.value)}
                                 data-testid={`shape-order-${option.value}`}
                                 className={clsx(
-                                    "rounded-4 flex min-h-24 items-center px-4 py-2 text-left",
+                                    "rounded-4 flex min-h-24 items-center gap-8 px-4 py-2 text-left",
                                     option.value === order.current
                                         ? "bg-fg-2 text-accent"
                                         : "hover:text-accent",
                                 )}
                             >
-                                {option.label}
+                                <ChoicePicture
+                                    picture={option.picture}
+                                    testId={`shape-order-${option.value}-picture`}
+                                />
+                                <span>{option.label}</span>
                             </button>
                         ))}
                     </div>
