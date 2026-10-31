@@ -32,7 +32,7 @@ export const lineShape: ShapeKind<LineParams> = {
     handles: () => [],
     drag: (p) => p,
     outline: (p) => [lineOutline(p)],
-    generate: (p, n) => lineSpots(p, n),
+    generate: (p, n, ctx) => lineSpots(p, n, ctx.stepPx),
     /** From the first point along the line, the way the spots go */
     orderKey: (p, point) => [alongLine(p, point)],
 };

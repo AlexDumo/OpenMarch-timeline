@@ -61,7 +61,12 @@ import {
 } from "../frame/shapeEditorStore";
 import { HANDLE_REACH_PX, toolEnvFor } from "../tool/toolEnv";
 import type { Roles } from "@/input/modifierRoles";
-import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
+import {
+    paramGlyph,
+    type AnyToolKind,
+    type ParamGlyph,
+    type ToolEnv,
+} from "../tool/toolKind";
 import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 import { ShapeAwayChip } from "./ShapeAwayChip";
 import { GlyphText } from "./GlyphText";
@@ -307,7 +312,7 @@ function ShapeEditorBar({
                                 note={x.note}
                                 canLess={x.less !== null}
                                 canMore={x.more !== null}
-                                glyph={false}
+                                glyph={null}
                                 actions={numbers}
                             />
                         ))}
@@ -350,7 +355,11 @@ function ShapeEditorBar({
                                         note={null}
                                         canLess={false}
                                         canMore={false}
-                                        glyph
+                                        glyph={paramGlyph(
+                                            x.param,
+                                            params,
+                                            spots,
+                                        )}
                                         derived={x.derived}
                                         actions={numbers}
                                     />
@@ -598,8 +607,8 @@ const NumberChip = memo(function NumberChip({
     note: string | null;
     canLess: boolean;
     canMore: boolean;
-    /** The spacings show their glyph */
-    glyph: boolean;
+    /** The mark the spacings show before them, if any */
+    glyph: ParamGlyph | null;
     /** Shown as about so much: pressing it snaps it to a half step (owner on #459) */
     derived?: boolean;
     actions: ReturnType<typeof numberActions>;
@@ -607,9 +616,9 @@ const NumberChip = memo(function NumberChip({
     const scrub = useMemo(() => actions.scrub(param), [actions, param]);
     return (
         <span className="flex items-center gap-2">
-            {glyph && param.glyph && (
+            {glyph && (
                 <span className="text-text/60" aria-hidden>
-                    <GlyphText text={param.glyph} />
+                    <GlyphText text={glyph} />
                 </span>
             )}
             {param.stepper && (
