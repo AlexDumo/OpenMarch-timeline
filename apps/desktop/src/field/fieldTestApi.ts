@@ -140,6 +140,11 @@ export interface FieldTestApi {
      * (#204), or null when neither is on the field.
      */
     shapeOverlay?(): FieldTestShapeOverlay | null;
+    /**
+     * False while the marchers, their labels and paths, and the shape's spots
+     * and walks are hidden so a shape is seen on its own (#558, H)
+     */
+    marchersShown?(): boolean;
     /** The placed boxes outlined on the field (the View tab's Shapes setting). */
     placedBoxes?(): FieldTestPlacedBox[];
     /**

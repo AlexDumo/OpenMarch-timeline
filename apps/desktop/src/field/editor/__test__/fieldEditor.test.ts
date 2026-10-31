@@ -26,6 +26,7 @@ function setup({
     pressSelection = undefined as FieldEditorPorts["pressSelection"],
     doubleClickMarcher = undefined as FieldEditorPorts["doubleClickMarcher"],
     reachesInside = undefined as FieldEditorPorts["reachesInside"],
+    marchersHidden = undefined as FieldEditorPorts["marchersHidden"],
 } = {}) {
     const clock = { now: 1000 };
     const state = {
@@ -60,6 +61,7 @@ function setup({
         pressSelection,
         doubleClickMarcher,
         reachesInside,
+        marchersHidden,
         selectionBoxPadding: () => 10,
         openMenu: vi.fn(),
         showPositions: vi.fn((positions) => {
@@ -165,6 +167,43 @@ describe("FieldEditor click selection", () => {
         expect(state.selected).toEqual([]);
         editor.pointerUp(at(100, 100));
         expect(state.selected).toEqual([1]);
+    });
+});
+
+describe("FieldEditor with the marchers hidden (#558, a shape seen on its own)", () => {
+    const slop = CLICK_SLOP / ZOOM;
+    const hiddenSetup = (selected: number[] = []) =>
+        setup({ selected, marchersHidden: () => true });
+
+    it("a click on a hidden marcher is a click on empty field", () => {
+        const { editor, state } = hiddenSetup([2]);
+        click(editor, 100, 100);
+        expect(state.selected).toEqual([]);
+    });
+
+    it("a drag from a hidden marcher moves nothing: it's a marquee", () => {
+        const { editor, state } = hiddenSetup();
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(100 + slop * 3, 100 + slop * 3));
+        expect(editor.activeGesture()).toBe("marquee");
+        editor.pointerUp(at(100 + slop * 3, 100 + slop * 3));
+        expect(state.drops).toEqual([]);
+    });
+
+    it("hovering a hidden marcher shows no pointer", () => {
+        const { editor } = hiddenSetup();
+        editor.pointerMove(at(100, 100));
+        expect(editor.cursor()).toBe("default");
+    });
+
+    it("hits them again once they show", () => {
+        let hidden = true;
+        const { editor, state } = setup({ marchersHidden: () => hidden });
+        click(editor, 100, 100);
+        expect(state.selected).toEqual([]);
+        hidden = false;
+        click(editor, 300, 100);
+        expect(state.selected).toEqual([3]);
     });
 });
 

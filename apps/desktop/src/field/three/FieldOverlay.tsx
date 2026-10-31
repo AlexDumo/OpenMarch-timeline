@@ -18,6 +18,7 @@ import { dotSizes, SELECTION_COLOR } from "./selectionRing";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import { GUIDE_INK, GUIDE_INK_TEXT } from "./guideInk";
+import { shapeAlone, useMarchersHidden } from "@/shapes/field/marchersHidden";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -136,8 +137,14 @@ export default function FieldOverlay({
     const area = useSyncExternalStore(subscribeEditor, () =>
         editor.areaShape(),
     );
-    const modeDrawing = useSyncExternalStore(subscribeEditor, () =>
+    const drawn = useSyncExternalStore(subscribeEditor, () =>
         editor.modeDrawing(),
+    );
+    // Held or latched H shows the shape on its own (#558)
+    const hideMarchers = useMarchersHidden();
+    const modeDrawing = useMemo(
+        () => (drawn && hideMarchers ? shapeAlone(drawn) : drawn),
+        [drawn, hideMarchers],
     );
     const propTool = useSyncExternalStore(subscribeEditor, () =>
         editor.propToolShape(),

@@ -790,6 +790,18 @@ const STATIC_ACTIONS = {
         // One press, one turn or recalculation: a held key doesn't repeat it (review)
         ignoreRepeat: true,
     },
+    // The shape on its own (#558): hold H to hide the marchers, its spots and walks, tap to keep
+    // them hidden; the editor's eye button and the palette turn the latch over. Drawing only, but
+    // filed with the shape's keys, which Visuals turns off: no shape is edited there
+    shapeHideMarchers: {
+        labelKey: "actions.shape.hideMarchers",
+        keywordsKey: "actions.shape.hideMarchersKeywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["H"],
+        ignoreRepeat: true,
+    },
 
     // Cursor mode
     cancelAlignmentUpdates: {
