@@ -234,6 +234,31 @@ export interface ToolGroups<P> {
     remove(params: P, n: number, index: number, env: ToolEnv): P;
 }
 
+/** A line in a {@link ToolChoicePicture} */
+export interface ToolChoicePictureLine {
+    readonly points: readonly XY[];
+    /** Joined back to its first point */
+    readonly closed?: boolean;
+    /** A guide or a move rather than the shape itself: drawn light */
+    readonly faint?: boolean;
+    /** Where the shape would go rather than where it is: drawn dashed */
+    readonly dashed?: boolean;
+}
+
+/**
+ * A small sketch of what an answer does (#559), beside its name in the menu and on the menu's
+ * button: lines and marchers in field units, any size, which the menu fits to its picture. A kind
+ * draws it from its own geometry where it can (a sample line laid out with the answer), otherwise
+ * by hand. Pure data, so kinds stay free of the UI.
+ */
+export interface ToolChoicePicture {
+    readonly lines: readonly ToolChoicePictureLine[];
+    /** Marchers where they stand */
+    readonly dots: readonly XY[];
+    /** Marchers where they come from, drawn light */
+    readonly faintDots?: readonly XY[];
+}
+
 /** One answer in a kind's menu ({@link ToolChoice}) */
 export interface ToolChoiceOption {
     /** Stable for the kind: tests and a later command step name the answer by it */
@@ -241,6 +266,8 @@ export interface ToolChoiceOption {
     readonly label: string;
     /** Why it can't be picked now, shown with it greyed out; absent when it can */
     readonly disabled?: string;
+    /** What it does, sketched; the menu shows the name alone when absent */
+    readonly picture?: ToolChoicePicture;
 }
 
 /**
