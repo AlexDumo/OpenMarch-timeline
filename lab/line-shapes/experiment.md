@@ -16,6 +16,8 @@ questions:
   - Did Measured (true distance, ↔ side to side, ↕ front to back) put marchers where you expected, and were the greyed-out reasons clear?
   - Was closing a line (click its first point, or drop an end on the other) and filling it (Grid, Outline, Spread) natural? Did Open bring it back the way you expected?
   - Did reaching Line and Curve from the favorites ring and the command bar (try `line 2*3+4*2`) work?
+  - Was clicking a point to see its curve, and double-clicking to switch corner and smooth, easier to read than before?
+  - Did holding or tapping H to hide the marchers do what you wanted? Do the menu pictures help?
   - Anything that felt wrong, slow or confusing?
 ---
 
@@ -41,9 +43,12 @@ a way to place the selected marchers.
 - Put Line or Curve in the favorites ring, or press ⌘K and type `line 2*3+4*2`.
 
 - Open any menu in the shape editor: each choice now has a small picture.
+- Click a point to select it. A smooth point shows a bar through it; drag
+  either end to change its curve. Double-click a point to switch it between a
+  corner and smooth.
+- Hold H (or press the eye in the editor bar) to hide the marchers and see the
+  shape on its own; tap H to keep them hidden until the next tap.
 
 **Not in this build yet**
 
-- From your last feedback: clicking a point to see its curve with a
-  double-click to switch corner and smooth (#557), hiding the marchers for a
-  moment (#558) and dropping the Points menu (#560).
+- Dropping the Points menu (#560), now that a double-click switches a point.
