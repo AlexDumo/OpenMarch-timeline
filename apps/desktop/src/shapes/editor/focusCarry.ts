@@ -16,20 +16,31 @@ export function useFocusCarry<T extends HTMLElement>(
     const had = useRef(false);
     useLayoutEffect(() => {
         if (!had.current) return;
-        const active = document.activeElement;
-        if (active && active !== document.body && active.isConnected) return;
-        // A number first (not its − or ≈), else the first control that takes focus
-        const el = ref.current;
-        // The number's tooltip may wrap it, taking the mark
-        const number = el?.querySelector<HTMLElement>("[data-scrub-number]");
-        (number?.matches("button")
-            ? number
-            : (number?.querySelector<HTMLElement>("button") ??
-              el?.querySelector<HTMLElement>("button:not(:disabled), input"))
-        )?.focus();
+        // Once the key that made the change is through: Enter applying a typed list would
+        // otherwise press the button focus lands on, opening the group menu at once
+        const timer = setTimeout(() => {
+            const active = document.activeElement;
+            if (active && active !== document.body && active.isConnected)
+                return;
+            // A number first (not its − or ≈), else the first control that takes focus
+            const el = ref.current;
+            // The number's tooltip may wrap it, taking the mark
+            const number = el?.querySelector<HTMLElement>(
+                "[data-scrub-number]",
+            );
+            (number?.matches("button")
+                ? number
+                : (number?.querySelector<HTMLElement>("button") ??
+                  el?.querySelector<HTMLElement>(
+                      "button:not(:disabled), input",
+                  ))
+            )?.focus();
+        });
+        return () => clearTimeout(timer);
         // Only `key` swaps the controls
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [key]);
+
     return {
         ref,
         onFocus: () => {

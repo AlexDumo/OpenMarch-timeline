@@ -112,6 +112,7 @@ export function GroupMenu({
                         )}
                         {...focus.trigger}
                         data-testid="shape-groups-menu"
+                        data-group-menu-trigger
                         data-summary={summary}
                         className="rounded-4 hover:bg-fg-2 flex min-h-24 items-center gap-4 px-4 py-2"
                     >
@@ -126,6 +127,16 @@ export function GroupMenu({
                     align="start"
                     sideOffset={6}
                     {...focus.content}
+                    // Focus back on the button isn't leaving: its tooltip closing can put it there.
+                    // Found by its mark, as the tooltip may have drawn the button again
+                    onFocusOutside={(e) => {
+                        if (
+                            (e.target as Element | null)?.closest?.(
+                                "[data-group-menu-trigger]",
+                            )
+                        )
+                            e.preventDefault();
+                    }}
                     onPointerDown={(e) => e.stopPropagation()}
                     className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex flex-col gap-4 border p-6"
                     data-testid="shape-groups-content"

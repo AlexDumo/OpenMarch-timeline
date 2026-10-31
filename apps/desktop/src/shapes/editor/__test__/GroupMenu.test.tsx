@@ -5,6 +5,7 @@ import {
     fireEvent,
     render,
     screen,
+    waitFor,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
@@ -112,7 +113,7 @@ describe("a line's interval groups in the floating editor", () => {
         expect(screen.queryByTestId("shape-groups-menu")).toBeNull();
     });
 
-    it("turns the number into the group menu's button when a list is typed, keeping focus, in one undo step", () => {
+    it("turns the number into the group menu's button when a list is typed, keeping focus, in one undo step", async () => {
         renderEditor();
         const steps = tool().past.length;
         typeInto("shape-editor-interval", "2*3+4*2");
@@ -121,7 +122,10 @@ describe("a line's interval groups in the floating editor", () => {
             "Multiple intervals",
         );
         expect(screen.queryByTestId("shape-editor-interval")).toBeNull();
-        expect(document.activeElement).toBe(button);
+        // Not while the Enter that applied the list is still going: it would press the button
+        expect(document.activeElement).not.toBe(button);
+        await waitFor(() => expect(document.activeElement).toBe(button));
+        expect(screen.queryByTestId("shape-groups-content")).toBeNull();
         expect(tool().past.length).toBe(steps + 1);
     });
 
@@ -211,7 +215,7 @@ describe("a line's interval groups in the floating editor", () => {
         expect(screen.getByTestId("shape-group-2")).toBeTruthy();
     });
 
-    it("goes back to the one number with focus when groups are removed down to one, in one undo step each", () => {
+    it("goes back to the one number with focus when groups are removed down to one, in one undo step each", async () => {
         renderEditor();
         typeInto("shape-editor-interval", "2*3+4*2");
         openMenu();
@@ -223,7 +227,7 @@ describe("a line's interval groups in the floating editor", () => {
         expect(screen.queryByTestId("shape-groups-content")).toBeNull();
         const number = screen.getByTestId("shape-editor-interval");
         expect(number.textContent).toBe("3");
-        expect(document.activeElement).toBe(number);
+        await waitFor(() => expect(document.activeElement).toBe(number));
         expect(tool().past.length).toBe(steps + 1);
         // The field's colors go with the menu
         expect(useShapePointerStore.getState().groupMenu).toBeNull();
