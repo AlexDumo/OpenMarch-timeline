@@ -12,6 +12,7 @@ import { performRedo, performUndo, transactionWithHistory } from "../history";
 import {
     followPlacedBoxChanges,
     invalidatePlacedBoxes,
+    placedBoxesRead,
     usePlacedBoxStore,
 } from "@/shapes/placed/placedBoxStore";
 import { createLastPage, deletePages } from "../page";
@@ -342,6 +343,39 @@ describeDbTests("Shape recipes", (it) => {
             await expect.poll(bulge).toBe(4);
             await performRedo(db);
             await expect.poll(bulge).toBe(9);
+        } finally {
+            stop();
+        }
+    });
+
+    it("placed shapes are read back with the end beats of their moves, a move made by the same edit too (#514)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const stop = followPlacedBoxChanges();
+        try {
+            const { a, b } = await show(db);
+            const before = new Set(
+                (
+                    await db
+                        .select({ id: schema.timelines.id })
+                        .from(schema.timelines)
+                        .all()
+                ).map((t) => t.id),
+            );
+            const id = await place(db, [a, b], ARC);
+            const timelineId = (await recipeTimeline(db, id))!;
+            expect(before.has(timelineId)).toBe(false);
+            const [move] = await db
+                .select({ end: schema.timelines.end_beat })
+                .from(schema.timelines)
+                .where(eq(schema.timelines.id, timelineId))
+                .all();
+            // Read back after the edit, as the save queue waits for it: no stored timelines here
+            await placedBoxesRead();
+            const { recipes, ends } = usePlacedBoxStore.getState();
+            expect(recipes.map((r) => r.id)).toContain(id);
+            expect(ends.get(timelineId)).toBe(move!.end);
         } finally {
             stop();
         }

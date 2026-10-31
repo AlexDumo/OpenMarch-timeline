@@ -6,7 +6,8 @@ import type { FieldRect } from "./selectionArea";
 
 /**
  * Scaling and rotating a selection with the selection box's handles (#198,
- * #189 user stories 46 to 55; rules table: Handles, Shift, Alt). Pure, in
+ * #189 user stories 46 to 55; rules table: Handles; held roles fine and
+ * constrain, version A of the modifier roles design). Pure, in
  * field units except where a rule is on screen. Only positions change: dots
  * and labels are drawn upright and the same size wherever they go.
  */
@@ -18,7 +19,7 @@ export type HandleId = FieldTestHandle;
 export const HANDLE_SIZE = 13;
 /** How far above the box's top middle the rotate handle sits, in CSS px. */
 export const ROTATE_HANDLE_OFFSET = 40;
-/** Rotation snaps to multiples of this many degrees unless Shift or Alt is down. */
+/** Rotation snaps to multiples of this many degrees, or to whole degrees with fine. */
 export const ROTATION_SNAP = 15;
 /**
  * The smallest a handle scales the formation to. A handle dragged past the
@@ -150,10 +151,10 @@ const FACING: Record<Exclude<HandleId, "rot">, FieldPoint> = {
  * drag's `delta` in field units. The handle's opposite side or corner stays
  * put (`anchor`), and the handle's side moves with the pointer:
  *
- * - a middle handle scales its own axis only, Shift or not (user story 49);
+ * - a middle handle scales its own axis only, free or not (user story 49);
  * - a corner scales both axes by the same amount, the pointer's progress
- *   along the corner's diagonal, unless `free` (Shift), when each axis
- *   follows the pointer (user story 48);
+ *   along the corner's diagonal, unless `free` (constrain, which flips the
+ *   proportional default), when each axis follows the pointer (user story 48);
  * - neither axis goes below {@link MIN_SCALE}: no flipping (user story 52).
  *
  * An axis the marchers have no extent along (all in one row) can't scale.
@@ -234,9 +235,19 @@ export function turnBetween(
           : degrees;
 }
 
-/** `degrees` to the nearest {@link ROTATION_SNAP}, unless `free` (Shift or Alt; user stories 50, 51). */
-export const snapRotation = (degrees: number, free: boolean) =>
-    free ? degrees : Math.round(degrees / ROTATION_SNAP) * ROTATION_SNAP + 0;
+/**
+ * `degrees` to the nearest {@link ROTATION_SNAP}, or to the nearest whole
+ * degree with `fine` (user stories 50, 51); as they are with the Snap toggle
+ * off (`snap: false`).
+ */
+export function snapRotation(
+    degrees: number,
+    { fine, snap = true }: { fine: boolean; snap?: boolean },
+): number {
+    if (!snap) return degrees;
+    const step = fine ? 1 : ROTATION_SNAP;
+    return Math.round(degrees / step) * step + 0;
+}
 
 /**
  * `starts` turned `degrees` clockwise about `center`, to three decimal
