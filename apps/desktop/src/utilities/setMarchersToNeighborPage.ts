@@ -7,7 +7,13 @@ import {
     type PagePositionCopy,
     type TimelineNeighborPageRequest,
 } from "@/timeline/timelineCoordinateWrites";
-import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import {
+    heldPagesText,
+    toastTimelineError,
+} from "@/timeline/timelineErrorMessages";
+import type { TimelineMoveResult } from "@/db-functions/timelineMoves";
+import type { HeldConflict } from "@/db-functions/timelineHeldMarks";
+import { joinList } from "@/timeline/timelineRangeWords";
 
 /**
  * "Set all or selected marchers to the previous or next page", the four batch-edit actions in
@@ -19,9 +25,13 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
  * `moveMarchersInTarget`), so it works on a page the marchers only hold through:
  *
  * - **Next page** moves each marcher to its next-page position there.
- * - **Previous page** clears each marcher's own move on the page, so the page follows earlier
- *   pages again (and later edits before it carry through). A marcher whose move there is shared
- *   with others, or longer than the page, is moved to its previous-page position instead.
+ * - **Previous page** is **Clear this page** (holds decision 16): each marcher is taken out of
+ *   every move over the page, so the page is Not set and follows earlier pages again (and later
+ *   edits before it carry through). A move shared with others, or longer than the page, is cut in
+ *   time at the page's flags first (`takeMarchersOutOfRangeInTransaction`). Shape and
+ *   follow-the-leader members are left as they are; the write names them, and they aren't
+ *   counted. On the first page of a Held hold that runs on, the later pages' hold goes too (its
+ *   arrival is gone), and the message says so.
  *
  * The success message shows only once the edit is written; a refused edit writes nothing and the
  * write's own error handler shows why.
@@ -45,7 +55,9 @@ export interface SetMarchersToNeighborPageArgs {
      * The write (`moveMarchersInTarget`'s `mutateAsync`). It rejects when the edit is
      * refused, after its own error handler has shown the reason.
      */
-    writeTimeline: (request: TimelineNeighborPageRequest) => Promise<unknown>;
+    writeTimeline: (
+        request: TimelineNeighborPageRequest,
+    ) => Promise<TimelineMoveResult>;
     notify: {
         success: (message: string) => unknown;
         error: (message: string) => unknown;
@@ -58,8 +70,8 @@ export interface SetMarchersToNeighborPageArgs {
 const MESSAGES = {
     previous: {
         none: "actions.batchEdit.noPreviousPage",
-        all: "actions.batchEdit.setAllToPreviousSuccess",
-        selected: "actions.batchEdit.setSelectedToPreviousSuccess",
+        all: "actions.batchEdit.clearThisPageAllSuccess",
+        selected: "actions.batchEdit.clearThisPageSelectedSuccess",
         param: "previousPage",
     },
     next: {
@@ -94,13 +106,20 @@ export async function setMarchersToNeighborPage({
         direction === "previous"
             ? getPreviousPage(selectedPage, pages)
             : getNextPage(selectedPage, pages);
-    const succeed = (count: number) => {
+    const succeed = (count: number, laterHolds?: HeldConflict) => {
+        const message = t(messages[scope], {
+            count,
+            currentPage: selectedPage.name,
+            [messages.param]: neighbor!.name,
+        });
         notify.success(
-            t(messages[scope], {
-                count,
-                currentPage: selectedPage.name,
-                [messages.param]: neighbor!.name,
-            }),
+            laterHolds && laterHolds.names.length > 0
+                ? `${message}; ${t("actions.batchEdit.clearThisPageHoldsToo", {
+                      count: laterHolds.names.length,
+                      names: joinList(laterHolds.names),
+                      pages: heldPagesText(laterHolds.pages),
+                  })}`
+                : message,
         );
         return count;
     };
@@ -131,15 +150,26 @@ export async function setMarchersToNeighborPage({
     if (count === 0) return null;
     // Previous clears own moves even where they already go nowhere, so every marcher is sent.
     // Basic's point target on the page's flag clears them too (its mid-page points with them)
-    const clearOwn = direction === "previous" && target.kind !== "home";
-    const moves = clearOwn ? copy.targets : copy.moves;
+    const clearPage = direction === "previous" && target.kind !== "home";
+    const moves = clearPage ? copy.targets : copy.moves;
+    let skipped = 0;
+    let laterHolds: HeldConflict | undefined;
     if (moves.length > 0) {
         try {
-            await writeTimeline({ target, moves, clearOwn });
+            const written = await writeTimeline({
+                target,
+                moves,
+                clearPage,
+            });
+            skipped = written.skipped?.marcherIds.length ?? 0;
+            laterHolds = written.clearedLaterHolds;
         } catch {
             // Refused or failed: nothing was written, and the write's error handler said why
             return null;
         }
     }
-    return succeed(count);
+    // Shape and follow-the-leader members Clear this page left alone: the write's warning names
+    // them, and the success message counts only the others
+    if (count - skipped === 0) return null;
+    return succeed(count - skipped, laterHolds);
 }

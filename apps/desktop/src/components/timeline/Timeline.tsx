@@ -32,10 +32,11 @@ import type {
     TimelineKeyframe,
     TimelineKeyframeMenu,
 } from "./TimelineKeyframes";
+import type { SelectionHeldBar } from "@/timeline/timelineHeldBars";
 import type {
     TimelineAddMarchersMenu,
-    TimelineKeepHereMenu,
     TimelineSetAsShownMenu,
+    TimelinePageCommandMenu,
     TimelineMenuEntry,
     TimelineMenuTarget,
     TimelineMoveCommands,
@@ -259,6 +260,8 @@ export interface TimelineProps {
     readonly keyframes?: readonly TimelineKeyframe[];
     /** #306: a keyframe diamond's right-click Unset actions, by spec beat; without it, no menu */
     readonly keyframeMenu?: TimelineKeyframeMenu;
+    /** #472: the selected marchers' Held holds, spec beats; none without a selection */
+    readonly heldBars?: readonly SelectionHeldBar[];
     /** The chains on the page boxes (UI-18 keep later pages), by page id; none without a selection */
     readonly keepChains?: PageKeepChains;
     /**
@@ -267,10 +270,10 @@ export interface TimelineProps {
      * (`useClipDrops`)
      */
     readonly pageMoves?: ReadonlySet<string | number>;
-    /** The page box menu's **Keep selected marchers here** and **Let selected marchers follow again** */
-    readonly keepHere?: TimelineKeepHereMenu;
     /** The page box menu's **Set as shown** (holds, fork #466) */
     readonly setAsShown?: TimelineSetAsShownMenu;
+    /** **Hold from previous page** on a page box (holds, fork #472) */
+    readonly holdFromPrevious?: TimelinePageCommandMenu;
     /** UI-19 Basic: the selected marchers' mid-page positions, spec beats */
     readonly basicPoints?: readonly TimelineBasicPoint[];
     /** UI-19 Basic: **Remove this count's position**, by its spec beat */
@@ -650,8 +653,8 @@ export function Timeline(props: TimelineProps) {
         onDeletePageWithMoves,
         onSetPageSubset,
         onOpenRange,
-        keepHere,
         setAsShown,
+        holdFromPrevious,
         pageMenuExtra,
     } = props;
     // A clip's stored spec range, else the view range mapped back (as the menu's Add does)
@@ -741,8 +744,8 @@ export function Timeline(props: TimelineProps) {
         onDeletePageFlag ||
         onDeletePageWithMoves ||
         onSetPageSubset ||
-        keepHere ||
-        setAsShown
+        setAsShown ||
+        holdFromPrevious
     );
     const disabledReason = addSelectedMarchers?.disabledReason;
     const addMarchersMenu = useMemo<
@@ -756,8 +759,8 @@ export function Timeline(props: TimelineProps) {
                       ...(deleteWithMoves
                           ? { onDeleteWithMoves: deleteWithMoves }
                           : {}),
-                      ...(keepHere ? { keepHere } : {}),
                       ...(setAsShown ? { setAsShown } : {}),
+                      ...(holdFromPrevious ? { holdFromPrevious } : {}),
                       ...(subsetMenu ? { subset: subsetMenu } : {}),
                       ...(pageExtra ? { extraFor: pageExtra } : {}),
                       onAdd: addMarchers,
@@ -769,8 +772,8 @@ export function Timeline(props: TimelineProps) {
             deleteWithMoves,
             disabledReason,
             hasMarchersMenu,
-            keepHere,
             setAsShown,
+            holdFromPrevious,
             subsetMenu,
             pageExtra,
         ],
@@ -958,6 +961,17 @@ export function Timeline(props: TimelineProps) {
             })),
         [axis, keyframes],
     );
+    // #472: the selection's Held bars on the view axis
+    const { heldBars } = props;
+    const viewHeldBars = useMemo(
+        () =>
+            heldBars?.map((bar) => ({
+                ...bar,
+                start: axis.toView(bar.start),
+                end: axis.toView(bar.end),
+            })),
+        [axis, heldBars],
+    );
     // #306: their menu acts on spec beats
     const { keyframeMenu } = props;
     const viewKeyframeMenu = useMemo<TimelineKeyframeMenu | undefined>(
@@ -1017,6 +1031,7 @@ export function Timeline(props: TimelineProps) {
         transportAccessories: props.transportAccessories,
         keyframes: viewKeyframes,
         keyframeMenu: viewKeyframeMenu,
+        heldBars: viewHeldBars,
         keepChains: props.keepChains,
         pageMoves: props.pageMoves,
         basicPoints: viewBasicPoints,

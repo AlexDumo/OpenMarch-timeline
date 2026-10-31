@@ -8,6 +8,7 @@ import { transactionWithHistory } from "./history";
 import { mapDbErrors, refuse } from "./timelineErrors";
 import {
     createRangeTimelineInTransaction,
+    nextMoveNameInTransaction,
     readMoveWords,
 } from "./timelineMoveNames";
 import { findTimelineByRange, type DatabaseTimeline } from "./timelines";
@@ -20,10 +21,6 @@ import {
     createTimelineAssignmentsInTransaction,
     type DatabaseTimelineAssignment,
 } from "./timelineAssignments";
-import {
-    keptAmong,
-    markAssignmentsKeptInTransaction,
-} from "./timelineKeptMarkers";
 
 /**
  * **Split at playhead** (docs/timeline/ui.md UI-27): one move becomes two that meet at a count,
@@ -39,8 +36,7 @@ import {
  * - A new move ("Move N", or unnamed over a page's box) runs over `[s, beat)`. Each transition of
  *   the original gets a shapeless direct counterpart there whose destinations are the resolver's
  *   positions at `beat`, one slot per marcher in it, and the rows that started before `beat`
- *   (cut at `beat` where they crossed it), on their own layers. A kept row split in two is kept in
- *   both halves, as Basic's split leaves it (`splitMovesAtBeatInTransaction`).
+ *   (cut at `beat` where they crossed it), on their own layers.
  * - A row that another move on a higher layer cuts into several visible pieces before `beat`
  *   (spec R-2) keeps only its last piece in that counterpart. Each earlier piece starts from
  *   where the other move left the marcher, so it heads somewhere else: it gets a row of its own,
@@ -73,10 +69,18 @@ export interface MotionChange {
     fromBeat: number;
 }
 
+/**
+ * Which half keeps the split move's id (and its name): the half after the beat by default. A holds
+ * cut (`timelineMoveCuts`) gives it to the half before when the half after would take over the
+ * move of a later page box (a page's own move is the oldest over its box), and to neither, the
+ * original going, when both halves would.
+ */
+export type SplitIdKeeper = "after" | "before" | "neither";
+
 export interface SplitTimelineResult {
-    /** The new move, over `[start, beat)` */
+    /** The half over `[start, beat)`: a new move, unless `idStaysWith` is `"before"` */
     before: DatabaseTimeline;
-    /** The original move, now over `[beat, end)` */
+    /** The half over `[beat, end)`: the original move, unless `idStaysWith` says otherwise */
     after: DatabaseTimeline;
     /** Marchers whose motion isn't what it was, sorted by id */
     motionChanged: MotionChange[];
@@ -135,14 +139,26 @@ export async function splitTimelineAtBeat({
     );
 }
 
+/**
+ * The split inside a caller's edit. With `allowSharedRanges` (a holds cut, `timelineMoveCuts`), a
+ * half may land on a range another move already has (C-12 relaxed as for a split by marcher,
+ * UI-25); a new half is then numbered, so it never takes over a page's move. `idStaysWith` picks
+ * the half that keeps the move's id (`SplitIdKeeper`); the transitions after the beat, and any
+ * shape recipe (#363, which describes where they arrive), stay with the half after the beat
+ * whichever id it has.
+ */
 export async function splitTimelineAtBeatInTransaction({
     tx,
     timelineId,
     beat,
+    allowSharedRanges = false,
+    idStaysWith = "after",
 }: {
     tx: DbTransaction;
     timelineId: number;
     beat: number;
+    allowSharedRanges?: boolean;
+    idStaysWith?: SplitIdKeeper;
 }): Promise<SplitTimelineResult> {
     const L = schema.timelines;
     const timeline = await tx
@@ -151,15 +167,11 @@ export async function splitTimelineAtBeatInTransaction({
         .where(eq(L.id, timelineId))
         .get();
     if (!timeline) refuse(`timeline ${timelineId} does not exist`);
-    const s0 = timeline.start_beat;
     const { transitions, rows } = await refuseUnlessSplitAllowed(
         tx,
         timeline,
         beat,
-    );
-    const kept = await keptAmong(
-        tx,
-        rows.map((r) => r.id),
+        allowSharedRanges,
     );
 
     // Where everyone is, from the rows as they are now: read before anything is written
@@ -188,7 +200,16 @@ export async function splitTimelineAtBeatInTransaction({
     });
 
     return await mapDbErrors(() =>
-        writeSplit({ tx, timelineId, beat, s0, rows, plans, kept, changed }),
+        writeSplit({
+            tx,
+            timeline,
+            beat,
+            rows,
+            plans,
+            changed,
+            allowSharedRanges,
+            idStaysWith,
+        }),
     );
 }
 
@@ -208,28 +229,29 @@ interface TransitionPlan {
  */
 async function writeSplit({
     tx,
-    timelineId,
+    timeline,
     beat,
-    s0,
     rows,
     plans,
-    kept,
     changed,
+    allowSharedRanges,
+    idStaysWith,
 }: {
     tx: DbTransaction;
-    timelineId: number;
+    timeline: DatabaseTimeline;
     beat: number;
-    s0: number;
     rows: readonly Row[];
     plans: readonly TransitionPlan[];
-    kept: ReadonlySet<number>;
     changed: ReadonlyMap<number, number>;
+    allowSharedRanges: boolean;
+    idStaysWith: SplitIdKeeper;
 }): Promise<SplitTimelineResult> {
+    const timelineId = timeline.id;
+    const s0 = timeline.start_beat;
     const L = schema.timelines;
     const T = schema.timeline_transitions;
     const A = schema.timeline_assignments;
-    // 1. Rows ending at or before the beat leave the original (their kept markers go with
-    //    them); rows crossing it now start there
+    // 1. Rows ending at or before the beat leave the original; rows crossing it now start there
     const leaving = rows.filter((r) => r.end_beat <= beat).map((r) => r.id);
     if (leaving.length > 0) await tx.delete(A).where(inArray(A.id, leaving));
     const crossing = rows
@@ -251,24 +273,41 @@ async function writeSplit({
             transitionIds: emptied,
         });
 
-    // 3. The original now runs from the beat: its transitions first, then the timeline
+    // 3. The original's transitions now run from the beat; then the timeline that keeps them
     //    (the triggers want a transition inside its timeline, and no stranded row)
     await tx
         .update(T)
         .set({ start_beat: beat })
         .where(eq(T.timeline_id, timelineId));
-    const after = await tx
-        .update(L)
-        .set({ start_beat: beat })
-        .where(eq(L.id, timelineId))
-        .returning()
-        .get();
+    const after =
+        idStaysWith === "after"
+            ? (await tx
+                  .update(L)
+                  .set({ start_beat: beat })
+                  .where(eq(L.id, timelineId))
+                  .returning()
+                  .get())!
+            : await moveAfterHalfOut(tx, timeline, beat, allowSharedRanges);
 
-    const before = await writeBeforeMove(tx, { s0, beat, plans, kept });
+    // 4. The half before the beat
+    const before =
+        idStaysWith === "before"
+            ? await keepIdBefore(tx, timeline, beat)
+            : await createRangeTimelineInTransaction(tx, {
+                  startBeat: s0,
+                  endBeat: beat,
+                  allowSharedRanges,
+              });
+    for (const { t, first, earlier } of plans)
+        for (const halfRows of [first, ...earlier])
+            await writeFirstHalfTransition(tx, { before, t, rows: halfRows });
+    // Neither half keeps the id: the original, empty now, goes
+    if (idStaysWith === "neither")
+        await tx.delete(L).where(eq(L.id, timelineId));
 
     return {
         before,
-        after: after!,
+        after,
         motionChanged: [...changed]
             .map(([marcherId, fromBeat]) => ({ marcherId, fromBeat }))
             .sort((a, b) => a.marcherId - b.marcherId),
@@ -283,6 +322,7 @@ async function refuseUnlessSplitAllowed(
     tx: DbTransaction,
     timeline: DatabaseTimeline,
     beat: number,
+    allowSharedRanges: boolean,
 ): Promise<{ transitions: DatabaseTimelineTransition[]; rows: Row[] }> {
     const T = schema.timeline_transitions;
     const A = schema.timeline_assignments;
@@ -297,10 +337,12 @@ async function refuseUnlessSplitAllowed(
         refuse(
             `${where} isn't inside ${name}. Put the playhead inside the move to split it.`,
         );
-    for (const half of [
-        { start: s0, end: beat },
-        { start: beat, end: e0 },
-    ]) {
+    for (const half of allowSharedRanges
+        ? []
+        : [
+              { start: s0, end: beat },
+              { start: beat, end: e0 },
+          ]) {
         if (await findTimelineByRange(tx, half))
             refuse(
                 `${moveName(half, words.boxes, words.moves)} already runs over ${countsText(half, words.boxes)}, so a half can't go there`,
@@ -334,31 +376,50 @@ async function refuseUnlessSplitAllowed(
     return { transitions, rows };
 }
 
-/** The new move over `[s0, beat)`: a shapeless direct transition per transition with rows there. */
-async function writeBeforeMove(
+/**
+ * The half after the beat as a new move (`idStaysWith` isn't `"after"`): a numbered timeline over
+ * `[beat, end)` that takes the original's transitions, which already start at the beat, and its
+ * shape recipes.
+ */
+async function moveAfterHalfOut(
     tx: DbTransaction,
-    {
-        s0,
-        beat,
-        plans,
-        kept,
-    }: {
-        s0: number;
-        beat: number;
-        plans: readonly TransitionPlan[];
-        kept: ReadonlySet<number>;
-    },
+    timeline: DatabaseTimeline,
+    beat: number,
+    allowSharedRanges: boolean,
 ): Promise<DatabaseTimeline> {
-    // 4. The new move before the beat, with a shapeless direct transition per transition
-    const before = await createRangeTimelineInTransaction(tx, {
-        startBeat: s0,
-        endBeat: beat,
+    const after = await createRangeTimelineInTransaction(tx, {
+        startBeat: beat,
+        endBeat: timeline.end_beat,
+        allowSharedRanges,
     });
-    for (const { t, first, earlier } of plans)
-        for (const rows of [first, ...earlier])
-            await writeFirstHalfTransition(tx, { before, t, rows, kept });
+    await tx
+        .update(schema.timeline_transitions)
+        .set({ timeline_id: after.id })
+        .where(eq(schema.timeline_transitions.timeline_id, timeline.id));
+    await tx
+        .update(schema.timeline_shape_recipes)
+        .set({ timeline_id: after.id })
+        .where(eq(schema.timeline_shape_recipes.timeline_id, timeline.id));
+    return after;
+}
 
-    return before;
+/**
+ * The original, empty once its transitions moved out (`moveAfterHalfOut`), as the half before the
+ * beat: it keeps its id and name, now over `[start, beat)`. A page box's unnamed move gets a
+ * number, since the half isn't a page's box.
+ */
+async function keepIdBefore(
+    tx: DbTransaction,
+    timeline: DatabaseTimeline,
+    beat: number,
+): Promise<DatabaseTimeline> {
+    const name = timeline.name ?? (await nextMoveNameInTransaction(tx));
+    return (await tx
+        .update(schema.timelines)
+        .set({ end_beat: beat, name })
+        .where(eq(schema.timelines.id, timeline.id))
+        .returning()
+        .get())!;
 }
 
 /** One shapeless direct transition of the new move, with `rows` in slot order. */
@@ -368,12 +429,10 @@ async function writeFirstHalfTransition(
         before,
         t,
         rows,
-        kept,
     }: {
         before: DatabaseTimeline;
         t: DatabaseTimelineTransition;
         rows: readonly FirstHalfRow[];
-        kept: ReadonlySet<number>;
     },
 ): Promise<void> {
     if (rows.length === 0) return;
@@ -393,7 +452,7 @@ async function writeFirstHalfTransition(
             },
         ],
     });
-    const made = await createTimelineAssignmentsInTransaction({
+    await createTimelineAssignmentsInTransaction({
         tx,
         newAssignments: rows.map((f, slot) => ({
             marcherId: f.row.marcher_id,
@@ -404,10 +463,6 @@ async function writeFirstHalfTransition(
             layer: f.row.layer,
         })),
     });
-    await markAssignmentsKeptInTransaction(
-        tx,
-        made.filter((_, i) => kept.has(rows[i]!.row.id)).map((a) => a.id),
-    );
 }
 
 /** The visible pieces of `row` (spec R-2: an assignment cut by higher layers), in order. */

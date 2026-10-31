@@ -80,18 +80,18 @@ import { useSplitMergeActions, useSplitMergeMoves } from "./useSplitMergeMoves";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 import { jumpTimelinePlayback } from "@/timeline/timelineTransport";
 import { useSelectionKeyframes } from "@/timeline/useSelectionKeyframes";
+import { useSelectionHeldBars } from "@/timeline/useHeldMarks";
 import { marcherNamesText } from "@/timeline/timelineKeepLater";
 import tolgee from "@/global/singletons/Tolgee";
 import type { TimelineKeyframe } from "./TimelineKeyframes";
 import { useKeyframeUnsetMenu } from "@/timeline/timelineUnset";
 import {
-    useKeepToggle,
     useMarcherNameOf,
     usePageKeepStates,
 } from "@/timeline/useKeepLaterPages";
-import { useSelectedPage } from "@/context/SelectedPageContext";
-import { keepHereMenu, usePageKeepChains } from "./PageKeepChain";
+import { usePageKeepChains } from "./PageKeepChain";
 import { setAsShownMenu } from "@/timeline/timelineSetAsShown";
+import { holdFromPreviousMenu } from "@/timeline/timelineHoldFromPrevious";
 import { describeMoveClips } from "./moveClipText";
 import { useMoveNotesStore } from "@/stores/MoveNotesStore";
 import { useClearLeftoverMoveSelection } from "./useMoveMemberSelection";
@@ -258,23 +258,20 @@ export default function TimelineModePanel() {
             })),
         [selectionKeyframes, keepNameOf],
     );
+    // #472: the selected marchers' Held holds, as solid bars from their arrivals' diamonds
+    const heldBars = useSelectionHeldBars(selectedIdList);
     // #306: a diamond's right-click Unset actions at its count
     const keyframeMenu = useKeyframeUnsetMenu(selectedIdList, isPlaying);
-    // UI-18 keep later pages: the chains on the page boxes, and the page box menu's entries
-    // (named up to three; K's target says so, from the current page)
+    // UI-18 keep later pages: the chains on the page boxes (named up to three)
     const keepStates = usePageKeepStates(pages, selectedIdList);
-    const keepK = useKeepToggle(
-        keepStates,
-        pages,
-        useSelectedPage()?.selectedPage?.id,
-    );
-    const keepChains = usePageKeepChains(keepStates, keepNameOf, keepK);
-    const keepHere = useMemo(
-        () => keepHereMenu(keepStates, keepK),
-        [keepStates, keepK],
-    );
+    const keepChains = usePageKeepChains(keepStates, keepNameOf);
     // Holds (#466): Set as shown on a page box, for the selected marchers Not set there
     const setAsShown = useMemo(() => setAsShownMenu(keepStates), [keepStates]);
+    // #472: Hold from previous page, for every selected marcher it can hold
+    const holdFromPrevious = useMemo(
+        () => holdFromPreviousMenu(keepStates, selectedIdList, keepNameOf),
+        [keepStates, selectedIdList, keepNameOf],
+    );
     const { tracks: timelines, current: tracksCurrent } =
         useTimelineTracksState({
             database: db,
@@ -544,9 +541,10 @@ export default function TimelineModePanel() {
                     }
                     keyframes={keyframes}
                     keyframeMenu={keyframeMenu}
+                    heldBars={heldBars}
                     keepChains={keepChains}
-                    keepHere={keepHere}
                     setAsShown={setAsShown}
+                    holdFromPrevious={holdFromPrevious}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={
                         basic ? undefined : commands.commitTimelineRange

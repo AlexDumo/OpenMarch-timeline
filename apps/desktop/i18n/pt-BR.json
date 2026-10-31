@@ -26,12 +26,8 @@
             "noPreviousPage": "Não é possível definir coordenadas do marcador para a página anterior. Não há página anterior.",
             "setAllToNext": "Copiar posições da próxima página (todos)",
             "setAllToNextSuccess": "Todas as {count} coordenadas dos marchadores na página {currentPage} foram definidas com sucesso para as coordenadas da próxima página {nextPage}",
-            "setAllToPrevious": "Copiar posições da página anterior (todos)",
-            "setAllToPreviousSuccess": "\"Todas as {count} coordenadas dos marchadores na página {currentPage} foram definidas com sucesso para as coordenadas da página anterior {previousPage}\"",
             "setSelectedToNext": "Copiar posições da próxima página (seleção)",
-            "setSelectedToNextSuccess": "{count, plural, one {Sucesso ao definir # coordenada de marcha na página {currentPage} para as coordenadas da próxima página {nextPage}} other {Sucesso ao definir # coordenadas de marcha na página {currentPage} para as coordenadas da próxima página {nextPage}} }",
-            "setSelectedToPrevious": "Copiar posições da página anterior (seleção)",
-            "setSelectedToPreviousSuccess": "{count, plural, other {\"'{count} coordenada{{count, plural, one {} other {s}}} dos marchadores na página {currentPage} foi definida com sucesso para as coordenadas da página anterior {previousPage}'\"}}"
+            "setSelectedToNextSuccess": "{count, plural, one {Sucesso ao definir # coordenada de marcha na página {currentPage} para as coordenadas da próxima página {nextPage}} other {Sucesso ao definir # coordenadas de marcha na página {currentPage} para as coordenadas da próxima página {nextPage}} }"
         },
         "edit": {
             "noRedoAvailable": "Nenhuma ação para refazer",
@@ -1658,8 +1654,7 @@
             "placeAllMarchers": "Colocar todos os marchadores",
             "placeSelectedMarchers": "Colocar marchadores selecionados",
             "snapToggleCaption": "Ajuste",
-            "toNextPagePositions": "...para posições da próxima página",
-            "toPreviousPagePositions": "...para posições anteriores de página"
+            "toNextPagePositions": "...para posições da próxima página"
         },
         "select": {
             "noDrillPrefixesToSelect": "Nenhum prefixo de perfuração encontrado para selecionar",

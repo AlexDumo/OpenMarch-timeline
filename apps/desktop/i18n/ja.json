@@ -26,12 +26,8 @@
             "noPreviousPage": "進行中の座標を 前のページには設定できません 。前のページがありません",
             "setAllToNext": "次のページの位置をコピー（全員）",
             "setAllToNextSuccess": "すべての {count} マーカー座標をページ {currentPage} 上の次のページ {nextPage} の座標に成功して設定しました",
-            "setAllToPrevious": "前のページの位置をコピー（全員）",
-            "setAllToPreviousSuccess": "すべての {count} マーカー座標をページ {currentPage} 上の前のページ {previousPage} の座標に成功して設定しました",
             "setSelectedToNext": "次のページの位置をコピー（選択中）",
-            "setSelectedToNextSuccess": "{count, plural, other {'{'count, plural, other '{'ページ '{'currentPage'}' 上の '{'count'}' ヶ所の座標を次のページ '{'nextPage'}' の座標に正常に設定しました'}}'\n'{'count, plural, one '{'ページ '{'currentPage'}' 上の座標を次のページ '{'nextPage'}' の座標に正常に設定しました'}}'}}",
-            "setSelectedToPrevious": "前のページの位置をコピー（選択中）",
-            "setSelectedToPreviousSuccess": "{count, plural, other {ページ {currentPage} 上の {count} マーカー座標を前のページ {previousPage} の座標に成功して設定しました}}"
+            "setSelectedToNextSuccess": "{count, plural, other {'{'count, plural, other '{'ページ '{'currentPage'}' 上の '{'count'}' ヶ所の座標を次のページ '{'nextPage'}' の座標に正常に設定しました'}}'\n'{'count, plural, one '{'ページ '{'currentPage'}' 上の座標を次のページ '{'nextPage'}' の座標に正常に設定しました'}}'}}"
         },
         "edit": {
             "noRedoAvailable": "やり直すアクションはありません",
@@ -1658,8 +1654,7 @@
             "placeAllMarchers": "すべての行進者を配置",
             "placeSelectedMarchers": "選択された行進者を配置",
             "snapToggleCaption": "スナップ",
-            "toNextPagePositions": "次の ページ位置 に進む",
-            "toPreviousPagePositions": "...前のページ位置へ"
+            "toNextPagePositions": "次の ページ位置 に進む"
         },
         "select": {
             "noDrillPrefixesToSelect": "選択できるドリルプレフィックスが見つかりません",

@@ -26,12 +26,8 @@
             "noPreviousPage": "No se pueden establecer las coordenadas del marchador en la página anterior. No hay una página anterior",
             "setAllToNext": "Copiar posiciones de la página siguiente (todos)",
             "setAllToNextSuccess": "Configurado con éxito todas las {count} coordenadas de marchadores en la página {currentPage} a las coordenadas de la siguiente página {nextPage}",
-            "setAllToPrevious": "Copiar posiciones de la página anterior (todos)",
-            "setAllToPreviousSuccess": "Configurado con éxito todas las {count} coordenadas de marchadores en la página {currentPage} a las coordenadas de la página anterior {previousPage}",
             "setSelectedToNext": "Copiar posiciones de la página siguiente (selección)",
-            "setSelectedToNextSuccess": "{count, plural, one {Configuró exitosamente {count} coordenada de marcha en la página {currentPage} a las coordenadas de la próxima página {nextPage}} other {Configuró exitosamente {count} coordenadas de marcha en la página {currentPage} a las coordenadas de la próxima página {nextPage}}}",
-            "setSelectedToPrevious": "Copiar posiciones de la página anterior (selección)",
-            "setSelectedToPreviousSuccess": "{count, plural, other {Configurado con éxito '{count} coordenada{{count, plural, one {} other {s}}} de marcha en la página {currentPage} a las coordenadas de la página anterior {previousPage}'}}"
+            "setSelectedToNextSuccess": "{count, plural, one {Configuró exitosamente {count} coordenada de marcha en la página {currentPage} a las coordenadas de la próxima página {nextPage}} other {Configuró exitosamente {count} coordenadas de marcha en la página {currentPage} a las coordenadas de la próxima página {nextPage}}}"
         },
         "edit": {
             "noRedoAvailable": "No hay acción para rehacer",
@@ -1658,8 +1654,7 @@
             "placeAllMarchers": "Colocar todos los manifestantes",
             "placeSelectedMarchers": "Colocar manifestantes seleccionados",
             "snapToggleCaption": "Alineación",
-            "toNextPagePositions": "...a posiciones de página siguientes",
-            "toPreviousPagePositions": "...a posiciones en la página anterior"
+            "toNextPagePositions": "...a posiciones de página siguientes"
         },
         "select": {
             "noDrillPrefixesToSelect": "No se encontraron prefijos de desagregación para seleccionar",

@@ -2,16 +2,24 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { Tolgee, FormatSimple } from "@tolgee/react";
+import { FormatIcu } from "@tolgee/format-icu";
+import { toast } from "sonner";
 import { TimelineCommitViolationError } from "@/db-functions/timelineChanges";
 import { TimelineWriteError } from "@/db-functions/timelineErrors";
 import { TIMELINE_INSPECTOR_STRINGS } from "@/components/inspector/timelineInspectorStrings";
 import { conToastError } from "@/utilities/utils";
+import { TimelineEditRefusedError } from "../timelineEditRefusals";
 import {
     TIMELINE_DB_ERROR_MESSAGE,
     TIMELINE_ERROR_MESSAGES,
+    HELD_CONFLICT_MESSAGES,
     TIMELINE_LEGACY_CONVERSION_MESSAGE,
     TIMELINE_NOT_READY_MESSAGE,
     isLegacyConversionViolation,
+    NOT_JOINED_MESSAGE,
+    NOT_JOINED_REASONS,
+    notJoinedMessage,
     TIMELINE_UNKNOWN_ERROR_MESSAGE,
     timelineErrorCode,
     timelineErrorMessage,
@@ -23,6 +31,7 @@ import {
  */
 
 vi.mock("@/utilities/utils", () => ({ conToastError: vi.fn() }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), warning: vi.fn() } }));
 
 afterEach(() => vi.mocked(conToastError).mockReset());
 
@@ -42,6 +51,8 @@ const SPEC_CODES = [
     "E-A3",
 ];
 const COMBINED_CODES = ["E-A1/E-A2", "E-T3/E-T4"];
+/** The Held marks' commit-time codes (ADR 0001 amendment 2026-10-30) */
+const HELD_CODES = ["E-H1", "E-H3"];
 
 describe("timelineErrorMessage", () => {
     it.each([...SPEC_CODES, ...COMBINED_CODES])(
@@ -63,7 +74,7 @@ describe("timelineErrorMessage", () => {
         );
         expect(new Set(messages).size).toBe(messages.length);
         expect(Object.keys(TIMELINE_ERROR_MESSAGES).sort()).toEqual(
-            [...SPEC_CODES, ...COMBINED_CODES].sort(),
+            [...SPEC_CODES, ...COMBINED_CODES, ...HELD_CODES].sort(),
         );
     });
 
@@ -84,6 +95,56 @@ describe("timelineErrorMessage", () => {
         const message = timelineErrorMessage(error);
         expect(message).toBe(TIMELINE_ERROR_MESSAGES["E-T6"]!.defaultMessage);
         expect(message).not.toContain("transition 4");
+    });
+
+    it.each(HELD_CODES)(
+        "maps a Held mark's commit-time %s, which names no transition",
+        (code) => {
+            const error = new TimelineCommitViolationError([
+                {
+                    code,
+                    transitionId: null,
+                    detail: "marcher 3 is Held over [17, 25)",
+                },
+            ]);
+            expect(error.message).toBe(
+                `${code}: marcher 3 is Held over [17, 25)`,
+            );
+            expect(timelineErrorMessage(error)).toBe(
+                TIMELINE_ERROR_MESSAGES[code]!.defaultMessage,
+            );
+        },
+    );
+
+    it("an E-H1 that knows who names the marchers and the page, and points to Clear this page", () => {
+        const fill = (
+            _key: string,
+            text: string,
+            params?: Record<string, string>,
+        ) =>
+            text.replace(
+                /\{(\w+)\}/g,
+                (_, name: string) => params?.[name] ?? "",
+            );
+        const violation = {
+            code: "E-H1",
+            transitionId: null,
+            detail: "marcher 3 is Held over [17, 25)",
+        };
+        const one = new TimelineCommitViolationError([violation], {
+            names: ["T1"],
+            pages: ["3"],
+        });
+        expect(timelineErrorMessage(one, { translate: fill })).toBe(
+            "T1 is Held on Page 3. Clear this page to remove the hold, or drag inside it to move it.",
+        );
+        const many = new TimelineCommitViolationError([violation], {
+            names: ["T1", "T2"],
+            pages: ["3", "5"],
+        });
+        expect(timelineErrorMessage(many, { translate: fill })).toBe(
+            "T1 and T2 are Held on Pages 3 and 5. Clear this page to remove the holds, or drag inside them to move them.",
+        );
     });
 
     it("E-T1 says a transition spans its timeline (C-11), from a row trigger or the commit check", () => {
@@ -220,6 +281,19 @@ describe("toastTimelineError", () => {
         );
     });
 
+    it("shows marchers a holds command left in their move as a warning, since the rest was done", () => {
+        const error = new TimelineEditRefusedError("inShapeOrFollowTheLeader", {
+            marcherIds: [3],
+            message: "B3 is in a shape, so it keeps its move here.",
+        });
+        toastTimelineError(error);
+        expect(toast.warning).toHaveBeenCalledWith(
+            "B3 is in a shape, so it keeps its move here.",
+            { id: "timeline-refused-inShapeOrFollowTheLeader" },
+        );
+        expect(toast.error).not.toHaveBeenCalled();
+    });
+
     it("uses the fallback for an error that isn't a timeline refusal", () => {
         const error = new Error("boom");
         toastTimelineError(error, "Error moving marchers");
@@ -227,6 +301,49 @@ describe("toastTimelineError", () => {
             "Error moving marchers",
             error,
         );
+    });
+});
+
+describe("notJoinedMessage", () => {
+    const labels = new Map([
+        [3, "T3"],
+        [4, "T4"],
+        [7, "B1"],
+    ]);
+    const nameOf = (id: number) => labels.get(id);
+
+    it("names the marchers and words the reason for a join (#470)", () => {
+        expect(
+            notJoinedMessage(
+                [{ marcherIds: [3, 4], reason: "secondMove" }],
+                nameOf,
+            ),
+        ).toBe(
+            "T3 and T4 couldn't join their moves: they'd have two moves over the same counts.",
+        );
+    });
+
+    it("puts each refused join in the one toast", () => {
+        expect(
+            notJoinedMessage(
+                [
+                    { marcherIds: [3], reason: "partway" },
+                    { marcherIds: [7], reason: "overlap" },
+                ],
+                nameOf,
+            ),
+        ).toBe(
+            "T3 couldn't join their moves: a marcher joins or leaves the next move partway. B1 couldn't join their moves: the joined move would run into another of their moves on the same layer.",
+        );
+    });
+
+    it("counts marchers whose names aren't known", () => {
+        expect(
+            notJoinedMessage(
+                [{ marcherIds: [3, 99], reason: "overlap" }],
+                nameOf,
+            ),
+        ).toMatch(/^2 marchers couldn't join their moves: /);
     });
 });
 
@@ -249,15 +366,16 @@ describe("en.json", () => {
             TIMELINE_UNKNOWN_ERROR_MESSAGE,
             TIMELINE_NOT_READY_MESSAGE,
             TIMELINE_LEGACY_CONVERSION_MESSAGE,
+            NOT_JOINED_MESSAGE,
+            ...Object.values(NOT_JOINED_REASONS),
+            ...Object.values(HELD_CONFLICT_MESSAGES),
         ])
             expect(lookup(m.key), m.key).toBe(m.defaultMessage);
     });
 
-    it("carries the keep menu entries, the chain's name and the Delete-move toast (pre-merge review U8)", () => {
+    it("carries the Set as shown entry, the chain's name and the Delete-move toast (pre-merge review U8)", () => {
         for (const [key, text] of Object.entries({
-            "timeline.rangeMenu.keepHere": "Keep selected marchers here",
-            "timeline.rangeMenu.followAgain":
-                "Let selected marchers follow again",
+            "timeline.rangeMenu.setAsShown": "Set as shown",
             "timeline.rangeMenu.deleteWithMoves": "Delete page and its moves",
             "timeline.keep.chain.ariaLabel": "Page {page}: {label}. {hint}",
             "timeline.moveDeleted.message": "Deleted {label}",
@@ -276,5 +394,34 @@ describe("en.json", () => {
     it("carries every inspector string", () => {
         for (const [key, text] of Object.entries(TIMELINE_INSPECTOR_STRINGS))
             expect(lookup(key), key).toBe(text);
+    });
+
+    it("words the holds skip notice as the write does, with the marcher names as parameters", async () => {
+        const key = "timeline.edit.inShapeOrFollowTheLeader";
+        const tolgee = Tolgee()
+            .use(FormatSimple())
+            .use(FormatIcu())
+            .init({
+                language: "en",
+                staticData: { en: { [key]: lookup(key) as string } },
+            });
+        await tolgee.run();
+        const say = (shapeNames: string[], leaderNames: string[]): string =>
+            tolgee.t(key, {
+                count: shapeNames.length + leaderNames.length,
+                shapeCount: shapeNames.length,
+                shapeNames: shapeNames.join(" and "),
+                leaderCount: leaderNames.length,
+                leaderNames: leaderNames.join(" and "),
+            });
+        expect(say(["B1"], [])).toBe(
+            "B1 is in a shape, so it keeps its move here.",
+        );
+        expect(say([], ["T1", "T2"])).toBe(
+            "T1 and T2 follow the leader, so they keep their move here.",
+        );
+        expect(say(["B1", "B2"], ["T1"])).toBe(
+            "B1 and B2 are in a shape, and T1 follows the leader, so they keep their move here.",
+        );
     });
 });

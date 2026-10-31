@@ -1,8 +1,11 @@
 import { useMemo } from "react";
 import type { Resolver } from "@openmarch/core";
 import { db } from "@/global/database/db";
+import { toast } from "sonner";
 import tolgee from "@/global/singletons/Tolgee";
 import type { DbConnection } from "@/db-functions/types";
+import type { NotJoined } from "@/db-functions/timelineJoinAtBeat";
+import { marcherLabels } from "@/db-functions/timelineMembership";
 import {
     unsetMarchersAt,
     type UnsetResult,
@@ -15,7 +18,7 @@ import {
 } from "@/stores/TimelineSelectionStore";
 import { lockedOnBox, useBasicLocksStore } from "./basicLocks";
 import { toastBasicLock } from "./basicLockToast";
-import { toastTimelineError } from "./timelineErrorMessages";
+import { notJoinedMessage, toastTimelineError } from "./timelineErrorMessages";
 import {
     followingPages,
     pageKeepStates,
@@ -24,7 +27,6 @@ import {
 import { keepPagesOfBoxes } from "./timelineOnlyThisPage";
 import { isSetAt, marcherSetBeats } from "./timelineSetFollowing";
 import { resolverSpans, useTimelineResolverStore } from "./timelineStore";
-import { applyKeptChange, useKeptAssignmentsStore } from "./useKeepLaterPages";
 
 /**
  * **Unset here** as the UI runs it (Set vs Following, #300 and #304): the selected marchers that
@@ -34,12 +36,11 @@ import { applyKeptChange, useKeptAssignmentsStore } from "./useKeepLaterPages";
  * (`unsetFollowingPages`). Each is one undo step; a refusal is a toast, never thrown.
  */
 
-const NOTHING: UnsetResult = { unset: [], markers: { added: [], removed: [] } };
+const NOTHING: UnsetResult = { unset: [], joined: [], notJoined: [] };
 
 /** What the Unset actions read for some marchers, worked out once per show version. */
 interface UnsetReads {
     resolver: Resolver | null;
-    kept: ReadonlySet<number>;
     marcherIds: readonly number[];
     boxes?: readonly PageBox[];
 }
@@ -48,14 +49,9 @@ interface UnsetReads {
  * The Unset actions' reads for `marcherIds` at any count (`unsetTargets`, `unsetFollowingPages`).
  * Each marcher's Set beats are worked out once, and each count's answers the first time it's
  * asked, so scrubbing with a large selection looks counts up instead of walking every move again.
- * Make a new one when the resolver version, kept markers, selection or page boxes change.
+ * Make a new one when the resolver version, selection or page boxes change.
  */
-export function unsetReader({
-    resolver,
-    kept,
-    marcherIds,
-    boxes = [],
-}: UnsetReads): {
+export function unsetReader({ resolver, marcherIds, boxes = [] }: UnsetReads): {
     targets: (beat: number) => number[];
     followingPages: (beat: number) => string[] | null;
 } {
@@ -65,7 +61,7 @@ export function unsetReader({
             resolver
                 ? marcherIds.map((m) => [
                       m,
-                      marcherSetBeats(resolverSpans(resolver, m), kept),
+                      marcherSetBeats(resolverSpans(resolver, m)),
                   ])
                 : [],
         );
@@ -112,7 +108,6 @@ export function unsetReader({
             pages,
             marcherIds: lastInPage,
             spansOf: (id) => resolverSpans(resolver, id),
-            kept,
         });
         return followingPages(states, holding.id)?.names ?? null;
     };
@@ -134,12 +129,11 @@ export function unsetTargets({
 function useUnsetReader(marcherIds: readonly number[]) {
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const version = useTimelineResolverStore((s) => s.version);
-    const kept = useKeptAssignmentsStore((s) => s.ids);
     const boxes = useTimelineSelectionStore((s) => s.pageBoxes);
     return useMemo(() => {
         void version; // a new version means new spans
-        return unsetReader({ resolver, kept, marcherIds, boxes });
-    }, [resolver, version, kept, marcherIds, boxes]);
+        return unsetReader({ resolver, marcherIds, boxes });
+    }, [resolver, version, marcherIds, boxes]);
 }
 
 /** `unsetTargets` for `marcherIds` at the count shown, kept current. */
@@ -229,7 +223,6 @@ export function useKeyframeUnsetMenu(
             stateFor: (beat: number) =>
                 unsetMenuStateAt({
                     resolver: useTimelineResolverStore.getState().resolver,
-                    kept: useKeptAssignmentsStore.getState().ids,
                     boxes: useTimelineSelectionStore.getState().pageBoxes,
                     marcherIds,
                     beat,
@@ -288,7 +281,6 @@ async function unsetSetMarchers(
 ): Promise<UnsetResult> {
     let targets = unsetTargets({
         resolver: useTimelineResolverStore.getState().resolver,
-        kept: useKeptAssignmentsStore.getState().ids,
         marcherIds,
         beat,
     });
@@ -311,7 +303,11 @@ async function unsetSetMarchers(
             keepLaterPages,
             tidyShared: basic,
         });
-        applyKeptChange(result.markers);
+        if (result.notJoined.length > 0)
+            void toastNotJoined(result.notJoined, database);
+        // Shape and follow-the-leader members of part of a group kept the plain Remove: say who
+        // and why (a warning, since the rest was written)
+        if (result.notTakenApart) toastTimelineError(result.notTakenApart);
         return result;
     } catch (error) {
         toastTimelineError(
@@ -339,5 +335,27 @@ function toastLockedUnset(count: number, wrote: boolean): void {
                   "{count, plural, one {One marcher uses Expert moves on this page. Switch to Expert to edit it.} other {# marchers use Expert moves on this page. Switch to Expert to edit them.}}",
                   { count },
               ),
+    );
+}
+
+/**
+ * The toast for marchers whose moves around the count weren't joined (#470): they kept the plain
+ * Remove. Their labels are read only here, when there is something to say.
+ */
+async function toastNotJoined(
+    groups: readonly NotJoined[],
+    database: DbConnection,
+): Promise<void> {
+    const labels = await marcherLabels(
+        database,
+        groups.flatMap((g) => g.marcherIds),
+    );
+    toast.warning(
+        notJoinedMessage(
+            groups,
+            (id) => labels.get(id),
+            (key, text, params) => tolgee.t(key, text, params),
+        ),
+        { id: "timeline-not-joined" },
     );
 }

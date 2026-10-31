@@ -15,7 +15,6 @@ import {
     updateTimelineTransitionsInTransaction,
 } from "../timelineTransitionsInTransaction";
 import { createTimelineAssignmentsInTransaction } from "../timelineAssignments";
-import { markAssignmentsKeptInTransaction } from "../timelineKeptMarkers";
 import { splitTimelineAtBeat } from "../timelineSplitAtBeat";
 import { splitMarchersIntoNewMove } from "../timelineSplitMoves";
 
@@ -33,7 +32,6 @@ const TABLES = [
     schema.timeline_transitions,
     schema.timeline_assignments,
     schema.timeline_slot_destinations,
-    schema.timeline_kept_assignments,
 ];
 
 const dataOf = async (db: DbConnection) => {
@@ -441,34 +439,6 @@ describeDbTests("Split at playhead (UI-27)", (it) => {
             path_style: "follow_the_leader",
             start_beat: 13,
         });
-    });
-
-    it("a kept row split in two is kept in both halves", async ({
-        db,
-        marchersAndPages: _,
-    }) => {
-        await convertPagesToTimeline(db);
-        const { timeline, transition } = await page2(db);
-        const rows = await rowsOf(db, transition.id);
-        await transactionWithHistory(db, "keep", (tx) =>
-            markAssignmentsKeptInTransaction(tx, [rows[0]!.id]),
-        );
-        const result = await splitTimelineAtBeat({
-            db,
-            timelineId: timeline.id,
-            beat: 12,
-        });
-        const kept = await db
-            .select()
-            .from(schema.timeline_kept_assignments)
-            .all();
-        const [made] = await transitionsOf(db, result.before.id);
-        const firstRow = (await rowsOf(db, made!.id)).find(
-            (r) => r.marcher_id === rows[0]!.marcher_id,
-        )!;
-        expect(kept.map((k) => k.assignment_id).sort((a, b) => a - b)).toEqual(
-            [rows[0]!.id, firstRow.id].sort((a, b) => a - b),
-        );
     });
 
     it("refuses a beat on or outside the move's ends, a fraction, and a taken half", async ({

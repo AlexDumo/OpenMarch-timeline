@@ -422,14 +422,14 @@ const STATIC_ACTIONS = {
 
     // Batch editing
     setAllMarchersToPreviousPage: {
-        labelKey: "actions.batchEdit.setAllToPrevious",
+        labelKey: "actions.batchEdit.clearThisPageAll",
         category: "batchEdit",
         editsDrill: true,
         scope: "canvas",
         defaultBindings: ["$mod+Shift+P", "Control+Shift+P"],
     },
     setSelectedMarchersToPreviousPage: {
-        labelKey: "actions.batchEdit.setSelectedToPrevious",
+        labelKey: "actions.batchEdit.clearThisPageSelected",
         category: "batchEdit",
         editsDrill: true,
         scope: "canvas",
@@ -786,17 +786,6 @@ const STATIC_ACTIONS = {
         editsDrill: false,
         scope: "global",
         defaultBindings: ["$mod+A", "Control+A"],
-    },
-
-    // UI-18 keep later pages: K keeps the selection where it holds on this page, or lets it
-    // follow again (timeline mode)
-    toggleKeepOnPage: {
-        labelKey: "actions.timeline.toggleKeepOnPage",
-        category: "timeline",
-        editsDrill: true,
-        scope: "canvas",
-        defaultBindings: ["K"],
-        ignoreRepeat: true,
     },
 
     // Set vs Following (#304): the selected marchers Set on the count shown lose that

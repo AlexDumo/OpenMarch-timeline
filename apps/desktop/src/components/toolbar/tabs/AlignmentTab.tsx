@@ -94,7 +94,7 @@ function SetMarcherPositionsDropdown() {
                             onRun={close}
                             className="text-text touch:min-h-44 px-6 py-4"
                         >
-                            <T keyName="toolbar.alignment.toPreviousPagePositions" />
+                            <T keyName="toolbar.alignment.clearThisPage" />
                         </ActionButton>
                         <ActionButton
                             action="setAllMarchersToNextPage"
