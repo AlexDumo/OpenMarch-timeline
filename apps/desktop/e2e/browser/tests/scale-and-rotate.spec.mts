@@ -17,7 +17,8 @@ import type { FieldTestHandle } from "../../../src/field/fieldTestApi";
 // #189 user stories 46 to 55, rules table rows Handles, Lock X / Lock Y,
 // Click vs drag; keys from the modifier roles design, version A): corners
 // scale uniformly and constrain (Cmd/Ctrl) frees them; middle handles scale
-// one axis; rotation snaps to 15°, fine (Shift) turns it in whole degrees at
+// one axis and constrain scales the other with it; from center (Alt) keeps the
+// box's center still (#545); rotation snaps to 15°, fine (Shift) turns it in whole degrees at
 // the pointer's full speed, and the Snap toggle off (Shift+M) turns it freely;
 // fine scales at a quarter of the pointer's speed; no flipping; the box fits
 // the marchers again after each transform. A transform is dropped through the
@@ -281,18 +282,68 @@ test("a middle handle scales one axis only", async ({ show }) => {
     await expectCanvasMatchesShow(show);
 });
 
-test("change: constrain does nothing on a middle handle: it still scales one axis", async ({
+test("change: constrain (Cmd/Ctrl) on a middle handle scales both axes, the opposite side still", async ({
     show,
 }) => {
     const { page } = show;
     await selectAll(page);
     const before = spread(asPositions(PAGE_0));
+    const center = middle(asPositions(PAGE_0));
 
     await dragHandle(page, "s", { x: 60, y: 80 }, { hold: ["ControlOrMeta"] });
 
     const saved = await savedChange(show);
-    expect(spread(saved).height / before.height).toBeGreaterThan(1.2);
-    expect(saved.map((p) => p.x)).toEqual(asPositions(PAGE_0).map((p) => p.x));
+    const after = spread(saved);
+    const scaleY = after.height / before.height;
+    expect(scaleY).toBeGreaterThan(1.2);
+    expect(after.width / before.width).toBeCloseTo(scaleY, 1);
+    // The top stays put; across, the formation grows evenly about its center
+    expect(Math.abs(after.top - before.top)).toBeLessThan(6);
+    expect(Math.abs(middle(saved).x - center.x)).toBeLessThan(6);
+    await expectCanvasMatchesShow(show);
+});
+
+test("from center (Alt) scales a corner about the box's center, as one undo step", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectAll(page);
+    const steps = await undoSteps(show);
+    const before = spread(asPositions(PAGE_0));
+    const center = middle(asPositions(PAGE_0));
+
+    await dragHandle(page, "se", { x: 60, y: 0 }, { hold: ["Alt"] });
+
+    const saved = await savedChange(show);
+    const after = spread(saved);
+    const scaleX = after.width / before.width;
+    expect(scaleX).toBeGreaterThan(1.2);
+    expect(after.height / before.height).toBeCloseTo(scaleX, 1);
+    // Grown on every side: the center stays where it was
+    expect(after.left).toBeLessThan(before.left - 6);
+    expect(after.top).toBeLessThan(before.top - 6);
+    expect(Math.abs(middle(saved).x - center.x)).toBeLessThan(6);
+    expect(Math.abs(middle(saved).y - center.y)).toBeLessThan(6);
+    // Alt on a handle is from center, never a subtract
+    expect((await readField(page)).selection).toEqual([1, 2, 3, 4]);
+    await expectCanvasMatchesShow(show);
+    expect(await undoSteps(show)).toBe(steps + 1);
+});
+
+test("from center (Alt) on a middle handle scales its axis about the center line", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectAll(page);
+    const before = spread(asPositions(PAGE_0));
+    const center = middle(asPositions(PAGE_0));
+
+    await dragHandle(page, "e", { x: 60, y: 40 }, { hold: ["Alt"] });
+
+    const saved = await savedChange(show);
+    expect(spread(saved).width / before.width).toBeGreaterThan(1.2);
+    expect(saved.map((p) => p.y)).toEqual(asPositions(PAGE_0).map((p) => p.y));
+    expect(Math.abs(middle(saved).x - center.x)).toBeLessThan(6);
     await expectCanvasMatchesShow(show);
 });
 
