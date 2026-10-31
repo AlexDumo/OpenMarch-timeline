@@ -35,6 +35,7 @@ import {
     withFillInterval,
 } from "./lineFill";
 import {
+    cornerGaps,
     closeLine,
     cornerOffInterval,
     curveInFrame,
@@ -655,7 +656,11 @@ const CORNERS: ToolChoice<LineParams> = {
 };
 
 /** Why a point's own marcher answer does nothing now (#569), or undefined when it counts */
-function marcherReason(p: LineParams): string | undefined {
+function marcherReason(
+    p: LineParams,
+    n: number,
+    index: number,
+): string | undefined {
     if (p.spacing.mode === "path")
         return tolgee.t(
             "shapes.kinds.line.menu.marcherPath",
@@ -666,8 +671,25 @@ function marcherReason(p: LineParams): string | undefined {
             "shapes.kinds.line.menu.marcherFilled",
             "A filled line's spots follow its fill",
         );
+    // Held points only hold marchers with a gap for every stretch: too few marchers, and the
+    // answer would change nothing
+    if (cornerGaps(withPointMarcher(p, index, true), n) === null)
+        return tolgee.t(
+            "shapes.kinds.line.menu.marcherTooFew",
+            "Too few marchers for one on every point",
+        );
     return undefined;
 }
+
+/** `p` with point `index`'s own marcher answer set to `marcher` */
+const withPointMarcher = (
+    p: LineParams,
+    index: number,
+    marcher: boolean,
+): LineParams => ({
+    ...p,
+    points: p.points.map((q, i) => (i === index ? { ...q, marcher } : q)),
+});
 
 /** The point menu's answers to whether a marcher stands on the point (#569) */
 const MARCHER_VALUES = {
@@ -715,10 +737,14 @@ function lineCaption(gives: boolean, follows: boolean): string {
  * Where the answer does nothing the section is greyed out with why, but a stored answer can still
  * be dropped by following again.
  */
-function marcherSection(p: LineParams, index: number): ToolMenuSection {
+function marcherSection(
+    p: LineParams,
+    n: number,
+    index: number,
+): ToolMenuSection {
     const own = p.points[index]!.marcher;
     const follows = own === undefined;
-    const disabled = marcherReason(p);
+    const disabled = marcherReason(p, n, index);
     const gives = lineGivesMarcher(p, index);
     // Where the answer counts for nothing, the line's setting isn't shown as one either
     const now = own ?? (disabled ? undefined : gives);
@@ -763,7 +789,7 @@ function marcherSection(p: LineParams, index: number): ToolMenuSection {
 }
 
 /** Right-click on point `index` (#569) */
-function pointMenu(p: LineParams, index: number): ToolMenuSection[] {
+function pointMenu(p: LineParams, n: number, index: number): ToolMenuSection[] {
     const q = p.points[index]!;
     const smoothPoint = q.tension > 0;
     const closed = isClosed(p);
@@ -803,7 +829,7 @@ function pointMenu(p: LineParams, index: number): ToolMenuSection[] {
         },
     ];
     // An open line's ends always hold a marcher
-    if (!end) sections.push(marcherSection(p, index));
+    if (!end) sections.push(marcherSection(p, n, index));
     const fewest = p.points.length <= minPoints(p);
     sections.push({
         items: [
@@ -914,9 +940,9 @@ function segmentMenu(p: LineParams, index: number): ToolMenuSection[] {
  * segment's new point and whether it's straight or curved.
  */
 const MENU: ToolHandleMenu<LineParams> = {
-    sections(p, _n, key) {
+    sections(p, n, key) {
         const index = pointOf(p, key);
-        if (index >= 0) return pointMenu(p, index);
+        if (index >= 0) return pointMenu(p, n, index);
         const segment = midpointOf(p, key);
         return segment >= 0 ? segmentMenu(p, segment) : null;
     },
@@ -967,7 +993,7 @@ const MENU: ToolHandleMenu<LineParams> = {
             // off sets the other answer than the line's, so the override is one click
             case "marcher-follow": {
                 const follows = p.points[index]!.marcher === undefined;
-                if (follows && marcherReason(p)) return null;
+                if (follows && marcherReason(p, n, index)) return null;
                 return {
                     params: setPointMarcher(
                         p,
@@ -981,7 +1007,7 @@ const MENU: ToolHandleMenu<LineParams> = {
             // Picked while following, the line's own answer is set over it all the same
             case "marcher-always":
             case "marcher-even": {
-                if (marcherReason(p)) return null;
+                if (marcherReason(p, n, index)) return null;
                 const next = setPointMarcher(
                     p,
                     n,

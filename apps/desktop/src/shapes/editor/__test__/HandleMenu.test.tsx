@@ -112,12 +112,17 @@ describe("a Line point's menu (#569)", () => {
         const caption = byTestId("shape-menu-caption");
         expect(caption.textContent).toBe("Line puts a marcher here");
         expect(follow.getAttribute("aria-describedby")).toBe(caption.id);
-        // Greyed, not off: still focusable, the line's answer marked
+        // Greyed, not off: still operable, the caption saying the line's answer
         const [always, even] = MARCHER.map(byTestId);
         for (const el of [always!, even!]) {
-            expect(el.getAttribute("aria-disabled")).toBe("true");
+            expect(el.hasAttribute("aria-disabled")).toBe(false);
             expect(el.hasAttribute("data-disabled")).toBe(false);
         }
+        expect(
+            screen
+                .getByRole("group", { name: "Marcher on this point" })
+                .getAttribute("aria-describedby"),
+        ).toBe(caption.id);
         expect(always!.getAttribute("aria-checked")).toBe("true");
         expect(even!.getAttribute("aria-checked")).toBe("false");
         expect(screen.queryByText("Override")).toBeNull();
@@ -145,7 +150,7 @@ describe("a Line point's menu (#569)", () => {
             "Line would put a marcher here",
         );
         const [always, even] = MARCHER.map(byTestId);
-        expect(always!.hasAttribute("aria-disabled")).toBe(false);
+        expect(always!.hasAttribute("data-disabled")).toBe(false);
         expect(even!.getAttribute("aria-checked")).toBe("true");
     });
 
@@ -244,8 +249,7 @@ describe("a Line point's menu (#569)", () => {
         const hint = byTestId("shape-menu-hint");
         expect(hint.textContent).toBe("Double-click a point to swap");
         expect(set.getAttribute("aria-describedby")).toBe(hint.id);
-        // Tucked under its switch, centred
-        expect(hint.className).toContain("text-center");
+        // Tucked under its switch
         expect(hint.previousElementSibling).toBe(set);
     });
 

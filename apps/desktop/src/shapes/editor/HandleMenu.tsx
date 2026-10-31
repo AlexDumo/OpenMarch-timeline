@@ -225,6 +225,8 @@ export default function HandleMenu() {
                 )}
                 <DropdownMenu.RadioGroup
                     aria-label={section.label}
+                    // Greyed while following, not off: the caption says the line's answer
+                    aria-describedby={section.caption ? captionId : undefined}
                     value={answers.find((i) => i.checked)?.value ?? ""}
                     data-following={following || undefined}
                     className={clsx(
@@ -239,10 +241,6 @@ export default function HandleMenu() {
                             value={item.value}
                             data-testid={`shape-menu-${item.value}`}
                             disabled={item.disabled !== undefined}
-                            // Greyed, not off: a click sets it over the shape's
-                            {...(following && item.disabled === undefined
-                                ? { "aria-disabled": true }
-                                : {})}
                             onSelect={(event) => {
                                 event.preventDefault();
                                 if (following || !item.checked)

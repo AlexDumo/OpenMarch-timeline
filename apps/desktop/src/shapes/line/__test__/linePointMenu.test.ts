@@ -292,6 +292,31 @@ describe("a Line's point menu (#569)", () => {
         expect(item(smooth, "p1", "marcher-even")?.checked).toBe(true);
     });
 
+    it("greys the marcher answers out with why when too few marchers hold every point", () => {
+        // Four stretches need at least four gaps: three marchers have two
+        const zigzag = L({
+            points: [
+                corner(0, 0),
+                corner(40, 0),
+                corner(40, 40),
+                corner(80, 40),
+                corner(80, 80),
+            ],
+        });
+        const section = lineTool.menu!.sections(zigzag, 3, "p1")![1]!;
+        const reason = "Too few marchers for one on every point";
+        expect(section.caption).toBe(reason);
+        for (const value of ["marcher-always", "marcher-even"])
+            expect(section.items.find((i) => i.value === value)).toMatchObject({
+                disabled: reason,
+                checked: false,
+            });
+        // With enough marchers the answers count again
+        expect(lineTool.menu!.sections(zigzag, 8, "p1")![1]!.caption).toBe(
+            "Line puts a marcher here",
+        );
+    });
+
     it("shows a point's own answer with following off, and what the line would do", () => {
         const even = marcherAt(L(), 1, false);
         expect(item(even, "p1", "marcher-follow")?.checked).toBe(false);
