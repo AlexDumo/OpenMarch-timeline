@@ -22,7 +22,7 @@ import {
 } from "../frame/gestures";
 import { toolEnvFor } from "../tool/toolEnv";
 import { pressShapeKeys, type HeldFieldGesture } from "../field/heldGesture";
-import { commitBox } from "./commitBox";
+import { commitBox, sameParams } from "./commitBox";
 import {
     clearLiveSelection,
     liveTargets,
@@ -30,7 +30,9 @@ import {
     openLive,
     pressLive,
     releaseLive,
+    reopenLive,
     type LiveBox,
+    type LiveClick,
 } from "./liveBox";
 import type { PlacedBox } from "./placedBox";
 import { enterBox } from "./boxSelection";
@@ -164,6 +166,8 @@ export class LiveBoxMode implements FieldMode {
     private shown: Shown | null = null;
     /** The held roles of the gesture under way, from its press to its end */
     private held: HeldFieldGesture | null = null;
+    /** The shape this mode last saved, until it's read back: the selection outlives only that */
+    private saved: unknown = undefined;
 
     constructor(
         box: PlacedBox,
@@ -172,10 +176,17 @@ export class LiveBoxMode implements FieldMode {
         this.live = openLive(box);
     }
 
-    /** The box was saved or changed elsewhere; mid-gesture, the gesture's own box stays */
+    /**
+     * The box was saved or changed elsewhere; mid-gesture, the gesture's own box stays. The
+     * selected handle stays only through this mode's own save (#557): an undo or redo clears it.
+     */
     setBox(box: PlacedBox): void {
         if (this.live.gesture) return;
-        this.live = openLive(box, this.live.selected);
+        const saved = this.saved;
+        // Read again unchanged (the playhead moved), the save may still be on its way
+        if (!sameParams(box.params, this.live.box.params))
+            this.saved = undefined;
+        this.live = reopenLive(this.live, box, saved);
         this.emit();
     }
 
@@ -272,15 +283,16 @@ export class LiveBoxMode implements FieldMode {
         this.held = null;
     }
 
-    release(pointer: FieldPointer, click: { double: boolean } | null): void {
+    release(pointer: FieldPointer, click: LiveClick | null): void {
         this.endHeld();
         const before = this.live;
         const out = releaseLive(before, click);
         this.live = out.live;
         this.emit();
-        if (out.changed)
+        if (out.changed) {
+            this.saved = out.live.params;
             void commitBox(before.box, out.live.params, this.queryClient);
-        else if (click?.double) this.enterAt(pointer);
+        } else if (out.enter) this.enterAt(pointer);
     }
 
     cancel(): void {

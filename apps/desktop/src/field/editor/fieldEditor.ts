@@ -360,9 +360,14 @@ export interface FieldMode {
     move(pointer: FieldPointer): void;
     /**
      * The press it claimed ended. `click` when it moved less than the click
-     * slop; `double` when that click came soon after another click it took.
+     * slop; `double` when that click came soon after another click, and
+     * `ownFirst` when that first click was the mode's too, not the editor's
+     * (the click on a member that turned a placed box's mode on).
      */
-    release(pointer: FieldPointer, click: { double: boolean } | null): void;
+    release(
+        pointer: FieldPointer,
+        click: { double: boolean; ownFirst: boolean } | null,
+    ): void;
     /** The press it claimed was lost: nothing is saved. */
     cancel(): void;
     /** The cursor over `pointer` with no button down, or null for the editor's. */
@@ -427,7 +432,8 @@ export class FieldEditor {
      */
     private modePress: {
         start: FieldPointer;
-        double: boolean;
+        /** What its release tells the mode if it's a click */
+        click: { double: boolean; ownFirst: boolean };
         dragged: boolean;
     } | null = null;
     /** The prop tool, while it's on (C2.1). */
@@ -512,7 +518,10 @@ export class FieldEditor {
                 start: pointer,
                 // The first click may have been the editor's: the click
                 // on a box's member that turned the mode on
-                double: last !== null && this.isSoonAfter(last, pointer),
+                click: {
+                    double: last !== null && this.isSoonAfter(last, pointer),
+                    ownFirst: last?.mode === true,
+                },
                 dragged: false,
             };
             this.mode.press(pointer, modePress);
@@ -610,7 +619,7 @@ export class FieldEditor {
                 !modePress.dragged && !isPastSlop(modePress.start, pointer);
             // A double-click's second click starts no third
             this.lastClick =
-                click && !modePress.double
+                click && !modePress.click.double
                     ? {
                           time: this.now(),
                           screen: modePress.start.screen,
@@ -618,10 +627,7 @@ export class FieldEditor {
                           mode: true,
                       }
                     : null;
-            this.mode?.release(
-                pointer,
-                click ? { double: modePress.double } : null,
-            );
+            this.mode?.release(pointer, click ? modePress.click : null);
             this.emit();
             return;
         }

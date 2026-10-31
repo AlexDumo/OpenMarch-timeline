@@ -426,12 +426,19 @@ export function release(
         ...(g.type === "draw" || g.type === "edit"
             ? {}
             : {
-                  selected: selectionAfter(
+                  // Only a handle the shape still has
+                  selected: selectionIn(
                       state.kind,
+                      state.params,
                       state.spots,
-                      g,
-                      click,
-                      state.selected,
+                      selectionAfter(
+                          state.kind,
+                          state.spots,
+                          g,
+                          click,
+                          state.selected,
+                          state.params,
+                      ),
                   ),
               }),
     };

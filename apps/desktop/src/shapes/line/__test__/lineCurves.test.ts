@@ -16,6 +16,7 @@ import {
     openLive,
     pressLive,
     releaseLive,
+    reopenLive,
 } from "../../placed/liveBox";
 import {
     boxesAt,
@@ -639,6 +640,104 @@ describe("a placed curve", () => {
         for (const q of next.points.slice(1, -1))
             expect(members.some((m) => dist(m, q) < 1e-6)).toBe(true);
     });
+
+    /** An open Line through four corners, its ends apart */
+    const OPEN4 = [
+        { x: 0, y: 0 },
+        { x: 40, y: 0 },
+        { x: 40, y: 40 },
+        { x: 0, y: 40 },
+    ];
+
+    it("drops the selection when the selected end, dragged onto the other, closes the line", () => {
+        const placed = readBack(recipeOf(clicked(lineTool, N, OPEN4)));
+        for (const [from, to] of [
+            ["p0", "p3"],
+            ["p3", "p0"],
+        ] as const) {
+            const start = handleAt(placed, from);
+            const selected = releaseLive(
+                pressLive(openLive(placed), start, env)!,
+                { double: false },
+            ).live;
+            expect(selected.selected).toBe(from);
+            let live = pressLive(selected, start, env)!;
+            live = moveLive(live, handleAt(placed, to), env);
+            const out = releaseLive(live, null);
+            expect((out.live.params as LineParams).closed).toBe(true);
+            expect(out.live.selected).toBeNull();
+        }
+    });
+
+    it("keeps the selection when its own save comes back, and drops it for any other change (undo)", () => {
+        const placed = readBack(recipeOf(arch()));
+        const selected = releaseLive(
+            pressLive(openLive(placed), handleAt(placed, "p2"), env)!,
+            { double: false },
+        ).live;
+        expect(selected.selected).toBe("p2");
+        // Read again unchanged (the playhead moved): kept
+        expect(reopenLive(selected, readBack(recipeOf(arch()))).selected).toBe(
+            "p2",
+        );
+        // A tension dragged and saved: the box read back is that save, kept
+        let live = pressLive(selected, handleAt(placed, "t2", "p2"), env)!;
+        live = moveLive(live, { x: 100, y: -30 }, env);
+        const out = releaseLive(live, null);
+        expect(out.changed).toBe(true);
+        const saved = {
+            ...placed,
+            params: JSON.parse(JSON.stringify(out.live.params)),
+        };
+        const readBackSave = reopenLive(out.live, saved, out.live.params);
+        expect(readBackSave.selected).toBe("p2");
+        // Undone: the box comes back from outside, nothing selected
+        const undone = reopenLive(readBackSave, placed);
+        expect(undone.selected).toBeNull();
+        expect(undone.params).toBe(placed.params);
+        // A split segment undone too, though the point's key is still there
+        const split = releaseLive(
+            pressLive(openLive(placed, "p2"), handleAt(placed, "m0"), env)!,
+            { double: false },
+        );
+        expect(split.changed).toBe(true);
+        const later = { ...placed, params: split.live.params as LineParams };
+        expect(reopenLive(openLive(later, "p3"), placed).selected).toBeNull();
+    });
+
+    it("goes inside the box on a double-click whose first click selected the box, not switching the point", () => {
+        const placed = readBack(recipeOf(arch()));
+        const out = releaseLive(
+            pressLive(openLive(placed), handleAt(placed, "p1"), env)!,
+            { double: true, ownFirst: false },
+        );
+        expect(out.changed).toBe(false);
+        expect(out.enter).toBe(true);
+        expect(out.live.selected ?? null).toBeNull();
+        expect((out.live.params as LineParams).points[1]!.tension).toBe(SMOOTH);
+        // Both clicks on the point: it switches, and nobody goes inside
+        const own = releaseLive(
+            pressLive(openLive(placed, "p1"), handleAt(placed, "p1"), env)!,
+            { double: true, ownFirst: true },
+        );
+        expect(own.changed).toBe(true);
+        expect(own.enter).toBe(false);
+    });
+
+    it("swallows a double-click on an end of a tangent bar: nothing changes, nobody goes inside", () => {
+        const placed = readBack(recipeOf(arch()));
+        const out = releaseLive(
+            pressLive(
+                openLive(placed, "p1"),
+                handleAt(placed, "t1", "p1"),
+                env,
+            )!,
+            { double: true, ownFirst: true },
+        );
+        expect(out.changed).toBe(false);
+        expect(out.enter).toBe(false);
+        expect(out.live.selected).toBe("p1");
+    });
 });
 
 describe("selecting a point (#557)", () => {
@@ -738,6 +837,25 @@ describe("selecting a point (#557)", () => {
         const s = onHandle(t, "p1");
         const dragged = onHandle(s, "p1", { x: p1.x, y: p1.y - 10 });
         expect(dragged.selected).toBe("p1");
+    });
+
+    it("drops the selection when the selected end, dragged onto the other, closes the line", () => {
+        const open = clicked(lineTool, 6, [
+            { x: 0, y: 0 },
+            { x: 40, y: 0 },
+            { x: 40, y: 40 },
+            { x: 0, y: 40 },
+        ]);
+        for (const [from, to] of [
+            ["p0", "p3"],
+            ["p3", "p0"],
+        ] as const) {
+            const s = onHandle(open, from);
+            expect(s.selected).toBe(from);
+            const closed = onHandle(s, from, at(open, to).at);
+            expect(paramsOf(closed).closed).toBe(true);
+            expect(closed.selected).toBeNull();
+        }
     });
 
     it("clears the selection on a click on the empty field, Escape, undo or another kind", () => {

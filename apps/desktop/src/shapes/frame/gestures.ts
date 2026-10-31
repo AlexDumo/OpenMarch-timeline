@@ -180,11 +180,13 @@ export function startShapeGesture(
 }
 
 /**
- * Which handle is selected once `gesture` ends (#557), from `selected` at its press. A click on a
- * handle that selects selects it (a double-click's first click already did); a click or drag on a
- * handle on the selection's bar keeps it, as does a drag of the selected handle, a move or a turn,
- * which keep every handle where it is in the shape. Any other click, or a drag of another handle
- * (which can add or reorder a kind's points), clears it.
+ * Which handle is selected once `gesture` ends (#557), from `selected` at its press and `after`, the
+ * shape it left. A click on a handle that selects selects it (a double-click's first click already
+ * did); a click or drag on a handle on the selection's bar keeps it, as does a drag of the selected
+ * handle, a move or a turn, which keep every handle where it is in the shape. A drag of the
+ * selected handle that changes which handles select (an end dropped on the other closes a Line,
+ * one point fewer) clears it, as do any other click and a drag of another handle (which can add or
+ * reorder a kind's points).
  */
 export function selectionAfter(
     kind: AnyToolKind,
@@ -192,16 +194,36 @@ export function selectionAfter(
     gesture: ShapeGesture,
     click: { readonly double: boolean } | null | undefined,
     selected: string | null | undefined,
+    after: unknown,
 ): string | null {
     const was = selected ?? null;
     if (gesture.type !== "handle") return click ? null : was;
-    if (gesture.key === was) return was;
+    if (gesture.key === was)
+        return selectableKeys(kind, gesture.base, n, was) ===
+            selectableKeys(kind, after, n, was)
+            ? was
+            : null;
     const handle = kind
         .handles(gesture.base, n, was)
         .find((h) => h.key === gesture.key);
     if (handle?.bar) return was;
     return click && handle?.selects ? handle.key : null;
 }
+
+/** The keys of the handles a click selects on `params`, as text to compare */
+const selectableKeys = (
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    selected: string | null,
+) =>
+    params === null
+        ? ""
+        : kind
+              .handles(params, n, selected)
+              .filter((h) => h.selects)
+              .map((h) => h.key)
+              .join(" ");
 
 /** `selected` if `params` still has that handle, else null: an undo or edit can take it away */
 export function selectionIn(

@@ -61,7 +61,9 @@ ordinary positions it writes.
 - The host keeps which handle a click selected (`selects` on a `ToolHandle`, #557) and hands its
   key back to `handles`, so a kind shows more around it (a Line's tangent bar, handles with
   `bar`); `selectionAfter` in `frame/gestures.ts` is the rule both the open and placed shape
-  follow. `clickHandle` is a click, `doubleClickHandle` a double-click's second click.
+  follow. `clickHandle` is a click, `doubleClickHandle` a double-click's second click. An undo or
+  redo clears the selection (a key names a point by index); a placed shape keeps it only through
+  its own save (`reopenLive`).
 - The spot count comes from the host. Spots and who goes where are separate steps.
 - Every placement goes through `writePlacement` (`tool/shapePlacement.ts`): `placeShape` for an
   open shape, `commitBox` for an edit of a placed one. Members move through the canvas-drag path
