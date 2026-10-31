@@ -213,6 +213,8 @@ export function savedToolKind(
         ...base,
         saved,
         base,
+        // Its picture fills a square with its own intervals (`fromFrame` below), not the kind's
+        pictureParams: undefined,
         // The command bar starts from each parameter's default: the saved intervals here
         params: base.params.map((p) =>
             p.interval && saved.intervals[p.key] !== undefined

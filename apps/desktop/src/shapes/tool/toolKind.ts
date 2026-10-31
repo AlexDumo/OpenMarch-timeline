@@ -533,6 +533,11 @@ export interface ToolKind<P> {
      * this kind this way, so the frame is kept (#344).
      */
     fromFrame(frame: ShapeFrame, n: number, env: ToolEnv): P;
+    /**
+     * The shape its picture shows (`shapePreview`), when filling a square with {@link fromFrame}
+     * wouldn't read as the kind: the Line's zigzag and the Curve's wave (owner, 2026-10-31)
+     */
+    pictureParams?(n: number, env: ToolEnv): P;
     /** After a turn or flip: the shape put back on the grid, if it snaps to one */
     settle?(params: P, n: number, env: ToolEnv): P;
     /**

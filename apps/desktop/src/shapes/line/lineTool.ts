@@ -1,4 +1,5 @@
 import tolgee from "@/global/singletons/Tolgee";
+import type { XY } from "../types";
 import { fieldToFrame, resizeCursor } from "../frame/frame";
 import { formatSteps, parseSteps } from "../editor/format";
 import {
@@ -1063,7 +1064,20 @@ export const lineTool: ToolKind<LineParams> = {
     settle: settleLine,
     fromFrame: lineInFrame,
     closed: lineClosed,
+    pictureParams: (_n, env) => zigzag(env, 0),
 };
+
+/** The picture's zigzag (owner, 2026-10-31): six points across the square, corners or smooth */
+const ZIGZAG: readonly XY[] = [
+    { x: -4.5, y: 1.5 },
+    { x: -2.7, y: -1.5 },
+    { x: -0.9, y: 1.5 },
+    { x: 0.9, y: -1.5 },
+    { x: 2.7, y: 1.5 },
+    { x: 4.5, y: -1.5 },
+];
+const zigzag = (env: ToolEnv, tension: number): LineParams =>
+    drawPoints(ZIGZAG, env, tension)!;
 
 /**
  * The Curve (#525, spec #522): a preset of the Line, the same kind and recipe, whose points start
@@ -1086,4 +1100,5 @@ export const curveTool: ToolKind<LineParams> = {
         },
     },
     fromFrame: curveInFrame,
+    pictureParams: (_n, env) => zigzag(env, SMOOTH),
 };
