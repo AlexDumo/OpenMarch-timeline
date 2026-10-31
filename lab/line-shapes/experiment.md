@@ -46,8 +46,9 @@ a way to place the selected marchers.
 - Click a point to select it. A smooth point shows a bar through it; drag
   either end to change its curve. Double-click a point to switch it between a
   corner and smooth.
-- Hold H (or press the eye in the editor bar) to hide the marchers and see the
-  shape on its own; tap H to keep them hidden until the next tap.
+- Hold H (or press the eye in the editor bar) to hide the shape's own marchers
+  while you edit it; the other marchers and where they started stay. Tap H to
+  keep them hidden until the next tap.
 
 **Not in this build yet**
 
