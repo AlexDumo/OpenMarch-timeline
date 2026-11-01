@@ -99,16 +99,17 @@ export interface View3dVenueChangeRequest {
     cameras?: unknown;
 }
 
-/** Window → main, `invoke`: this computer's camera profiles (ADR 0002 D-12). */
 /**
- * The window's only settings calls: read and answer the "open with the show" question
- * (`VIEW3D_AUTO_OPEN_SETTING`). Main checks the sender and the value.
+ * Window → main, `invoke`: the window's only settings calls, to read and answer the "open on
+ * launch" question (`VIEW3D_AUTO_OPEN_SETTING`, ADR 0002 amendment 2026-11-01). Main checks the
+ * sender and the value.
  */
 export const VIEW3D_AUTO_OPEN_CHANNELS = {
     get: "view3d:auto-open-get",
     set: "view3d:auto-open-set",
 } as const;
 
+/** Window → main, `invoke`: this computer's camera profiles (ADR 0002 D-12). */
 export const VIEW3D_CAMERA_PROFILE_CHANNELS = {
     list: "view3d:camera-profiles",
     save: "view3d:camera-profile-save",

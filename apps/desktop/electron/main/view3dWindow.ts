@@ -48,7 +48,8 @@ export interface View3dWindowConfig {
      * null where the window shouldn't ask (Playwright sessions).
      */
     getAutoOpen: () => unknown;
-    setAutoOpen: (autoOpen: boolean) => void;
+    /** Saves the window's answer; `sender` is the 3D View, which other windows hear it from */
+    setAutoOpen: (autoOpen: boolean, sender: Electron.WebContents) => void;
 }
 
 /** Height of the app's TitleBar, so native window controls line up with it. */
@@ -155,7 +156,7 @@ export function initView3dWindow(windowConfig: View3dWindowConfig) {
             if (typeof autoOpen !== "boolean") {
                 throw new Error("3D View: auto-open must be true or false");
             }
-            config?.setAutoOpen(autoOpen);
+            config?.setAutoOpen(autoOpen, event.sender);
         },
     );
     ipcMain.handle("view3d:sql-read-batch", (event, queries: unknown) => {

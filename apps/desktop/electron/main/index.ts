@@ -652,9 +652,10 @@ void app.whenReady().then(async () => {
             process.env.PLAYWRIGHT_SESSION
                 ? null
                 : store.get(VIEW3D_AUTO_OPEN_SETTING),
-        setAutoOpen: (autoOpen) => {
+        // Every other window hears it, so an open Settings window follows the answer
+        setAutoOpen: (autoOpen, sender) => {
             store.set(VIEW3D_AUTO_OPEN_SETTING, autoOpen);
-            win?.webContents.send("settings:changed", {
+            broadcastSettingsChanged(sender, {
                 [VIEW3D_AUTO_OPEN_SETTING]: autoOpen,
             });
         },

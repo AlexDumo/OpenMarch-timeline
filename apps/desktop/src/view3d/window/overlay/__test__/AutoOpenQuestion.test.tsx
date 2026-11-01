@@ -1,4 +1,5 @@
 import {
+    act,
     cleanup,
     fireEvent,
     render,
@@ -53,10 +54,18 @@ describe("AutoOpenQuestion", () => {
         "doesn't ask once answered or where it shouldn't (%s)",
         async (setting) => {
             withSetting(setting);
+            const get = vi.spyOn(
+                (
+                    window as unknown as {
+                        view3d: { autoOpen: { get: () => Promise<unknown> } };
+                    }
+                ).view3d.autoOpen,
+                "get",
+            );
             open();
-            // Let the read settle
-            await waitFor(() => Promise.resolve());
-            await new Promise((resolve) => setTimeout(resolve, 0));
+            // Once the read has answered, still nothing
+            await waitFor(() => expect(get).toHaveBeenCalled());
+            await act(() => get.mock.results[0]!.value);
             expect(
                 screen.queryByTestId("view3d-auto-open-question"),
             ).toBeNull();

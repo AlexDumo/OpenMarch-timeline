@@ -34,7 +34,12 @@ export function AutoOpenQuestion() {
     if (!asking) return null;
     const answer = (keepOpening: boolean) => {
         setAsking(false);
-        void window.view3d.autoOpen.set(keepOpening);
+        // A failed save leaves the setting unanswered, so the question comes back next time
+        window.view3d.autoOpen
+            .set(keepOpening)
+            .catch((error: unknown) =>
+                console.warn("3D View: couldn't save auto-open", error),
+            );
     };
     return (
         <div
