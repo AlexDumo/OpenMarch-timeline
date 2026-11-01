@@ -7,6 +7,7 @@ import {
     type Icon,
 } from "@phosphor-icons/react";
 import { useTranslate } from "@tolgee/react";
+import { useId, useState } from "react";
 import clsx from "clsx";
 import {
     ShortcutTooltip,
@@ -18,11 +19,8 @@ import {
     type ShapeOutlines,
     type UiSettings,
 } from "@/stores/UiSettingsStore";
+import { DISPLAY_BUTTON_CLASS, DisplayCaption } from "./displayButton";
 import { StartFlagPositionsButton } from "./StartFlagPositionsButton";
-
-/** The bar's square icon button, the same look as the transport's */
-export const DISPLAY_BUTTON_CLASS =
-    "focus-visible:ring-accent rounded-4 enabled:hover:text-accent enabled:hover:bg-fg-2 flex size-24 items-center justify-center outline-hidden transition-[color,background-color] duration-150 focus-visible:ring-2";
 
 const POPOVER_CLASS =
     "border-stroke bg-modal text-text shadow-modal rounded-8 z-50 flex flex-col gap-4 border p-8 backdrop-blur-sm";
@@ -50,9 +48,8 @@ export default function FieldDisplayBar() {
     return (
         <TransportTooltipProvider>
             <div
-                role="toolbar"
+                role="group"
                 aria-label={t("fieldDisplay.label")}
-                aria-orientation="vertical"
                 data-testid="field-display-bar"
                 className="border-stroke bg-bg-1 text-text pointer-events-auto absolute top-6 right-6 z-10 flex flex-col items-center gap-4 rounded-lg border p-4 shadow-lg"
             >
@@ -78,11 +75,13 @@ export default function FieldDisplayBar() {
                 <PlaceholderButton
                     icon={UsersThreeIcon}
                     label={t("fieldDisplay.sections")}
+                    caption={t("fieldDisplay.caption.sections")}
                     testId="field-display-sections"
                 />
                 <PlaceholderButton
                     icon={CompassIcon}
                     label={t("fieldDisplay.direction")}
+                    caption={t("fieldDisplay.caption.direction")}
                     testId="field-display-direction"
                 />
             </div>
@@ -97,7 +96,8 @@ interface Choice<T extends string> {
 
 /**
  * One setting picked from a short list (marcher labels, shape outlines): an icon that opens the
- * choices beside the bar, dimmed while the setting is off.
+ * choices beside the bar as radio buttons, dimmed while the setting is off. Picking one closes
+ * them, as the View tab's select did.
  */
 function ChoiceButton<K extends "marcherLabels" | "shapes">({
     setting,
@@ -119,12 +119,15 @@ function ChoiceButton<K extends "marcherLabels" | "shapes">({
     const label = t(labelKey);
     const currentKey = choices.find((c) => c.value === value)?.key;
     const current = currentKey ? t(currentKey) : undefined;
+    const [open, setOpen] = useState(false);
+    const headingId = useId();
     const choose = (next: NonNullable<UiSettings[K]>) => {
         const { uiSettings, setUiSettings } = useUiSettingsStore.getState();
         setUiSettings({ ...uiSettings, [setting]: next });
+        setOpen(false);
     };
     return (
-        <Popover.Root>
+        <Popover.Root open={open} onOpenChange={setOpen}>
             <ShortcutTooltip label={label} hint={current} side="left">
                 <Popover.Trigger asChild>
                     <button
@@ -139,6 +142,7 @@ function ChoiceButton<K extends "marcherLabels" | "shapes">({
                         )}
                     >
                         <IconComponent size={16} />
+                        <DisplayCaption>{label}</DisplayCaption>
                     </button>
                 </Popover.Trigger>
             </ShortcutTooltip>
@@ -150,24 +154,34 @@ function ChoiceButton<K extends "marcherLabels" | "shapes">({
                     aria-label={label}
                     className={POPOVER_CLASS}
                 >
-                    <h3 className="text-sub text-text-subtitle px-8 pt-4 pb-2">
+                    <h3
+                        id={headingId}
+                        className="text-sub text-text-subtitle px-8 pt-4 pb-2"
+                    >
                         {label}
                     </h3>
-                    {choices.map((choice) => (
-                        <button
-                            key={choice.value}
-                            type="button"
-                            aria-pressed={value === choice.value}
-                            data-testid={`${testId}-${choice.value}`}
-                            onClick={() => choose(choice.value)}
-                            className={clsx(
-                                "text-body rounded-6 hover:bg-fg-2 focus-visible:ring-accent px-8 py-4 text-left outline-hidden focus-visible:ring-2",
-                                value === choice.value && "text-accent",
-                            )}
-                        >
-                            {t(choice.key)}
-                        </button>
-                    ))}
+                    <div
+                        role="radiogroup"
+                        aria-labelledby={headingId}
+                        className="flex flex-col gap-4"
+                    >
+                        {choices.map((choice) => (
+                            <button
+                                key={choice.value}
+                                type="button"
+                                role="radio"
+                                aria-checked={value === choice.value}
+                                data-testid={`${testId}-${choice.value}`}
+                                onClick={() => choose(choice.value)}
+                                className={clsx(
+                                    "text-body rounded-6 hover:bg-fg-2 focus-visible:ring-accent px-8 py-4 text-left outline-hidden focus-visible:ring-2",
+                                    value === choice.value && "text-accent",
+                                )}
+                            >
+                                {t(choice.key)}
+                            </button>
+                        ))}
+                    </div>
                 </Popover.Content>
             </Popover.Portal>
         </Popover.Root>
@@ -181,10 +195,12 @@ function ChoiceButton<K extends "marcherLabels" | "shapes">({
 function PlaceholderButton({
     icon: IconComponent,
     label,
+    caption,
     testId,
 }: {
     icon: Icon;
     label: string;
+    caption: string;
     testId: string;
 }) {
     const { t } = useTranslate();
@@ -196,7 +212,7 @@ function PlaceholderButton({
         >
             <button
                 type="button"
-                aria-label={label}
+                aria-label={`${label}: ${t("fieldDisplay.comingSoon")}`}
                 aria-disabled
                 data-testid={testId}
                 className={clsx(
@@ -205,6 +221,7 @@ function PlaceholderButton({
                 )}
             >
                 <IconComponent size={16} />
+                <DisplayCaption>{caption}</DisplayCaption>
             </button>
         </ShortcutTooltip>
     );

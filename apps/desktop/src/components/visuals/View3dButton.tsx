@@ -9,7 +9,14 @@ import { useView3dWindowStore } from "@/stores/View3dWindowStore";
  * 3D View is another way to look at the show; it was in the toolbar's View tab. Only while the
  * window is closed: with it open, the window itself is the way back.
  */
-export default function View3dButton({ className }: { className?: string }) {
+export default function View3dButton({
+    className,
+    labelClassName,
+}: {
+    className?: string;
+    /** For the words alone, e.g. to keep only the icon where space is short */
+    labelClassName?: string;
+}) {
     const open = useView3dWindowStore((s) => s.open);
     if (open) return null;
     return (
@@ -22,7 +29,9 @@ export default function View3dButton({ className }: { className?: string }) {
             )}
         >
             <CubeIcon size={14} />
-            <T keyName="view3d.open" />
+            <span className={labelClassName}>
+                <T keyName="view3d.open" />
+            </span>
         </ActionButton>
     );
 }

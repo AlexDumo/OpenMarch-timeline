@@ -49,10 +49,13 @@ describe("FieldDisplayBar", () => {
         fireEvent.click(screen.getByTestId("field-display-labels"));
         fireEvent.click(screen.getByTestId("field-display-labels-off"));
         expect(settings().marcherLabels).toBe("off");
+        // Picking one closes the choices, as the View tab's select did
+        expect(screen.queryByTestId("field-display-labels-off")).toBeNull();
+        fireEvent.click(screen.getByTestId("field-display-labels"));
         expect(
             screen
                 .getByTestId("field-display-labels-off")
-                .getAttribute("aria-pressed"),
+                .getAttribute("aria-checked"),
         ).toBe("true");
     });
 
@@ -66,6 +69,11 @@ describe("FieldDisplayBar", () => {
     it("toggles next paths from the paths popover", () => {
         open();
         fireEvent.click(screen.getByTestId("start-flag-positions"));
+        // Its shortcut shows as keycaps beside it
+        expect(
+            screen.getByTestId("field-display-next-paths").closest("label")
+                ?.textContent,
+        ).toMatch(/Next paths\s*M/);
         fireEvent.click(screen.getByTestId("field-display-next-paths"));
         expect(settings().nextPaths).toBe(true);
     });

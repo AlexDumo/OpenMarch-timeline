@@ -704,6 +704,8 @@ test("change: the field display bar holds paths, labels and shapes; the rest is 
         "field-display-shapes",
     ])
         await expect(bar.getByTestId(id)).toBeVisible();
+    // Nothing else crept in: those three and the two placeholders
+    await expect(bar.getByRole("button")).toHaveCount(5);
     await expect(page.getByTestId("open-view3d")).toBeVisible();
 
     const settings = await openSettings(page, "Field");
