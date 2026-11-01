@@ -574,6 +574,10 @@
         "title": "Field"
     },
     "fieldDisplay": {
+        "caption": {
+            "direction": "Direction",
+            "sections": "Sections"
+        },
         "comingSoon": "Coming soon",
         "direction": "Field direction",
         "label": "Field display",
@@ -907,8 +911,7 @@
             "shapesTab": "Shapes",
             "successfullyCopied": "Shape successfully copied to page",
             "ungroupShapeButton": "Un-group",
-            "ungroupShapeTooltip": "Delete this shape for this page. Will not move marchers from their current position",
-            "viewTab": "View"
+            "ungroupShapeTooltip": "Delete this shape for this page. Will not move marchers from their current position"
         },
         "timeline": {
             "move": {
@@ -2643,8 +2646,7 @@
             "shapes": "Shapes",
             "shapesAlways": "Always",
             "shapesOff": "Off",
-            "shapesSelected": "When selected",
-            "uiSettingsToolbar": "Ui Settings Toolbar"
+            "shapesSelected": "When selected"
         },
         "hideToolbar": "Hide toolbar",
         "showToolbar": "Show toolbar"

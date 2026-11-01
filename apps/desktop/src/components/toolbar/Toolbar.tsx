@@ -41,9 +41,14 @@ export default function Topbar() {
     ]);
 
     return (
-        <div className="group relative">
+        <div className="group @container relative">
             <div className="absolute top-0 right-0 z-10 flex items-center gap-8">
-                <View3dButton />
+                {/* Its words go first, then the whole button, so it never covers the tabs at the
+                    narrowest window (the shortcut and ⌘K still open the 3D View) */}
+                <View3dButton
+                    className="@max-[480px]:hidden"
+                    labelClassName="@max-[600px]:sr-only"
+                />
                 <WorkspaceViewSwitch />
             </div>
             {visuals ? (

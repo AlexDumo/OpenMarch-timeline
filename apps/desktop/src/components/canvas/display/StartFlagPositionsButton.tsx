@@ -24,6 +24,7 @@ import {
     Keycaps,
     ShortcutTooltip,
 } from "@/components/timeline/ShortcutTooltip";
+import { DISPLAY_BUTTON_CLASS, DisplayCaption } from "./displayButton";
 
 type State = keyof StartFlagPositionsSettings;
 type Part = keyof StartFlagLevels;
@@ -107,6 +108,9 @@ export function StartFlagPositionsButton() {
     const keyState = { held, latched };
     const hold = isStartFlagHoldActive(keyState);
     const overrides = useShortcutOverridesStore((s) => s.overrides);
+    const nextPathsKey = getActionShortcutKeys("toggleNextPagePaths", {
+        overrides,
+    })?.join(" + ");
     const key = getActionShortcutKeys("toggleStartFlagPositions", {
         overrides,
     })?.join(" + ");
@@ -140,7 +144,7 @@ export function StartFlagPositionsButton() {
                         data-drawing={drawing}
                         data-hold={hold}
                         className={clsx(
-                            "focus-visible:ring-accent rounded-4 enabled:hover:text-accent enabled:hover:bg-fg-2 flex size-24 items-center justify-center outline-hidden transition-[color,background-color] duration-150 focus-visible:ring-2",
+                            DISPLAY_BUTTON_CLASS,
                             drawing ? "text-accent" : "text-text",
                             hold && "bg-accent/10",
                         )}
@@ -149,6 +153,9 @@ export function StartFlagPositionsButton() {
                             size={16}
                             weight={hold ? "bold" : "regular"}
                         />
+                        <DisplayCaption>
+                            {t("timeline.startFlagPositions.paths")}
+                        </DisplayCaption>
                     </button>
                 </Popover.Trigger>
             </ShortcutTooltip>
@@ -183,8 +190,11 @@ export function StartFlagPositionsButton() {
                         levels={settings.hold}
                     />
                     <label className="border-stroke flex items-center justify-between gap-8 border-t pt-12">
-                        <span className="text-body">
+                        <span className="text-body flex items-center gap-4">
                             {t("toolbar.view.nextPaths")}
+                            {nextPathsKey !== undefined && (
+                                <Keycaps shortcut={nextPathsKey} />
+                            )}
                         </span>
                         <Switch
                             data-testid="field-display-next-paths"
