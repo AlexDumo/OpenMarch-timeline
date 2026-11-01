@@ -39,6 +39,11 @@ export interface ChipLayout {
     readonly groups: readonly ToolGroup[] | null;
     /** Offer the lock that keeps the spacings in proportion: the kind has one and both show */
     readonly ratioLock: boolean;
+    /**
+     * The kind's interval lock (`ToolKind.lock`), beside its interval or groups: whether it's
+     * locked, or null when it isn't offered
+     */
+    readonly lock: boolean | null;
 }
 
 export function chipLayout(
@@ -67,6 +72,10 @@ export function chipLayout(
             kind.ratioLock === true &&
             (kind.ratioLockFor?.(params, n) ?? true) &&
             intervals.length > 1,
+        lock:
+            kind.lock && kind.lock.shown(params, n)
+                ? kind.lock.locked(params, n)
+                : null,
     };
 }
 

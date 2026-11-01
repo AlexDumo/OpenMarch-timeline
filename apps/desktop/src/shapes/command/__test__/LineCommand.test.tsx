@@ -194,7 +194,8 @@ describe("Line and Curve in the command bar", () => {
         key("Enter");
         expect(hasGroups(line.shape!)).toBe(true);
         expect(line.shape!.spacing).toEqual({
-            mode: "keep",
+            // Typing leaves the interval unlocked, the line sized to it
+            mode: "fit",
             groups: [
                 { count: 2, interval: 30 },
                 { count: 4, interval: 20 },
@@ -218,7 +219,8 @@ describe("Line and Curve in the command bar", () => {
         key("Enter");
         expect(line.finish).toHaveBeenCalledWith(["3"]);
         expect(line.shape!.spacing).toEqual({
-            mode: "keep",
+            // Typing leaves the interval unlocked, the line sized to it
+            mode: "fit",
             groups: [{ interval: 30 }],
         });
     });
@@ -236,7 +238,8 @@ describe("Line and Curve in the command bar", () => {
         key("Enter");
         expect(curve.finish).toHaveBeenCalledWith(["3"]);
         expect(curve.shape!.spacing).toEqual({
-            mode: "keep",
+            // Typing leaves the interval unlocked, the line sized to it
+            mode: "fit",
             groups: [{ interval: 30 }],
         });
     });

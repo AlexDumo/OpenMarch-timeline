@@ -11,11 +11,13 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 import type { FieldTestShapeOverlay } from "../../../src/field/fieldTestApi";
 
 // The Line (#523, spec #522): L opens it on the selected marchers, a drag draws
-// a straight line in Fit (its interval worked out), typing an interval keeps it
-// (the line grows from its pivot), the spacing menu offers Interval on the
-// path, Enter places it as one undo step, and a click on a member reopens it,
-// where a dragged end saves on release with the interval kept. A typed list
-// (#526) spaces it in groups of marchers, each a chip in the editor.
+// a straight line in Fit (its interval worked out), typing an interval sizes it
+// (the line grows from its pivot) and the lock beside it keeps it, the spacing
+// menu offers Interval on the path, Enter places it as one undo step, and a
+// click on a member reopens it, where a dragged end saves on release with the
+// interval kept. A typed list (#526) spaces it in groups of marchers, each a
+// chip in the editor. Unlocked, a dragged end snaps the interval to whole
+// steps; Offset sets both ways at once.
 
 // Eight trumpets scattered, all in view.
 const HOME: SeedPosition[] = [
@@ -113,7 +115,7 @@ function gaps(spots: readonly Point[]): number[] {
 const interval = (page: Page, readout: string) =>
     page.getByTestId(readout).getByTestId("shape-editor-interval").innerText();
 
-test("change: L draws a Fit line, a typed interval keeps it, Enter places it as one undo step, and a member reopens it", async ({
+test("change: L draws a Fit line, a typed interval sizes it and the lock keeps it, Enter places it as one undo step, and a member reopens it", async ({
     show,
 }) => {
     const { page } = show;
@@ -155,7 +157,8 @@ test("change: L draws a Fit line, a typed interval keeps it, Enter places it as 
         expect(Math.abs(gap - 1.5 * S)).toBeLessThan(CLOSE);
     expect(drawn.handles).toHaveLength(2);
 
-    // Typing 2 keeps the interval: the line grows from its center to 14 steps
+    // Typing 2 sizes the line from its center to 14 steps, still unlocked; the
+    // lock beside the interval keeps it
     await page
         .getByTestId("shape-tool-readout")
         .getByTestId("shape-editor-interval")
@@ -163,6 +166,13 @@ test("change: L draws a Fit line, a typed interval keeps it, Enter places it as 
     await page.getByTestId("shape-editor-interval-input").fill("2");
     await page.keyboard.press("Enter");
     await expect.poll(() => interval(page, "shape-tool-readout")).toBe("2");
+    await expect(spacing).toHaveAttribute("data-value", "fit");
+    const lock = page
+        .getByTestId("shape-tool-readout")
+        .getByTestId("shape-editor-interval-lock");
+    await expect(lock).toHaveAttribute("aria-pressed", "false");
+    await lock.click();
+    await expect(lock).toHaveAttribute("aria-pressed", "true");
     await expect(spacing).toHaveAttribute("data-value", "keep");
     const kept = (await shapeOverlay(page))!;
     for (const gap of gaps(kept.spots))
@@ -195,6 +205,7 @@ test("change: L draws a Fit line, a typed interval keeps it, Enter places it as 
     expect(await undoSteps(show)).toBe(steps + 1);
     const [recipe] = await recipes(show);
     expect([recipe.kind, recipe.kind_version]).toEqual(["line", 2]);
+    // Locked, the line stores Keep interval
     const stored = JSON.parse(recipe.params);
     expect(stored.spacing.mode).toBe("keep");
     expect(stored.spacing.groups[0].interval).toBeCloseTo(2 * S);
@@ -326,8 +337,10 @@ test("change: a diagonal from yard line to yard line is measured ↔, placing ma
         "Straight across",
         "Side to side",
         "Front to back",
+        "Offset",
     ]);
     await expect(rows.nth(3)).not.toHaveAttribute("aria-disabled", "true");
+    await expect(rows.nth(4)).not.toHaveAttribute("aria-disabled", "true");
     await page.keyboard.press("Escape");
 
     // 1½ steps side to side, grown from the center onto the grid
@@ -345,7 +358,9 @@ test("change: a diagonal from yard line to yard line is measured ↔, placing ma
     const [recipe] = await recipes(show);
     const stored = JSON.parse(recipe.params);
     expect(stored.measured).toBe("x");
-    expect(stored.spacing.mode).toBe("keep");
+    // Typed, the interval stays unlocked, kept as where the line started from
+    expect(stored.spacing.mode).toBe("fit");
+    expect(stored.spacing.groups[0].interval).toBeCloseTo(1.5 * S);
     const saved = [...(await savedPositions(show, 0))].sort(
         (a, b) => a.x - b.x,
     );
@@ -374,6 +389,96 @@ test("change: a diagonal from yard line to yard line is measured ↔, placing ma
         "data-value",
         "x",
     );
+});
+
+// The interval lock and Offset (owner decisions on #522, #527): unlocked, a
+// dragged end changes the interval live in whole steps; Offset shows two
+// numbers, typed or dragged; locked, an Offset line's ends don't move.
+test("change: an unlocked end drag snaps the interval to whole steps live, Offset shows two numbers, and locked its ends stay", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await page.keyboard.press("l");
+
+    // 8 marchers on a line 7 steps long: 1 step apart
+    const y = cf.y - 20 * S;
+    const from = { x: cf.x - 14 * S, y };
+    await drag(
+        page,
+        await toScreen(page, from),
+        await toScreen(page, { x: cf.x - 7 * S, y }),
+    );
+    const readout = page.getByTestId("shape-tool-readout");
+    await expect.poll(() => interval(page, "shape-tool-readout")).toBe("1");
+    const lock = readout.getByTestId("shape-editor-interval-lock");
+    await expect(lock).toHaveAttribute("aria-pressed", "false");
+
+    // Its right end dragged out: the readout changes while the drag goes on,
+    // in whole steps (7 gaps, so 14 steps long is 2 apart)
+    const right = [...(await shapeOverlay(page))!.handles].sort(
+        (a, b) => b.x - a.x,
+    )[0]!;
+    await page.mouse.move(right.x, right.y);
+    await page.mouse.down();
+    const out = await toScreen(page, { x: from.x + 14.3 * S, y: y + 0.2 * S });
+    await page.mouse.move(out.x, out.y, { steps: 12 });
+    await expect.poll(() => interval(page, "shape-tool-readout")).toBe("2");
+    await page.mouse.up();
+    const after = (await shapeOverlay(page))!;
+    for (const gap of gaps(after.spots))
+        expect(Math.abs(gap - 2 * S)).toBeLessThan(CLOSE);
+
+    // Measured as an offset: two numbers, each with its way after it
+    const measured = page.getByTestId("shape-choice-measured");
+    await measured.click();
+    await page
+        .getByTestId("shape-choice-measured-content")
+        .getByRole("menuitemradio", { name: "Offset" })
+        .click();
+    await expect(measured).toHaveAttribute("data-value", "offset");
+    await expect(readout.getByTestId("shape-editor-interval")).toBeHidden();
+    await expect(readout.getByTestId("shape-editor-offsetX")).toHaveText("2");
+    await expect(readout.getByTestId("shape-editor-offsetY")).toHaveText("0");
+    await readout.getByTestId("shape-editor-offsetY").click();
+    await page.getByTestId("shape-editor-offsetY-input").fill("1");
+    await page.keyboard.press("Enter");
+    await expect(readout.getByTestId("shape-editor-offsetY")).toHaveText("1");
+    const diagonal = (await shapeOverlay(page))!;
+    const sorted = [...diagonal.spots].sort((a, b) => a.x - b.x);
+    for (let i = 1; i < sorted.length; i++) {
+        expect(Math.abs(sorted[i]!.x - sorted[i - 1]!.x - 2 * S)).toBeLessThan(
+            CLOSE,
+        );
+        expect(
+            Math.abs(Math.abs(sorted[i]!.y - sorted[i - 1]!.y) - S),
+        ).toBeLessThan(CLOSE);
+    }
+
+    // Locked, dragging an end changes nothing
+    await lock.click();
+    await expect(lock).toHaveAttribute("aria-pressed", "true");
+    const end = [...diagonal.handles].sort((a, b) => b.x - a.x)[0]!;
+    await drag(page, end, { x: end.x + 60, y: end.y + 60 });
+    const still = (await shapeOverlay(page))!;
+    expect(still.spots).toEqual(diagonal.spots);
+
+    // Placed, it stores the offset
+    await page.keyboard.press("Enter");
+    await expect(readout).toBeHidden();
+    await waitForIdle(page);
+    const [recipe] = await recipes(show);
+    const stored = JSON.parse(recipe.params);
+    expect(stored.measured).toBe("offset");
+    expect(stored.offset.x).toBeCloseTo(2 * S);
+    expect(Math.abs(stored.offset.y)).toBeCloseTo(S);
+    expect(stored.spacing.mode).toBe("keep");
 });
 
 test("change: typing 2*3+4*2 spaces the line in groups, shown in the group menu, placed and reopened as typed", async ({

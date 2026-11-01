@@ -115,6 +115,13 @@ const chipText = (t: ToolState) =>
     }));
 const typed = (t: ToolState, text: string) =>
     edit(t, interval.type(t.params, t.spots, text, env), ctx);
+/** The interval locked (Keep interval) as its button does, one change; as it is when it is */
+const locked = (t: ToolState) =>
+    lineTool.lock!.locked(t.params, t.spots)
+        ? t
+        : edit(t, lineTool.lock!.toggle(t.params, t.spots, env), ctx);
+/** Typed, then locked: typing alone leaves the interval unlocked (owner decision on #522) */
+const kept = (t: ToolState, text: string) => locked(typed(t, text));
 const picked = (t: ToolState, value: string) =>
     edit(t, spacing.pick(t.params, t.spots, value, env), ctx);
 
@@ -211,7 +218,7 @@ describe("Fit", () => {
         expect(paramsOf(even).spacing.mode).toBe("fit");
     });
 
-    it("keeps its ends where they're dragged, the interval following", () => {
+    it("snaps a dragged end where the interval comes out to whole steps", () => {
         let t = drawn(5, { x: 100, y: 100 }, { x: 150, y: 100 });
         t = dragHandle(t, "p1", { x: 179, y: 101 });
         expect(pointsOf(t)).toEqual([
@@ -219,8 +226,18 @@ describe("Fit", () => {
             { x: 180, y: 100 },
         ]);
         expect(chipText(t)[0]!.display).toBe("2");
+        // 4 gaps from the other end: 58.5 is nearest 1 step each, so 40 long
         t = dragHandle(t, "p0", { x: 121.5, y: 100 });
+        expect(pointsOf(t)[0]).toEqual({ x: 140, y: 100 });
+        expect(chipText(t)[0]!.display).toBe("1");
+    });
+
+    it("leaves a dragged end where it's dragged with fine, still pulling onto lines", () => {
+        let t = drawn(5, { x: 100, y: 100 }, { x: 150, y: 100 });
+        t = dragHandle(t, "p0", { x: 121.5, y: 100 }, fine);
         expect(pointsOf(t)[0]).toEqual({ x: YARD, y: 100 });
+        t = dragHandle(t, "p0", { x: 113.3, y: 100 }, fine);
+        expect(pointsOf(t)[0]).toEqual({ x: 113.3, y: 100 });
     });
 });
 
@@ -229,7 +246,7 @@ describe("Keep interval", () => {
     const fitLine = () => drawn(5, { x: 100, y: 100 }, { x: 150, y: 100 });
 
     it("is what typing an interval switches to, the length following from the pivot", () => {
-        const t = typed(fitLine(), "2");
+        const t = kept(fitLine(), "2");
         expect(paramsOf(t).spacing.mode).toBe("keep");
         // 4 gaps of 2 steps, grown from the center
         expect(pointsOf(t)).toEqual([
@@ -246,7 +263,7 @@ describe("Keep interval", () => {
     it("grows from an end when the pivot is there", () => {
         let t = fitLine();
         t = edit(t, { ...paramsOf(t), pivot: "w" }, ctx);
-        t = typed(t, "2½");
+        t = kept(t, "2½");
         expect(pointsOf(t)).toEqual([
             { x: 100, y: 100 },
             { x: 200, y: 100 },
@@ -254,14 +271,14 @@ describe("Keep interval", () => {
     });
 
     it("keeps exact fractions as typed", () => {
-        const t = typed(fitLine(), "1 2/3");
+        const t = kept(fitLine(), "1 2/3");
         const [a, b] = pointsOf(t);
         expect(dist(a!, b!)).toBeCloseTo((4 * 50) / 3, 9);
         expect(chipText(t)[0]!.display).toBe("1⅔");
     });
 
     it("turns the line when an end is dragged, the interval kept", () => {
-        let t = typed(fitLine(), "2");
+        let t = kept(fitLine(), "2");
         t = dragHandle(t, "p1", { x: 86, y: 160 });
         const [a, b] = pointsOf(t);
         expect(a).toEqual({ x: 85, y: 100 });
@@ -276,7 +293,7 @@ describe("Keep interval", () => {
 
     it("turns square to the field from an end off the grid", () => {
         // 1⅝ steps apart from the center: the ends at 92.5 and 157.5, a quarter step off the grid
-        let t = typed(fitLine(), "1.625");
+        let t = kept(fitLine(), "1.625");
         expect(pointsOf(t)[0]).toEqual({ x: 92.5, y: 100 });
         expect(pointsOf(t)[1]).toEqual({ x: 157.5, y: 100 });
         // Dragged near straight down from the first end, it turns exactly there
@@ -286,10 +303,10 @@ describe("Keep interval", () => {
     });
 
     it("goes back to Fit from the spacing menu, the line kept as it is", () => {
-        const kept = typed(fitLine(), "2");
-        const t = picked(kept, "fit");
+        const keptLine = kept(fitLine(), "2");
+        const t = picked(keptLine, "fit");
         expect(paramsOf(t).spacing.mode).toBe("fit");
-        expect(pointsOf(t)).toEqual(pointsOf(kept));
+        expect(pointsOf(t)).toEqual(pointsOf(keptLine));
     });
 });
 
@@ -311,7 +328,7 @@ describe("Interval on the path", () => {
 
     it("lays a typed run on the line as drawn, from the anchor", () => {
         const run = (anchor: string) => {
-            const t = typed(picked(longLine(), `path-${anchor}`), "2");
+            const t = kept(picked(longLine(), `path-${anchor}`), "2");
             expect(spacing.current(t.params, t.spots)).toBe(`path-${anchor}`);
             // The drawn line stays; the run of 8 steps sits on it
             expect(pointsOf(t)).toEqual([
@@ -368,7 +385,7 @@ describe("mixed intervals (#526)", () => {
     ) => edit(t, groups.type(t.params, t.spots, index, part, text, env), ctx);
 
     it("lays 2*3+4*2 as 2 marchers at 3 steps, then 4 at 2, the length following from the pivot", () => {
-        const t = typed(fitLine(6), "2*3+4*2");
+        const t = kept(fitLine(6), "2*3+4*2");
         expect(paramsOf(t).spacing).toEqual({
             mode: "keep",
             groups: [
@@ -388,20 +405,20 @@ describe("mixed intervals (#526)", () => {
     });
 
     it("reads x and , too", () => {
-        const t = typed(fitLine(6), "2x3, 4x2");
+        const t = kept(fitLine(6), "2x3, 4x2");
         expectGaps(t, [3, 3, 2, 2, 2]);
     });
 
     it("puts the rest at the start, the end or the middle, by where it's typed", () => {
-        expectGaps(typed(fitLine(6), "2.5+3*4"), [2.5, 2.5, 4, 4, 4]);
-        expectGaps(typed(fitLine(6), "3*4+2.5"), [4, 4, 4, 2.5, 2.5]);
-        const both = typed(fitLine(7), "2*3+2+2*3");
+        expectGaps(kept(fitLine(6), "2.5+3*4"), [2.5, 2.5, 4, 4, 4]);
+        expectGaps(kept(fitLine(6), "3*4+2.5"), [4, 4, 4, 2.5, 2.5]);
+        const both = kept(fitLine(7), "2*3+2+2*3");
         expectGaps(both, [3, 3, 2, 2, 3, 3]);
         expect(chips(both)).toEqual(["2 × 3", "3 rest × 2", "2 × 3"]);
     });
 
     it("grows the last group to take extra marchers, and marks it", () => {
-        const t = typed(fitLine(10), "2*3+4*2");
+        const t = kept(fitLine(10), "2*3+4*2");
         expectGaps(t, [3, 3, 2, 2, 2, 2, 2, 2, 2]);
         expect(chips(t)).toEqual(["2 × 3", "8 +4 × 2"]);
         // The typed count is kept
@@ -411,21 +428,21 @@ describe("mixed intervals (#526)", () => {
     });
 
     it("drops groups from the end with too few marchers", () => {
-        expect(chips(typed(fitLine(4), "2*3+4*2"))).toEqual(["2 × 3", "2 × 2"]);
-        const two = typed(fitLine(2), "2*3+4*2");
+        expect(chips(kept(fitLine(4), "2*3+4*2"))).toEqual(["2 × 3", "2 × 2"]);
+        const two = kept(fitLine(2), "2*3+4*2");
         expect(chips(two)).toEqual(["2 × 3", "0 dropped × 2"]);
         expectGaps(two, [3]);
     });
 
     it("keeps exact fractions in a group", () => {
-        const t = typed(fitLine(4), "2*1 2/3+2");
+        const t = kept(fitLine(4), "2*1 2/3+2");
         expectGaps(t, [5 / 3, 2, 2]);
         expect(chips(t)).toEqual(["2 × 1⅔", "2 rest × 2"]);
     });
 
     it("goes back to one interval for everyone when a plain number is typed", () => {
-        let t = typed(fitLine(6), "2*3+4*2");
-        t = typed(t, "2");
+        let t = kept(fitLine(6), "2*3+4*2");
+        t = kept(t, "2");
         expect(paramsOf(t).spacing).toEqual({
             mode: "keep",
             groups: [{ interval: 20 }],
@@ -443,7 +460,7 @@ describe("mixed intervals (#526)", () => {
     it("lays the groups on the drawn line from the anchor, on the path", () => {
         let t = drawn(6, { x: 0, y: 100 }, { x: 200, y: 100 });
         t = picked(t, "path-start");
-        t = typed(t, "2*3+4*2");
+        t = kept(t, "2*3+4*2");
         expect(pointsOf(t)).toEqual([
             { x: 0, y: 100 },
             { x: 200, y: 100 },
@@ -458,7 +475,7 @@ describe("mixed intervals (#526)", () => {
     });
 
     it("widens every group at once when scaled", () => {
-        const t = typed(fitLine(6), "2*3+4*2");
+        const t = kept(fitLine(6), "2*3+4*2");
         const wider = interval.widen!(
             t.params,
             t.spots,
@@ -473,7 +490,7 @@ describe("mixed intervals (#526)", () => {
     });
 
     describe("its group chips", () => {
-        const drumline = () => typed(fitLine(6), "2*3+4*2");
+        const drumline = () => kept(fitLine(6), "2*3+4*2");
 
         it("types a group's count or interval", () => {
             let t = typedIn(drumline(), 0, "count", "3");
@@ -521,7 +538,7 @@ describe("mixed intervals (#526)", () => {
         });
 
         it("gives a typed count to the rest when its count is set", () => {
-            let t = typed(fitLine(6), "2*3+2");
+            let t = kept(fitLine(6), "2*3+2");
             expect(chips(t)).toEqual(["2 × 3", "4 rest × 2"]);
             t = typedIn(t, 1, "count", "3");
             expect(chips(t)).toEqual(["2 × 3", "4 +1 × 2"]);
@@ -537,20 +554,20 @@ describe("mixed intervals (#526)", () => {
         });
 
         it("adds a group that gets a marcher, even when the last has only 1", () => {
-            let t = typed(fitLine(6), "5*3+1*2");
+            let t = kept(fitLine(6), "5*3+1*2");
             t = edit(t, groups.add(t.params, 6, env), ctx);
             expect(chips(t)).toEqual(["4 × 3", "1 × 2", "1 × 2"]);
         });
 
         it("adds a group that gets a marcher when the counts already take everyone", () => {
-            let t = typed(fitLine(4), "2*3+4*2");
+            let t = kept(fitLine(4), "2*3+4*2");
             expect(chips(t)).toEqual(["2 × 3", "2 × 2"]);
             t = edit(t, groups.add(t.params, 4, env), ctx);
             expect(chips(t)).toEqual(["2 × 3", "1 × 2", "1 × 2"]);
         });
 
         it("adds no group when every group already has just 1 marcher", () => {
-            const t = typed(fitLine(2), "1*3+1*2");
+            const t = kept(fitLine(2), "1*3+1*2");
             expect(groups.add(t.params, 2, env)).toBe(t.params);
         });
 
@@ -570,15 +587,15 @@ describe("mixed intervals (#526)", () => {
                 : p.spacing.groups.map((g) => g.count);
 
         it("drags a dropped or grown group's count from its typed count", () => {
-            const dropped = typed(fitLine(2), "2*3+4*2");
+            const dropped = kept(fitLine(2), "2*3+4*2");
             expect(countDragged(dropped, 1, 1)).toBe(dropped.params);
             expect(storedCounts(countDragged(dropped, 1, 33))).toEqual([2, 6]);
-            const grown = typed(fitLine(10), "2*3+4*2");
+            const grown = kept(fitLine(10), "2*3+4*2");
             expect(storedCounts(countDragged(grown, 1, 33))).toEqual([2, 6]);
         });
 
         it("keeps a group's count at 999 or under", () => {
-            const t = typed(fitLine(6), "998*3+2");
+            const t = kept(fitLine(6), "998*3+2");
             expect(
                 groups.type(t.params, 6, 0, "count", "1000", env),
             ).toBeNull();
@@ -590,7 +607,7 @@ describe("mixed intervals (#526)", () => {
         });
 
         it("adds a group after the rest with +", () => {
-            const rest = typed(fitLine(6), "2*3+2");
+            const rest = kept(fitLine(6), "2*3+2");
             const t = edit(rest, groups.add(rest.params, 6, env), ctx);
             expect(chips(t)).toEqual(["2 × 3", "3 rest × 2", "1 × 2"]);
         });
@@ -603,7 +620,7 @@ describe("mixed intervals (#526)", () => {
             );
             expect(chips(t)).toBeNull();
             expect(chipText(t)).toEqual([{ display: "2", derived: false }]);
-            t = typed(fitLine(7), "2*3+2+2*3");
+            t = kept(fitLine(7), "2*3+2+2*3");
             t = edit(t, groups.remove(t.params, 7, 1, env), ctx);
             expect(chips(t)).toEqual(["2 × 3", "5 +3 × 3"]);
         });
@@ -618,9 +635,9 @@ describe("mixed intervals (#526)", () => {
 describe("the session around a line", () => {
     it("undoes and redoes a typed interval", () => {
         const t = drawn(5, { x: 100, y: 100 }, { x: 150, y: 100 });
-        const kept = typed(t, "2");
-        expect(undo(kept).params).toBe(t.params);
-        expect(redo(undo(kept)).params).toBe(kept.params);
+        const sized = typed(t, "2");
+        expect(undo(sized).params).toBe(t.params);
+        expect(redo(undo(sized)).params).toBe(sized.params);
     });
 
     it("turns into a box keeping its frame, and back", () => {
@@ -661,7 +678,7 @@ describe("a placed line", () => {
         return placed as PlacedBox<LineParams>;
     };
     const keptLine = () =>
-        typed(drawn(N, { x: 100, y: 100 }, { x: 150, y: 100 }), "2");
+        kept(drawn(N, { x: 100, y: 100 }, { x: 150, y: 100 }), "2");
 
     it("saves its points and spacing as a line recipe, with everyone on a spot", () => {
         const t = keptLine();
@@ -715,7 +732,7 @@ describe("a placed line", () => {
     });
 
     it("saves its groups and reopens with them exactly", () => {
-        const t = typed(
+        const t = kept(
             drawn(7, { x: 100, y: 100 }, { x: 150, y: 100 }),
             "2*3+2+2*1 2/3",
         );
@@ -741,7 +758,7 @@ describe("a placed line", () => {
     });
 
     it("labels a placed grouped line with its groups", () => {
-        const t = typed(
+        const t = kept(
             drawn(6, { x: 100, y: 100 }, { x: 150, y: 100 }),
             "2*3+4*2",
         );

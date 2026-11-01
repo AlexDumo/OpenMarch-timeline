@@ -203,7 +203,8 @@ describe("the line's steps (#530)", () => {
         expect(mixed.steps[0]!.invalid).toBe(false);
         expect(hasGroups(mixed.params as LineParams)).toBe(true);
         expect((mixed.params as LineParams).spacing).toEqual({
-            mode: "keep",
+            // Typing leaves the interval unlocked, the line sized to it
+            mode: "fit",
             groups: [
                 { count: 2, interval: 30 },
                 { count: 4, interval: 20 },
@@ -212,7 +213,8 @@ describe("the line's steps (#530)", () => {
         const plain = shapeSteps(lineTool, start(), N, env, ["3"]);
         expect(plain.steps[0]!.invalid).toBe(false);
         expect((plain.params as LineParams).spacing).toEqual({
-            mode: "keep",
+            // Typing leaves the interval unlocked, the line sized to it
+            mode: "fit",
             groups: [{ interval: 30 }],
         });
     });
@@ -222,7 +224,8 @@ describe("the line's steps (#530)", () => {
         expect(steps).toHaveLength(1);
         expect(steps[0]!.invalid).toBe(false);
         expect((params as LineParams).spacing).toEqual({
-            mode: "keep",
+            // Typing leaves the interval unlocked, the line sized to it
+            mode: "fit",
             groups: [{ interval: 30 }],
         });
     });
