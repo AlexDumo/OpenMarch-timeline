@@ -2664,10 +2664,10 @@
     },
     "view3d": {
         "autoOpenPrompt": {
-            "description": "The 3D View opened with your show. You can change this later in Settings › General.",
-            "no": "Don't open it",
-            "title": "Open the 3D viewer on launch?",
-            "yes": "Keep opening it"
+            "description": "You can change this later in Settings › General.",
+            "no": "No",
+            "title": "Open the 3D View on launch?",
+            "yes": "Yes"
         },
         "camera": {
             "blimp": "Blimp",
