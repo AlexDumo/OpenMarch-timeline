@@ -106,6 +106,7 @@
             "circle": "Shape: Circle",
             "ring": "Favorites ring: hold to pick a shape, tap to keep it open",
             "apply": "Place marchers on the shape",
+            "removeLastPoint": "Shape: Remove the last point while drawing",
             "quarterTurn": "Shape: Turn 90° clockwise",
             "recalculate": "Shape: Recalculate who goes where",
             "evenOut": "Shape: Even out the outline",
@@ -2007,7 +2008,8 @@
             },
             "drawHint": "Drag on the field to draw a {shape} · Esc to cancel",
             "drawPointsHint": "Drag on the field to draw a {shape}, or click point after point · Esc to cancel",
-            "pointsHint": "Click to add a point · Enter or a click on the last point finishes · Esc to cancel",
+            "removePointHint": "Right-click or <keys></keys> removes the last point · Double-click to finish · Esc to cancel",
+            "removePointHintClick": "Right-click removes the last point · Double-click to finish · Esc to cancel",
             "drawnOn": "from {page}",
             "edge": {
                 "label": "Edge",

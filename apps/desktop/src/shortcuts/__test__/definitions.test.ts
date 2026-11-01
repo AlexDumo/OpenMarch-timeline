@@ -31,6 +31,8 @@ const NOT_IN_PALETTE: Partial<Record<ActionId, string>> = {
     shapeBlock: "listed as Shape › Box, which asks the box's numbers",
     shapeCircle: "listed as Shape › Circle, which asks the circle's numbers",
     shapeLine: "listed as Shape › Line, which asks the line's numbers",
+    shapeRemoveLastPoint:
+        "works only between clicks while drawing a line point by point",
 };
 
 function lookup(key: string): unknown {

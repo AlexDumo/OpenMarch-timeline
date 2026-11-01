@@ -739,6 +739,18 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["Enter"],
     },
+    // While drawing a line point by point, the last point taken back (owner, option A on #522).
+    // Handled only then (shapes/tool/ShapeToolKeys), so the keys do nothing else meanwhile
+    shapeRemoveLastPoint: {
+        labelKey: "actions.shape.removeLastPoint",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["Backspace", "Delete"],
+        // One point a press: a held key doesn't run the line back to its start
+        ignoreRepeat: true,
+        hiddenFromPalette: true,
+    },
     // The floating editor's turn and Recalculate (#429), for the open or selected shape only. While
     // one is shown, Alt+F and Alt+Shift+F (flipHorizontal/flipVertical) flip the shape instead of
     // the marchers (shapes/editor/ShapeEditorBar)

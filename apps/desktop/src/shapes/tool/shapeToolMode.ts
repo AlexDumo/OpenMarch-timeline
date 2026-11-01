@@ -26,6 +26,7 @@ import {
     press,
     pressTarget,
     release,
+    removeLastPoint,
     slotsOf,
     startsOf,
     targetsOf,
@@ -393,6 +394,18 @@ export function cancelShapeGesture(): void {
 }
 
 /**
+ * While clicking a line's points: the last one taken back (owner, option A on #522). Says whether
+ * points are being clicked, so the right-click or key is used up even when only the first is left.
+ */
+export function removeLastShapePoint(): boolean {
+    const field = currentShapeField();
+    const tool = useShapeToolStore.getState().tool;
+    if (!field || tool?.gesture?.type !== "points") return false;
+    updateTool((t) => removeLastPoint(t, envOf(field, t)));
+    return true;
+}
+
+/**
  * The open shape tool on the field (docs/timeline/research/shapes/06-box-v1.md): a field editor
  * mode that takes every edit press while the tool is open and hands it to the tool's state
  * machine, so nothing selects, drags or lassos underneath. Navigation keeps its presses (right and
@@ -441,8 +454,11 @@ export const shapeToolMode: FieldMode = {
         updateTool((t) => release(t, shapeContextFor(field), click));
     },
     cancel: cancelShapeGesture,
-    // A right-click on a handle with a menu (a Line's point or segment, #569) opens it
+    // A right-click on a handle with a menu (a Line's point or segment, #569) opens it. While
+    // clicking a line's points it takes the last one back instead, a Mac's Ctrl-click and a long
+    // press too, as they open the menu (owner, option A on #522)
     openMenu(pointer) {
+        if (removeLastShapePoint()) return true;
         const tool = useShapeToolStore.getState().tool;
         const field = currentShapeField();
         if (!tool || !field || tool.gesture || tool.params === null)
