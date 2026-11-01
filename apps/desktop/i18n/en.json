@@ -2008,7 +2008,8 @@
             },
             "drawHint": "Drag on the field to draw a {shape} · Esc to cancel",
             "drawPointsHint": "Drag on the field to draw a {shape}, or click point after point · Esc to cancel",
-            "removePointHint": "Right-click or <keys></keys> removes the last point · Double-click to finish",
+            "removePointHint": "Right-click or <keys></keys> removes the last point · Double-click to finish · Esc to cancel",
+            "removePointHintClick": "Right-click removes the last point · Double-click to finish · Esc to cancel",
             "drawnOn": "from {page}",
             "edge": {
                 "label": "Edge",

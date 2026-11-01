@@ -747,6 +747,8 @@ const STATIC_ACTIONS = {
         editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Backspace", "Delete"],
+        // One point a press: a held key doesn't run the line back to its start
+        ignoreRepeat: true,
         hiddenFromPalette: true,
     },
     // The floating editor's turn and Recalculate (#429), for the open or selected shape only. While

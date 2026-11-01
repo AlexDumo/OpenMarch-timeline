@@ -212,13 +212,19 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
 function RemovePointHint() {
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     const keys = getActionShortcutKeys("shapeRemoveLastPoint", { overrides });
+    // With the key unbound, only the right-click is said
+    if (!keys)
+        return (
+            <T
+                keyName="shapes.edit.removePointHintClick"
+                defaultValue="Right-click removes the last point · Double-click to finish · Esc to cancel"
+            />
+        );
     return (
         <T
             keyName="shapes.edit.removePointHint"
-            defaultValue="Right-click or <keys></keys> removes the last point · Double-click to finish"
-            params={{
-                keys: () => (keys ? <Keycaps keys={keys} /> : "Backspace"),
-            }}
+            defaultValue="Right-click or <keys></keys> removes the last point · Double-click to finish · Esc to cancel"
+            params={{ keys: () => <Keycaps keys={keys} /> }}
         />
     );
 }
