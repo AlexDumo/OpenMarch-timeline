@@ -22,6 +22,7 @@ import { randomUUID } from "node:crypto";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import * as DatabaseServices from "../database/database.services";
 import { LIBRARY_LIMITS } from "../../src/view3d/library/protocol";
+import { VIEW3D_AUTO_OPEN_SETTING } from "../../src/view3d/sync/protocol";
 import { applicationMenu } from "./application-menu";
 import { openSettingsWindow } from "./settings-window";
 import { TRAFFIC_LIGHT_POSITION } from "./traffic-lights";
@@ -646,6 +647,17 @@ void app.whenReady().then(async () => {
         getLanguage: () => store.get("language", "en") as string,
         getEditorWindow: () => win,
         getLibraryStore,
+        // A Playwright session never asks, so the question doesn't sit over every test
+        getAutoOpen: () =>
+            process.env.PLAYWRIGHT_SESSION
+                ? null
+                : store.get(VIEW3D_AUTO_OPEN_SETTING),
+        setAutoOpen: (autoOpen) => {
+            store.set(VIEW3D_AUTO_OPEN_SETTING, autoOpen);
+            win?.webContents.send("settings:changed", {
+                [VIEW3D_AUTO_OPEN_SETTING]: autoOpen,
+            });
+        },
     });
     initLibraryIpc({
         getEditorWindow: () => win,

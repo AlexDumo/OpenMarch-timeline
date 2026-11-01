@@ -17,8 +17,8 @@
  * settings with history, camera lists without) and playback
  * requests (playback runs the editor's own actions). With no window open it does nothing, except that it opens the
  * window when the show opens if the app setting
- * `VIEW3D_AUTO_OPEN_SETTING` is on, and asks once while it was never set
- * (`view3dAutoOpenOnShow`). It keeps `useView3dWindowStore` up to date, so
+ * `VIEW3D_AUTO_OPEN_SETTING` is on, or was never answered (the window then
+ * asks, `view3dAutoOpenOnShow`). It keeps `useView3dWindowStore` up to date, so
  * the 3D View button shows only while the window is closed.
  */
 import { useCallback, useEffect, useRef } from "react";
@@ -54,7 +54,7 @@ import { pressAction, type ReleaseReason } from "@/shortcuts/registry";
 import { subscribeTimelineChanges } from "@/db-functions/timelineChanges";
 import { useView3dWindowStore } from "@/stores/View3dWindowStore";
 import { isWebBuild } from "@/utilities/webBuild";
-import { askToAutoOpenView3d, view3dAutoOpenOnShow } from "./view3dAutoOpen";
+import { view3dAutoOpenOnShow } from "./view3dAutoOpen";
 import {
     VIEW3D_AUTO_OPEN_SETTING,
     VIEW3D_CLOCK_CHANNEL,
@@ -282,31 +282,23 @@ export function useView3dPublisher() {
         };
     }, [sendClock, sendSelection, updateVenue, updateCameras, setWindowOpen]);
 
-    // Opens the window with the show when the app setting asks for it, in
-    // the background so the editor keeps focus, or asks once while it was
-    // never set. This runs after the effect above, so the window-state push
-    // and the window's hello aren't missed.
+    // Opens the window with the show when the app setting asks for it, or
+    // while it was never answered (the window asks), in the background so the
+    // editor keeps focus. This runs after the effect above, so the
+    // window-state push and the window's hello aren't missed.
     useEffect(() => {
         const electron = window.electron;
         if (!electron?.openView3d || !electron.invoke) return;
         let cancelled = false;
-        const open = () => void electron.openView3d({ background: true });
         void Promise.resolve(
             electron.invoke("settings:get", VIEW3D_AUTO_OPEN_SETTING),
         ).then((autoOpen) => {
-            if (cancelled) return;
-            const next = view3dAutoOpenOnShow(autoOpen, {
-                canAsk: !isWebBuild && !electron.isPlaywrightSession,
-            });
-            if (next === "open") open();
-            if (next === "ask")
-                askToAutoOpenView3d({
-                    save: (checked) =>
-                        electron.send("settings:set", {
-                            [VIEW3D_AUTO_OPEN_SETTING]: checked,
-                        }),
-                    open,
-                });
+            const canAutoOpen = !isWebBuild && !electron.isPlaywrightSession;
+            if (
+                !cancelled &&
+                view3dAutoOpenOnShow(autoOpen, { canAutoOpen }) === "open"
+            )
+                void electron.openView3d({ background: true });
         });
         return () => {
             cancelled = true;
