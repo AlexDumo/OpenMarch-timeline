@@ -5,11 +5,13 @@ import type { XY } from "../../types";
 import { ORDER_PICTURES, ORDER_SAMPLE, ORDER_SPOTS } from "../orderPictures";
 
 /**
- * Who goes where's pictures (#559, #568): the three answers read differently, and each picture's
- * moves follow the rule its answer names
+ * Who goes where's pictures (#559, #568): the three answers read differently, each picture's
+ * moves follow the rule its answer names, and the old line's first marcher, the one each picture
+ * picks out, lands on a different spot in each
  */
 
 const { from, to } = ORDER_SAMPLE;
+const last = from.length - 1;
 const walks = (spots: readonly number[]) =>
     from.map((p, i) => ({ from: p, to: to[spots[i]!]! }));
 const travel = (spots: readonly number[]) =>
@@ -25,22 +27,75 @@ const crossings = (spots: readonly number[]) => {
             if (walksCross(all[i]!, all[j]!)) n++;
     return n;
 };
-const same = (a: readonly number[], b: readonly number[]) =>
-    a.every((v, i) => v === b[i]);
-/** A spot's shade: the old-line place of the marcher who lands on it */
-const landed = (key: keyof typeof ORDER_PICTURES) =>
-    ORDER_PICTURES[key].shades!.dots;
+/** The closest a walk passes to a marcher other than its own */
+const clearance = (spots: readonly number[]) => {
+    let min = Infinity;
+    for (const w of walks(spots))
+        for (const p of [...from, ...to]) {
+            if (p === w.from || p === w.to) continue;
+            const dx = w.to.x - w.from.x;
+            const dy = w.to.y - w.from.y;
+            const t = Math.max(
+                0,
+                Math.min(
+                    1,
+                    ((p.x - w.from.x) * dx + (p.y - w.from.y) * dy) /
+                        (dx * dx + dy * dy),
+                ),
+            );
+            min = Math.min(
+                min,
+                Math.hypot(p.x - w.from.x - t * dx, p.y - w.from.y - t * dy),
+            );
+        }
+    return min;
+};
+/** Where a picture's solid marcher lands, as a spot index */
+const landsOn = (key: keyof typeof ORDER_PICTURES) =>
+    ORDER_PICTURES[key].marked!.dot;
 
 describe("who goes where's pictures", () => {
-    it("are three different pictures, with three different moves", () => {
+    it("show at least four marchers", () => {
+        expect(from.length).toBeGreaterThanOrEqual(4);
+        expect(to).toHaveLength(from.length);
+    });
+
+    it("are three different pictures, the solid marcher landing on three different spots", () => {
         const { nearest, keep, reverse } = ORDER_SPOTS;
-        expect(same(nearest, keep)).toBe(false);
-        expect(same(nearest, reverse)).toBe(false);
-        expect(same(keep, reverse)).toBe(false);
-        const drawn = Object.values(ORDER_PICTURES).map((p) =>
-            JSON.stringify(p),
-        );
-        expect(new Set(drawn).size).toBe(3);
+        expect(nearest).not.toEqual(keep);
+        expect(nearest).not.toEqual(reverse);
+        expect(keep).not.toEqual(reverse);
+        expect(
+            new Set(Object.values(ORDER_PICTURES).map((p) => JSON.stringify(p)))
+                .size,
+        ).toBe(3);
+        expect(
+            new Set([landsOn("nearest"), landsOn("keep"), landsOn("reverse")])
+                .size,
+        ).toBe(3);
+    });
+
+    it("pick out the old line's first marcher, solid where it starts and where it lands", () => {
+        for (const [key, picture] of Object.entries(ORDER_PICTURES)) {
+            expect(picture.marked!.faintDot).toBe(0);
+            expect(picture.marked!.dot).toBe(
+                ORDER_SPOTS[key as keyof typeof ORDER_SPOTS][0],
+            );
+            expect(picture.faintDots as readonly XY[]).toEqual(from);
+            expect(picture.dots as readonly XY[]).toEqual(to);
+        }
+    });
+
+    it("draw the old line faintly through its marchers in order", () => {
+        for (const picture of Object.values(ORDER_PICTURES))
+            expect(
+                picture.lines.some(
+                    (line) =>
+                        line.faint &&
+                        !line.dashed &&
+                        JSON.stringify(line.points) === JSON.stringify(from),
+                ),
+            ).toBe(true);
     });
 
     it("Least travel: the solver's answer, the shortest walks, none crossing", () => {
@@ -52,35 +107,27 @@ describe("who goes where's pictures", () => {
         expect(travel(ORDER_SPOTS.nearest)).toBeLessThan(
             travel(ORDER_SPOTS.reverse),
         );
-        // The ramp lands mixed: neither in order nor flipped
-        const shades = landed("nearest");
-        const sorted = [...shades].sort((a, b) => a - b);
-        expect(shades).not.toEqual(sorted);
-        expect(shades).not.toEqual([...sorted].reverse());
+        // The solid marcher lands on neither end
+        expect(landsOn("nearest")).not.toBe(0);
+        expect(landsOn("nearest")).not.toBe(last);
     });
 
-    it("Keep order: first to first, last to last, the ramp in order along the new line", () => {
+    it("Keep order: first to first and on in order, no walks crossing", () => {
         expect(ORDER_SPOTS.keep).toEqual(from.map((_, i) => i));
-        const shades = landed("keep");
-        expect(shades).toEqual([...shades].sort((a, b) => a - b));
+        expect(landsOn("keep")).toBe(0);
+        expect(crossings(ORDER_SPOTS.keep)).toBe(0);
     });
 
-    it("Reverse: first to last, the ramp flipped along the new line", () => {
-        expect(ORDER_SPOTS.reverse).toEqual(
-            from.map((_, i) => from.length - 1 - i),
-        );
-        const shades = landed("reverse");
-        expect(shades).toEqual([...shades].sort((a, b) => b - a));
+    it("Reverse: first to last, flipped, its walks crossing", () => {
+        expect(ORDER_SPOTS.reverse).toEqual(from.map((_, i) => last - i));
+        expect(landsOn("reverse")).toBe(last);
+        expect(crossings(ORDER_SPOTS.reverse)).toBeGreaterThan(0);
     });
 
-    it("shades the old line in its order, first an empty ring to last a solid dot", () => {
-        for (const picture of Object.values(ORDER_PICTURES)) {
-            const old = picture.shades!.faintDots;
-            expect(old).toHaveLength(from.length);
-            expect(old[0]).toBe(0);
-            expect(old[old.length - 1]).toBe(1);
-            expect(old).toEqual([...old].sort((a, b) => a - b));
-            expect(picture.dots as readonly XY[]).toEqual(to);
-        }
+    it("keep walks clear of the other marchers", () => {
+        // A fifth of the spots' spacing
+        const room = (to[1]!.x - to[0]!.x) / 5;
+        for (const spots of Object.values(ORDER_SPOTS))
+            expect(clearance(spots)).toBeGreaterThan(room);
     });
 });

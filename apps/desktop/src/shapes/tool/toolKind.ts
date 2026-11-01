@@ -274,7 +274,7 @@ export interface ToolChoicePictureLine {
     readonly points: readonly XY[];
     /** Joined back to its first point */
     readonly closed?: boolean;
-    /** A guide or a move rather than the shape itself: drawn light */
+    /** A guide, a move or where marchers come from rather than the shape itself: drawn faint */
     readonly faint?: boolean;
     /** Where the shape would go rather than where it is: drawn dashed */
     readonly dashed?: boolean;
@@ -290,16 +290,17 @@ export interface ToolChoicePicture {
     readonly lines: readonly ToolChoicePictureLine[];
     /** Marchers where they stand */
     readonly dots: readonly XY[];
-    /** Marchers where they come from, drawn light */
+    /** Marchers where they come from, drawn faint (a {@link marked} one solid) */
     readonly faintDots?: readonly XY[];
     /**
-     * Where each marcher comes in an order, 0 for the first to 1 for the last, parallel to
-     * {@link dots} and {@link faintDots}: drawn from an empty ring to a solid dot, so a picture
-     * shows who went where. Absent draws every marcher alike.
+     * One marcher picked out, by its index in {@link dots} (where it lands) and in
+     * {@link faintDots} (where it comes from): drawn solid at both ends of its move and every
+     * other marcher as a ring, so a picture of who goes where asks where the solid one lands.
+     * Absent draws every marcher alike.
      */
-    readonly shades?: {
-        readonly dots: readonly number[];
-        readonly faintDots: readonly number[];
+    readonly marked?: {
+        readonly dot: number;
+        readonly faintDot: number;
     };
 }
 

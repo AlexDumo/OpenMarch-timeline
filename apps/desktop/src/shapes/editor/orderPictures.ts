@@ -4,25 +4,34 @@ import type { ToolChoicePicture } from "../tool/toolKind";
 import type { XY } from "../types";
 
 /**
- * Who goes where's pictures (#559): marchers on a line (light) moving onto a new line below them,
- * each marcher drawn by its place in the order, from an empty ring (the first) to a solid dot
- * (the last), at both ends of its move. The old line bends back on itself, so the three answers
- * really differ (two straight lines would make Least travel the same as one of the others):
- * Least travel walks each marcher a short way straight down and the ramp lands mixed, Keep order
- * lands the ramp in the same order along the new line, and Reverse lands it flipped.
+ * Who goes where's pictures (#559): four marchers on an old line (drawn faint) walk onto a new
+ * line below it. Only the old line's first marcher is picked out, solid where it starts and where
+ * it lands, so each picture asks one question: where does the solid one land? The old line starts
+ * low on the left and turns up and along the top, so the three answers land it on three different
+ * spots: Least travel walks it a short way onto the second spot (the marcher above it takes the
+ * first), Keep order takes it to the first spot with the others following in order, and Reverse
+ * to the last, the walks crossing.
  */
 
+/** The menu's pictures are larger than the other menus': four marchers need the room */
+export const ORDER_PICTURE_SIZE = { width: 36, height: 22 } as const;
+
 /** The new line's spots, first to last */
-const TO: readonly XY[] = [2, 12, 22].map((x) => ({ x, y: 13 }));
-const NEW_LINE = { points: [TO[0]!, TO[2]!], faint: true };
-/** The old line's marchers, first to last: it runs left along the top and turns back */
+const TO: readonly XY[] = [0, 10, 20, 30].map((x) => ({ x, y: 18 }));
+const NEW_LINE = { points: [TO[0]!, TO[TO.length - 1]!] };
+/**
+ * The old line's marchers, first to last: the first stands low on the left, then the line runs up
+ * and along the top to the right
+ */
 const FROM: readonly XY[] = [
-    { x: 20, y: 1 },
-    { x: 5, y: 3 },
-    { x: 13, y: 5.5 },
+    { x: 3, y: 11 },
+    { x: 0, y: 0 },
+    { x: 10, y: 0 },
+    { x: 20, y: 2 },
 ];
-/** Each marcher's place in the old line's order, 0 to 1 */
-const SHADE = FROM.map((_, i) => i / (FROM.length - 1));
+const OLD_LINE = { points: FROM, faint: true };
+/** The marcher each picture picks out: the old line's first */
+const FIRST = 0;
 
 /** The pictures' moves, worked out with the rule each names: the spot index for each marcher */
 export const ORDER_SPOTS: Readonly<Record<OrderChoice, readonly number[]>> = {
@@ -35,21 +44,20 @@ export const ORDER_SPOTS: Readonly<Record<OrderChoice, readonly number[]>> = {
 export const ORDER_SAMPLE = { from: FROM, to: TO } as const;
 
 function picture(spotOf: readonly number[]): ToolChoicePicture {
-    // Each spot drawn as the marcher who lands on it
-    const landed = new Array<number>(TO.length);
-    spotOf.forEach((spot, marcher) => (landed[spot] = SHADE[marcher]!));
     return {
         lines: [
+            OLD_LINE,
             NEW_LINE,
+            // The first marcher's walk drawn stronger than the others', so the eye follows it
             ...FROM.map((p, i) => ({
                 points: [p, TO[spotOf[i]!]!],
-                faint: true,
+                faint: i !== FIRST,
                 dashed: true,
             })),
         ],
         dots: TO,
         faintDots: FROM,
-        shades: { dots: landed, faintDots: SHADE },
+        marked: { dot: spotOf[FIRST]!, faintDot: FIRST },
     };
 }
 

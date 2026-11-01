@@ -10,9 +10,10 @@ export const CHOICE_PICTURE = { width: 24, height: 16 } as const;
 /** Room left at the picture's edges, so dots and line ends aren't cut off */
 const PAD = 2;
 
-/** `picture` scaled into {@link CHOICE_PICTURE}, centered, keeping its proportions */
+/** `picture` scaled into `size` ({@link CHOICE_PICTURE} unless given), centered, keeping its proportions */
 export function fitChoicePicture(
     picture: ToolChoicePicture,
+    size: { readonly width: number; readonly height: number } = CHOICE_PICTURE,
 ): ToolChoicePicture {
     const all = [
         ...picture.dots,
@@ -26,7 +27,7 @@ export function fitChoicePicture(
     const minY = Math.min(...ys);
     const width = Math.max(...xs) - minX;
     const depth = Math.max(...ys) - minY;
-    const { width: W, height: H } = CHOICE_PICTURE;
+    const { width: W, height: H } = size;
     const k = Math.min(
         width > 0 ? (W - 2 * PAD) / width : Infinity,
         depth > 0 ? (H - 2 * PAD) / depth : Infinity,

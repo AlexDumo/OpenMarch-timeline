@@ -10,12 +10,18 @@ import { CHOICE_PICTURE, fitChoicePicture } from "../preview/choicePicture";
 export function ChoicePicture({
     picture,
     testId,
+    size = CHOICE_PICTURE,
 }: {
     picture: ToolChoicePicture;
     testId?: string;
+    /** In CSS px; the menus' usual size unless a menu needs more room */
+    size?: { readonly width: number; readonly height: number };
 }) {
-    const fitted = useMemo(() => fitChoicePicture(picture), [picture]);
-    const { width, height } = CHOICE_PICTURE;
+    const fitted = useMemo(
+        () => fitChoicePicture(picture, size),
+        [picture, size],
+    );
+    const { width, height } = size;
     return (
         <svg
             width={width}
@@ -46,9 +52,8 @@ export function ChoicePicture({
                     <polyline key={i} {...props} />
                 );
             })}
-            {fitted.faintDots?.map(({ x, y }, i) => {
-                const shade = fitted.shades?.faintDots[i];
-                return shade === undefined ? (
+            {fitted.faintDots?.map(({ x, y }, i) =>
+                fitted.marked === undefined ? (
                     <circle
                         key={`from-${i}`}
                         cx={x}
@@ -58,35 +63,57 @@ export function ChoicePicture({
                         fillOpacity={0.4}
                     />
                 ) : (
-                    <ShadedDot key={`from-${i}`} x={x} y={y} shade={shade} />
-                );
-            })}
-            {fitted.dots.map(({ x, y }, i) => {
-                const shade = fitted.shades?.dots[i];
-                return shade === undefined ? (
+                    <MarkedDot
+                        key={`from-${i}`}
+                        x={x}
+                        y={y}
+                        marked={i === fitted.marked.faintDot}
+                        faint
+                    />
+                ),
+            )}
+            {fitted.dots.map(({ x, y }, i) =>
+                fitted.marked === undefined ? (
                     <circle key={i} cx={x} cy={y} r={1.1} fill="currentColor" />
                 ) : (
-                    <ShadedDot key={i} x={x} y={y} shade={shade} />
-                );
-            })}
+                    <MarkedDot
+                        key={i}
+                        x={x}
+                        y={y}
+                        marked={i === fitted.marked.dot}
+                    />
+                ),
+            )}
         </svg>
     );
 }
 
 /**
- * A marcher's place in an order: the first an empty ring, the last a solid dot, those between
- * filled part way. Both ends of a move are drawn alike, so a picture's ramp reads end to end.
+ * A marcher in a picture that picks one out: the picked one a solid dot, larger, at both ends of
+ * its move; the others rings, those where they come from fainter
  */
-function ShadedDot({ x, y, shade }: { x: number; y: number; shade: number }) {
-    return (
+function MarkedDot({
+    x,
+    y,
+    marked,
+    faint = false,
+}: {
+    x: number;
+    y: number;
+    marked: boolean;
+    faint?: boolean;
+}) {
+    return marked ? (
+        <circle cx={x} cy={y} r={2.2} fill="currentColor" data-marked="" />
+    ) : (
         <circle
             cx={x}
             cy={y}
-            r={1.3}
-            fill="currentColor"
-            fillOpacity={shade}
+            r={1.4}
+            fill="none"
             stroke="currentColor"
-            strokeWidth={0.6}
+            strokeOpacity={faint ? 0.6 : 0.9}
+            strokeWidth={0.8}
         />
     );
 }
