@@ -496,8 +496,10 @@ const MarcherForm: React.FC<MarcherFormProps> = ({
                     </span>
                 </TabItem>
             </TabsList>
-            <TabContent value="manual">{manualForm}</TabContent>
-            <TabContent value="csv">
+            <TabContent value="manual" className="flex-1" tabIndex={-1}>
+                {manualForm}
+            </TabContent>
+            <TabContent value="csv" className="flex-1" tabIndex={-1}>
                 <MarcherCsvImportForm
                     existing={marchers ?? []}
                     importDisabled={
