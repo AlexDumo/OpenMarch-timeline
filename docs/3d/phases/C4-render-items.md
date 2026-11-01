@@ -314,3 +314,16 @@ Nothing yet.
   moves. `useShowNotes` reads the items' Outline changes for it. Shows with
   no platforms or obstacles skip the check; 400 performers over 1,000 counts
   with three props took about 95 ms on an M1 Pro.
+- 2026-11-01, C4.5 review fixes (branch `3d/c4-props`): a platform now
+  stands on any platform under its center; only two platforms over each
+  other's centers use the order (the smaller on the larger, then the later on
+  the earlier), and a longer loop is broken where it is entered. The props
+  and the performers share one layout a frame, and performers stand on the
+  platforms as drawn at the clock, where their bodies are (after the motion
+  step). The moving-platform note also fires when the platform turns or
+  changes size; the obstacle note says its counts ("Page 3 count 3 to
+  Page 4 count 2"); the step note's limit reads in the show's units.
+  - **Open:** a prop's Library model is C4.6's (props draw as Outlines until
+    then). "With nothing between" is read count to count: a step up 16 in and
+    another 16 in within one count reads as one 32 in step, and a hop onto
+    and off a narrow platform within one count isn't seen.

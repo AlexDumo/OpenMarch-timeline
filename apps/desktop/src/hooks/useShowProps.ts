@@ -4,7 +4,7 @@
  * timeline resolver and `readPutDownItems` count them.
  */
 import { useQueries, type UseQueryResult } from "@tanstack/react-query";
-import type { PutDownItem } from "@openmarch/core";
+import type { PlacementChange, PutDownItem } from "@openmarch/core";
 import type { DatabaseBeat } from "@/db-functions";
 import type { DatabaseItem, DatabaseItemGeometry } from "@/db-functions/items";
 import { allDatabaseBeatsQueryOptions } from "@/hooks/queries/useBeats";
@@ -13,7 +13,10 @@ import {
     itemGeometryQueryOptions,
 } from "@/hooks/queries/useItems";
 import { putDownItemsQueryOptions } from "@/hooks/queries/usePutDownItems";
-import { itemOutlineChanges } from "@/items/itemOutlineTimeline";
+import {
+    itemOutlineChanges,
+    type ItemOutlineChanges,
+} from "@/items/itemOutlineTimeline";
 import type { PropInput } from "@/view3d/core/props/propLayout";
 
 export type ShowPropsReturn = {
@@ -23,6 +26,31 @@ export type ShowPropsReturn = {
 };
 
 const NO_PROPS: PropInput[] = [];
+
+/**
+ * The props among the items (equipment is the Carry and Placement layers'), with their Outline
+ * changes by marchers row and their Placement changes.
+ */
+export function propInputs<
+    T extends Pick<DatabaseItem, "id" | "marcher_id" | "kind" | "surface_type">,
+>(
+    items: readonly T[],
+    outlines: ItemOutlineChanges,
+    placementsOf: (item: T) => readonly PlacementChange[],
+): PropInput[] {
+    return items.flatMap((item) =>
+        item.kind === "prop" && item.surface_type
+            ? [
+                  {
+                      id: item.marcher_id,
+                      surface: item.surface_type,
+                      changes: outlines.get(item.marcher_id) ?? [],
+                      placements: placementsOf(item),
+                  },
+              ]
+            : [],
+    );
+}
 
 export const _combineShowPropsQueries = (
     results: [
@@ -58,17 +86,15 @@ export const _combineShowPropsQueries = (
     const placementsOf = new Map(
         placements.data.map((p) => [p.marcherId, p.changes]),
     );
-    const props: PropInput[] = [];
-    for (const item of items.data) {
-        if (item.kind !== "prop" || !item.surface_type) continue;
-        props.push({
-            id: item.marcher_id,
-            surface: item.surface_type,
-            changes: changes.get(item.marcher_id) ?? [],
-            placements: placementsOf.get(item.marcher_id) ?? [],
-        });
-    }
-    return { props, isLoading: false, hasError: false };
+    return {
+        props: propInputs(
+            items.data,
+            changes,
+            (item) => placementsOf.get(item.marcher_id) ?? [],
+        ),
+        isLoading: false,
+        hasError: false,
+    };
 };
 
 /** The show's props, for the 3D View window. */

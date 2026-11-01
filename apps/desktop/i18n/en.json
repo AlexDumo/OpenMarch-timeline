@@ -2368,7 +2368,7 @@
         "leavesMovingPlatformDetail": "A moving platform doesn't carry the performers on it",
         "performers": "{count, plural, one {# performer} other {# performers}}",
         "pick": "Go to this count and select what it names",
-        "platformStepDetail": "More than 16 in, with no step between",
+        "platformStepDetail": "More than {limit}, with no step between",
         "platformStepDown": "{who} steps down {height} from {item}",
         "platformStepUp": "{who} steps up {height} onto {item}",
         "putDownDrift": "{item} put down away from its holder",

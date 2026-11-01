@@ -214,6 +214,22 @@ describe("propsAt", () => {
         expect(tops[2]).toBeCloseTo(0.6);
     });
 
+    it("stands a larger platform on a smaller one under its center", () => {
+        // the deck's center is over the riser; the riser's center isn't under the deck
+        const solids = byId(
+            propsAt(
+                [
+                    prop(1, "platform", [box(0, 2, 2, 0.4)]),
+                    prop(2, "platform", [box(0, 1.6, 6, 0.2)]),
+                ],
+                0,
+                at({ 1: { x: 0, z: 0 }, 2: { x: 0.9, z: 0 } }),
+            ),
+        );
+        expect(solids.get(1)!.base).toBe(0);
+        expect(solids.get(2)!.base).toBeCloseTo(0.4);
+    });
+
     it("stands the later of two same-size platforms on the earlier", () => {
         const solids = byId(
             propsAt(

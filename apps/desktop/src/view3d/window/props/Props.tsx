@@ -9,12 +9,11 @@ import * as THREE from "three";
 import type { FieldProperties } from "@openmarch/core";
 import { useShowProps } from "@/hooks/useShowProps";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
-import { playbackBeat } from "@/timeline/positionBuffer";
-import { propsAt } from "@/view3d/core/props/propLayout";
 import { useShowPositions } from "@/view3d/positions";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
 import { requestDraw } from "../drawWake";
 import { useView3dSceneStore } from "../sceneStore";
+import { propSolidsAt } from "./performerLift";
 import { propGeometry, propMaterials, propMeshY, shapeKey } from "./propMeshes";
 
 /** How long to keep drawing after the props change, so the change shows. */
@@ -71,12 +70,13 @@ export default function Props({
         const ms = useView3dSyncStore.getState().showMs();
         if (ms === lastMs.current) return;
         lastMs.current = ms;
-        const solids =
-            positions && showProps.length > 0
-                ? propsAt(showProps, playbackBeat(countGrid, ms), (id) =>
-                      positions.positionAt(id, ms, fieldProperties),
-                  )
-                : [];
+        const solids = propSolidsAt({
+            props: showProps,
+            positions,
+            countGrid,
+            ms,
+            fieldProperties,
+        });
         const drawn = new Set<number>();
         for (const solid of solids) {
             drawn.add(solid.id);

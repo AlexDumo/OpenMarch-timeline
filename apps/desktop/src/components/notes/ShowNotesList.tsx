@@ -12,6 +12,8 @@ import { useTolgee } from "@tolgee/react";
 import { Button } from "@openmarch/ui";
 import { InfoIcon, WarningIcon } from "@phosphor-icons/react";
 import type { MeasurementSystem } from "@openmarch/core";
+import { STEP_NOTE_HEIGHT } from "@/notes/platformNotes";
+import { METERS_PER_INCH } from "@/view3d/core/sizes/units";
 import { notesForItem, type ShowNote } from "@/notes/showNotes";
 import {
     snapItemToHolderMutationOptions,
@@ -24,6 +26,7 @@ import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
     beatWhere,
     joinList,
+    rangeWhere,
     type NamedPageBox,
 } from "@/timeline/timelineRangeWords";
 import { InspectorCollapsible } from "@/components/inspector/InspectorCollapsible";
@@ -50,7 +53,7 @@ type Translate = ReturnType<typeof useTolgee>["t"];
 export const stepHeightText = (m: number, system: MeasurementSystem) =>
     system === "metric"
         ? `${Math.round(Math.abs(m) * 100)} cm`
-        : `${Math.round(Math.abs(m) / 0.0254)} in`;
+        : `${Math.round(Math.abs(m) / METERS_PER_INCH)} in`;
 
 /** Names, up to three, then a count. */
 const names = (t: Translate, list: readonly string[]) =>
@@ -139,14 +142,26 @@ export function noteText(
                         { who, height, item },
                     ),
                 ),
-                detail: t("showChecks.platformStepDetail"),
+                detail: t("showChecks.platformStepDetail", {
+                    limit: stepHeightText(STEP_NOTE_HEIGHT, measurementSystem),
+                }),
             };
         }
-        case "inside_obstacle":
+        case "inside_obstacle": {
+            // Over the counts they are in it: "Page 3, counts 3–7"
+            const counts =
+                note.beat !== null && note.until !== null
+                    ? rangeWhere(
+                          { start: note.beat - 1, end: note.until - 1 },
+                          pageBoxes,
+                      )?.where
+                    : undefined;
+            const text = t("showChecks.insideObstacle", { who, item });
             return {
-                text: withWhere(t("showChecks.insideObstacle", { who, item })),
+                text: counts ? `${text}, ${counts}` : withWhere(text),
                 detail: t("showChecks.insideObstacleDetail"),
             };
+        }
         case "leaves_moving_platform":
             return {
                 text: withWhere(

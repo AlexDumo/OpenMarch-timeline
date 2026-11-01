@@ -177,7 +177,7 @@ describe("platform checks (C4.5)", () => {
             screen.getAllByTestId("show-note").map((li) => li.textContent),
         ).toEqual([
             "Alice steps up 24 in onto Riser, Page 5 count 7More than 16 in, with no step between",
-            "Carl is inside Cart, Page 3 count 3They pass through it in the 3D View",
+            "Carl is inside Cart, Page 3 count 3 to Page 4 count 2They pass through it in the 3D View",
             "Alice steps off Riser while it moves, Page 4 count 1A moving platform doesn't carry the performers on it",
         ]);
     });
@@ -192,6 +192,9 @@ describe("platform checks (C4.5)", () => {
         );
         expect((await screen.findByTestId("show-note")).textContent).toContain(
             "Alice steps down 61 cm from Riser",
+        );
+        expect(screen.getByTestId("show-note").textContent).toContain(
+            "More than 41 cm",
         );
     });
 });

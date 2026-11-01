@@ -40,6 +40,7 @@ import { itemOutlineChanges } from "@/items/itemOutlineTimeline";
 import { PIXELS_PER_METER } from "@/items/itemOutlines";
 import type { DatabaseItemGeometry } from "@/db-functions/items";
 import { platformNotes } from "@/notes/platformNotes";
+import { propInputs } from "./useShowProps";
 import {
     cueNotes,
     CREW_REACH_STEPS,
@@ -183,17 +184,10 @@ function platformNotesFrom(
     });
     const itemIdOf = new Map(data.items.map((i) => [i.marcher_id, i.id]));
     return platformNotes({
-        props: data.items.flatMap((i) =>
-            i.kind === "prop" && i.surface_type
-                ? [
-                      {
-                          id: i.marcher_id,
-                          surface: i.surface_type,
-                          changes: outlines.get(i.marcher_id) ?? [],
-                          placements: changesByItem.get(i.id) ?? [],
-                      },
-                  ]
-                : [],
+        props: propInputs(
+            data.items,
+            outlines,
+            (item) => changesByItem.get(item.id) ?? [],
         ),
         itemIdOf: (marcherId) => itemIdOf.get(marcherId) ?? -1,
         performers: data.marchers

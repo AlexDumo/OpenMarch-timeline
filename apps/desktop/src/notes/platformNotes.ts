@@ -5,13 +5,15 @@
  * - a performer stepping up or down more than 16 in at once: "P12 steps up 24 in onto Stage";
  * - a performer whose dot is inside an obstacle, who clips through it in 3D, over the counts they
  *   are in it: "T4 is inside Wall A";
- * - a dot leaving a platform while the platform moves: riders aren't carried with it.
+ * - a dot leaving a platform while the platform moves, turns or changes size: riders aren't
+ *   carried with it.
  *
  * Checked on every count, as the 3D View stands them (`propsAt`, `platformTopAt`), so a step is
  * the change in platform height from one count to the next; a step taken within a count is that
  * count's. Beats are ordinals.
  */
 import {
+    holds,
     platformTopAt,
     propsAt,
     type GroundPoint,
@@ -19,12 +21,13 @@ import {
     type PropSolid,
 } from "@/view3d/core/props/propLayout";
 import type { XY } from "@openmarch/core";
-import { insideOutline } from "@/items/itemOutlines";
+import { METERS_PER_INCH } from "@/view3d/core/sizes/units";
 import type { ShowNote, ShowNoteKind } from "./showNotes";
 
 /** A step of more than this, in meters, gets a note: 16 in. */
-export const STEP_NOTE_HEIGHT = 16 * 0.0254;
+export const STEP_NOTE_HEIGHT = 16 * METERS_PER_INCH;
 
+/** Lengths (m) and turns (degrees) this close are the same */
 const SAME = 1e-6;
 
 export interface PlatformNotesInput {
@@ -42,14 +45,15 @@ export interface PlatformNotesInput {
     unitsPerMeter: number;
 }
 
-const holds = (s: PropSolid, p: GroundPoint) =>
-    s.closed &&
-    insideOutline(
-        s.outline.map((q) => ({ x: q.x, y: q.z })),
-        { x: p.x, y: p.z },
-    );
-
 const topOf = (s: PropSolid) => s.base + s.height;
+
+/** Whether a platform moved, turned or changed size from one count to the next. */
+const moved = (then: PropSolid, now: PropSolid) =>
+    Math.abs(now.center.x - then.center.x) > SAME ||
+    Math.abs(now.center.z - then.center.z) > SAME ||
+    Math.abs(now.geometry.rotation - then.geometry.rotation) > SAME ||
+    Math.abs(now.geometry.width - then.geometry.width) > SAME ||
+    Math.abs(now.geometry.depth - then.geometry.depth) > SAME;
 
 /** One beat's props, as the checks read them. */
 interface Standing {
@@ -171,13 +175,11 @@ class PlatformChecks {
                 ).detail = { rise };
             }
             for (const id of was.on) {
-                const then = before.byId.get(id);
-                const it = now.byId.get(id);
-                if (footing.on.has(id) || !then || !it) continue;
-                if (
-                    Math.abs(it.center.x - then.center.x) > SAME ||
-                    Math.abs(it.center.z - then.center.z) > SAME
-                )
+                const platformBefore = before.byId.get(id);
+                const platformNow = now.byId.get(id);
+                if (footing.on.has(id) || !platformBefore || !platformNow)
+                    continue;
+                if (moved(platformBefore, platformNow))
                     this.note(
                         "leaves_moving_platform",
                         `${marcherId}:${id}`,

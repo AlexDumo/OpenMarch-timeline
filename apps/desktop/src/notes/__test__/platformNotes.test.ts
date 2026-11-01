@@ -160,6 +160,15 @@ describe("platformNotes", () => {
         ]);
     });
 
+    it("notes a dot left behind when a platform turns", () => {
+        const turned = { ...box(4, 0.5, 8 * IN, 2), rotation: 90 };
+        expect(
+            run([prop(STAGE, "platform", [box(4, 0.5, 8 * IN), turned])], {
+                [P12]: () => at(1.5, 0),
+            }).map((n) => [n.kind, n.beat]),
+        ).toEqual([["leaves_moving_platform", 2]]);
+    });
+
     it("says nothing about stepping off a platform that stands still", () => {
         expect(
             run([prop(STAGE, "platform", [box(2, 2, 8 * IN)])], {

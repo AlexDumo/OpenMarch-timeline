@@ -657,21 +657,19 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 xz,
                 placed,
             );
-            writePerformerLifts(
-                {
-                    props: showProps,
-                    positions: slots.positions,
-                    countGrid,
-                    ms: placedMs,
-                    fieldProperties,
-                },
-                xz,
-                placed,
-                lift,
-            );
+            // performers stand on the platforms as drawn, at the clock
+            const propsNow = {
+                props: showProps,
+                positions: slots.positions,
+                countGrid,
+                ms,
+                fieldProperties,
+            };
             if (marcherBodies) {
                 countRef.current = c;
                 motion?.update(c, xz, placed, headings);
+                // where the bodies are now
+                writePerformerLifts(propsNow, xz, placed, lift);
                 marcherBodies.writeFrame(
                     xz,
                     headings,
@@ -686,6 +684,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 lod[1] = cam[1];
                 lod[2] = cam[2];
             } else {
+                writePerformerLifts(propsNow, xz, placed, lift);
                 writePerformerMatrices(
                     count,
                     xz,

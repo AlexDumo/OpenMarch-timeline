@@ -7,7 +7,8 @@
  *   its holder's to draw (C4.6), so it is left out here.
  * - A platform or an obstacle sits on the top of the tallest platform under its footprint center.
  *   Of two platforms over each other's centers, the smaller stands on the larger, and of two the
- *   same size the later made (the higher id) on the earlier, so stacking makes steps.
+ *   same size the later made (the higher id) on the earlier, so stacking makes steps. A loop of
+ *   three or more (each center over the next) is broken where it is entered.
  * - A Floor prop stays flat on the Base floor and lifts nothing; obstacles are never stood on.
  *
  * Plain TypeScript only: this module lives under `view3d/core/`. Outlines are in world meters on
@@ -99,7 +100,14 @@ const area = (outline: readonly GroundPoint[]) => {
     return Math.abs(twice) / 2;
 };
 
-const holds = (f: Footprint, point: GroundPoint) =>
+/** Two areas this close are the same size (m²) */
+const SAME_AREA = 1e-6;
+
+/** Whether `point` is inside the footprint's Outline (an open path has no inside). */
+export const holds = (
+    f: Pick<PropSolid, "closed" | "outline">,
+    point: GroundPoint,
+) =>
     f.closed &&
     insideOutline(
         f.outline.map((p) => ({ x: p.x, y: p.z })),
@@ -127,25 +135,45 @@ export function propsAt(
         drawn.push(footprintOf(input, geometry, { ...center }));
     }
 
-    const platforms = drawn
-        .filter((f) => f.surface === "platform" && f.closed)
-        .map((f) => ({ f, area: area(f.outline) }));
-    // Larger first, then earlier: a platform stands only on those before it, so there are no loops
-    platforms.sort((a, b) => b.area - a.area || a.f.id - b.f.id);
-    const rank = new Map(platforms.map((p, i) => [p.f.id, i]));
+    const platforms = drawn.filter((f) => f.surface === "platform" && f.closed);
+    const areas = new Map(platforms.map((f) => [f.id, area(f.outline)]));
+    // Of two platforms over each other's centers, which is under: the larger, then the earlier
+    const lower = (a: Footprint, b: Footprint) =>
+        areas.get(a.id)! - areas.get(b.id)! > SAME_AREA ||
+        (Math.abs(areas.get(a.id)! - areas.get(b.id)!) <= SAME_AREA &&
+            a.id < b.id);
+    const standsOn = (f: Footprint, under: Footprint) =>
+        under.id !== f.id &&
+        holds(under, f.center) &&
+        (f.surface !== "platform" ||
+            !holds(f, under.center) ||
+            lower(under, f));
     const top = new Map<number, number>();
+    const visiting = new Set<number>();
+    /** Set when a loop was broken: values worked out meanwhile depend on the way in */
+    let brokeLoop = false;
     const baseOf = (f: Footprint): number => {
         if (f.surface === "floor") return 0;
-        const own = rank.get(f.id) ?? platforms.length;
+        visiting.add(f.id);
         let base = 0;
-        for (let i = 0; i < own; i++) {
-            const under = platforms[i]!.f;
-            if (holds(under, f.center))
-                base = Math.max(base, top.get(under.id)!);
+        for (const under of platforms) {
+            if (!standsOn(f, under)) continue;
+            if (visiting.has(under.id)) brokeLoop = true;
+            else base = Math.max(base, topOf(under));
         }
+        visiting.delete(f.id);
         return base;
     };
-    for (const { f } of platforms) top.set(f.id, baseOf(f) + f.height);
+    const topOf = (f: Footprint): number => {
+        const known = top.get(f.id);
+        if (known !== undefined) return known;
+        const outer = brokeLoop;
+        brokeLoop = false;
+        const t = baseOf(f) + f.height;
+        if (!brokeLoop) top.set(f.id, t);
+        brokeLoop ||= outer;
+        return t;
+    };
 
     return drawn.map((f) => ({ ...f, base: baseOf(f) }));
 }
