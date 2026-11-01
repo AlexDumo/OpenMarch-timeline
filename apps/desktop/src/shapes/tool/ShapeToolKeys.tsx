@@ -14,7 +14,7 @@ import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { nudgeEnvFor } from "./toolEnv";
 import { clearSelection, edit, finishPoints, redo } from "./toolMachine";
 import { updateTool, useShapeToolStore } from "./shapeToolStore";
-import { cancelShapeGesture } from "./shapeToolMode";
+import { cancelShapeGesture, removeLastShapePoint } from "./shapeToolMode";
 
 const NUDGE_DIRECTIONS = {
     up: { x: 0, y: -1 },
@@ -31,7 +31,9 @@ const NUDGE_DIRECTIONS = {
  *   otherwise the tool closes, placing nothing.
  * - Enter while clicking a line's points finishes the line (#524); otherwise it's Place.
  *   That is an undo step: undo right after it brings the shape back ({@link DiscardedShapeKeys}).
- * - Undo and Redo step through the shape's own edits; the show is untouched until Place.
+ * - Backspace or Delete while clicking a line's points takes the last one back, as a right-click
+ *   does (owner, option A on #522), and so does undo; otherwise undo and redo step through the
+ *   shape's own edits. The show is untouched until Place.
  * - The nudge keys move the whole shape, as one undo step each (08), not the marchers under it.
  */
 export function ShapeToolKeys(): null {
@@ -58,7 +60,18 @@ export function ShapeToolKeys(): null {
         {},
         clicking,
     );
-    useActionHandler("performUndo", undoOpenShape);
+    // Registered only while clicking points, so Backspace and Delete reach nothing else then
+    useActionHandler(
+        "shapeRemoveLastPoint",
+        () => {
+            removeLastShapePoint();
+        },
+        {},
+        clicking,
+    );
+    useActionHandler("performUndo", () => {
+        if (!removeLastShapePoint()) undoOpenShape();
+    });
     useActionHandler("performRedo", () => updateTool(redo));
     useActionHandlerGroup(NUDGE_ACTION_IDS, (_id, args) => {
         const field = currentShapeField();
