@@ -1633,9 +1633,12 @@ function intervalAt(
  *
  * The interval unlocked (Fit): the point snaps where the interval comes out to whole steps (half
  * steps zoomed in, {@link intervalUnit}); `fine` or the Snap toggle off leaves it where it's
- * dragged (landed). A corner holding a marcher between straight segments lands where both its
- * stretches' intervals do. Measured ↔ or ↕, an end's coordinate that way snaps and it takes the
- * pointer's place the other way.
+ * dragged (landed). Measured ↔ or ↕, an end's coordinate that way snaps and it takes the
+ * pointer's place the other way, and so does a corner holding a marcher between straight segments,
+ * where both its stretches' runs that way come out whole. Otherwise a point snaps only where
+ * that's near the pointer ({@link softSnap}): a corner holding a marcher between straight
+ * segments where both its stretches' intervals come out whole, any other point as far along its
+ * direction as makes its interval whole.
  *
  * The interval locked (Keep interval): an end turns about its neighbor, its segment's length (so
  * its intervals) kept, and a corner holding a marcher between straight segments lands where each
@@ -1701,10 +1704,14 @@ export function dragPoint(
         point = along(other, u, length(sub(was, other)));
     } else if (keep && env.snap && straightCorner(base, n, index)) {
         point = cornerOnIntervals(base, n, index, to);
+    } else if (fit && axis && env.snap && straightCorner(base, n, index)) {
+        point = cornerOnMeasured(base, n, index, to, axis, env);
     } else if (fit && env.snap && straightCorner(base, n, index)) {
-        point =
-            cornerOnWholeIntervals(base, n, index, to, env) ??
-            landPoint(to, env);
+        point = softSnap(
+            to,
+            cornerOnWholeIntervals(base, n, index, to, env),
+            env,
+        );
     } else if (fit && env.snap && (end || was.tension === 0)) {
         point = snappedFree(base, n, index, other, to, env);
     } else {
@@ -1778,7 +1785,8 @@ function snappedAlong(
 /**
  * Where an end or a corner dragged to `to` goes, unlocked: measured ↔ or ↕, with its coordinate
  * that way where the interval is whole steps and the pointer's place (landed) the other way; else
- * along its direction from the point before (on half steps), as far as makes the interval whole
+ * where the pointer lands, or along its direction from the point before (on half steps) as far as
+ * makes the interval whole when that's near the pointer ({@link softSnap})
  */
 function snappedFree(
     base: LineParams,
@@ -1793,7 +1801,7 @@ function snappedFree(
     if (!axis) {
         const u = unitOf(onHalfSteps(sub(landed, other), env));
         if (!u) return landed;
-        return snappedAlong(
+        const spot = snappedAlong(
             base,
             n,
             index,
@@ -1802,6 +1810,7 @@ function snappedFree(
             length(sub(landed, other)),
             env,
         );
+        return softSnap(to, spot, env);
     }
     const unit = intervalUnit(env);
     const side = coord(landed, across(axis));
@@ -1817,9 +1826,72 @@ function snappedFree(
 }
 
 /**
+ * How near the pointer, in screen pixels, a whole-interval spot must be for an unlocked point
+ * dragged in two directions to snap to it ({@link softSnap}); farther, it follows the pointer
+ */
+export const SOFT_SNAP_PX = 6;
+
+/**
+ * Where a point dragged to `to` goes, unlocked, with `spot` where its intervals come out whole:
+ * there when it's within {@link SOFT_SNAP_PX} of the pointer on screen, else where the pointer
+ * lands, so the point isn't held to a few far-apart spots
+ */
+function softSnap(to: XY, spot: XY | null, env: ToolEnv): XY {
+    const reach = SOFT_SNAP_PX / (env.zoom || 1);
+    if (spot && length(sub(spot, to)) <= reach + 1e-9) return spot;
+    return landPoint(to, env);
+}
+
+/**
+ * Where corner `index`, holding a marcher between two straight stretches of a line measured along
+ * `axis`, goes dragged to `to` unlocked: that way, the spot nearest the pointer where both its
+ * stretches' runs that way come out on whole steps (half steps zoomed in, {@link intervalUnit}),
+ * their gaps as they'd be with it there; the other way, where the pointer lands. Where the pointer
+ * lands when there's no such spot near.
+ */
+function cornerOnMeasured(
+    p: LineParams,
+    n: number,
+    index: number,
+    to: XY,
+    axis: LineMeasured,
+    env: ToolEnv,
+): XY {
+    const landed = landPoint(to, env);
+    const side = coord(landed, across(axis));
+    const at = (c: number) => pointOn(axis, c, side);
+    const { r } = stretchesAt(p, index);
+    const count = p.points.length;
+    const from = coord(p.points[(index - 1 + count) % count]!, axis);
+    const unit = intervalUnit(env);
+    const onUnit = (x: number) =>
+        x > 1e-9 && Math.abs(x / unit - Math.round(x / unit)) < 1e-6;
+    const whole = (c: number) => {
+        const q = withPointAt(p, index, at(c));
+        const counts = cornerGaps(q, n);
+        if (!counts) return false;
+        const runs = stretchExtents(q, axis);
+        const next = (r + 1) % counts.length;
+        return (
+            onUnit(runs[r]! / counts[r]!) && onUnit(runs[next]! / counts[next]!)
+        );
+    };
+    // Spots a whole number of units from the point before, nearest the pointer first
+    const want = (coord(to, axis) - from) / unit;
+    const j0 = Math.round(want);
+    for (let d = 0; d <= 2 * n + 2; d++) {
+        const js = d === 0 ? [j0] : [j0 - d, j0 + d];
+        js.sort((x, y) => Math.abs(x - want) - Math.abs(y - want));
+        for (const j of js)
+            if (whole(from + j * unit)) return at(from + j * unit);
+    }
+    return landed;
+}
+
+/**
  * Where corner `index`, holding a marcher between two straight stretches, goes dragged to `to`
  * unlocked: where both its stretches' intervals come out on whole steps (half steps zoomed in),
- * their gaps as they'd be with it at `to`; null when there's no such spot
+ * their gaps as they'd be with it at `to` and still are there; null when there's no such spot
  */
 function cornerOnWholeIntervals(
     p: LineParams,
@@ -1846,9 +1918,14 @@ function cornerOnWholeIntervals(
             const r1 = (i1 + d1 * unit) * k1;
             const r2 = (i2 + d2 * unit) * k2;
             if (r1 <= 0 || r2 <= 0) continue;
-            for (const q of circlesMeet(a, r1, b, r2))
-                if (!best || length(sub(q, to)) < length(sub(best, to)))
+            for (const q of circlesMeet(a, r1, b, r2)) {
+                if (best && length(sub(q, to)) >= length(sub(best, to)))
+                    continue;
+                // Only where its stretches keep those gaps, so the intervals are whole there
+                const there = cornerGaps(withPointAt(p, index, q), n);
+                if (there?.[r] === k1 && there[(r + 1) % there.length] === k2)
                     best = q;
+            }
         }
     return best;
 }
