@@ -608,7 +608,7 @@ test("change: clicks draw an L, its corner holds a marcher until switched off, a
     };
     await click(a);
     await expect(page.getByTestId("shape-tool-hint")).toContainText(
-        "Click to add a point",
+        "removes the last point",
     );
     await click(b);
     // The next segment follows the pointer before it's clicked
@@ -679,6 +679,97 @@ test("change: clicks draw an L, its corner holds a marcher until switched off, a
     const reopened = (await shapeOverlay(page))!;
     expect(reopened.handles).toHaveLength(3);
     expect(reopened.addHandles).toHaveLength(2);
+});
+
+test("change: while clicking points, a right-click, Backspace and undo each take the last point back, down to the first, and the marchers stay", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    const steps = await undoSteps(show);
+    await page.keyboard.press("l");
+
+    const y = cf.y - 20 * S;
+    const a = { x: cf.x - 14 * S, y };
+    const b = { x: cf.x - 6 * S, y };
+    const c = { x: cf.x - 6 * S, y: y + 5 * S };
+    // Three points clicked by mistake, past b
+    const wrong = [
+        { x: cf.x + 2 * S, y: y - 4 * S },
+        { x: cf.x + 6 * S, y: y + 2 * S },
+        { x: cf.x + 10 * S, y: y - 2 * S },
+    ];
+    const click = async (p: Point, button: "left" | "right" = "left") => {
+        const at = await toScreen(page, p);
+        await page.mouse.move(at.x, at.y, { steps: 4 });
+        await page.mouse.click(at.x, at.y, { button });
+    };
+    const clicked = () =>
+        page.evaluate(() => window.fieldTest!.shapeOverlay!()?.outline?.length);
+    await click(a);
+    // The hint names the key as a keycap
+    const hint = page.getByTestId("shape-tool-hint");
+    await expect(hint).toContainText(
+        "removes the last point · Double-click to finish",
+    );
+    await expect(hint.locator("kbd.keycap")).toHaveCount(1);
+    await click(b);
+    for (const p of wrong) await click(p);
+    // a, b, the three wrong points and the pointer's segment
+    await expect.poll(clicked).toBe(6);
+
+    // A right-click takes the last one back, and opens no menu
+    await click(wrong[2]!, "right");
+    await expect.poll(clicked).toBe(5);
+    await expect(page.getByTestId("shape-menu")).toHaveCount(0);
+    // Backspace too, without deleting a marcher or the selection
+    await page.keyboard.press("Backspace");
+    await expect.poll(clicked).toBe(4);
+    // And undo, before the line is finished
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(clicked).toBe(3);
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+
+    // Clicking goes on from b; a click on the last point finishes
+    await click(c);
+    await click(c);
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    const drawn = (await shapeOverlay(page))!;
+    expect(drawn.handles).toHaveLength(3);
+    expect(drawn.spots).toHaveLength(ALL.length);
+    expect((await readField(page)).selection).toEqual(ALL);
+    // Nothing reached the show while drawing
+    expect(await undoSteps(show)).toBe(steps);
+
+    // Down to the first point, a removal does nothing more; Escape cancels the drawing
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.press("l");
+    await click(a);
+    await click(b);
+    await page.keyboard.press("Backspace");
+    await page.keyboard.press("Backspace");
+    await click(a, "right");
+    await expect(page.getByTestId("shape-tool-hint")).toContainText(
+        "removes the last point",
+    );
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shape-tool-hint")).toContainText(
+        "click point after point",
+    );
+    const [row] = await show.query<{ count: number }>(
+        "SELECT COUNT(*) AS count FROM marchers",
+    );
+    expect(row.count).toBe(ALL.length);
+    expect(await undoSteps(show)).toBe(steps);
 });
 
 test("change: a right-click on a point opens its menu: switching off following the line keeps the corner's spacing even, or a greyed Marcher holds one with the switch off; a segment's menu adds a point", async ({
