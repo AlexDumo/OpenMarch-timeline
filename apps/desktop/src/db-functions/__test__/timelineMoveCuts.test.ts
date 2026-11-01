@@ -170,12 +170,16 @@ const clearTimelines = (db: DbConnection) =>
         await deleteTimelinesInTransaction({ tx, timelineIds: new Set(ids) });
     });
 
-/** A move over `range` named `name`, one transition taking `marcherIds` to spots of their own. */
+/**
+ * A move over `range` named `name`, one transition taking `marcherIds` to spots of their own; with
+ * `allowSharedRanges`, over a range another move has too.
+ */
 const moveOver = async (
     db: DbConnection,
     range: BeatRange,
     marcherIds: number[],
     name: string | null,
+    allowSharedRanges = false,
 ) =>
     transactionWithHistory(db, "move", async (tx) => {
         const [t] = await createTimelinesInTransaction({
@@ -183,6 +187,7 @@ const moveOver = async (
             newTimelines: [
                 { name, startBeat: range.start, endBeat: range.end },
             ],
+            allowSharedRanges,
         });
         const [made] = await createTimelineTransitionsInTransaction({
             tx,
@@ -426,11 +431,11 @@ describeDbTests("remove marchers from a move for a range of counts", (it) => {
                     intoOwnMove: false,
                     cuts: [],
                 },
-                // b stays in the long move: a and c are cut out of a move of their own
+                // A direct path: cut for everyone, since that changes nobody's motion
                 {
                     timelineId: long.id,
                     removed: leaving,
-                    intoOwnMove: true,
+                    intoOwnMove: false,
                     cuts: [
                         { timelineId: long.id, beat: 9, idStaysWith: "after" },
                         { timelineId: long.id, beat: 17, idStaysWith: "after" },
@@ -454,21 +459,21 @@ describeDbTests("remove marchers from a move for a range of counts", (it) => {
             {
                 timelineId: long.id,
                 pieceId: result.cuts[1]!.before.id,
-                deleted: true,
+                deleted: false,
             },
         ]);
-        // Their own move's piece over the page held only them, so it went; b keeps the long move
-        expect(
-            await db
-                .select()
-                .from(schema.timelines)
-                .where(eq(schema.timelines.id, result.pieces[1]!.pieceId))
-                .get(),
-        ).toBeUndefined();
-        expect(await membersOf(db, long.id)).toEqual([b]);
+        const piece = (await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.id, result.pieces[1]!.pieceId))
+            .get())!;
+        expect([piece.start_beat, piece.end_beat]).toEqual([
+            PAGE2.start,
+            PAGE2.end,
+        ]);
     });
 
-    it("a range inside a shared move: the marcher's own move is cut at both ends and it leaves the middle; the others keep the move and their motion", async ({
+    it("a range inside a shared move: a direct path is cut at both ends for everyone, the marcher leaves the middle, the others keep their motion", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -498,35 +503,27 @@ describeDbTests("remove marchers from a move for a range of counts", (it) => {
             [1, 9],
             [9, 17],
         ]);
-        // b's own move: its parts before and after the page are left, the middle went with b
-        const own = result.cuts[1]!.after.id;
-        expect(result.pieces).toEqual([
-            {
-                timelineId: long.id,
-                pieceId: result.cuts[1]!.before.id,
-                deleted: true,
-            },
+        // Three parts; the original keeps its id as the last
+        const parts = (await timelinesSorted(db)).filter((t) =>
+            [long.id, ...result.cuts.map((c) => c.before.id)].includes(t.id),
+        );
+        expect(parts.map((t) => [t.start_beat, t.end_beat])).toEqual([
+            [1, 9],
+            [9, 17],
+            [17, 25],
         ]);
-        expect(await membersOf(db, result.cuts[0]!.before.id)).toEqual([b]);
-        expect(await membersOf(db, own)).toEqual([b]);
+        expect(parts[2]!.id).toBe(long.id);
         // b has no row over the page: on its stored layer-1 rows nothing covers [9, 17)
         expect(
             (await rowsOver(db, [b!], PAGE2)).filter((r) => r.layer === 1),
         ).toEqual([]);
-        // The long move is the others' still, whole, its transition compacted to the two
-        const longNow = (await timelinesSorted(db)).find(
-            (t) => t.id === long.id,
-        )!;
-        expect([longNow.start_beat, longNow.end_beat]).toEqual([1, 25]);
-        expect(await membersOf(db, long.id)).toEqual(
-            [a!, c!].sort((x, y) => x - y),
-        );
-        const longTransitions = await db
+        // The middle part's transition is compacted to the two who stay
+        const middle = await db
             .select()
             .from(schema.timeline_transitions)
-            .where(eq(schema.timeline_transitions.timeline_id, long.id))
+            .where(eq(schema.timeline_transitions.timeline_id, parts[1]!.id))
             .all();
-        expect(longTransitions.map((t) => t.slot_count)).toEqual([2]);
+        expect(middle.map((t) => t.slot_count)).toEqual([2]);
 
         const r1 = await resolverOf(db);
         const after = track(r1, all, 30);
@@ -985,6 +982,66 @@ describeDbTests(
                 });
             });
 
+        /**
+         * A follow-the-leader move over `range` onto a line, `ids` in its one transition, whose
+         * order it inherits from the move before (R-12).
+         */
+        const followTheLeaderAfter = (
+            db: DbConnection,
+            ids: number[],
+            range: BeatRange,
+        ) =>
+            transactionWithHistory(db, "ftl", async (tx) => {
+                const [t] = await createTimelinesInTransaction({
+                    tx,
+                    newTimelines: [
+                        {
+                            name: "Ftl",
+                            startBeat: range.start,
+                            endBeat: range.end,
+                        },
+                    ],
+                });
+                const [shape] = await createTimelineShapesInTransaction({
+                    tx,
+                    newShapes: [
+                        {
+                            kind: "line",
+                            geometry: {
+                                points: [
+                                    [100, 300],
+                                    [900, 340],
+                                ],
+                            },
+                        },
+                    ],
+                });
+                const [made] = await createTimelineTransitionsInTransaction({
+                    tx,
+                    newTransitions: [
+                        {
+                            timelineId: t!.id,
+                            slotCount: ids.length,
+                            destination: { kind: "shape", shapeId: shape!.id },
+                            pathStyle: "follow_the_leader",
+                            pathParams: { waypoints: [] },
+                            orderMode: "inherit",
+                        },
+                    ],
+                });
+                await createTimelineAssignmentsInTransaction({
+                    tx,
+                    newAssignments: ids.map((marcherId, i) => ({
+                        marcherId,
+                        transitionId: made!.id,
+                        slotIndex: i,
+                        startBeat: range.start,
+                        endBeat: range.end,
+                        layer: 1,
+                    })),
+                });
+            });
+
         it("the others keep their move, rows, arc, recipe and every count; the cleared marcher's move alone is cut", async ({
             db,
             marchersAndPages: _,
@@ -1067,50 +1124,7 @@ describeDbTests(
         }) => {
             const { a, ids } = await arcShow(db);
             // The next move walks follow-the-leader in the arc's order (R-12)
-            await transactionWithHistory(db, "ftl", async (tx) => {
-                const [t] = await createTimelinesInTransaction({
-                    tx,
-                    newTimelines: [{ name: "Ftl", startBeat: 41, endBeat: 49 }],
-                });
-                const [shape] = await createTimelineShapesInTransaction({
-                    tx,
-                    newShapes: [
-                        {
-                            kind: "line",
-                            geometry: {
-                                points: [
-                                    [100, 300],
-                                    [900, 340],
-                                ],
-                            },
-                        },
-                    ],
-                });
-                const [made] = await createTimelineTransitionsInTransaction({
-                    tx,
-                    newTransitions: [
-                        {
-                            timelineId: t!.id,
-                            slotCount: ids.length,
-                            destination: { kind: "shape", shapeId: shape!.id },
-                            pathStyle: "follow_the_leader",
-                            pathParams: { waypoints: [] },
-                            orderMode: "inherit",
-                        },
-                    ],
-                });
-                await createTimelineAssignmentsInTransaction({
-                    tx,
-                    newAssignments: ids.map((marcherId, i) => ({
-                        marcherId,
-                        transitionId: made!.id,
-                        slotIndex: i,
-                        startBeat: 41,
-                        endBeat: 49,
-                        layer: 1,
-                    })),
-                });
-            });
+            await followTheLeaderAfter(db, ids, { start: 41, end: 49 });
             const before = await dataOf(db);
 
             // Nothing to write, so outside the history (an empty edit is refused there)
@@ -1130,9 +1144,137 @@ describeDbTests(
             expect(result.cleared).toBeUndefined();
             expect(result.skipped!.marcherIds).toEqual([a]);
             expect(result.skipped!.message).toMatch(
-                /^\S+ follows the leader, so it keeps its move here\.$/,
+                /^\S+ shares a curved move with a follow-the-leader order, so it keeps its move here\.$/,
             );
             expect(await dataOf(db)).toEqual(before);
+        });
+        it("a direct path shared with a follow-the-leader order elsewhere is still cut for everyone, as it changes nobody's motion", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await convertPagesToTimeline(db);
+            await clearTimelines(db);
+            const all = (await resolverOf(db)).marcherIds();
+            const [a, b, c] = all;
+            const ids = [a!, b!, c!];
+            // A direct move over pages 3 to 5, then follow the leader in its order
+            const direct = await moveOver(db, ARC, ids, "Direct");
+            await followTheLeaderAfter(db, ids, { start: 41, end: 49 });
+            const r0 = await resolverOf(db);
+            const before = track(r0, all, 50);
+
+            const result = await clearPage3(db, a!);
+
+            expect(result.cleared).toEqual([a]);
+            expect(result.skipped).toBeUndefined();
+            expect(await rowsOver(db, [a!], PAGE3)).toEqual([]);
+            const after = track(await resolverOf(db), all, 50);
+            all.forEach((id, m) => {
+                if (id === a) return;
+                expectClose([before[m]!], [after[m]!]);
+            });
+            // Cut for everyone: the original keeps its id as the part after the page
+            const kept = (await timelinesSorted(db)).find(
+                (t) => t.id === direct.id,
+            )!;
+            expect([kept.start_beat, kept.end_beat]).toEqual([
+                PAGE3.end,
+                ARC.end,
+            ]);
+            expect(await membersOf(db, direct.id)).toEqual(
+                [...ids].sort((x, y) => x - y),
+            );
+        });
+        it("clearing several moves at once: a part of a cut never takes over the move a part of another made over a page, and the preview says so", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await convertPagesToTimeline(db);
+            await clearTimelines(db);
+            const [a, b, d] = (await resolverOf(db)).marcherIds();
+            const range = { start: 17, end: 33 };
+            // Move A (a, b) on an arc, then move B (d) direct, both over pages 3 and 4
+            const moveA = await transactionWithHistory(db, "A", async (tx) => {
+                const [t] = await createTimelinesInTransaction({
+                    tx,
+                    newTimelines: [
+                        {
+                            name: "A",
+                            startBeat: range.start,
+                            endBeat: range.end,
+                        },
+                    ],
+                });
+                const [made] = await createTimelineTransitionsInTransaction({
+                    tx,
+                    newTransitions: [
+                        {
+                            timelineId: t!.id,
+                            slotCount: 2,
+                            destination: {
+                                kind: "individual",
+                                points: [
+                                    [400, 300],
+                                    [440, 300],
+                                ],
+                            },
+                            pathStyle: "arc",
+                            pathParams: { bulge: 0.4 },
+                        },
+                    ],
+                });
+                await createTimelineAssignmentsInTransaction({
+                    tx,
+                    newAssignments: [a!, b!].map((marcherId, i) => ({
+                        marcherId,
+                        transitionId: made!.id,
+                        slotIndex: i,
+                        startBeat: range.start,
+                        endBeat: range.end,
+                        layer: 1,
+                    })),
+                });
+                return t!;
+            });
+            const moveB = await moveOver(db, range, [d!], "B", true);
+            const PAGE4 = { start: 25, end: 33 };
+
+            const plan = await db.transaction((tx) =>
+                planRemovalFromRange({
+                    tx,
+                    marcherIds: [a!, d!],
+                    range: PAGE3,
+                }),
+            );
+            const result = await transactionWithHistory(db, "clear", (tx) =>
+                takeMarchersOutOfRangeInTransaction({
+                    tx,
+                    marcherIds: [a!, d!],
+                    range: PAGE3,
+                }),
+            );
+
+            // a's own move is cut at page 4's flag first, so B's part after it would be the oldest
+            // over page 4's box: the part before keeps B's id, and goes empty with d
+            expect(plan.moves.map((m) => [m.intoOwnMove, m.cuts])).toEqual([
+                [
+                    true,
+                    [{ timelineId: moveA.id, beat: 25, idStaysWith: "after" }],
+                ],
+                [
+                    false,
+                    [{ timelineId: moveB.id, beat: 25, idStaysWith: "before" }],
+                ],
+            ]);
+            expect(result.cuts[1]!.before.id).toBe(moveB.id);
+            const overPage4 = await db.transaction((tx) =>
+                timelinesWithRange(tx, PAGE4),
+            );
+            expect(overPage4).toHaveLength(2);
+            expect(overPage4.map((t) => t.id)).not.toContain(moveB.id);
+            // Page 4's move is a's own part, not a part of B taking over
+            expect(await membersOf(db, overPage4[0]!.id)).toEqual([a]);
+            expect(await membersOf(db, overPage4[1]!.id)).toEqual([d]);
         });
     },
 );
