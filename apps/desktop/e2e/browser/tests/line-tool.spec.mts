@@ -1122,7 +1122,8 @@ test("change: Curve in the Shapes tab draws a line bending through smooth points
     expect(drawn.handles).toHaveLength(3);
     expect(drawn.barHandles).toEqual([]);
     expect(drawn.outline!.length).toBeGreaterThan(3);
-    // 8 marchers on a symmetric arch: none on its smooth top, evenly apart
+    // 8 marchers on a symmetric arch: none on its smooth top, evenly apart along it (straight
+    // across, the gaps round the bend come out a hair shorter)
     expect(drawn.spots).toHaveLength(ALL.length);
     expect(
         drawn.spots.every(
@@ -1134,7 +1135,7 @@ test("change: Curve in the Shapes tab draws a line bending through smooth points
         .slice(1)
         .map((p, i) => Math.hypot(p.x - sorted[i]!.x, p.y - sorted[i]!.y));
     for (const gap of apart)
-        expect(Math.abs(gap - apart[0]!)).toBeLessThan(CLOSE);
+        expect(Math.abs(gap - apart[0]!)).toBeLessThan(0.01 * apart[0]!);
 
     // Enter places it, a Line recipe with smooth points
     await page.keyboard.press("Enter");
