@@ -42,7 +42,7 @@ export function OrderPicture({
                     textAnchor="middle"
                     dominantBaseline="central"
                     fill="currentColor"
-                    fillOpacity={0.6}
+                    fillOpacity={0.8}
                 >
                     {n}
                 </text>
