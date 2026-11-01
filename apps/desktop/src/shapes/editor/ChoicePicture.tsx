@@ -46,19 +46,47 @@ export function ChoicePicture({
                     <polyline key={i} {...props} />
                 );
             })}
-            {fitted.faintDots?.map(({ x, y }, i) => (
-                <circle
-                    key={`from-${i}`}
-                    cx={x}
-                    cy={y}
-                    r={1}
-                    fill="currentColor"
-                    fillOpacity={0.4}
-                />
-            ))}
-            {fitted.dots.map(({ x, y }, i) => (
-                <circle key={i} cx={x} cy={y} r={1.1} fill="currentColor" />
-            ))}
+            {fitted.faintDots?.map(({ x, y }, i) => {
+                const shade = fitted.shades?.faintDots[i];
+                return shade === undefined ? (
+                    <circle
+                        key={`from-${i}`}
+                        cx={x}
+                        cy={y}
+                        r={1}
+                        fill="currentColor"
+                        fillOpacity={0.4}
+                    />
+                ) : (
+                    <ShadedDot key={`from-${i}`} x={x} y={y} shade={shade} />
+                );
+            })}
+            {fitted.dots.map(({ x, y }, i) => {
+                const shade = fitted.shades?.dots[i];
+                return shade === undefined ? (
+                    <circle key={i} cx={x} cy={y} r={1.1} fill="currentColor" />
+                ) : (
+                    <ShadedDot key={i} x={x} y={y} shade={shade} />
+                );
+            })}
         </svg>
+    );
+}
+
+/**
+ * A marcher's place in an order: the first an empty ring, the last a solid dot, those between
+ * filled part way. Both ends of a move are drawn alike, so a picture's ramp reads end to end.
+ */
+function ShadedDot({ x, y, shade }: { x: number; y: number; shade: number }) {
+    return (
+        <circle
+            cx={x}
+            cy={y}
+            r={1.3}
+            fill="currentColor"
+            fillOpacity={shade}
+            stroke="currentColor"
+            strokeWidth={0.6}
+        />
     );
 }

@@ -292,6 +292,15 @@ export interface ToolChoicePicture {
     readonly dots: readonly XY[];
     /** Marchers where they come from, drawn light */
     readonly faintDots?: readonly XY[];
+    /**
+     * Where each marcher comes in an order, 0 for the first to 1 for the last, parallel to
+     * {@link dots} and {@link faintDots}: drawn from an empty ring to a solid dot, so a picture
+     * shows who went where. Absent draws every marcher alike.
+     */
+    readonly shades?: {
+        readonly dots: readonly number[];
+        readonly faintDots: readonly number[];
+    };
 }
 
 /** One answer in a kind's menu ({@link ToolChoice}) */

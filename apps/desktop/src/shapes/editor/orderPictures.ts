@@ -1,44 +1,61 @@
 import type { OrderChoice } from "../assign";
+import { leastTravel } from "../leastTravel";
 import type { ToolChoicePicture } from "../tool/toolKind";
 import type { XY } from "../types";
 
 /**
- * Who goes where's pictures (#559), drawn by hand: no kind's geometry says who goes where. Each
- * shows marchers (light) moving onto a new line below them. Least travel takes each to the spot
- * nearest it; Keep order takes the first of a line to the first spot and so on, so the moves fan
- * out without crossing; Reverse takes the first to the last, so they cross.
+ * Who goes where's pictures (#559): marchers on a line (light) moving onto a new line below them,
+ * each marcher drawn by its place in the order, from an empty ring (the first) to a solid dot
+ * (the last), at both ends of its move. The old line bends back on itself, so the three answers
+ * really differ (two straight lines would make Least travel the same as one of the others):
+ * Least travel walks each marcher a short way straight down and the ramp lands mixed, Keep order
+ * lands the ramp in the same order along the new line, and Reverse lands it flipped.
  */
 
-const TO: readonly XY[] = [2, 8.67, 15.33, 22].map((x) => ({ x, y: 13 }));
-const NEW_LINE = { points: [TO[0]!, TO[3]!], faint: true };
-/** A line of marchers placed before, for Keep order and Reverse to follow */
-const FROM_LINE: readonly XY[] = [7, 10.33, 13.67, 17].map((x) => ({
-    x,
-    y: 3,
-}));
-/** Marchers standing anywhere, for Least travel */
-const SCATTERED: readonly XY[] = [
-    { x: 3.5, y: 5 },
-    { x: 9.5, y: 3 },
-    { x: 14, y: 6 },
-    { x: 20.5, y: 4 },
+/** The new line's spots, first to last */
+const TO: readonly XY[] = [2, 12, 22].map((x) => ({ x, y: 13 }));
+const NEW_LINE = { points: [TO[0]!, TO[2]!], faint: true };
+/** The old line's marchers, first to last: it runs left along the top and turns back */
+const FROM: readonly XY[] = [
+    { x: 20, y: 1 },
+    { x: 5, y: 3 },
+    { x: 13, y: 5.5 },
 ];
+/** Each marcher's place in the old line's order, 0 to 1 */
+const SHADE = FROM.map((_, i) => i / (FROM.length - 1));
 
-const moves = (from: readonly XY[], to: readonly XY[]) =>
-    from.map((p, i) => ({ points: [p, to[i]!], faint: true, dashed: true }));
+/** The pictures' moves, worked out with the rule each names: the spot index for each marcher */
+export const ORDER_SPOTS: Readonly<Record<OrderChoice, readonly number[]>> = {
+    nearest: leastTravel(FROM, TO),
+    keep: FROM.map((_, i) => i),
+    reverse: FROM.map((_, i) => FROM.length - 1 - i),
+};
 
-const picture = (
-    from: readonly XY[],
-    to: readonly XY[],
-): ToolChoicePicture => ({
-    lines: [NEW_LINE, ...moves(from, to)],
-    dots: TO,
-    faintDots: from,
-});
+/** The old line's marchers and the new line's spots the pictures use */
+export const ORDER_SAMPLE = { from: FROM, to: TO } as const;
+
+function picture(spotOf: readonly number[]): ToolChoicePicture {
+    // Each spot drawn as the marcher who lands on it
+    const landed = new Array<number>(TO.length);
+    spotOf.forEach((spot, marcher) => (landed[spot] = SHADE[marcher]!));
+    return {
+        lines: [
+            NEW_LINE,
+            ...FROM.map((p, i) => ({
+                points: [p, TO[spotOf[i]!]!],
+                faint: true,
+                dashed: true,
+            })),
+        ],
+        dots: TO,
+        faintDots: FROM,
+        shades: { dots: landed, faintDots: SHADE },
+    };
+}
 
 export const ORDER_PICTURES: Readonly<Record<OrderChoice, ToolChoicePicture>> =
     {
-        nearest: picture(SCATTERED, TO),
-        keep: picture(FROM_LINE, TO),
-        reverse: picture(FROM_LINE, [...TO].reverse()),
+        nearest: picture(ORDER_SPOTS.nearest),
+        keep: picture(ORDER_SPOTS.keep),
+        reverse: picture(ORDER_SPOTS.reverse),
     };

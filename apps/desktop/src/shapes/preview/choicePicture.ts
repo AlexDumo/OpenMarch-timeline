@@ -39,6 +39,7 @@ export function fitChoicePicture(
         y: offsetY + (y - minY) * scale,
     });
     return {
+        ...picture,
         lines: picture.lines.map((line) => ({
             ...line,
             points: line.points.map(place),
