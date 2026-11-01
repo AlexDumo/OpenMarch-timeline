@@ -41,6 +41,7 @@ import {
     withFillInterval,
 } from "./lineFill";
 import {
+    MAX_TENSION,
     cornerGaps,
     closeLine,
     cornerOffInterval,
@@ -803,6 +804,10 @@ function marcherSection(
     };
 }
 
+/** Whether point `index` is an end of an open line, where corner or smooth bends nothing */
+const isOpenEnd = (p: LineParams, index: number): boolean =>
+    !isClosed(p) && (index === 0 || index === p.points.length - 1);
+
 /** Right-click on point `index` (#569) */
 function pointMenu(p: LineParams, n: number, index: number): ToolMenuSection[] {
     const q = p.points[index]!;
@@ -810,8 +815,10 @@ function pointMenu(p: LineParams, n: number, index: number): ToolMenuSection[] {
     const closed = isClosed(p);
     const last = p.points.length - 1;
     const end = !closed && (index === 0 || index === last);
-    const sections: ToolMenuSection[] = [
-        {
+    // An open line's end bends nothing (its handle runs along its segment): no corner type there
+    const sections: ToolMenuSection[] = [];
+    if (!end)
+        sections.push({
             label: tolgee.t("shapes.kinds.line.menu.cornerType", "Corner type"),
             look: "segmented",
             hint: tolgee.t(
@@ -841,8 +848,7 @@ function pointMenu(p: LineParams, n: number, index: number): ToolMenuSection[] {
                       ]
                     : []),
             ],
-        },
-    ];
+        });
     // An open line's ends always hold a marcher
     if (!end) sections.push(marcherSection(p, n, index));
     const fewest = p.points.length <= minPoints(p);
@@ -1147,7 +1153,7 @@ export const lineTool: ToolKind<LineParams> = {
     // A point double-clicked turns smooth, or a corner again (#557)
     doubleClickHandle(params, n, key) {
         const index = pointOf(params, key);
-        if (index < 0) return null;
+        if (index < 0 || isOpenEnd(params, index)) return null;
         const smooth = params.points[index]!.tension > 0;
         return keptInterval(setTension(params, index, smooth ? 0 : SMOOTH), n);
     },
@@ -1169,20 +1175,25 @@ export const lineTool: ToolKind<LineParams> = {
     settle: settleLine,
     fromFrame: lineInFrame,
     closed: lineClosed,
-    pictureParams: (_n, env) => zigzag(env, 0),
+    pictureParams: (_n, env) => zigzag(env),
 };
 
-/** The picture's zigzag (owner, 2026-10-31): six points across the square, corners or smooth */
+/** The picture's zigzag (owner, 2026-10-31): three segments from the top down, corners or smooth */
 const ZIGZAG: readonly XY[] = [
-    { x: -4.5, y: 1.5 },
-    { x: -2.7, y: -1.5 },
-    { x: -0.9, y: 1.5 },
-    { x: 0.9, y: -1.5 },
-    { x: 2.7, y: 1.5 },
-    { x: 4.5, y: -1.5 },
+    { x: -4, y: -4 },
+    { x: 4, y: -1.5 },
+    { x: -4, y: 1.5 },
+    { x: 4, y: 4 },
 ];
-const zigzag = (env: ToolEnv, tension: number): LineParams =>
-    drawPoints(ZIGZAG, env, tension)!;
+/** The Curve's picture: the zigzag's run from the top down, its ends drawn in, as round as it goes */
+const WAVE: readonly XY[] = [
+    { x: 0, y: -4.5 },
+    { x: 4, y: -1.5 },
+    { x: -4, y: 1.5 },
+    { x: 0, y: 4.5 },
+];
+const zigzag = (env: ToolEnv): LineParams => drawPoints(ZIGZAG, env, 0)!;
+const wave = (env: ToolEnv): LineParams => drawPoints(WAVE, env, MAX_TENSION)!;
 
 /**
  * The Curve (#525, spec #522): a preset of the Line, the same kind and recipe, whose points start
@@ -1205,5 +1216,5 @@ export const curveTool: ToolKind<LineParams> = {
         },
     },
     fromFrame: curveInFrame,
-    pictureParams: (_n, env) => zigzag(env, SMOOTH),
+    pictureParams: (_n, env) => wave(env),
 };
