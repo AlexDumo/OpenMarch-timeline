@@ -769,6 +769,18 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // Group the selected marchers into a shape as they stand (#603): nobody moves. No key until the
+    // owner picks one: Go to has ⌘G (shapes/placed/groupMarchers)
+    shapeGroup: {
+        labelKey: "actions.shape.group",
+        keywordsKey: "actions.shape.groupKeywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+
     // Ungroup the selected placed shape: its marchers stay put and stop being a shape. On a later
     // page it's that page's change, as an edit there is (shapes/placed/ungroupShape)
     shapeUngroup: {

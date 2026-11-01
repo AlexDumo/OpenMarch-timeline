@@ -4916,6 +4916,96 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         expect(await placedBoxes(page)).toEqual([]);
     });
 
+    test("change: Group makes the selected marchers a shape where they stand on Page 1 and Page 2 carries it; Ungroup on Page 2 ends it there; each one undo step (#603)", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const kinds = async () =>
+            (
+                await show.query<{ kind: string }>(
+                    "SELECT kind FROM timeline_shape_recipes ORDER BY id",
+                )
+            ).map((r) => r.kind);
+        const laterMoves = async () =>
+            (
+                await show.query<{ count: number }>(
+                    "SELECT COUNT(*) AS count FROM timelines WHERE end_beat > 32",
+                )
+            )[0]!.count;
+        const readoutShown = page.getByTestId("placed-box-readout");
+        const menu = page.getByTestId("field-menu");
+        await selectPage(show, "Page 1");
+        const standing = await savedPositions(show, 1);
+        const member = await marcherScreen(page, 1);
+
+        // From the field's menu, first, with the marchers selected
+        await selectAll(page);
+        const steps = await undoSteps(show);
+        await page.mouse.click(member.x, member.y, { button: "right" });
+        await expect(menu).toBeVisible();
+        await expect(menu.getByRole("menuitem").first()).toHaveText(/Group/);
+        await menu.getByRole("menuitem").first().click();
+        await expect.poll(kinds).toEqual(["group"]);
+        await waitForIdle(page);
+        // Nobody moves; Page 1 takes the change, as one undo step
+        expect(await savedPositions(show, 1)).toEqual(standing);
+        expect(await laterMoves()).toBe(0);
+        expect(await undoSteps(show)).toBe(steps + 1);
+        // Selected whole, with no Recalculate or Save, and Ungroup in its place in the menu
+        await expect(readoutShown).toBeVisible();
+        expect(await placedBoxes(page)).toHaveLength(1);
+        expect((await placedBoxes(page))[0]!.label).toMatch(/^Group/);
+        await expect(
+            readoutShown.getByTestId("shape-editor-recalculate"),
+        ).toHaveCount(0);
+        await expect(readoutShown.getByTestId("shape-editor-save")).toHaveCount(
+            0,
+        );
+        await page.mouse.click(member.x, member.y, { button: "right" });
+        await expect(menu).toBeVisible();
+        await expect(menu.getByRole("menuitem").first()).toHaveText(/Ungroup/);
+        await page.keyboard.press("Escape");
+        await expect(menu).toBeHidden();
+
+        // A click on a member selects the whole group, on Page 2 too, where it's carried
+        await page.keyboard.press("Escape");
+        await selectPage(show, "Page 2");
+        await page.mouse.click(member.x, member.y);
+        await expect(readoutShown).toBeVisible();
+        expect((await readField(page)).selection).toEqual(ALL);
+
+        // Ungroup there: Page 2 takes the change, and the group ends there
+        await readoutShown.getByTestId("shape-editor-ungroup").click();
+        await expect.poll(kinds).toEqual(["group", "ungrouped"]);
+        await waitForIdle(page);
+        await expect(readoutShown).toBeHidden();
+        expect(await placedBoxes(page)).toEqual([]);
+        expect(await laterMoves()).toBe(1);
+        expect(await savedPositions(show, 2)).toEqual(standing);
+        expect(await undoSteps(show)).toBe(steps + 2);
+
+        // Page 1 keeps its group
+        await page.keyboard.press("Escape");
+        await selectPage(show, "Page 1");
+        await page.mouse.click(member.x, member.y);
+        await expect(readoutShown).toBeVisible();
+
+        // Undo carries it to Page 2 again; a second undo takes the group away
+        await page.keyboard.press("ControlOrMeta+z");
+        await expect.poll(kinds).toEqual(["group"]);
+        await waitForIdle(page);
+        expect(await laterMoves()).toBe(0);
+        await page.keyboard.press("Escape");
+        await selectPage(show, "Page 2");
+        await page.mouse.click(member.x, member.y);
+        await expect(readoutShown).toBeVisible();
+        await page.keyboard.press("ControlOrMeta+z");
+        await expect.poll(kinds).toEqual([]);
+        await waitForIdle(page);
+        await expect(readoutShown).toBeHidden();
+        expect(await savedPositions(show, 1)).toEqual(standing);
+    });
+
     test("change: turned about a member on the next page, the member at the pivot stays in the box there (owner on #486)", async ({
         show,
     }) => {

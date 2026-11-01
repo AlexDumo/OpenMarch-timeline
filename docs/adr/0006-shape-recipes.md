@@ -305,3 +305,35 @@ positions.
 
 Verification: `placedBox.test.ts` (ungrouped marchers) and the browser scenario "Ungroup on the
 next page ends the box there" in `box-tool.spec.mts`.
+
+## Amendment, 2026-11-01: groups
+
+**Group** (#603; the field's menu and the command palette, no default key yet) makes the selected
+marchers a shape where they stand. Nobody moves. It changes no schema.
+
+1. **A recipe of kind `group`, version 1.** Its `params` are the frame (amendment of 2026-10-20):
+   `center`, `rotation`, `flipX` and `flipY` (absent when false) and the host's `pivot`, plus
+   `points`, each spot in the frame's own axes before any flip, in field units from the center,
+   slot `i` being `points[i]`. `spots` is the spot count, as for every kind. A new group is square
+   to the field, its center the middle of its marchers' bounds. Its size follows from the points,
+   so it isn't stored; scaling rewrites the points.
+2. **Its interval is the smallest gap between neighbors** (#356), each spot's neighbor being its
+   nearest. A gap under half the median of those is left out, so a near-duplicate pair doesn't
+   make it tiny; because the rule reads only proportions, scaling never picks another gap.
+   Scaling sets the interval (half steps for Shrink and Expand, as any kind's spacing) and every
+   point scales with it about the pivot. A group with no interval (stacked marchers) doesn't
+   scale. It has no handles: stretching one way would bend a loose form.
+3. **It's placed as any shape is**, through `writePlacement` at the edit window, its members set
+   there even though nobody moves (`setAll`), so later pages holding the form follow and it's one
+   undo step. Its members leave the other recipes at that beat (Revision, 2026-10-29), and a shape
+   carried from an earlier page ends there, as it does when a shape is placed over it. After
+   that it's an ordinary placed recipe: it shows on later pages while its form is held, members
+   who move leave holes (it has no Close up or Re-split, being no closed kind), and Ungroup
+   (amendment above) works on it unchanged.
+4. **Who stands where is part of it**, so it has no Recalculate, and it isn't saved to the
+   library, which keeps a kind's intervals and fill, not spots.
+5. An app without the kind shows a group as plain positions (decision 5).
+
+Verification: `group/__test__/groupTool.test.ts` (the frame, turn, flip, move, interval and scale,
+and reading groups back across pages) and the browser scenario "Group makes the selected marchers
+a shape…" in `box-tool.spec.mts`.

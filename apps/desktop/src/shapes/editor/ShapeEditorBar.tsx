@@ -357,6 +357,7 @@ function ShapeEditorBar({
                         evenState={evenState}
                         canShrink={canShrink}
                         canExpand={canExpand}
+                        asIs={kind.asIs === true}
                     />
                     {/* What doesn't change the shape itself, at the end (owner): its pathways
                         and saving it to the library */}
@@ -365,6 +366,7 @@ function ShapeEditorBar({
                         live={live}
                         stepPx={stepPx}
                         canPlace={target.place !== undefined}
+                        canSave={kind.asIs !== true}
                     />
                 </span>
             </div>
@@ -648,6 +650,7 @@ const TurnControls = memo(function TurnControls({
     evenState,
     canShrink,
     canExpand,
+    asIs,
 }: {
     live: ShapeEditTarget;
     degrees: number;
@@ -662,6 +665,8 @@ const TurnControls = memo(function TurnControls({
     canExpand: boolean;
     /** Only redraws it */
     canCloseUp: boolean;
+    /** Who stands where is part of the shape (a group, #603): no Recalculate */
+    asIs: boolean;
 }) {
     const base = useRef<unknown>(null);
     const recalculateLook = useActionLook(canRecalculate);
@@ -754,33 +759,35 @@ const TurnControls = memo(function TurnControls({
                 shrinkKey={keyOf("shapeShrink")}
                 expandKey={keyOf("shapeExpand")}
             />
-            <IconButton
-                label={
-                    canRecalculate
-                        ? tolgee.t(
-                              "shapes.edit.recalculate.title",
-                              "Recalculate who goes where, by least travel",
-                          )
-                        : empty > 0
-                          ? tolgee.t(
-                                "shapes.edit.recalculate.closeUpFirst",
-                                "Recalculate who goes where: close up the empty spots first",
-                            )
-                          : tolgee.t(
-                                "shapes.edit.recalculate.already",
-                                "Who goes where is already least travel",
-                            )
-                }
-                disabled={!canRecalculate}
-                shortcut={keyOf("shapeRecalculate")}
-                className="relative"
-                onClick={() => target.recalculate?.()}
-                testId="shape-editor-recalculate"
-            >
-                {/* The word only when it can do something: greyed out, it's the widest
+            {!asIs && (
+                <IconButton
+                    label={
+                        canRecalculate
+                            ? tolgee.t(
+                                  "shapes.edit.recalculate.title",
+                                  "Recalculate who goes where, by least travel",
+                              )
+                            : empty > 0
+                              ? tolgee.t(
+                                    "shapes.edit.recalculate.closeUpFirst",
+                                    "Recalculate who goes where: close up the empty spots first",
+                                )
+                              : tolgee.t(
+                                    "shapes.edit.recalculate.already",
+                                    "Who goes where is already least travel",
+                                )
+                    }
+                    disabled={!canRecalculate}
+                    shortcut={keyOf("shapeRecalculate")}
+                    className="relative"
+                    onClick={() => target.recalculate?.()}
+                    testId="shape-editor-recalculate"
+                >
+                    {/* The word only when it can do something: greyed out, it's the widest
                     thing on the bar for nothing (owner, review round r429) */}
-                <RecalculateFace look={recalculateLook} />
-            </IconButton>
+                    <RecalculateFace look={recalculateLook} />
+                </IconButton>
+            )}
             {evenState !== "none" && (
                 <IconButton
                     label={
@@ -821,15 +828,20 @@ const TurnControls = memo(function TurnControls({
     );
 });
 
-/** Snap, Pathways and ☆ Save, then Place for a new shape or Ungroup for a placed one */
+/**
+ * Snap, Pathways and ☆ Save (not for a group, which the library can't keep), then Place for a new
+ * shape or Ungroup for a placed one
+ */
 const EndControls = memo(function EndControls({
     live: target,
     stepPx,
     canPlace,
+    canSave,
 }: {
     live: ShapeEditTarget;
     stepPx: number;
     canPlace: boolean;
+    canSave: boolean;
 }) {
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     return (
@@ -837,13 +849,15 @@ const EndControls = memo(function EndControls({
             <span className="flex items-center gap-2">
                 <SnapButton />
                 {canPlace && <PathwaysButton />}
-                <SaveShapeButton
-                    shape={target}
-                    stepPx={stepPx}
-                    compact
-                    className="rounded-4 hover:text-accent flex min-h-24 min-w-24 items-center justify-center p-4"
-                    testId="shape-editor-save"
-                />
+                {canSave && (
+                    <SaveShapeButton
+                        shape={target}
+                        stepPx={stepPx}
+                        compact
+                        className="rounded-4 hover:text-accent flex min-h-24 min-w-24 items-center justify-center p-4"
+                        testId="shape-editor-save"
+                    />
+                )}
             </span>
             {canPlace && (
                 <>
