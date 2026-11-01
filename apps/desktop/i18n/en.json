@@ -2663,6 +2663,12 @@
         "trigger": "New Version Available!"
     },
     "view3d": {
+        "autoOpenPrompt": {
+            "description": "It opens beside the editor whenever you open a show. You can change this in Settings › General.",
+            "no": "No thanks",
+            "title": "Open the 3D View with your shows?",
+            "yes": "Open automatically"
+        },
         "camera": {
             "blimp": "Blimp",
             "corner": "Corner",

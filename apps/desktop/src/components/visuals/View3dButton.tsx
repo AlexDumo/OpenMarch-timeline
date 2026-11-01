@@ -2,12 +2,16 @@ import { CubeIcon } from "@phosphor-icons/react";
 import { T } from "@tolgee/react";
 import clsx from "clsx";
 import ActionButton from "@/shortcuts/ActionButton";
+import { useView3dWindowStore } from "@/stores/View3dWindowStore";
 
 /**
  * Opens the 3D View window, or focuses it (3D View UI-1). Beside the workspace switch, since the
- * 3D View is another way to look at the show; it was in the toolbar's View tab.
+ * 3D View is another way to look at the show; it was in the toolbar's View tab. Only while the
+ * window is closed: with it open, the window itself is the way back.
  */
 export default function View3dButton({ className }: { className?: string }) {
+    const open = useView3dWindowStore((s) => s.open);
+    if (open) return null;
     return (
         <ActionButton
             action="openView3d"
