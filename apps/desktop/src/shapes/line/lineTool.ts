@@ -43,6 +43,7 @@ import {
 import {
     cornerGaps,
     closeLine,
+    gapAlong,
     cornerOffInterval,
     curveInFrame,
     deletePoint,
@@ -385,6 +386,7 @@ const GROUPS: ToolGroups<LineParams> = {
         ),
     typeList: typedList,
     axis: measuredAxis,
+    along: gapAlong,
     scrub(base, n, index, part, m, env) {
         const distance = scrubDistance("x", m.dx, m.dy);
         if (part === "count") {
@@ -586,8 +588,8 @@ function measuredReason(p: LineParams, axis: LineMeasured): string | undefined {
 /**
  * The Measured menu (spec #522): what the interval measures. Along the path is the default, each
  * interval the length of line between neighbors; straight across is the distance from marcher to
- * marcher, the same on straight segments and shorter round a curve, measured along the path where
- * it would cut past a corner holding no marcher. ↔ puts neighbors the interval apart side to side,
+ * marcher, the same on straight segments and shorter round a curve, going on from a corner holding
+ * no marcher rather than cutting past it. ↔ puts neighbors the interval apart side to side,
  * x exactly on the step grid, and ↕ front to back; each is greyed out, with why, on a line that
  * doesn't go one way that way. It shows what the intervals measure now: a line whose part turned
  * square to its axis is laid out along the path until it goes one way again, and shows that.

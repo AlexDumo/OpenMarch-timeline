@@ -407,8 +407,13 @@ The Line shape (spec #522, #523) stores a new kind:
    the Measured menu's first choice is Along the path. The old meaning is kept as `"straight"`
    (the menu's Straight across, once True distance) with one fix: a gap whose straight-across spot
    would lie past a corner holding no marcher (a point of tension 0 inside the run, between two
-   held points, or anywhere on the path when no point holds a marcher there) is measured along the
-   path instead, so a gap never cuts across such a corner. Within a stretch of straight segments
+   held points, or anywhere on the path when no point holds a marcher there) goes on from that
+   corner, straight across again, with what is left of it, so a gap never cuts across such a
+   corner. And where a curve turns back toward the marcher before the gap is used up, the way
+   back counts too (a gap is how much the straight distance from the marcher changes along the
+   path), so a gap never jumps the part that curls back. Where a gap lands then moves on
+   smoothly as it grows, which Fit's search for one even interval needs: with the first spot at
+   the straight distance alone, a run could jump a curl and leave the last gap short. Within a stretch of straight segments
    straight across and along the path are therefore the same; they differ only round a curve,
    where a smooth point is never such a corner. ↔ and ↕ are unchanged: on a line that goes one way
    along the axis, the axis distance of a gap is the sum of the distances of the path between, so a

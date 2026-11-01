@@ -3,7 +3,7 @@ import type { Pivot, ShapeFrame } from "../frame/frame";
 import type { ScrubMove } from "../editor/scrub";
 import type { ClosedShape } from "../distribute/region";
 import type { LayoutFamily } from "../distribute/distribution";
-import type { AnyShapeKind, XY } from "../types";
+import type { AnyShapeKind, Slot, XY } from "../types";
 
 /** The roles a kind's own drag reads beyond fine, which every shape drag reads */
 export type KindHonors = Pick<HonoredRoles, "constrain" | "fromCenter">;
@@ -263,6 +263,12 @@ export interface ToolGroups<P> {
      * side (↔), `y` front to back (↕). The field labels each gap of a group pointed at with it.
      */
     axis?(params: P): "x" | "y" | null;
+    /**
+     * The middle of the gap between two neighboring spots along the shape, and its length that
+     * way, in field units, for its label: on the shape where it goes round a corner. Null (or
+     * absent) for the straight line between them.
+     */
+    along?(params: P, from: Slot, to: Slot): { at: XY; length: number } | null;
     /** The params with a group added at the end (the chip's +) */
     add(params: P, n: number, env: ToolEnv): P;
     /** The params without group `index`; one group left is everyone at its interval */

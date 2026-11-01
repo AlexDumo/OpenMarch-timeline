@@ -112,9 +112,8 @@ export interface LineParams {
     readonly distribution?: Distribution;
     /**
      * What every interval measures (#527, ADR 0006's Line amendment): along the path (its arc
-     * length) when absent; `straight` straight across from marcher to marcher, except that a gap is
-     * measured along the path where straight across would cut past a corner holding no marcher
-     * ({@link acrossOf}); `x` (↔) side to side and `y` (↕) front to back
+     * length) when absent; `straight` straight across from marcher to marcher, except that a gap
+     * goes on from a corner holding no marcher rather than cutting past it ({@link acrossOf}); `x` (↔) side to side and `y` (↕) front to back
      */
     readonly measured?: LineMeasure;
 }
@@ -379,7 +378,7 @@ function stretchAcross(p: LineParams): (number[] | null)[] {
  * How a gap is measured on a run of `segments` of the line, from its point `from` (#527): null
  * along the path, by arc length (the line's default); measured `straight`, the offsets along the
  * run of the corners on it (its points of tension 0 between its ends, none holding a marcher
- * there), across which a gap is measured along the path instead ({@link chordOffsets}). A run of
+ * there), from which a gap goes on straight across ({@link chordOffsets}). A run of
  * straight segments is null either way: straight across within a segment is its arc, and a gap
  * reaching past a corner goes round it. So straight across differs from along the path only on a
  * curve, and never skips a corner.
@@ -484,6 +483,26 @@ function runSpots(
     // The last on the end exactly, whatever the search left
     offsets[gaps.length] = path.length;
     return offsets.map((s) => ({ ...path.at(s), s: from + s }));
+}
+
+/**
+ * The middle of the gap between two of the line's spots along it, and its length that way (the
+ * group labels' `ToolGroups.along`): null when either spot isn't on the line where its `s` says
+ */
+export function gapAlong(
+    p: LineParams,
+    from: Slot,
+    to: Slot,
+): { at: XY; length: number } | null {
+    if (from.s === undefined || to.s === undefined) return null;
+    const path = linePath(p);
+    const tolerance = Math.max(path.length, 1) * 1e-6;
+    const on = (q: Slot) => length(sub(path.at(q.s!), q)) <= tolerance;
+    if (!on(from) || !on(to)) return null;
+    // A closed line's last gap runs on past its start
+    const end = to.s < from.s && path.closed ? to.s + path.length : to.s;
+    if (!(end > from.s)) return null;
+    return { at: path.at((from.s + end) / 2), length: end - from.s };
 }
 
 /**

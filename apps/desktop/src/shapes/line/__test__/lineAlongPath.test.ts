@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     isLineParams,
+    lineInterval,
     linePath,
     lineSpots,
     SMOOTH,
@@ -12,8 +13,8 @@ import { chordOffsets } from "../../spacing";
 /**
  * What a Line's interval measures (#527, ADR 0006's Line amendment): along the path by default
  * (absent `measured`), straight across marcher to marcher with `straight`. Straight across never
- * cuts past a corner that holds no marcher: a gap that would is measured along the path, so a
- * spike's tip is walked round, not skipped.
+ * cuts past a corner that holds no marcher: a gap that would goes along the path to it and on
+ * straight across, so a spike's tip is walked round, not skipped.
  */
 
 const corner = (x: number, y: number, more: Partial<LinePoint> = {}) => ({
@@ -73,6 +74,10 @@ describe("a spike whose tip holds no marcher", () => {
         const s = chordOffsets(path, 0, Array<number>(N - 1).fill(10));
         const jump = Math.max(...s.slice(1).map((x, i) => x - s[i]!));
         expect(jump).toBeGreaterThan(12);
+        // The Line measured straight across never does
+        const p = spiked({ measured: "straight" });
+        arcGaps(p, N).forEach((g) => expect(g).toBeLessThan(10.5));
+        expect(straddles(p, N, TIP).filter(Boolean)).toHaveLength(1);
     });
 
     it("is walked round along the path: every gap 10 along it", () => {
@@ -125,7 +130,8 @@ describe("a spike whose tip holds no marcher", () => {
             // The first gap is on the straight side, the same either way
             const first = arcs[0]!;
             arcs.forEach((g, i) => {
-                if (over[i]) expect(g).toBeCloseTo(first, 6);
+                // Straight across, the part past the tip is a chord of the curve beyond it
+                if (over[i]) expect(g).toBeCloseTo(first, measured ? 2 : 6);
                 expect(g).toBeLessThan(first * 1.1);
             });
         }
@@ -220,10 +226,97 @@ describe("the stored setting", () => {
         expect(back).toEqual(p);
         expect(lineSpots(back as LineParams, N)).toEqual(lineSpots(p, N));
     });
+});
 
-    it("stores nothing for along the path", () => {
-        const p = spiked();
-        expect("measured" in p).toBe(false);
-        expect(isLineParams(p)).toBe(true);
+/**
+ * Whether Fit's `n` spots are evenly spaced as the line measures them: the same spots as its
+ * interval laid from the start, the last of them on the line's end (not short of it, with the
+ * last gap shorter)
+ */
+const fitsEvenly = (p: LineParams, n: number, digits: number) => {
+    const fit = lineSpots(p, n);
+    const laid = lineSpots(
+        {
+            ...p,
+            spacing: {
+                mode: "path",
+                groups: [{ interval: lineInterval(p, n) }],
+                anchor: "start",
+            },
+        },
+        n,
+    );
+    expect(laid.at(-1)!.s!).toBeCloseTo(linePath(p).length, digits);
+    fit.forEach((q, i) => {
+        expect(q.x).toBeCloseTo(laid[i]!.x, digits);
+        expect(q.y).toBeCloseTo(laid[i]!.y, digits);
+    });
+};
+
+/** A small seeded generator, so a failure repeats */
+const seeded = (seed: number) => () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 2 ** 32;
+};
+
+describe("Fit straight across round corners that hold no marcher", () => {
+    it("keeps the last gap as long as the others (a run that would have jumped a corner)", () => {
+        const p: LineParams = {
+            points: [
+                corner(3.3, 0.6),
+                smooth(8.6, 10.2),
+                smooth(16.3, 4),
+                smooth(26.3, 7.9),
+                corner(32.7, 5.1),
+                corner(40.6, 11.6),
+            ],
+            spacing: { mode: "fit" },
+            corners: false,
+            measured: "straight",
+        };
+        fitsEvenly(p, 5, 6);
+    });
+
+    it("spreads random lines evenly, and reaches farther the longer the interval", () => {
+        const random = seeded(527);
+        for (let c = 0; c < 80; c++) {
+            const count = 3 + Math.floor(random() * 4);
+            let x = 0;
+            const points = Array.from({ length: count }, (_, i) => {
+                x += 2 + random() * 12;
+                const y = random() * 14;
+                return i === 0 || i === count - 1 || random() < 0.5
+                    ? corner(x, y)
+                    : smooth(x, y);
+            });
+            const p: LineParams = {
+                points,
+                spacing: { mode: "fit" },
+                corners: false,
+                measured: "straight",
+            };
+            const n = 3 + Math.floor(random() * 6);
+            fitsEvenly(p, n, 4);
+            const interval = lineInterval(p, n);
+
+            // An interval on the path: the last marcher only ever moves on as it grows
+            let reach = -Infinity;
+            for (let k = 0.5; k <= 1.5; k += 0.05) {
+                const spots = lineSpots(
+                    {
+                        ...p,
+                        spacing: {
+                            mode: "path",
+                            groups: [{ interval: interval * k }],
+                            anchor: "start",
+                        },
+                    },
+                    n,
+                );
+                const last = spots.at(-1)!.s!;
+                expect(last).toBeGreaterThanOrEqual(reach - 1e-9);
+                reach = last;
+            }
+        }
     });
 });
