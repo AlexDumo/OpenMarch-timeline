@@ -16,8 +16,9 @@ import type { FieldTestHandle } from "../../../src/field/fieldTestApi";
 // Scaling and rotating a selection with the selection box's handles (#198;
 // #189 user stories 46 to 55, rules table rows Handles, Lock X / Lock Y,
 // Click vs drag; keys from the modifier roles design, version A): corners
-// scale uniformly and constrain (Cmd/Ctrl) frees them; middle handles scale
-// one axis and constrain scales the other with it; from center (Alt) keeps the
+// scale each axis with the pointer and constrain (Cmd/Ctrl) keeps the ratio,
+// as a box shape's do (#545); middle handles scale one axis and constrain
+// scales the other with it; from center (Alt) keeps the
 // box's center still (#545); rotation snaps to 15°, fine (Shift) turns it in whole degrees at
 // the pointer's full speed, and the Snap toggle off (Shift+M) turns it freely;
 // fine scales at a quarter of the pointer's speed; no flipping; the box fits
@@ -220,7 +221,7 @@ test.beforeEach(async ({ show }) => {
     await expectCanvasMatchesShow(show);
 });
 
-test("a corner handle scales the formation uniformly from the opposite corner, as one undo step", async ({
+test("change: constrain (Cmd/Ctrl) scales a corner uniformly from the opposite corner, as one undo step", async ({
     show,
 }) => {
     const { page } = show;
@@ -229,7 +230,7 @@ test("a corner handle scales the formation uniformly from the opposite corner, a
     const before = spread(asPositions(PAGE_0));
 
     // Straight across: a uniform scale still grows both ways
-    await dragHandle(page, "se", { x: 120, y: 0 });
+    await dragHandle(page, "se", { x: 120, y: 0 }, { hold: ["ControlOrMeta"] });
 
     const after = spread(await savedChange(show));
     const scaleX = after.width / before.width;
@@ -249,14 +250,14 @@ test("a corner handle scales the formation uniformly from the opposite corner, a
     await expectCanvasMatchesShow(show);
 });
 
-test("change: constrain (Cmd/Ctrl) frees a corner handle: dragged across, only the width changes", async ({
+test("change: a corner handle scales each axis with the pointer: dragged across, only the width changes (#545)", async ({
     show,
 }) => {
     const { page } = show;
     await selectAll(page);
     const before = spread(asPositions(PAGE_0));
 
-    await dragHandle(page, "se", { x: 120, y: 0 }, { hold: ["ControlOrMeta"] });
+    await dragHandle(page, "se", { x: 120, y: 0 });
 
     const after = spread(await savedChange(show));
     expect(after.width / before.width).toBeGreaterThan(1.2);
@@ -303,7 +304,7 @@ test("change: constrain (Cmd/Ctrl) on a middle handle scales both axes, the oppo
     await expectCanvasMatchesShow(show);
 });
 
-test("from center (Alt) scales a corner about the box's center, as one undo step", async ({
+test("from center (Alt) scales a corner about the box's center, and adds up with constrain, as one undo step", async ({
     show,
 }) => {
     const { page } = show;
@@ -312,7 +313,12 @@ test("from center (Alt) scales a corner about the box's center, as one undo step
     const before = spread(asPositions(PAGE_0));
     const center = middle(asPositions(PAGE_0));
 
-    await dragHandle(page, "se", { x: 60, y: 0 }, { hold: ["Alt"] });
+    await dragHandle(
+        page,
+        "se",
+        { x: 60, y: 0 },
+        { hold: ["Alt", "ControlOrMeta"] },
+    );
 
     const saved = await savedChange(show);
     const after = spread(saved);
@@ -494,14 +500,7 @@ test("Lock X and Lock Y don't hold a handle", async ({ show }) => {
     await selectAll(page);
     const before = spread(asPositions(PAGE_0));
 
-    await dragHandle(
-        page,
-        "se",
-        { x: 100, y: 100 },
-        {
-            hold: ["ControlOrMeta"],
-        },
-    );
+    await dragHandle(page, "se", { x: 100, y: 100 });
 
     const after = spread(await savedChange(show));
     expect(after.width / before.width).toBeGreaterThan(1.2);

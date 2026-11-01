@@ -151,12 +151,12 @@ const FACING: Record<Exclude<HandleId, "rot">, FieldPoint> = {
  * drag's `delta` in field units. The handle's side moves with the pointer,
  * and the handle's opposite side or corner stays put (`anchor`):
  *
- * - a middle handle scales its own axis only, unless `constrain` (which flips
- *   its one-axis default), when the other axis scales by the same amount,
- *   evenly about the box's center line (owner, #545);
- * - a corner scales both axes by the same amount, the pointer's progress
- *   along the corner's diagonal, unless `constrain` (which flips the
- *   proportional default), when each axis follows the pointer (user story 48);
+ * - with `keepRatio` both axes scale by the same amount: a corner's by the
+ *   pointer's progress along its diagonal, and a middle handle's other axis
+ *   with its own, evenly about the box's center line (owner, #545);
+ * - without it a corner's axes each follow the pointer, and a middle handle
+ *   scales its own axis only (user stories 48, 49; a corner is free by
+ *   default as a box shape's is, owner on #545);
  * - with `fromCenter` the box's center stays put instead, and the opposite
  *   side mirrors the handle's, as a box shape's handles do (#510);
  * - neither axis goes below {@link MIN_SCALE}: no flipping (user story 52).
@@ -167,14 +167,14 @@ export function scaleFor(
     handle: Exclude<HandleId, "rot">,
     box: FieldRect,
     delta: FieldPoint,
-    constrain: boolean,
+    keepRatio: boolean,
     fromCenter = false,
 ): Scale {
     const facing = FACING[handle];
     // Along each axis the opposite side stays put, or the center: with from
-    // center, and across a middle handle that constrain scales both ways
+    // center, and across a middle handle that keeps the ratio
     const anchorOn = (side: number, low: number, high: number) =>
-        fromCenter || (side === 0 && constrain)
+        fromCenter || (side === 0 && keepRatio)
             ? (low + high) / 2
             : side < 0
               ? high
@@ -194,13 +194,13 @@ export function scaleFor(
 
     if (facing.x === 0) {
         const y = along(reach.y, delta.y);
-        return { anchor, x: constrain ? y : 1, y };
+        return { anchor, x: keepRatio ? y : 1, y };
     }
     if (facing.y === 0) {
         const x = along(reach.x, delta.x);
-        return { anchor, x, y: constrain ? x : 1 };
+        return { anchor, x, y: keepRatio ? x : 1 };
     }
-    if (constrain)
+    if (!keepRatio)
         return {
             anchor,
             x: along(reach.x, delta.x),
