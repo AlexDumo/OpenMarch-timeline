@@ -3,7 +3,12 @@ import type {
     ToolChoicePictureLine,
 } from "../tool/toolKind";
 import type { XY } from "../types";
-import { lineOutline, type LineParams, type LinePoint } from "./lineGeometry";
+import {
+    lineOutline,
+    type LineMeasure,
+    type LineParams,
+    type LinePoint,
+} from "./lineGeometry";
 import { lineFillSpots } from "./lineFill";
 
 /**
@@ -104,13 +109,14 @@ export const spacingPictures = once(() => {
 });
 
 /**
- * What the interval measures, on a line that bends from steep to shallow: the true distance puts
- * the marchers evenly along it; ↔ evens their side-to-side gaps (light lines up and down through
- * each), so they spread out on the steep part; ↕ evens their front-to-back gaps (light lines
- * across), so they spread out on the shallow part.
+ * What the interval measures, on a line that bends from steep to shallow: along the path traces the
+ * line itself between the marchers, evenly along it; straight across joins each pair of neighbors
+ * in a straight line, evenly apart that way; ↔ evens their side-to-side gaps (light lines up and
+ * down through each), so they spread out on the steep part; ↕ evens their front-to-back gaps
+ * (light lines across), so they spread out on the shallow part.
  */
 export const measuredPictures = once(() => {
-    const points = [corner(0, 0), corner(4, 10), corner(22, 14)];
+    const points = [corner(0, 0), { x: 4, y: 10, tension: 1 }, corner(22, 14)];
     const n = 6;
     const guides = (p: LineParams, axis: "x" | "y"): ToolChoicePictureLine[] =>
         lineFillSpots(p, n).map(({ x, y }) => ({
@@ -126,17 +132,36 @@ export const measuredPictures = once(() => {
                       ],
             faint: true,
         }));
-    const measured = (axis?: "x" | "y") => {
+    // Straight from each marcher to the next
+    const chords = (p: LineParams): ToolChoicePictureLine[] => {
+        const spots = lineFillSpots(p, n);
+        return spots.slice(1).map((b, i) => ({
+            points: [
+                { x: spots[i]!.x, y: spots[i]!.y },
+                { x: b.x, y: b.y },
+            ],
+        }));
+    };
+    const measured = (measure?: LineMeasure) => {
         const p: LineParams = {
             points,
             spacing: { mode: "fit" },
-            // The run goes round the bend, so only what's measured places it
-            corners: false,
-            ...(axis ? { measured: axis } : {}),
+            ...(measure ? { measured: measure } : {}),
         };
-        return sketch(p, n, axis ? guides(p, axis) : []);
+        const extra =
+            measure === "x" || measure === "y"
+                ? guides(p, measure)
+                : measure === "straight"
+                  ? chords(p)
+                  : [{ points: lineOutline(p) }];
+        return sketch(p, n, extra);
     };
-    return { true: measured(), x: measured("x"), y: measured("y") };
+    return {
+        along: measured(),
+        straight: measured("straight"),
+        x: measured("x"),
+        y: measured("y"),
+    };
 });
 
 /** The corners switch on an L: a marcher on the corner, or the run going round it */

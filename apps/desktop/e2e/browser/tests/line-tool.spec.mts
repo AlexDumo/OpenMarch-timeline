@@ -315,18 +315,19 @@ test("change: a diagonal from yard line to yard line is measured ↔, placing ma
     const measured = page.getByTestId("shape-choice-measured");
     await expect(measured).toHaveAttribute("data-value", "x");
 
-    // The menu offers the true distance too; ↕ is there, this line going one
-    // way front to back as well
+    // The menu offers along the path and straight across too; ↕ is there,
+    // this line going one way front to back as well
     await measured.click();
     const rows = page
         .getByTestId("shape-choice-measured-content")
         .getByRole("menuitemradio");
     await expect(rows).toHaveText([
-        "True distance",
+        "Along the path",
+        "Straight across",
         "Side to side",
         "Front to back",
     ]);
-    await expect(rows.nth(2)).not.toHaveAttribute("aria-disabled", "true");
+    await expect(rows.nth(3)).not.toHaveAttribute("aria-disabled", "true");
     await page.keyboard.press("Escape");
 
     // 1½ steps side to side, grown from the center onto the grid
@@ -1218,7 +1219,8 @@ test("change: Curve in the Shapes tab draws a line bending through smooth points
     expect(drawn.handles).toHaveLength(3);
     expect(drawn.barHandles).toEqual([]);
     expect(drawn.outline!.length).toBeGreaterThan(3);
-    // 8 marchers on a symmetric arch: none on its smooth top, evenly apart
+    // 8 marchers on a symmetric arch: none on its smooth top, evenly apart along it (straight
+    // across, the gaps round the bend come out a hair shorter)
     expect(drawn.spots).toHaveLength(ALL.length);
     expect(
         drawn.spots.every(
@@ -1230,7 +1232,7 @@ test("change: Curve in the Shapes tab draws a line bending through smooth points
         .slice(1)
         .map((p, i) => Math.hypot(p.x - sorted[i]!.x, p.y - sorted[i]!.y));
     for (const gap of apart)
-        expect(Math.abs(gap - apart[0]!)).toBeLessThan(CLOSE);
+        expect(Math.abs(gap - apart[0]!)).toBeLessThan(0.01 * apart[0]!);
 
     // Enter places it, a Line recipe with smooth points
     await page.keyboard.press("Enter");

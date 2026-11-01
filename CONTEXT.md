@@ -34,8 +34,10 @@ Terms the code, docs and issues use. Add a term when a design decision settles i
 - **The rest**: the one group in a list without a count. It takes every marcher the counted
   groups don't.
 - **Seam**: the gap between two groups. It is the larger of their intervals.
-- **Measured**: what an interval measures: the true distance between neighbors (the default),
-  side to side (↔) or front to back (↕).
+- **Measured**: what an interval measures: the length of line between neighbors (**Along the
+  path**, the default), the distance from marcher to marcher (**Straight across**, going on
+  from a corner holding no marcher rather than cutting past it), side to side (↔) or
+  front to back (↕).
 - **Fit / Keep interval / Interval on the path**: a path's spacing modes. Fit keeps the size
   drawn and works out the interval; Keep interval fixes the interval and the size follows; Interval
   on the path fixes both and anchors the run.

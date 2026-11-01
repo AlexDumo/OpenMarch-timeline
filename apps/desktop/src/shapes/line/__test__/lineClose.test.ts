@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { lineTool } from "../lineTool";
-import { isLineParams, type LineParams } from "../lineGeometry";
+import { isLineParams, lineSpots, type LineParams } from "../lineGeometry";
 import { chipLayout } from "../../editor/chip";
 import {
     edgeSplitOf,
@@ -189,7 +189,11 @@ describe("closing a line", () => {
     it("keeps a typed interval all the way round, grown from its pivot", () => {
         let t = picked(square(10), "corners", "off");
         t = edit(t, interval.type(t.params, 10, "3", env), ctx);
-        gapsRound(spotsOf(t)).forEach((g) => expect(g).toBeCloseTo(30, 6));
+        // Ten gaps of 3 steps along the outline, round its corners
+        const sides = gapsRound(pointsOf(t));
+        sides.forEach((side) => expect(side).toBeCloseTo(75, 6));
+        const s = lineSpots(paramsOf(t), 10).map((spot) => spot.s!);
+        s.slice(1).forEach((x, i) => expect(x - s[i]!).toBeCloseTo(30, 6));
         // Grown from its center, which stays put
         const xs = pointsOf(t).map((p) => p.x);
         expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(120, 6);
@@ -612,12 +616,21 @@ describe("a placed closed line", () => {
 });
 
 describe("a closed line and Measured (#527)", () => {
-    it("is laid out by the true distance and hides the Measured menu", () => {
+    it("is laid out along the path whatever axis it says, and offers no axis", () => {
         const t = square();
         const measured = edit(t, { ...paramsOf(t), measured: "x" }, ctx);
         expect(isLineParams(measured.params)).toBe(true);
         expectNear(spotsOf(measured), spotsOf(t));
-        expect(shown(t, "measured")).toBe(false);
-        expect(shown(clicking(8, SQUARE), "measured")).toBe(true);
+        expect(shown(t, "measured")).toBe(true);
+        const options = choice("measured").options(t.params, t.spots);
+        expect(options.find((o) => o.value === "straight")!.disabled).toBe(
+            undefined,
+        );
+        expect(options.find((o) => o.value === "x")!.disabled).toBeDefined();
+        expect(options.find((o) => o.value === "y")!.disabled).toBeDefined();
+    });
+
+    it("hides the Measured menu once filled", () => {
+        expect(shown(inMode(square(9), "files"), "measured")).toBe(false);
     });
 });

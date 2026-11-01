@@ -45,7 +45,7 @@ import type { ShapeContext, XY } from "../../types";
  * Smooth points and the Curve (#525, spec #522): each point has a tension, 0 a corner and more a
  * smooth point the line bends through. A click on a point selects it, a double-click toggles it,
  * the ends of a selected point's tangent bar set how round (#557); smooth points never hold a marcher, and spots stay
- * evenly apart straight across along the curve. Curve is a preset of the Line whose points start
+ * evenly apart along the curve, or straight across when measured so. Curve is a preset of the Line whose points start
  * smooth. Driven through the shape session with the real Line kind.
  */
 
@@ -120,6 +120,11 @@ const handleKeys = (t: ToolState) =>
     t.kind.handles(t.params, t.spots, t.selected).map((h) => h.key);
 const gapsOf = (spots: readonly XY[]) =>
     spots.slice(1).map((p, i) => dist(spots[i]!, p));
+/** How far along the line each spot is from the one before */
+const arcGapsOf = (p: LineParams, n: number) => {
+    const s = lineSpots(p, n).map((spot) => spot.s!);
+    return s.slice(1).map((x, i) => x - s[i]!);
+};
 /** How far `at` is from the line drawn through `t`'s outline */
 const offLine = (t: ToolState, at: XY) => {
     const path = linePath(paramsOf(t));
@@ -131,6 +136,7 @@ const typed = (t: ToolState, text: string) =>
     edit(t, interval.type(t.params, t.spots, text, env), ctx);
 const picked = (t: ToolState, key: string, value: string) =>
     edit(t, choice(key).pick(t.params, t.spots, value, env), ctx);
+const straight = (t: ToolState) => picked(t, "measured", "straight");
 
 const ARCH = [
     { x: 0, y: 0 },
@@ -252,15 +258,37 @@ describe("setting a point's tension", () => {
 });
 
 describe("spots along a curve", () => {
-    it("never puts a marcher on a smooth point, neighbors evenly apart straight across", () => {
+    it("never puts a marcher on a smooth point, neighbors evenly apart along the path", () => {
         // Four marchers on a symmetric arch: none on its top
         const t = clicked(curveTool, 4, ARCH);
         const spots = spotsOf(t);
         expect(spots[0]).toEqual(ARCH[0]);
         expect(spots.at(-1)).toEqual(ARCH[2]);
         for (const s of spots) expect(dist(s, ARCH[1]!)).toBeGreaterThan(1);
+        const gaps = arcGapsOf(paramsOf(t), 4);
+        for (const g of gaps) expect(g).toBeCloseTo(gaps[0]!, 6);
+        expect(gaps[0]).toBeCloseTo(linePath(paramsOf(t)).length / 3, 6);
+        for (const s of spots) expect(offLine(t, s)).toBeLessThan(1e-6);
+        // The chip shows that interval, worked out
+        const chip = chipLayout(lineTool, t.params, t.spots, env).intervals[0]!;
+        expect(Number(interval.value!(t.params, t.spots, STEP))).toBeCloseTo(
+            gaps[0]! / STEP,
+            6,
+        );
+        expect(chip.derived).toBe(true);
+    });
+
+    it("puts neighbors evenly apart straight across when measured so", () => {
+        const t = straight(clicked(curveTool, 4, ARCH));
+        expect(paramsOf(t).measured).toBe("straight");
+        const spots = spotsOf(t);
+        expect(spots[0]).toEqual(ARCH[0]);
+        expect(spots.at(-1)).toEqual(ARCH[2]);
         const gaps = gapsOf(spots);
         for (const g of gaps) expect(g).toBeCloseTo(gaps[0]!, 6);
+        // Each chord is shorter than the path between them, so not even along it
+        const arcs = arcGapsOf(paramsOf(t), 4);
+        expect(gaps[0]!).toBeLessThan(arcs[0]!);
         for (const s of spots) expect(offLine(t, s)).toBeLessThan(1e-6);
         // The chip shows that interval, worked out
         const chip = chipLayout(lineTool, t.params, t.spots, env).intervals[0]!;
@@ -286,31 +314,52 @@ describe("spots along a curve", () => {
         expect(spots.every((s) => dist(s, { x: 60, y: 30 }) > 0.5)).toBe(true);
     });
 
-    it("keeps a typed interval straight across between neighbors along the curve", () => {
+    it("keeps a typed interval along the path between neighbors on the curve", () => {
         const t = typed(clicked(curveTool, 5, ARCH), "2");
+        expect(paramsOf(t).spacing.mode).toBe("keep");
+        for (const g of arcGapsOf(paramsOf(t), 5))
+            expect(g).toBeCloseTo(2 * STEP, 6);
+        expect(linePath(paramsOf(t)).length).toBeCloseTo(4 * 2 * STEP, 6);
+    });
+
+    it("keeps a typed interval straight across between neighbors along the curve, measured so", () => {
+        const t = typed(straight(clicked(curveTool, 5, ARCH)), "2");
         expect(paramsOf(t).spacing.mode).toBe("keep");
         for (const g of gapsOf(spotsOf(t))) expect(g).toBeCloseTo(2 * STEP, 6);
     });
 
+    /** An L whose second arm bends through a smooth point: a corner, then a curve */
+    const hooked = () =>
+        switched(
+            clicked(lineTool, 7, [
+                { x: 0, y: 0 },
+                { x: 40, y: 0 },
+                { x: 55, y: 25 },
+                { x: 40, y: 50 },
+            ]),
+            "p2",
+        );
+
     it("makes a curved run between corners whole intervals when an interval is typed", () => {
-        // An L whose second arm bends through a smooth point: a corner, then a curve
-        let t = clicked(lineTool, 7, [
-            { x: 0, y: 0 },
-            { x: 40, y: 0 },
-            { x: 55, y: 25 },
-            { x: 40, y: 50 },
-        ]);
-        t = switched(t, "p2");
-        t = typed(t, "2");
-        for (const g of gapsOf(spotsOf(t))) expect(g).toBeCloseTo(2 * STEP, 6);
+        const t = typed(hooked(), "2");
+        for (const g of arcGapsOf(paramsOf(t), 7))
+            expect(g).toBeCloseTo(2 * STEP, 6);
         // The corner holds a marcher, and isn't off its interval
+        const corner = paramsOf(t).points[1]!;
+        expect(spotsOf(t).some((s) => dist(s, corner) < 1e-6)).toBe(true);
+        expect(interval.note!(t.params, t.spots)).toBeNull();
+    });
+
+    it("makes a curved run between corners whole intervals straight across, measured so", () => {
+        const t = typed(straight(hooked()), "2");
+        for (const g of gapsOf(spotsOf(t))) expect(g).toBeCloseTo(2 * STEP, 6);
         const corner = paramsOf(t).points[1]!;
         expect(spotsOf(t).some((s) => dist(s, corner) < 1e-6)).toBe(true);
         expect(interval.note!(t.params, t.spots)).toBeNull();
     });
 });
 
-describe("a curve with mixed intervals", () => {
+describe("a curve with mixed intervals, measured straight across", () => {
     const N = 6;
     /** A corner, then an arm bending through a smooth point; spaced `2*3+4*2` */
     const hook = () => {
@@ -320,7 +369,7 @@ describe("a curve with mixed intervals", () => {
             { x: 55, y: 25 },
             { x: 40, y: 50 },
         ]);
-        t = switched(t, "p2");
+        t = straight(switched(t, "p2"));
         expect(tensions(t)).toEqual([0, 0, SMOOTH, 0]);
         return typed(t, "2*3+4*2");
     };
@@ -401,7 +450,7 @@ describe("a curve with mixed intervals", () => {
 });
 
 describe("a run on the path along a curve", () => {
-    /** A curve bending hard near its start and gently toward its end */
+    /** A curve bending hard near its start and gently toward its end, measured straight across */
     const lopsided = (
         anchor: "start" | "center" | "end",
         groups: { interval: number; count?: number }[],
@@ -412,6 +461,7 @@ describe("a run on the path along a curve", () => {
             { x: 120, y: 0, tension: 0 },
         ],
         spacing: { mode: "path", groups, anchor },
+        measured: "straight",
     });
     const along = (p: LineParams, at: XY) => linePath(p).project(at);
     const ONE = [{ interval: 15 }];
@@ -436,6 +486,19 @@ describe("a run on the path along a curve", () => {
             expect(before).toBeGreaterThan(1);
             expect(before).toBeCloseTo(after, 3);
             gapsOf(spots).forEach((g, i) => expect(g).toBeCloseTo(gaps[i]!, 6));
+        });
+
+        it(`lays the run its length along the path from the anchor (${name})`, () => {
+            for (const anchor of ["start", "center", "end"] as const) {
+                const { measured: _m, ...p } = lopsided(anchor, [...groups]);
+                const s = lineSpots(p, 4).map((spot) => spot.s!);
+                arcGapsOf(p, 4).forEach((g, i) =>
+                    expect(g).toBeCloseTo(gaps[i]!, 9),
+                );
+                const spare = linePath(p).length - (s.at(-1)! - s[0]!);
+                const before = { start: 0, center: spare / 2, end: spare };
+                expect(s[0]).toBeCloseTo(before[anchor], 9);
+            }
         });
     }
 });
