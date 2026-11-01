@@ -169,6 +169,42 @@ export interface ShowNotesExtras {
 const label = (m: Pick<Marcher, "name" | "drill_number"> | undefined) =>
     m ? m.name || m.drill_number : "";
 
+/** The platform and obstacle checks, from the props' Outlines and Placement (C4.5). */
+function platformNotesFrom(
+    data: ShowNotesData,
+    changesByItem: ReturnType<typeof toPlacementChanges>,
+    ordinal: ReadonlyMap<number, number>,
+    positionAt: (marcherId: number, beat: number) => XY | null,
+): ShowNote[] {
+    const outlines = itemOutlineChanges({
+        items: data.items,
+        geometry: data.geometry ?? [],
+        beatIndexes: ordinal,
+    });
+    const itemIdOf = new Map(data.items.map((i) => [i.marcher_id, i.id]));
+    return platformNotes({
+        props: data.items.flatMap((i) =>
+            i.kind === "prop" && i.surface_type
+                ? [
+                      {
+                          id: i.marcher_id,
+                          surface: i.surface_type,
+                          changes: outlines.get(i.marcher_id) ?? [],
+                          placements: changesByItem.get(i.id) ?? [],
+                      },
+                  ]
+                : [],
+        ),
+        itemIdOf: (marcherId) => itemIdOf.get(marcherId) ?? -1,
+        performers: data.marchers
+            .map((m) => m.id)
+            .filter((id) => !itemIdOf.has(id)),
+        beatCount: data.grid.beatIds.length,
+        positionAt,
+        unitsPerMeter: PIXELS_PER_METER,
+    });
+}
+
 /** The checks from the data, a resolver and the extras. */
 export function showNotesFrom(
     data: ShowNotesData,
@@ -213,12 +249,6 @@ export function showNotesFrom(
         return beatId === undefined ? null : (ordinal.get(beatId) ?? null);
     };
     const changesByItem = toPlacementChanges(data.placements, ordinal);
-    const outlines = itemOutlineChanges({
-        items: data.items,
-        geometry: data.geometry ?? [],
-        beatIndexes: ordinal,
-    });
-    const itemIdOf = new Map(data.items.map((i) => [i.marcher_id, i.id]));
     const notes = sortShowNotes([
         ...itemNotes({
             items,
@@ -233,27 +263,9 @@ export function showNotesFrom(
                 CREW_REACH_STEPS * (data.fieldProperties?.pixelsPerStep ?? 12),
             warnPropMovesWithoutCrew: warnPropMovesWithoutCrewOf(data.settings),
         }),
-        ...platformNotes({
-            props: data.items.flatMap((i) =>
-                i.kind === "prop" && i.surface_type
-                    ? [
-                          {
-                              id: i.marcher_id,
-                              surface: i.surface_type,
-                              changes: outlines.get(i.marcher_id) ?? [],
-                              placements: changesByItem.get(i.id) ?? [],
-                          },
-                      ]
-                    : [],
-            ),
-            itemIdOf: (marcherId) => itemIdOf.get(marcherId) ?? -1,
-            performers: data.marchers
-                .map((m) => m.id)
-                .filter((id) => !itemIdOf.has(id)),
-            beatCount: data.grid.beatIds.length,
-            positionAt: known((id, beat) => resolver.positionAt(id, beat)),
-            unitsPerMeter: PIXELS_PER_METER,
-        }),
+        ...platformNotesFrom(data, changesByItem, ordinal, (id, beat) =>
+            ids.has(id) ? resolver.positionAt(id, beat) : null,
+        ),
         ...cueNotes(extras.cues?.notes ?? ([] as CueNote[]), cueBeat),
     ]);
     const marchers = new Map(data.marchers.map((m) => [m.id, m]));

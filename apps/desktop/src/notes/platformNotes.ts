@@ -11,15 +11,16 @@
  * the change in platform height from one count to the next; a step taken within a count is that
  * count's. Beats are ordinals.
  */
-import { propsAt, platformTopAt } from "@/view3d/core/props/propLayout";
-import type {
-    GroundPoint,
-    PropInput,
-    PropSolid,
+import {
+    platformTopAt,
+    propsAt,
+    type GroundPoint,
+    type PropInput,
+    type PropSolid,
 } from "@/view3d/core/props/propLayout";
 import type { XY } from "@openmarch/core";
 import { insideOutline } from "@/items/itemOutlines";
-import type { ShowNote } from "./showNotes";
+import type { ShowNote, ShowNoteKind } from "./showNotes";
 
 /** A step of more than this, in meters, gets a note: 16 in. */
 export const STEP_NOTE_HEIGHT = 16 * 0.0254;
@@ -48,15 +49,19 @@ const holds = (s: PropSolid, p: GroundPoint) =>
         { x: p.x, y: p.z },
     );
 
-interface Bounds {
-    minX: number;
-    maxX: number;
-    minZ: number;
-    maxZ: number;
+const topOf = (s: PropSolid) => s.base + s.height;
+
+/** One beat's props, as the checks read them. */
+interface Standing {
+    byId: Map<number, PropSolid>;
+    platforms: PropSolid[];
+    obstacles: PropSolid[];
+    /** Around every prop: most performers are nowhere near one */
+    bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
 }
 
-const boundsOf = (solids: readonly PropSolid[]): Bounds => {
-    const b = {
+function standingAt(solids: readonly PropSolid[]): Standing {
+    const bounds = {
         minX: Infinity,
         maxX: -Infinity,
         minZ: Infinity,
@@ -64,143 +69,176 @@ const boundsOf = (solids: readonly PropSolid[]): Bounds => {
     };
     for (const s of solids)
         for (const p of s.outline) {
-            b.minX = Math.min(b.minX, p.x);
-            b.maxX = Math.max(b.maxX, p.x);
-            b.minZ = Math.min(b.minZ, p.z);
-            b.maxZ = Math.max(b.maxZ, p.z);
+            bounds.minX = Math.min(bounds.minX, p.x);
+            bounds.maxX = Math.max(bounds.maxX, p.x);
+            bounds.minZ = Math.min(bounds.minZ, p.z);
+            bounds.maxZ = Math.max(bounds.maxZ, p.z);
         }
-    return b;
-};
+    return {
+        byId: new Map(solids.map((s) => [s.id, s])),
+        platforms: solids.filter((s) => s.surface === "platform"),
+        obstacles: solids.filter((s) => s.surface === "obstacle"),
+        bounds,
+    };
+}
 
-const within = (b: Bounds, p: GroundPoint) =>
+const near = ({ bounds: b }: Standing, p: GroundPoint) =>
     p.x >= b.minX && p.x <= b.maxX && p.z >= b.minZ && p.z <= b.maxZ;
+
+/** Where a performer stood on a count: the platform height, and the platforms under them. */
+interface Footing {
+    top: number;
+    on: ReadonlySet<number>;
+}
+
+function footingAt(standing: Standing, dot: GroundPoint): Footing {
+    if (!near(standing, dot)) return { top: 0, on: new Set() };
+    return {
+        top: platformTopAt(standing.platforms, dot),
+        on: new Set(
+            standing.platforms.filter((s) => holds(s, dot)).map((s) => s.id),
+        ),
+    };
+}
+
+/** The tallest of these platforms, or undefined. */
+const tallest = (ids: ReadonlySet<number>, standing: Standing) =>
+    [...ids]
+        .map((id) => standing.byId.get(id))
+        .filter((s): s is PropSolid => !!s)
+        .sort((a, b) => topOf(b) - topOf(a))[0];
+
+class PlatformChecks {
+    readonly notes: ShowNote[] = [];
+    private readonly last = new Map<number, Footing>();
+    /** Open obstacle notes, by performer and obstacle */
+    private readonly inside = new Map<string, ShowNote>();
+
+    constructor(private readonly itemIdOf: (marcherId: number) => number) {}
+
+    private note(
+        kind: ShowNoteKind,
+        key: string,
+        beat: number,
+        propId: number | undefined,
+        marcherId: number,
+    ): ShowNote {
+        const note: ShowNote = {
+            id: `${kind}:${key}:${beat}`,
+            kind,
+            source: "items",
+            beat,
+            until: beat + 1,
+            what: {
+                itemIds: propId === undefined ? [] : [this.itemIdOf(propId)],
+                marcherIds: [marcherId],
+                cueIds: [],
+            },
+        };
+        this.notes.push(note);
+        return note;
+    }
+
+    /** A performer with no position on this count: nothing to step from on the next. */
+    lost(marcherId: number) {
+        this.last.delete(marcherId);
+    }
+
+    /** One performer on one count, against this count's props and the last count's. */
+    check(
+        marcherId: number,
+        dot: GroundPoint,
+        beat: number,
+        now: Standing,
+        before: Standing,
+    ) {
+        const footing = footingAt(now, dot);
+        const was = this.last.get(marcherId);
+        if (was) {
+            const rise = footing.top - was.top;
+            if (Math.abs(rise) > STEP_NOTE_HEIGHT + SAME) {
+                // Named by the platform stepped onto, or off
+                const platform =
+                    rise > 0
+                        ? tallest(footing.on, now)
+                        : tallest(was.on, before);
+                this.note(
+                    "platform_step",
+                    `${marcherId}`,
+                    beat,
+                    platform?.id,
+                    marcherId,
+                ).detail = { rise };
+            }
+            for (const id of was.on) {
+                const then = before.byId.get(id);
+                const it = now.byId.get(id);
+                if (footing.on.has(id) || !then || !it) continue;
+                if (
+                    Math.abs(it.center.x - then.center.x) > SAME ||
+                    Math.abs(it.center.z - then.center.z) > SAME
+                )
+                    this.note(
+                        "leaves_moving_platform",
+                        `${marcherId}:${id}`,
+                        beat,
+                        id,
+                        marcherId,
+                    );
+            }
+        }
+        this.last.set(marcherId, footing);
+
+        const inRange = near(now, dot);
+        for (const obstacle of now.obstacles) {
+            const key = `${marcherId}:${obstacle.id}`;
+            const open = this.inside.get(key);
+            if (!inRange || !holds(obstacle, dot)) this.inside.delete(key);
+            else if (open) open.until = beat + 1;
+            else
+                this.inside.set(
+                    key,
+                    this.note(
+                        "inside_obstacle",
+                        key,
+                        beat,
+                        obstacle.id,
+                        marcherId,
+                    ),
+                );
+        }
+    }
+
+    /** After every performer's check on a count: an obstacle no longer drawn closes its notes. */
+    endBeat(beat: number) {
+        for (const [key, note] of this.inside)
+            if (note.until !== beat + 1) this.inside.delete(key);
+    }
+}
 
 /** The platform and obstacle notes. Nothing when the show has neither. */
 export function platformNotes(input: PlatformNotesInput): ShowNote[] {
-    const standing = input.props.filter(
+    const props = input.props.filter(
         (p) => p.surface === "platform" || p.surface === "obstacle",
     );
-    if (standing.length === 0 || input.performers.length === 0) return [];
+    if (props.length === 0 || input.performers.length === 0) return [];
     const ground = (id: number, beat: number): GroundPoint | null => {
         const p = input.positionAt(id, beat);
         return p
             ? { x: p[0] / input.unitsPerMeter, z: p[1] / input.unitsPerMeter }
             : null;
     };
-
-    const notes: ShowNote[] = [];
-    /** Each performer's platform height on the last count, and the platforms under them */
-    const last = new Map<number, { top: number; on: Set<number> }>();
-    /** Open obstacle notes, by performer and obstacle */
-    const inside = new Map<string, ShowNote>();
-    let before: Map<number, PropSolid> = new Map();
-
+    const checks = new PlatformChecks(input.itemIdOf);
+    let before = standingAt([]);
     for (let beat = 0; beat < input.beatCount; beat++) {
-        const solids = propsAt(standing, beat, (id) => ground(id, beat));
-        const byId = new Map(solids.map((s) => [s.id, s]));
-        const platforms = solids.filter((s) => s.surface === "platform");
-        const obstacles = solids.filter((s) => s.surface === "obstacle");
-        const bounds = boundsOf(solids);
+        const now = standingAt(propsAt(props, beat, (id) => ground(id, beat)));
         for (const marcherId of input.performers) {
             const dot = ground(marcherId, beat);
-            if (!dot) {
-                last.delete(marcherId);
-                continue;
-            }
-            // Most performers are nowhere near a prop
-            const near = within(bounds, dot);
-            const top = near ? platformTopAt(platforms, dot) : 0;
-            const on = new Set(
-                near
-                    ? platforms.filter((s) => holds(s, dot)).map((s) => s.id)
-                    : [],
-            );
-            const was = last.get(marcherId);
-            if (was) {
-                const rise = top - was.top;
-                if (Math.abs(rise) > STEP_NOTE_HEIGHT + SAME) {
-                    // Named by the platform stepped onto, or off
-                    const highest = (
-                        ids: Set<number>,
-                        from: Map<number, PropSolid>,
-                    ) =>
-                        [...ids]
-                            .map((id) => from.get(id))
-                            .filter((s): s is PropSolid => !!s)
-                            .sort(
-                                (a, b) =>
-                                    b.base + b.height - (a.base + a.height),
-                            )[0];
-                    const platform =
-                        rise > 0 ? highest(on, byId) : highest(was.on, before);
-                    notes.push({
-                        id: `platform_step:${marcherId}:${beat}`,
-                        kind: "platform_step",
-                        source: "items",
-                        beat,
-                        until: beat + 1,
-                        what: {
-                            itemIds: platform
-                                ? [input.itemIdOf(platform.id)]
-                                : [],
-                            marcherIds: [marcherId],
-                            cueIds: [],
-                        },
-                        detail: { rise },
-                    });
-                }
-                for (const id of was.on) {
-                    const then = before.get(id);
-                    const now = byId.get(id);
-                    if (on.has(id) || !then || !now) continue;
-                    const moved =
-                        Math.abs(now.center.x - then.center.x) > SAME ||
-                        Math.abs(now.center.z - then.center.z) > SAME;
-                    if (!moved) continue;
-                    notes.push({
-                        id: `leaves_moving_platform:${marcherId}:${id}:${beat}`,
-                        kind: "leaves_moving_platform",
-                        source: "items",
-                        beat,
-                        until: beat + 1,
-                        what: {
-                            itemIds: [input.itemIdOf(id)],
-                            marcherIds: [marcherId],
-                            cueIds: [],
-                        },
-                    });
-                }
-            }
-            last.set(marcherId, { top, on });
-
-            for (const obstacle of obstacles) {
-                const key = `${marcherId}:${obstacle.id}`;
-                const open = inside.get(key);
-                if (near && holds(obstacle, dot)) {
-                    if (open) open.until = beat + 1;
-                    else {
-                        const note: ShowNote = {
-                            id: `inside_obstacle:${marcherId}:${obstacle.id}:${beat}`,
-                            kind: "inside_obstacle",
-                            source: "items",
-                            beat,
-                            until: beat + 1,
-                            what: {
-                                itemIds: [input.itemIdOf(obstacle.id)],
-                                marcherIds: [marcherId],
-                                cueIds: [],
-                            },
-                        };
-                        inside.set(key, note);
-                        notes.push(note);
-                    }
-                } else if (open) inside.delete(key);
-            }
+            if (dot) checks.check(marcherId, dot, beat, now, before);
+            else checks.lost(marcherId);
         }
-        // An obstacle no longer drawn closes its notes
-        for (const [key, note] of inside)
-            if (note.until !== beat + 1) inside.delete(key);
-        before = byId;
+        checks.endBeat(beat);
+        before = now;
     }
-    return notes;
+    return checks.notes;
 }
