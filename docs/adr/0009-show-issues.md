@@ -69,7 +69,10 @@ identity matching for dismissals and for "new".
   subscribes to the same change stream as the main thread
   (`subscribeTimelineChanges`, both `batch` and `reset`) and receives item
   put-down updates (`setTimelinePutDownItems`), which bump the version
-  without a batch. The 3D View's own resolver plus put-downs
+  without a batch. `subscribeTimelineChanges` only covers timeline tables,
+  so the main thread also posts a **show-inputs snapshot** (tags, sections,
+  rules, the field properties checks read) whenever those queries change,
+  and the worker applies D-3's table to it. The 3D View's own resolver plus put-downs
   (`view3d/positions.ts`) is the precedent. The worker never touches the
   database. It checks the rest of the show in chunks, nearest the playhead
   first, and posts issues back.
@@ -156,16 +159,18 @@ so undo never brings warnings back. Columns:
 - check id;
 - kind: `occurrence`, `performers` or `check`;
 - performer ids;
-- for occurrences, the span stored **relative to a page**: the id of the
-  page holding the first count, a count offset into that page, and a length
-  in counts.
+- for occurrences, the span stored as the **id of its first count's beat**
+  (`beats.id`) and a length in counts.
 
-Anchoring to a page id means inserting or deleting counts elsewhere moves
-the page, not the dismissal, so no ripple has to rewrite the table and undo
-can't leave rippled spans behind. Edits inside the anchor page can shift an
-occurrence slightly. The overlap-or-touch tolerance absorbs small shifts,
-and a bigger change correctly brings the issue back. If the anchor page is
-deleted, the dismissal is dropped.
+Pages reference beats by id (`pages.start_beat`), and beat ids survive
+inserting or deleting counts elsewhere, splitting a page (which moves the
+existing page id to the later half) and dragging a page flag. So no ripple
+has to rewrite the table, and undo can't leave rippled spans behind. Page
+ids would not work as anchors, for exactly those last two reasons. The
+overlap-or-touch tolerance absorbs small shifts in the issue itself, and a
+bigger change correctly brings the issue back. A dismissal whose beat no
+longer exists (its counts were deleted) is ignored, like a missing
+performer below.
 
 Matching:
 
@@ -175,16 +180,20 @@ Matching:
   performers include all the dismissal's performers;
 - a **check** dismissal turns the check off.
 
-Deleting a performer doesn't cascade. Dismissals naming a missing performer
-are ignored, and pruned when the file is next opened, so undoing the delete
-in the same session brings them back.
+Deleting a performer or counts doesn't cascade. Dismissals naming a missing
+performer or beat are ignored, and pruned when the file is next opened, so
+undoing the delete in the same session brings them back.
 
 **`issue_rules`**, **with** history triggers. Rules are show edits like the
 field properties they sit beside, so they undo like them, and deleting a
 performer and undoing it restores their rules through the normal history.
-Columns: check id; target (`section` by name, because `marchers.section` is
-free text, `tag` by id, or `performer` by id); a JSON value validated by the
-check's rules schema. Show defaults live with the check: in field properties
+Columns: check id; target (`show`; `section` by name, because
+`marchers.section` is free text; `tag` by id; or `performer` by id); a JSON
+value validated by the check's rules schema. Tag and performer rules cascade
+on delete through foreign keys, so the history restores them on undo. A
+section rule whose name no longer matches any performer (after a rename) is
+kept and shown in the Checks section as "Woodwinds · no performers", so it
+can be retargeted or deleted. Show defaults live with the check: in field properties
 for step size (`stepSizeWarningThresholdInches`, unchanged), or as a
 `show`-target row for checks with no existing home.
 
@@ -194,7 +203,7 @@ reading it.
 
 Scope (Whole show or Here), the seen state behind "new", and the sweep
 setting are per user (UI settings), not saved in the show. The seen state is
-keyed by the show file's identity.
+keyed by the show file's path.
 
 ## Consequences
 

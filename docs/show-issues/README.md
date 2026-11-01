@@ -113,10 +113,10 @@ overlaps or touches the dismissed span. A nudge that shifts a collision by a
 count stays dismissed. The same pair colliding somewhere else is a new
 issue.
 
-The span is stored **relative to a page**: the page that holds its first
-count, plus a count offset into it. Inserting or deleting counts earlier in
-the show moves that page, so later dismissals still line up, and nothing
-needs rewriting when counts ripple (see the ADR).
+The span is stored as **the id of its first count's beat plus a length**.
+Beat ids survive inserting or deleting counts elsewhere, splitting pages and
+dragging page flags, so dismissals stay lined up and nothing needs rewriting
+when counts ripple (see the ADR).
 
 The same matching rule decides whether an issue is **new** (the badge dot,
 bold rows, the soft blink): an issue is new if nothing seen before matches
@@ -243,7 +243,7 @@ steps. Two performers collide when the circles touch or overlap: distance ≤
 rA + rB. A tuba (0.75) beside a clarinet (0.45) collides within 1.2 steps.
 
 Today's threshold is a pair distance, not a radius: `COLLISION_RADIUS = 10`
-field units (inches), about 0.89 of a default 22.5-inch step. So the default
+field units (20 inches, at 0.5 field units per inch), about 0.89 of a default 22.5-inch step. So the default
 personal space is **half of today's pair distance, converted to steps at the
 show's step size** (about 0.44 at the default step size), and a show with no
 rules flags exactly the pairs it flags today. From then on the radius is in
@@ -261,9 +261,14 @@ go in the rules table. That way the public `FieldProperties` type in core
 doesn't change, older app versions keep reading the threshold, and nothing
 needs copying.
 
-Every reader moves to the check: the inspector badge (`MarcherEditor.tsx`),
-`stepSizeWarning.ts` and `shapeFieldContext.ts`. The old warning paths
-become this check's focus explanation.
+Every reader moves to the check: the inspector badge (`MarcherEditor.tsx`)
+and `stepSizeWarning.ts`, with its field callers through
+`evaluatePathWarning` (`field/startFlagOverlay.ts`,
+`field/timelineOverlays.ts`). The old warning paths become this check's
+focus explanation. The shape tool's preview (`shapeFieldContext.ts`) judges
+uncommitted positions the resolver hasn't seen, so it calls the check's
+pure step-size function on the preview positions directly instead of
+reading issues.
 
 ## How checking runs
 
