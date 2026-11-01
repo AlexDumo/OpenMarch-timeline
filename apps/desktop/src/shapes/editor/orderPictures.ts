@@ -6,7 +6,7 @@ import type { XY } from "../types";
  * Who goes where's pictures (#559, owner's design C): four marchers drawn as their numbers where
  * they stand, an arrow, then the new line read as a sequence, the number of the marcher who lands
  * on each spot, first to last. Least travel reads 2 1 4 3 for the sample, Keep order 1 2 3 4, and
- * Keep order reversed 4 3 2 1. Everything here is pure.
+ * Reverse order 4 3 2 1. Everything here is pure.
  */
 
 /** The menu's pictures are larger than the other menus': the numbers need the room */
@@ -95,7 +95,7 @@ const before: readonly OrderPictureNumber[] = (() => {
     }));
 })();
 
-/** The picture for a choice: Keep order's turns with Reverse */
+/** The picture for a choice */
 export function orderPicture(choice: OrderChoice): OrderPicture {
     const step = 8;
     const first = W - 4 - step * (TO.length - 1);
