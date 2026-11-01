@@ -710,9 +710,12 @@ function GroupGapLabel({
 function OffsetStep({
     step,
     at,
+    abovePx,
 }: {
     step: NonNullable<FieldModeDrawing["offsetStep"]>;
     at: (point: { x: number; y: number }) => { x: number; y: number };
+    /** What stands above each spot (its name), which a pill above the across leg clears */
+    abovePx: number;
 }) {
     const a = at(step.from);
     const c = at(step.corner);
@@ -766,7 +769,9 @@ function OffsetStep({
             {pill(
                 step.across,
                 (a.x + c.x) / 2,
-                (a.y + c.y) / 2 + below * (h / 2 + 4),
+                (a.y + c.y) / 2 +
+                    below * (h / 2 + 4) -
+                    (below < 0 ? abovePx : 0),
                 "fieldShapeOffsetAcross",
             )}
             {pill(
@@ -891,7 +896,12 @@ function ModeDrawing({
                     />
                 ))}
             {drawing.offsetStep && (
-                <OffsetStep step={drawing.offsetStep} at={at} />
+                <OffsetStep
+                    step={drawing.offsetStep}
+                    at={at}
+                    // Clear of the spots' names, drawn above them
+                    abovePx={drawing.labels?.length ? SPOT_LABEL_PX + 1 : 0}
+                />
             )}
             {drawing.labels?.map(({ at: point, text }, i) => {
                 const p = at(point);
