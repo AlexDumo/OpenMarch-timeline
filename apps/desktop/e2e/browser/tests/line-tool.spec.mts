@@ -710,8 +710,14 @@ test("change: while clicking points, a right-click, Backspace and undo each take
         await page.mouse.move(at.x, at.y, { steps: 4 });
         await page.mouse.click(at.x, at.y, { button });
     };
-    const clicked = () =>
-        page.evaluate(() => window.fieldTest!.shapeOverlay!()?.outline?.length);
+    // With the pointer away from every point, so its segment to the pointer is drawn too
+    const away = await toScreen(page, { x: cf.x - 2 * S, y: y + 12 * S });
+    const clicked = async () => {
+        await page.mouse.move(away.x, away.y, { steps: 2 });
+        return page.evaluate(
+            () => window.fieldTest!.shapeOverlay!()?.outline?.length,
+        );
+    };
     await click(a);
     // The hint names the key as a keycap
     const hint = page.getByTestId("shape-tool-hint");
