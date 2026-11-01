@@ -38,6 +38,7 @@ import { useUiSettingsStore } from "./stores/UiSettingsStore";
 import { useSnapOnWhenFileOpens } from "./hooks/useSnapOnWhenFileOpens";
 import CanvasZoomControls from "@/components/canvas/CanvasZoomControls";
 import FieldDisplayBar from "@/components/canvas/display/FieldDisplayBar";
+import View3dButton from "@/components/visuals/View3dButton";
 import Plugin from "./global/classes/Plugin";
 import Sidebar from "@/components/sidebar/Sidebar";
 import Toaster from "./components/ui/Toaster";
@@ -395,8 +396,9 @@ function App() {
                                                         className="relative flex h-full min-h-0 w-full min-w-0 flex-col gap-8"
                                                     >
                                                         {preview ? (
-                                                            // Only the workspace switch, to go back
-                                                            <div className="flex justify-end">
+                                                            // Only the workspace switch, to go back, and the 3D View
+                                                            <div className="flex items-center justify-end gap-8">
+                                                                <View3dButton />
                                                                 <WorkspaceViewSwitch />
                                                             </div>
                                                         ) : (

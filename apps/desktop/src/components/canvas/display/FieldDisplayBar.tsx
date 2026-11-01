@@ -1,5 +1,6 @@
 import * as Popover from "@radix-ui/react-popover";
 import {
+    BoundingBoxIcon,
     CompassIcon,
     TagIcon,
     UsersThreeIcon,
@@ -14,6 +15,8 @@ import {
 import {
     useUiSettingsStore,
     type MarcherLabelForm,
+    type ShapeOutlines,
+    type UiSettings,
 } from "@/stores/UiSettingsStore";
 import { StartFlagPositionsButton } from "./StartFlagPositionsButton";
 
@@ -24,23 +27,23 @@ export const DISPLAY_BUTTON_CLASS =
 const POPOVER_CLASS =
     "border-stroke bg-modal text-text shadow-modal rounded-8 z-50 flex flex-col gap-4 border p-8 backdrop-blur-sm";
 
-const LABEL_FORMS: readonly MarcherLabelForm[] = [
-    "auto",
-    "names",
-    "numbers",
-    "off",
+const LABEL_CHOICES: readonly Choice<MarcherLabelForm>[] = [
+    { value: "auto", key: "toolbar.view.labelsAuto" },
+    { value: "names", key: "toolbar.view.labelsNames" },
+    { value: "numbers", key: "toolbar.view.labelsNumbers" },
+    { value: "off", key: "toolbar.view.labelsOff" },
 ];
-const LABEL_FORM_KEY: Record<MarcherLabelForm, string> = {
-    auto: "toolbar.view.labelsAuto",
-    names: "toolbar.view.labelsNames",
-    numbers: "toolbar.view.labelsNumbers",
-    off: "toolbar.view.labelsOff",
-};
+const SHAPE_CHOICES: readonly Choice<ShapeOutlines>[] = [
+    { value: "selected", key: "toolbar.view.shapesSelected" },
+    { value: "always", key: "toolbar.view.shapesAlways" },
+    { value: "off", key: "toolbar.view.shapesOff" },
+];
 
 /**
  * How the field is displayed, apart from the timeline: a small bar at the field's top right (the
- * zoom controls hold the bottom right). Path overlays and marcher labels work; sections and the
- * field's direction are placeholders until those features exist.
+ * zoom controls hold the bottom right). It replaced the toolbar's View tab. Path overlays, marcher
+ * labels and placed shapes' outlines work; sections and the field's direction are placeholders
+ * until those features exist.
  */
 export default function FieldDisplayBar() {
     const { t } = useTranslate();
@@ -54,7 +57,23 @@ export default function FieldDisplayBar() {
                 className="border-stroke bg-bg-1 text-text pointer-events-auto absolute top-6 right-6 z-10 flex flex-col items-center gap-4 rounded-lg border p-4 shadow-lg"
             >
                 <StartFlagPositionsButton />
-                <LabelsButton />
+                <ChoiceButton
+                    setting="marcherLabels"
+                    fallback="auto"
+                    choices={LABEL_CHOICES}
+                    icon={TagIcon}
+                    labelKey="toolbar.view.labels"
+                    testId="field-display-labels"
+                />
+                {/* Placed boxes' outlines (docs/timeline/research/shapes/07-placed-boxes.md) */}
+                <ChoiceButton
+                    setting="shapes"
+                    fallback="selected"
+                    choices={SHAPE_CHOICES}
+                    icon={BoundingBoxIcon}
+                    labelKey="toolbar.view.shapes"
+                    testId="field-display-shapes"
+                />
                 <span aria-hidden className="bg-stroke h-px w-16" />
                 <PlaceholderButton
                     icon={UsersThreeIcon}
@@ -71,17 +90,38 @@ export default function FieldDisplayBar() {
     );
 }
 
-/** Marcher labels: Auto, drill numbers, numbers only, or off (the View tab's Labels setting) */
-function LabelsButton() {
+interface Choice<T extends string> {
+    readonly value: T;
+    readonly key: string;
+}
+
+/**
+ * One setting picked from a short list (marcher labels, shape outlines): an icon that opens the
+ * choices beside the bar, dimmed while the setting is off.
+ */
+function ChoiceButton<K extends "marcherLabels" | "shapes">({
+    setting,
+    fallback,
+    choices,
+    icon: IconComponent,
+    labelKey,
+    testId,
+}: {
+    setting: K;
+    fallback: NonNullable<UiSettings[K]>;
+    choices: readonly Choice<NonNullable<UiSettings[K]>>[];
+    icon: Icon;
+    labelKey: string;
+    testId: string;
+}) {
     const { t } = useTranslate();
-    const form = useUiSettingsStore(
-        (s) => s.uiSettings.marcherLabels ?? "auto",
-    );
-    const label = t("toolbar.view.labels");
-    const current = t(LABEL_FORM_KEY[form]);
-    const setForm = (marcherLabels: MarcherLabelForm) => {
+    const value = useUiSettingsStore((s) => s.uiSettings[setting] ?? fallback);
+    const label = t(labelKey);
+    const currentKey = choices.find((c) => c.value === value)?.key;
+    const current = currentKey ? t(currentKey) : undefined;
+    const choose = (next: NonNullable<UiSettings[K]>) => {
         const { uiSettings, setUiSettings } = useUiSettingsStore.getState();
-        setUiSettings({ ...uiSettings, marcherLabels });
+        setUiSettings({ ...uiSettings, [setting]: next });
     };
     return (
         <Popover.Root>
@@ -89,14 +129,16 @@ function LabelsButton() {
                 <Popover.Trigger asChild>
                     <button
                         type="button"
-                        aria-label={`${label}: ${current}`}
-                        data-testid="field-display-labels"
+                        aria-label={current ? `${label}: ${current}` : label}
+                        data-testid={testId}
                         className={clsx(
                             DISPLAY_BUTTON_CLASS,
-                            form === "off" ? "text-text-disabled" : "text-text",
+                            value === "off"
+                                ? "text-text-disabled"
+                                : "text-text",
                         )}
                     >
-                        <TagIcon size={16} />
+                        <IconComponent size={16} />
                     </button>
                 </Popover.Trigger>
             </ShortcutTooltip>
@@ -111,19 +153,19 @@ function LabelsButton() {
                     <h3 className="text-sub text-text-subtitle px-8 pt-4 pb-2">
                         {label}
                     </h3>
-                    {LABEL_FORMS.map((value) => (
+                    {choices.map((choice) => (
                         <button
-                            key={value}
+                            key={choice.value}
                             type="button"
-                            aria-pressed={form === value}
-                            data-testid={`field-display-labels-${value}`}
-                            onClick={() => setForm(value)}
+                            aria-pressed={value === choice.value}
+                            data-testid={`${testId}-${choice.value}`}
+                            onClick={() => choose(choice.value)}
                             className={clsx(
                                 "text-body rounded-6 hover:bg-fg-2 focus-visible:ring-accent px-8 py-4 text-left outline-hidden focus-visible:ring-2",
-                                form === value && "text-accent",
+                                value === choice.value && "text-accent",
                             )}
                         >
-                            {t(LABEL_FORM_KEY[value])}
+                            {t(choice.key)}
                         </button>
                     ))}
                 </Popover.Content>
