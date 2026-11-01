@@ -72,7 +72,7 @@ export interface OrderPicture {
 
 const { width: W, height: H } = ORDER_PICTURE_SIZE;
 /** Where the marchers stand: the left of the picture, the sample's depth stretched so they read scattered */
-const BEFORE = { width: 26, pad: 4.5, stretch: 3 };
+const BEFORE = { width: 30, pad: 3.5, stretch: 4 };
 
 const before: readonly OrderPictureNumber[] = (() => {
     const pts = FROM.map((p) => ({ x: p.x, y: p.y * BEFORE.stretch }));
@@ -101,7 +101,7 @@ export function orderPicture(choice: OrderChoice): OrderPicture {
     const first = W - 4 - step * (TO.length - 1);
     return {
         before,
-        arrow: { x1: BEFORE.width + 2, x2: BEFORE.width + 12, y: H / 2 },
+        arrow: { x1: BEFORE.width + 1, x2: first - 4, y: H / 2 },
         line: { x1: first - 3, x2: W - 1, y: H / 2 + 6 },
         after: orderSequence(choice).map((n, j) => ({
             x: first + j * step,
