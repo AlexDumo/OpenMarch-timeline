@@ -305,5 +305,12 @@ Nothing yet.
   (`writeFrame`'s new `lift`, null for the ground). Obstacles and Floor
   props lift nothing. Checked in the web preview: the performers inside the
   stage stand on it, the one on the riser higher.
-  - **Next:** the notes (steps over 16 in, performers inside obstacles,
-    dots leaving a moving platform).
+- 2026-11-01, C4.5 part 3 (branch `3d/c4-props`): the platform checks in
+  "Show checks" (`notes/platformNotes.ts`), checked on every count as the
+  3D View stands the props: a step of more than 16 in from one count to the
+  next ("Alice steps up 24 in onto Stage, Page 5 count 7", in cm for a
+  metric show), a performer inside an obstacle (one note over the counts
+  they are in it), and a dot that leaves a platform while the platform
+  moves. `useShowNotes` reads the items' Outline changes for it. Shows with
+  no platforms or obstacles skip the check; 400 performers over 1,000 counts
+  with three props took about 95 ms on an M1 Pro.

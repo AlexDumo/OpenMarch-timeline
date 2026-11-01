@@ -35,6 +35,10 @@ export type ShowNoteKind =
     | "crew_distance"
     | "crewless_move"
     | "put_down_drift"
+    // props in the 3D View (C4.5)
+    | "platform_step"
+    | "inside_obstacle"
+    | "leaves_moving_platform"
     // cues
     | "carry_mismatch"
     | "silk_aspect";
@@ -72,6 +76,8 @@ export interface ShowNote {
         /** Short-handed hold: hands needed and given */
         needed?: number;
         held?: number;
+        /** Platform step: how far up (positive) or down, in meters */
+        rise?: number;
         /** A warning rather than information */
         level?: "warning" | "info";
     };

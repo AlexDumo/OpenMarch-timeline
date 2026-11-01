@@ -140,3 +140,58 @@ describe("ItemNotesView", () => {
         expect(screen.queryByTestId("item-notes")).toBeNull();
     });
 });
+
+describe("platform checks (C4.5)", () => {
+    const platformNotes: ShowNote[] = [
+        {
+            id: "up",
+            kind: "platform_step",
+            source: "items",
+            beat: 32,
+            until: 33,
+            what: what({ itemIds: [20], marcherIds: [1] }),
+            detail: { rise: 24 * 0.0254 },
+        },
+        {
+            id: "inside",
+            kind: "inside_obstacle",
+            source: "items",
+            beat: 12,
+            until: 20,
+            what: what({ itemIds: [21], marcherIds: [3] }),
+        },
+        {
+            id: "leaves",
+            kind: "leaves_moving_platform",
+            source: "items",
+            beat: 18,
+            until: 19,
+            what: what({ itemIds: [20], marcherIds: [1] }),
+        },
+    ];
+
+    it("names who steps how far onto what, who is inside an obstacle, and who leaves a moving platform", async () => {
+        show(<ShowNotesListView {...props()} notes={platformNotes} />);
+        await screen.findAllByTestId("show-note");
+        expect(
+            screen.getAllByTestId("show-note").map((li) => li.textContent),
+        ).toEqual([
+            "Alice steps up 24 in onto Riser, Page 5 count 7More than 16 in, with no step between",
+            "Carl is inside Cart, Page 3 count 3They pass through it in the 3D View",
+            "Alice steps off Riser while it moves, Page 4 count 1A moving platform doesn't carry the performers on it",
+        ]);
+    });
+
+    it("says a step down in the show's units", async () => {
+        show(
+            <ShowNotesListView
+                {...props()}
+                measurementSystem="metric"
+                notes={[{ ...platformNotes[0]!, detail: { rise: -0.61 } }]}
+            />,
+        );
+        expect((await screen.findByTestId("show-note")).textContent).toContain(
+            "Alice steps down 61 cm from Riser",
+        );
+    });
+});

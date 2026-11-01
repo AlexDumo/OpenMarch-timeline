@@ -36,6 +36,10 @@ import {
 } from "@/settings/workspaceSettings";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { conToastError } from "@/utilities/utils";
+import { itemOutlineChanges } from "@/items/itemOutlineTimeline";
+import { PIXELS_PER_METER } from "@/items/itemOutlines";
+import type { DatabaseItemGeometry } from "@/db-functions/items";
+import { platformNotes } from "@/notes/platformNotes";
 import {
     cueNotes,
     CREW_REACH_STEPS,
@@ -45,7 +49,10 @@ import {
     type ShowNote,
 } from "@/notes/showNotes";
 import { allMarchersQueryOptions } from "./queries/useMarchers";
-import { allItemsQueryOptions } from "./queries/useItems";
+import {
+    allItemsQueryOptions,
+    itemGeometryQueryOptions,
+} from "./queries/useItems";
 import { workspaceSettingsQueryOptions } from "./queries/useWorkspaceSettings";
 import { fieldPropertiesQueryOptions } from "./queries/useFieldProperties";
 import { useShowCueChecks, type ShowCueChecks } from "./useShowCueChecks";
@@ -91,6 +98,8 @@ export interface ShowNotesData {
     marchers: readonly Marcher[];
     settings: WorkspaceSettings | undefined;
     fieldProperties: FieldProperties | undefined;
+    /** The items' Outline changes, for the platform and obstacle checks; none until loaded */
+    geometry?: readonly DatabaseItemGeometry[];
 }
 
 export type ShowNotesQueries = {
@@ -107,9 +116,11 @@ export const _combineShowNotesQueries = (
         UseQueryResult<Marcher[]>,
         UseQueryResult<WorkspaceSettings>,
         UseQueryResult<FieldProperties>,
+        UseQueryResult<DatabaseItemGeometry[]>,
     ],
 ): ShowNotesQueries => {
-    const [items, placements, grid, marchers, settings, field] = results;
+    const [items, placements, grid, marchers, settings, field, geometry] =
+        results;
     const isLoading = results.some((r) => r.isLoading);
     const hasError = results.some((r) => r.isError);
     if (!items.data || !placements.data || !grid.data || !marchers.data)
@@ -122,6 +133,7 @@ export const _combineShowNotesQueries = (
             marchers: marchers.data,
             settings: settings.data,
             fieldProperties: field.data,
+            geometry: geometry?.data,
         },
         isLoading,
         hasError,
@@ -200,10 +212,17 @@ export function showNotesFrom(
         const beatId = extras.cues?.cueBeatId.get(cueId);
         return beatId === undefined ? null : (ordinal.get(beatId) ?? null);
     };
+    const changesByItem = toPlacementChanges(data.placements, ordinal);
+    const outlines = itemOutlineChanges({
+        items: data.items,
+        geometry: data.geometry ?? [],
+        beatIndexes: ordinal,
+    });
+    const itemIdOf = new Map(data.items.map((i) => [i.marcher_id, i.id]));
     const notes = sortShowNotes([
         ...itemNotes({
             items,
-            changesByItem: toPlacementChanges(data.placements, ordinal),
+            changesByItem,
             beatCount: data.grid.beatIds.length,
             positionAt: known((id, beat) => resolver.positionAt(id, beat)),
             basePositionAt: known((id, beat) => base.positionAt(id, beat)),
@@ -213,6 +232,27 @@ export function showNotesFrom(
             crewReach:
                 CREW_REACH_STEPS * (data.fieldProperties?.pixelsPerStep ?? 12),
             warnPropMovesWithoutCrew: warnPropMovesWithoutCrewOf(data.settings),
+        }),
+        ...platformNotes({
+            props: data.items.flatMap((i) =>
+                i.kind === "prop" && i.surface_type
+                    ? [
+                          {
+                              id: i.marcher_id,
+                              surface: i.surface_type,
+                              changes: outlines.get(i.marcher_id) ?? [],
+                              placements: changesByItem.get(i.id) ?? [],
+                          },
+                      ]
+                    : [],
+            ),
+            itemIdOf: (marcherId) => itemIdOf.get(marcherId) ?? -1,
+            performers: data.marchers
+                .map((m) => m.id)
+                .filter((id) => !itemIdOf.has(id)),
+            beatCount: data.grid.beatIds.length,
+            positionAt: known((id, beat) => resolver.positionAt(id, beat)),
+            unitsPerMeter: PIXELS_PER_METER,
         }),
         ...cueNotes(extras.cues?.notes ?? ([] as CueNote[]), cueBeat),
     ]);
@@ -247,6 +287,7 @@ export function useShowNotesWith(
             allMarchersQueryOptions(),
             workspaceSettingsQueryOptions(),
             fieldPropertiesQueryOptions(),
+            itemGeometryQueryOptions(),
         ],
         combine: _combineShowNotesQueries,
     });

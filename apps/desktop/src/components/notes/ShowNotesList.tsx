@@ -11,12 +11,14 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTolgee } from "@tolgee/react";
 import { Button } from "@openmarch/ui";
 import { InfoIcon, WarningIcon } from "@phosphor-icons/react";
+import type { MeasurementSystem } from "@openmarch/core";
 import { notesForItem, type ShowNote } from "@/notes/showNotes";
 import {
     snapItemToHolderMutationOptions,
     useShowNotes,
 } from "@/hooks/useShowNotes";
 import { allMarcherRowsQueryOptions } from "@/hooks/queries/useMarchers";
+import { fieldPropertiesQueryOptions } from "@/hooks/queries/useFieldProperties";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
@@ -38,9 +40,17 @@ export interface NotesViewProps {
     snapping?: number | null;
     /** Clicking a note: seek to its count and select what it names */
     onPick?: (note: ShowNote) => void;
+    /** The show's units, for a platform step's height; imperial when left out */
+    measurementSystem?: MeasurementSystem;
 }
 
 type Translate = ReturnType<typeof useTolgee>["t"];
+
+/** A platform step's height as the platform presets say it: whole inches, or centimeters. */
+export const stepHeightText = (m: number, system: MeasurementSystem) =>
+    system === "metric"
+        ? `${Math.round(Math.abs(m) * 100)} cm`
+        : `${Math.round(Math.abs(m) / 0.0254)} in`;
 
 /** Names, up to three, then a count. */
 const names = (t: Translate, list: readonly string[]) =>
@@ -56,7 +66,11 @@ export function noteText(
         pageBoxes,
         itemName,
         marcherName,
-    }: Pick<NotesViewProps, "pageBoxes" | "itemName" | "marcherName">,
+        measurementSystem = "imperial",
+    }: Pick<
+        NotesViewProps,
+        "pageBoxes" | "itemName" | "marcherName" | "measurementSystem"
+    >,
 ): { text: string; detail?: string } {
     const where =
         note.beat === null
@@ -112,6 +126,33 @@ export function noteText(
             return {
                 text: withWhere(t("showChecks.silkAspect")),
                 detail: who ? t("showChecks.forWho", { who }) : undefined,
+            };
+        case "platform_step": {
+            const rise = note.detail?.rise ?? 0;
+            const height = stepHeightText(rise, measurementSystem);
+            return {
+                text: withWhere(
+                    t(
+                        rise >= 0
+                            ? "showChecks.platformStepUp"
+                            : "showChecks.platformStepDown",
+                        { who, height, item },
+                    ),
+                ),
+                detail: t("showChecks.platformStepDetail"),
+            };
+        }
+        case "inside_obstacle":
+            return {
+                text: withWhere(t("showChecks.insideObstacle", { who, item })),
+                detail: t("showChecks.insideObstacleDetail"),
+            };
+        case "leaves_moving_platform":
+            return {
+                text: withWhere(
+                    t("showChecks.leavesMovingPlatform", { who, item }),
+                ),
+                detail: t("showChecks.leavesMovingPlatformDetail"),
             };
     }
 }
@@ -216,6 +257,7 @@ export function ItemNotesView({
 /** The live checks with their actions: Snap to holder, and click to seek and select. */
 function useLiveNotes(): NotesViewProps & { notes: ShowNote[] } {
     const { notes, itemName, itemMarcherId, marcherName } = useShowNotes();
+    const { data: field } = useQuery(fieldPropertiesQueryOptions());
     const pageBoxes = useTimelineSelectionStore((s) => s.pageBoxes);
     const snap = useMutation(snapItemToHolderMutationOptions());
     const { data: rows } = useQuery(allMarcherRowsQueryOptions());
@@ -229,6 +271,7 @@ function useLiveNotes(): NotesViewProps & { notes: ShowNote[] } {
         pageBoxes,
         itemName,
         marcherName,
+        measurementSystem: field?.measurementSystem,
         onSnap: (id) => snap.mutate(id),
         snapping: snap.isPending ? (snap.variables ?? null) : null,
         onPick: (note) => {
