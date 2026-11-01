@@ -44,7 +44,7 @@ import {
  *    move they empty (`clearOwnPageMoves` with `tidyShared`, as Basic's Set to previous page).
  *    On a direct path their motion before the range is unchanged; after it, they walk from wherever
  *    they now are. A path that isn't direct is sampled by the cut, so before the range they walk
- *    straight lines instead (a known gap, tracked in a follow-up issue).
+ *    straight lines instead (a known gap, tracked in #591).
  *    A cut changes the motion of everyone on a path that isn't direct, so where others share the
  *    move and one of them has such a row before the last cut, the move isn't cut for everyone: the
  *    marchers are taken into a move of their own first (below), and only that is cut, so the

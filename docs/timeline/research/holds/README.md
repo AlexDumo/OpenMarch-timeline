@@ -217,8 +217,8 @@ from stale copies (defined-coordinates finding 7).
       the marcher is first taken into a move of its own and only that is cut. A direct path is
       still cut for everyone, since no one's motion changes. Where split by marcher refuses (an
       inheriting follow-the-leader order), the marcher keeps its moves and is named. The cleared
-      marcher's own curved path still turns straight before the page (a known gap, follow-up
-      issue).
+      marcher's own curved path still turns straight before the page (a known gap,
+      #591).
 17. **Removing the keyframe where a Held hold begins removes the hold too.** The pages become
     Following. The hold meant "stand at this spot", and the spot is gone. No next-page stay is
     written inside the hold (review, semantics M3). Undo restores both. See
