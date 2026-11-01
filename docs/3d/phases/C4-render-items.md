@@ -295,6 +295,15 @@ Nothing yet.
   surface type until props carry Artwork (C5.5). Checked in the web preview
   with a demo show given a stage, a riser on it, a turned wall, a tarp and a
   round obstacle.
-  - **Next:** performers at the height of the platform under their dot,
-    stepping over about half a count; then the notes (steps over 16 in,
-    performers inside obstacles, dots leaving a moving platform).
+- 2026-11-01, C4.5 part 2 (branch `3d/c4-props`): performers stand at the
+  top of the tallest platform under their dot (`platformLift.ts`). The step
+  is a ramp across the edge as wide as a dot goes in half a count at the
+  show's step size, halfway up on the edge; each stacked platform lifts from
+  what is under it toward its own top. The lift is worked out at the moment
+  the performers are placed (a count ahead, `STEP_AHEAD`) and raises the
+  body, instrument, silk, contact shadow and selection ring
+  (`writeFrame`'s new `lift`, null for the ground). Obstacles and Floor
+  props lift nothing. Checked in the web preview: the performers inside the
+  stage stand on it, the one on the riser higher.
+  - **Next:** the notes (steps over 16 in, performers inside obstacles,
+    dots leaving a moving platform).

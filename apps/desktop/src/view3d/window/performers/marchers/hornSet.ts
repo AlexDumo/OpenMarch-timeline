@@ -129,7 +129,8 @@ export class HornSet {
     /**
      * Places every placed slot's instrument in its tier's mesh, packed, and
      * points each instance at its slot when the packing changed. `camera`
-     * null draws everything at full detail.
+     * null draws everything at full detail. `lift` raises each slot (m), as
+     * onto a platform; null stands them all on the ground.
      */
     writeFrame(
         xz: Float32Array,
@@ -137,6 +138,7 @@ export class HornSet {
         placed: Uint8Array,
         scale: Float32Array,
         camera: [number, number, number] | null,
+        lift: Float32Array | null = null,
     ): void {
         for (const g of this.groups) {
             const lists: number[][] = g.tiers.map(() => []);
@@ -170,6 +172,7 @@ export class HornSet {
                         heading[slot],
                         scale[slot],
                     );
+                    if (lift) matrices[i * 16 + 13] = lift[slot];
                     if (changed) writeInstance(t.mesh, i, slot);
                 });
                 t.mesh.count = list.length;

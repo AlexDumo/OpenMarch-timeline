@@ -60,6 +60,8 @@ import {
     sectionUniform,
 } from "@/view3d/core/marchers/looks";
 import { useShowPositions } from "@/view3d/positions";
+import { useShowProps } from "@/hooks/useShowProps";
+import { writePerformerLifts } from "../props/performerLift";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
 import type { View3dSelection } from "@/view3d/sync/protocol";
 import { useView3dSceneStore } from "../sceneStore";
@@ -217,7 +219,9 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     );
     const marcherAssets = useMarcherAssets(heightClasses);
     // The count clock and every marcher's clip plan for the whole show.
-    const { beats, pages } = useTimingObjects();
+    const { beats, pages, countGrid } = useTimingObjects();
+    // Performers stand on the platform under their dot (C4.5)
+    const { props: showProps } = useShowProps();
     const clock = useMemo(() => buildCountClock(beats), [beats]);
     // What each marcher carries, for the cues that fit them: their section's
     // usual equipment, as in the editor, whatever the guard preview shows.
@@ -519,6 +523,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             visible: new Uint8Array(count),
             xz: new Float32Array(count * 2),
             placed: new Uint8Array(count),
+            lift: new Float32Array(count),
         };
     }, [assets, count]);
     useEffect(
@@ -558,6 +563,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         marcherBodies,
         motion,
         silkMotion,
+        showProps,
+        countGrid,
     ]);
 
     // Colors and visibility, only when the looks change.
@@ -624,6 +631,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                     meshes.placed,
                     countRef.current,
                     cam,
+                    null,
+                    meshes.lift,
                 );
                 marcherBodies.compose(state.gl);
                 lod[0] = cam[0];
@@ -633,18 +642,32 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             return;
         }
 
-        const { bodies, rings, visible, xz, placed } = meshes;
+        const { bodies, rings, visible, xz, placed, lift } = meshes;
         if (moved) {
             // the marchers run a count ahead of the clock (`STEP_AHEAD`), so
             // they're placed from the drill a count later
             const c = countAt(clock, ms, countRef.current);
+            const placedMs =
+                marcherBodies && motion ? msAtCount(clock, c + STEP_AHEAD) : ms;
             writePerformerPositions(
                 slots,
-                marcherBodies && motion ? msAtCount(clock, c + STEP_AHEAD) : ms,
+                placedMs,
                 fieldProperties,
                 visible,
                 xz,
                 placed,
+            );
+            writePerformerLifts(
+                {
+                    props: showProps,
+                    positions: slots.positions,
+                    countGrid,
+                    ms: placedMs,
+                    fieldProperties,
+                },
+                xz,
+                placed,
+                lift,
             );
             if (marcherBodies) {
                 countRef.current = c;
@@ -656,6 +679,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                     c,
                     cam,
                     silkMotion?.update(c) ?? null,
+                    lift,
                 );
                 marcherBodies.compose(state.gl);
                 lod[0] = cam[0];
@@ -667,6 +691,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                     xz,
                     placed,
                     bodies.instanceMatrix.array as Float32Array,
+                    lift,
                 );
                 bodies.instanceMatrix.needsUpdate = true;
             }
@@ -677,6 +702,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             xz,
             placed,
             rings.instanceMatrix.array as Float32Array,
+            lift,
         );
         // With no selection there is nothing to upload (P5.1).
         if (ringCount > 0 || rings.count > 0)
