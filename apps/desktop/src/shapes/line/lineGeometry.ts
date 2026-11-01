@@ -54,7 +54,7 @@ export const MAX_TENSION = 2;
  * the marchers is `layGroups` (`spacing.ts`).
  */
 export interface LineGroup {
-    /** Field units between neighbors, straight across (the chord) */
+    /** Field units between neighbors, as the line measures them ({@link LineParams.measured}) */
     readonly interval: number;
     /** Marchers in the group, a whole number from 1; absent for the rest */
     readonly count?: number;
@@ -80,10 +80,16 @@ export type LineSpacing =
       };
 
 /**
- * What an interval measures (spec #522, "Measured"): `x` (↔) is how far neighbors are apart side
- * to side, `y` (↕) front to back. Absent is the true distance, straight across.
+ * An axis an interval can measure (spec #522, "Measured"): `x` (↔) is how far neighbors are apart
+ * side to side, `y` (↕) front to back
  */
 export type LineMeasured = "x" | "y";
+
+/**
+ * What an interval measures ({@link LineParams.measured}): along the path when absent, `straight`
+ * straight across from marcher to marcher, or an axis
+ */
+export type LineMeasure = LineMeasured | "straight";
 
 export interface LineParams {
     /** In order from the first marcher's end; two or more */
@@ -104,8 +110,13 @@ export interface LineParams {
      * line itself) when absent. Only on a closed line.
      */
     readonly distribution?: Distribution;
-    /** The true distance when absent (#527) */
-    readonly measured?: LineMeasured;
+    /**
+     * What every interval measures (#527, ADR 0006's Line amendment): along the path (its arc
+     * length) when absent; `straight` straight across from marcher to marcher, except that a gap is
+     * measured along the path where straight across would cut past a corner holding no marcher
+     * ({@link acrossOf}); `x` (↔) side to side and `y` (↕) front to back
+     */
+    readonly measured?: LineMeasure;
 }
 
 /** Whether `p` joins its last point to its first */
@@ -146,6 +157,7 @@ const isGroup = (g: unknown): g is LineGroup => {
 };
 
 const ANCHORS: readonly unknown[] = ["start", "center", "end"];
+const MEASURES: readonly unknown[] = ["straight", "x", "y"];
 // `pivot` is the host's (ADR 0006, amendment of 2026-10-20), stored beside the kind's own numbers
 const KEYS = new Set([
     "points",
@@ -169,7 +181,7 @@ export function isLineParams(params: unknown): params is LineParams {
     const p = params as Partial<LineParams>;
     if (p.closed !== undefined && typeof p.closed !== "boolean") return false;
     if (p.corners !== undefined && typeof p.corners !== "boolean") return false;
-    if (p.measured !== undefined && p.measured !== "x" && p.measured !== "y")
+    if (p.measured !== undefined && !MEASURES.includes(p.measured))
         return false;
     if (!Array.isArray(p.points) || p.points.length < (p.closed ? 3 : 2))
         return false;
@@ -348,25 +360,87 @@ function stretchPaths(p: LineParams): Path[] {
     );
 }
 
+/** Each stretch's {@link acrossOf}, in order */
+function stretchAcross(p: LineParams): (number[] | null)[] {
+    const segments = lineSegments(p);
+    return lineStretches(p).map(({ from, to }) =>
+        acrossOf(
+            p,
+            from,
+            Array.from(
+                { length: to - from },
+                (_, i) => segments[(from + i) % segments.length]!,
+            ),
+        ),
+    );
+}
+
+/**
+ * How a gap is measured on a run of `segments` of the line, from its point `from` (#527): null
+ * along the path, by arc length (the line's default); measured `straight`, the offsets along the
+ * run of the corners on it (its points of tension 0 between its ends, none holding a marcher
+ * there), across which a gap is measured along the path instead ({@link chordOffsets}). A run of
+ * straight segments is null either way: straight across within a segment is its arc, and a gap
+ * reaching past a corner goes round it. So straight across differs from along the path only on a
+ * curve, and never skips a corner.
+ */
+function acrossOf(
+    p: LineParams,
+    from: number,
+    segments: readonly Segment[],
+): number[] | null {
+    if (p.measured !== "straight") return null;
+    if (segments.every((segment) => segment.type === "line")) return null;
+    const bends: number[] = [];
+    let at = 0;
+    segments.forEach((segment, k) => {
+        if (k > 0 && p.points[(from + k) % p.points.length]!.tension === 0)
+            bends.push(at);
+        at += makePath([segment]).length;
+    });
+    return bends;
+}
+
+/** The whole line's {@link acrossOf}, from its first point */
+const lineAcross = (p: LineParams) => acrossOf(p, 0, lineSegments(p));
+
+/**
+ * Where neighbors `gaps` apart go along `path`, from `from`: along the path when `across` is
+ * null, else straight across past none of its bends ({@link acrossOf})
+ */
+const offsetsOn = (
+    path: Path,
+    from: number,
+    gaps: readonly number[],
+    across: readonly number[] | null,
+): number[] =>
+    across ? chordOffsets(path, from, gaps, across) : offsetsOf(gaps, from);
+
 /** Whether `path` runs straight from end to end */
 const straight = (path: Path) =>
     length(sub(path.at(path.length), path.at(0))) >= path.length * (1 - 1e-9);
 
 /**
- * How much `gaps`, measured straight across (the chord) and in order, must be scaled to reach
- * exactly from one end of `path` to the other. On a straight path it's the length over their sum.
+ * How much `gaps`, in order, must be scaled to reach exactly from one end of `path` to the other:
+ * the length over their sum along the path, and found by search straight across (`across`) on a
+ * curve
  */
-function chordScale(path: Path, gaps: readonly number[]): number {
+function fitScale(
+    path: Path,
+    gaps: readonly number[],
+    across: readonly number[] | null,
+): number {
     const whole = sum(gaps);
     if (!(whole > 0) || !(path.length > 0)) return 0;
     const arc = path.length / whole;
     // A chord is as long as its arc only on a straight stretch
-    if (straight(path)) return arc;
+    if (!across || straight(path)) return arc;
     const reach = (k: number) =>
         chordOffsets(
             path,
             0,
             gaps.map((gap) => gap * k),
+            across,
         ).at(-1)!;
     // Each chord reaches at least its own length along, so the arc's share reaches the end
     let lo = 0;
@@ -380,22 +454,32 @@ function chordScale(path: Path, gaps: readonly number[]): number {
 }
 
 /**
- * The interval at which `gaps` neighbors, measured straight across, reach exactly from one end of
- * `path` to the other
+ * The interval at which `gaps` even neighbors reach exactly from one end of `path` to the other,
+ * along it or straight across (`across`)
  */
-const evenChord = (path: Path, gaps: number): number =>
-    gaps > 0 ? chordScale(path, Array<number>(gaps).fill(1)) : 0;
+const evenScale = (
+    path: Path,
+    gaps: number,
+    across: readonly number[] | null,
+): number =>
+    gaps > 0 ? fitScale(path, Array<number>(gaps).fill(1), across) : 0;
 
 /**
- * Neighbors `gaps` apart straight across (scaled to fit, in order), from one end of `path` to the
- * other, tagged from `from`
+ * Neighbors `gaps` apart (scaled to fit, in order), along the path or straight across
+ * (`across`), from one end of `path` to the other, tagged from `from`
  */
-function runSpots(path: Path, gaps: readonly number[], from = 0): Slot[] {
-    const k = chordScale(path, gaps);
-    const offsets = chordOffsets(
+function runSpots(
+    path: Path,
+    gaps: readonly number[],
+    from: number,
+    across: readonly number[] | null,
+): Slot[] {
+    const k = fitScale(path, gaps, across);
+    const offsets = offsetsOn(
         path,
         0,
         gaps.map((gap) => gap * k),
+        across,
     );
     // The last on the end exactly, whatever the search left
     offsets[gaps.length] = path.length;
@@ -486,11 +570,13 @@ export function measuredBlock(
 }
 
 /**
- * What the line's intervals measure as it's laid out: its Measured setting, or the true distance
- * (null) when that's absent or the line no longer goes one way along it (a part turned square)
+ * The axis the line's intervals measure as it's laid out: its Measured setting's, or null when it
+ * has none (along the path, or straight across) or the line no longer goes one way along it (a
+ * part turned square), which is laid out along the path
  */
 export function measuredAxis(p: LineParams): LineMeasured | null {
-    return p.measured && measuredBlock(p, p.measured) === null
+    return (p.measured === "x" || p.measured === "y") &&
+        measuredBlock(p, p.measured) === null
         ? p.measured
         : null;
 }
@@ -615,8 +701,9 @@ export function lineInterval(p: LineParams, n: number): number {
     const axis = measuredAxis(p);
     if (axis) return axisLength(p, axis) / (n - 1);
     const gaps = gapCount(p, n);
-    // Along a curve, the straight distance between neighbors (#525)
-    return smooth(p) ? evenChord(linePath(p), gaps) : linePath(p).length / gaps;
+    const path = linePath(p);
+    const across = lineAcross(p);
+    return across ? evenScale(path, gaps, across) : path.length / gaps;
 }
 
 /**
@@ -727,16 +814,19 @@ export function intervalRange(
     const gaps = p.spacing.mode === "fit" ? cornerGaps(p, n) : null;
     if (!gaps) return null;
     const axis = measuredAxis(p);
+    const across = stretchAcross(p);
     const each = axis
         ? stretchExtents(p, axis).map((l, i) => l / gaps[i]!)
-        : stretchPaths(p).map((path, i) => evenChord(path, gaps[i]!));
+        : stretchPaths(p).map((path, i) =>
+              evenScale(path, gaps[i]!, across[i]!),
+          );
     return { min: Math.min(...each), max: Math.max(...each) };
 }
 
 /**
  * In Keep interval with every corner holding a marcher, whether a stretch isn't as long as its run
- * of gaps, straight across (a whole number of intervals): a corner dragged with `fine` (#524).
- * Measured ↔ or ↕, as long that way.
+ * of gaps as the line measures them (a whole number of intervals): a corner dragged with `fine`
+ * (#524). Measured ↔ or ↕, as long that way.
  */
 export function cornerOffInterval(p: LineParams, n: number): boolean {
     const runs = p.spacing.mode === "fit" ? null : cornerRuns(p, n);
@@ -746,14 +836,15 @@ export function cornerOffInterval(p: LineParams, n: number): boolean {
         return stretchExtents(p, axis).some(
             (l, i) => Math.abs(l - sum(runs[i]!)) > 1e-6 * Math.max(l, 1),
         );
+    const across = stretchAcross(p);
     return stretchPaths(p).some(
-        (path, i) => Math.abs(chordScale(path, runs[i]!) - 1) > 1e-6,
+        (path, i) => Math.abs(fitScale(path, runs[i]!, across[i]!) - 1) > 1e-6,
     );
 }
 
 /**
  * The spots of a line whose corners hold marchers: stretch by stretch from its first point, each
- * holding its run of gaps straight across, then the last point. In Keep interval a stretch is as
+ * holding its run of gaps as the line measures them, then the last point. In Keep interval a stretch is as
  * long as its run, so the gaps are as typed; a corner `fine` left off its interval scales its
  * stretches' gaps to fit (even gaps, with one interval) instead of running past the corner and
  * stacking marchers on it. Measured ↔ or ↕ (#527), each stretch holds its gaps that way. A closed
@@ -764,6 +855,7 @@ function cornerSpots(p: LineParams, runs: readonly number[][]): Slot[] {
     const axis = measuredAxis(p);
     const segments = lineSegments(p);
     const stretches = lineStretches(p);
+    const across = stretchAcross(p);
     const whole = makePath(segments).length;
     let s = sum(
         segments.slice(0, stretches[0]!.from).map((g) => makePath([g]).length),
@@ -773,7 +865,7 @@ function cornerSpots(p: LineParams, runs: readonly number[][]): Slot[] {
         spots.push(
             ...(axis
                 ? axisRunSpots(segments.slice(from, to), axis, runs[i]!, s)
-                : runSpots(path, runs[i]!, s)
+                : runSpots(path, runs[i]!, s, across[i]!)
             ).slice(0, -1),
         );
         s += path.length;
@@ -800,22 +892,28 @@ export function lineSpots(p: LineParams, n: number, stepPx?: number): Slot[] {
     const axis = measuredAxis(p);
     if (axis) return measuredSpots(p, n, axis, stepPx);
     const gaps = lineGaps(p, n);
+    const across = lineAcross(p);
     if (gaps === null) {
         if (n === 1) return [at(closed ? 0 : path.length / 2)];
         const count = gapCount(p, n);
-        // Along a curve, neighbors evenly apart straight across (#525); a closed line's last
-        // back on its first
-        if (smooth(p))
-            return runSpots(path, Array<number>(count).fill(1)).slice(0, n);
+        // Measured straight across along a curve, neighbors evenly apart that way (#525); a
+        // closed line's last back on its first
+        if (across)
+            return runSpots(
+                path,
+                Array<number>(count).fill(1),
+                0,
+                across,
+            ).slice(0, n);
         return Array.from({ length: n }, (_, i) =>
             at((path.length * i) / count),
         );
     }
     // A closed line's run goes round from its first point, its last gap back to it
-    if (closed) return chordOffsets(path, 0, gaps.slice(0, -1)).map(at);
+    if (closed) return offsetsOn(path, 0, gaps.slice(0, -1), across).map(at);
     // Keep interval is sized to its run, which sits on it whole; on the path it sits at its anchor
     const anchor = p.spacing.mode === "path" ? p.spacing.anchor : "center";
-    return anchoredSpots(p, gaps, anchor);
+    return anchoredSpots(p, gaps, anchor, across);
 }
 
 /** {@link lineSpots} on a line measured along `axis`, its corners holding no marchers */
@@ -871,31 +969,39 @@ const reversed = (segment: Segment): Segment =>
             };
 
 /**
- * A run of `gaps`, straight across, laid on the line at `anchor`: from its start, back from its
- * end, or centered with as much of the path spare before it as after it (#523, #525). Along a
- * curve the chords cover less path the more it bends there, so the end and the center are found on
- * the path itself, not from the run's length measured somewhere else. A run longer than the line
- * runs past its ends.
+ * A run of `gaps` laid on the line at `anchor`: from its start, back from its end, or centered
+ * with as much of the path spare before it as after it (#523, #525). Along the path that is the
+ * run's length from the anchor. Straight across (`across`), the chords cover less path the more it
+ * bends there, so the end and the center are found on the path itself, not from the run's length
+ * measured somewhere else. A run longer than the line runs past its ends.
  */
 function anchoredSpots(
     p: LineParams,
     gaps: readonly number[],
     anchor: LineAnchor,
+    across: readonly number[] | null,
 ): Slot[] {
     const segments = lineSegments(p);
     const path = makePath(segments);
     const at = (s: number): Slot => ({ ...path.at(s), s });
-    if (anchor === "start") return chordOffsets(path, 0, gaps).map(at);
+    if (!across) {
+        const spare = path.length - sum(gaps);
+        const from =
+            anchor === "start" ? 0 : anchor === "end" ? spare : spare / 2;
+        return offsetsOf(gaps, from).map(at);
+    }
+    if (anchor === "start") return chordOffsets(path, 0, gaps, across).map(at);
     if (anchor === "end") {
         const back = makePath(segments.map(reversed).reverse());
-        return chordOffsets(back, 0, [...gaps].reverse())
+        const bends = across.map((b) => path.length - b);
+        return chordOffsets(back, 0, [...gaps].reverse(), bends)
             .map((s) => ({ ...back.at(s), s: path.length - s }))
             .reverse();
     }
     // The path spare before the run less the path spare after it, which grows as the run starts
     // further along
     const lopsided = (from: number) =>
-        from - (path.length - chordOffsets(path, from, gaps).at(-1)!);
+        from - (path.length - chordOffsets(path, from, gaps, across).at(-1)!);
     const span = Math.max(path.length, sum(gaps), 1e-9);
     let lo = -span;
     let hi = span;
@@ -906,7 +1012,7 @@ function anchoredSpots(
         if (lopsided(mid) < 0) lo = mid;
         else hi = mid;
     }
-    return chordOffsets(path, (lo + hi) / 2, gaps).map(at);
+    return chordOffsets(path, (lo + hi) / 2, gaps, across).map(at);
 }
 
 /**
@@ -1457,19 +1563,20 @@ function onGrid(
 
 /**
  * Each stretch (corner to corner) scaled about its start so its run of gaps reaches it end to end
- * straight across (measured ↔ or ↕, that way), in its own direction and shape, from the first
+ * as the line measures them (↔ or ↕, that way), in its own direction and shape, from the first
  * point
  */
 function onIntervals(p: LineParams, runs: readonly number[][]): LineParams {
     const points = [...p.points];
     const paths = stretchPaths(p);
+    const across = stretchAcross(p);
     const axis = measuredAxis(p);
     const extents = axis ? stretchExtents(p, axis) : [];
     let at: XY = p.points[0]!;
     lineStretches(p).forEach(({ from, to }, r) => {
         const fit = axis
             ? extents[r]! / sum(runs[r]!)
-            : chordScale(paths[r]!, runs[r]!);
+            : fitScale(paths[r]!, runs[r]!, across[r]!);
         const k = fit > 0 ? 1 / fit : 1;
         const start = p.points[from]!;
         for (let i = from + 1; i <= to; i++) {
@@ -1491,12 +1598,15 @@ function onIntervals(p: LineParams, runs: readonly number[][]): LineParams {
 function runScale(p: LineParams, gaps: readonly number[]): number {
     const path = linePath(p);
     if (!(path.length > 0)) return 1;
+    const across = lineAcross(p);
+    if (!across) return sum(gaps) / path.length;
     // The run of chords on the line `k` times as big, against its length
     const over = (k: number) =>
         chordOffsets(
             path,
             0,
             gaps.map((gap) => gap / k),
+            across,
         ).at(-1)! - path.length;
     let lo = 1e-6;
     let hi = Math.max(1, sum(gaps) / path.length) * 2;
@@ -1566,20 +1676,25 @@ export function withSpacing(
 }
 
 /**
- * The line measured along `axis` (↔, ↕) or by the true distance (null), from the Measured menu
- * (#527). The typed interval (or groups) stays the same, now measured the new way, so Keep interval
- * resizes; Fit leaves the line as it is. A line that doesn't go one way along `axis` can't take it.
+ * The line measured `measure`: along the path (null), straight across or along an axis (↔, ↕),
+ * from the Measured menu (#527). The typed interval (or groups) stays the same, now measured the
+ * new way, so Keep interval resizes; Fit leaves the line as it is. A line that doesn't go one way
+ * along an axis can't take it.
  */
 export function withMeasured(
     p: LineParams,
     n: number,
-    axis: LineMeasured | null,
+    measure: LineMeasure | null,
     env: SizeEnv,
 ): LineParams {
-    if ((p.measured ?? null) === axis) return p;
-    if (axis && measuredBlock(p, axis) !== null) return p;
+    if ((p.measured ?? null) === measure) return p;
+    if (
+        (measure === "x" || measure === "y") &&
+        measuredBlock(p, measure) !== null
+    )
+        return p;
     const { measured: _was, ...rest } = p;
-    const next: LineParams = axis ? { ...rest, measured: axis } : rest;
+    const next: LineParams = measure ? { ...rest, measured: measure } : rest;
     return keptToRun(next, n, env);
 }
 

@@ -216,20 +216,37 @@ export function gapsInSteps(
 
 /**
  * Arc-length offsets along `path` for marchers whose neighbors are `gaps` apart in a straight
- * line, the way drill measures an interval, starting at `from`. On a straight path that is the
- * gaps themselves; on a curve each gap reaches a little farther along the path than its chord.
+ * line, starting at `from`. On a straight path that is the gaps themselves; on a curve each gap
+ * reaches a little farther along the path than its chord.
+ *
+ * `bends` are offsets of corners on the path that hold no marcher. A gap whose straight-across
+ * spot would lie past one of them is measured along the path instead, so a run never cuts across a
+ * corner (a spike's tip) and lands far down its other side.
  */
 export function chordOffsets(
     path: Path,
     from: number,
     gaps: readonly number[],
+    bends: readonly number[] = [],
 ): number[] {
     const offsets = [from];
     let s = from;
     for (const gap of gaps) {
-        offsets.push((s = nextAtChord(path, s, gap)));
+        const next = nextAtChord(path, s, gap);
+        offsets.push((s = cutsBend(bends, s, next, gap) ? s + gap : next));
     }
     return offsets;
+}
+
+/** Whether one of `bends` lies strictly between offsets `s` and `next` */
+function cutsBend(
+    bends: readonly number[],
+    s: number,
+    next: number,
+    gap: number,
+): boolean {
+    const tolerance = Math.max(gap, 1) * 1e-9;
+    return bends.some((b) => b > s + tolerance && b < next - tolerance);
 }
 
 /** The first offset past `s` whose point is `gap` from `s`'s point, in a straight line */

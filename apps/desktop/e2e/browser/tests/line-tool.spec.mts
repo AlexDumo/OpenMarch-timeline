@@ -315,18 +315,19 @@ test("change: a diagonal from yard line to yard line is measured ↔, placing ma
     const measured = page.getByTestId("shape-choice-measured");
     await expect(measured).toHaveAttribute("data-value", "x");
 
-    // The menu offers the true distance too; ↕ is there, this line going one
-    // way front to back as well
+    // The menu offers along the path and straight across too; ↕ is there,
+    // this line going one way front to back as well
     await measured.click();
     const rows = page
         .getByTestId("shape-choice-measured-content")
         .getByRole("menuitemradio");
     await expect(rows).toHaveText([
-        "True distance",
+        "Along the path",
+        "Straight across",
         "Side to side",
         "Front to back",
     ]);
-    await expect(rows.nth(2)).not.toHaveAttribute("aria-disabled", "true");
+    await expect(rows.nth(3)).not.toHaveAttribute("aria-disabled", "true");
     await page.keyboard.press("Escape");
 
     // 1½ steps side to side, grown from the center onto the grid

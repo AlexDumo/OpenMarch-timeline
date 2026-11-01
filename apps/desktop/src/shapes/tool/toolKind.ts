@@ -259,8 +259,8 @@ export interface ToolGroups<P> {
      */
     typeList(params: P, n: number, text: string, env: ToolEnv): P | null;
     /**
-     * What the intervals measure, when it isn't the true distance: `x` side to side (↔), `y`
-     * front to back (↕). The field labels each gap of a group pointed at with it.
+     * What the intervals measure, when it's an axis rather than the line itself: `x` side to
+     * side (↔), `y` front to back (↕). The field labels each gap of a group pointed at with it.
      */
     axis?(params: P): "x" | "y" | null;
     /** The params with a group added at the end (the chip's +) */

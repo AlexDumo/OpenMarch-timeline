@@ -235,7 +235,7 @@ const INTERVAL: ToolParam<LineParams> = {
     blends: true,
     default: 2,
     range: { min: 0.5 },
-    // What it measures: none for the true distance, the box's marks for ↔ and ↕
+    // What it measures: none along the path or straight across, the box's marks for ↔ and ↕
     glyph: (p) => {
         const axis = measuredAxis(p);
         return axis === "x" ? "↔" : axis === "y" ? "↕" : null;
@@ -584,11 +584,13 @@ function measuredReason(p: LineParams, axis: LineMeasured): string | undefined {
 }
 
 /**
- * The Measured menu (spec #522): what the interval measures. The true distance between neighbors
- * is the default; ↔ puts neighbors the interval apart side to side, x exactly on the step grid,
- * and ↕ front to back. Each is greyed out, with why, on a line that doesn't go one way that way.
- * It shows what the intervals measure now: a line whose part turned square to its setting is laid
- * out by the true distance until it goes one way again, and shows that.
+ * The Measured menu (spec #522): what the interval measures. Along the path is the default, each
+ * interval the length of line between neighbors; straight across is the distance from marcher to
+ * marcher, the same on straight segments and shorter round a curve, measured along the path where
+ * it would cut past a corner holding no marcher. ↔ puts neighbors the interval apart side to side,
+ * x exactly on the step grid, and ↕ front to back; each is greyed out, with why, on a line that
+ * doesn't go one way that way. It shows what the intervals measure now: a line whose part turned
+ * square to its axis is laid out along the path until it goes one way again, and shows that.
  */
 const MEASURED: ToolChoice<LineParams> = {
     key: "measured",
@@ -597,9 +599,20 @@ const MEASURED: ToolChoice<LineParams> = {
     },
     options: (p) => [
         {
-            value: "true",
-            label: tolgee.t("shapes.kinds.line.measured.true", "True distance"),
-            picture: measuredPictures().true,
+            value: "along",
+            label: tolgee.t(
+                "shapes.kinds.line.measured.along",
+                "Along the path",
+            ),
+            picture: measuredPictures().along,
+        },
+        {
+            value: "straight",
+            label: tolgee.t(
+                "shapes.kinds.line.measured.straight",
+                "Straight across",
+            ),
+            picture: measuredPictures().straight,
         },
         {
             value: "x",
@@ -614,11 +627,20 @@ const MEASURED: ToolChoice<LineParams> = {
             picture: measuredPictures().y,
         },
     ],
-    current: (p) => measuredAxis(p) ?? "true",
+    current: (p) =>
+        measuredAxis(p) ?? (p.measured === "straight" ? "straight" : "along"),
     pick: (p, n, value, env) =>
-        withMeasured(p, n, value === "x" || value === "y" ? value : null, env),
-    // A closed line always turns back, so it's measured by the true distance (#529)
-    shown: (p) => !isClosed(p),
+        withMeasured(
+            p,
+            n,
+            value === "x" || value === "y" || value === "straight"
+                ? value
+                : null,
+            env,
+        ),
+    // A closed line always turns back, so it's never measured ↔ or ↕ (#529), but its outline can
+    // be along the path or straight across. A filled one has no line of marchers to measure.
+    shown: (p) => !isFilled(p),
 };
 
 /**
