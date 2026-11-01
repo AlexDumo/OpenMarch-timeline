@@ -5,7 +5,7 @@ import tolgee from "@/global/singletons/Tolgee";
 import type { OrderChoice } from "../assign";
 import type { ToolChoicePicture } from "../tool/toolKind";
 import { ChoicePicture } from "./ChoicePicture";
-import { ORDER_PICTURES } from "./orderPictures";
+import { ORDER_PICTURE_SIZE, ORDER_PICTURES } from "./orderPictures";
 import type { ShapeEditTarget } from "./editTargets";
 import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
 import { Tip } from "./Tip";
@@ -81,6 +81,7 @@ export function OrderMenu({
                         <ChoicePicture
                             picture={ORDER_PICTURES[order.current]}
                             testId="shape-order-picture"
+                            size={ORDER_PICTURE_SIZE}
                         />
                         <span>{currentLabel}</span>
                         <CaretDownIcon size={10} />
@@ -127,6 +128,7 @@ export function OrderMenu({
                                 <ChoicePicture
                                     picture={option.picture}
                                     testId={`shape-order-${option.value}-picture`}
+                                    size={ORDER_PICTURE_SIZE}
                                 />
                                 <span>{option.label}</span>
                             </button>

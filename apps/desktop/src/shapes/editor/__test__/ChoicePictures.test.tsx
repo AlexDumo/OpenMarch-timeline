@@ -6,6 +6,12 @@ import { lineTool } from "../../line/lineTool";
 import type { LineParams, LinePoint } from "../../line/lineGeometry";
 import { CHOICE_PICTURE, fitChoicePicture } from "../../preview/choicePicture";
 import { ChoiceMenus } from "../ChoiceMenu";
+import { ChoicePicture } from "../ChoicePicture";
+import {
+    ORDER_PICTURE_SIZE,
+    ORDER_PICTURES,
+    ORDER_SAMPLE,
+} from "../orderPictures";
 import { OrderMenu } from "../OrderMenu";
 
 /**
@@ -173,6 +179,104 @@ describe("who goes where", () => {
             ).toBeInTheDocument();
         expect(button.innerHTML).toBe(
             screen.getByTestId("shape-order-reverse-picture").innerHTML,
+        );
+    });
+});
+
+describe("a picture that picks a marcher out", () => {
+    const drawn = (picture: ToolChoicePicture) =>
+        render(
+            <ChoicePicture
+                picture={picture}
+                size={ORDER_PICTURE_SIZE}
+                testId="picture"
+            />,
+        ).getByTestId("picture");
+
+    it("draws it solid where it starts and where it lands, and the others as rings", () => {
+        const svg = drawn(ORDER_PICTURES.reverse);
+        const fitted = fitChoicePicture(
+            ORDER_PICTURES.reverse,
+            ORDER_PICTURE_SIZE,
+        );
+        const marked = [...svg.querySelectorAll("circle[data-marked]")];
+        expect(marked).toHaveLength(2);
+        const at = (el: Element) => ({
+            x: Number(el.getAttribute("cx")),
+            y: Number(el.getAttribute("cy")),
+        });
+        // From the old line's first marcher to the new line's last spot
+        expect(at(marked[0]!)).toEqual(fitted.faintDots![0]);
+        expect(at(marked[1]!)).toEqual(fitted.dots[ORDER_SAMPLE.to.length - 1]);
+        // Solid in the text's color, so a greyed-out row (text-text/40) keeps it
+        for (const dot of marked) {
+            expect(dot.getAttribute("fill")).toBe("currentColor");
+            expect(dot.getAttribute("fill-opacity")).toBeNull();
+        }
+        const rings = [...svg.querySelectorAll("circle:not([data-marked])")];
+        expect(rings).toHaveLength(
+            ORDER_SAMPLE.from.length + ORDER_SAMPLE.to.length - 2,
+        );
+        for (const ring of rings) {
+            expect(ring.getAttribute("fill")).toBe("none");
+            expect(ring.getAttribute("stroke")).toBe("currentColor");
+        }
+    });
+
+    it("is drawn at the size it's given", () => {
+        const svg = drawn(ORDER_PICTURES.keep);
+        expect(svg).toHaveAttribute("width", String(ORDER_PICTURE_SIZE.width));
+        expect(svg).toHaveAttribute(
+            "height",
+            String(ORDER_PICTURE_SIZE.height),
+        );
+    });
+
+    it("leaves a picture without marks drawn exactly as before", () => {
+        const plain: ToolChoicePicture = {
+            lines: [
+                {
+                    points: [
+                        { x: 0, y: 0 },
+                        { x: 40, y: 10 },
+                    ],
+                },
+                {
+                    points: [
+                        { x: 0, y: 10 },
+                        { x: 40, y: 0 },
+                    ],
+                    faint: true,
+                    dashed: true,
+                },
+                {
+                    points: [
+                        { x: 0, y: 0 },
+                        { x: 40, y: 0 },
+                        { x: 20, y: 10 },
+                    ],
+                    closed: true,
+                },
+            ],
+            dots: [
+                { x: 0, y: 0 },
+                { x: 20, y: 5 },
+            ],
+            faintDots: [{ x: 40, y: 10 }],
+        };
+        const { container } = render(
+            <ChoicePicture picture={plain} testId="t" />,
+        );
+        // The markup from before pictures could mark a marcher
+        expect(container.innerHTML).toBe(
+            '<svg width="24" height="16" viewBox="0 0 24 16" aria-hidden="true" focusable="false" class="shrink-0" data-testid="t" data-spots="2">' +
+                '<polyline points="2,5.5 22,10.5" fill="none" stroke="currentColor" stroke-opacity="0.9" stroke-width="1.25" stroke-linejoin="round" stroke-linecap="round"></polyline>' +
+                '<polyline points="2,10.5 22,5.5" fill="none" stroke="currentColor" stroke-opacity="0.5" stroke-width="1" stroke-dasharray="1.5 1.5" stroke-linejoin="round" stroke-linecap="round"></polyline>' +
+                '<polygon points="2,5.5 22,5.5 12,10.5" fill="none" stroke="currentColor" stroke-opacity="0.9" stroke-width="1.25" stroke-linejoin="round" stroke-linecap="round"></polygon>' +
+                '<circle cx="22" cy="10.5" r="1" fill="currentColor" fill-opacity="0.4"></circle>' +
+                '<circle cx="2" cy="5.5" r="1.1" fill="currentColor"></circle>' +
+                '<circle cx="12" cy="8" r="1.1" fill="currentColor"></circle>' +
+                "</svg>",
         );
     });
 });
