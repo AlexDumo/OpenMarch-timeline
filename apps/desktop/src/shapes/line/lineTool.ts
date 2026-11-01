@@ -2,7 +2,7 @@ import tolgee from "@/global/singletons/Tolgee";
 import type { KindHonors } from "../tool/toolKind";
 import type { XY } from "../types";
 import { fieldToFrame, resizeCursor } from "../frame/frame";
-import { formatSteps, parseSteps } from "../editor/format";
+import { formatSignedSteps, formatSteps, parseSteps } from "../editor/format";
 import {
     COUNT_RATE,
     scrubDistance,
@@ -27,6 +27,7 @@ import type {
     ToolMenuSection,
     ToolParam,
 } from "../tool/toolKind";
+import { withPivot } from "../frame/pivot";
 import { curveShape, lineShape } from "./lineShape";
 import {
     cornersPictures,
@@ -82,13 +83,16 @@ import {
     splitSegment,
     tensionHandle,
     fitGroupsNow,
-    lineOffset,
     offsetBlock,
     offsetOf,
     withGroups,
     withLineFrame,
     withMeasured,
     withOffset,
+    offsetStart,
+    offsetStep,
+    startOffset,
+    linePivot,
     withTyped,
     settleLine,
     withSpacing,
@@ -480,37 +484,70 @@ const offsetWaits = (p: LineParams): boolean =>
 const offsetLabel = (axis: "x" | "y") =>
     axis === "x"
         ? tolgee.t(
-              "shapes.kinds.line.params.offsetX",
-              "Side to side from each marcher to the next, in steps",
+              "shapes.kinds.line.params.offsetSide",
+              "Side to side from each marcher to the next, in steps: right is more, left below 0",
           )
         : tolgee.t(
-              "shapes.kinds.line.params.offsetY",
-              "Front to back from each marcher to the next, in steps",
+              "shapes.kinds.line.params.offsetUp",
+              "Front to back from each marcher to the next, in steps: up the screen (toward the back) is more, down below 0",
           );
 
 /**
- * One of the offset's two numbers (rise over run, spec #522): how far each marcher is from the
- * next side to side (`x`, ↔) or front to back (`y`, ↕), in steps, typed or dragged. The sign is the
- * line's: the number is how far, the way the line already goes (a nought one goes right or back).
- * Together they set the line's direction and length, grown from the pivot. One undo step an edit.
+ * One of the offset's numbers as the screen shows it (owner on #596): how far each marcher is from
+ * the one before, counting from the marcher at the line's {@link offsetStart}, in steps. `x` (↔) is
+ * positive to the right; `y` (↕) positive up the screen, toward the back of the field, which is
+ * field y going down. Either goes below 0 the other way.
+ */
+export function offsetSteps(
+    p: LineParams,
+    n: number,
+    axis: "x" | "y",
+    stepPx: number,
+): number {
+    const o = startOffset(p, n);
+    const v = (axis === "x" ? o.x : -o.y) / stepPx;
+    // Never "−0"
+    return v === 0 ? 0 : v;
+}
+
+/** Steps typed into an offset number: a step number, 0, or either with a sign before it */
+function typedSigned(text: string): number | null {
+    const m = /^\s*([+\-−–]?)\s*(.*)$/.exec(text)!;
+    const body = m[2]!;
+    const steps = /^0+(\.0*)?\s*(steps?)?\s*$/i.test(body)
+        ? 0
+        : parseSteps(body);
+    if (steps === null) return null;
+    return m[1] && m[1] !== "+" ? -steps : steps;
+}
+
+/**
+ * One of the offset's two numbers (rise over run, spec #522): {@link offsetSteps}, typed or dragged,
+ * through 0 either way (owner on #596). ↔ drags sideways, right for more; ↕ up and down, up for
+ * more, so each moves the way the next marcher does. Together they set the line's direction and
+ * length, grown from its pivot. One undo step an edit.
  */
 function offsetParam(axis: "x" | "y"): ToolParam<LineParams> {
-    const part = (o: XY) => (axis === "x" ? o.x : o.y);
-    const now = (p: LineParams, n: number) => lineOffset(p, n);
-    /** The offset with this way's part `steps` long, the way the line goes that way */
+    const now = (p: LineParams, n: number, stepPx: number) =>
+        offsetSteps(p, n, axis, stepPx);
+    /** The offset with this way's number `steps`, the other kept */
     const set = (
         p: LineParams,
         n: number,
         steps: number,
         env: ToolEnv,
     ): LineParams | null => {
-        if (!(steps >= 0) || !Number.isFinite(steps)) return null;
-        const o = now(p, n);
-        const way = Math.sign(part(o)) || 1;
-        const value = way * steps * env.stepPx;
-        const next = axis === "x" ? { x: value, y: o.y } : { x: o.x, y: value };
+        if (!Number.isFinite(steps)) return null;
+        const o = startOffset(p, n);
+        const value = steps * env.stepPx;
+        // On the screen's terms, then back to the field's, from the line's first point
+        const next =
+            axis === "x" ? { x: value, y: o.y } : { x: o.x, y: -value };
         if (Math.hypot(next.x, next.y) < 1e-9) return null;
-        return withOffset(p, n, next, env);
+        const way = offsetStart(p) === "last" ? -1 : 1;
+        // Never a stored −0
+        const stored = { x: way * next.x || 0, y: way * next.y || 0 };
+        return withOffset(p, n, stored, env);
     };
     return {
         key: axis === "x" ? "offsetX" : "offsetY",
@@ -519,55 +556,49 @@ function offsetParam(axis: "x" | "y"): ToolParam<LineParams> {
         },
         unit: "steps",
         primary: true,
-        drag: "x",
+        drag: axis,
         interval: true,
         blends: true,
-        range: { min: 0 },
         glyph: axis === "x" ? "↔" : "↕",
         glyphAfter: true,
+        showsStep: true,
         shown: (p, n) => n > 1 && offsetOf(p) !== null,
-        derived: (p, n, stepPx) =>
-            !onHalves(Math.abs(part(now(p, n))) / stepPx),
+        derived: (p, n, stepPx) => !onHalves(Math.abs(now(p, n, stepPx))),
         snap: (p, n, env) =>
-            set(
-                p,
-                n,
-                Math.round((Math.abs(part(now(p, n))) / env.stepPx) * 2) / 2,
-                env,
-            ) ?? p,
-        display: (p, n, stepPx) =>
-            formatSteps(Math.abs(part(now(p, n))) / stepPx),
-        value: (p, n, stepPx) => Math.abs(part(now(p, n))) / stepPx,
-        // A plain number: `2x1` isn't read, since `x` and `,` already multiply in interval lists
+            set(p, n, Math.round(now(p, n, env.stepPx) * 2) / 2, env) ?? p,
+        display: (p, n, stepPx) => formatSignedSteps(now(p, n, stepPx)),
+        value: (p, n, stepPx) => now(p, n, stepPx),
+        // A plain number: `2x1` isn't read, since `x` and `,` already multiply in interval lists.
         // Nought is a way the line doesn't go: level side to side, or straight front to back
         type(p, n, text, env) {
-            const steps = /^\s*0+(\.0*)?\s*(steps?)?\s*$/i.test(text)
-                ? 0
-                : parseSteps(text);
+            const steps = typedSigned(text);
             return steps === null ? null : set(p, n, steps, env);
         },
         set: (p, n, steps, env) => set(p, n, steps, env),
         scrub(base, n, m, env) {
-            const was = Math.abs(part(now(base, n))) / env.stepPx;
-            const steps = Math.max(
+            const was = now(base, n, env.stepPx);
+            const steps = scrubValue(
+                was,
+                scrubDistance(axis, m.dx, m.dy),
                 0,
-                scrubValue(
-                    was,
-                    scrubDistance("x", m.dx, m.dy),
-                    0,
-                    spacingRate(env.snap, "x"),
-                ),
+                spacingRate(env.snap, "x"),
             );
             if (steps === was) return base;
-            return set(base, n, steps, env) ?? base;
+            // Both nought is no line: the drag steps over it, on to the next value
+            const rate = spacingRate(env.snap, "x");
+            return (
+                set(base, n, steps, env) ??
+                set(base, n, steps + Math.sign(steps - was) * rate.step, env) ??
+                base
+            );
         },
-        // Scaling grows each part that isn't nought by the same half steps
+        // Scaling grows each part that isn't nought by the same half steps, away from 0
         widen(p, n, by, env) {
-            const was = Math.abs(part(now(p, n))) / env.stepPx;
-            if (was < 1e-9) return p;
-            const steps = Math.round((was + by) * 2) / 2;
+            const was = now(p, n, env.stepPx);
+            if (Math.abs(was) < 1e-9) return p;
+            const steps = Math.round((Math.abs(was) + by) * 2) / 2;
             if (steps < 0.5 - 1e-9) return null;
-            return set(p, n, steps, env);
+            return set(p, n, Math.sign(was) * steps, env);
         },
     };
 }
@@ -1302,6 +1333,13 @@ const MENU: ToolHandleMenu<LineParams> = {
  * (#557). A right-click on a point or a segment's middle opens its menu (#569). A typed list
  * (`2*3+4*2`, #526) spaces it in groups of marchers, each a chip in the editor.
  */
+/** A new line with its pivot at its leftmost end or point ({@link linePivot}, owner on #596) */
+function pivoted(p: LineParams): LineParams;
+function pivoted(p: LineParams | undefined): LineParams | undefined;
+function pivoted(p: LineParams | undefined): LineParams | undefined {
+    return p && withPivot(p, linePivot(p));
+}
+
 export const lineTool: ToolKind<LineParams> = {
     shape: lineShape,
     params: [INTERVAL, OFFSET_X, OFFSET_Y],
@@ -1314,10 +1352,10 @@ export const lineTool: ToolKind<LineParams> = {
     ordered: true,
     readable: isLineParams,
     scaling: "interval",
-    draw: (from, to, _n, env) => drawLine(from, to, env),
+    draw: (from, to, _n, env) => pivoted(drawLine(from, to, env)),
     clickPoints: {
         land: landClicked,
-        draw: (points, _n, env) => drawPoints(points, env),
+        draw: (points, _n, env) => pivoted(drawPoints(points, env)),
         // A click on the first point closes the line (#529)
         close(points, n, env) {
             const p = drawPoints(points, env);
@@ -1414,7 +1452,9 @@ export const lineTool: ToolKind<LineParams> = {
     frameOf: (params) => lineFrame(params),
     withFrame: (params, _n, frame) => withLineFrame(params, frame),
     settle: settleLine,
-    fromFrame: lineInFrame,
+    fromFrame: (frame, n, env) => pivoted(lineInFrame(frame, n, env)),
+    startPivot: linePivot,
+    step: offsetStep,
     closed: lineClosed,
     pictureParams: (_n, env) => zigzag(env),
 };
@@ -1447,15 +1487,15 @@ export const curveTool: ToolKind<LineParams> = {
     preset: "curve",
     keywords: ["curve", "arc-like", "smooth"],
     shape: curveShape,
-    draw: (from, to, _n, env) => drawCurve(from, to, env),
+    draw: (from, to, _n, env) => pivoted(drawCurve(from, to, env)),
     clickPoints: {
         land: landClicked,
-        draw: (points, _n, env) => drawPoints(points, env, SMOOTH),
+        draw: (points, _n, env) => pivoted(drawPoints(points, env, SMOOTH)),
         close(points, n, env) {
             const p = drawPoints(points, env, SMOOTH);
             return p && closeLine(p, n, env);
         },
     },
-    fromFrame: curveInFrame,
+    fromFrame: (frame, n, env) => pivoted(curveInFrame(frame, n, env)),
     pictureParams: (_n, env) => wave(env),
 };

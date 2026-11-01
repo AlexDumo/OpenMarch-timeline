@@ -106,19 +106,26 @@ export function shapeTargetAt(
     selected?: string | null,
 ): ShapeTarget | null {
     const controls = frameControls(kind, params, n, env);
-    // Drawn over everything, so it wins over a handle on the marcher it sits on
-    if (controls.pivot && near(controls.pivot, at, env.hitRadius))
-        return { type: "pivot" };
-    // Reaching inside the center dot pulls the pivot out, even from under a handle there (a
-    // straight line's midpoint, #524)
-    if (env.reachInside && near(controls.center, at, env.hitRadius))
-        return { type: "pivot", pulled: true };
     let best: { key: string; d: number } | undefined;
     for (const h of kind.handles(params, n, selected)) {
         const d = Math.hypot(h.at.x - at.x, h.at.y - at.y);
         if (d <= env.hitRadius && (!best || d < best.d))
             best = { key: h.key, d };
     }
+    // Drawn over everything, so it wins over a handle on the marcher it sits on; one still where
+    // the kind starts it (a Line's left end, owner on #596) leaves the handle to a plain press,
+    // and reaching inside takes it
+    if (controls.pivot && near(controls.pivot, at, env.hitRadius)) {
+        const started = samePivot(
+            pivotOf(params),
+            kind.startPivot?.(params) ?? DEFAULT_PIVOT,
+        );
+        if (!best || !started || env.reachInside) return { type: "pivot" };
+    }
+    // Reaching inside the center dot pulls the pivot out, even from under a handle there (a
+    // straight line's midpoint, #524)
+    if (env.reachInside && near(controls.center, at, env.hitRadius))
+        return { type: "pivot", pulled: true };
     if (best) return { type: "handle", key: best.key };
     if (near(controls.knob, at, env.hitRadius))
         return { type: "rotate", from: "knob" };

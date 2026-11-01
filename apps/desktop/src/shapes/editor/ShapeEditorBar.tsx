@@ -16,7 +16,11 @@ import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { editorPlacement } from "./editorPlacement";
 import { keepInView } from "./keepInView";
 import { glideTo, isGliding } from "@/field/three/fieldNavigation";
-import { setShapeScrubbing, useShapePointerStore } from "../field/shapePointer";
+import {
+    engageStep,
+    setShapeScrubbing,
+    useShapePointerStore,
+} from "../field/shapePointer";
 import { keepFocus } from "./keepFocus";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { getActionShortcutLabel } from "@/shortcuts/labels";
@@ -693,9 +697,58 @@ const NumberChip = memo(function NumberChip({
     derived?: boolean;
     actions: ReturnType<typeof numberActions>;
 }) {
-    const scrub = useMemo(() => actions.scrub(param), [actions, param]);
+    const plain = useMemo(() => actions.scrub(param), [actions, param]);
+    const showsStep = param.showsStep === true;
+    const key = param.key;
+    // A number setting the kind's step: the field draws it while it's pointed at, focused (typing
+    // too) or dragged (owner on #596)
+    const scrub = useMemo(
+        () =>
+            showsStep
+                ? {
+                      ...plain,
+                      onScrubStart: () => {
+                          engageStep(`${key}:drag`, true);
+                          plain.onScrubStart();
+                      },
+                      onScrubEnd: (keep: boolean) => {
+                          engageStep(`${key}:drag`, false);
+                          plain.onScrubEnd(keep);
+                      },
+                  }
+                : plain,
+        [plain, showsStep, key],
+    );
+    useEffect(
+        () => () => {
+            for (const how of ["hover", "focus", "typing", "drag"])
+                engageStep(`${key}:${how}`, false);
+        },
+        [key],
+    );
+    // Focused is the number itself (Tab reaches it) or typing into it: the button gives way to
+    // the input and back without a blur, so a change of one clears the other
+    const engage = showsStep
+        ? {
+              onPointerEnter: () => engageStep(`${key}:hover`, true),
+              onPointerLeave: () => engageStep(`${key}:hover`, false),
+              onFocus: () => engageStep(`${key}:focus`, true),
+              onBlur: () => engageStep(`${key}:focus`, false),
+          }
+        : {};
+    const onTyping = useCallback(
+        (typing: boolean) => {
+            engageStep(`${key}:focus`, false);
+            engageStep(`${key}:typing`, typing);
+        },
+        [key],
+    );
     return (
-        <span className="flex items-center gap-2">
+        <span
+            className="flex items-center gap-2"
+            data-shows-step={showsStep || undefined}
+            {...engage}
+        >
             {glyph && !glyphAfter && (
                 <span className="text-text/60" aria-hidden>
                     <GlyphText text={glyph} />
@@ -717,6 +770,7 @@ const NumberChip = memo(function NumberChip({
                 testId={`shape-editor-${param.key}`}
                 {...scrub}
                 onType={(text) => actions.type(param, text)}
+                onTyping={showsStep ? onTyping : undefined}
                 onSnap={
                     derived && param.snap
                         ? () => actions.snap(param)

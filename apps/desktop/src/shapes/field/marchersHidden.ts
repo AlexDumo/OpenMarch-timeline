@@ -232,5 +232,7 @@ export function shapeAlone(drawing: FieldModeDrawing): FieldModeDrawing {
         // The interval groups ring the spots, so they go with them
         groupMarks: undefined,
         groupLabels: undefined,
+        // The step runs from one spot to the next
+        offsetStep: undefined,
     };
 }

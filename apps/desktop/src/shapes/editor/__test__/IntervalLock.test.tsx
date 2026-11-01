@@ -27,6 +27,7 @@ import {
     undo,
 } from "../../tool/toolMachine";
 import { ShapeEditor } from "../ShapeEditorBar";
+import { useShapePointerStore } from "../../field/shapePointer";
 import { stubPointerCapture } from "./pointerEvents";
 
 /**
@@ -153,13 +154,14 @@ describe("a line's interval lock in the floating editor", () => {
         const t = tool();
         const measured = lineTool.choices!.find((c) => c.key === "measured")!;
         const env = toolEnvFor({ ...field, fieldProperties });
-        // Turned to a diagonal first: across 14 steps, 7 deep
+        // Turned to a diagonal first: 14 steps right and 7 up the screen, from its left end
         const diagonal = {
             ...(t.params as LineParams),
             points: [
-                { x: 30 * STEP, y: 20 * STEP, tension: 0 },
-                { x: 44 * STEP, y: 27 * STEP, tension: 0 },
+                { x: 30 * STEP, y: 27 * STEP, tension: 0 },
+                { x: 44 * STEP, y: 20 * STEP, tension: 0 },
             ],
+            pivot: "w" as const,
         };
         act(() =>
             useShapeToolStore.setState({
@@ -176,11 +178,91 @@ describe("a line's interval lock in the floating editor", () => {
         expect(screen.getByTestId("shape-editor-offsetY").textContent).toBe(
             "1",
         );
+        // Up the screen is more, field y going down
         typeInto("shape-editor-offsetY", "1.5");
+        // Its left end, the pivot, onto the grid; it stays there from now on
+        const start = { ...(tool().params as LineParams).points[0]! };
+        expect((tool().params as LineParams).offset).toEqual({
+            x: 2 * STEP,
+            y: -1.5 * STEP,
+        });
+        // Below 0 is down the screen, typed with either minus sign
+        typeInto("shape-editor-offsetY", "-1.5");
         expect((tool().params as LineParams).offset).toEqual({
             x: 2 * STEP,
             y: 1.5 * STEP,
         });
+        expect(screen.getByTestId("shape-editor-offsetY").textContent).toBe(
+            "−1½",
+        );
+        typeInto("shape-editor-offsetX", "−1");
+        expect((tool().params as LineParams).offset).toEqual({
+            x: -STEP,
+            y: 1.5 * STEP,
+        });
+        expect(screen.getByTestId("shape-editor-offsetX").textContent).toBe(
+            "−1",
+        );
+        expect((tool().params as LineParams).points[0]).toEqual(start);
         expect(lockButton()).toBeTruthy();
+    });
+
+    it("draws the step on the field while an Offset number is pointed at, focused or dragged", () => {
+        renderEditor();
+        const t = tool();
+        const measured = lineTool.choices!.find((c) => c.key === "measured")!;
+        const env = toolEnvFor({ ...field, fieldProperties });
+        act(() =>
+            useShapeToolStore.setState({
+                tool: {
+                    ...t,
+                    params: measured.pick(
+                        {
+                            ...(t.params as LineParams),
+                            points: [
+                                { x: 30 * STEP, y: 27 * STEP, tension: 0 },
+                                { x: 44 * STEP, y: 20 * STEP, tension: 0 },
+                            ],
+                        },
+                        t.spots,
+                        "offset",
+                        env,
+                    ),
+                },
+            }),
+        );
+        const shown = () => useShapePointerStore.getState().stepShown;
+        const chip = (key: string) =>
+            screen
+                .getByTestId(`shape-editor-${key}`)
+                .closest<HTMLElement>("[data-shows-step]")!;
+        expect(shown()).toBe(false);
+        fireEvent.pointerEnter(chip("offsetY"));
+        expect(shown()).toBe(true);
+        // From one number to the other it stays
+        fireEvent.pointerEnter(chip("offsetX"));
+        fireEvent.pointerLeave(chip("offsetY"));
+        expect(shown()).toBe(true);
+        fireEvent.pointerLeave(chip("offsetX"));
+        expect(shown()).toBe(false);
+        // Typing into one
+        fireEvent.click(screen.getByTestId("shape-editor-offsetX"), {
+            detail: 0,
+        });
+        const input = screen.getByTestId("shape-editor-offsetX-input");
+        act(() => input.focus());
+        expect(shown()).toBe(true);
+        fireEvent.keyDown(input, { key: "Escape" });
+        act(() => (document.activeElement as HTMLElement | null)?.blur());
+        expect(shown()).toBe(false);
+        // Dragging one, the pointer captured
+        const y = screen.getByTestId("shape-editor-offsetY");
+        fireEvent.pointerDown(y, { button: 0, clientX: 0, clientY: 0 });
+        fireEvent.pointerMove(y, { clientX: 0, clientY: -20 });
+        expect(shown()).toBe(true);
+        fireEvent.pointerUp(y, { clientX: 0, clientY: -20 });
+        expect(shown()).toBe(false);
+        // The interval's own number never does
+        expect(document.querySelectorAll("[data-shows-step]")).toHaveLength(2);
     });
 });

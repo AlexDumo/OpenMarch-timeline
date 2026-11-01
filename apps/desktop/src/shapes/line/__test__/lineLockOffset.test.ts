@@ -161,14 +161,14 @@ describe("the interval unlocked (the default)", () => {
             groups: [{ interval: 20 }],
         });
         expect(isLineParams(paramsOf(t))).toBe(true);
-        // 4 gaps of 2 steps, grown from the center
+        // 4 gaps of 2 steps, grown from the left end, the line's pivot (#596)
         expect(pointsOf(t)).toEqual([
-            { x: 85, y: 100 },
-            { x: 165, y: 100 },
+            { x: 100, y: 100 },
+            { x: 180, y: 100 },
         ]);
         // A drag still changes it
-        const dragged = dragHandle(t, "p1", { x: 204, y: 100 });
-        expect(pointsOf(dragged)[1]).toEqual({ x: 205, y: 100 });
+        const dragged = dragHandle(t, "p1", { x: 219, y: 100 });
+        expect(pointsOf(dragged)[1]).toEqual({ x: 220, y: 100 });
         expect(readout(dragged)).toEqual(["3"]);
     });
 
@@ -232,12 +232,12 @@ describe("the lock", () => {
 
     it("swings an end round, locked along the path, its length kept", () => {
         const t = dragHandle(toggled(typed(fitLine(), "2")), "p1", {
-            x: 86,
+            x: 101,
             y: 160,
         });
         const [a, b] = pointsOf(t);
-        expect(a).toEqual({ x: 85, y: 100 });
-        near(b!.x, 85);
+        expect(a).toEqual({ x: 100, y: 100 });
+        near(b!.x, 100);
         near(b!.y, 180);
     });
 
@@ -281,7 +281,8 @@ describe("the lock", () => {
 });
 
 describe("Offset (rise over run)", () => {
-    // 5 marchers from (100, 100) to (140, 120): each 1 step across and ½ deep from the next
+    // 5 marchers from (100, 100) to (140, 120): each 1 step right and ½ down the screen (toward
+    // the front) from the next, so ↕ reads −½
     const diagonal = () => drawn(5, { x: 100, y: 100 }, { x: 140, y: 120 });
     const offsetLine = () => picked(diagonal(), "measured", "offset");
 
@@ -290,7 +291,7 @@ describe("Offset (rise over run)", () => {
         expect(choice("measured").current(t.params, t.spots)).toBe("offset");
         expect(paramsOf(t).offset).toEqual({ x: 10, y: 5 });
         expect(isLineParams(paramsOf(t))).toBe(true);
-        expect(readout(t)).toEqual(["1", "½"]);
+        expect(readout(t)).toEqual(["1", "−½"]);
         const keys = chipLayout(lineTool, t.params, t.spots, env).intervals.map(
             (x) => [x.param.key, x.param.glyph, x.param.glyphAfter],
         );
@@ -308,12 +309,18 @@ describe("Offset (rise over run)", () => {
         const steps = t.past.length;
         t = typed(t, "2", "offsetX");
         expect(paramsOf(t).offset).toEqual({ x: 20, y: 5 });
+        // Grown from the left end, where the line's pivot is (#596)
         expect(pointsOf(t)).toEqual([
-            { x: 80, y: 100 },
-            { x: 160, y: 120 },
+            { x: 100, y: 100 },
+            { x: 180, y: 120 },
         ]);
+        // Up the screen is more: 1 ↕ is each marcher a step toward the back, field y going down
         t = typed(t, "1", "offsetY");
-        expect(paramsOf(t).offset).toEqual({ x: 20, y: 10 });
+        expect(paramsOf(t).offset).toEqual({ x: 20, y: -10 });
+        expect(pointsOf(t)).toEqual([
+            { x: 100, y: 100 },
+            { x: 180, y: 60 },
+        ]);
         expect(readout(t)).toEqual(["2", "1"]);
         expect(t.past.length).toBe(steps + 2);
         // Still unlocked: typing doesn't lock
@@ -345,7 +352,7 @@ describe("Offset (rise over run)", () => {
         const t = midDrag(offsetLine(), "p1", { x: 162, y: 131 });
         // 60 × 30 over 4 gaps: 1½ × ¾, each nearest a whole step
         expect(paramsOf(t).offset).toEqual({ x: 20, y: 10 });
-        expect(readout(t)).toEqual(["2", "1"]);
+        expect(readout(t)).toEqual(["2", "−1"]);
         // Zoomed in, each nearest a half step
         const zoomedIn = midDrag(
             offsetLine(),
@@ -354,7 +361,7 @@ describe("Offset (rise over run)", () => {
             zoomed,
         );
         expect(paramsOf(zoomedIn).offset).toEqual({ x: 15, y: 5 });
-        expect(readout(zoomedIn)).toEqual(["1½", "½"]);
+        expect(readout(zoomedIn)).toEqual(["1½", "−½"]);
     });
 
     it("can't be changed by dragging an end when locked: only moving the whole line", () => {
@@ -419,7 +426,7 @@ describe("Offset (rise over run)", () => {
         const [a, b] = pointsOf(straight);
         near(b!.x - a!.x, 4 * 20);
         near(b!.y - a!.y, 4 * 5);
-        expect(readout(straight)).toEqual(["2", "½"]);
+        expect(readout(straight)).toEqual(["2", "−½"]);
     });
 
     it("drops the offset when another measure is picked", () => {
@@ -449,7 +456,7 @@ describe("Offset (rise over run)", () => {
         expect(placed!.kind).toBe(lineTool);
         expect(placed!.params.offset).toEqual({ x: 20, y: 5 });
         expect(placed!.params.measured).toBe("offset");
-        expect(placedBoxSummary(placed!, STEP)).toBe("2 × ½ steps");
+        expect(placedBoxSummary(placed!, STEP)).toBe("2 × −½ steps");
     });
 });
 

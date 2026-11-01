@@ -1,3 +1,4 @@
+import { withPivot } from "../../frame/pivot";
 import { describe, expect, it } from "vitest";
 import { lineTool } from "../lineTool";
 import { isLineParams, type LineParams } from "../lineGeometry";
@@ -248,25 +249,26 @@ describe("Keep interval", () => {
     it("is what typing an interval switches to, the length following from the pivot", () => {
         const t = kept(fitLine(), "2");
         expect(paramsOf(t).spacing.mode).toBe("keep");
-        // 4 gaps of 2 steps, grown from the center
+        // 4 gaps of 2 steps, grown from the left end, where a new line's pivot is (#596)
+        expect(paramsOf(t).pivot).toBe("w");
         expect(pointsOf(t)).toEqual([
-            { x: 85, y: 100 },
-            { x: 165, y: 100 },
+            { x: 100, y: 100 },
+            { x: 180, y: 100 },
         ]);
         expectNear(
             spotsOf(t),
-            [85, 105, 125, 145, 165].map((x) => ({ x, y: 100 })),
+            [100, 120, 140, 160, 180].map((x) => ({ x, y: 100 })),
         );
         expect(chipText(t)).toEqual([{ display: "2", derived: false }]);
     });
 
-    it("grows from an end when the pivot is there", () => {
+    it("grows from the center when the pivot is there", () => {
         let t = fitLine();
-        t = edit(t, { ...paramsOf(t), pivot: "w" }, ctx);
+        t = edit(t, withPivot(paramsOf(t), "c"), ctx);
         t = kept(t, "2½");
         expect(pointsOf(t)).toEqual([
-            { x: 100, y: 100 },
-            { x: 200, y: 100 },
+            { x: 75, y: 100 },
+            { x: 175, y: 100 },
         ]);
     });
 
@@ -279,10 +281,10 @@ describe("Keep interval", () => {
 
     it("turns the line when an end is dragged, the interval kept", () => {
         let t = kept(fitLine(), "2");
-        t = dragHandle(t, "p1", { x: 86, y: 160 });
+        t = dragHandle(t, "p1", { x: 101, y: 160 });
         const [a, b] = pointsOf(t);
-        expect(a).toEqual({ x: 85, y: 100 });
-        expect(b!.x).toBeCloseTo(85, 6);
+        expect(a).toEqual({ x: 100, y: 100 });
+        expect(b!.x).toBeCloseTo(100, 6);
         expect(b!.y).toBeCloseTo(180, 6);
         expect(paramsOf(t).spacing.mode).toBe("keep");
         expect(chipText(t)[0]!.display).toBe("2");
@@ -293,7 +295,8 @@ describe("Keep interval", () => {
 
     it("turns square to the field from an end off the grid", () => {
         // 1⅝ steps apart from the center: the ends at 92.5 and 157.5, a quarter step off the grid
-        let t = kept(fitLine(), "1.625");
+        let t = fitLine();
+        t = kept(edit(t, withPivot(paramsOf(t), "c"), ctx), "1.625");
         expect(pointsOf(t)[0]).toEqual({ x: 92.5, y: 100 });
         expect(pointsOf(t)[1]).toEqual({ x: 157.5, y: 100 });
         // Dragged near straight down from the first end, it turns exactly there
@@ -396,8 +399,8 @@ describe("mixed intervals (#526)", () => {
         // The seam between the groups is the larger interval
         expectGaps(t, [3, 3, 2, 2, 2]);
         expect(pointsOf(t)).toEqual([
-            { x: 65, y: 100 },
-            { x: 185, y: 100 },
+            { x: 100, y: 100 },
+            { x: 220, y: 100 },
         ]);
         expect(chips(t)).toEqual(["2 × 3", "4 × 2"]);
         // The single interval number gives way to the groups
@@ -687,8 +690,8 @@ describe("a placed line", () => {
         expect(placement.recipe.kindVersion).toBe(2);
         expect(placement.recipe.params).toMatchObject({
             points: [
-                { x: 85, y: 100, tension: 0 },
-                { x: 165, y: 100, tension: 0 },
+                { x: 100, y: 100, tension: 0 },
+                { x: 180, y: 100, tension: 0 },
             ],
             spacing: { mode: "keep" },
             spots: N,
@@ -717,11 +720,11 @@ describe("a placed line", () => {
         const end = lineTool.handles(placed.params, N)[1]!;
         let live = pressLive(openLive(placed), end.at, env)!;
         expect(live.gesture?.type).toBe("handle");
-        live = moveLive(live, { x: 85, y: 20 }, env);
+        live = moveLive(live, { x: 100, y: 20 }, env);
         const out = releaseLive(live);
         expect(out.changed).toBe(true);
         const params = out.live.params as LineParams;
-        expect(params.points[1]!.x).toBeCloseTo(85, 6);
+        expect(params.points[1]!.x).toBeCloseTo(100, 6);
         expect(params.points[1]!.y).toBeCloseTo(20, 6);
         const { members, spots } = liveTargets(placed, params, ctx);
         expect(spots).toBe(N);

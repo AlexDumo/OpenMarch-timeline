@@ -40,7 +40,8 @@ ordinary positions it writes.
   drag (`ScrubNumber`, `scrub.ts`, `format.ts` for exact fractions), a Line's interval groups
   (one group's chips in `GroupChips`, two or more in `GroupMenu`, whose rows light their group
   on the field through `field/groupDrawing.ts`; the list syntax and groups-to-gaps layout are
-  `spacing.ts`), the mode, layout and pivot
+  `spacing.ts`; a kind's `step` numbers, a Line's Offset, draw their step and light the pivot
+  through `field/stepDrawing.ts` while engaged), the mode, layout and pivot
   menus, Recalculate, Reshuffle, Close up, and keeping the shape in view (`keepInView.ts`).
 - `field/`: how the shape code reads the three.js field (`shapeField.ts`, registered by the
   field, never `window.canvas`), pointer routing and the field modes it installs.

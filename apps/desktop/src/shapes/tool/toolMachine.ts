@@ -5,7 +5,8 @@ import {
     type AssignMarcher,
     type OrderChoice,
 } from "../assign";
-import { carryPivot } from "../frame/pivot";
+import { carryPivot, pivotOf, withPivot } from "../frame/pivot";
+import { DEFAULT_PIVOT, samePivot } from "../frame/frame";
 import {
     centerPivot,
     dragShape,
@@ -595,11 +596,16 @@ export function switchKind(
     if (state.gesture || kind === state.kind) return state;
     if (state.params === null) return { ...state, kind };
     const n = state.spots;
-    // The pivot too: it sits on the frame
-    const params = carryPivot(
-        state.params,
-        kind.fromFrame(state.kind.frameOf(state.params, n), n, env),
-    );
+    // The pivot too, where it was moved: it sits on the frame. One the shape started at goes
+    // to where the new kind starts its own (a Line's leftmost end, owner on #596)
+    const made = kind.fromFrame(state.kind.frameOf(state.params, n), n, env);
+    const was = pivotOf(state.params);
+    const params = samePivot(
+        was,
+        state.kind.startPivot?.(state.params) ?? DEFAULT_PIVOT,
+    )
+        ? made
+        : withPivot(made, was);
     return reassign(
         pushHistory(
             { ...state, kind, params, selected: null },
