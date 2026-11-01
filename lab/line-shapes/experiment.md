@@ -50,8 +50,8 @@ a way to place the selected marchers.
   numbers (e.g. 2 ↔ 1 ↕).
 - While dragging an end: hold Cmd/Ctrl to keep the line's direction, Alt to
   grow it from the middle, Shift for no snapping.
-- Open **Who goes where**: Least travel or Keep order, each picture reading the
-  new line as numbers. The **⇄ Reverse** toggle beside it flips Keep order.
+- Open **Who goes where**: Least travel, Keep order or Reverse order, each picture reading the
+  new line as numbers.
 - In the Measured menu, try ↔ or ↕ on a line that goes one way across the
   field: the steps land exactly on the grid that way.
 - Click the first point again (or drop an end on the other) to close the line,
