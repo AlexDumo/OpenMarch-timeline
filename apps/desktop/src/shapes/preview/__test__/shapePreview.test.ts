@@ -101,21 +101,23 @@ describe("a shape's preview (#378)", () => {
         expect(shapePreview(boxTool)).toBe(shapePreview(boxTool));
     });
 
-    it("draws the line as a zigzag along its open outline (owner, 2026-10-31)", () => {
+    it("draws the line as a zigzag from the top down (owner, 2026-11-01)", () => {
         const preview = shapePreview(lineTool);
         expect(preview.spots).toHaveLength(PREVIEW_SPOTS);
         expect(preview.openOutline).toBe(true);
         expect(preview.spots.every(inView)).toBe(true);
         expect(preview.outline!.every(inView)).toBe(true);
-        // Its corners: the outline turns back up and down across the picture
-        const ys = preview.outline!.map((p) => p.y);
-        const turns = ys.filter(
-            (y, i) =>
+        // Its corners: the outline turns back left and right going down the picture
+        const outline = preview.outline!;
+        expect(outline[0]!.y).toBeLessThan(outline[outline.length - 1]!.y);
+        const xs = outline.map((p) => p.x);
+        const turns = xs.filter(
+            (x, i) =>
                 i > 0 &&
-                i < ys.length - 1 &&
-                (y - ys[i - 1]!) * (ys[i + 1]! - y) < 0,
+                i < xs.length - 1 &&
+                (x - xs[i - 1]!) * (xs[i + 1]! - x) < 0,
         );
-        expect(turns.length).toBeGreaterThanOrEqual(4);
+        expect(turns).toHaveLength(2);
     });
 
     it("draws the curve as the same zigzag, smooth: a wave", () => {
@@ -125,10 +127,9 @@ describe("a shape's preview (#378)", () => {
         expect(curve.outline!.every(inView)).toBe(true);
         // Smooth: drawn through many more points than the zigzag's corners
         expect(curve.outline!.length).toBeGreaterThan(line.outline!.length * 2);
-        expect(size(curve.outline!).width).toBeCloseTo(
-            size(line.outline!).width,
-            0,
-        );
+        // The same run from the top down, its turns rounded
+        const o = curve.outline!;
+        expect(o[0]!.y).toBeLessThan(o[o.length - 1]!.y);
     });
 
     it("keeps open outlines on the dots, without the closed-shape stand-off", () => {
