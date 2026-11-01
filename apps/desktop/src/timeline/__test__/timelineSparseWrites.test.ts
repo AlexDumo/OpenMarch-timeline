@@ -789,7 +789,7 @@ describeDbTests(
             // The page's own move (the oldest over its box) is still C's
             expect(overPage3[0]!.id).toBe(page3Move.id);
             expect(overPage3).toHaveLength(2);
-            // The window move's original id (and name) stays with its part over page 2
+            // B keeps the window move whole, id and name (holds decision 16): A's own move is cut
             const kept = (await db
                 .select()
                 .from(schema.timelines)
@@ -797,9 +797,10 @@ describeDbTests(
                 .get())!;
             expect([kept.start_beat, kept.end_beat]).toEqual([
                 page2.start,
-                page2.end,
+                page3.end,
             ]);
             expect(kept.name).toBe(window.name);
+            expect(await rowsOf(db, 2)).toEqual([[page2.start, page3.end, 0]]);
             expect(await rowsOf(db, 1)).toEqual([[page3.start, page3.end, 0]]);
             expect([1, 2, 3].map((id) => at(id, page3.end))).toEqual(beforeAt);
         });

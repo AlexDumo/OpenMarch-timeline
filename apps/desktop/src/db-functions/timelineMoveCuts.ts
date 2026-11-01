@@ -15,7 +15,11 @@ import { setTimelineTransitionDestinationInTransaction } from "./timelineTransit
 import { timelinesWithRange } from "./timelines";
 import { clearOwnPageMoves, sampleShape } from "./timelineMoveHelpers";
 import { memberRowsWhere, readTimeline } from "./timelineMemberRows";
-import { splitMarchersIntoNewMoveInTransaction } from "./timelineSplitMoves";
+import {
+    splitMarchersIntoNewMoveInTransaction,
+    splitRefusal,
+    type SplitRefusal,
+} from "./timelineSplitMoves";
 
 /**
  * Cut and remove: the two move operations the holds commands share (holds spec,
@@ -39,6 +43,12 @@ import { splitMarchersIntoNewMoveInTransaction } from "./timelineSplitMoves";
  *    slots in a shared transition are compacted, a transition they empty is deleted, and so is a
  *    move they empty (`clearOwnPageMoves` with `tidyShared`, as Basic's Set to previous page).
  *    Their motion outside the range is unchanged; after it, they walk from wherever they now are.
+ *    A move that needs a cut and has others in it isn't cut for everyone: the marchers are taken
+ *    into a move of their own first (below), and only that is cut, so the others keep their rows,
+ *    move, shape recipe and motion, which a cut changes for a path that isn't direct (holds
+ *    decision 16: other pages keep their motion). Where split by marcher refuses to take them out
+ *    (`splitRefusal`: a shared transition in an inheriting follow-the-leader order), they stay, as
+ *    a follow-the-leader member does.
  *
  * **Shape and follow-the-leader members stay** (owner, 2026-10-30, holds README decisions 6–14,
  * interim until fork #504): a marcher in a shape recipe of the move (#363), or whose row is in a
@@ -73,7 +83,10 @@ export interface MoveMemberSkip {
 
 /** A cut a removal makes, as planned before any write. */
 export interface PlannedCut {
-    /** The stored move the cut's piece comes from (as it is before the removal) */
+    /**
+     * The stored move the cut's piece comes from (as it is before the removal; with `intoOwnMove`,
+     * the piece is of the marchers' own move taken out of it)
+     */
     timelineId: number;
     beat: number;
     /** Which part keeps the id of the piece being cut (`SplitIdKeeper`) */
@@ -85,6 +98,11 @@ export interface MoveRemovalPlan {
     timelineId: number;
     /** The marchers that would leave, ascending */
     removed: number[];
+    /**
+     * Whether they'd be taken into a move of their own first, so the cuts are of that move and the
+     * others keep theirs as it is (see the module comment)
+     */
+    intoOwnMove: boolean;
     /** The cuts, in order: at the range's start, then at its end */
     cuts: PlannedCut[];
 }
@@ -123,6 +141,9 @@ export interface RemoveFromRangeResult {
 
 const ascending = (ids: Iterable<number>) =>
     [...new Set(ids)].sort((a, b) => a - b);
+
+/** A move a new one stands in for: newer than every stored move, so it takes over nothing. */
+const NEWEST = Number.MAX_SAFE_INTEGER;
 
 /** A stored move's id and range. */
 interface MoveSpan {
@@ -339,9 +360,9 @@ async function planCuts(
     if (crosses(range.start)) {
         const idStaysWith = await idKeeperFor(tx, piece, range.start);
         cuts.push({ timelineId: move.id, beat: range.start, idStaysWith });
-        // A new part is the newest move, so it takes over nothing (an id no move has stands in)
+        // A new part is the newest move, so it takes over nothing
         piece = {
-            id: idStaysWith === "after" ? move.id : Number.MAX_SAFE_INTEGER,
+            id: idStaysWith === "after" ? move.id : NEWEST,
             start: range.start,
             end: move.end,
         };
@@ -359,8 +380,9 @@ async function planCuts(
  * **Preview** (changes nothing): what removing `marcherIds` from move `timelineId` over `range`
  * (`removeMarchersFromMoveForRangeInTransaction`), or with no `timelineId` from every move they
  * have there (`takeMarchersOutOfRangeInTransaction`), would do. With no `timelineId`, a marcher
- * that has to stay in any of those moves stays in all of them. Marchers with no row there are
- * ignored.
+ * that has to stay in any of those moves (a shape or follow-the-leader member, or one split by
+ * marcher won't take out of a move that needs a cut) stays in all of them. Marchers with no row
+ * there are ignored.
  */
 export async function planRemovalFromRange({
     tx,
@@ -375,26 +397,78 @@ export async function planRemovalFromRange({
 }): Promise<RemovalPlan> {
     const rows = await rowsIn(tx, timelineId, { marcherIds, range });
     const stay = await membersThatStay(tx, rows);
-    const leaving = rows.filter((r) => !stay.has(r.row.marcher_id));
-    const moves: MoveRemovalPlan[] = [];
-    for (const id of ascending(leaving.map((r) => r.timelineId))) {
-        const move = (await readTimeline(tx, id))!;
-        const theirs = leaving.filter((r) => r.timelineId === id);
-        moves.push({
-            timelineId: id,
-            removed: ascending(theirs.map((r) => r.row.marcher_id)),
-            cuts: await planCuts(
-                tx,
-                { id, start: move.start_beat, end: move.end_beat },
-                theirs,
-                range,
+    // A refusal to take some into a move of their own keeps them in every move, so plan again
+    for (;;) {
+        const moves: MoveRemovalPlan[] = [];
+        let refused = false;
+        const leaving = rows.filter((r) => !stay.has(r.row.marcher_id));
+        for (const id of ascending(leaving.map((r) => r.timelineId))) {
+            const theirs = leaving.filter((r) => r.timelineId === id);
+            const removed = ascending(theirs.map((r) => r.row.marcher_id));
+            const plan = await planMove(tx, id, theirs, removed, range);
+            if (!("reason" in plan)) {
+                moves.push(plan);
+                continue;
+            }
+            const why = plan;
+            for (const marcherId of why.leaving)
+                if (!stay.has(marcherId))
+                    stay.set(marcherId, {
+                        marcherId,
+                        timelineId: id,
+                        reason: why.reason,
+                    });
+            refused = true;
+        }
+        if (refused) continue;
+        return {
+            removed: ascending(moves.flatMap((m) => m.removed)),
+            skipped: [...stay.values()].sort(
+                (a, b) => a.marcherId - b.marcherId,
             ),
-        });
+            moves,
+        };
+    }
+}
+
+/**
+ * Plans `removed` (their rows over the range, `theirs`) leaving move `id` over `range`, or returns
+ * split by marcher's refusal when they'd have to be taken into a move of their own and can't be.
+ */
+async function planMove(
+    tx: DbTransaction,
+    id: number,
+    theirs: readonly MoveRow[],
+    removed: number[],
+    range: BeatRange,
+): Promise<MoveRemovalPlan | SplitRefusal> {
+    const move = (await readTimeline(tx, id))!;
+    const span = { id, start: move.start_beat, end: move.end_beat };
+    const going = new Set(removed);
+    const shared = (await rowsIn(tx, id)).some(
+        (r) => !going.has(r.row.marcher_id),
+    );
+    if (shared) {
+        // Their own move over the move's counts would be the newest move
+        const cuts = await planCuts(tx, { ...span, id: NEWEST }, theirs, range);
+        if (cuts.length > 0) {
+            const why = await splitRefusal(tx, id, removed, {
+                storedShapesSwitched: true,
+            });
+            if (why) return why;
+            return {
+                timelineId: id,
+                removed,
+                intoOwnMove: true,
+                cuts: cuts.map((c) => ({ ...c, timelineId: id })),
+            };
+        }
     }
     return {
-        removed: ascending(moves.flatMap((m) => m.removed)),
-        skipped: [...stay.values()].sort((a, b) => a.marcherId - b.marcherId),
-        moves,
+        timelineId: id,
+        removed,
+        intoOwnMove: false,
+        cuts: await planCuts(tx, span, theirs, range),
     };
 }
 
@@ -406,6 +480,16 @@ async function removeFromMove(
 ): Promise<{ cuts: SplitTimelineResult[]; piece: RemovedFromPiece }> {
     const cuts: SplitTimelineResult[] = [];
     let pieceId = plan.timelineId;
+    if (plan.intoOwnMove)
+        pieceId = (
+            await takeMarchersIntoOwnMoveInTransaction({
+                tx,
+                timelineId: plan.timelineId,
+                marcherIds: plan.removed,
+                // Planned already: every one of them goes
+                plan: { removed: plan.removed, skipped: [], moves: [] },
+            })
+        ).timelineId!;
     for (const cut of plan.cuts) {
         const split = await splitTimelineAtBeatInTransaction({
             tx,
