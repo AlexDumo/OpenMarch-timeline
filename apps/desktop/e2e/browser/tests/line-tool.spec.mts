@@ -1227,19 +1227,52 @@ test("change: Curve in the Shapes tab draws a line bending through smooth points
     expect(drawn.handles).toHaveLength(3);
     expect(drawn.barHandles).toEqual([]);
     expect(drawn.outline!.length).toBeGreaterThan(3);
-    // 8 marchers on a symmetric arch: none on its smooth top, evenly apart
+    // 8 marchers on a symmetric arch: none on its smooth top, evenly apart along it (straight
+    // across, the gaps round the bend come out a hair shorter)
     expect(drawn.spots).toHaveLength(ALL.length);
     expect(
         drawn.spots.every(
             (s) => Math.hypot(s.x - top.x, s.y - top.y) > 0.25 * S,
         ),
     ).toBe(true);
-    const sorted = [...drawn.spots].sort((p, q) => p.x - q.x);
-    const apart = sorted
-        .slice(1)
-        .map((p, i) => Math.hypot(p.x - sorted[i]!.x, p.y - sorted[i]!.y));
+    // Each spot's place along the drawn outline (a polyline through the curve)
+    const outline = drawn.outline!;
+    const along = (p: Point) => {
+        let best = Infinity;
+        let at = 0;
+        let run = 0;
+        for (let i = 1; i < outline.length; i++) {
+            const a = outline[i - 1]!;
+            const b = outline[i]!;
+            const len = Math.hypot(b.x - a.x, b.y - a.y);
+            const t =
+                len > 0
+                    ? Math.max(
+                          0,
+                          Math.min(
+                              1,
+                              ((p.x - a.x) * (b.x - a.x) +
+                                  (p.y - a.y) * (b.y - a.y)) /
+                                  (len * len),
+                          ),
+                      )
+                    : 0;
+            const d = Math.hypot(
+                a.x + (b.x - a.x) * t - p.x,
+                a.y + (b.y - a.y) * t - p.y,
+            );
+            if (d < best) {
+                best = d;
+                at = run + len * t;
+            }
+            run += len;
+        }
+        return at;
+    };
+    const places = drawn.spots.map(along).sort((p, q) => p - q);
+    const apart = places.slice(1).map((p, i) => p - places[i]!);
     for (const gap of apart)
-        expect(Math.abs(gap - apart[0]!)).toBeLessThan(CLOSE);
+        expect(Math.abs(gap - apart[0]!)).toBeLessThan(0.01 * apart[0]!);
 
     // Enter places it, a Line recipe with smooth points
     await page.keyboard.press("Enter");

@@ -35,8 +35,8 @@ Terms the code, docs and issues use. Add a term when a design decision settles i
   groups don't.
 - **Seam**: the gap between two groups. It is the larger of their intervals.
 - **Measured**: what an interval measures: the length of line between neighbors (**Along the
-  path**, the default), the distance from marcher to marcher (**Straight across**, measured along
-  the line instead wherever it would cut past a corner holding no marcher), side to side (↔),
+  path**, the default), the distance from marcher to marcher (**Straight across**, going on
+  from a corner holding no marcher rather than cutting past it), side to side (↔),
   front to back (↕) or both at once (**Offset**, rise over run: `2 ↔ 1 ↕` is each marcher 2 steps
   across and 1 deep from the next, only on a one-segment line).
 - **Fit / Keep interval / Interval on the path**: a path's spacing modes. Fit keeps the size
