@@ -44,6 +44,7 @@ import {
 import { outlineGapAt } from "../distribute/outlineGap";
 import { openHandleMenu } from "../field/handleMenu";
 import { groupDrawing } from "../field/groupDrawing";
+import { stepDrawing } from "../field/stepDrawing";
 import type { GroupMenuState } from "../field/shapePointer";
 import type { AnyToolKind } from "../tool/toolKind";
 import type { XY } from "../types";
@@ -81,10 +82,19 @@ interface Shown {
     readonly scrubbing: boolean;
     /** The editor's group menu is open, and the group lit (#526 follow-up) */
     readonly groupMenu: GroupMenuState | null;
+    /** A number setting the kind's step is engaged: the step drawn (owner on #596) */
+    readonly stepShown: boolean;
 }
 
 const drawingOf = memoDrawing(
-    ({ live: saved, preview, calm, scrubbing, groupMenu }: Shown) => {
+    ({
+        live: saved,
+        preview,
+        calm,
+        scrubbing,
+        groupMenu,
+        stepShown,
+    }: Shown) => {
         const live =
             preview && !saved.gesture ? { ...saved, params: preview } : saved;
         const changing = live.gesture !== null || preview !== null;
@@ -120,6 +130,14 @@ const drawingOf = memoDrawing(
             calm,
             ...handleDrawing(kind, live.params, n, live.selected),
             gaps: gapsOf(kind, live.params, n),
+            ...stepDrawing(
+                kind,
+                live.params,
+                n,
+                stepShown,
+                live.gesture,
+                env.stepPx,
+            ),
             ...frameDrawing(
                 kind,
                 live.params,
@@ -408,7 +426,7 @@ export class LiveBoxMode implements FieldMode {
     drawing() {
         const preview = usePlacedBoxPreviewStore.getState().params;
         const calm = shapeCalm(this.live.gesture !== null);
-        const { pivotPreview, scrubbing, groupMenu } =
+        const { pivotPreview, scrubbing, groupMenu, stepShown } =
             useShapePointerStore.getState();
         if (
             this.shown?.live !== this.live ||
@@ -416,7 +434,8 @@ export class LiveBoxMode implements FieldMode {
             this.shown.calm !== calm ||
             this.shown.pivotPreview !== pivotPreview ||
             this.shown.scrubbing !== scrubbing ||
-            this.shown.groupMenu !== groupMenu
+            this.shown.groupMenu !== groupMenu ||
+            this.shown.stepShown !== stepShown
         )
             this.shown = {
                 live: this.live,
@@ -425,6 +444,7 @@ export class LiveBoxMode implements FieldMode {
                 pivotPreview,
                 scrubbing,
                 groupMenu,
+                stepShown,
             };
         return drawingOf(this.shown);
     }

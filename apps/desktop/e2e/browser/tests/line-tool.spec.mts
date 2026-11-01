@@ -393,7 +393,9 @@ test("change: a diagonal from yard line to yard line is measured ↔, placing ma
 
 // The interval lock and Offset (owner decisions on #522, #527): unlocked, a
 // dragged end changes the interval live in whole steps; Offset shows two
-// numbers, typed or dragged; locked, an Offset line's ends don't move.
+// numbers, typed or dragged, ↕ positive up the screen and dragged up and down
+// through 0 (#596), the step drawn on the field while they're engaged; locked,
+// an Offset line's ends don't move.
 test("change: an unlocked end drag snaps the interval to whole steps live, Offset shows two numbers, and locked its ends stay", async ({
     show,
 }) => {
@@ -450,15 +452,57 @@ test("change: an unlocked end drag snaps the interval to whole steps live, Offse
     await page.getByTestId("shape-editor-offsetY-input").fill("1");
     await page.keyboard.press("Enter");
     await expect(readout.getByTestId("shape-editor-offsetY")).toHaveText("1");
+    // Up the screen is more (#596): each next marcher to the right a step
+    // toward the back, field y going down, from the left end where it started
+    const rising = (await shapeOverlay(page))!;
+    const left = [...rising.spots].sort((a, b) => a.x - b.x);
+    expect(Math.abs(left[0]!.x - from.x)).toBeLessThan(CLOSE);
+    expect(Math.abs(left[0]!.y - from.y)).toBeLessThan(CLOSE);
+    for (let i = 1; i < left.length; i++) {
+        expect(Math.abs(left[i]!.x - left[i - 1]!.x - 2 * S)).toBeLessThan(
+            CLOSE,
+        );
+        expect(Math.abs(left[i - 1]!.y - left[i]!.y - S)).toBeLessThan(CLOSE);
+    }
+
+    // Pointed at, the numbers draw the step from the first marcher on the
+    // field and light the pivot it grows from (#596)
+    const offsetY = readout.getByTestId("shape-editor-offsetY");
+    await offsetY.hover();
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.offsetStep)
+        .toMatchObject({ across: "↔ 2", deep: "↕ 1" });
+    const step = (await shapeOverlay(page))!;
+    expect(Math.abs(step.offsetStep!.from.x - from.x)).toBeLessThan(CLOSE);
+    expect(Math.abs(step.offsetStep!.from.y - from.y)).toBeLessThan(CLOSE);
+    expect(Math.abs(step.offsetStep!.to.y - (from.y - S))).toBeLessThan(CLOSE);
+    expect(Math.abs(step.pivotPreview!.x - from.x)).toBeLessThan(CLOSE);
+
+    // ↕ dragged down: through 0 to below it, toward the front, the step
+    // following
+    const box = (await offsetY.boundingBox())!;
+    const grip = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    await page.mouse.move(grip.x, grip.y);
+    await page.mouse.down();
+    await page.mouse.move(grip.x, grip.y + 36, { steps: 12 });
+    await expect(offsetY).toHaveText("−1");
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.offsetStep?.deep)
+        .toBe("↕ −1");
+    await page.mouse.up();
+    await page.mouse.move(grip.x, grip.y - 200);
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.offsetStep)
+        .toBeNull();
     const diagonal = (await shapeOverlay(page))!;
     const sorted = [...diagonal.spots].sort((a, b) => a.x - b.x);
     for (let i = 1; i < sorted.length; i++) {
         expect(Math.abs(sorted[i]!.x - sorted[i - 1]!.x - 2 * S)).toBeLessThan(
             CLOSE,
         );
-        expect(
-            Math.abs(Math.abs(sorted[i]!.y - sorted[i - 1]!.y) - S),
-        ).toBeLessThan(CLOSE);
+        expect(Math.abs(sorted[i]!.y - sorted[i - 1]!.y - S)).toBeLessThan(
+            CLOSE,
+        );
     }
 
     // Locked, dragging an end changes nothing
@@ -477,7 +521,9 @@ test("change: an unlocked end drag snaps the interval to whole steps live, Offse
     const stored = JSON.parse(recipe.params);
     expect(stored.measured).toBe("offset");
     expect(stored.offset.x).toBeCloseTo(2 * S);
-    expect(Math.abs(stored.offset.y)).toBeCloseTo(S);
+    expect(stored.offset.y).toBeCloseTo(S);
+    // A new line's pivot is its left end (#596)
+    expect(stored.pivot).toBe("w");
     expect(stored.spacing.mode).toBe("keep");
 });
 
@@ -1332,10 +1378,42 @@ test("change: Curve in the Shapes tab draws a line bending through smooth points
             (s) => Math.hypot(s.x - top.x, s.y - top.y) > 0.25 * S,
         ),
     ).toBe(true);
-    const sorted = [...drawn.spots].sort((p, q) => p.x - q.x);
-    const apart = sorted
-        .slice(1)
-        .map((p, i) => Math.hypot(p.x - sorted[i]!.x, p.y - sorted[i]!.y));
+    // Each spot's place along the drawn outline (a polyline through the curve)
+    const outline = drawn.outline!;
+    const along = (p: Point) => {
+        let best = Infinity;
+        let at = 0;
+        let run = 0;
+        for (let i = 1; i < outline.length; i++) {
+            const a = outline[i - 1]!;
+            const b = outline[i]!;
+            const len = Math.hypot(b.x - a.x, b.y - a.y);
+            const t =
+                len > 0
+                    ? Math.max(
+                          0,
+                          Math.min(
+                              1,
+                              ((p.x - a.x) * (b.x - a.x) +
+                                  (p.y - a.y) * (b.y - a.y)) /
+                                  (len * len),
+                          ),
+                      )
+                    : 0;
+            const d = Math.hypot(
+                a.x + (b.x - a.x) * t - p.x,
+                a.y + (b.y - a.y) * t - p.y,
+            );
+            if (d < best) {
+                best = d;
+                at = run + len * t;
+            }
+            run += len;
+        }
+        return at;
+    };
+    const places = drawn.spots.map(along).sort((p, q) => p - q);
+    const apart = places.slice(1).map((p, i) => p - places[i]!);
     for (const gap of apart)
         expect(Math.abs(gap - apart[0]!)).toBeLessThan(0.01 * apart[0]!);
 

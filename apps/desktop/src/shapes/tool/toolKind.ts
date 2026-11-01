@@ -164,6 +164,11 @@ export interface ToolParam<P> {
      * number with the way it measures
      */
     readonly glyphAfter?: boolean;
+    /**
+     * While the number is pointed at, focused or dragged, the field draws the kind's
+     * {@link ToolKind.step} and lights its pivot (a Line's offset, owner on #596)
+     */
+    readonly showsStep?: boolean;
     /** Hidden while this is false (a spacing with only one spot that way) */
     shown?(params: P, n: number): boolean;
     /** The number as shown: "6 × 2", "2" */
@@ -482,6 +487,18 @@ export interface ToolKind<P> {
     readonly groups?: ToolGroups<P>;
     /** A lock on its interval, beside the interval in the floating editor */
     readonly lock?: ToolLock<P>;
+    /**
+     * The pivot a new shape of the kind starts at (a Line's leftmost end, owner on #596): it sets
+     * that itself when it draws one; picking another kind carries a pivot only when it's been
+     * moved from this. The center when absent.
+     */
+    startPivot?(params: P): Pivot;
+    /**
+     * The step from one marcher to the next that its {@link ToolParam.showsStep} numbers set (a
+     * Line's offset, rise over run): the field draws it as a right angle, ↔ then ↕, while they
+     * are engaged or an end is dragged. Null when it has none now.
+     */
+    step?(params: P, n: number): { from: XY; to: XY } | null;
     /**
      * Its spots run in an order along it (a Line, #528): the host offers who goes where by Least
      * travel, Keep order or Reverse. Absent: always least travel.

@@ -702,6 +702,88 @@ function GroupGapLabel({
     );
 }
 
+/**
+ * A Line's step from its first marcher to the next (owner on #596): a dashed right angle in the
+ * pivot's yellow on a dark edge, across then up or down, each leg's number in a pill beside it on
+ * the side away from the step, so it reads where the next marcher comes from
+ */
+function OffsetStep({
+    step,
+    at,
+    abovePx,
+}: {
+    step: NonNullable<FieldModeDrawing["offsetStep"]>;
+    at: (point: { x: number; y: number }) => { x: number; y: number };
+    /** What stands above each spot (its name), which a pill above the across leg clears */
+    abovePx: number;
+}) {
+    const a = at(step.from);
+    const c = at(step.corner);
+    const b = at(step.to);
+    const d = `M ${a.x} ${a.y} L ${c.x} ${c.y} L ${b.x} ${b.y}`;
+    const h = GROUP_LABEL_HEIGHT;
+    // The across leg's pill on the side away from the up-or-down leg, and that one's away from the
+    // first marcher
+    const below = b.y <= c.y ? 1 : -1;
+    const outward = c.x >= a.x ? 1 : -1;
+    const pill = (text: string, x: number, y: number, testId: string) => {
+        const w = groupLabelWidth(text);
+        return (
+            <g data-testid={testId}>
+                <rect
+                    x={x - w / 2}
+                    y={y - h / 2}
+                    width={w}
+                    height={h}
+                    rx={h / 2}
+                    fill={PIVOT_COLOR}
+                    stroke="black"
+                    strokeWidth={1}
+                />
+                <text
+                    x={x}
+                    y={y}
+                    fontSize={GROUP_LABEL_PX}
+                    fontWeight={600}
+                    fontFamily="DM Sans, sans-serif"
+                    fill="black"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                >
+                    {text}
+                </text>
+            </g>
+        );
+    };
+    const deepW = groupLabelWidth(step.deep);
+    return (
+        <g data-testid="fieldShapeOffsetStep" pointerEvents="none">
+            <path d={d} fill="none" stroke="black" strokeWidth={3.5} />
+            <path
+                d={d}
+                fill="none"
+                stroke={PIVOT_COLOR}
+                strokeWidth={1.5}
+                strokeDasharray="5 3"
+            />
+            {pill(
+                step.across,
+                (a.x + c.x) / 2,
+                (a.y + c.y) / 2 +
+                    below * (h / 2 + 4) -
+                    (below < 0 ? abovePx : 0),
+                "fieldShapeOffsetAcross",
+            )}
+            {pill(
+                step.deep,
+                (c.x + b.x) / 2 + outward * (deepW / 2 + 4),
+                (c.y + b.y) / 2,
+                "fieldShapeOffsetDeep",
+            )}
+        </g>
+    );
+}
+
 function ModeDrawing({
     drawing,
     theme,
@@ -813,6 +895,14 @@ function ModeDrawing({
                         seam={seam}
                     />
                 ))}
+            {drawing.offsetStep && (
+                <OffsetStep
+                    step={drawing.offsetStep}
+                    at={at}
+                    // Clear of the spots' names, drawn above them
+                    abovePx={drawing.labels?.length ? SPOT_LABEL_PX + 1 : 0}
+                />
+            )}
             {drawing.labels?.map(({ at: point, text }, i) => {
                 const p = at(point);
                 return (

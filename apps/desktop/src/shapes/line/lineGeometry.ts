@@ -1,7 +1,9 @@
 import {
     fieldToFrame,
     frameToField,
+    pivotAt,
     pivotPoint,
+    type Pivot,
     type ShapeFrame,
 } from "../frame/frame";
 import { linePull } from "../frame/edgeGuides";
@@ -117,8 +119,9 @@ export interface LineParams {
     /**
      * What every interval measures (#527, ADR 0006's Line amendment): along the path (its arc
      * length) when absent; `straight` straight across from marcher to marcher, except that a gap
-     * goes on from a corner holding no marcher rather than cutting past it ({@link acrossOf}); `x` (↔) side to side and `y` (↕) front to back; `offset` both at once,
-     * {@link offset} from each marcher to the next
+     * goes on from a corner holding no marcher rather than cutting past it ({@link acrossOf}); `x`
+     * (↔) side to side and `y` (↕) front to back; `offset` both at once, {@link offset} from each
+     * marcher to the next
      */
     readonly measured?: LineMeasure;
     /**
@@ -712,6 +715,64 @@ export function lineOffset(p: LineParams, n: number): XY {
         near(o.y, drawn.y)
         ? o
         : drawn;
+}
+
+/**
+ * The pivot a new Line starts at (owner on #596): its leftmost point, so it grows to the right from
+ * where it starts and its offset reads from there. On a tie (an upright line) the one nearest the
+ * front of the field, lowest on the screen (larger y); then the first. A closed line keeps the
+ * center, which its outline turns about. An end is its frame's `w` (the first point) or `e` (the
+ * last); a point between them is a free pivot on it.
+ */
+export function linePivot(p: LineParams): Pivot {
+    if (isClosed(p) || p.points.length < 2) return "c";
+    const tie = 1e-6;
+    let best = 0;
+    p.points.forEach((q, i) => {
+        const b = p.points[best]!;
+        if (q.x < b.x - tie || (Math.abs(q.x - b.x) <= tie && q.y > b.y + tie))
+            best = i;
+    });
+    if (best === 0) return "w";
+    if (best === p.points.length - 1) return "e";
+    return pivotAt(lineFrame(p), p.points[best]!);
+}
+
+/**
+ * Which end the line's offset is read from (owner on #596): the one nearer its pivot, its first on
+ * a tie (a centered pivot). The first marcher stands there, and each next one is an offset on.
+ */
+export function offsetStart(p: LineParams): "first" | "last" {
+    const at = pivotPoint(lineFrame(p), pivotOf(p));
+    const first = length(sub(p.points[0]!, at));
+    const last = length(sub(p.points.at(-1)!, at));
+    return last < first - 1e-6 ? "last" : "first";
+}
+
+/**
+ * From the marcher at the line's {@link offsetStart} to the next, as the line lays them out now
+ * ({@link lineOffset}, turned round when it starts from its last point), in field units
+ */
+export function startOffset(p: LineParams, n: number): XY {
+    const o = lineOffset(p, n);
+    return offsetStart(p) === "last" ? { x: -o.x, y: -o.y } : o;
+}
+
+/**
+ * The line's first gap from its {@link offsetStart} (the field's step drawing, owner on #596):
+ * the marcher there and the next one, or null when it isn't measured as an offset
+ */
+export function offsetStep(
+    p: LineParams,
+    n: number,
+): { from: XY; to: XY } | null {
+    if (!offsetOf(p) || n <= 1) return null;
+    const from = offsetStart(p) === "last" ? p.points.at(-1)! : p.points[0]!;
+    const o = startOffset(p, n);
+    return {
+        from: { x: from.x, y: from.y },
+        to: { x: from.x + o.x, y: from.y + o.y },
+    };
 }
 
 /**

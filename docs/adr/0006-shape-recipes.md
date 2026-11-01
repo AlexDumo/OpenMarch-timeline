@@ -456,6 +456,14 @@ The Line shape (spec #522, #523) stores a new kind:
    `"offset"`, `offset` and Fit's `groups`, and show such Lines as plain positions (decision 5).
    Saved Lines read unchanged.
 
+   Amended 2026-11-01 (owner feedback on #596), nothing stored changes shape: the editor shows the
+   offset in screen directions, read from the line's pivot end (the end nearer the pivot, the
+   first point on a tie): ↔ positive to the right, ↕ positive up the screen, toward the back,
+   which is field y going down; either crosses 0. `offset` itself stays signed from the first
+   point in field units. A new Line (drawn, or another kind turned into one) stores the host's
+   `pivot` at its leftmost end or point, `"w"` or `"e"` for an end, the front end on an upright
+   line, the center when closed. A saved Line without a `pivot` still turns about its center.
+
 Verification (2026-11-01, decision 9): `lineLockOffset.test.ts` drags ends and corners unlocked
 onto whole and half steps (↔ by its side-to-side distance), with `fine` free; checks that typing
 leaves the line unlocked and sized; locks and unlocks in one undo step each; locked, swings an end
