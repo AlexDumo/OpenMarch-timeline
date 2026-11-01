@@ -2666,7 +2666,7 @@
         "autoOpenPrompt": {
             "description": "The 3D View opened with your show. You can change this later in Settings › General.",
             "no": "Don't open it",
-            "title": "Keep opening the 3D View with your shows?",
+            "title": "Open the 3D viewer on launch?",
             "yes": "Keep opening it"
         },
         "camera": {
