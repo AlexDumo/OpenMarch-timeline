@@ -3,7 +3,8 @@
 - Status: proposed
 - Date: 2026-11-01
 - Spec: [docs/show-issues](../show-issues/README.md)
-- Related: [ADR 0001](0001-timeline-motion-model.md) (the resolver this reads),
+- Related: [ADR 0001](0001-timeline-motion-model.md) (the resolver this reads,
+  amended by D-3), [ADR 0002](0002-3d-view.md) (put-downs, D-9),
   [ADR 0005](0005-three-field-renderer.md) (the field that draws the markers)
 
 ADR numbers 0007 and 0008 are taken by open PRs (#550, #373). If another
@@ -12,7 +13,7 @@ record merges as 0009 first, the second to merge renumbers.
 ## Context
 
 Collision detection (fork #226) checks only the selected page, in the
-renderer, about 30 ms per page at 2,000 marchers. Its results show in a
+renderer, at about 30 ms per page with 2,000 marchers. Its results show in a
 toolbar tab that appears and disappears with the selected page. Step-size
 warnings are a separate system with their own badge, field paths and
 threshold.
@@ -27,7 +28,7 @@ things need durable decisions:
    at 30 ms per page is about 2 s of CPU per full pass. Rerunning that after
    every edit isn't acceptable. Moves, holds and keyframes overlap page
    flags, so "the pages an edit touched" isn't a reliable unit.
-3. Where dismissals are kept. They are a new kind of data in the show file.
+3. Where dismissals and rules are kept. They are new data in the show file.
 
 ## Decision
 
@@ -35,75 +36,104 @@ things need durable decisions:
 
 A check reads positions through the resolver interface (`positionAt`,
 `positionsAt`, `spanInfos`) plus a plain snapshot of the show data it
-declares (sections, tags, rules). It returns hits over the time window it
-was given. Checks have no React, no database access and no DOM, so the same
-code runs on the main thread and in a worker, and tests pass stand-in
-resolvers as `CollisionDetection` does today.
+declares (sections, tags, rules, the field's step size). It returns hits
+over the time window it was given. Checks have no React, no database access
+and no DOM, so the same code runs on the main thread and in a worker, and
+tests pass stand-in resolvers as `CollisionDetection` does today.
 
 Each check declares:
 
 - **its natural incident unit**, `counts` or `move`, used to stitch hits
-  into incidents;
-- **its inputs**, `positions` or `positions+show`, used to decide what an
-  edit makes out of date (D-3);
+  into incidents. A move is one performer's assignment to one transition,
+  not a resolver span: spans include holds, and a higher layer can split one
+  move into several spans;
+- **its show inputs** (which tags, sections, rules or field properties it
+  reads), used for invalidation (D-3);
 - **its rules schema**, with show defaults;
 - **its field drawings**, a rest mark and a focus explanation, so the
   framework draws markers and checks don't draw directly.
 
-The framework, not each check, owns stitching, levels, dismissal matching
-and rule resolution.
+The framework, not each check, owns stitching, levels, rule resolution, and
+identity matching for dismissals and for "new".
 
 ### D-2. Two tiers, one check implementation
 
-- **Live tier, main thread**: runs the checks on the selected page's window
-  once the page and resolver version settle (150 ms), as
+- **Live tier, main thread**: runs the checks on the selected page's own
+  counts once the page and resolver version settle (150 ms), as
   `useCollisionDetection` does today. It costs no more than today and drives
   the soft blink.
-- **Sweep tier, a dedicated worker**: owns a second resolver built from the
-  same `TimelineSnapshot` with `createCachedResolver`. After every commit,
-  the main thread posts the same `ChangeBatch` it passes to
-  `resolver.notify()`, so both resolvers describe the same show. The worker
-  never touches the database. It checks the rest of the show in chunks,
-  nearest the playhead first, and posts issues back.
+- **Sweep tier, a dedicated worker**: runs a **full copy of the timeline
+  host**, not just a resolver. It keeps the mirror updated by
+  `applyBatchToMirror`, the resolver from `createResolver`, and the
+  put-downs layer (`withPutDowns`), as the app does in `timelineHost.ts`. It
+  subscribes to the same change stream as the main thread
+  (`subscribeTimelineChanges`, both `batch` and `reset`) and receives item
+  put-down updates (`setTimelinePutDownItems`), which bump the version
+  without a batch. The 3D View's own resolver plus put-downs
+  (`view3d/positions.ts`) is the precedent. The worker never touches the
+  database. It checks the rest of the show in chunks, nearest the playhead
+  first, and posts issues back.
 
-Results from both tiers go through the same stitching and dismissal
-matching. The live tier's answer replaces the sweep's for the window it
-covers.
+Results from both tiers go through the same stitching and matching. The live
+tier's hits replace the sweep's hits inside its window. Incidents that cross
+the window's edge are re-stitched from live hits inside and sweep hits
+outside. A `move` incident only partly inside the window is rechecked whole
+by the tier that sees the whole move.
 
-### D-3. What's out of date is found from positions, in time buckets
+### D-3. What's out of date: a resolver report, narrowed by fingerprints
 
-The worker keeps a **fingerprint per (marcher, bucket)**, where a bucket is
-4 counts: a 32-bit hash of the marcher's positions sampled at each beat in
-the bucket. 200 marchers over 1,000 counts is 50,000 numbers, about 200 KB.
+**Resolver addition (amends ADR 0001 §4).** `InvalidationReport.marchersRebuilt`
+is not enough. It only lists marchers from assignment rows, transition
+start/end changes and `home` changes. Shape geometry, transition
+`dest`/`slots`/`style`/`params`, slot destination points, and
+follow-the-leader leader or order changes move marchers without listing
+them. The core tests confirm this (`resolverInvalidation.test.ts`: a shape
+edit and an FTL order toggle both report `[]`). So `notify()` gains a
+report of **every marcher whose positions may have changed, with the
+earliest such beat**: `positionsChanged: { marcherId, fromBeat }[]`. The
+resolver already has what it needs: the per-marcher earliest beat in
+`affected`, transition-to-row lookups, and FTL entry members. Put-down items
+inherit their holder's entry. Core tests must show that, for random batches,
+`positionsChanged` covers every marcher whose sampled positions differ.
 
-After a batch:
+**Fingerprints.** The worker keeps a fingerprint per (marcher, bucket),
+where a bucket is 4 counts: a 32-bit hash of the marcher's positions sampled
+at a fixed rate of 4 samples per beat, so a 1-count move's path style
+changes the hash. 200 marchers over 1,000 counts is 50,000 numbers, about
+200 KB.
 
-1. `notify()` returns `InvalidationReport.marchersRebuilt`. The worker
-   re-samples only those marchers across the show.
-2. Buckets whose hash changed for any marcher go on a dirty list as
-   (bucket, changed marchers).
+**After a batch:**
+
+1. For each `positionsChanged` entry, re-sample that marcher from `fromBeat`
+   to the end of the show.
+2. Buckets whose hash changed go on a dirty list as (bucket, changed
+   marchers). The fingerprints narrow the resolver's "from this beat onward"
+   down to where positions actually changed.
 3. Checks rerun only on dirty buckets. Position checks narrow further: a
    collision recheck tests only pairs where at least one marcher changed,
-   using a spatial grid. Unchanged pairs keep their cached result.
-4. A change fingerprints can't see makes every `positions+show` check that
-   reads it **all-dirty**, and it does a full pass. That covers tags,
-   sections, rules, props, and marchers added or removed. This fallback is
-   always correct, just slower.
+   using a spatial grid. Unchanged pairs keep their cached result. A `move`
+   check rechecks every whole move that overlaps a dirty bucket.
 
-Stitching then merges hits across bucket edges into incidents (spec,
-"Stitching"). Buckets decide what to recheck. Users never see them.
+**Changes positions can't show:**
 
-This is deliberately independent of the timeline model. Whatever produces
-positions (moves, holds, keyframes, future features), a change shows up as
-changed positions.
+| Change                                                         | What reruns                                                        |
+| -------------------------------------------------------------- | ------------------------------------------------------------------ |
+| A check's rules                                                | That check, whole show                                             |
+| Tags or sections (membership, names)                           | Every check that declares them, whole show                         |
+| The field's step size (`stepSizeInches`)                       | Every check, whole show (thresholds are in steps)                  |
+| Move structure (split, merge, assignments) with equal positions | `move` checks, for the moves touched by the batch                  |
+| Marchers added or removed                                      | Every check, for those marchers                                    |
+| `reset` (file open, host failure, unwrapped writes)            | The worker rebuilds its host from a fresh snapshot; all checks dirty |
 
-**Known risk**: if `marchersRebuilt` ever left out a marcher whose positions
-changed, its fingerprints would go stale. Two safeguards:
+**Inserting or deleting counts** ripples every later row
+(`withTimelinePageRipple`), so every bucket after the edit is dirty for every
+marcher. That's correct, and the spike measures its cost.
 
-- debug builds compare against a full re-sample after every batch and fail
-  loudly;
-- after the first sweep completes on an idle show, one cheap full
-  fingerprint pass runs as a backstop.
+**Safeguards.** Debug builds compare fingerprints against a full re-sample
+after every batch and fail loudly if `positionsChanged` missed a marcher. A
+property test covers the same thing in core. This is deliberately separate
+from the timeline model: whatever produces positions, a change shows up as
+changed positions, and the resolver's report only has to be a superset.
 
 ### D-4. Pacing is driven by out-of-date work, never by a timer
 
@@ -115,64 +145,93 @@ Battery API in the web build where it exists). A per-user setting chooses
 **Automatically**, **When Issues is open** or **Never**. Never leaves only
 the live tier running.
 
-### D-5. Dismissals and rules live in the show file, outside undo
+### D-5. Dismissals outside undo; rules as ordinary show edits
 
-A new migration adds tables for:
+One migration adds two tables.
 
-- **dismissals**: check id, kind (`occurrence`, `performers` or `check`),
-  performer ids, and for occurrences the dismissed span (from and to beat);
-- **check rules**: check id, target (`show`, `section`, `tag` or
-  `performer`) with its id, and a JSON value validated by the check's rules
-  schema.
+**`issue_dismissals`**, with no history triggers (following `view3d_cameras`
+and the Library tables). Dismissing is a review judgement, not a drill edit,
+so undo never brings warnings back. Columns:
 
-Neither table gets history triggers, following `view3d_cameras` and the
-Library tables: dismissing is a review judgement, not a drill edit, so undo
-never brings warnings back. The panel's Dismissed section is how they come
-back.
+- check id;
+- kind: `occurrence`, `performers` or `check`;
+- performer ids;
+- for occurrences, the span stored **relative to a page**: the id of the
+  page holding the first count, a count offset into that page, and a length
+  in counts.
 
-An occurrence matches on a recheck when the check and the performer set are
-equal and the new span overlaps or touches the stored span. Deleting a
-performer deletes their dismissals and performer rules.
+Anchoring to a page id means inserting or deleting counts elsewhere moves
+the page, not the dismissal, so no ripple has to rewrite the table and undo
+can't leave rippled spans behind. Edits inside the anchor page can shift an
+occurrence slightly. The overlap-or-touch tolerance absorbs small shifts,
+and a bigger change correctly brings the issue back. If the anchor page is
+deleted, the dismissal is dropped.
 
-The step-size threshold in field properties
-(`stepSizeWarningThresholdInches`) becomes the step-size check's
-show-default rule in phase 2. The migration copies the value, and field
-properties stops owning it.
+Matching:
 
-Scope (Whole show or Here), the seen state behind the "new" dot, and the
-sweep setting are per user (UI settings), not saved in the show.
+- an **occurrence** matches when the check and the exact performer set are
+  equal and the resolved span overlaps or touches;
+- a **performers** dismissal matches every issue of that check whose
+  performers include all the dismissal's performers;
+- a **check** dismissal turns the check off.
+
+Deleting a performer doesn't cascade. Dismissals naming a missing performer
+are ignored, and pruned when the file is next opened, so undoing the delete
+in the same session brings them back.
+
+**`issue_rules`**, **with** history triggers. Rules are show edits like the
+field properties they sit beside, so they undo like them, and deleting a
+performer and undoing it restores their rules through the normal history.
+Columns: check id; target (`section` by name, because `marchers.section` is
+free text, `tag` by id, or `performer` by id); a JSON value validated by the
+check's rules schema. Show defaults live with the check: in field properties
+for step size (`stepSizeWarningThresholdInches`, unchanged), or as a
+`show`-target row for checks with no existing home.
+
+The step-size default staying in field properties keeps the public
+`FieldProperties` type in core unchanged, and lets older app versions keep
+reading it.
+
+Scope (Whole show or Here), the seen state behind "new", and the sweep
+setting are per user (UI settings), not saved in the show. The seen state is
+keyed by the show file's identity.
 
 ## Consequences
 
 - One framework, one panel and one marker style for every check. New checks
   are a core function plus messages, with no UI or scheduling work.
-- The collision toolbar tab, the `CollisionStore` per-page map and the
-  separate step-size field paths and toggles are removed or folded in.
-- A second resolver in a worker roughly doubles resolver memory for the open
-  show, and adds one message per commit.
-- The resolver's `marchersRebuilt` becomes a correctness dependency of the
-  sweep, guarded by D-3's safeguards.
-- A show-file migration, with its tables outside history triggers. Older app
-  versions ignore the tables.
-- Field properties lose the step-size threshold in phase 2. That changes the
-  field-properties shape, and the import of older files copies the value.
+- The collision toolbar tab, `CollisionStore`, `zoomToCollisions` and the
+  separate step-size field paths and toggles are removed or folded in. The
+  framing math in `collisionsView` is reused.
+- The resolver's public report grows by one field, an ADR 0001 §4
+  amendment. Its correctness becomes a dependency of the sweep, guarded by a
+  property test and a debug assertion.
+- A full timeline host in a worker roughly doubles timeline memory for the
+  open show, and adds one message per commit and per put-down update.
+- A show-file migration with two tables, one outside history triggers.
+  Older app versions ignore both. Field properties don't change.
 
 ## Verification
 
 - Before phase 1, a spike on the 2,000-marcher benchmark show measures:
-  fingerprint build time and memory; re-sample cost for a 1-marcher edit and
-  a 200-marcher shape edit; recheck cost per dirty bucket; the per-commit
-  cost of keeping the worker resolver in sync. Results go in the spec, and
-  phase 1 starts only if the steady-state main-thread cost stays at or below
-  today's.
+  fingerprint build time and memory; re-sample cost for a 1-marcher drag, a
+  200-marcher shape edit and an 8-count insert early in the show; recheck
+  cost per dirty bucket; the per-commit cost of keeping the worker host in
+  sync. Results go in the spec. Phase 1 starts only if the steady-state
+  main-thread cost stays at or below today's.
+- Core property test: for random batches, `positionsChanged` covers every
+  marcher whose sampled positions differ.
+- Core property test: for random edit sequences, the incremental sweep's
+  issues equal a full recheck's.
 - Unit tests in core: each check against stand-in resolvers; stitching
-  across bucket and page edges; dismissal matching under span shifts; rule
+  across bucket, page and live-window edges; `move` incidents across split
+  spans; dismissal matching under span shifts and count inserts; rule
   precedence (performer, then tag, then section, then show, with the more
   lenient tag winning).
-- A property test: for random edit sequences, the incremental sweep's issues
-  equal a full recheck's.
 - Debug-build assertion: fingerprints equal a full re-sample after every
   batch.
-- Migration tests: new tables, no history triggers, the threshold copied.
-- Browser scenarios: the badge count and dot, scope switch, dismiss and
-  restore, soft blink after an edit, click to jump.
+- Migration tests: both tables, history triggers on rules only, undo of a
+  performer delete restores their rules.
+- Browser scenarios: badge count and dot, scope switch, dismiss and restore,
+  soft blink after an edit, click to jump, a dismissal surviving an 8-count
+  insert earlier in the show.

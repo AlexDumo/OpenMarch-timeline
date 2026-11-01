@@ -37,6 +37,8 @@ checks plug into the same interface later.
   default.
 - **Incident span**: the counts an issue covers. Issues are spans, not
   moments.
+- **Move**, for checks: one move clip of one performer (an assignment of a
+  marcher to a transition). Holds are not moves.
 - **Rule**: a check setting, either the show default or an override for a
   section, a tag or one performer.
 
@@ -54,12 +56,14 @@ checks plug into the same interface later.
 
 ## The panel
 
-- **Scope switch: Whole show · Here.** Whole show is the default. "Here" is
-  the selected page, or the loop region when one is set. The badge follows
+- **Scope switch: Whole show · Here.** Whole show is the default. "Here"
+  shows issues whose span overlaps the selected page's own counts (from its
+  start flag to its end), or the loop region when one is set. The badge follows
   the scope. This solves the full-inbox problem: someone working on one page
   isn't drowning in 100 issues from elsewhere, so the one that just appeared
   stands out. The choice is remembered per user, not saved in the show.
-- **Grouped by page in show order**, sorted by count within a page. A page
+- **Grouped by page in show order.** An issue is listed under the page that
+  holds its first count, sorted by first count within the page. A page
   header reads like "Page 4 · 2 problems, 1 heads-up". When the panel opens,
   the page at the playhead scrolls into view.
 - **Rows**: an icon for the check type, a level color, the performers, a
@@ -78,7 +82,10 @@ checks plug into the same interface later.
 ### Clicking an issue
 
 It moves the playhead to the issue's worst moment, selects the performers
-involved and glides the field to frame them (reusing `zoomToCollisions`).
+involved and glides the field to frame them. The framing math to reuse is
+`collisionsView` (`field/timelineOverlays.ts`). `zoomToCollisions` itself
+can't be reused: it does nothing while `showCollisions` is off, and it reads
+`CollisionStore`, which goes away.
 
 ### Keyboard
 
@@ -89,11 +96,11 @@ shown as keycaps.
 
 Each row's ⋯ menu:
 
-| Action                                     | Effect                                                                         |
-| ------------------------------------------ | ------------------------------------------------------------------------------ |
-| **It's intentional**                       | Hides this one occurrence.                                                     |
-| **Allow for 12 and 15** / **Allow for B3** | Hides this check for these performers anywhere in the show. Wording per check. |
-| **Stop checking for collisions**           | Turns the check off for this show. Turned back on in the Checks section.       |
+| Action                                     | Effect                                                                                                                  |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| **It's intentional**                       | Hides this one occurrence.                                                                                              |
+| **Allow for 12 and 15** / **Allow for B3** | Hides this check, anywhere in the show, for every issue whose performers include all the named ones. Wording per check. |
+| **Stop checking for collisions**           | Turns the check off for this show. Turned back on in the Checks section.                                                |
 
 There is no snooze. The scope switch covers "not now".
 
@@ -105,6 +112,15 @@ dismissed if the same check and the same performers have a span that
 overlaps or touches the dismissed span. A nudge that shifts a collision by a
 count stays dismissed. The same pair colliding somewhere else is a new
 issue.
+
+The span is stored **relative to a page**: the page that holds its first
+count, plus a count offset into it. Inserting or deleting counts earlier in
+the show moves that page, so later dismissals still line up, and nothing
+needs rewriting when counts ripple (see the ADR).
+
+The same matching rule decides whether an issue is **new** (the badge dot,
+bold rows, the soft blink): an issue is new if nothing seen before matches
+it.
 
 ### Where dismissals are kept
 
@@ -193,9 +209,11 @@ interface Issue {
   incident by the check's natural unit:
   - `counts`: hits in touching counts merge, across bucket and page
     boundaries (collisions).
-  - `move`: one incident per move, from the resolver's `spanInfos`, showing
-    the worst value (step size). A 16-count move with too big a step is one
-    row covering the whole move, even when the move crosses page flags.
+  - `move`: one incident per performer per move (see Words), even when the
+    move crosses page flags or a higher layer splits it into several
+    resolver spans. A 16-count move with too big a step is one row covering
+    the whole move. A dirty bucket anywhere in a move rechecks the whole
+    move.
 - **Issues with no performers** are allowed, for future checks like "page
   with no music" or "show runs past the end of the audio". They have no field
   ring, and clicking one just moves the playhead.
@@ -208,6 +226,10 @@ interface Issue {
 - The most specific rule wins: performer, then tag, then section, then show
   default. When two tags on one performer disagree, the more lenient rule
   wins, because these are warnings, not limits.
+- Sections are targeted **by name**, because `marchers.section` is free
+  text with no id.
+- Rules are show edits, so they are **undoable**, like field properties
+  today. Only dismissals stay out of undo.
 - Rules are edited in the panel's **Checks** section. Each check expands to
   show its default and overrides, with **+ Rule for…** to pick a section, tag
   or performer. A selected performer's inspector shows a read-only line,
@@ -216,30 +238,49 @@ interface Issue {
 
 ### v1 checks
 
-**Collisions (phase 1).** Each performer has a **personal space** radius.
-Two performers collide when the circles overlap: distance < rA + rB. A tuba
-(0.75) beside a clarinet (0.5) collides inside 1.25 steps. The default radius
-reproduces today's threshold (`COLLISION_RADIUS`). Only performers count, not
+**Collisions (phase 1).** Each performer has a **personal space** radius in
+steps. Two performers collide when the circles touch or overlap: distance ≤
+rA + rB. A tuba (0.75) beside a clarinet (0.45) collides within 1.2 steps.
+
+Today's threshold is a pair distance, not a radius: `COLLISION_RADIUS = 10`
+field units (inches), about 0.89 of a default 22.5-inch step. So the default
+personal space is **half of today's pair distance, converted to steps at the
+show's step size** (about 0.44 at the default step size), and a show with no
+rules flags exactly the pairs it flags today. From then on the radius is in
+steps, so it scales with the field's step size. Only performers count, not
 props. Unit: `counts`. Default level: Problem.
 
-**Step size (phase 2).** Rebuilt on the framework. Unit: `move`. The
-field-properties threshold becomes the show-default rule, keeping its value.
-The inspector badge reads from the check, and the old warning paths become
-this check's focus explanation.
+**Step size (phase 2).** Rebuilt on the framework. Unit: `move`. The value is
+today's: the move's average step (distance over counts, `stepSizeWarning.ts`).
+
+The show default **stays in field properties**
+(`stepSizeWarningThresholdInches`) and is still set where it is set today:
+the new-show wizard (`FieldStep.tsx`) and the field customizer
+(`GeneralTab.tsx`). The Checks section edits the same value. Only overrides
+go in the rules table. That way the public `FieldProperties` type in core
+doesn't change, older app versions keep reading the threshold, and nothing
+needs copying.
+
+Every reader moves to the check: the inspector badge (`MarcherEditor.tsx`),
+`stepSizeWarning.ts` and `shapeFieldContext.ts`. The old warning paths
+become this check's focus explanation.
 
 ## How checking runs
 
 Summary. The mechanics, and why, are in the ADR.
 
-- **Live tier** (main thread): checks only the selected page's window after
-  edits settle, as detection does today. It drives the soft blink.
-- **Sweep tier** (a worker with its own resolver copy, fed the same committed
-  change batches): checks the rest of the show, nearest the playhead first.
-- **What's out of date** is found from positions, not the model: a
-  fingerprint per (marcher, 4-count bucket). An edit re-samples only the
-  marchers the resolver rebuilt. Anything fingerprints can't see (tags,
-  sections, rules, props, marchers added or removed) reruns that check on the
-  whole show.
+- **Live tier** (main thread): checks the "Here" counts of the selected page
+  after edits settle, as detection does today. It drives the soft blink.
+- **Sweep tier** (a worker running its own copy of the timeline host, fed the
+  same change stream as the main thread): checks the rest of the show,
+  nearest the playhead first.
+- **What's out of date**: the resolver will report every marcher whose
+  positions may have changed, and from which beat (a resolver API addition,
+  see the ADR). The worker re-samples those marchers from that beat and
+  compares a fingerprint per (marcher, 4-count bucket) to find where they
+  actually changed. Some changes don't show up in positions (tags, sections,
+  rules, the field's step size, move structure, a reset). For those the ADR
+  lists which checks rerun on the whole show.
 - **Pacing**: driven by out-of-date work, never by a timer. An idle show uses
   no CPU. No sweeping during playback, scrubbing or a drag. Pauses while the
   window is hidden. Waits about 2 s after the last edit, or about 10 s and in
@@ -252,10 +293,13 @@ Summary. The mechanics, and why, are in the ADR.
 ### Before any code
 
 1. Owner accepts ADR 0009.
-2. **Performance spike** on the 2,000-marcher benchmark show: fingerprint
-   build time and memory, re-sample cost for a 1-marcher edit and a
-   200-marcher shape edit, the recheck cost per dirty bucket, and the cost of
-   keeping the worker resolver in sync. Phase 1 waits on the results.
+2. **Performance spike** on the 2,000-marcher benchmark show. Phase 1 waits
+   on the results. Measure:
+   - fingerprint build time and memory;
+   - re-sample cost for a 1-marcher drag, a 200-marcher shape edit and an
+     8-count insert on page 2, which dirties everything after it;
+   - recheck cost per dirty bucket;
+   - the per-commit cost of keeping the worker host in sync.
 3. **Throwaway prototype** of the panel, the badge (count, dot, scope) and
    the field markers, especially an obvious rest-state check mark, published
    to the lab.
@@ -266,16 +310,18 @@ Summary. The mechanics, and why, are in the ADR.
 - Panel: groups by page, spans, filter chips, freshness line, greyed stale
   rows, Dismissed section, scope switch.
 - Check interface, issue model and stitching in core.
+- The resolver's changed-positions report (ADR 0001 amendment).
 - Live tier, worker sweep, fingerprints, pacing, the setting.
-- Dismiss actions with span-overlap identity. The show-file table and
-  migration, left out of undo.
+- Dismiss actions with span-overlap identity. One migration adds both tables
+  (dismissals left out of undo, rules undoable).
 - Soft blink, click to jump, field markers.
 - Collisions on the framework: personal space, rules, steps everywhere.
 - Same in Basic and Expert, hidden in Preview.
 
 ### Phase 2: a second check proves the framework
 
-- Step size on the framework, with its limit moved into rules.
+- Step size on the framework. The default stays in field properties, and
+  overrides go in rules.
 - The export dialog line.
 - Next/previous issue shortcuts.
 
