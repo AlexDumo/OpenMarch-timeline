@@ -200,8 +200,9 @@ describe("handles on a line with corners", () => {
         ]);
     });
 
-    it("snaps a dragged corner where both its legs come out to whole steps, unlocked", () => {
-        const t = onHandle(L(), "p1", { x: 51, y: -9 });
+    it("snaps a dragged corner where both its legs come out to whole steps, unlocked, when that's near on screen", () => {
+        // Zoomed far out, every whole-step spot is within a few pixels of the pointer
+        const t = onHandle(L(), "p1", { x: 51, y: -9 }, { ...env, zoom: 0.01 });
         expect(paramsOf(t).spacing.mode).toBe("fit");
         const [a, b, c] = pointsOf(t);
         // Near where it was dropped, a marcher on it, each leg's gaps whole steps
