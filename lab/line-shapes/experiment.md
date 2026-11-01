@@ -28,7 +28,8 @@ a way to place the selected marchers.
 **What to try**
 
 - Select some marchers, pick **Line** in the Shapes tab and drag on the field.
-- Instead of dragging, click point after point to draw corners. Click a
+- Instead of dragging, click point after point to draw corners. Right-click,
+  Backspace or Ctrl/Cmd+Z takes the last point back. Click a
   segment's middle handle to split it. Press Enter to finish, then Enter again
   to place.
 - Type an interval in the floating editor (2) to fix it, or a mixed list such
