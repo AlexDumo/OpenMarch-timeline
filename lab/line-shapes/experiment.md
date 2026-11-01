@@ -40,6 +40,11 @@ a way to place the selected marchers.
 - Pick **Curve**, or click a point to make it smooth.
 - Move a placed line into another one and try **Who goes where**.
 
+- Intervals are now measured **along the path** by default. Pick **Straight
+  across** in the Measured menu to measure marcher to marcher; neither skips a
+  corner that holds no marcher.
+- Open **Who goes where**: each picture marks the first marcher solid, so you
+  can see where it lands.
 - In the Measured menu, try ↔ or ↕ on a line that goes one way across the
   field: the steps land exactly on the grid that way.
 - Click the first point again (or drop an end on the other) to close the line,
