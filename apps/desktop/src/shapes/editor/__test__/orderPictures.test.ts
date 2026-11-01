@@ -22,7 +22,7 @@ describe("who goes where's pictures", () => {
         expect(sequence.join("")).toBe("2143");
     });
 
-    it("reads Keep order first to last, and turned round with Reverse", () => {
+    it("reads Keep order first to last, and Reverse order last to first", () => {
         expect(orderSequence("keep").join("")).toBe("1234");
         expect(orderSequence("reverse").join("")).toBe("4321");
         expect(orderPicture("reverse").after.map((a) => a.n)).toEqual([

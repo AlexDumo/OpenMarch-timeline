@@ -15,23 +15,11 @@ export type OrderMode =
     | "keep";
 
 /**
- * Who goes where on a kind with an order along it (a Line, #528): Least travel, Keep order, or
- * Reverse (Keep order the other way round). The floating editor offers it as a mode (Least travel
- * or Keep order, {@link orderModeOf}) and a Reverse toggle ({@link isReversed}) for a mode with an
- * order. Stored as a recipe's order mode and reverse ({@link orderFields}).
+ * Who goes where as the floating editor offers it on a kind with an order along it (a Line, #528):
+ * Least travel, Keep order, or Reverse order (Keep order the other way round). Stored as a recipe's
+ * order mode and reverse ({@link orderFields}).
  */
 export type OrderChoice = "nearest" | "keep" | "reverse";
-
-/** A choice's mode, what the menu lists: Keep order whichever way round */
-export const orderModeOf = (choice: OrderChoice): OrderMode =>
-    choice === "nearest" ? "nearest" : "keep";
-
-/** Whether a choice is turned the other way round: only a mode with an order can be */
-export const isReversed = (choice: OrderChoice): boolean =>
-    choice === "reverse";
-
-/** Whether a mode has an order to reverse: Least travel has none */
-export const modeHasOrder = (mode: OrderMode): boolean => mode !== "nearest";
 
 /** Who goes where on a kind: its choice when it has an order along it (a Line), Least travel otherwise */
 export const orderOn = (

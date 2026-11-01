@@ -8,6 +8,7 @@ import {
     useRef,
     useState,
     type PointerEvent as ReactPointerEvent,
+    type ReactNode,
     type RefObject,
 } from "react";
 import { animated, to, useSpring } from "@react-spring/web";
@@ -16,14 +17,13 @@ import { editorPlacement } from "./editorPlacement";
 import { keepInView } from "./keepInView";
 import { glideTo, isGliding } from "@/field/three/fieldNavigation";
 import { setShapeScrubbing, useShapePointerStore } from "../field/shapePointer";
-import { IconButton } from "./IconButton";
 import { keepFocus } from "./keepFocus";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { getActionShortcutLabel } from "@/shortcuts/labels";
 import type { ActionId } from "@/shortcuts/definitions";
 import type { OrderChoice } from "../assign";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
-import { RichTips } from "./Tip";
+import { RichTips, Tip } from "./Tip";
 import {
     ActionFace,
     RecalculateFace,
@@ -1541,5 +1541,55 @@ export function SnapButton() {
         >
             <MagnetIcon size={14} />
         </IconButton>
+    );
+}
+
+function IconButton({
+    label,
+    shortcut,
+    className,
+    onClick,
+    disabled,
+    pressed,
+    testId,
+    children,
+}: {
+    label: string;
+    /** Its keys, shown in the tooltip as keycaps */
+    shortcut?: string;
+    className?: string;
+    onClick: () => void;
+    disabled?: boolean;
+    pressed?: boolean;
+    testId?: string;
+    children: ReactNode;
+}) {
+    return (
+        <Tip label={label} shortcut={shortcut}>
+            <button
+                type="button"
+                aria-label={label}
+                aria-pressed={pressed}
+                // aria-disabled, not disabled: a disabled button gets no pointer, so its tooltip
+                // (which says why, as Recalculate's does) wouldn't show
+                aria-disabled={disabled || undefined}
+                onPointerDown={keepFocus}
+                onClick={() => {
+                    if (!disabled) onClick();
+                }}
+                data-testid={testId}
+                className={clsx(
+                    // At least 24 px to hit (WCAG 2.2 target size; review round r429)
+                    "rounded-4 flex min-h-24 min-w-24 items-center justify-center gap-4 p-4",
+                    // On: the icon in the accent on a light accent tint, so the state is plain at a
+                    // glance without reading as a solid button (owner)
+                    pressed ? "bg-accent/15 text-accent" : "hover:text-accent",
+                    disabled && "cursor-default opacity-40 hover:text-inherit",
+                    className,
+                )}
+            >
+                {children}
+            </button>
+        </Tip>
     );
 }
