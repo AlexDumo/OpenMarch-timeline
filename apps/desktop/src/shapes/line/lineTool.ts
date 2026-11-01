@@ -1240,7 +1240,7 @@ const MENU: ToolHandleMenu<LineParams> = {
         if (segment >= 0) {
             if (value === "add")
                 return {
-                    params: splitSegment(p, segment),
+                    params: splitSegment(p, segment, n),
                     selected: `p${segment + 1}`,
                 };
             if (value === "straight" || value === "curved") {
@@ -1408,11 +1408,17 @@ export const lineTool: ToolKind<LineParams> = {
         // from center (`lineHonors`)
         const segment = midpointOf(base, key);
         if (segment >= 0)
-            return dragPoint(splitSegment(base, segment), n, segment + 1, to, {
-                ...env,
-                constrain: false,
-                fromCenter: false,
-            });
+            return dragPoint(
+                splitSegment(base, segment, n),
+                n,
+                segment + 1,
+                to,
+                {
+                    ...env,
+                    constrain: false,
+                    fromCenter: false,
+                },
+            );
         const tension = tangentOf(base, key);
         if (tension)
             return keptInterval(
@@ -1425,9 +1431,9 @@ export const lineTool: ToolKind<LineParams> = {
         return dragPoint(base, n, index, to, env);
     },
     // A midpoint clicked splits its segment; a point clicked is selected by the host (#557)
-    clickHandle(params, _n, key) {
+    clickHandle(params, n, key) {
         const segment = midpointOf(params, key);
-        return segment >= 0 ? splitSegment(params, segment) : null;
+        return segment >= 0 ? splitSegment(params, segment, n) : null;
     },
     // A point double-clicked turns smooth, or a corner again (#557)
     doubleClickHandle(params, n, key) {

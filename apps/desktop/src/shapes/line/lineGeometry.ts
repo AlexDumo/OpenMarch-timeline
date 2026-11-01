@@ -2241,25 +2241,52 @@ function circlesMeet(a: XY, ra: number, b: XY, rb: number): XY[] {
 }
 
 /**
- * The line with a point added halfway along segment `index`, on its curve: a corner between two
- * corners, so a straight line looks the same, else as smooth as the smoother end (#525)
+ * The line with a point added on segment `index`: a corner between two corners, so a straight
+ * line looks the same, else as smooth as the smoother end (#525). A point that holds a marcher
+ * ({@link holdsMarcher}) lands on the spot of the `n` marchers nearest the segment's midpoint, so
+ * splitting moves no marcher and changes no interval (owner feedback on #596); one that holds none,
+ * or a segment with no spot inside it, splits halfway along it, on its curve.
  */
-export function splitSegment(p: LineParams, index: number): LineParams {
+export function splitSegment(
+    p: LineParams,
+    index: number,
+    n?: number,
+): LineParams {
     if (index < 0 || index >= lineSegments(p).length) return p;
     // A closed line's last segment runs back to its first point (#529)
     const a = p.points[index]!;
     const b = p.points[(index + 1) % p.points.length]!;
-    const mid = withTension(Math.max(a.tension, b.tension))(
-        segmentMidpoint(p, index),
-    );
-    return {
+    const halfway = segmentMidpoint(p, index);
+    const split = (at: XY): LineParams => ({
         ...p,
         points: [
             ...p.points.slice(0, index + 1),
-            mid,
+            withTension(Math.max(a.tension, b.tension))(at),
             ...p.points.slice(index + 1),
         ],
-    };
+    });
+    const atMidpoint = split(halfway);
+    if (n === undefined || !holdsMarcher(atMidpoint, index + 1))
+        return atMidpoint;
+    // A held point is a corner between corners, so the segment is straight
+    const spot = spotInside(lineSpots(p, n), a, b, halfway);
+    return spot ? split(spot) : atMidpoint;
+}
+
+/** Of `spots`, the one strictly inside the straight segment from `a` to `b` nearest `to` */
+function spotInside(spots: readonly XY[], a: XY, b: XY, to: XY): XY | null {
+    const d = sub(b, a);
+    const l = length(d);
+    if (l < 1e-9) return null;
+    let best: XY | null = null;
+    for (const spot of spots) {
+        const t = dot(sub(spot, a), d) / (l * l);
+        const off = Math.abs(cross(d, sub(spot, a))) / l;
+        if (off > 1e-6 || t * l < 1e-6 || (1 - t) * l < 1e-6) continue;
+        if (!best || length(sub(spot, to)) < length(sub(best, to)))
+            best = { x: spot.x, y: spot.y };
+    }
+    return best;
 }
 
 /**
