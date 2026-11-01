@@ -1184,8 +1184,9 @@ test("change: a click on the first point closes a clicked line, Grid fills it, a
 
 // Who goes where on a Line (#528): a line drawn on marchers who all stand on
 // one placed Line keeps their order along it (Keep order, the default), the
-// menu offers Least travel and Reverse too, and the choice is saved in the
-// recipe, where a reopened line can pick again. Page 2 has no positions of
+// menu offers Least travel too, a Reverse toggle beside it turns Keep order
+// round (greyed out on Least travel), and the choice is saved in the recipe,
+// where a reopened line can pick again. Page 2 has no positions of
 // its own, so the line placed on page 1 is still standing there.
 test.describe("who goes where", () => {
     test.use({
@@ -1250,11 +1251,15 @@ test.describe("who goes where", () => {
             "data-value",
             "nearest",
         );
+        // Least travel has no order, so Reverse beside the menu is greyed out
+        const reverse = page.getByTestId("shape-order-reverse");
+        await expect(reverse).toHaveAttribute("aria-disabled", "true");
+        await expect(reverse).toHaveAttribute("aria-pressed", "false");
         await page.getByTestId("shape-order").click();
         // Nobody stands on a placed line yet: no Keep order
         await expect(
             page.getByTestId("shape-order-content").getByRole("menuitemradio"),
-        ).toHaveText(["Least travel", "Reverse"]);
+        ).toHaveText(["Least travel"]);
         await page.keyboard.press("Escape");
         await page.keyboard.press("Enter");
         await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
@@ -1284,14 +1289,27 @@ test.describe("who goes where", () => {
         await order.click();
         await expect(
             page.getByTestId("shape-order-content").getByRole("menuitemradio"),
-        ).toHaveText(["Least travel", "Keep order", "Reverse"]);
+        ).toHaveText(["Least travel", "Keep order"]);
+        await expect(
+            page.getByTestId("shape-order-keep-picture"),
+        ).toHaveAttribute("data-sequence", "1234");
+        await page.keyboard.press("Escape");
 
-        // Reverse, then back to Keep order
-        await page.getByTestId("shape-order-reverse").click();
-        await expect(order).toHaveAttribute("data-value", "reverse");
+        // Reverse on, then off: Keep order the whole time
+        await expect(reverse).not.toHaveAttribute("aria-disabled");
+        await reverse.click();
+        await expect(reverse).toHaveAttribute("aria-pressed", "true");
+        await expect(order).toHaveAttribute("data-value", "keep");
+        await expect(page.getByTestId("shape-order-picture")).toHaveAttribute(
+            "data-sequence",
+            "4321",
+        );
+        // Picking Keep order again leaves Reverse on
         await order.click();
         await page.getByTestId("shape-order-keep").click();
-        await expect(order).toHaveAttribute("data-value", "keep");
+        await expect(reverse).toHaveAttribute("aria-pressed", "true");
+        await reverse.click();
+        await expect(reverse).toHaveAttribute("aria-pressed", "false");
 
         await page.keyboard.press("Enter");
         await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
@@ -1303,7 +1321,7 @@ test.describe("who goes where", () => {
             reverse: 0,
         });
 
-        // Reopened, it shows Keep order; Reverse saves on pick, flipping them
+        // Reopened, it shows Keep order; Reverse saves when toggled, flipping them
         await page.keyboard.press("Escape");
         await expect
             .poll(async () => (await readField(page)).selection)
@@ -1312,13 +1330,14 @@ test.describe("who goes where", () => {
         await page.mouse.click(t3.x, t3.y);
         await expect(page.getByTestId("placed-box-readout")).toBeVisible();
         await expect(order).toHaveAttribute("data-value", "keep");
-        await order.click();
-        await page.getByTestId("shape-order-reverse").click();
+        await expect(reverse).toHaveAttribute("aria-pressed", "false");
+        await reverse.click();
         await expect.poll(() => byX(show, 2)).toEqual(alongA);
         await expect
             .poll(async () => (await orders(show)).at(-1))
             .toEqual({ order_mode: "keep", reverse: 1 });
-        await expect(order).toHaveAttribute("data-value", "reverse");
+        await expect(order).toHaveAttribute("data-value", "keep");
+        await expect(reverse).toHaveAttribute("aria-pressed", "true");
 
         // Undo puts Keep order back
         await waitForIdle(page);

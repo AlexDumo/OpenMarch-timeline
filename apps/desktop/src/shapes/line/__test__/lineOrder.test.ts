@@ -30,7 +30,12 @@ import {
     undo,
     type ToolState,
 } from "../../tool/toolMachine";
-import type { AssignMarcher } from "../../assign";
+import {
+    isReversed,
+    orderChoiceOf,
+    orderModeOf,
+    type AssignMarcher,
+} from "../../assign";
 import type { ShapeContext, XY } from "../../types";
 
 /**
@@ -408,6 +413,34 @@ describe("the order picked on a placed line", () => {
         expect(slotOf(pick(placed, "reverse").members)).toEqual(
             slotOf(placed.recipe.members),
         );
+    });
+
+    it("reads a line saved as Reverse as Keep order with Reverse on", () => {
+        const choice = placedOrderChoice(reversed());
+        expect(orderModeOf(choice)).toBe("keep");
+        expect(isReversed(choice)).toBe(true);
+        // Turning Reverse off is Keep order, saved as before
+        expect(orderChoiceOf(orderModeOf(choice), !isReversed(choice))).toBe(
+            "keep",
+        );
+        expect(recipeOrderFields(reversed(), "keep")).toEqual({
+            orderMode: "keep",
+            reverse: false,
+        });
+    });
+
+    it("ignores a reverse stored with Least travel, and clears it on the next save", () => {
+        const placed = kept();
+        const stray = {
+            ...placed,
+            recipe: { ...placed.recipe, orderMode: "nearest", reverse: true },
+        };
+        expect(placedOrderChoice(stray)).toBe("nearest");
+        expect(isReversed(placedOrderChoice(stray))).toBe(false);
+        expect(recipeOrderFields(stray, placedOrderChoice(stray))).toEqual({
+            orderMode: "nearest",
+            reverse: false,
+        });
     });
 
     it("puts a line saved as Reverse back in order when Keep order is picked", () => {

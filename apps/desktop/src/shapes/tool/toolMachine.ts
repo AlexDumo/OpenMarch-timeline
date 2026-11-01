@@ -154,7 +154,7 @@ const keepsOrder = (marchers: readonly AssignMarcher[]) =>
 
 /**
  * Whether Keep order is offered (#528): every selected marcher is a member of one placed Line.
- * Reverse is offered on any line.
+ * Reverse turns a way with an order round, so it can only be turned on with Keep order.
  */
 export const keepOrderOffered = (state: ToolState): boolean =>
     keepsOrder(state.marchers);
@@ -636,8 +636,9 @@ export function switchKind(
 }
 
 /**
- * Picks who goes where on a kind with an order (#528): Least travel, Keep order or Reverse, worked
- * out at once as one undo step. Nothing happens for the choice there already.
+ * Picks who goes where on a kind with an order (#528): Least travel, Keep order or Keep order
+ * reversed (the editor's Reverse toggle), worked out at once as one undo step. Nothing happens for
+ * the choice there already.
  */
 export function setOrder(
     state: ToolState,
