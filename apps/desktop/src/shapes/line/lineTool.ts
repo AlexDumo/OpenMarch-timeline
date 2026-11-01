@@ -41,6 +41,7 @@ import {
     withFillInterval,
 } from "./lineFill";
 import {
+    MAX_TENSION,
     cornerGaps,
     closeLine,
     cornerOffInterval,
@@ -1174,7 +1175,7 @@ export const lineTool: ToolKind<LineParams> = {
     settle: settleLine,
     fromFrame: lineInFrame,
     closed: lineClosed,
-    pictureParams: (_n, env) => zigzag(env, 0),
+    pictureParams: (_n, env) => zigzag(env),
 };
 
 /** The picture's zigzag (owner, 2026-10-31): three segments from the top down, corners or smooth */
@@ -1184,8 +1185,15 @@ const ZIGZAG: readonly XY[] = [
     { x: -4, y: 1.5 },
     { x: 4, y: 4 },
 ];
-const zigzag = (env: ToolEnv, tension: number): LineParams =>
-    drawPoints(ZIGZAG, env, tension)!;
+/** The Curve's picture: the zigzag's run from the top down, its ends drawn in, as round as it goes */
+const WAVE: readonly XY[] = [
+    { x: 0, y: -4.5 },
+    { x: 4, y: -1.5 },
+    { x: -4, y: 1.5 },
+    { x: 0, y: 4.5 },
+];
+const zigzag = (env: ToolEnv): LineParams => drawPoints(ZIGZAG, env, 0)!;
+const wave = (env: ToolEnv): LineParams => drawPoints(WAVE, env, MAX_TENSION)!;
 
 /**
  * The Curve (#525, spec #522): a preset of the Line, the same kind and recipe, whose points start
@@ -1208,5 +1216,5 @@ export const curveTool: ToolKind<LineParams> = {
         },
     },
     fromFrame: curveInFrame,
-    pictureParams: (_n, env) => zigzag(env, SMOOTH),
+    pictureParams: (_n, env) => wave(env),
 };

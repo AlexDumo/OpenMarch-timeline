@@ -120,7 +120,7 @@ describe("a shape's preview (#378)", () => {
         expect(turns).toHaveLength(2);
     });
 
-    it("draws the curve as the same zigzag, smooth: a wave", () => {
+    it("draws the curve as a round wave from the top down", () => {
         const curve = shapePreview(curveTool);
         const line = shapePreview(lineTool);
         expect(curve.openOutline).toBe(true);
