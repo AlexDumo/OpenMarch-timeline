@@ -104,8 +104,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C4.5: Props, platforms and obstacles in 3D
 
-- Owner: none
-- Status: open
+- Owner: Trevor (3d/c4-props)
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: C4.1, C2.1, C2.3, C2.6
@@ -281,3 +281,20 @@ Nothing yet.
   `research/gpu-benchmark.md` onto a branch from `main` and re-run
   `run-bench.mjs` with `garment=all`.
   <!-- cspell:ignore Subdiv -->
+- 2026-11-01, C4.5 part 1 (branch `3d/c4-props`): props stand in the
+  venue. `view3d/core/props/propLayout.ts` (`propsAt`, `platformTopAt`)
+  places each prop's Outline at real size where the timeline has it, from
+  the count it was made on, not while Off field, and not while held (C4.6
+  draws held items). Platforms and obstacles sit on the tallest platform
+  under their footprint center; of two platforms over each other's centers
+  the smaller stands on the larger (the same size: the later made on the
+  earlier), so stacking makes steps and there are no loops. Floor props lie
+  flat on the field. `window/props/Props.tsx` draws each prop as its own
+  extruded mesh (an open freehand path as a 10 cm wall), rebuilt only when
+  its shape changes, from `useShowProps` (`src/hooks/`). Plain materials per
+  surface type until props carry Artwork (C5.5). Checked in the web preview
+  with a demo show given a stage, a riser on it, a turned wall, a tarp and a
+  round obstacle.
+  - **Next:** performers at the height of the platform under their dot,
+    stepping over about half a count; then the notes (steps over 16 in,
+    performers inside obstacles, dots leaving a moving platform).

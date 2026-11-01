@@ -74,6 +74,7 @@ import {
     stepQualityFallback,
 } from "./qualityFallback";
 import Performers from "./performers/Performers";
+import Props from "./props/Props";
 import { warmLightingPresets } from "./warmLighting";
 import { maxPixelRatio } from "./renderPrefs";
 
@@ -419,7 +420,12 @@ function SceneContents({
         snapRef.current = false;
     });
 
-    return <Performers fieldProperties={fieldProperties} />;
+    return (
+        <>
+            <Performers fieldProperties={fieldProperties} />
+            <Props fieldProperties={fieldProperties} />
+        </>
+    );
 }
 
 const scratch = new Vector3();
