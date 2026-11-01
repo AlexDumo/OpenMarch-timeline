@@ -553,6 +553,7 @@
             "fine": "fine",
             "freeRatio": "free ratio",
             "fromCenter": "from center",
+            "keepDirection": "keep direction",
             "keepRatio": "keep ratio",
             "oneAxis": "one axis",
             "snapOff": "Snap off",

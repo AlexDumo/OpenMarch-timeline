@@ -179,6 +179,8 @@ describe("Outline on a closed curve", () => {
     it("runs groups once round from the first point, corners held", () => {
         let t = dShape();
         t = edit(t, interval.type(t.params, N, "4*2+3", env), ctx);
+        // Locked, the groups kept as typed
+        t = edit(t, lineTool.lock!.toggle(t.params, N, env), ctx);
         const p = paramsOf(t);
         expect(p.spacing).toEqual({
             mode: "keep",

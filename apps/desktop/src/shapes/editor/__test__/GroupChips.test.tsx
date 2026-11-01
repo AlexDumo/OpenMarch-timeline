@@ -164,7 +164,8 @@ describe("a line's group chips", () => {
         fireEvent.click(screen.getByLabelText("Remove group 1"));
         expect(screen.queryByTestId("shape-groups")).toBeNull();
         expect(screen.getByTestId("list")).toHaveTextContent(
-            JSON.stringify({ mode: "keep", groups: [{ interval: 20 }] }),
+            // Unlocked, as typing leaves it
+            JSON.stringify({ mode: "fit", groups: [{ interval: 20 }] }),
         );
     });
 });

@@ -33,6 +33,8 @@ import {
     FlipHorizontalIcon,
     FlipVerticalIcon,
     LinkSimpleIcon,
+    LockSimpleIcon,
+    LockSimpleOpenIcon,
     MinusIcon,
     PlusIcon,
     ArrowClockwiseIcon,
@@ -239,7 +241,13 @@ function ShapeEditorBar({
     const env = envFor();
     const layout = env
         ? chipLayout(kind, params, spots, { ...env, stepPx, anchor })
-        : { values: [], intervals: [], groups: null, ratioLock: false };
+        : {
+              values: [],
+              intervals: [],
+              groups: null,
+              ratioLock: false,
+              lock: null,
+          };
     const chips = useRef({ layout, anchor });
     // What the − and + presses act on: what this render shows
     chips.current = { layout, anchor };
@@ -373,6 +381,12 @@ function ShapeEditorBar({
                                     envFor={envFor}
                                     onScrubbing={setShapeScrubbing}
                                 />
+                                {layout.lock !== null && (
+                                    <IntervalLockButton
+                                        live={live}
+                                        locked={layout.lock}
+                                    />
+                                )}
                             </>
                         )}
                         {layout.groups?.length === 1 && (
@@ -387,6 +401,12 @@ function ShapeEditorBar({
                                 <span className="text-text/60">
                                     {tolgee.t("shapes.edit.steps", "steps")}
                                 </span>
+                                {layout.lock !== null && (
+                                    <IntervalLockButton
+                                        live={live}
+                                        locked={layout.lock}
+                                    />
+                                )}
                             </>
                         )}
                         {layout.intervals.length > 0 && (
@@ -406,6 +426,9 @@ function ShapeEditorBar({
                                                 params,
                                                 spots,
                                             )}
+                                            glyphAfter={
+                                                x.param.glyphAfter === true
+                                            }
                                             derived={x.derived}
                                             actions={numbers}
                                         />
@@ -414,6 +437,12 @@ function ShapeEditorBar({
                                         {tolgee.t("shapes.edit.steps", "steps")}
                                     </span>
                                     {layout.ratioLock && <RatioLockButton />}
+                                    {layout.lock !== null && (
+                                        <IntervalLockButton
+                                            live={live}
+                                            locked={layout.lock}
+                                        />
+                                    )}
                                 </span>
                             </>
                         )}
@@ -647,6 +676,7 @@ const NumberChip = memo(function NumberChip({
     canLess,
     canMore,
     glyph,
+    glyphAfter = false,
     derived = false,
     actions,
 }: {
@@ -657,6 +687,8 @@ const NumberChip = memo(function NumberChip({
     canMore: boolean;
     /** The mark the spacings show before them, if any */
     glyph: ParamGlyph | null;
+    /** The mark goes after the number (a Line's offset, `2 ↔ 1 ↕`) */
+    glyphAfter?: boolean;
     /** Shown as about so much: pressing it snaps it to a half step (owner on #459) */
     derived?: boolean;
     actions: ReturnType<typeof numberActions>;
@@ -664,7 +696,7 @@ const NumberChip = memo(function NumberChip({
     const scrub = useMemo(() => actions.scrub(param), [actions, param]);
     return (
         <span className="flex items-center gap-2">
-            {glyph && (
+            {glyph && !glyphAfter && (
                 <span className="text-text/60" aria-hidden>
                     <GlyphText text={glyph} />
                 </span>
@@ -701,8 +733,47 @@ const NumberChip = memo(function NumberChip({
                     <PlusIcon size={12} />
                 </IconButton>
             )}
+            {glyph && glyphAfter && (
+                <span className="text-text/60" aria-hidden>
+                    <GlyphText text={glyph} />
+                </span>
+            )}
             {note && <span className="text-text/60">· {note}</span>}
         </span>
+    );
+});
+
+/**
+ * The kind's interval lock (a Line's, owner decision on #522): locked, dragging an end keeps the
+ * interval; unlocked, it changes it. A press is one change of the shape (one undo step).
+ */
+const IntervalLockButton = memo(function IntervalLockButton({
+    live,
+    locked,
+}: {
+    live: ShapeEditTarget;
+    locked: boolean;
+}) {
+    const lock = live.kind.lock;
+    if (!lock) return null;
+    return (
+        <IconButton
+            label={lock.label(locked)}
+            pressed={locked}
+            onClick={() => {
+                const env = envFor();
+                if (!env) return;
+                const next = lock.toggle(live.params, live.spots, env);
+                if (next !== live.params) live.apply(next);
+            }}
+            testId="shape-editor-interval-lock"
+        >
+            {locked ? (
+                <LockSimpleIcon size={14} />
+            ) : (
+                <LockSimpleOpenIcon size={14} />
+            )}
+        </IconButton>
     );
 });
 

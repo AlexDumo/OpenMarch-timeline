@@ -109,6 +109,13 @@ const chip = (t: ToolState, e: ToolEnv = env) =>
     chipLayout(lineTool, t.params, t.spots, e).intervals[0]!;
 const typed = (t: ToolState, text: string) =>
     edit(t, interval.type(t.params, t.spots, text, env), ctx);
+/** The interval locked (Keep interval) as its button does, one change; as it is when it is */
+const locked = (t: ToolState) =>
+    lineTool.lock!.locked(t.params, t.spots)
+        ? t
+        : edit(t, lineTool.lock!.toggle(t.params, t.spots, env), ctx);
+/** Typed, then locked: typing alone leaves the interval unlocked (owner decision on #522) */
+const kept = (t: ToolState, text: string) => locked(typed(t, text));
 const cornersOff = (t: ToolState) =>
     edit(t, corners.pick(t.params, t.spots, "off", env), ctx);
 /** Whether `x` is a whole number of `unit`s */
@@ -184,13 +191,27 @@ describe("handles on a line with corners", () => {
         ]);
     });
 
-    it("drags a corner where it's dropped, in Fit", () => {
-        const t = onHandle(L(), "p1", { x: 51, y: -9 });
+    it("drags a corner where it's dropped with fine, in Fit", () => {
+        const t = onHandle(L(), "p1", { x: 51, y: -9 }, fine);
         expect(pointsOf(t)).toEqual([
             { x: 0, y: 0 },
-            { x: 50, y: -10 },
+            { x: 51, y: -9 },
             { x: 40, y: 40 },
         ]);
+    });
+
+    it("snaps a dragged corner where both its legs come out to whole steps, unlocked", () => {
+        const t = onHandle(L(), "p1", { x: 51, y: -9 });
+        expect(paramsOf(t).spacing.mode).toBe("fit");
+        const [a, b, c] = pointsOf(t);
+        // Near where it was dropped, a marcher on it, each leg's gaps whole steps
+        expect(dist(b!, { x: 51, y: -9 })).toBeLessThan(STEP * 2);
+        const spots = spotsOf(t);
+        const k = spots.findIndex((s) => dist(s, b!) < 1e-6);
+        expect(k).toBeGreaterThan(0);
+        const legs = [dist(a!, b!) / k, dist(b!, c!) / (spots.length - 1 - k)];
+        for (const leg of legs)
+            expect(leg / STEP).toBeCloseTo(Math.round(leg / STEP), 6);
     });
 
     it("splits a segment when its midpoint handle is clicked, the line looking the same", () => {
@@ -205,7 +226,7 @@ describe("handles on a line with corners", () => {
     });
 
     it("adds a corner and drags it when a midpoint handle is dragged", () => {
-        const t = onHandle(L(), "m0", { x: 20, y: -20 });
+        const t = onHandle(L(), "m0", { x: 20, y: -20 }, fine);
         expect(pointsOf(t)).toEqual([
             { x: 0, y: 0 },
             { x: 20, y: -20 },
@@ -308,7 +329,7 @@ describe("corners", () => {
 describe("Keep interval on a line with corners", () => {
     // 9 marchers on an L of 8 steps each way: 4 gaps of 2 steps on each leg
     const L = () =>
-        typed(
+        kept(
             clicked(9, [
                 { x: 0, y: 0 },
                 { x: 80, y: 0 },
@@ -319,7 +340,7 @@ describe("Keep interval on a line with corners", () => {
 
     it("makes each segment a whole number of intervals, a marcher on the corner", () => {
         // 4 marchers on an L of 4 then 2½ steps, typed 2: the legs become 4 and 2 steps
-        const t = typed(
+        const t = kept(
             clicked(4, [
                 { x: 0, y: 0 },
                 { x: 40, y: 0 },
@@ -461,7 +482,7 @@ describe("a placed line with corners", () => {
         const placed = readBack(recipeOf(zigzag()));
         const corner = lineTool.handles(placed.params, N)[1]!;
         let live = pressLive(openLive(placed), corner.at, env)!;
-        live = moveLive(live, { x: 40, y: -20 }, env);
+        live = moveLive(live, { x: 40, y: -20 }, fine);
         const out = releaseLive(live);
         expect(out.changed).toBe(true);
         expect((out.live.params as LineParams).points[1]).toMatchObject({
@@ -495,7 +516,7 @@ describe("mixed intervals on a line with corners (#526)", () => {
             { x: 40, y: 0 },
             { x: 40, y: 40 },
         ]);
-    const L = () => typed(drawnL(), "3*2+4*3");
+    const L = () => kept(drawnL(), "3*2+4*3");
     const gapsOf = (t: ToolState) => {
         const at = spotsOf(t);
         return at.slice(1).map((q, i) => dist(at[i]!, q) / STEP);
@@ -585,17 +606,24 @@ describe("mixed intervals on a line with corners (#526)", () => {
         expect(spotsOf(on)[3]).toEqual(pointsOf(on)[1]);
     });
 
-    it("gives each segment its marchers by length in Fit, the groups left behind", () => {
+    it("keeps the groups' proportions unlocked in Fit, scaled to the legs", () => {
         const spacing = lineTool.choices!.find((c) => c.key === "spacing")!;
         const t = L();
         const fit = edit(t, spacing.pick(t.params, t.spots, "fit", env), ctx);
-        expect(paramsOf(fit).spacing).toEqual({ mode: "fit" });
+        expect(paramsOf(fit).spacing).toEqual({
+            mode: "fit",
+            groups: (paramsOf(t).spacing as { groups: unknown }).groups,
+        });
         expect(pointsOf(fit)).toEqual(pointsOf(t));
-        // 70 then 90 over 6 gaps: 3 even gaps on each leg
-        const [a, b, c] = pointsOf(fit);
-        expectGaps(fit, [7 / 3, 7 / 3, 7 / 3, 3, 3, 3]);
-        expect(spotsOf(fit)[3]).toEqual(b);
-        expect([spotsOf(fit)[0], spotsOf(fit)[6]]).toEqual([a, c]);
+        // As long as the groups: the same spots as locked
+        expectNear(spotsOf(fit), spotsOf(t));
+        // A leg dragged longer with fine: its gaps grow in proportion, the corner on a marcher
+        const longer = onHandle(fit, "p2", { x: 120, y: 80 }, fine);
+        const [, b] = pointsOf(longer);
+        expect(spotsOf(longer).some((s) => dist(s, b!) < 1e-6)).toBe(true);
+        expect(
+            lineTool.groups!.shown(longer.params, longer.spots, STEP),
+        ).toHaveLength(2);
     });
 
     it("is placed and reopened with its points, groups and corners exactly", () => {

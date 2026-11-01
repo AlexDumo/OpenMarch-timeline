@@ -41,7 +41,9 @@ export function placedNumbers(box: PlacedBox, stepPx: number) {
     const family = resolved && shownFamily(resolved);
     if (family && family !== "shortBack" && counts.length > 0)
         counts[0] = `${LAYOUT_LABELS[family]} ${counts[0]}`;
-    const intervals = kind.params
+    // An interval the kind hides isn't shown either (a Line's one interval while two offset
+    // numbers stand for it)
+    const intervals = shown
         .filter((p) => p.interval && p.value)
         .map((p) => formatSteps(p.value!(params, spots, stepPx)));
     // Groups of marchers (#526) as their chips read: "2 × 3 + 4 × 2", the groups it reaches

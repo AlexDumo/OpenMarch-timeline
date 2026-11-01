@@ -42,6 +42,11 @@ export interface ToolEnv {
     /** How far from a handle a press still takes it, in field units */
     readonly hitRadius: number;
     /**
+     * Screen pixels per field unit, for what depends on how far the field is zoomed in (a Line's
+     * dragged interval snapping to half steps rather than whole ones); unknown when absent
+     */
+    readonly zoom?: number;
+    /**
      * The press's `reachInside` choice: a press on the center dot pulls the pivot out (#350). Read
      * at the press only.
      */
@@ -154,6 +159,11 @@ export interface ToolParam<P> {
      * when it depends on the shape (a Line's Measured setting); read through {@link paramGlyph}.
      */
     readonly glyph?: ParamGlyph | ((params: P, n: number) => ParamGlyph | null);
+    /**
+     * The mark goes after the number rather than before it: a Line's offset reads `2 ↔ 1 ↕`, each
+     * number with the way it measures
+     */
+    readonly glyphAfter?: boolean;
     /** Hidden while this is false (a spacing with only one spot that way) */
     shown?(params: P, n: number): boolean;
     /** The number as shown: "6 × 2", "2" */
@@ -201,6 +211,22 @@ export function paramGlyph<P>(
 ): ParamGlyph | null {
     const { glyph } = param;
     return (typeof glyph === "function" ? glyph(params, n) : glyph) ?? null;
+}
+
+/**
+ * A lock on the kind's interval (a Line's, owner decision on #522), a button beside its interval
+ * in the floating editor covering every group: locked, a drag keeps the interval and changes only
+ * what it doesn't pin; unlocked, a typed interval is only where the shape starts from and a drag
+ * changes it. Toggling is one change of the shape (one undo step). Everything is pure.
+ */
+export interface ToolLock<P> {
+    /** Shown while this is true (a Line with an interval to lock) */
+    shown(params: P, n: number): boolean;
+    locked(params: P, n: number): boolean;
+    /** The params locked if they're unlocked, else unlocked */
+    toggle(params: P, n: number, env: ToolEnv): P;
+    /** Its tooltip, as it is now */
+    label(locked: boolean): string;
 }
 
 /** One group of a kind's interval list as the floating editor shows it (#526) */
@@ -438,6 +464,8 @@ export interface ToolKind<P> {
     readonly choices?: readonly ToolChoice<P>[];
     /** Its mixed intervals, when it can be spaced by groups of marchers (#526) */
     readonly groups?: ToolGroups<P>;
+    /** A lock on its interval, beside the interval in the floating editor */
+    readonly lock?: ToolLock<P>;
     /**
      * Its spots run in an order along it (a Line, #528): the host offers who goes where by Least
      * travel, Keep order or Reverse. Absent: always least travel.
