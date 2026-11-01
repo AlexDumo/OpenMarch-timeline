@@ -43,6 +43,13 @@ a way to place the selected marchers.
 - Intervals are now measured **along the path** by default. Pick **Straight
   across** in the Measured menu to measure marcher to marcher; neither skips a
   corner that holds no marcher.
+- Type an interval: it's a starting value, and dragging an end still changes it
+  (watch the number). Click the **lock** next to it to keep it while you drag.
+  With ↔ locked an end only moves front to back; with ↕ locked, side to side.
+- On a one-segment line, pick **Offset** in the Measured menu and type the two
+  numbers (e.g. 2 ↔ 1 ↕).
+- While dragging an end: hold Cmd/Ctrl to keep the line's direction, Alt to
+  grow it from the middle, Shift for no snapping.
 - Open **Who goes where**: each picture marks the first marcher solid, so you
   can see where it lands.
 - In the Measured menu, try ↔ or ↕ on a line that goes one way across the
