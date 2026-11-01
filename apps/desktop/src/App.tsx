@@ -37,6 +37,7 @@ import TitleBar from "@/components/titlebar/TitleBar";
 import { useUiSettingsStore } from "./stores/UiSettingsStore";
 import { useSnapOnWhenFileOpens } from "./hooks/useSnapOnWhenFileOpens";
 import CanvasZoomControls from "@/components/canvas/CanvasZoomControls";
+import FieldDisplayBar from "@/components/canvas/display/FieldDisplayBar";
 import Plugin from "./global/classes/Plugin";
 import Sidebar from "@/components/sidebar/Sidebar";
 import Toaster from "./components/ui/Toaster";
@@ -428,6 +429,7 @@ function App() {
                                                                     threeZoomControls
                                                                 }
                                                             />
+                                                            <FieldDisplayBar />
                                                         </div>
                                                         {focussedComponent ===
                                                         "timeline" ? (

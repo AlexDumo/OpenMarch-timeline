@@ -573,6 +573,12 @@
         },
         "title": "Field"
     },
+    "fieldDisplay": {
+        "comingSoon": "Coming soon",
+        "direction": "Field direction",
+        "label": "Field display",
+        "sections": "Visible sections"
+    },
     "fieldProperties": {
         "applyFieldType": "Apply Field Type",
         "applyFieldTypeWarning": "Marchers will not move to the new field type size, they will stay where they are on the canvas. You can always change back the field type.",
