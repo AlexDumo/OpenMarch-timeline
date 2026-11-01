@@ -391,6 +391,55 @@ test("change: a diagonal from yard line to yard line is measured ↔, placing ma
     );
 });
 
+// Splitting a segment (owner feedback on #596): the new corner holds a marcher,
+// so it lands on the marcher spot nearest the segment's middle and the typed ↔
+// interval stays as it was, though 7 gaps put the middle between two spots.
+test("change: a click on a ↔ line's middle splits it on a marcher's spot, every marcher and the interval kept", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await page.keyboard.press("l");
+    const from = { x: cf.x - 16 * S, y: cf.y - 24 * S };
+    const to = { x: cf.x - 8 * S, y: cf.y - 18 * S };
+    await drag(page, await toScreen(page, from), await toScreen(page, to));
+    await expect(page.getByTestId("shape-choice-measured")).toHaveAttribute(
+        "data-value",
+        "x",
+    );
+    await page
+        .getByTestId("shape-tool-readout")
+        .getByTestId("shape-editor-interval")
+        .click();
+    await page.getByTestId("shape-editor-interval-input").fill("2");
+    await page.keyboard.press("Enter");
+    await expect.poll(() => interval(page, "shape-tool-readout")).toBe("2");
+
+    const before = (await shapeOverlay(page))!;
+    const [middle] = before.addHandles;
+    await page.mouse.move(middle!.x, middle!.y, { steps: 4 });
+    await page.mouse.click(middle!.x, middle!.y);
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.handles.length)
+        .toBe(3);
+    const after = (await shapeOverlay(page))!;
+    expect(after.spots).toHaveLength(before.spots.length);
+    for (const s of before.spots)
+        expect(
+            after.spots.some((t) => Math.hypot(s.x - t.x, s.y - t.y) < CLOSE),
+        ).toBe(true);
+    const xs = after.spots.map((s) => s.x).sort((a, b) => a - b);
+    for (let i = 1; i < xs.length; i++)
+        expect(Math.abs(xs[i]! - xs[i - 1]! - 2 * S)).toBeLessThan(CLOSE);
+    expect(await interval(page, "shape-tool-readout")).toBe("2");
+});
+
 // The interval lock and Offset (owner decisions on #522, #527): unlocked, a
 // dragged end changes the interval live in whole steps; Offset shows two
 // numbers, typed or dragged, ↕ positive up the screen and dragged up and down
