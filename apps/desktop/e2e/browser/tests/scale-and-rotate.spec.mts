@@ -16,11 +16,12 @@ import type { FieldTestHandle } from "../../../src/field/fieldTestApi";
 // Scaling and rotating a selection with the selection box's handles (#198;
 // #189 user stories 46 to 55, rules table rows Handles, Lock X / Lock Y,
 // Click vs drag; keys from the modifier roles design, version A): corners
-// scale each axis with the pointer and constrain (Cmd/Ctrl) keeps the ratio,
-// as a box shape's do (#545); middle handles scale one axis and constrain
-// scales the other with it; from center (Alt) keeps the
-// box's center still (#545); rotation snaps to 15°, fine (Shift) turns it in whole degrees at
-// the pointer's full speed, and the Snap toggle off (Shift+M) turns it freely;
+// scale each axis with the pointer, as a box shape's do, and constrain
+// (Cmd/Ctrl) keeps the ratio (#545); middle handles scale one axis and
+// constrain scales the other with it; from center (Alt) keeps the box's
+// center still (#545); rotation snaps to 15°, fine (Shift) turns it in whole
+// degrees at the pointer's full speed, and the Snap toggle off (Shift+M)
+// turns it freely;
 // fine scales at a quarter of the pointer's speed; no flipping; the box fits
 // the marchers again after each transform. A transform is dropped through the
 // same timeline rules as a move.

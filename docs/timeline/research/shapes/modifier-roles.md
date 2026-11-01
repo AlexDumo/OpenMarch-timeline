@@ -172,9 +172,9 @@ Two rules hold for every held role:
    whole degrees, Snap off = free.
 
    Update (owner on #545, 2026-11-01): scaling now has one default everywhere. A marcher
-   selection's corners scale freely, as a box shape's do, and constrain keeps the ratio; the box's
-   ratio lock is the selection's too, so the lock and the key are one concept on every selection
-   box.
+   selection's corners scale freely, as a box shape's do, and constrain keeps the ratio (on a box's
+   corner it gives equal spacings instead); the box's ratio lock is the selection's too, so on
+   side handles, and for a selection's corners, the lock and the key are one concept.
 
 ### No snap is a toggle, not a key
 

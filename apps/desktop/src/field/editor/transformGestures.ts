@@ -25,9 +25,9 @@ import type { FieldRect } from "./selectionArea";
  * Lock X and Lock Y don't apply to handles (rules table: Lock X / Lock Y).
  * While fine is on a scale handle counts the pointer at a quarter of its
  * speed (`precisionDelta`, #197); a rotation turns at full speed in whole
- * degrees. Alt (from center) scales about the box's center. As in a move, a role key pressed or released
- * mid-drag redraws the marchers at the last pointer. Each handle declares the
- * roles it reads, for the chip.
+ * degrees. Alt (from center) scales about the box's center. As in a move, a
+ * role key pressed or released mid-drag redraws the marchers at the last
+ * pointer. Each handle declares the roles it reads, for the chip.
  */
 abstract class HandleGesture implements FieldGesture {
     abstract readonly kind: FieldTestGesture;
@@ -74,8 +74,9 @@ abstract class HandleGesture implements FieldGesture {
 
 /**
  * A corner scales each axis with the pointer and a middle handle scales one axis, and constrain
- * keeps the ratio; with the ratio lock on they keep it, and constrain frees it (as on a box
- * shape). Either scales from the center with from center. Nothing snaps.
+ * keeps the ratio; with the box shape's ratio lock on they keep it, and constrain frees it (a box's
+ * corner gives equal spacings instead). Either scales from the center with from center. Nothing
+ * snaps.
  */
 const scaleHonors = (ratioLocked: boolean): HonoredRoles => ({
     context: "field",
