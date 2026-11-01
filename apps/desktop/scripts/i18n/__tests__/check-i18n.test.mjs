@@ -200,3 +200,132 @@ test("context for a key that isn't in en.json fails", async () => {
     );
     assert.match(errors.join("\n"), /"menu\.gone" is not in i18n\/en\.json/);
 });
+
+test("an ignore comment covers the whole next element or statement", async () => {
+    const source = `
+export function View() {
+    // i18n-ignore: developer-only notice
+    toast.error(
+        "A long developer-only message that prettier wraps onto its own line",
+    );
+    return (
+        <div>
+            {
+                /* i18n-ignore: product name, the same in every language */
+            }
+            <span>
+                OpenMarch
+            </span>
+            <span>Translate me</span>
+        </div>
+    );
+}
+`;
+    const { errors } = await checkI18n(await fixture({ source }));
+    const text = errors.join("\n");
+    assert.match(text, /1 untranslated UI text:/);
+    assert.ok(text.includes("Translate me"));
+});
+
+test("an ignore comment needs a reason", async () => {
+    const source = `
+export const View = () => (
+    <div>
+        {/* i18n-ignore */}
+        <span>OpenMarch</span>
+    </div>
+);
+`;
+    const { errors } = await checkI18n(await fixture({ source }));
+    assert.match(errors.join("\n"), /1 untranslated UI text:/);
+});
+
+test("flags concatenation, toast options and tooltip content, not button variants", async () => {
+    const source = `
+export function View({ n }: { n: number }) {
+    toast.promise(save(), { loading: "Saving", success: "Saved", id: "save-toast" });
+    return (
+        <div>
+            {"Page " + n}
+            <InfoTip content="Explained" />
+            <Button content="icon" />
+        </div>
+    );
+}
+`;
+    const { errors } = await checkI18n(await fixture({ source }));
+    const text = errors.join("\n");
+    assert.match(text, /4 untranslated UI texts/);
+    for (const found of ['"Saving"', '"Saved"', '"Page "', '"Explained"']) {
+        assert.ok(text.includes(found), `expected ${found} in:\n${text}`);
+    }
+    assert.ok(!text.includes("save-toast"));
+    assert.ok(!text.includes('"icon"'));
+});
+
+test("template-literal keys are checked; an ignore comment skips a non-Tolgee t()", async () => {
+    const source = `
+export const View = () => (
+    <>
+        {t(\`menu.missing\`)}
+        {/* i18n-ignore: date library, not Tolgee */}
+        {dates.t("not.a.key")}
+    </>
+);
+`;
+    const { errors } = await checkI18n(await fixture({ source }));
+    const text = errors.join("\n");
+    assert.match(text, /Key "menu\.missing"/);
+    assert.ok(!text.includes("not.a.key"));
+});
+
+test("against the base branch, the baseline may move between files but not grow", async () => {
+    const source = `export const View = () => <p>Old</p>;`;
+    const moved = {
+        untranslatedText: { "src/View.tsx": 1 },
+        keysWithoutContext: [],
+    };
+    const base = {
+        untranslatedText: { "src/OldName.tsx": 1 },
+        keysWithoutContext: [],
+    };
+    const ok = await checkI18n(await fixture({ source, baseline: moved }), {
+        base,
+    });
+    assert.deepEqual(ok.errors, []);
+
+    const grown = await checkI18n(await fixture({ source, baseline: moved }), {
+        base: { untranslatedText: {}, keysWithoutContext: [] },
+    });
+    assert.match(
+        grown.errors.join("\n"),
+        /adds up to 1, more than the base branch's 0/,
+    );
+
+    const english = { menu: { save: "Save", quit: "Quit" } };
+    const keyAdded = await checkI18n(
+        await fixture({
+            source: translated,
+            english,
+            baseline: {
+                untranslatedText: {},
+                keysWithoutContext: ["menu.quit"],
+            },
+        }),
+        { base: { untranslatedText: {}, keysWithoutContext: [] } },
+    );
+    assert.match(
+        keyAdded.errors.join("\n"),
+        /keysWithoutContext gained menu\.quit/,
+    );
+});
+
+test("a baseline checked out with CRLF line endings isn't stale", async () => {
+    const dir = await fixture({ source: translated });
+    const file = path.join(dir, PATHS.baseline);
+    await writeFile(
+        file,
+        (await readFile(file, "utf8")).replace(/\n/g, "\r\n"),
+    );
+    assert.deepEqual((await checkI18n(dir)).errors, []);
+});

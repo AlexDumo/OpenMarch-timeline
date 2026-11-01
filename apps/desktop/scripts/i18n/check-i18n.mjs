@@ -8,13 +8,17 @@
  * - Every new key has translator context in `i18n-meta/context.json`.
  *
  * `--update` rewrites the baseline after text was translated or keys were removed. It never
- * lets new problems in. See docs/conventions/localization.md.
+ * lets new problems in. On a pull request (GITHUB_BASE_REF set) the committed baseline is
+ * also compared with the base branch's, so a hand edit can't grow it either.
+ * See docs/conventions/localization.md.
  */
 import { ESLint } from "eslint";
+import { execFileSync } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { knownTranslationKey, noUntranslatedText } from "./rules.mjs";
 
 const require = createRequire(import.meta.url);
@@ -35,6 +39,8 @@ const SOURCES = ["src/**/*.ts", "src/**/*.tsx"];
 /** Not shipped to users, or shown only to developers. */
 const IGNORED_SOURCES = [
     "**/__test__/**",
+    "**/*.test.*",
+    "**/*.spec.*",
     "**/*.d.ts",
     "src/field/benchmark/**",
     "src/test/**",
@@ -100,7 +106,65 @@ function formatProblem(file, message) {
  * Runs every check from `dir` (the desktop package). Returns the problems to print and, when
  * `update` is set, writes a baseline that drops whatever was fixed.
  */
-export async function checkI18n(dir = DESKTOP, { update = false } = {}) {
+const totalText = (baseline) =>
+    Object.values(baseline?.untranslatedText ?? {}).reduce((a, b) => a + b, 0);
+
+/**
+ * The baseline may move between files (a rename or split) but never grow: its total count
+ * can't rise and it can't list a key the base branch didn't.
+ */
+function compareWithBase(baseline, base) {
+    const errors = [];
+    const now = totalText(baseline);
+    const before = totalText(base);
+    if (now > before) {
+        errors.push(
+            `${PATHS.baseline}: untranslatedText adds up to ${now}, more than the base branch's ${before}. The baseline only shrinks; translate the new text instead.`,
+        );
+    }
+    const baseKeys = new Set(base?.keysWithoutContext ?? []);
+    const added = (baseline?.keysWithoutContext ?? []).filter(
+        (key) => !baseKeys.has(key),
+    );
+    if (added.length > 0) {
+        errors.push(
+            `${PATHS.baseline}: keysWithoutContext gained ${added.join(", ")}. Write their notes in ${PATHS.context} instead.`,
+        );
+    }
+    return errors;
+}
+
+/** The base branch's baseline on a pull request, or undefined when there's none to compare. */
+export function readBaseBaseline(dir, ref = process.env.GITHUB_BASE_REF) {
+    if (!ref) return undefined;
+    try {
+        execFileSync("git", ["fetch", "--quiet", "--depth=1", "origin", ref], {
+            cwd: dir,
+            stdio: "ignore",
+        });
+    } catch {
+        console.warn(
+            `check:i18n: couldn't fetch ${ref}; skipped the comparison with the base baseline.`,
+        );
+        return undefined;
+    }
+    try {
+        return JSON.parse(
+            execFileSync("git", ["show", `FETCH_HEAD:./${PATHS.baseline}`], {
+                cwd: dir,
+                encoding: "utf8",
+                stdio: ["ignore", "pipe", "ignore"],
+            }),
+        );
+    } catch {
+        return undefined; // The base branch has no baseline yet.
+    }
+}
+
+export async function checkI18n(
+    dir = DESKTOP,
+    { update = false, base = undefined } = {},
+) {
     const english = flattenMessages(await readJson(dir, PATHS.english));
     const context = await readJson(dir, PATHS.context, {});
     const baseline = await readJson(dir, PATHS.baseline, {
@@ -108,7 +172,7 @@ export async function checkI18n(dir = DESKTOP, { update = false } = {}) {
         keysWithoutContext: [],
     });
 
-    const errors = [];
+    const errors = base ? compareWithBase(baseline, base) : [];
     const notes = [];
 
     // Untranslated text and keys, from source.
@@ -197,22 +261,36 @@ export async function checkI18n(dir = DESKTOP, { update = false } = {}) {
         path.join(dir, PATHS.baseline),
         "utf8",
     ).catch(() => "");
-    const stale = baselineText !== currentText;
+    const stale = baselineText !== currentText.replace(/\r\n/g, "\n");
 
     if (update && stale) {
         await writeFile(path.join(dir, PATHS.baseline), baselineText);
     } else if (stale) {
         errors.push(
-            `${PATHS.baseline} is out of date${notes.length ? `:\n${notes.map((n) => `  ${n}`).join("\n")}` : "."}\n  Run \`pnpm check:i18n --update\` to lock in the improvement.`,
+            notes.length > 0
+                ? `${PATHS.baseline} is out of date:\n${notes.map((n) => `  ${n}`).join("\n")}\n  Run \`pnpm check:i18n --update\` to lock in the improvement.`
+                : `${PATHS.baseline} is missing, out of order or not formatted as the check writes it. Run \`pnpm check:i18n --update\`.`,
         );
     }
 
     return { errors, updated: update && stale };
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+const isMain = () => {
+    try {
+        return (
+            realpathSync(process.argv[1]) ===
+            realpathSync(fileURLToPath(import.meta.url))
+        );
+    } catch {
+        return false;
+    }
+};
+
+if (isMain()) {
     const update = process.argv.includes("--update");
-    const { errors, updated } = await checkI18n(DESKTOP, { update });
+    const base = readBaseBaseline(DESKTOP);
+    const { errors, updated } = await checkI18n(DESKTOP, { update, base });
     if (updated) console.log(`Updated ${PATHS.baseline}.`);
     if (errors.length > 0) {
         console.error(`check:i18n found problems:\n\n${errors.join("\n")}\n`);

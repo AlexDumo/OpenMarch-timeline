@@ -12,18 +12,29 @@ in the pre-commit hook when desktop source or i18n files change, and in PR check
 
 Anything a person can read or hear:
 
-- JSX text and string expressions shown in JSX (`{on ? "On" : "Off"}`).
+- JSX text and string expressions shown in JSX (`{on ? "On" : "Off"}`,
+  `{"Page " + n}`).
 - Text props: `title`, `aria-label` and the other `aria-*` text props, `placeholder`,
-  `alt`, `label`, `tooltip`, `description`, `heading`, `message`, and props ending in
-  `Label`, `Text`, `Title`, `Tooltip`, `Description` or `Message`.
-- Toasts (`toast.*`, `conToastError`) and `alert` / `confirm`.
+  `alt`, `label`, `text`, `tooltip`, `description`, `heading`, `message`, `content`
+  (except on buttons, where it's a layout variant), and props ending in `Label`,
+  `Text`, `Title`, `Tooltip`, `Description` or `Message`.
+- Toasts (`toast.*` and the text fields of their options, `conToastError`) and
+  `alert` / `confirm`.
 - Error messages a user sees, and screen-reader text (`sr-only`, `aria-label`).
 
 Not user-facing: class names, ids, test ids, log messages, keys, file formats, and
 code shown as code (`<code>`, `<pre>`).
 
-The check sees literals written directly in those places. Text built elsewhere and
-passed in through a variable is still your responsibility.
+### What the check can't see
+
+A passing check doesn't mean the text is translated. It only sees literals written
+directly in the places above, so these stay your responsibility:
+
+- Text built elsewhere and passed in through a variable or a prop not in the list.
+- Error messages (`throw new Error("…")`) that end up on screen.
+- `t` renamed on import (`const { t: translate } = …`); keys aren't checked there.
+- The Electron main process (`apps/desktop/electron`: menus, native dialogs) and
+  `packages/ui`.
 
 ## How to add text
 
@@ -78,30 +89,47 @@ Every new key needs context. Keys that existed before the check are listed in
 `keysWithoutContext` in `apps/desktop/i18n-meta/baseline.json`; adding their context
 is welcome.
 
-Tolgee's file push doesn't carry descriptions, so a translation sync copies these
-notes into Tolgee's key descriptions separately.
+## Source of truth and syncing
+
+`apps/desktop/i18n/en.json` in the repository is the source of English text and
+keys; Tolgee follows it. Push English to Tolgee rather than editing it there. Tolgee's
+file push doesn't carry descriptions, so a sync also copies the notes from
+`context.json` into Tolgee's key descriptions. Pulling translations back
+(`tolgee pull`) rewrites the language files; if a pull changes `en.json`, its keys
+need notes and matching inline defaults like any other change.
 
 ## Exceptions
 
-Mark a deliberate exception, such as the product name, with a comment on the same
-line or the line before, and say why:
+Mark a deliberate exception, such as the product name, with an
+`i18n-ignore: <reason>` comment. The reason is required. A comment at the end of a
+line covers that line; a comment on its own line covers the next statement, JSX
+element or attribute, however many lines it spans:
 
 ```tsx
-{
-  /* i18n-ignore: product name */
-}
-<span>OpenMarch</span>;
+<h1>
+  {/* i18n-ignore: product name, the same in every language */}
+  <span>OpenMarch</span>
+</h1>
 ```
 
-Use this for text that must stay the same in every language, not to skip work.
+The same comment silences the key check for a function named `t` that isn't
+Tolgee's. Use it for text that must stay the same in every language, not to skip
+work.
 
 ## The baseline
 
 Text written before the check is counted per file in
-`apps/desktop/i18n-meta/baseline.json`. A file may not gain untranslated text, and
-when a file loses some (you translated it, or deleted the code) the check asks you
-to run `pnpm check:i18n --update` so the lower count is locked in. `--update` only
-lowers counts and removes entries; it never accepts new problems.
+`apps/desktop/i18n-meta/baseline.json`. A file's count may not rise, and when it
+falls (you translated text, or deleted the code) the check asks you to run
+`pnpm check:i18n --update` so the lower count is locked in. `--update` only lowers
+counts and removes entries; it never accepts new problems. The count is per file,
+so translating one string doesn't make room for a new one: write the new one with a
+key.
+
+When you rename or split a file in the baseline, move its count to the new path by
+hand. On a pull request the check compares the baseline with the base branch's: the
+counts may move between files, but their total can't rise and `keysWithoutContext`
+can't gain keys.
 
 When you touch a file in the baseline, translating its old text is welcome but not
 required.

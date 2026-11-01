@@ -1,6 +1,6 @@
 /**
  * ESLint rules behind `pnpm check:i18n`. They run only from `check-i18n.mjs`, not from the
- * repository's ESLint config, so the opt-out is an `i18n-ignore` comment rather than an
+ * repository's ESLint config, so the opt-out is an `i18n-ignore: <reason>` comment rather than an
  * `eslint-disable` directive.
  */
 
@@ -8,7 +8,21 @@ const LETTER = /\p{L}/u;
 
 /** Props whose string value is shown to the user or read out by a screen reader. */
 const TEXT_PROP =
-    /^(title|alt|label|placeholder|tooltip|description|heading|subtitle|message)$|^aria-(label|description|valuetext|roledescription)$|[a-z](Label|Text|Title|Tooltip|Description|Message)$/;
+    /^(title|alt|label|placeholder|tooltip|description|heading|subtitle|message|text)$|^aria-(label|description|valuetext|roledescription)$|[a-z](Label|Text|Title|Tooltip|Description|Message)$/;
+
+/** `content` is text on tooltips, but a layout variant ("icon", "text") on buttons. */
+const isTextProp = (name, element) =>
+    TEXT_PROP.test(name) ||
+    (name === "content" && !/Button$/.test(element ?? ""));
+
+/** Option fields of toast calls that hold text. */
+const TOAST_TEXT_OPTIONS = new Set([
+    "description",
+    "loading",
+    "success",
+    "error",
+    "label",
+]);
 
 /** Elements whose text is code or markup, not prose. */
 const NON_PROSE_ELEMENTS = new Set(["code", "pre", "style", "script"]);
@@ -16,7 +30,8 @@ const NON_PROSE_ELEMENTS = new Set(["code", "pre", "style", "script"]);
 /** Calls whose first argument is a message shown to the user. */
 const MESSAGE_CALLS = new Set(["conToastError", "alert", "confirm"]);
 
-const IGNORE_MARKER = "i18n-ignore";
+/** `i18n-ignore: <reason>`; the reason is required. */
+const IGNORE_MARKER = /\bi18n-ignore:\s*\S/;
 
 const hasLetter = (text) => LETTER.test(text);
 
@@ -39,6 +54,10 @@ function literalText(node) {
                 ...literalText(node.consequent),
                 ...literalText(node.alternate),
             ];
+        case "BinaryExpression":
+            return node.operator === "+"
+                ? [...literalText(node.left), ...literalText(node.right)]
+                : [];
         case "LogicalExpression":
             return node.operator === "&&"
                 ? literalText(node.right)
@@ -81,15 +100,55 @@ function isMessageCall(name) {
     );
 }
 
-/** Lines covered by an `i18n-ignore` comment: the comment's own last line and the next. */
-function ignoredLines(sourceCode) {
+/** Tokens between an ignore comment and the code it's about: `{/* *\/}` braces, JSX whitespace. */
+const isFiller = (token) =>
+    (token?.type === "Punctuator" &&
+        (token.value === "{" || token.value === "}")) ||
+    (token?.type === "JSXText" && token.value.trim() === "");
+
+function skipFiller(sourceCode, from, step) {
+    let token = step(from);
+    while (token && isFiller(token)) token = step(token);
+    return token;
+}
+
+/**
+ * What an `i18n-ignore: <reason>` comment covers. A comment after code on the same line
+ * covers that line. Otherwise it covers the next statement, JSX element or attribute,
+ * however many lines that spans (`{/* ... *\/}` braces around the comment are skipped).
+ * Returns a test for a node.
+ */
+function ignoreScope(sourceCode) {
     const lines = new Set();
+    const ranges = [];
     for (const comment of sourceCode.getAllComments()) {
-        if (!comment.value.includes(IGNORE_MARKER)) continue;
-        lines.add(comment.loc.end.line);
-        lines.add(comment.loc.end.line + 1);
+        if (!IGNORE_MARKER.test(comment.value)) continue;
+        const before = skipFiller(sourceCode, comment, (t) =>
+            sourceCode.getTokenBefore(t, { includeComments: false }),
+        );
+        if (before && before.loc.end.line === comment.loc.start.line) {
+            lines.add(comment.loc.start.line);
+            continue;
+        }
+        const after = skipFiller(sourceCode, comment, (t) =>
+            sourceCode.getTokenAfter(t, { includeComments: false }),
+        );
+        if (!after) continue;
+        let node = sourceCode.getNodeByRangeIndex(after.range[0]);
+        while (
+            node?.parent &&
+            node.parent.type !== "Program" &&
+            node.parent.range[0] === node.range[0]
+        ) {
+            node = node.parent;
+        }
+        if (node) ranges.push([after.range[0], node.range[1]]);
     }
-    return lines;
+    return (node) =>
+        lines.has(node.loc.start.line) ||
+        ranges.some(
+            ([from, to]) => node.range[0] >= from && node.range[0] < to,
+        );
 }
 
 export const noUntranslatedText = {
@@ -102,10 +161,10 @@ export const noUntranslatedText = {
     },
     create(context) {
         const sourceCode = context.sourceCode ?? context.getSourceCode();
-        const ignored = ignoredLines(sourceCode);
+        const ignored = ignoreScope(sourceCode);
 
         const report = (node) => {
-            if (ignored.has(node.loc.start.line)) return;
+            if (ignored(node)) return;
             const raw = sourceCode.getText(node).trim().replace(/\s+/g, " ");
             const text = raw.length > 60 ? `${raw.slice(0, 57)}...` : raw;
             context.report({ node, messageId: "text", data: { text } });
@@ -129,16 +188,43 @@ export const noUntranslatedText = {
             },
             JSXAttribute(node) {
                 if (node.name.type !== "JSXIdentifier") return;
-                if (!TEXT_PROP.test(node.name.name)) return;
+                const element = node.parent.name;
+                const elementName =
+                    element.type === "JSXIdentifier" ? element.name : undefined;
+                if (!isTextProp(node.name.name, elementName)) return;
                 literalText(node.value).forEach(report);
             },
             CallExpression(node) {
-                if (!isMessageCall(calleeName(node.callee))) return;
+                const name = calleeName(node.callee);
+                if (!isMessageCall(name)) return;
                 literalText(node.arguments[0]).forEach(report);
+                if (!name.startsWith("toast")) return;
+                for (const argument of node.arguments) {
+                    if (argument.type !== "ObjectExpression") continue;
+                    for (const property of argument.properties) {
+                        if (
+                            property.type === "Property" &&
+                            !property.computed &&
+                            property.key.type === "Identifier" &&
+                            TOAST_TEXT_OPTIONS.has(property.key.name)
+                        ) {
+                            literalText(property.value).forEach(report);
+                        }
+                    }
+                }
             },
         };
     },
 };
+
+/** The value of a string literal, or of a template literal with no `${}`. */
+function staticString(node) {
+    if (node?.type === "Literal" && typeof node.value === "string")
+        return node.value;
+    if (node?.type === "TemplateLiteral" && node.expressions.length === 0)
+        return node.quasis[0].value.cooked ?? undefined;
+    return undefined;
+}
 
 /** The literal key and inline default of a Tolgee `t(...)` call or `<T keyName>`. */
 function translationCall(node) {
@@ -151,22 +237,20 @@ function translationCall(node) {
             callee.property.name === "t");
     if (!isT) return undefined;
     const [first, second] = node.arguments;
-    if (first?.type === "Literal" && typeof first.value === "string") {
+    const key = staticString(first);
+    if (key !== undefined) {
         const fallback =
-            second?.type === "Literal" && typeof second.value === "string"
-                ? second.value
-                : objectString(second, "defaultValue");
-        return { keyNode: first, key: first.value, fallback };
+            staticString(second) ?? objectString(second, "defaultValue");
+        return { keyNode: first, key, fallback };
     }
-    if (first?.type === "ObjectExpression") {
-        const keyNode = objectProperty(first, "key");
-        if (keyNode?.type === "Literal" && typeof keyNode.value === "string") {
-            return {
-                keyNode,
-                key: keyNode.value,
-                fallback: objectString(first, "defaultValue"),
-            };
-        }
+    const keyNode = objectProperty(first, "key");
+    const objectKey = staticString(keyNode);
+    if (objectKey !== undefined) {
+        return {
+            keyNode,
+            key: objectKey,
+            fallback: objectString(first, "defaultValue"),
+        };
     }
     return undefined;
 }
@@ -184,10 +268,7 @@ function objectProperty(node, name) {
 }
 
 function objectString(node, name) {
-    const value = objectProperty(node, name);
-    return value?.type === "Literal" && typeof value.value === "string"
-        ? value.value
-        : undefined;
+    return staticString(objectProperty(node, name));
 }
 
 function jsxAttribute(opening, name) {
@@ -200,16 +281,10 @@ function jsxAttribute(opening, name) {
 }
 
 function jsxString(attribute) {
-    const value = attribute?.value;
-    if (value?.type === "Literal" && typeof value.value === "string")
-        return { node: value, value: value.value };
-    if (
-        value?.type === "JSXExpressionContainer" &&
-        value.expression.type === "Literal" &&
-        typeof value.expression.value === "string"
-    )
-        return { node: value.expression, value: value.expression.value };
-    return undefined;
+    let node = attribute?.value;
+    if (node?.type === "JSXExpressionContainer") node = node.expression;
+    const value = staticString(node);
+    return value === undefined ? undefined : { node, value };
 }
 
 /**
@@ -228,8 +303,11 @@ export const knownTranslationKey = {
     },
     create(context) {
         const english = context.options[0]?.english ?? {};
+        const sourceCode = context.sourceCode ?? context.getSourceCode();
+        const ignored = ignoreScope(sourceCode);
 
         const check = (keyNode, key, fallback) => {
+            if (ignored(keyNode)) return;
             if (!(key in english)) {
                 context.report({
                     node: keyNode,
