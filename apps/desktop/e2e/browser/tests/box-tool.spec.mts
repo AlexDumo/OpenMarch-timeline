@@ -4952,9 +4952,10 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         expect(await laterMoves()).toBe(0);
         expect(await undoSteps(show)).toBe(steps + 1);
         // Selected whole, with no Recalculate or Save, and Ungroup in its place in the menu
+        // (the selected shape draws its own outline, so it isn't in placedBoxes)
         await expect(readoutShown).toBeVisible();
-        expect(await placedBoxes(page)).toHaveLength(1);
-        expect((await placedBoxes(page))[0]!.label).toMatch(/^Group/);
+        expect((await readField(page)).selection).toEqual(ALL);
+        expect((await shapeOverlay(page))!.spots).toHaveLength(ALL.length);
         await expect(
             readoutShown.getByTestId("shape-editor-recalculate"),
         ).toHaveCount(0);
