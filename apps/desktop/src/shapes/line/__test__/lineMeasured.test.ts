@@ -464,7 +464,8 @@ describe("review fixes", () => {
             lineTool,
             t.params,
             t.spots,
-            Math.atan2(60, 80) + Math.PI / 6,
+            // 30° on from how it was drawn (ADR 0006, decision 10)
+            Math.PI / 6,
             "c",
             env,
         ) as LineParams;

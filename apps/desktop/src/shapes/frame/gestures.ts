@@ -292,7 +292,10 @@ function dragged(
             const frame = kind.frameOf(base, n);
             if (near(at, gesture.pivot, 1e-9)) return base;
             const turn = angleFrom(gesture.pivot, at) - gesture.startAngle;
-            const rotation = snapRotation(frame.rotation + turn, env);
+            // Stepped as the shape's turn reads, which for a Line counts from how it was drawn
+            const was = shapeTurn(kind, base, n);
+            const rotation =
+                frame.rotation + snapRotation(was + turn, env) - was;
             const turned = carryPivot(
                 base,
                 kind.withFrame(
@@ -384,7 +387,24 @@ export function centerPivot(gesture: ShapeGesture): unknown {
         : null;
 }
 
-/** The shape turned to `rotation` (radians) about `pivot` (the shape's own, normally) */
+/**
+ * How far the shape is turned as the editor reads it, in radians: the kind's own turn (a Line's,
+ * from how it was drawn), else its frame's
+ */
+export function shapeTurn(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+): number {
+    return normalizeAngle(
+        kind.turnOf?.(params, n) ?? kind.frameOf(params, n).rotation,
+    );
+}
+
+/**
+ * The shape turned to `rotation` (radians, as {@link shapeTurn} reads it) about `pivot` (the
+ * shape's own, normally)
+ */
 export function turnShape(
     kind: AnyToolKind,
     params: unknown,
@@ -394,6 +414,7 @@ export function turnShape(
     env: ToolEnv,
 ): unknown {
     const frame = kind.frameOf(params, n);
+    const by = rotation - shapeTurn(kind, params, n);
     const turned = carryPivot(
         params,
         kind.withFrame(
@@ -401,7 +422,7 @@ export function turnShape(
             n,
             rotateFrame(
                 frame,
-                normalizeAngle(rotation),
+                normalizeAngle(frame.rotation + by),
                 pivotPoint(frame, pivot),
             ),
         ),
@@ -472,7 +493,8 @@ export const ROTATION_PX_PER_DEGREE = 2;
 
 /**
  * The shape's rotation dragged `distance` px clockwise, 1° per 2 px from where it started: in 15°
- * steps as the knob turns (#403), whole degrees with `fine`, free with the Snap toggle off
+ * steps of its turn as the knob turns (#403), whole degrees with `fine`, free with the Snap toggle
+ * off
  */
 export function scrubTurn(
     kind: AnyToolKind,
@@ -485,7 +507,7 @@ export function scrubTurn(
     const turn = distance / ROTATION_PX_PER_DEGREE;
     const stepped = env.pull !== false;
     if (Math.trunc(turn) === 0 && stepped) return base;
-    const degrees = rotationDegrees(kind.frameOf(base, n).rotation) + turn;
+    const degrees = rotationDegrees(shapeTurn(kind, base, n)) + turn;
     const step = env.fine ? 1 : ROTATION_SNAP_DEGREES;
     const snapped = stepped ? Math.round(degrees / step) * step : degrees;
     return turnShape(kind, base, n, snapped * DEGREE, pivot, env);

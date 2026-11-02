@@ -590,6 +590,13 @@ export interface ToolKind<P> {
     /** The params with `frame`'s center, turn and flip; the kind keeps its own size */
     withFrame(params: P, n: number, frame: ShapeFrame): P;
     /**
+     * How far the shape is turned as the editor reads and steps it, in radians: the knob and the
+     * degrees snap this, ⟳ adds a quarter to it and typed degrees set it. The frame's rotation when
+     * absent; a Line, whose frame points along it, reads the turn since it was drawn (ADR 0006,
+     * decision 10), so its `withFrame` must keep this in step with the frame's turns.
+     */
+    turnOf?(params: P, n: number): number;
+    /**
      * A `footprint` kind's part in scaling (#349): the params with the frame's half sizes set,
      * its center, turn and flip kept. Absent for `interval` kinds, which scale their spacings.
      */
@@ -610,6 +617,12 @@ export interface ToolKind<P> {
      * wouldn't read as the kind: the Line's zigzag and the Curve's wave (owner, 2026-10-31)
      */
     pictureParams?(n: number, env: ToolEnv): P;
+    /**
+     * What the readout by the pointer says first while handle `key` is dragged, before the length
+     * and spacing: a Line's end, the way it points from its neighbor ("15°"). Nothing when absent
+     * or null.
+     */
+    handleTip?(params: P, n: number, key: string): string | null;
     /** After a turn or flip: the shape put back on the grid, if it snaps to one */
     settle?(params: P, n: number, env: ToolEnv): P;
     /**

@@ -303,6 +303,45 @@ test("change: Escape discards an open line and the show is untouched", async ({
     expect(await undoSteps(show)).toBe(steps);
 });
 
+// Turning a Line follows the box's rules (ADR 0006, decision 10): drawn either
+// way it reads 0°, ↻ adds exactly a quarter to that, and the recipe stores the
+// turn since it was drawn.
+test("change: a line drawn right to left reads 0°, ↻ turns it to 90° square on the grid, and the recipe keeps the turn", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await page.keyboard.press("l");
+    const y = cf.y - 20 * S;
+    const from = { x: cf.x - 3.5 * S, y };
+    const to = { x: cf.x - 14 * S, y };
+    await drag(page, await toScreen(page, from), await toScreen(page, to));
+    const rotation = page.getByTestId("shape-editor-rotation");
+    await expect(rotation).toHaveText("0°");
+
+    // ↻ turns it a quarter about its pivot, its left end, onto the grid
+    await page.getByTestId("shape-editor-quarter-turn").click();
+    await expect(rotation).toHaveText("90°");
+    const turned = (await shapeOverlay(page))!;
+    for (const h of turned.handles)
+        expect(Math.abs(h.x - turned.handles[0]!.x)).toBeLessThan(1);
+
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect.poll(async () => (await recipes(show)).length).toBe(1);
+    const [recipe] = await recipes(show);
+    expect(JSON.parse(recipe.params).turn).toBe(90);
+    // Every marcher stands on the step grid side to side, on the left end's x
+    const saved = await savedPositions(show, 0);
+    for (const p of saved) expect(Math.abs(p.x - to.x)).toBeLessThan(CLOSE);
+});
+
 // Measured (#527): a diagonal drawn from yard line to yard line starts in ↔,
 // where a typed interval is how far apart neighbors are side to side, every
 // saved x exactly that far from the last and on the step grid.

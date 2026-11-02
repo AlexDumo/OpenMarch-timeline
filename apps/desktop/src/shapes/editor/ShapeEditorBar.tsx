@@ -60,6 +60,7 @@ import {
     frameControls,
     scrubTurn,
     shapeOutline,
+    shapeTurn,
     turnShape,
 } from "../frame/gestures";
 import { currentShapeField } from "../field/shapeFieldContext";
@@ -467,7 +468,9 @@ function ShapeEditorBar({
                 >
                     <TurnControls
                         live={live}
-                        degrees={rotationDegrees(frame.rotation)}
+                        degrees={rotationDegrees(
+                            shapeTurn(kind, params, spots),
+                        )}
                         rotation={frame.rotation}
                         pivot={pivotOf(params)}
                         canRecalculate={target.recalculate !== null}
