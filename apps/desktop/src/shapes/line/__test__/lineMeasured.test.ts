@@ -25,9 +25,9 @@ import {
 import type { ShapeContext, XY } from "../../types";
 
 /**
- * The Line's Measured setting (#527, spec #522): an interval is the true distance between
- * neighbors by default; ↔ makes it how far apart they are side to side, x exactly on the step
- * grid, and ↕ front to back. Driven through the shape session with the real kind.
+ * The Line's Measured setting (#527, spec #522): an interval is measured along the path between
+ * neighbors by default; Straight across makes it the distance from marcher to marcher, ↔ how far
+ * apart they are side to side, x exactly on the step grid, and ↕ front to back. Driven through the shape session with the real kind.
  */
 
 const STEP = 10;
@@ -94,12 +94,20 @@ const diagonal = (n = 5) => drawn(n, { x: 1, y: 100 }, { x: 79, y: 160 });
 const offYards = (n = 5) => drawn(n, { x: 20, y: 100 }, { x: 60, y: 180 });
 
 describe("the Measured menu", () => {
-    it("offers the true distance, ↔ and ↕, the true distance by default with no mark", () => {
+    it("offers along the path, straight across, ↔ and ↕, along the path by default with no mark", () => {
         const t = offYards();
         expect(measured.options(t.params, t.spots).map((o) => o.value)).toEqual(
-            ["true", "x", "y"],
+            ["along", "straight", "x", "y"],
         );
-        expect(measured.current(t.params, t.spots)).toBe("true");
+        expect(measured.options(t.params, t.spots).map((o) => o.label)).toEqual(
+            [
+                "Along the path",
+                "Straight across",
+                "↔ Side to side",
+                "↕ Front to back",
+            ],
+        );
+        expect(measured.current(t.params, t.spots)).toBe("along");
         expect(paramsOf(t).measured).toBeUndefined();
         expect(glyphOf(t)).toBeNull();
         expect(scaleReadout(lineTool, t.params, t.spots, env)).not.toMatch(
@@ -110,10 +118,19 @@ describe("the Measured menu", () => {
     it("shows ↔ or ↕ before the interval once picked", () => {
         expect(glyphOf(measuredBy(offYards(), "x"))).toBe("↔");
         expect(glyphOf(measuredBy(offYards(), "y"))).toBe("↕");
-        expect(glyphOf(measuredBy(measuredBy(offYards(), "x"), "true"))).toBe(
+        expect(glyphOf(measuredBy(measuredBy(offYards(), "x"), "along"))).toBe(
             null,
         );
-        const back = measuredBy(measuredBy(offYards(), "x"), "true");
+        const back = measuredBy(measuredBy(offYards(), "x"), "along");
+        expect("measured" in paramsOf(back)).toBe(false);
+    });
+
+    it("stores straight across, with no mark, and back to along the path stores nothing", () => {
+        const t = measuredBy(offYards(), "straight");
+        expect(paramsOf(t).measured).toBe("straight");
+        expect(measured.current(t.params, t.spots)).toBe("straight");
+        expect(glyphOf(t)).toBeNull();
+        const back = measuredBy(t, "along");
         expect("measured" in paramsOf(back)).toBe(false);
     });
 });
@@ -156,8 +173,8 @@ describe("↔: neighbors the interval apart side to side", () => {
         const t = measuredBy(kept, "x");
         expect(chip(t)).toBe("2");
         expect(gapsOf(spotsOf(t).map((p) => p.x))).toEqual([20, 20, 20, 20]);
-        // And back: 2 steps straight across again
-        const back = measuredBy(t, "true");
+        // And back: 2 steps along the line again (straight across too, on a straight line)
+        const back = measuredBy(t, "along");
         const spots = spotsOf(back);
         for (let i = 1; i < spots.length; i++)
             expect(
@@ -216,7 +233,8 @@ describe("greyed out on a line that isn't one way", () => {
         const t = drawn(5, { x: 100, y: 100 }, { x: 100, y: 180 });
         expect(reasonOf(t, "x")).toBe("The line doesn't go side to side");
         expect(reasonOf(t, "y")).toBeUndefined();
-        expect(reasonOf(t, "true")).toBeUndefined();
+        expect(reasonOf(t, "along")).toBeUndefined();
+        expect(reasonOf(t, "straight")).toBeUndefined();
         expect(measured.pick(t.params, t.spots, "x", env)).toBe(t.params);
     });
 
@@ -225,15 +243,15 @@ describe("greyed out on a line that isn't one way", () => {
             points: [corner(0, 0), corner(40, 40), corner(80, 0)],
             spacing: { mode: "fit" },
         };
-        expect(measured.options(zigzag, 5)[1]!.disabled).toBeUndefined();
-        expect(measured.options(zigzag, 5)[2]!.disabled).toBe(
+        expect(measured.options(zigzag, 5)[2]!.disabled).toBeUndefined();
+        expect(measured.options(zigzag, 5)[3]!.disabled).toBe(
             "The line turns back front to back",
         );
         const back: LineParams = {
             ...zigzag,
             points: [corner(0, 0), corner(40, 40), corner(20, 80)],
         };
-        expect(measured.options(back, 5)[1]!.disabled).toBe(
+        expect(measured.options(back, 5)[2]!.disabled).toBe(
             "The line turns back side to side",
         );
     });
@@ -268,7 +286,7 @@ describe("a line drawn from yard line to yard line", () => {
         expect(spotsOf(t).map((p) => p.x)).toEqual([0, 20, 40, 60, 80]);
     });
 
-    it("starts with the true distance otherwise", () => {
+    it("starts along the path otherwise", () => {
         expect(paramsOf(offYards()).measured).toBeUndefined();
         // Along the field, or straight from a yard line to the next, it's the same either way
         expect(
@@ -314,11 +332,15 @@ describe("a placed line keeps its Measured setting", () => {
         expect(gapsOf(saved)).toEqual([15, 15, 15, 15]);
     });
 
-    it("reads ↔ and ↕ but no other setting", () => {
+    it("reads straight across, ↔ and ↕ but no other setting", () => {
         const p = paramsOf(offYards());
+        expect(isLineParams({ ...p, measured: "straight" })).toBe(true);
         expect(isLineParams({ ...p, measured: "x" })).toBe(true);
         expect(isLineParams({ ...p, measured: "y" })).toBe(true);
         expect(isLineParams({ ...p, measured: "true" })).toBe(false);
+        // Along the path is the absence of a setting, never stored
+        expect(isLineParams({ ...p, measured: "along" })).toBe(false);
+        expect(isLineParams({ ...p, measured: null })).toBe(false);
     });
 });
 
@@ -470,7 +492,7 @@ describe("review fixes", () => {
         expect(onLine(p, 5, at, { stepPx: STEP, hitRadius: 3 })).toBe(true);
     });
 
-    it("shows the true distance on the trigger while a part runs square to its setting", () => {
+    it("shows along the path on the trigger while a part runs square to its setting", () => {
         const t = opened(5, {
             points: [
                 corner(0, 100),
@@ -481,7 +503,7 @@ describe("review fixes", () => {
             spacing: { mode: "fit" },
             measured: "x",
         });
-        expect(measured.current(t.params, t.spots)).toBe("true");
+        expect(measured.current(t.params, t.spots)).toBe("along");
         expect(glyphOf(t)).toBeNull();
     });
 

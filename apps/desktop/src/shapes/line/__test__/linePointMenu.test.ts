@@ -735,9 +735,13 @@ describe("Open here on a closed line (#569)", () => {
         expect(apart(open.points[0]!, ring.points[1]!)).toBeLessThan(0.1);
         const now = xy(open, 8);
         expect(furthest(xy(ring, 8), now)).toBeLessThan(1.5);
-        now.slice(1).forEach((spot, i) =>
-            expect(apart(spot, now[i]!)).toBeCloseTo(8, 3),
-        );
+        // Each gap 8 along the line
+        const along = lineSpots(open, 8);
+        along
+            .slice(1)
+            .forEach((spot, i) =>
+                expect(spot.s! - along[i]!.s!).toBeCloseTo(8, 3),
+            );
     });
 
     it("moves the spots along to start on a point that holds none, gaps as they were", () => {
@@ -754,9 +758,10 @@ describe("Open here on a closed line (#569)", () => {
         const opened = openAt(ring, 6, 1, {});
         expect(apart(opened.points[0]!, ring.points[1]!)).toBeLessThan(0.5);
         const s = lineSpots(opened, 6);
-        expect(closest(s)).toBeGreaterThan(7);
+        // Nothing stacked: 8 along a ring this tight is a little under 7 straight across
+        expect(closest(s)).toBeGreaterThan(6.5);
         s.slice(1).forEach((spot, i) =>
-            expect(apart(spot, s[i]!)).toBeCloseTo(8, 3),
+            expect(spot.s! - s[i]!.s!).toBeCloseTo(8, 3),
         );
     });
 

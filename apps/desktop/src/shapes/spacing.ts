@@ -216,58 +216,87 @@ export function gapsInSteps(
 
 /**
  * Arc-length offsets along `path` for marchers whose neighbors are `gaps` apart in a straight
- * line, the way drill measures an interval, starting at `from`. On a straight path that is the
- * gaps themselves; on a curve each gap reaches a little farther along the path than its chord.
+ * line, starting at `from`. On a straight path that is the gaps themselves; on a curve each gap
+ * reaches a little farther along the path than its chord.
+ *
+ * A gap never jumps a stretch of the path. It is how far the path's points get from the marcher
+ * before it, straight across, counted all the way along: where the path turns back toward the
+ * marcher, the way back counts too, so a gap can't skip the bit that curls back. And at one of
+ * `bends` (offsets of corners on the path that hold no marcher) the gap goes on from the corner
+ * with what is left of it, so a run never cuts across a spike's tip and lands far down its other
+ * side. Where the path keeps leading away that is the chord. Where a gap lands moves on
+ * continuously as the gaps grow, so a search on them (Fit) finds one even interval.
  */
 export function chordOffsets(
     path: Path,
     from: number,
     gaps: readonly number[],
+    bends: readonly number[] = [],
 ): number[] {
     const offsets = [from];
     let s = from;
-    for (const gap of gaps) {
-        offsets.push((s = nextAtChord(path, s, gap)));
-    }
+    for (const gap of gaps) offsets.push((s = acrossTo(path, s, gap, bends)));
     return offsets;
 }
 
-/** The first offset past `s` whose point is `gap` from `s`'s point, in a straight line */
-function nextAtChord(path: Path, s: number, gap: number): number {
-    if (gap <= 0) return s;
-    const origin = path.at(s);
+/** How many steps a gap is walked out in, at most, over the path's length */
+const WALK_STEPS = 512;
+
+/** The offset `gap` past `s` straight across ({@link chordOffsets}) */
+function acrossTo(
+    path: Path,
+    s: number,
+    gap: number,
+    bends: readonly number[],
+): number {
+    if (!(gap > 0)) return s;
+    const step = Math.max(path.length, gap) / WALK_STEPS;
+    const tolerance = Math.max(gap, 1) * 1e-9;
+    let origin = path.at(s);
     const far = (t: number) => {
         const q = path.at(t);
         return Math.hypot(q.x - origin.x, q.y - origin.y);
     };
-    // A chord is never longer than its arc, so the answer is at least `gap` along. On a straight
-    // stretch it is exactly that.
-    let lo = s + gap;
-    let hi = lo;
-    const reach = far(lo);
-    if (Math.abs(reach - gap) <= gap * 1e-12) return lo;
-    if (reach > gap) {
-        // A curve's measured length runs a little short where it bends hard, so the chord can
-        // overshoot: the answer is back toward `s`
-        lo = s;
-    } else {
-        // March out in quarter gaps until the point is far enough, then bisect that step. A path
-        // that never gets that far (a gap wider than a small circle) falls back to the arc length.
-        const step = gap / 4;
-        for (let i = 0; ; i++) {
-            hi = lo + step;
-            if (far(hi) >= gap) break;
-            lo = hi;
-            if (i === 4096) return s + gap;
+    let bend = nextBend(bends, s, tolerance);
+    let lo = s;
+    let reach = 0;
+    // The distance changes no faster than the path goes, so a gap is used up within its own length
+    // along: at most WALK_STEPS steps, and one more for each corner it starts again from
+    for (let i = 0; i < 2 * WALK_STEPS + bends.length + 2; i++) {
+        const hi = Math.min(lo + step, bend);
+        const there = far(hi);
+        const change = Math.abs(there - reach);
+        if (change >= gap) {
+            // Within one short step the distance goes one way
+            const from = reach;
+            let a = lo;
+            let b = hi;
+            for (let k = 0; k < 48; k++) {
+                const mid = (a + b) / 2;
+                if (Math.abs(far(mid) - from) < gap) a = mid;
+                else b = mid;
+            }
+            return (a + b) / 2;
+        }
+        gap -= change;
+        lo = hi;
+        reach = there;
+        if (hi === bend) {
+            if (gap <= tolerance) return bend;
+            origin = path.at(bend);
+            reach = 0;
+            bend = nextBend(bends, bend, tolerance);
         }
     }
-    while (hi - lo > gap * 1e-9) {
-        const mid = (lo + hi) / 2;
-        if (far(mid) < gap) lo = mid;
-        else hi = mid;
-    }
-    return (lo + hi) / 2;
+    return lo + gap;
 }
+
+/** The first of `bends` past offset `s`, or Infinity */
+const nextBend = (bends: readonly number[], s: number, tolerance: number) =>
+    bends.reduce(
+        (first, b) => (b > s + tolerance && b < first ? b : first),
+        Infinity,
+    );
 
 /**
  * `n` slots along `path`, tagged with their distance `s` from the path's start.

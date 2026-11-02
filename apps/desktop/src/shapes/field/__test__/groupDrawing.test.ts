@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { lineTool } from "../../line/lineTool";
-import { drawLine, type LineParams } from "../../line/lineGeometry";
+import { drawLine, linePath, type LineParams } from "../../line/lineGeometry";
 import type { ToolEnv } from "../../tool/toolKind";
 import type { XY } from "../../types";
 import {
@@ -45,6 +45,44 @@ const lineWith = (n: number, list: string, to: XY = { x: 150, y: 100 }) =>
 /** Spots in order along the line, as the kind lays them out */
 const spotsOf = (p: LineParams, n: number) =>
     lineTool.shape.generate(p, n, { stepPx: STEP } as never);
+
+describe("a gap round a corner that holds no marcher", () => {
+    // A V whose tip holds no marcher, measured along the path: 3 at 4 steps, then 3
+    const p: LineParams = {
+        points: [
+            { x: 0, y: 0, tension: 0 },
+            { x: 30, y: -40, tension: 0 },
+            { x: 60, y: 0, tension: 0 },
+        ],
+        spacing: {
+            mode: "path",
+            groups: [{ count: 3, interval: 40 }, { interval: 30 }],
+            anchor: "start",
+        },
+        corners: false,
+    };
+    const spots = spotsOf(p, 5);
+
+    it("labels it at its middle along the line, not across the V", () => {
+        const { groupLabels } = groupDrawing(
+            lineTool,
+            p,
+            5,
+            spots,
+            { lit: 0 },
+            STEP,
+        );
+        // The second gap, 40 to 80 along, goes round the tip at 50
+        const round = groupLabels!.filter((l) => !l.seam)[1]!;
+        const path = linePath(p);
+        const middle = path.at(60);
+        expect(round.at.x).toBeCloseTo(middle.x, 6);
+        expect(round.at.y).toBeCloseTo(middle.y, 6);
+        expect(round.length).toBeCloseTo(40, 6);
+        // On the line: the chord's middle would be inside the V
+        expect(path.at(path.project(round.at)).y).toBeCloseTo(round.at.y, 6);
+    });
+});
 
 describe("the groups' colors", () => {
     it("gives each group its own color, round again past the palette", () => {
@@ -218,6 +256,21 @@ describe("the lit group's labels set beside the line", () => {
             100 - (RING + GROUP_LABEL_HEIGHT / 2 + 2),
         );
         expect(placed!.text).toBe("3");
+    });
+
+    it("keeps a pill each for gaps whose chord is short but that are long along the line", () => {
+        const short = { x: groupLabelWidth("3") / 2, y: 0 };
+        const labels = [
+            gapLabel({ x: 0, y: 100 }, { x: short.x, y: 100 }, { length: 40 }),
+            gapLabel(
+                { x: short.x, y: 100 },
+                { x: 2 * short.x, y: 100 },
+                { length: 40 },
+            ),
+        ];
+        expect(placeGroupLabels(labels, same, RING)).toHaveLength(2);
+        const chords = labels.map(({ length: _, ...l }) => l);
+        expect(placeGroupLabels(chords, same, RING)).toHaveLength(1);
     });
 
     it("moves it to the left of an upright line by the ring and half its width", () => {

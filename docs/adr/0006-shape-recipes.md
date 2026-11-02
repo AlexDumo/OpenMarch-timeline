@@ -287,17 +287,19 @@ The Line shape (spec #522, #523) stores a new kind:
    `measured` and the host's `pivot`. `spacing` is `{ mode: "fit" }` (the interval follows from the drawn
    points), `{ mode: "keep", groups }` (Keep interval) or `{ mode: "path", groups, anchor }`
    (Interval on the path, `anchor` one of `start`, `center`, `end`). A group is
-   `{ interval, count? }`: the interval is the straight distance between neighbors (the chord) in
-   field units, `count` a whole number of marchers from 1, and a group with no `count` is the
+   `{ interval, count? }`: the interval is the distance between neighbors in field units, as
+   `measured` says, `count` a whole number of marchers from 1, and a group with no `count` is the
    rest; at most one group in a list is the rest (#526). The groups give the line's gaps in order
    from its first point. Recipes store the parsed groups, never the typed text, so the interval
    list's change of meaning (count × interval, from interval × gaps) changes no saved data.
-   `measured` (#527) says what every interval measures: absent is the straight (true) distance
-   above; `"x"` (↔) is how far neighbors are apart side to side, and `"y"` (↕) front to back. Each
-   spot is then found where the line reaches its coordinate that way, so the line must go one way
-   along that axis over its whole drawn path (curves included); a line that no longer does (a
-   part turned back, or a straight part square to the axis) is laid out by the true distance
-   until it does again. Measured ↔ or ↕, each neighbor's x (or y) is its gap from the one before,
+   `measured` (#527) says what every interval measures. Absent is along the path: the length of
+   line between neighbors (arc length), changed on 2026-11-01 (see below). `"straight"` is
+   straight across, the distance from marcher to marcher (the chord), except across a corner
+   that holds no marcher. `"x"` (↔) is how far neighbors are apart side to side, and `"y"` (↕)
+   front to back. Each spot is then found where the line reaches its coordinate that way, so the
+   line must go one way along that axis over its whole drawn path (curves included); a line that
+   no longer does (a part turned back, or a straight part square to the axis) is laid out along
+   the path until it does again. Measured ↔ or ↕, each neighbor's x (or y) is its gap from the one before,
    computed from the run's start as `start + i × gap` within each group rather than summed, so a
    spot on the step grid stays on it; every spot is on the grid that way only with intervals that
    are whole half steps, in Keep interval (whose start slides along the line onto the grid) and on
@@ -313,11 +315,11 @@ The Line shape (spec #522, #523) stores a new kind:
    everyone, in proportion to the stretches' lengths (measured ↔ or ↕, their lengths that way, so
    each stretch's gaps are even that way with a marcher on every corner); with groups, each corner at the seam between
    gaps nearest its share of the line. Keep interval makes each stretch as long as the gaps it
-   holds, measured straight across or, measured ↔ or ↕, that way (a whole run of the groups, crossing group seams when they fall
+   holds, as `measured` says (a whole run of the groups, crossing group seams when they fall
    mid-stretch), a curved stretch scaled about its start, and a corner drag between two straight
    stretches lands where both are whole runs. A stretch left off its run (a corner dragged with
    `fine`) scales its gaps to fit, which is even spacing with one interval. In Fit the groups
-   don't apply: each stretch's marchers spread evenly over it, straight across. On the path the
+   don't apply: each stretch's marchers spread evenly over it, as `measured` says. On the path the
    run is laid from its anchor along the path itself: from the start, back from the end, or with
    as much path spare before it as after it.
 3. **A Curve is a Line.** The Curve in the pickers is a preset whose points start smooth; it
@@ -331,11 +333,12 @@ The Line shape (spec #522, #523) stores a new kind:
    understands. Each build widens its `readable` check as it learns a field: the first Line build
    read two straight points and a single group with no count; more points and `corners` came with
    #524, any number of groups, counted or with one rest, with #526, tensions from 0 to 2 with
-   #525, `measured` (`"x"` or `"y"`, with any of these) with #527, `closed` with its
+   #525, `measured` (`"x"` or `"y"`, with any of these) with #527, `"straight"` with the
+   change of 2026-11-01 below, `closed` with its
    `distribution` with #529, together with tensions and groups, and a point's `marcher` with
    #569 (decision 7). From #569 a point with any other field reads as plain positions. A closed line is never measured
-   along an axis (it always turns back), so it's laid out by the true distance whatever its
-   `measured` says.
+   along an axis (it always turns back), so it's laid out along the path when its `measured`
+   says `"x"` or `"y"`; `"straight"` applies to it as to an open line.
 6. **A closed Line (#529).** `closed: true` joins the last point to the first: a closed line has
    three points or more and a gap for every marcher (n gaps, an open line n − 1), and its spacing
    is `fit` or `keep`, never `path` (a closed line has no ends to lay a run from). The closing
@@ -394,6 +397,41 @@ The Line shape (spec #522, #523) stores a new kind:
    the only field a point has besides `x`, `y` and `tension`. Builds from before #569 (lab and
    nightly) don't recognise `marcher` and lay out such Lines as if every point followed the line:
    that is the accepted one-way door.
+
+8. **Along the path by default (2026-11-01, owner decision on #527).** Until this change an absent
+   `measured` meant straight across: each gap was the chord between neighbors. On a line with a
+   sharp spike whose tip holds no marcher (the corners switch off, or the tip's own answer Even
+   spacing), the next marcher went where the straight distance first reached the interval, far
+   down the spike's other side, so the tip was skipped though the marchers looked evenly spaced.
+   Now an absent `measured` is **along the path**: every gap is that much line, by arc length, and
+   the Measured menu's first choice is Along the path. The old meaning is kept as `"straight"`
+   (the menu's Straight across, once True distance) with one fix: a gap whose straight-across spot
+   would lie past a corner holding no marcher (a point of tension 0 inside the run, between two
+   held points, or anywhere on the path when no point holds a marcher there) goes on from that
+   corner, straight across again, with what is left of it, so a gap never cuts across such a
+   corner. And where a curve turns back toward the marcher before the gap is used up, the way
+   back counts too (a gap is how much the straight distance from the marcher changes along the
+   path), so a gap never jumps the part that curls back. Where a gap lands then moves on
+   smoothly as it grows, which Fit's search for one even interval needs: with the first spot at
+   the straight distance alone, a run could jump a curl and leave the last gap short. Within a stretch of straight segments
+   straight across and along the path are therefore the same; they differ only round a curve,
+   where a smooth point is never such a corner. ↔ and ↕ are unchanged: on a line that goes one way
+   along the axis, the axis distance of a gap is the sum of the distances of the path between, so a
+   gap can't cut a corner short. (A spike pointing across the axis can still leave its tip
+   between two marchers, each an interval apart that way, which is what ↔ or ↕ asks for.)
+
+   This is a one-way door taken while Line version 2 had not reached main (fork PR #568 open):
+   no saved show depends on absent meaning straight across. Lines saved by lab or nightly builds
+   from before this change read as along the path, so a Line with a curve or an un-held corner,
+   saved with no `measured`, can lay out a little differently once reopened or edited. Builds from before this change don't
+   recognise `"straight"` and show such Lines as plain positions (decision 5).
+
+Verification (2026-11-01): `lineAlongPath.test.ts` walks round a spike's un-held tip, along the
+path and straight across, with the corners switch off and with the tip's own Even spacing; checks
+equal arc gaps on a curve by default, equal chord gaps on it measured straight across, both the
+same on straight segments, ↔ still exactly an interval apart in x round un-held corners, and that
+`"straight"` is read and round-trips while along the path stores nothing. `lineMeasured.test.ts`
+covers the menu's four choices and refuses any other `measured`.
 
 Verification (#569): `linePointMenu.test.ts` opts a corner out with the switch on and in with it
 off, in Fit, on a closed line both ways, measured ↔ with each stretch even that way, and in Keep
