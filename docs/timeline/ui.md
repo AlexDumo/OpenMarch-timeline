@@ -1388,10 +1388,14 @@ from it. The spec still wins on the model; this file decides presentation.
     extrapolated along their own line). A row another move on a higher layer cuts into pieces
     before the playhead keeps each piece's own line: every earlier piece starts from where that
     move left the marcher, so it gets a row of its own in one more shapeless direct transition of
-    the new move. Any other path style is sampled at the playhead: before it the marchers go
-    straight to where they were, and from it the transition keeps its style but restarts there, so
-    its path after the playhead changes too. The toast says so: "Split Move 2 at Page 3 count 4 ·
-    3 marchers' paths are redrawn: straight before it, restarted after". Follow-the-leader's second half keeps its waypoints even where the leader has
+    the new move. An arc keeps every count before the playhead: its first half is an arc of the
+    same circle at the same speed, with a smaller bulge, one transition per count its rows' spans
+    start on (#591). From the playhead the transition keeps its style and bulge but restarts
+    there, so a curved path after the playhead changes; the toast says so: "Split Move 2 at Page 3
+    count 4 · 3 marchers' curved paths restart after it". Follow the leader is sampled at the
+    playhead: before it the marchers go straight to where they were, and from it the transition
+    restarts, and the toast says "3 marchers' paths are redrawn: straight before it, restarted
+    after". Follow-the-leader's second half keeps its waypoints even where the leader has
     passed them, and inherits order from the new straight first half (so it falls back to slot
     order): both are known gaps until pathways are redone.
   - **After.** The new move before the playhead becomes the window (its clip selected, the Move
