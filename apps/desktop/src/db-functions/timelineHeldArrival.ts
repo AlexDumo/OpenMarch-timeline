@@ -1,6 +1,7 @@
-import { inArray, sql, type SQL } from "drizzle-orm";
+import { and, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import * as schema from "@om-electron/database/migrations/schema";
 import type { DbConnection, DbTransaction } from "./types";
+import { shapeRecipesOnly } from "./shapeRecipes";
 
 /**
  * The Held marks as stored, and the one rule for a mark's **arrival** (ADR 0001 amendment
@@ -175,10 +176,9 @@ export async function readArrival(
 
 /**
  * Those of `marcherIds` whose starting spot a placed shape sets: a member of a recipe with no move
- * (`timeline_id` NULL), other than an ungrouped mark (kind `"ungrouped"`, `UNGROUPED_KIND` in
- * `shapes/placed/placedBox.ts`), which stores no shape. A shape's starting spots get no Held hold:
- * the shape carried on is its hold (owner, 2026-11-01; #619). Fork PR #618 names the ungrouped
- * test `isShapeRecipe()` in `shapeRecipes`; this can use it once both are in.
+ * (`timeline_id` NULL), other than an ungrouped mark (`shapeRecipesOnly`), which stores no shape.
+ * A shape's starting spots get no Held hold: the shape carried on is its hold (owner, 2026-11-01;
+ * #619).
  */
 export async function marchersWithShapeHome(
     db: DbConnection | DbTransaction,
@@ -192,7 +192,11 @@ export async function marchersWithShapeHome(
         .from(m)
         .innerJoin(r, sql`${r.id} = ${m.recipe_id}`)
         .where(
-            sql`${r.timeline_id} IS NULL AND ${r.kind} <> 'ungrouped' AND ${inArray(m.marcher_id, [...new Set(marcherIds)])}`,
+            and(
+                isNull(r.timeline_id),
+                shapeRecipesOnly(),
+                inArray(m.marcher_id, [...new Set(marcherIds)]),
+            ),
         )
         .all();
     return new Set(rows.map((row) => row.marcherId));

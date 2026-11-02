@@ -7,6 +7,7 @@ import {
     hasHeldMarksTable,
     isInsideHeldMark,
     readArrival,
+    readHeldMarkArrivals,
     readHeldMarks,
     HOME_ARRIVAL,
     marchersWithShapeHome,
@@ -73,6 +74,33 @@ export interface HeldHomeEdit<M extends { marcherId: number }> {
 
 /** A Held marcher an edit inside its hold left alone, with why. */
 export type HeldEditSkip = Pick<MoveMemberSkip, "marcherId" | "reason">;
+
+/**
+ * Deletes the holds from the starting spots (#619) of those of `marcherIds` whose starting spot a
+ * placed shape now sets (`marchersWithShapeHome`): a shape's starting spots get no Held hold, the
+ * shape carried on is its hold (owner, 2026-11-01). Run in the edit that placed the shape, after
+ * its recipe is written, so both are one undo step.
+ *
+ * @returns the marchers whose holds went
+ */
+export async function dropShapeHomeHoldsInTransaction(
+    tx: DbTransaction,
+    marcherIds: readonly number[],
+): Promise<number[]> {
+    const shaped = await marchersWithShapeHome(tx, marcherIds);
+    if (shaped.size === 0) return [];
+    const gone = (await readHeldMarkArrivals(tx)).filter(
+        (m) => m.fromHome && shaped.has(m.marcherId),
+    );
+    if (gone.length === 0) return [];
+    await tx.delete(schema.timeline_held_marks).where(
+        inArray(
+            schema.timeline_held_marks.id,
+            gone.map((m) => m.id),
+        ),
+    );
+    return [...new Set(gone.map((m) => m.marcherId))].sort((x, y) => x - y);
+}
 
 /**
  * Splits an edit at the count `beat` into the moved marchers that are Held there, those skipped,

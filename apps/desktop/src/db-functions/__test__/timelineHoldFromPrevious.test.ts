@@ -15,9 +15,11 @@ import {
     useTimelineResolverStore,
 } from "@/timeline/timelineStore";
 import {
+    heldDroppedMessage,
     timelineErrorCode,
     timelineErrorMessage,
 } from "@/timeline/timelineErrorMessages";
+import { carriedOnto } from "@/shapes/placed/commitBox";
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { createLastPage, deletePages, updatePages } from "../page";
 import { createBeats, deleteBeats, updateBeats } from "../beat";
@@ -1736,6 +1738,483 @@ describeDbTests(
                     .all()
             ).map((r) => r.marcherId);
             expect(marked).toContain(a);
+        });
+    },
+);
+
+/** `marcherId`'s drill name ("T1"), as the hold messages say it. */
+const nameOf = async (db: DbConnection, marcherId: number) => {
+    const m = (await db.select().from(schema.marchers).all()).find(
+        (r) => r.id === marcherId,
+    )!;
+    return `${m.drill_prefix}${m.drill_order}`;
+};
+
+const recipes = (db: DbConnection) =>
+    db.select().from(schema.timeline_shape_recipes).all();
+
+describeDbTests(
+    "A shape placed over marchers Held from their starting spots (#619 review)",
+    (it) => {
+        it("is saved at the starting spots, and their Held holds from them go, in one undo step", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, c } = await show(db);
+            await holdFromPreviousPage({
+                db,
+                pageBox: PAGE1,
+                marcherIds: [a, c],
+            });
+            const before = await snapshotWithHomes(db);
+            const groups = await undoGroups(db);
+            const seen: (number | null)[] = [];
+            await moveMarchersInTarget({
+                db,
+                target: { kind: "range", ...PAGE1 },
+                moves: [
+                    { marcherId: a, x: FAR[0], y: FAR[1] },
+                    { marcherId: c, x: LEFT[0], y: LEFT[1] },
+                ],
+                afterWrite: async (tx, timelineId) => {
+                    seen.push(timelineId);
+                    await saveShapeRecipeInTransaction({
+                        tx,
+                        timelineId,
+                        recipe: {
+                            kind: "box",
+                            kindVersion: 1,
+                            params: {},
+                            orderMode: "nearest",
+                            reverse: false,
+                        },
+                        members: [
+                            { marcherId: a, slot: 0, x: FAR[0], y: FAR[1] },
+                            { marcherId: c, slot: 1, x: LEFT[0], y: LEFT[1] },
+                        ],
+                    });
+                },
+            });
+            expect(seen).toEqual([null]);
+            const [recipe] = await recipes(db);
+            expect(recipe?.timeline_id).toBeNull();
+            expect(await homeOf(db, a)).toEqual(FAR);
+            expect(await homeOf(db, c)).toEqual(LEFT);
+            // A shape's starting spots get no Held hold: the shape carried on is the hold
+            expect(await marksOf(db, a)).toEqual([]);
+            expect(await marksOf(db, c)).toEqual([]);
+            expect(await undoGroups(db)).toBe(groups + 1);
+            const after = await snapshotWithHomes(db);
+            expect((await performUndo(db)).success).toBe(true);
+            expect(await snapshotWithHomes(db)).toEqual(before);
+            expect(await recipes(db)).toEqual([]);
+            expect((await performRedo(db)).success).toBe(true);
+            expect(await snapshotWithHomes(db)).toEqual(after);
+        });
+
+        it("a later Hold from previous page then skips them as homeShape", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { c } = await show(db);
+            await holdFromPreviousPage({ db, pageBox: PAGE1, marcherIds: [c] });
+            await moveMarchersInTarget({
+                db,
+                target: { kind: "range", ...PAGE1 },
+                moves: [{ marcherId: c, x: LEFT[0], y: LEFT[1] }],
+                afterWrite: (tx, timelineId) =>
+                    saveShapeRecipeInTransaction({
+                        tx,
+                        timelineId,
+                        recipe: {
+                            kind: "box",
+                            kindVersion: 1,
+                            params: {},
+                            orderMode: "nearest",
+                            reverse: false,
+                        },
+                        members: [
+                            { marcherId: c, slot: 0, x: LEFT[0], y: LEFT[1] },
+                        ],
+                    }).then(() => undefined),
+            });
+            expect(
+                await holdFromPreviousPage({
+                    db,
+                    pageBox: PAGE1,
+                    marcherIds: [c],
+                }),
+            ).toEqual({
+                held: [],
+                skipped: [{ marcherId: c, reason: "homeShape" }],
+            });
+        });
+
+        it("a drag inside with no app data keeps the holds (only a saved shape drops them)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { c } = await show(db);
+            await holdFromPreviousPage({ db, pageBox: PAGE1, marcherIds: [c] });
+            const seen: (number | null)[] = [];
+            await moveMarchersInTarget({
+                db,
+                target: { kind: "range", ...PAGE1 },
+                moves: [{ marcherId: c, x: LEFT[0], y: LEFT[1] }],
+                afterWrite: async (_tx, timelineId) => {
+                    seen.push(timelineId);
+                    return false;
+                },
+            });
+            expect(seen).toEqual([null]);
+            expect(await marksOf(db, c)).toEqual([PAGE1]);
+        });
+    },
+);
+
+describeDbTests(
+    "An edit of an earlier page that leaves a hold from the starting spots nothing to grow out of (#619 review)",
+    (it) => {
+        const fill = (
+            _key: string,
+            text: string,
+            params?: Record<string, string>,
+        ) =>
+            text.replace(
+                /\{(\w+)\}/g,
+                (_, name: string) => params?.[name] ?? "",
+            );
+
+        it("a move on Page 1 drops a Page 3 hold from the start, and says whose and where", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { c } = await show(db);
+            await holdFromPreviousPage({ db, pageBox: PAGE3, marcherIds: [c] });
+            const before = await snapshot(db);
+            const result = await move(db, PAGE1, [{ marcherId: c, xy: LEFT }]);
+            expect(await marksOf(db, c)).toEqual([]);
+            expect(result.droppedHolds).toEqual({
+                names: [await nameOf(db, c)],
+                pages: ["3"],
+            });
+            expect(heldDroppedMessage(result.droppedHolds, fill)).toBe(
+                `${await nameOf(db, c)} is no longer Held on Page 3: it held from the starting spot, and now a move before it ends somewhere else.`,
+            );
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("a Basic point edit on Page 1 says so too", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { c } = await show(db);
+            await holdFromPreviousPage({ db, pageBox: PAGE3, marcherIds: [c] });
+            const result = await edit(
+                db,
+                { kind: "point", beat: 9, box: PAGE1 },
+                [{ marcherId: c, xy: LEFT }],
+            );
+            expect(await marksOf(db, c)).toEqual([]);
+            expect(result.droppedHolds?.pages).toEqual(["3"]);
+        });
+
+        it("Set as shown on Page 1 drops it and says so", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { c } = await show(db);
+            await holdFromPreviousPage({ db, pageBox: PAGE3, marcherIds: [c] });
+            const result = await setAsShownOnPage({
+                db,
+                pageBox: PAGE1,
+                marcherIds: [c],
+            });
+            expect(result.changed).toEqual([c]);
+            expect(await marksOf(db, c)).toEqual([]);
+            expect(result.droppedHolds).toEqual({
+                names: [await nameOf(db, c)],
+                pages: ["3"],
+            });
+        });
+
+        it("a move that arrives at the hold's start keeps it, and names nothing", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { c } = await show(db);
+            await holdFromPreviousPage({ db, pageBox: PAGE2, marcherIds: [c] });
+            const result = await move(db, PAGE1, [{ marcherId: c, xy: LEFT }]);
+            expect(await marksOf(db, c)).toEqual([PAGE2]);
+            expect(result.droppedHolds).toBeUndefined();
+        });
+
+        it("a two-page names list: two marchers' holds on Pages 3 and 4", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { c } = await show(db);
+            const d = resolver().marcherIds()[3]!;
+            await holdFromPreviousPage({ db, pageBox: PAGE3, marcherIds: [c] });
+            await holdFromPreviousPage({ db, pageBox: PAGE4, marcherIds: [d] });
+            expect(await marksOf(db, c)).toEqual([PAGE3]);
+            const result = await move(db, PAGE1, [
+                { marcherId: c, xy: LEFT },
+                { marcherId: d, xy: FAR },
+            ]);
+            expect(result.droppedHolds?.names).toHaveLength(2);
+            expect(result.droppedHolds?.pages).toEqual(["3", "4"]);
+        });
+    },
+);
+
+describeDbTests(
+    "Ungrouping a shape that sets the starting spots (#619 review)",
+    (it) => {
+        const box = {
+            kind: "box",
+            kindVersion: 1,
+            params: {},
+            orderMode: "nearest",
+            reverse: false,
+        };
+        const ungrouped = { ...box, kind: UNGROUPED_RECIPE_KIND };
+
+        /** A box placed at the starting spots holding `c`, as the Shape tool saves it */
+        const placeAtHome = async (db: DbConnection, c: number) => {
+            await edit(db, { kind: "home" }, [{ marcherId: c, xy: LEFT }]);
+            return transactionWithHistory(db, "test", (tx) =>
+                saveShapeRecipeInTransaction({
+                    tx,
+                    timelineId: null,
+                    recipe: box,
+                    members: [
+                        { marcherId: c, slot: 0, x: LEFT[0], y: LEFT[1] },
+                    ],
+                }),
+            );
+        };
+
+        it("on Page 1 it's carried onto, so Ungroup marks Page 1's move, and Page 1 still can't be held", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { c } = await show(db);
+            const id = await placeAtHome(db, c);
+            const stored = (await recipes(db)).find((r) => r.id === id)!;
+            // ungroupShape's routing: a Page 1 edit window is past the homes recipe (beat 0)
+            expect(
+                carriedOnto(
+                    {
+                        ok: true,
+                        target: { kind: "range", ...PAGE1 },
+                        beat: PAGE1.end,
+                    },
+                    {
+                        recipe: {
+                            id,
+                            timelineId: stored.timeline_id,
+                            members: [],
+                        },
+                        endBeat: 0,
+                    } as unknown as Parameters<typeof carriedOnto>[1],
+                ),
+            ).toBe(true);
+            // markUngrouped: writePlacement with setAll, the members set where they stand
+            await moveMarchersInTarget({
+                db,
+                target: { kind: "range", ...PAGE1 },
+                moves: [{ marcherId: c, x: LEFT[0], y: LEFT[1] }],
+                keepUnchanged: true,
+                afterWrite: (tx, timelineId) =>
+                    saveShapeRecipeInTransaction({
+                        tx,
+                        timelineId,
+                        recipe: ungrouped,
+                        members: [
+                            { marcherId: c, slot: 0, x: LEFT[0], y: LEFT[1] },
+                        ],
+                    }).then(() => undefined),
+            });
+            expect((await recipes(db)).map((r) => r.kind).sort()).toEqual([
+                "box",
+                UNGROUPED_RECIPE_KIND,
+            ]);
+            const result = await holdFromPreviousPage({
+                db,
+                pageBox: PAGE1,
+                marcherIds: [c],
+            });
+            expect(result.skipped).toEqual([
+                { marcherId: c, reason: "homeShape" },
+            ]);
+        });
+
+        it("at the start of the show it's ungrouped in place, and then Page 1 can be held", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { c } = await show(db);
+            const id = await placeAtHome(db, c);
+            expect(
+                carriedOnto({ ok: true, target: { kind: "home" }, beat: 0 }, {
+                    recipe: { id, timelineId: null, members: [] },
+                    endBeat: 0,
+                } as unknown as Parameters<typeof carriedOnto>[1]),
+            ).toBe(false);
+            // ungroupInPlace
+            await transactionWithHistory(db, "ungroupShape", (tx) =>
+                saveShapeRecipeInTransaction({
+                    tx,
+                    timelineId: null,
+                    recipe: ungrouped,
+                    members: [
+                        { marcherId: c, slot: 0, x: LEFT[0], y: LEFT[1] },
+                    ],
+                    replaces: id,
+                }),
+            );
+            expect(
+                await holdFromPreviousPage({
+                    db,
+                    pageBox: PAGE1,
+                    marcherIds: [c],
+                }),
+            ).toEqual({ held: [c], skipped: [] });
+        });
+    },
+);
+
+describeDbTests(
+    "Holds from the starting spots with other edits (#619 review)",
+    (it) => {
+        it("a mixed drag: a plain marcher, one Held from an arrival and one Held from its starting spot", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b, c } = await show(db);
+            // a: Held on Page 3 from its Page 2 move; c: Held on Pages 1–3 from its starting spot
+            await holdFromPreviousPage({
+                db,
+                pageBox: PAGE3,
+                marcherIds: [a, c],
+            });
+            await holdFromPreviousPage({ db, pageBox: PAGE2, marcherIds: [c] });
+            await holdFromPreviousPage({ db, pageBox: PAGE1, marcherIds: [c] });
+            expect(await marksOf(db, c)).toEqual([{ start: 1, end: 25 }]);
+            const before = await snapshotWithHomes(db);
+            const groups = await undoGroups(db);
+            const result = await edit(db, { kind: "range", ...PAGE3 }, [
+                { marcherId: a, xy: FAR },
+                { marcherId: b, xy: ELSEWHERE },
+                { marcherId: c, xy: LEFT },
+            ]);
+            expect(result.homes).toEqual([c]);
+            expect(await homeOf(db, c)).toEqual(LEFT);
+            // a's Page 2 move ends at FAR, so it stands there over its hold; b moves on Page 3
+            expect((await atFlags(db, a)).slice(2)).toEqual([FAR, FAR, FAR]);
+            expect((await atFlags(db, b)).slice(2)).toEqual([
+                UP2,
+                ELSEWHERE,
+                ELSEWHERE,
+            ]);
+            expect(await atFlags(db, c)).toEqual([
+                LEFT,
+                LEFT,
+                LEFT,
+                LEFT,
+                LEFT,
+            ]);
+            expect(await marksOf(db, a)).toEqual([PAGE3]);
+            expect(await marksOf(db, c)).toEqual([{ start: 1, end: 25 }]);
+            expect(await undoGroups(db)).toBe(groups + 1);
+            const after = await snapshotWithHomes(db);
+            expect((await performUndo(db)).success).toBe(true);
+            expect(await snapshotWithHomes(db)).toEqual(before);
+            expect((await performRedo(db)).success).toBe(true);
+            expect(await snapshotWithHomes(db)).toEqual(after);
+        });
+
+        it("deleting Page 1 under a hold from the start on Page 2", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { c } = await show(db);
+            await holdFromPreviousPage({ db, pageBox: PAGE2, marcherIds: [c] });
+            const before = await snapshot(db);
+            await deletePages({ db, pageIds: new Set([await pageId(db, 1)]) });
+            await timelineResolverSettled();
+            const first = (await pagesInOrder(db)).find((p) => p.order === 1)!;
+            expect([first.id === 0, pageEndBeat(first)]).toEqual([false, 17]);
+            // Page 1's counts go to Page 2, now the first page [1, 17): the hold starts where it
+            // does, so it covers the whole page and still grows out of the starting spot
+            expect(await marksOf(db, c)).toEqual([{ start: 1, end: 17 }]);
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("deleting Page 1 when it is the hold from the start", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { c } = await show(db);
+            await holdFromPreviousPage({ db, pageBox: PAGE1, marcherIds: [c] });
+            const before = await snapshot(db);
+            await deletePages({ db, pageIds: new Set([await pageId(db, 1)]) });
+            await timelineResolverSettled();
+            expect(await marksOf(db, c)).toEqual([]);
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("Remove keyframe on a later page leaves a hold from the start alone", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a } = await show(db);
+            await holdFromPreviousPage({ db, pageBox: PAGE1, marcherIds: [a] });
+            await unsetMarchersAt({ db, beat: PAGE2.end, marcherIds: [a] });
+            expect(await marksOf(db, a)).toEqual([PAGE1]);
+        });
+
+        it("Remove keyframe after a hold from the start, joining the later moves, keeps the hold", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { c } = await show(db);
+            await move(db, PAGE2, [{ marcherId: c, xy: LEFT }]);
+            await move(db, PAGE3, [{ marcherId: c, xy: FAR }]);
+            await holdFromPreviousPage({ db, pageBox: PAGE1, marcherIds: [c] });
+            expect(await marksOf(db, c)).toEqual([PAGE1]);
+            await unsetMarchersAt({ db, beat: PAGE2.end, marcherIds: [c] });
+            // The moves on pages 2 and 3 join into one from Page 2's start: the hold still stands
+            // on its starting spot up to Page 1's end
+            expect(await marksOf(db, c)).toEqual([PAGE1]);
+        });
+
+        it("a move written over a hold from the start is refused (E-H1), naming who and where", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { c } = await show(db);
+            await holdFromPreviousPage({ db, pageBox: PAGE1, marcherIds: [c] });
+            const rows = await snapshotWithHomes(db);
+            // A window over pages 1 and 2 ends outside the hold, so it writes a move over it
+            const error = await move(db, { start: 1, end: 17 }, [
+                { marcherId: c, xy: FAR },
+            ]).catch((e: unknown) => e);
+            expect(timelineErrorCode(error)).toBe("E-H1");
+            const fill = (
+                _key: string,
+                text: string,
+                params?: Record<string, string>,
+            ) =>
+                text.replace(
+                    /\{(\w+)\}/g,
+                    (_, name: string) => params?.[name] ?? "",
+                );
+            expect(timelineErrorMessage(error, { translate: fill })).toBe(
+                `${await nameOf(db, c)} is Held on Page 1. Clear this page to remove the hold, or drag inside it to move it.`,
+            );
+            expect(await snapshotWithHomes(db)).toEqual(rows);
         });
     },
 );

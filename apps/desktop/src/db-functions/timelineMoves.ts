@@ -34,6 +34,7 @@ import type { DatabaseTimelineAssignment } from "./timelineAssignments";
 import { setPositionsAtBeatInTransaction } from "./timelinePointMoves";
 import {
     clearHeldMarksOverInTransaction,
+    dropShapeHomeHoldsInTransaction,
     nameHeldConflict,
     splitHeldEditsInTransaction,
     type HeldConflict,
@@ -41,6 +42,10 @@ import {
     type HeldEditSkip,
     type HeldHomeEdit,
 } from "./timelineHeldMarks";
+import {
+    readHeldArrivalsBefore,
+    startHoldsLostInTransaction,
+} from "./timelineHeldUpkeep";
 import {
     rowsIn,
     skippedRefusal,
@@ -118,6 +123,12 @@ export interface TimelineMoveResult {
      * the later pages went too (its arrival went), and those pages, for the toast
      */
     clearedLaterHolds?: HeldConflict;
+    /**
+     * Holds from the starting spots (#619) on later pages that the edit left with nothing to grow
+     * out of, so they went (`startHoldsLostInTransaction`): it gave the marcher a move starting
+     * before the hold that doesn't end at its start. For the edit's warning
+     */
+    droppedHolds?: HeldConflict;
     /**
      * Clear this page: the shape and follow-the-leader members it left in their move, named in
      * the refusal's message (`skippedRefusal`), for the toast after the rest was written
@@ -1255,7 +1266,7 @@ export const moveMarchersInTarget = async ({
     onStart?: () => void;
     /**
      * Called inside the edit after the positions are written, with the move they belong to
-     * (`null` for homes), so app data about them (a shape recipe, ADR 0006) is part of the same
+     * (`null` for homes, and for a drag inside holds from the starting spots only), so app data about them (a shape recipe, ADR 0006) is part of the same
      * undo step. Not called for a range with no move to hold the positions. Resolving to `false`
      * says it wrote nothing, so an edit that changed no positions either is still no undo step.
      */
@@ -1268,6 +1279,18 @@ export const moveMarchersInTarget = async ({
     try {
         return await transactionWithHistory(db, "moveMarchers", async (tx) => {
             onStart?.();
+            const heldBefore =
+                target.kind === "home"
+                    ? null
+                    : await readHeldArrivalsBefore(tx);
+            /** Names the holds from the starting spots the edit leaves nothing to grow out of */
+            const withDroppedHolds = async (result: TimelineMoveResult) => {
+                const dropped =
+                    heldBefore &&
+                    (await startHoldsLostInTransaction(tx, heldBefore));
+                if (dropped) result.droppedHolds = dropped;
+                return result;
+            };
             if (target.kind === "timeline") {
                 const result = await moveMarchersInTimelineInTransaction({
                     tx,
@@ -1276,7 +1299,7 @@ export const moveMarchersInTarget = async ({
                     ghosts: target.ghosts ?? false,
                 });
                 await afterWrite?.(tx, target.timelineId);
-                return result;
+                return withDroppedHolds(result);
             }
             if (target.kind === "range" || target.kind === "point") {
                 // A marcher Held at the edited count edits the move arriving at its hold
@@ -1348,8 +1371,13 @@ export const moveMarchersInTarget = async ({
                 // The selected move, else the one the marchers are in, since a move split off
                 // the page's shares its counts (UI-25). With only Held marchers, the move their
                 // edit went to (the most of them arrive in), so app data about their positions (a
-                // shape recipe) is saved with it
+                // shape recipe) is saved with it; with only marchers Held from their starting
+                // spots, the homes (`null`), where their edit went
                 const marcherIds = rest.map((m) => m.marcherId);
+                const onlyHomes =
+                    marcherIds.length === 0 &&
+                    held.length === 0 &&
+                    homes.length > 0;
                 const timelineId = !afterWrite
                     ? null
                     : marcherIds.length === 0
@@ -1378,13 +1406,23 @@ export const moveMarchersInTarget = async ({
                           )) ??
                           (await timelineEndingAt(tx, target.beat)));
                 const wroteAppData =
-                    afterWrite && timelineId !== null
-                        ? (await afterWrite(tx, timelineId)) !== false
+                    afterWrite && (timelineId !== null || onlyHomes)
+                        ? (await afterWrite(
+                              tx,
+                              onlyHomes ? null : timelineId,
+                          )) !== false
                         : false;
+                // A shape placed at the starting spots is those marchers' hold: their Held
+                // holds from the starting spots go, in the same edit (owner, 2026-11-01)
+                if (onlyHomes && wroteAppData)
+                    await dropShapeHomeHoldsInTransaction(
+                        tx,
+                        homes.map((h) => h.move.marcherId),
+                    );
                 // An edit that writes nothing (and no app data beside it) can't be an undo step
                 if (!wroteAppData && !wroteSomething(result))
                     throw new NothingWritten(result);
-                return result;
+                return withDroppedHolds(result);
             }
             refuseDuplicateMarchers(moves);
             for (const m of moves)
