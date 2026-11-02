@@ -3,6 +3,7 @@ import { arcTool, BEND_KEY } from "../arcTool";
 import {
     arcEnds,
     bendOf,
+    CLOSE_AT,
     isArcParams,
     landBend,
     withBend,
@@ -352,5 +353,65 @@ describe("its whole circle", () => {
         expect(arcTool.construction!(withEnds(arc(90), "circle"), 5)).toEqual(
             [],
         );
+    });
+});
+
+describe("bending past a half turn (owner on #634)", () => {
+    const radiusOf = (p: LineParams) => {
+        const s = bentSegment(p.points[0]!, p.points[1]!, bendOf(p));
+        return s.type === "arc" ? s.r : Infinity;
+    };
+    /** A 180° arc of 6 from (100, 200) to (160, 200): its circle's center (130, 200), radius 30 */
+    const halfTurn = () => {
+        let t = drawn(6, { x: 100, y: 200 }, { x: 160, y: 200 });
+        return onHandle(t, BEND_KEY, { x: 130, y: 170 });
+    };
+
+    it("holds the circle and brings the ends round it", () => {
+        let t = halfTurn();
+        expect(bendOf(paramsOf(t))).toBe(180);
+        // Out past the middle by a quarter of the radius each side: about 209°
+        t = onHandle(t, BEND_KEY, { x: 130, y: 162.5 }, fine);
+        const p = paramsOf(t);
+        expect(Math.abs(bendOf(p))).toBeGreaterThan(180);
+        expect(Math.abs(bendOf(p))).toBeLessThan(CLOSE_AT);
+        expect(radiusOf(p)).toBeCloseTo(30, 1);
+        // Both ends still on the circle, nearer each other than its diameter
+        for (const q of p.points)
+            expect(dist(q, { x: 130, y: 200 })).toBeCloseTo(30, 1);
+        expect(dist(p.points[0]!, p.points[1]!)).toBeLessThan(60);
+    });
+
+    it("never balloons, however far it's dragged, and closes to a circle on that circle", () => {
+        let t = halfTurn();
+        t = onHandle(t, BEND_KEY, { x: 130, y: -5000 });
+        const p = paramsOf(t);
+        expect(arcEnds(p)).toBe("circle");
+        expect(radiusOf(p)).toBeCloseTo(30, 1);
+    });
+
+    it("opens again when dragged back", () => {
+        let t = halfTurn();
+        t = onHandle(t, BEND_KEY, { x: 130, y: -5000 });
+        t = onHandle(t, BEND_KEY, { x: 130, y: 162.5 });
+        expect(arcEnds(paramsOf(t))).toBe("open");
+        expect(Math.abs(bendOf(paramsOf(t)))).toBeLessThan(CLOSE_AT);
+    });
+
+    it("comes back below a half turn with its ends on the circle's diameter", () => {
+        let t = halfTurn();
+        t = onHandle(t, BEND_KEY, { x: 130, y: 150 });
+        t = onHandle(t, BEND_KEY, { x: 130, y: 190 });
+        const p = paramsOf(t);
+        expect(Math.abs(bendOf(p))).toBeLessThan(180);
+        expect(dist(p.points[0]!, p.points[1]!)).toBeCloseTo(60, 6);
+    });
+
+    it("keeps an arc closed by its chord closed by its chord", () => {
+        let t = halfTurn();
+        t = edit(t, withEnds(paramsOf(t), "chord"), ctx);
+        t = onHandle(t, BEND_KEY, { x: 130, y: -5000 });
+        expect(arcEnds(paramsOf(t))).toBe("chord");
+        expect(radiusOf(paramsOf(t))).toBeCloseTo(30, 1);
     });
 });

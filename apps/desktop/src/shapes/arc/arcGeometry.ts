@@ -3,6 +3,7 @@ import type { ShapeFrame } from "../frame/frame";
 import type { XY } from "../types";
 import {
     bends,
+    bentSegment,
     drawLine,
     isClosed,
     isLineParams,
@@ -135,17 +136,112 @@ export function landBend(degrees: number, env: ToolEnv): number {
     return Math.round(degrees * 10) / 10;
 }
 
+/** How far an arc turns before a bend drag closes it round to a whole circle, in degrees */
+export const CLOSE_AT = 350;
+
+/** The arc with these ends, sweep and ends kind, its other numbers kept */
+function arcWith(
+    base: LineParams,
+    a: XY,
+    b: XY,
+    bend: number,
+    ends: ArcEnds,
+): LineParams {
+    const [p, q] = base.points as [LinePoint, LinePoint];
+    const moved: LineParams = {
+        ...base,
+        points: [
+            { ...p, x: a.x, y: a.y },
+            { ...q, x: b.x, y: b.y },
+        ],
+    };
+    // The ends kind first (it rebuilds the second point's bend), then the sweep on top
+    const kind = withEnds(moved, ends);
+    return { ...kind, points: withPoints(kind, bend, ends) };
+}
+
+const polar = (c: XY, r: number, angle: number): XY => ({
+    x: c.x + r * Math.cos(angle),
+    y: c.y + r * Math.sin(angle),
+});
+
 /**
- * The bend handle dragged to `to`: the arc through its two ends and `to`, its sweep landed
- * ({@link landBend}). It never straightens or flips through straight in one drag past
- * {@link MIN_BEND}, and a closed arc keeps bowing the way it did.
+ * The bend handle dragged to `to` (owner on #634). Up to a half turn the ends stay where they are
+ * and the arc bows out through the pointer. Past a half turn the circle stays its size and the
+ * ends come round it toward each other, the sweep growing as the pointer goes on out past the
+ * arc's middle, so the circle never balloons; from {@link CLOSE_AT} the arc closes round to a
+ * whole circle on that circle, and dragging back opens it again. A circle closed this way, or from
+ * the menu, opens below {@link CLOSE_AT}; an arc closed by its chord stays closed and never flips.
+ * The sweep is landed as {@link landBend} has it.
  */
 export function dragBend(base: LineParams, to: XY, env: ToolEnv): LineParams {
     const [a, b] = base.points as [LinePoint, LinePoint];
-    let sweep = sweepThrough(a, b, to);
-    if (isClosed(base) && Math.sign(sweep) !== Math.sign(bendOf(base)))
-        sweep = Math.sign(bendOf(base)) * MIN_BEND;
-    return withBend(base, landBend(sweep, env));
+    const bend = bendOf(base);
+    const sign = Math.sign(bend) || 1;
+    const ends = arcEnds(base);
+    // The arc as it is at a half turn: its circle, and the way from its center to its middle
+    let center: XY;
+    let r: number;
+    let middle: number;
+    if (Math.abs(bend) < 180) {
+        center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        r = Math.hypot(b.x - a.x, b.y - a.y) / 2;
+        // Bowing left of a → b for a positive sweep
+        middle = Math.atan2(-(b.x - a.x) * sign, (b.y - a.y) * sign);
+    } else {
+        const segment = bentSegment(a, b, bend);
+        if (segment.type !== "arc") return base;
+        center = segment.center;
+        r = segment.r;
+        middle = segment.start + segment.sweep / 2;
+    }
+    if (r < 1e-9) return base;
+    const out = {
+        x: Math.cos(middle),
+        y: Math.sin(middle),
+    };
+    const d = (to.x - center.x) * out.x + (to.y - center.y) * out.y;
+    const sweepAt = (degrees: number) => {
+        const half = (sign * degrees * Math.PI) / 360;
+        return [
+            polar(center, r, middle - half),
+            polar(center, r, middle + half),
+        ];
+    };
+    if (d <= r) {
+        // Ends held on the half turn's diameter, the arc bowing out to the pointer
+        let degrees = landBend(
+            (4 * Math.atan((2 * d) / (2 * r)) * 180) / Math.PI,
+            env,
+        );
+        if (Math.abs(degrees) < MIN_BEND)
+            degrees = Math.sign(degrees || 1) * MIN_BEND;
+        // A closed arc never flips through straight
+        if (ends !== "open" && degrees < MIN_BEND) degrees = MIN_BEND;
+        const [from, until] = sweepAt(180);
+        return arcWith(
+            base,
+            from!,
+            until!,
+            sign * degrees,
+            ends === "circle" ? "open" : ends,
+        );
+    }
+    // Past the half turn: the circle held, each end going round by as far as the pointer is out
+    const degrees = Math.min(
+        MAX_BEND,
+        landBend(180 + ((2 * (d - r)) / r) * (180 / Math.PI), env),
+    );
+    const closes = ends !== "chord" && degrees >= CLOSE_AT;
+    const kept = closes ? CLOSE_AT : degrees;
+    const [from, until] = sweepAt(kept);
+    return arcWith(
+        base,
+        from!,
+        until!,
+        sign * kept,
+        closes ? "circle" : ends === "circle" ? "open" : ends,
+    );
 }
 
 /** An arc drawn from `from` to `to`: its ends landed as a Line's, bowing a quarter turn left */
