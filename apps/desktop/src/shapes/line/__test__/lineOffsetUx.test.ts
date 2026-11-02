@@ -21,8 +21,10 @@ import {
     pointerMove,
     press,
     pressTarget,
+    redo,
     release,
     switchKind,
+    undo,
     type ToolState,
 } from "../../tool/toolMachine";
 import { quarterTurn } from "../../editor/chip";
@@ -234,6 +236,25 @@ describe("a new Line's pivot (#596)", () => {
         expect(moved.pivotMoved).toBe(true);
         moved = pickPivot(moved, pivotOf(t.params), ctx);
         expect(pressTarget(moved, end, env)).toEqual({ type: "pivot" });
+        // Undone, the pick goes and the drag stays: still moved by hand
+        let back = undo(moved);
+        expect(back.pivotMoved).toBe(true);
+        expect(pivotOf(back.params)).not.toBe(pivotOf(t.params));
+        // Undone again, the line as drawn: the end takes a plain press again
+        back = undo(back);
+        expect(back.pivotMoved).toBe(false);
+        expect(pivotOf(back.params)).toBe(pivotOf(t.params));
+        expect(pressTarget(back, end, env)).toEqual({
+            type: "handle",
+            key: "p0",
+        });
+        // Redone, moved by hand again, both steps
+        let again = redo(back);
+        expect(again.pivotMoved).toBe(true);
+        again = redo(again);
+        expect(again.pivotMoved).toBe(true);
+        expect(pivotOf(again.params)).toBe(pivotOf(t.params));
+        expect(pressTarget(again, end, env)).toEqual({ type: "pivot" });
         // A placed line, which doesn't keep that, goes by where a Line puts its pivot
         const turned = edit(
             t,
@@ -243,6 +264,25 @@ describe("a new Line's pivot (#596)", () => {
         expect(
             shapeTargetAt(lineTool, turned.params, turned.spots, end, env),
         ).toEqual({ type: "handle", key: "p0" });
+    });
+
+    it("isn't moved by hand when it's let go where it was, and leaves nothing to undo (review on #596)", () => {
+        const t = drawn(5, { x: 100, y: 100 }, { x: 160, y: 100 });
+        const end = paramsOf(t).points[0]!;
+        let jittered = press(t, end, { ...env, reachInside: true });
+        expect(jittered.gesture?.type).toBe("pivot");
+        // A hand's wobble, and dragged off and back onto the end
+        jittered = pointerMove(jittered, { x: 101, y: 100.5 }, env);
+        jittered = pointerMove(jittered, { x: 130, y: 100 }, env);
+        jittered = pointerMove(jittered, { x: 100.5, y: 99.5 }, env);
+        jittered = release(jittered, ctx);
+        expect(pivotOf(jittered.params)).toBe(pivotOf(t.params));
+        expect(jittered.pivotMoved).toBe(false);
+        expect(jittered.past).toHaveLength(t.past.length);
+        expect(pressTarget(jittered, end, env)).toEqual({
+            type: "handle",
+            key: "p0",
+        });
     });
 });
 
