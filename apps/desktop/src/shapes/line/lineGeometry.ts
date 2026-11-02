@@ -455,7 +455,9 @@ export function lineOutline(p: LineParams): XY[] {
     if (isClosed(p)) return closedOutline(p).points;
     if (!smooth(p)) return p.points.map(({ x, y }) => ({ x, y }));
     const path = linePath(p);
-    return path.polyline(path.length / (24 * (p.points.length - 1)));
+    // An arc (#634) can be large and round all the way: drawn finer so it never shows corners
+    const pieces = p.points.some(bends) ? 120 : 24 * (p.points.length - 1);
+    return path.polyline(path.length / pieces);
 }
 
 /**
@@ -475,8 +477,10 @@ export function closedOutline(p: LineParams): {
         points.push({ x, y });
         if (segment.type === "line") return;
         const path = makePath([segment]);
-        for (let k = 1; k < CURVE_PIECES; k++)
-            points.push(path.at((path.length * k) / CURVE_PIECES));
+        // An arc (#634) bends all the way along: cut finer, so a large one shows no corners
+        const pieces = bends(p.points[i]!) ? 4 * CURVE_PIECES : CURVE_PIECES;
+        for (let k = 1; k < pieces; k++)
+            points.push(path.at((path.length * k) / pieces));
     });
     return { points, corners };
 }

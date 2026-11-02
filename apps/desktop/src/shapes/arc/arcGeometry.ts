@@ -36,10 +36,6 @@ export const DRAWN_BEND = 90;
 export const MAX_BEND = 359;
 /** The narrowest: a hair off straight still reads as an arc */
 export const MIN_BEND = 1;
-/** Sweeps a dragged bend sticks to, in degrees (the owner's "90°, 180° …") */
-const STICKY_BENDS = [45, 90, 135, 180, 225, 270, 315];
-/** How near a sticky sweep a dragged bend sticks to it, in degrees */
-const STICK = 6;
 
 /** Whether `params` is an arc this version reads: a Line of two points, the first bent */
 export function isArcParams(params: unknown): params is LineParams {
@@ -195,43 +191,6 @@ function onAxes(g: ArcGuide, p: XY): XY {
     return { x: dx * c - dy * s, y: dx * s + dy * c };
 }
 
-/** Which side of the guide's center the arc's middle is, along its depth: 1 or -1 */
-const middleSide = (g: ArcGuide) =>
-    Math.sin(g.start + g.sweep / 2) >= 0 ? 1 : -1;
-
-/** The handles that set the guide's width and depth, by key */
-export const WIDTH_KEY = "rw";
-export const DEPTH_KEY = "rd";
-
-/**
- * Where the radius handles sit on the guide (owner on #634): the depth one where the depth axis
- * crosses it away from the arc's middle, the width one where the width axis crosses it
- */
-export function radiusHandlePoints(
-    p: LineParams,
-): { width: XY; depth: XY } | null {
-    const g = arcGuide(p);
-    if (!g) return null;
-    const back = (-middleSide(g) * Math.PI) / 2;
-    // Where the width axis crosses the guide off the arc, else partway round its bare back
-    const width =
-        [0, Math.PI].find((t) => !onArc(g, t)) ??
-        back + (middleSide(g) * Math.PI) / 4;
-    return { width: guidePoint(g, width), depth: guidePoint(g, back) };
-}
-
-/** How far off an arc's end a handle on its guide stays, in radians */
-const OFF_ARC = (8 * Math.PI) / 180;
-
-/** Whether angle `t` round the guide is on the arc, or within {@link OFF_ARC} of it */
-function onArc(g: ArcGuide, t: number): boolean {
-    const turn = 2 * Math.PI;
-    const wrap = (x: number) => ((x % turn) + turn) % turn;
-    const sign = Math.sign(g.sweep) || 1;
-    const along = wrap(sign * (t - g.start) + OFF_ARC);
-    return along <= Math.abs(g.sweep) + 2 * OFF_ARC;
-}
-
 /** The arc on `g`, its ends at its angles, as `base` with its other numbers kept */
 function onGuide(base: LineParams, g: ArcGuide): LineParams {
     const a = guidePoint(g, g.start);
@@ -256,13 +215,59 @@ function onGuide(base: LineParams, g: ArcGuide): LineParams {
 const ROUND_STICK = 0.05;
 
 /**
- * A radius handle dragged to `to` (owner on #634): the guide's width or depth set by it, the
- * other side staying where it is, or both sides moving with `fromCenter`; `constrain` keeps its
- * proportions. Radii land on half
- * steps with the ladder on and stick to a circle within {@link ROUND_STICK}. The arc keeps its
- * angles around the guide, so its ends ride along.
+ * The arc turning `degrees` around its circle or ellipse, which stays where it is (owner on #634):
+ * it grows or shrinks evenly from its middle, so in Fit its marchers spread out or close up
  */
-export function dragRadius(
+export function withSweep(p: LineParams, degrees: number): LineParams {
+    const g = arcGuide(p);
+    if (!g) return withBend(p, degrees);
+    const size = Math.min(MAX_BEND, Math.max(MIN_BEND, Math.abs(degrees)));
+    const sweep = ((Math.sign(g.sweep) || 1) * size * Math.PI) / 180;
+    if (Math.abs(sweep - g.sweep) < 1e-12) return p;
+    const middle = g.start + g.sweep / 2;
+    return onGuide(p, { ...g, start: middle - sweep / 2, sweep });
+}
+
+/** The handle in the middle of the arc, which stretches it front to back */
+export const MIDDLE_KEY = "mid";
+/** The arc's ends, as the Line's points: `p0` is the first marcher's end */
+export const END_KEYS = ["p0", "p1"] as const;
+
+/** How many points along the arc its extent is measured from */
+const EXTENT_SAMPLES = 64;
+
+/** The arc's extent in the guide's own axes, from its center */
+function extentOnAxes(g: ArcGuide): {
+    left: number;
+    right: number;
+    low: number;
+    high: number;
+} {
+    let left = Infinity;
+    let right = -Infinity;
+    let low = Infinity;
+    let high = -Infinity;
+    for (let i = 0; i <= EXTENT_SAMPLES; i++) {
+        const t = g.start + (g.sweep * i) / EXTENT_SAMPLES;
+        const x = g.rx * Math.cos(t);
+        const y = g.ry * Math.sin(t);
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+        low = Math.min(low, y);
+        high = Math.max(high, y);
+    }
+    return { left, right, low, high };
+}
+
+/**
+ * One of the arc's handles dragged to `to` (owner on #634), stretching the arc as a box's handles
+ * do, its sweep kept: an end stretches it side to side along its width, the middle front to back
+ * along its depth. The opposite side of the arc stays put, or with `fromCenter` the circle's
+ * center; `constrain` keeps its proportions. Sizes land on half steps across with the ladder on,
+ * and stick to a circle within {@link ROUND_STICK}. Stretched one way only, a circle becomes an
+ * ellipse.
+ */
+export function stretchArc(
     base: LineParams,
     key: string,
     to: XY,
@@ -270,80 +275,58 @@ export function dragRadius(
 ): LineParams {
     const g = arcGuide(base);
     if (!g) return base;
-    const width = key === WIDTH_KEY;
+    const end = (END_KEYS as readonly string[]).indexOf(key);
+    if (end < 0 && key !== MIDDLE_KEY) return base;
+    const width = end >= 0;
+    const box = extentOnAxes(g);
     const local = onAxes(g, to);
-    const was = width ? g.rx : g.ry;
-    // The handle's side of the center along its axis: where it's drawn
-    const handles = radiusHandlePoints(base)!;
-    const side = width
-        ? onAxes(g, handles.width).x >= 0
-            ? 1
-            : -1
-        : -middleSide(g);
-    const reach = side * (width ? local.x : local.y);
-    let r = env.fromCenter ? Math.abs(reach) : (reach + was) / 2;
-    if (env.snap) r = Math.round(r / (env.stepPx / 2)) * (env.stepPx / 2);
-    r = Math.max(env.stepPx / 2, r);
-    const other = width ? g.ry : g.rx;
-    if (
-        !env.constrain &&
-        Math.abs(r - other) <= ROUND_STICK * Math.max(r, other)
-    )
-        r = other;
-    // The far side stays put: the center moves half as far as the handle's side
-    const shift = env.fromCenter ? 0 : side * (r - was);
+    const handle = onAxes(
+        g,
+        width
+            ? guidePoint(g, end === 0 ? g.start : g.start + g.sweep)
+            : guidePoint(g, g.start + g.sweep / 2),
+    );
+    // The side that stays: across from the handle, or the circle's center
+    const along = (q: XY) => (width ? q.x : q.y);
+    const far = env.fromCenter
+        ? 0
+        : along(handle) >= 0
+          ? width
+              ? box.left
+              : box.low
+          : width
+            ? box.right
+            : box.high;
+    const reach = along(handle) - far;
+    if (Math.abs(reach) < 1e-9) return base;
+    const k = (along(local) - far) / reach;
+    // The size across that way, landed on half steps
+    const was = (width ? g.rx : g.ry) * 2;
+    let size = Math.max(env.stepPx / 2, was * k);
+    if (env.snap) size = Math.round(size / (env.stepPx / 2)) * (env.stepPx / 2);
+    const scale = size / was;
+    let rx = width || env.constrain ? g.rx * scale : g.rx;
+    let ry = !width || env.constrain ? g.ry * scale : g.ry;
+    if (!env.constrain && Math.abs(rx - ry) <= ROUND_STICK * Math.max(rx, ry)) {
+        if (width) rx = ry;
+        else ry = rx;
+    }
+    // Scaled about the side that stays: along the handle's way about `far`; the other way (with
+    // constrain) about the arc's back, so a stretched arc keeps its ends' line
+    const middleY = g.ry * Math.sin(g.start + g.sweep / 2);
+    const back = middleY >= 0 ? box.low : box.high;
+    const otherFar = env.fromCenter || !width ? 0 : back;
+    const kx = rx / g.rx;
+    const ky = ry / g.ry;
+    const cx = width ? far * (1 - kx) : otherFar * (1 - kx);
+    const cy = width ? otherFar * (1 - ky) : far * (1 - ky);
     const c = Math.cos(g.axis);
     const s = Math.sin(g.axis);
-    const along = width ? { x: c, y: s } : { x: -s, y: c };
     const center = {
-        x: g.center.x + along.x * shift,
-        y: g.center.y + along.y * shift,
+        x: g.center.x + cx * c - cy * s,
+        y: g.center.y + cx * s + cy * c,
     };
-    // constrain keeps the proportions: the other radius scales with it, about the center
-    const scaled = env.constrain ? (other * r) / was : other;
-    return onGuide(base, {
-        ...g,
-        center,
-        ...(width ? { rx: r, ry: scaled } : { ry: r, rx: scaled }),
-    });
-}
-
-/** Angles an end dragged on an ellipse sticks to: where the axes cross it */
-const END_STICK = (4 * Math.PI) / 180;
-
-/**
- * An end of an arc on an ellipse dragged to `to` (owner on #634): it slides round the ellipse to
- * where the pointer is, the other end staying, the arc never turning a full circle. On a circle
- * the ends drag as a Line's do, so this is for an ellipse only.
- */
-export function slideEnd(
-    base: LineParams,
-    index: number,
-    to: XY,
-    env: ToolEnv,
-): LineParams {
-    const g = arcGuide(base);
-    if (!g) return base;
-    const local = onAxes(g, to);
-    let t = Math.atan2(local.y / g.ry, local.x / g.rx);
-    if (env.snap) {
-        const quarter = Math.round(t / (Math.PI / 2)) * (Math.PI / 2);
-        if (Math.abs(t - quarter) <= END_STICK) t = quarter;
-    }
-    const sign = Math.sign(g.sweep) || 1;
-    const turn = 2 * Math.PI;
-    const wrap = (x: number) => ((x % turn) + turn) % turn;
-    const end = g.start + g.sweep;
-    const size =
-        index === 0 ? wrap(sign * (end - t)) : wrap(sign * (t - g.start));
-    const min = (MIN_BEND * Math.PI) / 180;
-    const max = (MAX_BEND * Math.PI) / 180;
-    const sweep = sign * Math.min(max, Math.max(min, size));
-    return onGuide(base, {
-        ...g,
-        start: index === 0 ? end - sweep : g.start,
-        sweep,
-    });
+    return onGuide(base, { ...g, center, rx, ry });
 }
 
 /**
@@ -358,162 +341,6 @@ export function withGuideSize(
     const g = arcGuide(base);
     if (!g || !(rx > 0) || !(ry > 0)) return base;
     return onGuide(base, { ...g, rx, ry });
-}
-
-/** The sweep, in degrees, of an arc between `a` and `b` passing through `through` */
-function sweepThrough(a: XY, b: XY, through: XY): number {
-    const d = { x: b.x - a.x, y: b.y - a.y };
-    const chord = Math.hypot(d.x, d.y);
-    if (chord < 1e-9) return 0;
-    const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    // A positive sweep bows to the left of a → b on the field (toward -normal)
-    const height = ((through.x - m.x) * d.y - (through.y - m.y) * d.x) / chord;
-    return (4 * Math.atan((2 * height) / chord) * 180) / Math.PI;
-}
-
-/**
- * The sweep dragged to `degrees`: sticking to the common sweeps and in whole degrees with the
- * ladder on, whole degrees with `fine`, as dragged with the Snap toggle off
- */
-export function landBend(degrees: number, env: ToolEnv): number {
-    if (env.snap) {
-        const size = Math.abs(degrees);
-        const sticky = STICKY_BENDS.find((s) => Math.abs(size - s) <= STICK);
-        if (sticky !== undefined) return Math.sign(degrees) * sticky;
-        return Math.round(degrees);
-    }
-    if (env.fine) return Math.round(degrees);
-    return Math.round(degrees * 10) / 10;
-}
-
-/** How far an arc turns before a bend drag closes it round to a whole circle, in degrees */
-export const CLOSE_AT = 350;
-
-/** The arc with these ends, sweep and ends kind, its other numbers kept */
-function arcWith(
-    base: LineParams,
-    a: XY,
-    b: XY,
-    bend: number,
-    ends: ArcEnds,
-): LineParams {
-    const [p, q] = base.points as [LinePoint, LinePoint];
-    const moved: LineParams = {
-        ...base,
-        points: [
-            { ...p, x: a.x, y: a.y },
-            { ...q, x: b.x, y: b.y },
-        ],
-    };
-    // The ends kind first (it rebuilds the second point's bend), then the sweep on top
-    const kind = withEnds(moved, ends);
-    return { ...kind, points: withPoints(kind, bend, ends) };
-}
-
-const polar = (c: XY, r: number, angle: number): XY => ({
-    x: c.x + r * Math.cos(angle),
-    y: c.y + r * Math.sin(angle),
-});
-
-/**
- * The bend handle dragged to `to` (owner on #634). Up to a half turn the ends stay where they are
- * and the arc bows out through the pointer. Past a half turn the circle stays its size and the
- * ends come round it toward each other, the sweep growing as the pointer goes on out past the
- * arc's middle, so the circle never balloons; from {@link CLOSE_AT} the arc closes round to a
- * whole circle on that circle, and dragging back opens it again. A circle closed this way, or from
- * the menu, opens below {@link CLOSE_AT}; an arc closed by its chord stays closed and never flips.
- * The sweep is landed as {@link landBend} has it.
- */
-export function dragBend(base: LineParams, to: XY, env: ToolEnv): LineParams {
-    const ellipse = ellipseOf(base);
-    if (!ellipse) return dragBendRound(base, to, env);
-    // Round where the ellipse is a circle, then stretched back onto it
-    const round: LineParams = {
-        ...base,
-        points: base.points.map(({ ellipse: _e, ...q }) => ({
-            ...q,
-            ...intoCircle(q, ellipse),
-        })),
-    };
-    const bent = dragBendRound(round, intoCircle(to, ellipse), env);
-    return {
-        ...bent,
-        points: bent.points.map((q) => ({
-            ...q,
-            ...outOfCircle(q, ellipse),
-            ...(q.bend === undefined ? {} : { ellipse }),
-        })),
-    };
-}
-
-function dragBendRound(base: LineParams, to: XY, env: ToolEnv): LineParams {
-    const [a, b] = base.points as [LinePoint, LinePoint];
-    const bend = bendOf(base);
-    const sign = Math.sign(bend) || 1;
-    const ends = arcEnds(base);
-    // The arc as it is at a half turn: its circle, and the way from its center to its middle
-    let center: XY;
-    let r: number;
-    let middle: number;
-    if (Math.abs(bend) < 180) {
-        center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        r = Math.hypot(b.x - a.x, b.y - a.y) / 2;
-        // Bowing left of a → b for a positive sweep
-        middle = Math.atan2(-(b.x - a.x) * sign, (b.y - a.y) * sign);
-    } else {
-        const segment = bentSegment(a, b, bend);
-        if (segment.type !== "arc") return base;
-        center = segment.center;
-        r = segment.r;
-        middle = segment.start + segment.sweep / 2;
-    }
-    if (r < 1e-9) return base;
-    const out = {
-        x: Math.cos(middle),
-        y: Math.sin(middle),
-    };
-    const d = (to.x - center.x) * out.x + (to.y - center.y) * out.y;
-    const sweepAt = (degrees: number) => {
-        const half = (sign * degrees * Math.PI) / 360;
-        return [
-            polar(center, r, middle - half),
-            polar(center, r, middle + half),
-        ];
-    };
-    if (d <= r) {
-        // Ends held on the half turn's diameter, the arc bowing out to the pointer
-        let degrees = landBend(
-            (4 * Math.atan((2 * d) / (2 * r)) * 180) / Math.PI,
-            env,
-        );
-        if (Math.abs(degrees) < MIN_BEND)
-            degrees = Math.sign(degrees || 1) * MIN_BEND;
-        // A closed arc never flips through straight
-        if (ends !== "open" && degrees < MIN_BEND) degrees = MIN_BEND;
-        const [from, until] = sweepAt(180);
-        return arcWith(
-            base,
-            from!,
-            until!,
-            sign * degrees,
-            ends === "circle" ? "open" : ends,
-        );
-    }
-    // Past the half turn: the circle held, each end going round by as far as the pointer is out
-    const degrees = Math.min(
-        MAX_BEND,
-        landBend(180 + ((2 * (d - r)) / r) * (180 / Math.PI), env),
-    );
-    const closes = ends !== "chord" && degrees >= CLOSE_AT;
-    const kept = closes ? CLOSE_AT : degrees;
-    const [from, until] = sweepAt(kept);
-    return arcWith(
-        base,
-        from!,
-        until!,
-        sign * kept,
-        closes ? "circle" : ends === "circle" ? "open" : ends,
-    );
 }
 
 /** An arc drawn from `from` to `to`: its ends landed as a Line's, bowing a quarter turn left */

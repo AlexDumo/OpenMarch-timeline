@@ -29,20 +29,17 @@ import {
     arcEnds,
     arcGuide,
     arcInFrame,
-    DEPTH_KEY,
-    dragRadius,
+    END_KEYS,
     ellipseOf,
-    radiusHandlePoints,
-    slideEnd,
-    WIDTH_KEY,
+    MIDDLE_KEY,
+    stretchArc,
     withGuideSize,
+    withSweep,
     bendHandlePoint,
     bendOf,
-    dragBend,
     drawArc,
     formatBend,
     isArcParams,
-    landBend,
     MAX_BEND,
     MIN_BEND,
     withBend,
@@ -50,24 +47,21 @@ import {
     type ArcEnds,
 } from "./arcGeometry";
 
-/** The bend handle's key: halfway along the arc */
-export const BEND_KEY = "bend";
-/** The ends' keys, as the Line's points: `p0` is the first marcher's end */
-const END_KEYS = ["p0", "p1"] as const;
-
 /** One degree of sweep per 2 px of drag, a degree a px with `fine` */
 const BEND_RATE = { px: 2, step: 1 } as const;
 const BEND_FINE_RATE = { px: 1, step: 1 } as const;
 
-/** The sweep set to `degrees`, the way it bows now, with a Keep interval arc sized to it again */
+/**
+ * The sweep set to `degrees` around the circle or ellipse, which stays (owner on #634), with a
+ * Keep interval arc sized to it again
+ */
 const bent = (
     p: LineParams,
     n: number,
     degrees: number,
     env: Pick<ToolEnv, "pivot" | "anchor"> = {},
 ): LineParams => {
-    const sign = Math.sign(bendOf(p)) || 1;
-    const next = withBend(p, sign * degrees);
+    const next = withSweep(p, degrees);
     return next === p ? p : keptInterval(next, n, env);
 };
 
@@ -308,14 +302,11 @@ const MENU: ToolHandleMenu<LineParams> = {
     },
 };
 
-/** The handle `key` is: an end's index, the bend, or neither */
-const endOf = (key: string): number =>
-    (END_KEYS as readonly string[]).indexOf(key);
-
 /**
  * The Arc (#634, owner 2026-11-02): dragged from one end to the other, bowing a quarter turn to
- * the left of the drag, then bent by the handle halfway along it, which reads the sweep in degrees
- * and sticks to the common sweeps unless `fine` is held. It is a Line of two points with a
+ * the left of the drag. Its handles stretch it as a box's do: its ends side to side, its middle
+ * front to back, so stretched one way it runs on an ellipse; the degrees it turns are set in the
+ * editor, growing it round its circle or ellipse. It is a Line of two points with a
  * circular bend, so its spacing, interval groups, lock and who goes where are the Line's, and
  * both ends always hold a marcher. It never turns more than 359°; closed, by its chord or round to
  * a whole circle, it fills as a closed Line does.
@@ -327,16 +318,10 @@ export const arcTool: ToolKind<LineParams> = {
     params: [INTERVAL, BEND, WIDTH, DEPTH],
     choices: [ENDS, lineChoice("spacing")],
     readable: isArcParams,
-    // A radius handle keeps the proportions with constrain and stretches from the center with
-    // fromCenter; an end on an ellipse slides
-    // round it, taking neither; otherwise as a Line's (owner on #634)
+    // Every handle stretches the arc: constrain keeps its proportions, fromCenter stretches it
+    // about its circle's center (owner on #634)
     honors: {
-        handle(key, ratioLocked, params, n) {
-            if (key === WIDTH_KEY || key === DEPTH_KEY)
-                return { constrain: "keepRatio", fromCenter: "fromCenter" };
-            if (key === BEND_KEY || ellipseOf(params)) return {};
-            return lineTool.honors!.handle!(key, ratioLocked, params, n);
-        },
+        handle: () => ({ constrain: "keepRatio", fromCenter: "fromCenter" }),
     },
     draw: (from, to, _n, env) => pivoted(drawArc(from, to, env)),
     clickPoints: undefined,
@@ -345,46 +330,20 @@ export const arcTool: ToolKind<LineParams> = {
         const ends = params.points.map((at: LinePoint, i) => ({
             key: END_KEYS[i]!,
             at: { x: at.x, y: at.y },
-            cursor:
-                arcEnds(params) === "open"
-                    ? resizeCursor(frame, { x: i === 1 ? 1 : -1, y: 0 })
-                    : "move",
+            cursor: resizeCursor(frame, { x: i === 1 ? 1 : -1, y: 0 }),
         }));
-        // The guide's width and depth (owner on #634): round handles on it
-        const radii = radiusHandlePoints(params);
+        // The middle stretches it front to back, as the ends do side to side (owner on #634)
         return [
             ...ends,
-            { key: BEND_KEY, at: bendHandlePoint(params), cursor: "pointer" },
-            ...(radii
-                ? [
-                      {
-                          key: WIDTH_KEY,
-                          at: radii.width,
-                          cursor: "pointer",
-                          adds: true,
-                      },
-                      {
-                          key: DEPTH_KEY,
-                          at: radii.depth,
-                          cursor: "pointer",
-                          adds: true,
-                      },
-                  ]
-                : []),
+            {
+                key: MIDDLE_KEY,
+                at: bendHandlePoint(params),
+                cursor: resizeCursor(frame, { x: 0, y: 1 }),
+            },
         ];
     },
-    dragHandle(base, n, key, to, env) {
-        if (key === BEND_KEY)
-            return keptInterval(dragBend(base, to, env), n, env);
-        if (key === WIDTH_KEY || key === DEPTH_KEY)
-            return keptInterval(dragRadius(base, key, to, env), n, env);
-        const end = endOf(key);
-        if (end < 0) return base;
-        // On an ellipse an end slides round it; on a circle it drags as a Line's
-        return ellipseOf(base)
-            ? keptInterval(slideEnd(base, end, to, env), n, env)
-            : lineTool.dragHandle(base, n, key, to, env);
-    },
+    dragHandle: (base, n, key, to, env) =>
+        keptInterval(stretchArc(base, key, to, env), n, env),
     clickHandle: undefined,
     doubleClickHandle: undefined,
     menu: MENU,
@@ -396,8 +355,6 @@ export const arcTool: ToolKind<LineParams> = {
             ? [{ center: g.center, rx: g.rx, ry: g.ry, rotation: g.axis }]
             : [];
     },
-    handleTip: (params, _n, key) =>
-        key === BEND_KEY ? formatBend(bendOf(params)) : null,
     snapPoints: (params) => [
         ...params.points.map(({ x, y }) => ({ x, y })),
         bendHandlePoint(params),
@@ -412,6 +369,6 @@ export const arcTool: ToolKind<LineParams> = {
                 ],
                 spacing: { mode: "fit" },
             },
-            landBend(180, env),
+            180,
         ),
 };

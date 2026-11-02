@@ -1,18 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { arcTool, BEND_KEY } from "../arcTool";
+import { arcTool } from "../arcTool";
 import {
     arcEnds,
     arcGuide,
+    bendHandlePoint,
     bendOf,
-    CLOSE_AT,
-    DEPTH_KEY,
     ellipseOf,
-    radiusHandlePoints,
-    WIDTH_KEY,
     isArcParams,
-    landBend,
+    MIDDLE_KEY,
     withBend,
     withEnds,
+    withSweep,
 } from "../arcGeometry";
 import {
     bentSegment,
@@ -44,8 +42,9 @@ import {
 import type { ShapeContext, XY } from "../../types";
 
 /**
- * The Arc (#634): drawn end to end, bent by its middle handle, spaced as a Line, closed by its
- * chord or round to a circle. Driven through the shape session with the real Arc kind.
+ * The Arc (#634): drawn end to end, stretched by its handles as a box is (onto an ellipse when one
+ * way only), its degrees set in the editor round its circle, spaced as a Line, closed by its chord
+ * or round to a circle. Driven through the shape session with the real Arc kind.
  */
 
 const STEP = 10;
@@ -89,6 +88,12 @@ function onHandle(t: ToolState, key: string, to: XY, e = env): ToolState {
     expect(t.gesture).toMatchObject({ type: "handle", key });
     t = pointerMove(t, to, e);
     return release(t, ctx, null);
+}
+
+/** A 180° arc of 7 from (100, 200) to (160, 200), bowing up: its circle's center (130, 200), r 30 */
+function halfTurn(): ToolState {
+    const t = drawn(7, { x: 100, y: 200 }, { x: 160, y: 200 });
+    return edit(t, withBend(paramsOf(t), 180), ctx);
 }
 
 /** A two-point open arc from (0, 0) to (40, 0) turning `bend` degrees */
@@ -199,60 +204,63 @@ describe("drawing an arc", () => {
     });
 });
 
-describe("bending it", () => {
-    it("takes the sweep from the handle, sticking to 90° and 180°", () => {
-        let t = drawn(5, { x: 100, y: 200 }, { x: 160, y: 200 });
-        // A half circle's middle is half the chord off it
-        t = onHandle(t, BEND_KEY, { x: 131, y: 171 });
-        expect(bendOf(paramsOf(t))).toBe(180);
-        t = onHandle(t, BEND_KEY, { x: 130, y: 188 });
-        // tan(θ/4) = 2h / c → about 87°: sticks to 90
-        expect(bendOf(paramsOf(t))).toBe(90);
+describe("its degrees (owner on #634)", () => {
+    const bend = () => arcTool.params.find((p) => p.key === "bend")!;
+
+    it("reads its sweep in the editor and takes a typed one, its circle staying", () => {
+        const t = halfTurn();
+        expect(bend().display(t.params, t.spots, STEP)).toBe("180°");
+        const typed = edit(t, bend().type(t.params, t.spots, "90", env), ctx);
+        const p = paramsOf(typed);
+        expect(bendOf(p)).toBeCloseTo(90, 6);
+        const g = arcGuide(p)!;
+        expect(dist(g.center, { x: 130, y: 200 })).toBeLessThan(1e-6);
+        expect(g.rx).toBeCloseTo(30, 6);
     });
 
-    it("bends freely in whole degrees with fine held", () => {
-        let t = drawn(5, { x: 100, y: 200 }, { x: 160, y: 200 });
-        t = onHandle(t, BEND_KEY, { x: 130, y: 188 }, fine);
-        const bend = bendOf(paramsOf(t));
-        expect(bend).toBe(Math.round(bend));
-        expect(bend).not.toBe(90);
+    it("grows evenly from its middle, so in Fit its marchers spread out", () => {
+        const t = halfTurn();
+        const middle = bendHandlePoint(paramsOf(t));
+        const gapBefore = dist(
+            lineSpots(paramsOf(t), 7)[0]!,
+            lineSpots(paramsOf(t), 7)[1]!,
+        );
+        const wider = withSweep(paramsOf(t), 270);
+        expect(dist(bendHandlePoint(wider), middle)).toBeLessThan(1e-6);
+        const spots = lineSpots(wider, 7);
+        expect(dist(spots[0]!, spots[1]!)).toBeGreaterThan(gapBefore);
     });
 
-    it("bows the other way when dragged past the chord", () => {
-        let t = drawn(5, { x: 100, y: 200 }, { x: 160, y: 200 });
-        t = onHandle(t, BEND_KEY, { x: 130, y: 230 });
-        expect(bendOf(paramsOf(t))).toBe(-180);
+    it("drags in whole degrees and never turns a full circle", () => {
+        const t = halfTurn();
+        const roles = {
+            fine: false,
+            constrain: false,
+            fromCenter: false,
+        } as never;
+        const more = bend().scrub(
+            t.params,
+            7,
+            { dx: 20, dy: 0, axis: "x", roles },
+            env,
+        );
+        expect(bendOf(more as LineParams)).toBeCloseTo(190, 6);
+        const most = bend().scrub(
+            t.params,
+            7,
+            { dx: 2000, dy: 0, axis: "x", roles },
+            env,
+        );
+        expect(Math.abs(bendOf(most as LineParams))).toBeLessThanOrEqual(359);
     });
 
-    it("never turns a full circle", () => {
-        let t = drawn(5, { x: 100, y: 200 }, { x: 160, y: 200 });
-        t = onHandle(t, BEND_KEY, { x: 130, y: -5000 });
-        expect(Math.abs(bendOf(paramsOf(t)))).toBeLessThanOrEqual(359);
-    });
-
-    it("reads its sweep in the editor and takes a typed one", () => {
-        const t = drawn(5, { x: 100, y: 200 }, { x: 160, y: 200 });
-        const bend = arcTool.params.find((p) => p.key === "bend")!;
-        expect(bend.display(t.params, t.spots, STEP)).toBe("90°");
-        const typed = edit(t, bend.type(t.params, t.spots, "120", env), ctx);
-        expect(bendOf(paramsOf(typed))).toBe(120);
-        expect(arcTool.handleTip!(typed.params, 5, BEND_KEY)).toBe("120°");
-    });
-
-    it("keeps a locked interval as it bends, the arc growing from its pivot", () => {
-        let t = drawn(5, { x: 100, y: 200 }, { x: 160, y: 200 });
+    it("keeps a locked interval as its degrees change, the circle sized to it", () => {
+        let t = halfTurn();
         t = edit(t, arcTool.lock!.toggle(t.params, t.spots, env), ctx);
         const before = linePath(paramsOf(t)).length;
-        t = onHandle(t, BEND_KEY, { x: 131, y: 171 });
-        expect(bendOf(paramsOf(t))).toBe(180);
+        t = edit(t, bend().type(t.params, t.spots, "90", env), ctx);
+        expect(bendOf(paramsOf(t))).toBeCloseTo(90, 6);
         expect(linePath(paramsOf(t)).length).toBeCloseTo(before, 6);
-    });
-
-    it("lands a sweep on the common ones within a few degrees", () => {
-        expect(landBend(87, env)).toBe(90);
-        expect(landBend(-176, env)).toBe(-180);
-        expect(landBend(100, env)).toBe(100);
-        expect(landBend(87.4, fine)).toBe(87);
     });
 });
 
@@ -361,238 +369,106 @@ describe("its whole circle", () => {
     });
 });
 
-describe("bending past a half turn (owner on #634)", () => {
-    const radiusOf = (p: LineParams) => {
-        const s = bentSegment(p.points[0]!, p.points[1]!, bendOf(p));
-        return s.type === "arc" ? s.r : Infinity;
-    };
-    /** A 180° arc of 6 from (100, 200) to (160, 200): its circle's center (130, 200), radius 30 */
-    const halfTurn = () => {
-        let t = drawn(6, { x: 100, y: 200 }, { x: 160, y: 200 });
-        return onHandle(t, BEND_KEY, { x: 130, y: 170 });
-    };
+describe("stretching it (owner on #634)", () => {
+    const handleAt = (t: ToolState, key: string) =>
+        t.kind.handles(t.params, t.spots, null).find((h) => h.key === key)!.at;
 
-    it("holds the circle and brings the ends round it", () => {
-        let t = halfTurn();
-        expect(bendOf(paramsOf(t))).toBe(180);
-        // Out past the middle by a quarter of the radius each side: about 209°
-        t = onHandle(t, BEND_KEY, { x: 130, y: 162.5 }, fine);
-        const p = paramsOf(t);
-        expect(Math.abs(bendOf(p))).toBeGreaterThan(180);
-        expect(Math.abs(bendOf(p))).toBeLessThan(CLOSE_AT);
-        expect(radiusOf(p)).toBeCloseTo(30, 1);
-        // Both ends still on the circle, nearer each other than its diameter
-        for (const q of p.points)
-            expect(dist(q, { x: 130, y: 200 })).toBeCloseTo(30, 1);
-        expect(dist(p.points[0]!, p.points[1]!)).toBeLessThan(60);
-    });
-
-    it("never balloons, however far it's dragged, and closes to a circle on that circle", () => {
-        let t = halfTurn();
-        t = onHandle(t, BEND_KEY, { x: 130, y: -5000 });
-        const p = paramsOf(t);
-        expect(arcEnds(p)).toBe("circle");
-        expect(radiusOf(p)).toBeCloseTo(30, 1);
-    });
-
-    it("opens again when dragged back", () => {
-        let t = halfTurn();
-        t = onHandle(t, BEND_KEY, { x: 130, y: -5000 });
-        t = onHandle(t, BEND_KEY, { x: 130, y: 162.5 });
-        expect(arcEnds(paramsOf(t))).toBe("open");
-        expect(Math.abs(bendOf(paramsOf(t)))).toBeLessThan(CLOSE_AT);
-    });
-
-    it("comes back below a half turn with its ends on the circle's diameter", () => {
-        let t = halfTurn();
-        t = onHandle(t, BEND_KEY, { x: 130, y: 150 });
-        t = onHandle(t, BEND_KEY, { x: 130, y: 190 });
-        const p = paramsOf(t);
-        expect(Math.abs(bendOf(p))).toBeLessThan(180);
-        expect(dist(p.points[0]!, p.points[1]!)).toBeCloseTo(60, 6);
-    });
-
-    it("keeps an arc closed by its chord closed by its chord", () => {
-        let t = halfTurn();
-        t = edit(t, withEnds(paramsOf(t), "chord"), ctx);
-        t = onHandle(t, BEND_KEY, { x: 130, y: -5000 });
-        expect(arcEnds(paramsOf(t))).toBe("chord");
-        expect(radiusOf(paramsOf(t))).toBeCloseTo(30, 1);
-    });
-});
-
-describe("on an ellipse (owner on #634)", () => {
-    /** A 180° arc of 7 from (100, 200) to (160, 200), bowing up: circle center (130, 200), r 30 */
-    const halfTurn = () => {
-        const t = drawn(7, { x: 100, y: 200 }, { x: 160, y: 200 });
-        return onHandle(t, BEND_KEY, { x: 130, y: 170 });
-    };
-    /** The half turn stretched 10 deeper by its depth handle, its far side kept */
-    const deeper = () => {
-        const t = halfTurn();
-        const { depth } = radiusHandlePoints(paramsOf(t))!;
-        return onHandle(t, DEPTH_KEY, { x: depth.x, y: depth.y + 20 });
-    };
-
-    it("shows two radius handles on the guide, off the arc", () => {
+    it("has a handle at each end and one in the middle", () => {
         const t = halfTurn();
         const keys = t.kind.handles(t.params, t.spots, null).map((h) => h.key);
-        expect(keys).toEqual(["p0", "p1", BEND_KEY, WIDTH_KEY, DEPTH_KEY]);
-        const { width, depth } = radiusHandlePoints(paramsOf(t))!;
-        // The depth handle across from the arc's middle; the width one not on an end
-        expect(dist(depth, { x: 130, y: 230 })).toBeLessThan(1e-6);
-        for (const q of paramsOf(t).points)
-            expect(dist(width, q)).toBeGreaterThan(5);
-        expect(dist(width, { x: 130, y: 200 })).toBeCloseTo(30, 6);
+        expect(keys).toEqual(["p0", "p1", MIDDLE_KEY]);
+        expect(dist(handleAt(t, MIDDLE_KEY), { x: 130, y: 170 })).toBeLessThan(
+            1e-6,
+        );
     });
 
-    it("stretches the guide into an ellipse, the arc riding along", () => {
-        const t = deeper();
+    it("stretches side to side from an end, the other side staying, onto an ellipse", () => {
+        let t = halfTurn();
+        // p1 at (160, 200) dragged 20 further out: 60 wide → 80 wide, the left side at 100 kept
+        t = onHandle(t, "p1", { x: 180, y: 200 });
         const p = paramsOf(t);
         const g = arcGuide(p)!;
         expect(ellipseOf(p)).toBeDefined();
-        expect(g.rx).toBeCloseTo(30, 6);
-        expect(g.ry).toBeCloseTo(40, 6);
-        // Its far side kept: the center moved 10 toward the handle
-        expect(g.center.y).toBeCloseTo(210, 6);
-        // Still a half of it, ends on it
-        expect(Math.abs(bendOf(p))).toBeCloseTo(180, 6);
-        expect(isArcParams(p)).toBe(true);
-        const [guide] = arcTool.construction!(p, 7);
-        expect(guide!.ry).toBeCloseTo(40, 6);
-    });
-
-    it("lays its marchers along the ellipse, evenly along it", () => {
-        const p = paramsOf(deeper());
-        const g = arcGuide(p)!;
-        const spots = lineSpots(p, 7);
-        for (const q of spots) {
-            const dx = q.x - g.center.x;
-            const dy = q.y - g.center.y;
-            expect((dx / g.rx) ** 2 + (dy / g.ry) ** 2).toBeCloseTo(1, 3);
-        }
-        const along = spots.map((q) => q.s!);
-        const gaps = along.slice(1).map((s, i) => s - along[i]!);
-        for (const gap of gaps) expect(gap).toBeCloseTo(gaps[0]!, 3);
-    });
-
-    it("sticks back to a circle near equal radii", () => {
-        let t = deeper();
-        const { depth } = radiusHandlePoints(paramsOf(t))!;
-        t = onHandle(t, DEPTH_KEY, { x: depth.x, y: depth.y - 19 });
-        expect(ellipseOf(paramsOf(t))).toBeUndefined();
-    });
-
-    it("stretches both sides from its center with fromCenter", () => {
-        const t = halfTurn();
-        const { width } = radiusHandlePoints(paramsOf(t))!;
-        const out = { x: 130 + Math.sign(width.x - 130) * 40, y: width.y };
-        const stretched = onHandle(t, WIDTH_KEY, out, {
-            ...env,
-            fromCenter: true,
-        });
-        const g = arcGuide(paramsOf(stretched))!;
-        expect(g.center.x).toBeCloseTo(130, 6);
         expect(g.rx).toBeCloseTo(40, 6);
-    });
-
-    it("slides an end round the ellipse, the other end staying", () => {
-        let t = deeper();
-        const before = paramsOf(t);
-        const g = arcGuide(before)!;
-        // Toward the back of the ellipse past the first end
-        const to = { x: g.center.x - 25, y: g.center.y + 30 };
-        t = onHandle(t, "p0", to);
-        const p = paramsOf(t);
-        expect(dist(p.points[1]!, before.points[1]!)).toBeLessThan(1e-6);
-        expect(Math.abs(bendOf(p))).toBeGreaterThan(180);
-        const now = arcGuide(p)!;
-        expect(now.rx).toBeCloseTo(g.rx, 6);
-        expect(now.ry).toBeCloseTo(g.ry, 6);
-        const q = p.points[0]!;
-        expect(
-            ((q.x - g.center.x) / g.rx) ** 2 + ((q.y - g.center.y) / g.ry) ** 2,
-        ).toBeCloseTo(1, 6);
-    });
-
-    it("bends on its ellipse, keeping it", () => {
-        let t = deeper();
-        const g = arcGuide(paramsOf(t))!;
-        t = onHandle(
-            t,
-            BEND_KEY,
-            { x: g.center.x, y: g.center.y - g.ry - 15 },
-            fine,
-        );
-        const p = paramsOf(t);
-        expect(Math.abs(bendOf(p))).toBeGreaterThan(180);
-        const now = arcGuide(p)!;
-        expect(now.rx).toBeCloseTo(g.rx, 6);
-        expect(now.ry).toBeCloseTo(g.ry, 6);
-    });
-
-    it("reads its width and depth in the editor and takes typed ones", () => {
-        const t = deeper();
-        const width = arcTool.params.find((q) => q.key === "width")!;
-        const depth = arcTool.params.find((q) => q.key === "depth")!;
-        expect(width.display(t.params, t.spots, STEP)).toBe("6");
-        expect(depth.display(t.params, t.spots, STEP)).toBe("8");
-        const typed = edit(t, depth.type(t.params, t.spots, "4", env), ctx);
-        const g = arcGuide(paramsOf(typed))!;
-        expect(g.rx).toBeCloseTo(30, 6);
-        expect(g.ry).toBeCloseTo(20, 6);
-        expect(width.display(halfTurn().params, 7, STEP)).toBe("6");
-        expect(depth.display(halfTurn().params, 7, STEP)).toBe("6");
-    });
-
-    it("closes all the way around the ellipse, and opens again", () => {
-        const p = paramsOf(deeper());
-        const round = withEnds(p, "circle");
-        expect(isArcParams(round)).toBe(true);
-        expect(round.points[1]!.ellipse).toEqual(round.points[0]!.ellipse);
-        const ends = arcTool.choices!.find((c) => c.key === "ends")!;
-        expect(
-            ends.options(round, 7).find((o) => o.value === "circle")!.label,
-        ).toBe("Close all the way around");
-        const spots = lineFillSpots(round, 8, STEP);
-        const g = arcGuide(p)!;
+        expect(g.ry).toBeCloseTo(30, 6);
+        expect(Math.min(p.points[0]!.x, p.points[1]!.x)).toBeCloseTo(100, 6);
+        expect(Math.abs(bendOf(p))).toBeCloseTo(180, 6);
+        // In Fit, the marchers spread side to side
+        const spots = lineSpots(p, 7);
         for (const q of spots)
             expect(
                 ((q.x - g.center.x) / g.rx) ** 2 +
                     ((q.y - g.center.y) / g.ry) ** 2,
             ).toBeCloseTo(1, 3);
-        expect(withEnds(round, "open")).toEqual(p);
     });
 
-    it("turns and mirrors its ellipse with the shape", () => {
-        const p = paramsOf(deeper());
-        const frame = lineFrame(p);
-        const turned = withLineFrame(p, {
-            ...frame,
-            rotation: frame.rotation + Math.PI / 2,
+    it("stretches front to back from the middle, its ends' line staying", () => {
+        let t = halfTurn();
+        t = onHandle(t, MIDDLE_KEY, { x: 130, y: 160 });
+        const p = paramsOf(t);
+        const g = arcGuide(p)!;
+        expect(g.ry).toBeCloseTo(40, 6);
+        expect(g.rx).toBeCloseTo(30, 6);
+        for (const q of p.points) expect(q.y).toBeCloseTo(200, 6);
+    });
+
+    it("keeps its proportions with constrain", () => {
+        let t = halfTurn();
+        t = onHandle(t, "p1", { x: 180, y: 200 }, { ...env, constrain: true });
+        const g = arcGuide(paramsOf(t))!;
+        expect(ellipseOf(paramsOf(t))).toBeUndefined();
+        expect(g.rx).toBeCloseTo(40, 6);
+        expect(g.ry).toBeCloseTo(40, 6);
+        // The ends' line stays
+        for (const q of paramsOf(t).points) expect(q.y).toBeCloseTo(200, 6);
+    });
+
+    it("stretches about its circle's center with fromCenter", () => {
+        let t = halfTurn();
+        t = onHandle(t, "p1", { x: 170, y: 200 }, { ...env, fromCenter: true });
+        const g = arcGuide(paramsOf(t))!;
+        expect(g.center.x).toBeCloseTo(130, 6);
+        expect(g.rx).toBeCloseTo(40, 6);
+    });
+
+    it("sticks back to a circle near equal sizes", () => {
+        let t = halfTurn();
+        t = onHandle(t, "p1", { x: 180, y: 200 });
+        // 80 wide back to 61: within 5% of 60 deep
+        t = onHandle(t, "p1", { x: 161, y: 200 });
+        expect(ellipseOf(paramsOf(t))).toBeUndefined();
+    });
+
+    it("keeps its degrees, and its degrees then grow round the ellipse", () => {
+        let t = halfTurn();
+        t = onHandle(t, MIDDLE_KEY, { x: 130, y: 160 });
+        const g = arcGuide(paramsOf(t))!;
+        const wider = withSweep(paramsOf(t), 270);
+        const now = arcGuide(wider)!;
+        expect(now.rx).toBeCloseTo(g.rx, 6);
+        expect(now.ry).toBeCloseTo(g.ry, 6);
+        expect(dist(now.center, g.center)).toBeLessThan(1e-6);
+    });
+
+    it("reads its width and depth in the editor and takes typed ones", () => {
+        const t = halfTurn();
+        const width = arcTool.params.find((q) => q.key === "width")!;
+        const depth = arcTool.params.find((q) => q.key === "depth")!;
+        expect(width.display(t.params, t.spots, STEP)).toBe("6");
+        expect(depth.display(t.params, t.spots, STEP)).toBe("6");
+        expect(width.words!(t.params, 7)).toEqual({ before: "Circle" });
+        expect(depth.words!(t.params, 7)).toEqual({
+            before: "×",
+            after: "steps",
         });
-        expect(arcGuide(turned)!.ry).toBeCloseTo(40, 6);
-        expect(arcGuide(turned)!.rx).toBeCloseTo(30, 6);
-        const mirrored = withLineFrame(p, { ...frame, flipY: true });
-        const m = arcGuide(mirrored)!;
-        expect(m.rx).toBeCloseTo(30, 6);
-        expect(m.ry).toBeCloseTo(40, 6);
-        // The arc stays on its ellipse, mirrored: every spot on it
-        for (const q of lineSpots(mirrored, 7))
-            expect(
-                (((q.x - m.center.x) * Math.cos(m.axis) +
-                    (q.y - m.center.y) * Math.sin(m.axis)) /
-                    m.rx) **
-                    2 +
-                    ((-(q.x - m.center.x) * Math.sin(m.axis) +
-                        (q.y - m.center.y) * Math.cos(m.axis)) /
-                        m.ry) **
-                        2,
-            ).toBeCloseTo(1, 3);
+        const typed = edit(t, depth.type(t.params, t.spots, "8", env), ctx);
+        const g = arcGuide(paramsOf(typed))!;
+        expect(g.ry).toBeCloseTo(40, 6);
+        expect(width.words!(typed.params, 7)).toEqual({ before: "Ellipse" });
     });
 
     it("drags width and depth each on its own, both together with constrain", () => {
-        const t = deeper();
+        const t = edit(halfTurn(), withSweep(paramsOf(halfTurn()), 180), ctx);
         const width = arcTool.params.find((q) => q.key === "width")!;
         const depth = arcTool.params.find((q) => q.key === "depth")!;
         const roles = {
@@ -607,15 +483,7 @@ describe("on an ellipse (owner on #634)", () => {
             env,
         );
         expect(width.display(wider, 7, STEP)).toBe("7");
-        expect(depth.display(wider, 7, STEP)).toBe("8");
-        const deeperStill = depth.scrub(
-            t.params,
-            7,
-            { dx: 16, dy: 0, axis: "x", roles },
-            env,
-        );
-        expect(depth.display(deeperStill, 7, STEP)).toBe("9");
-        expect(width.display(deeperStill, 7, STEP)).toBe("6");
+        expect(depth.display(wider, 7, STEP)).toBe("6");
         const both = width.scrub(
             t.params,
             7,
@@ -631,23 +499,50 @@ describe("on an ellipse (owner on #634)", () => {
             },
             env,
         );
-        // 6 → 9 wide, so 8 → 12 deep
         expect(width.display(both, 7, STEP)).toBe("9");
-        expect(depth.display(both, 7, STEP)).toBe("12");
+        expect(depth.display(both, 7, STEP)).toBe("9");
     });
 
-    it("keeps its proportions when a radius handle is dragged with constrain", () => {
-        const t = deeper();
-        const { depth } = radiusHandlePoints(paramsOf(t))!;
-        const g = arcGuide(paramsOf(t))!;
-        const kept = onHandle(
-            t,
-            DEPTH_KEY,
-            { x: depth.x, y: depth.y + 20 },
-            { ...env, constrain: true },
-        );
-        const now = arcGuide(paramsOf(kept))!;
-        expect(now.ry / now.rx).toBeCloseTo(g.ry / g.rx, 6);
-        expect(now.ry).toBeCloseTo(50, 6);
+    it("closes all the way around an ellipse, and opens again", () => {
+        let t = halfTurn();
+        t = onHandle(t, MIDDLE_KEY, { x: 130, y: 160 });
+        const p = paramsOf(t);
+        const round = withEnds(p, "circle");
+        expect(isArcParams(round)).toBe(true);
+        expect(round.points[1]!.ellipse).toEqual(round.points[0]!.ellipse);
+        const ends = arcTool.choices!.find((c) => c.key === "ends")!;
+        expect(
+            ends.options(round, 7).find((o) => o.value === "circle")!.label,
+        ).toBe("Close all the way around");
+        const g = arcGuide(p)!;
+        for (const q of lineFillSpots(round, 8, STEP))
+            expect(
+                ((q.x - g.center.x) / g.rx) ** 2 +
+                    ((q.y - g.center.y) / g.ry) ** 2,
+            ).toBeCloseTo(1, 3);
+        expect(withEnds(round, "open")).toEqual(p);
+    });
+
+    it("turns and mirrors its ellipse with the shape", () => {
+        let t = halfTurn();
+        t = onHandle(t, MIDDLE_KEY, { x: 130, y: 160 });
+        const p = paramsOf(t);
+        const frame = lineFrame(p);
+        const turned = withLineFrame(p, {
+            ...frame,
+            rotation: frame.rotation + Math.PI / 2,
+        });
+        expect(arcGuide(turned)!.ry).toBeCloseTo(40, 6);
+        const mirrored = withLineFrame(p, { ...frame, flipY: true });
+        const m = arcGuide(mirrored)!;
+        expect(m.rx).toBeCloseTo(30, 6);
+        expect(m.ry).toBeCloseTo(40, 6);
+        for (const q of lineSpots(mirrored, 7)) {
+            const dx = q.x - m.center.x;
+            const dy = q.y - m.center.y;
+            const u = (dx * Math.cos(m.axis) + dy * Math.sin(m.axis)) / m.rx;
+            const v = (-dx * Math.sin(m.axis) + dy * Math.cos(m.axis)) / m.ry;
+            expect(u * u + v * v).toBeCloseTo(1, 3);
+        }
     });
 });
