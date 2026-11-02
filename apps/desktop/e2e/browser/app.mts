@@ -282,10 +282,13 @@ export async function goTo(page: Page, where: string) {
 
 /**
  * Selects a page's box on the timeline ("Page 1"): the edit window is that
- * page's move, so drops and actions edit it.
+ * page's move, so drops and actions edit it. Scoped to the ruler: with no
+ * marchers selected, the inspector's section for the selected page is a
+ * button with the same name.
  */
 export async function selectPage(show: Show, pageName: string) {
     await show.page
+        .getByTestId("timeline-page-ruler")
         .getByRole("button", { name: pageName, exact: true })
         .click();
     await expect(
