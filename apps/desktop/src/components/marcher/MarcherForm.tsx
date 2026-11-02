@@ -462,6 +462,7 @@ const MarcherForm: React.FC<MarcherFormProps> = ({
                 <Button
                     type="submit"
                     className="w-full"
+                    data-testid="create-marcher-button"
                     disabled={submitIsDisabled || disabledProp || !isEditReady}
                 >
                     {makeButtonString(
