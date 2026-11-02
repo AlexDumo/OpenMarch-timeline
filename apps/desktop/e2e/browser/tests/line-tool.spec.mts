@@ -960,12 +960,12 @@ test("change: while clicking points, a right-click, Backspace and undo each take
         );
     };
     await click(a);
-    // The hint names the key as a keycap
+    // The hint names the remove key and Escape, each as one keycap
     const hint = page.getByTestId("shape-tool-hint");
     await expect(hint).toContainText(
         "removes the last point · Double-click to finish",
     );
-    await expect(hint.locator("kbd.keycap")).toHaveCount(1);
+    await expect(hint.locator("kbd.shortcut")).toHaveCount(2);
     await click(b);
     for (const p of wrong) await click(p);
     // a, b, the three wrong points and the pointer's segment
