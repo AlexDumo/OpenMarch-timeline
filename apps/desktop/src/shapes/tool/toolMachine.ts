@@ -66,7 +66,8 @@ export type Gesture =
       }
     /**
      * Clicking point after point (#524): it lasts from click to click, the pointer up between,
-     * until Enter, a double-click or a click on the last point finishes it, or Escape
+     * until Enter, a double-click or a click on the last point finishes it, or Escape. A
+     * right-click, Backspace or undo takes the last point back ({@link removeLastPoint}).
      */
     | {
           readonly type: "points";
@@ -354,6 +355,25 @@ export function finishPoints(state: ToolState, ctx: ShapeContext): ToolState {
     return reassign(
         pushHistory({ ...state, params: g.drawn, gesture: null }, g.before),
         ctx,
+    );
+}
+
+/**
+ * Takes back the last point clicked (owner, option A on #522): a right-click, Backspace or Delete,
+ * or undo while clicking points. Points aren't undo steps until the line is finished, so each
+ * press takes one off; the first point stays (Escape cancels the whole drawing). The preview
+ * follows the pointer from the point before. Unchanged when no points are being clicked, the
+ * pointer is down, or only the first is left.
+ */
+export function removeLastPoint(state: ToolState, env: ToolEnv): ToolState {
+    const g = state.gesture;
+    if (g?.type !== "points" || g.pressed || g.points.length < 2) return state;
+    const points = g.points.slice(0, -1);
+    return previewPoints(
+        state,
+        { ...g, points, onLast: false },
+        state.pointer ?? points.at(-1)!,
+        env,
     );
 }
 

@@ -120,6 +120,9 @@ import { outlineGapOf } from "../distribute/outlineGap";
 import type { XY } from "../types";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import tolgee from "@/global/singletons/Tolgee";
+import { T } from "@tolgee/react";
+import Keycaps from "@/components/ui/Keycaps";
+import { getActionShortcutKeys } from "@/shortcuts/labels";
 import {
     isHiding,
     pressHideMarchers,
@@ -179,22 +182,21 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
                 className="rounded-6 border-stroke bg-bg-1 bg-modal text-body text-text shadow-modal pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 border px-12 py-6"
                 data-testid="shape-tool-hint"
             >
-                {clicking
-                    ? tolgee.t(
-                          "shapes.edit.pointsHint",
-                          "Click to add a point · Enter or a click on the last point finishes · Esc to cancel",
-                      )
-                    : armed!.clickPoints
-                      ? tolgee.t(
-                            "shapes.edit.drawPointsHint",
-                            "Drag on the field to draw a {shape}, or click point after point · Esc to cancel",
-                            { shape: armed!.shape.label.toLowerCase() },
-                        )
-                      : tolgee.t(
-                            "shapes.edit.drawHint",
-                            "Drag on the field to draw a {shape} · Esc to cancel",
-                            { shape: armed!.shape.label.toLowerCase() },
-                        )}
+                {clicking ? (
+                    <RemovePointHint />
+                ) : armed!.clickPoints ? (
+                    tolgee.t(
+                        "shapes.edit.drawPointsHint",
+                        "Drag on the field to draw a {shape}, or click point after point · Esc to cancel",
+                        { shape: armed!.shape.label.toLowerCase() },
+                    )
+                ) : (
+                    tolgee.t(
+                        "shapes.edit.drawHint",
+                        "Drag on the field to draw a {shape} · Esc to cancel",
+                        { shape: armed!.shape.label.toLowerCase() },
+                    )
+                )}
             </div>
         );
     const target = toolOpen ? tool : placed;
@@ -207,6 +209,30 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
                 testId={toolOpen ? "shape-tool-readout" : "placed-box-readout"}
             />
         </RichTips>
+    );
+}
+
+/**
+ * While clicking a line's points (owner, option A on #522): how to take the last one back and
+ * finish, the key as keycaps
+ */
+function RemovePointHint() {
+    const overrides = useShortcutOverridesStore((s) => s.overrides);
+    const keys = getActionShortcutKeys("shapeRemoveLastPoint", { overrides });
+    // With the key unbound, only the right-click is said
+    if (!keys)
+        return (
+            <T
+                keyName="shapes.edit.removePointHintClick"
+                defaultValue="Right-click removes the last point · Double-click to finish · Esc to cancel"
+            />
+        );
+    return (
+        <T
+            keyName="shapes.edit.removePointHint"
+            defaultValue="Right-click or <keys></keys> removes the last point · Double-click to finish · Esc to cancel"
+            params={{ keys: () => <Keycaps keys={keys} /> }}
+        />
     );
 }
 
