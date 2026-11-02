@@ -2451,6 +2451,7 @@
             "expertMoves": "{names}: Expert moves on this page",
             "followLeader": "{names}: follows the leader on this page",
             "held": "{names}: already Held here",
+            "homeShape": "{names}: a shape sets the starting spot. Ungroup it to hold them one by one",
             "noArrival": "{names}: no move ends where {page} starts",
             "none": "Nobody Held on {page}",
             "notHeld": "Not held:",

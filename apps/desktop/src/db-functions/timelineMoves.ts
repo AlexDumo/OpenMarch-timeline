@@ -38,12 +38,13 @@ import {
     splitHeldEditsInTransaction,
     type HeldConflict,
     type HeldArrivalEdit,
+    type HeldEditSkip,
+    type HeldHomeEdit,
 } from "./timelineHeldMarks";
 import {
     rowsIn,
     skippedRefusal,
     takeMarchersOutOfRangeInTransaction,
-    type MoveMemberSkip,
 } from "./timelineMoveCuts";
 import { sampleShape } from "./timelineMoveHelpers";
 
@@ -780,7 +781,7 @@ export const moveMarchersInRangeInTransaction = async ({
     /** The selected move over `range` that added marchers join (UI-25) */
     into?: number;
     /** Marchers the caller left alone, named in `skipped` with this edit's own */
-    alsoSkipped?: readonly MoveMemberSkip[];
+    alsoSkipped?: readonly HeldEditSkip[];
 }): Promise<TimelineMoveResult> => {
     const result: TimelineMoveResult = {
         homes: [],
@@ -1066,6 +1067,29 @@ async function moveHeldArrivalsInTransaction(
 }
 
 /**
+ * Held marchers' edits whose hold grows out of the starting spot (`HeldHomeEdit`, #619): each sets
+ * the marcher's starting spot, as a drag at the start of the show would, so the whole hold moves
+ * with it. Adds the marchers to `result.homes`.
+ */
+async function moveHeldHomesInTransaction(
+    tx: DbTransaction,
+    homes: readonly HeldHomeEdit<TimelineMarcherMove>[],
+    result: TimelineMoveResult,
+): Promise<void> {
+    if (homes.length === 0) return;
+    for (const { move } of homes)
+        assertValid(validateDestination([move.x, move.y]), "position");
+    await updateMarcherHomesInTransaction({
+        tx,
+        modifiedHomes: homes.map(({ move }) => ({
+            marcherId: move.marcherId,
+            home: [move.x, move.y],
+        })),
+    });
+    result.homes.push(...homes.map(({ move }) => move.marcherId));
+}
+
+/**
  * Refuses (`notSimple`) a Basic edit of Held marchers whose arrival Basic can't edit: one not
  * simple on the page box it ends (a move across a flag, a shape's, or another path).
  */
@@ -1258,8 +1282,8 @@ export const moveMarchersInTarget = async ({
                 // A marcher Held at the edited count edits the move arriving at its hold
                 // instead, so the whole hold moves (holds decision 4); one whose arrival is a
                 // shape's or follow-the-leader move is skipped and named
-                const { held, skipped, rest } = clearPage
-                    ? { held: [], skipped: [], rest: [...moves] }
+                const { held, homes, skipped, rest } = clearPage
+                    ? { held: [], homes: [], skipped: [], rest: [...moves] }
                     : await splitHeldEditsInTransaction(
                           tx,
                           target.kind === "range" ? target.end : target.beat,
@@ -1320,6 +1344,7 @@ export const moveMarchersInTarget = async ({
                     basic: target.kind === "point",
                     keepUnchanged,
                 });
+                await moveHeldHomesInTransaction(tx, homes, result);
                 // The selected move, else the one the marchers are in, since a move split off
                 // the page's shares its counts (UI-25). With only Held marchers, the move their
                 // edit went to (the most of them arrive in), so app data about their positions (a

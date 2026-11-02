@@ -27,6 +27,11 @@ import { nameHeldConflict } from "./timelineHeldConflict";
  * A mark something still arrives at stays, whichever row that is: Basic rewrites a page's move
  * (a new row ending at the same flag), and page and beat edits move a mark with its arrival
  * (`planTimelineRipple`).
+ *
+ * A mark that grows out of the marcher's **starting spot** (`homeArrivalSql`, #619: no row of the
+ * marcher starts before it) has an arrival too, and stays. One whose arrival row the edit deleted
+ * doesn't become one: removing the keyframe a hold grows out of removes the hold, even when the
+ * marcher now stands on its starting spot up to it.
  */
 
 /** Each mark's arrival row before an edit, by mark id (`readHeldMarkArrivals`). */
@@ -49,8 +54,12 @@ export async function keepHeldMarksTrueInTransaction(
     tx: DbTransaction,
     before: HeldArrivalsBefore,
 ): Promise<void> {
+    const hadRow = (m: HeldMarkArrival) => {
+        const id = before.get(m.id);
+        return id !== undefined && id !== null;
+    };
     const orphans = (await readHeldMarkArrivals(tx)).filter(
-        (m) => m.arrivalId === null,
+        (m) => m.arrivalId === null && (!m.fromHome || hadRow(m)),
     );
     if (orphans.length === 0) return;
     const A = schema.timeline_assignments;
