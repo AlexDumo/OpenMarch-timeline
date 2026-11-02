@@ -2735,10 +2735,16 @@ function squareOnGrid(
     const first = p.points[0]!;
     const shaped = p.points.every((q) => onTheGrid(sub(q, first), unit));
     const ends = sub(p.points.at(-1)!, first);
+    // Level or plumb, and straight: every point on the line between the ends, so stretching it
+    // along itself reshapes nothing
     const level =
         !isClosed(p) &&
         length(ends) > 1e-9 &&
-        Math.min(Math.abs(ends.x), Math.abs(ends.y)) < 1e-9 * length(ends);
+        Math.min(Math.abs(ends.x), Math.abs(ends.y)) < 1e-9 * length(ends) &&
+        p.points.every(
+            (q) =>
+                Math.abs(cross(ends, sub(q, first))) <= 1e-9 * dot(ends, ends),
+        );
     if (!shaped && !level) return p;
     const pivot = pivotPoint(lineFrame(p), env.pivot ?? pivotOf(p));
     let held = 0;
