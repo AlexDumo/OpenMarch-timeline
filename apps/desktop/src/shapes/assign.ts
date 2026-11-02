@@ -16,7 +16,7 @@ export type OrderMode =
 
 /**
  * Who goes where as the floating editor offers it on a kind with an order along it (a Line, #528):
- * Least travel, Keep order, or Reverse (Keep order the other way round). Stored as a recipe's
+ * Least travel, Keep order, or Reverse order (Keep order the other way round). Stored as a recipe's
  * order mode and reverse ({@link orderFields}).
  */
 export type OrderChoice = "nearest" | "keep" | "reverse";
@@ -35,7 +35,11 @@ export const orderFields = (
         ? { orderMode: "nearest", reverse: false }
         : { orderMode: "keep", reverse: choice === "reverse" };
 
-/** A recipe's order mode and reverse as a choice; anything older (drill order) is Least travel */
+/**
+ * A recipe's order mode and reverse as a choice; anything older (drill order) is Least travel.
+ * Least travel has no order, so a reverse stored with it is ignored here, and the Line's next save
+ * writes it back as false ({@link orderFields}).
+ */
 export const orderChoiceOf = (
     orderMode: string,
     reverse: boolean,

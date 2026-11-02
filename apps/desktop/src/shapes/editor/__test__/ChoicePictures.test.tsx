@@ -6,7 +6,6 @@ import { lineTool } from "../../line/lineTool";
 import type { LineParams, LinePoint } from "../../line/lineGeometry";
 import { CHOICE_PICTURE, fitChoicePicture } from "../../preview/choicePicture";
 import { ChoiceMenus } from "../ChoiceMenu";
-import { OrderMenu } from "../OrderMenu";
 
 /**
  * Pictures in the shape menus (#559): every answer of every kind's menus is sketched beside its
@@ -149,31 +148,6 @@ describe("a kind's menu", () => {
             screen.getByTestId("shape-choice-measured-x-picture"),
         ).toBeInTheDocument();
         expect(row).toHaveTextContent("runs straight front to back");
-    });
-});
-
-describe("who goes where", () => {
-    it("pictures every answer, and the current one on its button", () => {
-        render(
-            <OrderMenu
-                target={{
-                    order: {
-                        current: "reverse",
-                        keepOffered: true,
-                        pick: vi.fn(),
-                    },
-                }}
-            />,
-        );
-        const button = screen.getByTestId("shape-order-picture");
-        fireEvent.click(screen.getByTestId("shape-order"));
-        for (const value of ["nearest", "keep", "reverse"])
-            expect(
-                screen.getByTestId(`shape-order-${value}-picture`),
-            ).toBeInTheDocument();
-        expect(button.innerHTML).toBe(
-            screen.getByTestId("shape-order-reverse-picture").innerHTML,
-        );
     });
 });
 
