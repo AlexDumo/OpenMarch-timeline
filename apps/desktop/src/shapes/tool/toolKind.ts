@@ -108,10 +108,15 @@ export interface ToolHandle {
     readonly bar?: XY;
 }
 
-/** A circle a shape is drawn on ({@link ToolKind.construction}), in field units */
+/**
+ * A circle or ellipse a shape is drawn on ({@link ToolKind.construction}), in field units:
+ * `rotation` (radians) the way its `rx` axis points
+ */
 export interface ConstructionCircle {
     readonly center: XY;
-    readonly r: number;
+    readonly rx: number;
+    readonly ry: number;
+    readonly rotation: number;
 }
 
 /** A parameter's direction mark: ↔ across, ↕ deep */
@@ -585,8 +590,8 @@ export interface ToolKind<P> {
     /** Whether the outline is open, drawn without joining its last point to its first (a line) */
     outlineOpen?(params: P, n: number): boolean;
     /**
-     * Circles the shape is drawn on, shown faint and dashed while it's edited: an Arc's whole
-     * circle (owner on #634). None when absent.
+     * Circles or ellipses the shape is drawn on, shown faint and dashed while it's edited: an
+     * Arc's whole circle (owner on #634). None when absent.
      */
     construction?(params: P, n: number): readonly ConstructionCircle[];
     /**

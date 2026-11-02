@@ -1304,6 +1304,9 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         return editorPlacement({
             outline: outline.map((p) => fieldToElement(view, p.x, p.y)),
             knob: fieldToElement(view, knob.x, knob.y),
+            handles: kind
+                .handles(params, spots, null)
+                .map(({ at }) => fieldToElement(view, at.x, at.y)),
             width: room.width,
             height: room.height,
             fieldWidth: room.fieldWidth,

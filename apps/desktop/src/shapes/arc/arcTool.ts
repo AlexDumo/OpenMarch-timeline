@@ -1,6 +1,12 @@
 import tolgee from "@/global/singletons/Tolgee";
 import { resizeCursor } from "../frame/frame";
-import { parseDegrees, scrubDistance, scrubValue } from "../editor/scrub";
+import {
+    parseDegrees,
+    scrubDistance,
+    scrubValue,
+    spacingRate,
+} from "../editor/scrub";
+import { formatSteps } from "../editor/format";
 import type {
     ToolChoice,
     ToolChoicePicture,
@@ -15,14 +21,21 @@ import { lineFillSpots } from "../line/lineFill";
 import {
     lineFrame,
     lineOutline,
-    lineSegments,
     type LineParams,
     type LinePoint,
 } from "../line/lineGeometry";
 import { arcShape } from "./arcShape";
 import {
     arcEnds,
+    arcGuide,
     arcInFrame,
+    DEPTH_KEY,
+    dragRadius,
+    ellipseOf,
+    radiusHandlePoints,
+    slideEnd,
+    WIDTH_KEY,
+    withGuideSize,
     bendHandlePoint,
     bendOf,
     dragBend,
@@ -104,6 +117,71 @@ const BEND: ToolParam<LineParams> = {
     },
 };
 
+/** A size as typed: "8 × 5", "8x5", "8 by 5.5", in steps; null for anything else */
+function parseGuideSize(text: string): { w: number; d: number } | null {
+    const m =
+        /^\s*(\d+(?:\.\d+)?)\s*(?:×|x|X|\*|by)\s*(\d+(?:\.\d+)?)\s*$/.exec(
+            text,
+        );
+    if (!m) return null;
+    const w = Number(m[1]);
+    const d = Number(m[2]);
+    return w > 0 && d > 0 ? { w, d } : null;
+}
+
+/**
+ * The width × depth across of the circle or ellipse the arc is on, in steps (owner on #634):
+ * typed as "8 × 5", dragged sideways for its width. A circle's reads "6 × 6", so a shallow arc,
+ * whose guide reaches far off, can be made an ellipse by typing.
+ */
+const SIZE: ToolParam<LineParams> = {
+    key: "size",
+    get label() {
+        return tolgee.t(
+            "shapes.kinds.arc.params.size",
+            "Width × depth of the ellipse the arc is on, in steps",
+        );
+    },
+    unit: "steps",
+    primary: true,
+    drag: "x",
+    interval: false,
+    blends: true,
+    shown: (p) => arcGuide(p) !== null,
+    display(p, _n, stepPx) {
+        const g = arcGuide(p);
+        if (!g) return "";
+        return `${formatSteps((2 * g.rx) / stepPx)} × ${formatSteps((2 * g.ry) / stepPx)}`;
+    },
+    type(p, n, text, env) {
+        const size = parseGuideSize(text);
+        if (!size) return null;
+        const next = withGuideSize(
+            p,
+            (size.w * env.stepPx) / 2,
+            (size.d * env.stepPx) / 2,
+        );
+        return keptInterval(next, n, env);
+    },
+    scrub(base, n, m, env) {
+        const g = arcGuide(base);
+        if (!g) return base;
+        const was = (2 * g.rx) / env.stepPx;
+        const steps = scrubValue(
+            was,
+            scrubDistance("x", m.dx, m.dy),
+            0,
+            spacingRate(env.snap, "x"),
+        );
+        if (steps === was || steps < 1) return base;
+        return keptInterval(
+            withGuideSize(base, (steps * env.stepPx) / 2, g.ry),
+            n,
+            env,
+        );
+    },
+};
+
 /** A small arc of `bend` degrees closed as `ends`, with `n` marchers laid out on it */
 function arcPicture(ends: ArcEnds, n: number): ToolChoicePicture {
     const open: LineParams = withBend(
@@ -129,11 +207,15 @@ function arcPicture(ends: ArcEnds, n: number): ToolChoicePicture {
     };
 }
 
-const ENDS_LABELS: Record<ArcEnds, () => string> = {
+/** Each way to close it, in words; an arc on an ellipse closes all the way round it */
+const ENDS_LABELS: Record<ArcEnds, (p?: LineParams) => string> = {
     open: () => tolgee.t("shapes.kinds.arc.ends.open", "Open"),
     chord: () =>
         tolgee.t("shapes.kinds.arc.ends.chord", "Close with a straight line"),
-    circle: () => tolgee.t("shapes.kinds.arc.ends.circle", "Close to circle"),
+    circle: (p) =>
+        p && ellipseOf(p)
+            ? tolgee.t("shapes.kinds.arc.ends.round", "Close all the way round")
+            : tolgee.t("shapes.kinds.arc.ends.circle", "Close to circle"),
 };
 const ENDS_ORDER: readonly ArcEnds[] = ["open", "chord", "circle"];
 
@@ -160,10 +242,10 @@ const ENDS: ToolChoice<LineParams> = {
     get label() {
         return tolgee.t("shapes.kinds.arc.ends.label", "Open or closed");
     },
-    options: () =>
+    options: (p) =>
         ENDS_ORDER.map((value) => ({
             value,
-            label: ENDS_LABELS[value](),
+            label: ENDS_LABELS[value](p),
             picture: arcPicture(value, value === "circle" ? 8 : 6),
         })),
     current: (p) => arcEnds(p),
@@ -181,7 +263,7 @@ const MENU: ToolHandleMenu<LineParams> = {
         {
             items: ENDS_ORDER.map((value) => ({
                 value,
-                label: ENDS_LABELS[value](),
+                label: ENDS_LABELS[value](p),
                 checked: arcEnds(p) === value,
             })),
         },
@@ -209,9 +291,19 @@ export const arcTool: ToolKind<LineParams> = {
     ...lineTool,
     shape: arcShape,
     keywords: ["arc", "bow", "semicircle"],
-    params: [INTERVAL, BEND],
+    params: [INTERVAL, BEND, SIZE],
     choices: [ENDS, lineChoice("spacing")],
     readable: isArcParams,
+    // A radius handle stretches from the center with fromCenter; an end on an ellipse slides
+    // round it, taking neither; otherwise as a Line's (owner on #634)
+    honors: {
+        handle(key, ratioLocked, params, n) {
+            if (key === WIDTH_KEY || key === DEPTH_KEY)
+                return { fromCenter: "fromCenter" };
+            if (key === BEND_KEY || ellipseOf(params)) return {};
+            return lineTool.honors!.handle!(key, ratioLocked, params, n);
+        },
+    },
     draw: (from, to, _n, env) => pivoted(drawArc(from, to, env)),
     clickPoints: undefined,
     handles(params) {
@@ -224,17 +316,40 @@ export const arcTool: ToolKind<LineParams> = {
                     ? resizeCursor(frame, { x: i === 1 ? 1 : -1, y: 0 })
                     : "move",
         }));
+        // The guide's width and depth (owner on #634): round handles on it
+        const radii = radiusHandlePoints(params);
         return [
             ...ends,
             { key: BEND_KEY, at: bendHandlePoint(params), cursor: "pointer" },
+            ...(radii
+                ? [
+                      {
+                          key: WIDTH_KEY,
+                          at: radii.width,
+                          cursor: "pointer",
+                          adds: true,
+                      },
+                      {
+                          key: DEPTH_KEY,
+                          at: radii.depth,
+                          cursor: "pointer",
+                          adds: true,
+                      },
+                  ]
+                : []),
         ];
     },
     dragHandle(base, n, key, to, env) {
         if (key === BEND_KEY)
             return keptInterval(dragBend(base, to, env), n, env);
-        return endOf(key) >= 0
-            ? lineTool.dragHandle(base, n, key, to, env)
-            : base;
+        if (key === WIDTH_KEY || key === DEPTH_KEY)
+            return keptInterval(dragRadius(base, key, to, env), n, env);
+        const end = endOf(key);
+        if (end < 0) return base;
+        // On an ellipse an end slides round it; on a circle it drags as a Line's
+        return ellipseOf(base)
+            ? keptInterval(slideEnd(base, end, to, env), n, env)
+            : lineTool.dragHandle(base, n, key, to, env);
     },
     clickHandle: undefined,
     doubleClickHandle: undefined,
@@ -242,9 +357,9 @@ export const arcTool: ToolKind<LineParams> = {
     // The whole circle the arc is part of, unless it already is one (owner on #634)
     construction(params) {
         if (arcEnds(params) === "circle") return [];
-        const segment = lineSegments(params)[0];
-        return segment?.type === "arc"
-            ? [{ center: segment.center, r: segment.r }]
+        const g = arcGuide(params);
+        return g
+            ? [{ center: g.center, rx: g.rx, ry: g.ry, rotation: g.axis }]
             : [];
     },
     handleTip: (params, _n, key) =>

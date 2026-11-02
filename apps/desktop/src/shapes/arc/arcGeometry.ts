@@ -5,19 +5,26 @@ import {
     bends,
     bentSegment,
     drawLine,
+    intoCircle,
     isClosed,
     isLineParams,
     lineInFrame,
+    lineSegments,
+    outOfCircle,
     segmentMidpoint,
+    type LineEllipse,
     type LineParams,
     type LinePoint,
 } from "../line/lineGeometry";
+import { ellipsePoint } from "../geometry/path";
 
 /**
  * The Arc (#634): a Line of two points whose segment bends as a circular arc, stored as the
  * Line's params with the first point's `bend` (its sweep in degrees). Closed, it is either the
  * arc and its chord (a straight segment back) or a whole circle (the second point's segment
- * bending round the rest of the way). Everything here is pure.
+ * bending round the rest of the way). Its segment can run on an ellipse instead of a circle
+ * (`ellipse` on its points, owner on #634): everything round is then done where the ellipse is a
+ * circle and stretched back. Everything here is pure.
  */
 
 /** How an arc is closed: open, by its chord, or round to a whole circle */
@@ -39,14 +46,23 @@ export function isArcParams(params: unknown): params is LineParams {
     if (!isLineParams(params)) return false;
     const [a, b, ...rest] = params.points;
     if (!a || !b || rest.length > 0 || !bends(a)) return false;
-    // Only the circle's second point bends, the same way round, making up the full turn
+    // Only the circle's second point bends, the same way round, making up the full turn on the
+    // same ellipse
     if (b.bend === undefined) return true;
     return (
         isClosed(params) &&
         Math.sign(b.bend) === Math.sign(a.bend!) &&
-        Math.abs(Math.abs(a.bend!) + Math.abs(b.bend) - 360) < 1e-6
+        Math.abs(Math.abs(a.bend!) + Math.abs(b.bend) - 360) < 1e-6 &&
+        sameEllipse(a.ellipse, b.ellipse)
     );
 }
+
+const sameEllipse = (a?: LineEllipse, b?: LineEllipse): boolean =>
+    a === b || (!!a && !!b && a.ratio === b.ratio && a.axis === b.axis);
+
+/** The ellipse the arc runs on, or undefined for a circle */
+export const ellipseOf = (p: LineParams): LineEllipse | undefined =>
+    p.points[0]?.ellipse;
 
 /** The arc's sweep in degrees, signed (positive bows to the left from its first end) */
 export const bendOf = (p: LineParams): number => p.points[0]?.bend ?? 0;
@@ -64,11 +80,15 @@ function withPoints(
     ends: ArcEnds,
 ): readonly LinePoint[] {
     const [a, b] = p.points as [LinePoint, LinePoint];
-    const { bend: _was, ...second } = b;
+    const { bend: _was, ellipse: _ellipse, ...second } = b;
     return [
         { ...a, bend },
         ends === "circle"
-            ? { ...second, bend: Math.sign(bend) * (360 - Math.abs(bend)) }
+            ? {
+                  ...second,
+                  bend: Math.sign(bend) * (360 - Math.abs(bend)),
+                  ...(a.ellipse ? { ellipse: a.ellipse } : {}),
+              }
             : second,
     ];
 }
@@ -107,8 +127,231 @@ export function withEnds(p: LineParams, ends: ArcEnds): LineParams {
           };
 }
 
-/** Where the bend handle sits: halfway along the arc */
-export const bendHandlePoint = (p: LineParams): XY => segmentMidpoint(p, 0);
+/**
+ * The circle or ellipse the arc runs on, in its own axes: `axis` (radians) the way its width
+ * (`rx`) points, its depth (`ry`) a quarter turn on; `start` and `sweep` the arc's angles around
+ * it from the width axis. A circle's axes follow the arc: its depth runs out through the arc's
+ * middle. Null while the arc is straight.
+ */
+export interface ArcGuide {
+    readonly center: XY;
+    readonly rx: number;
+    readonly ry: number;
+    readonly axis: number;
+    readonly start: number;
+    readonly sweep: number;
+}
+
+export function arcGuide(p: LineParams): ArcGuide | null {
+    const segment = lineSegments(p)[0];
+    if (segment?.type === "ellipse")
+        return {
+            center: segment.center,
+            rx: segment.rx,
+            ry: segment.ry,
+            axis: segment.rotation,
+            start: segment.start,
+            sweep: segment.sweep,
+        };
+    if (segment?.type !== "arc") return null;
+    const axis = segment.start + segment.sweep / 2 - Math.PI / 2;
+    return {
+        center: segment.center,
+        rx: segment.r,
+        ry: segment.r,
+        axis,
+        start: segment.start - axis,
+        sweep: segment.sweep,
+    };
+}
+
+/** The point at angle `t` around the guide */
+export const guidePoint = (g: ArcGuide, t: number): XY =>
+    ellipsePoint(
+        {
+            type: "ellipse",
+            center: g.center,
+            rx: g.rx,
+            ry: g.ry,
+            rotation: g.axis,
+            start: 0,
+            sweep: 0,
+        },
+        t,
+    );
+
+/** Where the bend handle sits: halfway round the arc */
+export function bendHandlePoint(p: LineParams): XY {
+    const g = arcGuide(p);
+    return g ? guidePoint(g, g.start + g.sweep / 2) : segmentMidpoint(p, 0);
+}
+
+/** `p` in the guide's own axes, from its center */
+function onAxes(g: ArcGuide, p: XY): XY {
+    const dx = p.x - g.center.x;
+    const dy = p.y - g.center.y;
+    const c = Math.cos(-g.axis);
+    const s = Math.sin(-g.axis);
+    return { x: dx * c - dy * s, y: dx * s + dy * c };
+}
+
+/** Which side of the guide's center the arc's middle is, along its depth: 1 or -1 */
+const middleSide = (g: ArcGuide) =>
+    Math.sin(g.start + g.sweep / 2) >= 0 ? 1 : -1;
+
+/** The handles that set the guide's width and depth, by key */
+export const WIDTH_KEY = "rw";
+export const DEPTH_KEY = "rd";
+
+/**
+ * Where the radius handles sit on the guide (owner on #634): the depth one where the depth axis
+ * crosses it away from the arc's middle, the width one where the width axis crosses it
+ */
+export function radiusHandlePoints(
+    p: LineParams,
+): { width: XY; depth: XY } | null {
+    const g = arcGuide(p);
+    if (!g) return null;
+    const back = (-middleSide(g) * Math.PI) / 2;
+    // Where the width axis crosses the guide off the arc, else partway round its bare back
+    const width =
+        [0, Math.PI].find((t) => !onArc(g, t)) ??
+        back + (middleSide(g) * Math.PI) / 4;
+    return { width: guidePoint(g, width), depth: guidePoint(g, back) };
+}
+
+/** How far off an arc's end a handle on its guide stays, in radians */
+const OFF_ARC = (8 * Math.PI) / 180;
+
+/** Whether angle `t` round the guide is on the arc, or within {@link OFF_ARC} of it */
+function onArc(g: ArcGuide, t: number): boolean {
+    const turn = 2 * Math.PI;
+    const wrap = (x: number) => ((x % turn) + turn) % turn;
+    const sign = Math.sign(g.sweep) || 1;
+    const along = wrap(sign * (t - g.start) + OFF_ARC);
+    return along <= Math.abs(g.sweep) + 2 * OFF_ARC;
+}
+
+/** The arc on `g`, its ends at its angles, as `base` with its other numbers kept */
+function onGuide(base: LineParams, g: ArcGuide): LineParams {
+    const a = guidePoint(g, g.start);
+    const b = guidePoint(g, g.start + g.sweep);
+    const round = Math.abs(g.rx - g.ry) <= 1e-9 * Math.max(g.rx, g.ry);
+    const ellipse: LineEllipse | undefined = round
+        ? undefined
+        : { ratio: g.ry / g.rx, axis: (g.axis * 180) / Math.PI };
+    const ends = arcEnds(base);
+    const bend = (g.sweep * 180) / Math.PI;
+    const [p, q] = base.points as [LinePoint, LinePoint];
+    const { ellipse: _p, ...first } = p;
+    const { ellipse: _q, ...second } = q;
+    const points: LinePoint[] = [
+        { ...first, x: a.x, y: a.y, bend, ...(ellipse ? { ellipse } : {}) },
+        { ...second, x: b.x, y: b.y },
+    ];
+    return { ...base, points: withPoints({ ...base, points }, bend, ends) };
+}
+
+/** How near equal the guide's radii stick to a circle, as a share of the larger */
+const ROUND_STICK = 0.05;
+
+/**
+ * A radius handle dragged to `to` (owner on #634): the guide's width or depth set by it, the
+ * other side staying where it is, or both sides moving with `fromCenter`. Radii land on half
+ * steps with the ladder on and stick to a circle within {@link ROUND_STICK}. The arc keeps its
+ * angles around the guide, so its ends ride along.
+ */
+export function dragRadius(
+    base: LineParams,
+    key: string,
+    to: XY,
+    env: ToolEnv,
+): LineParams {
+    const g = arcGuide(base);
+    if (!g) return base;
+    const width = key === WIDTH_KEY;
+    const local = onAxes(g, to);
+    const was = width ? g.rx : g.ry;
+    // The handle's side of the center along its axis: where it's drawn
+    const handles = radiusHandlePoints(base)!;
+    const side = width
+        ? onAxes(g, handles.width).x >= 0
+            ? 1
+            : -1
+        : -middleSide(g);
+    const reach = side * (width ? local.x : local.y);
+    let r = env.fromCenter ? Math.abs(reach) : (reach + was) / 2;
+    if (env.snap) r = Math.round(r / (env.stepPx / 2)) * (env.stepPx / 2);
+    r = Math.max(env.stepPx / 2, r);
+    const other = width ? g.ry : g.rx;
+    if (Math.abs(r - other) <= ROUND_STICK * Math.max(r, other)) r = other;
+    // The far side stays put: the center moves half as far as the handle's side
+    const shift = env.fromCenter ? 0 : side * (r - was);
+    const c = Math.cos(g.axis);
+    const s = Math.sin(g.axis);
+    const along = width ? { x: c, y: s } : { x: -s, y: c };
+    const center = {
+        x: g.center.x + along.x * shift,
+        y: g.center.y + along.y * shift,
+    };
+    return onGuide(base, {
+        ...g,
+        center,
+        ...(width ? { rx: r } : { ry: r }),
+    });
+}
+
+/** Angles an end dragged on an ellipse sticks to: where the axes cross it */
+const END_STICK = (4 * Math.PI) / 180;
+
+/**
+ * An end of an arc on an ellipse dragged to `to` (owner on #634): it slides round the ellipse to
+ * where the pointer is, the other end staying, the arc never turning a full circle. On a circle
+ * the ends drag as a Line's do, so this is for an ellipse only.
+ */
+export function slideEnd(
+    base: LineParams,
+    index: number,
+    to: XY,
+    env: ToolEnv,
+): LineParams {
+    const g = arcGuide(base);
+    if (!g) return base;
+    const local = onAxes(g, to);
+    let t = Math.atan2(local.y / g.ry, local.x / g.rx);
+    if (env.snap) {
+        const quarter = Math.round(t / (Math.PI / 2)) * (Math.PI / 2);
+        if (Math.abs(t - quarter) <= END_STICK) t = quarter;
+    }
+    const sign = Math.sign(g.sweep) || 1;
+    const turn = 2 * Math.PI;
+    const wrap = (x: number) => ((x % turn) + turn) % turn;
+    const end = g.start + g.sweep;
+    const size =
+        index === 0 ? wrap(sign * (end - t)) : wrap(sign * (t - g.start));
+    const min = (MIN_BEND * Math.PI) / 180;
+    const max = (MAX_BEND * Math.PI) / 180;
+    const sweep = sign * Math.min(max, Math.max(min, size));
+    return onGuide(base, {
+        ...g,
+        start: index === 0 ? end - sweep : g.start,
+        sweep,
+    });
+}
+
+/**
+ * The arc stretched to the shape `g` gives it, its ellipse and angles round it kept: the guide in
+ * steps, for the size typed or dragged in the editor
+ */
+export function withGuideSize(
+    base: LineParams,
+    rx: number,
+    ry: number,
+): LineParams {
+    const g = arcGuide(base);
+    if (!g || !(rx > 0) || !(ry > 0)) return base;
+    return onGuide(base, { ...g, rx, ry });
+}
 
 /** The sweep, in degrees, of an arc between `a` and `b` passing through `through` */
 function sweepThrough(a: XY, b: XY, through: XY): number {
@@ -175,6 +418,28 @@ const polar = (c: XY, r: number, angle: number): XY => ({
  * The sweep is landed as {@link landBend} has it.
  */
 export function dragBend(base: LineParams, to: XY, env: ToolEnv): LineParams {
+    const ellipse = ellipseOf(base);
+    if (!ellipse) return dragBendRound(base, to, env);
+    // Round where the ellipse is a circle, then stretched back onto it
+    const round: LineParams = {
+        ...base,
+        points: base.points.map(({ ellipse: _e, ...q }) => ({
+            ...q,
+            ...intoCircle(q, ellipse),
+        })),
+    };
+    const bent = dragBendRound(round, intoCircle(to, ellipse), env);
+    return {
+        ...bent,
+        points: bent.points.map((q) => ({
+            ...q,
+            ...outOfCircle(q, ellipse),
+            ...(q.bend === undefined ? {} : { ellipse }),
+        })),
+    };
+}
+
+function dragBendRound(base: LineParams, to: XY, env: ToolEnv): LineParams {
     const [a, b] = base.points as [LinePoint, LinePoint];
     const bend = bendOf(base);
     const sign = Math.sign(bend) || 1;

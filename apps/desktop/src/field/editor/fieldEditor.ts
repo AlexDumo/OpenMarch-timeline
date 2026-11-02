@@ -293,7 +293,13 @@ export type FieldModeDrawing = {
     /**
      * Circles the shape is drawn on, faint and dashed under it: an Arc's whole circle (#634)
      */
-    construction?: readonly { center: FieldPoint; r: number }[];
+    construction?: readonly {
+        center: FieldPoint;
+        rx: number;
+        ry: number;
+        /** Radians: the way `rx` points */
+        rotation: number;
+    }[];
     /**
      * Where the shape's marchers start the move (08-shape-system-ux.md, "Marcher styling"), drawn
      * as faint ghosts of them (#417): at the start flag, the same points the walks leave from

@@ -3202,5 +3202,7 @@
     "shapes.kinds.arc.ends.label": "Tooltip for the Arc shape's menu that picks whether the arc of marchers is left open or closed into a shape.",
     "shapes.kinds.arc.ends.open": "Menu option for an Arc shape: leave the arc open (its two ends are not joined).",
     "shapes.kinds.arc.ends.chord": "Menu option for an Arc shape: close the arc by joining its two ends with a straight line, making a half-moon shape that can be filled with marchers.",
-    "shapes.kinds.arc.ends.circle": "Menu option for an Arc shape: continue the arc all the way round so it becomes a full circle of marchers."
+    "shapes.kinds.arc.ends.circle": "Menu option for an Arc shape: continue the arc all the way round so it becomes a full circle of marchers.",
+    "shapes.kinds.arc.ends.round": "Menu option for an Arc shape that runs on an ellipse (an oval): continue the arc all the way round so it becomes a whole ellipse of marchers.",
+    "shapes.kinds.arc.params.size": "Tooltip for a number in the floating shape editor of an Arc shape on an ellipse (an oval): how wide and how deep the ellipse is, in marching steps, shown like \"8 × 5\"."
 }

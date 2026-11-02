@@ -529,13 +529,15 @@ const ShapeBody = memo(function ShapeBody({
     const dots = drawing.stage === "drawing";
     return (
         <>
-            {drawing.construction?.map(({ center, r }, i) => (
-                // The circle an arc is part of, faint under it (#634)
-                <circle
+            {drawing.construction?.map(({ center, rx, ry, rotation }, i) => (
+                // The circle or ellipse an arc is part of, faint under it (#634)
+                <ellipse
                     key={`construction-${i}`}
                     cx={center.x}
                     cy={center.y}
-                    r={r}
+                    rx={rx}
+                    ry={ry}
+                    transform={`rotate(${(rotation * 180) / Math.PI} ${center.x} ${center.y})`}
                     fill="none"
                     stroke={walk}
                     strokeWidth={SHAPE_OUTLINE_WIDTH}

@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import { arcTool, BEND_KEY } from "../arcTool";
 import {
     arcEnds,
+    arcGuide,
     bendOf,
     CLOSE_AT,
+    DEPTH_KEY,
+    ellipseOf,
+    radiusHandlePoints,
+    WIDTH_KEY,
     isArcParams,
     landBend,
     withBend,
@@ -345,7 +350,7 @@ describe("its whole circle", () => {
         const [circle] = arcTool.construction!(p, 5);
         expect(circle).toBeDefined();
         for (const end of p.points)
-            expect(dist(end, circle!.center)).toBeCloseTo(circle!.r, 9);
+            expect(dist(end, circle!.center)).toBeCloseTo(circle!.rx, 9);
         expect(arcTool.construction!(withEnds(p, "chord"), 5)).toHaveLength(1);
     });
 
@@ -413,5 +418,174 @@ describe("bending past a half turn (owner on #634)", () => {
         t = onHandle(t, BEND_KEY, { x: 130, y: -5000 });
         expect(arcEnds(paramsOf(t))).toBe("chord");
         expect(radiusOf(paramsOf(t))).toBeCloseTo(30, 1);
+    });
+});
+
+describe("on an ellipse (owner on #634)", () => {
+    /** A 180° arc of 7 from (100, 200) to (160, 200), bowing up: circle center (130, 200), r 30 */
+    const halfTurn = () => {
+        const t = drawn(7, { x: 100, y: 200 }, { x: 160, y: 200 });
+        return onHandle(t, BEND_KEY, { x: 130, y: 170 });
+    };
+    /** The half turn stretched 10 deeper by its depth handle, its far side kept */
+    const deeper = () => {
+        const t = halfTurn();
+        const { depth } = radiusHandlePoints(paramsOf(t))!;
+        return onHandle(t, DEPTH_KEY, { x: depth.x, y: depth.y + 20 });
+    };
+
+    it("shows two radius handles on the guide, off the arc", () => {
+        const t = halfTurn();
+        const keys = t.kind.handles(t.params, t.spots, null).map((h) => h.key);
+        expect(keys).toEqual(["p0", "p1", BEND_KEY, WIDTH_KEY, DEPTH_KEY]);
+        const { width, depth } = radiusHandlePoints(paramsOf(t))!;
+        // The depth handle across from the arc's middle; the width one not on an end
+        expect(dist(depth, { x: 130, y: 230 })).toBeLessThan(1e-6);
+        for (const q of paramsOf(t).points)
+            expect(dist(width, q)).toBeGreaterThan(5);
+        expect(dist(width, { x: 130, y: 200 })).toBeCloseTo(30, 6);
+    });
+
+    it("stretches the guide into an ellipse, the arc riding along", () => {
+        const t = deeper();
+        const p = paramsOf(t);
+        const g = arcGuide(p)!;
+        expect(ellipseOf(p)).toBeDefined();
+        expect(g.rx).toBeCloseTo(30, 6);
+        expect(g.ry).toBeCloseTo(40, 6);
+        // Its far side kept: the center moved 10 toward the handle
+        expect(g.center.y).toBeCloseTo(210, 6);
+        // Still a half of it, ends on it
+        expect(Math.abs(bendOf(p))).toBeCloseTo(180, 6);
+        expect(isArcParams(p)).toBe(true);
+        const [guide] = arcTool.construction!(p, 7);
+        expect(guide!.ry).toBeCloseTo(40, 6);
+    });
+
+    it("lays its marchers along the ellipse, evenly along it", () => {
+        const p = paramsOf(deeper());
+        const g = arcGuide(p)!;
+        const spots = lineSpots(p, 7);
+        for (const q of spots) {
+            const dx = q.x - g.center.x;
+            const dy = q.y - g.center.y;
+            expect((dx / g.rx) ** 2 + (dy / g.ry) ** 2).toBeCloseTo(1, 3);
+        }
+        const along = spots.map((q) => q.s!);
+        const gaps = along.slice(1).map((s, i) => s - along[i]!);
+        for (const gap of gaps) expect(gap).toBeCloseTo(gaps[0]!, 3);
+    });
+
+    it("sticks back to a circle near equal radii", () => {
+        let t = deeper();
+        const { depth } = radiusHandlePoints(paramsOf(t))!;
+        t = onHandle(t, DEPTH_KEY, { x: depth.x, y: depth.y - 19 });
+        expect(ellipseOf(paramsOf(t))).toBeUndefined();
+    });
+
+    it("stretches both sides from its center with fromCenter", () => {
+        const t = halfTurn();
+        const { width } = radiusHandlePoints(paramsOf(t))!;
+        const out = { x: 130 + Math.sign(width.x - 130) * 40, y: width.y };
+        const stretched = onHandle(t, WIDTH_KEY, out, {
+            ...env,
+            fromCenter: true,
+        });
+        const g = arcGuide(paramsOf(stretched))!;
+        expect(g.center.x).toBeCloseTo(130, 6);
+        expect(g.rx).toBeCloseTo(40, 6);
+    });
+
+    it("slides an end round the ellipse, the other end staying", () => {
+        let t = deeper();
+        const before = paramsOf(t);
+        const g = arcGuide(before)!;
+        // Toward the back of the ellipse past the first end
+        const to = { x: g.center.x - 25, y: g.center.y + 30 };
+        t = onHandle(t, "p0", to);
+        const p = paramsOf(t);
+        expect(dist(p.points[1]!, before.points[1]!)).toBeLessThan(1e-6);
+        expect(Math.abs(bendOf(p))).toBeGreaterThan(180);
+        const now = arcGuide(p)!;
+        expect(now.rx).toBeCloseTo(g.rx, 6);
+        expect(now.ry).toBeCloseTo(g.ry, 6);
+        const q = p.points[0]!;
+        expect(
+            ((q.x - g.center.x) / g.rx) ** 2 + ((q.y - g.center.y) / g.ry) ** 2,
+        ).toBeCloseTo(1, 6);
+    });
+
+    it("bends on its ellipse, keeping it", () => {
+        let t = deeper();
+        const g = arcGuide(paramsOf(t))!;
+        t = onHandle(
+            t,
+            BEND_KEY,
+            { x: g.center.x, y: g.center.y - g.ry - 15 },
+            fine,
+        );
+        const p = paramsOf(t);
+        expect(Math.abs(bendOf(p))).toBeGreaterThan(180);
+        const now = arcGuide(p)!;
+        expect(now.rx).toBeCloseTo(g.rx, 6);
+        expect(now.ry).toBeCloseTo(g.ry, 6);
+    });
+
+    it("reads its size in the editor and takes a typed one", () => {
+        const t = deeper();
+        const size = arcTool.params.find((q) => q.key === "size")!;
+        expect(size.shown!(t.params, t.spots)).toBe(true);
+        expect(size.display(t.params, t.spots, STEP)).toBe("6 × 8");
+        const typed = edit(t, size.type(t.params, t.spots, "10 × 4", env), ctx);
+        const g = arcGuide(paramsOf(typed))!;
+        expect(g.rx).toBeCloseTo(50, 6);
+        expect(g.ry).toBeCloseTo(20, 6);
+        expect(size.display(halfTurn().params, 7, STEP)).toBe("6 × 6");
+    });
+
+    it("closes all the way round the ellipse, and opens again", () => {
+        const p = paramsOf(deeper());
+        const round = withEnds(p, "circle");
+        expect(isArcParams(round)).toBe(true);
+        expect(round.points[1]!.ellipse).toEqual(round.points[0]!.ellipse);
+        const ends = arcTool.choices!.find((c) => c.key === "ends")!;
+        expect(
+            ends.options(round, 7).find((o) => o.value === "circle")!.label,
+        ).toBe("Close all the way round");
+        const spots = lineFillSpots(round, 8, STEP);
+        const g = arcGuide(p)!;
+        for (const q of spots)
+            expect(
+                ((q.x - g.center.x) / g.rx) ** 2 +
+                    ((q.y - g.center.y) / g.ry) ** 2,
+            ).toBeCloseTo(1, 3);
+        expect(withEnds(round, "open")).toEqual(p);
+    });
+
+    it("turns and mirrors its ellipse with the shape", () => {
+        const p = paramsOf(deeper());
+        const frame = lineFrame(p);
+        const turned = withLineFrame(p, {
+            ...frame,
+            rotation: frame.rotation + Math.PI / 2,
+        });
+        expect(arcGuide(turned)!.ry).toBeCloseTo(40, 6);
+        expect(arcGuide(turned)!.rx).toBeCloseTo(30, 6);
+        const mirrored = withLineFrame(p, { ...frame, flipY: true });
+        const m = arcGuide(mirrored)!;
+        expect(m.rx).toBeCloseTo(30, 6);
+        expect(m.ry).toBeCloseTo(40, 6);
+        // The arc stays on its ellipse, mirrored: every spot on it
+        for (const q of lineSpots(mirrored, 7))
+            expect(
+                (((q.x - m.center.x) * Math.cos(m.axis) +
+                    (q.y - m.center.y) * Math.sin(m.axis)) /
+                    m.rx) **
+                    2 +
+                    ((-(q.x - m.center.x) * Math.sin(m.axis) +
+                        (q.y - m.center.y) * Math.cos(m.axis)) /
+                        m.ry) **
+                        2,
+            ).toBeCloseTo(1, 3);
     });
 });

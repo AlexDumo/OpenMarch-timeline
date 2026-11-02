@@ -2395,13 +2395,15 @@
                     "sameSpot": "The arc's ends are on the same spot"
                 },
                 "params": {
-                    "bend": "How far the arc turns"
+                    "bend": "How far the arc turns",
+                    "size": "Width × depth of the ellipse the arc is on, in steps"
                 },
                 "ends": {
                     "label": "Open or closed",
                     "open": "Open",
                     "chord": "Close with a straight line",
-                    "circle": "Close to circle"
+                    "circle": "Close to circle",
+                    "round": "Close all the way round"
                 }
             },
             "block": {

@@ -53,6 +53,18 @@ export interface LinePoint extends XY {
      * than 360. Absent (or 0) where the segment is straight or follows the points' tension.
      */
     readonly bend?: number;
+    /**
+     * The bent segment on an ellipse rather than a circle (#634): its depth over its width
+     * (`ratio`, never 1) and the way its width axis points (`axis`, degrees clockwise from the
+     * field's x axis). The bend is then the angle around the ellipse. Only with a bend.
+     */
+    readonly ellipse?: LineEllipse;
+}
+
+/** An ellipse a bent segment runs on ({@link LinePoint.ellipse}) */
+export interface LineEllipse {
+    readonly ratio: number;
+    readonly axis: number;
 }
 
 /** The tension a point made smooth starts with: the plain Catmull-Rom curve (#525) */
@@ -168,7 +180,7 @@ const withTension =
     ({ x, y }: XY): LinePoint => ({ x, y, tension });
 
 /** A point's own fields: anything else is a later build's (ADR 0006, decision 5) */
-const POINT_KEYS = new Set(["x", "y", "tension", "marcher", "bend"]);
+const POINT_KEYS = new Set(["x", "y", "tension", "marcher", "bend", "ellipse"]);
 
 const isPoint = (q: unknown): q is LinePoint =>
     typeof q === "object" &&
@@ -181,7 +193,23 @@ const isPoint = (q: unknown): q is LinePoint =>
     Number.isFinite((q as LinePoint).tension) &&
     (q as LinePoint).tension >= 0 &&
     (q as LinePoint).tension <= MAX_TENSION &&
-    isBend((q as LinePoint).bend);
+    isBend((q as LinePoint).bend) &&
+    isEllipse((q as LinePoint).ellipse, (q as LinePoint).bend);
+
+/** A stored ellipse: absent, or on a bent segment with a finite ratio other than 1 and an axis */
+const isEllipse = (e: unknown, bend: unknown): boolean => {
+    if (e === undefined) return true;
+    if (typeof e !== "object" || e === null || bend === undefined) return false;
+    if (Object.keys(e).some((key) => key !== "ratio" && key !== "axis"))
+        return false;
+    const { ratio, axis } = e as LineEllipse;
+    return (
+        Number.isFinite(ratio) &&
+        ratio > 0 &&
+        Math.abs(ratio - 1) > 1e-9 &&
+        Number.isFinite(axis)
+    );
+};
 
 /** A stored bend: absent, or a finite sweep short of a full turn either way */
 const isBend = (b: unknown): boolean =>
@@ -307,7 +335,10 @@ export function lineSegments(p: LineParams): Segment[] {
     return Array.from({ length: count }, (_, i): Segment => {
         const a = points[i]!;
         const b = points[(i + 1) % points.length]!;
-        if (bends(a)) return bentSegment(a, b, a.bend!);
+        if (bends(a))
+            return a.ellipse
+                ? ellipseSegment(a, b, a.bend!, a.ellipse)
+                : bentSegment(a, b, a.bend!);
         const line: Segment = { type: "line", a, b };
         if (a.tension === 0 && b.tension === 0) return line;
         const full = catmullRomSpan(points, i, closed);
@@ -351,6 +382,51 @@ export function bentSegment(a: XY, b: XY, degrees: number): Segment {
         r,
         start: Math.atan2(a.y - center.y, a.x - center.x),
         sweep,
+    };
+}
+
+/** A point into the space where `ellipse` is a circle: turned to its axis, its depth stretched */
+export function intoCircle(p: XY, ellipse: LineEllipse): XY {
+    const angle = (-ellipse.axis * Math.PI) / 180;
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    return { x: p.x * c - p.y * s, y: (p.x * s + p.y * c) / ellipse.ratio };
+}
+
+/** A point from the space where `ellipse` is a circle back onto the field */
+export function outOfCircle(p: XY, ellipse: LineEllipse): XY {
+    const angle = (ellipse.axis * Math.PI) / 180;
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    const y = p.y * ellipse.ratio;
+    return { x: p.x * c - y * s, y: p.x * s + y * c };
+}
+
+/**
+ * The arc of `ellipse` from `a` to `b` turning through `degrees` around it: the circular arc
+ * through them where the ellipse is a circle ({@link intoCircle}), stretched back
+ */
+export function ellipseSegment(
+    a: XY,
+    b: XY,
+    degrees: number,
+    ellipse: LineEllipse,
+): Segment {
+    const round = bentSegment(
+        intoCircle(a, ellipse),
+        intoCircle(b, ellipse),
+        degrees,
+    );
+    if (round.type !== "arc")
+        return { type: "line", a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y } };
+    return {
+        type: "ellipse",
+        center: outOfCircle(round.center, ellipse),
+        rx: round.r,
+        ry: round.r * ellipse.ratio,
+        rotation: (ellipse.axis * Math.PI) / 180,
+        start: round.start,
+        sweep: round.sweep,
     };
 }
 
@@ -1481,11 +1557,38 @@ export function withLineFrame(p: LineParams, frame: ShapeFrame): LineParams {
         };
     });
     const mirrored = frame.flipX !== frame.flipY;
-    // A mirror bends every arc the other way (#634)
-    if (mirrored !== (was.flipX !== was.flipY))
-        points.forEach((q, i) => {
-            if (q.bend !== undefined) points[i] = { ...q, bend: -q.bend };
+    // A mirror bends every arc the other way, and an ellipse's axis goes round with it (#634)
+    const moved = (q: XY) => {
+        const local = fieldToFrame(was, q);
+        return frameToField(frame, {
+            x: frame.flipX ? -local.x : local.x,
+            y: frame.flipY ? -local.y : local.y,
         });
+    };
+    const flips = mirrored !== (was.flipX !== was.flipY);
+    points.forEach((q, i) => {
+        const bend = q.bend !== undefined && flips ? -q.bend : q.bend;
+        let ellipse = q.ellipse;
+        if (ellipse) {
+            const angle = (ellipse.axis * Math.PI) / 180;
+            const from = moved(q);
+            const to = moved({
+                x: q.x + Math.cos(angle) * 100,
+                y: q.y + Math.sin(angle) * 100,
+            });
+            ellipse = {
+                ...ellipse,
+                axis:
+                    (Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI,
+            };
+        }
+        if (bend !== q.bend || ellipse !== q.ellipse)
+            points[i] = {
+                ...points[i]!,
+                ...(bend === undefined ? {} : { bend }),
+                ...(ellipse ? { ellipse } : {}),
+            };
+    });
     const turn = mirrored
         ? -lineTurn(p)
         : lineTurn(p) + (frame.rotation - was.rotation);
