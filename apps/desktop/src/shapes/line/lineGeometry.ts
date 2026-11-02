@@ -1,8 +1,11 @@
 import {
+    DEGREE,
     fieldToFrame,
     frameToField,
+    normalizeAngle,
     pivotAt,
     pivotPoint,
+    snapRotation,
     type Pivot,
     type ShapeFrame,
 } from "../frame/frame";
@@ -133,6 +136,13 @@ export interface LineParams {
      * offsets long; in Fit it's where the line started from, the drawn line giving the offset.
      */
     readonly offset?: XY;
+    /**
+     * How far the whole line has been turned since it was drawn, in degrees clockwise from 0 up to
+     * 360 (ADR 0006, decision 10): what the editor's turn reads, so a line reads 0° as drawn
+     * whichever way it was drawn. Only turning the whole shape changes it (the knob, the degrees,
+     * ⟳); editing its points never does. Absent is 0, so a Line saved before reads 0° as it is.
+     */
+    readonly turn?: number;
 }
 
 /** Whether `p` joins its last point to its first */
@@ -202,8 +212,13 @@ const KEYS = new Set([
     "distribution",
     "measured",
     "offset",
+    "turn",
     "pivot",
 ]);
+
+/** A stored turn: degrees from 0 up to 360 */
+const isTurn = (t: unknown): t is number =>
+    typeof t === "number" && Number.isFinite(t) && t >= 0 && t < 360;
 
 /**
  * Whether `params` is a line this version can lay out exactly as it was saved. Anything a newer
@@ -222,6 +237,7 @@ export function isLineParams(params: unknown): params is LineParams {
     // An offset only measured as one, and always with it
     if ((p.measured === "offset") !== (p.offset !== undefined)) return false;
     if (p.offset !== undefined && !isOffset(p.offset)) return false;
+    if (p.turn !== undefined && !isTurn(p.turn)) return false;
     if (!Array.isArray(p.points) || p.points.length < (p.closed ? 3 : 2))
         return false;
     // A closed line's fill (#529): one this version fills, and never on an open line
@@ -1341,7 +1357,9 @@ export function lineFrame(p: LineParams): ShapeFrame {
 
 /**
  * The line moved, turned or flipped into `frame`: each point keeps its place in the frame, mirrored
- * when `frame` is flipped
+ * when `frame` is flipped. Its {@link LineParams.turn} goes round with it: turned, by as much as the
+ * frame turned; mirrored, to the other way round (a mirror of a line turned 30° clockwise is the
+ * mirrored line turned 30° the other way); moved, not at all.
  */
 export function withLineFrame(p: LineParams, frame: ShapeFrame): LineParams {
     const was = lineFrame(p);
@@ -1355,7 +1373,29 @@ export function withLineFrame(p: LineParams, frame: ShapeFrame): LineParams {
             }),
         };
     });
-    return { ...p, points };
+    const mirrored = frame.flipX !== frame.flipY;
+    const turn = mirrored
+        ? -lineTurn(p)
+        : lineTurn(p) + (frame.rotation - was.rotation);
+    return withTurn({ ...p, points }, turn);
+}
+
+/** The line's turn since it was drawn ({@link LineParams.turn}), in radians */
+export const lineTurn = (p: Pick<LineParams, "turn">): number =>
+    (p.turn ?? 0) * DEGREE;
+
+/**
+ * `p` with its turn at `rad` radians, stored in degrees from 0 up to 360 rounded to a millionth
+ * (float noise from 15° steps in radians), and left out at 0
+ */
+export function withTurn<T extends Pick<LineParams, "turn">>(
+    p: T,
+    rad: number,
+): T {
+    let degrees = Math.round((normalizeAngle(rad) / DEGREE) * 1e6) / 1e6;
+    if (degrees >= 360) degrees = 0;
+    const { turn: _turn, ...rest } = p;
+    return (degrees === 0 ? rest : { ...rest, turn: degrees }) as T;
 }
 
 /**
@@ -1496,14 +1536,28 @@ export function drawPoints(
 }
 
 /**
- * Which way an end dragged to `to` points from the fixed end `other`, in Keep interval: the
- * offset on half steps when snapping (an end kept off the grid still turns square to the field).
+ * The way from `other` toward `to`, for an end swung round its neighbor ({@link swungDirection}).
  * Null for no direction.
  */
 function directionFrom(other: XY, to: XY, env: ToolEnv): XY | null {
-    let d = sub(to, other);
-    if (env.snap) d = onHalfSteps(d, env);
-    return unitOf(d);
+    return swungDirection(sub(to, other), env);
+}
+
+/**
+ * The way `d` points, as an end swung round its neighbor goes (ADR 0006, decision 10): in the
+ * knob's steps ({@link snapRotation}), 15° at a time counted from level, so level and plumb are
+ * always reachable whichever way the line was drawn; whole degrees with `fine`; free with the Snap
+ * toggle off. One long, or null for no direction.
+ */
+export function swungDirection(
+    d: XY,
+    env: Pick<ToolEnv, "fine" | "pull">,
+): XY | null {
+    if (length(d) < 1e-9) return null;
+    const angle = snapRotation(Math.atan2(d.y, d.x), env);
+    // Level and plumb exactly, not float noise off them
+    const clean = (v: number) => (Math.abs(v) < 1e-12 ? 0 : v);
+    return { x: clean(Math.cos(angle)), y: clean(Math.sin(angle)) };
 }
 
 /** `d` with each axis on the half-step ladder */
@@ -2100,8 +2154,8 @@ function keptDirection(d: EndDrag, env: ToolEnv): XY | null {
 
 /**
  * The line locked (Keep interval): measured ↔ or ↕ it keeps that way's distance and takes the
- * pointer's place the other way; else it swings round, pointing the way the pointer is (on half
- * steps when snapping), its length kept
+ * pointer's place the other way; else it swings round, pointing the way the pointer is in the
+ * knob's steps ({@link swungDirection}), its length kept
  */
 function lockedVector(d: EndDrag, env: ToolEnv): XY | null {
     if (d.axis)
@@ -2110,9 +2164,7 @@ function lockedVector(d: EndDrag, env: ToolEnv): XY | null {
             coord(d.was, d.axis),
             coord(d.raw, across(d.axis)),
         );
-    const u = env.snap
-        ? unitOf(onHalfSteps(d.pointer, env))
-        : unitOf(d.pointer);
+    const u = swungDirection(d.pointer, env);
     if (!u) return null;
     const l = length(d.was);
     return { x: u.x * l, y: u.y * l };
@@ -2121,7 +2173,8 @@ function lockedVector(d: EndDrag, env: ToolEnv): XY | null {
 /**
  * The line unlocked (Fit), snapping so the interval is whole steps (half zoomed in): an offset's
  * two parts each, either nought; measured ↔ or ↕ that way's distance, the pointer's place the
- * other way; else its length, pointing the way the pointer is on half steps. On the path, with
+ * other way; else its length, pointing the way the pointer is in the knob's steps
+ * ({@link swungDirection}). On the path, with
  * `fine` or the Snap toggle off, where the pointer lands.
  */
 function unlockedVector(d: EndDrag, env: ToolEnv): XY | null {
@@ -2143,7 +2196,7 @@ function unlockedVector(d: EndDrag, env: ToolEnv): XY | null {
             ) * per,
             coord(d.raw, across(d.axis)),
         );
-    const u = unitOf(onHalfSteps(d.pointer, env));
+    const u = swungDirection(d.pointer, env);
     if (!u) return null;
     const l = onUnits(length(d.pointer) / per, 1) * per;
     return { x: u.x * l, y: u.y * l };
@@ -2633,14 +2686,16 @@ export function keptToRun(p: LineParams, n: number, env: SizeEnv): LineParams {
 }
 
 /**
- * After a turn or flip (the kind's `settle`): a line in Keep interval measured ↔ or ↕ covers a
+ * After a turn or flip (the kind's `settle`): a line turned square to the field goes back onto the
+ * grid as a box does ({@link squareOnGrid}); a line in Keep interval measured ↔ or ↕ covers a
  * different distance that way once turned, so it's sized to its run again (#527)
  */
 export function settleLine(
-    p: LineParams,
+    base: LineParams,
     n: number,
     env: SizeEnv & Partial<Pick<ToolEnv, "stepPx">>,
 ): LineParams {
+    const p = squareOnGrid(base, env);
     // Measured as an offset, the offset turns with the line, back on half steps when snapping
     if (offsetOf(p) && n > 1) {
         const d = sub(p.points.at(-1)!, p.points[0]!);
@@ -2656,6 +2711,76 @@ export function settleLine(
         return keptToRun({ ...p, offset }, n, env);
     }
     return measuredAxis(p) ? keptToRun(p, n, env) : p;
+}
+
+/** Whether `q` is on the half-step grid, within float noise */
+const onTheGrid = (q: XY, unit: number): boolean =>
+    [q.x, q.y].every((v) => Math.abs(v / unit - Math.round(v / unit)) < 1e-6);
+
+/**
+ * When snapping, a line turned square to the field put back on the grid as a box is (ADR 0006,
+ * decision 10): moved so the point nearest its pivot is on the grid, so every point is when they
+ * are a whole number of half steps apart each way. An open line in Fit whose ends are square to
+ * each other (level or plumb) is also stretched from that point, along itself, so its far end lands
+ * on the grid; locked (Keep interval, or on the path), its length is its intervals', which it keeps.
+ * A line with its points off the grid's shape (turned 15° from level, say) stays where it is, as a
+ * box turned off the field's axes does.
+ */
+function squareOnGrid(
+    p: LineParams,
+    env: SizeEnv & Partial<Pick<ToolEnv, "stepPx">>,
+): LineParams {
+    if (!env.snap || !env.gridSnap || !env.stepPx) return p;
+    const unit = env.stepPx / 2;
+    const first = p.points[0]!;
+    const shaped = p.points.every((q) => onTheGrid(sub(q, first), unit));
+    const ends = sub(p.points.at(-1)!, first);
+    const level =
+        !isClosed(p) &&
+        length(ends) > 1e-9 &&
+        Math.min(Math.abs(ends.x), Math.abs(ends.y)) < 1e-9 * length(ends);
+    if (!shaped && !level) return p;
+    const pivot = pivotPoint(lineFrame(p), env.pivot ?? pivotOf(p));
+    let held = 0;
+    p.points.forEach((q, i) => {
+        if (length(sub(q, pivot)) < length(sub(p.points[held]!, pivot)) - 1e-9)
+            held = i;
+    });
+    const from = p.points[held]!;
+    const landed = env.gridSnap(from);
+    let points = p.points.map((q) => ({
+        ...q,
+        x: q.x + landed.x - from.x,
+        y: q.y + landed.y - from.y,
+    }));
+    if (level && p.spacing.mode === "fit") {
+        // Stretched from the held point so the end farther from it lands on the grid
+        const lastIndex = points.length - 1;
+        const far =
+            length(sub(points[0]!, landed)) >
+            length(sub(points[lastIndex]!, landed))
+                ? 0
+                : lastIndex;
+        const reach = sub(points[far]!, landed);
+        const span = length(reach);
+        const to = Math.round(span / unit) * unit;
+        if (span > 1e-9 && to > 1e-9 && Math.abs(to - span) > 1e-9) {
+            const k = to / span;
+            points = points.map((q) => ({
+                ...q,
+                x: landed.x + (q.x - landed.x) * k,
+                y: landed.y + (q.y - landed.y) * k,
+            }));
+        }
+    }
+    // Float noise from turning: exactly on the grid where a point is within it
+    points = points.map((q) =>
+        onTheGrid(q, unit) ? { ...q, ...env.gridSnap!(q) } : q,
+    );
+    const moved = points.some(
+        (q, i) => q.x !== p.points[i]!.x || q.y !== p.points[i]!.y,
+    );
+    return moved ? { ...p, points } : p;
 }
 
 /** The line moved by `delta`, its first point on the half-step grid when snapping */
@@ -2732,10 +2857,12 @@ export function lineInFrame(
         );
     const flipped = across ? frame.flipX : frame.flipY;
     const [a, b] = flipped ? [end(1), end(-1)] : [end(-1), end(1)];
-    return {
+    // It reads the turn the shape had (ADR 0006, decision 10), not the way it happens to point
+    const line: LineParams = {
         points: [corner(env.gridSnap(a)), corner(env.gridSnap(b))],
         spacing: FIT,
     };
+    return withTurn(line, frame.rotation);
 }
 
 /**

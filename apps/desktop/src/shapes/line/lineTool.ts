@@ -1,7 +1,7 @@
 import tolgee from "@/global/singletons/Tolgee";
 import type { KindHonors } from "../tool/toolKind";
 import type { XY } from "../types";
-import { fieldToFrame, resizeCursor } from "../frame/frame";
+import { fieldToFrame, resizeCursor, rotationDegrees } from "../frame/frame";
 import { formatSignedSteps, formatSteps, parseSteps } from "../editor/format";
 import {
     COUNT_RATE,
@@ -87,6 +87,7 @@ import {
     offsetOf,
     withGroups,
     withLineFrame,
+    lineTurn,
     withMeasured,
     withOffset,
     offsetStart,
@@ -1323,6 +1324,21 @@ const MENU: ToolHandleMenu<LineParams> = {
 };
 
 /**
+ * The drag readout's angle for point `index` when it's an open line's end (ADR 0006, decision 10):
+ * the way it points from its neighbor, clockwise from the right as the turn reads, so an end
+ * swung round in the knob's steps shows each one. Null for any other point.
+ */
+function endTip(p: LineParams, index: number): string | null {
+    const last = p.points.length - 1;
+    if (isClosed(p) || (index !== 0 && index !== last)) return null;
+    const end = p.points[index]!;
+    const neighbor = p.points[index === 0 ? 1 : last - 1]!;
+    const d = { x: end.x - neighbor.x, y: end.y - neighbor.y };
+    if (Math.hypot(d.x, d.y) < 1e-9) return null;
+    return `${rotationDegrees(Math.atan2(d.y, d.x))}°`;
+}
+
+/**
  * The Line (#523, #524, #525, spec #522): a line of marchers drawn with one drag (two points) or by
  * clicking point after point, every point and every segment's midpoint a handle, moved from its
  * body, and turned and flipped through its frame like every shape. Drawn in Fit, the interval
@@ -1457,6 +1473,9 @@ export const lineTool: ToolKind<LineParams> = {
     move: (base, _n, delta, env) => moveLine(base, delta, env),
     frameOf: (params) => lineFrame(params),
     withFrame: (params, _n, frame) => withLineFrame(params, frame),
+    // 0° as drawn, whichever way (ADR 0006, decision 10)
+    turnOf: (params) => lineTurn(params),
+    handleTip: (params, _n, key) => endTip(params, pointOf(params, key)),
     settle: settleLine,
     fromFrame: (frame, n, env) => pivoted(lineInFrame(frame, n, env)),
     startPivot: linePivot,
