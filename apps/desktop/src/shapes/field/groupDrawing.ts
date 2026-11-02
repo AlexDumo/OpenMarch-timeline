@@ -1,5 +1,5 @@
 import { parseSteps } from "../editor/format";
-import type { XY } from "../types";
+import type { Slot, XY } from "../types";
 import type { AnyToolKind } from "../tool/toolKind";
 import type { GroupMenuState } from "./shapePointer";
 
@@ -39,7 +39,8 @@ export interface GroupMark {
 }
 
 /**
- * A gap of the lit group labeled with its interval, at its middle: "3", "↔ 2½". A `seam` is the gap
+ * A gap of the lit group labeled with its interval, at its middle along the shape: "3", "↔ 2½". A
+ * `seam` is the gap
  * where the lit group meets a neighbor, labeled with the interval it takes there, the larger of the
  * two groups' (`groupGaps`).
  */
@@ -51,6 +52,11 @@ export interface GroupGapLabel {
     readonly from: XY;
     readonly to: XY;
     readonly seam: boolean;
+    /**
+     * How long the gap is along the shape, in field units, when that isn't the straight line
+     * between its spots (it goes round a corner or a curve)
+     */
+    readonly length?: number;
     /** The lit group as one label, "2 at 3", for when its gaps are too short for one each */
     readonly whole: string;
 }
@@ -60,14 +66,15 @@ export interface GroupGapLabel {
  * spot ringed in its group's color, and with a group lit, every gap in it labeled with its
  * interval (and the axis, on a Measured line), and the seams where it meets its neighbors with
  * theirs. Nothing with the menu closed or a shape without
- * groups. `spots` are the shape's spots in order along it, as its kind lays them out. Pure: a
+ * groups. `spots` are the shape's spots in order along it, as its kind lays them out; a gap's label
+ * stands at its middle along the shape when the kind says where that is (`along`). Pure: a
  * drawing only, nothing is edited.
  */
 export function groupDrawing(
     kind: AnyToolKind,
     params: unknown,
     n: number,
-    spots: readonly XY[],
+    spots: readonly Slot[],
     menu: GroupMenuState | null,
     stepPx: number,
 ): { groupMarks?: GroupMark[]; groupLabels?: GroupGapLabel[] } {
@@ -88,10 +95,13 @@ export function groupDrawing(
     const gap = (k: number) => {
         const from = spots[k - 1]!;
         const to = spots[k]!;
+        const along = kind.groups!.along?.(params, from, to);
         return {
             from,
             to,
-            at: { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 },
+            ...(along
+                ? { at: along.at, length: along.length }
+                : { at: { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 } }),
         };
     };
     shown.forEach((g, group) => {
@@ -168,7 +178,7 @@ export interface PlacedGroupLabel {
  * across its gap, perpendicular to it, by the ring's radius and its own half-size that way; the
  * group's gaps always go to the side that faces up the screen (left on an upright gap), its seams
  * to the other side, so the two never meet. When the group's gaps are shorter on screen than a
- * pill (and a little room), it gets one label at its middle ("2 at 3") instead of one per gap.
+ * pill (and a little room), measured along the shape where it bends between the spots, it gets one label at its middle ("2 at 3") instead of one per gap.
  * `toScreen` maps a field point to CSS px; `ringPx` is a ring's radius there; `abovePx` is what
  * stands above each ring (the spots' names), which a pill moving up clears too.
  */
@@ -217,14 +227,21 @@ export function placeGroupLabels(
             seam: l.seam,
         };
     };
+    // A gap's length on screen: along the shape where the label knows it, else its chord
+    const onScreen = (l: GroupGapLabel, chord: number) => {
+        if (l.length === undefined) return chord;
+        const a = toScreen(l.at);
+        const b = toScreen({ x: l.at.x + 1, y: l.at.y });
+        return Math.max(chord, l.length * Math.hypot(b.x - a.x, b.y - a.y));
+    };
     const gaps = labels.filter((l) => !l.seam);
     const seams = labels.filter((l) => l.seam);
     const placed: PlacedGroupLabel[] = [];
     const crowded = gaps.some((l) => {
-        const { length, along } = across(l);
+        const { length: chord, along } = across(l);
         const w = groupLabelWidth(l.text);
         return (
-            length <
+            onScreen(l, chord) <
             Math.abs(along.x) * w +
                 Math.abs(along.y) * GROUP_LABEL_HEIGHT +
                 GROUP_LABEL_ROOM
