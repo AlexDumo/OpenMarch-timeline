@@ -1,3 +1,4 @@
+import Shortcut from "@/components/ui/Shortcut";
 import { useMemo, useRef, useState } from "react";
 import { touchSafeAccept } from "@/utilities/fileAccept";
 import { T, useTranslate } from "@tolgee/react";
@@ -14,9 +15,8 @@ import {
     XCircleIcon,
 } from "@phosphor-icons/react";
 import type { NewMarcherArgs } from "@/db-functions";
-import Keycaps from "@/components/ui/Keycaps";
 import { getTranslatedSectionName } from "@/global/classes/Sections";
-import { getActionShortcutKeys } from "@/shortcuts/labels";
+import { getEffectiveBindings } from "@/shortcuts/keymap";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import {
     MARCHER_CSV_COLUMNS,
@@ -73,10 +73,9 @@ export default function MarcherCsvImportForm({
 }: MarcherCsvImportFormProps) {
     const { t } = useTranslate();
     const shortcutOverrides = useShortcutOverridesStore((s) => s.overrides);
-    // Undefined when the person has unbound Undo: the note then names no shortcut
-    const undoKeys = getActionShortcutKeys("performUndo", {
-        overrides: shortcutOverrides,
-    });
+    // False when the person has unbound Undo: the note then names no shortcut
+    const hasUndo =
+        getEffectiveBindings("performUndo", shortcutOverrides).length > 0;
     const fileInput = useRef<HTMLInputElement>(null);
     const readGeneration = useRef(0);
     const [mode, setMode] = useState<MarcherCsvMode>("section");
@@ -352,11 +351,11 @@ export default function MarcherCsvImportForm({
             </Button>
             {showInfoNote && (
                 <InfoNote>
-                    {undoKeys ? (
+                    {hasUndo ? (
                         <T
                             keyName="marchers.csv.info"
                             params={{
-                                keys: () => <Keycaps keys={undoKeys} />,
+                                keys: () => <Shortcut action="performUndo" />,
                             }}
                         />
                     ) : (

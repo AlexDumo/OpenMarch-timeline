@@ -4,6 +4,7 @@
  * or length (a phrase), the value's own settings, its ripple and notes.
  * Each change is one undoable edit. No popovers: everything is here.
  */
+import Shortcut from "@/components/ui/Shortcut";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { T, useTranslate } from "@tolgee/react";
@@ -38,9 +39,6 @@ import { useVisualsData } from "./VisualsProvider";
 import { countWords } from "./countWhere";
 import { cueValueName } from "./cueValueText";
 import { useTargetLabel } from "./useTargetLabel";
-import Keycaps from "@/components/ui/Keycaps";
-import { formatBindingKeys } from "@/shortcuts/bindings";
-import { isMacPlatform } from "@/shortcuts/platform";
 import FacingWheel from "./FacingWheel";
 import {
     cancelFieldPoint,
@@ -470,16 +468,7 @@ function PickPointButton({
             {picking ? (
                 <T
                     keyName="visuals.cue.pickingPoint"
-                    params={{
-                        keys: () => (
-                            <Keycaps
-                                keys={formatBindingKeys(
-                                    "Escape",
-                                    isMacPlatform(),
-                                )}
-                            />
-                        ),
-                    }}
+                    params={{ keys: () => <Shortcut binding="Escape" /> }}
                 />
             ) : (
                 <T keyName="visuals.cue.pickPoint" />

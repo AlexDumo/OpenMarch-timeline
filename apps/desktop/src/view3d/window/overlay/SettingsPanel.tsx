@@ -19,6 +19,7 @@ import { T, useTranslate } from "@tolgee/react";
 import { XIcon } from "@phosphor-icons/react";
 import { Input, Switch } from "@openmarch/ui";
 import clsx from "clsx";
+import Shortcut from "@/components/ui/Shortcut";
 import { useView3dSceneStore } from "../sceneStore";
 import { QUALITY_MODES } from "../qualityPreference";
 import { HAS_SETTINGS_WINDOW, RESOLUTIONS } from "../renderPrefs";
@@ -33,9 +34,6 @@ import {
     useVenueRequest,
 } from "./VenueControls";
 import { useShowPerformerDefaults } from "../performers/useStoredCues";
-import Keycaps from "@/components/ui/Keycaps";
-import { formatBindingKeys } from "@/shortcuts/bindings";
-import { isMacPlatform } from "@/shortcuts/platform";
 
 /** End-zone lettering longer than this doesn't fit at a readable size. */
 export const END_ZONE_TEXT_MAX = 24;
@@ -453,86 +451,50 @@ function StepOffFootRow() {
 
 /**
  * The window's keyboard and mouse controls (ui.md UI-3, UI-4), in display
- * order. Each has `view3d.keys.<name>` for what it does; its keys show as
- * keycaps, alone, as a pair or a range (`view3d.keyNames.pair`/`range`), and
- * mouse gestures are words (`view3d.keyNames.<name>`).
+ * order. Each has `view3d.keys.<name>` for what it does; its keys are a
+ * binding or display keys shown as a `Shortcut` (mouse gestures are words in
+ * the cap), or two of them as a pair (`view3d.keyNames.pair`).
  */
 type ShortcutKeys =
-    | { readonly kind: "keys"; readonly binding: string }
-    | {
-          readonly kind: "pair" | "range";
-          readonly first: string;
-          readonly second: string;
-      }
-    | { readonly kind: "gesture"; readonly withKey?: string };
+    | { readonly binding: string }
+    | { readonly keys: readonly string[] }
+    | { readonly pair: readonly [first: string, second: string] };
 
 const SHORTCUTS: readonly (readonly [string, ShortcutKeys])[] = [
-    ["playPause", { kind: "keys", binding: "Space" }],
-    ["previousNext", { kind: "pair", first: "Q", second: "E" }],
-    ["firstLast", { kind: "pair", first: "Shift+Q", second: "Shift+E" }],
-    ["cameras", { kind: "range", first: "1", second: "9" }],
-    ["fullscreen", { kind: "keys", binding: "F" }],
-    ["crowd", { kind: "keys", binding: "C" }],
-    ["escape", { kind: "keys", binding: "Escape" }],
-    ["orbit", { kind: "gesture" }],
-    ["pan", { kind: "gesture", withKey: "Shift" }],
-    ["zoom", { kind: "gesture" }],
+    ["playPause", { binding: "Space" }],
+    ["previousNext", { pair: ["Q", "E"] }],
+    ["firstLast", { pair: ["Alt+Q", "Alt+E"] }],
+    ["cameras", { keys: ["1–9"] }],
+    ["fullscreen", { binding: "F" }],
+    ["crowd", { binding: "C" }],
+    ["escape", { binding: "Escape" }],
+    ["orbit", { binding: "drag" }],
+    ["pan", { binding: "Shift+drag" }],
+    ["zoom", { binding: "scroll" }],
 ];
 
-function ShortcutKeysCell({
-    name,
-    keys,
-}: {
-    name: string;
-    keys: ShortcutKeys;
-}) {
-    const isMac = isMacPlatform();
-    const caps = (binding: string) => () => (
-        <Keycaps keys={formatBindingKeys(binding, isMac)} />
+function ShortcutKeysCell({ keys }: { keys: ShortcutKeys }) {
+    if (!("pair" in keys)) return <Shortcut {...keys} />;
+    const [first, second] = keys.pair;
+    return (
+        <T
+            keyName="view3d.keyNames.pair"
+            params={{
+                first: () => <Shortcut binding={first} />,
+                second: () => <Shortcut binding={second} />,
+            }}
+        />
     );
-    switch (keys.kind) {
-        case "keys":
-            return caps(keys.binding)();
-        case "pair":
-            return (
-                <T
-                    keyName="view3d.keyNames.pair"
-                    params={{
-                        first: caps(keys.first),
-                        second: caps(keys.second),
-                    }}
-                />
-            );
-        case "range":
-            return (
-                <T
-                    keyName="view3d.keyNames.range"
-                    params={{
-                        first: caps(keys.first),
-                        last: caps(keys.second),
-                    }}
-                />
-            );
-        case "gesture":
-            return (
-                <T
-                    keyName={`view3d.keyNames.${name}`}
-                    params={
-                        keys.withKey ? { keys: caps(keys.withKey) } : undefined
-                    }
-                />
-            );
-    }
 }
 
 function ShortcutList() {
     const { t } = useTranslate();
     return (
-        <dl className="text-sub grid grid-cols-[auto_1fr] items-center gap-x-12 gap-y-4">
+        <dl className="text-sub grid grid-cols-[auto_1fr] items-baseline gap-x-12 gap-y-4">
             {SHORTCUTS.map(([name, keys]) => (
                 <div key={name} className="contents">
-                    <dt className="text-text/80 flex items-center gap-4 whitespace-nowrap">
-                        <ShortcutKeysCell name={name} keys={keys} />
+                    <dt className="flex items-center gap-4 whitespace-nowrap">
+                        <ShortcutKeysCell keys={keys} />
                     </dt>
                     <dd className="text-text/80">{t(`view3d.keys.${name}`)}</dd>
                 </div>

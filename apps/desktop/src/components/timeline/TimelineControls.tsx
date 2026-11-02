@@ -6,6 +6,7 @@ import {
     RowsIcon,
     RepeatIcon,
 } from "@phosphor-icons/react";
+import Shortcut from "@/components/ui/Shortcut";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { clsx } from "clsx";
 import { T, useTranslate } from "@tolgee/react";
@@ -14,9 +15,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { Slider } from "@openmarch/ui";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { toggleTimelineLoop } from "@/timeline/timelineTransport";
-import { Keycaps, ShortcutTooltip } from "./ShortcutTooltip";
-import { getActionShortcutKeys } from "@/shortcuts/labels";
-import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
+import { ShortcutTooltip } from "./ShortcutTooltip";
 import { PlaybackSpeedButton } from "./PlaybackSpeedButton";
 import { TRANSPORT_SHORTCUTS } from "./TimelinePrimitives";
 import { START_INK } from "./startFlagInk";
@@ -134,8 +133,8 @@ export function TimelineLoopButton() {
                             keyName="timeline.loop.hintOn"
                             params={{
                                 keys: () => (
-                                    <Keycaps
-                                        shortcut={TRANSPORT_SHORTCUTS.play}
+                                    <Shortcut
+                                        binding={TRANSPORT_SHORTCUTS.play}
                                     />
                                 ),
                             }}
@@ -200,10 +199,6 @@ export function TimelineSpeedButton() {
  */
 export function TimelineSoundButton() {
     const { t } = useTranslate();
-    const overrides = useShortcutOverridesStore((s) => s.overrides);
-    const metronomeKeys = getActionShortcutKeys("toggleMetronome", {
-        overrides,
-    });
     const audioVolume = useUiSettingsStore((s) => s.uiSettings.audioVolume);
     const audioMuted = useUiSettingsStore((s) => s.uiSettings.audioMuted);
     const setAudioVolume = useUiSettingsStore((s) => s.setAudioVolume);
@@ -305,11 +300,9 @@ export function TimelineSoundButton() {
                                     : "timeline.sound.metronomeOff",
                             )}
                         </span>
-                        {metronomeKeys && (
-                            <span className="text-sub text-text-subtitle ml-auto">
-                                <Keycaps keys={metronomeKeys} />
-                            </span>
-                        )}
+                        <span className="ml-auto">
+                            <Shortcut action="toggleMetronome" />
+                        </span>
                     </button>
                 </Popover.Content>
             </Popover.Portal>

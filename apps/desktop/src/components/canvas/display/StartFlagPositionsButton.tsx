@@ -4,7 +4,8 @@ import { SegmentedTextSwitch, Switch } from "@openmarch/ui";
 import { T, useTranslate } from "@tolgee/react";
 import clsx from "clsx";
 import type { ReactNode } from "react";
-import { getActionShortcutKeys } from "@/shortcuts/labels";
+import { getActionShortcutLabel } from "@/shortcuts/labels";
+import Shortcut from "@/components/ui/Shortcut";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import {
     isStartFlagHoldActive,
@@ -20,10 +21,7 @@ import {
     type StartFlagLevels,
     type StartFlagPositionsSettings,
 } from "@/timeline/startFlagLevels";
-import {
-    Keycaps,
-    ShortcutTooltip,
-} from "@/components/timeline/ShortcutTooltip";
+import { ShortcutTooltip } from "@/components/timeline/ShortcutTooltip";
 import { DISPLAY_BUTTON_CLASS, DisplayCaption } from "./displayButton";
 
 type State = keyof StartFlagPositionsSettings;
@@ -111,12 +109,13 @@ export function StartFlagPositionsButton() {
     const keyState = { held, latched };
     const hold = isStartFlagHoldActive(keyState);
     const overrides = useShortcutOverridesStore((s) => s.overrides);
-    const nextPathsKey = getActionShortcutKeys("toggleNextPagePaths", {
+    const nextPathsKey = getActionShortcutLabel("toggleNextPagePaths", {
         overrides,
-    })?.join(" + ");
-    const key = getActionShortcutKeys("toggleStartFlagPositions", {
+    });
+    // As plain text for the hint line and titles; drawn as a Shortcut elsewhere
+    const key = getActionShortcutLabel("toggleStartFlagPositions", {
         overrides,
-    })?.join(" + ");
+    });
     const levels = startFlagLevelsInEffect(settings, keyState);
     // What the field actually draws, as it publishes it (`useStartFlagOverlay`)
     const drawing = useStartFlagKeyStore((s) => s.drawn);
@@ -148,7 +147,9 @@ export function StartFlagPositionsButton() {
                     params={{
                         dots,
                         paths,
-                        keys: () => <Keycaps shortcut={key} />,
+                        keys: () => (
+                            <Shortcut action="toggleStartFlagPositions" />
+                        ),
                     }}
                 />
             </span>
@@ -159,7 +160,7 @@ export function StartFlagPositionsButton() {
         <Popover.Root>
             <ShortcutTooltip
                 label={label}
-                shortcut={key}
+                action="toggleStartFlagPositions"
                 hint={hint}
                 side="left"
             >
@@ -212,7 +213,9 @@ export function StartFlagPositionsButton() {
                                 <T
                                     keyName="timeline.startFlagPositions.holdHeading"
                                     params={{
-                                        keys: () => <Keycaps shortcut={key} />,
+                                        keys: () => (
+                                            <Shortcut action="toggleStartFlagPositions" />
+                                        ),
                                     }}
                                 />
                             )
@@ -223,7 +226,7 @@ export function StartFlagPositionsButton() {
                         <span className="text-body flex items-center gap-4">
                             {t("toolbar.view.nextPaths")}
                             {nextPathsKey !== undefined && (
-                                <Keycaps shortcut={nextPathsKey} />
+                                <Shortcut action="toggleNextPagePaths" />
                             )}
                         </span>
                         <Switch

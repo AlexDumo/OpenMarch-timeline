@@ -20,12 +20,10 @@ import {
     TransportNavigationButton,
     TransportPlayButton,
 } from "./TransportButtons";
-import {
-    Keycaps,
-    ShortcutTooltip,
-    TransportTooltipProvider,
-} from "./ShortcutTooltip";
+import { ShortcutTooltip, TransportTooltipProvider } from "./ShortcutTooltip";
+import Shortcut from "@/components/ui/Shortcut";
 import { T, useTranslate } from "@tolgee/react";
+import { formatBinding } from "@/shortcuts/bindings";
 import {
     isPlainNudgeKey,
     overlayOpen,
@@ -227,7 +225,7 @@ export const TimelineTransport = memo(function TimelineTransport({
         model,
         isPlaying ? Math.min(positionBeat + 1, model.beatCount) : positionBeat,
     );
-    const mod = isMac() ? "⌘" : "Ctrl";
+    const goToMod = formatBinding("$mod+G", isMac());
     const [goTo, setGoTo] = useState<string | null>(null);
     const [goToFailed, setGoToFailed] = useState(false);
     const canGoTo = onSeek != null || onSelectionChange != null;
@@ -305,7 +303,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                 title={t("timeline.goTo.readoutTooltip", {
                     position: readoutText.spoken,
                     key: "G",
-                    modKey: `${mod}+G`,
+                    modKey: goToMod,
                 })}
                 className="text-text rounded-4 enabled:hover:bg-fg-2 flex h-22 min-w-0 items-baseline gap-8 overflow-hidden px-4 font-mono text-[11px] leading-[22px] whitespace-nowrap"
             >
@@ -328,7 +326,9 @@ export const TimelineTransport = memo(function TimelineTransport({
                 <span className="text-text-subtitle flex items-center gap-4 text-[11px]">
                     <T
                         keyName="timeline.fit.hint"
-                        params={{ keys: () => <Keycaps shortcut={mod} /> }}
+                        params={{
+                            keys: () => <Shortcut binding="Mod+scroll" />,
+                        }}
                     />
                 </span>
             }

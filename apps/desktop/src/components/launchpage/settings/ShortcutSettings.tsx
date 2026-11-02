@@ -14,11 +14,7 @@ import {
     PlusIcon,
     XIcon,
 } from "@phosphor-icons/react";
-import {
-    bindingFromEvent,
-    formatBinding,
-    formatBindingKeys,
-} from "@/shortcuts/bindings";
+import { bindingFromEvent, formatBinding } from "@/shortcuts/bindings";
 import {
     ACTION_IDS,
     TAP_BEATS_ACTION_IDS,
@@ -30,7 +26,7 @@ import { findBindingOwners, getDisplayBindings } from "@/shortcuts/keymap";
 import { getActionLabel, type Translate } from "@/shortcuts/labels";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { searchItems } from "@/shortcuts/search";
-import Keycaps from "@/components/ui/Keycaps";
+import Shortcut from "@/components/ui/Shortcut";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 
 /** What the settings view shows as one group; the command palette still groups by raw category. */
@@ -111,7 +107,7 @@ function TapBeatsRow({ row }: { row: Row }) {
         <li className="flex min-h-[48px] items-center justify-between gap-16 py-12">
             <span className="text-body text-text">{row.label}</span>
             <div className="flex items-center gap-4">
-                <Keycaps keys={["1–9"]} />
+                <Shortcut keys={["1–9"]} size="md" />
                 {/* Matches the hidden remove (16px + 2px gap) and add (22px) buttons on other rows, so keycaps line up. */}
                 <span aria-hidden className="h-[22px] w-[40px] shrink-0" />
             </div>
@@ -154,7 +150,11 @@ function ShortcutRow({
                 <div className="flex flex-wrap items-center justify-end gap-4">
                     {row.bindings.map((binding, i) => (
                         <span key={binding} className="flex items-center gap-2">
-                            <Keycaps keys={formatBindingKeys(binding, isMac)} />
+                            <Shortcut
+                                binding={binding}
+                                size="md"
+                                isMac={isMac}
+                            />
                             <button
                                 type="button"
                                 className="hover:text-red text-text-subtitle touch:flex touch:size-44 touch:items-center touch:justify-center touch:opacity-100 rounded-full p-2 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
@@ -176,11 +176,9 @@ function ShortcutRow({
                                 keyName="settings.shortcuts.recordingHint"
                                 params={{
                                     keys: () => (
-                                        <Keycaps
-                                            keys={formatBindingKeys(
-                                                "Escape",
-                                                isMac,
-                                            )}
+                                        <Shortcut
+                                            binding="Escape"
+                                            isMac={isMac}
                                         />
                                     ),
                                 }}
@@ -222,11 +220,9 @@ function ShortcutRow({
                             keyName="settings.shortcuts.conflictWith"
                             params={{
                                 keys: () => (
-                                    <Keycaps
-                                        keys={formatBindingKeys(
-                                            conflict.binding,
-                                            isMac,
-                                        )}
+                                    <Shortcut
+                                        binding={conflict.binding}
+                                        isMac={isMac}
                                     />
                                 ),
                                 actions: new Intl.ListFormat(language, {

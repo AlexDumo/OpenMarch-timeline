@@ -13,9 +13,8 @@ import {
 } from "@/components/timeline/TimelineRangeMenu";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
 import type { ActionId } from "@/shortcuts/definitions";
-import { getActionLabel, getActionShortcutKeys } from "@/shortcuts/labels";
-// The small muted caps the timeline's menus use
-import { Keycaps } from "@/components/timeline/ShortcutTooltip";
+import { getActionLabel } from "@/shortcuts/labels";
+import Shortcut from "@/components/ui/Shortcut";
 import {
     actionLabelNow,
     isActionEnabled,
@@ -23,7 +22,6 @@ import {
     subscribeToActionHandlers,
 } from "@/shortcuts/registry";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
-import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
 
@@ -67,7 +65,6 @@ const UNSET: ReadonlySet<ActionId> = new Set([
 /** The entries' style, as the timeline's menus */
 const ITEM_CLASS =
     "rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50";
-const SHORTCUT_CLASS = "text-text-subtitle ml-auto pl-16";
 
 /** Each action's enabled state and live label, as one string, so a change re-renders. */
 const handlerSnapshot = () =>
@@ -89,7 +86,6 @@ export default function FieldContextMenu({
     timelineMode: boolean;
 }) {
     const { t } = useTranslate();
-    const overrides = useShortcutOverridesStore((s) => s.overrides);
     useSyncExternalStore(subscribeToActionHandlers, handlerSnapshot);
     const open = at !== null;
     // The context-menu key and Shift+F10 also fire the browser's own menu
@@ -159,11 +155,9 @@ export default function FieldContextMenu({
                                         getActionLabel(id, (key, params) =>
                                             t(key, params as never),
                                         )}
-                                    <Shortcut
-                                        keys={getActionShortcutKeys(id, {
-                                            overrides,
-                                        })}
-                                    />
+                                    <span className="ml-auto pl-16">
+                                        <Shortcut action={id} />
+                                    </span>
                                 </DropdownMenu.Item>
                             ))}
                         </Fragment>
@@ -173,13 +167,6 @@ export default function FieldContextMenu({
         </DropdownMenu.Root>
     );
 }
-
-const Shortcut = ({ keys }: { keys?: readonly string[] }) =>
-    keys ? (
-        <span className={SHORTCUT_CLASS}>
-            <Keycaps keys={keys} />
-        </span>
-    ) : null;
 
 type MenuPoint = { x: number; y: number };
 

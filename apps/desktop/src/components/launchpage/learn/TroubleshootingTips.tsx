@@ -1,7 +1,5 @@
+import Shortcut from "@/components/ui/Shortcut";
 import { T } from "@tolgee/react";
-import Keycaps from "@/components/ui/Keycaps";
-import { formatBindingKeys } from "@/shortcuts/bindings";
-import { isMacPlatform } from "@/shortcuts/platform";
 
 /** Where each system keeps OpenMarch's cache; the system names are the same in every language. */
 const CACHE_FOLDERS = [
@@ -26,16 +24,7 @@ export default function TroubleshootingTips() {
                 <p className="text-body leading-[180%]">
                     <T
                         keyName="launchpage.learn.troubleshooting.refreshHint"
-                        params={{
-                            keys: () => (
-                                <Keycaps
-                                    keys={formatBindingKeys(
-                                        "$mod+R",
-                                        isMacPlatform(),
-                                    )}
-                                />
-                            ),
-                        }}
+                        params={{ keys: () => <Shortcut binding="$mod+R" /> }}
                     />
                 </p>
                 <h5 className="text-h5">

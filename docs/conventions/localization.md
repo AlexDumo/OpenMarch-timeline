@@ -100,7 +100,7 @@ arrives (`web/renderer/workerErrors.ts`). Text the page shows before the app sta
 (notices, the version switch) waits for `tolgee.run()`; only a message for when the
 translations themselves fail to load stays in English, with an `i18n-ignore`.
 
-- Native menus and dialogs can't show keycaps, so a shortcut there is plain text in
+- Native menus and dialogs can't show a `Shortcut`, so a shortcut there is plain text in
   the string's arguments (`menu.withShortcut`).
 
 ## Writing translatable strings
@@ -119,8 +119,8 @@ translations themselves fail to load stays in English, with an `i18n-ignore`.
   caller.
 - Inline elements are tags in the string, rendered with `<T params>`:
   `"zoom out with <keys></keys>"` and
-  `<T keyName="…" params={{ keys: () => <Keycaps … /> }} />`. Keyboard shortcuts
-  always render as keycaps (see `apps/desktop/AGENTS.md`).
+  `<T keyName="…" params={{ keys: () => <Shortcut … /> }} />`. Keyboard shortcuts
+  always render with `Shortcut`, never as text in the string (see `apps/desktop/AGENTS.md`).
 - Units and short labels (`"fps"`, `"X:"`, `"bpm"`) are text too.
 
 ## Translator context

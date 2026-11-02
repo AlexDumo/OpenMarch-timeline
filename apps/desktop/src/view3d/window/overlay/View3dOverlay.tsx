@@ -209,11 +209,6 @@ export default function View3dOverlay() {
             ? "view3d.overlay.exitFullscreen"
             : "view3d.overlay.enterFullscreen",
     );
-    // the shortcut is the F key, written as the app writes shortcuts in tooltips
-    const fullscreenTooltip = t("actions.tooltipWithShortcut", {
-        label: fullscreenLabel,
-        shortcut: "F",
-    });
     const settingsLabel = t("view3d.settings.title");
 
     return (
@@ -262,7 +257,8 @@ export default function View3dOverlay() {
                                 )
                             }
                             label={fullscreenLabel}
-                            tooltip={fullscreenTooltip}
+                            tooltip={fullscreenLabel}
+                            shortcut="F"
                             iconOnly
                             testId="view3d-fullscreen"
                         />

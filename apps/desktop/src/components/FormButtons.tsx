@@ -20,7 +20,7 @@ interface FormButtonsProps extends ButtonProps {
     handleSubmit?: () => void;
     isDangerButton?: boolean;
     alertDialogTitle?: string;
-    /** Text, or translated text with elements in it (a `<T>` with keycaps) */
+    /** Text, or translated text with elements in it (a `<T>` with a `Shortcut`) */
     alertDialogDescription?: React.ReactNode;
     alertDialogActions?: React.ReactNode;
 }

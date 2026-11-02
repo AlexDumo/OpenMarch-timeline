@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import Shortcut from "@/components/ui/Shortcut";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslate } from "@tolgee/react";
 import { CaretRightIcon } from "@phosphor-icons/react";
@@ -9,9 +10,6 @@ import {
     useCommandBarStore,
     type CommandRun,
 } from "./commandBar";
-import Keycaps from "@/components/ui/Keycaps";
-import { formatBindingKeys } from "../bindings";
-import { isMacPlatform } from "../platform";
 import "./CommandPalette.css";
 
 /**
@@ -59,7 +57,6 @@ function DockedSteps({
     const [prefill] = useState(() => run.fillAhead?.(typed) ?? typed);
     const { t: tolgeeT } = useTranslate();
     const t: Translate = (key, params) => tolgeeT(key, params as never);
-    const isMac = isMacPlatform();
     // A one-liner opens at the first step it didn't fill, or the last one, so one Enter finishes
     // it (sims B354); Backspace still goes back over what it filled
     const [opening] = useState(() => {
@@ -215,17 +212,17 @@ function DockedSteps({
                           })}
                 </span>
                 <span className="palette-footer-hint" aria-hidden>
-                    <Keycaps keys={formatBindingKeys("Enter", isMac)} />
+                    <Shortcut binding="Enter" />
                     {index === steps.length - 1
                         ? (run.finishLabel ?? t("commandPalette.done"))
                         : t("commandPalette.next")}
                 </span>
                 <span className="palette-footer-hint" aria-hidden>
-                    <Keycaps keys={formatBindingKeys("Backspace", isMac)} />
+                    <Shortcut binding="Backspace" />
                     {t("commandPalette.back")}
                 </span>
                 <span className="palette-footer-hint" aria-hidden>
-                    <Keycaps keys={formatBindingKeys("Escape", isMac)} />
+                    <Shortcut binding="Escape" />
                     {t("commandPalette.cancel")}
                 </span>
             </div>

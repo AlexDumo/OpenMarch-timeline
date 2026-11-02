@@ -1,9 +1,7 @@
+import Shortcut from "@/components/ui/Shortcut";
 import { Description as DialogDescription } from "@radix-ui/react-dialog";
 import { Button, Dialog, DialogContent, DialogTitle } from "@openmarch/ui";
 import { T, useTranslate } from "@tolgee/react";
-import Keycaps from "@/components/ui/Keycaps";
-import { formatBindingKeys } from "@/shortcuts/bindings";
-import { isMacPlatform } from "@/shortcuts/platform";
 import { useWebWelcomeStore } from "@/stores/WebWelcomeStore";
 import { useWelcomeFlowStore } from "@/stores/WelcomeFlowStore";
 import { webChannel } from "@/utilities/webBuild";
@@ -17,7 +15,6 @@ export default function WebWelcomeModal() {
     const { t } = useTranslate();
     const { open, setOpen } = useWebWelcomeStore();
     const welcomeFlowShowing = useWelcomeFlowStore((s) => s.showing);
-    const save = formatBindingKeys("$mod+S", isMacPlatform());
 
     return (
         <Dialog open={open && !welcomeFlowShowing} onOpenChange={setOpen}>
@@ -41,7 +38,11 @@ export default function WebWelcomeModal() {
                         <p>
                             <T
                                 keyName="web.welcome.backUpBody"
-                                params={{ keys: () => <Keycaps keys={save} /> }}
+                                params={{
+                                    keys: () => (
+                                        <Shortcut action="launchSaveFileDialogue" />
+                                    ),
+                                }}
                             />
                         </p>
                     </section>

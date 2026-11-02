@@ -9,7 +9,8 @@ import {
     clampPlaybackSpeed,
     formatPlaybackSpeed,
 } from "@/stores/PlaybackSpeedStore";
-import { Keycaps, ShortcutTooltip } from "./ShortcutTooltip";
+import { ShortcutTooltip } from "./ShortcutTooltip";
+import Shortcut from "@/components/ui/Shortcut";
 
 // The popover's chips: the click cycle's speeds and the ones between
 const SPEED_CHIPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 4] as const;
@@ -34,13 +35,17 @@ function SpeedHint() {
             <span className="flex items-center gap-6">
                 <T
                     keyName="timeline.playbackSpeed.hintFaster"
-                    params={{ keys: () => <Keycaps shortcut="]" /> }}
+                    params={{
+                        keys: () => <Shortcut action="holdFasterPlayback" />,
+                    }}
                 />
             </span>
             <span className="flex items-center gap-6">
                 <T
                     keyName="timeline.playbackSpeed.hintSlower"
-                    params={{ keys: () => <Keycaps shortcut="[" /> }}
+                    params={{
+                        keys: () => <Shortcut action="holdSlowerPlayback" />,
+                    }}
                 />
             </span>
         </span>
@@ -166,8 +171,12 @@ export function PlaybackSpeedButton({
                         <T
                             keyName="timeline.playbackSpeed.holdKeys"
                             params={{
-                                faster: () => <Keycaps shortcut="]" />,
-                                slower: () => <Keycaps shortcut="[" />,
+                                faster: () => (
+                                    <Shortcut action="holdFasterPlayback" />
+                                ),
+                                slower: () => (
+                                    <Shortcut action="holdSlowerPlayback" />
+                                ),
                             }}
                         />
                     </p>

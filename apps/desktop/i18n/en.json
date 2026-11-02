@@ -137,7 +137,6 @@
             "splitSelectedIntoNewMove": "Split selected marchers into a new move",
             "mergeMoveIntoPage": "Merge this move into its page"
         },
-        "tooltipWithShortcut": "{label} [{shortcut}]",
         "ui": {
             "exitTimelineFocus": "Done editing timeline",
             "focusCanvas": "Focus canvas",
@@ -2958,7 +2957,7 @@
         },
         "fit": {
             "label": "Fit the show",
-            "hint": "Press again to go back. Pinch or <keys></keys>+scroll to zoom"
+            "hint": "Press again to go back. Pinch or <keys></keys> to zoom"
         },
         "transport": {
             "label": "Transport",
@@ -3356,11 +3355,7 @@
             "zoom": "Zoom"
         },
         "keyNames": {
-            "orbit": "Drag",
-            "pan": "<keys></keys>+drag",
-            "zoom": "Scroll",
-            "pair": "<first></first> / <second></second>",
-            "range": "<first></first>–<last></last>"
+            "pair": "<first></first> / <second></second>"
         },
         "uniformPreset": {
             "fade": "Ultraviolet Fade",
@@ -3978,10 +3973,6 @@
             "zoom": "Zoom the timeline"
         },
         "title": "Keyboard shortcuts",
-        "gesture": {
-            "drag": "Drag",
-            "scroll": "Scroll"
-        },
         "group": {
             "alignment": "Alignment",
             "batchEdit": "Batch editing",
@@ -3996,6 +3987,13 @@
             "shape": "Shapes",
             "timeline": "Timeline",
             "ui": "View"
+        }
+    },
+    "shortcut": {
+        "gesture": {
+            "drag": "drag",
+            "scroll": "scroll",
+            "click": "click"
         }
     },
     "menu": {

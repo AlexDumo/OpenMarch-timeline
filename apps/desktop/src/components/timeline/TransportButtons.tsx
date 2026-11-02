@@ -24,7 +24,8 @@ import {
 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { T, useTranslate } from "@tolgee/react";
-import { Keycaps, ShortcutTooltip } from "./ShortcutTooltip";
+import { ShortcutTooltip } from "./ShortcutTooltip";
+import Shortcut from "@/components/ui/Shortcut";
 import { isMac } from "./platform";
 import { START_INK } from "./startFlagInk";
 import type { TimelineNavigation } from "./TimelineViewModel";
@@ -292,7 +293,6 @@ const navigationGuide = (
     back: boolean,
     t: Translate,
 ): readonly TransportGuideRow<TransportNavigationMode>[] => {
-    const alt = isMac() ? "Option" : "Alt";
     return [
         {
             mode: "page",
@@ -326,10 +326,10 @@ const navigationGuide = (
                     ? "timeline.transport.showStart"
                     : "timeline.transport.showEnd",
             ),
-            shortcut: (back
+            // Shortcut writes Alt as ⌥ on a Mac
+            shortcut: back
                 ? TRANSPORT_SHORTCUTS.firstPage
-                : TRANSPORT_SHORTCUTS.lastPage
-            ).replace("Alt", alt),
+                : TRANSPORT_SHORTCUTS.lastPage,
         },
     ];
 };
@@ -367,7 +367,7 @@ function TransportGuide({
                     <span className="flex items-center gap-4 text-[12px]">
                         {row.content ?? row.label}
                     </span>
-                    <Keycaps shortcut={row.shortcut} />
+                    <Shortcut binding={row.shortcut} />
                 </span>
             ))}
         </span>
@@ -513,10 +513,8 @@ const playGuide = (
                   mode: "alt" as const,
                   icon: PLAY_ON_ICON,
                   ...playWords("start", false, t),
-                  shortcut: TRANSPORT_SHORTCUTS.playOn.replace(
-                      "Alt",
-                      isMac() ? "Option" : "Alt",
-                  ),
+                  // Shortcut writes Alt as ⌥ on a Mac
+                  shortcut: TRANSPORT_SHORTCUTS.playOn,
               },
           ]
         : []),

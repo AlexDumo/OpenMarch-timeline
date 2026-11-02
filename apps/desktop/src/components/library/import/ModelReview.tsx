@@ -3,6 +3,7 @@
  * the report, grouped as Can't import, Needs your choice (pre-selected),
  * Fixed for you (collapsed) and Notes (props-spec.md §2 "The review").
  */
+import Shortcut from "@/components/ui/Shortcut";
 import { Button, Checkbox } from "@openmarch/ui";
 import {
     BookOpenIcon,
@@ -37,9 +38,6 @@ import {
     type Translate,
 } from "./reportText";
 import { formatList } from "@/utilities/formatList";
-import Keycaps from "@/components/ui/Keycaps";
-import { formatBindingKeys } from "@/shortcuts/bindings";
-import { isMacPlatform } from "@/shortcuts/platform";
 import { formatLocale } from "@/utilities/formatLocale";
 
 type ChoiceRow = ModelImportReport["needsChoice"][number];
@@ -321,12 +319,7 @@ function Choice({
                                         keyName="library.import.choices.grip.picking"
                                         params={{
                                             keys: () => (
-                                                <Keycaps
-                                                    keys={formatBindingKeys(
-                                                        "Escape",
-                                                        isMacPlatform(),
-                                                    )}
-                                                />
+                                                <Shortcut binding="Escape" />
                                             ),
                                         }}
                                     />

@@ -9,14 +9,13 @@ import { ListIcon } from "@phosphor-icons/react";
 import { useTranslate } from "@tolgee/react";
 import { useSyncExternalStore } from "react";
 import type { ActionId } from "@/shortcuts/definitions";
-import { getActionLabel, getActionShortcutKeys } from "@/shortcuts/labels";
-import Keycaps from "@/components/ui/Keycaps";
+import { getActionLabel } from "@/shortcuts/labels";
+import Shortcut from "@/components/ui/Shortcut";
 import {
     isActionEnabled,
     runAction,
     subscribeToActionHandlers,
 } from "@/shortcuts/registry";
-import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { useShowShortcutHints } from "@/stores/KeyboardSeenStore";
 import { useWebLibraryStore } from "@/stores/WebLibraryStore";
 
@@ -38,7 +37,6 @@ const FILE_ACTIONS: ActionId[] = [
  */
 export default function WebFileMenu() {
     const { t } = useTranslate();
-    const overrides = useShortcutOverridesStore((s) => s.overrides);
     // No ⌘O / Ctrl+, on a tablet until a keyboard has been used
     const showHints = useShowShortcutHints();
     const openId = useWebLibraryStore((state) => state.library?.openId ?? null);
@@ -48,26 +46,17 @@ export default function WebFileMenu() {
         FILE_ACTIONS.map(isActionEnabled).join(),
     );
 
-    const item = (action: ActionId, label = getActionLabel(action, t)) => {
-        const keys = showHints
-            ? getActionShortcutKeys(action, { overrides })
-            : undefined;
-        return (
-            <DropdownMenuItem
-                key={action}
-                disabled={!isActionEnabled(action)}
-                className={itemClass}
-                onSelect={() => runAction(action)}
-            >
-                <span>{label}</span>
-                {keys && (
-                    <span className="text-sub text-text-subtitle">
-                        <Keycaps keys={keys} />
-                    </span>
-                )}
-            </DropdownMenuItem>
-        );
-    };
+    const item = (action: ActionId, label = getActionLabel(action, t)) => (
+        <DropdownMenuItem
+            key={action}
+            disabled={!isActionEnabled(action)}
+            className={itemClass}
+            onSelect={() => runAction(action)}
+        >
+            <span>{label}</span>
+            {showHints && <Shortcut action={action} />}
+        </DropdownMenuItem>
+    );
 
     return (
         <DropdownMenu>

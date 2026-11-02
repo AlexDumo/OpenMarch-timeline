@@ -1,3 +1,4 @@
+import Shortcut from "@/components/ui/Shortcut";
 import { useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ListFormProps } from "../../global/Interfaces";
@@ -13,8 +14,7 @@ import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import FormButtons from "../FormButtons";
 import { AlertDialogAction, AlertDialogCancel } from "@openmarch/ui";
 import { T, useTranslate } from "@tolgee/react";
-import Keycaps from "@/components/ui/Keycaps";
-import { getActionShortcutKeys } from "@/shortcuts/labels";
+import { getEffectiveBindings } from "@/shortcuts/keymap";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { formatList } from "@/utilities/formatList";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -47,11 +47,10 @@ export default function MarcherList({
         updateMarchersMutationOptions(queryClient),
     );
     const { t } = useTranslate();
-    // Undefined when the person has unbound Undo: the warning then names no shortcut
+    // False when the person has unbound Undo: the warning then names no shortcut
     const shortcutOverrides = useShortcutOverridesStore((s) => s.overrides);
-    const undoKeys = getActionShortcutKeys("performUndo", {
-        overrides: shortcutOverrides,
-    });
+    const hasUndo =
+        getEffectiveBindings("performUndo", shortcutOverrides).length > 0;
     const [submitActivator, setSubmitActivator] = submitActivatorStateProp || [
         false,
         undefined,
@@ -182,13 +181,13 @@ export default function MarcherList({
                                 isDangerButton={true}
                                 alertDialogTitle={t("marchers.deleteTitle")}
                                 alertDialogDescription={
-                                    undoKeys ? (
+                                    hasUndo ? (
                                         <T
                                             keyName="marchers.deleteWarningWithShortcut"
                                             params={{
                                                 marchers: deletedMarchersText(),
                                                 keys: () => (
-                                                    <Keycaps keys={undoKeys} />
+                                                    <Shortcut action="performUndo" />
                                                 ),
                                             }}
                                         />

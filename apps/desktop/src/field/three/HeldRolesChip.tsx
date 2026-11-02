@@ -1,7 +1,6 @@
 import { Fragment } from "react";
 import { T, useTranslate } from "@tolgee/react";
-// The small muted caps, sized for the chip's 11 px text
-import { Keycaps } from "@/components/timeline/ShortcutTooltip";
+import Shortcut from "@/components/ui/Shortcut";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useIsPlaying } from "@/context/IsPlayingContext";
@@ -57,7 +56,7 @@ export function useHeldRolesChipSegments(): ChipSegment[] | null {
     return segments.length === 0 ? null : segments;
 }
 
-/** The segments in a row, each held key as a keycap, apart by dots */
+/** The segments in a row, each held key as a `Shortcut`, apart by dots */
 function ChipText({ segments }: { segments: readonly ChipSegment[] }) {
     return (
         <>
@@ -71,7 +70,7 @@ function ChipText({ segments }: { segments: readonly ChipSegment[] }) {
                             keyName={WITH_KEY_I18N}
                             params={{
                                 word: segment.word,
-                                keys: () => <Keycaps keys={[segment.key!]} />,
+                                keys: () => <Shortcut keys={[segment.key!]} />,
                             }}
                         />
                     )}

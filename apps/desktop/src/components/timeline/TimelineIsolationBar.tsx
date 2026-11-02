@@ -3,7 +3,7 @@ import { Button } from "@openmarch/ui";
 import { FlagIcon } from "@phosphor-icons/react";
 import { T, useTranslate } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
-import { Keycaps } from "./ShortcutTooltip";
+import Shortcut from "@/components/ui/Shortcut";
 import { TRANSPORT_SHORTCUTS } from "./TransportButtons";
 import clsx from "clsx";
 import { START_INK } from "./startFlagInk";
@@ -496,11 +496,7 @@ export function TimelineFromStartBadge() {
                         <T
                             keyName="timeline.windowLine.loops"
                             params={{
-                                keys: () => (
-                                    <Keycaps
-                                        shortcut={TRANSPORT_SHORTCUTS.play}
-                                    />
-                                ),
+                                keys: () => <Shortcut action="playPause" />,
                                 loop: loopName ?? "",
                             }}
                         />
@@ -580,7 +576,7 @@ export default function TimelineIsolationBar() {
             >
                 <T
                     keyName="timeline.isolation.done"
-                    params={{ keys: () => <Keycaps shortcut="Esc" /> }}
+                    params={{ keys: () => <Shortcut binding="Escape" /> }}
                 />
             </Button>
         </div>

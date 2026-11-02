@@ -1,3 +1,4 @@
+import Shortcut from "@/components/ui/Shortcut";
 import { TempoGroup } from "@/components/music/TempoGroup/TempoGroup";
 import { useMemo, useState } from "react";
 import { PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
@@ -17,8 +18,7 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 import { T, useTranslate } from "@tolgee/react";
 import { TouchCaption } from "@/components/ui/InfoTip";
 import { useCascadeDeleteMeasures } from "@/global/classes/Measure";
-import Keycaps from "@/components/ui/Keycaps";
-import { getActionShortcutKeys } from "@/shortcuts/labels";
+import { getEffectiveBindings } from "@/shortcuts/keymap";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 
 export default function TempoGroupCard({
@@ -62,7 +62,7 @@ function StaticTempoGroupCard({
 }) {
     const { t } = useTranslate();
     const overrides = useShortcutOverridesStore((s) => s.overrides);
-    const undoKeys = getActionShortcutKeys("performUndo", { overrides });
+    const hasUndo = getEffectiveBindings("performUndo", overrides).length > 0;
     const { mutate: cascadeDeleteMeasures, isPending: isDeleting } =
         useCascadeDeleteMeasures();
     const isManualTempo = useMemo(
@@ -187,15 +187,13 @@ function StaticTempoGroupCard({
                                             <T keyName="music.deleteAllMeasures" />
                                         </Button>
                                     </AlertDialogAction>
-                                    {undoKeys && (
+                                    {hasUndo && (
                                         <div className="text-sub text-text-subtitle">
                                             <T
                                                 keyName="music.undoWithShortcut"
                                                 params={{
                                                     keys: () => (
-                                                        <Keycaps
-                                                            keys={undoKeys}
-                                                        />
+                                                        <Shortcut action="performUndo" />
                                                     ),
                                                 }}
                                             />

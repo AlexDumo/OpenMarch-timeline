@@ -5,6 +5,7 @@
  * side and top views, before/after for simplify and grip picking; artwork
  * shows the focused page's 1024 px preview from `renderArtworkPreview`.
  */
+import Shortcut from "@/components/ui/Shortcut";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
 import { useStore } from "zustand";
@@ -18,9 +19,6 @@ import {
 } from "@phosphor-icons/react";
 import { T, useTranslate } from "@tolgee/react";
 import { formatLength } from "@/view3d/core/sizes/units";
-import Keycaps from "@/components/ui/Keycaps";
-import { formatBindingKeys } from "@/shortcuts/bindings";
-import { isMacPlatform } from "@/shortcuts/platform";
 import {
     litMaterial,
     type ArtworkReview,
@@ -220,16 +218,7 @@ function ModelStage({ store }: { store: ImportReviewStore }) {
                     <CrosshairIcon size={14} />
                     <T
                         keyName="library.import.stage.pickGrip"
-                        params={{
-                            keys: () => (
-                                <Keycaps
-                                    keys={formatBindingKeys(
-                                        "Escape",
-                                        isMacPlatform(),
-                                    )}
-                                />
-                            ),
-                        }}
+                        params={{ keys: () => <Shortcut binding="Escape" /> }}
                     />
                 </span>
             )}

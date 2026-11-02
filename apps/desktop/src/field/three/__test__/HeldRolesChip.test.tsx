@@ -205,7 +205,10 @@ describe("HeldRolesChip", () => {
             x: 0,
             y: 0,
         });
-        expect(chip()).toHaveTextContent("⇧ fine · ⌘ one axis · ⌥ from center");
+        // As shown: a screen reader hears the symbols as words instead
+        const shown = chip()!.cloneNode(true) as Element;
+        shown.querySelectorAll(".sr-only").forEach((node) => node.remove());
+        expect(shown).toHaveTextContent("⇧ fine · ⌘ one axis · ⌥ from center");
     });
 
     it("doesn't render again as the pointer moves while it's hidden", () => {
