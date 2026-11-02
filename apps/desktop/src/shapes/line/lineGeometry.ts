@@ -1635,8 +1635,7 @@ function intervalAt(
  * steps zoomed in, {@link intervalUnit}); `fine` or the Snap toggle off leaves it where it's
  * dragged (landed). Measured ↔ or ↕, an end's coordinate that way snaps and it takes the
  * pointer's place the other way, and so does a corner holding a marcher between straight segments,
- * where both its stretches' runs that way come out whole, keeping its spot that way until the
- * pointer is most of the way to another ({@link stickyOnAxis}). Otherwise a point snaps only where
+ * where both its stretches' runs that way come out whole. Otherwise a point snaps only where
  * that's near the pointer ({@link softSnap}): a corner holding a marcher between straight
  * segments where both its stretches' intervals come out whole, any other point as far along its
  * direction as makes its interval whole.
@@ -1645,8 +1644,8 @@ function intervalAt(
  * its intervals) kept, and a corner holding a marcher between straight segments lands where each
  * of them is a whole number of intervals long (#524); `fine` frees it. Measured ↔ or ↕ (#527), an
  * end keeps how far it is that way and takes the pointer's place the other way, and a corner lands
- * a whole run of gaps that way from the point before it, kept as it's dragged
- * ({@link stickyOnAxis}). On the path the point goes where it's dragged.
+ * a whole run of gaps that way from the point before it. On the path the point goes where it's
+ * dragged.
  *
  * A smooth point, or a corner beside a curve, goes where it's dragged. `constrain` keeps the
  * direction from the point before (an end's segment), only its length changing; `fromCenter` moves
@@ -1698,9 +1697,7 @@ export function dragPoint(
     } else if (keep && axis && end) {
         point = measuredEnd(was, to, axis, env);
     } else if (keep && axis && env.snap && straightCorner(base, n, index)) {
-        point = stickyOnAxis(was, to, axis, (at) =>
-            cornerOnAxis(base, n, index, at, axis, env),
-        );
+        point = cornerOnAxis(base, n, index, to, axis, env);
     } else if (keep && end) {
         const u = directionFrom(other, to, env);
         if (!u) return base;
@@ -1708,9 +1705,7 @@ export function dragPoint(
     } else if (keep && env.snap && straightCorner(base, n, index)) {
         point = cornerOnIntervals(base, n, index, to);
     } else if (fit && axis && env.snap && straightCorner(base, n, index)) {
-        point = stickyOnAxis(was, to, axis, (at) =>
-            cornerOnMeasured(base, n, index, at, axis, env),
-        );
+        point = cornerOnMeasured(base, n, index, to, axis, env);
     } else if (fit && env.snap && straightCorner(base, n, index)) {
         point = softSnap(
             to,
@@ -1828,36 +1823,6 @@ function snappedFree(
     const span = unit * n * 2;
     const c = solveFor(f, target, c0, c0 - span, c0 + span);
     return c === null ? landed : at(c);
-}
-
-/**
- * How far toward another spot, as a share of the way there, the pointer must go before a corner
- * dragged front to back under ↔ (side to side under ↕) changes spots that way ({@link stickyOnAxis})
- */
-export const CORNER_STICK = 0.75;
-
-/**
- * Where a corner measured along `axis`, at `was` when the drag started, goes dragged to `to`, with
- * `spotFor` the spot a pointer picks: that way it keeps `was`'s spot until the pointer is
- * {@link CORNER_STICK} of the way to another, not just past halfway, so a hand's wobble dragging
- * it front to back doesn't flip it a spot sideways and hand its marcher to the other stretch; the
- * other way it follows the pointer as `spotFor` has it. A corner that started off every spot
- * goes to the one nearest the pointer.
- */
-function stickyOnAxis(
-    was: XY,
-    to: XY,
-    axis: LineMeasured,
-    spotFor: (at: XY) => XY,
-): XY {
-    const spot = spotFor(to);
-    const from = coord(was, axis);
-    const gone = coord(spot, axis) - from;
-    if (Math.abs(gone) < 1e-6) return spot;
-    if (Math.abs(coord(spotFor(was), axis) - from) > 1e-6) return spot;
-    const off = (coord(to, axis) - from) / gone;
-    if (off >= CORNER_STICK) return spot;
-    return pointOn(axis, from, coord(spot, across(axis)));
 }
 
 /**
