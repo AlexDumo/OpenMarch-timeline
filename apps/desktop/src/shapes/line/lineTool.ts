@@ -1,7 +1,14 @@
 import tolgee from "@/global/singletons/Tolgee";
+import type { KindHonors } from "../tool/toolKind";
 import type { XY } from "../types";
-import { fieldToFrame, resizeCursor } from "../frame/frame";
-import { formatSteps, parseSteps } from "../editor/format";
+import {
+    fieldToFrame,
+    pivotPoint,
+    resizeCursor,
+    rotationDegrees,
+    type Pivot,
+} from "../frame/frame";
+import { formatSignedSteps, formatSteps, parseSteps } from "../editor/format";
 import {
     COUNT_RATE,
     scrubDistance,
@@ -26,6 +33,7 @@ import type {
     ToolMenuSection,
     ToolParam,
 } from "../tool/toolKind";
+import { withPivot } from "../frame/pivot";
 import { curveShape, lineShape } from "./lineShape";
 import {
     cornersPictures,
@@ -80,10 +88,19 @@ import {
     SMOOTH,
     splitSegment,
     tensionHandle,
+    fitGroupsNow,
+    offsetBlock,
+    offsetOf,
     withGroups,
-    withInterval,
     withLineFrame,
+    lineTurn,
     withMeasured,
+    withOffset,
+    offsetStart,
+    offsetStep,
+    startOffset,
+    linePivot,
+    withTyped,
     settleLine,
     withSpacing,
     type LineAnchor,
@@ -150,7 +167,7 @@ const onHalves = (steps: number) =>
 
 /**
  * The line with its spacing set to `interval`: a filled line's outline grown to it (#529), else
- * the line kept at it
+ * the line sized to it, kept at it only when the interval is locked ({@link withTyped})
  */
 const spacedAt = (
     p: LineParams,
@@ -160,7 +177,7 @@ const spacedAt = (
 ): LineParams =>
     isFilled(p)
         ? (withFillInterval(p, n, interval, env) ?? p)
-        : withInterval(p, n, interval, env);
+        : withTyped(p, n, [{ interval }], env);
 
 /** The spacing as shown: a filled line's (#529), else the line's interval */
 const spacingOf = (p: LineParams, n: number): number =>
@@ -170,11 +187,16 @@ const spacingOf = (p: LineParams, n: number): number =>
 const typed = (p: LineParams, n: number, steps: number, env: ToolEnv) =>
     spacedAt(p, n, snapInterval(steps * env.stepPx, env, true), env);
 
-/** The line's groups, in Fit the one interval it works out to */
+/**
+ * The line's groups; in Fit the one interval it works out to, or its mixed groups as scaled to
+ * fit it
+ */
 const groupsOf = (p: LineParams, n: number): readonly LineGroup[] =>
-    p.spacing.mode === "fit"
-        ? [{ interval: lineInterval(p, n) }]
-        : p.spacing.groups;
+    p.spacing.mode !== "fit"
+        ? p.spacing.groups
+        : hasGroups(p)
+          ? fitGroupsNow(p, n)
+          : [{ interval: lineInterval(p, n) }];
 
 /**
  * An interval list typed (#526): one number is everyone at it, as before; groups space the line
@@ -195,7 +217,7 @@ function typedList(
         interval: snapInterval(steps * env.stepPx, env, true),
         ...(count === undefined ? {} : { count }),
     }));
-    return withGroups(p, n, groups, env);
+    return withTyped(p, n, groups, env);
 }
 
 /**
@@ -215,12 +237,13 @@ function eachInterval(
     }));
     if (changed.some((g) => g.interval < env.stepPx / 2 - 1e-9)) return null;
     const groups = changed.map((g) => ({ ...g, interval: round(g.interval) }));
-    return withGroups(p, n, groups, env);
+    return withTyped(p, n, groups, env);
 }
 
 /**
- * The line's interval between neighbors. In Fit it's worked out from the line as drawn; typing or
- * dragging it fixes it (Keep interval, or the run on the path).
+ * The line's interval between neighbors. Unlocked (Fit) it's worked out from the line as drawn,
+ * and typing or dragging it sizes the line to it; locked it's kept (Keep interval, or the run on
+ * the path). Measured as an offset, the two offset numbers show instead.
  */
 const INTERVAL: ToolParam<LineParams> = {
     key: "interval",
@@ -242,7 +265,7 @@ const INTERVAL: ToolParam<LineParams> = {
         const axis = measuredAxis(p);
         return axis === "x" ? "↔" : axis === "y" ? "↕" : null;
     },
-    shown: (_p, n) => n > 1,
+    shown: (p, n) => n > 1 && !offsetOf(p),
     // Off the half steps in Fit, or uneven around corners, it shows as about so much; a filled
     // line's follows its outline (#529)
     derived: (p, n, stepPx) =>
@@ -275,7 +298,12 @@ const INTERVAL: ToolParam<LineParams> = {
                   "shapes.kinds.line.params.cornerOff",
                   "corner off its interval",
               )
-            : null,
+            : offsetWaits(p)
+              ? tolgee.t(
+                    "shapes.kinds.line.params.offsetWaits",
+                    "along the path until it's one segment (Offset)",
+                )
+              : null,
     value: (p, n, stepPx) => spacingOf(p, n) / stepPx,
     // The full list syntax (#526): `2*3+4*2` switches to groups; a filled line has one spacing
     type(p, n, text, env) {
@@ -332,7 +360,7 @@ function withGroup(
 ): LineParams {
     const groups = groupsOf(p, n);
     if (index < 0 || index >= groups.length) return p;
-    return withGroups(
+    return withTyped(
         p,
         n,
         groups.map((g, i) => (i === index ? change(g) : g)),
@@ -352,9 +380,9 @@ const counted = (g: LineGroup, count: number): LineGroup => ({
  */
 const GROUPS: ToolGroups<LineParams> = {
     shown(p, n, stepPx) {
-        if (!hasGroups(p) || p.spacing.mode === "fit" || isFilled(p))
-            return null;
-        const { groups } = p.spacing;
+        if (!hasGroups(p) || isFilled(p)) return null;
+        // Unlocked, the groups as scaled to fit the line
+        const groups = groupsOf(p, n);
         return layGroups(groups, n).map(({ count, grown }, i) => ({
             count: String(count),
             interval: formatSteps(groups[i]!.interval / stepPx),
@@ -440,17 +468,189 @@ const GROUPS: ToolGroups<LineParams> = {
             if (from < 0) return p;
             groups[from] = counted(groups[from]!, laid[from]!.count - 1);
         }
-        return withGroups(p, n, groups, env);
+        return withTyped(p, n, groups, env);
     },
     remove(p, n, index, env) {
         const groups = groupsOf(p, n).filter((_, i) => i !== index);
         if (groups.length === 0) return p;
         // One group left is everyone at its interval
         if (groups.length === 1)
-            return withInterval(p, n, groups[0]!.interval, env);
-        return withGroups(p, n, groups, env);
+            return withTyped(p, n, [{ interval: groups[0]!.interval }], env);
+        return withTyped(p, n, groups, env);
     },
 };
+
+/**
+ * Whether the line is measured as an offset but laid out along the path for now: it has more than
+ * one segment, or mixed groups, and goes back to its offset once it hasn't (spec #522)
+ */
+const offsetWaits = (p: LineParams): boolean =>
+    p.measured === "offset" && !offsetOf(p) && offsetBlock(p) !== "path";
+
+/** What one of the offset's numbers is, for its tooltip and screen readers */
+const offsetLabel = (axis: "x" | "y") =>
+    axis === "x"
+        ? tolgee.t(
+              "shapes.kinds.line.params.offsetSide",
+              "Side to side from each marcher to the next, in steps: right is more, left below 0",
+          )
+        : tolgee.t(
+              "shapes.kinds.line.params.offsetUp",
+              "Front to back from each marcher to the next, in steps: up the screen (toward the back) is more, down below 0",
+          );
+
+/**
+ * One of the offset's numbers as the screen shows it (owner on #596): how far each marcher is from
+ * the one before, counting from the marcher at the line's {@link offsetStart}, in steps. `x` (↔) is
+ * positive to the right; `y` (↕) positive up the screen, toward the back of the field, which is
+ * field y going down. Either goes below 0 the other way.
+ */
+export function offsetSteps(
+    p: LineParams,
+    n: number,
+    axis: "x" | "y",
+    stepPx: number,
+): number {
+    const o = startOffset(p, n);
+    const v = (axis === "x" ? o.x : -o.y) / stepPx;
+    // Never "−0"
+    return v === 0 ? 0 : v;
+}
+
+/** Steps typed into an offset number: a step number, 0, or either with a sign before it */
+function typedSigned(text: string): number | null {
+    const m = /^\s*([+\-−–]?)\s*(.*)$/.exec(text)!;
+    const body = m[2]!;
+    const steps = /^0+(\.0*)?\s*(steps?)?\s*$/i.test(body)
+        ? 0
+        : parseSteps(body);
+    if (steps === null) return null;
+    return m[1] && m[1] !== "+" ? -steps : steps;
+}
+
+/**
+ * One of the offset's two numbers (rise over run, spec #522): {@link offsetSteps}, typed or dragged,
+ * through 0 either way (owner on #596). ↔ drags sideways, right for more; ↕ up and down, up for
+ * more, so each moves the way the next marcher does. Together they set the line's direction and
+ * length, grown from its pivot. One undo step an edit.
+ */
+function offsetParam(axis: "x" | "y"): ToolParam<LineParams> {
+    const now = (p: LineParams, n: number, stepPx: number) =>
+        offsetSteps(p, n, axis, stepPx);
+    /** The offset with this way's number `steps`, the other kept */
+    const set = (
+        p: LineParams,
+        n: number,
+        steps: number,
+        env: ToolEnv,
+    ): LineParams | null => {
+        if (!Number.isFinite(steps)) return null;
+        const o = startOffset(p, n);
+        const value = steps * env.stepPx;
+        // On the screen's terms, then back to the field's, from the line's first point
+        const next =
+            axis === "x" ? { x: value, y: o.y } : { x: o.x, y: -value };
+        if (Math.hypot(next.x, next.y) < 1e-9) return null;
+        const way = offsetStart(p) === "last" ? -1 : 1;
+        // Never a stored −0
+        const stored = { x: way * next.x || 0, y: way * next.y || 0 };
+        return withOffset(p, n, stored, env);
+    };
+    return {
+        key: axis === "x" ? "offsetX" : "offsetY",
+        get label() {
+            return offsetLabel(axis);
+        },
+        unit: "steps",
+        primary: true,
+        drag: axis,
+        interval: true,
+        blends: true,
+        glyph: axis === "x" ? "↔" : "↕",
+        glyphAfter: true,
+        showsStep: true,
+        shown: (p, n) => n > 1 && offsetOf(p) !== null,
+        derived: (p, n, stepPx) => !onHalves(Math.abs(now(p, n, stepPx))),
+        snap: (p, n, env) =>
+            set(p, n, Math.round(now(p, n, env.stepPx) * 2) / 2, env) ?? p,
+        display: (p, n, stepPx) => formatSignedSteps(now(p, n, stepPx)),
+        value: (p, n, stepPx) => now(p, n, stepPx),
+        // A plain number: `2x1` isn't read, since `x` and `,` already multiply in interval lists.
+        // Nought is a way the line doesn't go: level side to side, or straight front to back
+        type(p, n, text, env) {
+            const steps = typedSigned(text);
+            return steps === null ? null : set(p, n, steps, env);
+        },
+        set: (p, n, steps, env) => set(p, n, steps, env),
+        scrub(base, n, m, env) {
+            const was = now(base, n, env.stepPx);
+            const steps = scrubValue(
+                was,
+                scrubDistance(axis, m.dx, m.dy),
+                0,
+                spacingRate(env.snap, "x"),
+            );
+            if (steps === was) return base;
+            // Both nought is no line: the drag steps over it, on to the next value
+            const rate = spacingRate(env.snap, "x");
+            return (
+                set(base, n, steps, env) ??
+                set(base, n, steps + Math.sign(steps - was) * rate.step, env) ??
+                base
+            );
+        },
+        // Scaling grows each part that isn't nought by the same half steps, away from 0
+        widen(p, n, by, env) {
+            const was = now(p, n, env.stepPx);
+            if (Math.abs(was) < 1e-9) return p;
+            const steps = Math.round((Math.abs(was) + by) * 2) / 2;
+            if (steps < 0.5 - 1e-9) return null;
+            return set(p, n, Math.sign(was) * steps, env);
+        },
+    };
+}
+
+const OFFSET_X = offsetParam("x");
+const OFFSET_Y = offsetParam("y");
+
+/**
+ * The interval lock (owner decision on #522): unlocked (Fit, the default) a typed interval is only
+ * where the line starts from and dragging an end or a corner changes it, snapping to whole steps;
+ * locked (Keep interval) the interval is kept and a drag changes only what it doesn't pin. Interval
+ * on the path is locked too, its run pinned at an anchor; unlocking it is Fit. It covers every
+ * group of mixed intervals. A filled line's spacing follows its outline, so it has none.
+ */
+const LOCK = {
+    shown: (p: LineParams, n: number) => n > 1 && !isFilled(p),
+    locked: (p: LineParams) => p.spacing.mode !== "fit",
+    toggle: (p: LineParams, n: number, env: ToolEnv) =>
+        withSpacing(p, n, p.spacing.mode === "fit" ? "keep" : "fit", env),
+    label: (locked: boolean) =>
+        locked
+            ? tolgee.t(
+                  "shapes.kinds.line.lock.locked",
+                  "Interval locked: dragging an end keeps it. Click to unlock",
+              )
+            : tolgee.t(
+                  "shapes.kinds.line.lock.unlocked",
+                  "Lock the interval, so dragging an end keeps it",
+              ),
+};
+
+/**
+ * What `constrain` and `fromCenter` do on a Line's handles: an end or a corner keeps its
+ * direction, only its length changing, and an open line's end goes from the center, the other end
+ * mirroring it. A locked one-segment line measured as an offset can't be dragged by its ends at
+ * all; a midpoint or a tangent bar's end takes neither.
+ */
+function lineHonors(key: string, p: LineParams): KindHonors {
+    const index = pointOf(p, key);
+    if (index < 0) return {};
+    if (offsetOf(p) && p.spacing.mode === "keep") return {};
+    if (isOpenEnd(p, index))
+        return { constrain: "keepDirection", fromCenter: "fromCenter" };
+    return p.points[index]!.tension === 0 ? { constrain: "keepDirection" } : {};
+}
 
 /** Whether a cornered Fit line's segments have different intervals */
 function isRange(p: LineParams, n: number): boolean {
@@ -491,33 +691,34 @@ const ENDS: ToolChoice<LineParams> = {
     shown: (p) => isClosed(p) || p.points.length > 2,
 };
 
-/** Interval on the path, from each anchor */
-const PATH_OPTIONS = () => [
-    {
-        value: "path-start",
-        label: tolgee.t(
-            "shapes.kinds.line.spacing.pathStart",
-            "Interval on the path, from the start",
-        ),
-        picture: spacingPictures()["path-start"],
-    },
-    {
-        value: "path-center",
-        label: tolgee.t(
-            "shapes.kinds.line.spacing.pathCenter",
-            "Interval on the path, centered",
-        ),
-        picture: spacingPictures()["path-center"],
-    },
-    {
-        value: "path-end",
-        label: tolgee.t(
-            "shapes.kinds.line.spacing.pathEnd",
-            "Interval on the path, from the end",
-        ),
-        picture: spacingPictures()["path-end"],
-    },
-];
+/** Interval on the path, from each anchor; `disabled` why it can't be picked now */
+const PATH_OPTIONS = (disabled?: string) =>
+    [
+        {
+            value: "path-start",
+            label: tolgee.t(
+                "shapes.kinds.line.spacing.pathStart",
+                "Interval on the path, from the start",
+            ),
+            picture: spacingPictures()["path-start"],
+        },
+        {
+            value: "path-center",
+            label: tolgee.t(
+                "shapes.kinds.line.spacing.pathCenter",
+                "Interval on the path, centered",
+            ),
+            picture: spacingPictures()["path-center"],
+        },
+        {
+            value: "path-end",
+            label: tolgee.t(
+                "shapes.kinds.line.spacing.pathEnd",
+                "Interval on the path, from the end",
+            ),
+            picture: spacingPictures()["path-end"],
+        },
+    ].map((option) => (disabled ? { ...option, disabled } : option));
 
 /** The spacing menu (05-interval-modes.md): Fit, Keep interval, or Interval on the path */
 const SPACING: ToolChoice<LineParams> = {
@@ -536,8 +737,17 @@ const SPACING: ToolChoice<LineParams> = {
             label: tolgee.t("shapes.kinds.line.spacing.keep", "Keep interval"),
             picture: spacingPictures().keep,
         },
-        // A closed line has no ends to lay a run from (#529)
-        ...(isClosed(p) ? [] : PATH_OPTIONS()),
+        // A closed line has no ends to lay a run from (#529); an offset sets the line's length
+        ...(isClosed(p)
+            ? []
+            : PATH_OPTIONS(
+                  offsetOf(p)
+                      ? tolgee.t(
+                            "shapes.kinds.line.spacing.pathOffset",
+                            "Offset sets the line's length",
+                        )
+                      : undefined,
+              )),
     ],
     current: (p) =>
         p.spacing.mode === "path" ? `path-${p.spacing.anchor}` : p.spacing.mode,
@@ -545,11 +755,36 @@ const SPACING: ToolChoice<LineParams> = {
         if (value === "fit" || value === "keep")
             return withSpacing(p, n, value, env);
         const anchor = ANCHORS.find((a) => value === `path-${a}`);
-        return anchor && !isClosed(p) ? withSpacing(p, n, anchor, env) : p;
+        return anchor && !isClosed(p) && !offsetOf(p)
+            ? withSpacing(p, n, anchor, env)
+            : p;
     },
     // A filled line's spacing follows its outline (#529)
     shown: (p) => !isFilled(p),
 };
+
+/** Why a line can't be measured as an offset, or undefined when it can */
+function offsetReason(p: LineParams): string | undefined {
+    switch (offsetBlock(p)) {
+        case "segments":
+            return tolgee.t(
+                "shapes.kinds.line.measured.offsetSegments",
+                "Only on a one-segment line",
+            );
+        case "groups":
+            return tolgee.t(
+                "shapes.kinds.line.measured.offsetGroups",
+                "Only with one interval for everyone",
+            );
+        case "path":
+            return tolgee.t(
+                "shapes.kinds.line.measured.offsetPath",
+                "Not with Interval on the path",
+            );
+        default:
+            return undefined;
+    }
+}
 
 /** Why a line can't be measured along `axis`, or undefined when it can */
 function measuredReason(p: LineParams, axis: LineMeasured): string | undefined {
@@ -592,8 +827,10 @@ function measuredReason(p: LineParams, axis: LineMeasured): string | undefined {
  * marcher, the same on straight segments and shorter round a curve, going on from a corner holding
  * no marcher rather than cutting past it. ↔ puts neighbors the interval apart side to side,
  * x exactly on the step grid, and ↕ front to back; each is greyed out, with why, on a line that
- * doesn't go one way that way. It shows what the intervals measure now: a line whose part turned
- * square to its axis is laid out along the path until it goes one way again, and shows that.
+ * doesn't go one way that way. Offset (rise over run) sets both ways at once, on a one-segment
+ * line with one interval: a point added lays it out along the path, at the same spacing, until it's
+ * one segment again. It shows what the intervals measure now: a line whose part turned square to
+ * its axis is laid out along the path until it goes one way again, and shows that.
  */
 const MEASURED: ToolChoice<LineParams> = {
     key: "measured",
@@ -629,18 +866,32 @@ const MEASURED: ToolChoice<LineParams> = {
             disabled: measuredReason(p, "y"),
             picture: measuredPictures().y,
         },
+        {
+            value: "offset",
+            label: tolgee.t("shapes.kinds.line.measured.offset", "Offset"),
+            disabled: offsetReason(p),
+            picture: measuredPictures().offset,
+        },
     ],
     current: (p) =>
-        measuredAxis(p) ?? (p.measured === "straight" ? "straight" : "along"),
+        offsetOf(p)
+            ? "offset"
+            : (measuredAxis(p) ??
+              (p.measured === "straight" ? "straight" : "along")),
     pick: (p, n, value, env) =>
-        withMeasured(
-            p,
-            n,
-            value === "x" || value === "y" || value === "straight"
-                ? value
-                : null,
-            env,
-        ),
+        value === "offset" && offsetReason(p)
+            ? p
+            : withMeasured(
+                  p,
+                  n,
+                  value === "x" ||
+                      value === "y" ||
+                      value === "straight" ||
+                      value === "offset"
+                      ? value
+                      : null,
+                  env,
+              ),
     // A closed line always turns back, so it's never measured ↔ or ↕ (#529), but its outline can
     // be along the path or straight across. A filled one has no line of marchers to measure.
     shown: (p) => !isFilled(p),
@@ -996,7 +1247,7 @@ const MENU: ToolHandleMenu<LineParams> = {
         if (segment >= 0) {
             if (value === "add")
                 return {
-                    params: splitSegment(p, segment),
+                    params: splitSegment(p, segment, n),
                     selected: `p${segment + 1}`,
                 };
             if (value === "straight" || value === "curved") {
@@ -1079,27 +1330,65 @@ const MENU: ToolHandleMenu<LineParams> = {
 };
 
 /**
+ * The drag readout's angle for point `index` when it's an open line's end (ADR 0006, decision 10):
+ * the way it points from its neighbor, clockwise from the right as the turn reads, so an end
+ * swung round in the knob's steps shows each one. Null for any other point.
+ */
+function endTip(p: LineParams, index: number): string | null {
+    const last = p.points.length - 1;
+    if (isClosed(p) || (index !== 0 && index !== last)) return null;
+    const end = p.points[index]!;
+    const neighbor = p.points[index === 0 ? 1 : last - 1]!;
+    const d = { x: end.x - neighbor.x, y: end.y - neighbor.y };
+    if (Math.hypot(d.x, d.y) < 1e-9) return null;
+    return `${rotationDegrees(Math.atan2(d.y, d.x))}°`;
+}
+
+/**
  * The Line (#523, #524, #525, spec #522): a line of marchers drawn with one drag (two points) or by
  * clicking point after point, every point and every segment's midpoint a handle, moved from its
- * body, and turned and flipped through its frame like every shape. Drawn in Fit; typing an interval
- * keeps it, the length following from the pivot. Every corner holds a marcher unless switched off.
+ * body, and turned and flipped through its frame like every shape. Drawn in Fit, the interval
+ * unlocked: typing one sizes the line from the pivot and a drag changes it, snapping to whole
+ * steps; the lock beside it keeps it (Keep interval). Every corner holds a marcher unless switched off.
  * A click on a point selects it; a selected smooth point shows its tangent bar, whose ends set how
  * round the line bends through it, and a double-click makes a point smooth, or a corner again
  * (#557). A right-click on a point or a segment's middle opens its menu (#569). A typed list
  * (`2*3+4*2`, #526) spaces it in groups of marchers, each a chip in the editor.
  */
+/**
+ * Whether `pivot` is one a Line puts there itself ({@link linePivot}), however it has been turned,
+ * flipped or edited since: an open line's either end or one of its points, a closed line's center
+ */
+function lineOwnPivot(p: LineParams, pivot: Pivot): boolean {
+    if (isClosed(p)) return pivot === "c";
+    if (pivot === "w" || pivot === "e") return true;
+    const at = pivotPoint(lineFrame(p), pivot);
+    return p.points.some((q) => Math.hypot(q.x - at.x, q.y - at.y) < 1e-6);
+}
+
+/** A new line with its pivot at its leftmost end or point ({@link linePivot}, owner on #596) */
+function pivoted(p: LineParams): LineParams;
+function pivoted(p: LineParams | undefined): LineParams | undefined;
+function pivoted(p: LineParams | undefined): LineParams | undefined {
+    return p && withPivot(p, linePivot(p));
+}
+
 export const lineTool: ToolKind<LineParams> = {
     shape: lineShape,
-    params: [INTERVAL],
+    params: [INTERVAL, OFFSET_X, OFFSET_Y],
     choices: [ENDS, SPACING, MEASURED, CORNERS],
     groups: GROUPS,
+    lock: LOCK,
+    honors: {
+        handle: (key, _ratioLocked, params) => lineHonors(key, params),
+    },
     ordered: true,
     readable: isLineParams,
     scaling: "interval",
-    draw: (from, to, _n, env) => drawLine(from, to, env),
+    draw: (from, to, _n, env) => pivoted(drawLine(from, to, env)),
     clickPoints: {
         land: landClicked,
-        draw: (points, _n, env) => drawPoints(points, env),
+        draw: (points, _n, env) => pivoted(drawPoints(points, env)),
         // A click on the first point closes the line (#529)
         close(points, n, env) {
             const p = drawPoints(points, env);
@@ -1148,15 +1437,20 @@ export const lineTool: ToolKind<LineParams> = {
         return [...points, ...midpoints, ...tensions];
     },
     dragHandle(base, n, key, to, env) {
-        // A midpoint dragged: a corner added there, and dragged
+        // A midpoint dragged: a corner added there, and dragged, taking neither constrain nor
+        // from center (`lineHonors`)
         const segment = midpointOf(base, key);
         if (segment >= 0)
             return dragPoint(
-                splitSegment(base, segment),
+                splitSegment(base, segment, n),
                 n,
                 segment + 1,
                 to,
-                env,
+                {
+                    ...env,
+                    constrain: false,
+                    fromCenter: false,
+                },
             );
         const tension = tangentOf(base, key);
         if (tension)
@@ -1170,9 +1464,9 @@ export const lineTool: ToolKind<LineParams> = {
         return dragPoint(base, n, index, to, env);
     },
     // A midpoint clicked splits its segment; a point clicked is selected by the host (#557)
-    clickHandle(params, _n, key) {
+    clickHandle(params, n, key) {
         const segment = midpointOf(params, key);
-        return segment >= 0 ? splitSegment(params, segment) : null;
+        return segment >= 0 ? splitSegment(params, segment, n) : null;
     },
     // A point double-clicked turns smooth, or a corner again (#557)
     doubleClickHandle(params, n, key) {
@@ -1196,8 +1490,14 @@ export const lineTool: ToolKind<LineParams> = {
     move: (base, _n, delta, env) => moveLine(base, delta, env),
     frameOf: (params) => lineFrame(params),
     withFrame: (params, _n, frame) => withLineFrame(params, frame),
+    // 0° as drawn, whichever way (ADR 0006, decision 10)
+    turnOf: (params) => lineTurn(params),
+    handleTip: (params, _n, key) => endTip(params, pointOf(params, key)),
     settle: settleLine,
-    fromFrame: lineInFrame,
+    fromFrame: (frame, n, env) => pivoted(lineInFrame(frame, n, env)),
+    startPivot: linePivot,
+    ownPivot: lineOwnPivot,
+    step: offsetStep,
     closed: lineClosed,
     pictureParams: (_n, env) => zigzag(env),
 };
@@ -1230,15 +1530,15 @@ export const curveTool: ToolKind<LineParams> = {
     preset: "curve",
     keywords: ["curve", "arc-like", "smooth"],
     shape: curveShape,
-    draw: (from, to, _n, env) => drawCurve(from, to, env),
+    draw: (from, to, _n, env) => pivoted(drawCurve(from, to, env)),
     clickPoints: {
         land: landClicked,
-        draw: (points, _n, env) => drawPoints(points, env, SMOOTH),
+        draw: (points, _n, env) => pivoted(drawPoints(points, env, SMOOTH)),
         close(points, n, env) {
             const p = drawPoints(points, env, SMOOTH);
             return p && closeLine(p, n, env);
         },
     },
-    fromFrame: curveInFrame,
+    fromFrame: (frame, n, env) => pivoted(curveInFrame(frame, n, env)),
     pictureParams: (_n, env) => wave(env),
 };

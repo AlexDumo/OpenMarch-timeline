@@ -113,7 +113,8 @@ export const spacingPictures = once(() => {
  * line itself between the marchers, evenly along it; straight across joins each pair of neighbors
  * in a straight line, evenly apart that way; ↔ evens their side-to-side gaps (light lines up and
  * down through each), so they spread out on the steep part; ↕ evens their front-to-back gaps
- * (light lines across), so they spread out on the shallow part.
+ * (light lines across), so they spread out on the shallow part. Offset, on a straight line of its
+ * own, draws each step's side-to-side and front-to-back parts.
  */
 export const measuredPictures = once(() => {
     const points = [corner(0, 0), { x: 4, y: 10, tension: 1 }, corner(22, 14)];
@@ -156,11 +157,33 @@ export const measuredPictures = once(() => {
                   : [{ points: lineOutline(p) }];
         return sketch(p, n, extra);
     };
+    // An offset is only on a one-segment line: a straight diagonal, each step from one marcher
+    // to the next drawn as its side-to-side then front-to-back parts
+    const offset = () => {
+        const p: LineParams = {
+            points: [corner(0, 2), corner(20, 12)],
+            spacing: { mode: "fit" },
+            measured: "offset",
+            offset: { x: 5, y: 2.5 },
+        };
+        const spots = lineFillSpots(p, 5);
+        const steps = spots.slice(1).map(
+            (b, i): ToolChoicePictureLine => ({
+                points: [
+                    { x: spots[i]!.x, y: spots[i]!.y },
+                    { x: b.x, y: spots[i]!.y },
+                    { x: b.x, y: b.y },
+                ],
+            }),
+        );
+        return sketch(p, 5, steps);
+    };
     return {
         along: measured(),
         straight: measured("straight"),
         x: measured("x"),
         y: measured("y"),
+        offset: offset(),
     };
 });
 

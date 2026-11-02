@@ -42,6 +42,11 @@ export interface ToolEnv {
     /** How far from a handle a press still takes it, in field units */
     readonly hitRadius: number;
     /**
+     * Screen pixels per field unit, for what depends on how far the field is zoomed in (a Line's
+     * dragged interval snapping to half steps rather than whole ones); unknown when absent
+     */
+    readonly zoom?: number;
+    /**
      * The press's `reachInside` choice: a press on the center dot pulls the pivot out (#350). Read
      * at the press only.
      */
@@ -154,6 +159,16 @@ export interface ToolParam<P> {
      * when it depends on the shape (a Line's Measured setting); read through {@link paramGlyph}.
      */
     readonly glyph?: ParamGlyph | ((params: P, n: number) => ParamGlyph | null);
+    /**
+     * The mark goes after the number rather than before it: a Line's offset reads `2 ↔ 1 ↕`, each
+     * number with the way it measures
+     */
+    readonly glyphAfter?: boolean;
+    /**
+     * While the number is pointed at, focused or dragged, the field draws the kind's
+     * {@link ToolKind.step} and lights its pivot (a Line's offset, owner on #596)
+     */
+    readonly showsStep?: boolean;
     /** Hidden while this is false (a spacing with only one spot that way) */
     shown?(params: P, n: number): boolean;
     /** The number as shown: "6 × 2", "2" */
@@ -201,6 +216,22 @@ export function paramGlyph<P>(
 ): ParamGlyph | null {
     const { glyph } = param;
     return (typeof glyph === "function" ? glyph(params, n) : glyph) ?? null;
+}
+
+/**
+ * A lock on the kind's interval (a Line's, owner decision on #522), a button beside its interval
+ * in the floating editor covering every group: locked, a drag keeps the interval and changes only
+ * what it doesn't pin; unlocked, a typed interval is only where the shape starts from and a drag
+ * changes it. Toggling is one change of the shape (one undo step). Everything is pure.
+ */
+export interface ToolLock<P> {
+    /** Shown while this is true (a Line with an interval to lock) */
+    shown(params: P, n: number): boolean;
+    locked(params: P, n: number): boolean;
+    /** The params locked if they're unlocked, else unlocked */
+    toggle(params: P, n: number, env: ToolEnv): P;
+    /** Its tooltip, as it is now */
+    label(locked: boolean): string;
 }
 
 /** One group of a kind's interval list as the floating editor shows it (#526) */
@@ -444,6 +475,28 @@ export interface ToolKind<P> {
     readonly choices?: readonly ToolChoice<P>[];
     /** Its mixed intervals, when it can be spaced by groups of marchers (#526) */
     readonly groups?: ToolGroups<P>;
+    /** A lock on its interval, beside the interval in the floating editor */
+    readonly lock?: ToolLock<P>;
+    /**
+     * The pivot a new shape of the kind starts at (a Line's leftmost end, owner on #596): it sets
+     * that itself when it draws one; picking another kind carries a pivot only when it's been
+     * moved by hand. The center when absent.
+     */
+    startPivot?(params: P): Pivot;
+    /**
+     * Whether `pivot` is one the kind could have put there itself, however the shape has been
+     * turned, flipped or edited since (a Line's: either end, or its first point when that was the
+     * leftmost). A placed shape doesn't keep whether its pivot was moved by hand, so this decides
+     * whether a plain press on a handle under it takes the handle. Absent: only
+     * {@link startPivot} as the shape is now.
+     */
+    ownPivot?(params: P, pivot: Pivot): boolean;
+    /**
+     * The step from one marcher to the next that its {@link ToolParam.showsStep} numbers set (a
+     * Line's offset, rise over run): the field draws it as a right angle, ↔ then ↕, while they
+     * are engaged or an end is dragged. Null when it has none now.
+     */
+    step?(params: P, n: number): { from: XY; to: XY } | null;
     /**
      * Its spots run in an order along it (a Line, #528): the host offers who goes where by Least
      * travel, Keep order or Reverse. Absent: always least travel.
@@ -545,6 +598,13 @@ export interface ToolKind<P> {
     /** The params with `frame`'s center, turn and flip; the kind keeps its own size */
     withFrame(params: P, n: number, frame: ShapeFrame): P;
     /**
+     * How far the shape is turned as the editor reads and steps it, in radians: the knob and the
+     * degrees snap this, ⟳ adds a quarter to it and typed degrees set it. The frame's rotation when
+     * absent; a Line, whose frame points along it, reads the turn since it was drawn (ADR 0006,
+     * decision 10), so its `withFrame` must keep this in step with the frame's turns.
+     */
+    turnOf?(params: P, n: number): number;
+    /**
      * A `footprint` kind's part in scaling (#349): the params with the frame's half sizes set,
      * its center, turn and flip kept. Absent for `interval` kinds, which scale their spacings.
      */
@@ -565,6 +625,12 @@ export interface ToolKind<P> {
      * wouldn't read as the kind: the Line's zigzag and the Curve's wave (owner, 2026-10-31)
      */
     pictureParams?(n: number, env: ToolEnv): P;
+    /**
+     * What the readout by the pointer says first while handle `key` is dragged, before the length
+     * and spacing: a Line's end, the way it points from its neighbor ("15°"). Nothing when absent
+     * or null.
+     */
+    handleTip?(params: P, n: number, key: string): string | null;
     /** After a turn or flip: the shape put back on the grid, if it snaps to one */
     settle?(params: P, n: number, env: ToolEnv): P;
     /**

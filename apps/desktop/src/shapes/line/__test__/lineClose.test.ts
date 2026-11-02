@@ -451,8 +451,11 @@ describe("a closed line with mixed groups (#526)", () => {
     const six = (n = 9) => click(clicking(n, SIX), { x: 101, y: 99 });
     // 4 marchers 2 steps apart, the rest 3: the top side holds the 2-step gaps, every other
     // side two 3-step gaps, the closing gap the seam between the last group and the first
-    const grouped = (t: ToolState, n = 9) =>
-        edit(t, interval.type(t.params, n, "4*2+3", env), ctx);
+    // Typed, then locked (Keep interval): typing alone leaves the interval unlocked
+    const grouped = (t: ToolState, n = 9) => {
+        const typed = edit(t, interval.type(t.params, n, "4*2+3", env), ctx);
+        return edit(typed, lineTool.lock!.toggle(typed.params, n, env), ctx);
+    };
     const GAPS = [20, 20, 20, 30, 30, 30, 30, 30, 30];
 
     it("runs the groups once round in Outline + Keep interval, from the first point", () => {
@@ -478,12 +481,19 @@ describe("a closed line with mixed groups (#526)", () => {
         );
     });
 
-    it("spreads evenly round the same outline in Fit", () => {
+    it("keeps the groups' proportions round the same outline in Fit, unlocked", () => {
         const t = picked(grouped(six()), "spacing", "fit");
-        expect(paramsOf(t).spacing).toEqual({ mode: "fit" });
+        expect(paramsOf(t).spacing).toEqual({
+            mode: "fit",
+            groups: [{ interval: 20, count: 4 }, { interval: 30 }],
+        });
+        expect(isLineParams(paramsOf(t))).toBe(true);
         expect(pointsOf(t)).toEqual(SIX);
-        // 9 marchers round 24 steps, corners held: the sides share the 9 gaps
+        // As long round as its groups: the same gaps, every corner on a marcher
         expect(spotsOf(t)).toHaveLength(9);
+        gapsRound(spotsOf(t)).forEach((g, i) =>
+            expect(g).toBeCloseTo(GAPS[i]!, 6),
+        );
         for (const c of SIX)
             expect(spotsOf(t).some((s) => dist(s, c) < 1e-6)).toBe(true);
     });
@@ -565,6 +575,7 @@ describe("a placed closed line", () => {
     it("closes up in Outline + Keep interval with even gaps, grown from its pivot", () => {
         let t = picked(square(N), "corners", "off");
         t = edit(t, interval.type(t.params, N, "2", env), ctx);
+        t = edit(t, lineTool.lock!.toggle(t.params, N, env), ctx);
         const placed = readBack(withoutMembers(recipeOf(t), [5]))!;
         const params = closedUpParams(placed, N - 1, env) as LineParams;
         const spots = lineTool.shape.generate(params, N - 1, ctx);

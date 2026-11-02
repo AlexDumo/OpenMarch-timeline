@@ -375,6 +375,18 @@ export type FieldModeDrawing = {
         seam: boolean;
         whole: string;
     }[];
+    /**
+     * While a Line's Offset numbers are pointed at, focused or dragged, or an end is dragged
+     * (owner on #596): the step from the first marcher to the next as a dashed right angle, across
+     * to `corner` then up or down to `to`, each leg labeled ("↔ 2", "↕ −1")
+     */
+    offsetStep?: {
+        from: FieldPoint;
+        corner: FieldPoint;
+        to: FieldPoint;
+        across: string;
+        deep: string;
+    };
 };
 
 /** What the editor knows of a press it asks a {@link FieldMode} to claim. */

@@ -206,8 +206,8 @@ describe("a line's interval groups in the floating editor", () => {
         openMenu();
         const steps = tool().past.length;
         typeInto("shape-group-1-interval", "2.5");
-        expect(spacing().mode).not.toBe("fit");
-        if (spacing().mode === "fit") return;
+        // Typed, the interval stays unlocked with the groups as typed
+        expect(spacing().mode).toBe("fit");
         const groups = (
             spacing() as { groups: { interval: number; count?: number }[] }
         ).groups;

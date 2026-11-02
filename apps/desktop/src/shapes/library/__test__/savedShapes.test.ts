@@ -12,6 +12,7 @@ import {
     whyNotSavable,
 } from "../savedShapes";
 import { curveTool, lineTool } from "../../line/lineTool";
+import { offsetOf, type LineParams } from "../../line/lineGeometry";
 import { placementOf } from "../../tool/shapePlacement";
 import { shapeSteps, startingParams } from "../../command/shapeSteps";
 import type { AnyToolKind, ToolEnv } from "../../tool/toolKind";
@@ -146,6 +147,48 @@ describe("a line with mixed intervals (#526)", () => {
             whyNotSavable(lineTool, lineTyped(6, "2*2+4*2"), 6, STEP),
         ).toBeNull();
         expect(whyNotSavable(boxTool, wideBox().params, 6, STEP)).toBeNull();
+    });
+});
+
+describe("a saved Line and its Offset (#596)", () => {
+    const measure = lineTool.choices!.find((c) => c.key === "measured")!;
+    const offsetX = lineTool.params.find((p) => p.key === "offsetX")!;
+    const offsetY = lineTool.params.find((p) => p.key === "offsetY")!;
+    const save = (params: unknown) =>
+        savedToolKind(
+            lineTool,
+            savedShapeOf(lineTool, params, 5, STEP, { ...SAVED, name: "L" }),
+        );
+    const drawAgain = (params: unknown) =>
+        save(params).draw(
+            { x: 100, y: 200 },
+            { x: 140, y: 230 },
+            5,
+            env(),
+        ) as LineParams;
+
+    it("a plain Line saves only its interval and draws again plain", () => {
+        const t = drawn(lineTool, 5, { x: 100, y: 100 }, { x: 160, y: 100 });
+        expect(Object.keys(intervalsOf(lineTool, t.params, 5, STEP))).toEqual([
+            "interval",
+        ]);
+        const again = drawAgain(t.params);
+        expect(again.measured).toBeUndefined();
+        expect(offsetOf(again)).toBeNull();
+    });
+
+    it("an Offset Line saves its offset and draws again as that Offset", () => {
+        const t = drawn(lineTool, 5, { x: 100, y: 100 }, { x: 140, y: 120 });
+        let params = measure.pick(t.params, 5, "offset", env());
+        params = offsetX.type(params, 5, "1", env())!;
+        params = offsetY.type(params, 5, "-0.5", env())!;
+        const kept = intervalsOf(lineTool, params, 5, STEP);
+        expect(kept.offsetX).toBe(1);
+        expect(kept.offsetY).toBe(-0.5);
+        const again = drawAgain(params);
+        expect(again.measured).toBe("offset");
+        expect(offsetX.value!(again, 5, STEP)).toBeCloseTo(1, 9);
+        expect(offsetY.value!(again, 5, STEP)).toBeCloseTo(-0.5, 9);
     });
 });
 

@@ -67,6 +67,13 @@ const spacing = lineTool.choices!.find((c) => c.key === "spacing")!;
 const measured = lineTool.choices!.find((c) => c.key === "measured")!;
 const typed = (t: ToolState, text: string) =>
     edit(t, interval.type(t.params, t.spots, text, env), ctx);
+/** The interval locked (Keep interval) as its button does, one change; as it is when it is */
+const locked = (t: ToolState) =>
+    lineTool.lock!.locked(t.params, t.spots)
+        ? t
+        : edit(t, lineTool.lock!.toggle(t.params, t.spots, env), ctx);
+/** Typed, then locked: typing alone leaves the interval unlocked (owner decision on #522) */
+const kept = (t: ToolState, text: string) => locked(typed(t, text));
 const picked = (t: ToolState, value: string) =>
     edit(t, spacing.pick(t.params, t.spots, value, env), ctx);
 const measuredBy = (t: ToolState, value: string) =>
@@ -97,7 +104,7 @@ describe("the Measured menu", () => {
     it("offers along the path, straight across, ↔ and ↕, along the path by default with no mark", () => {
         const t = offYards();
         expect(measured.options(t.params, t.spots).map((o) => o.value)).toEqual(
-            ["along", "straight", "x", "y"],
+            ["along", "straight", "x", "y", "offset"],
         );
         expect(measured.options(t.params, t.spots).map((o) => o.label)).toEqual(
             [
@@ -105,6 +112,7 @@ describe("the Measured menu", () => {
                 "Straight across",
                 "↔ Side to side",
                 "↕ Front to back",
+                "Offset",
             ],
         );
         expect(measured.current(t.params, t.spots)).toBe("along");
@@ -137,7 +145,7 @@ describe("the Measured menu", () => {
 
 describe("↔: neighbors the interval apart side to side", () => {
     it("puts x exactly an interval apart and on the step grid, y where the line puts it", () => {
-        const t = typed(measuredBy(offYards(), "x"), "1.5");
+        const t = kept(measuredBy(offYards(), "x"), "1.5");
         expect(paramsOf(t).spacing.mode).toBe("keep");
         const spots = spotsOf(t);
         expect(gapsOf(spots.map((p) => p.x))).toEqual([15, 15, 15, 15]);
@@ -151,7 +159,7 @@ describe("↔: neighbors the interval apart side to side", () => {
 
     it("moves a run that grows off the grid onto it, along the line", () => {
         // 4 marchers 1½ steps apart from the center at 40: x from 17.5, landed on 20
-        const t = typed(measuredBy(offYards(4), "x"), "1.5");
+        const t = kept(measuredBy(offYards(4), "x"), "1.5");
         const xs = spotsOf(t).map((p) => p.x);
         expect(xs).toEqual([20, 35, 50, 65]);
         expect(paramsOf(t).points[0]!.x).toBe(20);
@@ -169,8 +177,8 @@ describe("↔: neighbors the interval apart side to side", () => {
     });
 
     it("keeps the same number when picked in Keep interval, now measured across", () => {
-        const kept = typed(offYards(), "2");
-        const t = measuredBy(kept, "x");
+        const keptLine = kept(offYards(), "2");
+        const t = measuredBy(keptLine, "x");
         expect(chip(t)).toBe("2");
         expect(gapsOf(spotsOf(t).map((p) => p.x))).toEqual([20, 20, 20, 20]);
         // And back: 2 steps along the line again (straight across too, on a straight line)
@@ -186,7 +194,7 @@ describe("↔: neighbors the interval apart side to side", () => {
     });
 
     it("keeps the interval across when an end is dragged in Keep interval", () => {
-        let t = typed(measuredBy(diagonal(), "x"), "2");
+        let t = kept(measuredBy(diagonal(), "x"), "2");
         const end = lineTool.handles(t.params, t.spots)[1]!;
         t = press(t, end.at, env);
         t = pointerMove(t, { x: end.at.x - 20, y: end.at.y + 40 }, env);
@@ -199,7 +207,7 @@ describe("↔: neighbors the interval apart side to side", () => {
         // 8 steps across; a run of 4 × 1½ = 6 steps
         const run = (anchor: string) =>
             spotsOf(
-                typed(
+                kept(
                     picked(measuredBy(diagonal(), "x"), `path-${anchor}`),
                     "1.5",
                 ),
@@ -209,7 +217,7 @@ describe("↔: neighbors the interval apart side to side", () => {
         expect(run("center")).toEqual([10, 25, 40, 55, 70]);
         // 4 × 1¾ = 7 steps: centered it would start at ½ step, which is on the grid
         const odd = spotsOf(
-            typed(picked(measuredBy(diagonal(), "x"), "path-center"), "1.75"),
+            kept(picked(measuredBy(diagonal(), "x"), "path-center"), "1.75"),
         ).map((p) => p.x);
         expect(odd[0]).toBe(5);
         expect(gapsOf(odd)).toEqual([17.5, 17.5, 17.5, 17.5]);
@@ -218,7 +226,7 @@ describe("↔: neighbors the interval apart side to side", () => {
 
 describe("↕: the same front to back", () => {
     it("puts y exactly an interval apart and on the step grid", () => {
-        const t = typed(measuredBy(offYards(), "y"), "2");
+        const t = kept(measuredBy(offYards(), "y"), "2");
         const spots = spotsOf(t);
         expect(gapsOf(spots.map((p) => p.y))).toEqual([20, 20, 20, 20]);
         for (const p of spots) expect(p.y % half).toBe(0);
@@ -320,7 +328,7 @@ describe("a placed line keeps its Measured setting", () => {
     }
 
     it.each(["x", "y"] as const)("saves and reopens %s", (axis) => {
-        const t = typed(measuredBy(offYards(N), axis), "1.5");
+        const t = kept(measuredBy(offYards(N), axis), "1.5");
         const { placement, placed } = readBack(t);
         expect(placement.recipe.params).toMatchObject({ measured: axis });
         expect(placed).toBeDefined();
@@ -353,7 +361,7 @@ const onHalf = (v: number) => Math.abs(v / half - Math.round(v / half)) < 1e-9;
 describe("↔ with mixed intervals", () => {
     it("spaces each group at its own interval side to side, on the grid", () => {
         // 2 marchers at 1½ steps, then 3 at 2: the seam takes the larger
-        const t = typed(measuredBy(offYards(), "x"), "2*1.5+3*2");
+        const t = kept(measuredBy(offYards(), "x"), "2*1.5+3*2");
         expect(paramsOf(t).measured).toBe("x");
         const xs = spotsOf(t).map((p) => p.x);
         expect(gapsOf(xs)).toEqual([15, 20, 20, 20]);
@@ -382,7 +390,7 @@ describe("↔ on a line whose corners hold marchers", () => {
 
     it("in Keep interval sizes each leg to its gaps side to side, every x on the grid", () => {
         // 3 steps across then 7, typed 2: legs of 2 gaps and 3, so 4 steps and 6
-        const t = typed(
+        const t = kept(
             opened(6, {
                 ...zigzag({ mode: "fit" }),
                 points: [corner(0, 100), corner(30, 130), corner(100, 60)],
@@ -435,7 +443,7 @@ describe("↔ on a curve", () => {
 
 describe("review fixes", () => {
     it("keeps a dragged end's x in Keep interval ↔, however steep the drag", () => {
-        let t = typed(measuredBy(diagonal(), "x"), "2");
+        let t = kept(measuredBy(diagonal(), "x"), "2");
         const before = paramsOf(t).points;
         const end = lineTool.handles(t.params, t.spots)[1]!;
         t = press(t, end.at, env);
@@ -451,12 +459,13 @@ describe("review fixes", () => {
     });
 
     it("sizes a line in Keep interval ↔ to its run again when it's turned", () => {
-        const t = typed(measuredBy(diagonal(), "x"), "2");
+        const t = kept(measuredBy(diagonal(), "x"), "2");
         const turned = turnShape(
             lineTool,
             t.params,
             t.spots,
-            Math.atan2(60, 80) + Math.PI / 6,
+            // 30° on from how it was drawn (ADR 0006, decision 10)
+            Math.PI / 6,
             "c",
             env,
         ) as LineParams;

@@ -253,6 +253,18 @@ export type FieldTestShapeOverlay = {
      * field units; a `seam` is where the group meets a neighbor, with the interval there.
      */
     groupLabels: { x: number; y: number; text: string; seam: boolean }[];
+    /**
+     * While a Line's Offset numbers are engaged or an end is dragged: the step from the first
+     * marcher to the next, field units, across to `corner` then up or down to `to`, with its two
+     * labels ("↔ 2", "↕ −1"). Null otherwise.
+     */
+    offsetStep: {
+        from: { x: number; y: number };
+        corner: { x: number; y: number };
+        to: { x: number; y: number };
+        across: string;
+        deep: string;
+    } | null;
 };
 
 /** A placed box outlined on the field. */

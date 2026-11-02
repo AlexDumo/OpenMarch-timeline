@@ -42,7 +42,11 @@ const intervalParams = (kind: AnyToolKind) =>
         (p) => p.interval && p.value,
     );
 
-/** The intervals of a shape of `kind`, in steps, by each interval parameter's key */
+/**
+ * The intervals of a shape of `kind`, in steps, by each interval parameter's key. Only those the
+ * shape shows: a Line's Offset numbers are kept only for a Line measured by its offset, so a plain
+ * Line saved and drawn again stays plain (drawing a saved shape sets every number it kept).
+ */
 export function intervalsOf(
     kind: AnyToolKind,
     params: unknown,
@@ -50,7 +54,9 @@ export function intervalsOf(
     stepPx: number,
 ): Record<string, number> {
     return Object.fromEntries(
-        intervalParams(kind).map((p) => [p.key, p.value!(params, n, stepPx)]),
+        intervalParams(kind)
+            .filter((p) => !p.shown || p.shown(params, n))
+            .map((p) => [p.key, p.value!(params, n, stepPx)]),
     );
 }
 

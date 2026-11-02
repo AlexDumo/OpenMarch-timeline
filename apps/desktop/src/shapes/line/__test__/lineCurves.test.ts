@@ -134,6 +134,13 @@ const interval = lineTool.params.find((p) => p.key === "interval")!;
 const choice = (key: string) => lineTool.choices!.find((c) => c.key === key)!;
 const typed = (t: ToolState, text: string) =>
     edit(t, interval.type(t.params, t.spots, text, env), ctx);
+/** The interval locked (Keep interval) as its button does, one change; as it is when it is */
+const locked = (t: ToolState) =>
+    lineTool.lock!.locked(t.params, t.spots)
+        ? t
+        : edit(t, lineTool.lock!.toggle(t.params, t.spots, env), ctx);
+/** Typed, then locked: typing alone leaves the interval unlocked (owner decision on #522) */
+const kept = (t: ToolState, text: string) => locked(typed(t, text));
 const picked = (t: ToolState, key: string, value: string) =>
     edit(t, choice(key).pick(t.params, t.spots, value, env), ctx);
 const straight = (t: ToolState) => picked(t, "measured", "straight");
@@ -315,7 +322,7 @@ describe("spots along a curve", () => {
     });
 
     it("keeps a typed interval along the path between neighbors on the curve", () => {
-        const t = typed(clicked(curveTool, 5, ARCH), "2");
+        const t = kept(clicked(curveTool, 5, ARCH), "2");
         expect(paramsOf(t).spacing.mode).toBe("keep");
         for (const g of arcGapsOf(paramsOf(t), 5))
             expect(g).toBeCloseTo(2 * STEP, 6);
@@ -323,7 +330,7 @@ describe("spots along a curve", () => {
     });
 
     it("keeps a typed interval straight across between neighbors along the curve, measured so", () => {
-        const t = typed(straight(clicked(curveTool, 5, ARCH)), "2");
+        const t = kept(straight(clicked(curveTool, 5, ARCH)), "2");
         expect(paramsOf(t).spacing.mode).toBe("keep");
         for (const g of gapsOf(spotsOf(t))) expect(g).toBeCloseTo(2 * STEP, 6);
     });
@@ -341,7 +348,7 @@ describe("spots along a curve", () => {
         );
 
     it("makes a curved run between corners whole intervals when an interval is typed", () => {
-        const t = typed(hooked(), "2");
+        const t = kept(hooked(), "2");
         for (const g of arcGapsOf(paramsOf(t), 7))
             expect(g).toBeCloseTo(2 * STEP, 6);
         // The corner holds a marcher, and isn't off its interval
@@ -351,7 +358,7 @@ describe("spots along a curve", () => {
     });
 
     it("makes a curved run between corners whole intervals straight across, measured so", () => {
-        const t = typed(straight(hooked()), "2");
+        const t = kept(straight(hooked()), "2");
         for (const g of gapsOf(spotsOf(t))) expect(g).toBeCloseTo(2 * STEP, 6);
         const corner = paramsOf(t).points[1]!;
         expect(spotsOf(t).some((s) => dist(s, corner) < 1e-6)).toBe(true);
@@ -371,7 +378,7 @@ describe("a curve with mixed intervals, measured straight across", () => {
         ]);
         t = straight(switched(t, "p2"));
         expect(tensions(t)).toEqual([0, 0, SMOOTH, 0]);
-        return typed(t, "2*3+4*2");
+        return kept(t, "2*3+4*2");
     };
     // 2 marchers 3 apart, then 4 marchers 2 apart, the seam the larger
     const GAPS = [3, 3, 2, 2, 2].map((g) => g * STEP);
@@ -398,16 +405,21 @@ describe("a curve with mixed intervals, measured straight across", () => {
         expect(interval.note!(t.params, t.spots)).toBeNull();
     });
 
-    it("spreads each stretch's marchers evenly in Fit, the corner on a marcher", () => {
-        const t = picked(hook(), "spacing", "fit");
-        expect(paramsOf(t).spacing).toEqual({ mode: "fit" });
+    it("keeps the groups' proportions unlocked in Fit, the corner on a marcher", () => {
+        const kept = hook();
+        const t = picked(kept, "spacing", "fit");
+        expect(paramsOf(t).spacing).toEqual({
+            mode: "fit",
+            groups: (paramsOf(kept).spacing as { groups: unknown }).groups,
+        });
         const spots = spotsOf(t);
         expect(spots).toHaveLength(N);
         const corner = spots.findIndex((s) => dist(s, cornerPoint(t)) < 1e-6);
         expect(corner).toBeGreaterThan(0);
-        const gaps = gapsOf(spots);
-        for (const run of [gaps.slice(0, corner), gaps.slice(corner)])
-            for (const g of run) expect(g).toBeCloseTo(run[0]!, 6);
+        // The line as long as its groups: the same spots as locked
+        spotsOf(kept).forEach((s, i) =>
+            expect(dist(s, spots[i]!)).toBeLessThan(1e-6),
+        );
         for (const s of spots)
             expect(dist(s, smoothPoint(t))).toBeGreaterThan(0.5);
     });

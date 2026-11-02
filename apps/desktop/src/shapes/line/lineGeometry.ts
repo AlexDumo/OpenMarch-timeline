@@ -1,7 +1,12 @@
 import {
+    DEGREE,
     fieldToFrame,
     frameToField,
+    normalizeAngle,
+    pivotAt,
     pivotPoint,
+    snapRotation,
+    type Pivot,
     type ShapeFrame,
 } from "../frame/frame";
 import { linePull } from "../frame/edgeGuides";
@@ -10,6 +15,7 @@ import { catmullRomSpan } from "../geometry/catmullRom";
 import { makePath, type Path, type Segment } from "../geometry/path";
 import { cross, dot, lerp } from "../geometry/vec";
 import { chordOffsets, groupGaps, layGroups } from "../spacing";
+import { falsePosition, secantFrom } from "../solve";
 import {
     canLayOut,
     storedDistribution,
@@ -66,12 +72,15 @@ export type LineAnchor = "start" | "center" | "end";
 /**
  * How the marchers are spaced (docs/timeline/research/shapes/05-interval-modes.md):
  *
- * - `fit`: the line as drawn, the interval worked out from it;
- * - `keep` (Keep interval): the interval fixed, the line's length following from its pivot;
+ * - `fit` (the interval unlocked): the line as drawn, the interval worked out from it. `groups`
+ *   is the interval last typed, only where the line started from (a drag changes the interval);
+ *   with mixed groups (#526) their proportions, scaled to fit the drawn line;
+ * - `keep` (Keep interval, the interval locked): the interval fixed, the line's length following
+ *   from its pivot;
  * - `path` (Interval on the path): both fixed, the run laid on the drawn line from `anchor`.
  */
 export type LineSpacing =
-    | { readonly mode: "fit" }
+    | { readonly mode: "fit"; readonly groups?: readonly LineGroup[] }
     | { readonly mode: "keep"; readonly groups: readonly LineGroup[] }
     | {
           readonly mode: "path";
@@ -87,9 +96,10 @@ export type LineMeasured = "x" | "y";
 
 /**
  * What an interval measures ({@link LineParams.measured}): along the path when absent, `straight`
- * straight across from marcher to marcher, or an axis
+ * straight across from marcher to marcher, an axis, or `offset` (rise over run, {@link
+ * LineParams.offset})
  */
-export type LineMeasure = LineMeasured | "straight";
+export type LineMeasure = LineMeasured | "straight" | "offset";
 
 export interface LineParams {
     /** In order from the first marcher's end; two or more */
@@ -113,9 +123,27 @@ export interface LineParams {
     /**
      * What every interval measures (#527, ADR 0006's Line amendment): along the path (its arc
      * length) when absent; `straight` straight across from marcher to marcher, except that a gap
-     * goes on from a corner holding no marcher rather than cutting past it ({@link acrossOf}); `x` (↔) side to side and `y` (↕) front to back
+     * goes on from a corner holding no marcher rather than cutting past it ({@link acrossOf}); `x`
+     * (↔) side to side and `y` (↕) front to back; `offset` both at once, {@link offset} from each
+     * marcher to the next
      */
     readonly measured?: LineMeasure;
+    /**
+     * Measured `offset` (rise over run): how far each marcher is from the one before it, side to
+     * side (`x`) and front to back (`y`), in field units, signed from the first point on. Only on
+     * a one-segment open line with one interval for everyone ({@link offsetOf}); stored with
+     * `measured: "offset"` and only with it, and kept while the line has more points, which lay
+     * it out along the path until it's one segment again. In Keep interval the line is `n − 1`
+     * offsets long; in Fit it's where the line started from, the drawn line giving the offset.
+     */
+    readonly offset?: XY;
+    /**
+     * How far the whole line has been turned since it was drawn, in degrees clockwise from 0 up to
+     * 360 (ADR 0006, decision 10): what the editor's turn reads, so a line reads 0° as drawn
+     * whichever way it was drawn. Only turning the whole shape changes it (the knob, the degrees,
+     * ⟳); editing its points never does. Absent is 0, so a Line saved before reads 0° as it is.
+     */
+    readonly turn?: number;
 }
 
 /** Whether `p` joins its last point to its first */
@@ -156,7 +184,26 @@ const isGroup = (g: unknown): g is LineGroup => {
 };
 
 const ANCHORS: readonly unknown[] = ["start", "center", "end"];
-const MEASURES: readonly unknown[] = ["straight", "x", "y"];
+const MEASURES: readonly unknown[] = ["straight", "x", "y", "offset"];
+
+/** A stored offset: two finite numbers, not both nought */
+const isOffset = (o: unknown): o is XY => {
+    if (typeof o !== "object" || o === null) return false;
+    if (Object.keys(o).some((key) => key !== "x" && key !== "y")) return false;
+    const { x, y } = o as XY;
+    return (
+        Number.isFinite(x) &&
+        Number.isFinite(y) &&
+        (Math.abs(x) > 1e-9 || Math.abs(y) > 1e-9)
+    );
+};
+
+/** A list of groups as stored: one or more, at most one of them the rest (#526) */
+const isGroupList = (groups: unknown): groups is LineGroup[] =>
+    Array.isArray(groups) &&
+    groups.length > 0 &&
+    groups.every(isGroup) &&
+    (groups as LineGroup[]).filter((g) => g.count === undefined).length <= 1;
 // `pivot` is the host's (ADR 0006, amendment of 2026-10-20), stored beside the kind's own numbers
 const KEYS = new Set([
     "points",
@@ -165,8 +212,14 @@ const KEYS = new Set([
     "corners",
     "distribution",
     "measured",
+    "offset",
+    "turn",
     "pivot",
 ]);
+
+/** A stored turn: degrees from 0 up to 360 */
+const isTurn = (t: unknown): t is number =>
+    typeof t === "number" && Number.isFinite(t) && t >= 0 && t < 360;
 
 /**
  * Whether `params` is a line this version can lay out exactly as it was saved. Anything a newer
@@ -182,6 +235,10 @@ export function isLineParams(params: unknown): params is LineParams {
     if (p.corners !== undefined && typeof p.corners !== "boolean") return false;
     if (p.measured !== undefined && !MEASURES.includes(p.measured))
         return false;
+    // An offset only measured as one, and always with it
+    if ((p.measured === "offset") !== (p.offset !== undefined)) return false;
+    if (p.offset !== undefined && !isOffset(p.offset)) return false;
+    if (p.turn !== undefined && !isTurn(p.turn)) return false;
     if (!Array.isArray(p.points) || p.points.length < (p.closed ? 3 : 2))
         return false;
     // A closed line's fill (#529): one this version fills, and never on an open line
@@ -197,15 +254,12 @@ export function isLineParams(params: unknown): params is LineParams {
         groups?: unknown;
         anchor?: unknown;
     };
-    if (sp.mode === "fit") return true;
+    // Fit's groups, where the line started from, are optional
+    if (sp.mode === "fit")
+        return sp.groups === undefined || isGroupList(sp.groups);
     if (sp.mode !== "keep" && sp.mode !== "path") return false;
-    if (!Array.isArray(sp.groups) || sp.groups.length === 0) return false;
-    if (!sp.groups.every(isGroup)) return false;
     // Mixed intervals (#526): any groups, at most one of them the rest
-    const rests = (sp.groups as LineGroup[]).filter(
-        (g) => g.count === undefined,
-    );
-    if (rests.length > 1) return false;
+    if (!isGroupList(sp.groups)) return false;
     if (sp.mode === "keep") return true;
     // A closed line has no ends to lay a run from
     return !p.closed && ANCHORS.includes(sp.anchor);
@@ -441,15 +495,18 @@ function fitScale(
             gaps.map((gap) => gap * k),
             across,
         ).at(-1)!;
-    // Each chord reaches at least its own length along, so the arc's share reaches the end
-    let lo = 0;
-    let hi = arc;
-    while (hi - lo > arc * 1e-10) {
-        const mid = (lo + hi) / 2;
-        if (reach(mid) < path.length) lo = mid;
-        else hi = mid;
-    }
-    return (lo + hi) / 2;
+    // Each chord reaches at least its own length along, so the arc's share reaches the end. The
+    // reach grows with the scale, close to in proportion, so false position (Illinois) homes in
+    // within a few layouts where halving would take dozens: each is a walk along the whole path
+    const g = (k: number) => reach(k) - path.length;
+    const atArc = g(arc);
+    if (atArc <= 0) return arc;
+    // Scaled down as far as the arc's share overshoots: as good as there, and short of it
+    const k = (arc * path.length) / (path.length + atArc);
+    const tolerance = arc * 1e-10;
+    const found = secantFrom(g, arc, atArc, k, g(k), 0, arc, tolerance);
+    if (typeof found === "number") return found;
+    return falsePosition(g, 0, -path.length, arc, atArc, tolerance) ?? arc;
 }
 
 /**
@@ -509,9 +566,31 @@ export function gapAlong(
  * Whether the line is spaced by groups (#526) rather than one interval for everyone: more than
  * one group, or a group with a count
  */
-export const hasGroups = (p: LineParams): boolean =>
-    p.spacing.mode !== "fit" &&
-    (p.spacing.groups.length > 1 || p.spacing.groups[0]!.count !== undefined);
+export const hasGroups = (p: LineParams): boolean => {
+    const groups = p.spacing.groups;
+    return (
+        groups !== undefined &&
+        (groups.length > 1 || groups[0]!.count !== undefined)
+    );
+};
+
+/** In Fit with mixed groups (#526), their gaps as typed, before they're scaled to fit; else null */
+function fitRawGaps(p: LineParams, n: number): number[] | null {
+    if (p.spacing.mode !== "fit" || !hasGroups(p)) return null;
+    return groupGapsRound(p, p.spacing.groups!, n);
+}
+
+/**
+ * How much Fit's mixed groups (#526) are scaled to reach the drawn line from end to end: as the
+ * line measures them, one factor for the whole line (a cornered line's stretches each fit their
+ * own, {@link cornerSpots})
+ */
+function fitGroupScale(p: LineParams, raw: readonly number[]): number {
+    const axis = measuredAxis(p);
+    if (axis) return axisLength(p, axis) / sum(raw);
+    const k = runScale(p, raw);
+    return k > 0 ? 1 / k : 1;
+}
 
 /**
  * The interval a typed spacing keeps, in field units, the smallest of its groups' when it has
@@ -528,8 +607,21 @@ export function typedInterval(p: LineParams): number | null {
  * marcher back to the first, is the seam between the last group and the first.
  */
 export function lineGaps(p: LineParams, n: number): number[] | null {
+    const raw = fitRawGaps(p, n);
+    if (raw) {
+        const k = fitGroupScale(p, raw);
+        return raw.map((gap) => gap * k);
+    }
     if (p.spacing.mode === "fit") return null;
-    const { groups } = p.spacing;
+    return groupGapsRound(p, p.spacing.groups, n);
+}
+
+/** The gaps `groups` give `n` marchers, a closed line's seam back to the first included */
+function groupGapsRound(
+    p: LineParams,
+    groups: readonly LineGroup[],
+    n: number,
+): number[] {
     const gaps = groupGaps(groups, n, (g) => g.interval);
     if (!isClosed(p) || n < 2) return gaps;
     const laid = layGroups(groups, n);
@@ -599,6 +691,163 @@ export function measuredAxis(p: LineParams): LineMeasured | null {
         ? p.measured
         : null;
 }
+
+/**
+ * Why the line can't be measured as an offset (rise over run), or null when it can: only a
+ * one-segment open line (`segments`), with one interval for everyone (`groups`), and not laid on
+ * the path (`path`), which keeps the drawn line's length
+ */
+export function offsetBlock(
+    p: LineParams,
+): "segments" | "groups" | "path" | null {
+    if (isClosed(p) || p.points.length !== 2) return "segments";
+    if (hasGroups(p)) return "groups";
+    if (p.spacing.mode === "path") return "path";
+    return null;
+}
+
+/**
+ * The offset the line's marchers are laid out by: its stored {@link LineParams.offset}, or null
+ * when it's not measured as one, or can't be now ({@link offsetBlock}), which lays it out along
+ * the path
+ */
+export function offsetOf(p: LineParams): XY | null {
+    return p.measured === "offset" && p.offset && offsetBlock(p) === null
+        ? p.offset
+        : null;
+}
+
+/**
+ * From each of the `n` marchers to the next, as the line lays them out now: in Keep interval its
+ * stored offset while the line is that long (exactly, so spots stay on the grid), else the drawn
+ * line's (end to end over its gaps)
+ */
+export function lineOffset(p: LineParams, n: number): XY {
+    const d = sub(p.points.at(-1)!, p.points[0]!);
+    if (n <= 1) return d;
+    const drawn = { x: d.x / (n - 1), y: d.y / (n - 1) };
+    const o = p.offset;
+    const near = (a: number, b: number) =>
+        Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(a));
+    return p.spacing.mode === "keep" &&
+        o &&
+        near(o.x, drawn.x) &&
+        near(o.y, drawn.y)
+        ? o
+        : drawn;
+}
+
+/**
+ * The pivot a new Line starts at (owner on #596): its leftmost point, so it grows to the right from
+ * where it starts and its offset reads from there. On a tie (an upright line) the one nearest the
+ * front of the field, lowest on the screen (larger y); then the first. A closed line keeps the
+ * center, which its outline turns about. An end is its frame's `w` (the first point) or `e` (the
+ * last); a point between them is a free pivot on it.
+ */
+export function linePivot(p: LineParams): Pivot {
+    if (isClosed(p) || p.points.length < 2) return "c";
+    const tie = 1e-6;
+    let best = 0;
+    p.points.forEach((q, i) => {
+        const b = p.points[best]!;
+        if (q.x < b.x - tie || (Math.abs(q.x - b.x) <= tie && q.y > b.y + tie))
+            best = i;
+    });
+    if (best === 0) return "w";
+    if (best === p.points.length - 1) return "e";
+    return pivotAt(lineFrame(p), p.points[best]!);
+}
+
+/**
+ * Which end the line's offset is read from (owner on #596): the one nearer its pivot, its first on
+ * a tie (a centered pivot). The first marcher stands there, and each next one is an offset on.
+ */
+export function offsetStart(p: LineParams): "first" | "last" {
+    const at = pivotPoint(lineFrame(p), pivotOf(p));
+    const first = length(sub(p.points[0]!, at));
+    const last = length(sub(p.points.at(-1)!, at));
+    return last < first - 1e-6 ? "last" : "first";
+}
+
+/**
+ * From the marcher at the line's {@link offsetStart} to the next, as the line lays them out now
+ * ({@link lineOffset}, turned round when it starts from its last point), in field units
+ */
+export function startOffset(p: LineParams, n: number): XY {
+    const o = lineOffset(p, n);
+    return offsetStart(p) === "last" ? { x: -o.x, y: -o.y } : o;
+}
+
+/**
+ * The line's first gap from its {@link offsetStart} (the field's step drawing, owner on #596):
+ * the marcher there and the next one, or null when it isn't measured as an offset
+ */
+export function offsetStep(
+    p: LineParams,
+    n: number,
+): { from: XY; to: XY } | null {
+    if (!offsetOf(p) || n <= 1) return null;
+    const from = offsetStart(p) === "last" ? p.points.at(-1)! : p.points[0]!;
+    const o = startOffset(p, n);
+    return {
+        from: { x: from.x, y: from.y },
+        to: { x: from.x + o.x, y: from.y + o.y },
+    };
+}
+
+/**
+ * The line measured as `offset` from each marcher to the next (rise over run): as long as `n`
+ * marchers so far apart need, grown from its pivot (or `env.anchor`), its first point then onto
+ * the grid when snapping, so every spot is on it with offsets on half steps. In Fit that's where
+ * it starts from, as a typed interval is. Unchanged where an offset can't measure it.
+ */
+export function withOffset(
+    p: LineParams,
+    n: number,
+    offset: XY,
+    env: SizeEnv,
+): LineParams {
+    if (offsetBlock(p) !== null || n <= 1) return p;
+    const interval = length(offset);
+    if (!(interval > 1e-9)) return p;
+    const next: LineParams = {
+        ...p,
+        measured: "offset",
+        offset,
+        spacing:
+            p.spacing.mode === "keep"
+                ? { mode: "keep", groups: [{ interval }] }
+                : p.spacing,
+    };
+    return sizedToOffset(next, n, env);
+}
+
+/** A one-segment line `n − 1` of its offsets long, grown from its pivot, its start on the grid */
+function sizedToOffset(p: LineParams, n: number, env: SizeEnv): LineParams {
+    const o = p.offset!;
+    const [a, b] = p.points as [LinePoint, LinePoint];
+    const grown: LineParams = {
+        ...p,
+        points: [a, { ...b, x: a.x + (n - 1) * o.x, y: a.y + (n - 1) * o.y }],
+    };
+    const at = pinned(p, grown, env);
+    if (!env.snap || !env.gridSnap) return at;
+    const first = at.points[0]!;
+    return translated(at, sub(env.gridSnap(first), first));
+}
+
+/** `p` moved by `d` */
+const translated = (p: LineParams, d: XY): LineParams =>
+    d.x === 0 && d.y === 0
+        ? p
+        : {
+              ...p,
+              points: p.points.map((q) => ({
+                  ...q,
+                  x: q.x + d.x,
+                  y: q.y + d.y,
+              })),
+          };
 
 /** How far apart `a` and `b` are along `axis` */
 const extent = (a: XY, b: XY, axis: LineMeasured) =>
@@ -717,6 +966,8 @@ export function lineInterval(p: LineParams, n: number): number {
     const typed = typedInterval(p);
     if (typed !== null) return typed;
     if (n <= 1) return 0;
+    // Fit's mixed groups scaled to the line: their narrowest
+    if (hasGroups(p)) return Math.min(...lineGaps(p, n)!);
     const axis = measuredAxis(p);
     if (axis) return axisLength(p, axis) / (n - 1);
     const gaps = gapCount(p, n);
@@ -903,6 +1154,17 @@ function cornerSpots(p: LineParams, runs: readonly number[][]): Slot[] {
  */
 export function lineSpots(p: LineParams, n: number, stepPx?: number): Slot[] {
     if (n <= 0) return [];
+    // Measured as an offset, each marcher that far from the one before, exactly
+    if (offsetOf(p) && n > 1) {
+        const o = lineOffset(p, n);
+        const first = p.points[0]!;
+        const step = length(o);
+        return Array.from({ length: n }, (_, i) => ({
+            x: first.x + i * o.x,
+            y: first.y + i * o.y,
+            s: i * step,
+        }));
+    }
     const path = linePath(p);
     const at = (s: number): Slot => ({ ...path.at(s), s });
     const corners = cornerRuns(p, n);
@@ -1099,7 +1361,9 @@ export function lineFrame(p: LineParams): ShapeFrame {
 
 /**
  * The line moved, turned or flipped into `frame`: each point keeps its place in the frame, mirrored
- * when `frame` is flipped
+ * when `frame` is flipped. Its {@link LineParams.turn} goes round with it: turned, by as much as the
+ * frame turned; mirrored, to the other way round (a mirror of a line turned 30° clockwise is the
+ * mirrored line turned 30° the other way); moved, not at all.
  */
 export function withLineFrame(p: LineParams, frame: ShapeFrame): LineParams {
     const was = lineFrame(p);
@@ -1113,7 +1377,29 @@ export function withLineFrame(p: LineParams, frame: ShapeFrame): LineParams {
             }),
         };
     });
-    return { ...p, points };
+    const mirrored = frame.flipX !== frame.flipY;
+    const turn = mirrored
+        ? -lineTurn(p)
+        : lineTurn(p) + (frame.rotation - was.rotation);
+    return withTurn({ ...p, points }, turn);
+}
+
+/** The line's turn since it was drawn ({@link LineParams.turn}), in radians */
+export const lineTurn = (p: Pick<LineParams, "turn">): number =>
+    (p.turn ?? 0) * DEGREE;
+
+/**
+ * `p` with its turn at `rad` radians, stored in degrees from 0 up to 360 rounded to a millionth
+ * (float noise from 15° steps in radians), and left out at 0
+ */
+export function withTurn<T extends Pick<LineParams, "turn">>(
+    p: T,
+    rad: number,
+): T {
+    let degrees = Math.round((normalizeAngle(rad) / DEGREE) * 1e6) / 1e6;
+    if (degrees >= 360) degrees = 0;
+    const { turn: _turn, ...rest } = p;
+    return (degrees === 0 ? rest : { ...rest, turn: degrees }) as T;
 }
 
 /**
@@ -1254,31 +1540,183 @@ export function drawPoints(
 }
 
 /**
- * Which way an end dragged to `to` points from the fixed end `other`, in Keep interval: the
- * offset on half steps (an end kept off the grid still turns square to the field), or at 45° with
- * constrain. Null for no direction.
+ * The way from `other` toward `to`, for an end swung round its neighbor ({@link swungDirection}).
+ * Null for no direction.
  */
 function directionFrom(other: XY, to: XY, env: ToolEnv): XY | null {
-    let d = sub(env.constrain ? at45(other, to, env) : to, other);
-    if (env.snap && !env.constrain) {
-        const unit = halfStep(env);
-        d = {
-            x: Math.round(d.x / unit) * unit,
-            y: Math.round(d.y / unit) * unit,
-        };
-    }
-    const l = length(d);
-    return l < 1e-9 ? null : { x: d.x / l, y: d.y / l };
+    return swungDirection(sub(to, other), env);
 }
 
 /**
- * Point `index` dragged to `to`. In Fit and on the path the point goes there (landed). In Keep
- * interval an end turns about its neighbor, its segment's length (so its intervals) kept, and a
- * corner holding a marcher between straight segments lands where each of them is a whole number
- * of intervals long (#524); `fine` frees it. A smooth point, or a corner beside a curve, goes
- * where it's dragged. Measured ↔ or ↕ in Keep interval (#527), an end keeps how far it is that
- * way and takes the pointer's place the other way, and a corner lands a whole run of gaps that way
- * from the point before it. An end dropped on the other end closes the line (#529).
+ * The way `d` points, as an end swung round its neighbor goes (ADR 0006, decision 10): in the
+ * knob's steps ({@link snapRotation}), 15° at a time counted from level, so level and plumb are
+ * always reachable whichever way the line was drawn; whole degrees with `fine`; free with the Snap
+ * toggle off. One long, or null for no direction.
+ */
+export function swungDirection(
+    d: XY,
+    env: Pick<ToolEnv, "fine" | "pull">,
+): XY | null {
+    if (length(d) < 1e-9) return null;
+    const angle = snapRotation(Math.atan2(d.y, d.x), env);
+    // Level and plumb exactly, not float noise off them
+    const clean = (v: number) => (Math.abs(v) < 1e-12 ? 0 : v);
+    return { x: clean(Math.cos(angle)), y: clean(Math.sin(angle)) };
+}
+
+/** `d` with each axis on the half-step ladder */
+const onHalfSteps = (d: XY, env: Pick<ToolEnv, "stepPx">): XY => {
+    const unit = halfStep(env);
+    return {
+        x: Math.round(d.x / unit) * unit,
+        y: Math.round(d.y / unit) * unit,
+    };
+};
+
+/** `d` made one long, or null when it has no direction */
+const unitOf = (d: XY): XY | null => {
+    const l = length(d);
+    return l < 1e-9 ? null : { x: d.x / l, y: d.y / l };
+};
+
+/** `a` plus `t` of `u` */
+const along = (a: XY, u: XY, t: number): XY => ({
+    x: a.x + u.x * t,
+    y: a.y + u.y * t,
+});
+
+/**
+ * How near half a step must come to this many screen pixels before a dragged interval snaps to
+ * half steps rather than whole ones
+ */
+export const HALF_STEP_SNAP_PX = 8;
+
+/**
+ * What a dragged interval snaps to with the interval unlocked: whole steps, or half steps once
+ * the field is zoomed in so far that half a step is {@link HALF_STEP_SNAP_PX} on screen
+ */
+export function intervalUnit(env: Pick<ToolEnv, "stepPx" | "zoom">): number {
+    const half = env.stepPx / 2;
+    return env.zoom !== undefined && half * env.zoom >= HALF_STEP_SNAP_PX - 1e-9
+        ? half
+        : env.stepPx;
+}
+
+/**
+ * `x` on the nearest multiple of `unit`; never nought unless `zero` allows it, one unit the way
+ * `x` goes (or `way`) instead
+ */
+function onUnits(x: number, unit: number, zero = false, way = 1): number {
+    const k = Math.round(x / unit);
+    if (k !== 0 || zero) return k * unit;
+    return (Math.sign(x) || Math.sign(way) || 1) * unit;
+}
+
+/** `p` with point `index` at `at` */
+const withPointAt = (p: LineParams, index: number, at: XY): LineParams => ({
+    ...p,
+    points: p.points.map((q, i) =>
+        i === index ? { ...q, x: at.x, y: at.y } : q,
+    ),
+});
+
+/**
+ * The `t` nearest `t0` between `lo` and `hi` where `f(t)` is `target`, or null where it never is:
+ * by secant steps from `t0` (`h` the first, {@link secantFrom}), else sampled for where it crosses and narrowed
+ * down to it. `near` is a short search, `lo` to `hi` only as far as the caller can use: there a
+ * secant step past them says it isn't in reach, without sampling.
+ */
+function solveFor(
+    f: (t: number) => number,
+    target: number,
+    t0: number,
+    lo: number,
+    hi: number,
+    near = false,
+): number | null {
+    const SAMPLES = near ? 12 : 96;
+    const g = (t: number) => f(t) - target;
+    // `f` is all but straight near `t0` as a rule (an interval against how far a point is
+    // dragged), so a secant from `t0` brackets the crossing within a call or two and false
+    // position finishes it: a handful of calls where sampling takes over a hundred, each a whole
+    // layout (a search of its own straight across, #596)
+    const h = (hi - lo) / SAMPLES;
+    const b = t0 + h <= hi ? t0 + h : t0 - h;
+    const found =
+        t0 >= lo && t0 <= hi
+            ? secantFrom(g, t0, g(t0), b, g(b), lo, hi, (hi - lo) * 1e-12)
+            : undefined;
+    if (found === "outside" && near) return null;
+    if (typeof found === "number") return found;
+    let best: number | null = null;
+    let prevT = lo;
+    let prev = g(lo);
+    const tolerance = (hi - lo) * 1e-12;
+    for (let i = 1; i <= SAMPLES; i++) {
+        const t = lo + ((hi - lo) * i) / SAMPLES;
+        const now = g(t);
+        if (Number.isFinite(prev) && Number.isFinite(now) && prev * now <= 0) {
+            const root = falsePosition(g, prevT, prev, t, now, tolerance);
+            if (
+                root !== null &&
+                (best === null || Math.abs(root - t0) < Math.abs(best - t0))
+            )
+                best = root;
+        }
+        prevT = t;
+        prev = now;
+    }
+    return best;
+}
+
+/**
+ * The interval a drag of point `index` changes: with points holding marchers (`counts`, each
+ * stretch's gaps, held as they were), the interval of the stretch it ends, or the first one for
+ * the first point; else the line's
+ */
+function intervalAt(
+    p: LineParams,
+    n: number,
+    index: number,
+    counts: readonly number[] | null,
+): number {
+    if (!counts) return lineInterval(p, n);
+    const stretches = lineStretches(p);
+    if (stretches.length !== counts.length) return lineInterval(p, n);
+    const r =
+        index === 0
+            ? 0
+            : stretches.findIndex((stretch) => stretch.to === index);
+    if (r < 0) return lineInterval(p, n);
+    const axis = measuredAxis(p);
+    if (axis) return stretchExtents(p, axis)[r]! / counts[r]!;
+    return evenScale(stretchPaths(p)[r]!, counts[r]!, stretchAcross(p)[r]!);
+}
+
+/**
+ * Point `index` dragged to `to`. An end dropped on the other end closes the line (#529).
+ *
+ * The interval unlocked (Fit): the point snaps where the interval comes out to whole steps (half
+ * steps zoomed in, {@link intervalUnit}); `fine` or the Snap toggle off leaves it where it's
+ * dragged (landed). Measured ↔ or ↕, an end's coordinate that way snaps and it takes the
+ * pointer's place the other way, and so does a corner holding a marcher between straight segments,
+ * where both its stretches' runs that way come out whole, keeping its spot that way until the
+ * pointer is most of the way to another ({@link stickyOnAxis}). Otherwise a point snaps only where
+ * that's near the pointer ({@link softSnap}): a corner holding a marcher between straight
+ * segments where both its stretches' intervals come out whole, any other point as far along its
+ * direction as makes its interval whole.
+ *
+ * The interval locked (Keep interval): an end turns about its neighbor, its segment's length (so
+ * its intervals) kept, and a corner holding a marcher between straight segments lands where each
+ * of them is a whole number of intervals long (#524); `fine` frees it. Measured ↔ or ↕ (#527), an
+ * end keeps how far it is that way and takes the pointer's place the other way, and a corner lands
+ * a whole run of gaps that way from the point before it, kept as it's dragged
+ * ({@link stickyOnAxis}). On the path the point goes where it's dragged.
+ *
+ * A smooth point, or a corner beside a curve, goes where it's dragged. `constrain` keeps the
+ * direction from the point before (an end's segment), only its length changing; `fromCenter` moves
+ * the other end the opposite way, so the line changes about its center. A one-segment line has its
+ * own rules ({@link dragEnd}).
  */
 export function dragPoint(
     base: LineParams,
@@ -1302,32 +1740,497 @@ export function dragPoint(
                 env,
             );
     }
+    if (end && last === 1) return dragEnd(base, n, index, to, env);
     const other = base.points[index === 0 ? (closed ? last : 1) : index - 1]!;
+    const was = base.points[index]!;
     const keep = base.spacing.mode === "keep" && n > 1;
-    const axis = keep ? measuredAxis(base) : null;
+    const fit = base.spacing.mode === "fit" && n > 1;
+    const axis = measuredAxis(base);
+    // The direction kept with constrain: from the point before (an end's neighbor)
+    const kept = env.constrain ? unitOf(sub(was, other)) : null;
     let point: XY | null;
-    if (axis && end) {
-        point = measuredEnd(base.points[index]!, other, to, axis, env);
-    } else if (axis && env.snap && !end && straightCorner(base, n, index)) {
-        point = cornerOnAxis(base, n, index, to, axis, env);
+    if (kept && keep && end) {
+        // An end's length is its intervals', and its direction is kept: nothing moves
+        return base;
+    } else if (kept && keep && env.snap && straightCorner(base, n, index)) {
+        point = cornerAlongOnIntervals(base, n, index, kept, to);
+    } else if (kept) {
+        const t = Math.max(dot(sub(to, other), kept), halfStep(env));
+        point =
+            fit && env.snap
+                ? snappedAlong(base, n, index, other, kept, t, env)
+                : along(other, kept, env.snap ? onUnits(t, halfStep(env)) : t);
+    } else if (keep && axis && end) {
+        point = measuredEnd(was, to, axis, env);
+    } else if (keep && axis && env.snap && straightCorner(base, n, index)) {
+        point = stickyOnAxis(was, to, axis, (at) =>
+            cornerOnAxis(base, n, index, at, axis, env),
+        );
     } else if (keep && end) {
         const u = directionFrom(other, to, env);
         if (!u) return base;
-        const was = length(sub(base.points[index]!, other));
-        point = { x: other.x + u.x * was, y: other.y + u.y * was };
-    } else if (keep && env.snap && !end && straightCorner(base, n, index)) {
+        point = along(other, u, length(sub(was, other)));
+    } else if (keep && env.snap && straightCorner(base, n, index)) {
         point = cornerOnIntervals(base, n, index, to);
-        if (!point) return base;
+    } else if (fit && axis && env.snap && straightCorner(base, n, index)) {
+        point = stickyOnAxis(was, to, axis, (at) =>
+            cornerOnMeasured(base, n, index, at, axis, env),
+        );
+    } else if (fit && env.snap && straightCorner(base, n, index)) {
+        point = softSnap(
+            to,
+            cornerOnWholeIntervals(base, n, index, to, env),
+            env,
+        );
+    } else if (fit && env.snap && (end || was.tension === 0)) {
+        point = snappedFree(base, n, index, other, to, env);
     } else {
-        point = endAt(other, to, env);
-        if (length(sub(point, other)) < 1e-9) return base;
+        point = landPoint(to, env);
     }
-    const was = base.points[index]!;
+    if (!point || length(sub(point, other)) < 1e-9) return base;
     if (was.x === point.x && was.y === point.y) return base;
-    const points = base.points.map((q, i) =>
-        i === index ? { ...q, x: point.x, y: point.y } : q,
+    const moved = withPointAt(base, index, point);
+    // From the center, the far end goes the other way (unlocked, or on the path)
+    if (env.fromCenter && end && !keep) {
+        const far = index === 0 ? last : 0;
+        const q = base.points[far]!;
+        return withPointAt(moved, far, {
+            x: q.x - (point.x - was.x),
+            y: q.y - (point.y - was.y),
+        });
+    }
+    return moved;
+}
+
+/**
+ * The line with point `index` moved, the far end mirroring it with `fromCenter` (an end, unlocked)
+ */
+function placedAt(
+    base: LineParams,
+    index: number,
+    at: XY,
+    env: ToolEnv,
+): LineParams {
+    const moved = withPointAt(base, index, at);
+    const last = base.points.length - 1;
+    if (!env.fromCenter || isClosed(base) || (index !== 0 && index !== last))
+        return moved;
+    const far = index === 0 ? last : 0;
+    const was = base.points[index]!;
+    const q = base.points[far]!;
+    return withPointAt(moved, far, {
+        x: q.x - (at.x - was.x),
+        y: q.y - (at.y - was.y),
+    });
+}
+
+/**
+ * Where point `index` goes along `u` from `from`, about `t` along, so the interval it changes
+ * comes out on whole steps (unlocked); `t` itself when there's no such spot near
+ */
+function snappedAlong(
+    base: LineParams,
+    n: number,
+    index: number,
+    from: XY,
+    u: XY,
+    t: number,
+    env: ToolEnv,
+    within?: number,
+): XY {
+    const unit = intervalUnit(env);
+    const counts = cornerGaps(placedAt(base, index, along(from, u, t), env), n);
+    const interval = (s: number) =>
+        intervalAt(
+            placedAt(base, index, along(from, u, s), env),
+            n,
+            index,
+            counts,
+        );
+    // Each is a layout: the one at `t` is asked for again first
+    const atT = interval(t);
+    const f = (s: number) => (s === t ? atT : interval(s));
+    const target = onUnits(atT, unit);
+    // Only as far as the caller can use: each try is a whole layout, searched for itself straight
+    // across, so a hundred of them over the whole line freezes a drag (#596)
+    const span = within ?? Math.max(t, unit * n);
+    const s = solveFor(
+        f,
+        target,
+        t,
+        Math.max(1e-6, t - span),
+        t + span,
+        within !== undefined,
     );
-    return { ...base, points };
+    return along(from, u, s ?? t);
+}
+
+/**
+ * Where an end or a corner dragged to `to` goes, unlocked: measured ↔ or ↕, with its coordinate
+ * that way where the interval is whole steps and the pointer's place (landed) the other way; else
+ * where the pointer lands, or along its direction from the point before (on half steps) as far as
+ * makes the interval whole when that's near the pointer ({@link softSnap})
+ */
+function snappedFree(
+    base: LineParams,
+    n: number,
+    index: number,
+    other: XY,
+    to: XY,
+    env: ToolEnv,
+): XY {
+    const landed = landPoint(to, env);
+    const axis = measuredAxis(base);
+    if (!axis) {
+        const u = unitOf(onHalfSteps(sub(landed, other), env));
+        if (!u) return landed;
+        // A spot `d` along from where the pointer lands is at least `d` from it, so further than
+        // this from there it's never near enough the pointer to take
+        const within = softSnapReach(env) + length(sub(landed, to));
+        const spot = snappedAlong(
+            base,
+            n,
+            index,
+            other,
+            u,
+            length(sub(landed, other)),
+            env,
+            within,
+        );
+        return softSnap(to, spot, env);
+    }
+    const unit = intervalUnit(env);
+    const side = coord(landed, across(axis));
+    const at = (c: number) => pointOn(axis, c, side);
+    const c0 = coord(landed, axis);
+    const counts = cornerGaps(placedAt(base, index, at(c0), env), n);
+    const f = (c: number) =>
+        intervalAt(placedAt(base, index, at(c), env), n, index, counts);
+    const target = onUnits(f(c0), unit);
+    const span = unit * n * 2;
+    const c = solveFor(f, target, c0, c0 - span, c0 + span);
+    return c === null ? landed : at(c);
+}
+
+/**
+ * How far toward another spot, as a share of the way there, the pointer must go before a corner
+ * dragged front to back under ↔ (side to side under ↕) changes spots that way ({@link stickyOnAxis})
+ */
+export const CORNER_STICK = 0.75;
+
+/**
+ * Where a corner measured along `axis`, at `was` when the drag started, goes dragged to `to`, with
+ * `spotFor` the spot a pointer picks: that way it keeps `was`'s spot until the pointer is
+ * {@link CORNER_STICK} of the way to another, not just past halfway, so a hand's wobble dragging
+ * it front to back doesn't flip it a spot sideways and hand its marcher to the other stretch; the
+ * other way it follows the pointer as `spotFor` has it. A corner that started off every spot
+ * goes to the one nearest the pointer.
+ */
+function stickyOnAxis(
+    was: XY,
+    to: XY,
+    axis: LineMeasured,
+    spotFor: (at: XY) => XY,
+): XY {
+    const spot = spotFor(to);
+    const from = coord(was, axis);
+    const gone = coord(spot, axis) - from;
+    if (Math.abs(gone) < 1e-6) return spot;
+    if (Math.abs(coord(spotFor(was), axis) - from) > 1e-6) return spot;
+    const off = (coord(to, axis) - from) / gone;
+    if (off >= CORNER_STICK) return spot;
+    return pointOn(axis, from, coord(spot, across(axis)));
+}
+
+/**
+ * How near the pointer, in screen pixels, a whole-interval spot must be for an unlocked point
+ * dragged in two directions to snap to it ({@link softSnap}); farther, it follows the pointer
+ */
+export const SOFT_SNAP_PX = 6;
+
+/**
+ * Where a point dragged to `to` goes, unlocked, with `spot` where its intervals come out whole:
+ * there when it's within {@link SOFT_SNAP_PX} of the pointer on screen, else where the pointer
+ * lands, so the point isn't held to a few far-apart spots
+ */
+/** How near the pointer, in field units, a spot {@link softSnap} takes must be */
+const softSnapReach = (env: ToolEnv) => SOFT_SNAP_PX / (env.zoom || 1);
+
+function softSnap(to: XY, spot: XY | null, env: ToolEnv): XY {
+    const reach = softSnapReach(env);
+    if (spot && length(sub(spot, to)) <= reach + 1e-9) return spot;
+    return landPoint(to, env);
+}
+
+/**
+ * Where corner `index`, holding a marcher between two straight stretches of a line measured along
+ * `axis`, goes dragged to `to` unlocked: that way, the spot nearest the pointer where both its
+ * stretches' runs that way come out on whole steps (half steps zoomed in, {@link intervalUnit}),
+ * their gaps as they'd be with it there; the other way, where the pointer lands. Where the pointer
+ * lands when there's no such spot near.
+ */
+function cornerOnMeasured(
+    p: LineParams,
+    n: number,
+    index: number,
+    to: XY,
+    axis: LineMeasured,
+    env: ToolEnv,
+): XY {
+    const landed = landPoint(to, env);
+    const side = coord(landed, across(axis));
+    const at = (c: number) => pointOn(axis, c, side);
+    const { r } = stretchesAt(p, index);
+    const count = p.points.length;
+    const from = coord(p.points[(index - 1 + count) % count]!, axis);
+    const unit = intervalUnit(env);
+    const onUnit = (x: number) =>
+        x > 1e-9 && Math.abs(x / unit - Math.round(x / unit)) < 1e-6;
+    const whole = (c: number) => {
+        const q = withPointAt(p, index, at(c));
+        const counts = cornerGaps(q, n);
+        if (!counts) return false;
+        const runs = stretchExtents(q, axis);
+        const next = (r + 1) % counts.length;
+        return (
+            onUnit(runs[r]! / counts[r]!) && onUnit(runs[next]! / counts[next]!)
+        );
+    };
+    // Spots a whole number of units from the point before, nearest the pointer first
+    const want = (coord(to, axis) - from) / unit;
+    const j0 = Math.round(want);
+    for (let d = 0; d <= 2 * n + 2; d++) {
+        const js = d === 0 ? [j0] : [j0 - d, j0 + d];
+        js.sort((x, y) => Math.abs(x - want) - Math.abs(y - want));
+        for (const j of js)
+            if (whole(from + j * unit)) return at(from + j * unit);
+    }
+    return landed;
+}
+
+/**
+ * Where corner `index`, holding a marcher between two straight stretches, goes dragged to `to`
+ * unlocked: where both its stretches' intervals come out on whole steps (half steps zoomed in),
+ * their gaps as they'd be with it at `to` and still are there; null when there's no such spot
+ */
+function cornerOnWholeIntervals(
+    p: LineParams,
+    n: number,
+    index: number,
+    to: XY,
+    env: ToolEnv,
+): XY | null {
+    const landed = withPointAt(p, index, landPoint(to, env));
+    const counts = cornerGaps(landed, n);
+    if (!counts) return null;
+    const { r } = stretchesAt(landed, index);
+    const k1 = counts[r]!;
+    const k2 = counts[(r + 1) % counts.length]!;
+    const count = p.points.length;
+    const a = p.points[(index - 1 + count) % count]!;
+    const b = p.points[(index + 1) % count]!;
+    const unit = intervalUnit(env);
+    const i1 = onUnits(length(sub(to, a)) / k1, unit);
+    const i2 = onUnits(length(sub(to, b)) / k2, unit);
+    let best: XY | null = null;
+    for (const d1 of [0, -1, 1])
+        for (const d2 of [0, -1, 1]) {
+            const r1 = (i1 + d1 * unit) * k1;
+            const r2 = (i2 + d2 * unit) * k2;
+            if (r1 <= 0 || r2 <= 0) continue;
+            for (const q of circlesMeet(a, r1, b, r2)) {
+                if (best && length(sub(q, to)) >= length(sub(best, to)))
+                    continue;
+                // Only where its stretches keep those gaps, so the intervals are whole there
+                const there = cornerGaps(withPointAt(p, index, q), n);
+                if (there?.[r] === k1 && there[(r + 1) % there.length] === k2)
+                    best = q;
+            }
+        }
+    return best;
+}
+
+/**
+ * Where corner `index`, holding a marcher between straight stretches, slides along `u` from the
+ * point before with the interval locked (constrain): the whole run of its stretch's gaps nearest
+ * `to`, so the stretch before it stays on its intervals
+ */
+function cornerAlongOnIntervals(
+    p: LineParams,
+    n: number,
+    index: number,
+    u: XY,
+    to: XY,
+): XY {
+    const runs = cornerRuns(p, n)!;
+    const { r } = stretchesAt(p, index);
+    const both = [...runs[r]!, ...runs[(r + 1) % runs.length]!];
+    const count = p.points.length;
+    const a = p.points[(index - 1 + count) % count]!;
+    const want = dot(sub(to, a), u);
+    const seams = offsetsOf(both, 0).slice(1, -1);
+    const t = seams.reduce((b, o) =>
+        Math.abs(o - want) < Math.abs(b - want) ? o : b,
+    );
+    return along(a, u, t);
+}
+
+/**
+ * An end of a one-segment line dragged to `to`, worked out as the line from its fixed end (or, with
+ * `fromCenter`, about its center, both ends moving):
+ *
+ * - unlocked (Fit), its length snaps so the interval is whole steps (half zoomed in,
+ *   {@link intervalUnit}), pointing the way the pointer is from the fixed end on half steps;
+ *   measured ↔ or ↕ that way's distance snaps, the pointer's place (landed) the other way; as an
+ *   offset, both ways snap, either can be nought, and the stored offset follows;
+ * - locked (Keep interval), it swings round, its length kept; ↔ only front to back and ↕ only side
+ *   to side; as an offset it doesn't move at all;
+ * - on the path, it goes where it's dragged (landed).
+ *
+ * `constrain` keeps the line's direction, only its length changing (locked, nothing moves);
+ * `fine` or the Snap toggle off leaves the interval where it's dragged.
+ */
+function dragEnd(
+    base: LineParams,
+    n: number,
+    index: number,
+    to: XY,
+    env: ToolEnv,
+): LineParams {
+    const a = base.points[1 - index]!;
+    const b = base.points[index]!;
+    const keep = base.spacing.mode === "keep" && n > 1;
+    const offset = offsetOf(base);
+    if (keep && (offset || env.constrain)) return base;
+    const center = env.fromCenter === true;
+    const mid = lerp(a, b, 0.5);
+    const scale = center ? 2 : 1;
+    // From the fixed end (or, from the center, the whole line as twice that)
+    const fromFixed = (q: XY) => {
+        const d = sub(q, center ? mid : a);
+        return { x: d.x * scale, y: d.y * scale };
+    };
+    const drag: EndDrag = {
+        was: sub(b, a),
+        raw: fromFixed(landPoint(to, env)),
+        pointer: fromFixed(to),
+        gaps: Math.max(1, n - 1),
+        axis: measuredAxis(base),
+        offset: offset !== null,
+        fit: base.spacing.mode === "fit" && n > 1,
+    };
+    const v = env.constrain
+        ? keptDirection(drag, env)
+        : keep
+          ? lockedVector(drag, env)
+          : unlockedVector(drag, env);
+    if (!v || length(v) < 1e-9) return base;
+    const start = center ? { x: mid.x - v.x / 2, y: mid.y - v.y / 2 } : a;
+    const finish = { x: start.x + v.x, y: start.y + v.y };
+    if (
+        finish.x === b.x &&
+        finish.y === b.y &&
+        start.x === a.x &&
+        start.y === a.y
+    )
+        return base;
+    const ends = index === 1 ? [start, finish] : [finish, start];
+    const points = base.points.map((q, i) => ({ ...q, ...ends[i]! }));
+    const moved: LineParams = { ...base, points };
+    // Unlocked, a line measured as an offset keeps the offset it's drawn at
+    return offset && n > 1
+        ? {
+              ...moved,
+              offset: { x: v.x / drag.gaps, y: v.y / drag.gaps },
+          }
+        : moved;
+}
+
+/**
+ * An end of a one-segment line being dragged ({@link dragEnd}), each vector from the fixed end
+ * (from the center, twice from it): the line as it was, to where the pointer lands, and to where
+ * it is
+ */
+interface EndDrag {
+    readonly was: XY;
+    readonly raw: XY;
+    readonly pointer: XY;
+    readonly gaps: number;
+    readonly axis: LineMeasured | null;
+    readonly offset: boolean;
+    /** The interval unlocked: it snaps to whole steps */
+    readonly fit: boolean;
+}
+
+/**
+ * The line kept on its direction (`constrain`), only its length changing: when snapping, the way
+ * the interval measures it on its units (whole steps unlocked, else half steps): along the line,
+ * or its larger part that way (an axis, or an offset's)
+ */
+function keptDirection(d: EndDrag, env: ToolEnv): XY | null {
+    const u = unitOf(d.was);
+    if (!u) return null;
+    let k = Math.max(dot(d.pointer, u), 1e-9);
+    if (env.snap) {
+        const part = d.axis
+            ? Math.abs(d.axis === "x" ? u.x : u.y)
+            : d.offset
+              ? Math.max(Math.abs(u.x), Math.abs(u.y))
+              : 1;
+        const per = d.fit ? intervalUnit(env) * d.gaps : halfStep(env);
+        k = onUnits((k * part) / per, 1) * (per / part);
+    }
+    return { x: u.x * k, y: u.y * k };
+}
+
+/**
+ * The line locked (Keep interval): measured ↔ or ↕ it keeps that way's distance and takes the
+ * pointer's place the other way; else it swings round, pointing the way the pointer is in the
+ * knob's steps ({@link swungDirection}), its length kept
+ */
+function lockedVector(d: EndDrag, env: ToolEnv): XY | null {
+    if (d.axis)
+        return pointOn(
+            d.axis,
+            coord(d.was, d.axis),
+            coord(d.raw, across(d.axis)),
+        );
+    const u = swungDirection(d.pointer, env);
+    if (!u) return null;
+    const l = length(d.was);
+    return { x: u.x * l, y: u.y * l };
+}
+
+/**
+ * The line unlocked (Fit), snapping so the interval is whole steps (half zoomed in): an offset's
+ * two parts each, either nought; measured ↔ or ↕ that way's distance, the pointer's place the
+ * other way; else its length, pointing the way the pointer is in the knob's steps
+ * ({@link swungDirection}). On the path, with
+ * `fine` or the Snap toggle off, where the pointer lands.
+ */
+function unlockedVector(d: EndDrag, env: ToolEnv): XY | null {
+    if (!d.fit || !env.snap) return d.raw;
+    const per = intervalUnit(env) * d.gaps;
+    if (d.offset)
+        return {
+            x: onUnits(d.raw.x / per, 1, true) * per,
+            y: onUnits(d.raw.y / per, 1, true) * per,
+        };
+    if (d.axis)
+        return pointOn(
+            d.axis,
+            onUnits(
+                coord(d.raw, d.axis) / per,
+                1,
+                false,
+                coord(d.was, d.axis),
+            ) * per,
+            coord(d.raw, across(d.axis)),
+        );
+    const u = swungDirection(d.pointer, env);
+    if (!u) return null;
+    const l = onUnits(length(d.pointer) / per, 1) * per;
+    return { x: u.x * l, y: u.y * l };
 }
 
 /** The other axis */
@@ -1339,28 +2242,14 @@ const pointOn = (axis: LineMeasured, along: number, side: number): XY =>
 
 /**
  * Where an end of a line measured along `axis` goes, dragged to `to` in Keep interval: where it is
- * that way, so its run keeps its length, and where the pointer lands the other way; with
- * constrain, level with `other` or at 45° from it, whichever is nearer
+ * that way, so its run keeps its length, and where the pointer lands the other way
  */
-function measuredEnd(
-    was: XY,
-    other: XY,
-    to: XY,
-    axis: LineMeasured,
-    env: ToolEnv,
-): XY {
-    const side = across(axis);
-    let c = coord(landPoint(to, env), side);
-    if (env.constrain) {
-        const reach = extent(was, other, axis);
-        const o = coord(other, side);
-        c = [o, o - reach, o + reach].reduce((best, v) =>
-            Math.abs(v - coord(to, side)) < Math.abs(best - coord(to, side))
-                ? v
-                : best,
-        );
-    }
-    return pointOn(axis, coord(was, axis), c);
+function measuredEnd(was: XY, to: XY, axis: LineMeasured, env: ToolEnv): XY {
+    return pointOn(
+        axis,
+        coord(was, axis),
+        coord(landPoint(to, env), across(axis)),
+    );
 }
 
 /**
@@ -1471,25 +2360,58 @@ function circlesMeet(a: XY, ra: number, b: XY, rb: number): XY[] {
 }
 
 /**
- * The line with a point added halfway along segment `index`, on its curve: a corner between two
- * corners, so a straight line looks the same, else as smooth as the smoother end (#525)
+ * The line with a point added on segment `index`: a corner between two corners, so a straight
+ * line looks the same, else as smooth as the smoother end (#525). A point that holds a marcher
+ * ({@link holdsMarcher}) lands on the spot of the `n` marchers nearest the segment's midpoint, so
+ * splitting moves no marcher and changes no interval (owner feedback on #596); one that holds none
+ * splits halfway along it, on its curve. On a segment with no spot inside it (one gap) the point
+ * splits halfway and holds no marcher (`marcher: false`, Even spacing), so every spot stays put.
  */
-export function splitSegment(p: LineParams, index: number): LineParams {
+export function splitSegment(
+    p: LineParams,
+    index: number,
+    n?: number,
+): LineParams {
     if (index < 0 || index >= lineSegments(p).length) return p;
     // A closed line's last segment runs back to its first point (#529)
     const a = p.points[index]!;
     const b = p.points[(index + 1) % p.points.length]!;
-    const mid = withTension(Math.max(a.tension, b.tension))(
-        segmentMidpoint(p, index),
-    );
-    return {
+    const halfway = segmentMidpoint(p, index);
+    const split = (at: XY, more?: Partial<LinePoint>): LineParams => ({
         ...p,
         points: [
             ...p.points.slice(0, index + 1),
-            mid,
+            { ...withTension(Math.max(a.tension, b.tension))(at), ...more },
             ...p.points.slice(index + 1),
         ],
-    };
+    });
+    const atMidpoint = split(halfway);
+    if (n === undefined || !holdsMarcher(atMidpoint, index + 1))
+        return atMidpoint;
+    // A held point is a corner between corners, so the segment is straight
+    const spot = spotInside(lineSpots(p, n), a, b, halfway);
+    if (spot) return split(spot);
+    // With no spot inside, a marcher there would move the others: the point takes none (owner).
+    // On the path no point holds a marcher, so nothing is set there
+    return p.spacing.mode === "path"
+        ? atMidpoint
+        : split(halfway, { marcher: false });
+}
+
+/** Of `spots`, the one strictly inside the straight segment from `a` to `b` nearest `to` */
+function spotInside(spots: readonly XY[], a: XY, b: XY, to: XY): XY | null {
+    const d = sub(b, a);
+    const l = length(d);
+    if (l < 1e-9) return null;
+    let best: XY | null = null;
+    for (const spot of spots) {
+        const t = dot(sub(spot, a), d) / (l * l);
+        const off = Math.abs(cross(d, sub(spot, a))) / l;
+        if (off > 1e-6 || t * l < 1e-6 || (1 - t) * l < 1e-6) continue;
+        if (!best || length(sub(spot, to)) < length(sub(best, to)))
+            best = { x: spot.x, y: spot.y };
+    }
+    return best;
 }
 
 /**
@@ -1525,6 +2447,20 @@ export function withGroups(
         return { ...p, spacing: { ...p.spacing, groups } };
     const kept: LineParams = { ...p, spacing: { mode: "keep", groups } };
     if (n <= 1) return kept;
+    // Measured as an offset, the offset sets the length (its interval is the offset's length)
+    const offset = offsetOf(kept);
+    if (offset)
+        return sizedToOffset(
+            {
+                ...kept,
+                spacing: {
+                    mode: "keep",
+                    groups: [{ interval: length(offset) }],
+                },
+            },
+            n,
+            env,
+        );
     const axis = measuredAxis(kept);
     const runs = cornerRuns(kept, n);
     const gaps = lineGaps(kept, n)!;
@@ -1682,16 +2618,68 @@ export function withSpacing(
     env: ToolEnv,
 ): LineParams {
     const interval = lineInterval(p, n);
+    // Unlocked, the interval it had is kept as where it started from (mixed groups' proportions)
     if (mode === "fit")
-        return p.spacing.mode === "fit" ? p : { ...p, spacing: FIT };
+        return p.spacing.mode === "fit"
+            ? p
+            : { ...p, spacing: { mode: "fit", groups: p.spacing.groups } };
     // Nothing to space with one marcher, or a line with no length: Fit is all there is
     if (!(interval > 0)) return p;
-    const groups = p.spacing.mode === "fit" ? [{ interval }] : p.spacing.groups;
+    // Unlocked, `offset` follows only some drags (a one-segment end, a settle): a line bent and
+    // straightened again, say, keeps an older one. Locking keeps the offset it shows now
+    if (p.spacing.mode === "fit" && p.offset && offsetBlock(p) === null) {
+        const now = lineOffset(p, n);
+        if (Math.hypot(now.x, now.y) > 1e-9) p = { ...p, offset: now };
+    }
+    const groups =
+        p.spacing.mode !== "fit" ? p.spacing.groups : fitLocked(p, n, interval);
     if (mode === "keep")
         return p.spacing.mode === "keep"
             ? p
             : withGroups({ ...p, spacing: FIT }, n, groups, env);
     return { ...p, spacing: { mode: "path", groups, anchor: mode } };
+}
+
+/**
+ * The groups a line unlocked (Fit) is locked at: as it lays them out now (mixed groups scaled to
+ * fit it, else its `interval`), or exactly as typed while it's still the length they give
+ */
+function fitLocked(p: LineParams, n: number, interval: number): LineGroup[] {
+    const typed = p.spacing.groups;
+    const now = hasGroups(p) ? fitGroupsNow(p, n) : [{ interval }];
+    const same =
+        typed !== undefined &&
+        typed.length === now.length &&
+        typed.every(
+            (g, i) =>
+                g.count === now[i]!.count &&
+                Math.abs(g.interval - now[i]!.interval) <= 1e-9 * g.interval,
+        );
+    return same ? [...typed] : now;
+}
+
+/** Fit's mixed groups (#526) as the line lays them out now, scaled to fit it */
+export function fitGroupsNow(p: LineParams, n: number): LineGroup[] {
+    const groups = p.spacing.groups ?? [];
+    const raw = fitRawGaps(p, n);
+    const k = raw ? fitGroupScale(p, raw) : 1;
+    return groups.map((g) => ({ ...g, interval: g.interval * k }));
+}
+
+/**
+ * A typed interval, or groups (#526), set on the line: locked (Keep interval, or the run on the
+ * path) it's kept, as {@link withGroups}; unlocked (Fit) the line is sized to it the same way, and
+ * stays unlocked with it as where it started from, so a drag changes it again
+ */
+export function withTyped(
+    p: LineParams,
+    n: number,
+    groups: readonly LineGroup[],
+    env: SizeEnv,
+): LineParams {
+    if (p.spacing.mode !== "fit") return withGroups(p, n, groups, env);
+    const sized = withGroups({ ...p, spacing: FIT }, n, groups, env);
+    return { ...sized, spacing: { mode: "fit", groups } };
 }
 
 /**
@@ -1712,7 +2700,14 @@ export function withMeasured(
         measuredBlock(p, measure) !== null
     )
         return p;
-    const { measured: _was, ...rest } = p;
+    const { measured: _was, offset: _offset, ...rest } = p;
+    // Measured as an offset, from the line as it is: in Keep interval its length doesn't change
+    if (measure === "offset") {
+        if (offsetBlock(p) !== null || n <= 1) return p;
+        const offset = lineOffset(p, n);
+        if (!(length(offset) > 1e-9)) return p;
+        return keptToRun({ ...rest, measured: "offset", offset }, n, env);
+    }
     const next: LineParams = measure ? { ...rest, measured: measure } : rest;
     return keptToRun(next, n, env);
 }
@@ -1728,11 +2723,113 @@ export function keptToRun(p: LineParams, n: number, env: SizeEnv): LineParams {
 }
 
 /**
- * After a turn or flip (the kind's `settle`): a line in Keep interval measured ↔ or ↕ covers a
+ * After a turn or flip (the kind's `settle`): a line turned square to the field goes back onto the
+ * grid as a box does ({@link squareOnGrid}); a line in Keep interval measured ↔ or ↕ covers a
  * different distance that way once turned, so it's sized to its run again (#527)
  */
-export function settleLine(p: LineParams, n: number, env: SizeEnv): LineParams {
+export function settleLine(
+    base: LineParams,
+    n: number,
+    env: SizeEnv & Partial<Pick<ToolEnv, "stepPx">>,
+): LineParams {
+    const p = squareOnGrid(base, env);
+    // Measured as an offset, the offset turns with the line. Turned square to the field it's back
+    // on half steps when snapping, rid of the turn's float noise; turned off square it's exactly
+    // the turned one, so a locked line keeps its interval and points where it was turned (ADR
+    // 0006, decision 10), the numbers then fractions
+    if (offsetOf(p) && n > 1) {
+        const d = sub(p.points.at(-1)!, p.points[0]!);
+        let offset = { x: d.x / (n - 1), y: d.y / (n - 1) };
+        if (env.snap && env.stepPx) {
+            const unit = env.stepPx / 2;
+            const on = {
+                x: Math.round(offset.x / unit) * unit,
+                y: Math.round(offset.y / unit) * unit,
+            };
+            const square =
+                Math.abs(on.x - offset.x) <= 1e-6 * unit &&
+                Math.abs(on.y - offset.y) <= 1e-6 * unit;
+            if (square && length(on) > 1e-9) offset = on;
+        }
+        return keptToRun({ ...p, offset }, n, env);
+    }
     return measuredAxis(p) ? keptToRun(p, n, env) : p;
+}
+
+/** Whether `q` is on the half-step grid, within float noise */
+const onTheGrid = (q: XY, unit: number): boolean =>
+    [q.x, q.y].every((v) => Math.abs(v / unit - Math.round(v / unit)) < 1e-6);
+
+/**
+ * When snapping, a line turned square to the field put back on the grid as a box is (ADR 0006,
+ * decision 10): moved so the point nearest its pivot is on the grid, so every point is when they
+ * are a whole number of half steps apart each way. An open line in Fit whose ends are square to
+ * each other (level or plumb) is also stretched from that point, along itself, so its far end lands
+ * on the grid; locked (Keep interval, or on the path), its length is its intervals', which it keeps.
+ * A line with its points off the grid's shape (turned 15° from level, say) stays where it is, as a
+ * box turned off the field's axes does.
+ */
+function squareOnGrid(
+    p: LineParams,
+    env: SizeEnv & Partial<Pick<ToolEnv, "stepPx">>,
+): LineParams {
+    if (!env.snap || !env.gridSnap || !env.stepPx) return p;
+    const unit = env.stepPx / 2;
+    const first = p.points[0]!;
+    const shaped = p.points.every((q) => onTheGrid(sub(q, first), unit));
+    const ends = sub(p.points.at(-1)!, first);
+    // Level or plumb, and straight: every point on the line between the ends, so stretching it
+    // along itself reshapes nothing
+    const level =
+        !isClosed(p) &&
+        length(ends) > 1e-9 &&
+        Math.min(Math.abs(ends.x), Math.abs(ends.y)) < 1e-9 * length(ends) &&
+        p.points.every(
+            (q) =>
+                Math.abs(cross(ends, sub(q, first))) <= 1e-9 * dot(ends, ends),
+        );
+    if (!shaped && !level) return p;
+    const pivot = pivotPoint(lineFrame(p), env.pivot ?? pivotOf(p));
+    let held = 0;
+    p.points.forEach((q, i) => {
+        if (length(sub(q, pivot)) < length(sub(p.points[held]!, pivot)) - 1e-9)
+            held = i;
+    });
+    const from = p.points[held]!;
+    const landed = env.gridSnap(from);
+    let points = p.points.map((q) => ({
+        ...q,
+        x: q.x + landed.x - from.x,
+        y: q.y + landed.y - from.y,
+    }));
+    if (level && p.spacing.mode === "fit") {
+        // Stretched from the held point so the end farther from it lands on the grid
+        const lastIndex = points.length - 1;
+        const far =
+            length(sub(points[0]!, landed)) >
+            length(sub(points[lastIndex]!, landed))
+                ? 0
+                : lastIndex;
+        const reach = sub(points[far]!, landed);
+        const span = length(reach);
+        const to = Math.round(span / unit) * unit;
+        if (span > 1e-9 && to > 1e-9 && Math.abs(to - span) > 1e-9) {
+            const k = to / span;
+            points = points.map((q) => ({
+                ...q,
+                x: landed.x + (q.x - landed.x) * k,
+                y: landed.y + (q.y - landed.y) * k,
+            }));
+        }
+    }
+    // Float noise from turning: exactly on the grid where a point is within it
+    points = points.map((q) =>
+        onTheGrid(q, unit) ? { ...q, ...env.gridSnap!(q) } : q,
+    );
+    const moved = points.some(
+        (q, i) => q.x !== p.points[i]!.x || q.y !== p.points[i]!.y,
+    );
+    return moved ? { ...p, points } : p;
 }
 
 /** The line moved by `delta`, its first point on the half-step grid when snapping */
@@ -1809,10 +2906,12 @@ export function lineInFrame(
         );
     const flipped = across ? frame.flipX : frame.flipY;
     const [a, b] = flipped ? [end(1), end(-1)] : [end(-1), end(1)];
-    return {
+    // It reads the turn the shape had (ADR 0006, decision 10), not the way it happens to point
+    const line: LineParams = {
         points: [corner(env.gridSnap(a)), corner(env.gridSnap(b))],
         spacing: FIT,
     };
+    return withTurn(line, frame.rotation);
 }
 
 /**

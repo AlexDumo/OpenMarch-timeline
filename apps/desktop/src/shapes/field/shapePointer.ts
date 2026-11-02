@@ -12,7 +12,9 @@ import type { PivotKey } from "../frame/frame";
  * shown on the field, never stored. `scrubbing`: a spacing number in the editor is being dragged,
  * so the field shows the guides a corner or center lands on (#452). `groupMenu`: the editor's menu
  * of a Line's interval groups is open, and the group whose row is pointed at, focused or edited
- * (`lit`, null for none), for the field to color each group's spots (#526 follow-up).
+ * (`lit`, null for none), for the field to color each group's spots (#526 follow-up). `stepShown`:
+ * a number that sets the kind's step (a Line's offset) is pointed at, focused or dragged, so the
+ * field draws the step and lights the pivot it grows from (owner on #596).
  */
 export const useShapePointerStore = create<{
     over: boolean;
@@ -21,6 +23,7 @@ export const useShapePointerStore = create<{
     pivotPreview: PivotKey | null;
     scrubbing: boolean;
     groupMenu: GroupMenuState | null;
+    stepShown: boolean;
 }>(() => ({
     over: false,
     dragging: false,
@@ -28,6 +31,7 @@ export const useShapePointerStore = create<{
     pivotPreview: null,
     scrubbing: false,
     groupMenu: null,
+    stepShown: false,
 }));
 
 /** The editor's group menu while it's open: the group lit on the field, or null for none */
@@ -40,6 +44,21 @@ export function setGroupMenu(groupMenu: GroupMenuState | null): void {
     const was = useShapePointerStore.getState().groupMenu;
     if (was?.lit !== groupMenu?.lit || (was === null) !== (groupMenu === null))
         useShapePointerStore.setState({ groupMenu });
+}
+
+/** The numbers engaged now (pointed at, focused or dragged), each by its own key */
+const stepEngaged = new Set<string>();
+
+/**
+ * Notes a number that sets the kind's step (`ToolParam.showsStep`) engaged or let go, by `key`:
+ * the field draws the step while any is (owner on #596)
+ */
+export function engageStep(key: string, on: boolean): void {
+    if (on) stepEngaged.add(key);
+    else stepEngaged.delete(key);
+    const stepShown = stepEngaged.size > 0;
+    if (useShapePointerStore.getState().stepShown !== stepShown)
+        useShapePointerStore.setState({ stepShown });
 }
 
 /** Notes whether a spacing number in the floating editor is being dragged (#452) */
@@ -85,6 +104,8 @@ export function resetShapePointer(): void {
     setPivotPreview(null);
     setShapeScrubbing(false);
     setGroupMenu(null);
+    stepEngaged.clear();
+    engageStep("", false);
 }
 
 /**

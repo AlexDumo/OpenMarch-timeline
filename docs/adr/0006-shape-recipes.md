@@ -285,7 +285,7 @@ The Line shape (spec #522, #523) stores a new kind:
    above 0 a smooth point the line bends through, centripetal Catmull-Rom with its handles scaled
    by the tension, 1 the plain curve, #525), `closed` (open when absent), `corners`, `spacing`,
    `measured` and the host's `pivot`. `spacing` is `{ mode: "fit" }` (the interval follows from the drawn
-   points), `{ mode: "keep", groups }` (Keep interval) or `{ mode: "path", groups, anchor }`
+   points; since decision 9 it may carry `groups`), `{ mode: "keep", groups }` (Keep interval) or `{ mode: "path", groups, anchor }`
    (Interval on the path, `anchor` one of `start`, `center`, `end`). A group is
    `{ interval, count? }`: the interval is the distance between neighbors in field units, as
    `measured` says, `count` a whole number of marchers from 1, and a group with no `count` is the
@@ -318,8 +318,9 @@ The Line shape (spec #522, #523) stores a new kind:
    holds, as `measured` says (a whole run of the groups, crossing group seams when they fall
    mid-stretch), a curved stretch scaled about its start, and a corner drag between two straight
    stretches lands where both are whole runs. A stretch left off its run (a corner dragged with
-   `fine`) scales its gaps to fit, which is even spacing with one interval. In Fit the groups
-   don't apply: each stretch's marchers spread evenly over it, as `measured` says. On the path the
+   `fine`) scales its gaps to fit, which is even spacing with one interval. In Fit with no groups,
+   or one, each stretch's marchers spread evenly over it, as `measured` says; Fit's mixed groups
+   keep their proportions (decision 9). On the path the
    run is laid from its anchor along the path itself: from the start, back from the end, or with
    as much path spare before it as after it.
 3. **A Curve is a Line.** The Curve in the pickers is a preset whose points start smooth; it
@@ -335,8 +336,8 @@ The Line shape (spec #522, #523) stores a new kind:
    #524, any number of groups, counted or with one rest, with #526, tensions from 0 to 2 with
    #525, `measured` (`"x"` or `"y"`, with any of these) with #527, `"straight"` with the
    change of 2026-11-01 below, `closed` with its
-   `distribution` with #529, together with tensions and groups, and a point's `marcher` with
-   #569 (decision 7). From #569 a point with any other field reads as plain positions. A closed line is never measured
+   `distribution` with #529, together with tensions and groups, a point's `marcher` with
+   #569 (decision 7), and Fit's `groups`, `measured: "offset"` and `offset` with decision 9, and `turn` with decision 10. From #569 a point with any other field reads as plain positions. A closed line is never measured
    along an axis (it always turns back), so it's laid out along the path when its `measured`
    says `"x"` or `"y"`; `"straight"` applies to it as to an open line.
 6. **A closed Line (#529).** `closed: true` joins the last point to the first: a closed line has
@@ -425,6 +426,112 @@ The Line shape (spec #522, #523) stores a new kind:
    from before this change read as along the path, so a Line with a curve or an un-held corner,
    saved with no `measured`, can lay out a little differently once reopened or edited. Builds from before this change don't
    recognise `"straight"` and show such Lines as plain positions (decision 5).
+
+9. **The interval lock and Offset (2026-11-01, owner decisions on #522 and #527).** The floating
+   editor has a lock beside a Line's interval (and beside its group menu, covering every group).
+   It needs no field of its own: unlocked is `fit` and locked is `keep`; `path` counts as locked,
+   pinned at its anchor, and unlocking it is `fit`. Typing an interval no longer switches to Keep
+   interval. Unlocked, it sizes the line from its pivot as Keep interval would and stays `fit`,
+   with the typed groups stored as `{ mode: "fit", groups }`: where the line started from, not a
+   promise, since dragging an end then changes the interval (snapping to whole steps, or half steps
+   zoomed in). With one group the layout ignores it, the interval coming from the drawn line as
+   before. With mixed groups (#526) their proportions are kept: the gaps are scaled by one factor
+   so the run reaches the drawn line end to end as `measured` says (a cornered line's stretches
+   each fit their own share, decision 2), so unlocking mixed intervals doesn't lose them. Locking a
+   `fit` line stores `keep` with the groups it lays out now, exactly as typed while the line is
+   still the length they give. `fit` without `groups` reads as before.
+
+   `measured: "offset"` is rise over run: `offset` is `{ x, y }`, how far each marcher is from the
+   one before it side to side and front to back, in field units like a group's interval, signed
+   from the first point, never both nought. `offset` is stored only with `measured: "offset"`, and
+   always with it. It applies only to an open line of two points with no mixed groups, not on the
+   path. There the spots are `first + i × offset` exactly, so offsets on half steps keep every spot
+   on the grid. In `keep` the line is `n − 1` offsets long, grown from its pivot with its first
+   point then moved onto the grid, its group's interval the offset's length. In `fit` the drawn
+   line gives the offset, `offset` following a drag, and typing either number sizes the line as
+   Keep interval would. A line that has more points, or mixed groups, keeps `measured: "offset"`
+   and `offset` but is laid out along the path at its own spacing until it is one segment with one
+   interval again. Its offset then applies again, as a line turned square to its ↔ or ↕ axis does
+   (decision 1). Picking another measure drops `offset`. Builds from before this change refuse
+   `"offset"` and `offset`, and show such Lines as plain positions (decision 5). They don't refuse
+   Fit's `groups`: their check takes any `fit` spacing, so they read a Fit line with mixed groups
+   as evenly spaced along its drawn line. Line v2 isn't released, so only lab and nightly builds
+   meet that. Saved Lines read unchanged. A saved shape (amendment of 2026-10-20) keeps a Line's
+   `offsetX` and `offsetY` only when it's measured as an offset, so a plain Line comes back plain
+   and an Offset line comes back as Offset at the saved offset.
+
+   Amended 2026-11-01 (owner feedback on #596), nothing stored changes shape: the editor shows the
+   offset in screen directions, read from the line's pivot end (the end nearer the pivot, the
+   first point on a tie): ↔ positive to the right, ↕ positive up the screen, toward the back,
+   which is field y going down; either crosses 0. `offset` itself stays signed from the first
+   point in field units. A new Line (drawn, or another kind turned into one) stores the host's
+   `pivot` at its leftmost end or point, `"w"` or `"e"` for an end, the front end on an upright
+   line, the center when closed. A saved Line without a `pivot` still turns about its center.
+
+10. **A Line's turn (2026-11-01, owner on #596: "Why can it not follow the same rules as the
+    box? … when I draw the line, why can't we just mark that state as 0°?").** A Line may store
+    `turn`: how far the whole line has been turned since it was drawn, in degrees clockwise, from 0
+    up to (not including) 360. Absent is 0. Its frame still points along it (decision 4: center
+    between its ends, rotation its drawn direction, a closed line's square to its outline), since
+    its handles, pivots and knob need that; `turn` is only what the editor reads and steps. So a
+    new Line, dragged or clicked, Line or Curve, either way round, reads 0° and stores nothing new.
+    Only turning the whole shape changes it: the knob (or a corner's ring), the degrees dragged or
+    typed, and ↻. They work as a box's do, counted from the drawn 0°: 15° steps, whole degrees with
+    `fine`, free with the Snap toggle off, ↻ exactly +90°, typed degrees setting the turn. Editing
+    points (dragging ends or corners, adding, deleting, opening or closing) never changes it,
+    and nor does a move. A flip mirrors it (30° becomes 330°): the mirror of a line turned 30° from
+    how it was drawn is the mirrored line turned 30° the other way. A shape turned into a Line keeps
+    the turn its frame had (a box at 30° makes a Line reading 30°, however the line lies in it). A
+    closed Line follows the same rule; its frame's rotation stays the outline's square-to-the-field
+    turn, and `turn` counts how far the outline was turned. A full turn round stores nothing.
+
+    Saved Lines without `turn` read as 0°, their stored geometry taken as drawn, rather than
+    showing their absolute direction: the readout then means the same thing for every Line, and no
+    data changes. Builds from before this change refuse `turn` and show turned Lines as plain
+    positions (decision 5).
+
+    Turned square to the field, a Line goes back onto the grid as a box does: when snapping, after
+    a turn or flip, a line whose points are a whole number of half steps apart each way, or an open
+    line whose ends are level or plumb, is moved so the point nearest its pivot is on the grid. An
+    open line in Fit with level or plumb ends is also stretched from that point, along itself, so
+    its far end lands on the grid; locked (Keep interval, or on the path), its length is its
+    intervals' and is kept. A new Line's pivot is at an end on the grid, so turning it a quarter
+    keeps that end still. A line turned off square stays where it turned. Measured as an offset
+    (decision 9), its `offset` turns with it: turned square to the field it's back on half steps,
+    rid of the turn's float noise; turned off square it's stored exactly as turned, unrounded, so a
+    locked line keeps its interval and points the way it was turned (a 2-step line turned 15°
+    stays 2 steps at 15°, its offset reading about 1.93 and −0.52). Rounding it to half steps would
+    change both.
+
+    An end swung round its neighbor (an open line's end dragged, locked or not, wherever the drag
+    used to round its direction to the half-step grid) points in the knob's steps, but counted from
+    the field rather than from the drawn 0°: 15° from level, so level and plumb are always reachable
+    whichever way the line was drawn, as when drawing. `fine` gives whole degrees, and the Snap
+    toggle off leaves it free. Before, the direction was the pointer rounded to half steps, whose
+    angles stepped by distance. The readout by the pointer shows the end's direction from its
+    neighbor, clockwise from the right as the turn reads, before the length ("15° · 8 steps · 2
+    apart").
+
+Verification (2026-11-01, decision 10): `lineTurn.test.ts` reads 0° after a drag either way, a
+slanted drag, a Curve and clicks; keeps the turn through end drags, an added point and a move;
+steps the knob in 15° from the drawn 0° (whole degrees with `fine`, free with Snap off), the scrub
+the same, ↻ +90° round to nothing stored, typed degrees relative; turns a closed line; mirrors the
+turn on a flip and back; keeps a box's turn in a Line made from it; puts a level line turned about
+its center back on the grid and lands a Fit line's far end on it, its pivot end still; swings an
+end in 15° from level locked and unlocked, 1° with `fine`, free with Snap off, with the angle in
+the readout; reads a Line saved without `turn` as 0°, places and reads back a turned Line, and
+refuses a `turn` outside 0 up to 360. A browser scenario in `line-tool.spec.mts` draws a line right
+to left, reads 0°, turns it with ↻ to 90° and finds `turn: 90` in its recipe.
+
+Verification (2026-11-01, decision 9): `lineLockOffset.test.ts` drags ends and corners unlocked
+onto whole and half steps (↔ by its side-to-side distance), with `fine` free; checks that typing
+leaves the line unlocked and sized; locks and unlocks in one undo step each; locked, swings an end
+along the path, moves an end only front to back under ↔ and side to side under ↕, and steps a
+corner in whole intervals; lays out, types, drags and greys out Offset, falls back along the path
+when a point is added and comes back when it's deleted; checks the modifiers (keep direction, from
+center, nothing locked); places and reads back an Offset line; and refuses an `offset` without its
+measure, a nought or wider `offset`, and Fit `groups` with two rests or none.
+`IntervalLock.test.tsx` covers the button in the real floating editor.
 
 Verification (2026-11-01): `lineAlongPath.test.ts` walks round a spike's un-held tip, along the
 path and straight across, with the corners switch off and with the tip's own Even spacing; checks

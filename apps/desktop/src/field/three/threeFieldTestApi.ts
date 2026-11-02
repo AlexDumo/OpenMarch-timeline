@@ -215,6 +215,15 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
             text,
             seam,
         })),
+        offsetStep: drawing.offsetStep
+            ? {
+                  from: copy(drawing.offsetStep.from),
+                  corner: copy(drawing.offsetStep.corner),
+                  to: copy(drawing.offsetStep.to),
+                  across: drawing.offsetStep.across,
+                  deep: drawing.offsetStep.deep,
+              }
+            : null,
     };
     function screen(at: FieldPoint) {
         const { x, y } = fieldToElement(view, at.x, at.y);
