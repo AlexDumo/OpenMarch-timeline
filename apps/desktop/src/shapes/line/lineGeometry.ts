@@ -47,6 +47,12 @@ export interface LinePoint extends XY {
      * line ({@link holdsMarcher}). An open line's ends always hold one.
      */
     readonly marcher?: boolean;
+    /**
+     * The segment from this point to the next bent as a circular arc (the Arc, #634): its sweep in
+     * degrees, signed as the path's arcs are (positive turns toward +y), more than -360 and less
+     * than 360. Absent (or 0) where the segment is straight or follows the points' tension.
+     */
+    readonly bend?: number;
 }
 
 /** The tension a point made smooth starts with: the plain Catmull-Rom curve (#525) */
@@ -162,7 +168,7 @@ const withTension =
     ({ x, y }: XY): LinePoint => ({ x, y, tension });
 
 /** A point's own fields: anything else is a later build's (ADR 0006, decision 5) */
-const POINT_KEYS = new Set(["x", "y", "tension", "marcher"]);
+const POINT_KEYS = new Set(["x", "y", "tension", "marcher", "bend"]);
 
 const isPoint = (q: unknown): q is LinePoint =>
     typeof q === "object" &&
@@ -174,7 +180,17 @@ const isPoint = (q: unknown): q is LinePoint =>
     Number.isFinite((q as LinePoint).y) &&
     Number.isFinite((q as LinePoint).tension) &&
     (q as LinePoint).tension >= 0 &&
-    (q as LinePoint).tension <= MAX_TENSION;
+    (q as LinePoint).tension <= MAX_TENSION &&
+    isBend((q as LinePoint).bend);
+
+/** A stored bend: absent, or a finite sweep short of a full turn either way */
+const isBend = (b: unknown): boolean =>
+    b === undefined ||
+    (typeof b === "number" && Number.isFinite(b) && Math.abs(b) < 360);
+
+/** Whether point `q`'s segment to the next bends as a circular arc */
+export const bends = (q: Pick<LinePoint, "bend">): boolean =>
+    q.bend !== undefined && Math.abs(q.bend) > 1e-9;
 
 const isGroup = (g: unknown): g is LineGroup => {
     if (typeof g !== "object" || g === null) return false;
@@ -242,7 +258,12 @@ export function isLineParams(params: unknown): params is LineParams {
     if ((p.measured === "offset") !== (p.offset !== undefined)) return false;
     if (p.offset !== undefined && !isOffset(p.offset)) return false;
     if (p.turn !== undefined && !isTurn(p.turn)) return false;
-    if (!Array.isArray(p.points) || p.points.length < (p.closed ? 3 : 2))
+    // A closed line has three points, or two joined by a bent segment (an Arc's chord or circle)
+    if (
+        !Array.isArray(p.points) ||
+        p.points.length <
+            (p.closed && !p.points.some((q) => isPoint(q) && bends(q)) ? 3 : 2)
+    )
         return false;
     // A closed line's fill (#529): one this version fills, and never on an open line
     if (p.distribution !== undefined) {
@@ -286,6 +307,7 @@ export function lineSegments(p: LineParams): Segment[] {
     return Array.from({ length: count }, (_, i): Segment => {
         const a = points[i]!;
         const b = points[(i + 1) % points.length]!;
+        if (bends(a)) return bentSegment(a, b, a.bend!);
         const line: Segment = { type: "line", a, b };
         if (a.tension === 0 && b.tension === 0) return line;
         const full = catmullRomSpan(points, i, closed);
@@ -304,6 +326,34 @@ export function lineSegments(p: LineParams): Segment[] {
     });
 }
 
+/**
+ * The circular arc from `a` to `b` turning through `degrees` (signed as the path's arcs): its
+ * center on the chord's perpendicular, a half turn's center the chord's midpoint. Straight when
+ * `a` and `b` are one point.
+ */
+export function bentSegment(a: XY, b: XY, degrees: number): Segment {
+    const d = sub(b, a);
+    const chord = Math.hypot(d.x, d.y);
+    const sweep = (degrees * Math.PI) / 180;
+    if (chord < 1e-9 || Math.abs(sweep) < 1e-9)
+        return { type: "line", a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y } };
+    const u = { x: d.x / chord, y: d.y / chord };
+    const normal = { x: -u.y, y: u.x };
+    const away = chord / 2 / Math.tan(sweep / 2);
+    const center = {
+        x: (a.x + b.x) / 2 + normal.x * away,
+        y: (a.y + b.y) / 2 + normal.y * away,
+    };
+    const r = chord / 2 / Math.abs(Math.sin(sweep / 2));
+    return {
+        type: "arc",
+        center,
+        r,
+        start: Math.atan2(a.y - center.y, a.x - center.x),
+        sweep,
+    };
+}
+
 /** The path through the line's points, round to its first again when closed */
 export function linePath(p: LineParams): Path {
     return makePath(lineSegments(p), isClosed(p));
@@ -314,7 +364,8 @@ export const gapCount = (p: LineParams, n: number): number =>
     isClosed(p) ? n : n - 1;
 
 /** Whether any point of the line is smooth */
-const smooth = (p: LineParams) => p.points.some((q) => q.tension > 0);
+const smooth = (p: LineParams) =>
+    p.points.some((q) => q.tension > 0 || bends(q));
 
 /** How many pieces a curved segment of a closed outline is cut into */
 const CURVE_PIECES = 32;
@@ -1430,6 +1481,11 @@ export function withLineFrame(p: LineParams, frame: ShapeFrame): LineParams {
         };
     });
     const mirrored = frame.flipX !== frame.flipY;
+    // A mirror bends every arc the other way (#634)
+    if (mirrored !== (was.flipX !== was.flipY))
+        points.forEach((q, i) => {
+            if (q.bend !== undefined) points[i] = { ...q, bend: -q.bend };
+        });
     const turn = mirrored
         ? -lineTurn(p)
         : lineTurn(p) + (frame.rotation - was.rotation);

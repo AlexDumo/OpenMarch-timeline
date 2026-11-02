@@ -117,6 +117,7 @@
             "keywords": "shape form formation set place",
             "line": "Shape: Line",
             "curve": "Shape: Curve",
+            "arc": "Shape: Arc",
             "group": "Group selection",
             "groupKeywords": "group shape freeze as is keep together combine",
             "ungroup": "Shape: Ungroup",
@@ -2190,6 +2191,15 @@
                 "validate": {
                     "flat": "The arc is flat, so it's a straight line",
                     "sameSpot": "The arc's ends are on the same spot"
+                },
+                "params": {
+                    "bend": "How far the arc turns"
+                },
+                "ends": {
+                    "label": "Open or closed",
+                    "open": "Open",
+                    "chord": "Close with a straight line",
+                    "circle": "Close to circle"
                 }
             },
             "block": {

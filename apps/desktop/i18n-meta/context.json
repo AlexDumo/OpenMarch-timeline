@@ -40,6 +40,7 @@
     "view3d.autoOpenPrompt.title": "Question in a card at the bottom right of the 3D View window, shown each time the window opens until answered: should the 3D View open by itself whenever a show is opened?",
     "view3d.autoOpenPrompt.yes": "Button answering yes to the 3D View's \"open on launch\" question: the 3D View will open by itself with every show.",
     "actions.shape.curve": "Name of a shape action in the command palette and shortcut settings. Text: \"Shape: Curve\".",
+    "actions.shape.arc": "Name of a shape action in the command palette and shortcut settings. Text: \"Shape: Arc\".",
     "actions.shape.hideMarchers": "Name of a shape action in the command palette and shortcut settings. Text: \"Shape: Hide the marchers (hold to peek, tap to keep hidden)\".",
     "actions.shape.hideMarchersKeywords": "Search keywords (space separated, not shown) for a shape action in the command palette. Text: \"hide show marchers spots walks alone peek eye\".",
     "actions.shape.line": "Name of a shape action in the command palette and shortcut settings. Text: \"Shape: Line\".",
@@ -147,5 +148,10 @@
     "shapes.spacing.twoRests": "Error or note shown in the shape editor when the typed interval list for a shape can't be read. Text: \"Only one group can go without a count (the rest). Type a count before the others: 2*3\".",
     "shapes.groups.countAt": "One label drawn on the field for a whole interval group when its gaps are too small to label one by one, e.g. \"4 at 2\": {count} marchers at {interval} steps apart. Words in braces are filled in by the app; keep them.",
     "visuals.cue.pickingPoint": "Button label in the Visuals cue panel while the app waits for the person to click a point on the field, for a cue that needs a position. <keys></keys> is replaced by the Escape key, shown as a key.",
-    "web.welcome.backUpBody": "Paragraph in the welcome dialog of the web version of OpenMarch, which keeps shows in the browser. Explains backing up. <keys></keys> is replaced by the Save keyboard shortcut, shown as a key (Command-S on a Mac, Ctrl+S elsewhere); {save} is the same shortcut as plain text, kept for older translations."
+    "web.welcome.backUpBody": "Paragraph in the welcome dialog of the web version of OpenMarch, which keeps shows in the browser. Explains backing up. <keys></keys> is replaced by the Save keyboard shortcut, shown as a key (Command-S on a Mac, Ctrl+S elsewhere); {save} is the same shortcut as plain text, kept for older translations.",
+    "shapes.kinds.arc.params.bend": "Tooltip for the Arc shape's number in the floating shape editor: how many degrees the arc of marchers turns through (its sweep), e.g. 90° for a quarter circle.",
+    "shapes.kinds.arc.ends.label": "Tooltip for the Arc shape's menu that picks whether the arc of marchers is left open or closed into a shape.",
+    "shapes.kinds.arc.ends.open": "Menu option for an Arc shape: leave the arc open (its two ends are not joined).",
+    "shapes.kinds.arc.ends.chord": "Menu option for an Arc shape: close the arc by joining its two ends with a straight line, making a half-moon shape that can be filled with marchers.",
+    "shapes.kinds.arc.ends.circle": "Menu option for an Arc shape: continue the arc all the way round so it becomes a full circle of marchers."
 }
