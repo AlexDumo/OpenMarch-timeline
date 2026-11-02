@@ -25,8 +25,9 @@ import type { ShapeContext, XY } from "../../types";
 /**
  * Splitting a segment (owner feedback on #596): a new point that holds a marcher lands on the
  * marcher spot nearest the segment's midpoint, so the split moves no marcher and changes no
- * interval, measured ↔ or along the path, unlocked or locked. A point that holds none, or a
- * segment with no spot inside it, splits at the midpoint.
+ * interval, measured ↔ or along the path, unlocked or locked. A point that holds none splits at
+ * the midpoint; on a segment with no spot inside it (one gap) the point splits at the midpoint
+ * with no marcher (`marcher: false`), so every spot stays.
  */
 
 const STEP = 10;
@@ -184,24 +185,107 @@ describe("splitting a segment on a marcher's spot", () => {
         xs.forEach((x) => expect(x).toBeCloseTo(Math.round(x * 2) / 2, 6));
     });
 
-    it("keeps the midpoint where the segment holds only one gap, every marcher still placed", () => {
+    describe("a segment holding only one gap", () => {
         // 4 marchers: one gap on the first leg (2 steps), two on the second
         const L: LineParams = {
             points: [corner(0, 0), corner(20, 0), corner(20, 40)],
             spacing: { mode: "fit" },
         };
-        const p = splitSegment(L, 0, 4);
-        expect(p.points[1]).toMatchObject({ x: 10, y: 0, tension: 0 });
-        const spots = lineSpots(p, 4);
-        expect(spots).toHaveLength(4);
-        spots.forEach((s) => {
-            expect(Number.isFinite(s.x) && Number.isFinite(s.y)).toBe(true);
+        const before = lineSpots(L, 4).map(({ x, y }) => ({ x, y }));
+
+        it("adds the point at the midpoint with no marcher, every spot kept", () => {
+            expect(before).toEqual([
+                { x: 0, y: 0 },
+                { x: 20, y: 0 },
+                { x: 20, y: 20 },
+                { x: 20, y: 40 },
+            ]);
+            const p = splitSegment(L, 0, 4);
+            expect(p.points[1]).toEqual(corner(10, 0, { marcher: false }));
+            expect(holdsMarcher(p, 1)).toBe(false);
+            expectSame(
+                lineSpots(p, 4).map(({ x, y }) => ({ x, y })),
+                before,
+            );
         });
-        // A marcher on every corner
-        for (const q of p.points)
-            expect(
-                spots.some((s) => Math.hypot(s.x - q.x, s.y - q.y) < 1e-9),
-            ).toBe(true);
+
+        const ways: [string, (t: ToolState) => ToolState][] = [
+            ...SPLITS,
+            [
+                "a midpoint press-drag before it moves",
+                (t) => {
+                    const at = segmentMidpoint(paramsOf(t), 0);
+                    const drag = press(t, at, env);
+                    expect(drag.gesture).toMatchObject({
+                        type: "handle",
+                        key: "m0",
+                    });
+                    return pointerMove(drag, at, fine);
+                },
+            ],
+        ];
+        for (const [how, split] of ways)
+            it(`keeps every spot, ${how}`, () => {
+                const t = opened(L, 4);
+                const after = split(t);
+                expect(paramsOf(after).points[1]).toMatchObject({
+                    x: 10,
+                    y: 0,
+                    marcher: false,
+                });
+                expectSame(spotsOf(after), spotsOf(t));
+            });
+
+        it("shows the new point as overridden in its menu: Follow off, Even spacing checked", () => {
+            const p = splitSegment(L, 0, 4);
+            const items = lineTool
+                .menu!.sections(p, 4, "p1")!
+                .flatMap((s) => s.items);
+            const find = (value: string) =>
+                items.find((i) => i.value === value)!;
+            expect(find("marcher-follow").checked).toBe(false);
+            expect(find("marcher-even").checked).toBe(true);
+            expect(find("marcher-always").checked).toBe(false);
+            expect(find("marcher-even").disabled).toBeUndefined();
+        });
+
+        it("still gives a segment with spots inside a marcher on its new point", () => {
+            const p = splitSegment(L, 1, 4);
+            expect(p.points[2]).toEqual(corner(20, 20));
+            expectSame(
+                lineSpots(p, 4).map(({ x, y }) => ({ x, y })),
+                before,
+            );
+        });
+
+        it("keeps every spot on a closed line, its last segment too", () => {
+            // A 20 × 40 rectangle, 6 marchers 20 apart: one gap on each short side
+            const box: LineParams = {
+                points: [
+                    corner(0, 0),
+                    corner(20, 0),
+                    corner(20, 40),
+                    corner(0, 40),
+                ],
+                closed: true,
+                spacing: { mode: "fit" },
+            };
+            const t = opened(box, 6);
+            const set = (s: readonly XY[]) =>
+                s.map(({ x, y }) => `${x.toFixed(6)},${y.toFixed(6)}`).sort();
+            for (const [key, index] of [
+                ["m0", 1],
+                ["m2", 3],
+            ] as const) {
+                const after = clicked(t, key);
+                expect(paramsOf(after).points[index]!.marcher).toBe(false);
+                expect(set(spotsOf(after))).toEqual(set(spotsOf(t)));
+            }
+            // A long side has a spot inside: its new point holds a marcher there
+            const long = clicked(t, "m1");
+            expect(paramsOf(long).points[2]).toEqual(corner(20, 20));
+            expect(set(spotsOf(long))).toEqual(set(spotsOf(t)));
+        });
     });
 
     it("splits a smooth segment at its midpoint, on its curve", () => {
