@@ -2244,8 +2244,9 @@ function circlesMeet(a: XY, ra: number, b: XY, rb: number): XY[] {
  * The line with a point added on segment `index`: a corner between two corners, so a straight
  * line looks the same, else as smooth as the smoother end (#525). A point that holds a marcher
  * ({@link holdsMarcher}) lands on the spot of the `n` marchers nearest the segment's midpoint, so
- * splitting moves no marcher and changes no interval (owner feedback on #596); one that holds none,
- * or a segment with no spot inside it, splits halfway along it, on its curve.
+ * splitting moves no marcher and changes no interval (owner feedback on #596); one that holds none
+ * splits halfway along it, on its curve. On a segment with no spot inside it (one gap) the point
+ * splits halfway and holds no marcher (`marcher: false`, Even spacing), so every spot stays put.
  */
 export function splitSegment(
     p: LineParams,
@@ -2257,11 +2258,11 @@ export function splitSegment(
     const a = p.points[index]!;
     const b = p.points[(index + 1) % p.points.length]!;
     const halfway = segmentMidpoint(p, index);
-    const split = (at: XY): LineParams => ({
+    const split = (at: XY, more?: Partial<LinePoint>): LineParams => ({
         ...p,
         points: [
             ...p.points.slice(0, index + 1),
-            withTension(Math.max(a.tension, b.tension))(at),
+            { ...withTension(Math.max(a.tension, b.tension))(at), ...more },
             ...p.points.slice(index + 1),
         ],
     });
@@ -2270,7 +2271,8 @@ export function splitSegment(
         return atMidpoint;
     // A held point is a corner between corners, so the segment is straight
     const spot = spotInside(lineSpots(p, n), a, b, halfway);
-    return spot ? split(spot) : atMidpoint;
+    // With no spot inside, a marcher there would move the others: the point takes none (owner)
+    return spot ? split(spot) : split(halfway, { marcher: false });
 }
 
 /** Of `spots`, the one strictly inside the straight segment from `a` to `b` nearest `to` */
