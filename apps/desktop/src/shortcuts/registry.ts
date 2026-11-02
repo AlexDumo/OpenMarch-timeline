@@ -35,6 +35,27 @@ function notify() {
     listeners.forEach((listener) => listener());
 }
 
+// DEBUG pr620
+(globalThis as any).__actionStack = (id: ActionId) =>
+    (handlers.get(id) ?? []).map((h) => ({
+        enabled: h.isEnabled(),
+        tag: (h as any).tag,
+    }));
+if (typeof window !== "undefined") {
+    (window as any).__escLog = [];
+    window.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape") return;
+        const a = document.activeElement as HTMLElement | null;
+        (window as any).__escLog.push({
+            defaultPrevented: e.defaultPrevented,
+            target: (e.target as HTMLElement)?.outerHTML?.slice(0, 160),
+            active: a?.outerHTML?.slice(0, 160),
+            openTooltips: document.querySelectorAll(
+                '[role="tooltip"], [data-state="delayed-open"], [data-state="instant-open"]',
+            ).length,
+        });
+    });
+}
 function top(id: ActionId): ActionHandler | undefined {
     const stack = handlers.get(id);
     return stack?.[stack.length - 1];
@@ -44,6 +65,10 @@ export function registerActionHandler(
     id: ActionId,
     handler: ActionHandler,
 ): () => void {
+    (handler as any).tag = new Error().stack
+        ?.split("\n")
+        .slice(2, 6)
+        .join(" | ");
     handlers.set(id, [...(handlers.get(id) ?? []), handler]);
     notify();
     return () => {

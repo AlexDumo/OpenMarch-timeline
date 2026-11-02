@@ -4854,9 +4854,24 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         await expect(readoutShown).toBeHidden();
 
         // Page 1 keeps its box
+        const diag = async (when: string) =>
+            console.log(
+                "DIAG " + when + " " +
+                    JSON.stringify({
+                        selection: (await readField(page)).selection,
+                        stack: await page.evaluate(() =>
+                            (globalThis as any).__actionStack("cancelAlignmentUpdates"),
+                        ),
+                        esc: await page.evaluate(() => (window as any).__escLog),
+                    }),
+            );
+        await diag("beforeEsc");
         await page.keyboard.press("Escape");
+        await diag("afterEsc");
         await selectPage(show, "Page 1");
+        await diag("afterPage1");
         await page.mouse.click(member.x, member.y);
+        await diag("afterClick");
         await expect(readoutShown).toBeVisible();
 
         // Undo shares Page 1's box with Page 2 again
