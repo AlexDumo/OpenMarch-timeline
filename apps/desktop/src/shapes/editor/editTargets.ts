@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useQueryClient } from "@tanstack/react-query";
 import type { OrderChoice } from "../assign";
+import type { Pivot } from "../frame/frame";
 import { carryPivot } from "../frame/pivot";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import {
@@ -30,6 +31,7 @@ import {
     keepOrderOffered,
     setOrder,
     previewEdit,
+    pickPivot,
     recalculate,
     release,
 } from "../tool/toolMachine";
@@ -70,6 +72,11 @@ export interface ShapeEditTarget {
      * new change while the last one is still being saved.
      */
     update(change: (params: unknown) => unknown): void;
+    /**
+     * The pivot picked in the pivot menu, as one change: the open shape keeps that it was moved
+     * by hand (`pivotMoved`). Absent: an {@link update} setting it.
+     */
+    readonly pickPivot?: (pivot: Pivot) => void;
     /**
      * Recalculate who goes where (#429): the marchers on the shape's spots by least travel from
      * where they come from, as one change. Null when that changes nothing, so the button is
@@ -136,6 +143,8 @@ export function useToolEditTarget(): ShapeEditTarget | null {
                             : edit(t, change(t.params), ctx),
                     ),
                 ),
+            pickPivot: (pivot) =>
+                withField((ctx) => updateTool((t) => pickPivot(t, pivot, ctx))),
             recalculate: can
                 ? () =>
                       withField((ctx) => updateTool((t) => recalculate(t, ctx)))

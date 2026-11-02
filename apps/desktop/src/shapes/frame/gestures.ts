@@ -92,6 +92,16 @@ export function frameControls(
 const near = (a: XY, b: XY, r: number) => Math.hypot(a.x - b.x, a.y - b.y) <= r;
 
 /**
+ * Whether a placed shape's pivot looks moved by hand, with nothing saying: not one its kind
+ * could have put there ({@link ToolKind.ownPivot}), or else not where it starts one now
+ */
+export function pivotByHand(kind: AnyToolKind, params: unknown): boolean {
+    const pivot = pivotOf(params);
+    if (kind.ownPivot) return !kind.ownPivot(params, pivot);
+    return !samePivot(pivot, kind.startPivot?.(params) ?? DEFAULT_PIVOT);
+}
+
+/**
  * What a press at `at` grabs on the shape, nearest the front of what's drawn first: the pivot's
  * crosshair, a handle, the knob, the center dot (the pivot with reach inside), the ring just outside
  * a corner, then the body. Null when it misses.
@@ -104,6 +114,11 @@ export function shapeTargetAt(
     env: ToolEnv,
     /** The handle selected by a click (#557), whose own handles show around it */
     selected?: string | null,
+    /**
+     * Whether the pivot has been moved by hand (the open shape's `pivotMoved`); unknown for a
+     * placed shape, which goes by whether the kind could have put it there ({@link pivotByHand})
+     */
+    pivotMoved?: boolean,
 ): ShapeTarget | null {
     const controls = frameControls(kind, params, n, env);
     let best: { key: string; d: number } | undefined;
@@ -112,15 +127,12 @@ export function shapeTargetAt(
         if (d <= env.hitRadius && (!best || d < best.d))
             best = { key: h.key, d };
     }
-    // Drawn over everything, so it wins over a handle on the marcher it sits on; one still where
-    // the kind starts it (a Line's left end, owner on #596) leaves the handle to a plain press,
-    // and reaching inside takes it
+    // Drawn over everything, so it wins over a handle on the marcher it sits on; one the kind put
+    // there and nobody has moved (a Line's left end, owner on #596, however it's been turned or
+    // flipped since) leaves the handle to a plain press, and reaching inside takes it
     if (controls.pivot && near(controls.pivot, at, env.hitRadius)) {
-        const started = samePivot(
-            pivotOf(params),
-            kind.startPivot?.(params) ?? DEFAULT_PIVOT,
-        );
-        if (!best || !started || env.reachInside) return { type: "pivot" };
+        const byHand = pivotMoved ?? pivotByHand(kind, params);
+        if (!best || byHand || env.reachInside) return { type: "pivot" };
     }
     // Reaching inside the center dot pulls the pivot out, even from under a handle there (a
     // straight line's midpoint, #524)
@@ -161,8 +173,18 @@ export function startShapeGesture(
     at: XY,
     env: ToolEnv,
     selected?: string | null,
+    /** Whether the pivot has been moved by hand, as {@link shapeTargetAt} takes it */
+    pivotMoved?: boolean,
 ): ShapeGesture | null {
-    const target = shapeTargetAt(kind, params, n, at, env, selected);
+    const target = shapeTargetAt(
+        kind,
+        params,
+        n,
+        at,
+        env,
+        selected,
+        pivotMoved,
+    );
     if (!target) return null;
     switch (target.type) {
         case "handle":

@@ -1,6 +1,7 @@
 import tolgee from "@/global/singletons/Tolgee";
 import { fractionText, readSteps } from "./editor/format";
 import type { Path } from "./geometry/path";
+import { falsePosition } from "./solve";
 import type { IntervalRun, Slot, Spacing } from "./types";
 
 /**
@@ -267,16 +268,22 @@ function acrossTo(
         const there = far(hi);
         const change = Math.abs(there - reach);
         if (change >= gap) {
-            // Within one short step the distance goes one way
+            // Within one short step the distance goes one way, all but straight: false position
+            // finds it in a few calls, where halving took dozens (a layout straight across is
+            // searched for, and a drag searches layouts)
             const from = reach;
-            let a = lo;
-            let b = hi;
-            for (let k = 0; k < 48; k++) {
-                const mid = (a + b) / 2;
-                if (Math.abs(far(mid) - from) < gap) a = mid;
-                else b = mid;
-            }
-            return (a + b) / 2;
+            const left = gap;
+            const short = (t: number) => Math.abs(far(t) - from) - left;
+            return (
+                falsePosition(
+                    short,
+                    lo,
+                    -left,
+                    hi,
+                    change - left,
+                    (hi - lo) * 1e-12,
+                ) ?? lo + left
+            );
         }
         gap -= change;
         lo = hi;

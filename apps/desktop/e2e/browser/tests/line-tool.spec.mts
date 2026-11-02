@@ -157,8 +157,8 @@ test("change: L draws a Fit line, a typed interval sizes it and the lock keeps i
         expect(Math.abs(gap - 1.5 * S)).toBeLessThan(CLOSE);
     expect(drawn.handles).toHaveLength(2);
 
-    // Typing 2 sizes the line from its center to 14 steps, still unlocked; the
-    // lock beside the interval keeps it
+    // Typing 2 sizes the line to 14 steps from its pivot, its left end (ADR 0006,
+    // decision 9), still unlocked; the lock beside the interval keeps it
     await page
         .getByTestId("shape-tool-readout")
         .getByTestId("shape-editor-interval")
@@ -178,8 +178,8 @@ test("change: L draws a Fit line, a typed interval sizes it and the lock keeps i
     for (const gap of gaps(kept.spots))
         expect(Math.abs(gap - 2 * S)).toBeLessThan(CLOSE);
     const xs = kept.spots.map((p) => p.x);
-    expect(Math.min(...xs)).toBeCloseTo(cf.x - 15.75 * S, 3);
-    expect(Math.max(...xs)).toBeCloseTo(cf.x - 1.75 * S, 3);
+    expect(Math.min(...xs)).toBeCloseTo(cf.x - 14 * S, 3);
+    expect(Math.max(...xs)).toBeCloseTo(cf.x, 3);
 
     // The spacing menu offers Interval on the path, anchored three ways
     await spacing.click();
@@ -239,8 +239,8 @@ test("change: L draws a Fit line, a typed interval sizes it and the lock keeps i
     // Its two handles are on the same ends
     const reopened = (await shapeOverlay(page))!;
     const ends = [
-        await toScreen(page, { x: cf.x - 15.75 * S, y }),
-        await toScreen(page, { x: cf.x - 1.75 * S, y }),
+        await toScreen(page, { x: cf.x - 14 * S, y }),
+        await toScreen(page, { x: cf.x, y }),
     ];
     const handles = [...reopened.handles].sort((a, b) => a.x - b.x);
     expect(handles).toHaveLength(2);
@@ -252,7 +252,7 @@ test("change: L draws a Fit line, a typed interval sizes it and the lock keeps i
     // Its right end, dragged down, turns the line about its left end and saves
     // on release, everyone still 2 steps apart
     const right = [...reopened.handles].sort((a, b) => b.x - a.x)[0]!;
-    const left = { x: cf.x - 15.75 * S, y };
+    const left = { x: cf.x - 14 * S, y };
     await drag(
         page,
         right,
@@ -703,14 +703,15 @@ test("change: typing 2*3+4*2 spaces the line in groups, shown in the group menu,
         .poll(async () => (await shapeOverlay(page))!.groupMarks)
         .toEqual([]);
 
-    // Placed, the recipe stores the groups as typed
+    // Placed, the recipe stores the groups as typed, still unlocked (Fit's groups, ADR 0006,
+    // decision 9: typing no longer locks the interval)
     await page.keyboard.press("Enter");
     await expect(readout).toBeHidden();
     await expect.poll(() => onSpots(show, spaced.spots)).toBe(true);
     await waitForIdle(page);
     const [recipe] = await recipes(show);
     const stored = JSON.parse(recipe.params).spacing;
-    expect(stored.mode).toBe("keep");
+    expect(stored.mode).toBe("fit");
     expect(stored.groups.map((g: { count?: number }) => g.count)).toEqual([
         2, 4,
     ]);

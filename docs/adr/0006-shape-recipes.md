@@ -453,8 +453,12 @@ The Line shape (spec #522, #523) stores a new kind:
    and `offset` but is laid out along the path at its own spacing until it is one segment with one
    interval again. Its offset then applies again, as a line turned square to its ↔ or ↕ axis does
    (decision 1). Picking another measure drops `offset`. Builds from before this change refuse
-   `"offset"`, `offset` and Fit's `groups`, and show such Lines as plain positions (decision 5).
-   Saved Lines read unchanged.
+   `"offset"` and `offset`, and show such Lines as plain positions (decision 5). They don't refuse
+   Fit's `groups`: their check takes any `fit` spacing, so they read a Fit line with mixed groups
+   as evenly spaced along its drawn line. Line v2 isn't released, so only lab and nightly builds
+   meet that. Saved Lines read unchanged. A saved shape (amendment of 2026-10-20) keeps a Line's
+   `offsetX` and `offsetY` only when it's measured as an offset, so a plain Line comes back plain
+   and an Offset line comes back as Offset at the saved offset.
 
    Amended 2026-11-01 (owner feedback on #596), nothing stored changes shape: the editor shows the
    offset in screen directions, read from the line's pivot end (the end nearer the pivot, the
@@ -492,7 +496,12 @@ The Line shape (spec #522, #523) stores a new kind:
     open line in Fit with level or plumb ends is also stretched from that point, along itself, so
     its far end lands on the grid; locked (Keep interval, or on the path), its length is its
     intervals' and is kept. A new Line's pivot is at an end on the grid, so turning it a quarter
-    keeps that end still. A line turned off square stays where it turned.
+    keeps that end still. A line turned off square stays where it turned. Measured as an offset
+    (decision 9), its `offset` turns with it: turned square to the field it's back on half steps,
+    rid of the turn's float noise; turned off square it's stored exactly as turned, unrounded, so a
+    locked line keeps its interval and points the way it was turned (a 2-step line turned 15°
+    stays 2 steps at 15°, its offset reading about 1.93 and −0.52). Rounding it to half steps would
+    change both.
 
     An end swung round its neighbor (an open line's end dragged, locked or not, wherever the drag
     used to round its direction to the half-step grid) points in the knob's steps, but counted from
