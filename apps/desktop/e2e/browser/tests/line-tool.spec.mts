@@ -140,7 +140,7 @@ test("change: L draws a Fit line, a typed interval sizes it and the lock keeps i
     const steps = await undoSteps(show);
     await page.keyboard.press("l");
     await expect(page.getByTestId("shape-tool-hint")).toContainText(
-        "draw the line",
+        "draw a line",
     );
 
     // A drag 10½ steps long: 8 marchers, Fit, 1½ steps apart
