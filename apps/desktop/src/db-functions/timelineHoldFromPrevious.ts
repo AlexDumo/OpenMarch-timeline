@@ -51,7 +51,7 @@ import { HOME_ARRIVAL, marchersWithShapeHome } from "./timelineHeldArrival";
  *   (`readArrival`; a borrowed hold, #474);
  * - `homeShape`: it is held from its starting spot, and a placed shape sets that spot
  *   (`marchersWithShapeHome`): a shape gets no Held hold, the shape carried on is its hold (owner,
- *   2026-11-01). Ungroup it to hold its marchers one by one;
+ *   2026-11-01). Ungroup it at the start of the show (Ungroup on a later page only marks that page) to hold its marchers one by one;
  * - `held`: it is Held over some of the box already;
  * - `crossesFlag`: a move of its runs over one of the box's flags (taking it out of part of a move
  *   is #469's cut in time);

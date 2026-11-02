@@ -65,7 +65,7 @@ const SKIP_WORDS: Record<
     homeShape: {
         key: "timeline.holdFromPrevious.homeShape",
         defaultValue:
-            "{names}: a shape sets the starting spot. Ungroup it to hold them one by one",
+            "{names}: a shape sets the starting spot. Ungroup it at the start of the show to hold them one by one",
     },
 };
 
