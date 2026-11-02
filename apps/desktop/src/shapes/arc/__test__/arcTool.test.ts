@@ -543,7 +543,7 @@ describe("on an ellipse (owner on #634)", () => {
         expect(size.display(halfTurn().params, 7, STEP)).toBe("6 × 6");
     });
 
-    it("closes all the way round the ellipse, and opens again", () => {
+    it("closes all the way around the ellipse, and opens again", () => {
         const p = paramsOf(deeper());
         const round = withEnds(p, "circle");
         expect(isArcParams(round)).toBe(true);
@@ -551,7 +551,7 @@ describe("on an ellipse (owner on #634)", () => {
         const ends = arcTool.choices!.find((c) => c.key === "ends")!;
         expect(
             ends.options(round, 7).find((o) => o.value === "circle")!.label,
-        ).toBe("Close all the way round");
+        ).toBe("Close all the way around");
         const spots = lineFillSpots(round, 8, STEP);
         const g = arcGuide(p)!;
         for (const q of spots)

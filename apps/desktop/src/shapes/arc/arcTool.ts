@@ -207,14 +207,17 @@ function arcPicture(ends: ArcEnds, n: number): ToolChoicePicture {
     };
 }
 
-/** Each way to close it, in words; an arc on an ellipse closes all the way round it */
+/** Each way to close it, in words; an arc on an ellipse closes all the way around it */
 const ENDS_LABELS: Record<ArcEnds, (p?: LineParams) => string> = {
     open: () => tolgee.t("shapes.kinds.arc.ends.open", "Open"),
     chord: () =>
         tolgee.t("shapes.kinds.arc.ends.chord", "Close with a straight line"),
     circle: (p) =>
         p && ellipseOf(p)
-            ? tolgee.t("shapes.kinds.arc.ends.round", "Close all the way round")
+            ? tolgee.t(
+                  "shapes.kinds.arc.ends.round",
+                  "Close all the way around",
+              )
             : tolgee.t("shapes.kinds.arc.ends.circle", "Close to circle"),
 };
 const ENDS_ORDER: readonly ArcEnds[] = ["open", "chord", "circle"];
