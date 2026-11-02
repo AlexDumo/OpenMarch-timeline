@@ -6,7 +6,7 @@ import type { OrderChoice } from "../assign";
 import type { ShapeEditTarget } from "./editTargets";
 import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
 import { OrderPicture } from "./OrderPicture";
-import { Tip } from "./Tip";
+import { Tip } from "@/components/ui/Tip";
 
 /** The answers, in the menu's order; Keep order only when offered */
 export function orderOptions(

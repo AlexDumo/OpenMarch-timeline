@@ -13,7 +13,8 @@ import {
 } from "@/components/timeline/TimelineRangeMenu";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
 import type { ActionId } from "@/shortcuts/definitions";
-import { getActionLabel, getActionShortcutLabel } from "@/shortcuts/labels";
+import { getActionLabel } from "@/shortcuts/labels";
+import Shortcut from "@/components/ui/Shortcut";
 import {
     actionLabelNow,
     isActionEnabled,
@@ -21,7 +22,6 @@ import {
     subscribeToActionHandlers,
 } from "@/shortcuts/registry";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
-import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
 
@@ -31,6 +31,7 @@ import { fieldToElement, useFieldViewStore } from "./fieldView";
  * palette do, and is unavailable when they are. It acts on the selection: the
  * editor selects an unselected marcher right-clicked before it opens.
  *
+ * - **Ungroup**, first, shown only while a placed shape is selected whole.
  * - **Unset here** and **Unset here and on Pages N–M** (Set vs Following,
  *   #304, #305): timeline mode only, as in the inspector. The second is shown
  *   only while it's offered (some pages follow), with its handler's label
@@ -40,6 +41,7 @@ import { fieldToElement, useFieldViewStore } from "./fieldView";
  * - **Select all**, which right-clicking empty field reaches for.
  */
 const GROUPS: readonly (readonly ActionId[])[] = [
+    ["shapeUngroup"],
     ["timelineUnsetHere", "timelineUnsetHereAndFollowing"],
     [
         "alignHorizontally",
@@ -63,7 +65,6 @@ const UNSET: ReadonlySet<ActionId> = new Set([
 /** The entries' style, as the timeline's menus */
 const ITEM_CLASS =
     "rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50";
-const SHORTCUT_CLASS = "text-text-subtitle ml-auto pl-16 font-mono text-[11px]";
 
 /** Each action's enabled state and live label, as one string, so a change re-renders. */
 const handlerSnapshot = () =>
@@ -85,7 +86,6 @@ export default function FieldContextMenu({
     timelineMode: boolean;
 }) {
     const { t } = useTolgee();
-    const overrides = useShortcutOverridesStore((s) => s.overrides);
     useSyncExternalStore(subscribeToActionHandlers, handlerSnapshot);
     const open = at !== null;
     // The context-menu key and Shift+F10 also fire the browser's own menu
@@ -98,10 +98,12 @@ export default function FieldContextMenu({
     if (!at) return null;
 
     const shown = (id: ActionId) =>
-        UNSET.has(id)
-            ? timelineMode &&
-              (id === "timelineUnsetHere" || isActionEnabled(id))
-            : true;
+        id === "shapeUngroup"
+            ? isActionEnabled(id)
+            : UNSET.has(id)
+              ? timelineMode &&
+                (id === "timelineUnsetHere" || isActionEnabled(id))
+              : true;
     const enabled = (id: ActionId) =>
         isActionEnabled(id) && (id !== "swapMarchers" || selectedCount === 2);
     const groups = GROUPS.map((group) => group.filter(shown)).filter(
@@ -153,11 +155,9 @@ export default function FieldContextMenu({
                                         getActionLabel(id, (key, params) =>
                                             t(key, params as never),
                                         )}
-                                    <Shortcut
-                                        keys={getActionShortcutLabel(id, {
-                                            overrides,
-                                        })}
-                                    />
+                                    <span className="ml-auto pl-16">
+                                        <Shortcut action={id} />
+                                    </span>
                                 </DropdownMenu.Item>
                             ))}
                         </Fragment>
@@ -167,9 +167,6 @@ export default function FieldContextMenu({
         </DropdownMenu.Root>
     );
 }
-
-const Shortcut = ({ keys }: { keys?: string }) =>
-    keys ? <span className={SHORTCUT_CLASS}>{keys}</span> : null;
 
 type MenuPoint = { x: number; y: number };
 

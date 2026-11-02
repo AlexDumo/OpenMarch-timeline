@@ -2,7 +2,7 @@ name: PR Checks
 
 on:
   pull_request:
-    branches: ["main", "field-renderer", "shapes/lines"]
+    branches: ["main", "field-renderer"]
 
 permissions:
   contents: read
@@ -37,6 +37,7 @@ jobs:
           - format:check
           - lint
           - spellcheck
+          - check:i18n
       fail-fast: false
     runs-on: ubuntu-latest
     steps:

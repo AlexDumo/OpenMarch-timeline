@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { parseSteps } from "../editor/format";
 import type { Slot, XY } from "../types";
 import type { AnyToolKind } from "../tool/toolKind";
@@ -113,7 +114,12 @@ export function groupDrawing(
         for (let k = 0; k < count && start + k < spots.length; k++)
             marks.push({ at: spots[start + k]!, color, shade, group });
         if (menu.lit !== group || count === 0) return;
-        const whole = `${prefix}${g.count} at ${g.interval}`;
+        const whole =
+            prefix +
+            tolgee.t("shapes.groups.countAt", "{count} at {interval}", {
+                count: g.count,
+                interval: g.interval,
+            });
         for (let k = 1; k < count && start + k < spots.length; k++)
             labels.push({
                 ...gap(start + k),

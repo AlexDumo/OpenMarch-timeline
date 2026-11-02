@@ -21,6 +21,9 @@ import {
     TransportPlayButton,
 } from "./TransportButtons";
 import { ShortcutTooltip, TransportTooltipProvider } from "./ShortcutTooltip";
+import Shortcut from "@/components/ui/Shortcut";
+import { T } from "@tolgee/react";
+import { formatBinding } from "@/shortcuts/bindings";
 import {
     isPlainNudgeKey,
     overlayOpen,
@@ -178,7 +181,6 @@ export const TimelineTransport = memo(function TimelineTransport({
     fitted = false,
     accessories,
     secondary,
-    leadingViewControls,
     viewControls,
     onSeek,
     onSelectionChange,
@@ -204,8 +206,6 @@ export const TimelineTransport = memo(function TimelineTransport({
     accessories?: ReactNode;
     /** Controls after those that fold into "⋯" on a narrow panel, such as Sound */
     secondary?: ReactNode;
-    /** View controls first in the row's right group, before Fit; they fold too */
-    leadingViewControls?: ReactNode;
     /** View controls at the row's end, such as Compact; they fold too */
     viewControls?: ReactNode;
     /** The go-to box seeks to a measure or rehearsal mark (view beats) */
@@ -224,7 +224,7 @@ export const TimelineTransport = memo(function TimelineTransport({
         model,
         isPlaying ? Math.min(positionBeat + 1, model.beatCount) : positionBeat,
     );
-    const mod = isMac() ? "⌘" : "Ctrl";
+    const goToMod = formatBinding("$mod+G", isMac());
     const [goTo, setGoTo] = useState<string | null>(null);
     const [goToFailed, setGoToFailed] = useState(false);
     const canGoTo = onSeek != null || onSelectionChange != null;
@@ -297,7 +297,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                 disabled={!canGoTo}
                 onClick={openGoTo}
                 aria-label={`${readoutText.spoken}. Go to a page, measure or rehearsal mark`}
-                title={`${readoutText.spoken}. Click or press G or ${mod}+G to go to a page, measure or rehearsal mark`}
+                title={`${readoutText.spoken}. Click or press G or ${goToMod} to go to a page, measure or rehearsal mark`}
                 className="text-text rounded-4 enabled:hover:bg-fg-2 flex h-22 min-w-0 items-baseline gap-8 overflow-hidden px-4 font-mono text-[11px] leading-[22px] whitespace-nowrap"
             >
                 {/* UI-13: a minimum width, so the transport doesn't shift as the count changes */}
@@ -315,7 +315,16 @@ export const TimelineTransport = memo(function TimelineTransport({
         <TransportButton
             label="Fit the show"
             shortcut="Shift + Z"
-            hint={`Press again to go back. Pinch or ${mod}+scroll to zoom`}
+            hint={
+                <span className="text-text-subtitle flex items-center gap-4 text-[11px]">
+                    <T
+                        keyName="timeline.fit.hint"
+                        params={{
+                            keys: () => <Shortcut binding="Mod+scroll" />,
+                        }}
+                    />
+                </span>
+            }
             pressed={fitted}
             onClick={onFit}
         >
@@ -387,7 +396,6 @@ export const TimelineTransport = memo(function TimelineTransport({
                                 >
                                     {clock}
                                     {secondary}
-                                    {leadingViewControls}
                                     {fit}
                                     {viewControls}
                                 </Popover.Content>
@@ -395,7 +403,6 @@ export const TimelineTransport = memo(function TimelineTransport({
                         </Popover.Root>
                     ) : (
                         <>
-                            {leadingViewControls}
                             {fit}
                             {viewControls}
                         </>

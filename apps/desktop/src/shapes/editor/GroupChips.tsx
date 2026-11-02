@@ -7,7 +7,7 @@ import type { GroupPart, ToolEnv, ToolGroup } from "../tool/toolKind";
 import type { ShapeEditTarget } from "./editTargets";
 import { keepFocus } from "./keepFocus";
 import { ScrubNumber, type ScrubMove } from "./ScrubNumber";
-import { Tip } from "./Tip";
+import { Tip } from "@/components/ui/Tip";
 
 /**
  * A kind's mixed intervals in the floating editor (#526, spec #522): a chip per group,
