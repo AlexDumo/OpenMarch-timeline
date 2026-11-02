@@ -184,7 +184,11 @@ export default function WelcomeFlow({
     // Developer builds only: Expert mode, no further questions. An unanswered
     // analytics question is answered "no" so the old opt-in modal stays away,
     // and the web build's welcome modal (waiting for this flow) is closed.
+    // Off the web, it waits for the analytics setting so an earlier answer
+    // isn't overwritten. Language and theme are left as they are.
+    const devSkipDisabled = !isWebBuild && analyticsChoiceMade === null;
     const devSkip = () => {
+        if (devSkipDisabled) return;
         setMode("expert");
         useWebWelcomeStore.getState().setOpen(false);
         const willReload = !isWebBuild && analyticsChoiceMade !== true;
@@ -210,6 +214,7 @@ export default function WelcomeFlow({
             <WelcomeStep
                 onStart={next}
                 onDevSkip={devSkip}
+                devSkipDisabled={devSkipDisabled}
                 startLanguage={language?.code ?? suggestedLanguage()}
                 aria-label={t("welcomeFlow.dialogLabel")}
             />
@@ -309,6 +314,7 @@ export default function WelcomeFlow({
                     </div>
                     <DevSkipSetupButton
                         onSkip={devSkip}
+                        disabled={devSkipDisabled}
                         className="-mt-16 self-end"
                     />
                 </div>

@@ -9,9 +9,11 @@ import { isDevBuild } from "@/utilities/devBuild";
  */
 export default function DevSkipSetupButton({
     onSkip,
+    disabled,
     className,
 }: {
     onSkip: () => void;
+    disabled?: boolean;
     className?: string;
 }) {
     if (!isDevBuild) return null;
@@ -21,6 +23,7 @@ export default function DevSkipSetupButton({
             variant="ghost"
             size="compact"
             onClick={onSkip}
+            disabled={disabled}
             className={twMerge(
                 "border-stroke text-text-subtitle hover:text-text gap-6 border border-dashed",
                 className,
