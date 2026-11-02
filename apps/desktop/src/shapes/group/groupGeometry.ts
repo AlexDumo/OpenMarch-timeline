@@ -257,7 +257,7 @@ const facing = (key: GroupHandleKey): XY => ({
  */
 export function groupHandles(
     p: GroupParams,
-): { key: GroupHandleKey; at: XY; local: XY }[] {
+): { key: GroupHandleKey; at: XY; facing: XY }[] {
     if (p.points.length < 2) return [];
     const frame = groupFrame(p);
     const wide = frame.halfWidth > FLAT;
@@ -268,7 +268,8 @@ export function groupHandles(
     }).map((key) => {
         const f = facing(key);
         const local = { x: f.x * frame.halfWidth, y: f.y * frame.halfDepth };
-        return { key, at: frameToField(frame, local), local };
+        // Facing: a corner faces out diagonally however wide the group is, as a box's
+        return { key, at: frameToField(frame, local), facing: f };
     });
 }
 

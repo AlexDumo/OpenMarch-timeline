@@ -1,3 +1,4 @@
+// cspell:ignore nesw
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { boxShape } from "../../box/boxShape";
@@ -420,6 +421,29 @@ describe("a group's handles stretch it as an ungrouped selection's do (owner on 
             handles.filter((h) => h.key === "se").map((h) => h.at),
             [{ x: 155, y: 133 }],
         );
+    });
+
+    it("a corner's cursor is diagonal and a side's straight, however wide the group (owner on #606)", () => {
+        // 100 wide and 20 deep: its corners lie about 11° off across, nearer across than diagonal
+        const wide = params([
+            { id: 1, x: 0, y: 0 },
+            { id: 2, x: 100, y: 0 },
+            { id: 3, x: 0, y: 20 },
+            { id: 4, x: 100, y: 20 },
+        ]);
+        const cursors = Object.fromEntries(
+            groupTool.handles(wide, 4).map((h) => [h.key, h.cursor]),
+        );
+        expect(cursors).toEqual({
+            nw: "nwse-resize",
+            n: "ns-resize",
+            ne: "nesw-resize",
+            e: "ew-resize",
+            se: "nwse-resize",
+            s: "ns-resize",
+            sw: "nesw-resize",
+            w: "ew-resize",
+        });
     });
 
     it("a side stretches one way, the opposite side staying put", () => {

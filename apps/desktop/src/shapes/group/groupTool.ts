@@ -109,11 +109,12 @@ export const groupTool: ToolKind<GroupParams> = {
     asIs: true,
     draw: () => undefined,
     handles: (params) =>
-        groupHandles(params).map(({ key, at, local }) => ({
+        groupHandles(params).map(({ key, at, facing }) => ({
             key,
             at,
-            // The cursor faces the way the handle does, however the group is turned
-            cursor: resizeCursor(groupFrame(params), local),
+            // The cursor faces the way the handle does, however the group is turned: a corner's
+            // is diagonal even on a wide group (owner on #606)
+            cursor: resizeCursor(groupFrame(params), facing),
         })),
     dragHandle: (base, _n, key, to, env) =>
         stretchGroup(base, key as GroupHandleKey, to, env),
