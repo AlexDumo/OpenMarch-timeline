@@ -402,3 +402,113 @@ describe("groups read back across pages", () => {
         expect(groupTool.closed).toBeUndefined();
     });
 });
+
+describe("a group's handles stretch it as an ungrouped selection's do (owner on #606)", () => {
+    // STANDING's bounds: x 100 to 155, y 100 to 133
+    const free: ToolEnv = { ...env, snap: false };
+    const drag = (key: string, to: XY, with_: Partial<ToolEnv> = {}) =>
+        groupSpots(
+            groupTool.dragHandle(params(), 4, key, to, { ...free, ...with_ }),
+        );
+
+    it("has a box's eight handles, on its frame", () => {
+        const handles = groupTool.handles(params(), 4);
+        expect(handles.map((h) => h.key).sort()).toEqual(
+            ["e", "n", "ne", "nw", "s", "se", "sw", "w"].sort(),
+        );
+        close(
+            handles.filter((h) => h.key === "se").map((h) => h.at),
+            [{ x: 155, y: 133 }],
+        );
+    });
+
+    it("a side stretches one way, the opposite side staying put", () => {
+        close(drag("e", { x: 210, y: 0 }), [
+            { x: 100, y: 100 },
+            { x: 140, y: 100 },
+            { x: 100, y: 120 },
+            { x: 210, y: 133 },
+        ]);
+    });
+
+    it("a corner stretches both ways from the opposite corner", () => {
+        close(drag("se", { x: 210, y: 166 }), [
+            { x: 100, y: 100 },
+            { x: 140, y: 100 },
+            { x: 100, y: 140 },
+            { x: 210, y: 166 },
+        ]);
+    });
+
+    it("constrain keeps the proportions, a side growing about the middle of its other way", () => {
+        close(drag("e", { x: 210, y: 0 }, { constrain: true }), [
+            { x: 100, y: 83.5 },
+            { x: 140, y: 83.5 },
+            { x: 100, y: 123.5 },
+            { x: 210, y: 149.5 },
+        ]);
+    });
+
+    it("from center stretches about the middle", () => {
+        close(drag("e", { x: 182.5, y: 0 }, { fromCenter: true }), [
+            { x: 72.5, y: 100 },
+            { x: 112.5, y: 100 },
+            { x: 72.5, y: 120 },
+            { x: 182.5, y: 133 },
+        ]);
+    });
+
+    it("with snapping on, the handle lands on the half-step grid", () => {
+        close(
+            drag("e", { x: 211.2, y: 0 }, { snap: true }),
+            drag("e", { x: 210, y: 0 }),
+        );
+    });
+
+    it("dragged past the opposite side, it flattens rather than turning inside out", () => {
+        const xs = drag("e", { x: 50, y: 0 }).map((s) => s.x);
+        for (const x of xs) {
+            expect(x).toBeGreaterThanOrEqual(100);
+            expect(x).toBeLessThan(101);
+        }
+    });
+
+    it("turned and flipped, it stretches along its own axes and keeps both", () => {
+        const turned = flipShape(
+            groupTool,
+            turnShape(groupTool, params(), 4, 90 * DEGREE, "c", env),
+            4,
+            "across",
+            "c",
+            env,
+        ) as GroupParams;
+        const before = groupFrame(turned);
+        const handle = groupTool.handles(turned, 4).find((h) => h.key === "e")!;
+        // Out along the frame's across axis by its whole width again
+        const out = {
+            x: handle.at.x + (handle.at.x - before.center.x) * 2,
+            y: handle.at.y + (handle.at.y - before.center.y) * 2,
+        };
+        const after = groupFrame(
+            groupTool.dragHandle(turned, 4, "e", out, free),
+        );
+        expect(after.halfWidth).toBeCloseTo(before.halfWidth * 2, 9);
+        expect(after.halfDepth).toBeCloseTo(before.halfDepth, 9);
+        expect(after.rotation).toBeCloseTo(before.rotation, 9);
+        expect(after.flipX).toBe(before.flipX);
+    });
+
+    it("a rank has no handles stretching its depth, only its ends", () => {
+        const rank = params([
+            { id: 1, x: 0, y: 0 },
+            { id: 2, x: 20, y: 0 },
+            { id: 3, x: 40, y: 0 },
+        ]);
+        expect(
+            groupTool
+                .handles(rank, 3)
+                .map((h) => h.key)
+                .sort(),
+        ).toEqual(["e", "w"]);
+    });
+});

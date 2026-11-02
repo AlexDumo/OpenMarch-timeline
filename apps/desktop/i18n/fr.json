@@ -91,7 +91,7 @@
             "expand": "Forme : agrandir, en gardant les proportions",
             "shrink": "Forme : réduire, en gardant les proportions",
             "ring": "Anneau des favoris : maintenez pour choisir une forme, touchez pour le garder ouvert",
-            "group": "Forme : Grouper",
+            "group": "Grouper la sélection",
             "groupKeywords": "grouper forme figer tel quel ensemble combiner",
             "ungroup": "Forme : Dégrouper",
             "ungroupKeywords": "dégrouper forme séparer détacher"

@@ -1,5 +1,5 @@
 {
-    "actions.shape.group": "Name of the Group action in the command palette and shortcut settings. Group makes the selected marchers one shape where they stand: nobody moves, and from then on they move, turn and scale together.",
+    "actions.shape.group": "Name of the Group selection action: the first item in the field's right-click menu while two or more marchers are selected, and its name in the command palette and shortcut settings. It makes the selected marchers one shape where they stand: nobody moves, and from then on they move, turn and scale together.",
     "actions.shape.groupKeywords": "Search words for the Group action in the command palette, separated by spaces. Not shown; translate as words people might type to find it.",
     "actions.shape.ungroup": "Name of the Ungroup action in the command palette and shortcut settings. Ungroup turns a placed shape (a box of marchers) back into plain marchers: they stay where they are and stop moving as one shape from that page on.",
     "actions.shape.ungroupKeywords": "Search words for the Ungroup action in the command palette, separated by spaces. Not shown; translate as words people might type to find it.",

@@ -10,11 +10,15 @@ import {
     groupInterval,
     groupSnapPoints,
     insideGroup,
+    groupHandles,
     moveGroup,
+    stretchGroup,
     withGroupFrame,
     withGroupInterval,
+    type GroupHandleKey,
     type GroupParams,
 } from "./groupGeometry";
+import { resizeCursor } from "../frame/frame";
 
 /** Within this of a half step, an interval is on the ladder */
 const LADDER_EPS = 1e-6;
@@ -93,10 +97,10 @@ const INTERVAL: ToolParam<GroupParams> = {
 
 /**
  * The group tool kind (#603): marchers grouped where they stand. It's never drawn or picked (it
- * isn't in `SHAPE_TOOLS`); placed groups read back as it (`PLACED_KINDS`). It has no handles, as
- * stretching one way would bend a loose form: it moves, turns, flips around its pivot, and scales
- * by its interval. Its spots are where its marchers stood, so who stands where is part of it
- * (`asIs`).
+ * isn't in `SHAPE_TOOLS`); placed groups read back as it (`PLACED_KINDS`). It moves, turns, flips
+ * around its pivot and scales by its interval, and its handles stretch it as an ungrouped
+ * selection's do (owner on #606): a corner both ways, a side one way, constrain keeping the
+ * proportions. Its spots are where its marchers stood, so who stands where is part of it (`asIs`).
  */
 export const groupTool: ToolKind<GroupParams> = {
     shape: groupShape,
@@ -104,8 +108,20 @@ export const groupTool: ToolKind<GroupParams> = {
     scaling: "interval",
     asIs: true,
     draw: () => undefined,
-    handles: () => [],
-    dragHandle: (base) => base,
+    handles: (params) =>
+        groupHandles(params).map(({ key, at, local }) => ({
+            key,
+            at,
+            // The cursor faces the way the handle does, however the group is turned
+            cursor: resizeCursor(groupFrame(params), local),
+        })),
+    dragHandle: (base, _n, key, to, env) =>
+        stretchGroup(base, key as GroupHandleKey, to, env),
+    // As an ungrouped selection's handles: constrain keeps the proportions, from center stretches
+    // about the middle
+    honors: {
+        handle: () => ({ constrain: "keepRatio", fromCenter: "fromCenter" }),
+    },
     snapPoints: (p) => groupSnapPoints(p),
     contains: (p, _n, at) => insideGroup(p, at),
     move: (base, _n, delta, env) => moveGroup(base, delta, env),

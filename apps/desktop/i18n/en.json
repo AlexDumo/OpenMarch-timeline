@@ -112,7 +112,7 @@
             "expand": "Shape: Expand, keeping the proportions",
             "shrink": "Shape: Shrink, keeping the proportions",
             "keywords": "shape form formation set place",
-            "group": "Shape: Group",
+            "group": "Group selection",
             "groupKeywords": "group shape freeze as is keep together combine",
             "ungroup": "Shape: Ungroup",
             "ungroupKeywords": "ungroup shape break apart release separate"

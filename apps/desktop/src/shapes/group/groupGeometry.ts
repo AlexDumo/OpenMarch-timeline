@@ -224,3 +224,117 @@ export function groupInFrame(frame: ShapeFrame, n: number): GroupParams {
         })),
     };
 }
+
+/** A group's handles: its frame's corners and the middles of its sides, as a box's */
+export type GroupHandleKey = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
+
+const GROUP_HANDLE_KEYS: readonly GroupHandleKey[] = [
+    "nw",
+    "n",
+    "ne",
+    "e",
+    "se",
+    "s",
+    "sw",
+    "w",
+];
+
+/** The smallest a handle stretches a group to, as an ungrouped selection's (#198) */
+const MIN_SCALE = 0.01;
+
+/** Under this, in field units, a group has no size that way (one rank, or one file) */
+const FLAT = 1e-6;
+
+/** Which way handle `key` faces in the frame's axes, as −1, 0 or 1 across and deep */
+const facing = (key: GroupHandleKey): XY => ({
+    x: key.includes("w") ? -1 : key.includes("e") ? 1 : 0,
+    y: key.includes("n") ? -1 : key.includes("s") ? 1 : 0,
+});
+
+/**
+ * The group's handles where they're drawn, on its frame. A way it has no size (one rank, one
+ * file) has no handles stretching it: a rank keeps only its ends.
+ */
+export function groupHandles(
+    p: GroupParams,
+): { key: GroupHandleKey; at: XY; local: XY }[] {
+    if (p.points.length < 2) return [];
+    const frame = groupFrame(p);
+    const wide = frame.halfWidth > FLAT;
+    const deep = frame.halfDepth > FLAT;
+    return GROUP_HANDLE_KEYS.filter((key) => {
+        const f = facing(key);
+        return (f.x === 0 || wide) && (f.y === 0 || deep);
+    }).map((key) => {
+        const f = facing(key);
+        const local = { x: f.x * frame.halfWidth, y: f.y * frame.halfDepth };
+        return { key, at: frameToField(frame, local), local };
+    });
+}
+
+/**
+ * The group with handle `key` dragged to `to`, as an ungrouped selection's handles scale it
+ * (#198): the opposite corner or side stays put, a corner stretches both ways and a side one,
+ * `constrain` keeps the proportions and `fromCenter` stretches about the middle. It never turns
+ * inside out. With snapping on, the handle lands on the half-step grid, so the
+ * marcher at it does. Only the spots change: turn, flip and pivot are kept.
+ */
+export function stretchGroup(
+    base: GroupParams,
+    key: GroupHandleKey,
+    to: XY,
+    env: Pick<ToolEnv, "snap" | "gridSnap" | "constrain" | "fromCenter">,
+): GroupParams {
+    const frame = groupFrame(base);
+    const f = facing(key);
+    const { halfWidth: hw, halfDepth: hd } = frame;
+    const at = fieldToFrame(frame, env.snap ? env.gridSnap(to) : to);
+    // The fixed point, in the frame's axes as shown (flips applied)
+    const anchor = env.fromCenter
+        ? { x: 0, y: 0 }
+        : { x: -f.x * hw, y: -f.y * hd };
+    const along = (pointer: number, side: number, from: number) =>
+        Math.abs(side - from) > FLAT
+            ? Math.max(MIN_SCALE, (pointer - from) / (side - from))
+            : 1;
+    let sx = f.x !== 0 && hw > FLAT ? along(at.x, f.x * hw, anchor.x) : 1;
+    let sy = f.y !== 0 && hd > FLAT ? along(at.y, f.y * hd, anchor.y) : 1;
+    if (env.constrain) {
+        // The proportions kept: a corner follows whichever way was pulled further, a side the
+        // one way it moves; a flat way has nothing to keep
+        const k =
+            f.x !== 0 && f.y !== 0
+                ? Math.abs(sx - 1) >= Math.abs(sy - 1)
+                    ? sx
+                    : sy
+                : f.x !== 0
+                  ? sx
+                  : sy;
+        sx = hw > FLAT ? k : 1;
+        sy = hd > FLAT ? k : 1;
+    }
+    const flip = (pt: XY): XY => ({
+        x: frame.flipX ? -pt.x : pt.x,
+        y: frame.flipY ? -pt.y : pt.y,
+    });
+    // Each spot as shown, stretched about the anchor
+    const shown = base.points.map((pt) => {
+        const s = flip(pt);
+        return {
+            x: anchor.x + (s.x - anchor.x) * sx,
+            y: anchor.y + (s.y - anchor.y) * sy,
+        };
+    });
+    // The new frame's center is the middle of the stretched spots
+    const xs = shown.map((s) => s.x);
+    const ys = shown.map((s) => s.y);
+    const mid = {
+        x: (Math.min(...xs) + Math.max(...xs)) / 2,
+        y: (Math.min(...ys) + Math.max(...ys)) / 2,
+    };
+    return {
+        ...base,
+        center: frameToField(frame, mid),
+        points: shown.map((s) => flip({ x: s.x - mid.x, y: s.y - mid.y })),
+    };
+}

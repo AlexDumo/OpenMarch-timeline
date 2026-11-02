@@ -4953,7 +4953,9 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         const steps = await undoSteps(show);
         await page.mouse.click(member.x, member.y, { button: "right" });
         await expect(menu).toBeVisible();
-        await expect(menu.getByRole("menuitem").first()).toHaveText(/Group/);
+        await expect(menu.getByRole("menuitem").first()).toHaveText(
+            /Group selection/,
+        );
         await menu.getByRole("menuitem").first().click();
         await expect.poll(kinds).toEqual(["group"]);
         await waitForIdle(page);
