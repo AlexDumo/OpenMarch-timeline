@@ -2271,8 +2271,12 @@ export function splitSegment(
         return atMidpoint;
     // A held point is a corner between corners, so the segment is straight
     const spot = spotInside(lineSpots(p, n), a, b, halfway);
-    // With no spot inside, a marcher there would move the others: the point takes none (owner)
-    return spot ? split(spot) : split(halfway, { marcher: false });
+    if (spot) return split(spot);
+    // With no spot inside, a marcher there would move the others: the point takes none (owner).
+    // On the path no point holds a marcher, so nothing is set there
+    return p.spacing.mode === "path"
+        ? atMidpoint
+        : split(halfway, { marcher: false });
 }
 
 /** Of `spots`, the one strictly inside the straight segment from `a` to `b` nearest `to` */
