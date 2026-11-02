@@ -1434,7 +1434,16 @@ export const moveMarchersInTarget = async ({
                     home: [m.x, m.y],
                 })),
             });
-            await afterWrite?.(tx, null);
+            const placed =
+                afterWrite !== undefined &&
+                (await afterWrite(tx, null)) !== false;
+            // A shape placed at the starting spots is those marchers' hold, as when it's placed
+            // through a hold (above): their Held holds from the starting spots go, in this edit
+            if (placed)
+                await dropShapeHomeHoldsInTransaction(
+                    tx,
+                    moves.map((m) => m.marcherId),
+                );
             return {
                 homes: moves.map((m) => m.marcherId),
                 slots: [],

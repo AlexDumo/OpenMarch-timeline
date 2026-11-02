@@ -29,6 +29,7 @@ import {
     type TimelineEditTarget,
 } from "../timelineMoves";
 import { timelineDisplayVersion } from "../timelineDisplay";
+import { addMarchersToTimeline } from "../timelineMembership";
 import {
     saveShapeRecipeInTransaction,
     UNGROUPED_RECIPE_KIND,
@@ -2215,6 +2216,61 @@ describeDbTests(
                 `${await nameOf(db, c)} is Held on Page 1. Clear this page to remove the hold, or drag inside it to move it.`,
             );
             expect(await snapshotWithHomes(db)).toEqual(rows);
+        });
+    },
+);
+
+describeDbTests(
+    "Holds from the starting spots, the paths the #619 re-check found",
+    (it) => {
+        it("placing a shape at the starting spots drops those marchers' holds from the start", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { c } = await show(db);
+            await holdFromPreviousPage({ db, pageBox: PAGE1, marcherIds: [c] });
+            expect(await marksOf(db, c)).toEqual([PAGE1]);
+            const before = await snapshot(db);
+            await moveMarchersInTarget({
+                db,
+                target: { kind: "home" },
+                moves: [{ marcherId: c, x: LEFT[0], y: LEFT[1] }],
+                afterWrite: (tx, timelineId) =>
+                    saveShapeRecipeInTransaction({
+                        tx,
+                        timelineId,
+                        recipe: {
+                            kind: "box",
+                            kindVersion: 1,
+                            params: {},
+                            orderMode: "nearest",
+                            reverse: false,
+                        },
+                        members: [
+                            { marcherId: c, slot: 0, x: LEFT[0], y: LEFT[1] },
+                        ],
+                    }).then(() => undefined),
+            });
+            expect(await marksOf(db, c)).toEqual([]);
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("Add to move on Page 1 drops a Page 3 hold from the start, and says so", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { c } = await show(db);
+            await holdFromPreviousPage({ db, pageBox: PAGE3, marcherIds: [c] });
+            const result = await addMarchersToTimeline({
+                db,
+                range: PAGE1,
+                marcherIds: [c],
+            });
+            expect(await marksOf(db, c)).toEqual([]);
+            expect(result.droppedHolds).toEqual({
+                names: [await nameOf(db, c)],
+                pages: ["3"],
+            });
         });
     },
 );

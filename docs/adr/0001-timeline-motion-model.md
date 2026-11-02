@@ -429,8 +429,10 @@ holds to the resolver (spec R-6), so the mark is app data:
   without ending at its start (a move on an earlier page, or Set as shown there) leaves it nothing
   to grow out of, so the mark is deleted: holding from where that move ends is a borrowed hold
   (#474). The edit names the holds it dropped in its warning ("T1 is no longer Held on Page 3"),
-  for point and range moves and Set as shown. Starting spots a placed shape sets (a recipe with no
-  move, other than an ungrouped mark) are skipped and named: the shape carried on is its hold, so
+  for point and range moves, Set as shown and Add to move. Placing a shape at the starting spots
+  drops its marchers' holds from the starting spots in the same edit. Starting spots a placed shape
+  sets (a recipe with no move, other than an ungrouped mark) are skipped and named: the shape
+  carried on is its hold, so
   the way to hold its marchers one by one is to ungroup it at the start of the show (Ungroup on a
   later page only marks that page's move). No schema change: the arrival follows from the rows.
 - **A drag on a count inside a Held hold** (a range edit whose end, or a Basic point edit whose
