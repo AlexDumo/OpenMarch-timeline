@@ -473,6 +473,19 @@ describe("a group's handles stretch it as an ungrouped selection's do (owner on 
         ]);
     });
 
+    it("constrain on a corner follows the pointer along the diagonal, as a selection's does", () => {
+        // From the nw corner (100, 100) toward se (155, 133); the pointer mostly sideways and a
+        // little in: its progress along that diagonal, not the sideways pull alone
+        const k = (110 * 55 + 20 * 33) / (55 * 55 + 33 * 33);
+        close(
+            drag("se", { x: 210, y: 120 }, { constrain: true }),
+            STANDING.map(({ x, y }) => ({
+                x: 100 + (x - 100) * k,
+                y: 100 + (y - 100) * k,
+            })),
+        );
+    });
+
     it("from center stretches about the middle", () => {
         close(drag("e", { x: 182.5, y: 0 }, { fromCenter: true }), [
             { x: 72.5, y: 100 },

@@ -277,8 +277,8 @@ export function groupHandles(
  * The group with handle `key` dragged to `to`, as an ungrouped selection's handles scale it
  * (#198): the opposite corner or side stays put, a corner stretches both ways and a side one,
  * `constrain` keeps the proportions and `fromCenter` stretches about the middle. It never turns
- * inside out. With snapping on, the handle lands on the half-step grid, so the
- * marcher at it does. Only the spots change: turn, flip and pivot are kept.
+ * inside out. With snapping on, the pointer is taken to the half-step grid: on a group square
+ * to the field the marcher at the handle lands on it, on a turned one it needn't. Only the spots change: turn, flip and pivot are kept.
  */
 export function stretchGroup(
     base: GroupParams,
@@ -301,16 +301,23 @@ export function stretchGroup(
     let sx = f.x !== 0 && hw > FLAT ? along(at.x, f.x * hw, anchor.x) : 1;
     let sy = f.y !== 0 && hd > FLAT ? along(at.y, f.y * hd, anchor.y) : 1;
     if (env.constrain) {
-        // The proportions kept: a corner follows whichever way was pulled further, a side the
-        // one way it moves; a flat way has nothing to keep
-        const k =
-            f.x !== 0 && f.y !== 0
-                ? Math.abs(sx - 1) >= Math.abs(sy - 1)
-                    ? sx
-                    : sy
-                : f.x !== 0
-                  ? sx
-                  : sy;
+        // The proportions kept, as a selection's handles keep them (`scaleFor`): a corner by how
+        // far the pointer has come along its diagonal from the anchor, a side by the one way it
+        // moves; a flat way has nothing to keep
+        let k: number;
+        if (f.x !== 0 && f.y !== 0) {
+            const reach = { x: f.x * hw - anchor.x, y: f.y * hd - anchor.y };
+            const length = reach.x * reach.x + reach.y * reach.y;
+            k =
+                length > FLAT
+                    ? Math.max(
+                          MIN_SCALE,
+                          ((at.x - anchor.x) * reach.x +
+                              (at.y - anchor.y) * reach.y) /
+                              length,
+                      )
+                    : 1;
+        } else k = f.x !== 0 ? sx : sy;
         sx = hw > FLAT ? k : 1;
         sy = hd > FLAT ? k : 1;
     }
