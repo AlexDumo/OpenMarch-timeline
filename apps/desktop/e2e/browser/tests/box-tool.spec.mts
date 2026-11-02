@@ -4856,6 +4856,8 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         // Page 1 keeps its box
         await page.keyboard.press("Escape");
         await selectPage(show, "Page 1");
+        // A click before the page's box is read back picks the one marcher
+        await expect.poll(async () => (await placedBoxes(page)).length).toBe(1);
         await page.mouse.click(member.x, member.y);
         await expect(readoutShown).toBeVisible();
 
@@ -4866,6 +4868,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         expect(await laterMoves()).toBe(0);
         await page.keyboard.press("Escape");
         await selectPage(show, "Page 2");
+        await expect.poll(async () => (await placedBoxes(page)).length).toBe(1);
         await page.mouse.click(member.x, member.y);
         await expect(readoutShown).toBeVisible();
 
