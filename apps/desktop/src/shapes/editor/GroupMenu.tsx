@@ -22,7 +22,7 @@ import {
 } from "./groupSummary";
 import { useEditorMenu, useMenuFocus } from "./menuFocus";
 import { ScrubNumber } from "./ScrubNumber";
-import { Tip } from "./Tip";
+import { Tip } from "@/components/ui/Tip";
 
 /** Marks the group menu's popover, so focus carried in it counts as in the editor's intervals */
 export const GROUP_MENU_ATTRIBUTE = "data-shape-group-menu";

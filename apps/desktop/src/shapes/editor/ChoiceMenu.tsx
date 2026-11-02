@@ -6,7 +6,7 @@ import type { ShapeEditTarget } from "./editTargets";
 import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
 import { ChoicePicture } from "./ChoicePicture";
 import { GlyphText } from "./GlyphText";
-import { Tip } from "./Tip";
+import { Tip } from "@/components/ui/Tip";
 
 // A kind's menus hold choices of any kind's params
 type Choice = NonNullable<AnyToolKind["choices"]>[number];

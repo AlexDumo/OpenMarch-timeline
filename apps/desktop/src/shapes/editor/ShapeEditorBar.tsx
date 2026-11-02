@@ -1,3 +1,5 @@
+import { T } from "@tolgee/react";
+import Shortcut from "@/components/ui/Shortcut";
 import clsx from "clsx";
 import {
     memo,
@@ -24,11 +26,10 @@ import {
 import { keepFocus } from "./keepFocus";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { runAction } from "@/shortcuts/registry";
-import { getActionShortcutLabel } from "@/shortcuts/labels";
 import type { ActionId } from "@/shortcuts/definitions";
 import type { OrderChoice } from "../assign";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
-import { RichTips, Tip } from "./Tip";
+import { RichTips, Tip } from "@/components/ui/Tip";
 import {
     ActionFace,
     RecalculateFace,
@@ -122,8 +123,6 @@ import { outlineGapOf } from "../distribute/outlineGap";
 import type { XY } from "../types";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import tolgee from "@/global/singletons/Tolgee";
-import { T } from "@tolgee/react";
-import Keycaps from "@/components/ui/Keycaps";
 import { getActionShortcutKeys } from "@/shortcuts/labels";
 import {
     isHiding,
@@ -188,17 +187,23 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
                 {clicking ? (
                     <RemovePointHint />
                 ) : armed!.clickPoints ? (
-                    tolgee.t(
-                        "shapes.edit.drawPointsHint",
-                        "Drag on the field to draw a {shape}, or click point after point · Esc to cancel",
-                        { shape: armed!.shape.label.toLowerCase() },
-                    )
+                    <T
+                        keyName="shapes.edit.drawPointsHint"
+                        defaultValue="Drag on the field to draw a {shape}, or click point after point · <keys></keys> to cancel"
+                        params={{
+                            shape: armed!.shape.label.toLowerCase(),
+                            keys: () => <Shortcut binding="Escape" />,
+                        }}
+                    />
                 ) : (
-                    tolgee.t(
-                        "shapes.edit.drawHint",
-                        "Drag on the field to draw a {shape} · Esc to cancel",
-                        { shape: armed!.shape.label.toLowerCase() },
-                    )
+                    <T
+                        keyName="shapes.edit.drawHint"
+                        defaultValue="Drag on the field to draw a {shape} · <keys></keys> to cancel"
+                        params={{
+                            shape: armed!.shape.label.toLowerCase(),
+                            keys: () => <Shortcut binding="Escape" />,
+                        }}
+                    />
                 )}
             </div>
         );
@@ -222,19 +227,24 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
 function RemovePointHint() {
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     const keys = getActionShortcutKeys("shapeRemoveLastPoint", { overrides });
+    const esc = () => <Shortcut binding="Escape" />;
     // With the key unbound, only the right-click is said
     if (!keys)
         return (
             <T
                 keyName="shapes.edit.removePointHintClick"
-                defaultValue="Right-click removes the last point · Double-click to finish · Esc to cancel"
+                defaultValue="Right-click removes the last point · Double-click to finish · <esc></esc> to cancel"
+                params={{ esc }}
             />
         );
     return (
         <T
             keyName="shapes.edit.removePointHint"
-            defaultValue="Right-click or <keys></keys> removes the last point · Double-click to finish · Esc to cancel"
-            params={{ keys: () => <Keycaps keys={keys} /> }}
+            defaultValue="Right-click or <keys></keys> removes the last point · Double-click to finish · <esc></esc> to cancel"
+            params={{
+                keys: () => <Shortcut action="shapeRemoveLastPoint" />,
+                esc,
+            }}
         />
     );
 }
@@ -922,8 +932,6 @@ const TurnControls = memo(function TurnControls({
     const base = useRef<unknown>(null);
     const recalculateLook = useActionLook(canRecalculate);
     const evenLook = useActionLook(evenState === "uneven");
-    const overrides = useShortcutOverridesStore((s) => s.overrides);
-    const keyOf = (id: ActionId) => getActionShortcutLabel(id, { overrides });
     const flip = (axis: "across" | "deep") =>
         updateWith(target, (now, env) =>
             flipShape(target.kind, now, target.spots, axis, pivotOf(now), env),
@@ -937,7 +945,7 @@ const TurnControls = memo(function TurnControls({
                     "shapes.edit.quarterTurn",
                     "Turn 90° clockwise",
                 )}
-                shortcut={keyOf("shapeQuarterTurn")}
+                action="shapeQuarterTurn"
                 onClick={() => turnQuarter(target)}
                 testId="shape-editor-quarter-turn"
             >
@@ -990,7 +998,7 @@ const TurnControls = memo(function TurnControls({
             />
             <IconButton
                 label={tolgee.t("shapes.edit.flipAcross", "Flip side to side")}
-                shortcut={keyOf("flipHorizontal")}
+                action="flipHorizontal"
                 onClick={() => flip("across")}
                 testId="shape-editor-flip-across"
             >
@@ -998,7 +1006,7 @@ const TurnControls = memo(function TurnControls({
             </IconButton>
             <IconButton
                 label={tolgee.t("shapes.edit.flipDeep", "Flip front to back")}
-                shortcut={keyOf("flipVertical")}
+                action="flipVertical"
                 onClick={() => flip("deep")}
                 testId="shape-editor-flip-deep"
             >
@@ -1009,8 +1017,6 @@ const TurnControls = memo(function TurnControls({
                 envFor={envFor}
                 canShrink={canShrink}
                 canExpand={canExpand}
-                shrinkKey={keyOf("shapeShrink")}
-                expandKey={keyOf("shapeExpand")}
             />
             <IconButton
                 label={
@@ -1040,7 +1046,7 @@ const TurnControls = memo(function TurnControls({
                               )
                 }
                 disabled={!canRecalculate}
-                shortcut={keyOf("shapeRecalculate")}
+                action="shapeRecalculate"
                 className="relative"
                 onClick={() => target.recalculate?.()}
                 testId="shape-editor-recalculate"
@@ -1062,7 +1068,7 @@ const TurnControls = memo(function TurnControls({
                                   "The marchers are as even as the box allows",
                               )
                     }
-                    shortcut={keyOf("shapeEvenOut")}
+                    action="shapeEvenOut"
                     disabled={evenState !== "uneven"}
                     className="relative"
                     onClick={() => evenOut(target)}
@@ -1099,7 +1105,6 @@ const EndControls = memo(function EndControls({
     stepPx: number;
     canPlace: boolean;
 }) {
-    const overrides = useShortcutOverridesStore((s) => s.overrides);
     return (
         <>
             <span className="flex items-center gap-2">
@@ -1136,9 +1141,7 @@ const EndControls = memo(function EndControls({
                             "shapes.edit.ungroup",
                             "Ungroup: the marchers stay where they are",
                         )}
-                        shortcut={getActionShortcutLabel("shapeUngroup", {
-                            overrides,
-                        })}
+                        action="shapeUngroup"
                         onClick={() => runAction("shapeUngroup")}
                         testId="shape-editor-ungroup"
                     >
@@ -1607,7 +1610,6 @@ function Divider() {
  */
 function HideMarchersButton() {
     const hidden = useMarchersHiddenStore(isHiding);
-    const overrides = useShortcutOverridesStore((s) => s.overrides);
     return (
         <IconButton
             label={
@@ -1621,9 +1623,7 @@ function HideMarchersButton() {
                           "Hide the marchers",
                       )
             }
-            shortcut={getActionShortcutLabel("shapeHideMarchers", {
-                overrides,
-            })}
+            action="shapeHideMarchers"
             pressed={hidden}
             onClick={toggleHideMarchers}
             testId="shape-editor-hide-marchers"
@@ -1675,7 +1675,6 @@ function PathwaysButton() {
  */
 export function SnapButton() {
     const on = useUiSettingsStore((s) => s.uiSettings.snap);
-    const overrides = useShortcutOverridesStore((s) => s.overrides);
     return (
         <IconButton
             label={
@@ -1686,7 +1685,7 @@ export function SnapButton() {
                           "Snap off: turn it back on",
                       )
             }
-            shortcut={getActionShortcutLabel("toggleSnap", { overrides })}
+            action="toggleSnap"
             pressed={!on}
             onClick={() => useUiSettingsStore.getState().setSnap()}
             testId="shape-editor-snap"
@@ -1698,7 +1697,7 @@ export function SnapButton() {
 
 function IconButton({
     label,
-    shortcut,
+    action,
     className,
     onClick,
     disabled,
@@ -1707,8 +1706,8 @@ function IconButton({
     children,
 }: {
     label: string;
-    /** Its keys, shown in the tooltip as keycaps */
-    shortcut?: string;
+    /** The action it runs, whose shortcut the tooltip shows */
+    action?: ActionId;
     className?: string;
     onClick: () => void;
     disabled?: boolean;
@@ -1717,7 +1716,7 @@ function IconButton({
     children: ReactNode;
 }) {
     return (
-        <Tip label={label} shortcut={shortcut}>
+        <Tip label={label} action={action}>
             <button
                 type="button"
                 aria-label={label}
