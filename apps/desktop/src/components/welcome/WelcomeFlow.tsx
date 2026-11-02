@@ -4,6 +4,7 @@ import { T, useTolgee, useTranslate } from "@tolgee/react";
 import NewShowProgressIndicator from "@/components/launchpage/newShow/components/NewShowProgressIndicator";
 import { useEditorModeStore, type EditorMode } from "@/stores/EditorModeStore";
 import { useWelcomeFlowStore } from "@/stores/WelcomeFlowStore";
+import { useWebWelcomeStore } from "@/stores/WebWelcomeStore";
 import OpenMarchLogo from "@/components/OpenMarchLogo";
 import { saveAnalyticsChoice } from "@/utilities/analyticsConsent";
 import { matchAppLanguage } from "@/utilities/languages";
@@ -20,6 +21,7 @@ import LanguageStep from "./steps/LanguageStep";
 import ThemeStep from "./steps/ThemeStep";
 import ModeStep from "./steps/ModeStep";
 import AnalyticsStep from "./steps/AnalyticsStep";
+import DevSkipSetupButton from "./DevSkipSetupButton";
 
 export interface WelcomeFlowProps {
     /**
@@ -179,6 +181,18 @@ export default function WelcomeFlow({
         (step === "language" && language === null) ||
         waitingForAnalytics;
 
+    // Developer builds only: Expert mode, no further questions. An unanswered
+    // analytics question is answered "no" so the old opt-in modal stays away,
+    // and the web build's welcome modal (waiting for this flow) is closed.
+    const devSkip = () => {
+        setMode("expert");
+        useWebWelcomeStore.getState().setOpen(false);
+        const willReload = !isWebBuild && analyticsChoiceMade !== true;
+        if (willReload) saveAnalyticsChoice(true);
+        onFinish({ willReload });
+        if (willReload) reload();
+    };
+
     const next = () => {
         if (continueDisabled) return;
         // A language suggested from the system is saved on Continue.
@@ -195,6 +209,7 @@ export default function WelcomeFlow({
         return (
             <WelcomeStep
                 onStart={next}
+                onDevSkip={devSkip}
                 startLanguage={language?.code ?? suggestedLanguage()}
                 aria-label={t("welcomeFlow.dialogLabel")}
             />
@@ -292,6 +307,10 @@ export default function WelcomeFlow({
                             )}
                         </div>
                     </div>
+                    <DevSkipSetupButton
+                        onSkip={devSkip}
+                        className="-mt-16 self-end"
+                    />
                 </div>
             </div>
         </main>

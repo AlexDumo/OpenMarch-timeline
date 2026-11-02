@@ -6,6 +6,7 @@ import OpenMarchLogo from "@/components/OpenMarchLogo";
 import launchImage from "@/assets/welcome/launch-image.webp";
 import { APP_LANGUAGES, type AppLanguage } from "@/utilities/languages";
 import CyclingText, { useCycleIndex } from "../CyclingText";
+import DevSkipSetupButton from "../DevSkipSetupButton";
 
 /** The page's text that changes language along with the greeting. */
 const CYCLED_KEYS = {
@@ -23,10 +24,13 @@ const CYCLED_KEYS = {
 // eslint-disable-next-line max-lines-per-function
 export default function WelcomeStep({
     onStart,
+    onDevSkip,
     startLanguage,
     "aria-label": ariaLabel,
 }: {
     onStart: () => void;
+    /** Skips setup; the button shows in developer builds only. */
+    onDevSkip: () => void;
     /** The language to show first: the one the flow will suggest. */
     startLanguage: string;
     "aria-label"?: string;
@@ -133,6 +137,7 @@ export default function WelcomeStep({
                         />
                         <ArrowRightIcon size={18} />
                     </Button>
+                    <DevSkipSetupButton onSkip={onDevSkip} className="-mt-16" />
                 </div>
             </div>
         </main>

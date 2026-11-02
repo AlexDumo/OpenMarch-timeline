@@ -6,6 +6,7 @@ import { TolgeeProvider } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { useEditorModeStore } from "@/stores/EditorModeStore";
+import { useWebWelcomeStore } from "@/stores/WebWelcomeStore";
 import { APP_LANGUAGES } from "@/utilities/languages";
 import WelcomeFlow from "../WelcomeFlow";
 
@@ -111,6 +112,41 @@ describe("WelcomeFlow", () => {
         fireEvent.click(continueButton());
 
         expect(screen.queryByTestId("welcome-analytics-opt-in")).toBeNull();
+        expect(useEditorModeStore.getState().mode).toBe("expert");
+        expect(electron.send).toHaveBeenCalledTimes(1);
+        expect(onFinish).toHaveBeenCalledWith({ willReload: false });
+        expect(reload).not.toHaveBeenCalled();
+    });
+
+    // Vitest runs with import.meta.env.DEV, so the dev-only button shows.
+    it("dev skip saves Expert and answers an open analytics question no", async () => {
+        const electron = stubElectron(undefined);
+        useWebWelcomeStore.setState({ open: true });
+        const { onFinish, reload } = renderFlow();
+        await waitFor(() => expect(electron.invoke).toHaveBeenCalled());
+
+        fireEvent.click(await screen.findByTestId("welcome-dev-skip"));
+
+        expect(useWebWelcomeStore.getState().open).toBe(false);
+        expect(useEditorModeStore.getState().mode).toBe("expert");
+        expect(electron.send).toHaveBeenCalledWith("settings:set", {
+            editorMode: "expert",
+        });
+        expect(electron.send).toHaveBeenCalledWith("settings:set", {
+            optOutAnalytics: true,
+        });
+        expect(onFinish).toHaveBeenCalledWith({ willReload: true });
+        expect(reload).toHaveBeenCalled();
+    });
+
+    it("dev skip from a later step keeps an analytics answer", async () => {
+        const electron = stubElectron(false);
+        const { onFinish, reload } = renderFlow();
+        await waitFor(() => expect(electron.invoke).toHaveBeenCalled());
+
+        await goToModeStep();
+        fireEvent.click(screen.getByTestId("welcome-dev-skip"));
+
         expect(useEditorModeStore.getState().mode).toBe("expert");
         expect(electron.send).toHaveBeenCalledTimes(1);
         expect(onFinish).toHaveBeenCalledWith({ willReload: false });
