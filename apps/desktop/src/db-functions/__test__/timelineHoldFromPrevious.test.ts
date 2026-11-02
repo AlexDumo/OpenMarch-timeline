@@ -1263,6 +1263,15 @@ const markUngrouped = (
         }),
     );
 
+/** Both recipe tables, for exact undo/redo checks */
+const recipeTables = async (db: DbConnection) => ({
+    recipes: await db.select().from(schema.timeline_shape_recipes).all(),
+    members: await db
+        .select()
+        .from(schema.timeline_shape_recipe_marchers)
+        .all(),
+});
+
 /** Who move `timelineId`'s ungrouped marks list */
 const ungroupedOn = async (db: DbConnection, timelineId: number) =>
     (
@@ -1354,9 +1363,16 @@ describeDbTests(
                     notify: { success: vi.fn(), error: vi.fn() },
                     t: english,
                 });
+            const recipesBefore = await recipeTables(db);
             expect(await clear([a])).toBe(1);
             // The mark lists only who is still in the move, as when the move empties
             expect(await ungroupedOn(db, page2)).toEqual([b]);
+            // One undo step, exact both ways
+            const recipesAfter = await recipeTables(db);
+            await performUndo(db);
+            expect(await recipeTables(db)).toEqual(recipesBefore);
+            await performRedo(db);
+            expect(await recipeTables(db)).toEqual(recipesAfter);
             expect(await clear([b])).toBe(1);
             expect(await ungroupedOn(db, page2)).toEqual([]);
             expect(
@@ -1371,6 +1387,90 @@ describeDbTests(
                     )
                     .all(),
             ).toEqual([]);
+        });
+
+        it("Clear this page leaves a later page's ungrouped mark alone (the check is per move)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await show(db);
+            const page2 = await moveEndingAt(db, a, PAGE3.start);
+            const there: XY = [UP[0] + 10, UP[1]];
+            const there2: XY = [UP2[0] + 10, UP2[1]];
+            await move(db, PAGE3, [
+                { marcherId: a, xy: there },
+                { marcherId: b, xy: there2 },
+            ]);
+            const page3 = await moveEndingAt(db, a, PAGE3.end);
+            await markUngrouped(db, page2, [
+                { marcherId: a, xy: UP },
+                { marcherId: b, xy: UP2 },
+            ]);
+            await markUngrouped(db, page3, [
+                { marcherId: a, xy: there },
+                { marcherId: b, xy: there2 },
+            ]);
+            const pages = await pagesInOrder(db);
+            await setMarchersToNeighborPage({
+                direction: "previous",
+                scope: "selected",
+                selectedPage: pages.find((p) => p.name === "2")!,
+                pages,
+                selectedMarcherIds: [a],
+                writeTimeline: (request) =>
+                    moveMarchersInTarget({ db, ...request }),
+                notify: { success: vi.fn(), error: vi.fn() },
+                t: english,
+            });
+            expect(await ungroupedOn(db, page2)).toEqual([b]);
+            expect(await ungroupedOn(db, page3)).toEqual(
+                [a, b].sort((x, y) => x - y),
+            );
+        });
+
+        it("a Basic point mid-page only re-cuts the move: the marcher stays in the page's ungrouped mark", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await show(db);
+            const page2 = await moveEndingAt(db, a, PAGE3.start);
+            await markUngrouped(db, page2, [
+                { marcherId: a, xy: UP },
+                { marcherId: b, xy: UP2 },
+            ]);
+            await edit(db, { kind: "point", beat: 13, box: PAGE2 }, [
+                { marcherId: a, xy: [150, 150] },
+            ]);
+            // a's page 2 is now two moves, but it was never cleared off the page
+            expect(
+                (await rowsOf(db, a)).filter(
+                    (r) =>
+                        r.start_beat >= PAGE2.start && r.end_beat <= PAGE2.end,
+                ).length,
+            ).toBeGreaterThan(1);
+            const marked = (
+                await db
+                    .select({
+                        marcherId:
+                            schema.timeline_shape_recipe_marchers.marcher_id,
+                    })
+                    .from(schema.timeline_shape_recipe_marchers)
+                    .innerJoin(
+                        schema.timeline_shape_recipes,
+                        eqId(
+                            schema.timeline_shape_recipes.id,
+                            schema.timeline_shape_recipe_marchers.recipe_id,
+                        ),
+                    )
+                    .where(
+                        eqId(
+                            schema.timeline_shape_recipes.kind,
+                            UNGROUPED_RECIPE_KIND,
+                        ),
+                    )
+                    .all()
+            ).map((r) => r.marcherId);
+            expect(marked).toContain(a);
         });
     },
 );

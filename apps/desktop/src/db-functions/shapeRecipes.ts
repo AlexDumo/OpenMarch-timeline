@@ -42,6 +42,10 @@ export interface StoredShapeRecipe extends ShapeRecipeRecord {
 const recipes = schema.timeline_shape_recipes;
 const members = schema.timeline_shape_recipe_marchers;
 
+/** Where-clause for the recipes nobody is in */
+const noMembers = () =>
+    sql`NOT EXISTS (SELECT 1 FROM ${members} WHERE ${members.recipe_id} = ${recipes.id})`;
+
 const sameMove = (timelineId: number | null) =>
     timelineId === null
         ? isNull(recipes.timeline_id)
@@ -320,8 +324,9 @@ export const UNGROUPED_RECIPE_KIND = "ungrouped";
 export const shapeRecipesOnly = () => ne(recipes.kind, UNGROUPED_RECIPE_KIND);
 
 /**
- * After marchers leave moves `timelineIds`, takes them out of those moves' ungrouped marks, and
- * deletes a mark left with nobody. A mark lists only marchers in its move, as every recipe does:
+ * After `marcherIds` are cleared off moves `timelineIds`, takes those no longer in a move out of
+ * its ungrouped marks, and deletes a mark left with nobody. Only cleared marchers: a marcher whose
+ * rows are only re-cut into other moves over the same page (Basic's mid-page points) stays in. A mark lists only marchers in its move, as every recipe does:
  * one still naming a marcher cleared off its page would keep hiding the earlier shape that marcher
  * now stands in (Clear this page reverts the page, its Ungroup included). Real shapes' recipes are
  * left to their writers.
@@ -329,8 +334,14 @@ export const shapeRecipesOnly = () => ne(recipes.kind, UNGROUPED_RECIPE_KIND);
 export async function dropUngroupedLeavers(
     tx: DbTransaction,
     timelineIds: readonly number[],
+    marcherIds: readonly number[],
 ): Promise<void> {
-    if (timelineIds.length === 0 || !(await hasShapeRecipes(tx))) return;
+    if (
+        timelineIds.length === 0 ||
+        marcherIds.length === 0 ||
+        !(await hasShapeRecipes(tx))
+    )
+        return;
     const a = schema.timeline_assignments;
     const t = schema.timeline_transitions;
     const marks = tx
@@ -345,16 +356,21 @@ export async function dropUngroupedLeavers(
     const stillInMove = sql`EXISTS (SELECT 1 FROM ${a} INNER JOIN ${t} ON ${t.id} = ${a.transition_id} INNER JOIN ${recipes} r2 ON r2.id = ${members.recipe_id} WHERE ${a.marcher_id} = ${members.marcher_id} AND ${t.timeline_id} = r2.timeline_id)`;
     await tx
         .delete(members)
-        .where(and(inArray(members.recipe_id, marks), sql`NOT ${stillInMove}`))
+        .where(
+            and(
+                inArray(members.recipe_id, marks),
+                inArray(members.marcher_id, [...new Set(marcherIds)]),
+                sql`NOT ${stillInMove}`,
+            ),
+        )
         .run();
-    const empty = sql`NOT EXISTS (SELECT 1 FROM ${members} WHERE ${members.recipe_id} = ${recipes.id})`;
     await tx
         .delete(recipes)
         .where(
             and(
                 inArray(recipes.timeline_id, [...new Set(timelineIds)]),
                 eq(recipes.kind, UNGROUPED_RECIPE_KIND),
-                empty,
+                noMembers(),
             ),
         )
         .run();
@@ -375,7 +391,7 @@ export async function deleteEmptyRecipes(
     tx: DbTransaction,
     timelineId?: number | null,
 ): Promise<void> {
-    const empty = sql`NOT EXISTS (SELECT 1 FROM ${members} WHERE ${members.recipe_id} = ${recipes.id})`;
+    const empty = noMembers();
     await tx
         .delete(recipes)
         .where(
