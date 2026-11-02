@@ -98,7 +98,14 @@ export const lineFillSpots = (
     p: LineParams,
     n: number,
     stepPx?: number,
-): Slot[] => (isFilled(p) ? fillSpots(p, n) : lineSpots(p, n, stepPx));
+): Slot[] => {
+    // One marcher on a closed line has no gap to lay out: it stands on the first point
+    if (n === 1 && isClosed(p)) {
+        const { x, y } = p.points[0]!;
+        return [{ x, y, s: 0 }];
+    }
+    return isFilled(p) ? fillSpots(p, n) : lineSpots(p, n, stepPx);
+};
 
 /**
  * A filled line with its spacing set to `interval` (field units): the outline grown or shrunk

@@ -178,6 +178,9 @@ const isPoint = (q: unknown): q is LinePoint =>
 
 const isGroup = (g: unknown): g is LineGroup => {
     if (typeof g !== "object" || g === null) return false;
+    // Nothing a newer build adds to a group is read past (ADR 0006, decision 5)
+    if (Object.keys(g).some((key) => key !== "interval" && key !== "count"))
+        return false;
     const { interval, count } = g as LineGroup;
     if (!Number.isFinite(interval) || !(interval > 0)) return false;
     return count === undefined || (Number.isInteger(count) && count >= 1);
@@ -254,6 +257,11 @@ export function isLineParams(params: unknown): params is LineParams {
         groups?: unknown;
         anchor?: unknown;
     };
+    // Only the fields its mode has: anything else is a newer build's (ADR 0006, decision 5)
+    const spacingKeys =
+        sp.mode === "path" ? ["mode", "groups", "anchor"] : ["mode", "groups"];
+    if (Object.keys(spacing).some((key) => !spacingKeys.includes(key)))
+        return false;
     // Fit's groups, where the line started from, are optional
     if (sp.mode === "fit")
         return sp.groups === undefined || isGroupList(sp.groups);

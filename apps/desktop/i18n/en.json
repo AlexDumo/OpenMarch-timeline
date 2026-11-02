@@ -2470,7 +2470,8 @@
             "theRest": "the rest,",
             "at": "at",
             "addGroup": "Add group",
-            "list": "All groups as a list: count * steps, + between groups"
+            "list": "All groups as a list: count * steps, + between groups",
+            "countAt": "{count} at {interval}"
         }
     },
     "showChecks": {
