@@ -116,7 +116,9 @@
             "shrink": "Shape: Shrink, keeping the proportions",
             "keywords": "shape form formation set place",
             "line": "Shape: Line",
-            "curve": "Shape: Curve"
+            "curve": "Shape: Curve",
+            "ungroup": "Shape: Ungroup",
+            "ungroupKeywords": "ungroup shape break apart release separate"
         },
         "swap": {
             "error": "Could not swap marchers {marcher1} and {marcher2}",
@@ -265,6 +267,7 @@
                 "addBeat": "Add Beat",
                 "cannotDeleteOnPage": "Beats on pages cannot be deleted",
                 "errorCreating": "Error creating beat",
+                "errorCreatingMeasure": "Error creating measure",
                 "errorDeleting": "Error deleting beat",
                 "markAsMeasure": "Mark as Measure"
             },
@@ -578,6 +581,16 @@
             "unavailable.web": "This browser has WebGL graphics turned off or blocked. Turn on graphics acceleration (in Chrome or Edge: Settings, System, \"Use graphics acceleration when available\"), restart the browser, then reload this page. Your show is safe."
         },
         "title": "Field"
+    },
+    "fieldDisplay": {
+        "caption": {
+            "direction": "Direction",
+            "sections": "Sections"
+        },
+        "comingSoon": "Coming soon",
+        "direction": "Field direction",
+        "label": "Field display",
+        "sections": "Visible sections"
     },
     "fieldProperties": {
         "applyFieldType": "Apply Field Type",
@@ -907,8 +920,7 @@
             "shapesTab": "Shapes",
             "successfullyCopied": "Shape successfully copied to page",
             "ungroupShapeButton": "Un-group",
-            "ungroupShapeTooltip": "Delete this shape for this page. Will not move marchers from their current position",
-            "viewTab": "View"
+            "ungroupShapeTooltip": "Delete this shape for this page. Will not move marchers from their current position"
         },
         "timeline": {
             "move": {
@@ -1009,8 +1021,6 @@
                     "title": "Field setup"
                 },
                 "performers": {
-                    "added": "Added performers",
-                    "addNew": "Add performers",
                     "description": "Add marchers now or skip and add them later in the editor.",
                     "noneAdded": "No performers added yet.",
                     "title": "Performers"
@@ -1381,8 +1391,7 @@
         "addMarcher": "Add",
         "addMarchers": "Add Marchers",
         "addMethod": {
-            "manual": "Add manually",
-            "or": "or"
+            "manual": "Add manually"
         },
         "cancelDeleteButton": "Cancel",
         "createButton": "{quantity, plural, one {Create Marcher} other {Create Marchers}}",
@@ -2076,7 +2085,9 @@
                 "already": "Who goes where is already least travel",
                 "closeUpFirst": "Recalculate who goes where: close up the empty spots first",
                 "label": "Recalculate",
-                "title": "Recalculate who goes where, by least travel"
+                "title": "Recalculate who goes where, by least travel",
+                "titleInOrder": "Recalculate who goes where, in order along the line",
+                "alreadyInOrder": "Who goes where is already in order along the line"
             },
             "scrubTip": "{label}: click to type, drag to change",
             "snapTip": "Snap to the nearest half step",
@@ -2091,7 +2102,14 @@
                 "label": "Seed"
             },
             "steps": "steps",
-            "turn": "Turn, in degrees clockwise"
+            "turn": "Turn, in degrees clockwise",
+            "ungroup": "Ungroup: the marchers stay where they are",
+            "order": {
+                "nearest": "Least travel",
+                "keep": "Keep order",
+                "reverse": "Reverse order",
+                "label": "Who goes where"
+            }
         },
         "placed": {
             "label": "{name} · {interval} steps",
@@ -2105,7 +2123,9 @@
             "summary": {
                 "empty": "{count, plural, other {# empty}}",
                 "steps": "{interval} steps"
-            }
+            },
+            "ungroupError": "Error ungrouping the shape",
+            "ungroupIsolated": "Ungroup this shape outside isolation: it comes from an earlier page"
         },
         "save": {
             "descriptionLabel": "Description of the saved shape (optional)",
@@ -2115,7 +2135,8 @@
             "cancel": "Cancel",
             "nameLabel": "Name of the saved shape",
             "savedAs": "Saved as {name}",
-            "tip": "Save this shape to your library, starred"
+            "tip": "Save this shape to your library, starred",
+            "mixedIntervals": "Lines with mixed intervals can't be saved yet"
         },
         "saved": {
             "copyFailed": "Couldn't copy the saved shape into the show",
@@ -2259,7 +2280,10 @@
                 },
                 "params": {
                     "interval": "Spacing between neighbors, in steps",
-                    "cornerOff": "corner off its interval"
+                    "cornerOff": "corner off its interval",
+                    "offsetWaits": "along the path until it's one segment (Offset)",
+                    "offsetSide": "Side to side from each marcher to the next, in steps: right is more, left below 0",
+                    "offsetUp": "Front to back from each marcher to the next, in steps: up the screen (toward the back) is more, down below 0"
                 },
                 "spacing": {
                     "label": "Spacing",
@@ -2267,12 +2291,67 @@
                     "keep": "Keep interval",
                     "pathStart": "Interval on the path, from the start",
                     "pathCenter": "Interval on the path, centered",
-                    "pathEnd": "Interval on the path, from the end"
+                    "pathEnd": "Interval on the path, from the end",
+                    "pathOffset": "Offset sets the line's length"
                 },
                 "corners": {
                     "label": "Corners",
                     "on": "Marcher on every corner",
                     "off": "Intervals run around corners"
+                },
+                "lock": {
+                    "locked": "Interval locked: dragging an end keeps it. Click to unlock",
+                    "unlocked": "Lock the interval, so dragging an end keeps it"
+                },
+                "ends": {
+                    "label": "Open or closed",
+                    "open": "Open",
+                    "closed": "Closed"
+                },
+                "measured": {
+                    "offsetSegments": "Only on a one-segment line",
+                    "offsetGroups": "Only with one interval for everyone",
+                    "offsetPath": "Not with Interval on the path",
+                    "noX": "The line doesn't go side to side",
+                    "squareX": "Part of the line runs straight front to back",
+                    "turnsX": "The line turns back side to side",
+                    "noY": "The line doesn't go front to back",
+                    "squareY": "Part of the line runs straight side to side",
+                    "turnsY": "The line turns back front to back",
+                    "label": "Measured",
+                    "along": "Along the path",
+                    "straight": "Straight across",
+                    "x": "↔ Side to side",
+                    "y": "↕ Front to back",
+                    "offset": "Offset"
+                },
+                "menu": {
+                    "marcherPath": "Interval on the path runs past every point",
+                    "marcherFilled": "A filled line's spots follow its fill",
+                    "marcherTooFew": "Too few marchers for one on every point",
+                    "linePuts": "Line puts a marcher here",
+                    "lineKeeps": "Line keeps spacing even here",
+                    "lineWouldPut": "Line would put a marcher here",
+                    "lineWouldKeep": "Line would keep spacing even here",
+                    "marcher": "Marcher on this point",
+                    "marcherFollow": "Follow line's marchers",
+                    "marcherAlways": "Marcher",
+                    "marcherEven": "Even spacing",
+                    "cornerType": "Corner type",
+                    "swapHint": "Double-click a point to swap",
+                    "corner": "Corner",
+                    "smooth": "Smooth",
+                    "roundness": "Roundness",
+                    "delete": "Delete point",
+                    "fewestClosed": "A closed line needs at least three points",
+                    "fewestOpen": "A line needs at least two points",
+                    "open": "Open here",
+                    "close": "Close line",
+                    "closeFew": "A line needs three points to close",
+                    "add": "Add point here",
+                    "straight": "Straight",
+                    "curved": "Curved",
+                    "noCurve": "The line runs straight through here"
                 }
             },
             "measure": {
@@ -2323,10 +2402,15 @@
         "spacing": {
             "empty": "Enter an interval in steps",
             "noGaps": "A run needs at least 1 gap",
-            "notInterval": "\"{part}\" isn't an interval. Type steps (2), a list (4,4,2) or steps x gaps (4x3)",
+            "notInterval": "\"{part}\" isn't an interval. Type steps (2), or a count and steps for each group (2*3+4*2)",
             "notPositive": "An interval must be more than 0 steps",
             "repeating": "{needed, plural, one {# gap} other {# gaps}} needed, {given} typed: repeating from the first",
-            "unused": "{needed, plural, one {# gap} other {# gaps}} needed, {given} typed: the last {unused} unused"
+            "unused": "{needed, plural, one {# gap} other {# gaps}} needed, {given} typed: the last {unused} unused",
+            "emptyGroup": "There's an empty group in the list. Type a group between each +: 2*3+4*2",
+            "notCount": "\"{count}\" isn't a number of marchers. Type a whole count before the interval: 2*3",
+            "noMarchers": "A group needs at least 1 marcher",
+            "tooManyMarchers": "A group can have at most {max} marchers",
+            "twoRests": "Only one group can go without a count (the rest). Type a count before the others: 2*3"
         },
         "tool": {
             "moment": {
@@ -2364,6 +2448,29 @@
             "sameSpot": "{count, plural, one {# marcher would stand} other {# marchers would stand}} on the same spot",
             "stepsTooLong": "{count, plural, one {# marcher needs steps longer than the {limit} limit ({longest}, drawn in orange).} other {# marchers need steps longer than the {limit} limit (longest {longest}, drawn in orange).}} Set the limit in Field › Customize.",
             "tooClose": "{count, plural, one {# marcher is} other {# marchers are}} closer than {min, plural, one {# step} other {# steps}}"
+        },
+        "groups": {
+            "restShort": "rest",
+            "noMarchers": "No marchers left",
+            "all": "All {count}",
+            "first": "First {count}",
+            "last": "Last {count}",
+            "next": "Next {count}",
+            "grown": "Grew by {count} to take the marchers no group has",
+            "interval": "Group {n} spacing, in steps",
+            "remove": "Remove group {n}",
+            "add": "Add a group",
+            "countRest": "Group {n}: the rest of the marchers. Type a count to fix it",
+            "countDropped": "Group {n} marchers: none left for it",
+            "count": "Group {n} marchers",
+            "multiple": "Multiple intervals",
+            "menuTip": "Groups of marchers at their own intervals",
+            "menuLabel": "Multiple intervals: {groups}",
+            "menuName": "Interval groups",
+            "theRest": "the rest,",
+            "at": "at",
+            "addGroup": "Add group",
+            "list": "All groups as a list: count * steps, + between groups"
         }
     },
     "showChecks": {
@@ -2550,7 +2657,9 @@
         "rangeMenu": {
             "deleteWithMoves": "Delete page and its moves",
             "followAgain": "Let selected marchers follow again",
-            "keepHere": "Keep selected marchers here"
+            "keepHere": "Keep selected marchers here",
+            "setAsShown": "Set as shown",
+            "setAsShownNone": "Every selected marcher is already set on {page}, or partway through a move"
         },
         "startFlagPositions": {
             "always": "Always",
@@ -2635,6 +2744,9 @@
             "toNextPagePositions": "...to next page positions",
             "toPreviousPagePositions": "...to previous page positions"
         },
+        "collisions": {
+            "collisionsToolbar": "Collisions"
+        },
         "select": {
             "drillPrefixesLabel": "Select drill prefixes",
             "sectionsLabel": "Select sections",
@@ -2667,8 +2779,7 @@
             "shapes": "Shapes",
             "shapesAlways": "Always",
             "shapesOff": "Off",
-            "shapesSelected": "When selected",
-            "uiSettingsToolbar": "Ui Settings Toolbar"
+            "shapesSelected": "When selected"
         },
         "hideToolbar": "Hide toolbar",
         "showToolbar": "Show toolbar"
@@ -2687,6 +2798,12 @@
         "trigger": "New Version Available!"
     },
     "view3d": {
+        "autoOpenPrompt": {
+            "description": "You can change this later in Settings › General.",
+            "no": "No",
+            "title": "Open the 3D View on launch?",
+            "yes": "Yes"
+        },
         "camera": {
             "blimp": "Blimp",
             "corner": "Corner",

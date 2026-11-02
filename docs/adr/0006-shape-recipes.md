@@ -562,3 +562,32 @@ Curve smoothly through its first point, lays Outline with groups on a closed cur
 a closed curve, and reopens closed curves. `clickPoints.test.ts` covers the host's
 close-on-first-point with a fake kind, and a browser scenario in `line-tool.spec.mts` closes a
 clicked line, fills it in Grid, places and reopens it.
+
+## Amendment, 2026-11-01: ungrouping
+
+**Ungroup** (Shift+⌘G on a Mac, Ctrl+Shift+G elsewhere; the field's menu; the floating editor)
+turns a placed shape back into plain marchers. Nobody moves. It follows the same rules as editing
+the shape (Revision, 2026-10-14), and it changes no schema. Both cases store a recipe of kind
+`ungrouped` (version 1, empty `params`) with the shape's members. It describes no shape: it claims
+its members from its move's end, wherever they go next, until a recipe placed later takes them
+(decision 4). Against older recipes it keeps whichever members a later shape hasn't taken. Being
+an ordinary recipe, it is deleted with its move, carried by splits and merges, and undone with the
+positions.
+
+1. **On the shape's own page** (or an edit window reaching back over its move), the shape's recipe
+   becomes the `ungrouped` mark in place. Later pages that held the form follow. It isn't
+   deleted, because an earlier recipe over the same spots would then show again: a later page's
+   own copy of a box (a pivot changed there) sits on the earlier page's spots.
+2. **On a later page the shape is carried onto**, the change belongs to that page. Its members are
+   set there, as an edit that moves nobody sets them, and the mark is saved on that page's move.
+   Earlier pages keep their shape.
+3. Where no edit can be made (past the last page in Basic, the timeline not ready), Ungroup is
+   refused as an edit is. While isolating a move, a shape from another move is
+   refused with a toast: the isolated move can't take the change, and the shape's own move
+   shouldn't lose it.
+4. An app without the kind skips the recipe (decision 5), so it shows the earlier shape on later
+   pages as it did before the ungroup, and a shape ungrouped on its own page disappears there
+   too. Positions are unaffected.
+
+Verification: `placedBox.test.ts` (ungrouped marchers) and the browser scenario "Ungroup on the
+next page ends the box there" in `box-tool.spec.mts`.

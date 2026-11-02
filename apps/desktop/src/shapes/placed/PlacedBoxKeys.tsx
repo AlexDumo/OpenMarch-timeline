@@ -13,6 +13,7 @@ import { useBoxSelectionStore } from "./boxSelectionStore";
 import { commitBox } from "./commitBox";
 import { leaveBox, selectOnField } from "./boxSelection";
 import { clearLiveBoxSelection } from "./liveBoxMode";
+import { ungroupShape } from "./ungroupShape";
 
 const DIRECTIONS = {
     up: { x: 0, y: -1 },
@@ -51,6 +52,7 @@ export function stepPlacedBoxFiles(
  *   steps).
  * - Escape with a handle selected (a Line's point, #557) clears that; inside a box it selects the
  *   whole box again, and on a box selected whole deselects it.
+ * - Ungroup (shapeUngroup) ungroups the shape selected whole; its marchers stay selected.
  */
 export function PlacedBoxKeys(): null {
     const queryClient = useQueryClient();
@@ -88,6 +90,14 @@ export function PlacedBoxKeys(): null {
             else selectOnField([]);
         },
         { enabled: inside || selected },
+    );
+    useActionHandler(
+        "shapeUngroup",
+        () => {
+            const box = useBoxSelectionStore.getState().selected;
+            if (box) void ungroupShape(box, queryClient);
+        },
+        { enabled: selected, ignoreRepeat: true },
     );
     return null;
 }
