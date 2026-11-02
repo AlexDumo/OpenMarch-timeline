@@ -6,7 +6,7 @@ import {
     type OrderChoice,
 } from "../assign";
 import { carryPivot, pivotOf, withPivot } from "../frame/pivot";
-import type { Pivot } from "../frame/frame";
+import { samePivot, type Pivot } from "../frame/frame";
 import {
     centerPivot,
     dragShape,
@@ -455,6 +455,14 @@ export function release(
     } else if (click && "click" in g && g.click !== undefined)
         // A click moves nothing else, even if the pointer slipped a little
         state = { ...state, params: g.click };
+    // The pivot let go where it was (a jitter, or dragged off and back) moves nothing: it isn't
+    // moved by hand, and there's nothing to undo
+    if (
+        g.type === "pivot" &&
+        state.params !== g.before.params &&
+        samePivot(pivotOf(state.params), pivotOf(g.before.params))
+    )
+        state = { ...state, params: g.before.params };
     const ended: ToolState = {
         ...state,
         gesture: null,

@@ -474,6 +474,24 @@ const straight = (path: Path) =>
     length(sub(path.at(path.length), path.at(0))) >= path.length * (1 - 1e-9);
 
 /**
+ * The scales, as shares of the arc's, that {@link fitScale} steps up through from nought straight
+ * across, for the first that reaches the end: quarters, then 32nds from three quarters on, where
+ * it nearly always is. Each is where halving from nought to the arc's share goes while it falls
+ * short, or between two of those.
+ */
+const FIT_LADDER = [
+    1 / 4,
+    1 / 2,
+    ...Array.from({ length: 8 }, (_, i) => 3 / 4 + i / 32),
+];
+
+/**
+ * How narrow, as a share of the arc's, {@link fitScale} halves the step it's reached in before it
+ * finishes by false position
+ */
+const FIT_HALVED = 2 ** -16;
+
+/**
  * How much `gaps`, in order, must be scaled to reach exactly from one end of `path` to the other:
  * the length over their sum along the path, and found by search straight across (`across`) on a
  * curve
@@ -495,18 +513,44 @@ function fitScale(
             gaps.map((gap) => gap * k),
             across,
         ).at(-1)!;
-    // Each chord reaches at least its own length along, so the arc's share reaches the end. The
-    // reach grows with the scale, close to in proportion, so false position (Illinois) homes in
-    // within a few layouts where halving would take dozens: each is a walk along the whole path
+    // Each chord reaches at least its own length along, so the arc's share reaches the end. Where
+    // the path curls back, the reach can rise past the end and fall short again as the scale grows,
+    // so more than one scale reaches the end. The smallest is taken, every time, so a line lays out
+    // the same however it got there: stepped up to from below ({@link FIT_LADDER}), halved within
+    // the step it's reached in, where layouts before #596 halved too (so they lay out the same),
+    // and false position (Illinois) finishes it in a few layouts, where halving all the way takes
+    // over thirty (each a walk along the whole path)
     const g = (k: number) => reach(k) - path.length;
-    const atArc = g(arc);
-    if (atArc <= 0) return arc;
-    // Scaled down as far as the arc's share overshoots: as good as there, and short of it
-    const k = (arc * path.length) / (path.length + atArc);
-    const tolerance = arc * 1e-10;
-    const found = secantFrom(g, arc, atArc, k, g(k), 0, arc, tolerance);
-    if (typeof found === "number") return found;
-    return falsePosition(g, 0, -path.length, arc, atArc, tolerance) ?? arc;
+    let lo = 0;
+    let atLo = -path.length;
+    let hi = arc;
+    let atHi = Number.NaN;
+    for (const share of FIT_LADDER) {
+        const k = arc * share;
+        const atK = g(k);
+        if (atK >= 0) {
+            hi = k;
+            atHi = atK;
+            break;
+        }
+        lo = k;
+        atLo = atK;
+    }
+    while (hi - lo > arc * FIT_HALVED) {
+        const mid = (lo + hi) / 2;
+        const atMid = g(mid);
+        if (atMid < 0) {
+            lo = mid;
+            atLo = atMid;
+        } else {
+            hi = mid;
+            atHi = atMid;
+        }
+    }
+    if (Number.isNaN(atHi)) atHi = g(hi);
+    // Float noise short of the end at the arc's share, which reaches it
+    if (!(atHi >= 0)) return hi;
+    return falsePosition(g, lo, atLo, hi, atHi, arc * 1e-10) ?? (lo + hi) / 2;
 }
 
 /**
@@ -1621,10 +1665,22 @@ const withPointAt = (p: LineParams, index: number, at: XY): LineParams => ({
 });
 
 /**
+ * How many layouts {@link solveFor} narrows a crossing down in, at most. Straight across, an
+ * interval is jagged on a fine scale (a gap is walked out along the path in short steps) and jumps
+ * where the scale that fits it does ({@link fitScale}): narrowing down onto a jump took dozens of
+ * layouts a pointer move, for a spot no nearer whole, where a crossing takes well under this
+ */
+const SOLVE_STEPS = 16;
+
+/** How near its target, in field units, {@link solveFor} takes an interval to be on it */
+const ON_TARGET = 1e-10;
+
+/**
  * The `t` nearest `t0` between `lo` and `hi` where `f(t)` is `target`, or null where it never is:
- * by secant steps from `t0` (`h` the first, {@link secantFrom}), else sampled for where it crosses and narrowed
- * down to it. `near` is a short search, `lo` to `hi` only as far as the caller can use: there a
- * secant step past them says it isn't in reach, without sampling.
+ * by secant steps from `t0` (`h` the first, {@link secantFrom}), else sampled for where it crosses
+ * and narrowed down to it. `near` is a short search, `lo` to `hi` only as far as the caller can
+ * use: there a secant step past them is taken to say the nearest crossing isn't in reach, unless
+ * the tries so far, or `lo` and `hi` themselves, straddle one ({@link straddled}).
  */
 function solveFor(
     f: (t: number) => number,
@@ -1635,7 +1691,16 @@ function solveFor(
     near = false,
 ): number | null {
     const SAMPLES = near ? 12 : 96;
-    const g = (t: number) => f(t) - target;
+    const tolerance = (hi - lo) * 1e-12;
+    // Every try is kept: two either side of the target bracket a crossing without another layout
+    const tried: Try[] = [];
+    const g = (t: number) => {
+        const off = f(t) - target;
+        // On it, to well past what any number shows: narrowing further only costs layouts
+        const v = Math.abs(off) <= ON_TARGET ? 0 : off;
+        tried.push({ t, v });
+        return v;
+    };
     // `f` is all but straight near `t0` as a rule (an interval against how far a point is
     // dragged), so a secant from `t0` brackets the crossing within a call or two and false
     // position finishes it: a handful of calls where sampling takes over a hundred, each a whole
@@ -1644,19 +1709,34 @@ function solveFor(
     const b = t0 + h <= hi ? t0 + h : t0 - h;
     const found =
         t0 >= lo && t0 <= hi
-            ? secantFrom(g, t0, g(t0), b, g(b), lo, hi, (hi - lo) * 1e-12)
+            ? secantFrom(g, t0, g(t0), b, g(b), lo, hi, tolerance, SOLVE_STEPS)
             : undefined;
-    if (found === "outside" && near) return null;
     if (typeof found === "number") return found;
+    if (found === "outside" && near) {
+        // The step overshot, but a crossing may still be in reach where `f` bends: the reach's
+        // ends say so, two layouts where sampling it takes a dozen
+        if (!straddles(tried, lo, hi)) {
+            g(lo);
+            g(hi);
+        }
+        return straddled(g, tried, t0, lo, hi, tolerance);
+    }
     let best: number | null = null;
     let prevT = lo;
     let prev = g(lo);
-    const tolerance = (hi - lo) * 1e-12;
     for (let i = 1; i <= SAMPLES; i++) {
         const t = lo + ((hi - lo) * i) / SAMPLES;
         const now = g(t);
         if (Number.isFinite(prev) && Number.isFinite(now) && prev * now <= 0) {
-            const root = falsePosition(g, prevT, prev, t, now, tolerance);
+            const root = falsePosition(
+                g,
+                prevT,
+                prev,
+                t,
+                now,
+                tolerance,
+                SOLVE_STEPS,
+            );
             if (
                 root !== null &&
                 (best === null || Math.abs(root - t0) < Math.abs(best - t0))
@@ -1667,6 +1747,51 @@ function solveFor(
         prev = now;
     }
     return best;
+}
+
+/** One value tried in a search: `f(t)` less the target */
+type Try = { readonly t: number; readonly v: number };
+
+/** Tries between `lo` and `hi`, in order along, with a finite value */
+const triedIn = (tried: readonly Try[], lo: number, hi: number): Try[] =>
+    tried
+        .filter((x) => x.t >= lo && x.t <= hi && Number.isFinite(x.v))
+        .sort((x, y) => x.t - y.t);
+
+/** Whether two of `tried` between `lo` and `hi` are either side of the target */
+const straddles = (tried: readonly Try[], lo: number, hi: number): boolean => {
+    const inside = triedIn(tried, lo, hi);
+    return inside.some((x, i) => i > 0 && inside[i - 1]!.v * x.v <= 0);
+};
+
+/**
+ * Where `g` crosses nought between the two neighboring tries, of `tried` between `lo` and `hi`,
+ * that straddle it nearest `t0`; null when none do
+ */
+function straddled(
+    g: (t: number) => number,
+    tried: readonly Try[],
+    t0: number,
+    lo: number,
+    hi: number,
+    tolerance: number,
+): number | null {
+    const inside = triedIn(tried, lo, hi);
+    let best: [Try, Try] | null = null;
+    let bestOff = Infinity;
+    for (let i = 1; i < inside.length; i++) {
+        const a = inside[i - 1]!;
+        const b = inside[i]!;
+        if (a.v * b.v > 0) continue;
+        const off = t0 < a.t ? a.t - t0 : t0 > b.t ? t0 - b.t : 0;
+        if (off < bestOff) {
+            bestOff = off;
+            best = [a, b];
+        }
+    }
+    if (!best) return null;
+    const [a, b] = best;
+    return falsePosition(g, a.t, a.v, b.t, b.v, tolerance, SOLVE_STEPS);
 }
 
 /**
@@ -1755,11 +1880,7 @@ export function dragPoint(
     } else if (kept && keep && env.snap && straightCorner(base, n, index)) {
         point = cornerAlongOnIntervals(base, n, index, kept, to);
     } else if (kept) {
-        const t = Math.max(dot(sub(to, other), kept), halfStep(env));
-        point =
-            fit && env.snap
-                ? snappedAlong(base, n, index, other, kept, t, env)
-                : along(other, kept, env.snap ? onUnits(t, halfStep(env)) : t);
+        point = alongKept(base, n, index, other, kept, to, fit, env);
     } else if (keep && axis && end) {
         point = measuredEnd(was, to, axis, env);
     } else if (keep && axis && env.snap && straightCorner(base, n, index)) {
@@ -1800,6 +1921,30 @@ export function dragPoint(
         });
     }
     return moved;
+}
+
+/**
+ * Where point `index` goes dragged to `to` with constrain, along `kept` from `other`, unlocked or
+ * on the path: with Fit snapped, where the interval comes out whole; else on half steps (snap on)
+ */
+function alongKept(
+    base: LineParams,
+    n: number,
+    index: number,
+    other: XY,
+    kept: XY,
+    to: XY,
+    fit: boolean,
+    env: ToolEnv,
+): XY {
+    const t = Math.max(dot(sub(to, other), kept), halfStep(env));
+    if (!(fit && env.snap))
+        return along(other, kept, env.snap ? onUnits(t, halfStep(env)) : t);
+    // The nearest whole interval is at most half a step of interval away, about half a step on
+    // each of its gaps (fewer than n) along: searched for twice that far and no further, since
+    // each try is a layout searched for itself straight across (#596)
+    const within = intervalUnit(env) * n;
+    return snappedAlong(base, n, index, other, kept, t, env, within);
 }
 
 /**

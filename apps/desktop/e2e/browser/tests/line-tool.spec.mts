@@ -382,7 +382,7 @@ test("change: a diagonal from yard line to yard line is measured ↔, placing ma
     await expect(rows.nth(4)).not.toHaveAttribute("aria-disabled", "true");
     await page.keyboard.press("Escape");
 
-    // 1½ steps side to side, grown from the center onto the grid
+    // 1½ steps side to side, grown from the left end, where a new Line's pivot is
     await page
         .getByTestId("shape-tool-readout")
         .getByTestId("shape-editor-interval")
