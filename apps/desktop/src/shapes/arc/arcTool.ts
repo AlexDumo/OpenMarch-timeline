@@ -131,7 +131,8 @@ function parseGuideSize(text: string): { w: number; d: number } | null {
 
 /**
  * The width × depth across of the circle or ellipse the arc is on, in steps (owner on #634):
- * typed as "8 × 5", dragged sideways for its width. A circle's reads "6 × 6", so a shallow arc,
+ * typed as "8 × 5", dragged sideways for its width and up and down for its depth, both in
+ * proportion with constrain. A circle's reads "6 × 6", so a shallow arc,
  * whose guide reaches far off, can be made an ellipse by typing.
  */
 const SIZE: ToolParam<LineParams> = {
@@ -144,7 +145,7 @@ const SIZE: ToolParam<LineParams> = {
     },
     unit: "steps",
     primary: true,
-    drag: "x",
+    drag: "both",
     interval: false,
     blends: true,
     shown: (p) => arcGuide(p) !== null,
@@ -163,22 +164,27 @@ const SIZE: ToolParam<LineParams> = {
         );
         return keptInterval(next, n, env);
     },
+    // Sideways for its width, up and down for its depth; constrain keeps its proportions
     scrub(base, n, m, env) {
         const g = arcGuide(base);
         if (!g) return base;
-        const was = (2 * g.rx) / env.stepPx;
+        const width = m.axis === "x";
+        const was = (2 * (width ? g.rx : g.ry)) / env.stepPx;
         const steps = scrubValue(
             was,
-            scrubDistance("x", m.dx, m.dy),
-            0,
-            spacingRate(env.snap, "x"),
+            m.dx,
+            m.dy,
+            spacingRate(env.snap, m.axis),
         );
         if (steps === was || steps < 1) return base;
-        return keptInterval(
-            withGuideSize(base, (steps * env.stepPx) / 2, g.ry),
-            n,
-            env,
-        );
+        const r = (steps * env.stepPx) / 2;
+        const scale = r / (width ? g.rx : g.ry);
+        const [rx, ry] = m.roles.constrain
+            ? [g.rx * scale, g.ry * scale]
+            : width
+              ? [r, g.ry]
+              : [g.rx, r];
+        return keptInterval(withGuideSize(base, rx, ry), n, env);
     },
 };
 
@@ -297,12 +303,13 @@ export const arcTool: ToolKind<LineParams> = {
     params: [INTERVAL, BEND, SIZE],
     choices: [ENDS, lineChoice("spacing")],
     readable: isArcParams,
-    // A radius handle stretches from the center with fromCenter; an end on an ellipse slides
+    // A radius handle keeps the proportions with constrain and stretches from the center with
+    // fromCenter; an end on an ellipse slides
     // round it, taking neither; otherwise as a Line's (owner on #634)
     honors: {
         handle(key, ratioLocked, params, n) {
             if (key === WIDTH_KEY || key === DEPTH_KEY)
-                return { fromCenter: "fromCenter" };
+                return { constrain: "keepRatio", fromCenter: "fromCenter" };
             if (key === BEND_KEY || ellipseOf(params)) return {};
             return lineTool.honors!.handle!(key, ratioLocked, params, n);
         },

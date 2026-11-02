@@ -257,7 +257,8 @@ const ROUND_STICK = 0.05;
 
 /**
  * A radius handle dragged to `to` (owner on #634): the guide's width or depth set by it, the
- * other side staying where it is, or both sides moving with `fromCenter`. Radii land on half
+ * other side staying where it is, or both sides moving with `fromCenter`; `constrain` keeps its
+ * proportions. Radii land on half
  * steps with the ladder on and stick to a circle within {@link ROUND_STICK}. The arc keeps its
  * angles around the guide, so its ends ride along.
  */
@@ -284,7 +285,11 @@ export function dragRadius(
     if (env.snap) r = Math.round(r / (env.stepPx / 2)) * (env.stepPx / 2);
     r = Math.max(env.stepPx / 2, r);
     const other = width ? g.ry : g.rx;
-    if (Math.abs(r - other) <= ROUND_STICK * Math.max(r, other)) r = other;
+    if (
+        !env.constrain &&
+        Math.abs(r - other) <= ROUND_STICK * Math.max(r, other)
+    )
+        r = other;
     // The far side stays put: the center moves half as far as the handle's side
     const shift = env.fromCenter ? 0 : side * (r - was);
     const c = Math.cos(g.axis);
@@ -294,10 +299,12 @@ export function dragRadius(
         x: g.center.x + along.x * shift,
         y: g.center.y + along.y * shift,
     };
+    // constrain keeps the proportions: the other radius scales with it, about the center
+    const scaled = env.constrain ? (other * r) / was : other;
     return onGuide(base, {
         ...g,
         center,
-        ...(width ? { rx: r } : { ry: r }),
+        ...(width ? { rx: r, ry: scaled } : { ry: r, rx: scaled }),
     });
 }
 

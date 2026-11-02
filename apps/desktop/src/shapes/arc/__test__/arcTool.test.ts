@@ -588,4 +588,61 @@ describe("on an ellipse (owner on #634)", () => {
                         2,
             ).toBeCloseTo(1, 3);
     });
+
+    it("drags its size sideways for width, up and down for depth, both with constrain", () => {
+        const t = deeper();
+        const size = arcTool.params.find((q) => q.key === "size")!;
+        expect(size.drag).toBe("both");
+        const roles = {
+            fine: false,
+            constrain: false,
+            fromCenter: false,
+        } as never;
+        const wider = size.scrub(
+            t.params,
+            7,
+            { dx: 16, dy: 0, axis: "x", roles },
+            env,
+        );
+        expect(size.display(wider, 7, STEP)).toBe("7 × 8");
+        const deeperStill = size.scrub(
+            t.params,
+            7,
+            { dx: 0, dy: -16, axis: "y", roles },
+            env,
+        );
+        expect(size.display(deeperStill, 7, STEP)).toBe("6 × 9");
+        const both = size.scrub(
+            t.params,
+            7,
+            {
+                dx: 48,
+                dy: 0,
+                axis: "x",
+                roles: {
+                    fine: false,
+                    constrain: true,
+                    fromCenter: false,
+                } as never,
+            },
+            env,
+        );
+        // 6 → 9 wide, so 8 → 12 deep
+        expect(size.display(both, 7, STEP)).toBe("9 × 12");
+    });
+
+    it("keeps its proportions when a radius handle is dragged with constrain", () => {
+        const t = deeper();
+        const { depth } = radiusHandlePoints(paramsOf(t))!;
+        const g = arcGuide(paramsOf(t))!;
+        const kept = onHandle(
+            t,
+            DEPTH_KEY,
+            { x: depth.x, y: depth.y + 20 },
+            { ...env, constrain: true },
+        );
+        const now = arcGuide(paramsOf(kept))!;
+        expect(now.ry / now.rx).toBeCloseTo(g.ry / g.rx, 6);
+        expect(now.ry).toBeCloseTo(50, 6);
+    });
 });
