@@ -4856,8 +4856,9 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         // Page 1 keeps its box
         await page.keyboard.press("Escape");
         await selectPage(show, "Page 1");
-        // A click before the page's boxes are read back picks the one marcher
-        await waitForIdle(page);
+        // A second click on the same marcher within the field's double-click time (500 ms, even
+        // across the page change) goes inside the box and picks the one marcher
+        await page.waitForTimeout(600);
         await page.mouse.click(member.x, member.y);
         await expect(readoutShown).toBeVisible();
 
@@ -4868,7 +4869,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         expect(await laterMoves()).toBe(0);
         await page.keyboard.press("Escape");
         await selectPage(show, "Page 2");
-        await waitForIdle(page);
+        await page.waitForTimeout(600);
         await page.mouse.click(member.x, member.y);
         await expect(readoutShown).toBeVisible();
 
