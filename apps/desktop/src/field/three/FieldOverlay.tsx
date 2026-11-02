@@ -46,6 +46,8 @@ const SUBTRACT_LASSO_DASH = "2 4";
  */
 const SHAPE_OUTLINE_WIDTH = 1;
 const SHAPE_OUTLINE_DASH = "6 4";
+/** The circle a shape is drawn on (an Arc's, #634): short dashes, quieter than a drawing outline */
+const CONSTRUCTION_DASH = "3 5";
 const SPOT_RADIUS = 4;
 const SPOT_WIDTH = 1.5;
 const WALK_WIDTH = 1;
@@ -527,6 +529,21 @@ const ShapeBody = memo(function ShapeBody({
     const dots = drawing.stage === "drawing";
     return (
         <>
+            {drawing.construction?.map(({ center, r }, i) => (
+                // The circle an arc is part of, faint under it (#634)
+                <circle
+                    key={`construction-${i}`}
+                    cx={center.x}
+                    cy={center.y}
+                    r={r}
+                    fill="none"
+                    stroke={walk}
+                    strokeWidth={SHAPE_OUTLINE_WIDTH}
+                    strokeDasharray={CONSTRUCTION_DASH}
+                    vectorEffect="non-scaling-stroke"
+                    data-testid="fieldShapeConstruction"
+                />
+            ))}
             {drawing.outline &&
                 (drawing.openOutline ? (
                     // A line has no inside to fill (#524)

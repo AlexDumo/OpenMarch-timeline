@@ -185,6 +185,10 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
         })),
         rings: (drawing.rings ?? []).map(copy),
         gaps: (drawing.gaps ?? []).map(copy),
+        construction: (drawing.construction ?? []).map(({ center, r }) => ({
+            center: copy(center),
+            r,
+        })),
         stage: drawing.stage ?? null,
         knob: drawing.knob ? screen(drawing.knob.at) : null,
         centerDot: drawing.centerDot ? screen(drawing.centerDot) : null,

@@ -108,6 +108,12 @@ export interface ToolHandle {
     readonly bar?: XY;
 }
 
+/** A circle a shape is drawn on ({@link ToolKind.construction}), in field units */
+export interface ConstructionCircle {
+    readonly center: XY;
+    readonly r: number;
+}
+
 /** A parameter's direction mark: ↔ across, ↕ deep */
 export type ParamGlyph = "↔" | "↕";
 
@@ -578,6 +584,11 @@ export interface ToolKind<P> {
     outline?(params: P, n: number): readonly XY[];
     /** Whether the outline is open, drawn without joining its last point to its first (a line) */
     outlineOpen?(params: P, n: number): boolean;
+    /**
+     * Circles the shape is drawn on, shown faint and dashed while it's edited: an Arc's whole
+     * circle (owner on #634). None when absent.
+     */
+    construction?(params: P, n: number): readonly ConstructionCircle[];
     /**
      * The points pulled onto the field's lines while the shape is moved (#446): a box's corners,
      * then its center. None when absent, so the shape moves on the grid alone.

@@ -15,6 +15,7 @@ import { lineFillSpots } from "../line/lineFill";
 import {
     lineFrame,
     lineOutline,
+    lineSegments,
     type LineParams,
     type LinePoint,
 } from "../line/lineGeometry";
@@ -238,6 +239,14 @@ export const arcTool: ToolKind<LineParams> = {
     clickHandle: undefined,
     doubleClickHandle: undefined,
     menu: MENU,
+    // The whole circle the arc is part of, unless it already is one (owner on #634)
+    construction(params) {
+        if (arcEnds(params) === "circle") return [];
+        const segment = lineSegments(params)[0];
+        return segment?.type === "arc"
+            ? [{ center: segment.center, r: segment.r }]
+            : [];
+    },
     handleTip: (params, _n, key) =>
         key === BEND_KEY ? formatBend(bendOf(params)) : null,
     snapPoints: (params) => [

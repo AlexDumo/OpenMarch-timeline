@@ -337,3 +337,20 @@ describe("switching kinds", () => {
         expect(Math.abs(bendOf(paramsOf(switched)))).toBe(180);
     });
 });
+
+describe("its whole circle", () => {
+    it("shows the circle the arc is part of, through both ends", () => {
+        const p = arc(90);
+        const [circle] = arcTool.construction!(p, 5);
+        expect(circle).toBeDefined();
+        for (const end of p.points)
+            expect(dist(end, circle!.center)).toBeCloseTo(circle!.r, 9);
+        expect(arcTool.construction!(withEnds(p, "chord"), 5)).toHaveLength(1);
+    });
+
+    it("shows none once it's closed to a circle", () => {
+        expect(arcTool.construction!(withEnds(arc(90), "circle"), 5)).toEqual(
+            [],
+        );
+    });
+});

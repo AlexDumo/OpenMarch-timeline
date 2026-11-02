@@ -291,6 +291,10 @@ export type FieldModeDrawing = {
     /** The outline is open: drawn without joining its last point to its first (a line, #524) */
     openOutline?: boolean;
     /**
+     * Circles the shape is drawn on, faint and dashed under it: an Arc's whole circle (#634)
+     */
+    construction?: readonly { center: FieldPoint; r: number }[];
+    /**
      * Where the shape's marchers start the move (08-shape-system-ux.md, "Marcher styling"), drawn
      * as faint ghosts of them (#417): at the start flag, the same points the walks leave from
      */
