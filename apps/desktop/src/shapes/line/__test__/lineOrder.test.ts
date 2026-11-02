@@ -30,13 +30,13 @@ import {
     undo,
     type ToolState,
 } from "../../tool/toolMachine";
-import type { AssignMarcher } from "../../assign";
+import { orderChoiceOf, type AssignMarcher } from "../../assign";
 import type { ShapeContext, XY } from "../../types";
 
 /**
  * Who goes where on a Line (#528, spec #522): Least travel by default, Keep order when every
- * selected marcher is a member of one placed Line (they keep their order along it), and Reverse,
- * which flips which end gets the first marcher. Driven through the shape session with the real
+ * selected marcher is a member of one placed Line (they keep their order along it), and Reverse
+ * order, which flips which end gets the first marcher. Driven through the shape session with the real
  * Line kind, and read back from recipes as the database keeps them.
  */
 
@@ -408,6 +408,28 @@ describe("the order picked on a placed line", () => {
         expect(slotOf(pick(placed, "reverse").members)).toEqual(
             slotOf(placed.recipe.members),
         );
+    });
+
+    it("reads a line saved as Reverse as Reverse order, and saves Keep order as before", () => {
+        expect(placedOrderChoice(reversed())).toBe("reverse");
+        expect(orderChoiceOf("keep", true)).toBe("reverse");
+        expect(recipeOrderFields(reversed(), "keep")).toEqual({
+            orderMode: "keep",
+            reverse: false,
+        });
+    });
+
+    it("ignores a reverse stored with Least travel, and clears it on the next save", () => {
+        const placed = kept();
+        const stray = {
+            ...placed,
+            recipe: { ...placed.recipe, orderMode: "nearest", reverse: true },
+        };
+        expect(placedOrderChoice(stray)).toBe("nearest");
+        expect(recipeOrderFields(stray, placedOrderChoice(stray))).toEqual({
+            orderMode: "nearest",
+            reverse: false,
+        });
     });
 
     it("puts a line saved as Reverse back in order when Keep order is picked", () => {

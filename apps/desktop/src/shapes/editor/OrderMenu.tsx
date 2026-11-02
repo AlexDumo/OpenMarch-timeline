@@ -3,47 +3,40 @@ import * as Popover from "@radix-ui/react-popover";
 import { CaretDownIcon } from "@phosphor-icons/react";
 import tolgee from "@/global/singletons/Tolgee";
 import type { OrderChoice } from "../assign";
-import type { ToolChoicePicture } from "../tool/toolKind";
-import { ChoicePicture } from "./ChoicePicture";
-import { ORDER_PICTURES } from "./orderPictures";
 import type { ShapeEditTarget } from "./editTargets";
 import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
+import { OrderPicture } from "./OrderPicture";
 import { Tip } from "./Tip";
 
 /** The answers, in the menu's order; Keep order only when offered */
-export function orderOptions(keepOffered: boolean): {
-    value: OrderChoice;
-    label: string;
-    picture: ToolChoicePicture;
-}[] {
+export function orderOptions(
+    keepOffered: boolean,
+): { value: OrderChoice; label: string }[] {
     return [
         {
             value: "nearest",
             label: tolgee.t("shapes.edit.order.nearest", "Least travel"),
-            picture: ORDER_PICTURES.nearest,
         },
         ...(keepOffered
             ? [
                   {
                       value: "keep" as const,
                       label: tolgee.t("shapes.edit.order.keep", "Keep order"),
-                      picture: ORDER_PICTURES.keep,
                   },
               ]
             : []),
         {
             value: "reverse",
-            label: tolgee.t("shapes.edit.order.reverse", "Reverse"),
-            picture: ORDER_PICTURES.reverse,
+            label: tolgee.t("shapes.edit.order.reverse", "Reverse order"),
         },
     ];
 }
 
 /**
  * Who goes where on a kind with an order along it (a Line, #528): Least travel, Keep order (when
- * every marcher comes from one placed Line) or Reverse. Like the kind's own menus, its button
+ * every marcher comes from one placed Line) or Reverse order. Like the kind's own menus, its button
  * names the answer the shape has, and picking another lays the marchers out again as one change.
- * None for a kind without an order.
+ * Each answer's picture reads the new line as numbers (#559). None for a kind without an order.
  */
 export function OrderMenu({
     target,
@@ -78,8 +71,8 @@ export function OrderMenu({
                         data-value={order.current}
                         className="rounded-4 hover:bg-fg-2 flex min-h-24 items-center gap-4 px-4 py-2"
                     >
-                        <ChoicePicture
-                            picture={ORDER_PICTURES[order.current]}
+                        <OrderPicture
+                            choice={order.current}
                             testId="shape-order-picture"
                         />
                         <span>{currentLabel}</span>
@@ -124,8 +117,8 @@ export function OrderMenu({
                                         : "hover:text-accent",
                                 )}
                             >
-                                <ChoicePicture
-                                    picture={option.picture}
+                                <OrderPicture
+                                    choice={option.value}
                                     testId={`shape-order-${option.value}-picture`}
                                 />
                                 <span>{option.label}</span>

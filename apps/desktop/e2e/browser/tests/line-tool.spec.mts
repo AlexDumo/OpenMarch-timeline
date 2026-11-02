@@ -1033,7 +1033,8 @@ test("change: a click on the first point closes a clicked line, Grid fills it, a
 
 // Who goes where on a Line (#528): a line drawn on marchers who all stand on
 // one placed Line keeps their order along it (Keep order, the default), the
-// menu offers Least travel and Reverse too, and the choice is saved in the
+// menu offers Least travel and Reverse order too, each pictured as the new
+// line read as numbers, and the choice is saved in the
 // recipe, where a reopened line can pick again. Page 2 has no positions of
 // its own, so the line placed on page 1 is still standing there.
 test.describe("who goes where", () => {
@@ -1103,7 +1104,7 @@ test.describe("who goes where", () => {
         // Nobody stands on a placed line yet: no Keep order
         await expect(
             page.getByTestId("shape-order-content").getByRole("menuitemradio"),
-        ).toHaveText(["Least travel", "Reverse"]);
+        ).toHaveText([/Least travel$/, /Reverse order$/]);
         await page.keyboard.press("Escape");
         await page.keyboard.press("Enter");
         await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
@@ -1133,11 +1134,23 @@ test.describe("who goes where", () => {
         await order.click();
         await expect(
             page.getByTestId("shape-order-content").getByRole("menuitemradio"),
-        ).toHaveText(["Least travel", "Keep order", "Reverse"]);
+        ).toHaveText([/Least travel$/, /Keep order$/, /Reverse order$/]);
+        for (const [choice, sequence] of [
+            ["nearest", "2143"],
+            ["keep", "1234"],
+            ["reverse", "4321"],
+        ])
+            await expect(
+                page.getByTestId(`shape-order-${choice}-picture`),
+            ).toHaveAttribute("data-sequence", sequence);
 
-        // Reverse, then back to Keep order
+        // Reverse order, then back to Keep order
         await page.getByTestId("shape-order-reverse").click();
         await expect(order).toHaveAttribute("data-value", "reverse");
+        await expect(page.getByTestId("shape-order-picture")).toHaveAttribute(
+            "data-sequence",
+            "4321",
+        );
         await order.click();
         await page.getByTestId("shape-order-keep").click();
         await expect(order).toHaveAttribute("data-value", "keep");
@@ -1152,7 +1165,7 @@ test.describe("who goes where", () => {
             reverse: 0,
         });
 
-        // Reopened, it shows Keep order; Reverse saves on pick, flipping them
+        // Reopened, it shows Keep order; Reverse order saves on pick, flipping them
         await page.keyboard.press("Escape");
         await expect
             .poll(async () => (await readField(page)).selection)
