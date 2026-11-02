@@ -3,6 +3,7 @@
  * the report, grouped as Can't import, Needs your choice (pre-selected),
  * Fixed for you (collapsed) and Notes (props-spec.md §2 "The review").
  */
+import tolgee from "@/global/singletons/Tolgee";
 import { Button, Checkbox } from "@openmarch/ui";
 import {
     BookOpenIcon,
@@ -36,6 +37,10 @@ import {
     UNIT_FACTORS,
     type Translate,
 } from "./reportText";
+import { formatList } from "@/utilities/formatList";
+import Keycaps from "@/components/ui/Keycaps";
+import { formatBindingKeys } from "@/shortcuts/bindings";
+import { isMacPlatform } from "@/shortcuts/platform";
 
 type ChoiceRow = ModelImportReport["needsChoice"][number];
 type Actions = Pick<
@@ -165,9 +170,15 @@ function Choice({
                     <Row
                         title={k("units.title")}
                         detail={k("units.detail", {
-                            largest: largest.toLocaleString("en-US", {
-                                maximumFractionDigits: 2,
-                            }),
+                            largest: largest.toLocaleString(
+                                tolgee.getLanguage(),
+                                {
+                                    style: "unit",
+                                    unit: "meter",
+                                    unitDisplay: "short",
+                                    maximumFractionDigits: 2,
+                                },
+                            ),
                         })}
                     />
                     <div className="flex flex-wrap gap-4" role="group">
@@ -223,11 +234,13 @@ function Choice({
                         disabled={busy}
                         onChange={(v) => actions.setChoices({ simplify: v })}
                         title={k("simplify.title", {
-                            cap: row.cap.toLocaleString("en-US"),
+                            cap: row.cap.toLocaleString(tolgee.getLanguage()),
                         })}
                         detail={k("simplify.detail", {
-                            triangles: row.triangles.toLocaleString("en-US"),
-                            cap: row.cap.toLocaleString("en-US"),
+                            triangles: row.triangles.toLocaleString(
+                                tolgee.getLanguage(),
+                            ),
+                            cap: row.cap.toLocaleString(tolgee.getLanguage()),
                             kind: kind ? kindName(kind, t) : "",
                         })}
                     />
@@ -240,8 +253,9 @@ function Choice({
                                 onClick={() => actions.setShowBefore(true)}
                             >
                                 {k("before", {
-                                    triangles:
-                                        row.triangles.toLocaleString("en-US"),
+                                    triangles: row.triangles.toLocaleString(
+                                        tolgee.getLanguage(),
+                                    ),
                                 })}
                             </Chip>
                             <Chip
@@ -253,7 +267,7 @@ function Choice({
                                 {k("after", {
                                     triangles:
                                         row.simplifiedTriangles.toLocaleString(
-                                            "en-US",
+                                            tolgee.getLanguage(),
                                         ),
                                 })}
                             </Chip>
@@ -285,7 +299,7 @@ function Choice({
                                 ? k("grip.manual")
                                 : row.misnamed.length
                                   ? k("grip.misnamed", {
-                                        names: row.misnamed.join(", "),
+                                        names: formatList(row.misnamed),
                                     })
                                   : k("grip.detail")
                         }
@@ -305,9 +319,23 @@ function Choice({
                                 }
                             >
                                 <CrosshairIcon size={14} />
-                                {model.pickingGrip
-                                    ? k("grip.picking")
-                                    : k("grip.pick")}
+                                {model.pickingGrip ? (
+                                    <T
+                                        keyName="library.import.choices.grip.picking"
+                                        params={{
+                                            keys: () => (
+                                                <Keycaps
+                                                    keys={formatBindingKeys(
+                                                        "Escape",
+                                                        isMacPlatform(),
+                                                    )}
+                                                />
+                                            ),
+                                        }}
+                                    />
+                                ) : (
+                                    k("grip.pick")
+                                )}
                             </Button>
                         </div>
                     )}

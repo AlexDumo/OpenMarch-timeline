@@ -5,8 +5,9 @@ piece of user-facing text through Tolgee as you build, even though only English
 ships at first. Translators fill in the other languages later, from the English
 text and the context you leave for them.
 
-`pnpm check:i18n` enforces this for `apps/desktop/src`. It runs in `pnpm check:quick`,
-in the pre-commit hook when desktop source or i18n files change, and in PR checks.
+`pnpm check:i18n` enforces this for the renderer (`apps/desktop/src`) and the Electron
+main process and preload (`apps/desktop/electron`). It runs in `pnpm check:quick`, in
+the pre-commit hook when desktop source or i18n files change, and in PR checks.
 
 ## What counts as user-facing text
 
@@ -33,8 +34,18 @@ directly in the places above, so these stay your responsibility:
 - Text built elsewhere and passed in through a variable or a prop not in the list.
 - Error messages (`throw new Error("…")`) that end up on screen.
 - `t` renamed on import (`const { t: translate } = …`); keys aren't checked there.
-- The Electron main process (`apps/desktop/electron`: menus, native dialogs) and
-  `packages/ui`.
+- In the main process, the check sees `t()` keys and literal text in native dialogs
+  (`dialog.show*` text options, `buttons`, file-filter `name`s, `dialog.showErrorBox`),
+  menu item labels and window titles (`new BrowserWindow({ title })`, `setTitle`).
+  It doesn't see text main returns to the renderer (error messages in IPC results,
+  thrown errors), or dialog and menu options built in a helper and passed in.
+- `packages/ui` isn't checked. It has no translations, so its components take every
+  piece of text through props, with no English default; pass translated text from
+  the app.
+
+Keys written in `labelKey`-style properties (`labelKey`, `titleKey`, `messageKey`,
+`descriptionKey`, `detailKey`, `tooltipKey`, `placeholderKey`) for code elsewhere to
+translate are checked like `t()` keys.
 
 ## How to add text
 
@@ -53,6 +64,28 @@ Key names are `<area>.<feature>.<thing>`, for example
 `timeline.rangeMenu.setAsShown`. Reuse an existing key only when the text means
 the same thing in the same place; "Set" on a button and "Set" as a state can
 translate differently.
+
+### Main process
+
+The Electron main process translates with `t()` from `apps/desktop/electron/main/i18n.ts`:
+the same keys, `en.json` and ICU formatting as the renderer, with English for keys a
+language lacks. It follows the app language the renderer saves (the `language`
+setting).
+
+- Call `t()` when the text is shown: build dialog options, file filters and menu
+  templates in a function, never in a module-level constant, or they keep the
+  language they were first read in.
+- The application menu is built by `buildApplicationMenu()` and rebuilt when the
+  language changes. Give role items (`cut`, `zoomIn`) a `label` too; Electron's own
+  role labels are English only.
+- Window titles are set when the window opens; a window whose renderer sets
+  `document.title` follows language changes from there.
+- Text for the renderer to show: prefer returning a code and let the renderer word
+  it. When main words it, use `t()`. Code the web build or a worker also runs
+  (`electron/database`, modules `web/` imports) must not import `i18n.ts`; return the
+  key instead (`messageKey`, `messageParams`) and translate where it's shown.
+- Native menus and dialogs can't show keycaps, so a shortcut there is plain text in
+  the string's arguments (`menu.withShortcut`).
 
 ## Writing translatable strings
 

@@ -330,20 +330,16 @@ export function StaticMarcherCoordinateSheet({
             ) : (
                 <>
                     <div
-                        title="header container"
-                        aria-label="marcher header"
+                        data-testid="marcher-header"
                         className="sheetHeader"
                         style={{
                             backgroundColor: "#ddd",
                             display: "flex",
                         }}
                     >
-                        <div
-                            title="drill number header"
-                            style={headingContainerStyle}
-                        >
+                        <div style={headingContainerStyle}>
                             <h4
-                                aria-label="marcher drill number"
+                                data-testid="marcher-drill-number"
                                 style={h4Style}
                             >
                                 {marcherState.drill_number}
@@ -351,32 +347,32 @@ export function StaticMarcherCoordinateSheet({
                         </div>
                         {marcherState.name && marcherState.name.trim() && (
                             <div
-                                title="marcher name header"
                                 style={{
                                     flexGrow: 1,
                                     ...leftBorderStyle,
                                     ...headingContainerStyle,
                                 }}
                             >
-                                <h4 aria-label="marcher name" style={h4Style}>
+                                <h4 data-testid="marcher-name" style={h4Style}>
                                     {marcherState.name}
                                 </h4>
                             </div>
                         )}
                         <div
-                            title="section header"
                             style={{
                                 ...leftBorderStyle,
                                 ...headingContainerStyle,
                             }}
                         >
-                            <h4 aria-label="marcher section" style={h4Style}>
+                            <h4 data-testid="marcher-section" style={h4Style}>
                                 {marcherState.section}
                             </h4>
                         </div>
                     </div>
                     <table
-                        aria-label="individual marcher coordinates table"
+                        aria-label={t("coordinateSheet.tableLabel", {
+                            drillNumber: marcherState.drill_number,
+                        })}
                         style={{
                             tableLayout: "fixed",
                             width: "100%",
@@ -409,31 +405,34 @@ export function StaticMarcherCoordinateSheet({
                             />
                         </colgroup>
                         <thead /* style={{ width: "100%" }} */>
-                            <tr aria-label="coordinates header row">
+                            <tr>
                                 <th
                                     className="text-center"
-                                    aria-label="page header"
+                                    aria-label={t(
+                                        "coordinateSheet.pageColumnLabel",
+                                    )}
                                     style={{
                                         ...thTdStyle,
                                         fontWeight: "bold",
                                     }}
                                 >
-                                    Pg
+                                    {t("coordinateSheet.pageAbbreviation")}
                                 </th>
                                 <th
                                     className="text-center"
-                                    aria-label="counts header"
+                                    aria-label={t(
+                                        "coordinateSheet.countsColumnLabel",
+                                    )}
                                     style={{
                                         ...thTdStyle,
                                         fontWeight: "bold",
                                     }}
                                 >
-                                    Ct
+                                    {t("coordinateSheet.countAbbreviation")}
                                 </th>
                                 {includeMeasuresState && (
                                     <th
                                         className="text-center"
-                                        aria-label="measure header"
                                         style={{
                                             ...thTdStyle,
                                             fontWeight: "bold",
@@ -443,27 +442,39 @@ export function StaticMarcherCoordinateSheet({
                                     </th>
                                 )}
                                 <th
-                                    aria-label="x header"
+                                    aria-label={
+                                        useXYState
+                                            ? t(
+                                                  "exportCoordinates.sideToSideHeader",
+                                              )
+                                            : undefined
+                                    }
                                     style={{
                                         ...thTdStyle,
                                         fontWeight: "bold",
                                     }}
                                 >
                                     {useXYState
-                                        ? "X"
+                                        ? t("coordinateSheet.xHeader")
                                         : t(
                                               "exportCoordinates.sideToSideHeader",
                                           )}
                                 </th>
                                 <th
-                                    aria-label="y header"
+                                    aria-label={
+                                        useXYState
+                                            ? t(
+                                                  "exportCoordinates.frontToBackHeader",
+                                              )
+                                            : undefined
+                                    }
                                     style={{
                                         ...thTdStyle,
                                         fontWeight: "bold",
                                     }}
                                 >
                                     {useXYState
-                                        ? "Y"
+                                        ? t("coordinateSheet.yHeader")
                                         : t(
                                               "exportCoordinates.frontToBackHeader",
                                           )}
@@ -490,7 +501,6 @@ export function StaticMarcherCoordinateSheet({
                                     <tr key={marcherPage.page_id}>
                                         <td
                                             className="text-center"
-                                            aria-label="page name"
                                             style={{
                                                 ...thTdStyle,
                                             }}
@@ -499,7 +509,6 @@ export function StaticMarcherCoordinateSheet({
                                         </td>
                                         <td
                                             className="text-center"
-                                            aria-label="page counts"
                                             style={{
                                                 ...thTdStyle,
                                             }}
@@ -509,7 +518,6 @@ export function StaticMarcherCoordinateSheet({
                                         {includeMeasuresState && (
                                             <td
                                                 className="text-center"
-                                                aria-label="page measures"
                                                 style={{
                                                     ...thTdStyle,
                                                 }}
@@ -518,7 +526,6 @@ export function StaticMarcherCoordinateSheet({
                                             </td>
                                         )}
                                         <td
-                                            aria-label="x coordinate"
                                             style={{
                                                 ...thTdStyle,
                                                 textAlign: "left",
@@ -529,7 +536,6 @@ export function StaticMarcherCoordinateSheet({
                                                 : rCoords.toVerboseStringX()}
                                         </td>
                                         <td
-                                            aria-label="y coordinate"
                                             style={{
                                                 ...thTdStyle,
                                                 textAlign: "left",
@@ -624,14 +630,12 @@ export function StaticQuarterMarcherSheet({
 
     return (
         <div
-            title="Marcher Coordinate Sheet Container"
             style={{
                 fontFamily: "ui-sans-serif, system-ui, sans-serif",
             }}
         >
             <div
-                title="header container"
-                aria-label="marcher header"
+                data-testid="marcher-header"
                 className="sheetHeader"
                 style={{
                     backgroundColor: "#ddd",
@@ -639,7 +643,6 @@ export function StaticQuarterMarcherSheet({
                 }}
             >
                 <div
-                    title="drill number header"
                     style={{
                         backgroundColor: "#ddd",
                         padding: "0.5rem",
@@ -648,7 +651,7 @@ export function StaticQuarterMarcherSheet({
                     }}
                 >
                     <h4
-                        aria-label="marcher drill number"
+                        data-testid="marcher-drill-number"
                         style={{
                             margin: 0,
                             padding: 0,
@@ -660,7 +663,6 @@ export function StaticQuarterMarcherSheet({
                 </div>
                 {marcherState.name && marcherState.name.trim() && (
                     <div
-                        title="marcher name header"
                         style={{
                             flexGrow: 1,
                             borderLeft: "1px dotted #888",
@@ -671,7 +673,7 @@ export function StaticQuarterMarcherSheet({
                         }}
                     >
                         <h4
-                            aria-label="marcher name"
+                            data-testid="marcher-name"
                             style={{
                                 margin: 0,
                                 padding: 0,
@@ -683,7 +685,6 @@ export function StaticQuarterMarcherSheet({
                     </div>
                 )}
                 <div
-                    title="quarter-page number header"
                     style={{
                         borderLeft: "1px dotted #888",
                         backgroundColor: "#ddd",
@@ -693,19 +694,23 @@ export function StaticQuarterMarcherSheet({
                     }}
                 >
                     <h4
-                        aria-label="quarter page number"
+                        data-testid="quarter-page-number"
                         style={{
                             margin: 0,
                             padding: 0,
                             fontSize: "1rem",
                         }}
                     >
-                        Page {quarterPageNumber}
+                        {t("coordinateSheet.page", {
+                            page: quarterPageNumber,
+                        })}
                     </h4>
                 </div>
             </div>
             <table
-                aria-label="individual marcher coordinates table"
+                aria-label={t("coordinateSheet.tableLabel", {
+                    drillNumber: marcherState.drill_number,
+                })}
                 style={{
                     tableLayout: "fixed",
                     width: "100%",
@@ -726,9 +731,9 @@ export function StaticQuarterMarcherSheet({
                     <col style={{ width: QuarterSheetColumnWidths.y }} />
                 </colgroup>
                 <thead /* style={{ width: "100%" }} */>
-                    <tr aria-label="coordinates header row">
+                    <tr>
                         <th
-                            aria-label="page header"
+                            aria-label={t("coordinateSheet.pageColumnLabel")}
                             style={{
                                 border: "1px solid #888",
                                 padding: "2px 4px",
@@ -739,10 +744,10 @@ export function StaticQuarterMarcherSheet({
                                 lineHeight: 1.1,
                             }}
                         >
-                            Pg.
+                            {t("coordinateSheet.pageAbbreviation")}
                         </th>
                         <th
-                            aria-label="counts header"
+                            aria-label={t("coordinateSheet.countsColumnLabel")}
                             style={{
                                 border: "1px solid #888",
                                 padding: "2px 4px",
@@ -753,11 +758,10 @@ export function StaticQuarterMarcherSheet({
                                 lineHeight: 1.1,
                             }}
                         >
-                            Ct
+                            {t("coordinateSheet.countAbbreviation")}
                         </th>
                         {includeMeasuresState && (
                             <th
-                                aria-label="measure header"
                                 style={{
                                     border: "1px solid #888",
                                     padding: "2px 4px",
@@ -772,7 +776,11 @@ export function StaticQuarterMarcherSheet({
                             </th>
                         )}
                         <th
-                            aria-label="side to side header"
+                            aria-label={
+                                useXYState
+                                    ? t("exportCoordinates.sideToSideHeader")
+                                    : undefined
+                            }
                             style={{
                                 border: "1px solid #888",
                                 padding: "2px 4px",
@@ -783,11 +791,15 @@ export function StaticQuarterMarcherSheet({
                             }}
                         >
                             {useXYState
-                                ? "X"
+                                ? t("coordinateSheet.xHeader")
                                 : t("exportCoordinates.sideToSideHeader")}
                         </th>
                         <th
-                            aria-label="front to back header"
+                            aria-label={
+                                useXYState
+                                    ? t("exportCoordinates.frontToBackHeader")
+                                    : undefined
+                            }
                             style={{
                                 border: "1px solid #888",
                                 padding: "2px 4px",
@@ -798,7 +810,7 @@ export function StaticQuarterMarcherSheet({
                             }}
                         >
                             {useXYState
-                                ? "Y"
+                                ? t("coordinateSheet.yHeader")
                                 : t("exportCoordinates.frontToBackHeader")}
                         </th>
                     </tr>

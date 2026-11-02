@@ -5,7 +5,8 @@ import {
     updateWorkspaceSettingsMutationOptions,
 } from "@/hooks/queries/useWorkspaceSettings";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useTolgee } from "@tolgee/react";
+import { useTranslate } from "@tolgee/react";
+import tolgee from "@/global/singletons/Tolgee";
 import { useGetApiEditorV1Ensembles } from "@/api/generated/ensembles/ensembles";
 import { usePostApiEditorV1Productions } from "@/api/generated/productions/productions";
 import type { ProductionPreview } from "@/api/generated/model";
@@ -44,7 +45,7 @@ export default function EnsembleList() {
         isLoading,
         error,
     } = useGetApiEditorV1Ensembles();
-    const { t } = useTolgee();
+    const { t } = useTranslate();
     const [dialogOpen, setDialogOpen] = useState(false);
     const [selectedProduction, setSelectedProduction] =
         useState<ProductionPreview | null>(null);
@@ -81,7 +82,7 @@ export default function EnsembleList() {
     );
 
     const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString("en-US", {
+        return new Date(dateString).toLocaleDateString(tolgee.getLanguage(), {
             year: "numeric",
             month: "long",
             day: "numeric",
@@ -172,10 +173,11 @@ export default function EnsembleList() {
                 {error && (
                     <div className="text-body text-red">
                         {t("ensembles.error", {
-                            defaultValue: "Error loading ensembles",
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
                         })}
-                        :{" "}
-                        {error instanceof Error ? error.message : String(error)}
                     </div>
                 )}
 

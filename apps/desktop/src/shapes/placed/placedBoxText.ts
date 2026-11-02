@@ -1,5 +1,4 @@
 import tolgee from "@/global/singletons/Tolgee";
-import { LAYOUT_LABELS } from "../distribute/distribution";
 import { layoutOf } from "../distribute/modes";
 import { shownFamily } from "../distribute/layouts";
 import {
@@ -40,11 +39,18 @@ export function placedNumbers(box: PlacedBox, stepPx: number) {
     const resolved = layoutOf(kind, params, spots);
     const family = resolved && shownFamily(resolved);
     if (family && family !== "shortBack" && counts.length > 0)
-        counts[0] = `${LAYOUT_LABELS[family]} ${counts[0]}`;
-    const intervals = kind.params
+        counts[0] = tolgee.t(
+            "shapes.placed.layoutSize",
+            "{layout, select, full {Full} stagger {Stagger} rounded {Rounded} notched {Notched} other {Short back}} {size}",
+            { layout: family, size: counts[0]! },
+        );
+    const values = kind.params
         .filter((p) => p.interval && p.value)
-        .map((p) => formatSteps(p.value!(params, spots, stepPx)));
+        .map((p) => p.value!(params, spots, stepPx));
+    const intervals = values.map((v) => formatSteps(v));
     return {
+        /** The last interval's number, which "steps" agrees with (ICU plural) */
+        intervalCount: values[values.length - 1] ?? 0,
         counts: counts.length > 0 ? counts.join(" · ") : null,
         intervals:
             intervals.length === 0
@@ -62,14 +68,19 @@ export function placedNumbers(box: PlacedBox, stepPx: number) {
  * (short: spots the back rank never had; empty: holes members left), "2 steps" for a circle
  */
 export function placedBoxSummary(box: PlacedBox, stepPx: number): string {
-    const { counts, intervals, notes, empty } = placedNumbers(box, stepPx);
+    const { counts, intervals, intervalCount, notes, empty } = placedNumbers(
+        box,
+        stepPx,
+    );
     return [
         ...(counts ? [counts] : []),
         ...(intervals
             ? [
-                  tolgee.t("shapes.placed.summary.steps", "{interval} steps", {
-                      interval: intervals,
-                  }),
+                  tolgee.t(
+                      "shapes.placed.summary.steps",
+                      "{count, plural, one {{interval} step} other {{interval} steps}}",
+                      { interval: intervals, count: intervalCount },
+                  ),
               ]
             : []),
         ...notes,
@@ -77,7 +88,7 @@ export function placedBoxSummary(box: PlacedBox, stepPx: number): string {
             ? [
                   tolgee.t(
                       "shapes.placed.summary.empty",
-                      "{count, plural, other {# empty}}",
+                      "{count, plural, one {# empty} other {# empty}}",
                       { count: empty },
                   ),
               ]

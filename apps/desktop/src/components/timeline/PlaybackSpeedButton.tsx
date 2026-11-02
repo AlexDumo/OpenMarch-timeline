@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { T, useTranslate } from "@tolgee/react";
 import { clsx } from "clsx";
 import * as Popover from "@radix-ui/react-popover";
 import { Slider } from "@openmarch/ui";
@@ -24,17 +25,27 @@ function sliderToSpeed(value: number): number {
 }
 
 // The tooltip's second part: what a click does, then each hold key on its own line
-const SPEED_HINT = (
-    <span className="text-text-subtitle flex flex-col gap-4 text-[11px]">
-        <span>Click for the next speed, right-click for more</span>
-        <span className="flex items-center gap-6">
-            Hold <Keycaps shortcut="]" /> for double speed
+function SpeedHint() {
+    return (
+        <span className="text-text-subtitle flex flex-col gap-4 text-[11px]">
+            <span>
+                <T keyName="timeline.playbackSpeed.hintClick" />
+            </span>
+            <span className="flex items-center gap-6">
+                <T
+                    keyName="timeline.playbackSpeed.hintFaster"
+                    params={{ keys: () => <Keycaps shortcut="]" /> }}
+                />
+            </span>
+            <span className="flex items-center gap-6">
+                <T
+                    keyName="timeline.playbackSpeed.hintSlower"
+                    params={{ keys: () => <Keycaps shortcut="[" /> }}
+                />
+            </span>
         </span>
-        <span className="flex items-center gap-6">
-            Hold <Keycaps shortcut="[" /> for half speed
-        </span>
-    </span>
-);
+    );
+}
 
 /**
  * Playback speed, as a video player has it. A click steps through 0.25×, 0.5×, 1×, 1.5×, 2× and
@@ -67,19 +78,21 @@ export function PlaybackSpeedButton({
     className?: string;
     testId: string;
 }) {
+    const { t } = useTranslate();
     const [open, setOpen] = useState(false);
-    const shown = formatPlaybackSpeed(playing);
+    const shown = formatPlaybackSpeed(playing, t);
+    const label = t("timeline.playbackSpeed.current", { speed: shown });
     return (
         <Popover.Root open={open} onOpenChange={setOpen}>
             <ShortcutTooltip
-                label={open ? undefined : `Playback speed: ${shown}`}
-                hint={SPEED_HINT}
+                label={open ? undefined : label}
+                hint={<SpeedHint />}
             >
                 <Popover.Anchor asChild>
                     <button
                         type="button"
                         data-testid={testId}
-                        aria-label={`Playback speed: ${shown}`}
+                        aria-label={label}
                         aria-haspopup="dialog"
                         aria-keyshortcuts="BracketRight BracketLeft"
                         // Keeps keyboard focus off, so Space after a click is still Play
@@ -110,12 +123,14 @@ export function PlaybackSpeedButton({
                     className="border-stroke bg-modal text-text shadow-modal rounded-8 z-50 flex w-256 flex-col gap-10 border px-16 py-12 backdrop-blur-sm"
                 >
                     <div className="flex items-baseline justify-between">
-                        <p className="text-body">Playback speed</p>
+                        <p className="text-body">
+                            {t("timeline.playbackSpeed.title")}
+                        </p>
                         <span
                             data-testid={`${testId}-value`}
                             className="text-body font-mono tabular-nums"
                         >
-                            {formatPlaybackSpeed(speed)}
+                            {formatPlaybackSpeed(speed, t)}
                         </span>
                     </div>
                     <Slider
@@ -127,7 +142,7 @@ export function PlaybackSpeedButton({
                         onValueChange={(values) =>
                             onSetSpeed(sliderToSpeed(values[0] ?? 0))
                         }
-                        aria-label="Playback speed"
+                        aria-label={t("timeline.playbackSpeed.title")}
                     />
                     <div className="grid grid-cols-4 gap-4">
                         {SPEED_CHIPS.map((chip) => (
@@ -143,13 +158,18 @@ export function PlaybackSpeedButton({
                                         : "bg-fg-2 hover:text-accent",
                                 )}
                             >
-                                {formatPlaybackSpeed(chip)}
+                                {formatPlaybackSpeed(chip, t)}
                             </button>
                         ))}
                     </div>
                     <p className="text-sub text-text-subtitle border-stroke flex items-center gap-4 border-t pt-8">
-                        Hold <Keycaps shortcut="]" /> for double speed,
-                        <Keycaps shortcut="[" /> for half
+                        <T
+                            keyName="timeline.playbackSpeed.holdKeys"
+                            params={{
+                                faster: () => <Keycaps shortcut="]" />,
+                                slower: () => <Keycaps shortcut="[" />,
+                            }}
+                        />
                     </p>
                 </Popover.Content>
             </Popover.Portal>

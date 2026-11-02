@@ -23,7 +23,8 @@ import { basename, dirname, join, resolve, sep } from "node:path";
 import * as DatabaseServices from "../database/database.services";
 import { LIBRARY_LIMITS } from "../../src/view3d/library/protocol";
 import { VIEW3D_AUTO_OPEN_SETTING } from "../../src/view3d/sync/protocol";
-import { applicationMenu } from "./application-menu";
+import { buildApplicationMenu } from "./application-menu";
+import { onMainLanguageChange, setMainLanguage, t } from "./i18n";
 import { openSettingsWindow } from "./settings-window";
 import { TRAFFIC_LIGHT_POSITION } from "./traffic-lights";
 import { handleWindowOpen } from "./window-open-policy";
@@ -138,6 +139,10 @@ ipcMain.on("settings:set", (event, settings) => {
     }
     broadcastSettingsChanged(event.sender, settings);
 
+    if (Object.prototype.hasOwnProperty.call(settings, "language")) {
+        setMainLanguage(settings.language);
+    }
+
     if (Object.prototype.hasOwnProperty.call(settings, "automaticUpdates")) {
         const enabled = automaticUpdatesAreEnabled(settings.automaticUpdates);
         if (app.isPackaged && !process.env.SNAP) {
@@ -227,7 +232,7 @@ const indexHtml = join(process.env.DIST, "index.html");
 // eslint-disable-next-line max-lines-per-function
 async function createWindow(title?: string) {
     win = new BrowserWindow({
-        title: title || "OpenMarch",
+        title: title || "OpenMarch", // i18n-ignore: product name
         icon: join(process.env.VITE_PUBLIC, "favicon.ico"),
         // Fits a portrait tablet (iPad mini is 744 wide; Windows tablets in
         // portrait or split screen are ~768), where the Inspector folds away
@@ -543,7 +548,7 @@ function initDatabaseIpcHandlers() {
     );
     ipcMain.handle("newShow:getDraftPath", () => currentNewShowDraftPath);
     ipcMain.handle("newShow:choosePreviousDotsFile", async () =>
-        choosePreviousDotsFile(win),
+        choosePreviousDotsFile(win, showFileDialogFilters()),
     );
     handleNewShowFloorIpc();
     ipcMain.handle("database:repair", async (_, dbPath: string) => {
@@ -560,7 +565,10 @@ function initDatabaseIpcHandlers() {
             )
                 return null;
             throw new Error(
-                `The repaired file was saved at ${newPath} but couldn't be opened (status ${resCode}).`,
+                t("settings.repairDotsFile.reopenFailed", {
+                    path: newPath,
+                    status: resCode,
+                }),
             );
         } catch (error) {
             console.error("Error repairing database:", error);
@@ -627,7 +635,10 @@ void app.whenReady().then(async () => {
         console.log("Not running in codegen mode");
     }
 
-    Menu.setApplicationMenu(applicationMenu);
+    // The menu and native dialogs follow the app language the renderer saves
+    setMainLanguage(store.get("language"));
+    showApplicationMenu();
+    onMainLanguageChange(showApplicationMenu);
 
     const pathToOpen = resolveStartupDatabasePath();
     if (pathToOpen.length > 0) await setActiveDb(pathToOpen);
@@ -667,6 +678,7 @@ void app.whenReady().then(async () => {
         workerPath: join(__dirname, "import-worker.js"),
     });
 
+    // i18n-ignore: the product name and a file path, the same in every language
     await createWindow("OpenMarch - " + store.get("databasePath"));
 
     void startAutomaticUpdates({
@@ -827,9 +839,17 @@ function broadcastSettingsChanged(
     }
 }
 
+/** The application menu, in the current app language. */
+let applicationMenu: Menu | null = null;
+
+function showApplicationMenu() {
+    applicationMenu = buildApplicationMenu();
+    Menu.setApplicationMenu(applicationMenu);
+}
+
 ipcMain.on(`menu:open`, () => {
     if (!isMacOS) {
-        applicationMenu.popup();
+        applicationMenu?.popup();
     }
 });
 
@@ -853,6 +873,7 @@ ipcMain.handle("get-language", () => {
 ipcMain.handle("set-language", (event, language) => {
     store.set("language", language);
     broadcastSettingsChanged(event.sender, { language });
+    setMainLanguage(language);
 });
 
 // file management
@@ -1038,7 +1059,7 @@ async function openDatabaseAtPathWithoutReload(
         }
 
         store.set("databasePath", filePath);
-        win?.setTitle("OpenMarch - " + filePath);
+        win?.setTitle("OpenMarch - " + filePath); // i18n-ignore: product name and path
         conversionQuestion.forget();
         return 200;
     } catch (error) {
@@ -1324,8 +1345,13 @@ export async function newFile() {
         filePath = process.env.PLAYWRIGHT_NEW_FILE_PATH;
     } else {
         const dialogResult = await dialog.showSaveDialog(win, {
-            buttonLabel: "Create New",
-            filters: [{ name: "OpenMarch File", extensions: ["dots"] }],
+            buttonLabel: t("fileDialog.newShow.button"),
+            filters: [
+                {
+                    name: t("fileDialog.filters.openMarchFile"),
+                    extensions: ["dots"],
+                },
+            ],
         });
         if (dialogResult.canceled || !dialogResult.filePath) return;
         filePath = dialogResult.filePath;
@@ -1353,8 +1379,13 @@ export async function saveFile() {
     // Save
     const response = await dialog
         .showSaveDialog(win, {
-            buttonLabel: "Save Copy",
-            filters: [{ name: "OpenMarch File", extensions: ["dots"] }],
+            buttonLabel: t("fileDialog.saveCopy.button"),
+            filters: [
+                {
+                    name: t("fileDialog.filters.openMarchFile"),
+                    extensions: ["dots"],
+                },
+            ],
         })
         .then(async (path) => {
             if (path.canceled || !path.filePath) return 0;
@@ -1390,6 +1421,12 @@ export async function saveFile() {
     return response;
 }
 
+/** Open-dialog filters for a show file, in the app language. */
+const showFileDialogFilters = (): Electron.FileFilter[] => [
+    { name: t("fileDialog.filters.openMarchFile"), extensions: ["dots"] },
+    { name: t("fileDialog.filters.allFiles"), extensions: ["*"] },
+];
+
 /**
  * Opens a dialog to load a database file path to connect to.
  *
@@ -1403,10 +1440,7 @@ export async function loadDatabaseFile() {
     // If there is no previous path, open a dialog
     dialog
         .showOpenDialog(win, {
-            filters: [
-                { name: "OpenMarch File", extensions: ["dots"] },
-                { name: "All Files", extensions: ["*"] },
-            ],
+            filters: showFileDialogFilters(),
         })
         .then(async (path) => {
             if (path.canceled) return -1;
@@ -1530,12 +1564,13 @@ async function closeCurrentFileNow(isAppQuitting: boolean) {
 
 // Audio files
 
-const AUDIO_FILE_DIALOG_FILTERS: Electron.FileFilter[] = [
+/** Built when the dialog opens, so the names follow the app language. */
+const audioFileDialogFilters = (): Electron.FileFilter[] => [
     {
-        name: "Audio File",
+        name: t("fileDialog.filters.audioFile"),
         extensions: ["mp3", "wav", "ogg", "m4a", "aac", "webm"],
     },
-    { name: "All Files", extensions: ["*"] },
+    { name: t("fileDialog.filters.allFiles"), extensions: ["*"] },
 ];
 
 function audioInsertError(
@@ -1547,7 +1582,7 @@ function audioInsertError(
 async function pickAudioFilePath(): Promise<string | null> {
     if (!win) return null;
     const result = await dialog.showOpenDialog(win, {
-        filters: AUDIO_FILE_DIALOG_FILTERS,
+        filters: audioFileDialogFilters(),
     });
     if (result.canceled || !result.filePaths[0]) return null;
     return result.filePaths[0];
@@ -1583,9 +1618,7 @@ export async function insertAudioFile(): Promise<
 
     if (!DatabaseServices.databaseIsReady()) {
         console.error("insertAudioFile: Database is not ready");
-        return audioInsertError(
-            "No file is open. Create or open a show first.",
-        );
+        return audioInsertError(t("audio.insert.noFileOpen"));
     }
 
     try {
@@ -1603,9 +1636,7 @@ export async function insertAudioFile(): Promise<
             console.error(
                 "insertAudioFile: Database became unavailable during upload",
             );
-            return audioInsertError(
-                "Database became unavailable. Please try again after ensuring the database file is ready.",
-            );
+            return audioInsertError(t("audio.insert.databaseUnavailable"));
         }
 
         const databaseResponse = await DatabaseServices.insertAudioFile({
@@ -1738,7 +1769,7 @@ async function setActiveDbNow(
                 // No show is open (at launch, or an open that got as far as closing it): ask
                 // over the launch page.
                 store.delete("databasePath");
-                win?.setTitle("OpenMarch");
+                win?.setTitle("OpenMarch"); // i18n-ignore: product name
                 if (token !== undefined) win?.webContents.reload();
             }
             return result.status;
@@ -1762,7 +1793,7 @@ async function setActiveDbNow(
             if (result.status === OPEN_STOPPED_STATUS) {
                 // Convert on open: a dialog already told the person why the file didn't open.
                 // Open nothing.
-                win?.setTitle("OpenMarch");
+                win?.setTitle("OpenMarch"); // i18n-ignore: product name
                 win?.webContents.reload();
             } else {
                 console.error(
@@ -1772,7 +1803,7 @@ async function setActiveDbNow(
                     // The refusal closed the show that was open: go to the launch page, which
                     // explains why the file didn't open.
                     refusalAfterReload = result.status;
-                    win?.setTitle("OpenMarch");
+                    win?.setTitle("OpenMarch"); // i18n-ignore: product name
                     win?.webContents.reload();
                 }
             }
@@ -1783,7 +1814,7 @@ async function setActiveDbNow(
         // navigation doesn't discard it and close the show that just opened.
         await forgetReplacedNewShowDraft(path);
 
-        win?.setTitle("OpenMarch - " + path);
+        win?.setTitle("OpenMarch - " + path); // i18n-ignore: product name and path
         store.set("databasePath", path); // Save current db path
         win?.webContents.reload();
         // Only once the reloaded page has navigated may it query the file. Another open can
@@ -1796,7 +1827,10 @@ async function setActiveDbNow(
         captureException(error);
         store.delete("databasePath"); // Reset database path
         DatabaseServices.setDbPath("", false);
-        dialog.showErrorBox("Error Loading Database", (error as Error).message);
+        dialog.showErrorBox(
+            t("fileDialog.openFailed.title"),
+            (error as Error).message,
+        );
         win?.webContents.reload();
         throw error;
     }

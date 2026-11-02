@@ -1,5 +1,6 @@
 /**
- * `pnpm check:i18n`: keeps user-facing text in the desktop app going through Tolgee.
+ * `pnpm check:i18n`: keeps user-facing text in the desktop app going through Tolgee, in the
+ * renderer (`src`) and the Electron main process and preload (`electron`).
  *
  * - No new untranslated UI text. Text that predates the check is listed per file in
  *   `i18n-meta/baseline.json`; a file may only go down.
@@ -19,7 +20,11 @@ import { readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { knownTranslationKey, noUntranslatedText } from "./rules.mjs";
+import {
+    knownTranslationKey,
+    noUntranslatedMainText,
+    noUntranslatedText,
+} from "./rules.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -34,7 +39,10 @@ export const PATHS = {
     baseline: "i18n-meta/baseline.json",
 };
 
-const SOURCES = ["src/**/*.ts", "src/**/*.tsx"];
+const SOURCES = ["src/**/*.ts", "src/**/*.tsx", "electron/**/*.ts"];
+
+/** The main process and preload: no JSX, so they get their own untranslated-text rule. */
+const MAIN_SOURCES = ["electron/**"];
 
 /** Not shipped to users, or shown only to developers. */
 const IGNORED_SOURCES = [
@@ -44,6 +52,7 @@ const IGNORED_SOURCES = [
     "**/*.d.ts",
     "src/field/benchmark/**",
     "src/test/**",
+    "electron/database/migrations/**",
 ];
 
 export function flattenMessages(tree, prefix = "", into = {}) {
@@ -76,6 +85,7 @@ async function lintSources(dir, english) {
             i18n: {
                 rules: {
                     "no-untranslated-text": noUntranslatedText,
+                    "no-untranslated-main-text": noUntranslatedMainText,
                     "known-translation-key": knownTranslationKey,
                 },
             },
@@ -93,6 +103,15 @@ async function lintSources(dir, english) {
                 "i18n/no-untranslated-text": "error",
                 "i18n/known-translation-key": ["error", { english }],
             },
+            overrides: [
+                {
+                    files: MAIN_SOURCES,
+                    rules: {
+                        "i18n/no-untranslated-text": "off",
+                        "i18n/no-untranslated-main-text": "error",
+                    },
+                },
+            ],
         },
     });
     return eslint.lintFiles(SOURCES);
@@ -188,7 +207,10 @@ export async function checkI18n(
                 errors.push(formatProblem(file, message));
             } else if (message.ruleId === "i18n/known-translation-key") {
                 errors.push(formatProblem(file, message));
-            } else if (message.ruleId === "i18n/no-untranslated-text") {
+            } else if (
+                message.ruleId === "i18n/no-untranslated-text" ||
+                message.ruleId === "i18n/no-untranslated-main-text"
+            ) {
                 const list = textByFile.get(file) ?? [];
                 list.push(message);
                 textByFile.set(file, list);

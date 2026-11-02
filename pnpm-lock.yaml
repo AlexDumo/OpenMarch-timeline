@@ -350,6 +350,9 @@ importers:
       '@tiptap/starter-kit':
         specifier: ^2.6.6
         version: 2.27.2
+      '@tolgee/core':
+        specifier: ^6.2.6
+        version: 6.6.0
       '@tolgee/format-icu':
         specifier: ^6.2.6
         version: 6.6.0
@@ -5793,7 +5796,7 @@ packages:
   '@tailwindcss/vite@4.1.18':
     resolution: {integrity: sha512-jVA+/UpKL1vRLg6Hkao5jldawNmRo7mQYrZtNHMIVpLfLhDml5nMRUo/8MwoX2vNXvnaXNNMedrMfMugAVX1nA==}
     peerDependencies:
-      vite: '>=6.4.2'
+      vite: '>=7.3.2'
 
   '@tanstack/eslint-plugin-query@5.96.2':
     resolution: {integrity: sha512-OsXCATZ+YmG8TyHrunfYy2IDB+dqY87en2im2A60JPgDAg66cCoHTzJWbe9uH8Cw9/K3NiKYlyyo1erVFu3qFw==}

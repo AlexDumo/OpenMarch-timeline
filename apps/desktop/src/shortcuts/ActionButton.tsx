@@ -10,7 +10,7 @@ import { LongPressBubble, useLongPress } from "@openmarch/ui";
 import Keycaps from "@/components/ui/Keycaps";
 import { useShowShortcutHints } from "@/stores/KeyboardSeenStore";
 import clsx from "clsx";
-import { useTolgee } from "@tolgee/react";
+import { useTranslate } from "@tolgee/react";
 import { twMerge } from "tailwind-merge";
 import { TouchCaption } from "@/components/ui/InfoTip";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
@@ -63,7 +63,7 @@ export default function ActionButton({
     onClick,
     ...rest
 }: ActionButtonProps) {
-    const { t } = useTolgee();
+    const { t } = useTranslate();
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     const runnable = useSyncExternalStore(subscribeToActionHandlers, () =>
         isActionEnabled(action),

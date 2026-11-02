@@ -5,6 +5,7 @@
  * side and top views, before/after for simplify and grip picking; artwork
  * shows the focused page's 1024 px preview from `renderArtworkPreview`.
  */
+import tolgee from "@/global/singletons/Tolgee";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
 import { useStore } from "zustand";
@@ -18,6 +19,9 @@ import {
 } from "@phosphor-icons/react";
 import { T, useTranslate } from "@tolgee/react";
 import { formatLength } from "@/view3d/core/sizes/units";
+import Keycaps from "@/components/ui/Keycaps";
+import { formatBindingKeys } from "@/shortcuts/bindings";
+import { isMacPlatform } from "@/shortcuts/platform";
 import {
     litMaterial,
     type ArtworkReview,
@@ -166,11 +170,15 @@ function ModelStage({ store }: { store: ImportReviewStore }) {
                     <span className={tag} data-testid="import-stage-triangles">
                         {cap
                             ? t("library.import.stage.trianglesCap", {
-                                  triangles: triangles.toLocaleString("en-US"),
-                                  cap: cap.toLocaleString("en-US"),
+                                  triangles: triangles.toLocaleString(
+                                      tolgee.getLanguage(),
+                                  ),
+                                  cap: cap.toLocaleString(tolgee.getLanguage()),
                               })
                             : t("library.import.stage.triangles", {
-                                  triangles: triangles.toLocaleString("en-US"),
+                                  triangles: triangles.toLocaleString(
+                                      tolgee.getLanguage(),
+                                  ),
                               })}
                     </span>
                 )}
@@ -212,7 +220,19 @@ function ModelStage({ store }: { store: ImportReviewStore }) {
                     data-testid="import-stage-picking"
                 >
                     <CrosshairIcon size={14} />
-                    <T keyName="library.import.stage.pickGrip" />
+                    <T
+                        keyName="library.import.stage.pickGrip"
+                        params={{
+                            keys: () => (
+                                <Keycaps
+                                    keys={formatBindingKeys(
+                                        "Escape",
+                                        isMacPlatform(),
+                                    )}
+                                />
+                            ),
+                        }}
+                    />
                 </span>
             )}
             <div
@@ -314,7 +334,10 @@ function ArtworkStage({
                     page?.vector
                         ? t("library.import.stage.vector")
                         : page?.pixels
-                          ? `${page.pixels.width} × ${page.pixels.height} px`
+                          ? t("library.import.stage.pixels", {
+                                width: String(page.pixels.width),
+                                height: String(page.pixels.height),
+                            })
                           : null,
                 ]
                     .filter(Boolean)

@@ -6,6 +6,7 @@
  * print-readiness line (owner decision Q75, 2026-10-12).
  */
 import { useEffect, useState } from "react";
+import { sizeChipLabel } from "@/view3d/library/catalogNames";
 import clsx from "clsx";
 import { UnitInput } from "@openmarch/ui";
 import { InfoIcon, LockSimpleIcon, ProhibitIcon } from "@phosphor-icons/react";
@@ -53,6 +54,7 @@ function LengthField({
     testId: string;
     onCommit: (m: number) => void;
 }) {
+    const { t } = useTranslate();
     const parts = value ? feetAndInches(value.m) : null;
     const [ft, setFt] = useState(parts ? String(parts.ft) : "");
     const [inch, setInch] = useState(parts ? String(parts.in) : "");
@@ -78,11 +80,11 @@ function LengthField({
             <div className="flex gap-4">
                 <UnitInput
                     compact
-                    unit="ft"
+                    unit={t("library.import.size.feetUnit")}
                     min={0}
                     value={ft}
                     disabled={disabled}
-                    aria-label={`${label} (ft)`}
+                    aria-label={t("library.import.size.feetLabel", { label })}
                     data-testid={`${testId}-ft`}
                     containerClassName="w-[72px]"
                     onChange={(e) => setFt(e.target.value)}
@@ -91,12 +93,12 @@ function LengthField({
                 />
                 <UnitInput
                     compact
-                    unit="in"
+                    unit={t("library.import.size.inchesUnit")}
                     min={0}
                     step={0.125}
                     value={inch}
                     disabled={disabled}
-                    aria-label={`${label} (in)`}
+                    aria-label={t("library.import.size.inchesLabel", { label })}
                     data-testid={`${testId}-in`}
                     containerClassName="w-[72px]"
                     onChange={(e) => setInch(e.target.value)}
@@ -282,7 +284,7 @@ function SizeStep({
                             })
                         }
                     >
-                        {chip.label}
+                        {sizeChipLabel(chip)}
                     </Chip>
                 ))}
             </div>

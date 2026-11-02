@@ -97,6 +97,10 @@ import { outlineGapOf } from "../distribute/outlineGap";
 import type { XY } from "../types";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import tolgee from "@/global/singletons/Tolgee";
+import { T } from "@tolgee/react";
+import Keycaps from "@/components/ui/Keycaps";
+import { formatBindingKeys } from "@/shortcuts/bindings";
+import { isMacPlatform } from "@/shortcuts/platform";
 
 /** How long the editor stays still after a press on it ends, so a second click lands */
 const PRESS_HOLD_MS = 450;
@@ -146,11 +150,20 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
                 className="rounded-6 border-stroke bg-bg-1 bg-modal text-body text-text shadow-modal pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 border px-12 py-6"
                 data-testid="shape-tool-hint"
             >
-                {tolgee.t(
-                    "shapes.edit.drawHint",
-                    "Drag on the field to draw a {shape} · Esc to cancel",
-                    { shape: armed.shape.label.toLowerCase() },
-                )}
+                <T
+                    keyName="shapes.edit.drawHint"
+                    params={{
+                        shape: armed.shape.id,
+                        keys: () => (
+                            <Keycaps
+                                keys={formatBindingKeys(
+                                    "Escape",
+                                    isMacPlatform(),
+                                )}
+                            />
+                        ),
+                    }}
+                />
             </div>
         );
     const target = toolOpen ? tool : placed;

@@ -108,7 +108,12 @@ export function resolveNewShowFilePath(
 ): string {
     const trimmed = filePath.trim();
     if (!trimmed) {
-        throw new Error("File path is required");
+        throw new Error(
+            tolgee.t(
+                "launchpage.newShow.errors.filePathRequired",
+                "File path is required",
+            ),
+        );
     }
 
     const normalizedPath = trimmed.replace(/\\/g, "/");
@@ -325,7 +330,13 @@ export async function applyPreviousDotsFieldImage(
             await window.electron.setNewShowFloorFromVersion(fieldFloor);
         else await window.electron.setNewShowFloorFromImage(fieldImage!);
     } catch (error) {
-        conToastError("Couldn't copy the previous show's field image", error);
+        conToastError(
+            tolgee.t(
+                "launchpage.newShow.errors.fieldImageNotCopied",
+                "Couldn't copy the previous show's field image",
+            ),
+            error,
+        );
         return;
     }
     await queryClient.invalidateQueries({
@@ -720,7 +731,10 @@ export async function completeNewShow(
     const dbReady = await window.electron.databaseIsReady();
     if (!dbReady) {
         throw new Error(
-            "Database is not ready. Complete the project step first.",
+            tolgee.t(
+                "launchpage.newShow.errors.databaseNotReady",
+                "Database is not ready. Complete the project step first.",
+            ),
         );
     }
 
@@ -751,7 +765,13 @@ export async function completeNewShow(
     // it didn't open (convert on open), and the window is reloading.
     if (finalizeResult === OPEN_STOPPED_STATUS) return;
     if (finalizeResult !== 200) {
-        throw new Error(`Failed to save show at ${targetPath}`);
+        throw new Error(
+            tolgee.t(
+                "launchpage.newShow.errors.saveFailed",
+                "Failed to save show at {path}",
+                { path: targetPath },
+            ),
+        );
     }
 
     await queryClient.invalidateQueries({

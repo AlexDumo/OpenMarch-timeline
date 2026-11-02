@@ -5,6 +5,7 @@
  * through Tolgee (`library.import.rows.*`). Artwork notes keep the
  * pipeline's English `message` for v1 (owner decision Q58).
  */
+import tolgee from "@/global/singletons/Tolgee";
 import { formatLength } from "@/view3d/core/sizes/units";
 import type { ModelImportReport, ModelKind } from "@/view3d/library/protocol";
 
@@ -22,7 +23,8 @@ export interface RowText {
     detail?: string;
 }
 
-const n = (value: number) => Math.round(value).toLocaleString("en-US");
+const n = (value: number) =>
+    Math.round(value).toLocaleString(tolgee.getLanguage());
 const list = (items: readonly string[], max = 4) =>
     items.length > max
         ? `${items.slice(0, max).join(", ")} +${items.length - max}`

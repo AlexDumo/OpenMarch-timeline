@@ -14,9 +14,12 @@ import {
 } from "@openmarch/ui";
 import { AlertDialog } from "@openmarch/ui";
 import * as Tooltip from "@radix-ui/react-tooltip";
-import { T, useTolgee } from "@tolgee/react";
+import { T, useTranslate } from "@tolgee/react";
 import { TouchCaption } from "@/components/ui/InfoTip";
 import { useCascadeDeleteMeasures } from "@/global/classes/Measure";
+import Keycaps from "@/components/ui/Keycaps";
+import { getActionShortcutKeys } from "@/shortcuts/labels";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 
 export default function TempoGroupCard({
     tempoGroup,
@@ -57,7 +60,9 @@ function StaticTempoGroupCard({
     setNewGroupFormIndex: (index: number) => void;
     index: number;
 }) {
-    const { t } = useTolgee();
+    const { t } = useTranslate();
+    const overrides = useShortcutOverridesStore((s) => s.overrides);
+    const undoKeys = getActionShortcutKeys("performUndo", { overrides });
     const { mutate: cascadeDeleteMeasures, isPending: isDeleting } =
         useCascadeDeleteMeasures();
     const isManualTempo = useMemo(
@@ -105,16 +110,22 @@ function StaticTempoGroupCard({
                                 {tempoGroup.tempo}{" "}
                                 <span className="text-text-subtitle text-sm">
                                     {isMixedMeter ? "♩ " : ""}
-                                    bpm
+                                    {t("music.bpmUnit")}
                                 </span>
                             </h3>
                         </div>
                     )}
                     {tempoGroup.measureRangeString && (
                         <p className="text-text-subtitle text-sm">
-                            {tempoGroup.measureRangeString}
-                            {tempoGroup.numOfRepeats > 1 &&
-                                ` (${tempoGroup.numOfRepeats}x)`}
+                            {tempoGroup.numOfRepeats > 1
+                                ? t(
+                                      "music.tempoGroupCard.measureRangeRepeats",
+                                      {
+                                          range: tempoGroup.measureRangeString,
+                                          count: tempoGroup.numOfRepeats,
+                                      },
+                                  )
+                                : tempoGroup.measureRangeString}
                         </p>
                     )}
                 </div>
@@ -176,9 +187,20 @@ function StaticTempoGroupCard({
                                             <T keyName="music.deleteAllMeasures" />
                                         </Button>
                                     </AlertDialogAction>
-                                    <div className="text-sub text-text-subtitle">
-                                        <T keyName="music.undoWithCtrlZ" />
-                                    </div>
+                                    {undoKeys && (
+                                        <div className="text-sub text-text-subtitle">
+                                            <T
+                                                keyName="music.undoWithShortcut"
+                                                params={{
+                                                    keys: () => (
+                                                        <Keycaps
+                                                            keys={undoKeys}
+                                                        />
+                                                    ),
+                                                }}
+                                            />
+                                        </div>
+                                    )}
                                     <AlertDialogCancel asChild>
                                         <Button
                                             variant="secondary"

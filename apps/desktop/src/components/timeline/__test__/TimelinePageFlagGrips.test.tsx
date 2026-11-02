@@ -343,7 +343,12 @@ describe("describePageFlagBlock", () => {
         expect(describePageFlagBlock({ kind: "open" }, pages, tracks)).toBe("");
         expect(
             describePageFlagBlock(
-                { kind: "move", timelineId: 4, message: "E-A3 …" },
+                {
+                    kind: "move",
+                    timelineId: 4,
+                    reason: "inTheWay",
+                    message: "E-A3 …",
+                },
                 pages,
                 tracks,
             ),
@@ -353,6 +358,7 @@ describe("describePageFlagBlock", () => {
                 {
                     kind: "move",
                     timelineId: 6,
+                    reason: "sharesRange",
                     message: "two moves would share beats [3, 7)",
                 },
                 pages,
@@ -364,6 +370,7 @@ describe("describePageFlagBlock", () => {
                 {
                     kind: "move",
                     timelineId: 5,
+                    reason: "leftBehind",
                     message: "a move on the flag would be left behind",
                 },
                 pages,

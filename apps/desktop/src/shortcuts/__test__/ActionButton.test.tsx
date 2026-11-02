@@ -35,7 +35,7 @@ const Providers = ({ children }: { children: React.ReactNode }) => (
 describe("labels", () => {
     it("builds suffix and param labels", () => {
         expect(getActionLabel("moveSelectedMarchersUpFine", t)).toBe(
-            "actions.movement.moveUp (actions.movement.variants.fine)",
+            'actions.labelWithVariant:{"label":"actions.movement.moveUp","variant":"actions.movement.variants.fine"}',
         );
         expect(getActionLabel("timelineTapBeats2", t)).toBe(
             'actions.timeline.tapBeats:{"count":2}',
@@ -45,9 +45,11 @@ describe("labels", () => {
     it("tooltip uses toggle key and platform binding", () => {
         expect(
             getActionTooltip("lockX", t, { toggleState: "on", isMac: false }),
-        ).toBe("actions.alignment.lockXOn [Y]");
+        ).toBe(
+            'actions.tooltipWithShortcut:{"label":"actions.alignment.lockXOn","shortcut":"Y"}',
+        );
         expect(getActionTooltip("performUndo", t, { isMac: true })).toBe(
-            "actions.edit.undo [⌘Z]",
+            'actions.tooltipWithShortcut:{"label":"actions.edit.undo","shortcut":"⌘Z"}',
         );
         expect(
             getActionTooltip("launchLoadFileDialogue", t, { isMac: false }),

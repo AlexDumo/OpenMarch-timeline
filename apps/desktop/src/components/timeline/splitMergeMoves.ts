@@ -17,7 +17,6 @@ import {
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import {
     isPageTimeline,
-    moveLabel,
     moveLabels,
     pageTimelineOver as storedPageTimelineOver,
 } from "@/timeline/timelineViewModel";
@@ -38,13 +37,11 @@ import type {
 export const pauseToSplit = () =>
     tolgee.t("timeline.split.paused", "Pause to split or merge moves.");
 
-/** "Page 3", or "this page" / "This page" when it has no name. */
-const pageWords = (name: string | undefined, start: "lower" | "upper") =>
+/** "Page 3", or "this page" when it has no name: a page's move, named inside a merge entry. */
+const pageWords = (name: string | undefined) =>
     name !== undefined
         ? tolgee.t("timeline.merge.page", "Page {name}", { name })
-        : start === "lower"
-          ? tolgee.t("timeline.merge.thisPage", "this page")
-          : tolgee.t("timeline.merge.thisPageStart", "This page");
+        : tolgee.t("timeline.merge.thisPage", "this page");
 
 /** What the entries read: the store's stored timelines and page boxes, and who is selected. */
 export interface SplitMergeContext {
@@ -85,11 +82,12 @@ export function timelineLabel(ctx: SplitMergeContext, id: number): string {
     if (!t) return tolgee.t("timeline.merge.thisMove", "this move");
     if (isPage(ctx, t)) {
         const name = boxOf(ctx, t)?.name;
-        return pageWords(name, "lower");
+        return pageWords(name);
     }
     return (
         moveLabels(ctx.storedTimelines, ctx.pageBoxes).get(id) ??
-        moveLabel({ name: t.name })
+        t.name ??
+        tolgee.t("timeline.moveName.unnamed")
     );
 }
 
@@ -136,7 +134,7 @@ export function splitEntryState(
         n > 0
             ? tolgee.t(
                   "timeline.split.menu",
-                  "Split {count} selected into new move",
+                  "{count, plural, one {Split # selected into new move} other {Split # selected into new move}}",
                   { count: n },
               )
             : tolgee.t(
@@ -374,11 +372,17 @@ export function dropTargetTimeline(
     if (page) return { id: page.id };
     const name = range ? boxOf(ctx, range)?.name : undefined;
     return {
-        missing: tolgee.t(
-            "timeline.merge.noPageMove",
-            "{page} has no move of its own to merge into.",
-            { page: pageWords(name, "upper") },
-        ),
+        missing:
+            name !== undefined
+                ? tolgee.t(
+                      "timeline.merge.noPageMove",
+                      "Page {page} has no move of its own to merge into.",
+                      { page: name },
+                  )
+                : tolgee.t(
+                      "timeline.merge.noPageMoveUnnamed",
+                      "This page has no move of its own to merge into.",
+                  ),
     };
 }
 

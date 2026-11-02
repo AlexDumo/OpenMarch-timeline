@@ -29,6 +29,7 @@ import {
     countsText,
     moveInSentence,
 } from "@/timeline/timelineRangeWords";
+import { text } from "@/timeline/timelineText";
 
 export { findTimelineByRange };
 
@@ -276,7 +277,8 @@ export const addMarchersToTimelineInTransaction = async ({
         refuse(
             `a timeline needs whole beats with its end after its start, not ${rangeText(range)}`,
         );
-    if (marcherIds.length === 0) refuse("select the marchers to add");
+    if (marcherIds.length === 0)
+        refuse(text.t("timeline.refusals.members.selectToAdd"));
     if (new Set(marcherIds).size !== marcherIds.length)
         refuse("a marcher appears more than once");
     const ids = [...marcherIds].sort((x, y) => x - y);
@@ -303,9 +305,9 @@ export const addMarchersToTimelineInTransaction = async ({
     const toAdd = ids.filter((id) => !alreadyIn.includes(id));
     if (toAdd.length === 0)
         refuse(
-            alreadyIn.length === 1
-                ? "the selected marcher is already in this timeline"
-                : "every selected marcher is already in this timeline",
+            text.t("timeline.refusals.members.alreadyIn", {
+                count: alreadyIn.length,
+            }),
         );
     const overridden: PassedMove[] = [];
     const caughtUp: PassedMove[] = [];
@@ -327,8 +329,22 @@ export const addMarchersToTimelineInTransaction = async ({
                     continue;
                 }
                 const { boxes, moves } = await readMoveWords(tx);
+                const start = beatWhere(other.start, boxes);
+                const params = {
+                    marcher: labels.get(id)!,
+                    move: moveInSentence(other, boxes, moves),
+                    counts: countsText(range, boxes),
+                };
                 refuse(
-                    `${labels.get(id)} is in ${moveInSentence(other, boxes, moves)}, which only partly overlaps ${countsText(range, boxes)}: joining a move partway isn't supported yet. End the range at ${beatWhere(other.start, boxes) ?? "that move's start"}.`,
+                    start
+                        ? text.t("timeline.refusals.members.joinPartway", {
+                              ...params,
+                              start,
+                          })
+                        : text.t(
+                              "timeline.refusals.members.joinPartwayNoStart",
+                              params,
+                          ),
                 );
             }
             if (!containsRange(other, range) && containsRange(range, other)) {
@@ -338,7 +354,11 @@ export const addMarchersToTimelineInTransaction = async ({
                 }
                 const { boxes, moves } = await readMoveWords(tx);
                 refuse(
-                    `${labels.get(id)} is in ${moveInSentence(other, boxes, moves)}, inside ${countsText(range, boxes)}; adding it would replace that move`,
+                    text.t("timeline.refusals.members.wouldReplace", {
+                        marcher: labels.get(id)!,
+                        move: moveInSentence(other, boxes, moves),
+                        counts: countsText(range, boxes),
+                    }),
                 );
             }
         }
@@ -654,13 +674,14 @@ export const removeMarchersFromTimelineInTransaction = async ({
         .where(eq(schema.timelines.id, timelineId))
         .get();
     if (!timeline) refuse(`timeline ${timelineId} does not exist`);
-    if (marcherIds.length === 0) refuse("select the marchers to remove");
+    if (marcherIds.length === 0)
+        refuse(text.t("timeline.refusals.members.selectToRemove"));
     const removed = await assignmentsInTimeline(tx, timelineId, marcherIds);
     if (removed.length === 0)
         refuse(
-            marcherIds.length === 1
-                ? "the marcher isn't in this timeline"
-                : "none of the selected marchers is in this timeline",
+            text.t("timeline.refusals.members.notIn", {
+                count: marcherIds.length,
+            }),
         );
     return await removeAssignmentRowsInTransaction({
         tx,

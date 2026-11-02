@@ -18,7 +18,12 @@ export function getActionLabel(id: ActionId, t: Translate): string {
     const base = def.labelParams
         ? t(def.labelKey, { ...def.labelParams })
         : t(def.labelKey);
-    return def.labelSuffixKey ? `${base} (${t(def.labelSuffixKey)})` : base;
+    return def.labelSuffixKey
+        ? t("actions.labelWithVariant", {
+              label: base,
+              variant: t(def.labelSuffixKey),
+          })
+        : base;
 }
 
 export function getActionShortcutLabel(
@@ -70,5 +75,8 @@ export function getActionTooltip(
               : undefined;
     const label = toggleKey ? t(toggleKey) : getActionLabel(id, t);
     const shortcut = getActionShortcutLabel(id, options);
-    return shortcut ? `${label} [${shortcut}]` : label;
+    // A native tooltip can't show keycaps, so the shortcut stays text here
+    return shortcut
+        ? t("actions.tooltipWithShortcut", { label, shortcut })
+        : label;
 }

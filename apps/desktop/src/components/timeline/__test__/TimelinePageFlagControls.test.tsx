@@ -135,10 +135,8 @@ describe("Create page at playhead on the paused playhead's right-click menu (UI-
         const names = screen.getAllByTestId("timeline-add-page-name");
         expect(names.map((n) => n.textContent)).toEqual(["3", "2A"]);
         const item = screen.getByTestId("timeline-add-page");
-        // The action's label (its key here: tests don't load en.json), name and shortcut
-        expect(item.textContent).toBe(
-            "actions.timeline.createPageAtPlayhead3F",
-        );
+        // The action's label, name and shortcut
+        expect(item.textContent).toBe("Create page at playhead3F");
         fireEvent.click(item);
         expect(onAddPageFlag).toHaveBeenCalledTimes(1);
     });
@@ -149,9 +147,7 @@ describe("Create page at playhead on the paused playhead's right-click menu (UI-
         show({ onAddPageFlag, onAddSubsetPage });
         fireEvent.contextMenu(playhead());
         const item = screen.getByTestId("timeline-add-subset-page");
-        expect(item.textContent).toBe(
-            "actions.timeline.createSubsetAtPlayhead2AShift+F",
-        );
+        expect(item.textContent).toBe("Create subset at playhead2AShift+F");
         fireEvent.click(item);
         expect(onAddSubsetPage).toHaveBeenCalledTimes(1);
         expect(onAddPageFlag).not.toHaveBeenCalled();

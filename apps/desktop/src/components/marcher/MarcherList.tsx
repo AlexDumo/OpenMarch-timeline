@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ListFormProps } from "../../global/Interfaces";
 import Marcher from "@/global/classes/Marcher";
+import { sectionDisplayName } from "@/components/marcher/sectionDisplayName";
 import { Button, TooltipClassName } from "@openmarch/ui";
 import {
     DotsThreeOutlineIcon,
@@ -11,7 +12,10 @@ import {
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import FormButtons from "../FormButtons";
 import { AlertDialogAction, AlertDialogCancel } from "@openmarch/ui";
-import { T, useTolgee } from "@tolgee/react";
+import { T, useTranslate } from "@tolgee/react";
+import Keycaps from "@/components/ui/Keycaps";
+import { getActionShortcutKeys } from "@/shortcuts/labels";
+import { formatList } from "@/utilities/formatList";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     deleteMarchersMutationOptions,
@@ -41,7 +45,7 @@ export default function MarcherList({
     const { mutate: updateMarchers } = useMutation(
         updateMarchersMutationOptions(queryClient),
     );
-    const { t } = useTolgee();
+    const { t } = useTranslate();
     const [submitActivator, setSubmitActivator] = submitActivatorStateProp || [
         false,
         undefined,
@@ -121,12 +125,20 @@ export default function MarcherList({
     }, [cancelActivator, setCancelActivator]);
 
     if (marchersLoading) {
-        return <div>Loading...</div>;
+        return (
+            <div>
+                <T keyName="marchers.list.loading" />
+            </div>
+        );
     }
 
     if (marchersError) {
         console.error(marchersError);
-        return <div>Error loading marchers</div>;
+        return (
+            <div>
+                <T keyName="marchers.list.loadError" />
+            </div>
+        );
     }
 
     if (marchersSuccess && marchers.length > 0)
@@ -154,22 +166,35 @@ export default function MarcherList({
                                 handleSubmit={handleSubmit}
                                 isDangerButton={true}
                                 alertDialogTitle={t("marchers.deleteTitle")}
-                                alertDialogDescription={t(
-                                    "marchers.deleteWarning",
-                                    {
-                                        marchers: deletionsRef.current
-                                            .map((marcherId) => {
-                                                const marcherName =
-                                                    marchers?.find(
-                                                        (marcher) =>
-                                                            marcher.id ===
-                                                            marcherId,
-                                                    )?.drill_number;
-                                                return marcherName || "Unknown";
-                                            })
-                                            .join(", "),
-                                    },
-                                )}
+                                alertDialogDescription={
+                                    <T
+                                        keyName="marchers.deleteWarning"
+                                        params={{
+                                            marchers: formatList(
+                                                deletionsRef.current.map(
+                                                    (marcherId) =>
+                                                        marchers?.find(
+                                                            (marcher) =>
+                                                                marcher.id ===
+                                                                marcherId,
+                                                        )?.drill_number ||
+                                                        t(
+                                                            "marchers.list.unknown",
+                                                        ),
+                                                ),
+                                            ),
+                                            keys: () => (
+                                                <Keycaps
+                                                    keys={
+                                                        getActionShortcutKeys(
+                                                            "performUndo",
+                                                        ) ?? []
+                                                    }
+                                                />
+                                            ),
+                                        }}
+                                    />
+                                }
                                 alertDialogActions={
                                     <>
                                         <AlertDialogAction>
@@ -309,6 +334,7 @@ interface MarcherRowProps {
 }
 
 function MarcherRow({ marcher, onDelete }: MarcherRowProps) {
+    const { t } = useTranslate();
     const { setContent } = useSidebarModalStore();
     const [open, setOpen] = useState(false);
 
@@ -328,7 +354,7 @@ function MarcherRow({ marcher, onDelete }: MarcherRowProps) {
                     className="text-body text-text"
                     data-testid="marcher-section"
                 >
-                    {marcher.section}
+                    {sectionDisplayName(marcher.section, t)}
                 </p>
             </div>
             <div className="truncate">
@@ -363,7 +389,14 @@ function MarcherRow({ marcher, onDelete }: MarcherRowProps) {
             <div className="flex place-content-end gap-8">
                 <Dropdown.Root open={open} onOpenChange={setOpen} modal={false}>
                     <Dropdown.Trigger asChild>
-                        <Button variant="ghost" size="compact" content="icon">
+                        <Button
+                            aria-label={t("marchers.list.moreOptions", {
+                                marcher: marcher.drill_number,
+                            })}
+                            variant="ghost"
+                            size="compact"
+                            content="icon"
+                        >
                             <DotsThreeOutlineIcon size={18} />
                         </Button>
                     </Dropdown.Trigger>

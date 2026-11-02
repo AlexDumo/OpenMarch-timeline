@@ -1,4 +1,5 @@
-import { afterEach, describe, expect } from "vitest";
+import { afterEach, describe, expect, beforeAll } from "vitest";
+import tolgee from "@/global/singletons/Tolgee";
 import { asc, eq, getTableName, sql } from "drizzle-orm";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import type Page from "@/global/classes/Page";
@@ -27,6 +28,11 @@ import {
 } from "../timelineSplitMoves";
 import { readTimelineResizeLimits, resizeTimeline } from "../timelineResize";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
+
+// Refusals and toasts are translated: load English so they read as written
+beforeAll(async () => {
+    await tolgee.run();
+});
 
 // These tests convert the show themselves, so a page's timeline is one shared transition
 keepFixturesInPageMode("its tests convert the show themselves");
@@ -427,7 +433,7 @@ describeDbTests("splitting and merging moves (UI-25)", (it) => {
                         timelineId: track.timelineId,
                         marcherIds: [a!],
                     }),
-                /move into one shape together/,
+                /moves into one shape together/,
             );
             const positionsBefore = await everyBeat(pages);
             const result = await splitMarchersIntoNewMove({

@@ -6,10 +6,11 @@ import {
     DropdownMenuTrigger,
 } from "@radix-ui/react-dropdown-menu";
 import { ListIcon } from "@phosphor-icons/react";
-import { useTolgee } from "@tolgee/react";
+import { useTranslate } from "@tolgee/react";
 import { useSyncExternalStore } from "react";
 import type { ActionId } from "@/shortcuts/definitions";
-import { getActionLabel, getActionShortcutLabel } from "@/shortcuts/labels";
+import { getActionLabel, getActionShortcutKeys } from "@/shortcuts/labels";
+import Keycaps from "@/components/ui/Keycaps";
 import {
     isActionEnabled,
     runAction,
@@ -36,7 +37,7 @@ const FILE_ACTIONS: ActionId[] = [
  * saved in the browser) and the show's Versions.
  */
 export default function WebFileMenu() {
-    const { t } = useTolgee();
+    const { t } = useTranslate();
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     // No ⌘O / Ctrl+, on a tablet until a keyboard has been used
     const showHints = useShowShortcutHints();
@@ -47,21 +48,26 @@ export default function WebFileMenu() {
         FILE_ACTIONS.map(isActionEnabled).join(),
     );
 
-    const item = (action: ActionId, label = getActionLabel(action, t)) => (
-        <DropdownMenuItem
-            key={action}
-            disabled={!isActionEnabled(action)}
-            className={itemClass}
-            onSelect={() => runAction(action)}
-        >
-            <span>{label}</span>
-            {showHints && (
-                <span className="text-sub text-text-subtitle">
-                    {getActionShortcutLabel(action, { overrides })}
-                </span>
-            )}
-        </DropdownMenuItem>
-    );
+    const item = (action: ActionId, label = getActionLabel(action, t)) => {
+        const keys = showHints
+            ? getActionShortcutKeys(action, { overrides })
+            : undefined;
+        return (
+            <DropdownMenuItem
+                key={action}
+                disabled={!isActionEnabled(action)}
+                className={itemClass}
+                onSelect={() => runAction(action)}
+            >
+                <span>{label}</span>
+                {keys && (
+                    <span className="text-sub text-text-subtitle">
+                        <Keycaps keys={keys} />
+                    </span>
+                )}
+            </DropdownMenuItem>
+        );
+    };
 
     return (
         <DropdownMenu>

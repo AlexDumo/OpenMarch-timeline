@@ -15,7 +15,7 @@
  * orbit while trying a look.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useTranslate } from "@tolgee/react";
+import { T, useTranslate } from "@tolgee/react";
 import { XIcon } from "@phosphor-icons/react";
 import { Input, Switch } from "@openmarch/ui";
 import clsx from "clsx";
@@ -33,6 +33,9 @@ import {
     useVenueRequest,
 } from "./VenueControls";
 import { useShowPerformerDefaults } from "../performers/useStoredCues";
+import Keycaps from "@/components/ui/Keycaps";
+import { formatBindingKeys } from "@/shortcuts/bindings";
+import { isMacPlatform } from "@/shortcuts/platform";
 
 /** End-zone lettering longer than this doesn't fit at a readable size. */
 export const END_ZONE_TEXT_MAX = 24;
@@ -442,7 +445,7 @@ function StepOffFootRow() {
             onChange={setOverride}
             testId="view3d-step-off-foot-picker"
             hint={t("view3d.settings.stepOffFootHint", {
-                foot: t(`view3d.settings.stepOffFootMode.${showFoot}`),
+                foot: showFoot,
             })}
         />
     );
@@ -450,32 +453,86 @@ function StepOffFootRow() {
 
 /**
  * The window's keyboard and mouse controls (ui.md UI-3, UI-4), in display
- * order. Each has `view3d.keys.<name>` for what it does and
- * `view3d.keyNames.<name>` for the key or gesture.
+ * order. Each has `view3d.keys.<name>` for what it does; its keys show as
+ * keycaps, alone, as a pair or a range (`view3d.keyNames.pair`/`range`), and
+ * mouse gestures are words (`view3d.keyNames.<name>`).
  */
-const SHORTCUTS = [
-    "playPause",
-    "previousNext",
-    "firstLast",
-    "cameras",
-    "fullscreen",
-    "crowd",
-    "escape",
-    "orbit",
-    "pan",
-    "zoom",
-] as const;
+type ShortcutKeys =
+    | { readonly kind: "keys"; readonly binding: string }
+    | {
+          readonly kind: "pair" | "range";
+          readonly first: string;
+          readonly second: string;
+      }
+    | { readonly kind: "gesture"; readonly withKey?: string };
+
+const SHORTCUTS: readonly (readonly [string, ShortcutKeys])[] = [
+    ["playPause", { kind: "keys", binding: "Space" }],
+    ["previousNext", { kind: "pair", first: "Q", second: "E" }],
+    ["firstLast", { kind: "pair", first: "Shift+Q", second: "Shift+E" }],
+    ["cameras", { kind: "range", first: "1", second: "9" }],
+    ["fullscreen", { kind: "keys", binding: "F" }],
+    ["crowd", { kind: "keys", binding: "C" }],
+    ["escape", { kind: "keys", binding: "Escape" }],
+    ["orbit", { kind: "gesture" }],
+    ["pan", { kind: "gesture", withKey: "Shift" }],
+    ["zoom", { kind: "gesture" }],
+];
+
+function ShortcutKeysCell({
+    name,
+    keys,
+}: {
+    name: string;
+    keys: ShortcutKeys;
+}) {
+    const isMac = isMacPlatform();
+    const caps = (binding: string) => () => (
+        <Keycaps keys={formatBindingKeys(binding, isMac)} />
+    );
+    switch (keys.kind) {
+        case "keys":
+            return caps(keys.binding)();
+        case "pair":
+            return (
+                <T
+                    keyName="view3d.keyNames.pair"
+                    params={{
+                        first: caps(keys.first),
+                        second: caps(keys.second),
+                    }}
+                />
+            );
+        case "range":
+            return (
+                <T
+                    keyName="view3d.keyNames.range"
+                    params={{
+                        first: caps(keys.first),
+                        last: caps(keys.second),
+                    }}
+                />
+            );
+        case "gesture":
+            return (
+                <T
+                    keyName={`view3d.keyNames.${name}`}
+                    params={
+                        keys.withKey ? { keys: caps(keys.withKey) } : undefined
+                    }
+                />
+            );
+    }
+}
 
 function ShortcutList() {
     const { t } = useTranslate();
     return (
-        <dl className="text-sub grid grid-cols-[auto_1fr] items-baseline gap-x-12 gap-y-4">
-            {SHORTCUTS.map((name) => (
+        <dl className="text-sub grid grid-cols-[auto_1fr] items-center gap-x-12 gap-y-4">
+            {SHORTCUTS.map(([name, keys]) => (
                 <div key={name} className="contents">
-                    <dt>
-                        <kbd className="border-stroke rounded-4 text-text/80 border px-4 font-mono whitespace-nowrap">
-                            {t(`view3d.keyNames.${name}`)}
-                        </kbd>
+                    <dt className="text-text/80 flex items-center gap-4 whitespace-nowrap">
+                        <ShortcutKeysCell name={name} keys={keys} />
                     </dt>
                     <dd className="text-text/80">{t(`view3d.keys.${name}`)}</dd>
                 </div>

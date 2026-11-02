@@ -6,14 +6,16 @@ import {
     useSyncExternalStore,
 } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { useTolgee } from "@tolgee/react";
+import { useTranslate } from "@tolgee/react";
 import {
     KEEP_MENU_EVENTS,
     TIMELINE_MENU_CONTENT_CLASS,
 } from "@/components/timeline/TimelineRangeMenu";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
 import type { ActionId } from "@/shortcuts/definitions";
-import { getActionLabel, getActionShortcutLabel } from "@/shortcuts/labels";
+import { getActionLabel, getActionShortcutKeys } from "@/shortcuts/labels";
+// The small muted caps the timeline's menus use
+import { Keycaps } from "@/components/timeline/ShortcutTooltip";
 import {
     actionLabelNow,
     isActionEnabled,
@@ -65,7 +67,7 @@ const UNSET: ReadonlySet<ActionId> = new Set([
 /** The entries' style, as the timeline's menus */
 const ITEM_CLASS =
     "rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50";
-const SHORTCUT_CLASS = "text-text-subtitle ml-auto pl-16 font-mono text-[11px]";
+const SHORTCUT_CLASS = "text-text-subtitle ml-auto pl-16";
 
 /** Each action's enabled state and live label, as one string, so a change re-renders. */
 const handlerSnapshot = () =>
@@ -86,7 +88,7 @@ export default function FieldContextMenu({
     /** Whether the show's timeline is loaded (Unset needs it). */
     timelineMode: boolean;
 }) {
-    const { t } = useTolgee();
+    const { t } = useTranslate();
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     useSyncExternalStore(subscribeToActionHandlers, handlerSnapshot);
     const open = at !== null;
@@ -158,7 +160,7 @@ export default function FieldContextMenu({
                                             t(key, params as never),
                                         )}
                                     <Shortcut
-                                        keys={getActionShortcutLabel(id, {
+                                        keys={getActionShortcutKeys(id, {
                                             overrides,
                                         })}
                                     />
@@ -172,8 +174,12 @@ export default function FieldContextMenu({
     );
 }
 
-const Shortcut = ({ keys }: { keys?: string }) =>
-    keys ? <span className={SHORTCUT_CLASS}>{keys}</span> : null;
+const Shortcut = ({ keys }: { keys?: readonly string[] }) =>
+    keys ? (
+        <span className={SHORTCUT_CLASS}>
+            <Keycaps keys={keys} />
+        </span>
+    ) : null;
 
 type MenuPoint = { x: number; y: number };
 

@@ -125,6 +125,7 @@ function ShortcutRow({
     isRecording,
     conflict,
     t,
+    language,
     isMac,
     onStartRecording,
     onRemove,
@@ -137,6 +138,8 @@ function ShortcutRow({
     isRecording: boolean;
     conflict: PendingConflict | null;
     t: Translate;
+    /** The app's language, for the list of conflicting actions */
+    language: string;
     isMac: boolean;
     onStartRecording: () => void;
     onRemove: (binding: string) => void;
@@ -169,7 +172,19 @@ function ShortcutRow({
                             role="status"
                             className="border-accent text-accent rounded-6 text-sub border px-6 py-2"
                         >
-                            <T keyName="settings.shortcuts.recording" />
+                            <T
+                                keyName="settings.shortcuts.recording"
+                                params={{
+                                    keys: () => (
+                                        <Keycaps
+                                            keys={formatBindingKeys(
+                                                "Escape",
+                                                isMac,
+                                            )}
+                                        />
+                                    ),
+                                }}
+                            />
                         </span>
                     ) : (
                         <button
@@ -203,12 +218,26 @@ function ShortcutRow({
                     className="bg-fg-2 rounded-6 flex flex-wrap items-center justify-between gap-8 px-8 py-6"
                 >
                     <span className="text-sub text-text">
-                        {t("settings.shortcuts.conflict", {
-                            binding: formatBinding(conflict.binding, isMac),
-                            actions: conflict.owners
-                                .map((owner) => getActionLabel(owner, t))
-                                .join(", "),
-                        })}
+                        <T
+                            keyName="settings.shortcuts.conflict"
+                            params={{
+                                keys: () => (
+                                    <Keycaps
+                                        keys={formatBindingKeys(
+                                            conflict.binding,
+                                            isMac,
+                                        )}
+                                    />
+                                ),
+                                actions: new Intl.ListFormat(language, {
+                                    type: "conjunction",
+                                }).format(
+                                    conflict.owners.map((owner) =>
+                                        getActionLabel(owner, t),
+                                    ),
+                                ),
+                            }}
+                        />
                     </span>
                     <div className="flex gap-6">
                         <Button size="compact" onClick={onReassign}>
@@ -229,7 +258,8 @@ function ShortcutRow({
 }
 
 export default function ShortcutSettings() {
-    const { t: tolgeeT } = useTolgee();
+    const { t: tolgeeT, getLanguage } = useTolgee(["language"]);
+    const language = getLanguage() ?? "en";
     const t: Translate = useCallback(
         (key, params) => tolgeeT(key, params as never),
         [tolgeeT],
@@ -371,6 +401,7 @@ export default function ShortcutSettings() {
                                                 : null
                                         }
                                         t={t}
+                                        language={language}
                                         isMac={isMac}
                                         onStartRecording={() => {
                                             setPending(null);

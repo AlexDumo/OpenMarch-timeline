@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it as plainIt } from "vitest";
+import { afterEach, describe, expect, it as plainIt, beforeAll } from "vitest";
+import tolgee from "@/global/singletons/Tolgee";
 import { asc, eq, getTableName } from "drizzle-orm";
 import { createResolver, type Resolver } from "@openmarch/core";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
@@ -24,6 +25,17 @@ import {
 import { keepFixturesInPageMode } from "@/test/timelineMode";
 import { readPageBoxes } from "../timelineMoveNames";
 import { shiftTimeline } from "../timelineCommands";
+import { translateTimelineText } from "@/timeline/translateTimelineText";
+import type { TimelineText } from "@/timeline/timelineText";
+
+/** A refusal in English, through the app's Tolgee (English in tests); `null` stays `null`. */
+const say = (refusal: TimelineText | null) =>
+    refusal && translateTimelineText(refusal);
+
+// Refusals and toasts are translated: load English so they read as written
+beforeAll(async () => {
+    await tolgee.run();
+});
 
 /**
  * Resizing a move (docs/timeline/research/resize-move): dragging a clip's start or end edge
@@ -368,14 +380,16 @@ describe("timelineResizeLimits (pure)", () => {
                 ],
             });
             expect(timelineResizeRefusal(limits, 8, 20)).toBeNull();
-            expect(timelineResizeRefusal(limits, 8, 21)).toMatch(/in the way/);
-            expect(timelineResizeRefusal(limits, 8, 8)).toMatch(
+            expect(say(timelineResizeRefusal(limits, 8, 21))).toMatch(
+                /in the way/,
+            );
+            expect(say(timelineResizeRefusal(limits, 8, 8))).toMatch(
                 /at least 1 count/,
             );
-            expect(timelineResizeRefusal(limits, 0, 16)).toMatch(
+            expect(say(timelineResizeRefusal(limits, 0, 16))).toMatch(
                 /already covers exactly these counts/,
             );
-            expect(timelineResizeRefusal(limits, 8.5, 16)).toMatch(
+            expect(say(timelineResizeRefusal(limits, 8.5, 16))).toMatch(
                 /whole counts/,
             );
         },

@@ -173,17 +173,11 @@ export function unsetFollowingLabel(
 ): string {
     const first = pages[0] ?? "";
     const last = pages[pages.length - 1] ?? first;
-    return first === last
-        ? translate(
-              "actions.timeline.unsetHereAndPage",
-              "Remove keyframe, Page {page} follows back",
-              { page: first },
-          )
-        : translate(
-              "actions.timeline.unsetHereAndPages",
-              "Remove keyframe, Pages {first}–{last} follow back",
-              { first, last },
-          );
+    return translate(
+        "actions.timeline.unsetHereAndPages",
+        "{count, plural, one {Remove keyframe, Page {first} follows back} other {Remove keyframe, Pages {first}–{last} follow back}}",
+        { first, last, count: first === last ? 1 : pages.length },
+    );
 }
 
 /** `unsetFollowingPages` for `marcherIds` at the count shown, kept current. */

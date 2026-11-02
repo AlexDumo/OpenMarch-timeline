@@ -5,7 +5,12 @@ import { ShapesIcon } from "@phosphor-icons/react";
 import { performersOnly } from "@/global/classes/Marcher";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import ActionButton from "@/shortcuts/ActionButton";
-import { getActionShortcutLabel } from "@/shortcuts/labels";
+import {
+    getActionShortcutKeys,
+    getActionShortcutLabel,
+} from "@/shortcuts/labels";
+import { T } from "@tolgee/react";
+import Keycaps from "@/components/ui/Keycaps";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import ToolbarSection from "@/components/toolbar/ToolbarSection";
 import { showShapeLibrary } from "../library/ShapeLibraryPanel";
@@ -41,7 +46,7 @@ export default function ShapesTab() {
     const armed = shown ? openKind : null;
     const gate = kindPickGate(shown, performers);
     const overrides = useShortcutOverridesStore((s) => s.overrides);
-    const ringKey = getActionShortcutLabel("openShapeRing", { overrides });
+    const ringKey = getActionShortcutKeys("openShapeRing", { overrides });
     const starred = useStarredShapes();
     /** A greyed-out shape's tooltip: its name, then why it can't be picked */
     const greyedTitle = (label: string) =>
@@ -166,14 +171,13 @@ export default function ShapesTab() {
             {/* The ring has no button, so the tab says how to open it (sims, ring round 1) */}
             {ringKey && (
                 <span
-                    className="text-sub text-text-subtitle"
+                    className="text-sub text-text-subtitle flex items-center gap-4"
                     data-testid="shapes-tab-ring-hint"
                 >
-                    {tolgee.t(
-                        "shapes.tool.tab.ringHint",
-                        "Hold {key} on the field for the shape ring",
-                        { key: ringKey },
-                    )}
+                    <T
+                        keyName="shapes.tool.tab.ringHint"
+                        params={{ keys: () => <Keycaps keys={ringKey} /> }}
+                    />
                 </span>
             )}
             {!gate.ok && (

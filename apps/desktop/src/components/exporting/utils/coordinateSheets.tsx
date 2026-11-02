@@ -3,7 +3,7 @@ import ReactDOMServer from "react-dom/server";
 import type { FieldProperties } from "@openmarch/core";
 import type Marcher from "@/global/classes/Marcher";
 import type Page from "@/global/classes/Page";
-import type tolgee from "@/global/singletons/Tolgee";
+import tolgee from "@/global/singletons/Tolgee";
 import {
     StaticMarcherCoordinateSheet,
     StaticQuarterMarcherSheet,
@@ -57,10 +57,12 @@ export function coordinateSheetMarchers(
             // Use raw DB section with the numeric part of drill_number as fallback display name
             name:
                 marcher.name ||
-                `${marcher.section} ${
-                    marcher.drill_number.match(/\d+/)?.[0] ||
-                    String(marcher.drill_order)
-                }`,
+                tolgee.t("coordinateSheet.unnamedMarcherName", {
+                    section: marcher.section,
+                    number:
+                        marcher.drill_number.match(/\d+/)?.[0] ||
+                        String(marcher.drill_order),
+                }),
         }))
         .sort((a, b) => {
             const sectionCompare = (a.section || "").localeCompare(

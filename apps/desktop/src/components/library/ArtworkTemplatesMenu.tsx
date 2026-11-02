@@ -9,6 +9,7 @@
  * exists.
  */
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
+import { catalogEntryName } from "@/view3d/library/catalogNames";
 import {
     CaretDownIcon,
     CaretRightIcon,
@@ -49,7 +50,10 @@ export function templateSizeText(download: TemplateDownload): string {
 }
 
 export function templateLabel(download: TemplateDownload, t: Translate) {
-    const name = download.catalogName ?? download.surface.name;
+    const name =
+        (download.catalogId && catalogEntryName(download.catalogId)) ??
+        download.catalogName ??
+        download.surface.name;
     if (download.sag) {
         return t("library.templates.withSag", {
             name,
@@ -63,9 +67,9 @@ export function templateLabel(download: TemplateDownload, t: Translate) {
         return t(`library.templates.propFace.${download.face}`, { name });
     }
     if (download.uniformPart && download.uniformSide) {
-        return t(`library.templates.uniformSide.${download.uniformSide}`, {
-            part: t(`library.templates.uniformPart.${download.uniformPart}`),
-        });
+        return t(
+            `library.templates.uniformPanel.${download.uniformPart}.${download.uniformSide}`,
+        );
     }
     return name;
 }

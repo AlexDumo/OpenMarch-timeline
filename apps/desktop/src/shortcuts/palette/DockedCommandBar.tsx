@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useTolgee } from "@tolgee/react";
+import { useTranslate } from "@tolgee/react";
 import { CaretRightIcon } from "@phosphor-icons/react";
 import type { Translate } from "../labels";
 import {
@@ -9,6 +9,9 @@ import {
     useCommandBarStore,
     type CommandRun,
 } from "./commandBar";
+import Keycaps from "@/components/ui/Keycaps";
+import { formatBindingKeys } from "../bindings";
+import { isMacPlatform } from "../platform";
 import "./CommandPalette.css";
 
 /**
@@ -54,8 +57,9 @@ function DockedSteps({
 }) {
     // The one-liner's answers on the steps they answer
     const [prefill] = useState(() => run.fillAhead?.(typed) ?? typed);
-    const { t: tolgeeT } = useTolgee();
+    const { t: tolgeeT } = useTranslate();
     const t: Translate = (key, params) => tolgeeT(key, params as never);
+    const isMac = isMacPlatform();
     // A one-liner opens at the first step it didn't fill, or the last one, so one Enter finishes
     // it (sims B354); Backspace still goes back over what it filled
     const [opening] = useState(() => {
@@ -211,17 +215,17 @@ function DockedSteps({
                           })}
                 </span>
                 <span className="palette-footer-hint" aria-hidden>
-                    <kbd className="keycap">Enter</kbd>
+                    <Keycaps keys={formatBindingKeys("Enter", isMac)} />
                     {index === steps.length - 1
                         ? (run.finishLabel ?? t("commandPalette.done"))
                         : t("commandPalette.next")}
                 </span>
                 <span className="palette-footer-hint" aria-hidden>
-                    <kbd className="keycap">Backspace</kbd>
+                    <Keycaps keys={formatBindingKeys("Backspace", isMac)} />
                     {t("commandPalette.back")}
                 </span>
                 <span className="palette-footer-hint" aria-hidden>
-                    <kbd className="keycap">Esc</kbd>
+                    <Keycaps keys={formatBindingKeys("Escape", isMac)} />
                     {t("commandPalette.cancel")}
                 </span>
             </div>

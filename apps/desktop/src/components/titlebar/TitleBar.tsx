@@ -19,7 +19,7 @@ import {
 } from "@openmarch/ui";
 import VersionChecker from "../VersionCheck";
 import FileControls from "./FileControls";
-import { T, useTolgee } from "@tolgee/react";
+import { T, useTranslate } from "@tolgee/react";
 import ActionButton from "@/shortcuts/ActionButton";
 import { useIsTouchMode } from "@/stores/InputModeStore";
 import { setToolbarTabsSlot } from "./toolbarSlot";
@@ -116,7 +116,7 @@ function EditorTitleBar({
     showControls?: boolean;
     variant?: "main" | "settings";
 }) {
-    const { t } = useTolgee();
+    const { t } = useTranslate();
     const isTouch = useIsTouchMode();
     // Touch mode in the editor: the toolbar's tabs take the middle of this row (one row of chrome)
     const tabsInTitleBar = isTouch && variant === "main" && !!showControls;
@@ -140,9 +140,7 @@ function EditorTitleBar({
                 const path = await window.electron.databaseGetPath();
                 setDbPath(path);
             } catch (error) {
-                setDbPath(
-                    "Failed to fetch .dots file path! Fully quit the app and try again. If the issue persists, please reach out to support",
-                );
+                setDbPath("");
                 setDbPathError(true);
                 console.error("Error fetching database path:", error);
             }
@@ -151,12 +149,14 @@ function EditorTitleBar({
         void fetchDbPath();
     }, [showFilePath]);
 
-    const displayDbPath = showFullDatabasePath
-        ? dbPath
-        : (dbPath
-              .split(/[/\\]/)
-              .filter((segment) => segment.length > 0)
-              .pop() ?? dbPath);
+    const displayDbPath = dbPathError
+        ? t("titlebar.databasePathUnavailable")
+        : showFullDatabasePath
+          ? dbPath
+          : (dbPath
+                .split(/[/\\]/)
+                .filter((segment) => segment.length > 0)
+                .pop() ?? dbPath);
 
     return (
         <>
@@ -210,6 +210,7 @@ function EditorTitleBar({
                         />
                         {/* Touch mode: the logo alone, to leave the row for the toolbar tabs */}
                         <p className="text-body touch:hidden min-w-0 leading-none">
+                            {/* i18n-ignore: product name, the same in every language */}
                             OpenMarch
                         </p>
                         {variant === "main" && (
@@ -227,7 +228,7 @@ function EditorTitleBar({
                                         className="touch:hidden bg-accent hover:bg-accent/80 focus-visible:ring-accent cursor-pointer rounded-full px-8 py-2 text-xs leading-none font-medium text-white outline-hidden duration-150 ease-out focus-visible:ring-2"
                                         onClick={() => openWebWelcome(true)}
                                     >
-                                        Web
+                                        {t("titlebar.webBadge")}
                                     </button>
                                 )}
                                 {!isWebBuild && <VersionChecker />}
@@ -267,6 +268,7 @@ function EditorTitleBar({
                         <div className="titlebar-button flex">
                             <button
                                 className="hover:text-accent focus-visible:text-accent touch:flex touch:min-h-44 touch:items-center cursor-pointer px-16 py-8 outline-hidden duration-150 ease-out"
+                                aria-label={t("titlebar.window.minimize")}
                                 onClick={() => {
                                     window.electron.minimizeWindow();
                                 }}
@@ -275,6 +277,7 @@ function EditorTitleBar({
                             </button>
                             <button
                                 className="hover:text-accent focus-visible:text-accent touch:flex touch:min-h-44 touch:items-center cursor-pointer px-16 py-8 outline-hidden duration-150 ease-out"
+                                aria-label={t("titlebar.window.maximize")}
                                 onClick={() => {
                                     window.electron.maximizeWindow();
                                 }}
@@ -283,6 +286,7 @@ function EditorTitleBar({
                             </button>
                             <button
                                 className="hover:text-red focus-visible:text-red touch:flex touch:min-h-44 touch:items-center cursor-pointer px-16 py-8 pr-24 outline-hidden duration-150 ease-out"
+                                aria-label={t("titlebar.window.close")}
                                 onClick={() => {
                                     window.electron.closeWindow();
                                 }}

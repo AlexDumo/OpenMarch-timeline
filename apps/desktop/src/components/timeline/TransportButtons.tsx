@@ -23,6 +23,8 @@ import {
     StopIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
+import { T } from "@tolgee/react";
+import tolgee from "@/global/singletons/Tolgee";
 import { Keycaps, ShortcutTooltip } from "./ShortcutTooltip";
 import { isMac } from "./platform";
 import { START_INK } from "./startFlagInk";
@@ -289,7 +291,11 @@ const navigationGuide = (
         {
             mode: "page",
             icon: back ? SKIP_BACK_ICON : SKIP_FORWARD_ICON,
-            label: back ? "Previous page" : "Next page",
+            label: tolgee.t(
+                back
+                    ? "timeline.transport.previousPage"
+                    : "timeline.transport.nextPage",
+            ),
             shortcut: back
                 ? TRANSPORT_SHORTCUTS.previousPage
                 : TRANSPORT_SHORTCUTS.nextPage,
@@ -297,7 +303,11 @@ const navigationGuide = (
         {
             mode: "beat",
             icon: back ? BEAT_BACK_ICON : BEAT_FORWARD_ICON,
-            label: back ? "Previous beat" : "Next beat",
+            label: tolgee.t(
+                back
+                    ? "timeline.transport.previousBeat"
+                    : "timeline.transport.nextBeat",
+            ),
             shortcut: back
                 ? TRANSPORT_SHORTCUTS.previousBeat
                 : TRANSPORT_SHORTCUTS.nextBeat,
@@ -305,7 +315,11 @@ const navigationGuide = (
         {
             mode: "edge",
             icon: back ? START_ICON : END_ICON,
-            label: back ? "Start of the show" : "End of the show",
+            label: tolgee.t(
+                back
+                    ? "timeline.transport.showStart"
+                    : "timeline.transport.showEnd",
+            ),
             shortcut: (back
                 ? TRANSPORT_SHORTCUTS.firstPage
                 : TRANSPORT_SHORTCUTS.lastPage
@@ -434,23 +448,35 @@ const PLAYHEAD_MARK = (
     </svg>
 );
 
+/** The lines' marks, for the tags in the play guide's words */
+const PLAY_MARKS = {
+    start: () => START_FLAG_MARK,
+    playhead: () => PLAYHEAD_MARK,
+};
+
 /** "Play from start flag ⚑ and continue", with the lines' marks after their names (owner) */
 const playWords = (
     from: "start" | "playhead",
     stopAtPlayhead: boolean,
 ): { label: string; content: ReactNode } => {
-    const name = from === "start" ? "start flag" : "playhead";
-    const end = stopAtPlayhead ? "stop at playhead" : "continue";
+    const [label, marked] =
+        from === "start"
+            ? stopAtPlayhead
+                ? ([
+                      "timeline.transport.playFromStartAndStop",
+                      "timeline.transport.playFromStartAndStopMarked",
+                  ] as const)
+                : ([
+                      "timeline.transport.playFromStartAndContinue",
+                      "timeline.transport.playFromStartAndContinueMarked",
+                  ] as const)
+            : ([
+                  "timeline.transport.playFromPlayheadAndContinue",
+                  "timeline.transport.playFromPlayheadAndContinueMarked",
+              ] as const);
     return {
-        label: `Play from ${name} and ${end}`,
-        content: (
-            <>
-                Play from {name}
-                {from === "start" ? START_FLAG_MARK : PLAYHEAD_MARK}
-                and {end}
-                {stopAtPlayhead && PLAYHEAD_MARK}
-            </>
-        ),
+        label: tolgee.t(label),
+        content: <T keyName={marked} params={PLAY_MARKS} />,
     };
 };
 
@@ -467,7 +493,9 @@ const playGuide = (
     {
         mode: "play",
         icon: PLAY_ICON,
-        ...(loops ? { label: "Play the loop" } : playWords("start", playsOn)),
+        ...(loops
+            ? { label: tolgee.t("timeline.transport.playLoop") }
+            : playWords("start", playsOn)),
         shortcut: TRANSPORT_SHORTCUTS.play,
     },
     ...(playsOn
@@ -487,24 +515,24 @@ const playGuide = (
         mode: "shift",
         icon: PLAY_FROM_PLAYHEAD_ICON,
         ...(loops
-            ? { label: "Play the loop once" }
+            ? { label: tolgee.t("timeline.transport.playLoopOnce") }
             : playWords("playhead", false)),
         shortcut: TRANSPORT_SHORTCUTS.playPage,
     },
 ];
 
 /** What Stop (Space) and Pause (Shift+Space) do while playing (UI-24) */
-const stopGuide: readonly TransportGuideRow<TransportPlayMode>[] = [
+const stopGuide = (): readonly TransportGuideRow<TransportPlayMode>[] => [
     {
         mode: "play",
         icon: STOP_ICON,
-        label: "Stop and go back",
+        label: tolgee.t("timeline.transport.stopAndGoBack"),
         shortcut: TRANSPORT_SHORTCUTS.play,
     },
     {
         mode: "shift",
         icon: PAUSE_ICON,
-        label: "Pause here",
+        label: tolgee.t("timeline.transport.pauseHere"),
         shortcut: TRANSPORT_SHORTCUTS.playPage,
     },
 ];
@@ -545,7 +573,7 @@ export const TransportPlayButton = memo(function TransportPlayButton({
         [isPlaying, onPlayingChange, onPlayFromPlayhead, onPlayOn, playsOn],
     );
     const onClick = onPlayingChange ? togglePlaying : undefined;
-    const guide = isPlaying ? stopGuide : playGuide(playLoops, playsOn);
+    const guide = isPlaying ? stopGuide() : playGuide(playLoops, playsOn);
     const mode =
         held === "shift" && !onPlayFromPlayhead
             ? "play"
