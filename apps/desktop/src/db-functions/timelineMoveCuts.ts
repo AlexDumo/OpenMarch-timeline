@@ -10,7 +10,7 @@ import {
     type SplitIdKeeper,
     type SplitTimelineResult,
 } from "./timelineSplitAtBeat";
-import { hasShapeRecipes } from "./shapeRecipes";
+import { hasShapeRecipes, shapeRecipesOnly } from "./shapeRecipes";
 import { setTimelineTransitionDestinationInTransaction } from "./timelineTransitionsInTransaction";
 import { timelinesWithRange } from "./timelines";
 import { clearOwnPageMoves, sampleShape } from "./timelineMoveHelpers";
@@ -406,6 +406,7 @@ async function membersThatStay(
                     recipes.timeline_id,
                     ascending(rows.map((r) => r.timelineId)),
                 ),
+                shapeRecipesOnly(),
             ),
         )
         .all();
@@ -600,7 +601,7 @@ async function removeFromMove(
     await clearOwnPageMoves(
         tx,
         removed.map((r) => r.row),
-        { tidyShared: true },
+        { tidyShared: true, dropUngrouped: plan.removed },
     );
     const deleted = !(await readTimeline(tx, pieceId));
     return {
