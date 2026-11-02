@@ -375,7 +375,9 @@ describe("TimelineHoldLine", () => {
             fireEvent.focus(keepHere()!);
             const caps = await screen.findAllByText("K", { selector: "kbd" });
             expect(caps.length).toBeGreaterThan(0);
-            expect(caps[0]!.parentElement!.parentElement).toHaveTextContent(
+            // The tooltip holds the hint and the K cap together
+            const tip = caps[0]!.closest("[data-radix-popper-content-wrapper]");
+            expect(tip).toHaveTextContent(
                 "Keep OT1 on Page 3, so editing Page 2 won't move them here",
             );
             cleanup();
