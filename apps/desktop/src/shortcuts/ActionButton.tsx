@@ -9,7 +9,6 @@ import {
 import { useIsTouchMode } from "@/stores/InputModeStore";
 import { LongPressBubble, useLongPress } from "@openmarch/ui";
 import Shortcut from "@/components/ui/Shortcut";
-import { Tip } from "@/components/ui/Tip";
 import { useShowShortcutHints } from "@/stores/KeyboardSeenStore";
 import clsx from "clsx";
 import { useTolgee } from "@tolgee/react";
@@ -142,6 +141,7 @@ export default function ActionButton({
                 if (isTouch) setHintOpen(false);
             }}
             data-own-long-press
+            title={hintLabel || undefined}
             ref={setAnchor}
             disabled={disabled || !runnable}
             onClick={(event) => {
@@ -164,14 +164,7 @@ export default function ActionButton({
     );
     return (
         <>
-            {/* The touch layout shows the long-press bubble instead */}
-            <Tip
-                label={hintLabel || undefined}
-                action={showShortcut ? action : undefined}
-                disabled={isTouch}
-            >
-                {button}
-            </Tip>
+            {button}
             <LongPressBubble
                 anchor={anchor}
                 open={hintOpen}
