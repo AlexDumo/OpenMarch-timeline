@@ -480,9 +480,17 @@ export interface ToolKind<P> {
     /**
      * The pivot a new shape of the kind starts at (a Line's leftmost end, owner on #596): it sets
      * that itself when it draws one; picking another kind carries a pivot only when it's been
-     * moved from this. The center when absent.
+     * moved by hand. The center when absent.
      */
     startPivot?(params: P): Pivot;
+    /**
+     * Whether `pivot` is one the kind could have put there itself, however the shape has been
+     * turned, flipped or edited since (a Line's: either end, or its first point when that was the
+     * leftmost). A placed shape doesn't keep whether its pivot was moved by hand, so this decides
+     * whether a plain press on a handle under it takes the handle. Absent: only
+     * {@link startPivot} as the shape is now.
+     */
+    ownPivot?(params: P, pivot: Pivot): boolean;
     /**
      * The step from one marcher to the next that its {@link ToolParam.showsStep} numbers set (a
      * Line's offset, rise over run): the field draws it as a right angle, ↔ then ↕, while they

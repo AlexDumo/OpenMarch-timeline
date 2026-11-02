@@ -979,7 +979,9 @@ const TurnControls = memo(function TurnControls({
                 pivot={pivot}
                 rotation={rotation}
                 onPick={(key) =>
-                    updateWith(target, (now) => withPivot(now, key))
+                    target.pickPivot
+                        ? target.pickPivot(key)
+                        : updateWith(target, (now) => withPivot(now, key))
                 }
                 testId="shape-editor-pivot"
             />

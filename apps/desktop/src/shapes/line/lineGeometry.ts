@@ -15,6 +15,7 @@ import { catmullRomSpan } from "../geometry/catmullRom";
 import { makePath, type Path, type Segment } from "../geometry/path";
 import { cross, dot, lerp } from "../geometry/vec";
 import { chordOffsets, groupGaps, layGroups } from "../spacing";
+import { falsePosition, secantFrom } from "../solve";
 import {
     canLayOut,
     storedDistribution,
@@ -494,15 +495,18 @@ function fitScale(
             gaps.map((gap) => gap * k),
             across,
         ).at(-1)!;
-    // Each chord reaches at least its own length along, so the arc's share reaches the end
-    let lo = 0;
-    let hi = arc;
-    while (hi - lo > arc * 1e-10) {
-        const mid = (lo + hi) / 2;
-        if (reach(mid) < path.length) lo = mid;
-        else hi = mid;
-    }
-    return (lo + hi) / 2;
+    // Each chord reaches at least its own length along, so the arc's share reaches the end. The
+    // reach grows with the scale, close to in proportion, so false position (Illinois) homes in
+    // within a few layouts where halving would take dozens: each is a walk along the whole path
+    const g = (k: number) => reach(k) - path.length;
+    const atArc = g(arc);
+    if (atArc <= 0) return arc;
+    // Scaled down as far as the arc's share overshoots: as good as there, and short of it
+    const k = (arc * path.length) / (path.length + atArc);
+    const tolerance = arc * 1e-10;
+    const found = secantFrom(g, arc, atArc, k, g(k), 0, arc, tolerance);
+    if (typeof found === "number") return found;
+    return falsePosition(g, 0, -path.length, arc, atArc, tolerance) ?? arc;
 }
 
 /**
@@ -1618,7 +1622,9 @@ const withPointAt = (p: LineParams, index: number, at: XY): LineParams => ({
 
 /**
  * The `t` nearest `t0` between `lo` and `hi` where `f(t)` is `target`, or null where it never is:
- * sampled for where it crosses, then halved down to it
+ * by secant steps from `t0` (`h` the first, {@link secantFrom}), else sampled for where it crosses and narrowed
+ * down to it. `near` is a short search, `lo` to `hi` only as far as the caller can use: there a
+ * secant step past them says it isn't in reach, without sampling.
  */
 function solveFor(
     f: (t: number) => number,
@@ -1626,30 +1632,35 @@ function solveFor(
     t0: number,
     lo: number,
     hi: number,
+    near = false,
 ): number | null {
-    const SAMPLES = 96;
+    const SAMPLES = near ? 12 : 96;
     const g = (t: number) => f(t) - target;
+    // `f` is all but straight near `t0` as a rule (an interval against how far a point is
+    // dragged), so a secant from `t0` brackets the crossing within a call or two and false
+    // position finishes it: a handful of calls where sampling takes over a hundred, each a whole
+    // layout (a search of its own straight across, #596)
+    const h = (hi - lo) / SAMPLES;
+    const b = t0 + h <= hi ? t0 + h : t0 - h;
+    const found =
+        t0 >= lo && t0 <= hi
+            ? secantFrom(g, t0, g(t0), b, g(b), lo, hi, (hi - lo) * 1e-12)
+            : undefined;
+    if (found === "outside" && near) return null;
+    if (typeof found === "number") return found;
     let best: number | null = null;
     let prevT = lo;
     let prev = g(lo);
+    const tolerance = (hi - lo) * 1e-12;
     for (let i = 1; i <= SAMPLES; i++) {
         const t = lo + ((hi - lo) * i) / SAMPLES;
         const now = g(t);
         if (Number.isFinite(prev) && Number.isFinite(now) && prev * now <= 0) {
-            let a = prevT;
-            let b = t;
-            let ga = prev;
-            for (let k = 0; k < 50; k++) {
-                const mid = (a + b) / 2;
-                const gm = g(mid);
-                if (ga * gm <= 0) b = mid;
-                else {
-                    a = mid;
-                    ga = gm;
-                }
-            }
-            const root = (a + b) / 2;
-            if (best === null || Math.abs(root - t0) < Math.abs(best - t0))
+            const root = falsePosition(g, prevT, prev, t, now, tolerance);
+            if (
+                root !== null &&
+                (best === null || Math.abs(root - t0) < Math.abs(best - t0))
+            )
                 best = root;
         }
         prevT = t;
@@ -1825,19 +1836,32 @@ function snappedAlong(
     u: XY,
     t: number,
     env: ToolEnv,
+    within?: number,
 ): XY {
     const unit = intervalUnit(env);
     const counts = cornerGaps(placedAt(base, index, along(from, u, t), env), n);
-    const f = (s: number) =>
+    const interval = (s: number) =>
         intervalAt(
             placedAt(base, index, along(from, u, s), env),
             n,
             index,
             counts,
         );
-    const target = onUnits(f(t), unit);
-    const span = Math.max(t, unit * n);
-    const s = solveFor(f, target, t, Math.max(1e-6, t - span), t + span);
+    // Each is a layout: the one at `t` is asked for again first
+    const atT = interval(t);
+    const f = (s: number) => (s === t ? atT : interval(s));
+    const target = onUnits(atT, unit);
+    // Only as far as the caller can use: each try is a whole layout, searched for itself straight
+    // across, so a hundred of them over the whole line freezes a drag (#596)
+    const span = within ?? Math.max(t, unit * n);
+    const s = solveFor(
+        f,
+        target,
+        t,
+        Math.max(1e-6, t - span),
+        t + span,
+        within !== undefined,
+    );
     return along(from, u, s ?? t);
 }
 
@@ -1860,6 +1884,9 @@ function snappedFree(
     if (!axis) {
         const u = unitOf(onHalfSteps(sub(landed, other), env));
         if (!u) return landed;
+        // A spot `d` along from where the pointer lands is at least `d` from it, so further than
+        // this from there it's never near enough the pointer to take
+        const within = softSnapReach(env) + length(sub(landed, to));
         const spot = snappedAlong(
             base,
             n,
@@ -1868,6 +1895,7 @@ function snappedFree(
             u,
             length(sub(landed, other)),
             env,
+            within,
         );
         return softSnap(to, spot, env);
     }
@@ -1925,8 +1953,11 @@ export const SOFT_SNAP_PX = 6;
  * there when it's within {@link SOFT_SNAP_PX} of the pointer on screen, else where the pointer
  * lands, so the point isn't held to a few far-apart spots
  */
+/** How near the pointer, in field units, a spot {@link softSnap} takes must be */
+const softSnapReach = (env: ToolEnv) => SOFT_SNAP_PX / (env.zoom || 1);
+
 function softSnap(to: XY, spot: XY | null, env: ToolEnv): XY {
-    const reach = SOFT_SNAP_PX / (env.zoom || 1);
+    const reach = softSnapReach(env);
     if (spot && length(sub(spot, to)) <= reach + 1e-9) return spot;
     return landPoint(to, env);
 }
@@ -2594,6 +2625,12 @@ export function withSpacing(
             : { ...p, spacing: { mode: "fit", groups: p.spacing.groups } };
     // Nothing to space with one marcher, or a line with no length: Fit is all there is
     if (!(interval > 0)) return p;
+    // Unlocked, `offset` follows only some drags (a one-segment end, a settle): a line bent and
+    // straightened again, say, keeps an older one. Locking keeps the offset it shows now
+    if (p.spacing.mode === "fit" && p.offset && offsetBlock(p) === null) {
+        const now = lineOffset(p, n);
+        if (Math.hypot(now.x, now.y) > 1e-9) p = { ...p, offset: now };
+    }
     const groups =
         p.spacing.mode !== "fit" ? p.spacing.groups : fitLocked(p, n, interval);
     if (mode === "keep")
@@ -2696,7 +2733,10 @@ export function settleLine(
     env: SizeEnv & Partial<Pick<ToolEnv, "stepPx">>,
 ): LineParams {
     const p = squareOnGrid(base, env);
-    // Measured as an offset, the offset turns with the line, back on half steps when snapping
+    // Measured as an offset, the offset turns with the line. Turned square to the field it's back
+    // on half steps when snapping, rid of the turn's float noise; turned off square it's exactly
+    // the turned one, so a locked line keeps its interval and points where it was turned (ADR
+    // 0006, decision 10), the numbers then fractions
     if (offsetOf(p) && n > 1) {
         const d = sub(p.points.at(-1)!, p.points[0]!);
         let offset = { x: d.x / (n - 1), y: d.y / (n - 1) };
@@ -2706,7 +2746,10 @@ export function settleLine(
                 x: Math.round(offset.x / unit) * unit,
                 y: Math.round(offset.y / unit) * unit,
             };
-            if (length(on) > 1e-9) offset = on;
+            const square =
+                Math.abs(on.x - offset.x) <= 1e-6 * unit &&
+                Math.abs(on.y - offset.y) <= 1e-6 * unit;
+            if (square && length(on) > 1e-9) offset = on;
         }
         return keptToRun({ ...p, offset }, n, env);
     }

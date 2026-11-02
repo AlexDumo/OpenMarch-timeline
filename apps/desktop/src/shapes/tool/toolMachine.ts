@@ -6,7 +6,7 @@ import {
     type OrderChoice,
 } from "../assign";
 import { carryPivot, pivotOf, withPivot } from "../frame/pivot";
-import { DEFAULT_PIVOT, samePivot } from "../frame/frame";
+import type { Pivot } from "../frame/frame";
 import {
     centerPivot,
     dragShape,
@@ -51,6 +51,14 @@ export interface ToolSnapshot {
      * Kept through other kinds, which go by least travel.
      */
     readonly order: OrderChoice;
+    /**
+     * Whether the pivot has been moved by hand (dragged, pulled out, double-clicked back to the
+     * center or picked in the pivot menu) since the shape was drawn. Until it has, it is where the
+     * kind put it, carried through turns, flips and edits however far it has come from where
+     * the kind would start it now: a plain press on a handle under it takes the handle, and
+     * picking another kind starts that kind's own pivot. Absent is not moved.
+     */
+    readonly pivotMoved?: boolean;
 }
 
 export type Gesture =
@@ -146,6 +154,7 @@ const snapshot = (s: ToolState): ToolSnapshot => ({
     params: s.params,
     assignment: s.assignment,
     order: s.order,
+    pivotMoved: s.pivotMoved,
 });
 
 /** Whether every marcher has a place along one placed Line, so their order there can be kept */
@@ -238,6 +247,7 @@ export function pressTarget(
             at,
             env,
             state.selected,
+            state.pivotMoved ?? false,
         ) ?? {
             type: "draw",
         }
@@ -259,6 +269,7 @@ export function press(state: ToolState, at: XY, env: ToolEnv): ToolState {
                   at,
                   env,
                   state.selected,
+                  state.pivotMoved ?? false,
               );
     const click =
         onShape?.type === "handle"
@@ -353,7 +364,10 @@ export function finishPoints(state: ToolState, ctx: ShapeContext): ToolState {
     if (g?.type !== "points") return state;
     if (g.drawn === undefined) return cancelGesture(state);
     return reassign(
-        pushHistory({ ...state, params: g.drawn, gesture: null }, g.before),
+        pushHistory(
+            { ...state, params: g.drawn, gesture: null, pivotMoved: false },
+            g.before,
+        ),
         ctx,
     );
 }
@@ -444,6 +458,11 @@ export function release(
     const ended: ToolState = {
         ...state,
         gesture: null,
+        // A new shape's pivot is where its kind puts it; one dragged or double-clicked is moved
+        ...(g.type === "draw" &&
+            state.params !== g.before.params && { pivotMoved: false }),
+        ...(g.type === "pivot" &&
+            state.params !== g.before.params && { pivotMoved: true }),
         ...(g.type === "draw" || g.type === "edit"
             ? {}
             : {
@@ -482,7 +501,12 @@ function releasePoint(
     if (g.onFirst && !g.onLast && g.adding !== undefined)
         return reassign(
             pushHistory(
-                { ...state, params: g.adding, gesture: null },
+                {
+                    ...state,
+                    params: g.adding,
+                    gesture: null,
+                    pivotMoved: false,
+                },
                 g.before,
             ),
             ctx,
@@ -616,16 +640,12 @@ export function switchKind(
     if (state.gesture || kind === state.kind) return state;
     if (state.params === null) return { ...state, kind };
     const n = state.spots;
-    // The pivot too, where it was moved: it sits on the frame. One the shape started at goes
-    // to where the new kind starts its own (a Line's leftmost end, owner on #596)
+    // The pivot too, where it was moved by hand: it sits on the frame. One the kind put there
+    // goes to where the new kind starts its own (a Line's leftmost end, owner on #596)
     const made = kind.fromFrame(state.kind.frameOf(state.params, n), n, env);
-    const was = pivotOf(state.params);
-    const params = samePivot(
-        was,
-        state.kind.startPivot?.(state.params) ?? DEFAULT_PIVOT,
-    )
-        ? made
-        : withPivot(made, was);
+    const params = state.pivotMoved
+        ? withPivot(made, pivotOf(state.params))
+        : made;
     return reassign(
         pushHistory(
             { ...state, kind, params, selected: null },
@@ -633,6 +653,20 @@ export function switchKind(
         ),
         ctx,
     );
+}
+
+/**
+ * The pivot picked in the pivot menu: moved by hand, so it stays where it's put (a plain press on
+ * a handle under it takes the pivot). One undo step, as any edit.
+ */
+export function pickPivot(
+    state: ToolState,
+    pivot: Pivot,
+    ctx: ShapeContext,
+): ToolState {
+    if (state.params === null || state.gesture) return state;
+    const picked = edit(state, withPivot(state.params, pivot), ctx);
+    return picked === state ? state : { ...picked, pivotMoved: true };
 }
 
 /**

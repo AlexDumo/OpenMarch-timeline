@@ -11,18 +11,22 @@ import { boxTool } from "../../box/boxTool";
 import { chipLayout } from "../../editor/chip";
 import type { ScrubMove } from "../../editor/scrub";
 import { pivotPoint } from "../../frame/frame";
-import { pivotOf, withPivot } from "../../frame/pivot";
+import { pivotOf } from "../../frame/pivot";
 import { shapeTargetAt } from "../../frame/gestures";
 import type { ToolEnv } from "../../tool/toolKind";
 import {
     edit,
     openTool,
+    pickPivot,
     pointerMove,
     press,
+    pressTarget,
     release,
     switchKind,
     type ToolState,
 } from "../../tool/toolMachine";
+import { quarterTurn } from "../../editor/chip";
+import { flipShape } from "../../frame/gestures";
 import type { ShapeContext, XY } from "../../types";
 
 /**
@@ -121,7 +125,7 @@ describe("a new Line's pivot (#596)", () => {
 
     it("keeps one set by hand, and a box's moved pivot when it becomes a Line", () => {
         let t = drawn(5, { x: 100, y: 100 }, { x: 150, y: 100 });
-        t = edit(t, withPivot(paramsOf(t), "c"), ctx);
+        t = pickPivot(t, "c", ctx);
         t = typed(t, "2", "interval");
         // Grown from the center, set by hand
         expect(pointsOf(t)).toEqual([
@@ -135,11 +139,12 @@ describe("a new Line's pivot (#596)", () => {
         box = press(box, { x: 100, y: 100 }, env);
         box = pointerMove(box, { x: 160, y: 140 }, env);
         box = release(box, ctx);
-        box = edit(box, withPivot(box.params, "ne"), ctx);
-        expect(pivotOf(switchKind(box, lineTool, ctx, env).params)).toBe("ne");
-        // One at the box's own start (the center) goes to the Line's own start
-        const plain = edit(box, withPivot(box.params, "c"), ctx);
-        const line = switchKind(plain, lineTool, ctx, env);
+        const moved = pickPivot(box, "ne", ctx);
+        expect(pivotOf(switchKind(moved, lineTool, ctx, env).params)).toBe(
+            "ne",
+        );
+        // One where the box put it (the center) goes to the Line's own start
+        const line = switchKind(box, lineTool, ctx, env);
         expect(pivotOf(line.params)).toBe(linePivot(line.params as LineParams));
         // And back: the Line's start doesn't follow it into a box
         expect(pivotOf(switchKind(line, boxTool, ctx, env).params)).toBe("c");
@@ -158,16 +163,86 @@ describe("a new Line's pivot (#596)", () => {
             }),
         ).toMatchObject({ type: "pivot" });
         // A pivot moved onto an end by hand wins over it, as before
-        const moved = edit(t, withPivot(paramsOf(t), "e"), ctx);
-        expect(
-            shapeTargetAt(
+        const moved = pickPivot(t, "e", ctx);
+        expect(pressTarget(moved, { x: 150, y: 100 }, env)).toMatchObject({
+            type: "pivot",
+        });
+    });
+
+    /** What a plain press, and one reaching inside, on point `index` of the open line takes */
+    const pressesOn = (t: ToolState, index: number) => {
+        const at = paramsOf(t).points[index]!;
+        return [
+            pressTarget(t, at, env),
+            pressTarget(t, at, { ...env, reachInside: true }),
+        ];
+    };
+
+    it("leaves the end under it to a plain press after a quarter turn, a flip or the ends crossing (review on #596)", () => {
+        const t = drawn(5, { x: 100, y: 100 }, { x: 160, y: 100 });
+        // ↻ about the left end: the pivot stays on it, though the line now starts from its front
+        const turned = edit(
+            t,
+            quarterTurn(lineTool, t.params, t.spots, env),
+            ctx,
+        );
+        expect(linePivot(paramsOf(turned))).not.toBe(pivotOf(turned.params));
+        expect(pressesOn(turned, 0)).toEqual([
+            { type: "handle", key: "p0" },
+            { type: "pivot" },
+        ]);
+        // Flipped side to side about it
+        const flipped = edit(
+            t,
+            flipShape(
                 lineTool,
-                moved.params,
-                moved.spots,
-                { x: 150, y: 100 },
+                t.params,
+                t.spots,
+                "across",
+                pivotOf(t.params),
                 env,
             ),
-        ).toMatchObject({ type: "pivot" });
+            ctx,
+        );
+        const under = paramsOf(flipped).points.findIndex(
+            (q) => q.x === 100 && q.y === 100,
+        );
+        expect(under).toBeGreaterThanOrEqual(0);
+        expect(pressesOn(flipped, under)[0]).toEqual({
+            type: "handle",
+            key: `p${under}`,
+        });
+        // The far end dragged past the pivot's end: that end is no longer the leftmost
+        const at = paramsOf(t).points[1]!;
+        let crossed = press(t, at, env);
+        crossed = release(pointerMove(crossed, { x: 60, y: 100 }, env), ctx);
+        expect(paramsOf(crossed).points[1]!.x).toBeLessThan(100);
+        expect(pressesOn(crossed, 0)[0]).toEqual({
+            type: "handle",
+            key: "p0",
+        });
+    });
+
+    it("takes a plain press once it's been moved by hand, and keeps that through undo", () => {
+        const t = drawn(5, { x: 100, y: 100 }, { x: 160, y: 100 });
+        const end = paramsOf(t).points[0]!;
+        // Dragged off and back onto the left end by hand
+        let moved = press(t, end, { ...env, reachInside: true });
+        expect(moved.gesture?.type).toBe("pivot");
+        moved = pointerMove(moved, { x: 130, y: 100 }, env);
+        moved = release(moved, ctx);
+        expect(moved.pivotMoved).toBe(true);
+        moved = pickPivot(moved, pivotOf(t.params), ctx);
+        expect(pressTarget(moved, end, env)).toEqual({ type: "pivot" });
+        // A placed line, which doesn't keep that, goes by where a Line puts its pivot
+        const turned = edit(
+            t,
+            quarterTurn(lineTool, t.params, t.spots, env),
+            ctx,
+        );
+        expect(
+            shapeTargetAt(lineTool, turned.params, turned.spots, end, env),
+        ).toEqual({ type: "handle", key: "p0" });
     });
 });
 

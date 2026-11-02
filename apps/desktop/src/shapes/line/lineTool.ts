@@ -1,7 +1,13 @@
 import tolgee from "@/global/singletons/Tolgee";
 import type { KindHonors } from "../tool/toolKind";
 import type { XY } from "../types";
-import { fieldToFrame, resizeCursor, rotationDegrees } from "../frame/frame";
+import {
+    fieldToFrame,
+    pivotPoint,
+    resizeCursor,
+    rotationDegrees,
+    type Pivot,
+} from "../frame/frame";
 import { formatSignedSteps, formatSteps, parseSteps } from "../editor/format";
 import {
     COUNT_RATE,
@@ -1349,6 +1355,17 @@ function endTip(p: LineParams, index: number): string | null {
  * (#557). A right-click on a point or a segment's middle opens its menu (#569). A typed list
  * (`2*3+4*2`, #526) spaces it in groups of marchers, each a chip in the editor.
  */
+/**
+ * Whether `pivot` is one a Line puts there itself ({@link linePivot}), however it has been turned,
+ * flipped or edited since: an open line's either end or one of its points, a closed line's center
+ */
+function lineOwnPivot(p: LineParams, pivot: Pivot): boolean {
+    if (isClosed(p)) return pivot === "c";
+    if (pivot === "w" || pivot === "e") return true;
+    const at = pivotPoint(lineFrame(p), pivot);
+    return p.points.some((q) => Math.hypot(q.x - at.x, q.y - at.y) < 1e-6);
+}
+
 /** A new line with its pivot at its leftmost end or point ({@link linePivot}, owner on #596) */
 function pivoted(p: LineParams): LineParams;
 function pivoted(p: LineParams | undefined): LineParams | undefined;
@@ -1479,6 +1496,7 @@ export const lineTool: ToolKind<LineParams> = {
     settle: settleLine,
     fromFrame: (frame, n, env) => pivoted(lineInFrame(frame, n, env)),
     startPivot: linePivot,
+    ownPivot: lineOwnPivot,
     step: offsetStep,
     closed: lineClosed,
     pictureParams: (_n, env) => zigzag(env),

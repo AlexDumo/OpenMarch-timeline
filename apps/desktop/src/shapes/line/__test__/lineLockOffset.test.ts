@@ -3,9 +3,12 @@ import { lineTool } from "../lineTool";
 import {
     intervalUnit,
     isLineParams,
+    lineFrame,
     offsetOf,
     type LineParams,
 } from "../lineGeometry";
+import { frameControls, shapeTurn } from "../../frame/gestures";
+import { DEGREE, rotationDegrees } from "../../frame/frame";
 import { chipLayout } from "../../editor/chip";
 import {
     boxesAt,
@@ -632,5 +635,81 @@ describe("what a Line stores", () => {
         ],
     ])("refuses %s", (_name, params) => {
         expect(isLineParams(params)).toBe(false);
+    });
+});
+
+describe("Offset kept through other edits (review on #596)", () => {
+    const offsetLine = () =>
+        picked(
+            drawn(5, { x: 100, y: 100 }, { x: 140, y: 120 }),
+            "measured",
+            "offset",
+        );
+
+    it("locks a Fit line at the offset it shows, after it was bent and straightened again", () => {
+        const t = offsetLine();
+        expect(readout(t)).toEqual(["1", "−½"]);
+        const bent = menuPick(t, "m0", "add");
+        const moved = dragHandle(bent, "p2", { x: 200, y: 100 }, fine);
+        const straight = menuPick(moved, "p1", "delete");
+        expect(readout(straight)).toEqual(["2½", "0"]);
+        const locked = toggled(straight);
+        expect(lock.locked(paramsOf(locked))).toBe(true);
+        expect(pointsOf(locked)).toEqual(pointsOf(straight));
+        expect(readout(locked)).toEqual(["2½", "0"]);
+        expect(paramsOf(locked).offset).toEqual({ x: 25, y: 0 });
+    });
+
+    /** The line turned `by` degrees clockwise with the knob */
+    const knobTurned = (t: ToolState, by: number) => {
+        const { knob } = frameControls(lineTool, t.params, t.spots, env);
+        const pressed = press(t, knob, env);
+        const { pivot } = pressed.gesture as unknown as { pivot: XY };
+        const r = Math.hypot(knob.x - pivot.x, knob.y - pivot.y);
+        const a = Math.atan2(knob.y - pivot.y, knob.x - pivot.x) + by * DEGREE;
+        const to = {
+            x: pivot.x + r * Math.cos(a),
+            y: pivot.y + r * Math.sin(a),
+        };
+        return release(pointerMove(pressed, to, env), ctx);
+    };
+
+    it.each([15, 30, 45])(
+        "keeps a locked line's interval and direction turned %i°, the offset then fractions",
+        (by) => {
+            const t = picked(
+                toggled(drawn(5, { x: 100, y: 100 }, { x: 180, y: 100 })),
+                "measured",
+                "offset",
+            );
+            expect(readout(t)).toEqual(["2", "0"]);
+            const turned = knobTurned(t, by);
+            const p = paramsOf(turned);
+            expect(
+                rotationDegrees(
+                    shapeTurn(lineTool, turned.params, turned.spots),
+                ),
+            ).toBeCloseTo(by, 9);
+            expect(rotationDegrees(lineFrame(p).rotation)).toBeCloseTo(by, 9);
+            const o = offsetOf(p)!;
+            near(Math.hypot(o.x, o.y), 20);
+            const ends = p.points.map(({ x, y }) => ({ x, y }));
+            near(
+                Math.hypot(ends[1]!.x - ends[0]!.x, ends[1]!.y - ends[0]!.y),
+                80,
+            );
+            expect(ends[0]).toEqual({ x: 100, y: 100 });
+        },
+    );
+
+    it("puts a locked line turned square to the field back on half steps", () => {
+        const t = picked(
+            toggled(drawn(5, { x: 100, y: 100 }, { x: 180, y: 100 })),
+            "measured",
+            "offset",
+        );
+        const turned = knobTurned(t, 90);
+        expect(offsetOf(paramsOf(turned))).toEqual({ x: 0, y: 20 });
+        expect(readout(turned)).toEqual(["0", "−2"]);
     });
 });
