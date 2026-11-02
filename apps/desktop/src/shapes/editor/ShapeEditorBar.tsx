@@ -189,7 +189,7 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
                 ) : armed!.clickPoints ? (
                     <T
                         keyName="shapes.edit.drawPointsHint"
-                        defaultValue="Drag on the field to draw a {shape}, or click point after point · <keys></keys> to cancel"
+                        defaultValue="Drag on the field to draw the {shape}, or click point after point · <keys></keys> to cancel"
                         params={{
                             shape: armed!.shape.label.toLowerCase(),
                             keys: () => <Shortcut binding="Escape" />,
@@ -198,7 +198,7 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
                 ) : (
                     <T
                         keyName="shapes.edit.drawHint"
-                        defaultValue="Drag on the field to draw a {shape} · <keys></keys> to cancel"
+                        defaultValue="Drag on the field to draw the {shape} · <keys></keys> to cancel"
                         params={{
                             shape: armed!.shape.label.toLowerCase(),
                             keys: () => <Shortcut binding="Escape" />,

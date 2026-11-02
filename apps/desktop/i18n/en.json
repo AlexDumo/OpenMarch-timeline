@@ -2019,8 +2019,8 @@
                 "goBack": "Go back",
                 "text": "Shape open at {moment}"
             },
-            "drawHint": "Drag on the field to draw a {shape} · <keys></keys> to cancel",
-            "drawPointsHint": "Drag on the field to draw a {shape}, or click point after point · <keys></keys> to cancel",
+            "drawHint": "Drag on the field to draw the {shape} · <keys></keys> to cancel",
+            "drawPointsHint": "Drag on the field to draw the {shape}, or click point after point · <keys></keys> to cancel",
             "removePointHint": "Right-click or <keys></keys> removes the last point · Double-click to finish · <esc></esc> to cancel",
             "removePointHintClick": "Right-click removes the last point · Double-click to finish · <esc></esc> to cancel",
             "drawnOn": "from {page}",

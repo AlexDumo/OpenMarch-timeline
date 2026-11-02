@@ -6050,7 +6050,7 @@ test("change: O opens the circle tool; a drag from the center draws it, its hand
     await selectAll(page);
     await page.keyboard.press("o");
     await expect(page.getByTestId("shape-tool-hint")).toContainText(
-        "draw a circle",
+        "draw the circle",
     );
 
     // From the center out to a rim 8 steps away: 8 marchers, a chord of 6.1,
