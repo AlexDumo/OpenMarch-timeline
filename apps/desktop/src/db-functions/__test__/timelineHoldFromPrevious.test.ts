@@ -27,6 +27,7 @@ import {
     type TimelineEditTarget,
 } from "../timelineMoves";
 import { timelineDisplayVersion } from "../timelineDisplay";
+import { UNGROUPED_RECIPE_KIND } from "../shapeRecipes";
 import { readHeldMarks } from "../timelineHeldMarks";
 import { holdFromPreviousPage } from "../timelineHoldFromPrevious";
 import { setAsShownOnPage } from "../timelineSetAsShown";
@@ -358,6 +359,47 @@ describeDbTests("Hold from previous page", (it) => {
             held: [b],
             skipped: [{ marcherId: a, reason: "arrivalShape" }],
         });
+    });
+
+    it("holds a marcher whose arrival's shape was ungrouped (its recipe is an ungrouped mark)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a, b } = await show(db);
+        const arrival = (await rowsOf(db, a)).find(
+            (r) => r.end_beat === PAGE3.start,
+        )!;
+        const [transition] = await db
+            .select()
+            .from(schema.timeline_transitions)
+            .where(eqId(schema.timeline_transitions.id, arrival.transition_id))
+            .all();
+        // What Ungroup leaves on the shape's own page (`ungroupShape`)
+        await transactionWithHistory(db, "test", async (tx) => {
+            const [recipe] = await tx
+                .insert(schema.timeline_shape_recipes)
+                .values({
+                    timeline_id: transition!.timeline_id,
+                    kind: UNGROUPED_RECIPE_KIND,
+                    kind_version: 1,
+                    params: "{}",
+                    order_mode: "nearest",
+                })
+                .returning();
+            await tx.insert(schema.timeline_shape_recipe_marchers).values({
+                recipe_id: recipe!.id,
+                marcher_id: a,
+                slot: 0,
+                x: UP[0],
+                y: UP[1],
+            });
+        });
+        const result = await holdFromPreviousPage({
+            db,
+            pageBox: PAGE3,
+            marcherIds: [a, b],
+        });
+        expect(result).toEqual({ held: [a, b], skipped: [] });
     });
 
     it("refuses a box that isn't a page's, worded in pages and counts", async ({

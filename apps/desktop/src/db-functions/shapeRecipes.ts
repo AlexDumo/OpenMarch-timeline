@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import type { DbConnection, DbTransaction } from "./types";
 
@@ -308,6 +308,16 @@ export async function splitShapeRecipesInTransaction({
             .run();
     await deleteEmptyRecipes(tx, from);
 }
+
+/**
+ * The kind of a recipe that marks its members **ungrouped** (`ungroupShape`, `UNGROUPED_KIND` in
+ * `shapes/placed/placedBox.ts`). It stores no shape, so code asking whether a marcher is in a
+ * shape skips it (`isShapeRecipe`).
+ */
+export const UNGROUPED_RECIPE_KIND = "ungrouped";
+
+/** Where-clause for the recipes that describe a shape: every kind but an ungrouped mark */
+export const isShapeRecipe = () => ne(recipes.kind, UNGROUPED_RECIPE_KIND);
 
 /** Whether the show stores shape recipes at all (a database from before them doesn't) */
 export async function hasShapeRecipes(
