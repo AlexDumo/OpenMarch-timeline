@@ -337,7 +337,7 @@ The Line shape (spec #522, #523) stores a new kind:
    #525, `measured` (`"x"` or `"y"`, with any of these) with #527, `"straight"` with the
    change of 2026-11-01 below, `closed` with its
    `distribution` with #529, together with tensions and groups, a point's `marcher` with
-   #569 (decision 7), and Fit's `groups`, `measured: "offset"` and `offset` with decision 9. From #569 a point with any other field reads as plain positions. A closed line is never measured
+   #569 (decision 7), and Fit's `groups`, `measured: "offset"` and `offset` with decision 9, and `turn` with decision 10. From #569 a point with any other field reads as plain positions. A closed line is never measured
    along an axis (it always turns back), so it's laid out along the path when its `measured`
    says `"x"` or `"y"`; `"straight"` applies to it as to an open line.
 6. **A closed Line (#529).** `closed: true` joins the last point to the first: a closed line has
@@ -463,6 +463,56 @@ The Line shape (spec #522, #523) stores a new kind:
    point in field units. A new Line (drawn, or another kind turned into one) stores the host's
    `pivot` at its leftmost end or point, `"w"` or `"e"` for an end, the front end on an upright
    line, the center when closed. A saved Line without a `pivot` still turns about its center.
+
+10. **A Line's turn (2026-11-01, owner on #596: "Why can it not follow the same rules as the
+    box? … when I draw the line, why can't we just mark that state as 0°?").** A Line may store
+    `turn`: how far the whole line has been turned since it was drawn, in degrees clockwise, from 0
+    up to (not including) 360. Absent is 0. Its frame still points along it (decision 4: center
+    between its ends, rotation its drawn direction, a closed line's square to its outline), since
+    its handles, pivots and knob need that; `turn` is only what the editor reads and steps. So a
+    new Line, dragged or clicked, Line or Curve, either way round, reads 0° and stores nothing new.
+    Only turning the whole shape changes it: the knob (or a corner's ring), the degrees dragged or
+    typed, and ↻. They work as a box's do, counted from the drawn 0°: 15° steps, whole degrees with
+    `fine`, free with the Snap toggle off, ↻ exactly +90°, typed degrees setting the turn. Editing
+    points (dragging ends or corners, adding, deleting, opening or closing) never changes it,
+    and nor does a move. A flip mirrors it (30° becomes 330°): the mirror of a line turned 30° from
+    how it was drawn is the mirrored line turned 30° the other way. A shape turned into a Line keeps
+    the turn its frame had (a box at 30° makes a Line reading 30°, however the line lies in it). A
+    closed Line follows the same rule; its frame's rotation stays the outline's square-to-the-field
+    turn, and `turn` counts how far the outline was turned. A full turn round stores nothing.
+
+    Saved Lines without `turn` read as 0°, their stored geometry taken as drawn, rather than
+    showing their absolute direction: the readout then means the same thing for every Line, and no
+    data changes. Builds from before this change refuse `turn` and show turned Lines as plain
+    positions (decision 5).
+
+    Turned square to the field, a Line goes back onto the grid as a box does: when snapping, after
+    a turn or flip, a line whose points are a whole number of half steps apart each way, or an open
+    line whose ends are level or plumb, is moved so the point nearest its pivot is on the grid. An
+    open line in Fit with level or plumb ends is also stretched from that point, along itself, so
+    its far end lands on the grid; locked (Keep interval, or on the path), its length is its
+    intervals' and is kept. A new Line's pivot is at an end on the grid, so turning it a quarter
+    keeps that end still. A line turned off square stays where it turned.
+
+    An end swung round its neighbor (an open line's end dragged, locked or not, wherever the drag
+    used to round its direction to the half-step grid) points in the knob's steps, but counted from
+    the field rather than from the drawn 0°: 15° from level, so level and plumb are always reachable
+    whichever way the line was drawn, as when drawing. `fine` gives whole degrees, and the Snap
+    toggle off leaves it free. Before, the direction was the pointer rounded to half steps, whose
+    angles stepped by distance. The readout by the pointer shows the end's direction from its
+    neighbor, clockwise from the right as the turn reads, before the length ("15° · 8 steps · 2
+    apart").
+
+Verification (2026-11-01, decision 10): `lineTurn.test.ts` reads 0° after a drag either way, a
+slanted drag, a Curve and clicks; keeps the turn through end drags, an added point and a move;
+steps the knob in 15° from the drawn 0° (whole degrees with `fine`, free with Snap off), the scrub
+the same, ↻ +90° round to nothing stored, typed degrees relative; turns a closed line; mirrors the
+turn on a flip and back; keeps a box's turn in a Line made from it; puts a level line turned about
+its center back on the grid and lands a Fit line's far end on it, its pivot end still; swings an
+end in 15° from level locked and unlocked, 1° with `fine`, free with Snap off, with the angle in
+the readout; reads a Line saved without `turn` as 0°, places and reads back a turned Line, and
+refuses a `turn` outside 0 up to 360. A browser scenario in `line-tool.spec.mts` draws a line right
+to left, reads 0°, turns it with ↻ to 90° and finds `turn: 90` in its recipe.
 
 Verification (2026-11-01, decision 9): `lineLockOffset.test.ts` drags ends and corners unlocked
 onto whole and half steps (↔ by its side-to-side distance), with `fine` free; checks that typing

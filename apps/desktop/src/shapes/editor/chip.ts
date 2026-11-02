@@ -1,4 +1,4 @@
-import { turnShape } from "../frame/gestures";
+import { shapeTurn, turnShape } from "../frame/gestures";
 import { pivotOf } from "../frame/pivot";
 import { pivotPoint } from "../frame/frame";
 import type { XY } from "../types";
@@ -89,12 +89,11 @@ export function quarterTurn(
     n: number,
     env: ToolEnv,
 ): unknown {
-    const { rotation } = kind.frameOf(params, n);
     return turnShape(
         kind,
         params,
         n,
-        rotation + Math.PI / 2,
+        shapeTurn(kind, params, n) + Math.PI / 2,
         pivotOf(params),
         env,
     );
