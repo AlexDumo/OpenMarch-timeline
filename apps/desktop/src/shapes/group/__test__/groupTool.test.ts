@@ -1,5 +1,5 @@
-// cspell:ignore nesw
 // @vitest-environment node
+// cspell:ignore nesw
 import { describe, expect, it } from "vitest";
 import { boxShape } from "../../box/boxShape";
 import { drawBox } from "../../box/boxGeometry";
