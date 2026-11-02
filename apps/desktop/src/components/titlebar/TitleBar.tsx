@@ -131,7 +131,9 @@ function EditorTitleBar({
     const openWebWelcome = useWebWelcomeStore((state) => state.setOpen);
 
     const [dbPath, setDbPath] = useState<string>("");
-    const [dbPathError, setDbPathError] = useState<boolean>(false);
+    // The path stays shown as unavailable after its error dialog is dismissed
+    const [dbPathUnavailable, setDbPathUnavailable] = useState(false);
+    const [dbPathDialogOpen, setDbPathDialogOpen] = useState(false);
 
     useEffect(() => {
         if (!showFilePath) return;
@@ -139,9 +141,11 @@ function EditorTitleBar({
             try {
                 const path = await window.electron.databaseGetPath();
                 setDbPath(path);
+                setDbPathUnavailable(false);
             } catch (error) {
                 setDbPath("");
-                setDbPathError(true);
+                setDbPathUnavailable(true);
+                setDbPathDialogOpen(true);
                 console.error("Error fetching database path:", error);
             }
         };
@@ -149,7 +153,7 @@ function EditorTitleBar({
         void fetchDbPath();
     }, [showFilePath]);
 
-    const displayDbPath = dbPathError
+    const displayDbPath = dbPathUnavailable
         ? t("titlebar.databasePathUnavailable")
         : showFullDatabasePath
           ? dbPath
@@ -160,7 +164,7 @@ function EditorTitleBar({
 
     return (
         <>
-            <AlertDialog open={dbPathError}>
+            <AlertDialog open={dbPathDialogOpen}>
                 <AlertDialogContent>
                     <div className="flex flex-col items-center gap-12">
                         <SealWarningIcon size={48} className="text-red" />
@@ -173,7 +177,7 @@ function EditorTitleBar({
                         <AlertDialogAction>
                             <Button
                                 variant="primary"
-                                onClick={() => setDbPathError(false)}
+                                onClick={() => setDbPathDialogOpen(false)}
                             >
                                 <T keyName="titlebar.databasePathError.dismiss" />
                             </Button>

@@ -307,7 +307,7 @@ export function TimelineSoundButton() {
                         </span>
                         {metronomeKeys && (
                             <span className="text-sub text-text-subtitle ml-auto">
-                                <Keycaps shortcut={metronomeKeys.join(" + ")} />
+                                <Keycaps keys={metronomeKeys} />
                             </span>
                         )}
                     </button>

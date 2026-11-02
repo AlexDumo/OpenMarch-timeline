@@ -1,6 +1,5 @@
 import type { ValidationError, ValidationResult } from "@openmarch/core";
-import type { TimelineText } from "@/timeline/timelineText";
-import { translateTimelineText } from "@/timeline/translateTimelineText";
+import { timelineTextForLog, type TimelineText } from "@/timeline/timelineText";
 
 /**
  * A rejected timeline write (spec section 6). `code` is the spec's error code: `E-S1`, `E-P1`,
@@ -12,8 +11,10 @@ import { translateTimelineText } from "@/timeline/translateTimelineText";
  * a slot count that needs destinations, and so on), and `E-DB` any other database rejection.
  *
  * A refusal for the user carries `text`, its message as a Tolgee key and arguments, which
- * `timelineErrorMessage` translates when it is shown. `message` is that text in the app's language
- * at the time it was thrown, for logs; a message given as a plain string is for developers only.
+ * `timelineErrorMessage` translates when it is shown. `message` is that key with its arguments,
+ * for logs (`timelineTextForLog`): this module doesn't import Tolgee, so the convert-on-open
+ * worker and the web build's worker can run the write path. A message given as a plain string is
+ * for developers only.
  */
 export class TimelineWriteError extends Error {
     readonly code: string;
@@ -28,9 +29,7 @@ export class TimelineWriteError extends Error {
         options?: { cause?: unknown },
     ) {
         const own =
-            typeof message === "string"
-                ? message
-                : translateTimelineText(message);
+            typeof message === "string" ? message : timelineTextForLog(message);
         super(own.startsWith("E-") ? own : `${code}: ${own}`, options);
         this.name = "TimelineWriteError";
         this.code = code;

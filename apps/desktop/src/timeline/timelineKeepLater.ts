@@ -1,6 +1,7 @@
 import tolgee from "@/global/singletons/Tolgee";
 import type { SpanInfo } from "@openmarch/core";
 import { keptStateOf, type KeptPageBox } from "./timelineKept";
+import { formatList } from "@/utilities/formatList";
 import { joinList } from "./translateTimelineText";
 
 /**
@@ -391,7 +392,7 @@ const namesList = (
     const names = namesOf(ids, nameOf);
     if (!names) return null;
     return names.length <= NAMES_SHOWN
-        ? names.join(", ")
+        ? formatList(names)
         : marcherNamesText(ids, nameOf, t);
 };
 
@@ -440,7 +441,7 @@ const followsWords = (
         ? names
             ? t(
                   "timeline.keep.chain.followsNamed",
-                  "{count, plural, one {{names} holds where Page {from} left it} other {{names} hold where Page {from} left them}}",
+                  "{count, plural, =1 {{names} holds where Page {from} left it} other {{names} hold where Page {from} left them}}",
                   { count, names, from: fromPage },
               )
             : t(
@@ -451,7 +452,7 @@ const followsWords = (
         : names
           ? t(
                 "timeline.keep.chain.followsNamedEarlier",
-                "{count, plural, one {{names} holds where earlier pages left it} other {{names} hold where earlier pages left them}}",
+                "{count, plural, =1 {{names} holds where earlier pages left it} other {{names} hold where earlier pages left them}}",
                 { count, names },
             )
           : t(
@@ -464,23 +465,23 @@ const followsWords = (
         hint: fromPage
             ? t(
                   "timeline.keep.chain.followsHint",
-                  "Changes to Page {from} carry onto Page {page}. Click to keep {count, plural, one {it} other {them}} here instead",
+                  "Changes to Page {from} carry onto Page {page}. Click to keep {count, plural, =1 {it} other {them}} here instead",
                   { count, page, from: fromPage },
               )
             : t(
                   "timeline.keep.chain.followsHintEarlier",
-                  "Changes to earlier pages carry onto Page {page}. Click to keep {count, plural, one {it} other {them}} here instead",
+                  "Changes to earlier pages carry onto Page {page}. Click to keep {count, plural, =1 {it} other {them}} here instead",
                   { count, page },
               ),
         menuHint: fromPage
             ? t(
                   "timeline.keep.chain.followsMenuHint",
-                  "Changes to Page {from} carry onto Page {page}. Right-click the page to keep {count, plural, one {it} other {them}} here instead",
+                  "Changes to Page {from} carry onto Page {page}. Right-click the page to keep {count, plural, =1 {it} other {them}} here instead",
                   { count, page, from: fromPage },
               )
             : t(
                   "timeline.keep.chain.followsMenuHintEarlier",
-                  "Changes to earlier pages carry onto Page {page}. Right-click the page to keep {count, plural, one {it} other {them}} here instead",
+                  "Changes to earlier pages carry onto Page {page}. Right-click the page to keep {count, plural, =1 {it} other {them}} here instead",
                   { count, page },
               ),
     };
@@ -563,12 +564,12 @@ const mixedWords = (
         label,
         hint: t(
             "timeline.keep.chain.mixedRestHint",
-            "{count, plural, one {The other one follows earlier pages. Click to keep it here too} other {The other # follow earlier pages. Click to keep them here too}}",
+            "{count, plural, =1 {The other one follows earlier pages. Click to keep it here too} other {The other # follow earlier pages. Click to keep them here too}}",
             rest,
         ),
         menuHint: t(
             "timeline.keep.chain.mixedRestMenuHint",
-            "{count, plural, one {The other one follows earlier pages. Right-click the page to keep it here too} other {The other # follow earlier pages. Right-click the page to keep them here too}}",
+            "{count, plural, =1 {The other one follows earlier pages. Right-click the page to keep it here too} other {The other # follow earlier pages. Right-click the page to keep them here too}}",
             rest,
         ),
     };

@@ -15,6 +15,8 @@ import {
     type TimelineSelectionState,
 } from "@/stores/TimelineSelectionStore";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import type { TimelineText } from "@/timeline/timelineText";
+import { translateTimelineText } from "@/timeline/translateTimelineText";
 import {
     isPageTimeline,
     moveLabels,
@@ -112,14 +114,19 @@ export const selectedMembers = (
     return t ? chosenIn(ctx, t) : [];
 };
 
+const translateBlocker = (blocker: TimelineText | null) =>
+    blocker && translateTimelineText(blocker);
+
 /** Why splitting the selected marchers off `t` can't run, or `null` (the menus' and the drag's). */
 const splitBlocker = (ctx: SplitMergeContext, t: StoredTimelineMembership) =>
     ctx.isPlaying
         ? pauseToSplit()
-        : splitMembershipBlocker(
-              t.marcherIds,
-              ctx.selectedMarcherIds,
-              timelineLabel(ctx, t.id),
+        : translateBlocker(
+              splitMembershipBlocker(
+                  t.marcherIds,
+                  ctx.selectedMarcherIds,
+                  timelineLabel(ctx, t.id),
+              ),
           );
 
 /** **Split N selected into new move** on move `timelineId`: its words and why it can't run. */
@@ -161,7 +168,7 @@ export function mergeBlocker(
     if (both.length > 0)
         return tolgee.t(
             "timeline.merge.inBoth",
-            "{count, plural, one {A marcher is} other {# marchers are}} in both moves, so merging would give them two moves at once.",
+            "{count, plural, =1 {A marcher is} other {# marchers are}} in both moves, so merging would give them two moves at once.",
             { count: both.length },
         );
     return null;

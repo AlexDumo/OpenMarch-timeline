@@ -151,7 +151,7 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
                 data-testid="shape-tool-hint"
             >
                 <T
-                    keyName="shapes.edit.drawHint"
+                    keyName="shapes.edit.drawHintFor"
                     params={{
                         shape: armed.shape.id,
                         keys: () => (

@@ -99,3 +99,20 @@ export function resolveTimelineText(
                 : resolveTimelineText(arg, translate, language);
     return translate(value.key, params);
 }
+
+/**
+ * `value` for a log or a developer's message, without Tolgee: each key with its arguments
+ * (`timeline.where.page {"page":"2"}`), lists joined in English. The write path (db-functions)
+ * uses it, since code the convert-on-open worker and the web build's worker run mustn't import
+ * Tolgee; the user sees the text translated where it is shown (`translateTimelineText`).
+ */
+export function timelineTextForLog(value: TimelineTextArg): string {
+    return resolveTimelineText(
+        value,
+        (key, params) =>
+            Object.keys(params).length === 0
+                ? key
+                : `${key} ${JSON.stringify(params)}`,
+        "en",
+    );
+}

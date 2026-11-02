@@ -16,7 +16,8 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { isPageTimeline, moveLabels } from "@/timeline/timelineViewModel";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import { timelineExists } from "@/db-functions/timelines";
-import { pageRunsLabel, type NamedPage } from "@/db-functions/pageDelete";
+import { pageRuns, type NamedPage } from "@/db-functions/pageDelete";
+import { formatList } from "@/utilities/formatList";
 import {
     splitTimelineAtBeat,
     type MotionChange,
@@ -203,10 +204,10 @@ export function moveDeletedMessage(
         return tolgee.t("timeline.moveDeleted.message", "Deleted {label}", {
             label,
         });
-    const pages = pageRunsLabel(changedPages);
+    const pages = formatList(pageRuns(changedPages));
     return tolgee.t(
         "timeline.moveDeleted.withPages",
-        "{count, plural, one {Deleted {label} · Page {pages} changed} other {Deleted {label} · Pages {pages} changed}}",
+        "{count, plural, =1 {Deleted {label} · Page {pages} changed} other {Deleted {label} · Pages {pages} changed}}",
         { label, pages, count: changedPages.length },
     );
 }

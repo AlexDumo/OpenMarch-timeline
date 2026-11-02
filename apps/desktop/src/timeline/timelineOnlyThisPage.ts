@@ -176,12 +176,12 @@ export function onlyThisPageMessage(
     return {
         message: translate(
             "timeline.keep.followed.changed",
-            "{count, plural, one {Page {first} was holding this form, so it changed too} other {Pages {first}–{last} were holding this form, so they changed too}}",
+            "{count, plural, =1 {Page {first} was holding this form, so it changed too} other {Pages {first}–{last} were holding this form, so they changed too}}",
             pages,
         ),
         actionLabel: translate(
             "timeline.keep.followed.keepAsBefore",
-            "{count, plural, one {Keep Page {first} as before} other {Keep Pages {first}–{last} as before}}",
+            "{count, plural, =1 {Keep Page {first} as before} other {Keep Pages {first}–{last} as before}}",
             pages,
         ),
     };
@@ -240,7 +240,13 @@ function showOnlyThisPageToast({
                 })
                     .then((kept) => applyKeptChange(kept.markers))
                     .catch((e: unknown) =>
-                        toastTimelineError(e, "Error keeping the later pages"),
+                        toastTimelineError(
+                            e,
+                            tolgee.t(
+                                "timeline.keep.followed.keepError",
+                                "Error keeping the later pages",
+                            ),
+                        ),
                     );
             },
         },

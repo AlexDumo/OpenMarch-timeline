@@ -3,7 +3,6 @@
  * the report, grouped as Can't import, Needs your choice (pre-selected),
  * Fixed for you (collapsed) and Notes (props-spec.md §2 "The review").
  */
-import tolgee from "@/global/singletons/Tolgee";
 import { Button, Checkbox } from "@openmarch/ui";
 import {
     BookOpenIcon,
@@ -41,6 +40,7 @@ import { formatList } from "@/utilities/formatList";
 import Keycaps from "@/components/ui/Keycaps";
 import { formatBindingKeys } from "@/shortcuts/bindings";
 import { isMacPlatform } from "@/shortcuts/platform";
+import { formatLocale } from "@/utilities/formatLocale";
 
 type ChoiceRow = ModelImportReport["needsChoice"][number];
 type Actions = Pick<
@@ -170,15 +170,12 @@ function Choice({
                     <Row
                         title={k("units.title")}
                         detail={k("units.detail", {
-                            largest: largest.toLocaleString(
-                                tolgee.getLanguage(),
-                                {
-                                    style: "unit",
-                                    unit: "meter",
-                                    unitDisplay: "short",
-                                    maximumFractionDigits: 2,
-                                },
-                            ),
+                            largest: largest.toLocaleString(formatLocale(), {
+                                style: "unit",
+                                unit: "meter",
+                                unitDisplay: "short",
+                                maximumFractionDigits: 2,
+                            }),
                         })}
                     />
                     <div className="flex flex-wrap gap-4" role="group">
@@ -234,13 +231,12 @@ function Choice({
                         disabled={busy}
                         onChange={(v) => actions.setChoices({ simplify: v })}
                         title={k("simplify.title", {
-                            cap: row.cap.toLocaleString(tolgee.getLanguage()),
+                            cap: row.cap.toLocaleString(formatLocale()),
                         })}
                         detail={k("simplify.detail", {
-                            triangles: row.triangles.toLocaleString(
-                                tolgee.getLanguage(),
-                            ),
-                            cap: row.cap.toLocaleString(tolgee.getLanguage()),
+                            triangles:
+                                row.triangles.toLocaleString(formatLocale()),
+                            cap: row.cap.toLocaleString(formatLocale()),
                             kind: kind ? kindName(kind, t) : "",
                         })}
                     />
@@ -253,9 +249,10 @@ function Choice({
                                 onClick={() => actions.setShowBefore(true)}
                             >
                                 {k("before", {
-                                    triangles: row.triangles.toLocaleString(
-                                        tolgee.getLanguage(),
-                                    ),
+                                    triangles:
+                                        row.triangles.toLocaleString(
+                                            formatLocale(),
+                                        ),
                                 })}
                             </Chip>
                             <Chip
@@ -267,7 +264,7 @@ function Choice({
                                 {k("after", {
                                     triangles:
                                         row.simplifiedTriangles.toLocaleString(
-                                            tolgee.getLanguage(),
+                                            formatLocale(),
                                         ),
                                 })}
                             </Chip>
@@ -436,8 +433,16 @@ function ArtworkSurfaceChoice({
                     const size = slotSizeFor(m);
                     if (!size) return null;
                     const dims = k("size", {
-                        width: formatLength(size.widthM, "metric"),
-                        height: formatLength(size.heightM, "metric"),
+                        width: formatLength(
+                            size.widthM,
+                            "metric",
+                            formatLocale(),
+                        ),
+                        height: formatLength(
+                            size.heightM,
+                            "metric",
+                            formatLocale(),
+                        ),
                     });
                     return (
                         <SurfaceOption

@@ -9,6 +9,7 @@ import Measure from "@/global/classes/Measure";
 import Beat from "@/global/classes/Beat";
 import { T } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
+import { sectionDisplayName } from "@/components/marcher/sectionDisplayName";
 import { useQuery } from "@tanstack/react-query";
 
 const FullPageSheetColumnWidths = {
@@ -365,7 +366,7 @@ export function StaticMarcherCoordinateSheet({
                             }}
                         >
                             <h4 data-testid="marcher-section" style={h4Style}>
-                                {marcherState.section}
+                                {sectionDisplayName(marcherState.section, t)}
                             </h4>
                         </div>
                     </div>
@@ -744,7 +745,7 @@ export function StaticQuarterMarcherSheet({
                                 lineHeight: 1.1,
                             }}
                         >
-                            {t("coordinateSheet.pageAbbreviation")}
+                            {t("coordinateSheet.quarterPageAbbreviation")}
                         </th>
                         <th
                             aria-label={t("coordinateSheet.countsColumnLabel")}

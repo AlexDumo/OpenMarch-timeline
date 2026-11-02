@@ -29,6 +29,7 @@ import {
     type ImportClient,
 } from "@/view3d/library/importClient";
 import type { TemplateFormat } from "@/view3d/library/protocol";
+import { formatLocale } from "@/utilities/formatLocale";
 
 /** Menu order (the owner's list: PNG, SVG or PDF). */
 export const MENU_FORMATS: readonly TemplateFormat[] = ["png", "svg", "pdf"];
@@ -46,7 +47,7 @@ function defaultClient(): TemplateSaver {
 export function templateSizeText(download: TemplateDownload): string {
     const { width, height, unit } = download.surface;
     const system = unit === "mm" ? "metric" : "imperial";
-    return `${formatLength(width, system)} × ${formatLength(height, system)}`;
+    return `${formatLength(width, system, formatLocale())} × ${formatLength(height, system, formatLocale())}`;
 }
 
 export function templateLabel(download: TemplateDownload, t: Translate) {

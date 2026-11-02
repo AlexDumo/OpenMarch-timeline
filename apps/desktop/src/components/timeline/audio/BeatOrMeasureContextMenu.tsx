@@ -313,7 +313,7 @@ const TempoInput = ({
                 onBlur={handleBlur}
                 disabled={mutation.isPending}
                 className="w-full"
-                unit="BPM"
+                unit={tolgee.t("music.bpmUnit")}
                 autoFocus
             />
         </>

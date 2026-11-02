@@ -44,6 +44,7 @@ import "../../styles/shimmer.css";
 import { T } from "@tolgee/react";
 import { ShareNoteExportLine } from "@/components/assets/ShowCredits";
 import tolgee from "@/global/singletons/Tolgee";
+import { formatFixed } from "@/utilities/formatLocale";
 import { useQuery } from "@tanstack/react-query";
 import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { assert } from "@/utilities/utils";
@@ -303,7 +304,7 @@ function CoordinateSheetExport() {
             // Add success toast message
             toast.success(
                 <span>
-                    {t("exportCoordinates.exportSuccess", {
+                    {t("exportCoordinates.exportedCount", {
                         count: processedMarchers.length,
                     })}
                     <button
@@ -464,7 +465,7 @@ function CoordinateSheetExport() {
                         side="top"
                         contentClassName="z-[100000] p-16"
                         content={
-                            <T keyName="exportCoordinates.organizeBySectionTooltip" />
+                            <T keyName="exportCoordinates.organizeBySectionHint" />
                         }
                     />
                 </Form.Field>
@@ -1043,17 +1044,17 @@ function DrillChartExport() {
                         </p>
                         <div className="text-center text-xs text-gray-500">
                             <div>
-                                {t("exportCoordinates.fieldProperties", {
+                                {t("exportCoordinates.checkFieldProperties", {
                                     status: fieldProperties ? "ok" : "missing",
                                 })}
                             </div>
                             <div>
-                                {t("exportCoordinates.page", {
+                                {t("exportCoordinates.checkPage", {
                                     status: pages.length > 1 ? "ok" : "missing",
                                 })}
                             </div>
                             <div>
-                                {t("exportCoordinates.marcher", {
+                                {t("exportCoordinates.checkMarcher", {
                                     status:
                                         marchers && marchers.length > 0
                                             ? "ok"
@@ -1655,7 +1656,7 @@ function VideoExport() {
                             className="relative flex h-5 w-full touch-none items-center select-none"
                         />
                         <span className="text-sub text-text/60 w-[3rem] text-right tabular-nums">
-                            {fieldFraming.scale.toFixed(2)}×
+                            {formatFixed(fieldFraming.scale, 2)}×
                         </span>
 
                         <span className="text-body whitespace-nowrap">
@@ -1680,7 +1681,7 @@ function VideoExport() {
                             className="relative flex h-5 w-full touch-none items-center select-none"
                         />
                         <span className="text-sub text-text/60 w-[3rem] text-right tabular-nums">
-                            {fieldFraming.offsetX.toFixed(2)}
+                            {formatFixed(fieldFraming.offsetX, 2)}
                         </span>
 
                         <span className="text-body whitespace-nowrap">
@@ -1705,7 +1706,7 @@ function VideoExport() {
                             className="relative flex h-5 w-full touch-none items-center select-none"
                         />
                         <span className="text-sub text-text/60 w-[3rem] text-right tabular-nums">
-                            {fieldFraming.offsetY.toFixed(2)}
+                            {formatFixed(fieldFraming.offsetY, 2)}
                         </span>
                     </div>
                     <Button

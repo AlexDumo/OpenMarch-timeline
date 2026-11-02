@@ -15,6 +15,7 @@ import { AlertDialogAction, AlertDialogCancel } from "@openmarch/ui";
 import { T, useTranslate } from "@tolgee/react";
 import Keycaps from "@/components/ui/Keycaps";
 import { getActionShortcutKeys } from "@/shortcuts/labels";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { formatList } from "@/utilities/formatList";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -46,6 +47,11 @@ export default function MarcherList({
         updateMarchersMutationOptions(queryClient),
     );
     const { t } = useTranslate();
+    // Undefined when the person has unbound Undo: the warning then names no shortcut
+    const shortcutOverrides = useShortcutOverridesStore((s) => s.overrides);
+    const undoKeys = getActionShortcutKeys("performUndo", {
+        overrides: shortcutOverrides,
+    });
     const [submitActivator, setSubmitActivator] = submitActivatorStateProp || [
         false,
         undefined,
@@ -66,6 +72,15 @@ export default function MarcherList({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const changesRef = useRef<{ [key: number | string]: any }>({});
     const deletionsRef = useRef<number[]>([]);
+    /** The drill numbers of the marchers about to be deleted, as a list */
+    const deletedMarchersText = () =>
+        formatList(
+            deletionsRef.current.map(
+                (marcherId) =>
+                    marchers?.find((marcher) => marcher.id === marcherId)
+                        ?.drill_number || t("marchers.list.unknown"),
+            ),
+        );
 
     async function handleSubmit() {
         const modifiedMarchers: ModifiedMarcherArgs[] = [];
@@ -167,33 +182,24 @@ export default function MarcherList({
                                 isDangerButton={true}
                                 alertDialogTitle={t("marchers.deleteTitle")}
                                 alertDialogDescription={
-                                    <T
-                                        keyName="marchers.deleteWarning"
-                                        params={{
-                                            marchers: formatList(
-                                                deletionsRef.current.map(
-                                                    (marcherId) =>
-                                                        marchers?.find(
-                                                            (marcher) =>
-                                                                marcher.id ===
-                                                                marcherId,
-                                                        )?.drill_number ||
-                                                        t(
-                                                            "marchers.list.unknown",
-                                                        ),
+                                    undoKeys ? (
+                                        <T
+                                            keyName="marchers.deleteWarningWithShortcut"
+                                            params={{
+                                                marchers: deletedMarchersText(),
+                                                keys: () => (
+                                                    <Keycaps keys={undoKeys} />
                                                 ),
-                                            ),
-                                            keys: () => (
-                                                <Keycaps
-                                                    keys={
-                                                        getActionShortcutKeys(
-                                                            "performUndo",
-                                                        ) ?? []
-                                                    }
-                                                />
-                                            ),
-                                        }}
-                                    />
+                                            }}
+                                        />
+                                    ) : (
+                                        <T
+                                            keyName="marchers.deleteWarningNoShortcut"
+                                            params={{
+                                                marchers: deletedMarchersText(),
+                                            }}
+                                        />
+                                    )
                                 }
                                 alertDialogActions={
                                     <>

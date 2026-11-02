@@ -73,7 +73,7 @@ export function CheckpointEditor({
                         tooltip={
                             axis === "x"
                                 ? t(
-                                      "fieldProperties.checkpoint.stepsFromCenterTooltip",
+                                      "fieldProperties.checkpoint.stepsFromCenterHint",
                                   )
                                 : t(
                                       "fieldProperties.checkpoint.stepsFromFrontTooltip",

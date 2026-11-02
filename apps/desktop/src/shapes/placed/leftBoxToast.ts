@@ -107,7 +107,7 @@ function showOne(leave: BoxLeave, rewrite: BoxRewrite): void {
               )
         : names.length === 1
           ? tolgee.t(
-                "shapes.placed.left.one",
+                "shapes.placed.leftShape.one",
                 "{name} left the {shape, select, block {box} circle {circle} other {shape}}",
                 {
                     name: names[0]!,
@@ -115,7 +115,7 @@ function showOne(leave: BoxLeave, rewrite: BoxRewrite): void {
                 },
             )
           : tolgee.t(
-                "shapes.placed.left.many",
+                "shapes.placed.leftShape.many",
                 "{count, plural, one {# left the {shape, select, block {box} circle {circle} other {shape}}} other {# left the {shape, select, block {box} circle {circle} other {shape}}}}",
                 { count: names.length, shape: box.kind.shape.id },
             );

@@ -1,6 +1,6 @@
 import tolgee from "@/global/singletons/Tolgee";
 import {
-    pageRunsLabel,
+    pageRuns,
     type PageAfterDelete,
     type PageDeleteWithMovesResult,
 } from "@/db-functions/pageDelete";
@@ -13,19 +13,19 @@ const changedPagesMessage = (changedPages: readonly PageAfterDelete[]) => {
     if (kept.length > 0 && renamed.length > 0)
         return tolgee.t("pages.deleteWithMoves.changedBoth", {
             keptCount: kept.length,
-            kept: pageRunsLabel(kept),
+            kept: formatList(pageRuns(kept)),
             renamedCount: renamed.length,
-            renamed: pageRunsLabel(renamed),
+            renamed: formatList(pageRuns(renamed)),
         });
     if (kept.length > 0)
         return tolgee.t("pages.deleteWithMoves.changed", {
             count: kept.length,
-            pages: pageRunsLabel(kept),
+            pages: formatList(pageRuns(kept)),
         });
     if (renamed.length > 0)
         return tolgee.t("pages.deleteWithMoves.changedOld", {
             count: renamed.length,
-            pages: pageRunsLabel(renamed),
+            pages: formatList(pageRuns(renamed)),
         });
     return tolgee.t("pages.deleteWithMoves.noOtherChanged");
 };

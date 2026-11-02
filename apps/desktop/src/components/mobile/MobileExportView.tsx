@@ -53,6 +53,7 @@ import {
 } from "@/global/classes/FieldProperties";
 import { T, useTranslate } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
+import { formatLocale } from "@/utilities/formatLocale";
 
 type UploadStatus = "idle" | "loading" | "error";
 
@@ -124,7 +125,7 @@ const formatRevisionDate = (dateString: string): string => {
         return tolgee.t("mobileExport.date.daysAgo", { count: diffDays });
     }
 
-    const language = tolgee.getLanguage();
+    const language = formatLocale();
     const day = new Intl.DateTimeFormat(language, { dateStyle: "long" }).format(
         date,
     );
@@ -132,7 +133,7 @@ const formatRevisionDate = (dateString: string): string => {
         timeStyle: "short",
     }).format(date);
 
-    return tolgee.t("mobileExport.date.full", { date: day, time });
+    return tolgee.t("mobileExport.date.dateTime", { date: day, time });
 };
 
 export const SubmitRevisionForm = ({

@@ -44,7 +44,7 @@ export function SelectWholeShape() {
         >
             <BoundingBoxIcon size={16} weight="bold" />
             {tolgee.t(
-                "shapes.placed.selectWhole",
+                "shapes.placed.selectWholeShape",
                 "Select {shape, select, block {box} circle {circle} other {shape}}",
                 {
                     shape: partOf.kind.shape.id,

@@ -88,12 +88,12 @@ export function UnsetHereAndFollowingButton({
         targets.length === marcherIds.length
             ? t("inspector.marcher.timeline.unsetHereAndFollowingHint", {
                   defaultValue:
-                      "Remove their keyframe on this count, and {pageCount, plural, one {Page {first} follows} other {Pages {first}–{last} follow}} back to the keyframe before it",
+                      "Remove their keyframe on this count, and {pageCount, plural, =1 {Page {first} follows} other {Pages {first}–{last} follow}} back to the keyframe before it",
                   ...pageArgs,
               })
             : t("inspector.marcher.timeline.unsetHereAndFollowingHintSome", {
                   defaultValue:
-                      "Remove the keyframe of the {count} of the {total} selected that have one on this count, and {pageCount, plural, one {Page {first} follows} other {Pages {first}–{last} follow}} back to the keyframe before it",
+                      "Remove the keyframe of the {count} of the {total} selected that have one on this count, and {pageCount, plural, =1 {Page {first} follows} other {Pages {first}–{last} follow}} back to the keyframe before it",
                   count: String(targets.length),
                   total: String(marcherIds.length),
                   ...pageArgs,

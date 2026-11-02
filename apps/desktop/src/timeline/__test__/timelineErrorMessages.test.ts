@@ -146,7 +146,10 @@ describe("timelineErrorMessage", () => {
             "E-ARGS",
             text.t("timeline.refusals.casting.alreadyInSlot", { slot: 3 }),
         );
-        expect(error.message).toBe("E-ARGS: the marcher is already in slot 3");
+        // The message is for logs: the key and its arguments, built without Tolgee
+        expect(error.message).toBe(
+            'E-ARGS: timeline.refusals.casting.alreadyInSlot {"slot":3}',
+        );
         expect(timelineErrorMessage(error)).toBe(
             "the marcher is already in slot 3",
         );
@@ -166,12 +169,31 @@ describe("timelineErrorMessage", () => {
         );
     });
 
-    it("E-ARGS with only a developer's message gets the generic message", () => {
+    it("E-ARGS with only a developer's message gets the fallback, or the generic message", () => {
+        const error = new TimelineWriteError(
+            "E-ARGS",
+            "timeline 7 does not exist",
+        );
+        expect(timelineErrorMessage(error)).toBe(
+            TIMELINE_UNKNOWN_ERROR_MESSAGE.defaultMessage,
+        );
+        expect(
+            timelineErrorMessage(error, {
+                fallback: "Couldn't split the move",
+            }),
+        ).toBe("Couldn't split the move");
+        // A refusal with text for the user shows that, not the fallback
         expect(
             timelineErrorMessage(
-                new TimelineWriteError("E-ARGS", "timeline 7 does not exist"),
+                new TimelineWriteError(
+                    "E-ARGS",
+                    text.t("timeline.refusals.casting.alreadyInSlot", {
+                        slot: 3,
+                    }),
+                ),
+                { fallback: "Couldn't split the move" },
             ),
-        ).toBe(TIMELINE_UNKNOWN_ERROR_MESSAGE.defaultMessage);
+        ).toBe("the marcher is already in slot 3");
     });
 
     it("E-DB is generic and never shows the database's text", () => {
@@ -288,7 +310,7 @@ describe("en.json", () => {
             "timeline.keep.chain.ariaLabel": "Page {page}: {label}. {hint}",
             "timeline.moveDeleted.message": "Deleted {label}",
             "timeline.moveDeleted.withPages":
-                "{count, plural, one {Deleted {label} · Page {pages} changed} other {Deleted {label} · Pages {pages} changed}}",
+                "{count, plural, =1 {Deleted {label} · Page {pages} changed} other {Deleted {label} · Pages {pages} changed}}",
             "timeline.keyframes.title": "Keyframe · Page {page}, count {count}",
             "timeline.keyframes.detail": "{set} of {total} selected",
             "timeline.keyframes.detailNames":

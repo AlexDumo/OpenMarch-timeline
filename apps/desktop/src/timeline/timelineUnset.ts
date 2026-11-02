@@ -175,7 +175,7 @@ export function unsetFollowingLabel(
     const last = pages[pages.length - 1] ?? first;
     return translate(
         "actions.timeline.unsetHereAndPages",
-        "{count, plural, one {Remove keyframe, Page {first} follows back} other {Remove keyframe, Pages {first}–{last} follow back}}",
+        "{count, plural, =1 {Remove keyframe, Page {first} follows back} other {Remove keyframe, Pages {first}–{last} follow back}}",
         { first, last, count: first === last ? 1 : pages.length },
     );
 }
@@ -325,12 +325,12 @@ function toastLockedUnset(count: number, wrote: boolean): void {
         wrote
             ? tolgee.t(
                   "timeline.keyframes.removeLocked",
-                  "{count, plural, one {One marcher uses Expert moves on this page, so its keyframe wasn't removed. Switch to Expert to edit it.} other {# marchers use Expert moves on this page, so their keyframes weren't removed. Switch to Expert to edit them.}}",
+                  "{count, plural, =1 {One marcher uses Expert moves on this page, so its keyframe wasn't removed. Switch to Expert to edit it.} other {# marchers use Expert moves on this page, so their keyframes weren't removed. Switch to Expert to edit them.}}",
                   { count },
               )
             : tolgee.t(
                   "timeline.keyframes.removeLockedAll",
-                  "{count, plural, one {One marcher uses Expert moves on this page. Switch to Expert to edit it.} other {# marchers use Expert moves on this page. Switch to Expert to edit them.}}",
+                  "{count, plural, =1 {One marcher uses Expert moves on this page. Switch to Expert to edit it.} other {# marchers use Expert moves on this page. Switch to Expert to edit them.}}",
                   { count },
               ),
     );

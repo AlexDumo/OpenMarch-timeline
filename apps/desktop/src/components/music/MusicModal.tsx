@@ -19,7 +19,7 @@ import { useTimingObjects } from "@/hooks";
 import TempoGroupCard from "./TempoGroup/TempoGroupCard";
 import NewTempoGroupForm from "./TempoGroup/NewTempoGroupForm";
 import { MusicNotesIcon } from "@phosphor-icons/react";
-import { T, useTranslate } from "@tolgee/react";
+import { T, useTolgee, useTranslate } from "@tolgee/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     workspaceSettingsQueryOptions,
@@ -55,9 +55,13 @@ function MusicModalContents() {
     const [newGroupFormHidden, setNewGroupFormHidden] = React.useState(
         measures.length > 0,
     );
+    // The groups carry translated range text ("m 1-4"), so rebuild them when the
+    // app language changes.
+    const language = useTolgee(["language"]).getLanguage();
     const tempoGroups = useMemo(
         () => TempoGroupsFromMeasures(measures),
-        [measures],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [measures, language],
     );
 
     const newFormRef = useRef<HTMLDivElement>(null);

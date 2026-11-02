@@ -4,6 +4,7 @@ import type { FieldProperties } from "@openmarch/core";
 import type Marcher from "@/global/classes/Marcher";
 import type Page from "@/global/classes/Page";
 import tolgee from "@/global/singletons/Tolgee";
+import { sectionDisplayName } from "@/components/marcher/sectionDisplayName";
 import {
     StaticMarcherCoordinateSheet,
     StaticQuarterMarcherSheet,
@@ -54,11 +55,12 @@ export function coordinateSheetMarchers(
     return marchers
         .map((marcher) => ({
             ...marcher,
-            // Use raw DB section with the numeric part of drill_number as fallback display name
+            // An unnamed marcher: its section (in the app's language when built in) and the
+            // numeric part of its drill number
             name:
                 marcher.name ||
                 tolgee.t("coordinateSheet.unnamedMarcherName", {
-                    section: marcher.section,
+                    section: sectionDisplayName(marcher.section, tolgee.t),
                     number:
                         marcher.drill_number.match(/\d+/)?.[0] ||
                         String(marcher.drill_order),

@@ -108,7 +108,7 @@ export function moveThemTooMessage(
     return {
         message: translate(
             "marcherPages.moveThemToo.ownMove",
-            "{count, plural, one {{names} has its own move on Page {page}, so it kept its spot} other {{names} have their own move on Page {page}, so they kept their spot}}",
+            "{count, plural, =1 {{names} has its own move on Page {page}, so it kept its spot} other {{names} have their own move on Page {page}, so they kept their spot}}",
             { names, page, count: kept.length },
         ),
         actionLabel,

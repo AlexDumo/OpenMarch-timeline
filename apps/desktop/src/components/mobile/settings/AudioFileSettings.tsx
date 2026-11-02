@@ -40,6 +40,7 @@ import { getAudioDuration, getAudioSizeMegabytes } from "../audio-files/utils";
 import clsx from "clsx";
 import { useTranslate } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
+import { formatLocale } from "@/utilities/formatLocale";
 
 function formatDuration(seconds: number): string {
     const roundedSeconds = Math.round(seconds);
@@ -52,7 +53,7 @@ function formatDuration(seconds: number): string {
 }
 
 function formatDate(date: Date): string {
-    return date.toLocaleString(tolgee.getLanguage(), {
+    return date.toLocaleString(formatLocale(), {
         month: "numeric",
         day: "numeric",
         year: "numeric",
@@ -457,7 +458,7 @@ export function AudioFileSettings({
                                                 size: Number(
                                                     file.sizeMb ?? 0,
                                                 ).toLocaleString(
-                                                    tolgee.getLanguage(),
+                                                    formatLocale(),
                                                     {
                                                         minimumFractionDigits: 2,
                                                         maximumFractionDigits: 2,

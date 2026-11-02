@@ -294,9 +294,11 @@ export async function deletePageYankWithMoves({
 }
 
 /**
- * Runs of pages next to each other in show order, as "3–5", joined with commas: "2, 4–6".
+ * Runs of pages next to each other in show order, each as a page's name or a range "3–5":
+ * `["2", "4–6"]`. The caller joins them as a list in the app's language (`formatList`) where they
+ * are shown; this module doesn't import Tolgee.
  */
-export function pageRunsLabel(pages: readonly NamedPage[]): string {
+export function pageRuns(pages: readonly NamedPage[]): string[] {
     const runs: NamedPage[][] = [];
     for (const page of pages) {
         const run = runs[runs.length - 1];
@@ -304,11 +306,9 @@ export function pageRunsLabel(pages: readonly NamedPage[]): string {
         if (run && last && page.order === last.order + 1) run.push(page);
         else runs.push([page]);
     }
-    return runs
-        .map((run) =>
-            run.length === 1
-                ? run[0]!.name
-                : `${run[0]!.name}–${run[run.length - 1]!.name}`,
-        )
-        .join(", ");
+    return runs.map((run) =>
+        run.length === 1
+            ? run[0]!.name
+            : `${run[0]!.name}–${run[run.length - 1]!.name}`,
+    );
 }

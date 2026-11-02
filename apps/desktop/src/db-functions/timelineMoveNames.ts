@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { text, type TimelineText } from "@/timeline/timelineText";
 import * as schema from "@om-electron/database/migrations/schema";
 import { readShowTiming } from "@/timeline/showTiming";
@@ -55,6 +55,24 @@ export const pageMoveTakenOver = async (
         (t) => t.id !== timelineId,
     );
     return page && timelineId < page.id ? page : undefined;
+};
+
+/** Each marcher's drill number ("T3"), for refusals. */
+export const marcherLabels = async (
+    tx: DbTransaction,
+    marcherIds: readonly number[],
+): Promise<Map<number, string>> => {
+    if (marcherIds.length === 0) return new Map();
+    const rows = await tx
+        .select({
+            id: schema.marchers.id,
+            prefix: schema.marchers.drill_prefix,
+            order: schema.marchers.drill_order,
+        })
+        .from(schema.marchers)
+        .where(inArray(schema.marchers.id, [...marcherIds]))
+        .all();
+    return new Map(rows.map((r) => [r.id, `${r.prefix}${r.order}`]));
 };
 
 /** Says why `pageMoveTakenOver` refuses a landing. */

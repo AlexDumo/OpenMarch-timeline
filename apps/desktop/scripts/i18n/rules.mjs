@@ -397,6 +397,27 @@ function propertyName(property) {
 }
 
 /**
+ * Reports the `role` of a menu item that has no `label`. A role item shows
+ * Electron's own label, which is English in every language, so it needs a label of its own. No
+ * role is exempt: Electron localizes none of them, and every role that makes a menu item shows
+ * text. A spread may bring the label, so an item with one isn't flagged.
+ */
+function reportUnlabelledRole(context, object, ignored) {
+    const role = object.properties.find((p) => propertyName(p) === "role");
+    if (!role || ignored(role)) return;
+    const labelled = object.properties.some(
+        (p) => p.type === "SpreadElement" || propertyName(p) === "label",
+    );
+    if (labelled) return;
+    const sourceCode = context.sourceCode ?? context.getSourceCode();
+    context.report({
+        node: role,
+        messageId: "roleLabel",
+        data: { role: sourceCode.getText(role.value).replace(/\s+/g, " ") },
+    });
+}
+
+/**
  * The main process's literal UI text (`apps/desktop/electron`): native dialogs' text options,
  * their button labels and file-filter names, menu item labels, and window titles. JSX text
  * doesn't exist there, so `no-untranslated-text` would find nothing.
@@ -406,6 +427,8 @@ export const noUntranslatedMainText = {
         type: "problem",
         messages: {
             text: "Untranslated UI text: {{text}}",
+            roleLabel:
+                "Untranslated UI text: menu item {{role}} has no label. Electron's role labels are English only; add label: t(…)",
         },
         schema: [],
     },
@@ -486,6 +509,7 @@ export const noUntranslatedMainText = {
                     if (propertyName(property) === "label")
                         literalText(property.value).forEach(report);
                 }
+                reportUnlabelledRole(context, node, ignored);
             },
         };
     },

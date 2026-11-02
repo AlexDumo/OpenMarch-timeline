@@ -1,5 +1,6 @@
 import Measure from "@/global/classes/Measure";
 import Page from "@/global/classes/Page";
+import tolgee from "@/global/singletons/Tolgee";
 import { recolorMarcherIconSvg } from "@/assets/open-march-marcher";
 import { getVideoThemeColors, type VideoTheme } from "./videoTheme";
 
@@ -520,7 +521,12 @@ export function drawOverlay(
 
 /* ------------------------------ Branding ------------------------------ */
 
-export const BRANDING_TEXT = "Made with OpenMarch";
+/** The branding line, in the app's language. Resolved per frame so it's never frozen at load. */
+function brandingText(): string {
+    return tolgee.t("exportCoordinates.videoBranding", {
+        product: "OpenMarch", // i18n-ignore: product name, the same in every language
+    });
+}
 
 const logoPromises = new Map<VideoTheme, Promise<HTMLImageElement | null>>();
 
@@ -567,7 +573,8 @@ export function drawBranding(
     ctx.save();
     ctx.font = `500 ${fontSize}px ${FONT_FAMILY}`;
     ctx.textBaseline = "middle";
-    const textWidth = ctx.measureText(BRANDING_TEXT).width;
+    const text = brandingText();
+    const textWidth = ctx.measureText(text).width;
     const logoHeight = Math.round(fontSize * 1.4);
     const logoWidth = logo
         ? Math.round(logoHeight * (logo.width / logo.height))
@@ -597,6 +604,6 @@ export function drawBranding(
         ctx.globalAlpha = 1;
     }
     ctx.fillStyle = colors.brandingText;
-    ctx.fillText(BRANDING_TEXT, boxX + padding + logoWidth + gap, centerY);
+    ctx.fillText(text, boxX + padding + logoWidth + gap, centerY);
     ctx.restore();
 }

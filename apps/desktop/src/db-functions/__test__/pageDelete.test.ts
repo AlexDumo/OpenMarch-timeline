@@ -13,7 +13,7 @@ import { addPageFlag, deletePageFlags } from "../pageFlags";
 import {
     deletePageYankWithMoves,
     deletePagesWithMoves,
-    pageRunsLabel,
+    pageRuns,
 } from "../pageDelete";
 import { pageDeleteWithMovesMessage } from "@/hooks/queries/pageDeleteMessage";
 import { moveMarchersInTarget } from "../timelineMoves";
@@ -137,7 +137,7 @@ const S4 = async (db: DbConnection) => {
     return { a: a!, b: b! };
 };
 
-describe("pageRunsLabel", () => {
+describe("pageRuns", () => {
     const page = (name: string, order: number, renamed = false) => ({
         id: order,
         name,
@@ -146,18 +146,13 @@ describe("pageRunsLabel", () => {
     });
 
     test("runs of pages next to each other", () => {
-        expect(pageRunsLabel([page("3", 3), page("4", 4), page("5", 5)])).toBe(
+        expect(pageRuns([page("3", 3), page("4", 4), page("5", 5)])).toEqual([
             "3–5",
-        );
+        ]);
         expect(
-            pageRunsLabel([
-                page("2", 2),
-                page("4", 4),
-                page("4A", 5),
-                page("5", 6),
-            ]),
-        ).toBe("2, 4–5");
-        expect(pageRunsLabel([page("1", 1)])).toBe("1");
+            pageRuns([page("2", 2), page("4", 4), page("4A", 5), page("5", 6)]),
+        ).toEqual(["2", "4–5"]);
+        expect(pageRuns([page("1", 1)])).toEqual(["1"]);
     });
 });
 

@@ -6,8 +6,11 @@ import { DbTransaction } from "./types";
 import { mapDbErrors, refuse, TimelineWriteError } from "./timelineErrors";
 import { deleteTimelineTransitionsInTransaction } from "./timelineTransitions";
 import { moveInSentence } from "@/timeline/timelineRangeWords";
-import { text, type TimelineTextArg } from "@/timeline/timelineText";
-import { translateTimelineText } from "@/timeline/translateTimelineText";
+import {
+    text,
+    type TimelineTextArg,
+    timelineTextForLog,
+} from "@/timeline/timelineText";
 
 /**
  * Page and beat ripple (docs/timeline/phases/07-page-parity.md P7.4, P7.5).
@@ -400,7 +403,7 @@ export function planTimelineRipple(
         });
     };
     // The invariant refusals below show their code's own message; theirs is for the log
-    const logged = (value: TimelineTextArg) => translateTimelineText(value);
+    const logged = (value: TimelineTextArg) => timelineTextForLog(value);
 
     // A timeline whose transitions all go is deleted with them (C-11), so it isn't rippled
     const emptied = new Set(

@@ -6,7 +6,6 @@ import {
 } from "@/hooks/queries/useWorkspaceSettings";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTranslate } from "@tolgee/react";
-import tolgee from "@/global/singletons/Tolgee";
 import { useGetApiEditorV1Ensembles } from "@/api/generated/ensembles/ensembles";
 import { usePostApiEditorV1Productions } from "@/api/generated/productions/productions";
 import type { ProductionPreview } from "@/api/generated/model";
@@ -25,6 +24,7 @@ import {
 } from "@openmarch/ui";
 import { CircleNotchIcon, PlusIcon } from "@phosphor-icons/react";
 import ViewEnsembleDetailsLink from "./ViewEnsembleDetailsLink";
+import { formatLocale } from "@/utilities/formatLocale";
 
 type CreateProductionTarget = {
     id: number;
@@ -82,7 +82,7 @@ export default function EnsembleList() {
     );
 
     const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString(tolgee.getLanguage(), {
+        return new Date(dateString).toLocaleDateString(formatLocale(), {
             year: "numeric",
             month: "long",
             day: "numeric",
@@ -172,7 +172,7 @@ export default function EnsembleList() {
 
                 {error && (
                     <div className="text-body text-red">
-                        {t("ensembles.error", {
+                        {t("ensembles.loadError", {
                             error:
                                 error instanceof Error
                                     ? error.message

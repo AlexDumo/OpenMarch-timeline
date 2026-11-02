@@ -1,4 +1,5 @@
 import type { FieldProperties } from "@openmarch/core";
+import { formatLocale } from "@/utilities/formatLocale";
 
 type Translate = (
     key: string,
@@ -6,7 +7,7 @@ type Translate = (
 ) => string;
 
 const twoDecimals = (value: number, language: string | undefined) =>
-    value.toLocaleString(language ?? "en", {
+    value.toLocaleString(formatLocale(language), {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     });

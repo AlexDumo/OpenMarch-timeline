@@ -22,6 +22,7 @@ import { stealLayer } from "./timelineCommands";
 import { ensureCountsInTransaction } from "./endlessCounts";
 import {
     createRangeTimelineInTransaction,
+    marcherLabels,
     readMoveWords,
 } from "./timelineMoveNames";
 import {
@@ -31,7 +32,7 @@ import {
 } from "@/timeline/timelineRangeWords";
 import { text } from "@/timeline/timelineText";
 
-export { findTimelineByRange };
+export { findTimelineByRange, marcherLabels };
 
 /**
  * Who is in a timeline (docs/timeline/phases/08-authoring-ui.md P8.14; ui.md UI-9: Adding
@@ -74,24 +75,6 @@ export const partlyOverlaps = (a: BeatRange, b: BeatRange): boolean =>
     !containsRange(b, a);
 
 const rangeText = ({ start, end }: BeatRange) => `[${start}, ${end})`;
-
-/** Each marcher's drill number ("T3"), for refusals. */
-export const marcherLabels = async (
-    tx: DbTransaction,
-    marcherIds: readonly number[],
-): Promise<Map<number, string>> => {
-    if (marcherIds.length === 0) return new Map();
-    const rows = await tx
-        .select({
-            id: schema.marchers.id,
-            prefix: schema.marchers.drill_prefix,
-            order: schema.marchers.drill_order,
-        })
-        .from(schema.marchers)
-        .where(inArray(schema.marchers.id, [...marcherIds]))
-        .all();
-    return new Map(rows.map((r) => [r.id, `${r.prefix}${r.order}`]));
-};
 
 /**
  * Marchers in an inheriting follow-the-leader transition, whose order R-12 may read from the slot
@@ -371,10 +354,21 @@ export const addMarchersToTimelineInTransaction = async ({
     for (const marcherId of toAdd) {
         const [x, y] = resolver.positionAt(marcherId, end);
         const point: XY = [x, y];
-        if (!validateDestination(point).ok)
+        if (!validateDestination(point).ok) {
+            const { boxes } = await readMoveWords(tx);
+            const at = beatWhere(end, boxes);
+            const marcher = labels.get(marcherId)!;
             refuse(
-                `${labels.get(marcherId)} is outside the field's bounds at beat ${end}`,
+                at
+                    ? text.t("timeline.refusals.members.offField", {
+                          marcher,
+                          at,
+                      })
+                    : text.t("timeline.refusals.members.offFieldNoWhere", {
+                          marcher,
+                      }),
             );
+        }
         members.push({
             marcherId,
             point,

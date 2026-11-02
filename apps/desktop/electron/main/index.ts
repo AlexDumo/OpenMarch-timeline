@@ -1,14 +1,6 @@
 /* eslint-disable no-console */
 import { MENU_ACTION_CHANNEL } from "../../src/global/menuActions";
-import {
-    app,
-    BrowserWindow,
-    shell,
-    ipcMain,
-    Menu,
-    dialog,
-    MenuItemConstructorOptions,
-} from "electron";
+import { app, BrowserWindow, shell, ipcMain, Menu, dialog } from "electron";
 import Store from "electron-store";
 import * as fs from "fs";
 import { release } from "node:os";
@@ -25,6 +17,7 @@ import { LIBRARY_LIMITS } from "../../src/view3d/library/protocol";
 import { VIEW3D_AUTO_OPEN_SETTING } from "../../src/view3d/sync/protocol";
 import { buildApplicationMenu } from "./application-menu";
 import { onMainLanguageChange, setMainLanguage, t } from "./i18n";
+import { textContextMenuTemplate } from "./textContextMenu";
 import { openSettingsWindow } from "./settings-window";
 import { TRAFFIC_LIGHT_POSITION } from "./traffic-lights";
 import { handleWindowOpen } from "./window-open-policy";
@@ -107,6 +100,9 @@ import {
 
 let isQuitting = false;
 const store = new Store();
+// Native dialogs follow the saved app language from the start: on macOS a file can arrive
+// (`open-file`) before the app is ready, and its dialogs would otherwise be in English
+setMainLanguage(store.get("language"));
 
 /** Active new-show draft file in userData/new-show-drafts (not in recent files until finalized). */
 let currentNewShowDraftPath: string | null = null;
@@ -339,37 +335,12 @@ async function createWindow(title?: string) {
         handleWindowOpen(url, (u) => void shell.openExternal(u)),
     );
 
-    // Context menu with spellcheck suggestions and basic edit actions
-    win.webContents.on("context-menu", (event, params) => {
-        const template: MenuItemConstructorOptions[] = [];
-
-        if (params.misspelledWord && params.dictionarySuggestions.length > 0) {
-            template.push(
-                ...params.dictionarySuggestions.map((suggestion) => ({
-                    label: suggestion,
-                    click: () => {
-                        win?.webContents.replaceMisspelling(suggestion);
-                    },
-                })),
-                { type: "separator" },
-            );
-        }
-
-        if (params.isEditable) {
-            template.push(
-                { role: "undo" },
-                { role: "redo" },
-                { type: "separator" },
-                { role: "cut" },
-                { role: "copy" },
-                { role: "paste" },
-                { type: "separator" },
-                { role: "selectAll" },
-            );
-        } else if (params.selectionText && params.selectionText.trim()) {
-            template.push({ role: "copy" }, { role: "selectAll" });
-        }
-
+    // Context menu with spellcheck suggestions and basic edit actions, built per popup so its
+    // labels follow the app language
+    win.webContents.on("context-menu", (_event, params) => {
+        const template = textContextMenuTemplate(params, (suggestion) =>
+            win?.webContents.replaceMisspelling(suggestion),
+        );
         if (!template.length) return;
 
         const menu = Menu.buildFromTemplate(template);

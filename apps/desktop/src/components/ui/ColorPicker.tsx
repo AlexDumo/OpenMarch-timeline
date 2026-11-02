@@ -150,7 +150,6 @@ export default function ColorPicker({
                         >
                             {rgbaToHex(currentColor).toUpperCase()}
                             {/* i18n-ignore: color code notation (hex, then -a and the alpha value), not prose */}
-                            {/* i18n-ignore: color code notation (hex, then -a and the alpha value), not prose */}
                             {"-a"}
                             {currentColor.a === 1
                                 ? 1

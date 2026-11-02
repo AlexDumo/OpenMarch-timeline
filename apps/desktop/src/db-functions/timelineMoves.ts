@@ -35,8 +35,11 @@ import {
     moveName,
 } from "@/timeline/timelineRangeWords";
 import { readMoveWords } from "./timelineMoveNames";
-import { text, type TimelineTextArg } from "@/timeline/timelineText";
-import { translateTimelineText } from "@/timeline/translateTimelineText";
+import {
+    text,
+    type TimelineTextArg,
+    timelineTextForLog,
+} from "@/timeline/timelineText";
 import { FIRST_PAGE_ID } from "./rowMappers";
 import type { DatabaseTimelineAssignment } from "./timelineAssignments";
 import {
@@ -261,7 +264,7 @@ export const moveMarchersOnPageInTransaction = async ({
 
     if (page.beats.length === 0)
         refuse(
-            `${translateTimelineText(pageLabel(page))} has no beats, so it has no end beat`,
+            `${timelineTextForLog(pageLabel(page))} has no beats, so it has no end beat`,
         );
     const endBeat = pageEndBeat(page);
 
@@ -352,7 +355,7 @@ const writeSlotMoves = async ({
         if (row.shapeId !== null && row.pathStyle === "follow_the_leader")
             throw new TimelineWriteError(
                 "E-T5",
-                `marcher ${await marcherLabel(tx, move.marcherId)} follows the leader into a shape on ${translateTimelineText(typeof where === "function" ? await where() : where)}; move the shape instead`,
+                `marcher ${await marcherLabel(tx, move.marcherId)} follows the leader into a shape on ${timelineTextForLog(typeof where === "function" ? await where() : where)}; move the shape instead`,
             );
 
     // Shape-backed transitions switch to individual points (Q-14), copying the shape's samples.

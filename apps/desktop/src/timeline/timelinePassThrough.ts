@@ -100,7 +100,7 @@ export function passThroughMessage(
     if (pages)
         return translate(
             "timeline.edit.passThrough.noLongerStop.pages",
-            "{count, plural, one {Page {first} is no longer a keyframe} other {Pages {first}–{last} are no longer keyframes}}",
+            "{count, plural, =1 {Page {first} is no longer a keyframe} other {Pages {first}–{last} are no longer keyframes}}",
             pages,
         );
     if (pass.flags.length > 0)
@@ -152,7 +152,7 @@ export function keepStopsLabel(
         );
     return translate(
         "timeline.edit.passThrough.keepStops.pages",
-        "{count, plural, one {Keep Page {first} as a keyframe} other {Keep Pages {first}–{last} as keyframes}}",
+        "{count, plural, =1 {Keep Page {first} as a keyframe} other {Keep Pages {first}–{last} as keyframes}}",
         pages,
     );
 }
@@ -211,7 +211,10 @@ export function toastPassThrough(
                                   .catch((e: unknown) =>
                                       toastTimelineError(
                                           e,
-                                          "Error moving marchers",
+                                          tolgee.t(
+                                              "timeline.edit.passThrough.keepStopsError",
+                                              "Couldn't keep those pages as keyframes",
+                                          ),
                                       ),
                                   );
                           },

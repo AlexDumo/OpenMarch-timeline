@@ -23,7 +23,6 @@ import {
     type TimelineText,
     type TimelineTextArg,
 } from "@/timeline/timelineText";
-import { translateTimelineText } from "@/timeline/translateTimelineText";
 import { nextMoveNameInTransaction, readMoveWords } from "./timelineMoveNames";
 import type { TimelinePathParams } from "./timelineTransitionsInTransaction";
 import {
@@ -181,9 +180,8 @@ export function splitMembershipBlocker(
     members: ReadonlySet<number>,
     marcherIds: Iterable<number>,
     moveName: string,
-): string | null {
-    const blocker = splitMembershipBlockerText(members, marcherIds, moveName);
-    return blocker && translateTimelineText(blocker);
+): TimelineText | null {
+    return splitMembershipBlockerText(members, marcherIds, moveName);
 }
 
 /** `splitMembershipBlocker`'s reason as text, translated where it is shown (the write path's). */

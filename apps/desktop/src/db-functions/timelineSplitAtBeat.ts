@@ -3,8 +3,7 @@ import { createResolver, type Resolver, type XY } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { readTimelineTables } from "@/timeline/timelineRows";
 import { beatWhere, countsText, moveName } from "@/timeline/timelineRangeWords";
-import { text } from "@/timeline/timelineText";
-import { translateTimelineText } from "@/timeline/translateTimelineText";
+import { text, timelineTextForLog } from "@/timeline/timelineText";
 import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { mapDbErrors, refuse } from "./timelineErrors";
@@ -296,7 +295,7 @@ async function refuseUnlessSplitAllowed(
         beatWhere(beat, words.boxes) ?? text.t("timeline.where.beat", { beat });
     if (!Number.isInteger(beat))
         refuse(
-            `${translateTimelineText(name)} can only be split on a whole count, not ${beat}`,
+            `${timelineTextForLog(name)} can only be split on a whole count, not ${beat}`,
         );
     if (!(s0 < beat && beat < e0))
         refuse(

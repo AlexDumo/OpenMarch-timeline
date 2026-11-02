@@ -82,7 +82,7 @@ export function OutlineGap({
         if (changed !== now) target.apply(changed);
     };
     const side = tolgee.t(
-        "shapes.edit.gap.menu",
+        "shapes.edit.gap.menuLabel",
         "Leftover: {side, select, back {Back} front {Front} left {Left} other {Right}}",
         {
             side: seen.side,
@@ -117,7 +117,7 @@ export function OutlineGap({
         : "";
     const sentence = differs
         ? tolgee.t(
-              "shapes.edit.gap.spacingTip",
+              "shapes.edit.gap.spacingHint",
               "The {side, select, back {back} front {front} left {left} other {right}} has one fewer marcher, so its marchers are {spacing} apart.",
               {
                   side: seen.side,

@@ -5,6 +5,7 @@ import { Switch, Slider } from "@openmarch/ui";
 import { T, useTolgee, useTranslate } from "@tolgee/react";
 import SettingRow from "@/settings/SettingRow";
 import SettingsPanel from "@/settings/SettingsPanel";
+import { formatLocale } from "@/utilities/formatLocale";
 
 export default function MouseSettings() {
     const setUiSettings = useUiSettingsStore((s) => s.setUiSettings);
@@ -15,7 +16,7 @@ export default function MouseSettings() {
         })),
     );
     const { t } = useTranslate();
-    const language = useTolgee(["language"]).getLanguage();
+    const language = formatLocale(useTolgee(["language"]).getLanguage());
     /** A sensitivity as a multiplier, e.g. "1.5x", with the language's decimal mark */
     const multiplier = (value: number) =>
         t("settings.mouse.multiplier", {

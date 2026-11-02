@@ -128,7 +128,10 @@ const snapRotation = (angle: number, stepRad: number) => {
 
 const ROTATE_OFFSET = Math.PI / 2;
 
-/** Steps to two decimals, as a number so the readout writes it in the app's language */
+/**
+ * Steps to two decimals. Kept a number so the readout's `{x, number}` writes it with the app
+ * language's decimal separator.
+ */
 const trim = (v: number) => Math.round(v * 100) / 100;
 
 /** The block's pattern group: how its ranks sit, and where a short rank goes */
@@ -444,7 +447,7 @@ export const blockKind: ShapeKind<BlockParams> = {
                 ),
                 value: tolgee.t(
                     "shapes.kinds.block.readout.intervalValue",
-                    "{across} × {deep} steps",
+                    "{across, number} × {deep, number} steps",
                     {
                         across: trim(p.across / ctx.stepPx),
                         deep: trim(p.deep / ctx.stepPx),

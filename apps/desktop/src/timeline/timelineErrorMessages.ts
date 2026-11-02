@@ -185,7 +185,8 @@ export function timelineErrorCode(error: unknown): string | null {
 
 /**
  * The message to show for `error`, or `fallback` (when given) for an error that isn't a timeline
- * refusal. An error that isn't a refusal and has no fallback gets the generic message.
+ * refusal or is an `E-ARGS` refusal without text for the user (a developer-only message). Either
+ * without a fallback gets the generic message.
  */
 export function timelineErrorMessage(
     error: unknown,
@@ -216,10 +217,14 @@ export function timelineErrorMessage(
                 TIMELINE_UNKNOWN_ERROR_MESSAGE.defaultMessage,
             )
         );
-    if (code === "E-ARGS" && error instanceof TimelineWriteError && error.text)
-        return translateTimelineText(error.text, (key, params) =>
-            translate(key, undefined, params),
-        );
+    if (code === "E-ARGS" && error instanceof TimelineWriteError) {
+        if (error.text)
+            return translateTimelineText(error.text, (key, params) =>
+                translate(key, undefined, params),
+            );
+        // A developer-only refusal (a plain string): the caller's words for what failed, if any
+        if (fallback !== undefined) return fallback;
+    }
     const mapped =
         code === "E-DB"
             ? TIMELINE_DB_ERROR_MESSAGE

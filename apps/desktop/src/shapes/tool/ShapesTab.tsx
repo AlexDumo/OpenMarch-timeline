@@ -175,7 +175,7 @@ export default function ShapesTab() {
                     data-testid="shapes-tab-ring-hint"
                 >
                     <T
-                        keyName="shapes.tool.tab.ringHint"
+                        keyName="shapes.tool.tab.ringHintKeys"
                         params={{ keys: () => <Keycaps keys={ringKey} /> }}
                     />
                 </span>

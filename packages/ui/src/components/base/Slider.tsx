@@ -4,15 +4,18 @@ import { type SliderProps } from "@radix-ui/react-slider";
 import { twMerge } from "tailwind-merge";
 
 /**
- * `aria-label` names the thumb for screen readers. The package has no translations, so pass
- * translated text; there is no default.
+ * `aria-label` names the thumb for screen readers and is required. The package has no
+ * translations, so pass translated text; there is no default.
  */
 export function Slider({
     "aria-label": ariaLabel,
     className,
     thumbClassName,
     ...props
-}: SliderProps & { thumbClassName?: string }) {
+}: Omit<SliderProps, "aria-label"> & {
+    "aria-label": string;
+    thumbClassName?: string;
+}) {
     return (
         <RadixSlider.Root
             {...props}

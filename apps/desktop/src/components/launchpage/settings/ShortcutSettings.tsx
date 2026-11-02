@@ -173,7 +173,7 @@ function ShortcutRow({
                             className="border-accent text-accent rounded-6 text-sub border px-6 py-2"
                         >
                             <T
-                                keyName="settings.shortcuts.recording"
+                                keyName="settings.shortcuts.recordingHint"
                                 params={{
                                     keys: () => (
                                         <Keycaps
@@ -219,7 +219,7 @@ function ShortcutRow({
                 >
                     <span className="text-sub text-text">
                         <T
-                            keyName="settings.shortcuts.conflict"
+                            keyName="settings.shortcuts.conflictWith"
                             params={{
                                 keys: () => (
                                     <Keycaps

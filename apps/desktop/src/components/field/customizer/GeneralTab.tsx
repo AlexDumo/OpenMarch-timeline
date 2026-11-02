@@ -120,7 +120,7 @@ export function GeneralTab({
                         currentFieldProperties.stepSizeWarningThresholdInches >
                         0
                             ? t(
-                                  "fieldProperties.labels.stepSizeWarningThresholdRatio",
+                                  "fieldProperties.labels.stepSizeWarningRatio",
                                   "Step Size Warning Threshold ({steps} to 5)",
                                   {
                                       steps:

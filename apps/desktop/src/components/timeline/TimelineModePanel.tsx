@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useTranslate } from "@tolgee/react";
+import { useTolgee, useTranslate } from "@tolgee/react";
 import {
     pageFlagMoveLimits,
     type AddedPageFlag,
@@ -245,6 +245,8 @@ export default function TimelineModePanel() {
     const keepNameOf = useMarcherNameOf(selectedMarchers);
     // #303: where the selected marchers are Set, as keyframes on the timeline, each naming who
     const selectionKeyframes = useSelectionKeyframes(selectedIdList);
+    // Words built here with tolgee.t are built again when the language changes
+    const language = useTolgee(["language"]).getLanguage();
     const keyframes = useMemo<readonly TimelineKeyframe[]>(
         () =>
             selectionKeyframes.map((keyframe) => ({
@@ -256,7 +258,8 @@ export default function TimelineModePanel() {
                         tolgee.t(key, defaultValue, params),
                 ),
             })),
-        [selectionKeyframes, keepNameOf],
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- language: the words are tolgee.t's
+        [selectionKeyframes, keepNameOf, language],
     );
     // #306: a diamond's right-click Unset actions at its count
     const keyframeMenu = useKeyframeUnsetMenu(selectedIdList, isPlaying);
@@ -308,7 +311,8 @@ export default function TimelineModePanel() {
                 pageBoxes,
                 pages,
             }),
-        [clipTimelines, pages, storedTimelines, pageBoxes],
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- language: the words are tolgee.t's
+        [clipTimelines, pages, storedTimelines, pageBoxes, language],
     );
     // The Move card says it too
     useEffect(() => {
@@ -936,7 +940,7 @@ export function describePageFlagBlock(
     pages: readonly (FlagPage & { readonly name: string })[],
     timelines: readonly Pick<
         TimelineInput,
-        "linkId" | "label" | "startBeatIndex" | "endBeatIndex"
+        "linkId" | "label" | "unnamed" | "startBeatIndex" | "endBeatIndex"
     >[],
 ): string {
     // Nothing stops the last flag past every move (endless counts); never shown
@@ -961,7 +965,7 @@ export function describePageFlagBlock(
         : undefined;
     const who = page
         ? { who: "page", page: page.page.name, name: "" }
-        : track && !/^Timeline \d+$/.test(track.label)
+        : track && !track.unnamed
           ? { who: "named", page: "", name: track.label }
           : { who: "other", page: "", name: "" };
     switch (block.reason) {

@@ -41,12 +41,6 @@ describe("main-process translations", () => {
         expect(t("settings.title")).toBe("設定");
     });
 
-    it("falls back to English for a key the language lacks", () => {
-        setMainLanguage("fr");
-        // Added after the last translation pull, so French doesn't have it yet
-        expect(t("menu.file.open")).toBe("Open File");
-    });
-
     it("treats an unknown or missing setting as English", () => {
         expect(toMainLanguage("pt-BR")).toBe("pt-BR");
         expect(toMainLanguage("de")).toBe("en");

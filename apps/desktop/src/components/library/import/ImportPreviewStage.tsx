@@ -5,7 +5,6 @@
  * side and top views, before/after for simplify and grip picking; artwork
  * shows the focused page's 1024 px preview from `renderArtworkPreview`.
  */
-import tolgee from "@/global/singletons/Tolgee";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
 import { useStore } from "zustand";
@@ -34,6 +33,7 @@ import {
     type Bounds,
     type PreviewView,
 } from "./previewMath";
+import { formatLocale } from "@/utilities/formatLocale";
 
 const ImportPreviewCanvas = lazy(() => import("./ImportPreviewCanvas"));
 
@@ -170,15 +170,13 @@ function ModelStage({ store }: { store: ImportReviewStore }) {
                     <span className={tag} data-testid="import-stage-triangles">
                         {cap
                             ? t("library.import.stage.trianglesCap", {
-                                  triangles: triangles.toLocaleString(
-                                      tolgee.getLanguage(),
-                                  ),
-                                  cap: cap.toLocaleString(tolgee.getLanguage()),
+                                  triangles:
+                                      triangles.toLocaleString(formatLocale()),
+                                  cap: cap.toLocaleString(formatLocale()),
                               })
                             : t("library.import.stage.triangles", {
-                                  triangles: triangles.toLocaleString(
-                                      tolgee.getLanguage(),
-                                  ),
+                                  triangles:
+                                      triangles.toLocaleString(formatLocale()),
                               })}
                     </span>
                 )}
@@ -207,7 +205,7 @@ function ModelStage({ store }: { store: ImportReviewStore }) {
             {height !== null && (
                 <span className={clsx(tag, "absolute bottom-8 left-10")}>
                     {t("library.import.stage.tall", {
-                        height: formatLength(height, "metric"),
+                        height: formatLength(height, "metric", formatLocale()),
                     })}
                 </span>
             )}

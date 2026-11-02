@@ -26,6 +26,7 @@ import type {
 import { formatLength, fromMeters, type Length } from "@/view3d/core/sizes";
 import type { ReviewError } from "./importReview";
 import type { RowText } from "./reportText";
+import { formatLocale } from "@/utilities/formatLocale";
 
 export function Label({
     children,
@@ -63,7 +64,7 @@ export function FileTypeIcon({
 }
 
 export function formatBytes(bytes: number): string {
-    const language = tolgee.getLanguage();
+    const language = formatLocale();
     if (bytes >= 1e6)
         return tolgee.t("library.import.fileSizeMb", "{size} MB", {
             size: (bytes / 1e6).toLocaleString(language, {

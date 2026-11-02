@@ -73,10 +73,10 @@ export default function MarcherCsvImportForm({
 }: MarcherCsvImportFormProps) {
     const { t } = useTranslate();
     const shortcutOverrides = useShortcutOverridesStore((s) => s.overrides);
-    const undoKeys =
-        getActionShortcutKeys("performUndo", {
-            overrides: shortcutOverrides,
-        }) ?? [];
+    // Undefined when the person has unbound Undo: the note then names no shortcut
+    const undoKeys = getActionShortcutKeys("performUndo", {
+        overrides: shortcutOverrides,
+    });
     const fileInput = useRef<HTMLInputElement>(null);
     const readGeneration = useRef(0);
     const [mode, setMode] = useState<MarcherCsvMode>("section");
@@ -352,10 +352,16 @@ export default function MarcherCsvImportForm({
             </Button>
             {showInfoNote && (
                 <InfoNote>
-                    <T
-                        keyName="marchers.csv.info"
-                        params={{ keys: () => <Keycaps keys={undoKeys} /> }}
-                    />
+                    {undoKeys ? (
+                        <T
+                            keyName="marchers.csv.info"
+                            params={{
+                                keys: () => <Keycaps keys={undoKeys} />,
+                            }}
+                        />
+                    ) : (
+                        <T keyName="marchers.csv.infoNoShortcut" />
+                    )}
                 </InfoNote>
             )}
         </div>

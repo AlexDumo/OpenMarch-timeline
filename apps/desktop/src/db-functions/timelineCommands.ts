@@ -28,8 +28,14 @@ import {
 } from "./timelines";
 import { createTimelineTransitionsInTransaction } from "./timelineTransitions";
 import { ensureCountsInTransaction } from "./endlessCounts";
-import { pageTakeoverRefusal, pageMoveTakenOver } from "./timelineMoveNames";
+import {
+    marcherLabels,
+    pageMoveTakenOver,
+    pageTakeoverRefusal,
+    readMoveWords,
+} from "./timelineMoveNames";
 import { text } from "@/timeline/timelineText";
+import { beatWhere } from "@/timeline/timelineRangeWords";
 import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
 import {
     updateTimelineTransitionsInTransaction,
@@ -448,10 +454,23 @@ export const createTrackInTransaction = async ({
             target.marcherId,
             startBeat,
         );
-        if (!validateDestination([x, y]).ok)
+        if (!validateDestination([x, y]).ok) {
+            const { boxes } = await readMoveWords(tx);
+            const at = beatWhere(startBeat, boxes);
+            const marcher = (await marcherLabels(tx, [target.marcherId])).get(
+                target.marcherId,
+            )!;
             refuse(
-                `marcher ${target.marcherId} is outside the field's bounds at beat ${startBeat}`,
+                at
+                    ? text.t("timeline.refusals.members.offField", {
+                          marcher,
+                          at,
+                      })
+                    : text.t("timeline.refusals.members.offFieldNoWhere", {
+                          marcher,
+                      }),
             );
+        }
         destination = { kind: "individual", points: [[x, y]] };
     }
     const layer = await stealLayer(tx, marcherIds, startBeat, endBeat);

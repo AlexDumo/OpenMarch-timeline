@@ -360,6 +360,26 @@ export const ACTIONS = [
     assert.equal(errors.length, 2, text);
 });
 
+test("flags a main-process role menu item without a label", async () => {
+    const files = {
+        "electron/main/menu.ts": `
+import { t } from "./i18n";
+export const items = (copy: object) => [
+    { role: "undo" },
+    { role: "copy", label: t("menu.save") },
+    { ...copy, role: "copy" },
+    { role: "paste" }, // i18n-ignore: a test of the ignore comment
+    { type: "separator" },
+];
+`,
+    };
+    const { errors } = await checkI18n(await fixture({ files }));
+    const text = errors.join("\n");
+    assert.match(text, /electron\/main\/menu\.ts: 1 untranslated UI text:/);
+    assert.match(text, /menu\.ts:4:\d+ +.*menu item "undo" has no label/);
+    assert.ok(!text.includes('"paste"'), text);
+});
+
 test("flags the main process's literal dialog, menu and window text", async () => {
     const files = {
         "electron/main/index.ts": `

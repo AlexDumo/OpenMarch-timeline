@@ -127,6 +127,7 @@ function MetronomeModalContents() {
                             max={100}
                             step={1}
                             onValueChange={([v]) => setVolume(v)}
+                            aria-label={t("music.volume")}
                         />
                     </div>
                 </div>

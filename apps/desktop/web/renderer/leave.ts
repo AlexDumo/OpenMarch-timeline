@@ -3,6 +3,7 @@
  * New): only when its latest changes aren't safely kept.
  */
 import type { FlushResult } from "../protocol";
+import { workerErrorText } from "./workerErrors";
 import tolgee from "../../src/global/singletons/Tolgee";
 
 export type LeaveDecision =
@@ -38,5 +39,7 @@ export function leaveQuestion(decision: LeaveDecision): string | null {
     if (decision.reason === "memory") return tolgee.t("web.leave.memory");
     return decision.error === null
         ? tolgee.t("web.leave.noAnswer")
-        : tolgee.t("web.leave.unsaved", { error: decision.error });
+        : tolgee.t("web.leave.unsaved", {
+              error: workerErrorText(decision.error),
+          });
 }

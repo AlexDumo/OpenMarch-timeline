@@ -25,7 +25,7 @@ export default function TroubleshootingTips() {
                 </h5>
                 <p className="text-body leading-[180%]">
                     <T
-                        keyName="launchpage.learn.troubleshooting.refresh.description"
+                        keyName="launchpage.learn.troubleshooting.refreshHint"
                         params={{
                             keys: () => (
                                 <Keycaps

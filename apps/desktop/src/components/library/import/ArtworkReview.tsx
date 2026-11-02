@@ -11,6 +11,7 @@ import clsx from "clsx";
 import { UnitInput } from "@openmarch/ui";
 import { InfoIcon, LockSimpleIcon, ProhibitIcon } from "@phosphor-icons/react";
 import { T, useTranslate } from "@tolgee/react";
+import { formatFixed } from "@/utilities/formatLocale";
 import {
     ARTWORK_SURFACES,
     fromMeters,
@@ -214,8 +215,8 @@ function SizeStep({
         );
     const ratio =
         g.aspect >= 1
-            ? `${g.aspect.toFixed(2)} : 1`
-            : `1 : ${(1 / g.aspect).toFixed(2)}`;
+            ? `${formatFixed(g.aspect, 2)} : 1`
+            : `1 : ${formatFixed(1 / g.aspect, 2)}`;
     return (
         <section
             className="flex flex-col gap-8"

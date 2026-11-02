@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it as plainIt, beforeAll } from "vitest";
+import { refusalText } from "@/test/refusalText";
 import tolgee from "@/global/singletons/Tolgee";
 import { asc, eq, getTableName } from "drizzle-orm";
 import { createResolver, type Resolver } from "@openmarch/core";
@@ -496,7 +497,7 @@ describeDbTests("resizing a timeline", (it) => {
                 end: e + 5,
             }),
         );
-        expect(error.message).toMatch(/in the way/);
+        expect(refusalText(error)).toMatch(/in the way/);
         await expectRefused(db, () =>
             resizeTimeline({
                 db,
@@ -628,7 +629,9 @@ describeDbTests("resizing a timeline", (it) => {
                 end: e,
             }),
         );
-        expect(error.message).toMatch(/already covers exactly these counts/);
+        expect(refusalText(error)).toMatch(
+            /already covers exactly these counts/,
+        );
     });
 
     it("refuses landing an older move on a newer page move's exact counts, by resize or clip move (UI-25)", async ({
@@ -669,11 +672,15 @@ describeDbTests("resizing a timeline", (it) => {
                 end: box.end,
             }),
         );
-        expect(resized.message).toMatch(/make this move the page's own move/);
+        expect(refusalText(resized)).toMatch(
+            /make this move the page's own move/,
+        );
         const moved = await expectRefused(db, () =>
             shiftTimeline({ db, timelineId: older, delta: 2 }),
         );
-        expect(moved.message).toMatch(/make this move the page's own move/);
+        expect(refusalText(moved)).toMatch(
+            /make this move the page's own move/,
+        );
         // A newer move may still land on the page's counts (L-4): it stays a clip
         const newer = await addTimeline(db, {
             marcherId: m3!,
