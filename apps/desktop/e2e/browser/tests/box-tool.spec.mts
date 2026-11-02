@@ -5004,6 +5004,15 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         await waitForIdle(page);
         await expect(readoutShown).toBeHidden();
         expect(await savedPositions(show, 1)).toEqual(standing);
+
+        // ⌘G / Ctrl+G groups too, and no longer opens Go to (plain G does)
+        await page.keyboard.press("Escape");
+        await selectPage(show, "Page 1");
+        await selectAll(page);
+        await page.keyboard.press("ControlOrMeta+g");
+        await expect.poll(kinds).toEqual(["group"]);
+        await expect(page.getByTestId("timeline-go-to")).toHaveCount(0);
+        expect(await savedPositions(show, 1)).toEqual(standing);
     });
 
     test("change: turned about a member on the next page, the member at the pivot stays in the box there (owner on #486)", async ({
