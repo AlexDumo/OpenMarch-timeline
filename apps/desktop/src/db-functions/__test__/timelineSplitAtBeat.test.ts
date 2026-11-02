@@ -512,6 +512,38 @@ describeDbTests("Split at playhead (UI-27)", (it) => {
         expect((await snapshot(db)).data).toEqual(original.data);
     });
 
+    it("an arc of bulge 0 gives a direct first half, which Basic can edit (#621 review)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        const { timeline, transition } = await page2(db);
+        await transactionWithHistory(db, "flat arc", (tx) =>
+            updateTimelineTransitionsInTransaction({
+                tx,
+                modifiedTransitions: [
+                    {
+                        id: transition.id,
+                        pathStyle: "arc",
+                        pathParams: { bulge: 0 },
+                    },
+                ],
+            }),
+        );
+        const r0 = await resolverOf(db);
+        const result = await splitTimelineAtBeat({
+            db,
+            timelineId: timeline.id,
+            beat: 13,
+        });
+        const r1 = await resolverOf(db);
+        expectSamePositions(positions(r0, 13), positions(r1, 13), 1e-6);
+        const made = await transitionsOf(db, result.before.id);
+        expect(made.map((t) => [t.path_style, t.path_params])).toEqual(
+            made.map(() => ["direct", null]),
+        );
+    });
+
     it("refuses a beat on or outside the move's ends, a fraction, and a taken half", async ({
         db,
         marchersAndPages: _,

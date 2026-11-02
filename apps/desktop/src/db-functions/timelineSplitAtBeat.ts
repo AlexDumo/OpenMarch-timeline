@@ -39,13 +39,14 @@ import {
  *   there; rows that ended at or before `beat` leave it, and a transition nobody takes any more
  *   goes with them.
  * - A new move ("Move N", or unnamed over a page's box) runs over `[s, beat)`. Each transition of
- *   the original gets a shapeless direct counterpart there whose destinations are the resolver's
- *   positions at `beat`, one slot per marcher in it, and the rows that started before `beat`
+ *   the original gets a shapeless counterpart there, direct or an arc of the original's circle,
+ *   whose destinations are the resolver's positions at `beat`, one slot per marcher in it, and the rows that started before `beat`
  *   (cut at `beat` where they crossed it), on their own layers.
  * - A row that another move on a higher layer cuts into several visible pieces before `beat`
  *   (spec R-2) keeps only its last piece in that counterpart. Each earlier piece starts from
  *   where the other move left the marcher, so it heads somewhere else: it gets a row of its own,
- *   over just that piece, in one more shapeless direct transition of the new move (a transition
+ *   over just that piece, in one more shapeless transition of the new move (direct, or an arc of
+ *   the original's circle) (a transition
  *   holds one row per marcher, so the k-th earlier pieces of a transition's rows share one).
  *
  * **Motion is unchanged for direct paths.** A direct span is a straight line at a constant speed
@@ -572,9 +573,12 @@ function firstHalfOf(
     const bulge = params?.bulge ?? 0;
     /** The fraction of the transition's counts from `start` that `beat` is */
     const partBy = (start: number) => (beat - start) / (t.end_beat - start);
-    /** The bulge of a first-half row whose span starts at `start` */
+    /**
+     * The bulge of a first-half row whose span starts at `start`, `null` for a straight line (an
+     * arc of bulge 0 too, so the first half stays direct and Basic can edit it, as before #591)
+     */
     const bulgeFrom = (start: number) =>
-        arc ? partArcBulge(bulge, partBy(start)) : null;
+        arc && bulge !== 0 ? partArcBulge(bulge, partBy(start)) : null;
     const pieces = piecesOf(resolver, row).filter((p) => p.start < beat);
     const last = pieces[pieces.length - 1];
     // Hidden by another move until the beat or later: it never shows in the first half

@@ -326,29 +326,39 @@ export function moveSplitMessage(
         { label, where },
     );
     if (changed.length === 0) return base;
-    const count = changed.length;
-    const note = changed.every((c) => c.fromBeat >= beat)
-        ? count === 1
-            ? tolgee.t(
-                  "timeline.moveSplit.oneRestarted",
-                  "1 marcher's curved path restarts after it",
-              )
-            : tolgee.t(
-                  "timeline.moveSplit.restarted",
-                  "{count} marchers' curved paths restart after it",
-                  { count },
-              )
-        : count === 1
-          ? tolgee.t(
-                "timeline.moveSplit.oneChanged",
-                "1 marcher's path is redrawn: straight before it, restarted after",
-            )
-          : tolgee.t(
-                "timeline.moveSplit.changed",
-                "{count} marchers' paths are redrawn: straight before it, restarted after",
-                { count },
-            );
-    return `${base} · ${note}`;
+    // Curved paths keep every count before the split and only restart after it (#591); a path
+    // that changes before it too (follow the leader) is redrawn straight there. Each is counted
+    // on its own, so a move with both says both
+    const restarted = changed.filter((c) => c.fromBeat >= beat).length;
+    const redrawn = changed.length - restarted;
+    const notes: string[] = [];
+    if (restarted > 0)
+        notes.push(
+            restarted === 1
+                ? tolgee.t(
+                      "timeline.moveSplit.oneRestarted",
+                      "1 marcher's curved path restarts after it",
+                  )
+                : tolgee.t(
+                      "timeline.moveSplit.restarted",
+                      "{count} marchers' curved paths restart after it",
+                      { count: restarted },
+                  ),
+        );
+    if (redrawn > 0)
+        notes.push(
+            redrawn === 1
+                ? tolgee.t(
+                      "timeline.moveSplit.oneChanged",
+                      "1 marcher's path is redrawn: straight before it, restarted after",
+                  )
+                : tolgee.t(
+                      "timeline.moveSplit.changed",
+                      "{count} marchers' paths are redrawn: straight before it, restarted after",
+                      { count: redrawn },
+                  ),
+        );
+    return [base, ...notes].join(" · ");
 }
 
 /**
