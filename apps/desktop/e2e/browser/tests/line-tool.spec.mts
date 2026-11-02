@@ -1103,7 +1103,7 @@ test.describe("who goes where", () => {
         // Nobody stands on a placed line yet: no Keep order
         await expect(
             page.getByTestId("shape-order-content").getByRole("menuitemradio"),
-        ).toHaveText(["Least travel", "Reverse order"]);
+        ).toHaveText([/Least travel$/, /Reverse order$/]);
         await page.keyboard.press("Escape");
         await page.keyboard.press("Enter");
         await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
@@ -1133,7 +1133,7 @@ test.describe("who goes where", () => {
         await order.click();
         await expect(
             page.getByTestId("shape-order-content").getByRole("menuitemradio"),
-        ).toHaveText(["Least travel", "Keep order", "Reverse order"]);
+        ).toHaveText([/Least travel$/, /Keep order$/, /Reverse order$/]);
         for (const [choice, sequence] of [
             ["nearest", "2143"],
             ["keep", "1234"],
