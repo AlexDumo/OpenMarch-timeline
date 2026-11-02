@@ -6,7 +6,7 @@ import {
     scrubValue,
     spacingRate,
 } from "../editor/scrub";
-import { formatSteps } from "../editor/format";
+import { formatSteps, parseSteps } from "../editor/format";
 import type {
     ToolChoice,
     ToolChoicePicture,
@@ -117,76 +117,89 @@ const BEND: ToolParam<LineParams> = {
     },
 };
 
-/** A size as typed: "8 × 5", "8x5", "8 by 5.5", in steps; null for anything else */
-function parseGuideSize(text: string): { w: number; d: number } | null {
-    const m =
-        /^\s*(\d+(?:\.\d+)?)\s*(?:×|x|X|\*|by)\s*(\d+(?:\.\d+)?)\s*$/.exec(
-            text,
-        );
-    if (!m) return null;
-    const w = Number(m[1]);
-    const d = Number(m[2]);
-    return w > 0 && d > 0 ? { w, d } : null;
-}
-
 /**
- * The width × depth across of the circle or ellipse the arc is on, in steps (owner on #634):
- * typed as "8 × 5", dragged sideways for its width and up and down for its depth, both in
- * proportion with constrain. A circle's reads "6 × 6", so a shallow arc,
- * whose guide reaches far off, can be made an ellipse by typing.
+ * One radius of the circle or ellipse the arc is on, as its width (`↔`) or depth (`↕`) across, in
+ * steps (owner on #634): typed, or dragged sideways; with constrain the other follows in
+ * proportion. A circle's read the same, so a shallow arc, whose guide reaches far off, can be made
+ * an ellipse by typing.
  */
-const SIZE: ToolParam<LineParams> = {
-    key: "size",
-    get label() {
-        return tolgee.t(
-            "shapes.kinds.arc.params.size",
-            "Width × depth of the ellipse the arc is on, in steps",
-        );
-    },
-    unit: "steps",
-    primary: true,
-    drag: "both",
-    interval: false,
-    blends: true,
-    shown: (p) => arcGuide(p) !== null,
-    display(p, _n, stepPx) {
+function guideParam(way: "width" | "depth"): ToolParam<LineParams> {
+    const width = way === "width";
+    const radiusOf = (p: LineParams) => {
         const g = arcGuide(p);
-        if (!g) return "";
-        return `${formatSteps((2 * g.rx) / stepPx)} × ${formatSteps((2 * g.ry) / stepPx)}`;
-    },
-    type(p, n, text, env) {
-        const size = parseGuideSize(text);
-        if (!size) return null;
-        const next = withGuideSize(
-            p,
-            (size.w * env.stepPx) / 2,
-            (size.d * env.stepPx) / 2,
-        );
-        return keptInterval(next, n, env);
-    },
-    // Sideways for its width, up and down for its depth; constrain keeps its proportions
-    scrub(base, n, m, env) {
-        const g = arcGuide(base);
-        if (!g) return base;
-        const width = m.axis === "x";
-        const was = (2 * (width ? g.rx : g.ry)) / env.stepPx;
-        const steps = scrubValue(
-            was,
-            m.dx,
-            m.dy,
-            spacingRate(env.snap, m.axis),
-        );
-        if (steps === was || steps < 1) return base;
-        const r = (steps * env.stepPx) / 2;
+        return g ? (width ? g.rx : g.ry) : null;
+    };
+    /** The arc with this radius `r`, the other kept or (`ratio`) scaled with it */
+    const sized = (p: LineParams, r: number, ratio: boolean): LineParams => {
+        const g = arcGuide(p);
+        if (!g || !(r > 0)) return p;
         const scale = r / (width ? g.rx : g.ry);
-        const [rx, ry] = m.roles.constrain
+        const [rx, ry] = ratio
             ? [g.rx * scale, g.ry * scale]
             : width
               ? [r, g.ry]
               : [g.rx, r];
-        return keptInterval(withGuideSize(base, rx, ry), n, env);
-    },
-};
+        return withGuideSize(p, rx, ry);
+    };
+    return {
+        key: way,
+        get label() {
+            return width
+                ? tolgee.t(
+                      "shapes.kinds.arc.params.width",
+                      "Width of the circle or ellipse the arc is on, in steps",
+                  )
+                : tolgee.t(
+                      "shapes.kinds.arc.params.depth",
+                      "Depth of the circle or ellipse the arc is on, in steps",
+                  );
+        },
+        unit: "steps",
+        primary: true,
+        drag: "x",
+        interval: false,
+        blends: true,
+        range: { min: 1 },
+        glyph: width ? "↔" : "↕",
+        shown: (p) => arcGuide(p) !== null,
+        display: (p, _n, stepPx) => {
+            const r = radiusOf(p);
+            return r === null ? "" : formatSteps((2 * r) / stepPx);
+        },
+        value: (p, _n, stepPx) => (2 * (radiusOf(p) ?? 0)) / stepPx,
+        type(p, n, text, env) {
+            const steps = parseSteps(text);
+            if (steps === null || !(steps > 0)) return null;
+            return keptInterval(
+                sized(p, (steps * env.stepPx) / 2, false),
+                n,
+                env,
+            );
+        },
+        set: (p, n, steps, env) =>
+            keptInterval(sized(p, (steps * env.stepPx) / 2, false), n, env),
+        scrub(base, n, m, env) {
+            const r = radiusOf(base);
+            if (r === null) return base;
+            const was = (2 * r) / env.stepPx;
+            const steps = scrubValue(
+                was,
+                scrubDistance("x", m.dx, m.dy),
+                0,
+                spacingRate(env.snap, "x"),
+            );
+            if (steps === was || steps < 1) return base;
+            return keptInterval(
+                sized(base, (steps * env.stepPx) / 2, m.roles.constrain),
+                n,
+                env,
+            );
+        },
+    };
+}
+
+const WIDTH = guideParam("width");
+const DEPTH = guideParam("depth");
 
 /** A small arc of `bend` degrees closed as `ends`, with `n` marchers laid out on it */
 function arcPicture(ends: ArcEnds, n: number): ToolChoicePicture {
@@ -300,7 +313,7 @@ export const arcTool: ToolKind<LineParams> = {
     ...lineTool,
     shape: arcShape,
     keywords: ["arc", "bow", "semicircle"],
-    params: [INTERVAL, BEND, SIZE],
+    params: [INTERVAL, BEND, WIDTH, DEPTH],
     choices: [ENDS, lineChoice("spacing")],
     readable: isArcParams,
     // A radius handle keeps the proportions with constrain and stretches from the center with

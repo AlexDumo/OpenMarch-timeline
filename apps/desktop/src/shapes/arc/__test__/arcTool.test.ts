@@ -531,16 +531,18 @@ describe("on an ellipse (owner on #634)", () => {
         expect(now.ry).toBeCloseTo(g.ry, 6);
     });
 
-    it("reads its size in the editor and takes a typed one", () => {
+    it("reads its width and depth in the editor and takes typed ones", () => {
         const t = deeper();
-        const size = arcTool.params.find((q) => q.key === "size")!;
-        expect(size.shown!(t.params, t.spots)).toBe(true);
-        expect(size.display(t.params, t.spots, STEP)).toBe("6 × 8");
-        const typed = edit(t, size.type(t.params, t.spots, "10 × 4", env), ctx);
+        const width = arcTool.params.find((q) => q.key === "width")!;
+        const depth = arcTool.params.find((q) => q.key === "depth")!;
+        expect(width.display(t.params, t.spots, STEP)).toBe("6");
+        expect(depth.display(t.params, t.spots, STEP)).toBe("8");
+        const typed = edit(t, depth.type(t.params, t.spots, "4", env), ctx);
         const g = arcGuide(paramsOf(typed))!;
-        expect(g.rx).toBeCloseTo(50, 6);
+        expect(g.rx).toBeCloseTo(30, 6);
         expect(g.ry).toBeCloseTo(20, 6);
-        expect(size.display(halfTurn().params, 7, STEP)).toBe("6 × 6");
+        expect(width.display(halfTurn().params, 7, STEP)).toBe("6");
+        expect(depth.display(halfTurn().params, 7, STEP)).toBe("6");
     });
 
     it("closes all the way around the ellipse, and opens again", () => {
@@ -589,30 +591,32 @@ describe("on an ellipse (owner on #634)", () => {
             ).toBeCloseTo(1, 3);
     });
 
-    it("drags its size sideways for width, up and down for depth, both with constrain", () => {
+    it("drags width and depth each on its own, both together with constrain", () => {
         const t = deeper();
-        const size = arcTool.params.find((q) => q.key === "size")!;
-        expect(size.drag).toBe("both");
+        const width = arcTool.params.find((q) => q.key === "width")!;
+        const depth = arcTool.params.find((q) => q.key === "depth")!;
         const roles = {
             fine: false,
             constrain: false,
             fromCenter: false,
         } as never;
-        const wider = size.scrub(
+        const wider = width.scrub(
             t.params,
             7,
             { dx: 16, dy: 0, axis: "x", roles },
             env,
         );
-        expect(size.display(wider, 7, STEP)).toBe("7 × 8");
-        const deeperStill = size.scrub(
+        expect(width.display(wider, 7, STEP)).toBe("7");
+        expect(depth.display(wider, 7, STEP)).toBe("8");
+        const deeperStill = depth.scrub(
             t.params,
             7,
-            { dx: 0, dy: -16, axis: "y", roles },
+            { dx: 16, dy: 0, axis: "x", roles },
             env,
         );
-        expect(size.display(deeperStill, 7, STEP)).toBe("6 × 9");
-        const both = size.scrub(
+        expect(depth.display(deeperStill, 7, STEP)).toBe("9");
+        expect(width.display(deeperStill, 7, STEP)).toBe("6");
+        const both = width.scrub(
             t.params,
             7,
             {
@@ -628,7 +632,8 @@ describe("on an ellipse (owner on #634)", () => {
             env,
         );
         // 6 → 9 wide, so 8 → 12 deep
-        expect(size.display(both, 7, STEP)).toBe("9 × 12");
+        expect(width.display(both, 7, STEP)).toBe("9");
+        expect(depth.display(both, 7, STEP)).toBe("12");
     });
 
     it("keeps its proportions when a radius handle is dragged with constrain", () => {

@@ -16,6 +16,7 @@ import {
 import { animated, to, useSpring } from "@react-spring/web";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { editorPlacement } from "./editorPlacement";
+import { usePlacedBoxPreviewStore } from "../placed/boxSelectionStore";
 import { keepInView } from "./keepInView";
 import { glideTo, isGliding } from "@/field/three/fieldNavigation";
 import {
@@ -282,8 +283,14 @@ function ShapeEditorBar({
     const run = useRef<SizeRun | null>(null);
     const anchor = sizeRun(run.current, kind, params, spots);
     const env = envFor();
+    // A placed shape's number drag is previewed on the field until it's saved on release: its
+    // numbers show the preview meanwhile, so the dragged number moves with it
+    const previewed = usePlacedBoxPreviewStore((s) =>
+        s.held ? s.params : null,
+    );
+    const shown = !shape.place && previewed !== null ? previewed : params;
     const layout = env
-        ? chipLayout(kind, params, spots, { ...env, stepPx, anchor })
+        ? chipLayout(kind, shown, spots, { ...env, stepPx, anchor })
         : {
               values: [],
               intervals: [],
