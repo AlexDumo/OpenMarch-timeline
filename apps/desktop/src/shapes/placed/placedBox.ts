@@ -13,6 +13,7 @@ import {
     type BoxParams,
 } from "../box/boxGeometry";
 import { boxTool } from "../box/boxTool";
+import { groupTool } from "../group/groupTool";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import { SHAPE_TOOLS } from "../tool/shapeTools";
 import type { ShapeContext, XY } from "../types";
@@ -55,10 +56,14 @@ export const isPlacedBox = (
     placed: PlacedBox,
 ): placed is PlacedBox<BoxParams> => placed.kind === boxTool;
 
-/** The kinds a recipe can be read back as: every kind the shape tool draws, presets as their kind */
-export const PLACED_KINDS: readonly AnyToolKind[] = SHAPE_TOOLS.flatMap(
-    (entry) => (entry.kind.preset ? [] : [entry.kind]),
-);
+/**
+ * The kinds a recipe can be read back as: every kind the shape tool draws, presets as their kind,
+ * and groups (#603), which are made from the selection rather than drawn
+ */
+export const PLACED_KINDS: readonly AnyToolKind[] = [
+    ...SHAPE_TOOLS.flatMap((entry) => (entry.kind.preset ? [] : [entry.kind])),
+    groupTool,
+];
 
 /** How close a marcher must stand to its spot to be on it, in field units */
 const ON_SPOT = 0.01;
