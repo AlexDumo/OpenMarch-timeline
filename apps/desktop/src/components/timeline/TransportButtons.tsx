@@ -23,7 +23,8 @@ import {
     StopIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
-import { Keycaps, ShortcutTooltip } from "./ShortcutTooltip";
+import { ShortcutTooltip } from "./ShortcutTooltip";
+import Shortcut from "@/components/ui/Shortcut";
 import { isMac } from "./platform";
 import { START_INK } from "./startFlagInk";
 import type { TimelineNavigation } from "./TimelineViewModel";
@@ -347,7 +348,7 @@ function TransportGuide({
                     <span className="flex items-center gap-4 text-[12px]">
                         {row.content ?? row.label}
                     </span>
-                    <Keycaps shortcut={row.shortcut} />
+                    <Shortcut binding={row.shortcut} />
                 </span>
             ))}
         </span>
@@ -476,10 +477,8 @@ const playGuide = (
                   mode: "alt" as const,
                   icon: PLAY_ON_ICON,
                   ...playWords("start", false),
-                  shortcut: TRANSPORT_SHORTCUTS.playOn.replace(
-                      "Alt",
-                      isMac() ? "Option" : "Alt",
-                  ),
+                  // Shortcut writes Alt as ⌥ on a Mac
+                  shortcut: TRANSPORT_SHORTCUTS.playOn,
               },
           ]
         : []),
