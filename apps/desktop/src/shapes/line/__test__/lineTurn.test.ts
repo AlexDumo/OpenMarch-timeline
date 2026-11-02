@@ -326,6 +326,30 @@ describe("square to the field, back on the grid", () => {
         expect(b).toEqual({ x: 100, y: 185 });
     });
 
+    it("doesn't stretch a bent line whose ends happen to be level", () => {
+        // A Fit chevron, its ends level: a flip mirrors it and reshapes nothing
+        const chevron: LineParams = {
+            points: [
+                { x: 100, y: 100, tension: 0 },
+                { x: 141.3, y: 130, tension: 0 },
+                { x: 183.7, y: 100, tension: 0 },
+            ],
+            spacing: { mode: "fit" },
+        };
+        const flipped = flipShape(
+            lineTool,
+            chevron,
+            5,
+            "across",
+            "w",
+            env,
+        ) as LineParams;
+        const [a, mid, b] = flipped.points;
+        near(Math.abs(b!.x - a!.x), 83.7);
+        near(Math.abs(mid!.x - a!.x), 41.3);
+        near(Math.abs(mid!.y - a!.y), 30);
+    });
+
     it("leaves a line turned off square where it turned", () => {
         const t = drawn(5, { x: 100, y: 100 }, { x: 180, y: 100 });
         const turned = turnShape(
