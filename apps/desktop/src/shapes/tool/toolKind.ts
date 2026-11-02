@@ -191,6 +191,14 @@ export interface ToolParam<P> {
     value?(params: P, n: number, stepPx: number): number;
     /** A note after the number, such as "1 short"; null for none */
     note?(params: P, n: number): string | null;
+    /**
+     * Words just before and after the number, muted, so a few numbers read as one phrase: an
+     * Arc's "Circle 60 × 60 steps" (owner on #634). None when absent or null.
+     */
+    words?(
+        params: P,
+        n: number,
+    ): { readonly before?: string; readonly after?: string } | null;
     /** The params with `text` typed over the number; null when the text isn't understood */
     type(params: P, n: number, text: string, env: ToolEnv): P | null;
     /**

@@ -147,11 +147,11 @@ function guideParam(way: "width" | "depth"): ToolParam<LineParams> {
             return width
                 ? tolgee.t(
                       "shapes.kinds.arc.params.width",
-                      "Width of the circle or ellipse the arc is on, in steps",
+                      "Width of the dashed circle or ellipse the arc is on, in steps",
                   )
                 : tolgee.t(
                       "shapes.kinds.arc.params.depth",
-                      "Depth of the circle or ellipse the arc is on, in steps",
+                      "Depth of the dashed circle or ellipse the arc is on, in steps",
                   );
         },
         unit: "steps",
@@ -160,8 +160,19 @@ function guideParam(way: "width" | "depth"): ToolParam<LineParams> {
         interval: false,
         blends: true,
         range: { min: 1 },
-        glyph: width ? "↔" : "↕",
         shown: (p) => arcGuide(p) !== null,
+        // One phrase for the dashed guide: "Circle 60 × 60 steps", "Ellipse 60 × 72 steps"
+        words: (p) =>
+            width
+                ? {
+                      before: ellipseOf(p)
+                          ? tolgee.t("shapes.kinds.arc.size.ellipse", "Ellipse")
+                          : tolgee.t("shapes.kinds.arc.size.circle", "Circle"),
+                  }
+                : {
+                      before: "×",
+                      after: tolgee.t("shapes.kinds.arc.size.steps", "steps"),
+                  },
         display: (p, _n, stepPx) => {
             const r = radiusOf(p);
             return r === null ? "" : formatSteps((2 * r) / stepPx);

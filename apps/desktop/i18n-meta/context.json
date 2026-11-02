@@ -3205,5 +3205,8 @@
     "shapes.kinds.arc.ends.circle": "Menu option for an Arc shape: continue the arc all the way around so it becomes a full circle of marchers.",
     "shapes.kinds.arc.ends.round": "Menu option for an Arc shape that runs on an ellipse (an oval): continue the arc all the way around so it becomes a whole ellipse of marchers.",
     "shapes.kinds.arc.params.width": "Tooltip for a number in the floating editor of an Arc shape: how wide the circle or ellipse (oval) that the arc of marchers lies on is, in marching steps.",
-    "shapes.kinds.arc.params.depth": "Tooltip for a number in the floating editor of an Arc shape: how deep (front to back of the arc) the circle or ellipse (oval) that the arc of marchers lies on is, in marching steps."
+    "shapes.kinds.arc.params.depth": "Tooltip for a number in the floating editor of an Arc shape: how deep (front to back of the arc) the circle or ellipse (oval) that the arc of marchers lies on is, in marching steps.",
+    "shapes.kinds.arc.size.circle": "Word before the width number in an Arc shape's floating editor, read as one phrase with the depth: \"Circle 60 × 60 steps\". It names the dashed circle the arc of marchers lies on.",
+    "shapes.kinds.arc.size.ellipse": "Word before the width number in an Arc shape's floating editor once its dashed guide is stretched into an ellipse (oval), read as \"Ellipse 60 × 72 steps\".",
+    "shapes.kinds.arc.size.steps": "Unit after the depth number in an Arc shape's floating editor, ending the phrase \"Circle 60 × 60 steps\": marching steps (8 to 5)."
 }

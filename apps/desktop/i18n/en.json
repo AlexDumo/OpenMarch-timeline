@@ -2396,8 +2396,8 @@
                 },
                 "params": {
                     "bend": "How far the arc turns",
-                    "width": "Width of the circle or ellipse the arc is on, in steps",
-                    "depth": "Depth of the circle or ellipse the arc is on, in steps"
+                    "width": "Width of the dashed circle or ellipse the arc is on, in steps",
+                    "depth": "Depth of the dashed circle or ellipse the arc is on, in steps"
                 },
                 "ends": {
                     "label": "Open or closed",
@@ -2405,6 +2405,11 @@
                     "chord": "Close with a straight line",
                     "circle": "Close to circle",
                     "round": "Close all the way around"
+                },
+                "size": {
+                    "circle": "Circle",
+                    "ellipse": "Ellipse",
+                    "steps": "steps"
                 }
             },
             "block": {

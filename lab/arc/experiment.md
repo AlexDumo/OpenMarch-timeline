@@ -25,8 +25,9 @@ Select some marchers, open the **Shapes** tab and pick **Arc** (after Curve).
   two small round handles on it to stretch it into an ellipse. Alt stretches
   both sides; Cmd/Ctrl keeps its proportions.
 - On an ellipse, drag an end to slide it around the ellipse.
-- In the editor, drag or type the degrees, the width (↔) and the depth (↕).
-  Hold Cmd/Ctrl while dragging one to keep the proportions. Try **Open or
+- In the editor, drag or type the degrees, and the size of the dashed guide
+  ("Circle 60 × 60 steps": width × depth). Hold Cmd/Ctrl while dragging one
+  to keep the proportions. Try **Open or
   closed**:
   **Close with a straight line** and fill it with **Grid**, or **Close to
   circle**.

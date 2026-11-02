@@ -17,6 +17,9 @@ export interface ChipNumber {
     readonly display: string;
     /** "1 short", or null */
     readonly note: string | null;
+    /** Words just before and after it ({@link ToolParam.words}) */
+    readonly before: string | null;
+    readonly after: string | null;
     /** What − and + would make the shape; null where it can't go that way or has no buttons */
     readonly less: unknown;
     readonly more: unknown;
@@ -58,6 +61,8 @@ export function chipLayout(
             param,
             display: param.display(params, n, env.stepPx),
             note: param.note?.(params, n) ?? null,
+            before: param.words?.(params, n)?.before ?? null,
+            after: param.words?.(params, n)?.after ?? null,
             less: param.stepper?.by(params, n, -1, env) ?? null,
             more: param.stepper?.by(params, n, 1, env) ?? null,
             derived: param.derived?.(params, n, env.stepPx) ?? false,

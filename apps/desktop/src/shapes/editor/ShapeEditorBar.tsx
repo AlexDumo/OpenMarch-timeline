@@ -402,6 +402,8 @@ function ShapeEditorBar({
                                 param={x.param}
                                 display={x.display}
                                 note={x.note}
+                                before={x.before}
+                                after={x.after}
                                 canLess={x.less !== null}
                                 canMore={x.more !== null}
                                 glyph={null}
@@ -727,6 +729,8 @@ const NumberChip = memo(function NumberChip({
     param,
     display,
     note,
+    before = null,
+    after = null,
     canLess,
     canMore,
     glyph,
@@ -737,6 +741,9 @@ const NumberChip = memo(function NumberChip({
     param: Param;
     display: string;
     note: string | null;
+    /** Words just before and after the number, muted ("Circle", "steps") */
+    before?: string | null;
+    after?: string | null;
     canLess: boolean;
     canMore: boolean;
     /** The mark the spacings show before them, if any */
@@ -799,6 +806,7 @@ const NumberChip = memo(function NumberChip({
             data-shows-step={showsStep || undefined}
             {...engage}
         >
+            {before && <span className="text-text/60">{before}</span>}
             {glyph && !glyphAfter && (
                 <span className="text-text/60" aria-hidden>
                     <GlyphText text={glyph} />
@@ -842,6 +850,7 @@ const NumberChip = memo(function NumberChip({
                     <GlyphText text={glyph} />
                 </span>
             )}
+            {after && <span className="text-text/60">{after}</span>}
             {note && <span className="text-text/60">· {note}</span>}
         </span>
     );
