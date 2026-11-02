@@ -312,12 +312,53 @@ export async function splitShapeRecipesInTransaction({
 /**
  * The kind of a recipe that marks its members **ungrouped** (`ungroupShape`, `UNGROUPED_KIND` in
  * `shapes/placed/placedBox.ts`). It stores no shape, so code asking whether a marcher is in a
- * shape skips it (`isShapeRecipe`).
+ * shape skips it (`shapeRecipesOnly`).
  */
 export const UNGROUPED_RECIPE_KIND = "ungrouped";
 
 /** Where-clause for the recipes that describe a shape: every kind but an ungrouped mark */
-export const isShapeRecipe = () => ne(recipes.kind, UNGROUPED_RECIPE_KIND);
+export const shapeRecipesOnly = () => ne(recipes.kind, UNGROUPED_RECIPE_KIND);
+
+/**
+ * After marchers leave moves `timelineIds`, takes them out of those moves' ungrouped marks, and
+ * deletes a mark left with nobody. A mark lists only marchers in its move, as every recipe does:
+ * one still naming a marcher cleared off its page would keep hiding the earlier shape that marcher
+ * now stands in (Clear this page reverts the page, its Ungroup included). Real shapes' recipes are
+ * left to their writers.
+ */
+export async function dropUngroupedLeavers(
+    tx: DbTransaction,
+    timelineIds: readonly number[],
+): Promise<void> {
+    if (timelineIds.length === 0 || !(await hasShapeRecipes(tx))) return;
+    const a = schema.timeline_assignments;
+    const t = schema.timeline_transitions;
+    const marks = tx
+        .select({ id: recipes.id })
+        .from(recipes)
+        .where(
+            and(
+                inArray(recipes.timeline_id, [...new Set(timelineIds)]),
+                eq(recipes.kind, UNGROUPED_RECIPE_KIND),
+            ),
+        );
+    const stillInMove = sql`EXISTS (SELECT 1 FROM ${a} INNER JOIN ${t} ON ${t.id} = ${a.transition_id} INNER JOIN ${recipes} r2 ON r2.id = ${members.recipe_id} WHERE ${a.marcher_id} = ${members.marcher_id} AND ${t.timeline_id} = r2.timeline_id)`;
+    await tx
+        .delete(members)
+        .where(and(inArray(members.recipe_id, marks), sql`NOT ${stillInMove}`))
+        .run();
+    const empty = sql`NOT EXISTS (SELECT 1 FROM ${members} WHERE ${members.recipe_id} = ${recipes.id})`;
+    await tx
+        .delete(recipes)
+        .where(
+            and(
+                inArray(recipes.timeline_id, [...new Set(timelineIds)]),
+                eq(recipes.kind, UNGROUPED_RECIPE_KIND),
+                empty,
+            ),
+        )
+        .run();
+}
 
 /** Whether the show stores shape recipes at all (a database from before them doesn't) */
 export async function hasShapeRecipes(

@@ -10,7 +10,7 @@ import {
     type SplitIdKeeper,
     type SplitTimelineResult,
 } from "./timelineSplitAtBeat";
-import { hasShapeRecipes, isShapeRecipe } from "./shapeRecipes";
+import { hasShapeRecipes, shapeRecipesOnly } from "./shapeRecipes";
 import { setTimelineTransitionDestinationInTransaction } from "./timelineTransitionsInTransaction";
 import { timelinesWithRange } from "./timelines";
 import { clearOwnPageMoves, sampleShape } from "./timelineMoveHelpers";
@@ -404,7 +404,7 @@ async function membersThatStay(
                     recipes.timeline_id,
                     ascending(rows.map((r) => r.timelineId)),
                 ),
-                isShapeRecipe(),
+                shapeRecipesOnly(),
             ),
         )
         .all();

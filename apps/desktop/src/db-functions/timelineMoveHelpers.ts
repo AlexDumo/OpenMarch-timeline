@@ -10,6 +10,7 @@ import type { DbTransaction } from "./types";
 import type { DatabaseTimelineAssignment } from "./timelineAssignments";
 import { removeAssignmentRowsInTransaction } from "./timelineMembership";
 import { deleteTimelinesInTransaction, oldestOnSharedRange } from "./timelines";
+import { dropUngroupedLeavers } from "./shapeRecipes";
 
 /**
  * Two helpers the move writers share (`timelineMoves`, `timelinePointMoves`, `timelineUnset` and
@@ -65,7 +66,8 @@ export const sampleShape = (
  * a transition sharing a marcher with an inheriting follow-the-leader one, stays (`compact`).
  *
  * An emptied page timeline that a move split off it still shares the range with is kept, empty
- * (UI-25, `oldestOnSharedRange`).
+ * (UI-25, `oldestOnSharedRange`). Ungrouped marks on the moves let go of the marchers that left
+ * (`dropUngroupedLeavers`).
  */
 export const clearOwnPageMoves = async (
     tx: DbTransaction,
@@ -92,6 +94,8 @@ export const clearOwnPageMoves = async (
         compact: tidyShared,
         deleteEmptied: tidyShared,
     });
+    // An Ungroup on a page these rows leave no longer claims them (`dropUngroupedLeavers`)
+    await dropUngroupedLeavers(tx, timelineIds);
     const left = new Set(
         (
             await tx
