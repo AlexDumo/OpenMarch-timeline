@@ -460,7 +460,7 @@ const SHORTCUTS: readonly (readonly [
 ])[] = [
     ["playPause", [{ binding: "Space" }]],
     ["previousNext", [{ binding: "Q" }, { binding: "E" }]],
-    ["firstLast", [{ binding: "Shift+Q" }, { binding: "Shift+E" }]],
+    ["firstLast", [{ binding: "Alt+Q" }, { binding: "Alt+E" }]],
     ["cameras", [{ keys: ["1–9"] }]],
     ["fullscreen", [{ binding: "F" }]],
     ["crowd", [{ binding: "C" }]],

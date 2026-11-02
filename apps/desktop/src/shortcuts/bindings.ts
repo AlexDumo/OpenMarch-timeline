@@ -278,6 +278,22 @@ const SPOKEN_KEYS: Record<string, string> = {
     "↓": "Down Arrow",
     "←": "Left Arrow",
     "→": "Right Arrow",
+    Win: "Windows",
+    /* cspell: disable */
+    "[": "Left Bracket",
+    "]": "Right Bracket",
+    "/": "Slash",
+    "\\": "Backslash",
+    ",": "Comma",
+    ".": "Period",
+    ";": "Semicolon",
+    "'": "Quote",
+    "-": "Minus",
+    "−": "Minus",
+    "=": "Equals",
+    "`": "Backquote",
+    "?": "Question Mark",
+    /* cspell: enable */
 };
 
 /**

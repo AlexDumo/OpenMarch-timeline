@@ -5261,7 +5261,9 @@ test("the Shapes tab lists the kinds, greyed out until marchers are selected; pi
     await expect(box).toHaveAttribute("aria-pressed", "false");
     await box.hover();
     await expect(page.getByRole("tooltip")).toContainText("Box");
-    await expect(page.getByRole("tooltip").locator("kbd")).toHaveText("B");
+    await expect(
+        page.getByRole("tooltip").locator(".shortcut-keys"),
+    ).toHaveText("B");
     await page.mouse.move(5, 5);
 
     // Picking it arms the box: the field draws it on the next drag

@@ -60,3 +60,13 @@ describe("Shortcut", () => {
         expect(read(bound.container).shown).toBe("⌘Z");
     });
 });
+
+describe("Shortcut for screen readers", () => {
+    it("names a punctuation key in words, as voices may skip it", () => {
+        const { container } = render(<Shortcut binding="BracketRight" />);
+        expect(read(container)).toEqual({
+            shown: "]",
+            spoken: "Right Bracket",
+        });
+    });
+});

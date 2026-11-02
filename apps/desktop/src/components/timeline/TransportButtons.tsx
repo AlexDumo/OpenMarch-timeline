@@ -285,7 +285,6 @@ interface TransportGuideRow<Mode extends string = string> {
 const navigationGuide = (
     back: boolean,
 ): readonly TransportGuideRow<TransportNavigationMode>[] => {
-    const alt = isMac() ? "Option" : "Alt";
     return [
         {
             mode: "page",
@@ -307,10 +306,10 @@ const navigationGuide = (
             mode: "edge",
             icon: back ? START_ICON : END_ICON,
             label: back ? "Start of the show" : "End of the show",
-            shortcut: (back
+            // Shortcut writes Alt as ⌥ on a Mac
+            shortcut: back
                 ? TRANSPORT_SHORTCUTS.firstPage
-                : TRANSPORT_SHORTCUTS.lastPage
-            ).replace("Alt", alt),
+                : TRANSPORT_SHORTCUTS.lastPage,
         },
     ];
 };
