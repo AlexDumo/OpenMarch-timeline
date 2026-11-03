@@ -791,6 +791,8 @@ new record supersedes the affected section.
   page-end coordinates exactly as individual destinations and no motion is
   lost. Only the editable curve object is not carried over. No new path style
   is added. The conversion equality corpus (P6.6) checks this on real shows.
+  **Amended 2026-11-03 by [ADR 0010](0010-moves-follow-drawn-paths.md):** a move can now follow
+  a drawn path (a new `route` path style). The rest of C-8 stands.
 
 ## Consequences
 

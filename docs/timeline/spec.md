@@ -1,7 +1,7 @@
 # OpenMarch Timeline Resolution Model: Specification
 
-**Version:** 0.8 (revised after four structural reviews, two design changes and one implementation review. Appendices B to E map each review finding to its fix and evidence. Appendix F covers the design change: shapes are optional. Appendix G covers compatibility with the app's undo and redo. Appendix H covers how the app chooses layers.)
-**Date:** 2026-09-29
+**Version:** 0.9, growing step by step (routes: Appendix I). 0.8 was revised after four structural reviews, two design changes and one implementation review. Appendices B to E map each review finding to its fix and evidence. Appendix F covers the design change: shapes are optional. Appendix G covers compatibility with the app's undo and redo. Appendix H covers how the app chooses layers. Appendix I covers routes, which v0.9 adds one build step at a time.
+**Date:** 2026-11-03 (v0.9 step 1); 0.8 was 2026-09-29
 **Scope:** The data model and resolution engine behind timelines, shapes, transitions and assignments. It does not cover the editor UI.
 
 ---
@@ -63,6 +63,7 @@ The design replaces the current model, which stores one coordinate per (marcher,
 | **Timeline**               | A container with a range: a track in the UI. It has **no effect on resolution** (R-1). _App restriction (implementation-plan.md C-11): it is the container for start and stop, and every transition in it spans its whole range. App restriction (C-12): at most one timeline has a given range, and a page's box in the UI is the timeline ending at its flag; relaxed by UI-25 (2026-10-16): a move split off another keeps its range, and the page box is the oldest timeline over it._ |
 | **Transition**             | Motion over a range, in a given path style, into slot destinations. The destinations come from a shape or are placed individually. It owns `slot_count` **anonymous slots**. It does **not** store where marchers start.                                                                                                                                                                                                                                                                   |
 | **Slot**                   | An anonymous position within a transition, numbered `0…slot_count-1`. Its destination is sampled from the transition's shape, or is an individually placed point (R-13).                                                                                                                                                                                                                                                                                                                   |
+| **Route**                  | A path a transition's marcher walks from where it starts to its slot destination: a list of points in absolute field coordinates (R-14, v0.9). It has no knowledge of time or of marchers. **Optional**: only `route` transitions have one. |
 | **Individual destination** | A point placed by hand for one slot of a transition that has no shape (`slot_destinations`, D-16). "Move marcher 7 here" means setting the point of marcher 7's slot.                                                                                                                                                                                                                                                                                                                      |
 | **Assignment**             | A stored row saying _marcher m occupies slot k of transition T over range [s, e), at layer L_. This is the only link between real marchers and slots.                                                                                                                                                                                                                                                                                                                                      |
 | **Layer**                  | An integer precedence. Where a marcher's assignments overlap in time, the higher layer wins. The resolver reads it as stored. The app derives it from the ranges (§6.2, D-18) and never asks the designer for it.                                                                                                                                                                                                                                                                          |
@@ -129,6 +130,7 @@ The four concepts are strictly separated. Merging any two of them is the failure
 | D-16 | **Shapes are optional. A transition's slot destinations come from a shape _or_ from individually placed points, never both.**                                                                                                                                  | Proposed (v0.6)                     | Designers need to move marchers individually as well as by shape. The resolver only ever needed one destination point per slot; a shape is just one way to produce those points. So individual placement is a second _source_ of slot destinations, and assignments, layers, steals, FTL ordering, invalidation and the derived-range bound (§8.11) are unchanged. Points are keyed by slot, not by marcher, which keeps D-4. Follow-the-leader still needs a shape, because it follows a path (I-T5). Mixing the two in one transition (a shape with a few slots nudged) is Q-14.                                                                                               |
 | D-17 | **Triggers check; they never rewrite.** A change that touches several rows, such as the anchored range edit (R-E1), is an app procedure made of explicit statements, ordered so that every intermediate state is valid.                                        | Proposed (v0.7)                     | The app's undo replays each edit's row changes in reverse. That only works if every step of the edit landed on a valid state, and if replaying a statement has no side effects. A trigger that rewrites rows breaks both (§6.1, Appendix G).                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | D-18 | **The app derives every layer from the ranges: base rows lowest, then the later start, then the earlier end (§6.2).** Nobody types or picks a layer, and no code chooses one outside the layer module.                                                         | Decided (project owner, 2026-10-16) | Keeps D-6's stored integer, so the resolver, triggers and `ref/` are unchanged. "Last edited on top" made playback depend on edit history the timeline doesn't show: a page-flag drag hid a breakaway, a one-count nudge flipped a path, and two identical timelines played differently. Start, then end, ranks a marcher's overlapping rows straight off the timeline. Cases and animations: [research/layer-priority](research/layer-priority/README.md).                                                                                                                                                                                                                      |
+| D-19 | **A transition may walk a route: points between where its marcher starts and its destination (R-14).** Routes are resolver data, like shapes; recipes stay app data. | Proposed (v0.9, ADR 0010) | Drill writers need runs, follow the leader on drawn trails, and one marcher bent around a collision. Each needs a path that isn't a straight line or a minor arc, stored where the resolver reads it, since positions come only from the resolver (D-2). v0.9 adds it one build step at a time (Appendix I); step 1 is corners only. |
 
 ---
 
@@ -171,13 +173,21 @@ CREATE TABLE timelines (
   CHECK (end_beat > start_beat)
 ) STRICT;
 
+-- v0.9 (D-19, Appendix I): the path a route transition walks. No owner column, like shapes:
+-- the resolver never reads timelines (R-1).
+CREATE TABLE routes (
+  id        INTEGER PRIMARY KEY,
+  geometry  TEXT NOT NULL CHECK (json_valid(geometry))    -- §5.2, I-R1
+) STRICT;
+
 CREATE TABLE transitions (
   id             INTEGER PRIMARY KEY,
   timeline_id    INTEGER NOT NULL REFERENCES timelines(id) ON DELETE CASCADE,
   dest_shape_id  INTEGER          REFERENCES shapes(id)    ON DELETE RESTRICT,   -- NULL: slots placed individually (D-16)
   path_style     TEXT NOT NULL DEFAULT 'direct'
-                 CHECK (path_style IN ('direct','arc','follow_the_leader')),
+                 CHECK (path_style IN ('direct','arc','follow_the_leader','route')),
   path_params    TEXT CHECK (path_params IS NULL OR json_valid(path_params)),
+  route_id       INTEGER          REFERENCES routes(id)    ON DELETE RESTRICT,   -- v0.9: required for 'route' (I-R2)
   order_mode     TEXT NOT NULL DEFAULT 'inherit' CHECK (order_mode IN ('inherit','slot')),
   slot_count     INTEGER NOT NULL CHECK (slot_count BETWEEN 1 AND 10000),
   start_beat     INTEGER NOT NULL CHECK (start_beat BETWEEN 0 AND 2147483647),
@@ -187,7 +197,11 @@ CREATE TABLE transitions (
   CHECK (dest_shape_id IS NOT NULL OR path_style <> 'follow_the_leader'),
   -- I-T2 (partial, DB-enforced): an arc carries a numeric bulge with |bulge| <= 0.5 (minor arcs only, §8.11)
   CHECK (path_style <> 'arc' OR (coalesce(json_type(path_params, '$.bulge'), '') IN ('integer', 'real')
-                                 AND abs(json_extract(path_params, '$.bulge')) <= 0.5))
+                                 AND abs(json_extract(path_params, '$.bulge')) <= 0.5)),
+  -- I-R2 (v0.9): a route transition walks a route, has no shape and exactly one slot. Rules that later
+  -- steps relax (which other styles may carry a route, its path_params) are commit checks instead
+  -- (E-R2, E-R4), so relaxing them never rebuilds this table.
+  CHECK (path_style <> 'route' OR (route_id IS NOT NULL AND dest_shape_id IS NULL AND slot_count = 1))
 ) STRICT;
 
 CREATE TABLE assignments (
@@ -290,7 +304,26 @@ CREATE VIEW commit_violations AS
            || ' of ' || t.slot_count || ' destinations' AS detail
     FROM transitions t
    WHERE t.dest_shape_id IS NULL
-     AND (SELECT count(*) FROM slot_destinations d WHERE d.transition_id = t.id) <> t.slot_count;
+     AND (SELECT count(*) FROM slot_destinations d WHERE d.transition_id = t.id) <> t.slot_count
+  UNION ALL
+  -- I-R3 (v0.9): every route is walked by exactly one transition
+  SELECT 'E-R3', NULL,
+         'route ' || r.id || ' is used by ' || (SELECT count(*) FROM transitions t WHERE t.route_id = r.id)
+           || ' transitions' AS detail
+    FROM routes r
+   WHERE (SELECT count(*) FROM transitions t WHERE t.route_id = r.id) <> 1
+  UNION ALL
+  -- I-R2 (v0.9 step 1): no other path style carries a route yet (trails relax this)
+  SELECT 'E-R2', t.id, 'a ' || t.path_style || ' transition has a route' AS detail
+    FROM transitions t
+   WHERE t.path_style <> 'route' AND t.route_id IS NOT NULL
+  UNION ALL
+  -- I-R4 (v0.9 step 1): a route transition carries no path_params yet
+  SELECT 'E-R4', t.id, 'route transition has path_params' AS detail
+    FROM transitions t
+   WHERE t.path_style = 'route' AND t.path_params IS NOT NULL;
+
+CREATE INDEX idx_tr_route ON transitions(route_id);
 
 -- I-A1 (transition side): a transition's range must still contain every one of its assignments.
 -- A pure check. The anchored rewrite (R-E1) is an app procedure, NOT a trigger: a trigger that modifies rows
@@ -338,13 +371,17 @@ CREATE TRIGGER log_marchers_del AFTER DELETE ON marchers BEGIN INSERT INTO chang
 CREATE TRIGGER log_shapes_ins AFTER INSERT ON shapes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('shapes',NEW.id,NULL,json_object('id',NEW.id,'kind',NEW.kind,'geometry',json(NEW.geometry))); END;
 CREATE TRIGGER log_shapes_upd AFTER UPDATE ON shapes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('shapes',NEW.id,json_object('id',OLD.id,'kind',OLD.kind,'geometry',json(OLD.geometry)),json_object('id',NEW.id,'kind',NEW.kind,'geometry',json(NEW.geometry))); END;
 CREATE TRIGGER log_shapes_del AFTER DELETE ON shapes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('shapes',OLD.id,json_object('id',OLD.id,'kind',OLD.kind,'geometry',json(OLD.geometry)),NULL); END;
-CREATE TRIGGER log_transitions_ins AFTER INSERT ON transitions BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('transitions',NEW.id,NULL,json_object('id',NEW.id,'dest',NEW.dest_shape_id,'style',NEW.path_style,'params',json(NEW.path_params),'order',NEW.order_mode,'slots',NEW.slot_count,'start',NEW.start_beat,'end',NEW.end_beat)); END;
-CREATE TRIGGER log_transitions_upd AFTER UPDATE ON transitions BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('transitions',NEW.id,json_object('id',OLD.id,'dest',OLD.dest_shape_id,'style',OLD.path_style,'params',json(OLD.path_params),'order',OLD.order_mode,'slots',OLD.slot_count,'start',OLD.start_beat,'end',OLD.end_beat),json_object('id',NEW.id,'dest',NEW.dest_shape_id,'style',NEW.path_style,'params',json(NEW.path_params),'order',NEW.order_mode,'slots',NEW.slot_count,'start',NEW.start_beat,'end',NEW.end_beat)); END;
-CREATE TRIGGER log_transitions_del AFTER DELETE ON transitions BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('transitions',OLD.id,json_object('id',OLD.id,'dest',OLD.dest_shape_id,'style',OLD.path_style,'params',json(OLD.path_params),'order',OLD.order_mode,'slots',OLD.slot_count,'start',OLD.start_beat,'end',OLD.end_beat),NULL); END;
+CREATE TRIGGER log_transitions_ins AFTER INSERT ON transitions BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('transitions',NEW.id,NULL,json_object('id',NEW.id,'dest',NEW.dest_shape_id,'style',NEW.path_style,'params',json(NEW.path_params),'order',NEW.order_mode,'slots',NEW.slot_count,'start',NEW.start_beat,'end',NEW.end_beat,'route',NEW.route_id)); END;
+CREATE TRIGGER log_transitions_upd AFTER UPDATE ON transitions BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('transitions',NEW.id,json_object('id',OLD.id,'dest',OLD.dest_shape_id,'style',OLD.path_style,'params',json(OLD.path_params),'order',OLD.order_mode,'slots',OLD.slot_count,'start',OLD.start_beat,'end',OLD.end_beat,'route',OLD.route_id),json_object('id',NEW.id,'dest',NEW.dest_shape_id,'style',NEW.path_style,'params',json(NEW.path_params),'order',NEW.order_mode,'slots',NEW.slot_count,'start',NEW.start_beat,'end',NEW.end_beat,'route',NEW.route_id)); END;
+CREATE TRIGGER log_transitions_del AFTER DELETE ON transitions BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('transitions',OLD.id,json_object('id',OLD.id,'dest',OLD.dest_shape_id,'style',OLD.path_style,'params',json(OLD.path_params),'order',OLD.order_mode,'slots',OLD.slot_count,'start',OLD.start_beat,'end',OLD.end_beat,'route',OLD.route_id),NULL); END;
 CREATE TRIGGER log_assignments_ins AFTER INSERT ON assignments BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('assignments',NEW.id,NULL,json_object('id',NEW.id,'marcher',NEW.marcher_id,'transition',NEW.transition_id,'slot',NEW.slot_index,'start',NEW.start_beat,'end',NEW.end_beat,'layer',NEW.layer)); END;
 CREATE TRIGGER log_assignments_upd AFTER UPDATE ON assignments BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('assignments',NEW.id,json_object('id',OLD.id,'marcher',OLD.marcher_id,'transition',OLD.transition_id,'slot',OLD.slot_index,'start',OLD.start_beat,'end',OLD.end_beat,'layer',OLD.layer),json_object('id',NEW.id,'marcher',NEW.marcher_id,'transition',NEW.transition_id,'slot',NEW.slot_index,'start',NEW.start_beat,'end',NEW.end_beat,'layer',NEW.layer)); END;
 CREATE TRIGGER log_assignments_del AFTER DELETE ON assignments BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('assignments',OLD.id,json_object('id',OLD.id,'marcher',OLD.marcher_id,'transition',OLD.transition_id,'slot',OLD.slot_index,'start',OLD.start_beat,'end',OLD.end_beat,'layer',OLD.layer),NULL); END;
 -- slot_destinations rows are logged under their transition id (the resolver recomputes that transition's destinations)
+-- v0.9: routes are logged like shapes
+CREATE TRIGGER log_routes_ins AFTER INSERT ON routes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('routes',NEW.id,NULL,json_object('id',NEW.id,'geometry',json(NEW.geometry))); END;
+CREATE TRIGGER log_routes_upd AFTER UPDATE ON routes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('routes',NEW.id,json_object('id',OLD.id,'geometry',json(OLD.geometry)),json_object('id',NEW.id,'geometry',json(NEW.geometry))); END;
+CREATE TRIGGER log_routes_del AFTER DELETE ON routes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('routes',OLD.id,json_object('id',OLD.id,'geometry',json(OLD.geometry)),NULL); END;
 CREATE TRIGGER log_slot_destinations_ins AFTER INSERT ON slot_destinations BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('slot_destinations',NEW.transition_id,NULL,json_object('transition',NEW.transition_id,'slot',NEW.slot_index,'x',NEW.x,'y',NEW.y)); END;
 CREATE TRIGGER log_slot_destinations_upd AFTER UPDATE ON slot_destinations BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('slot_destinations',NEW.transition_id,json_object('transition',OLD.transition_id,'slot',OLD.slot_index,'x',OLD.x,'y',OLD.y),json_object('transition',NEW.transition_id,'slot',NEW.slot_index,'x',NEW.x,'y',NEW.y)); END;
 CREATE TRIGGER log_slot_destinations_del AFTER DELETE ON slot_destinations BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('slot_destinations',OLD.transition_id,json_object('transition',OLD.transition_id,'slot',OLD.slot_index,'x',OLD.x,'y',OLD.y),NULL); END;
@@ -393,6 +430,33 @@ Every number in `geometry` and `path_params` MUST be finite. Every authored poin
 | `direct`            | `NULL`                                                                                                                              | no           |
 | `arc`               | `{"bulge": k}` with \|k\| ≤ ½: minor arcs only (D-15, enforced by a CHECK). k = 0 is a straight line and \|k\| = ½ is a semicircle. | no           |
 | `follow_the_leader` | `{"waypoints": [[x,y], …]}`. May be empty. Absolute coordinates.                                                                    | **yes**      |
+| `route`             | `NULL` (I-R4). The points live in the route (below).                                                                                | no           |
+
+**Route `geometry`** (I-R1, v0.9 step 1). Absolute field units (D-5):
+
+```jsonc
+{
+  "v": 1,
+  "from": [x, y],   // where the marcher stood at T.start_beat when the route was drawn
+  "to": [x, y],     // its destination when the route was drawn
+  "points": [       // inner points in walking order; may be empty
+    { "id": "p1", "at": [x, y] },
+    { "id": "p2", "at": [x, y] }
+  ]
+}
+```
+
+- `from` and `to` are written by the app and are **not read by the resolver in step 1**. They record
+  what the route was drawn against, for later steps (smooth points need them for tangents next to
+  the ends; re-fit and the "changed" flag compare them with the real ends). The walked path always
+  starts at the marcher's real origin and ends at its real destination (R-14).
+- Point ids are non-empty strings of at most 16 characters, unique within the route and never
+  reused in it. Later steps name points by id (pins, spots), so editing one point never renumbers
+  the others. The app makes each new id fresh (random), never from the route's current points, so
+  an id that has left a route (deleted, or moved to another route by AP-R7) never comes back to it.
+- In step 1 a point has exactly the keys `id` and `at`; every point is a corner. Any other key is
+  rejected (E-R1) until the step that defines it.
+- Every number is finite, and `from`, `to` and every point lie within `[−10⁶, 10⁶]²`.
 
 "Left" and "right" for `bulge` follow the rotation `(dx, dy) → (−dy, dx)` in field coordinates. Whether that looks like left on screen depends on which way the renderer's y-axis points. Positive bulge means the arc bows toward `+90°` from the chord direction.
 
@@ -433,6 +497,11 @@ With this wrapper, the resolver never sees a partial edit, and a rejected edit l
 | I-D2 | Individual destinations are finite and within `[−10⁶, 10⁶]²`                                                                                                                                                                                                | CHECK                                                                                                                                                                                                            | constraint |
 | I-N1 | Integer columns (beats, slots, layers, ids) hold integers                                                                                                                                                                                                   | `STRICT` tables                                                                                                                                                                                                  | constraint |
 | I-N2 | Beats lie in `[0, 2³¹−1]`, `layer` in `[−1000, 1000]` and `slot_count` in `[1, 10000]`. Home coordinates are finite with \|x\|, \|y\| ≤ 10⁶.                                                                                                                | CHECK constraints                                                                                                                                                                                                | constraint |
+| I-R1 | Route geometry matches §5.2 (v0.9 step 1): version 1, finite numbers, every point within `[−10⁶, 10⁶]²`, unique point ids, corner points only. | App write path. `json_valid` is a CHECK. | `E-R1` |
+| I-R2 | A `route` transition has a route, no shape and `slot_count = 1`. No other transition has a route (step 1; follow the leader on a trail relaxes this). | CHECK; the second sentence at commit | constraint; `E-R2` |
+| I-R4 | A `route` transition's `path_params` is NULL (v0.9 step 1; the group step adds an offset here). | App write path, and a commit check | `E-R4` |
+| I-R3 | Every route is walked by exactly one transition (v0.9 step 1; the group step relaxes this to at least one, with no table change). | `commit_violations` at commit | `E-R3` |
+| I-D3 | A route that a transition uses cannot be deleted | FK `ON DELETE RESTRICT` | constraint |
 
 Because of I-A3, at most one winner exists for any beat in R-2.
 
@@ -607,6 +676,7 @@ For joins and resumes, the same formula **rebases** the motion: whatever distanc
 | **R-6** `hold`             | `origin(s)`                                                           |
 | **R-7** `direct`, any kind | `lerp(origin(s), dest, p(s,b))`, where `dest = destinations[T][slot]` |
 | **R-8** `arc`, any kind    | `arcPoint(origin(s), dest, bulge, p(s,b))`, as defined below          |
+| **R-14** `route`          | the walked path of R-14 at `p(s,b)`; a join or resume walks straight, as R-7 (v0.9 step 1) |
 
 `lerp(a, b, t)` is endpoint-exact: it returns `a` for `t ≤ 0` and `b` for `t ≥ 1`, bit for bit (§8.10).
 
@@ -701,6 +771,51 @@ For a transition with `n = slot_count`, slot `i` gets `p_i`:
 
 Curves are never flattened, so FTL arrival and trail adherence are exact at every radius. v0.2 flattened circles into 720 segments, which broke its own 0.01 tolerance above a radius of about 1,050 (Appendix C).
 
+### R-14: Routes [Proposed, v0.9 step 1]
+
+For a span `s` of a `route` transition `T` with route `R` (D-19, I-R2):
+
+```
+A = origin(s)                   the marcher's real start (R-4)
+B = destinations[T][0]          its destination (R-13; a route transition has one slot)
+P_1 … P_n = R.points[·].at      the inner points, in order
+```
+
+**Founding spans** walk the polyline `A → P_1 → … → P_n → B`. **Joins and resumes** walk straight,
+exactly as R-7, and raise `D-REBASE`. A later step replaces this with a rejoin onto the route.
+
+**Cleaning.** Build `V` from `A`, the inner points and `B`:
+
+1. Start with `V = [A]`.
+2. For each `P_i` in order, append it only if `|P_i − last(V)| ≥ ε_geom`.
+3. While `V` has more than one point and `|last(V) − B| < ε_geom`, remove `last(V)` (an inner point,
+   never `A`).
+4. Append `B`.
+
+So every leg of `V` is at least `ε_geom` long, except when `V = [A, B]`.
+
+**Length.** `ℓ_j = |V_{j+1} − V_j|` (computed as `hypot`), `D_0 = 0`, `D_{j+1} = D_j + ℓ_j`,
+summed from the first leg in float64, and `L = D_last`.
+
+**Evaluation**, with `p = p(s, b)` from R-5:
+
+```
+if p ≤ 0: return A                      // endpoints are exact (§8.10)
+if p ≥ 1: return B
+if L < ε_geom: return lerp(A, B, p)
+d = p · L
+j = the smallest index with d < D_{j+1}; if there is none (rounding), the last leg
+return lerp(V_j, V_{j+1}, (d − D_j) / ℓ_j)
+```
+
+The marcher moves at **constant speed** along the whole path: the same distance every beat, from
+`s.start` to `T.end_beat`. Corners are passed through without stopping. A founding span clipped by
+a steal at beat `c` leaves the path at distance `p(s, c) · L`, and the next span starts there (R-4,
+D-7), as for every other path style.
+
+Step 1 makes no promise that a marcher lands on a corner bit for bit at any beat: nothing ties a
+corner to a beat until pins (a later step). Facing is not derived from the path (ADR 0010).
+
 ### 8.9 Diagnostics
 
 Diagnostics never block playback or writes. The inspector MUST show them.
@@ -708,7 +823,7 @@ Diagnostics never block playback or writes. The inspector MUST show them.
 | Code                | Level   | Raised when                                                               |
 | ------------------- | ------- | ------------------------------------------------------------------------- |
 | `D-VACANT`          | warning | Slot `k` of `T` has no assignment                                         |
-| `D-REBASE`          | info    | A direct or arc span is a join or resume (R-5 rebase)                     |
+| `D-REBASE`          | info    | A direct, arc or route span is a join or resume (R-5 rebase; R-14)        |
 | `D-FTL-NONFOUNDING` | warning | An FTL span is a join or resume, so R-11 applies                          |
 | `D-FTL-EMPTY`       | warning | An FTL transition has no founding spans                                   |
 | `D-ORDER-FALLBACK`  | info    | `inherit` could not find a single upstream source, so slot order was used |
@@ -736,7 +851,7 @@ Authored points are bounded (I-S1), but positions are _derived_. An arc's origin
 
 **Restriction.** Arcs are minor: `|bulge| ≤ ½` (I-T2, D-15).
 
-**Theorem.** Let β be the largest distance from the field origin to any authored point (homes, waypoints, individual destinations, and every point of every shape). By I-S1, β ≤ √2·10⁶. Every position the resolver produces satisfies
+**Theorem.** Let β be the largest distance from the field origin to any authored point (homes, waypoints, individual destinations, every point of every shape, and every point of every route, v0.9). By I-S1 and I-R1, β ≤ √2·10⁶. Every position the resolver produces satisfies
 
 `|P| ≤ β·√(1 + a)`
 
@@ -745,6 +860,7 @@ where `a` is the number of arc spans on the dependency path that leads to it. Th
 **Why.** Write P for a span's origin and B for its authored target. Each primitive keeps its points Q bounded like this:
 
 - **Direct, FTL fallback, hold:** Q lies on the segment from P to B, so `|Q| ≤ max(|P|, |B|)`.
+- **Route (R-14, v0.9 step 1):** Q lies on the polyline through P, the route's points and B, so `|Q|` is at most the largest of those. A join or resume is direct. Routes never grow the bound.
 - **FTL founding:** Q lies on a polyline through member origins and waypoints, or on the destination path, so `|Q|` is at most the largest of those vertices.
 - **Minor arc:** Q sees the chord PB at an angle of at least 90°, so by Thales it lies in the disk with diameter PB. Then `|Q| ≤ (|P+B| + |P−B|)/2 ≤ √(|P|² + |B|²)`.
 
@@ -819,6 +935,7 @@ flowchart TB
 | 4   | `ftlGeometry`       | FTL transition        | the exact destination path and its length (R-13)                                                        | dest shape                                                                                         | local         |
 | 5   | `origin`            | (marcher, span.start) | xy                                                                                                      | the previous span's evaluation (R-4)                                                               | **cascading** |
 | 6   | `ftlEntry`          | FTL transition        | members in q order, order source, startDist, endDist, targets (R-9); the trail references `ftlGeometry` | founding origins, `ftlGeometry`, the order source, and **every assignment row of T** (for targets) | **cascading** |
+| 7   | `routeGeometry`     | route                 | the inner points `P_1 … P_n` (R-14), v0.9                                                               | the route's `geometry`                                                                             | local         |
 
 Origins are keyed by `(marcher, span.start)`, not by span index. When `spans[m]` is rebuilt, entries whose start comes before the edit keep their key and stay valid.
 
@@ -875,6 +992,8 @@ The resolver processes one **batch** per committed transaction (§10.2). It neve
 | `T.path_style`                                                                                      | `ftlGeometry[T]` (create or drop)                                    | W-3 for T           |
 | `T.path_params`                                                                                     | `ftlGeometry[T]` if FTL                                              | W-3 for T           |
 | `T.order_mode`                                                                                      | none                                                                 | W-3 for T           |
+| Route `R` geometry updated (v0.9). On insert or delete, the same edit also changes `T.route_id` (AP-R1 to AP-R3, AP-R7), and that row seeds W-3; a deleted route's T comes from the coalesced `before` image | `routeGeometry[R]` (create, recompute or drop) | W-3 for the T with `route_id = R` |
+| `T.route_id` (v0.9)                                                                                 | none (R-14 reads `routeGeometry` of the new route)                   | W-3 for T           |
 | `T.start_beat` or `T.end_beat` (with R-E1)                                                          | step 3 for every marcher with a row in T                             | W-3 for T           |
 | Transition inserted or deleted                                                                      | create or drop its local caches                                      | W-3, or drop        |
 | Assignment insert, update or delete (including cascades, R-E1 procedure rows, undo and redo)        | step 3 for its marcher                                               | steps 3.1 and 3.4   |
@@ -887,6 +1006,7 @@ The resolver processes one **batch** per committed transaction (§10.2). It neve
 - **W-2** Dirtying `ftlEntry(T)` also dirties `origin(next(s))` for every span `s` in `spansByTransition[T]`.
 - **W-3** Seeding for transition `T` dirties `origin(next(s))` for every span `s` in `T`, plus `ftlEntry(T)` if `T` is FTL or was FTL before the edit.
 - **W-4** If a node is already dirty, the walk does **not** continue past it. This is correct because of I-C1.
+- **W-5** (v0.9) An implementation that caches a span's cleaned path `V` and its lengths MUST drop that cache whenever `origin(s)` is dirtied or W-3 is seeded for the span's transition. R-14 reads `origin(s)`, `routeGeometry` and `destinations` and nothing else.
 
 ```mermaid
 %%{init: {"theme": "neutral"}}%%
@@ -1046,7 +1166,7 @@ Resolver arithmetic and every cache MUST use `Float64`. The golden fixtures are 
 
 ### 10.2 Change log and batches [Proposed, added in v0.2]
 
-- **Capture.** `AFTER INSERT`, `UPDATE` and `DELETE` triggers on `marchers`, `shapes`, `transitions`, `assignments` and `slot_destinations` write a JSON image of each changed row to `change_log` (§5.1). A `slot_destinations` row is logged under its transition's id, because the resolver recomputes that transition's destinations as a whole (QA-DB-41). The triggers also fire for foreign-key cascades (QA-DB-29). Undo and redo go through the same wrapper, so they produce ordinary batches (QA-UNDO-7). Timelines are not logged, because they don't affect resolution (R-1).
+- **Capture.** `AFTER INSERT`, `UPDATE` and `DELETE` triggers on `marchers`, `shapes`, `transitions`, `assignments`, `slot_destinations` and (v0.9) `routes` write a JSON image of each changed row to `change_log` (§5.1). A `slot_destinations` row is logged under its transition's id, because the resolver recomputes that transition's destinations as a whole (QA-DB-41). The triggers also fire for foreign-key cascades (QA-DB-29). Undo and redo go through the same wrapper, so they produce ordinary batches (QA-UNDO-7). Timelines are not logged, because they don't affect resolution (R-1). A route's image is `{id, geometry}`, and a transition's image gains `route_id` (v0.9); coalescing compares `geometry` as it compares `params`.
 - **Read.** The write wrapper reads and clears the log inside the same transaction (§6). A rolled-back edit leaves nothing in the log (QA-DB-30).
 - **Coalesce.** The resolver reduces the batch to one net change per `(table, rowId)`, keeping the **first** `before` and the **last** `after`. A row that is inserted and then deleted in the same transaction disappears from the batch. This matters in practice: without coalescing, a transaction that edits a transition and then deletes it gets processed using the stale edit. The fuzzer found exactly this (§12.10).
 - **Apply atomically.** The resolver applies the whole batch (§9.4) before answering any query. In a single-threaded runtime that means inside one call. If a worker is involved, queries wait for the batch.
@@ -1650,3 +1770,73 @@ The reviewer accepted the core design and found no new structural contradiction.
 | QA-LP-11 | Two base rows `[0,16)` (old page move, marked) and `[0,8)` (new page after a flag insert)                         | `[0,8)` wins on 0 to 8; layers 0 and 1                                       |
 | QA-LP-12 | An FTL transition whose founder also has a same-start row elsewhere; shorten that row so it wins at the FTL start | The marcher becomes a joiner; founders and targets update; diagnostic raised |
 | QA-LP-13 | A flag drag that would give one marcher two non-base rows with the same range                                     | The drag stops one beat short                                                |
+
+---
+
+## Appendix I: Design change: routes, step by step (v0.8 → v0.9)
+
+**Change (project owner, 2026-11-03; ADR 0010):** a transition may walk a **route**, a drawn path from where its marcher starts to its destination (D-19). v0.9 grows one build step at a time. Each step adds the storage and rules it needs here, and nothing for later steps. The pathways research ([research/pathways](research/pathways/README.md)) is the reference each step draws on, not normative text.
+
+**Why step by step:** the owner tries each step as a lab build before the next starts. Rules written ahead of that feedback would be guesses. Files saved by one step's lab build may not open in the next. Files from the v0.1.7 release open at every step, and the step migrations are folded into one before the integration branch reaches main.
+
+### I.1 Step 1: corners, one marcher
+
+| Section | Change |
+| ------- | ------ |
+| §2 | New term **Route** |
+| §4 | New D-19 |
+| §5.1 | New `routes` table; `transitions` gains `route_id`, the `route` path style and one CHECK (I-R2); `commit_violations` gains E-R2, E-R3 and E-R4; routes are logged; a transition's log image gains `route` |
+| §5.2 | `path_params` for `route` is NULL; route `geometry` schema |
+| §6 | New I-R1 to I-R4, I-D3 |
+| §8 | New R-14; `D-REBASE` covers routes; §8.11 counts route points in β |
+| §9 | New cache `routeGeometry`; two invalidation rows; W-5 |
+| §10.2 | Routes are captured |
+
+**File version:** step 1 bumps it once (ADR 0010), so older fork builds refuse files that may hold routes.
+
+**Unchanged:** every other resolution rule, layers (§6.2), FTL, and the meaning of every existing file. App table names keep the timeline prefix (`timeline_routes`, ADR 0001 C-4).
+
+**Not in step 1:** smooth points and arcs inside a route; pins, holds and midsets; rejoining a route after a takeover (a join or resume walks straight); several marchers sharing a route; follow the leader on a drawn trail; steps per count; turns. Each comes with the step that builds it.
+
+### I.2 App procedures for step 1
+
+The spec covers the model, not the editor, but these procedures decide which rows an edit writes, so they are fixed here (as R-E1 is).
+
+| ID | Edit | Statements, in one write-wrapper transaction |
+| --- | --- | --- |
+| AP-R1 | **Draw a route** for one marcher's move, or **draw it again** | If the marcher's transition in the move has a shape or more than one slot (a shape move, the later half of a split), first give the marcher its own one-slot shapeless transition with its resolved destination, as point drags already do (`createOwnTransitionsInTransaction`). Then, with no route: insert the route, and set `path_style = 'route'`, `route_id` and `path_params = NULL` **in one UPDATE** (any two-statement order breaks the I-R2 CHECK). With a route: update its `geometry` in place, keeping its id. `from` is the founding span's `origin(s)` and `to` its destination. **Refused** (`E-ARGS`, "taken over at the start of this move") when the marcher's span at `T.start_beat` is a join, because step 1 would never walk the route. |
+| AP-R2 | **Remove path** for one marcher's move | Set `path_style = 'direct'`, `route_id = NULL`, `path_params = NULL` in one UPDATE; then delete the route. That order is required: `RESTRICT` refuses the other (I-D3), and undo replays it reversed. One edit, one undo step. The Move card's **Straight** and **Arc** (`setMovePath`) on a move with a route in any of its transitions are **refused** (`E-ARGS`, "this move has a drawn path: remove it first"), and the route stays. |
+| AP-R3 | **Delete a move or transition** with a route | Delete the transition (and what already goes with it), then its route, in `deleteTimelineTransitionRowsInTransaction`, the one helper that ripple, timeline delete, marcher delete, membership removal and split at a beat all delete through. |
+| AP-R4 | **Range edits**: resize, page-flag drags, moving a move in time, R-E1 | Unchanged. The route is untouched; the marcher walks the same path over the new range. |
+| AP-R5 | **End and start changes**: the destination is edited, or an earlier edit moves where the marcher starts | Unchanged. The route is untouched; the last leg goes to the new destination and the first leg starts from the new origin (R-14 always uses the real `A` and `B`). |
+| AP-R6 | **Everything else that would copy, split or merge a route transition, give it a shape, or change its `slot_count`** | Refused with a reason (`E-ARGS`), and nothing is written. A later step lifts each refusal when it supports the edit. By procedure: split by marchers (UI-25), and so each holds command that would take a route marcher into a move of its own first (`timelineMoveCuts`); merging moves; a point drag that would merge into the next move when either move has a route (`timelinePointMoves`); Remove keyframe's join (`timelineJoinAtBeat`); adding a marcher to a route transition; any procedure not listed here. |
+| AP-R7 | **Cut at a count `b`**: split at the playhead (UI-27, `splitTimelineAtBeatInTransaction`), and the holds commands' cut that goes through it | As today for every other transition. For a route transition `T` with route `R` and its one row `r`: let `s` be `r`'s founding span, `V`, `D` and `L` its cleaned path and lengths (R-14), `p_b = (b − T.start_beat) / (T.end_beat − T.start_beat)`, `d = p_b · L`, and `C` R-14's evaluation of `s` at `p_b`. (When `s` shows at `b`, `C` is the marcher's position there, bit for bit.) **Before `b`:** insert a route `R′` with the inner points `V_k` whose `D_k < d` and `|V_k − C| ≥ ε_geom`, `from = A` and `to = C`; then the first half's counterpart of `T` is its own one-slot transition with destination `C`, `path_style = 'route'`, `route_id = R′` and `path_params = NULL`, holding `r`'s part before `b`. **From `b`:** update `R`'s geometry in place to the inner points whose `D_k > d` and `|V_k − C| ≥ ε_geom`, `from = C` and `to = B`. A point at or within `ε_geom` of `C` goes to neither, since R-14's cleaning would drop it. Points come from the cleaned `V`, so inner points that cleaning already removed are dropped from storage too, with their ids. Kept points keep their ids. If `r` ends at or before `b`, `T` has no row from `b`, and it goes with its route as AP-R3. **Motion is unchanged:** the first half walks the same path to `C` at the same speed, and from `b` a founding span walks the rest; if `r` is hidden at `b` by a higher layer, its later span from `b` is a join and walks straight, as the resume it replaces did. **Refused** (`E-ARGS`) when `r` has no founding span ("taken over at the start of this move"), or any visible piece of `r` other than `s` starting at or before `b` ("taken over earlier in this move"): a resume at `b` would become a founding span after the cut and walk the rest of the route, where before it walked straight. Basic's **+ page flag** inside a move (`splitMovesAtBeatInTransaction`) is unchanged: a route isn't `direct`, so the marcher isn't simple on the page and is left alone, as an arc is today. |
+
+A marcher taken over by a later move partway through a route leaves the route where it is at that beat (R-14, D-7). When the takeover ends and the route transition resumes, the marcher walks straight to its destination.
+
+**Big steps (app advice, not a rule).** A route's step size is its length `L` over the move's counts, so every leg has the same step size. The amber "Big steps" label uses the field's existing step-size warning and the same test as straight moves (`StepSize`), applied to `L`. "Worst leg" wording waits for pins, when legs can differ.
+
+### I.3 New tests for step 1
+
+| ID | Setup | Expected |
+| --- | --- | --- |
+| QA-RT-1 | Golden: one marcher, a route with two corners, an 8-beat move | Positions at every beat match hand-computed values within 10⁻⁹; the ends are bit-exact |
+| QA-RT-2 | A route with no points | Bit-identical to the same transition as `direct` at every probe |
+| QA-RT-3 | Property: random routes, founding spans | At every probe the position lies on leg `V_j → V_{j+1}`, and the polyline distance from `A` to it equals `p · L` within `10⁻⁹ · L`, so a walk that ignores the corners fails; P-1 (continuity) and P-13 (the bound, with route points in β) hold. Exact values come from the `ref/` oracle |
+| QA-RT-4 | A founding span clipped by a steal at beat `c` | The marcher leaves at distance `p(s, c) · L` along the path; the steal starts exactly there |
+| QA-RT-5 | A resume after the steal ends | Straight from the origin to the destination, as R-7; `D-REBASE` raised |
+| QA-RT-6 | Degenerate: repeated points, a point within `ε_geom` of `A` or `B`, two points straddling `B` within `ε_geom`, every point within `ε_geom`, `A = B` | A route with an `ε_geom`-close inner point is bit-identical to the same route without it; every position is finite; no leg has zero length; ends exact |
+| QA-RT-7 | Invalidation: edit a route's points; Remove path; cut at a count; an earlier edit moves `A`; delete the move; undo and redo each | After every batch, the resolver matches a fresh oracle at every probe (as QA-INV) |
+| QA-RT-8 | Fuzz: the end-to-end fuzzer also draws, redraws and removes routes | No divergence from the oracle; no rejected undo or redo |
+| QA-DB-R1 | A `route` transition with no route, with a shape or with two slots; a `direct` transition with a route; a route transition with `path_params` | The first three refused by the I-R2 CHECK; the last two refused at commit, `E-R2` and `E-R4` |
+| QA-DB-R2 | Delete a route a transition uses | Refused (I-D3) |
+| QA-DB-R3 | Commit with an unused route, or with two transitions on one route | Refused at commit, `E-R3` |
+| QA-DB-R4 | Route geometry with a NaN, a point outside `[−10⁶, 10⁶]²`, a repeated point id, or a `smooth` key | Refused by the write path, `E-R1` |
+| QA-AP-R1 | Each refused edit in AP-R6; AP-R1 on a join; the Move card's Straight and Arc on a move with a route; AP-R7 on a row taken over at the start, on one taken over and resumed before `b`, and on one resumed exactly at `b` | Reports `E-ARGS` with its reason and writes nothing: the database, both history stacks and the resolver are unchanged |
+| QA-AP-R2 | AP-R1 on a marcher in a shape move and in the later half of a split | The marcher gets its own one-slot transition and the route in one edit; the other marchers' positions are unchanged at every beat; undo restores both exactly |
+| QA-AP-R3 | AP-R7 on a route move: `b` between corners; `b` exactly on a corner; a corner within `ε_geom` of `C`; `b` while a higher layer hides the marcher (resuming after `b`); a takeover starting after `b`; a row ending before `b`; and the holds cut with the id kept by the part before, and by neither | Positions match the move before the cut at every beat within `ε_geom + 10⁻⁹ · max(1, L)`, and are exactly `C` at `b` when `s` shows there; no route has a point within `ε_geom` of `C`; E-R3 holds; one undo step restores the database exactly, ids included |
+| QA-AP-R4 | Basic's + page flag inside a page where one marcher has a route | That marcher is listed in `leftAlone`; its transition and route are unchanged |
+| QA-UNDO-R1 | Draw, Remove path, and delete a move with a route | Each round trip restores the database exactly, ids included |
+| QA-MIG-R1 | Migrate a v0.1.7 file and a current fork file | Both open unchanged; `timeline_transitions` keeps every trigger, history trigger and rowid after the rebuild |
+
+The reference implementation in `ref/` gains R-14 in step 1, so the oracle and the app's resolver are checked against each other as for every other rule.
