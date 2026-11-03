@@ -24,7 +24,18 @@ const ROOT = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
     "../..",
 );
-const LANGUAGES = ["es", "fr", "pt-BR", "ja"];
+const LANGUAGES = [
+    "es",
+    "fr",
+    "pt-BR",
+    "ja",
+    "id",
+    "ms",
+    "fil",
+    "zh-Hans",
+    "zh-Hant",
+    "th",
+];
 const read = (file) => JSON.parse(readFileSync(path.join(ROOT, file), "utf8"));
 
 export function flatten(tree, prefix = "", into = {}) {
@@ -96,9 +107,9 @@ export function translationWarnings(
     }
     // Search words for the command palette: space-separated on purpose, English kept too.
     const searchWords = /keywords$/i.test(key);
-    if (language === "ja" && !searchWords) {
+    if ((language === "ja" || language.startsWith("zh")) && !searchWords) {
         if (new RegExp(`[${CJK}] +[${CJK}]`).test(translated))
-            warnings.push("space between Japanese words");
+            warnings.push("space between Japanese or Chinese words");
         if (/[A-Za-z]{4,}(?: [A-Za-z]{3,}){2,}/.test(prose(translated)))
             warnings.push("looks like untranslated English");
     }

@@ -1,5 +1,5 @@
 {
-    "about": "Agreed words for OpenMarch and marching-band terms, one per language, so every string says the same thing the same way. Drafted by AI on 2026-11-02 and not yet checked by a native speaker in the marching activity; 'confidence' says how sure the draft is. A reviewer who changes a term here should change it in that language's file too (scripts/i18n/ai-translate.mjs check lists the strings that use it). 'match' are the English words that trigger the term; 'accept' lists other forms a translation may use instead (plurals, verb forms, inflections). See docs/conventions/localization.md.",
+    "about": "Agreed words for OpenMarch and marching-band terms, one per language, so every string says the same thing the same way. Drafted by AI on 2026-11-02 and not yet checked by a native speaker in the marching activity; 'confidence' says how sure the draft is. A reviewer who changes a term here should change it in that language's file too (scripts/i18n/ai-translate.mjs check lists the strings that use it). 'match' are the English words that trigger the term; 'accept' lists other forms a translation may use instead (plurals, verb forms, inflections). See docs/conventions/localization.md. Indonesian (id), Malay (ms), Filipino (fil), Chinese (zh-Hans, zh-Hant) and Thai (th) were added on 2026-11-02 and every term in them is low confidence until a reviewer checks it; 'confidence' describes the first five languages.",
     "terms": [
         {
             "en": "marcher",
@@ -13,9 +13,21 @@
                 "es": ["integrantes"],
                 "fr": ["marcheurs", "marcheuse"],
                 "pt-BR": ["integrantes"],
-                "ja": []
+                "ja": [],
+                "id": ["anggota"],
+                "ms": ["ahli"],
+                "fil": ["marcher"],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "medium: Latin American and Brazilian bands usually say integrante(s); Japanese marching bands say メンバー. French has no established marching-band word."
+            "confidence": "medium: Latin American and Brazilian bands usually say integrante(s); Japanese marching bands say メンバー. French has no established marching-band word.",
+            "id": "pemain",
+            "ms": "pemain",
+            "fil": "miyembro",
+            "zh-Hans": "队员",
+            "zh-Hant": "隊員",
+            "th": "ผู้แสดง"
         },
         {
             "en": "page",
@@ -29,9 +41,21 @@
                 "es": ["páginas"],
                 "fr": ["pages"],
                 "pt-BR": ["páginas"],
-                "ja": []
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "high"
+            "confidence": "high",
+            "id": "halaman",
+            "ms": "halaman",
+            "fil": "pahina",
+            "zh-Hans": "页",
+            "zh-Hant": "頁",
+            "th": "หน้า"
         },
         {
             "en": "count",
@@ -45,9 +69,21 @@
                 "es": ["tiempos", "conteo"],
                 "fr": [],
                 "pt-BR": ["tempos"],
-                "ja": []
+                "ja": [],
+                "id": ["ketukan"],
+                "ms": [],
+                "fil": ["count"],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "medium: 'tiempos'/'temps'/'tempos' is how musicians count; check the bands say it the same way on the field. Only applies where 'count' is the unit of time."
+            "confidence": "medium: 'tiempos'/'temps'/'tempos' is how musicians count; check the bands say it the same way on the field. Only applies where 'count' is the unit of time.",
+            "id": "hitungan",
+            "ms": "kiraan",
+            "fil": "bilang",
+            "zh-Hans": "拍",
+            "zh-Hant": "拍",
+            "th": "จังหวะ"
         },
         {
             "en": "beat",
@@ -61,9 +97,21 @@
                 "es": ["pulsos", "tiempo", "tiempos"],
                 "fr": [],
                 "pt-BR": ["batidas", "tempo", "tempos"],
-                "ja": ["ビート"]
+                "ja": ["ビート"],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "medium"
+            "confidence": "medium",
+            "id": "ketukan",
+            "ms": "rentak",
+            "fil": "kumpas",
+            "zh-Hans": "节拍",
+            "zh-Hant": "節拍",
+            "th": "จังหวะ"
         },
         {
             "en": "measure",
@@ -77,9 +125,21 @@
                 "es": ["compases"],
                 "fr": ["mesures"],
                 "pt-BR": ["compassos"],
-                "ja": []
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "high"
+            "confidence": "high",
+            "id": "birama",
+            "ms": "bar",
+            "fil": "sukat",
+            "zh-Hans": "小节",
+            "zh-Hant": "小節",
+            "th": "ห้อง"
         },
         {
             "en": "move",
@@ -93,9 +153,21 @@
                 "es": ["movimientos", "mover", "mueve", "mueven"],
                 "fr": ["mouvements", "déplacer", "déplace"],
                 "pt-BR": ["movimentos", "mover", "move"],
-                "ja": ["移動"]
+                "ja": ["移動"],
+                "id": ["pindah", "memindahkan"],
+                "ms": ["alih", "pindah"],
+                "fil": ["ilipat"],
+                "zh-Hans": ["移动"],
+                "zh-Hant": ["移動"],
+                "th": ["ย้าย"]
             },
-            "confidence": "low for ja: 動き is natural for a marching move; ムーブ is the other option."
+            "confidence": "low for ja: 動き is natural for a marching move; ムーブ is the other option.",
+            "id": "gerakan",
+            "ms": "gerakan",
+            "fil": "galaw",
+            "zh-Hans": "动作",
+            "zh-Hant": "動作",
+            "th": "การเคลื่อนที่"
         },
         {
             "en": "keyframe",
@@ -109,9 +181,21 @@
                 "es": ["fotogramas clave"],
                 "fr": ["images clés"],
                 "pt-BR": ["quadros-chave"],
-                "ja": []
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "high: the words Premiere, DaVinci Resolve and After Effects use"
+            "confidence": "high: the words Premiere, DaVinci Resolve and After Effects use",
+            "id": "keyframe",
+            "ms": "kerangka kunci",
+            "fil": "keyframe",
+            "zh-Hans": "关键帧",
+            "zh-Hant": "關鍵影格",
+            "th": "คีย์เฟรม"
         },
         {
             "en": "playhead",
@@ -125,9 +209,21 @@
                 "es": ["cabezal"],
                 "fr": [],
                 "pt-BR": ["indicador"],
-                "ja": []
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "high"
+            "confidence": "high",
+            "id": "playhead",
+            "ms": "kepala main",
+            "fil": "playhead",
+            "zh-Hans": "播放头",
+            "zh-Hant": "播放指示器",
+            "th": "หัวเล่น"
         },
         {
             "en": "timeline",
@@ -137,8 +233,25 @@
             "fr": "timeline",
             "pt-BR": "linha do tempo",
             "ja": "タイムライン",
-            "accept": { "es": [], "fr": [], "pt-BR": [], "ja": [] },
-            "confidence": "high: French video editors (DaVinci Resolve, Final Cut) say la timeline"
+            "accept": {
+                "es": [],
+                "fr": [],
+                "pt-BR": [],
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
+            },
+            "confidence": "high: French video editors (DaVinci Resolve, Final Cut) say la timeline",
+            "id": "linimasa",
+            "ms": "garis masa",
+            "fil": "timeline",
+            "zh-Hans": "时间轴",
+            "zh-Hant": "時間軸",
+            "th": "ไทม์ไลน์"
         },
         {
             "en": "start flag",
@@ -148,8 +261,25 @@
             "fr": "repère de début",
             "pt-BR": "marcador de início",
             "ja": "開始フラグ",
-            "accept": { "es": [], "fr": [], "pt-BR": [], "ja": [] },
-            "confidence": "medium"
+            "accept": {
+                "es": [],
+                "fr": [],
+                "pt-BR": [],
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
+            },
+            "confidence": "medium",
+            "id": "penanda awal",
+            "ms": "penanda mula",
+            "fil": "panimulang marka",
+            "zh-Hans": "起始标记",
+            "zh-Hant": "起始標記",
+            "th": "ธงเริ่มต้น"
         },
         {
             "en": "page flag",
@@ -163,9 +293,21 @@
                 "es": ["marcadores de página"],
                 "fr": ["repères de page"],
                 "pt-BR": ["marcadores de página"],
-                "ja": []
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "medium"
+            "confidence": "medium",
+            "id": "penanda halaman",
+            "ms": "penanda halaman",
+            "fil": "marka ng pahina",
+            "zh-Hans": "页面标记",
+            "zh-Hant": "頁面標記",
+            "th": "ธงหน้า"
         },
         {
             "en": "loop",
@@ -175,8 +317,25 @@
             "fr": "boucle",
             "pt-BR": "loop",
             "ja": "ループ",
-            "accept": { "es": [], "fr": [], "pt-BR": ["repetição"], "ja": [] },
-            "confidence": "high"
+            "accept": {
+                "es": [],
+                "fr": [],
+                "pt-BR": ["repetição"],
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
+            },
+            "confidence": "high",
+            "id": "pengulangan",
+            "ms": "gelung",
+            "fil": "loop",
+            "zh-Hans": "循环",
+            "zh-Hant": "循環",
+            "th": "วนซ้ำ"
         },
         {
             "en": "field",
@@ -186,8 +345,25 @@
             "fr": "terrain",
             "pt-BR": "campo",
             "ja": "フィールド",
-            "accept": { "es": [], "fr": [], "pt-BR": [], "ja": [] },
-            "confidence": "high"
+            "accept": {
+                "es": [],
+                "fr": [],
+                "pt-BR": [],
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
+            },
+            "confidence": "high",
+            "id": "lapangan",
+            "ms": "padang",
+            "fil": "field",
+            "zh-Hans": "场地",
+            "zh-Hant": "場地",
+            "th": "สนาม"
         },
         {
             "en": "yard line",
@@ -201,9 +377,21 @@
                 "es": ["líneas de yarda", "yardas"],
                 "fr": ["lignes de yard"],
                 "pt-BR": ["linhas de jarda", "jardas"],
-                "ja": []
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "medium"
+            "confidence": "medium",
+            "id": "garis yard",
+            "ms": "garisan ela",
+            "fil": "yard line",
+            "zh-Hans": "码线",
+            "zh-Hant": "碼線",
+            "th": "เส้นหลา"
         },
         {
             "en": "hash",
@@ -217,9 +405,21 @@
                 "es": ["marcas hash"],
                 "fr": ["marques de hash"],
                 "pt-BR": ["marcas hash"],
-                "ja": ["ハッシュマーク"]
+                "ja": ["ハッシュマーク"],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "low: kept as the English word, which bands that march on American football fields use; a reviewer may know a local word"
+            "confidence": "low: kept as the English word, which bands that march on American football fields use; a reviewer may know a local word",
+            "id": "hash",
+            "ms": "hash",
+            "fil": "hash",
+            "zh-Hans": "Hash 标记",
+            "zh-Hant": "Hash 標記",
+            "th": "เส้นแฮช"
         },
         {
             "en": "step",
@@ -233,9 +433,21 @@
                 "es": ["pasos"],
                 "fr": [],
                 "pt-BR": ["passos"],
-                "ja": ["ステップ"]
+                "ja": ["ステップ"],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": ["สเต็ป"]
             },
-            "confidence": "high"
+            "confidence": "high",
+            "id": "langkah",
+            "ms": "langkah",
+            "fil": "hakbang",
+            "zh-Hans": "步",
+            "zh-Hant": "步",
+            "th": "ก้าว"
         },
         {
             "en": "section",
@@ -249,9 +461,21 @@
                 "es": ["secciones"],
                 "fr": ["pupitres"],
                 "pt-BR": ["naipes"],
-                "ja": []
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "medium: pupitre and naipe are the words orchestras and bands use for an instrument section; パート is the Japanese band word"
+            "confidence": "medium: pupitre and naipe are the words orchestras and bands use for an instrument section; パート is the Japanese band word",
+            "id": "seksi",
+            "ms": "seksyen",
+            "fil": "seksyon",
+            "zh-Hans": "声部",
+            "zh-Hant": "聲部",
+            "th": "กลุ่มเครื่อง"
         },
         {
             "en": "color guard",
@@ -265,9 +489,21 @@
                 "es": ["guardia"],
                 "fr": [],
                 "pt-BR": ["linha de frente", "corpo coreográfico"],
-                "ja": ["ガード"]
+                "ja": ["ガード"],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": ["护旗队", "旗舞"],
+                "zh-Hant": ["旗舞"],
+                "th": []
             },
-            "confidence": "low: color guard is the loanword used in Latin America; Brazilian bands may say linha de frente or corpo coreográfico"
+            "confidence": "low: color guard is the loanword used in Latin America; Brazilian bands may say linha de frente or corpo coreográfico",
+            "id": "color guard",
+            "ms": "color guard",
+            "fil": "color guard",
+            "zh-Hans": "旗队",
+            "zh-Hant": "旗隊",
+            "th": "คัลเลอร์การ์ด"
         },
         {
             "en": "drill",
@@ -281,9 +517,21 @@
                 "es": ["coreografía"],
                 "fr": ["chorégraphie"],
                 "pt-BR": ["drill"],
-                "ja": []
+                "ja": [],
+                "id": ["formasi"],
+                "ms": ["formasi"],
+                "fil": [],
+                "zh-Hans": ["队列"],
+                "zh-Hant": ["隊列"],
+                "th": []
             },
-            "confidence": "low: drill is the loanword in Japanese marching; Spanish- and French-speaking bands may say coreografía/chorégraphie"
+            "confidence": "low: drill is the loanword in Japanese marching; Spanish- and French-speaking bands may say coreografía/chorégraphie",
+            "id": "drill",
+            "ms": "drill",
+            "fil": "drill",
+            "zh-Hans": "队形",
+            "zh-Hant": "隊形",
+            "th": "ดริล"
         },
         {
             "en": "drill chart",
@@ -297,9 +545,21 @@
                 "es": ["hojas de drill"],
                 "fr": ["feuilles de drill"],
                 "pt-BR": ["folhas de coreografia"],
-                "ja": ["コンテ"]
+                "ja": ["コンテ"],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "low"
+            "confidence": "low",
+            "id": "lembar drill",
+            "ms": "carta drill",
+            "fil": "drill chart",
+            "zh-Hans": "队形图",
+            "zh-Hant": "隊形圖",
+            "th": "แผนผังดริล"
         },
         {
             "en": "coordinate sheet",
@@ -318,9 +578,21 @@
                 "es": ["hojas de coordenadas"],
                 "fr": ["feuilles de coordonnées"],
                 "pt-BR": ["folhas de coordenadas"],
-                "ja": ["個人コンテ"]
+                "ja": ["個人コンテ"],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "medium"
+            "confidence": "medium",
+            "id": "lembar koordinat",
+            "ms": "helaian koordinat",
+            "fil": "coordinate sheet",
+            "zh-Hans": "坐标表",
+            "zh-Hant": "座標表",
+            "th": "ตารางพิกัด"
         },
         {
             "en": "show",
@@ -334,9 +606,21 @@
                 "es": ["shows", "espectáculo", "mostrar", "muestra"],
                 "fr": ["spectacles", "afficher", "affiche"],
                 "pt-BR": ["shows", "espetáculo", "mostrar", "mostra", "exibir"],
-                "ja": ["表示"]
+                "ja": ["表示"],
+                "id": ["show", "tampilkan", "menampilkan"],
+                "ms": ["tunjuk", "papar", "show"],
+                "fil": ["ipakita", "show"],
+                "zh-Hans": ["显示"],
+                "zh-Hant": ["顯示"],
+                "th": ["แสดง"]
             },
-            "confidence": "medium"
+            "confidence": "medium",
+            "id": "pertunjukan",
+            "ms": "persembahan",
+            "fil": "palabas",
+            "zh-Hans": "表演",
+            "zh-Hant": "表演",
+            "th": "โชว์"
         },
         {
             "en": "prop",
@@ -350,9 +634,21 @@
                 "es": ["utilerías", "elemento de utilería"],
                 "fr": ["accessoires"],
                 "pt-BR": ["adereços"],
-                "ja": ["小道具"]
+                "ja": ["小道具"],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "medium"
+            "confidence": "medium",
+            "id": "properti",
+            "ms": "prop",
+            "fil": "prop",
+            "zh-Hans": "道具",
+            "zh-Hant": "道具",
+            "th": "พร็อพ"
         },
         {
             "en": "cue",
@@ -366,9 +662,21 @@
                 "es": ["cues", "señal"],
                 "fr": ["tops", "cue"],
                 "pt-BR": ["deixas", "cue"],
-                "ja": []
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "medium: top and deixa are the theater words; lighting crews may say cue"
+            "confidence": "medium: top and deixa are the theater words; lighting crews may say cue",
+            "id": "cue",
+            "ms": "isyarat",
+            "fil": "cue",
+            "zh-Hans": "提示点",
+            "zh-Hant": "提示點",
+            "th": "คิว"
         },
         {
             "en": "interval",
@@ -382,9 +690,21 @@
                 "es": ["intervalos"],
                 "fr": ["intervalles"],
                 "pt-BR": ["intervalos"],
-                "ja": []
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "high"
+            "confidence": "high",
+            "id": "jarak",
+            "ms": "jarak",
+            "fil": "pagitan",
+            "zh-Hans": "间距",
+            "zh-Hant": "間距",
+            "th": "ระยะห่าง"
         },
         {
             "en": "checkpoint",
@@ -398,9 +718,21 @@
                 "es": ["líneas de referencia"],
                 "fr": ["repères"],
                 "pt-BR": ["linhas de referência"],
-                "ja": []
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "medium"
+            "confidence": "medium",
+            "id": "garis acuan",
+            "ms": "garisan rujukan",
+            "fil": "linya ng sanggunian",
+            "zh-Hans": "参考线",
+            "zh-Hant": "參考線",
+            "th": "เส้นอ้างอิง"
         },
         {
             "en": "box",
@@ -410,8 +742,25 @@
             "fr": "bloc",
             "pt-BR": "bloco",
             "ja": "ブロック",
-            "accept": { "es": [], "fr": [], "pt-BR": [], "ja": [] },
-            "confidence": "medium: a block is the marching word for this formation"
+            "accept": {
+                "es": [],
+                "fr": [],
+                "pt-BR": [],
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
+            },
+            "confidence": "medium: a block is the marching word for this formation",
+            "id": "blok",
+            "ms": "blok",
+            "fil": "bloke",
+            "zh-Hans": "方阵",
+            "zh-Hant": "方陣",
+            "th": "บล็อก"
         },
         {
             "en": "production",
@@ -425,9 +774,21 @@
                 "es": ["producciones"],
                 "fr": ["productions"],
                 "pt-BR": ["produções"],
-                "ja": []
+                "ja": [],
+                "id": [],
+                "ms": [],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "medium"
+            "confidence": "medium",
+            "id": "produksi",
+            "ms": "produksi",
+            "fil": "produksyon",
+            "zh-Hans": "制作",
+            "zh-Hant": "製作",
+            "th": "โปรดักชัน"
         },
         {
             "en": "ensemble",
@@ -441,9 +802,21 @@
                 "es": ["agrupaciones", "banda"],
                 "fr": ["ensembles"],
                 "pt-BR": ["grupos", "banda"],
-                "ja": ["バンド"]
+                "ja": ["バンド"],
+                "id": ["band"],
+                "ms": ["band"],
+                "fil": [],
+                "zh-Hans": [],
+                "zh-Hant": [],
+                "th": []
             },
-            "confidence": "medium"
+            "confidence": "medium",
+            "id": "grup",
+            "ms": "kumpulan",
+            "fil": "grupo",
+            "zh-Hans": "乐团",
+            "zh-Hant": "樂團",
+            "th": "วง"
         }
     ]
 }

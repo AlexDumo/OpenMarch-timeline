@@ -59,3 +59,59 @@ the agreed words in `glossary.json` and the note for each key in `context.json`.
   or the argument, or keep only the `other` branch, and must not invent a `one` branch.
 - Katakana loanwords use the long-vowel mark the way major software does (ユーザー,
   フォルダー, ファイル).
+
+## Bahasa Indonesia (`id`)
+
+- Standard Indonesian as software uses it (Google, Microsoft). Address the user politely and
+  neutrally; avoid "kamu" and "Anda" where a sentence works without a pronoun, and use "Anda"
+  where one is needed.
+- Buttons and menu items are verbs in the base form ("Simpan", "Hapus", "Tambahkan halaman").
+- Keep the English word where Indonesian marching bands and video editors do (keyframe,
+  playhead, drill, color guard) rather than coining one.
+
+## Bahasa Melayu (`ms`)
+
+- Malaysian Malay (Bahasa Malaysia), not Indonesian: "padam" not "hapus", "fail" not "file",
+  "tetapan" not "pengaturan", "komputer", "muat turun".
+- Address the user as "anda" (lowercase) only where a pronoun is needed.
+- Buttons and menu items are verbs in the base form ("Simpan", "Padam").
+
+## Filipino (`fil`)
+
+- Filipino as Philippine software uses it: Tagalog grammar, with English kept for technical
+  and marching terms people actually say in English (drill, field, timeline, keyframe, file).
+  Don't coin Tagalog words nobody uses; natural Taglish is better than stiff Tagalog.
+- Polite but not formal; avoid "po" in interface text.
+- Buttons and menu items are short verbs ("I-save", "Burahin", "Magdagdag ng pahina").
+
+## 简体中文 (`zh-Hans`)
+
+- Simplified Chinese as used in mainland China and Singapore, in the terms Chinese software
+  uses (文件, 设置, 撤销, 重做, 删除).
+- Full-width punctuation (，。：；？！「」 or “”) in Chinese text; half-width digits and Latin
+  letters. No spaces between Chinese characters; no space is needed between Chinese and a
+  number or Latin word either.
+- Address the user as 你 only where a pronoun is needed; most interface text needs none.
+- Chinese has no plural: a plural message may become one plain string with `#` or the
+  argument, or keep only the `other` branch.
+
+## 繁體中文 (`zh-Hant`)
+
+- Traditional Chinese as used in Taiwan, with Taiwan's software vocabulary, not mainland
+  vocabulary in Traditional characters: 檔案 (not 文件), 設定, 復原, 取消復原 or 重做, 刪除,
+  影片, 軟體, 預設, 資料.
+- Full-width punctuation 「」，。：；？！; half-width digits and Latin letters. No spaces
+  between Chinese characters.
+- Address the user as 你 only where a pronoun is needed.
+- Same plural rule as Simplified Chinese.
+
+## ไทย (`th`)
+
+- Thai as Thai software uses it (Windows, macOS, Google in Thai). Polite and neutral; no
+  particles such as ครับ/ค่ะ in interface text.
+- Thai has no spaces between words; a space separates phrases and sentences. Don't put spaces
+  between words.
+- Keep loanwords Thai users already read in English or Thai transliteration (คีย์เฟรม,
+  ไทม์ไลน์, ดริล) consistent with the glossary.
+- Thai has no plural: a plural message may become one plain string or keep only `other`.
+- Half-width (Arabic) digits, not Thai digits.
