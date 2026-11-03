@@ -35,7 +35,7 @@ import {
     stretchArc,
     arcFootprint,
     withFootprint,
-    withSweep,
+    withDegrees,
     bendHandlePoint,
     bendOf,
     drawArc,
@@ -53,8 +53,8 @@ const BEND_RATE = { px: 2, step: 1 } as const;
 const BEND_FINE_RATE = { px: 1, step: 1 } as const;
 
 /**
- * The sweep set to `degrees` around the circle or ellipse, which stays (owner on #634), with a
- * Keep interval arc sized to it again
+ * The sweep set to `degrees`: up to a half turn its ends staying, past it its circle or ellipse
+ * (owner on #634); with a Keep interval arc sized to it again
  */
 const bent = (
     p: LineParams,
@@ -62,7 +62,7 @@ const bent = (
     degrees: number,
     env: Pick<ToolEnv, "pivot" | "anchor"> = {},
 ): LineParams => {
-    const next = withSweep(p, degrees);
+    const next = withDegrees(p, degrees);
     return next === p ? p : keptInterval(next, n, env);
 };
 

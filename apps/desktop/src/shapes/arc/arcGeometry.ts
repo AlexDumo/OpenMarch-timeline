@@ -212,6 +212,27 @@ function onGuide(base: LineParams, g: ArcGuide): LineParams {
     return { ...base, points: withPoints({ ...base, points }, bend, ends) };
 }
 
+/** Up to this many degrees, a change of degrees keeps the arc's ends where they are */
+export const HALF_TURN = 180;
+
+/**
+ * The arc turning `degrees`, as the editor's degrees set it (owner on #634): up to a half turn its
+ * ends stay where they are and its middle moves, so the gap between its end marchers holds and the
+ * circle grows or shrinks to fit; past a half turn its circle or ellipse stays instead
+ * ({@link withSweep}), since its ends close in and the circle would otherwise balloon. A change
+ * across the half turn goes to it one way and on the other.
+ */
+export function withDegrees(p: LineParams, degrees: number): LineParams {
+    const size = Math.min(MAX_BEND, Math.max(MIN_BEND, Math.abs(degrees)));
+    const now = Math.abs(bendOf(p));
+    const sign = Math.sign(bendOf(p)) || 1;
+    if (size <= HALF_TURN && now <= HALF_TURN) return withBend(p, sign * size);
+    if (size > HALF_TURN && now >= HALF_TURN) return withSweep(p, size);
+    if (size <= HALF_TURN)
+        return withBend(withSweep(p, HALF_TURN), sign * size);
+    return withSweep(withBend(p, sign * HALF_TURN), size);
+}
+
 /** How near equal the guide's radii stick to a circle, as a share of the larger */
 const ROUND_STICK = 0.05;
 

@@ -207,13 +207,36 @@ describe("drawing an arc", () => {
 describe("its degrees (owner on #634)", () => {
     const bend = () => arcTool.params.find((p) => p.key === "bend")!;
 
-    it("reads its sweep in the editor and takes a typed one, its circle staying", () => {
+    it("keeps its ends up to a half turn, its middle moving", () => {
         const t = halfTurn();
         expect(bend().display(t.params, t.spots, STEP)).toBe("180°");
         const typed = edit(t, bend().type(t.params, t.spots, "90", env), ctx);
         const p = paramsOf(typed);
         expect(bendOf(p)).toBeCloseTo(90, 6);
-        const g = arcGuide(p)!;
+        // The end marchers stay 60 apart; the circle grows to fit
+        expect(dist(p.points[0]!, { x: 100, y: 200 })).toBeLessThan(1e-6);
+        expect(dist(p.points[1]!, { x: 160, y: 200 })).toBeLessThan(1e-6);
+        expect(arcGuide(p)!.rx).toBeCloseTo(30 * Math.SQRT2, 6);
+        // And back to 30°, still the same ends
+        const flat = bend().type(p, 7, "30", env) as LineParams;
+        expect(dist(flat.points[0]!, { x: 100, y: 200 })).toBeLessThan(1e-6);
+        expect(dist(flat.points[1]!, { x: 160, y: 200 })).toBeLessThan(1e-6);
+    });
+
+    it("keeps its circle past a half turn, and across it", () => {
+        const t = halfTurn();
+        // 180 → 270: the circle stays
+        const most = bend().type(t.params, 7, "270", env) as LineParams;
+        let g = arcGuide(most)!;
+        expect(dist(g.center, { x: 130, y: 200 })).toBeLessThan(1e-6);
+        expect(g.rx).toBeCloseTo(30, 6);
+        // 270 → 90: back round the same circle to the half turn, then its ends stay
+        const back = bend().type(most, 7, "90", env) as LineParams;
+        expect(dist(back.points[0]!, { x: 100, y: 200 })).toBeLessThan(1e-6);
+        expect(dist(back.points[1]!, { x: 160, y: 200 })).toBeLessThan(1e-6);
+        // 90 → 270: out to the half turn on its ends, then round that circle
+        const round = bend().type(back, 7, "270", env) as LineParams;
+        g = arcGuide(round)!;
         expect(dist(g.center, { x: 130, y: 200 })).toBeLessThan(1e-6);
         expect(g.rx).toBeCloseTo(30, 6);
     });
@@ -598,6 +621,20 @@ describe("stretching it (owner on #634)", () => {
         expect(arcTool.ratioLock).toBe(true);
         expect(depth.ratioLockAfter).toBe(true);
         expect(width.ratioLockAfter).toBeFalsy();
+    });
+
+    it("keeps its ends when its degrees change on an ellipse", () => {
+        let t = halfTurn();
+        t = onHandle(t, MIDDLE_KEY, { x: 130, y: 160 });
+        const before = paramsOf(t).points.map(({ x, y }) => ({ x, y }));
+        const degrees = arcTool.params.find((q) => q.key === "bend")!;
+        const typed = edit(t, degrees.type(t.params, t.spots, "120", env), ctx);
+        const p = paramsOf(typed);
+        expect(Math.abs(bendOf(p))).toBeCloseTo(120, 6);
+        expect(ellipseOf(p)).toBeDefined();
+        p.points.forEach((q, i) =>
+            expect(dist(q, before[i]!)).toBeLessThan(1e-6),
+        );
     });
 
     it("closes all the way around an ellipse, and opens again", () => {

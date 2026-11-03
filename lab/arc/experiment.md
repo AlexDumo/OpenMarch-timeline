@@ -23,9 +23,10 @@ Select some marchers, open the **Shapes** tab and pick **Arc** (after Curve).
   the center and Cmd/Ctrl keeps its proportions. Stretched one way only, it
   runs on an ellipse. A handle catches on the yard lines, hashes and
   sidelines it passes, as a box's edge does.
-- Set how far it turns with the degrees in the editor (drag or type). The
-  dashed circle or ellipse stays put and the arc grows or shrinks around it,
-  so the marchers spread out or close up.
+- Set how far it turns with the degrees in the editor (drag or type). Up to
+  a half circle (180°) its ends stay put and its middle moves, so the end
+  marchers keep their distance. Past 180° the dashed circle stays put and
+  the arc wraps further around it.
 - The editor also shows the room the arc takes ("60 × 30 steps": how far it
   reaches side to side, and how deep it is from its ends to its far edge).
   Up to a half circle the first number is the distance between the two end
