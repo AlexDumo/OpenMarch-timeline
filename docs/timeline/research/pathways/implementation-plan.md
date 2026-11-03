@@ -13,12 +13,30 @@ see. A step lists what to try, what good looks like, and what is deliberately le
 is about that step only.
 
 - **One step at a time.** The next step starts once the owner has given the current one a verdict.
-  further starts until N has feedback.
 - **Feedback changes the plan here.** Each step's row in the tracker records the verdict
   (good / fix / rethink) and any fixes, so nothing gets lost between steps.
 - **Lab builds only for steps with something to try.** Steps 1 and 2 are plumbing with a small
   visible piece; the rest each add one behaviour.
 - The integration branch goes to main only when everything is in and every check is green.
+
+## Where a path is edited (owner, 2026-11-03)
+
+On the field, with a small floating editor beside the path, as the shape editor works. Not in the
+inspector, and not on the Move card. This replaces every Move card control for paths in
+[ux-sheet.md](ux-sheet.md) and its earlier drafts (the Drawn / Follow / Turn choice, the point row,
+Re-fit, Own routes · Rejoin, and Straight removing a path).
+
+- **On the field:** the pen draws; points drag; right-click or long-press a point for its menu.
+- **The floating editor** shows while a path is being drawn or is open, and moves out of the way of
+  the handles. Each control is also a named command with its shortcut shown, so the palette,
+  keyboard and touch reach the same actions.
+- **What it holds grows with the steps:** step 1, who the path is for, Big steps and **Remove
+  path**; step 2, Corner / Smooth for the selected point; step 15, Own path · Rejoin; step 3, Re-fit;
+  step 5, the selected point's count and Put corners on counts; later, Follow options and turns.
+- **Steps per count** applies to straight moves too, so where it lives is settled in its own step
+  (#657), not in the path editor by default.
+- The Move card's Straight and Arc are refused on a move with a drawn path; Remove path is how a
+  path goes (spec AP-R2). What becomes of the Move card is a convergence question, not this one.
 
 ## Before building
 
@@ -49,7 +67,7 @@ a reason, never a broken file.
 | #       | Step                                                  | Blocked by     | What you can try                                                                                                                                                                                                                                                                                                         |
 | ------- | ----------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | ~~P-0~~ | ~~Schema and resolver seam~~                          |                | Dropped (#642 closed): each step adds the storage it needs; step 1 adds the per-move walked-path seam                                                                                                                                                                                                                    |
-| 1       | Draw a cornered path for one marcher                  | B-4            | Path pen: click corners, Enter, Backspace; playback, 3D and start-flag paths follow it; Big steps per leg; split and merge of such a move refuse; a marcher taken over walks straight (interim). Adds only its own storage                                                                                               |
+| 1       | Draw a cornered path for one marcher                  | B-4            | Path pen: click corners, Enter, Backspace; playback, 3D and start-flag paths follow it; floating editor with Big steps and Remove path; split at the playhead cuts the path at the count; split by marchers and merge refuse; a marcher taken over walks straight (interim). Adds only its own storage                   |
 | 2       | Curves                                                | 1              | Drag for smooth points; marchers keep facing front (P-3)                                                                                                                                                                                                                                                                 |
 | 3       | Paths as objects: open, edit, clear a collision       | 2, 15          | Click selects a path, double-click opens it; dragging a dot still makes a new move (P-1); drag, add, delete points; corner ↔ smooth; a point edit on a group path moves the group, a hand edit to one lane gives it its own path; Re-fit; Paths Off / Selected / All; collisions sampled along the path; "No collisions" |
 | 4       | Follow a drawn trail into place                       | 2              | Follow, leader, Reverse; a line follows a drawn trail into its spots                                                                                                                                                                                                                                                     |

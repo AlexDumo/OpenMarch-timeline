@@ -54,6 +54,10 @@ Nothing the model computes (bounds, rejoin aim, lanes, fractions) has a setting.
 The Move card's path choice switches to **Drawn**. Choosing **Straight** again removes the route
 (one undo step).
 
+> **Superseded (owner, 2026-11-03):** paths are edited on the field with a floating editor beside
+> the path, not on the Move card; **Remove path** removes one, and the Move card's Straight and Arc
+> are refused on a move with a path (implementation plan, "Where a path is edited"; spec AP-R2).
+
 ### Edit a route
 
 - Drag a point to move it. Double-click a point to switch corner ↔ smooth. Click on the line to
