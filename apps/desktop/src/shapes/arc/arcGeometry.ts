@@ -3,14 +3,11 @@ import type { ShapeFrame } from "../frame/frame";
 import type { XY } from "../types";
 import {
     bends,
-    bentSegment,
     drawLine,
-    intoCircle,
     isClosed,
     isLineParams,
     lineInFrame,
     lineSegments,
-    outOfCircle,
     segmentMidpoint,
     type LineEllipse,
     type LineParams,

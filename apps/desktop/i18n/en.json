@@ -2268,13 +2268,16 @@
             },
             "place": "Place",
             "quarterTurn": "Turn 90° clockwise",
-            "angleLines": {
-                "hide": "Hide the lines from the center to the ends",
-                "show": "Show lines from the center to the ends"
+            "guides": {
+                "label": "Guides",
+                "circle": "Circle",
+                "angles": "Angle lines"
             },
             "ratioLock": {
                 "locked": "Spacings locked together: click to unlock",
-                "unlocked": "Lock the two spacings together"
+                "unlocked": "Lock the two spacings together",
+                "sizesLocked": "Width and depth locked together: click to unlock",
+                "sizesUnlocked": "Lock the width and depth together"
             },
             "hideMarchers": {
                 "hide": "Hide the marchers",

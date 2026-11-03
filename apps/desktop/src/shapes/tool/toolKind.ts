@@ -4,6 +4,7 @@ import type { ScrubMove } from "../editor/scrub";
 import type { ClosedShape } from "../distribute/region";
 import type { LayoutFamily } from "../distribute/distribution";
 import type { AnyShapeKind, Slot, XY } from "../types";
+import type { ShapeGuide } from "../field/shapeGuides";
 
 /** The roles a kind's own drag reads beyond fine, which every shape drag reads */
 export type KindHonors = Pick<HonoredRoles, "constrain" | "fromCenter">;
@@ -118,8 +119,9 @@ export interface ConstructionCircle {
     readonly ry: number;
     readonly rotation: number;
     /**
-     * Points a line is drawn to from its center, when angle lines are shown: an Arc's ends, so
-     * the angle it turns reads at a glance (owner on #634). None when absent.
+     * Points its angle lines run through from its center and on past, when they're shown (the
+     * editor's Guides menu): an Arc's ends, so the angle it turns reads at a glance (owner on
+     * #634). None when absent.
      */
     readonly spokes?: readonly XY[];
 }
@@ -210,11 +212,6 @@ export interface ToolParam<P> {
      * #634)
      */
     readonly ratioLockAfter?: boolean;
-    /**
-     * The angle lines' on/off button sits just after this number: an Arc's degrees, its lines
-     * from its circle's center to its ends (owner on #634)
-     */
-    readonly angleLinesAfter?: boolean;
     /** The params with `text` typed over the number; null when the text isn't understood */
     type(params: P, n: number, text: string, env: ToolEnv): P | null;
     /**
@@ -618,6 +615,11 @@ export interface ToolKind<P> {
      * Arc's whole circle (owner on #634). None when absent.
      */
     construction?(params: P, n: number): readonly ConstructionCircle[];
+    /**
+     * The guides the editor's Guides menu shows or hides for this kind's construction (owner on
+     * #634): the circle, and its angle lines. No menu when absent.
+     */
+    readonly guides?: readonly ShapeGuide[];
     /**
      * The points pulled onto the field's lines while the shape is moved (#446): a box's corners,
      * then its center. None when absent, so the shape moves on the grid alone.

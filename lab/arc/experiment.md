@@ -29,8 +29,9 @@ Select some marchers, open the **Shapes** tab and pick **Arc** (after Curve).
   marchers keep their distance. Past 180° the dashed circle stays put and
   the arc wraps further around it. Dragging the degrees lands the middle
   handle on half steps and catches it on hashes.
-- Faint lines run from the circle's center to the arc's ends, so its angle
-  is easy to see. The angle button beside the degrees hides or shows them.
+- Angle lines run from the circle's center out through the arc's ends and
+  across the field, so its angle is easy to see. The editor's **Guides**
+  menu shows or hides the circle and the angle lines, each on its own.
 - Try **Measured → ↔ Side to side**: each marcher sits an even number of
   steps apart side to side, which is easy to read off the yard lines. Their
   side-to-side spots stay put as you change the degrees (up to 180°).

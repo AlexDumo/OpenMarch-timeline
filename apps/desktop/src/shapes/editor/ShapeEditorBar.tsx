@@ -1,6 +1,6 @@
 import { T } from "@tolgee/react";
 import Shortcut from "@/components/ui/Shortcut";
-import { useAngleLinesStore } from "@/shapes/field/angleLines";
+import { useShapeGuidesStore } from "@/shapes/field/shapeGuides";
 import clsx from "clsx";
 import {
     Fragment,
@@ -50,7 +50,6 @@ import {
     EqualsIcon,
     MagnetIcon,
     PathIcon,
-    AngleIcon,
     EyeIcon,
     EyeSlashIcon,
     SelectionSlashIcon,
@@ -109,7 +108,7 @@ import { LayoutMenu } from "./LayoutPicker";
 import { ReshuffleButton } from "./ReshuffleButton";
 import { EdgeToggle } from "./EdgeToggle";
 import { ModeMenu } from "./ModeMenu";
-import { ChoiceMenus } from "./ChoiceMenu";
+import { ChoiceMenus, GuidesMenu } from "./ChoiceMenu";
 import { GroupChips } from "./GroupChips";
 import { GROUP_MENU_ATTRIBUTE, GroupMenu } from "./GroupMenu";
 import { useFocusCarry } from "./focusCarry";
@@ -414,11 +413,8 @@ function ShapeEditorBar({
                                 />
                                 {layout.ratioLock &&
                                     x.param.ratioLockAfter === true && (
-                                        <RatioLockButton />
+                                        <RatioLockButton sizes />
                                     )}
-                                {x.param.angleLinesAfter === true && (
-                                    <AngleLinesButton />
-                                )}
                             </Fragment>
                         ))}
                         {target.empty > 0 && (
@@ -905,48 +901,35 @@ const IntervalLockButton = memo(function IntervalLockButton({
 });
 
 /** Keeps the two spacings in proportion */
-/**
- * Shows or hides the angle lines (owner on #634): an Arc's lines from its circle's center to its
- * ends, beside its degrees. The user's choice, kept for every arc.
- */
-const AngleLinesButton = memo(function AngleLinesButton() {
-    const shown = useAngleLinesStore((s) => s.shown);
-    return (
-        <IconButton
-            label={
-                shown
-                    ? tolgee.t(
-                          "shapes.edit.angleLines.hide",
-                          "Hide the lines from the center to the ends",
-                      )
-                    : tolgee.t(
-                          "shapes.edit.angleLines.show",
-                          "Show lines from the center to the ends",
-                      )
-            }
-            pressed={shown}
-            onClick={useAngleLinesStore.getState().toggle}
-            testId="shape-editor-angle-lines"
-        >
-            <AngleIcon size={14} />
-        </IconButton>
-    );
-});
-
-const RatioLockButton = memo(function RatioLockButton() {
+const RatioLockButton = memo(function RatioLockButton({
+    sizes = false,
+}: {
+    /** It locks two sizes rather than spacings: an Arc's width and depth (#634) */
+    sizes?: boolean;
+}) {
     const ratioLocked = useShapeEditorStore((s) => s.ratioLocked);
     return (
         <IconButton
             label={
-                ratioLocked
-                    ? tolgee.t(
-                          "shapes.edit.ratioLock.locked",
-                          "Spacings locked together: click to unlock",
-                      )
-                    : tolgee.t(
-                          "shapes.edit.ratioLock.unlocked",
-                          "Lock the two spacings together",
-                      )
+                sizes
+                    ? ratioLocked
+                        ? tolgee.t(
+                              "shapes.edit.ratioLock.sizesLocked",
+                              "Width and depth locked together: click to unlock",
+                          )
+                        : tolgee.t(
+                              "shapes.edit.ratioLock.sizesUnlocked",
+                              "Lock the width and depth together",
+                          )
+                    : ratioLocked
+                      ? tolgee.t(
+                            "shapes.edit.ratioLock.locked",
+                            "Spacings locked together: click to unlock",
+                        )
+                      : tolgee.t(
+                            "shapes.edit.ratioLock.unlocked",
+                            "Lock the two spacings together",
+                        )
             }
             pressed={ratioLocked}
             onClick={toggleRatioLock}
@@ -1281,6 +1264,8 @@ const FillPill = memo(function FillPill({
             <ChoiceMenus target={target} envFor={env} />
             {/* Who goes where on a Line (#528) */}
             <OrderMenu target={target} />
+            {/* Which guides a shape draws: an Arc's circle and angle lines (#634) */}
+            <GuidesMenu target={target} />
             <ModeMenu target={target} envFor={env} />
             {/* What the mode has, after a divider (owner); nothing, and no divider, when it
                 has none */}
@@ -1355,7 +1340,7 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
     /** Where it goes in `view`. The view isn't subscribed to: a pan or zoom moves the editor
      * without re-rendering it (#455) */
     // The angle lines meet at the circle's center, which the editor then keeps clear of too (#634)
-    const angleLines = useAngleLinesStore((s) => s.shown);
+    const angleLines = useShapeGuidesStore((s) => s.shown.angles);
     const centers = angleLines
         ? (kind.construction?.(params, spots) ?? [])
               .filter((c) => (c.spokes ?? []).length > 0)

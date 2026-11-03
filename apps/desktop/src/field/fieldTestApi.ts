@@ -203,7 +203,9 @@ export type FieldTestShapeOverlay = {
         rx: number;
         ry: number;
         rotation: number;
-        /** Where its angle lines go from its center (#634), field units; none when hidden */
+        /** Whether the circle itself is drawn (the Guides menu's Circle, #634) */
+        shown: boolean;
+        /** The ends its angle lines run through from its center (#634), field units; none when hidden */
         spokes: { x: number; y: number }[];
     }[];
     /** Its handles, in the viewport. */

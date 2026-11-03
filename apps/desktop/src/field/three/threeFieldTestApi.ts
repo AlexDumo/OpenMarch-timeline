@@ -1,5 +1,5 @@
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
-import { useAngleLinesStore } from "@/shapes/field/angleLines";
+import { useShapeGuidesStore } from "@/shapes/field/shapeGuides";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import type { FieldModeDrawing, FieldPoint } from "@/field/editor/fieldEditor";
 import type {
@@ -161,6 +161,24 @@ function lookOf(
 }
 
 /** What the editor's mode draws, with its handles in viewport CSS px (#204). */
+/** A shape's construction as the test API reads it, with what the Guides menu shows (#634) */
+function constructionOf(
+    drawing: FieldModeDrawing,
+    copy: (p: { x: number; y: number }) => { x: number; y: number },
+): FieldTestShapeOverlay["construction"] {
+    const { shown } = useShapeGuidesStore.getState();
+    return (drawing.construction ?? []).map(
+        ({ center, rx, ry, rotation, spokes }) => ({
+            center: copy(center),
+            rx,
+            ry,
+            rotation,
+            shown: shown.circle,
+            spokes: shown.angles ? (spokes ?? []).map(copy) : [],
+        }),
+    );
+}
+
 function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
     const drawn = field.modeDrawing();
     const element = field.element();
@@ -186,17 +204,7 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
         })),
         rings: (drawing.rings ?? []).map(copy),
         gaps: (drawing.gaps ?? []).map(copy),
-        construction: (drawing.construction ?? []).map(
-            ({ center, rx, ry, rotation, spokes }) => ({
-                center: copy(center),
-                rx,
-                ry,
-                rotation,
-                spokes: useAngleLinesStore.getState().shown
-                    ? (spokes ?? []).map(copy)
-                    : [],
-            }),
-        ),
+        construction: constructionOf(drawing, copy),
         stage: drawing.stage ?? null,
         knob: drawing.knob ? screen(drawing.knob.at) : null,
         centerDot: drawing.centerDot ? screen(drawing.centerDot) : null,

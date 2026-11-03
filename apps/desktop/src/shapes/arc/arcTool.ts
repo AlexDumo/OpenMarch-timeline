@@ -84,8 +84,6 @@ const BEND: ToolParam<LineParams> = {
     default: 90,
     range: { min: MIN_BEND, max: MAX_BEND },
     display: (p) => formatBend(bendOf(p)),
-    // The angle lines' button follows it (owner on #634)
-    angleLinesAfter: true,
     value: (p) => Math.abs(bendOf(p)),
     type(p, n, text, env) {
         const degrees = parseDegrees(text);
@@ -375,8 +373,9 @@ export const arcTool: ToolKind<LineParams> = {
     clickHandle: undefined,
     doubleClickHandle: undefined,
     menu: MENU,
-    // The whole circle the arc is part of, unless it already is one, with lines from its center
-    // to the arc's ends so its angle reads (owner on #634)
+    // The whole circle the arc is part of, unless it already is one, with angle lines from its
+    // center out through the arc's ends (owner on #634); the Guides menu shows either
+    guides: ["circle", "angles"],
     construction(params) {
         if (arcEnds(params) === "circle") return [];
         const g = arcGuide(params);

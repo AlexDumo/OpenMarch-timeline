@@ -19,7 +19,7 @@ import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import { GUIDE_INK, GUIDE_INK_TEXT } from "./guideInk";
 import { shapeAlone, useMarchersHidden } from "@/shapes/field/marchersHidden";
-import { useAngleLinesStore } from "@/shapes/field/angleLines";
+import { useShapeGuidesStore } from "@/shapes/field/shapeGuides";
 import {
     GROUP_LABEL_HEIGHT,
     GROUP_LABEL_PX,
@@ -48,7 +48,8 @@ const SUBTRACT_LASSO_DASH = "2 4";
 const SHAPE_OUTLINE_WIDTH = 1;
 const SHAPE_OUTLINE_DASH = "6 4";
 /** The circle a shape is drawn on (an Arc's, #634): short dashes, quieter than a drawing outline */
-const CONSTRUCTION_DASH = "3 5";
+/** How far an angle line runs from its circle's center, in field units: past any field */
+const GUIDE_REACH = 100_000;
 const SPOT_RADIUS = 4;
 const SPOT_WIDTH = 1.5;
 const WALK_WIDTH = 1;
@@ -528,44 +529,51 @@ const ShapeBody = memo(function ShapeBody({
     const fill = rgbaToString({ ...theme.shape, a: 0.06 });
     const open = drawing.stage === "open";
     const dots = drawing.stage === "drawing";
-    const angleLines = useAngleLinesStore((s) => s.shown);
+    const guides = useShapeGuidesStore((s) => s.shown);
+    // A shape's guides: solid, a shade lighter than the shape (owner on #634)
+    const guide = rgbaToString({ ...theme.shape, a: 0.55 });
     return (
         <>
-            {angleLines &&
+            {guides.angles &&
                 drawing.construction?.flatMap(({ center, spokes }, i) =>
-                    (spokes ?? []).map((to, j) => (
-                        // From the circle's center to an arc's end, so its angle reads (#634)
-                        <line
-                            key={`spoke-${i}-${j}`}
-                            x1={center.x}
-                            y1={center.y}
-                            x2={to.x}
-                            y2={to.y}
-                            stroke={walk}
-                            strokeWidth={SHAPE_OUTLINE_WIDTH}
-                            strokeDasharray={CONSTRUCTION_DASH}
-                            vectorEffect="non-scaling-stroke"
-                            data-testid="fieldShapeAngleLine"
-                        />
-                    )),
+                    (spokes ?? []).flatMap((to, j) => {
+                        // From the circle's center out through an arc's end and on past it, so
+                        // its angle reads (#634)
+                        const d = Math.hypot(to.x - center.x, to.y - center.y);
+                        if (!(d > 0)) return [];
+                        const k = GUIDE_REACH / d;
+                        return [
+                            <line
+                                key={`spoke-${i}-${j}`}
+                                x1={center.x}
+                                y1={center.y}
+                                x2={center.x + (to.x - center.x) * k}
+                                y2={center.y + (to.y - center.y) * k}
+                                stroke={guide}
+                                strokeWidth={SHAPE_OUTLINE_WIDTH}
+                                vectorEffect="non-scaling-stroke"
+                                data-testid="fieldShapeAngleLine"
+                            />,
+                        ];
+                    }),
                 )}
-            {drawing.construction?.map(({ center, rx, ry, rotation }, i) => (
-                // The circle or ellipse an arc is part of, faint under it (#634)
-                <ellipse
-                    key={`construction-${i}`}
-                    cx={center.x}
-                    cy={center.y}
-                    rx={rx}
-                    ry={ry}
-                    transform={`rotate(${(rotation * 180) / Math.PI} ${center.x} ${center.y})`}
-                    fill="none"
-                    stroke={walk}
-                    strokeWidth={SHAPE_OUTLINE_WIDTH}
-                    strokeDasharray={CONSTRUCTION_DASH}
-                    vectorEffect="non-scaling-stroke"
-                    data-testid="fieldShapeConstruction"
-                />
-            ))}
+            {guides.circle &&
+                drawing.construction?.map(({ center, rx, ry, rotation }, i) => (
+                    // The circle or ellipse an arc is part of, under it (#634)
+                    <ellipse
+                        key={`construction-${i}`}
+                        cx={center.x}
+                        cy={center.y}
+                        rx={rx}
+                        ry={ry}
+                        transform={`rotate(${(rotation * 180) / Math.PI} ${center.x} ${center.y})`}
+                        fill="none"
+                        stroke={guide}
+                        strokeWidth={SHAPE_OUTLINE_WIDTH}
+                        vectorEffect="non-scaling-stroke"
+                        data-testid="fieldShapeConstruction"
+                    />
+                ))}
             {drawing.outline &&
                 (drawing.openOutline ? (
                     // A line has no inside to fill (#524)
