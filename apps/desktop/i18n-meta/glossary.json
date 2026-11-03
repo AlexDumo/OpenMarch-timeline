@@ -444,6 +444,22 @@
                 "ja": ["バンド"]
             },
             "confidence": "medium"
+        },
+        {
+            "en": "snap",
+            "match": ["snap", "snapping"],
+            "meaning": "The Snap toggle on the toolbar and everything it controls: while dragging, marchers jump to the nearest grid step. The toggle caption, \"Snap off\" and \"Snap to grid\" must all use this word. \"Snap to holder\" (put a prop back with its holder) is a different meaning and may use another verb.",
+            "es": "ajuste",
+            "fr": "magnétisme",
+            "pt-BR": "ajuste",
+            "ja": "スナップ",
+            "accept": {
+                "es": ["ajustar", "ajusta"],
+                "fr": ["aligner", "magnétique"],
+                "pt-BR": ["ajustar", "ajusta"],
+                "ja": []
+            },
+            "confidence": "medium: the words Adobe and Figma use in each language"
         }
     ]
 }
