@@ -12,6 +12,7 @@ import {
     MIDDLE_KEY,
     withBend,
     withEnds,
+    withStretch,
     withSweep,
 } from "../arcGeometry";
 import {
@@ -336,6 +337,37 @@ describe("turning and flipping", () => {
         // Turned, it keeps its sweep
         const turned = withLineFrame(p, { ...frame, rotation: Math.PI / 2 });
         expect(bendOf(turned)).toBe(90);
+    });
+
+    it("stays readable turned or flipped when closed all the way round on an ellipse", () => {
+        const drawn = withEnds(
+            withStretch(
+                withBend(
+                    {
+                        ...arc(90),
+                        points: [
+                            { x: 3.7, y: 41.3, tension: 0 },
+                            { x: 113, y: 12, tension: 0 },
+                        ],
+                    },
+                    120,
+                ),
+                1.6,
+            ),
+            "circle",
+        );
+        expect(isArcParams(drawn)).toBe(true);
+        const frame = lineFrame(drawn);
+        for (let k = 1; k < 24; k++) {
+            const turned = withLineFrame(drawn, {
+                ...frame,
+                rotation: frame.rotation + (k * Math.PI) / 12,
+            });
+            expect(isArcParams(turned), `turned ${k * 15}°`).toBe(true);
+        }
+        expect(
+            isArcParams(withLineFrame(drawn, { ...frame, flipX: true })),
+        ).toBe(true);
     });
 });
 
@@ -813,6 +845,16 @@ describe("its stretch (owner on #634)", () => {
         const wide = param("stretch").type(p, 7, "1.5 wide", env) as LineParams;
         expect(arcStretch(wide)).toBeCloseTo(1 / 1.5, 6);
         expect(param("stretch").words!(wide, 7)!.after).toBe("wide");
+        // A decimal comma reads as a point; more than one number isn't a stretch
+        const comma = param("stretch").type(
+            p,
+            7,
+            "2,5 deep",
+            env,
+        ) as LineParams;
+        expect(arcStretch(comma)).toBeCloseTo(2.5, 6);
+        expect(param("stretch").type(p, 7, "1/2", env)).toBeNull();
+        expect(param("stretch").type(p, 7, "1.5x2", env)).toBeNull();
     });
 
     it("makes a circle in one click, its ends and degrees kept", () => {

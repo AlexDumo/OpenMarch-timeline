@@ -160,7 +160,6 @@ function lookOf(
     };
 }
 
-/** What the editor's mode draws, with its handles in viewport CSS px (#204). */
 /** A shape's construction as the test API reads it, with what the Guides menu shows (#634) */
 function constructionOf(
     drawing: FieldModeDrawing,
@@ -179,6 +178,7 @@ function constructionOf(
     );
 }
 
+/** What the editor's mode draws, with its handles in viewport CSS px (#204). */
 function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
     const drawn = field.modeDrawing();
     const element = field.element();

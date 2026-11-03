@@ -291,7 +291,7 @@ export type FieldModeDrawing = {
     /** The outline is open: drawn without joining its last point to its first (a line, #524) */
     openOutline?: boolean;
     /**
-     * Circles the shape is drawn on, faint and dashed under it: an Arc's whole circle (#634)
+     * Circles the shape is drawn on, quiet solid lines under it: an Arc's whole circle (#634)
      */
     construction?: readonly {
         center: FieldPoint;

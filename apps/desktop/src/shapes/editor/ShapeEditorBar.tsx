@@ -292,6 +292,9 @@ function ShapeEditorBar({
     );
     const shown = !shape.place && previewed !== null ? previewed : params;
     const dragged = useDraggedNumberStore((s) => s.key);
+    // An editor closed mid-drag never sees its drag end: let go of its number so later editors
+    // don't keep showing it
+    useEffect(() => () => useDraggedNumberStore.setState({ key: null }), []);
     const layout = env
         ? chipLayout(kind, shown, spots, { ...env, stepPx, anchor }, dragged)
         : {
@@ -679,11 +682,6 @@ const turnQuarter = (target: ShapeEditTarget) =>
     );
 
 /**
- * A number's drag: the change from the shape at the press, previewed live. `base` holds the
- * shape at the press. A spacing's (`guides`) shows the field lines a corner or the center lands
- * on while it goes (#452).
- */
-/**
  * The number being dragged, by its key: kept in the editor for its drag even where the shape stops
  * showing it (an Arc's stretch dragged onto a circle, #634), so the drag doesn't lose its number
  */
@@ -691,6 +689,11 @@ const useDraggedNumberStore = create<{ key: string | null }>(() => ({
     key: null,
 }));
 
+/**
+ * A number's drag: the change from the shape at the press, previewed live. `base` holds the
+ * shape at the press. A spacing's (`guides`) shows the field lines a corner or the center lands
+ * on while it goes (#452).
+ */
 const scrubWith = (
     target: ShapeEditTarget,
     base: { current: unknown },

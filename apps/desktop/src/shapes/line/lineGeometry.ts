@@ -1574,11 +1574,13 @@ export function withLineFrame(p: LineParams, frame: ShapeFrame): LineParams {
         const bend = q.bend !== undefined && flips ? -q.bend : q.bend;
         let ellipse = q.ellipse;
         if (ellipse) {
+            // The frame moves every direction alike, so map it from one fixed spot: points
+            // sharing an ellipse then keep exactly the same axis
             const angle = (ellipse.axis * Math.PI) / 180;
-            const from = moved(q);
+            const from = moved({ x: 0, y: 0 });
             const to = moved({
-                x: q.x + Math.cos(angle) * 100,
-                y: q.y + Math.sin(angle) * 100,
+                x: Math.cos(angle) * 100,
+                y: Math.sin(angle) * 100,
             });
             ellipse = {
                 ...ellipse,

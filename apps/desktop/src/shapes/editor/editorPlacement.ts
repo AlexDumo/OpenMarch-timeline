@@ -22,7 +22,7 @@ export interface PlacementInput {
     readonly knob?: XY;
     /**
      * The shape's handles in the field element's px: those inside the field count as part of the
-     * shape, so the editor never covers one (an Arc's radius handles out on its guide, #634)
+     * shape, so the editor never covers one (#634)
      */
     readonly handles?: readonly XY[];
     /** The editor's size */

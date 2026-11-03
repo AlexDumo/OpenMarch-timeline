@@ -272,7 +272,10 @@ const STRETCH: ToolParam<LineParams> = {
         const s = arcStretch(p);
         if (s === null) return null;
         const lower = text.toLowerCase();
-        const factor = Number.parseFloat(lower.replace(/[^0-9.]/g, ""));
+        // One number, with a point or a comma: "1.5", "2,5 deep"; anything else isn't a stretch
+        const numbers = lower.match(/\d*[.,]?\d+/g);
+        if (numbers?.length !== 1) return null;
+        const factor = Number.parseFloat(numbers[0]!.replace(",", "."));
         if (!(factor >= 1)) return null;
         const deep = lower.includes(
             tolgee.t("shapes.kinds.arc.size.wide", "wide").toLowerCase(),

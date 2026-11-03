@@ -47,7 +47,6 @@ const SUBTRACT_LASSO_DASH = "2 4";
  */
 const SHAPE_OUTLINE_WIDTH = 1;
 const SHAPE_OUTLINE_DASH = "6 4";
-/** The circle a shape is drawn on (an Arc's, #634): short dashes, quieter than a drawing outline */
 /** How far an angle line runs from its circle's center, in field units: past any field */
 const GUIDE_REACH = 100_000;
 const SPOT_RADIUS = 4;

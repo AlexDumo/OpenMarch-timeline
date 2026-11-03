@@ -621,7 +621,7 @@ export interface ToolKind<P> {
     /** Whether the outline is open, drawn without joining its last point to its first (a line) */
     outlineOpen?(params: P, n: number): boolean;
     /**
-     * Circles or ellipses the shape is drawn on, shown faint and dashed while it's edited: an
+     * Circles or ellipses the shape is drawn on, shown as quiet solid lines while it's edited: an
      * Arc's whole circle (owner on #634). None when absent.
      */
     construction?(params: P, n: number): readonly ConstructionCircle[];

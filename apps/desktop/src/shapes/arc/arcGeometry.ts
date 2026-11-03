@@ -51,8 +51,13 @@ export function isArcParams(params: unknown): params is LineParams {
     );
 }
 
+/** Whether two points run on the same ellipse, give or take float noise from turning it */
 const sameEllipse = (a?: LineEllipse, b?: LineEllipse): boolean =>
-    a === b || (!!a && !!b && a.ratio === b.ratio && a.axis === b.axis);
+    a === b ||
+    (!!a &&
+        !!b &&
+        Math.abs(a.ratio - b.ratio) < 1e-6 &&
+        Math.abs(((a.axis - b.axis + 540) % 360) - 180) < 1e-6);
 
 /** The ellipse the arc runs on, or undefined for a circle */
 export const ellipseOf = (p: LineParams): LineEllipse | undefined =>
