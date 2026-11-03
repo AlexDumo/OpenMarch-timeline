@@ -36,6 +36,7 @@ import {
     arcFootprint,
     withFootprint,
     withDegrees,
+    landedDegrees,
     bendHandlePoint,
     bendOf,
     drawArc,
@@ -97,12 +98,13 @@ const BEND: ToolParam<LineParams> = {
             ...(env.snap ? BEND_RATE : BEND_FINE_RATE),
         });
         if (degrees === was) return base;
-        return bent(
+        // Its middle handle lands on the grid or a field line as it goes (owner on #634)
+        const landed = landedDegrees(
             base,
-            n,
             Math.min(MAX_BEND, Math.max(MIN_BEND, degrees)),
             env,
         );
+        return landed === was ? base : bent(base, n, landed, env);
     },
     widen(p, n, by, env) {
         const degrees = Math.abs(bendOf(p)) + by * 15;
@@ -285,9 +287,23 @@ const ENDS: ToolChoice<LineParams> = {
         isEnds(value) ? closedAs(p, n, value, env) : p,
 };
 
-/** The Line's spacing menu, but measured along the arc only: its other measures are a Line's */
+/** One of the Line's menus, as the Arc shares it */
 const lineChoice = (key: string) =>
     lineTool.choices!.find((choice) => choice.key === key)!;
+
+/**
+ * The Line's Measured menu for the Arc (owner on #634): along the arc, straight from marcher to
+ * marcher, or ↔ side to side, which puts each marcher a step count off a yard line (an arc bowing
+ * front or back up to a half turn). No offset: that's a straight line's.
+ */
+const MEASURED: ToolChoice<LineParams> = (() => {
+    const line = lineChoice("measured");
+    return {
+        ...line,
+        options: (...args: Parameters<typeof line.options>) =>
+            line.options(...args).filter((o) => o.value !== "offset"),
+    };
+})();
 
 /** A right-click on any of its handles: how it's closed, as the editor's menu has it */
 const MENU: ToolHandleMenu<LineParams> = {
@@ -321,7 +337,7 @@ export const arcTool: ToolKind<LineParams> = {
     shape: arcShape,
     keywords: ["arc", "bow", "semicircle"],
     params: [INTERVAL, BEND, WIDTH, DEPTH],
-    choices: [ENDS, lineChoice("spacing")],
+    choices: [ENDS, lineChoice("spacing"), MEASURED],
     readable: isArcParams,
     // Its width and depth can be kept in proportion with the editor's lock (owner on #634)
     ratioLock: true,

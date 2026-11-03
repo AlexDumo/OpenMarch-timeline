@@ -223,6 +223,41 @@ describe("its degrees (owner on #634)", () => {
         expect(dist(flat.points[1]!, { x: 160, y: 200 })).toBeLessThan(1e-6);
     });
 
+    it("lands its middle on half steps, or a field line, as its degrees are dragged", () => {
+        const t = halfTurn();
+        const roles = {
+            fine: false,
+            constrain: false,
+            fromCenter: false,
+        } as never;
+        const drag = (e: ToolEnv) =>
+            bend().scrub(
+                t.params,
+                7,
+                // A degree per 2 px, or per px with fine
+                { dx: e.snap ? -120 : -60, dy: 0, axis: "x", roles },
+                e,
+            ) as LineParams;
+        // 120° would stand its middle 17.32 off its ends' line: landed at 15, 1½ steps
+        let p = drag(env);
+        expect(dist(bendHandlePoint(p), { x: 130, y: 185 })).toBeLessThan(1e-6);
+        expect(dist(p.points[0]!, { x: 100, y: 200 })).toBeLessThan(1e-6);
+        // A hash it comes near takes it instead
+        p = drag({ ...env, fieldLines: { x: [], y: [183] }, pullRadius: 4 });
+        expect(bendHandlePoint(p).y).toBeCloseTo(183, 6);
+        // With fine, the degrees as dragged
+        p = drag(fine);
+        expect(Math.abs(bendOf(p))).toBeCloseTo(120, 6);
+        // A half turn is a stop: just under it stays there
+        const under = bend().scrub(
+            t.params,
+            7,
+            { dx: -4, dy: 0, axis: "x", roles },
+            env,
+        );
+        expect(Math.abs(bendOf(under as LineParams))).toBeCloseTo(180, 6);
+    });
+
     it("keeps its circle past a half turn, and across it", () => {
         const t = halfTurn();
         // 180 → 270: the circle stays
@@ -678,5 +713,48 @@ describe("stretching it (owner on #634)", () => {
             const v = (-dx * Math.sin(m.axis) + dy * Math.cos(m.axis)) / m.ry;
             expect(u * u + v * v).toBeCloseTo(1, 3);
         }
+    });
+});
+
+describe("measured side to side (owner on #634)", () => {
+    const measured = () => arcTool.choices!.find((c) => c.key === "measured")!;
+    const degrees = () => arcTool.params.find((q) => q.key === "bend")!;
+    const quarter = () => {
+        const t = drawn(7, { x: 100, y: 200 }, { x: 160, y: 200 });
+        return paramsOf(t);
+    };
+
+    it("offers along, straight, side to side and front to back, but no offset", () => {
+        const values = measured()
+            .options(quarter(), 7)
+            .map((o) => o.value);
+        expect(values).toEqual(["along", "straight", "x", "y"]);
+    });
+
+    it("spaces its marchers evenly side to side, each on the arc", () => {
+        const p = measured().pick(quarter(), 7, "x", env) as LineParams;
+        expect(measured().current(p, 7)).toBe("x");
+        const spots = lineSpots(p, 7);
+        const g = arcGuide(p)!;
+        spots.forEach((q, i) => {
+            expect(q.x).toBeCloseTo(100 + i * 10, 6);
+            expect(dist(q, g.center)).toBeCloseTo(g.rx, 6);
+        });
+    });
+
+    it("keeps each marcher's side-to-side spot as its degrees change", () => {
+        const p = measured().pick(quarter(), 7, "x", env) as LineParams;
+        const deeper = degrees().type(p, 7, "150", env) as LineParams;
+        lineSpots(deeper, 7).forEach((q, i) =>
+            expect(q.x).toBeCloseTo(100 + i * 10, 6),
+        );
+    });
+
+    it("can't be side to side once it wraps back past a half turn", () => {
+        const most = withSweep(quarter(), 270);
+        const x = measured()
+            .options(most, 7)
+            .find((o) => o.value === "x")!;
+        expect(x.disabled).toBeTruthy();
     });
 });

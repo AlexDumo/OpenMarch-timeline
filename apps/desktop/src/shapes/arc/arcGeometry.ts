@@ -233,6 +233,70 @@ export function withDegrees(p: LineParams, degrees: number): LineParams {
     return withSweep(withBend(p, sign * HALF_TURN), size);
 }
 
+/** How far the arc's middle stands off its ends' line, and which way, for `degrees` of it */
+function middleOff(p: LineParams, degrees: number) {
+    const q = withDegrees(p, degrees);
+    const [a, b] = q.points as [LinePoint, LinePoint];
+    const base = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const mid = bendHandlePoint(q);
+    const height = Math.hypot(mid.x - base.x, mid.y - base.y);
+    const way =
+        height > 1e-9
+            ? { x: (mid.x - base.x) / height, y: (mid.y - base.y) / height }
+            : null;
+    return { mid, height, way };
+}
+
+/**
+ * The degrees a drag of the editor's degrees to `degrees` lands on (owner on #634): up to a half
+ * turn, where the arc's ends stay, its middle handle goes onto a field line it comes near (on an
+ * arc square to the field), or else its height off the ends' line onto half steps, with a half
+ * turn itself a stop. Past a half turn, its middle stays put anyway, so `degrees` as dragged.
+ */
+export function landedDegrees(
+    p: LineParams,
+    degrees: number,
+    env: ToolEnv,
+): number {
+    if (degrees > HALF_TURN || !isArcParams(p)) return degrees;
+    const { mid, height, way } = middleOff(p, degrees);
+    if (!way) return degrees;
+    let target: number | null = null;
+    if (env.pull !== false && env.fieldLines) {
+        const pull = linePull(
+            [mid],
+            env.fieldLines,
+            Math.min(env.pullRadius ?? 0, env.stepPx / 4),
+        );
+        const SQUARE = 0.999;
+        if (Math.abs(way.x) > SQUARE && pull.x !== null)
+            target = height + pull.x / way.x;
+        else if (Math.abs(way.y) > SQUARE && pull.y !== null)
+            target = height + pull.y / way.y;
+    }
+    const most = middleOff(p, HALF_TURN).height;
+    if (target === null) {
+        if (!env.snap) return degrees;
+        const half = env.stepPx / 2;
+        const rounded = Math.max(half, Math.round(height / half) * half);
+        target =
+            Math.abs(height - most) < Math.abs(height - rounded)
+                ? most
+                : rounded;
+    }
+    if (target >= most - 1e-9) return HALF_TURN;
+    // Its height grows with its degrees: found by halving
+    let low = MIN_BEND;
+    let high = HALF_TURN;
+    if (target <= middleOff(p, low).height) return low;
+    for (let i = 0; i < 48; i++) {
+        const at = (low + high) / 2;
+        if (middleOff(p, at).height < target) low = at;
+        else high = at;
+    }
+    return (low + high) / 2;
+}
+
 /** How near equal the guide's radii stick to a circle, as a share of the larger */
 const ROUND_STICK = 0.05;
 

@@ -9,6 +9,7 @@ questions:
   - Did stretching the arc by its ends and middle feel like stretching a box?
   - Was setting the degrees from the editor enough, or did you want a handle for it on the field?
   - Did the arc's size numbers (width × depth of the arc itself) tell you what you needed?
+  - Was spacing the arc side to side (↔) useful, for example for teaching?
   - Did closing (with a straight line, or all the way around) do what you expected?
 ---
 
@@ -26,7 +27,11 @@ Select some marchers, open the **Shapes** tab and pick **Arc** (after Curve).
 - Set how far it turns with the degrees in the editor (drag or type). Up to
   a half circle (180°) its ends stay put and its middle moves, so the end
   marchers keep their distance. Past 180° the dashed circle stays put and
-  the arc wraps further around it.
+  the arc wraps further around it. Dragging the degrees lands the middle
+  handle on half steps and catches it on hashes.
+- Try **Measured → ↔ Side to side**: each marcher sits an even number of
+  steps apart side to side, which is easy to read off the yard lines. Their
+  side-to-side spots stay put as you change the degrees (up to 180°).
 - The editor also shows the room the arc takes ("60 × 30 steps": how far it
   reaches side to side, and how deep it is from its ends to its far edge).
   Up to a half circle the first number is the distance between the two end
