@@ -772,7 +772,7 @@ describe("measured side to side (owner on #634)", () => {
     });
 });
 
-describe("its radius and stretch (owner on #634)", () => {
+describe("its stretch (owner on #634)", () => {
     const param = (key: string) => arcTool.params.find((q) => q.key === key)!;
     const shown = (key: string, p: LineParams) =>
         param(key).shown?.(p, 7) ?? true;
@@ -788,43 +788,17 @@ describe("its radius and stretch (owner on #634)", () => {
             .choices!.find((c) => c.key === "spacing")!
             .pick(p, 7, "keep", env) as LineParams;
 
-    it("shows the radius on a circle, and the stretch on an ellipse", () => {
+    it("shows the stretch on an ellipse only, and no radius", () => {
         const round = paramsOf(halfTurn());
-        expect(shown("radius", round)).toBe(true);
         expect(shown("stretch", round)).toBe(false);
-        expect(param("radius").display(round, 7, STEP)).toBe("3");
-        expect(param("radius").words!(round, 7)).toEqual({
-            before: "· r",
-            after: "steps",
-        });
+        expect(arcTool.params.map((q) => q.key)).not.toContain("radius");
         const oval = deeper();
-        expect(shown("radius", oval)).toBe(false);
         expect(shown("stretch", oval)).toBe(true);
         expect(param("stretch").display(oval, 7, STEP)).toBe("1.33×");
         expect(param("stretch").words!(oval, 7)).toEqual({
             before: "·",
             after: "deep",
         });
-    });
-
-    it("takes a typed radius, keeping its degrees and the middle of its ends' line", () => {
-        const p = param("radius").type(
-            paramsOf(halfTurn()),
-            7,
-            "4",
-            env,
-        ) as LineParams;
-        expect(arcGuide(p)!.rx).toBeCloseTo(40, 6);
-        expect(Math.abs(bendOf(p))).toBeCloseTo(180, 6);
-        expect((p.points[0]!.x + p.points[1]!.x) / 2).toBeCloseTo(130, 6);
-        for (const q of p.points) expect(q.y).toBeCloseTo(200, 6);
-    });
-
-    it("greys out the radius in Keep interval, which sets it", () => {
-        const p = keep(paramsOf(halfTurn()));
-        expect(param("radius").readOnly!(p, 7)).toBeTruthy();
-        expect(param("radius").type(p, 7, "4", env)).toBeNull();
-        expect(param("radius").readOnly!(paramsOf(halfTurn()), 7)).toBeNull();
     });
 
     it("takes a typed stretch, keeping its ends and degrees up to a half turn", () => {

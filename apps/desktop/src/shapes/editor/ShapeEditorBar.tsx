@@ -410,7 +410,6 @@ function ShapeEditorBar({
                                     canLess={x.less !== null}
                                     canMore={x.more !== null}
                                     glyph={null}
-                                    readOnly={x.readOnly}
                                     actions={numbers}
                                 />
                                 {x.param.button &&
@@ -782,7 +781,6 @@ const NumberChip = memo(function NumberChip({
     glyph,
     glyphAfter = false,
     derived = false,
-    readOnly = null,
     actions,
 }: {
     param: Param;
@@ -799,8 +797,6 @@ const NumberChip = memo(function NumberChip({
     glyphAfter?: boolean;
     /** Shown as about so much: pressing it snaps it to a half step (owner on #459) */
     derived?: boolean;
-    /** Why it can't be changed here: shown greyed out, with why on hover (#634) */
-    readOnly?: string | null;
     actions: ReturnType<typeof numberActions>;
 }) {
     const plain = useMemo(() => actions.scrub(param), [actions, param]);
@@ -870,34 +866,20 @@ const NumberChip = memo(function NumberChip({
                     <MinusIcon size={12} />
                 </IconButton>
             )}
-            {readOnly !== null ? (
-                <Tip label={readOnly}>
-                    <span
-                        className="text-text/50 tabular-nums"
-                        aria-label={`${param.label}: ${display}. ${readOnly}`}
-                        aria-disabled
-                        data-testid={`shape-editor-${param.key}`}
-                        data-read-only
-                    >
-                        {display}
-                    </span>
-                </Tip>
-            ) : (
-                <ScrubNumber
-                    display={display}
-                    axis={param.drag}
-                    label={param.label}
-                    testId={`shape-editor-${param.key}`}
-                    {...scrub}
-                    onType={(text) => actions.type(param, text)}
-                    onTyping={showsStep ? onTyping : undefined}
-                    onSnap={
-                        derived && param.snap
-                            ? () => actions.snap(param)
-                            : undefined
-                    }
-                />
-            )}
+            <ScrubNumber
+                display={display}
+                axis={param.drag}
+                label={param.label}
+                testId={`shape-editor-${param.key}`}
+                {...scrub}
+                onType={(text) => actions.type(param, text)}
+                onTyping={showsStep ? onTyping : undefined}
+                onSnap={
+                    derived && param.snap
+                        ? () => actions.snap(param)
+                        : undefined
+                }
+            />
 
             {param.stepper && (
                 <IconButton

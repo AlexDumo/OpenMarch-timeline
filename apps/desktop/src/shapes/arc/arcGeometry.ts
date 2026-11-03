@@ -582,20 +582,6 @@ export function withStretch(p: LineParams, stretch: number): LineParams {
     return rescaled(p, g, 1, k, 0, backOf(g, box));
 }
 
-/**
- * The arc on a circle of radius `r`, its degrees kept (owner on #634): scaled evenly about the
- * middle of its ends' line, so its ends move apart or together and it gets deeper with them. An
- * arc on an ellipse is unchanged: it has no one radius.
- */
-export function withRadius(p: LineParams, r: number): LineParams {
-    const g = arcGuide(p);
-    if (!g || !(r > 0) || !isRound(p)) return p;
-    const box = extentOnAxes(g);
-    const k = r / g.rx;
-    if (Math.abs(k - 1) < 1e-12) return p;
-    return rescaled(p, g, k, k, (box.left + box.right) / 2, backOf(g, box));
-}
-
 /** An arc drawn from `from` to `to`: its ends landed as a Line's, bowing a quarter turn left */
 export function drawArc(
     from: XY,

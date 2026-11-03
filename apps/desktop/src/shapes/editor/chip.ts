@@ -25,8 +25,6 @@ export interface ChipNumber {
     readonly more: unknown;
     /** Worked out from the shape: shown, not changed ({@link ToolParam.derived}) */
     readonly derived: boolean;
-    /** Why it can't be changed here, greyed out ({@link ToolParam.readOnly}); null when it can */
-    readonly readOnly: string | null;
 }
 
 /**
@@ -58,7 +56,7 @@ export function chipLayout(
     env: ToolEnv,
     /**
      * The number being dragged, kept while its drag lasts even where the shape no longer shows it:
-     * an Arc's stretch dragged onto a circle, where the radius takes its place (#634)
+     * an Arc's stretch dragged onto a circle, which shows none (#634)
      */
     dragged: string | null = null,
 ): ChipLayout {
@@ -77,7 +75,6 @@ export function chipLayout(
             less: param.stepper?.by(params, n, -1, env) ?? null,
             more: param.stepper?.by(params, n, 1, env) ?? null,
             derived: param.derived?.(params, n, env.stepPx) ?? false,
-            readOnly: param.readOnly?.(params, n) ?? null,
         }));
     const groups = kind.groups?.shown(params, n, env.stepPx) ?? null;
     const intervals = groups ? [] : numbers.filter((x) => x.param.interval);

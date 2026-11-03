@@ -36,7 +36,6 @@ import {
     arcFootprint,
     arcStretch,
     isRound,
-    withRadius,
     withStretch,
     withFootprint,
     withDegrees,
@@ -217,69 +216,6 @@ function guideParam(way: "width" | "depth"): ToolParam<LineParams> {
 const WIDTH = guideParam("width");
 const DEPTH = guideParam("depth");
 
-/** Why an arc's radius can't be set while its interval is kept */
-const radiusKept = (p: LineParams): string | null =>
-    p.spacing.mode === "keep"
-        ? tolgee.t(
-              "shapes.kinds.arc.radiusKept",
-              "Keep interval sets the radius: change the interval, or switch to Fit",
-          )
-        : null;
-
-/**
- * The radius of the circle the arc is on, in steps, shown while it's on one (owner on #634): how
- * tight it is, "r 35 steps". Typed or dragged, the arc keeps its degrees and grows about the
- * middle of its ends' line. In Keep interval the interval sets it, so it's shown greyed out.
- */
-const RADIUS: ToolParam<LineParams> = {
-    key: "radius",
-    get label() {
-        return tolgee.t(
-            "shapes.kinds.arc.params.radius",
-            "Radius of the circle the arc is on, in steps",
-        );
-    },
-    unit: "steps",
-    primary: true,
-    drag: "x",
-    interval: false,
-    blends: true,
-    range: { min: 0.5 },
-    shown: (p) => isRound(p),
-    words: () => ({
-        before: tolgee.t("shapes.kinds.arc.size.radius", "· r"),
-        after: tolgee.t("shapes.kinds.arc.size.steps", "steps"),
-    }),
-    readOnly: radiusKept,
-    display: (p, _n, stepPx) => {
-        const g = arcGuide(p);
-        return g ? formatSteps(g.rx / stepPx) : "";
-    },
-    value: (p, _n, stepPx) => (arcGuide(p)?.rx ?? 0) / stepPx,
-    type(p, n, text, env) {
-        const steps = parseSteps(text);
-        if (steps === null || !(steps > 0) || radiusKept(p)) return null;
-        return keptInterval(withRadius(p, steps * env.stepPx), n, env);
-    },
-    set: (p, n, steps, env) =>
-        radiusKept(p)
-            ? p
-            : keptInterval(withRadius(p, steps * env.stepPx), n, env),
-    scrub(base, n, m, env) {
-        const g = arcGuide(base);
-        if (!g || radiusKept(base)) return base;
-        const was = g.rx / env.stepPx;
-        const steps = scrubValue(
-            was,
-            scrubDistance("x", m.dx, m.dy),
-            0,
-            spacingRate(env.snap, "x"),
-        );
-        if (steps === was || steps < 0.5) return base;
-        return keptInterval(withRadius(base, steps * env.stepPx), n, env);
-    },
-};
-
 /**
  * How stretched an arc's ellipse is, as one number either side of a circle (owner on #634): 0 a
  * circle, 0.3 for 1.3 times as deep as wide ("1.3× deep"), -0.3 for as wide ("1.3× wide")
@@ -297,7 +233,8 @@ const stretchOf = (factor: number, deep: boolean): number =>
  * How stretched the ellipse an arc is on is, shown while it's on one (owner on #634): "· 1.3×
  * deep" or "· 1.3× wide", with Make circle after it. Typed or dragged, it keeps its degrees and,
  * up to a half turn, its ends too: only its depth changes, and in Fit its interval follows.
- * Dragged, it passes through a circle, where the radius takes its place.
+ * Dragged, it passes through a circle ("1× circle"), and let go there it's gone: a circle needs
+ * no stretch, and the step interval sizes it.
  */
 const STRETCH: ToolParam<LineParams> = {
     key: "stretch",
@@ -495,9 +432,7 @@ export const arcTool: ToolKind<LineParams> = {
     ...lineTool,
     shape: arcShape,
     keywords: ["arc", "bow", "semicircle"],
-    // The stretch before the radius: dragged onto a circle, the radius appears after it, not under
-    // the pointer
-    params: [INTERVAL, BEND, WIDTH, DEPTH, STRETCH, RADIUS],
+    params: [INTERVAL, BEND, WIDTH, DEPTH, STRETCH],
     choices: [ENDS, lineChoice("spacing"), MEASURED],
     readable: isArcParams,
     // Its width and depth can be kept in proportion with the editor's lock (owner on #634)

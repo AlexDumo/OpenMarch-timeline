@@ -213,11 +213,6 @@ export interface ToolParam<P> {
      */
     readonly ratioLockAfter?: boolean;
     /**
-     * Shown but not changed here, greyed out, with why: an Arc's radius in Keep interval, where
-     * the interval decides it (owner on #634). Changeable when absent or null.
-     */
-    readonly readOnly?: (params: P, n: number) => string | null;
-    /**
      * A button just after the number that changes the shape in one click: an Arc's Make circle
      * after its stretch (owner on #634). Null from `apply` where it can't.
      */

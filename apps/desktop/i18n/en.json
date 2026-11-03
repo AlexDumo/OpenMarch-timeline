@@ -2405,7 +2405,6 @@
                     "bend": "How far the arc turns",
                     "width": "How far the arc reaches side to side, in steps",
                     "depth": "How deep the arc is, from its ends to its far edge, in steps",
-                    "radius": "Radius of the circle the arc is on, in steps",
                     "stretch": "How stretched the ellipse the arc is on is: how many times deeper than wide, or wider than deep"
                 },
                 "ends": {
@@ -2417,13 +2416,11 @@
                 },
                 "size": {
                     "steps": "steps",
-                    "radius": "· r",
                     "deep": "deep",
                     "wide": "wide",
                     "round": "circle"
                 },
-                "makeCircle": "Make circle",
-                "radiusKept": "Keep interval sets the radius: change the interval, or switch to Fit"
+                "makeCircle": "Make circle"
             },
             "block": {
                 "across": "Across",
