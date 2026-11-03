@@ -10,6 +10,7 @@ questions:
   - Was setting the degrees from the editor enough, or did you want a handle for it on the field?
   - Did the arc's size numbers (width × depth of the arc itself) tell you what you needed?
   - Was spacing the arc side to side (↔) useful, for example for teaching?
+  - Did the radius, the stretch and Make circle make sense?
   - Did closing (with a straight line, or all the way around) do what you expected?
 ---
 
@@ -41,6 +42,12 @@ Select some marchers, open the **Shapes** tab and pick **Arc** (after Curve).
   marchers. Both change as you change the degrees; drag or type either. The
   lock after them keeps the two in proportion, for the handles too (Cmd/Ctrl
   frees them for one drag).
+- After the size, the editor says how tight the arc is: on a circle its
+  radius ("r 35 steps"), which you can drag or type; on an ellipse how
+  stretched it is ("1.3× deep" or "1.3× wide"), with **Make circle** to go
+  back to a circle. In Fit these keep the ends and the interval follows; in
+  Keep interval the interval holds and the ends move (the radius is greyed
+  out there, because the interval sets it).
 - Try **Open or closed**: **Close with a straight line** and fill it with
   **Grid**, or close it all the way around.
 

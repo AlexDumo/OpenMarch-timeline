@@ -34,6 +34,10 @@ import {
     MIDDLE_KEY,
     stretchArc,
     arcFootprint,
+    arcStretch,
+    isRound,
+    withRadius,
+    withStretch,
     withFootprint,
     withDegrees,
     landedDegrees,
@@ -213,6 +217,158 @@ function guideParam(way: "width" | "depth"): ToolParam<LineParams> {
 const WIDTH = guideParam("width");
 const DEPTH = guideParam("depth");
 
+/** Why an arc's radius can't be set while its interval is kept */
+const radiusKept = (p: LineParams): string | null =>
+    p.spacing.mode === "keep"
+        ? tolgee.t(
+              "shapes.kinds.arc.radiusKept",
+              "Keep interval sets the radius: change the interval, or switch to Fit",
+          )
+        : null;
+
+/**
+ * The radius of the circle the arc is on, in steps, shown while it's on one (owner on #634): how
+ * tight it is, "r 35 steps". Typed or dragged, the arc keeps its degrees and grows about the
+ * middle of its ends' line. In Keep interval the interval sets it, so it's shown greyed out.
+ */
+const RADIUS: ToolParam<LineParams> = {
+    key: "radius",
+    get label() {
+        return tolgee.t(
+            "shapes.kinds.arc.params.radius",
+            "Radius of the circle the arc is on, in steps",
+        );
+    },
+    unit: "steps",
+    primary: true,
+    drag: "x",
+    interval: false,
+    blends: true,
+    range: { min: 0.5 },
+    shown: (p) => isRound(p),
+    words: () => ({
+        before: tolgee.t("shapes.kinds.arc.size.radius", "· r"),
+        after: tolgee.t("shapes.kinds.arc.size.steps", "steps"),
+    }),
+    readOnly: radiusKept,
+    display: (p, _n, stepPx) => {
+        const g = arcGuide(p);
+        return g ? formatSteps(g.rx / stepPx) : "";
+    },
+    value: (p, _n, stepPx) => (arcGuide(p)?.rx ?? 0) / stepPx,
+    type(p, n, text, env) {
+        const steps = parseSteps(text);
+        if (steps === null || !(steps > 0) || radiusKept(p)) return null;
+        return keptInterval(withRadius(p, steps * env.stepPx), n, env);
+    },
+    set: (p, n, steps, env) =>
+        radiusKept(p)
+            ? p
+            : keptInterval(withRadius(p, steps * env.stepPx), n, env),
+    scrub(base, n, m, env) {
+        const g = arcGuide(base);
+        if (!g || radiusKept(base)) return base;
+        const was = g.rx / env.stepPx;
+        const steps = scrubValue(
+            was,
+            scrubDistance("x", m.dx, m.dy),
+            0,
+            spacingRate(env.snap, "x"),
+        );
+        if (steps === was || steps < 0.5) return base;
+        return keptInterval(withRadius(base, steps * env.stepPx), n, env);
+    },
+};
+
+/**
+ * How stretched an arc's ellipse is, as one number either side of a circle (owner on #634): 0 a
+ * circle, 0.3 for 1.3 times as deep as wide ("1.3× deep"), -0.3 for as wide ("1.3× wide")
+ */
+const signedStretch = (s: number): number => (s >= 1 ? s - 1 : 1 - 1 / s);
+const fromSigned = (v: number): number => (v >= 0 ? 1 + v : 1 / (1 - v));
+/** A dragged stretch moves by this much a notch, and lands on it with the ladder on */
+const STRETCH_NOTCH = 0.05;
+
+/** The stretch with `factor` (1 or more) either way, `deep` deciding which */
+const stretchOf = (factor: number, deep: boolean): number =>
+    deep ? factor : 1 / factor;
+
+/**
+ * How stretched the ellipse an arc is on is, shown while it's on one (owner on #634): "· 1.3×
+ * deep" or "· 1.3× wide", with Make circle after it. Typed or dragged, it keeps its degrees and,
+ * up to a half turn, its ends too: only its depth changes, and in Fit its interval follows.
+ * Dragged, it passes through a circle, where the radius takes its place.
+ */
+const STRETCH: ToolParam<LineParams> = {
+    key: "stretch",
+    get label() {
+        return tolgee.t(
+            "shapes.kinds.arc.params.stretch",
+            "How stretched the ellipse the arc is on is: how many times deeper than wide, or wider than deep",
+        );
+    },
+    unit: "ratio",
+    primary: true,
+    drag: "x",
+    interval: false,
+    blends: true,
+    shown: (p) => arcStretch(p) !== null && !isRound(p),
+    words: (p) => ({
+        before: "·",
+        after:
+            (arcStretch(p) ?? 1) >= 1
+                ? tolgee.t("shapes.kinds.arc.size.deep", "deep")
+                : tolgee.t("shapes.kinds.arc.size.wide", "wide"),
+    }),
+    display: (p) => {
+        const s = arcStretch(p) ?? 1;
+        const factor = s >= 1 ? s : 1 / s;
+        return `${Math.round(factor * 100) / 100}×`;
+    },
+    value: (p) => {
+        const s = arcStretch(p) ?? 1;
+        return s >= 1 ? s : 1 / s;
+    },
+    type(p, n, text, env) {
+        const s = arcStretch(p);
+        if (s === null) return null;
+        const lower = text.toLowerCase();
+        const factor = Number.parseFloat(lower.replace(/[^0-9.]/g, ""));
+        if (!(factor >= 1)) return null;
+        const deep = lower.includes(
+            tolgee.t("shapes.kinds.arc.size.wide", "wide").toLowerCase(),
+        )
+            ? false
+            : lower.includes(
+                    tolgee
+                        .t("shapes.kinds.arc.size.deep", "deep")
+                        .toLowerCase(),
+                )
+              ? true
+              : s >= 1;
+        return keptInterval(withStretch(p, stretchOf(factor, deep)), n, env);
+    },
+    scrub(base, n, m, env) {
+        const s = arcStretch(base);
+        if (s === null) return base;
+        const was = signedStretch(s);
+        const notches = Math.trunc(
+            scrubDistance("x", m.dx, m.dy) / (env.snap ? 4 : 2),
+        );
+        if (notches === 0) return base;
+        let v = was + notches * (env.snap ? STRETCH_NOTCH : 0.01);
+        if (env.snap) v = Math.round(v / STRETCH_NOTCH) * STRETCH_NOTCH;
+        if (Math.abs(v - was) < 1e-9) return base;
+        return keptInterval(withStretch(base, fromSigned(v)), n, env);
+    },
+    button: {
+        get label() {
+            return tolgee.t("shapes.kinds.arc.makeCircle", "Make circle");
+        },
+        apply: (p, n, env) => keptInterval(withStretch(p, 1), n, env),
+    },
+};
+
 /** A small arc of `bend` degrees closed as `ends`, with `n` marchers laid out on it */
 function arcPicture(ends: ArcEnds, n: number): ToolChoicePicture {
     const open: LineParams = withBend(
@@ -336,7 +492,7 @@ export const arcTool: ToolKind<LineParams> = {
     ...lineTool,
     shape: arcShape,
     keywords: ["arc", "bow", "semicircle"],
-    params: [INTERVAL, BEND, WIDTH, DEPTH],
+    params: [INTERVAL, BEND, WIDTH, DEPTH, RADIUS, STRETCH],
     choices: [ENDS, lineChoice("spacing"), MEASURED],
     readable: isArcParams,
     // Its width and depth can be kept in proportion with the editor's lock (owner on #634)

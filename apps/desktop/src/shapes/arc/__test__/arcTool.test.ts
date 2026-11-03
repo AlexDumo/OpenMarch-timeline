@@ -3,6 +3,8 @@ import { arcTool } from "../arcTool";
 import {
     arcEnds,
     arcGuide,
+    arcStretch,
+    isRound,
     bendHandlePoint,
     bendOf,
     ellipseOf,
@@ -766,5 +768,135 @@ describe("measured side to side (owner on #634)", () => {
             .options(most, 7)
             .find((o) => o.value === "x")!;
         expect(x.disabled).toBeTruthy();
+    });
+});
+
+describe("its radius and stretch (owner on #634)", () => {
+    const param = (key: string) => arcTool.params.find((q) => q.key === key)!;
+    const shown = (key: string, p: LineParams) =>
+        param(key).shown?.(p, 7) ?? true;
+    const deeper = () => paramsOf(onHandleTop(halfTurn(), { x: 130, y: 160 }));
+    const onHandleTop = (t: ToolState, to: XY) => {
+        let s = pointerMove(t, { x: 130, y: 170 }, env);
+        s = press(s, { x: 130, y: 170 }, env);
+        s = pointerMove(s, to, env);
+        return release(s, ctx, null);
+    };
+    const keep = (p: LineParams) =>
+        arcTool
+            .choices!.find((c) => c.key === "spacing")!
+            .pick(p, 7, "keep", env) as LineParams;
+
+    it("shows the radius on a circle, and the stretch on an ellipse", () => {
+        const round = paramsOf(halfTurn());
+        expect(shown("radius", round)).toBe(true);
+        expect(shown("stretch", round)).toBe(false);
+        expect(param("radius").display(round, 7, STEP)).toBe("3");
+        expect(param("radius").words!(round, 7)).toEqual({
+            before: "· r",
+            after: "steps",
+        });
+        const oval = deeper();
+        expect(shown("radius", oval)).toBe(false);
+        expect(shown("stretch", oval)).toBe(true);
+        expect(param("stretch").display(oval, 7, STEP)).toBe("1.33×");
+        expect(param("stretch").words!(oval, 7)).toEqual({
+            before: "·",
+            after: "deep",
+        });
+    });
+
+    it("takes a typed radius, keeping its degrees and the middle of its ends' line", () => {
+        const p = param("radius").type(
+            paramsOf(halfTurn()),
+            7,
+            "4",
+            env,
+        ) as LineParams;
+        expect(arcGuide(p)!.rx).toBeCloseTo(40, 6);
+        expect(Math.abs(bendOf(p))).toBeCloseTo(180, 6);
+        expect((p.points[0]!.x + p.points[1]!.x) / 2).toBeCloseTo(130, 6);
+        for (const q of p.points) expect(q.y).toBeCloseTo(200, 6);
+    });
+
+    it("greys out the radius in Keep interval, which sets it", () => {
+        const p = keep(paramsOf(halfTurn()));
+        expect(param("radius").readOnly!(p, 7)).toBeTruthy();
+        expect(param("radius").type(p, 7, "4", env)).toBeNull();
+        expect(param("radius").readOnly!(paramsOf(halfTurn()), 7)).toBeNull();
+    });
+
+    it("takes a typed stretch, keeping its ends and degrees up to a half turn", () => {
+        const p = deeper();
+        const ends = p.points.map(({ x, y }) => ({ x, y }));
+        const twice = param("stretch").type(p, 7, "2", env) as LineParams;
+        expect(arcStretch(twice)).toBeCloseTo(2, 6);
+        twice.points.forEach((q, i) =>
+            expect(dist(q, ends[i]!)).toBeLessThan(1e-6),
+        );
+        expect(Math.abs(bendOf(twice))).toBeCloseTo(180, 6);
+        const wide = param("stretch").type(p, 7, "1.5 wide", env) as LineParams;
+        expect(arcStretch(wide)).toBeCloseTo(1 / 1.5, 6);
+        expect(param("stretch").words!(wide, 7)!.after).toBe("wide");
+    });
+
+    it("makes a circle in one click, its ends and degrees kept", () => {
+        const p = deeper();
+        const round = param("stretch").button!.apply(p, 7, env)!;
+        expect(isRound(round)).toBe(true);
+        expect(ellipseOf(round)).toBeUndefined();
+        round.points.forEach((q, i) =>
+            expect(dist(q, p.points[i]!)).toBeLessThan(1e-6),
+        );
+    });
+
+    it("drags through a circle in notches", () => {
+        const p = deeper(); // 1.33× deep
+        const roles = {
+            fine: false,
+            constrain: false,
+            fromCenter: false,
+        } as never;
+        // 7 notches of 0.05 back: 0.33 → about 0, landed on a circle
+        const back = param("stretch").scrub(
+            p,
+            7,
+            { dx: -28, dy: 0, axis: "x", roles },
+            env,
+        );
+        expect(isRound(back as LineParams)).toBe(true);
+        const past = param("stretch").scrub(
+            p,
+            7,
+            { dx: -40, dy: 0, axis: "x", roles },
+            env,
+        );
+        expect(param("stretch").words!(past as LineParams, 7)!.after).toBe(
+            "wide",
+        );
+    });
+
+    it("moves its interval in Fit and its ends in Keep interval", () => {
+        const interval = param("interval");
+        const fit = deeper();
+        const fitMore = param("stretch").type(fit, 7, "2", env) as LineParams;
+        expect(interval.value!(fitMore, 7, STEP)).toBeGreaterThan(
+            interval.value!(fit, 7, STEP),
+        );
+        const kept = keep(fit);
+        const keptMore = param("stretch").type(kept, 7, "2", env) as LineParams;
+        expect(interval.value!(keptMore, 7, STEP)).toBeCloseTo(
+            interval.value!(kept, 7, STEP),
+            6,
+        );
+        expect(dist(keptMore.points[1]!, kept.points[1]!)).toBeGreaterThan(1);
+    });
+
+    it("keeps the guide's width past a half turn", () => {
+        const most = withSweep(deeper(), 270);
+        const g = arcGuide(most)!;
+        const p = param("stretch").type(most, 7, "2", env) as LineParams;
+        expect(arcGuide(p)!.rx).toBeCloseTo(g.rx, 6);
+        expect(arcStretch(p)).toBeCloseTo(2, 6);
     });
 });

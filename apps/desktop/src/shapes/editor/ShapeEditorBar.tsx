@@ -409,8 +409,20 @@ function ShapeEditorBar({
                                     canLess={x.less !== null}
                                     canMore={x.more !== null}
                                     glyph={null}
+                                    readOnly={x.readOnly}
                                     actions={numbers}
                                 />
+                                {x.param.button && (
+                                    <button
+                                        type="button"
+                                        onPointerDown={keepFocus}
+                                        onClick={() => numbers.press(x.param)}
+                                        data-testid={`shape-editor-${x.param.key}-button`}
+                                        className="rounded-4 border-stroke hover:text-accent border px-6 py-1"
+                                    >
+                                        {x.param.button.label}
+                                    </button>
+                                )}
                                 {layout.ratioLock &&
                                     x.param.ratioLockAfter === true && (
                                         <RatioLockButton sizes />
@@ -723,6 +735,13 @@ function numberActions(
             if (env && param.snap)
                 target.apply(param.snap(target.params, target.spots, env));
         },
+        /** The button after a number (an Arc's Make circle, #634) */
+        press: (param: Param) => {
+            const env = envFor();
+            const next =
+                env && param.button?.apply(target.params, target.spots, env);
+            if (next != null && next !== target.params) target.apply(next);
+        },
         type: (param: Param, text: string) => {
             const env = envFor();
             const next =
@@ -746,6 +765,7 @@ const NumberChip = memo(function NumberChip({
     glyph,
     glyphAfter = false,
     derived = false,
+    readOnly = null,
     actions,
 }: {
     param: Param;
@@ -762,6 +782,8 @@ const NumberChip = memo(function NumberChip({
     glyphAfter?: boolean;
     /** Shown as about so much: pressing it snaps it to a half step (owner on #459) */
     derived?: boolean;
+    /** Why it can't be changed here: shown greyed out, with why on hover (#634) */
+    readOnly?: string | null;
     actions: ReturnType<typeof numberActions>;
 }) {
     const plain = useMemo(() => actions.scrub(param), [actions, param]);
@@ -831,20 +853,34 @@ const NumberChip = memo(function NumberChip({
                     <MinusIcon size={12} />
                 </IconButton>
             )}
-            <ScrubNumber
-                display={display}
-                axis={param.drag}
-                label={param.label}
-                testId={`shape-editor-${param.key}`}
-                {...scrub}
-                onType={(text) => actions.type(param, text)}
-                onTyping={showsStep ? onTyping : undefined}
-                onSnap={
-                    derived && param.snap
-                        ? () => actions.snap(param)
-                        : undefined
-                }
-            />
+            {readOnly !== null ? (
+                <Tip label={readOnly}>
+                    <span
+                        className="text-text/50 tabular-nums"
+                        aria-label={`${param.label}: ${display}. ${readOnly}`}
+                        aria-disabled
+                        data-testid={`shape-editor-${param.key}`}
+                        data-read-only
+                    >
+                        {display}
+                    </span>
+                </Tip>
+            ) : (
+                <ScrubNumber
+                    display={display}
+                    axis={param.drag}
+                    label={param.label}
+                    testId={`shape-editor-${param.key}`}
+                    {...scrub}
+                    onType={(text) => actions.type(param, text)}
+                    onTyping={showsStep ? onTyping : undefined}
+                    onSnap={
+                        derived && param.snap
+                            ? () => actions.snap(param)
+                            : undefined
+                    }
+                />
+            )}
 
             {param.stepper && (
                 <IconButton

@@ -153,9 +153,9 @@ export interface ToolParam<P> {
     readonly label: string;
     /**
      * Counts are whole numbers; steps and degrees are typed and shown as such; a choice is typed
-     * by name (the host's mode step)
+     * by name (the host's mode step); a ratio is so many times (an Arc's stretch, "1.3×")
      */
-    readonly unit: "count" | "steps" | "degrees" | "choice";
+    readonly unit: "count" | "steps" | "degrees" | "choice" | "ratio";
     /** Shown in the floating chip */
     readonly primary: boolean;
     /** Which way a drag changes it: right for more, up for more, or the first way moved */
@@ -212,6 +212,19 @@ export interface ToolParam<P> {
      * #634)
      */
     readonly ratioLockAfter?: boolean;
+    /**
+     * Shown but not changed here, greyed out, with why: an Arc's radius in Keep interval, where
+     * the interval decides it (owner on #634). Changeable when absent or null.
+     */
+    readonly readOnly?: (params: P, n: number) => string | null;
+    /**
+     * A button just after the number that changes the shape in one click: an Arc's Make circle
+     * after its stretch (owner on #634). Null from `apply` where it can't.
+     */
+    readonly button?: {
+        readonly label: string;
+        apply(params: P, n: number, env: ToolEnv): P | null;
+    };
     /** The params with `text` typed over the number; null when the text isn't understood */
     type(params: P, n: number, text: string, env: ToolEnv): P | null;
     /**

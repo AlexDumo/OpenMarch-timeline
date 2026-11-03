@@ -25,6 +25,8 @@ export interface ChipNumber {
     readonly more: unknown;
     /** Worked out from the shape: shown, not changed ({@link ToolParam.derived}) */
     readonly derived: boolean;
+    /** Why it can't be changed here, greyed out ({@link ToolParam.readOnly}); null when it can */
+    readonly readOnly: string | null;
 }
 
 /**
@@ -66,6 +68,7 @@ export function chipLayout(
             less: param.stepper?.by(params, n, -1, env) ?? null,
             more: param.stepper?.by(params, n, 1, env) ?? null,
             derived: param.derived?.(params, n, env.stepPx) ?? false,
+            readOnly: param.readOnly?.(params, n) ?? null,
         }));
     const groups = kind.groups?.shown(params, n, env.stepPx) ?? null;
     const intervals = groups ? [] : numbers.filter((x) => x.param.interval);

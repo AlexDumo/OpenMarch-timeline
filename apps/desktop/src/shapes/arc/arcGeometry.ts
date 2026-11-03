@@ -538,6 +538,64 @@ function pullAlong(
     return null;
 }
 
+/** How near 1 a stretch reads as a circle */
+const ROUND = 1e-6;
+
+/**
+ * How stretched the arc's circle is (owner on #634): its ellipse's depth over its width, 1 on a
+ * circle, over 1 deeper than wide and under 1 wider than deep. Null for an arc with no guide.
+ */
+export function arcStretch(p: LineParams): number | null {
+    const g = arcGuide(p);
+    return g ? g.ry / g.rx : null;
+}
+
+/** Whether the arc runs on a circle rather than an ellipse */
+export const isRound = (p: LineParams): boolean => {
+    const s = arcStretch(p);
+    return s !== null && Math.abs(s - 1) <= ROUND;
+};
+
+/**
+ * The arc on an ellipse stretched `stretch` (depth over width; 1 a circle), its degrees kept
+ * (owner on #634): up to a half turn its ends stay too, so only its depth changes; past it the
+ * guide's width stays and its depth grows or shrinks from the arc's back.
+ */
+export function withStretch(p: LineParams, stretch: number): LineParams {
+    const g = arcGuide(p);
+    if (!g || !(stretch > 0)) return p;
+    const now = g.ry / g.rx;
+    if (Math.abs(now - stretch) <= ROUND) return p;
+    if (Math.abs(bendOf(p)) <= HALF_TURN) {
+        const [a, b] = p.points as [LinePoint, LinePoint];
+        const { ellipse: _was, ...first } = a;
+        const round = Math.abs(stretch - 1) <= ROUND;
+        const axis = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+        const point: LinePoint = round
+            ? first
+            : { ...first, ellipse: { ratio: stretch, axis } };
+        return { ...p, points: [point, b] };
+    }
+    const box = extentOnAxes(g);
+    const k = stretch / now;
+    // On a circle exactly, the arc drops its ellipse (onGuide)
+    return rescaled(p, g, 1, k, 0, backOf(g, box));
+}
+
+/**
+ * The arc on a circle of radius `r`, its degrees kept (owner on #634): scaled evenly about the
+ * middle of its ends' line, so its ends move apart or together and it gets deeper with them. An
+ * arc on an ellipse is unchanged: it has no one radius.
+ */
+export function withRadius(p: LineParams, r: number): LineParams {
+    const g = arcGuide(p);
+    if (!g || !(r > 0) || !isRound(p)) return p;
+    const box = extentOnAxes(g);
+    const k = r / g.rx;
+    if (Math.abs(k - 1) < 1e-12) return p;
+    return rescaled(p, g, k, k, (box.left + box.right) / 2, backOf(g, box));
+}
+
 /** An arc drawn from `from` to `to`: its ends landed as a Line's, bowing a quarter turn left */
 export function drawArc(
     from: XY,
