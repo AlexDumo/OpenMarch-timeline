@@ -35,9 +35,12 @@
 }
 
 @theme {
+    /* "OpenMarch Text Symbols" (apps/desktop/src/styles/text-symbols.css) must stay
+       before the emoji fonts, or symbols such as ↩ and ↔ can show as color emoji */
     --font-sans:
-        "DM Sans", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
-        "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+        "DM Sans", "OpenMarch Text Symbols", ui-sans-serif, system-ui,
+        sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+        "Noto Color Emoji";
     --font-mono:
         "DM Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
         "Liberation Mono", "Courier New", monospace;
