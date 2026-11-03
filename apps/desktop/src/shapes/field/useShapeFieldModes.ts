@@ -21,6 +21,8 @@ import { forgetDiscardedShape } from "../tool/shapeLeave";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import { shapeToolMode } from "../tool/shapeToolMode";
 import { resetShapePointer, watchShapeEditorFocus } from "./shapePointer";
+import { usePathPenStore } from "@/pathways/pathPenStore";
+import { pathPenMode } from "@/pathways/pathPenMode";
 
 /**
  * Puts the shapes on the field's editor (#204): the open Shape tool takes every edit press
@@ -38,6 +40,8 @@ export function useShapeFieldModes(
 ): void {
     const toolOpen = useShapeToolStore((s) => s.tool !== null);
     const hidden = useShapeHidden();
+    // The path pen drawing, or a path open, takes the field's presses first (pathways step 1)
+    const pathOpen = usePathPenStore((s) => s.session !== null);
     const box = useBoxSelectionStore((s) => s.selected);
     const queryClient = useQueryClient();
     useBoxSelection({ isPlaying });
@@ -69,8 +73,16 @@ export function useShapeFieldModes(
         resetShapePointer();
         // A handle's menu is for the shape it was opened on (#569)
         closeHandleMenu();
-        editor.setMode(toolOpen ? (hidden ? null : shapeToolMode) : live);
-    }, [editor, toolOpen, hidden, live]);
+        editor.setMode(
+            pathOpen && !isPlaying
+                ? pathPenMode
+                : toolOpen
+                  ? hidden
+                      ? null
+                      : shapeToolMode
+                  : live,
+        );
+    }, [editor, toolOpen, hidden, live, pathOpen, isPlaying]);
     useEffect(() => () => editor.setMode(null), [editor]);
     // Keyboard focus in the floating editor shows the shape's controls (#430)
     useEffect(() => watchShapeEditorFocus(), []);

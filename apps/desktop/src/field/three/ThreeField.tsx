@@ -72,6 +72,7 @@ import {
     PlacedBoxesOverlay,
 } from "@/shapes/placed/PlacedBoxesOverlay";
 import { ShapeEditor } from "@/shapes/editor/ShapeEditorBar";
+import { PathEditor } from "@/pathways/PathEditor";
 import HandleMenu from "@/shapes/editor/HandleMenu";
 import { useShapeEditorStore } from "@/shapes/frame/shapeEditorStore";
 import FavoritesRing from "@/shapes/tool/FavoritesRing";
@@ -703,6 +704,9 @@ function ThreeFieldView() {
                 )}
                 {fieldProperties && (
                     <ShapeEditor stepPx={fieldProperties.pixelsPerStep} />
+                )}
+                {fieldProperties && !isPlaying && (
+                    <PathEditor fieldProperties={fieldProperties} />
                 )}
                 {/* Fine, Equal, From center, Add and Snap for a tablet: touch layout only */}
                 {!preview && <TouchModifierButtons marchers={marchers} />}

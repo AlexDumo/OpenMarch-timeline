@@ -256,6 +256,8 @@ export interface DrawRouteResult {
  * start (its span there is a join, which step 1 walks straight); one following the leader (leaving
  * that move would move the others' targets). Invalid points are `E-R1`.
  */
+// One procedure, read then written in the order the spec gives (AP-R1)
+// eslint-disable-next-line max-lines-per-function
 export async function drawRouteInTransaction({
     tx,
     timelineId,

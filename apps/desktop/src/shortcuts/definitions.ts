@@ -887,6 +887,30 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // Pathways step 1 (ADR 0010): the Path pen draws a cornered path for one selected marcher's
+    // move at the playhead. P as in design tools' pen. While it draws, Enter (applyShape) finishes,
+    // Backspace (shapeRemoveLastPoint) takes the last corner back and Escape
+    // (cancelAlignmentUpdates) cancels, handled only then (pathways/PathPenKeys)
+    pathPen: {
+        labelKey: "actions.path.pen",
+        keywordsKey: "actions.path.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["P"],
+        ignoreRepeat: true,
+    },
+    // The open path's Remove path (AP-R2): the move goes straight again
+    removePath: {
+        labelKey: "actions.path.remove",
+        keywordsKey: "actions.path.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["Shift+Backspace"],
+        ignoreRepeat: true,
+    },
+
     // Cursor mode
     cancelAlignmentUpdates: {
         labelKey: "actions.alignment.cancelUpdates",

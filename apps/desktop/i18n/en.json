@@ -177,6 +177,16 @@
             "toggleNextPaths": "Toggle next page paths",
             "togglePreview": "Preview the show",
             "togglePreviewKeywords": "preview cinematic watch present presentation fullscreen play"
+        },
+        "path": {
+            "pen": "Path pen",
+            "remove": "Remove path",
+            "keywords": "path pen pathway route corner draw curve walk",
+            "finish": "Finish path",
+            "removeLastCorner": "Remove last corner",
+            "cancel": "Cancel path",
+            "deleteCorner": "Delete corner",
+            "close": "Close path"
         }
     },
     "analyticsOptIn": {
@@ -4313,5 +4323,35 @@
         "tiny": "Tiny",
         "toFive": "{steps, number} to 5",
         "undefined": "Undefined"
+    },
+    "pathways": {
+        "banner": {
+            "drawing": "Path pen · {marcher}: click to place corners from where it starts to its end spot · <finish></finish> finishes · <undo></undo> takes back the last · <cancel></cancel> cancels"
+        },
+        "editor": {
+            "for": "Path · {marcher}",
+            "bigSteps": "Big steps · {steps} ({inches} in)",
+            "bigStepsTip": "Every leg has this step size. Lengthen the move, or move or take out corners to shorten the path.",
+            "finish": "Finish",
+            "removeLast": "Remove last corner",
+            "cancel": "Cancel",
+            "deleteCorner": "Delete corner"
+        },
+        "menu": {
+            "deleteCorner": "Delete corner"
+        },
+        "errors": {
+            "save": "Couldn't save the path",
+            "remove": "Couldn't remove the path"
+        },
+        "refusals": {
+            "noMove": "{marcher} has no move at the playhead to draw a path on",
+            "oneMarcher": "One marcher for now: select just one to draw its path",
+            "playing": "Stop playback to draw a path",
+            "selectOne": "Select a marcher to draw a path for"
+        },
+        "toolbar": {
+            "path": "Path"
+        }
     }
 }

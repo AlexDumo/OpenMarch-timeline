@@ -18,6 +18,8 @@ import { PlacedBoxKeys } from "@/shapes/placed/PlacedBoxKeys";
 import { useBoxSelectionStore } from "@/shapes/placed/boxSelectionStore";
 import { useUnsetActionHandlers } from "./handlers/useUnsetActionHandlers";
 import { useHoldActionHandlers } from "./handlers/useHoldActionHandlers";
+import { PathPenKeys, usePathPenActions } from "@/pathways/usePathPen";
+import { usePathPenStore } from "@/pathways/pathPenStore";
 
 /** Handlers available before a show is open (launch page). */
 export function FileActionHandlers() {
@@ -39,6 +41,7 @@ export function EditorActionHandlers() {
     useUnsetActionHandlers();
     useHoldActionHandlers();
     useTimelineActionEffects();
+    usePathPenActions();
     // Mounted after the handlers above, so the open shape tool's keys are on top, and a selected
     // placed box's below them
     // An open shape waiting out of sight (#416) takes no keys: Escape, undo and the arrows act on
@@ -49,6 +52,9 @@ export function EditorActionHandlers() {
         (s) => s.selected !== null || s.inside !== null,
     );
     const shapeDiscarded = useShapeToolStore((s) => s.discarded !== null);
+    // The path pen drawing, or a path open on the field, takes its keys over everything (pathways)
+    const pathOpen = usePathPenStore((s) => s.session !== null);
+    if (pathOpen) return <PathPenKeys />;
     if (shapeToolOpen && !shapeHidden) return <ShapeToolKeys />;
     return (
         <>
