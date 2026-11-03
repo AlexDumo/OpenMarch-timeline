@@ -199,6 +199,12 @@ export interface ToolParam<P> {
         params: P,
         n: number,
     ): { readonly before?: string; readonly after?: string } | null;
+    /**
+     * The kind's ratio lock ({@link ToolKind.ratioLock}) sits just after this number, for a kind
+     * whose proportioned sizes aren't intervals: an Arc's "Circle 60 × 60 steps 🔒" (owner on
+     * #634)
+     */
+    readonly ratioLockAfter?: boolean;
     /** The params with `text` typed over the number; null when the text isn't understood */
     type(params: P, n: number, text: string, env: ToolEnv): P | null;
     /**

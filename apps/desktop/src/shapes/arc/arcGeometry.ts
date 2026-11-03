@@ -17,6 +17,7 @@ import {
     type LinePoint,
 } from "../line/lineGeometry";
 import { ellipsePoint } from "../geometry/path";
+import { linePull } from "../frame/edgeGuides";
 
 /**
  * The Arc (#634): a Line of two points whose segment bends as a circular arc, stored as the
@@ -299,20 +300,30 @@ export function stretchArc(
             : box.high;
     const reach = along(handle) - far;
     if (Math.abs(reach) < 1e-9) return base;
-    const k = (along(local) - far) / reach;
-    // The size across that way, landed on half steps
+    // The handle pulled onto a field line it comes near, as a box's edge is (#425): a yard line
+    // for an end, a hash or sideline for the middle, on an arc square to the field
+    const pulled = pullAlong(g, width, handle, local, env);
+    const k = ((pulled ?? along(local)) - far) / reach;
+    // The size across that way, landed on half steps unless the handle's on a line
     const was = (width ? g.rx : g.ry) * 2;
     let size = Math.max(env.stepPx / 2, was * k);
-    if (env.snap) size = Math.round(size / (env.stepPx / 2)) * (env.stepPx / 2);
+    if (env.snap && pulled === null)
+        size = Math.round(size / (env.stepPx / 2)) * (env.stepPx / 2);
     const scale = size / was;
-    let rx = width || env.constrain ? g.rx * scale : g.rx;
-    let ry = !width || env.constrain ? g.ry * scale : g.ry;
-    if (!env.constrain && Math.abs(rx - ry) <= ROUND_STICK * Math.max(rx, ry)) {
+    // The ratio lock, flipped by constrain for the drag (as a box's side is)
+    const keep = env.ratioLocked ?? env.constrain;
+    let rx = width || keep ? g.rx * scale : g.rx;
+    let ry = !width || keep ? g.ry * scale : g.ry;
+    if (
+        !keep &&
+        pulled === null &&
+        Math.abs(rx - ry) <= ROUND_STICK * Math.max(rx, ry)
+    ) {
         if (width) rx = ry;
         else ry = rx;
     }
-    // Scaled about the side that stays: along the handle's way about `far`; the other way (with
-    // constrain) about the arc's back, so a stretched arc keeps its ends' line
+    // Scaled about the side that stays: along the handle's way about `far`; the other way (kept
+    // in proportion) about the arc's back, so a stretched arc keeps its ends' line
     const middleY = g.ry * Math.sin(g.start + g.sweep / 2);
     const back = middleY >= 0 ? box.low : box.high;
     const otherFar = env.fromCenter || !width ? 0 : back;
@@ -327,6 +338,42 @@ export function stretchArc(
         y: g.center.y + cx * s + cy * c,
     };
     return onGuide(base, { ...g, center, rx, ry });
+}
+
+/**
+ * Where along its way (on the guide's axes) a handle at `handle`, dragged to `local`, lands when
+ * the field line nearest it is within reach: null when none is, the pulls are off, or the arc is
+ * turned off the field's axes (its handle then moves slantwise across the lines)
+ */
+function pullAlong(
+    g: ArcGuide,
+    width: boolean,
+    handle: XY,
+    local: XY,
+    env: ToolEnv,
+): number | null {
+    if (env.pull === false || !env.fieldLines) return null;
+    const c = Math.cos(g.axis);
+    const s = Math.sin(g.axis);
+    // The handle's way on the field, and where it is with the pointer's reach
+    const way = width ? { x: c, y: s } : { x: -s, y: c };
+    const at = width ? local.x : local.y;
+    const off = width ? handle.y : handle.x;
+    const ax = width ? at : off;
+    const ay = width ? off : at;
+    const raw = {
+        x: g.center.x + ax * c - ay * s,
+        y: g.center.y + ax * s + ay * c,
+    };
+    const pull = linePull(
+        [raw],
+        env.fieldLines,
+        Math.min(env.pullRadius ?? 0, env.stepPx / 4),
+    );
+    const SQUARE = 0.999;
+    if (Math.abs(way.x) > SQUARE && pull.x !== null) return at + pull.x / way.x;
+    if (Math.abs(way.y) > SQUARE && pull.y !== null) return at + pull.y / way.y;
+    return null;
 }
 
 /**

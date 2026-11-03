@@ -76,7 +76,8 @@ export function chipLayout(
         ratioLock:
             kind.ratioLock === true &&
             (kind.ratioLockFor?.(params, n) ?? true) &&
-            intervals.length > 1,
+            (intervals.length > 1 ||
+                numbers.some((x) => x.param.ratioLockAfter === true)),
         lock:
             kind.lock && kind.lock.shown(params, n)
                 ? kind.lock.locked(params, n)

@@ -20,12 +20,14 @@ Select some marchers, open the **Shapes** tab and pick **Arc** (after Curve).
 - Drag an end to stretch the arc side to side, and the handle in its middle
   to stretch it front to back. The other side stays put; Alt stretches from
   the center and Cmd/Ctrl keeps its proportions. Stretched one way only, it
-  runs on an ellipse.
+  runs on an ellipse. A handle catches on the yard lines, hashes and
+  sidelines it passes, as a box's edge does.
 - Set how far it turns with the degrees in the editor (drag or type). The
   dashed circle or ellipse stays put and the arc grows or shrinks around it,
   so the marchers spread out or close up.
 - The editor also shows the dashed guide's size ("Circle 60 × 60 steps":
-  width × depth); drag or type either.
+  width × depth); drag or type either. The lock after it keeps the two in
+  proportion, for the handles too (Cmd/Ctrl frees them for one drag).
 - Try **Open or closed**: **Close with a straight line** and fill it with
   **Grid**, or close it all the way around.
 

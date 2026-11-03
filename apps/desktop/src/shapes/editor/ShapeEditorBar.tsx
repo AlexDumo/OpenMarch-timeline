@@ -2,6 +2,7 @@ import { T } from "@tolgee/react";
 import Shortcut from "@/components/ui/Shortcut";
 import clsx from "clsx";
 import {
+    Fragment,
     memo,
     useCallback,
     useEffect,
@@ -397,18 +398,23 @@ function ShapeEditorBar({
                         data-testid={`${testId}-text`}
                     >
                         {layout.values.map((x) => (
-                            <NumberChip
-                                key={x.param.key}
-                                param={x.param}
-                                display={x.display}
-                                note={x.note}
-                                before={x.before}
-                                after={x.after}
-                                canLess={x.less !== null}
-                                canMore={x.more !== null}
-                                glyph={null}
-                                actions={numbers}
-                            />
+                            <Fragment key={x.param.key}>
+                                <NumberChip
+                                    param={x.param}
+                                    display={x.display}
+                                    note={x.note}
+                                    before={x.before}
+                                    after={x.after}
+                                    canLess={x.less !== null}
+                                    canMore={x.more !== null}
+                                    glyph={null}
+                                    actions={numbers}
+                                />
+                                {layout.ratioLock &&
+                                    x.param.ratioLockAfter === true && (
+                                        <RatioLockButton />
+                                    )}
+                            </Fragment>
                         ))}
                         {target.empty > 0 && (
                             <span className="text-text/60">
@@ -488,7 +494,10 @@ function ShapeEditorBar({
                                     <span className="text-text/60">
                                         {tolgee.t("shapes.edit.steps", "steps")}
                                     </span>
-                                    {layout.ratioLock && <RatioLockButton />}
+                                    {layout.ratioLock &&
+                                        layout.intervals.length > 1 && (
+                                            <RatioLockButton />
+                                        )}
                                     {layout.lock !== null && (
                                         <IntervalLockButton
                                             live={live}

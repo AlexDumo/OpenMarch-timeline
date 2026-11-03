@@ -113,8 +113,8 @@ const BEND: ToolParam<LineParams> = {
 
 /**
  * One radius of the circle or ellipse the arc is on, as its width (`↔`) or depth (`↕`) across, in
- * steps (owner on #634): typed, or dragged sideways; with constrain the other follows in
- * proportion. A circle's read the same, so a shallow arc, whose guide reaches far off, can be made
+ * steps (owner on #634): typed, or dragged sideways; with the ratio lock on (flipped by
+ * constrain while dragged) the other follows in proportion. A circle's read the same, so a shallow arc, whose guide reaches far off, can be made
  * an ellipse by typing.
  */
 function guideParam(way: "width" | "depth"): ToolParam<LineParams> {
@@ -155,6 +155,8 @@ function guideParam(way: "width" | "depth"): ToolParam<LineParams> {
         blends: true,
         range: { min: 1 },
         shown: (p) => arcGuide(p) !== null,
+        // The lock sits after the depth, at the end of "Circle 60 × 60 steps"
+        ratioLockAfter: !width,
         // One phrase for the dashed guide: "Circle 60 × 60 steps", "Ellipse 60 × 72 steps"
         words: (p) =>
             width
@@ -176,13 +178,17 @@ function guideParam(way: "width" | "depth"): ToolParam<LineParams> {
             const steps = parseSteps(text);
             if (steps === null || !(steps > 0)) return null;
             return keptInterval(
-                sized(p, (steps * env.stepPx) / 2, false),
+                sized(p, (steps * env.stepPx) / 2, env.ratioLocked === true),
                 n,
                 env,
             );
         },
         set: (p, n, steps, env) =>
-            keptInterval(sized(p, (steps * env.stepPx) / 2, false), n, env),
+            keptInterval(
+                sized(p, (steps * env.stepPx) / 2, env.ratioLocked === true),
+                n,
+                env,
+            ),
         scrub(base, n, m, env) {
             const r = radiusOf(base);
             if (r === null) return base;
@@ -195,7 +201,12 @@ function guideParam(way: "width" | "depth"): ToolParam<LineParams> {
             );
             if (steps === was || steps < 1) return base;
             return keptInterval(
-                sized(base, (steps * env.stepPx) / 2, m.roles.constrain),
+                // The editor's env holds the lock flipped by constrain already
+                sized(
+                    base,
+                    (steps * env.stepPx) / 2,
+                    env.ratioLocked ?? m.roles.constrain,
+                ),
                 n,
                 env,
             );
@@ -318,10 +329,15 @@ export const arcTool: ToolKind<LineParams> = {
     params: [INTERVAL, BEND, WIDTH, DEPTH],
     choices: [ENDS, lineChoice("spacing")],
     readable: isArcParams,
-    // Every handle stretches the arc: constrain keeps its proportions, fromCenter stretches it
-    // about its circle's center (owner on #634)
+    // Its width and depth can be kept in proportion with the editor's lock (owner on #634)
+    ratioLock: true,
+    // Every handle stretches the arc: constrain flips the ratio lock for the drag, as on a box's
+    // side, and fromCenter stretches it about its circle's center (owner on #634)
     honors: {
-        handle: () => ({ constrain: "keepRatio", fromCenter: "fromCenter" }),
+        handle: (_key, ratioLocked) => ({
+            constrain: ratioLocked ? "freeRatio" : "keepRatio",
+            fromCenter: "fromCenter",
+        }),
     },
     draw: (from, to, _n, env) => pivoted(drawArc(from, to, env)),
     clickPoints: undefined,

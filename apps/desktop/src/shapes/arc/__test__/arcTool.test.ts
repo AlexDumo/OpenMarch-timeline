@@ -503,6 +503,57 @@ describe("stretching it (owner on #634)", () => {
         expect(depth.display(both, 7, STEP)).toBe("9");
     });
 
+    it("pulls a dragged handle onto a field line it comes near", () => {
+        const lines = { x: [183], y: [157] };
+        const pulled: ToolEnv = { ...env, fieldLines: lines, pullRadius: 4 };
+        // An end dragged to 181 lands its end on the yard line at 183, off the half steps
+        let t = onHandle(halfTurn(), "p1", { x: 181, y: 200 }, pulled);
+        expect(Math.max(...paramsOf(t).points.map((q) => q.x))).toBeCloseTo(
+            183,
+            6,
+        );
+        // The middle dragged to 159 lands the arc's top on the line at 157
+        t = onHandle(halfTurn(), MIDDLE_KEY, { x: 130, y: 159 }, pulled);
+        expect(handleAt(t, MIDDLE_KEY).y).toBeCloseTo(157, 6);
+        // Out of reach, or with the pulls off, it keeps to the half steps
+        t = onHandle(halfTurn(), "p1", { x: 176, y: 200 }, pulled);
+        expect(arcGuide(paramsOf(t))!.rx).toBeCloseTo(37.5, 6);
+        t = onHandle(
+            halfTurn(),
+            "p1",
+            { x: 181, y: 200 },
+            { ...pulled, pull: false },
+        );
+        expect(arcGuide(paramsOf(t))!.rx).toBeCloseTo(40, 6);
+    });
+
+    it("keeps its proportions with the ratio lock, constrain freeing them", () => {
+        const locked: ToolEnv = { ...env, ratioLocked: true };
+        let t = onHandle(halfTurn(), "p1", { x: 180, y: 200 }, locked);
+        expect(arcGuide(paramsOf(t))!.ry).toBeCloseTo(40, 6);
+        // The host flips the lock with constrain: locked and held is free
+        t = onHandle(
+            halfTurn(),
+            "p1",
+            { x: 180, y: 200 },
+            { ...env, constrain: true, ratioLocked: false },
+        );
+        expect(arcGuide(paramsOf(t))!.ry).toBeCloseTo(30, 6);
+        expect(
+            arcTool.honors!.handle!("p1", true, paramsOf(t), 7).constrain,
+        ).toBe("freeRatio");
+        // A typed width follows it too
+        const width = arcTool.params.find((q) => q.key === "width")!;
+        const u = halfTurn();
+        const typed = width.type(u.params, u.spots, "8", locked)!;
+        expect(arcGuide(typed as LineParams)!.ry).toBeCloseTo(40, 6);
+        // The editor offers it just after the depth
+        const depth = arcTool.params.find((q) => q.key === "depth")!;
+        expect(arcTool.ratioLock).toBe(true);
+        expect(depth.ratioLockAfter).toBe(true);
+        expect(width.ratioLockAfter).toBeFalsy();
+    });
+
     it("closes all the way around an ellipse, and opens again", () => {
         let t = halfTurn();
         t = onHandle(t, MIDDLE_KEY, { x: 130, y: 160 });
