@@ -12,7 +12,11 @@ export function setTexturePainting(enabled: boolean): void {
     paintingEnabled = enabled;
 }
 
-/** Lists the text symbols face (packages/ui text-symbols.css) so ↔ never paints as emoji */
+/**
+ * Lists the text symbols face (packages/ui text-symbols.css) like the app's stacks. A
+ * canvas doesn't wait for a face to load, so text with ↔ or ↕ would also need
+ * `document.fonts.load` for it first (see fontsLoaded in core/field).
+ */
 export const TEXTURE_FONT = '"DM Sans", "OpenMarch Text Symbols", sans-serif';
 
 /**

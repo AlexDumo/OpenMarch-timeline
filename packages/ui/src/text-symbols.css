@@ -1,7 +1,9 @@
 /*
- * "OpenMarch Text Symbols": text (black and white) glyphs for every character that
- * Unicode lets a platform draw as a color emoji although its default is text, such as
- * ↩ U+21A9 (the Mac Return key) and ↔ U+2194.
+ * "OpenMarch Text Symbols": text (black and white) glyphs for the characters below
+ * U+FFFF that Unicode lets a platform draw as a color emoji although their default is
+ * text, such as ↩ U+21A9 (the Mac Return key) and ↔ U+2194. Others (⁉ ℹ 〽 ㊗ ㊙, and
+ * every such character above U+FFFF, like 🗑) have no glyph here; the guard test
+ * (apps/desktop/src/styles/__test__/textSymbols.test.ts) rejects them in UI text.
  *
  * Why: when DM Sans lacks a character, the browser walks the rest of `--font-sans`.
  * On a Mac, Helvetica and SF lack ↩, so the next family that has it is
@@ -14,11 +16,12 @@
  * Each face is limited to exactly those characters, so every other symbol (⌘ ⇧ ⌥ ←)
  * still comes from the system font as before. A face is only loaded when the page
  * draws one of its characters, and `font-display: swap` shows the next font in the
- * stack until then, so a symbol is never blank. Ranges are disjoint, preferring the
- * smallest file.
- * U+2049 ⁉, U+2139 ℹ, U+303D 〽, U+3297 ㊗ and U+3299 ㊙ have no Noto text glyph; the
- * guard test (apps/desktop/src/styles/__test__/textSymbols.test.ts) rejects them in
- * UI text.
+ * stack until then, so a symbol is never blank. Ranges are disjoint.
+ *
+ * The files in fonts/ are subsets of Noto fonts (OFL-1.1, fonts/OFL.txt) holding only
+ * each face's range, a few KB each. They're vendored with relative URLs so they resolve
+ * for any app importing these styles. After changing a range, rebuild them with
+ * `uv run packages/ui/scripts/subset_text_symbols.py`.
  *
  * Emoji typed by users or written on purpose still show as emoji: characters that are
  * emoji by default (🎺) aren't in these ranges, and Chromium draws a character followed
@@ -31,8 +34,7 @@
     font-style: normal;
     font-weight: 400;
     font-display: swap;
-    src: url("@fontsource/noto-sans-symbols/files/noto-sans-symbols-symbols-400-normal.woff2")
-        format("woff2");
+    src: url("./fonts/text-symbols-noto-sans-symbols.woff2") format("woff2");
     unicode-range:
         U+2194-2199, U+24C2, U+2626, U+262A, U+262E-262F, U+2638-263A, U+2640,
         U+2642, U+267B, U+267E, U+2692, U+2694-2697, U+2699, U+269B-269C,
@@ -46,8 +48,7 @@
     font-style: normal;
     font-weight: 400;
     font-display: swap;
-    src: url("@fontsource/noto-sans-symbols-2/files/noto-sans-symbols-2-symbols-400-normal.woff2")
-        format("woff2");
+    src: url("./fonts/text-symbols-noto-sans-symbols-2.woff2") format("woff2");
     unicode-range:
         U+2328, U+23CF, U+23ED-23EF, U+23F1-23F2, U+23F8-23FA, U+25AA-25AB,
         U+25B6, U+25C0, U+25FB-25FC, U+2600-2604, U+260E, U+2611, U+2618,
@@ -63,7 +64,6 @@
     font-style: normal;
     font-weight: 400;
     font-display: swap;
-    src: url("@fontsource/noto-sans-math/files/noto-sans-math-latin-400-normal.woff2")
-        format("woff2");
+    src: url("./fonts/text-symbols-noto-sans-math.woff2") format("woff2");
     unicode-range: U+203C, U+21A9-21AA, U+2934-2935, U+3030;
 }

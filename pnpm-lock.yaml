@@ -802,15 +802,6 @@ importers:
       '@fontsource/dm-sans':
         specifier: ^5.2.6
         version: 5.2.8
-      '@fontsource/noto-sans-math':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource/noto-sans-symbols':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource/noto-sans-symbols-2':
-        specifier: ^5.3.0
-        version: 5.3.0
       '@korhq/undocs':
         specifier: 0.4.1-alpha
         version: 0.4.1-alpha(@types/node@24.12.2)(aws4fetch@1.0.20)(jiti@2.6.1)(lightningcss@1.32.0)(rollup@4.60.1)(sass@1.77.4)(terser@5.16.9)(tsx@4.21.0)(yaml@2.8.3)
@@ -3289,15 +3280,6 @@ packages:
 
   '@fontsource/dm-sans@5.2.8':
     resolution: {integrity: sha512-tlovG42m9ESG28WiHpLq3F5umAlm64rv0RkqTbYowRn70e9OlRr5a3yTJhrhrY+k5lftR/OFJjPzOLQzk8EfCA==}
-
-  '@fontsource/noto-sans-math@5.3.0':
-    resolution: {integrity: sha512-CzodkZ4R2VC73rqbNbVpiI94fXZJLFEMNBTAM3DFadjAKrjLQ2Fr+s2yM2c5uS+frBZ2IM+LyMo6COhAzV7hCA==}
-
-  '@fontsource/noto-sans-symbols-2@5.3.0':
-    resolution: {integrity: sha512-hFnEnIXOIgLLJ61SO9icRXKoS+LSWoq7ZqKJQ/NaQR7ptdC6+7yW4ci6EuXgsS1S9JmWpciX6w0AFZkU1DKn1A==}
-
-  '@fontsource/noto-sans-symbols@5.3.0':
-    resolution: {integrity: sha512-Al5jMC2ivI5JkBP3RpcEhkY3zel9CyS199TfKC/B1SAFVj8BJghUNX0tMif0CuhVLpVwZMacM/lHJx3wxdJZBQ==}
 
   '@formatjs/icu-messageformat-parser@3.5.22':
     resolution: {integrity: sha512-YuwN+dDKgssfuYwtOyGQD0CSn7K46g9cv1Fp0VgKpjZDDFvv8b8crzP990IcJhRPWHhKzCGsbUSJVIguyyFA5A==}
@@ -16644,12 +16626,6 @@ snapshots:
   '@fontsource/dm-mono@5.2.7': {}
 
   '@fontsource/dm-sans@5.2.8': {}
-
-  '@fontsource/noto-sans-math@5.3.0': {}
-
-  '@fontsource/noto-sans-symbols-2@5.3.0': {}
-
-  '@fontsource/noto-sans-symbols@5.3.0': {}
 
   '@formatjs/icu-messageformat-parser@3.5.22':
     dependencies:

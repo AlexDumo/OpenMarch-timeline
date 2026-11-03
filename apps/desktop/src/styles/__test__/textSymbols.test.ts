@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { relative, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import ts from "typescript";
 
 /**
@@ -80,7 +79,10 @@ interface Text {
     line: number;
 }
 
-/** String, template and JSX text in a TS/TSX file; comments are never included */
+/**
+ * String, template and JSX text in a TS/TSX file, with escapes such as "\u21A9" already
+ * read as the character; comments are never included
+ */
 function tsTexts(file: string, source: string): Text[] {
     const sf = ts.createSourceFile(
         file,
@@ -101,7 +103,7 @@ function tsTexts(file: string, source: string): Text[] {
         ) {
             const start = node.getStart(sf);
             texts.push({
-                text: node.getText(sf),
+                text: node.text,
                 line: sf.getLineAndCharacterOfPosition(start).line + 1,
             });
         }
@@ -155,7 +157,8 @@ function parseUnicodeRanges(css: string): Set<number> {
     return covered;
 }
 
-const symbolsCss = readFileSync(resolve(UI, "src/text-symbols.css"), "utf8");
+const SYMBOLS_CSS = resolve(UI, "src/text-symbols.css");
+const symbolsCss = readFileSync(SYMBOLS_CSS, "utf8");
 const tailwind = readFileSync(resolve(UI, "src/tailwind.css"), "utf8");
 
 function stack(variable: string): string[] {
@@ -175,14 +178,19 @@ describe("text symbols never show as color emoji", () => {
         expect(stack("--font-mono").slice(0, 2)).toEqual(["DM Mono", FAMILY]);
     });
 
-    it("defines the family from font files that exist, in the shared styles", () => {
-        const require = createRequire(resolve(UI, "package.json"));
+    it("defines the family from vendored font files, in the shared styles", () => {
         const urls = [...symbolsCss.matchAll(/url\("([^"]+)"\)/g)].map(
             ([, url]) => url!,
         );
         expect(urls.length).toBeGreaterThan(0);
-        for (const url of urls)
-            expect(existsSync(require.resolve(url))).toBe(true);
+        for (const url of urls) {
+            // A bundler resolves a package URL from the importing app, which may lack it
+            expect(url).toMatch(/^\.\//);
+            expect(
+                existsSync(resolve(dirname(SYMBOLS_CSS), url)),
+                `${url} exists`,
+            ).toBe(true);
+        }
         expect(symbolsCss).toContain(`font-family: "${FAMILY}"`);
         // A face still loading must not leave the symbol blank
         expect(symbolsCss).not.toMatch(/font-display:\s*block/);
@@ -191,7 +199,11 @@ describe("text symbols never show as color emoji", () => {
 
     it("lists the family in every other font stack built on DM Sans or DM Mono", () => {
         const problems: string[] = [];
-        for (const file of uiFiles()) {
+        const websiteStyles = walk(
+            resolve(REPO, "apps/website/src/styles"),
+            (path) => path.endsWith(".css"),
+        ).map((path) => relative(REPO, path));
+        for (const file of [...uiFiles(), ...websiteStyles]) {
             if (file.endsWith(".json")) continue;
             const source = readFileSync(resolve(REPO, file), "utf8");
             if (!/DM (Sans|Mono)/.test(source)) continue;
