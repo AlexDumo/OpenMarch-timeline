@@ -3,6 +3,8 @@ import type {
     OrderMode,
     PathParams,
     PathStyle,
+    RouteGeometry,
+    RouteRow,
     RowImage,
     ShapeKind,
     ShapeRow,
@@ -35,6 +37,7 @@ type TransitionDbRow = typeof schema.timeline_transitions.$inferSelect;
 type AssignmentDbRow = typeof schema.timeline_assignments.$inferSelect;
 type SlotDestinationDbRow =
     typeof schema.timeline_slot_destinations.$inferSelect;
+type RouteDbRow = typeof schema.timeline_routes.$inferSelect;
 
 /** A marcher as the resolver reads it. */
 export interface TimelineMarcher {
@@ -83,6 +86,12 @@ export const transitionFromRow = (row: TransitionDbRow): TransitionRow => ({
         row.path_params == null
             ? null
             : (JSON.parse(row.path_params) as PathParams),
+    route: row.route_id,
+});
+
+/** A route (spec v0.9 §5.2): its geometry, parsed. */
+export const routeFromRow = (row: RouteDbRow): RouteRow => ({
+    geometry: JSON.parse(row.geometry) as RouteGeometry,
 });
 
 export const assignmentFromRow = (row: AssignmentDbRow): AssignmentRow => ({
@@ -162,8 +171,25 @@ export const transitionFromImage = (image: RowImage): TransitionRow => {
         style: field<PathStyle>(image, "style", t, isString),
         order: field<OrderMode>(image, "order", t, isString),
         params: params as PathParams | null,
+        route:
+            field<number | null>(
+                image,
+                "route",
+                t,
+                (v) => v === undefined || isNullableNumber(v),
+            ) ?? null,
     };
 };
+
+/** A route from its change-log image `{id, geometry}` (spec v0.9 §10.2). */
+export const routeFromImage = (image: RowImage): RouteRow => ({
+    geometry: field<RouteGeometry>(
+        image,
+        "geometry",
+        "routes",
+        (v) => typeof v === "object" && v !== null,
+    ),
+});
 
 export const slotDestinationFromImage = (image: RowImage): SlotDestination => {
     const t = "slot_destinations";
@@ -221,7 +247,7 @@ export interface TimelineTables {
     destinations: SlotDestinationIndex;
 }
 
-/** The five reads of a cold build, in the order a snapshot assembles them. */
+/** The six reads of a cold build, in the order a snapshot assembles them. */
 function timelineTableQueries(db: DbConnection | DbTransaction) {
     return [
         db
@@ -239,6 +265,7 @@ function timelineTableQueries(db: DbConnection | DbTransaction) {
             .from(schema.timeline_assignments)
             .orderBy(asc(schema.timeline_assignments.id)),
         db.select().from(schema.timeline_slot_destinations),
+        db.select().from(schema.timeline_routes),
     ] as const;
 }
 
@@ -252,6 +279,7 @@ function assembleTimelineTables([
     transitions,
     assignments,
     slotDestinations,
+    routes,
 ]: TimelineTableRows): TimelineTables {
     const destinations: SlotDestinationIndex = new Map();
     for (const row of slotDestinations)
@@ -262,7 +290,9 @@ function assembleTimelineTables([
         shapes: {},
         transitions: {},
         assignments: assignments.map(assignmentFromRow),
+        routes: {},
     };
+    for (const row of routes) snapshot.routes![row.id] = routeFromRow(row);
     for (const row of shapes) snapshot.shapes[row.id] = shapeFromRow(row);
     for (const row of transitions)
         snapshot.transitions[row.id] = withPoints(
@@ -280,14 +310,21 @@ function assembleTimelineTables([
 export async function readTimelineTables(
     db: DbConnection | DbTransaction,
 ): Promise<TimelineTables> {
-    const [marchers, shapes, transitions, assignments, slotDestinations] =
-        timelineTableQueries(db);
+    const [
+        marchers,
+        shapes,
+        transitions,
+        assignments,
+        slotDestinations,
+        routes,
+    ] = timelineTableQueries(db);
     return assembleTimelineTables([
         await marchers,
         await shapes,
         await transitions,
         await assignments,
         await slotDestinations,
+        await routes,
     ]);
 }
 

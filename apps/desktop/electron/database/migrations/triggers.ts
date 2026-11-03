@@ -1,6 +1,11 @@
 import { DatabaseSync } from "node:sqlite";
 
-const triggers = {
+/**
+ * Every trigger, by name. `transitionRoute` says whether `timeline_transitions` has `route_id`
+ * (migration 0031): a file opened with an older migrations folder, as some migration tests do,
+ * logs transitions without it.
+ */
+const buildTriggers = (transitionRoute = true) => ({
     prevent_first_beat_modification: `
             CREATE TRIGGER IF NOT EXISTS prevent_first_beat_modification
                 BEFORE UPDATE ON beats
@@ -50,8 +55,19 @@ const triggers = {
             END;
     `,
     ...timelineInvariantTriggers(),
-    ...timelineChangeLogTriggers(),
-};
+    ...timelineChangeLogTriggers(transitionRoute),
+});
+const triggers = buildTriggers();
+
+/** Whether the file's `timeline_transitions` has `route_id` (migration 0031). */
+const hasTransitionRoute = (dbConnection: DatabaseSync): boolean =>
+    (
+        dbConnection
+            .prepare(
+                "SELECT 1 FROM pragma_table_info('timeline_transitions') WHERE name = 'route_id'",
+            )
+            .all() as unknown[]
+    ).length > 0;
 
 /**
  * Views that depend on tables created by migrations. Dropped before migrations run (so a table
@@ -90,6 +106,32 @@ const views = {
      * a page-era file being converted commits timeline rows before it has the table, so the
      * write wrapper reads this view only once the table exists.
      */
+    /**
+     * The routes' commit-time invariants (spec v0.9 §5.1, ADR 0010): every route is walked by
+     * exactly one transition (E-R3), no other path style carries a route yet (E-R2), and a route
+     * transition has no path_params (E-R4). Apart from `timeline_commit_violations` for the same
+     * reason as `timeline_held_violations`: the write wrapper reads it once the routes table
+     * exists, and a view that names a missing table would break a later table rebuild.
+     */
+    timeline_route_violations: `
+        CREATE VIEW IF NOT EXISTS timeline_route_violations AS
+            SELECT 'E-R3' AS code, NULL AS transition_id,
+                   'route ' || r.id || ' is used by '
+                       || (SELECT count(*) FROM timeline_transitions t WHERE t.route_id = r.id)
+                       || ' transitions' AS detail
+              FROM timeline_routes r
+             WHERE (SELECT count(*) FROM timeline_transitions t WHERE t.route_id = r.id) <> 1
+            UNION ALL
+            SELECT 'E-R2' AS code, t.id AS transition_id,
+                   'a ' || t.path_style || ' transition has a route' AS detail
+              FROM timeline_transitions t
+             WHERE t.path_style <> 'route' AND t.route_id IS NOT NULL
+            UNION ALL
+            SELECT 'E-R4' AS code, t.id AS transition_id,
+                   'route transition has path_params' AS detail
+              FROM timeline_transitions t
+             WHERE t.path_style = 'route' AND t.path_params IS NOT NULL;
+    `,
     timeline_held_violations: `
         CREATE VIEW IF NOT EXISTS timeline_held_violations AS
             SELECT 'E-H1' AS code, NULL AS transition_id,
@@ -279,7 +321,9 @@ function exactReal(column: string): string {
  * `ChangeBatch` without translation. They fire for foreign-key cascades too. They write only to
  * the bookkeeping table (U-1). Timelines are not logged (R-1).
  */
-function timelineChangeLogTriggers(): Record<string, string> {
+function timelineChangeLogTriggers(
+    transitionRoute = true,
+): Record<string, string> {
     const loggedTables: {
         table: string;
         /** The spec's logical table name, written to `tbl` */
@@ -313,7 +357,16 @@ function timelineChangeLogTriggers(): Record<string, string> {
             image: (r) =>
                 `json_object('id', ${r}.id, 'dest', ${r}.dest_shape_id, 'style', ${r}.path_style, ` +
                 `'params', json(${r}.path_params), 'order', ${r}.order_mode, 'slots', ${r}.slot_count, ` +
-                `'start', ${r}.start_beat, 'end', ${r}.end_beat)`,
+                `'start', ${r}.start_beat, 'end', ${r}.end_beat` +
+                (transitionRoute ? `, 'route', ${r}.route_id)` : `)`),
+        },
+        {
+            // Routes are logged like shapes (spec v0.9 §10.2)
+            table: "timeline_routes",
+            logicalName: "routes",
+            rowId: (r) => `${r}.id`,
+            image: (r) =>
+                `json_object('id', ${r}.id, 'geometry', json(${r}.geometry))`,
         },
         {
             table: "timeline_assignments",
@@ -385,7 +438,43 @@ const normalizeTriggerSql = (sql: string) =>
  * file, and the recreation is one transaction, so a failure can't leave a trigger dropped.
  */
 export const recreateChangeLogTriggers = (dbConnection: DatabaseSync) =>
-    recreateTriggersIfStale(dbConnection, timelineChangeLogTriggers());
+    recreateTriggersIfStale(
+        dbConnection,
+        onExistingTables(
+            dbConnection,
+            timelineChangeLogTriggers(hasTransitionRoute(dbConnection)),
+        ),
+    );
+
+/** The table a trigger is on, read from its header (`... ON <table>` before WHEN or BEGIN). */
+export const triggerTable = (triggerSql: string): string => {
+    const header = triggerSql.split(/\b(?:WHEN|BEGIN)\b/)[0]!;
+    const match = /\bON\s+"?([A-Za-z_][A-Za-z0-9_]*)"?/.exec(header);
+    if (!match) throw new Error(`No table in trigger: ${triggerSql}`);
+    return match[1]!;
+};
+
+/**
+ * Only the triggers whose table the file has. A table a later migration adds, such as the routes
+ * table (0031), is missing from a page-era file until it converts; its triggers come with it.
+ */
+const onExistingTables = (
+    dbConnection: DatabaseSync,
+    wanted: Record<string, string>,
+): Record<string, string> => {
+    const tables = new Set(
+        (
+            dbConnection
+                .prepare("SELECT name FROM sqlite_schema WHERE type = 'table'")
+                .all() as { name: string }[]
+        ).map((row) => row.name),
+    );
+    return Object.fromEntries(
+        Object.entries(wanted).filter(([, sql]) =>
+            tables.has(triggerTable(sql)),
+        ),
+    );
+};
 
 /**
  * Recreates the triggers in `wantedTriggers` that are missing or whose stored body differs, in
@@ -454,7 +543,12 @@ export const dropAllTriggers = (dbConnection: DatabaseSync) => {
  * @param db - The database instance to create triggers in.
  */
 export const createAllTriggers = (dbConnection: DatabaseSync) => {
-    for (const [name, trigger] of Object.entries(triggers)) {
+    for (const [name, trigger] of Object.entries(
+        onExistingTables(
+            dbConnection,
+            buildTriggers(hasTransitionRoute(dbConnection)),
+        ),
+    )) {
         try {
             dbConnection.exec(`${trigger}`);
         } catch (error) {

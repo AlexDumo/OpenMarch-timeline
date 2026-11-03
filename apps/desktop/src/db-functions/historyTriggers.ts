@@ -32,6 +32,8 @@ export const tablesWithHistory = [
     schema.timeline_transitions,
     schema.timeline_assignments,
     schema.timeline_slot_destinations,
+    // Routes walked by route transitions (spec v0.9, ADR 0010)
+    schema.timeline_routes,
     // App data beside them: where marchers are Held (ADR 0001 amendment 2026-10-30)
     schema.timeline_held_marks,
     // Performer cues (ADR 0004 D-5)

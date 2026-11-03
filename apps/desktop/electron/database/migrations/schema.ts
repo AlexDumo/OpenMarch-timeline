@@ -390,6 +390,23 @@ export const timeline_shapes = sqliteTable(
     ],
 );
 
+/**
+ * The path a `route` transition walks (spec v0.9 §5.1 `routes`, ADR 0010, D-19): a list of
+ * corner points in absolute field coordinates, from where the marcher starts to its destination.
+ * No owner column, like shapes; exactly one transition walks each route (I-R3, at commit).
+ */
+export const timeline_routes = sqliteTable(
+    "timeline_routes",
+    {
+        id: integer().primaryKey(),
+        /** JSON geometry `{v, from, to, points}` (spec §5.2, I-R1) */
+        geometry: text().notNull(),
+    },
+    (_table) => [
+        check("timeline_routes_geometry_check", sql`json_valid(geometry)`),
+    ],
+);
+
 /** Motion into a destination over a beat range (spec §5.1 `transitions`). */
 export const timeline_transitions = sqliteTable(
     "timeline_transitions",
@@ -402,10 +419,14 @@ export const timeline_transitions = sqliteTable(
         dest_shape_id: integer().references(() => timeline_shapes.id, {
             onDelete: "restrict",
         }),
-        /** direct, arc or follow_the_leader */
+        /** direct, arc, follow_the_leader or route (v0.9) */
         path_style: text().notNull().default("direct"),
         /** JSON path parameters, by path_style (spec §5.2) */
         path_params: text(),
+        /** The route a `route` transition walks (v0.9, I-R2); NULL otherwise */
+        route_id: integer().references(() => timeline_routes.id, {
+            onDelete: "restrict",
+        }),
         /** inherit or slot */
         order_mode: text().notNull().default("inherit"),
         slot_count: integer().notNull(),
@@ -420,7 +441,7 @@ export const timeline_transitions = sqliteTable(
         ),
         check(
             "timeline_transitions_path_style_check",
-            sql`path_style IN ('direct', 'arc', 'follow_the_leader')`,
+            sql`path_style IN ('direct', 'arc', 'follow_the_leader', 'route')`,
         ),
         check(
             "timeline_transitions_path_params_check",
@@ -446,7 +467,19 @@ export const timeline_transitions = sqliteTable(
             "timeline_transitions_arc_bulge_check",
             sql`path_style <> 'arc' OR (coalesce(json_type(path_params, '$.bulge'), '') IN ('integer', 'real') AND abs(json_extract(path_params, '$.bulge')) <= 0.5)`,
         ),
+        check(
+            "timeline_transitions_route_id_type_check",
+            sql`route_id IS NULL OR typeof(route_id) = 'integer'`,
+        ),
+        // I-R2 (v0.9): a route transition walks a route, has no shape and exactly one slot.
+        // Rules later steps relax are commit checks instead (E-R2, E-R4), so relaxing them never
+        // rebuilds this table.
+        check(
+            "timeline_transitions_route_check",
+            sql`path_style <> 'route' OR (route_id IS NOT NULL AND dest_shape_id IS NULL AND slot_count = 1)`,
+        ),
         index("timeline_idx_tr_shape").on(table.dest_shape_id),
+        index("timeline_idx_tr_route").on(table.route_id),
         index("timeline_idx_tr_timeline").on(table.timeline_id),
     ],
 );

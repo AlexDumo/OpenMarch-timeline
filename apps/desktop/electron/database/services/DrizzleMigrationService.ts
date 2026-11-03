@@ -31,6 +31,17 @@ import {
  */
 export const FIRST_TIMELINE_MIGRATION_TAG = "0020_drop_page_era";
 
+/**
+ * Timeline-only migrations that change a table the page conversion writes (`timeline_transitions`).
+ * The converter writes through this build's schema before the timeline-only migrations run, so
+ * these also run, unrecorded, after a page-model file's page-era migrations, both on open
+ * (`applyPendingMigrations`) and in its conversion (`applyPageMigrationsInTransaction`); the
+ * timeline stage then runs and records them as usual.
+ * Each must be safe to run twice on a file being converted: `IF NOT EXISTS` for new tables, and a
+ * table rebuild that copies every row (a converting file has no rows that use what it adds).
+ */
+export const CONVERTER_SCHEMA_MIGRATION_TAGS = ["0031_timeline_routes"];
+
 /** The migrations folder, also found from a built `dist-electron/main`. */
 export function resolveMigrationsFolder(migrationsFolder?: string): string {
     const requestedFolder =
@@ -201,8 +212,19 @@ export function applyPageMigrationsInTransaction(
     );
     dropAllTriggers(rawDb);
     for (const query of queries) runMigrationQuery(rawDb, query);
+    for (const query of converterSchemaQueries(
+        resolveMigrationsFolder(migrationsFolder),
+    ))
+        runMigrationQuery(rawDb, query);
     createAllTriggers(rawDb);
     recreateChangeLogTriggers(rawDb);
+}
+
+/** The statements of `CONVERTER_SCHEMA_MIGRATION_TAGS`, without the rows that record them. */
+function converterSchemaQueries(folder: string): string[] {
+    return readTaggedMigrations(folder)
+        .filter((m) => CONVERTER_SCHEMA_MIGRATION_TAGS.includes(m.tag))
+        .flatMap((m) => m.sql);
 }
 
 /**
@@ -292,6 +314,8 @@ export class DrizzleMigrationService {
             // Like drizzle's own migrator, rebuild the triggers on every open, even with nothing
             // pending, so they always match this build.
             dropAllTriggers(this.rawDb);
+            if (userVersion === PAGE_MODEL_USER_VERSION)
+                queries.push(...converterSchemaQueries(folder));
             for (const query of queries) {
                 this.rawDb.exec("PRAGMA foreign_keys = OFF");
                 runMigrationQuery(this.rawDb, query);

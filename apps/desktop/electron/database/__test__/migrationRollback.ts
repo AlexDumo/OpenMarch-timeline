@@ -61,6 +61,62 @@ const dropMarchersColumn = (
     );
 };
 
+/** Pieces of `timeline_transitions`' DDL that 0031 added, removed again by its rollback */
+const ROUTE_DDL_PIECES = [
+    "\t`route_id` integer,\n",
+    "\tFOREIGN KEY (`route_id`) REFERENCES `timeline_routes`(`id`) ON UPDATE no action ON DELETE restrict,\n",
+    `,\n\tCONSTRAINT "timeline_transitions_route_id_type_check" CHECK(route_id IS NULL OR typeof(route_id) = 'integer'),\n\tCONSTRAINT "timeline_transitions_route_check" CHECK(path_style <> 'route' OR (route_id IS NOT NULL AND dest_shape_id IS NULL AND slot_count = 1))`,
+];
+
+/** Rebuilds `timeline_transitions` as it was before 0031 (no routes), keeping its rows and ids. */
+export const rollBackRoutesSchema = (db: DatabaseSync) => {
+    let { sql } = db
+        .prepare(
+            "SELECT sql FROM sqlite_schema WHERE name = 'timeline_transitions'",
+        )
+        .get() as { sql: string };
+    for (const piece of ROUTE_DDL_PIECES) {
+        if (!sql.includes(piece))
+            throw new Error(
+                `timeline_transitions has no ${piece} to roll back`,
+            );
+        sql = sql.replace(piece, "");
+    }
+    sql = sql
+        .replace("'follow_the_leader', 'route')", "'follow_the_leader')")
+        // SQLite stores a renamed table's name in double quotes
+        .replace(
+            /CREATE TABLE [`"]timeline_transitions[`"]/,
+            "CREATE TABLE `timeline_transitions_old`",
+        );
+    db.exec(sql);
+    const columns = (
+        db
+            .prepare(
+                "SELECT name FROM pragma_table_info('timeline_transitions_old')",
+            )
+            .all() as { name: string }[]
+    )
+        .map((c) => `\`${c.name}\``)
+        .join(", ");
+    db.exec(
+        `INSERT INTO timeline_transitions_old (${columns}) SELECT ${columns} FROM timeline_transitions`,
+    );
+    db.exec("PRAGMA legacy_alter_table = ON");
+    db.exec("DROP TABLE timeline_transitions");
+    db.exec(
+        "ALTER TABLE timeline_transitions_old RENAME TO timeline_transitions",
+    );
+    db.exec("PRAGMA legacy_alter_table = OFF");
+    db.exec(
+        "CREATE INDEX `timeline_idx_tr_shape` ON `timeline_transitions` (`dest_shape_id`)",
+    );
+    db.exec(
+        "CREATE INDEX `timeline_idx_tr_timeline` ON `timeline_transitions` (`timeline_id`)",
+    );
+    dropTables(db, ["timeline_routes"]);
+};
+
 const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
     // Performer cues (ADR 0004)
     22: (db) =>
@@ -102,6 +158,11 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
 )`),
     // Held marks (ADR 0001 amendment 2026-10-30)
     30: (db) => dropTables(db, ["timeline_held_marks"]),
+    // Routes, pathways step 1 (ADR 0010). The schema is left as it is: older migrations' tests
+    // write timeline rows through this build's schema, which has `route_id`. Re-running 0031 on
+    // it is safe (it runs twice in a conversion too). `rollBackRoutesSchema` restores the real
+    // older schema for 0031's own test.
+    31: () => {},
 };
 
 /**
