@@ -19,6 +19,7 @@ import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import { GUIDE_INK, GUIDE_INK_TEXT } from "./guideInk";
 import { shapeAlone, useMarchersHidden } from "@/shapes/field/marchersHidden";
+import { useAngleLinesStore } from "@/shapes/field/angleLines";
 import {
     GROUP_LABEL_HEIGHT,
     GROUP_LABEL_PX,
@@ -527,8 +528,27 @@ const ShapeBody = memo(function ShapeBody({
     const fill = rgbaToString({ ...theme.shape, a: 0.06 });
     const open = drawing.stage === "open";
     const dots = drawing.stage === "drawing";
+    const angleLines = useAngleLinesStore((s) => s.shown);
     return (
         <>
+            {angleLines &&
+                drawing.construction?.flatMap(({ center, spokes }, i) =>
+                    (spokes ?? []).map((to, j) => (
+                        // From the circle's center to an arc's end, so its angle reads (#634)
+                        <line
+                            key={`spoke-${i}-${j}`}
+                            x1={center.x}
+                            y1={center.y}
+                            x2={to.x}
+                            y2={to.y}
+                            stroke={walk}
+                            strokeWidth={SHAPE_OUTLINE_WIDTH}
+                            strokeDasharray={CONSTRUCTION_DASH}
+                            vectorEffect="non-scaling-stroke"
+                            data-testid="fieldShapeAngleLine"
+                        />
+                    )),
+                )}
             {drawing.construction?.map(({ center, rx, ry, rotation }, i) => (
                 // The circle or ellipse an arc is part of, faint under it (#634)
                 <ellipse

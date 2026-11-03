@@ -299,6 +299,8 @@ export type FieldModeDrawing = {
         ry: number;
         /** Radians: the way `rx` points */
         rotation: number;
+        /** Points a line goes to from its center, when angle lines are shown (#634) */
+        spokes?: readonly FieldPoint[];
     }[];
     /**
      * Where the shape's marchers start the move (08-shape-system-ux.md, "Marcher styling"), drawn

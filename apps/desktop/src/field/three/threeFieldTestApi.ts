@@ -1,4 +1,5 @@
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
+import { useAngleLinesStore } from "@/shapes/field/angleLines";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import type { FieldModeDrawing, FieldPoint } from "@/field/editor/fieldEditor";
 import type {
@@ -186,11 +187,14 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
         rings: (drawing.rings ?? []).map(copy),
         gaps: (drawing.gaps ?? []).map(copy),
         construction: (drawing.construction ?? []).map(
-            ({ center, rx, ry, rotation }) => ({
+            ({ center, rx, ry, rotation, spokes }) => ({
                 center: copy(center),
                 rx,
                 ry,
                 rotation,
+                spokes: useAngleLinesStore.getState().shown
+                    ? (spokes ?? []).map(copy)
+                    : [],
             }),
         ),
         stage: drawing.stage ?? null,

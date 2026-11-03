@@ -117,6 +117,11 @@ export interface ConstructionCircle {
     readonly rx: number;
     readonly ry: number;
     readonly rotation: number;
+    /**
+     * Points a line is drawn to from its center, when angle lines are shown: an Arc's ends, so
+     * the angle it turns reads at a glance (owner on #634). None when absent.
+     */
+    readonly spokes?: readonly XY[];
 }
 
 /** A parameter's direction mark: ↔ across, ↕ deep */
@@ -205,6 +210,11 @@ export interface ToolParam<P> {
      * #634)
      */
     readonly ratioLockAfter?: boolean;
+    /**
+     * The angle lines' on/off button sits just after this number: an Arc's degrees, its lines
+     * from its circle's center to its ends (owner on #634)
+     */
+    readonly angleLinesAfter?: boolean;
     /** The params with `text` typed over the number; null when the text isn't understood */
     type(params: P, n: number, text: string, env: ToolEnv): P | null;
     /**

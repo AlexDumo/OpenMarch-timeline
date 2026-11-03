@@ -203,6 +203,8 @@ export type FieldTestShapeOverlay = {
         rx: number;
         ry: number;
         rotation: number;
+        /** Where its angle lines go from its center (#634), field units; none when hidden */
+        spokes: { x: number; y: number }[];
     }[];
     /** Its handles, in the viewport. */
     handles: ScreenPoint[];

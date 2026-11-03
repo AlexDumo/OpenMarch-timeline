@@ -1,5 +1,6 @@
 import { T } from "@tolgee/react";
 import Shortcut from "@/components/ui/Shortcut";
+import { useAngleLinesStore } from "@/shapes/field/angleLines";
 import clsx from "clsx";
 import {
     Fragment,
@@ -49,6 +50,7 @@ import {
     EqualsIcon,
     MagnetIcon,
     PathIcon,
+    AngleIcon,
     EyeIcon,
     EyeSlashIcon,
     SelectionSlashIcon,
@@ -414,6 +416,9 @@ function ShapeEditorBar({
                                     x.param.ratioLockAfter === true && (
                                         <RatioLockButton />
                                     )}
+                                {x.param.angleLinesAfter === true && (
+                                    <AngleLinesButton />
+                                )}
                             </Fragment>
                         ))}
                         {target.empty > 0 && (
@@ -900,6 +905,34 @@ const IntervalLockButton = memo(function IntervalLockButton({
 });
 
 /** Keeps the two spacings in proportion */
+/**
+ * Shows or hides the angle lines (owner on #634): an Arc's lines from its circle's center to its
+ * ends, beside its degrees. The user's choice, kept for every arc.
+ */
+const AngleLinesButton = memo(function AngleLinesButton() {
+    const shown = useAngleLinesStore((s) => s.shown);
+    return (
+        <IconButton
+            label={
+                shown
+                    ? tolgee.t(
+                          "shapes.edit.angleLines.hide",
+                          "Hide the lines from the center to the ends",
+                      )
+                    : tolgee.t(
+                          "shapes.edit.angleLines.show",
+                          "Show lines from the center to the ends",
+                      )
+            }
+            pressed={shown}
+            onClick={useAngleLinesStore.getState().toggle}
+            testId="shape-editor-angle-lines"
+        >
+            <AngleIcon size={14} />
+        </IconButton>
+    );
+});
+
 const RatioLockButton = memo(function RatioLockButton() {
     const ratioLocked = useShapeEditorStore((s) => s.ratioLocked);
     return (
@@ -1321,6 +1354,13 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
     );
     /** Where it goes in `view`. The view isn't subscribed to: a pan or zoom moves the editor
      * without re-rendering it (#455) */
+    // The angle lines meet at the circle's center, which the editor then keeps clear of too (#634)
+    const angleLines = useAngleLinesStore((s) => s.shown);
+    const centers = angleLines
+        ? (kind.construction?.(params, spots) ?? [])
+              .filter((c) => (c.spokes ?? []).length > 0)
+              .map((c) => c.center)
+        : [];
     const targetIn = (view: FieldView) => {
         // The knob stands a fixed distance off the shape on screen, so it's found at this zoom
         const { knob } = frameControls(kind, params, spots, {
@@ -1329,9 +1369,10 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         return editorPlacement({
             outline: outline.map((p) => fieldToElement(view, p.x, p.y)),
             knob: fieldToElement(view, knob.x, knob.y),
-            handles: kind
-                .handles(params, spots, null)
-                .map(({ at }) => fieldToElement(view, at.x, at.y)),
+            handles: [
+                ...kind.handles(params, spots, null).map(({ at }) => at),
+                ...centers,
+            ].map((at) => fieldToElement(view, at.x, at.y)),
             width: room.width,
             height: room.height,
             fieldWidth: room.fieldWidth,

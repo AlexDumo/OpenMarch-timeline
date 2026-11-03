@@ -420,6 +420,17 @@ describe("its whole circle", () => {
         expect(arcTool.construction!(withEnds(p, "chord"), 5)).toHaveLength(1);
     });
 
+    it("draws lines from the circle's center to each end, its button by the degrees", () => {
+        const p = arc(90);
+        const [circle] = arcTool.construction!(p, 5);
+        expect(circle!.spokes).toHaveLength(2);
+        circle!.spokes!.forEach((to, i) =>
+            expect(dist(to, p.points[i]!)).toBeLessThan(1e-9),
+        );
+        const degrees = arcTool.params.find((q) => q.key === "bend")!;
+        expect(degrees.angleLinesAfter).toBe(true);
+    });
+
     it("shows none once it's closed to a circle", () => {
         expect(arcTool.construction!(withEnds(arc(90), "circle"), 5)).toEqual(
             [],
