@@ -187,7 +187,7 @@ CREATE TABLE transitions (
   path_style     TEXT NOT NULL DEFAULT 'direct'
                  CHECK (path_style IN ('direct','arc','follow_the_leader','route')),
   path_params    TEXT CHECK (path_params IS NULL OR json_valid(path_params)),
-  route_id       INTEGER          REFERENCES routes(id)    ON DELETE RESTRICT,   -- v0.9: set exactly for 'route' (I-R2)
+  route_id       INTEGER          REFERENCES routes(id)    ON DELETE RESTRICT,   -- v0.9: required for 'route' (I-R2)
   order_mode     TEXT NOT NULL DEFAULT 'inherit' CHECK (order_mode IN ('inherit','slot')),
   slot_count     INTEGER NOT NULL CHECK (slot_count BETWEEN 1 AND 10000),
   start_beat     INTEGER NOT NULL CHECK (start_beat BETWEEN 0 AND 2147483647),
@@ -198,11 +198,10 @@ CREATE TABLE transitions (
   -- I-T2 (partial, DB-enforced): an arc carries a numeric bulge with |bulge| <= 0.5 (minor arcs only, §8.11)
   CHECK (path_style <> 'arc' OR (coalesce(json_type(path_params, '$.bulge'), '') IN ('integer', 'real')
                                  AND abs(json_extract(path_params, '$.bulge')) <= 0.5)),
-  -- I-R2 (v0.9): a route transition walks exactly one route, has no shape and exactly one slot;
-  -- no other transition has a route. Its path_params are checked by the write path (I-R4), so
-  -- groups can add an offset there later without rebuilding this table.
-  CHECK ((path_style = 'route') = (route_id IS NOT NULL)),
-  CHECK (path_style <> 'route' OR (dest_shape_id IS NULL AND slot_count = 1))
+  -- I-R2 (v0.9): a route transition walks a route, has no shape and exactly one slot. Rules that later
+  -- steps relax (which other styles may carry a route, its path_params) are commit checks instead
+  -- (E-R2, E-R4), so relaxing them never rebuilds this table.
+  CHECK (path_style <> 'route' OR (route_id IS NOT NULL AND dest_shape_id IS NULL AND slot_count = 1))
 ) STRICT;
 
 CREATE TABLE assignments (
@@ -313,6 +312,11 @@ CREATE VIEW commit_violations AS
            || ' transitions' AS detail
     FROM routes r
    WHERE (SELECT count(*) FROM transitions t WHERE t.route_id = r.id) <> 1
+  UNION ALL
+  -- I-R2 (v0.9 step 1): no other path style carries a route yet (trails relax this)
+  SELECT 'E-R2', t.id, 'a ' || t.path_style || ' transition has a route' AS detail
+    FROM transitions t
+   WHERE t.path_style <> 'route' AND t.route_id IS NOT NULL
   UNION ALL
   -- I-R4 (v0.9 step 1): a route transition carries no path_params yet
   SELECT 'E-R4', t.id, 'route transition has path_params' AS detail
@@ -493,7 +497,7 @@ With this wrapper, the resolver never sees a partial edit, and a rejected edit l
 | I-N1 | Integer columns (beats, slots, layers, ids) hold integers                                                                                                                                                                                                   | `STRICT` tables                                                                                                                                                                                                  | constraint |
 | I-N2 | Beats lie in `[0, 2³¹−1]`, `layer` in `[−1000, 1000]` and `slot_count` in `[1, 10000]`. Home coordinates are finite with \|x\|, \|y\| ≤ 10⁶.                                                                                                                | CHECK constraints                                                                                                                                                                                                | constraint |
 | I-R1 | Route geometry matches §5.2 (v0.9 step 1): version 1, finite numbers, every point within `[−10⁶, 10⁶]²`, unique point ids, corner points only. | App write path. `json_valid` is a CHECK. | `E-R1` |
-| I-R2 | A transition has a route exactly when its `path_style` is `route`. A `route` transition has no shape and `slot_count = 1`. | CHECK | constraint |
+| I-R2 | A `route` transition has a route, no shape and `slot_count = 1`. No other transition has a route (step 1; follow the leader on a trail relaxes this). | CHECK; the second sentence at commit | constraint; `E-R2` |
 | I-R4 | A `route` transition's `path_params` is NULL (v0.9 step 1; the group step adds an offset here). | App write path, and a commit check | `E-R4` |
 | I-R3 | Every route is walked by exactly one transition (v0.9 step 1; the group step relaxes this to at least one, with no table change). | `commit_violations` at commit | `E-R3` |
 | I-D3 | A route that a transition uses cannot be deleted | FK `ON DELETE RESTRICT` | constraint |
@@ -783,7 +787,7 @@ exactly as R-7, and raise `D-REBASE`. A later step replaces this with a rejoin o
 
 1. Start with `V = [A]`.
 2. For each `P_i` in order, append it only if `|P_i − last(V)| ≥ ε_geom`.
-3. If `V` has more than one point and `|last(V) − B| < ε_geom`, remove `last(V)` (an inner point,
+3. While `V` has more than one point and `|last(V) − B| < ε_geom`, remove `last(V)` (an inner point,
    never `A`).
 4. Append `B`.
 
@@ -987,7 +991,7 @@ The resolver processes one **batch** per committed transaction (§10.2). It neve
 | `T.path_style`                                                                                      | `ftlGeometry[T]` (create or drop)                                    | W-3 for T           |
 | `T.path_params`                                                                                     | `ftlGeometry[T]` if FTL                                              | W-3 for T           |
 | `T.order_mode`                                                                                      | none                                                                 | W-3 for T           |
-| Route `R` geometry inserted, updated or deleted (v0.9)                                              | `routeGeometry[R]`                                                   | W-3 for the T with `route_id = R` |
+| Route `R` geometry updated (v0.9). On insert or delete, the same edit also changes `T.route_id` (AP-R1 to AP-R3), and that row seeds W-3; a deleted route's T comes from the coalesced `before` image | `routeGeometry[R]` (create, recompute or drop) | W-3 for the T with `route_id = R` |
 | `T.route_id` (v0.9)                                                                                 | none (R-14 reads `routeGeometry` of the new route)                   | W-3 for T           |
 | `T.start_beat` or `T.end_beat` (with R-E1)                                                          | step 3 for every marcher with a row in T                             | W-3 for T           |
 | Transition inserted or deleted                                                                      | create or drop its local caches                                      | W-3, or drop        |
@@ -1780,12 +1784,14 @@ The reviewer accepted the core design and found no new structural contradiction.
 | ------- | ------ |
 | §2 | New term **Route** |
 | §4 | New D-19 |
-| §5.1 | New `routes` table; `transitions` gains `route_id`, the `route` path style and two CHECKs (I-R2); `commit_violations` gains E-R3; routes are logged; a transition's log image gains `route` |
+| §5.1 | New `routes` table; `transitions` gains `route_id`, the `route` path style and one CHECK (I-R2); `commit_violations` gains E-R2, E-R3 and E-R4; routes are logged; a transition's log image gains `route` |
 | §5.2 | `path_params` for `route` is NULL; route `geometry` schema |
 | §6 | New I-R1 to I-R4, I-D3 |
 | §8 | New R-14; `D-REBASE` covers routes; §8.11 counts route points in β |
 | §9 | New cache `routeGeometry`; two invalidation rows; W-5 |
 | §10.2 | Routes are captured |
+
+**File version:** step 1 bumps it once (ADR 0010), so older fork builds refuse files that may hold routes.
 
 **Unchanged:** every other resolution rule, layers (§6.2), FTL, and the meaning of every existing file. App table names keep the timeline prefix (`timeline_routes`, ADR 0001 C-4).
 
@@ -1797,12 +1803,12 @@ The spec covers the model, not the editor, but these procedures decide which row
 
 | ID | Edit | Statements, in one write-wrapper transaction |
 | --- | --- | --- |
-| AP-R1 | **Draw a route** for one marcher's move, or **draw it again** | The move's transition for that marcher must be shapeless with one slot (every app move is: UI-9 in [ui.md](ui.md)). With no route: insert the route, then set `path_style = 'route'`, `route_id`, `path_params = NULL`. With a route: update its `geometry` in place, keeping its id. `from` is the marcher's resolved position at `T.start_beat`, `to` its destination. |
-| AP-R2 | **Straight** (remove the route) | Set `path_style = 'direct'`, `route_id = NULL`; then delete the route. That order is required: `RESTRICT` refuses the other (I-D3), and undo replays it reversed. |
-| AP-R3 | **Delete a move or transition** with a route | Delete the transition (and what already goes with it), then its route. |
+| AP-R1 | **Draw a route** for one marcher's move, or **draw it again** | If the marcher's transition in the move has a shape or more than one slot (a shape move, the later half of a split), first give the marcher its own one-slot shapeless transition with its resolved destination, as point drags already do (`createOwnTransitionsInTransaction`). Then, with no route: insert the route, and set `path_style = 'route'`, `route_id` and `path_params = NULL` **in one UPDATE** (any two-statement order breaks the I-R2 CHECK). With a route: update its `geometry` in place, keeping its id. `from` is the founding span's `origin(s)` and `to` its destination. **Refused** (`E-ARGS`, "taken over at the start of this move") when the marcher's span at `T.start_beat` is a join, because step 1 would never walk the route. |
+| AP-R2 | **Straight** (remove the route), for one marcher or from the Move card for a whole move (`setMovePath`) | For each route transition: set `path_style = 'direct'`, `route_id = NULL`, `path_params = NULL` in one UPDATE; then delete the route. That order is required: `RESTRICT` refuses the other (I-D3), and undo replays it reversed. **Arc** from the Move card does the same with `path_style = 'arc'` and its bulge: it replaces the route. One edit, one undo step. |
+| AP-R3 | **Delete a move or transition** with a route | Delete the transition (and what already goes with it), then its route, in `deleteTimelineTransitionRowsInTransaction`, the one helper that ripple, timeline delete, marcher delete, membership removal and split at a beat all delete through. |
 | AP-R4 | **Range edits**: resize, page-flag drags, moving a move in time, R-E1 | Unchanged. The route is untouched; the marcher walks the same path over the new range. |
 | AP-R5 | **End and start changes**: the destination is edited, or an earlier edit moves where the marcher starts | Unchanged. The route is untouched; the last leg goes to the new destination and the first leg starts from the new origin (R-14 always uses the real `A` and `B`). |
-| AP-R6 | **Everything else that would copy, split or merge a route transition, give it a shape, or change its `slot_count`** | Refused with a reason (`E-ARGS`), and nothing is written. This includes split at the playhead (UI-27), split by marchers (UI-25), merging moves, and any procedure not listed here. A later step lifts each refusal when it supports the edit. |
+| AP-R6 | **Everything else that would copy, split or merge a route transition, give it a shape, or change its `slot_count`** | Refused with a reason (`E-ARGS`), and nothing is written. A later step lifts each refusal when it supports the edit. By procedure: split at the playhead (UI-27); split by marchers (UI-25); merging moves; **Basic mode's + page flag inside a move** (`splitMovesAtBeatInTransaction`), refused when it would cut a route; a point drag that would merge into the next move when either move has a route (`timelinePointMoves`); Remove keyframe's join (`timelineJoinAtBeat`); adding a marcher to a route transition; any procedure not listed here. |
 
 A marcher taken over by a later move partway through a route leaves the route where it is at that beat (R-14, D-7). When the takeover ends and the route transition resumes, the marcher walks straight to its destination.
 
@@ -1814,16 +1820,19 @@ A marcher taken over by a later move partway through a route leaves the route wh
 | --- | --- | --- |
 | QA-RT-1 | Golden: one marcher, a route with two corners, an 8-beat move | Positions at every beat match hand-computed values within 10⁻⁹; the ends are bit-exact |
 | QA-RT-2 | A route with no points | Bit-identical to the same transition as `direct` at every probe |
-| QA-RT-3 | Property: random routes | Distance along the path grows by `L / (T.end − T.start)` per beat, within `10⁻⁹ · L`; P-1 (continuity) and P-13 (the bound, with route points in β) hold |
+| QA-RT-3 | Property: random routes, founding spans | At every probe the position lies on leg `V_j → V_{j+1}`, and the polyline distance from `A` to it equals `p · L` within `10⁻⁹ · L`, so a walk that ignores the corners fails; P-1 (continuity) and P-13 (the bound, with route points in β) hold. Exact values come from the `ref/` oracle |
 | QA-RT-4 | A founding span clipped by a steal at beat `c` | The marcher leaves at distance `p(s, c) · L` along the path; the steal starts exactly there |
 | QA-RT-5 | A resume after the steal ends | Straight from the origin to the destination, as R-7; `D-REBASE` raised |
-| QA-RT-6 | Degenerate: repeated points, a point within `ε_geom` of `A` or `B`, every point within `ε_geom`, `A = B` | Cleaning as R-14; finite positions; ends exact |
+| QA-RT-6 | Degenerate: repeated points, a point within `ε_geom` of `A` or `B`, two points straddling `B` within `ε_geom`, every point within `ε_geom`, `A = B` | A route with an `ε_geom`-close inner point is bit-identical to the same route without it; every position is finite; no leg has zero length; ends exact |
 | QA-RT-7 | Invalidation: edit a route's points; Straight; an earlier edit moves `A`; delete the move; undo and redo each | After every batch, the resolver matches a fresh oracle at every probe (as QA-INV) |
 | QA-RT-8 | Fuzz: the end-to-end fuzzer also draws, redraws and removes routes | No divergence from the oracle; no rejected undo or redo |
-| QA-DB-R1 | A `route` transition with no route; a `direct` one with a route; a route transition with a shape or two slots | Refused by the I-R2 CHECKs; `path_params` on a route transition is refused at commit, `E-R4` |
+| QA-DB-R1 | A `route` transition with no route, with a shape or with two slots; a `direct` transition with a route; a route transition with `path_params` | The first three refused by the I-R2 CHECK; the last two refused at commit, `E-R2` and `E-R4` |
 | QA-DB-R2 | Delete a route a transition uses | Refused (I-D3) |
 | QA-DB-R3 | Commit with an unused route, or with two transitions on one route | Refused at commit, `E-R3` |
 | QA-DB-R4 | Route geometry with a NaN, a point outside `[−10⁶, 10⁶]²`, a repeated point id, or a `smooth` key | Refused by the write path, `E-R1` |
+| QA-AP-R1 | Each refused edit in AP-R6, and AP-R1 on a join | Reports `E-ARGS` with its reason and writes nothing: the database, both history stacks and the resolver are unchanged |
+| QA-AP-R2 | AP-R1 on a marcher in a shape move and in the later half of a split | The marcher gets its own one-slot transition and the route in one edit; the other marchers' positions are unchanged at every beat; undo restores both exactly |
+| QA-AP-R3 | Move card Straight and Arc on a move where one marcher has a route | Every transition takes the new path; the route is deleted; one undo step restores it |
 | QA-UNDO-R1 | Draw, Straight, and delete a move with a route | Each round trip restores the database exactly, ids included |
 | QA-MIG-R1 | Migrate a v0.1.7 file and a current fork file | Both open unchanged; `timeline_transitions` keeps every trigger, history trigger and rowid after the rebuild |
 
