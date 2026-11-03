@@ -33,7 +33,8 @@ import {
     ellipseOf,
     MIDDLE_KEY,
     stretchArc,
-    withGuideSize,
+    arcFootprint,
+    withFootprint,
     withSweep,
     bendHandlePoint,
     bendOf,
@@ -112,40 +113,36 @@ const BEND: ToolParam<LineParams> = {
 };
 
 /**
- * One radius of the circle or ellipse the arc is on, as its width (`↔`) or depth (`↕`) across, in
- * steps (owner on #634): typed, or dragged sideways; with the ratio lock on (flipped by
- * constrain while dragged) the other follows in proportion. A circle's read the same, so a shallow arc, whose guide reaches far off, can be made
- * an ellipse by typing.
+ * The room the arc takes, as its width (side to side; up to a half turn, the distance between its
+ * ends) or depth (from its ends' line to its far edge), in steps (owner on #634): typed, or dragged
+ * sideways. Degrees change it as the arc grows round its circle. With the ratio lock on (flipped
+ * by constrain while dragged) the other follows in proportion, on half steps.
  */
 function guideParam(way: "width" | "depth"): ToolParam<LineParams> {
     const width = way === "width";
-    const radiusOf = (p: LineParams) => {
-        const g = arcGuide(p);
-        return g ? (width ? g.rx : g.ry) : null;
+    const sizeOf = (p: LineParams) => {
+        const f = arcFootprint(p);
+        return f ? (width ? f.width : f.depth) : null;
     };
-    /** The arc with this radius `r`, the other kept or (`ratio`) scaled with it */
-    const sized = (p: LineParams, r: number, ratio: boolean): LineParams => {
-        const g = arcGuide(p);
-        if (!g || !(r > 0)) return p;
-        const scale = r / (width ? g.rx : g.ry);
-        const [rx, ry] = ratio
-            ? [g.rx * scale, g.ry * scale]
-            : width
-              ? [r, g.ry]
-              : [g.rx, r];
-        return withGuideSize(p, rx, ry);
-    };
+    /** The arc `size` across this way, the other kept or (`keep`) following in proportion */
+    const sized = (
+        p: LineParams,
+        size: number,
+        keep: boolean,
+        env: ToolEnv,
+    ): LineParams =>
+        withFootprint(p, width, size, keep, env.snap ? env.stepPx : null);
     return {
         key: way,
         get label() {
             return width
                 ? tolgee.t(
                       "shapes.kinds.arc.params.width",
-                      "Width of the dashed circle or ellipse the arc is on, in steps",
+                      "How far the arc reaches side to side, in steps",
                   )
                 : tolgee.t(
                       "shapes.kinds.arc.params.depth",
-                      "Depth of the dashed circle or ellipse the arc is on, in steps",
+                      "How deep the arc is, from its ends to its far edge, in steps",
                   );
         },
         unit: "steps",
@@ -153,59 +150,56 @@ function guideParam(way: "width" | "depth"): ToolParam<LineParams> {
         drag: "x",
         interval: false,
         blends: true,
-        range: { min: 1 },
+        range: { min: 0.5 },
         shown: (p) => arcGuide(p) !== null,
-        // The lock sits after the depth, at the end of "Circle 60 × 60 steps"
+        // The lock sits after the depth, at the end of "60 × 30 steps"
         ratioLockAfter: !width,
-        // One phrase for the dashed guide: "Circle 60 × 60 steps", "Ellipse 60 × 72 steps"
-        words: (p) =>
+        // One phrase for the room it takes: "60 × 30 steps"
+        words: (): { before?: string; after?: string } =>
             width
-                ? {
-                      before: ellipseOf(p)
-                          ? tolgee.t("shapes.kinds.arc.size.ellipse", "Ellipse")
-                          : tolgee.t("shapes.kinds.arc.size.circle", "Circle"),
-                  }
+                ? {}
                 : {
                       before: "×",
                       after: tolgee.t("shapes.kinds.arc.size.steps", "steps"),
                   },
         display: (p, _n, stepPx) => {
-            const r = radiusOf(p);
-            return r === null ? "" : formatSteps((2 * r) / stepPx);
+            const size = sizeOf(p);
+            return size === null ? "" : formatSteps(size / stepPx);
         },
-        value: (p, _n, stepPx) => (2 * (radiusOf(p) ?? 0)) / stepPx,
+        value: (p, _n, stepPx) => (sizeOf(p) ?? 0) / stepPx,
         type(p, n, text, env) {
             const steps = parseSteps(text);
             if (steps === null || !(steps > 0)) return null;
             return keptInterval(
-                sized(p, (steps * env.stepPx) / 2, env.ratioLocked === true),
+                sized(p, steps * env.stepPx, env.ratioLocked === true, env),
                 n,
                 env,
             );
         },
         set: (p, n, steps, env) =>
             keptInterval(
-                sized(p, (steps * env.stepPx) / 2, env.ratioLocked === true),
+                sized(p, steps * env.stepPx, env.ratioLocked === true, env),
                 n,
                 env,
             ),
         scrub(base, n, m, env) {
-            const r = radiusOf(base);
-            if (r === null) return base;
-            const was = (2 * r) / env.stepPx;
+            const size = sizeOf(base);
+            if (size === null) return base;
+            const was = size / env.stepPx;
             const steps = scrubValue(
                 was,
                 scrubDistance("x", m.dx, m.dy),
                 0,
                 spacingRate(env.snap, "x"),
             );
-            if (steps === was || steps < 1) return base;
+            if (steps === was || steps < 0.5) return base;
             return keptInterval(
                 // The editor's env holds the lock flipped by constrain already
                 sized(
                     base,
-                    (steps * env.stepPx) / 2,
+                    steps * env.stepPx,
                     env.ratioLocked ?? m.roles.constrain,
+                    env,
                 ),
                 n,
                 env,

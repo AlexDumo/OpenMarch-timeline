@@ -450,25 +450,61 @@ describe("stretching it (owner on #634)", () => {
         expect(dist(now.center, g.center)).toBeLessThan(1e-6);
     });
 
-    it("reads its width and depth in the editor and takes typed ones", () => {
+    it("reads the room it takes as width × depth, and takes typed ones", () => {
         const t = halfTurn();
         const width = arcTool.params.find((q) => q.key === "width")!;
         const depth = arcTool.params.find((q) => q.key === "depth")!;
+        // A half circle 60 across: from end to end 6 steps, 3 deep
         expect(width.display(t.params, t.spots, STEP)).toBe("6");
-        expect(depth.display(t.params, t.spots, STEP)).toBe("6");
-        expect(width.words!(t.params, 7)).toEqual({ before: "Circle" });
+        expect(depth.display(t.params, t.spots, STEP)).toBe("3");
+        expect(width.words!(t.params, 7)).toEqual({});
         expect(depth.words!(t.params, 7)).toEqual({
             before: "×",
             after: "steps",
         });
-        const typed = edit(t, depth.type(t.params, t.spots, "8", env), ctx);
-        const g = arcGuide(paramsOf(typed))!;
-        expect(g.ry).toBeCloseTo(40, 6);
-        expect(width.words!(typed.params, 7)).toEqual({ before: "Ellipse" });
+        // A typed depth keeps its ends' line and width
+        const typed = edit(t, depth.type(t.params, t.spots, "4", env), ctx);
+        const p = paramsOf(typed);
+        expect(arcGuide(p)!.ry).toBeCloseTo(40, 6);
+        expect(arcGuide(p)!.rx).toBeCloseTo(30, 6);
+        for (const q of p.points) expect(q.y).toBeCloseTo(200, 6);
+        // A typed width keeps its middle
+        const wide = width.type(t.params, t.spots, "8", env) as LineParams;
+        expect(Math.abs(wide.points[0]!.x - wide.points[1]!.x)).toBeCloseTo(
+            80,
+            6,
+        );
+        expect((wide.points[0]!.x + wide.points[1]!.x) / 2).toBeCloseTo(130, 6);
     });
 
-    it("drags width and depth each on its own, both together with constrain", () => {
-        const t = edit(halfTurn(), withSweep(paramsOf(halfTurn()), 180), ctx);
+    it("changes its numbers with its degrees, its circle staying", () => {
+        const t = halfTurn();
+        const width = arcTool.params.find((q) => q.key === "width")!;
+        const depth = arcTool.params.find((q) => q.key === "depth")!;
+        // A quarter turn of a 30 circle: its ends 42.43 apart, 8.79 deep
+        const quarter = withSweep(paramsOf(t), 90);
+        expect(width.value!(quarter, 7, STEP)).toBeCloseTo(
+            (2 * 30 * Math.SQRT1_2) / STEP,
+            6,
+        );
+        expect(depth.value!(quarter, 7, STEP)).toBeCloseTo(
+            (30 - 30 * Math.SQRT1_2) / STEP,
+            6,
+        );
+        // Past a half turn it reads how wide it reaches, not its ends' gap
+        const most = withSweep(paramsOf(t), 270);
+        expect(width.value!(most, 7, STEP)).toBeCloseTo(6, 6);
+        expect(depth.value!(most, 7, STEP)).toBeCloseTo(
+            (30 + 30 * Math.SQRT1_2) / STEP,
+            6,
+        );
+        // Typing a width past a half turn sizes its reach
+        const typed = width.type(most, 7, "8", env) as LineParams;
+        expect(arcGuide(typed)!.rx).toBeCloseTo(40, 6);
+    });
+
+    it("drags width and depth each on its own, both together with the lock", () => {
+        const t = halfTurn();
         const width = arcTool.params.find((q) => q.key === "width")!;
         const depth = arcTool.params.find((q) => q.key === "depth")!;
         const roles = {
@@ -483,24 +519,34 @@ describe("stretching it (owner on #634)", () => {
             env,
         );
         expect(width.display(wider, 7, STEP)).toBe("7");
-        expect(depth.display(wider, 7, STEP)).toBe("6");
+        expect(depth.display(wider, 7, STEP)).toBe("3");
         const both = width.scrub(
             t.params,
             7,
-            {
-                dx: 48,
-                dy: 0,
-                axis: "x",
-                roles: {
-                    fine: false,
-                    constrain: true,
-                    fromCenter: false,
-                } as never,
-            },
-            env,
+            { dx: 16, dy: 0, axis: "x", roles },
+            { ...env, ratioLocked: true },
         );
-        expect(width.display(both, 7, STEP)).toBe("9");
-        expect(depth.display(both, 7, STEP)).toBe("9");
+        expect(width.display(both, 7, STEP)).toBe("7");
+        // 3 × 7/6 = 3.5: the follower on half steps
+        expect(depth.display(both, 7, STEP)).toBe("3½");
+    });
+
+    it("lands a locked follower on half steps", () => {
+        const t = halfTurn();
+        const width = arcTool.params.find((q) => q.key === "width")!;
+        const depth = arcTool.params.find((q) => q.key === "depth")!;
+        // 6 → 7.5 wide: 3 deep would follow to 3.75, landed on 4 (half steps of 10 are 5)
+        const typed = width.type(t.params, 7, "7.5", {
+            ...env,
+            ratioLocked: true,
+        }) as LineParams;
+        expect(depth.value!(typed, 7, STEP)).toBeCloseTo(4, 6);
+        // Off the ladder it follows exactly
+        const free = width.type(t.params, 7, "7.5", {
+            ...fine,
+            ratioLocked: true,
+        }) as LineParams;
+        expect(depth.value!(free, 7, STEP)).toBeCloseTo(3.75, 6);
     });
 
     it("pulls a dragged handle onto a field line it comes near", () => {

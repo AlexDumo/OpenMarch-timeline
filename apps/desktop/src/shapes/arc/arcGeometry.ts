@@ -234,22 +234,25 @@ export const MIDDLE_KEY = "mid";
 /** The arc's ends, as the Line's points: `p0` is the first marcher's end */
 export const END_KEYS = ["p0", "p1"] as const;
 
-/** How many points along the arc its extent is measured from */
-const EXTENT_SAMPLES = 64;
-
-/** The arc's extent in the guide's own axes, from its center */
+/** The arc's extent in the guide's own axes, from its center: its ends and every quarter of the
+ * way round the guide it passes */
 function extentOnAxes(g: ArcGuide): {
     left: number;
     right: number;
     low: number;
     high: number;
 } {
+    const from = Math.min(g.start, g.start + g.sweep);
+    const to = Math.max(g.start, g.start + g.sweep);
+    const angles = [from, to];
+    const quarter = Math.PI / 2;
+    for (let q = Math.ceil(from / quarter); q * quarter <= to; q++)
+        angles.push(q * quarter);
     let left = Infinity;
     let right = -Infinity;
     let low = Infinity;
     let high = -Infinity;
-    for (let i = 0; i <= EXTENT_SAMPLES; i++) {
-        const t = g.start + (g.sweep * i) / EXTENT_SAMPLES;
+    for (const t of angles) {
         const x = g.rx * Math.cos(t);
         const y = g.ry * Math.sin(t);
         left = Math.min(left, x);
@@ -258,6 +261,88 @@ function extentOnAxes(g: ArcGuide): {
         high = Math.max(high, y);
     }
     return { left, right, low, high };
+}
+
+/**
+ * The room the arc takes on the field (owner on #634), in field units on its own axes: how far it
+ * reaches side to side (up to a half turn, the distance between its ends) and how deep it is,
+ * from its ends' line to its far edge. Null for an arc with no guide.
+ */
+export function arcFootprint(
+    p: LineParams,
+): { width: number; depth: number } | null {
+    const g = arcGuide(p);
+    if (!g) return null;
+    const box = extentOnAxes(g);
+    return { width: box.right - box.left, depth: box.high - box.low };
+}
+
+/** The guide's edge on the arc's ends' side: its back, which a change of depth keeps */
+function backOf(g: ArcGuide, box: ReturnType<typeof extentOnAxes>): number {
+    return g.ry * Math.sin(g.start + g.sweep / 2) >= 0 ? box.low : box.high;
+}
+
+/**
+ * The arc on `g` scaled `kx` along its width about `ax` and `ky` along its depth about `ay` (on
+ * the guide's axes, from its center), its angles kept
+ */
+function rescaled(
+    base: LineParams,
+    g: ArcGuide,
+    kx: number,
+    ky: number,
+    ax: number,
+    ay: number,
+): LineParams {
+    const cx = ax * (1 - kx);
+    const cy = ay * (1 - ky);
+    const c = Math.cos(g.axis);
+    const s = Math.sin(g.axis);
+    const center = {
+        x: g.center.x + cx * c - cy * s,
+        y: g.center.y + cx * s + cy * c,
+    };
+    return onGuide(base, { ...g, center, rx: g.rx * kx, ry: g.ry * ky });
+}
+
+/** `size` on the half-step ladder, no smaller than a half step */
+const onHalfSteps = (size: number, stepPx: number) =>
+    Math.max(stepPx / 2, Math.round(size / (stepPx / 2)) * (stepPx / 2));
+
+/**
+ * The scale the other way follows a change of `scale` with: the same, its size then landed on
+ * half steps (`stepPx`) when snapping, so a kept ratio still reads in half steps (owner on #634)
+ */
+function follower(was: number, scale: number, stepPx: number | null): number {
+    if (stepPx === null || !(was > 0)) return scale;
+    return onHalfSteps(was * scale, stepPx) / was;
+}
+
+/**
+ * The arc with its footprint ({@link arcFootprint}) `size` across one way (`width` or depth), as
+ * typed or dragged in the editor: a width about its middle, a depth about its ends' line. With
+ * `keep` the other way follows in proportion, landed on half steps when `stepPx` is given.
+ */
+export function withFootprint(
+    base: LineParams,
+    width: boolean,
+    size: number,
+    keep: boolean,
+    stepPx: number | null,
+): LineParams {
+    const g = arcGuide(base);
+    if (!g || !(size > 0)) return base;
+    const box = extentOnAxes(g);
+    const was = width ? box.right - box.left : box.high - box.low;
+    const other = width ? box.high - box.low : box.right - box.left;
+    if (!(was > 0)) return base;
+    const scale = size / was;
+    const then = keep ? follower(other, scale, stepPx) : 1;
+    const middle = (box.left + box.right) / 2;
+    const back = backOf(g, box);
+    return width
+        ? rescaled(base, g, scale, then, middle, back)
+        : rescaled(base, g, then, scale, middle, back);
 }
 
 /**
@@ -304,40 +389,35 @@ export function stretchArc(
     // for an end, a hash or sideline for the middle, on an arc square to the field
     const pulled = pullAlong(g, width, handle, local, env);
     const k = ((pulled ?? along(local)) - far) / reach;
-    // The size across that way, landed on half steps unless the handle's on a line
-    const was = (width ? g.rx : g.ry) * 2;
+    // The arc's footprint that way, landed on half steps unless the handle's on a line
+    const was = width ? box.right - box.left : box.high - box.low;
+    const other = width ? box.high - box.low : box.right - box.left;
+    if (!(was > 0)) return base;
     let size = Math.max(env.stepPx / 2, was * k);
-    if (env.snap && pulled === null)
-        size = Math.round(size / (env.stepPx / 2)) * (env.stepPx / 2);
-    const scale = size / was;
+    if (env.snap && pulled === null) size = onHalfSteps(size, env.stepPx);
+    let scale = size / was;
     // The ratio lock, flipped by constrain for the drag (as a box's side is)
     const keep = env.ratioLocked ?? env.constrain;
-    let rx = width || keep ? g.rx * scale : g.rx;
-    let ry = !width || keep ? g.ry * scale : g.ry;
+    const then = keep
+        ? follower(other, scale, env.snap ? env.stepPx : null)
+        : 1;
+    // Near a circle, it sticks to one
+    const rx = g.rx * (width ? scale : then);
+    const ry = g.ry * (width ? then : scale);
     if (
         !keep &&
         pulled === null &&
         Math.abs(rx - ry) <= ROUND_STICK * Math.max(rx, ry)
     ) {
-        if (width) rx = ry;
-        else ry = rx;
+        if (width) scale = ry / g.rx;
+        else scale = rx / g.ry;
     }
     // Scaled about the side that stays: along the handle's way about `far`; the other way (kept
     // in proportion) about the arc's back, so a stretched arc keeps its ends' line
-    const middleY = g.ry * Math.sin(g.start + g.sweep / 2);
-    const back = middleY >= 0 ? box.low : box.high;
-    const otherFar = env.fromCenter || !width ? 0 : back;
-    const kx = rx / g.rx;
-    const ky = ry / g.ry;
-    const cx = width ? far * (1 - kx) : otherFar * (1 - kx);
-    const cy = width ? otherFar * (1 - ky) : far * (1 - ky);
-    const c = Math.cos(g.axis);
-    const s = Math.sin(g.axis);
-    const center = {
-        x: g.center.x + cx * c - cy * s,
-        y: g.center.y + cx * s + cy * c,
-    };
-    return onGuide(base, { ...g, center, rx, ry });
+    const otherFar = env.fromCenter || !width ? 0 : backOf(g, box);
+    return width
+        ? rescaled(base, g, scale, then, far, otherFar)
+        : rescaled(base, g, then, scale, otherFar, far);
 }
 
 /**
@@ -374,20 +454,6 @@ function pullAlong(
     if (Math.abs(way.x) > SQUARE && pull.x !== null) return at + pull.x / way.x;
     if (Math.abs(way.y) > SQUARE && pull.y !== null) return at + pull.y / way.y;
     return null;
-}
-
-/**
- * The arc stretched to the shape `g` gives it, its ellipse and angles round it kept: the guide in
- * steps, for the size typed or dragged in the editor
- */
-export function withGuideSize(
-    base: LineParams,
-    rx: number,
-    ry: number,
-): LineParams {
-    const g = arcGuide(base);
-    if (!g || !(rx > 0) || !(ry > 0)) return base;
-    return onGuide(base, { ...g, rx, ry });
 }
 
 /** An arc drawn from `from` to `to`: its ends landed as a Line's, bowing a quarter turn left */

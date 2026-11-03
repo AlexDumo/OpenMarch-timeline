@@ -8,6 +8,7 @@ status: open
 questions:
   - Did stretching the arc by its ends and middle feel like stretching a box?
   - Was setting the degrees from the editor enough, or did you want a handle for it on the field?
+  - Did the arc's size numbers (width × depth of the arc itself) tell you what you needed?
   - Did closing (with a straight line, or all the way around) do what you expected?
 ---
 
@@ -25,9 +26,12 @@ Select some marchers, open the **Shapes** tab and pick **Arc** (after Curve).
 - Set how far it turns with the degrees in the editor (drag or type). The
   dashed circle or ellipse stays put and the arc grows or shrinks around it,
   so the marchers spread out or close up.
-- The editor also shows the dashed guide's size ("Circle 60 × 60 steps":
-  width × depth); drag or type either. The lock after it keeps the two in
-  proportion, for the handles too (Cmd/Ctrl frees them for one drag).
+- The editor also shows the room the arc takes ("60 × 30 steps": how far it
+  reaches side to side, and how deep it is from its ends to its far edge).
+  Up to a half circle the first number is the distance between the two end
+  marchers. Both change as you change the degrees; drag or type either. The
+  lock after them keeps the two in proportion, for the handles too (Cmd/Ctrl
+  frees them for one drag).
 - Try **Open or closed**: **Close with a straight line** and fill it with
   **Grid**, or close it all the way around.
 
