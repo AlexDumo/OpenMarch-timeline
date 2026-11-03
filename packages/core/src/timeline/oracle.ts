@@ -1,7 +1,7 @@
 // cspell:ignore lerp prevs NONFOUNDING
 /**
  * Reference oracle: an uncached, spec-literal implementation of section 8
- * (R-1 to R-13) with the section 8.9 diagnostics. Ported from
+ * (R-1 to R-14) with the section 8.9 diagnostics. Ported from
  * `docs/timeline/ref/oracle.mjs`.
  *
  * FOR TESTS AND SMALL SHOWS ONLY. It is deliberately naive and recursive:
@@ -12,7 +12,6 @@
  * as `createTimelineOracleForTesting`.
  */
 import {
-    arcPoint,
     classifySpan,
     clamp01,
     destPath,
@@ -21,6 +20,7 @@ import {
     lerp,
     makeTrail,
     paramT,
+    walkedPoint,
 } from "./geom";
 import type {
     AssignmentRow,
@@ -133,9 +133,14 @@ export function createOracle(db: TimelineSnapshot): Oracle {
             return lerp(o, ftlEntryRaw(t.id).target.get(sp.m)!, p);
         }
         const dst = destinationsOf(t, db.shapes)[sp.row.slot]!;
-        return t.style === "arc"
-            ? arcPoint(o, dst, t.params?.bulge ?? 0, p) // R-8
-            : lerp(o, dst, p); // R-7
+        let route: XY[] | undefined;
+        if (t.style === "route") {
+            const r = t.route == null ? undefined : db.routes?.[t.route];
+            if (!r) throw new Error(`route transition ${t.id} has no route`);
+            route = r.geometry.points.map((pt): XY => pt.at);
+        }
+        // R-7, R-8, R-14
+        return walkedPoint(t, o, dst, p, route, kind(sp) === "founding");
     }
 
     function prevNonHold(sp: OracleSpan): OracleSpan | null {

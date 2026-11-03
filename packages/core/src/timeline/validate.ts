@@ -15,8 +15,11 @@ export const COORD_BOUND = 1e6;
 export const MAX_ABS_BULGE = 0.5;
 const TWO_PI = 2 * Math.PI;
 
-/** `E-S1` shape, `E-P1` path params, `E-D2` destination, `E-N2` home. */
-export type ValidationCode = "E-S1" | "E-P1" | "E-D2" | "E-N2";
+/** `E-S1` shape, `E-P1` path params, `E-D2` destination, `E-N2` home, `E-R1` route (v0.9). */
+export type ValidationCode = "E-S1" | "E-P1" | "E-D2" | "E-N2" | "E-R1";
+
+/** Longest route point id (spec 5.2, I-R1). */
+export const MAX_ROUTE_POINT_ID_LENGTH = 16;
 
 export interface ValidationError {
     code: ValidationCode;
@@ -280,6 +283,10 @@ export function validatePathParams(
             }
             break;
         }
+        case "route":
+            // I-R4 (v0.9 step 1): the points live in the route
+            if (params !== null) push("", "route path_params must be null");
+            break;
         case "follow_the_leader": {
             if (!isRecord(params)) {
                 push("", "follow_the_leader path_params must be {waypoints}");
@@ -331,5 +338,56 @@ export function validateDestination(point: unknown): ValidationResult {
 export function validateHome(home: unknown): ValidationResult {
     const { push, result } = collector("E-N2");
     pointOf(home, "home", push);
+    return result();
+}
+
+// ---------------------------------------------------------------------------
+// Routes (I-R1, v0.9 step 1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate a route's `geometry` (spec 5.2, I-R1): version 1, `from`, `to` and every point
+ * finite and within the bound, point ids non-empty strings of at most 16 characters and unique,
+ * and every point exactly `{id, at}` (corners only in step 1). Errors are `E-R1`.
+ */
+export function validateRouteGeometry(geometry: unknown): ValidationResult {
+    const { push, result } = collector("E-R1");
+    if (!isRecord(geometry)) {
+        push("", "route geometry must be an object {v, from, to, points}");
+        return result();
+    }
+    noExtraKeys(geometry, ["v", "from", "to", "points"], push);
+    if (geometry.v !== 1) push("v", "route geometry version must be 1");
+    pointOf(geometry.from, "from", push);
+    pointOf(geometry.to, "to", push);
+    if (!Array.isArray(geometry.points)) {
+        push("points", "points must be an array");
+        return result();
+    }
+    const ids = new Set<string>();
+    geometry.points.forEach((pt: unknown, i: number) => {
+        const path = `points[${i}]`;
+        if (!isRecord(pt)) {
+            push(path, `${path} must be an object {id, at}`);
+            return;
+        }
+        for (const key of Object.keys(pt))
+            if (key !== "id" && key !== "at")
+                push(`${path}.${key}`, `unexpected field "${key}"`);
+        const id = pt.id;
+        if (
+            typeof id !== "string" ||
+            id.length === 0 ||
+            id.length > MAX_ROUTE_POINT_ID_LENGTH
+        )
+            push(
+                `${path}.id`,
+                `${path}.id must be a string of 1 to 16 characters`,
+            );
+        else if (ids.has(id))
+            push(`${path}.id`, `point id "${id}" is repeated`);
+        else ids.add(id);
+        pointOf(pt.at, `${path}.at`, push);
+    });
     return result();
 }

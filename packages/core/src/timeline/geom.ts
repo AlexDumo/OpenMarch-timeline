@@ -268,3 +268,84 @@ export function makeTrail(
                 : path.at(d - destOffset),
     };
 }
+
+/**
+ * R-14: a route's cleaned walked path `V` from `A` through the inner points to `B`, with the
+ * cumulative distances `D` (D[0] = 0) and the total length `L`. Every leg is at least
+ * `EPS_GEOM` long, except when `V = [A, B]`.
+ */
+export interface RoutePath {
+    V: XY[];
+    D: number[];
+    L: number;
+}
+
+/** R-14 cleaning and length. */
+export function routePath(A: XY, inner: readonly XY[], B: XY): RoutePath {
+    const V: XY[] = [A];
+    for (const P of inner) if (dist(V[V.length - 1]!, P) >= EPS_GEOM) V.push(P);
+    // Inner points within EPS_GEOM of B go (never A, which is V[0])
+    while (V.length > 1 && dist(V[V.length - 1]!, B) < EPS_GEOM) V.pop();
+    V.push(B);
+    const D = [0];
+    let total = 0;
+    for (let j = 0; j + 1 < V.length; j++) {
+        total += dist(V[j]!, V[j + 1]!);
+        D.push(total);
+    }
+    return { V, D, L: total };
+}
+
+/**
+ * R-14 evaluation at progress `p` along a cleaned path: constant speed along the whole
+ * polyline, corners passed without stopping. Endpoints are exact. A path with no inner corner
+ * left (`V = [A, B]`) is evaluated as R-7 so it is bit-identical to a direct move (QA-RT-2).
+ */
+export function routePoint(path: RoutePath, p: number): XY {
+    const { V, D, L } = path;
+    const A = V[0]!;
+    const B = V[V.length - 1]!;
+    if (p <= 0) return A;
+    if (p >= 1) return B;
+    if (V.length === 2 || L < EPS_GEOM) return lerp(A, B, p);
+    const d = p * L;
+    // smallest j with d < D[j+1]; the last leg when rounding finds none
+    let lo = 0;
+    let hi = V.length - 2;
+    while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (d < D[mid + 1]!) hi = mid;
+        else lo = mid + 1;
+    }
+    const lj = D[lo + 1]! - D[lo]!;
+    return lerp(V[lo]!, V[lo + 1]!, (d - D[lo]!) / lj);
+}
+
+/**
+ * The walked path of one span of an order-free transition (R-7, R-8, R-14): where a marcher
+ * that starts at `A` and ends at `B` is at progress `p`. Every direct, arc and route span goes
+ * through here, so later path kinds plug into one place.
+ *
+ * @param route the route's inner points, for a `route` transition
+ * @param founding whether the span is founding (R-3); a route's join or resume walks straight
+ */
+export function walkedPoint(
+    t: Pick<TransitionRow, "style" | "params">,
+    A: XY,
+    B: XY,
+    p: number,
+    route: readonly XY[] | undefined,
+    founding: boolean,
+): XY {
+    switch (t.style) {
+        case "arc":
+            return arcPoint(A, B, t.params?.bulge ?? 0, p); // R-8
+        case "route":
+            if (!founding) return lerp(A, B, p); // R-14: joins and resumes walk straight
+            if (!route) throw new Error("route transition has no route (I-R2)");
+            if (route.length === 0) return lerp(A, B, p);
+            return routePoint(routePath(A, route, B), p);
+        default:
+            return lerp(A, B, p); // R-7
+    }
+}
