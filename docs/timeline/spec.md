@@ -198,10 +198,11 @@ CREATE TABLE transitions (
   -- I-T2 (partial, DB-enforced): an arc carries a numeric bulge with |bulge| <= 0.5 (minor arcs only, §8.11)
   CHECK (path_style <> 'arc' OR (coalesce(json_type(path_params, '$.bulge'), '') IN ('integer', 'real')
                                  AND abs(json_extract(path_params, '$.bulge')) <= 0.5)),
-  -- I-R2 (v0.9): a route transition walks exactly one route, has no shape and exactly one slot,
-  -- and carries no path_params; no other transition has a route
+  -- I-R2 (v0.9): a route transition walks exactly one route, has no shape and exactly one slot;
+  -- no other transition has a route. Its path_params are checked by the write path (I-R4), so
+  -- groups can add an offset there later without rebuilding this table.
   CHECK ((path_style = 'route') = (route_id IS NOT NULL)),
-  CHECK (path_style <> 'route' OR (dest_shape_id IS NULL AND slot_count = 1 AND path_params IS NULL))
+  CHECK (path_style <> 'route' OR (dest_shape_id IS NULL AND slot_count = 1))
 ) STRICT;
 
 CREATE TABLE assignments (
@@ -311,7 +312,12 @@ CREATE VIEW commit_violations AS
          'route ' || r.id || ' is used by ' || (SELECT count(*) FROM transitions t WHERE t.route_id = r.id)
            || ' transitions' AS detail
     FROM routes r
-   WHERE (SELECT count(*) FROM transitions t WHERE t.route_id = r.id) <> 1;
+   WHERE (SELECT count(*) FROM transitions t WHERE t.route_id = r.id) <> 1
+  UNION ALL
+  -- I-R4 (v0.9 step 1): a route transition carries no path_params yet
+  SELECT 'E-R4', t.id, 'route transition has path_params' AS detail
+    FROM transitions t
+   WHERE t.path_style = 'route' AND t.path_params IS NOT NULL;
 
 CREATE INDEX idx_tr_route ON transitions(route_id);
 
@@ -420,7 +426,7 @@ Every number in `geometry` and `path_params` MUST be finite. Every authored poin
 | `direct`            | `NULL`                                                                                                                              | no           |
 | `arc`               | `{"bulge": k}` with \|k\| ≤ ½: minor arcs only (D-15, enforced by a CHECK). k = 0 is a straight line and \|k\| = ½ is a semicircle. | no           |
 | `follow_the_leader` | `{"waypoints": [[x,y], …]}`. May be empty. Absolute coordinates.                                                                    | **yes**      |
-| `route`             | `NULL` (I-R2). The points live in the route (below).                                                                                | no           |
+| `route`             | `NULL` (I-R4). The points live in the route (below).                                                                                | no           |
 
 **Route `geometry`** (I-R1, v0.9 step 1). Absolute field units (D-5):
 
@@ -487,8 +493,9 @@ With this wrapper, the resolver never sees a partial edit, and a rejected edit l
 | I-N1 | Integer columns (beats, slots, layers, ids) hold integers                                                                                                                                                                                                   | `STRICT` tables                                                                                                                                                                                                  | constraint |
 | I-N2 | Beats lie in `[0, 2³¹−1]`, `layer` in `[−1000, 1000]` and `slot_count` in `[1, 10000]`. Home coordinates are finite with \|x\|, \|y\| ≤ 10⁶.                                                                                                                | CHECK constraints                                                                                                                                                                                                | constraint |
 | I-R1 | Route geometry matches §5.2 (v0.9 step 1): version 1, finite numbers, every point within `[−10⁶, 10⁶]²`, unique point ids, corner points only. | App write path. `json_valid` is a CHECK. | `E-R1` |
-| I-R2 | A transition has a route exactly when its `path_style` is `route`. A `route` transition has no shape, `slot_count = 1` and `path_params` NULL. | CHECK | constraint |
-| I-R3 | Every route is walked by exactly one transition (v0.9 step 1; groups sharing one route come later). | `commit_violations` at commit | `E-R3` |
+| I-R2 | A transition has a route exactly when its `path_style` is `route`. A `route` transition has no shape and `slot_count = 1`. | CHECK | constraint |
+| I-R4 | A `route` transition's `path_params` is NULL (v0.9 step 1; the group step adds an offset here). | App write path, and a commit check | `E-R4` |
+| I-R3 | Every route is walked by exactly one transition (v0.9 step 1; the group step relaxes this to at least one, with no table change). | `commit_violations` at commit | `E-R3` |
 | I-D3 | A route that a transition uses cannot be deleted | FK `ON DELETE RESTRICT` | constraint |
 
 Because of I-A3, at most one winner exists for any beat in R-2.
@@ -1775,7 +1782,7 @@ The reviewer accepted the core design and found no new structural contradiction.
 | §4 | New D-19 |
 | §5.1 | New `routes` table; `transitions` gains `route_id`, the `route` path style and two CHECKs (I-R2); `commit_violations` gains E-R3; routes are logged; a transition's log image gains `route` |
 | §5.2 | `path_params` for `route` is NULL; route `geometry` schema |
-| §6 | New I-R1, I-R2, I-R3, I-D3 |
+| §6 | New I-R1 to I-R4, I-D3 |
 | §8 | New R-14; `D-REBASE` covers routes; §8.11 counts route points in β |
 | §9 | New cache `routeGeometry`; two invalidation rows; W-5 |
 | §10.2 | Routes are captured |
@@ -1813,7 +1820,7 @@ A marcher taken over by a later move partway through a route leaves the route wh
 | QA-RT-6 | Degenerate: repeated points, a point within `ε_geom` of `A` or `B`, every point within `ε_geom`, `A = B` | Cleaning as R-14; finite positions; ends exact |
 | QA-RT-7 | Invalidation: edit a route's points; Straight; an earlier edit moves `A`; delete the move; undo and redo each | After every batch, the resolver matches a fresh oracle at every probe (as QA-INV) |
 | QA-RT-8 | Fuzz: the end-to-end fuzzer also draws, redraws and removes routes | No divergence from the oracle; no rejected undo or redo |
-| QA-DB-R1 | A `route` transition with no route; a `direct` one with a route; a route transition with a shape, two slots or `path_params` | Refused by the I-R2 CHECKs |
+| QA-DB-R1 | A `route` transition with no route; a `direct` one with a route; a route transition with a shape or two slots | Refused by the I-R2 CHECKs; `path_params` on a route transition is refused at commit, `E-R4` |
 | QA-DB-R2 | Delete a route a transition uses | Refused (I-D3) |
 | QA-DB-R3 | Commit with an unused route, or with two transitions on one route | Refused at commit, `E-R3` |
 | QA-DB-R4 | Route geometry with a NaN, a point outside `[−10⁶, 10⁶]²`, a repeated point id, or a `smooth` key | Refused by the write path, `E-R1` |
