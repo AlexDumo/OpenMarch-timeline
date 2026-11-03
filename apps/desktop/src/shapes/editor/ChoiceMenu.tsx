@@ -1,6 +1,10 @@
 import clsx from "clsx";
 import * as Popover from "@radix-ui/react-popover";
-import { CaretDownIcon, CheckIcon } from "@phosphor-icons/react";
+import {
+    CaretDownIcon,
+    CheckIcon,
+    CompassToolIcon,
+} from "@phosphor-icons/react";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     useShapeGuidesStore,
@@ -188,7 +192,8 @@ const GUIDE_LABELS: Record<ShapeGuide, () => string> = {
 
 /**
  * The Guides menu (owner on #634): which of the kind's construction guides are drawn while it's
- * edited, each checked on or off on its own (an Arc's circle, and its angle lines). The user's
+ * edited, each checked on or off on its own (an Arc's circle, and its angle lines). A compass
+ * among the editor's view controls, since it changes what's shown, not the shape. The user's
  * choice, kept for every shape. None for a kind without guides, or a shape with none to draw now.
  */
 export function GuidesMenu({
@@ -218,10 +223,10 @@ export function GuidesMenu({
                         aria-label={label}
                         {...focus.trigger}
                         data-testid="shape-guides"
-                        className="rounded-4 hover:bg-fg-2 flex min-h-24 items-center gap-4 px-4 py-2"
+                        className="rounded-4 hover:text-accent flex min-h-24 items-center gap-2 p-4"
                     >
-                        <span>{label}</span>
-                        <CaretDownIcon size={10} />
+                        <CompassToolIcon size={14} />
+                        <CaretDownIcon size={8} />
                     </button>
                 </Popover.Trigger>
             </Tip>

@@ -1143,7 +1143,7 @@ const TurnControls = memo(function TurnControls({
 });
 
 /**
- * Snap, Pathways and ☆ Save (not for a group, which the library can't keep), then Place for a new
+ * The eye, Guides (#634), Snap, Pathways and ☆ Save (not for a group, which the library can't keep), then Place for a new
  * shape or Ungroup for a placed one
  */
 const EndControls = memo(function EndControls({
@@ -1161,6 +1161,9 @@ const EndControls = memo(function EndControls({
         <>
             <span className="flex items-center gap-2">
                 <HideMarchersButton />
+                {/* Which guides a shape draws, beside the other view controls: an Arc's circle
+                    and angle lines (#634) */}
+                <GuidesMenu target={target} />
                 <SnapButton />
                 {canPlace && <PathwaysButton />}
                 {canSave && (
@@ -1264,8 +1267,6 @@ const FillPill = memo(function FillPill({
             <ChoiceMenus target={target} envFor={env} />
             {/* Who goes where on a Line (#528) */}
             <OrderMenu target={target} />
-            {/* Which guides a shape draws: an Arc's circle and angle lines (#634) */}
-            <GuidesMenu target={target} />
             <ModeMenu target={target} envFor={env} />
             {/* What the mode has, after a divider (owner); nothing, and no divider, when it
                 has none */}
