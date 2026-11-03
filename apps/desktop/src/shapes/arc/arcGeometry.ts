@@ -103,7 +103,8 @@ export function withBend(p: LineParams, bend: number): LineParams {
 
 /**
  * The arc closed by its chord, closed round to a whole circle, or opened again. Its ends and
- * sweep stay, so opening gives back the arc it was; a fill goes with the opening.
+ * sweep stay, so opening gives back the arc it was. A fill goes only with the opening: closed
+ * either way it keeps it, so switching between the two closes gives it back.
  */
 export function withEnds(p: LineParams, ends: ArcEnds): LineParams {
     if (ends === arcEnds(p)) return p;
@@ -115,15 +116,11 @@ export function withEnds(p: LineParams, ends: ArcEnds): LineParams {
         ...rest
     } = p;
     if (ends === "open") return { ...rest, points };
+    const fill = p.distribution ? { distribution: p.distribution } : {};
     // Round a circle the marchers go evenly, with no corner holding one at the ends
     return ends === "circle"
-        ? { ...rest, points, closed: true, corners: false }
-        : {
-              ...rest,
-              points,
-              closed: true,
-              ...(p.distribution ? { distribution: p.distribution } : {}),
-          };
+        ? { ...rest, points, closed: true, corners: false, ...fill }
+        : { ...rest, points, closed: true, ...fill };
 }
 
 /**
@@ -484,7 +481,7 @@ export function stretchArc(
     if (env.snap && pulled === null) size = onHalfSteps(size, env.stepPx);
     let scale = size / was;
     // The ratio lock, flipped by constrain for the drag (as a box's side is)
-    const keep = env.ratioLocked ?? env.constrain;
+    const keep = env.sizesLocked ?? env.constrain;
     const then = keep
         ? follower(other, scale, env.snap ? env.stepPx : null)
         : 1;

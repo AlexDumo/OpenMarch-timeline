@@ -12,8 +12,6 @@ export const SHAPE_GUIDES_STORAGE_KEY = "openmarch:shapeGuides";
 /** A guide the Guides menu shows or hides */
 export type ShapeGuide = "circle" | "angles";
 
-export const SHAPE_GUIDES: readonly ShapeGuide[] = ["circle", "angles"];
-
 type Shown = Record<ShapeGuide, boolean>;
 
 const ALL: Shown = { circle: true, angles: true };

@@ -61,6 +61,8 @@ export interface ToolEnv {
     readonly pivotSnaps?: () => readonly XY[];
     /** The box's ratio lock: changing one spacing changes the other in proportion */
     readonly ratioLocked?: boolean;
+    /** An Arc's lock: changing its width changes its depth in proportion, and back (#634) */
+    readonly sizesLocked?: boolean;
     /**
      * Where the pivot was, on the field, when a run of size presses began (the chip's − and +):
      * each press grows from there rather than from the last one's rounding, so the shape doesn't

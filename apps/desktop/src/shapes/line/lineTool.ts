@@ -378,7 +378,7 @@ const counted = (g: LineGroup, count: number): LineGroup => ({
  * The line's mixed intervals (#526): each group a chip in the floating editor, its count and
  * interval typed or dragged, `+` adding a group and × removing one
  */
-export const GROUPS: ToolGroups<LineParams> = {
+const GROUPS: ToolGroups<LineParams> = {
     shown(p, n, stepPx) {
         if (!hasGroups(p) || isFilled(p)) return null;
         // Unlocked, the groups as scaled to fit the line
@@ -620,7 +620,7 @@ const OFFSET_Y = offsetParam("y");
  * on the path is locked too, its run pinned at an anchor; unlocking it is Fit. It covers every
  * group of mixed intervals. A filled line's spacing follows its outline, so it has none.
  */
-export const LOCK = {
+const LOCK = {
     shown: (p: LineParams, n: number) => n > 1 && !isFilled(p),
     locked: (p: LineParams) => p.spacing.mode !== "fit",
     toggle: (p: LineParams, n: number, env: ToolEnv) =>
@@ -721,7 +721,7 @@ const PATH_OPTIONS = (disabled?: string) =>
     ].map((option) => (disabled ? { ...option, disabled } : option));
 
 /** The spacing menu (05-interval-modes.md): Fit, Keep interval, or Interval on the path */
-export const SPACING: ToolChoice<LineParams> = {
+const SPACING: ToolChoice<LineParams> = {
     key: "spacing",
     get label() {
         return tolgee.t("shapes.kinds.line.spacing.label", "Spacing");
@@ -1359,7 +1359,7 @@ function endTip(p: LineParams, index: number): string | null {
  * Whether `pivot` is one a Line puts there itself ({@link linePivot}), however it has been turned,
  * flipped or edited since: an open line's either end or one of its points, a closed line's center
  */
-export function lineOwnPivot(p: LineParams, pivot: Pivot): boolean {
+function lineOwnPivot(p: LineParams, pivot: Pivot): boolean {
     if (isClosed(p)) return pivot === "c";
     if (pivot === "w" || pivot === "e") return true;
     const at = pivotPoint(lineFrame(p), pivot);

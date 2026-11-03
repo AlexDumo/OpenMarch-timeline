@@ -72,6 +72,7 @@ import {
 import { currentShapeField } from "../field/shapeFieldContext";
 import {
     toggleRatioLock,
+    toggleSizesLock,
     useShapeEditorStore,
 } from "../frame/shapeEditorStore";
 import { HANDLE_REACH_PX, toolEnvFor } from "../tool/toolEnv";
@@ -945,7 +946,10 @@ const RatioLockButton = memo(function RatioLockButton({
     /** It locks two sizes rather than spacings: an Arc's width and depth (#634) */
     sizes?: boolean;
 }) {
-    const ratioLocked = useShapeEditorStore((s) => s.ratioLocked);
+    // Each its own: an Arc's width-and-depth lock doesn't lock a box's spacings (owner on #634)
+    const ratioLocked = useShapeEditorStore((s) =>
+        sizes ? s.sizesLocked : s.ratioLocked,
+    );
     return (
         <IconButton
             label={
@@ -970,7 +974,7 @@ const RatioLockButton = memo(function RatioLockButton({
                         )
             }
             pressed={ratioLocked}
-            onClick={toggleRatioLock}
+            onClick={sizes ? toggleSizesLock : toggleRatioLock}
             testId="shape-editor-ratio-lock"
         >
             {/* One chain either way, lit in the accent when locked: a broken

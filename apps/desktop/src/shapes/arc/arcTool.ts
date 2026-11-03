@@ -110,8 +110,11 @@ const BEND: ToolParam<LineParams> = {
         return landed === was ? base : bent(base, n, landed, env);
     },
     widen(p, n, by, env) {
-        const degrees = Math.abs(bendOf(p)) + by * 15;
-        if (degrees < MIN_BEND || degrees > MAX_BEND) return null;
+        // A step past the narrowest or widest stops there; only a step from there goes nowhere
+        const degrees = Math.min(
+            MAX_BEND,
+            Math.max(MIN_BEND, Math.abs(bendOf(p)) + by * 15),
+        );
         const next = bent(p, n, degrees, env);
         return next === p ? null : next;
     },
@@ -176,14 +179,14 @@ function guideParam(way: "width" | "depth"): ToolParam<LineParams> {
             const steps = parseSteps(text);
             if (steps === null || !(steps > 0)) return null;
             return keptInterval(
-                sized(p, steps * env.stepPx, env.ratioLocked === true, env),
+                sized(p, steps * env.stepPx, env.sizesLocked === true, env),
                 n,
                 env,
             );
         },
         set: (p, n, steps, env) =>
             keptInterval(
-                sized(p, steps * env.stepPx, env.ratioLocked === true, env),
+                sized(p, steps * env.stepPx, env.sizesLocked === true, env),
                 n,
                 env,
             ),
@@ -203,7 +206,7 @@ function guideParam(way: "width" | "depth"): ToolParam<LineParams> {
                 sized(
                     base,
                     steps * env.stepPx,
-                    env.ratioLocked ?? m.roles.constrain,
+                    env.sizesLocked ?? m.roles.constrain,
                     env,
                 ),
                 n,
@@ -443,8 +446,8 @@ export const arcTool: ToolKind<LineParams> = {
     // Every handle stretches the arc: constrain flips the ratio lock for the drag, as on a box's
     // side, and fromCenter stretches it about its circle's center (owner on #634)
     honors: {
-        handle: (_key, ratioLocked) => ({
-            constrain: ratioLocked ? "freeRatio" : "keepRatio",
+        handle: (_key, sizesLocked) => ({
+            constrain: sizesLocked ? "freeRatio" : "keepRatio",
             fromCenter: "fromCenter",
         }),
     },

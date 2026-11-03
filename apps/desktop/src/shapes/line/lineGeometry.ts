@@ -386,7 +386,7 @@ export function bentSegment(a: XY, b: XY, degrees: number): Segment {
 }
 
 /** A point into the space where `ellipse` is a circle: turned to its axis, its depth stretched */
-export function intoCircle(p: XY, ellipse: LineEllipse): XY {
+function intoCircle(p: XY, ellipse: LineEllipse): XY {
     const angle = (-ellipse.axis * Math.PI) / 180;
     const c = Math.cos(angle);
     const s = Math.sin(angle);
@@ -394,7 +394,7 @@ export function intoCircle(p: XY, ellipse: LineEllipse): XY {
 }
 
 /** A point from the space where `ellipse` is a circle back onto the field */
-export function outOfCircle(p: XY, ellipse: LineEllipse): XY {
+function outOfCircle(p: XY, ellipse: LineEllipse): XY {
     const angle = (ellipse.axis * Math.PI) / 180;
     const c = Math.cos(angle);
     const s = Math.sin(angle);

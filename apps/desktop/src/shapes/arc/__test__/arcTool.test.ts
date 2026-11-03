@@ -30,6 +30,11 @@ import { PLACED_KINDS } from "../../placed/placedBox";
 import { SHAPE_TOOLS } from "../../tool/shapeTools";
 import { circleTool } from "../../circle/circleTool";
 import { chipLayout } from "../../editor/chip";
+import {
+    locksSizes,
+    toggleSizesLock,
+    useShapeEditorStore,
+} from "../../frame/shapeEditorStore";
 import type { ToolEnv } from "../../tool/toolKind";
 import {
     edit,
@@ -326,6 +331,35 @@ describe("its degrees (owner on #634)", () => {
     });
 });
 
+describe("its degrees' steps (owner on #634)", () => {
+    it("stops at the widest or narrowest rather than refusing the step", () => {
+        const widen = arcTool.params.find((p) => p.key === "bend")!.widen!;
+        expect(Math.abs(bendOf(widen(arc(350), 7, 1, env) as LineParams))).toBe(
+            359,
+        );
+        expect(widen(arc(359), 7, 1, env)).toBeNull();
+        expect(Math.abs(bendOf(widen(arc(10), 7, -1, env) as LineParams))).toBe(
+            1,
+        );
+    });
+});
+
+describe("its width-and-depth lock (owner on #634)", () => {
+    it("is its own, apart from a box's spacing lock", () => {
+        useShapeEditorStore.setState({
+            ratioLocked: false,
+            sizesLocked: false,
+        });
+        toggleSizesLock();
+        expect(useShapeEditorStore.getState()).toMatchObject({
+            sizesLocked: true,
+            ratioLocked: false,
+        });
+        toggleSizesLock();
+        expect(locksSizes(arcTool)).toBe(true);
+    });
+});
+
 describe("turning and flipping", () => {
     it("bows the other way when mirrored, so it stays where it was drawn", () => {
         const p = arc(90);
@@ -383,6 +417,19 @@ describe("closing it", () => {
         ]);
         expect(distributionOf(arcTool, chord, 8)?.mode).toBe("outline");
         expect(withEnds(chord, "open")).toEqual(p);
+    });
+
+    it("keeps its fill switching between the two closes (owner on #634)", () => {
+        const chord = {
+            ...withEnds(arc(180), "chord"),
+            distribution: { mode: "files", oddGap: "center" },
+        } as LineParams;
+        const circle = withEnds(chord, "circle");
+        expect(circle.distribution).toEqual(chord.distribution);
+        expect(withEnds(circle, "chord").distribution).toEqual(
+            chord.distribution,
+        );
+        expect(withEnds(circle, "open").distribution).toBeUndefined();
     });
 
     it("closes round to a whole circle, its marchers evenly round it", () => {
@@ -627,7 +674,7 @@ describe("stretching it (owner on #634)", () => {
             t.params,
             7,
             { dx: 16, dy: 0, axis: "x", roles },
-            { ...env, ratioLocked: true },
+            { ...env, sizesLocked: true },
         );
         expect(width.display(both, 7, STEP)).toBe("7");
         // 3 × 7/6 = 3.5: the follower on half steps
@@ -641,13 +688,13 @@ describe("stretching it (owner on #634)", () => {
         // 6 → 7.5 wide: 3 deep would follow to 3.75, landed on 4 (half steps of 10 are 5)
         const typed = width.type(t.params, 7, "7.5", {
             ...env,
-            ratioLocked: true,
+            sizesLocked: true,
         }) as LineParams;
         expect(depth.value!(typed, 7, STEP)).toBeCloseTo(4, 6);
         // Off the ladder it follows exactly
         const free = width.type(t.params, 7, "7.5", {
             ...fine,
-            ratioLocked: true,
+            sizesLocked: true,
         }) as LineParams;
         expect(depth.value!(free, 7, STEP)).toBeCloseTo(3.75, 6);
     });
@@ -677,7 +724,7 @@ describe("stretching it (owner on #634)", () => {
     });
 
     it("keeps its proportions with the ratio lock, constrain freeing them", () => {
-        const locked: ToolEnv = { ...env, ratioLocked: true };
+        const locked: ToolEnv = { ...env, sizesLocked: true };
         let t = onHandle(halfTurn(), "p1", { x: 180, y: 200 }, locked);
         expect(arcGuide(paramsOf(t))!.ry).toBeCloseTo(40, 6);
         // The host flips the lock with constrain: locked and held is free
@@ -685,7 +732,7 @@ describe("stretching it (owner on #634)", () => {
             halfTurn(),
             "p1",
             { x: 180, y: 200 },
-            { ...env, constrain: true, ratioLocked: false },
+            { ...env, constrain: true, sizesLocked: false },
         );
         expect(arcGuide(paramsOf(t))!.ry).toBeCloseTo(30, 6);
         expect(
