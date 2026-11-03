@@ -3246,9 +3246,8 @@
     "shapes.kinds.arc.params.width": "Tooltip for a number in the floating editor of an Arc shape: how far the arc of marchers reaches from side to side on the field (for arcs up to a half circle, the distance between its two end marchers), in marching steps.",
     "shapes.kinds.arc.params.depth": "Tooltip for a number in the floating editor of an Arc shape: how deep the arc of marchers is, measured from the line between its two ends to its farthest edge, in marching steps.",
     "shapes.kinds.arc.params.stretch": "Tooltip for a number in the floating editor of an Arc shape, shown while the arc lies on an ellipse (oval): how many times deeper than wide it is, or wider than deep, e.g. \"1.3× deep\".",
-    "shapes.kinds.arc.size.deep": "Word after the stretch number in an Arc shape's floating editor: \"1.3× deep\" means the oval the arc is on is 1.3 times as deep (front to back) as it is wide. Also accepted when typing the number.",
-    "shapes.kinds.arc.size.wide": "Word after the stretch number in an Arc shape's floating editor: \"1.3× wide\" means the oval the arc is on is 1.3 times as wide (side to side) as it is deep. Also accepted when typing the number.",
+    "shapes.kinds.arc.size.tall": "Word after the stretch number in an Arc shape's floating editor: \"1.3× tall\" means the oval the arc is on is 1.3 times as tall (front to back on the field) as it is wide. Also accepted when typing the number.",
+    "shapes.kinds.arc.size.wide": "Word after the stretch number in an Arc shape's floating editor: \"1.3× wide\" means the oval the arc is on is 1.3 times as wide (side to side) as it is tall. Also accepted when typing the number.",
     "shapes.kinds.arc.size.round": "Word after the stretch number in an Arc shape's floating editor while it's dragged onto exactly 1×: \"1× circle\", meaning the oval has become a circle.",
-    "shapes.kinds.arc.makeCircle": "Button after the stretch number in an Arc shape's floating editor: turns the oval the arc of marchers lies on back into a circle.",
     "shapes.kinds.arc.size.steps": "Unit after the depth number in an Arc shape's floating editor, ending the phrase \"60 × 30 steps\" (width × depth of the arc): marching steps (8 to 5)."
 }

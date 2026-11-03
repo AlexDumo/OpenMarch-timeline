@@ -2415,7 +2415,7 @@
                     "bend": "How far the arc turns",
                     "width": "How far the arc reaches side to side, in steps",
                     "depth": "How deep the arc is, from its ends to its far edge, in steps",
-                    "stretch": "How stretched the ellipse the arc is on is: how many times deeper than wide, or wider than deep"
+                    "stretch": "How stretched the ellipse the arc is on is: how many times taller than wide, or wider than tall"
                 },
                 "ends": {
                     "label": "Open or closed",
@@ -2426,11 +2426,10 @@
                 },
                 "size": {
                     "steps": "steps",
-                    "deep": "deep",
+                    "tall": "tall",
                     "wide": "wide",
                     "round": "circle"
-                },
-                "makeCircle": "Make circle"
+                }
             },
             "block": {
                 "across": "Across",

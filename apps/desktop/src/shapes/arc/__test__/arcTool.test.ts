@@ -881,7 +881,7 @@ describe("its stretch (owner on #634)", () => {
         expect(param("stretch").display(oval, 7, STEP)).toBe("1.33×");
         expect(param("stretch").words!(oval, 7)).toEqual({
             before: "·",
-            after: "deep",
+            after: "tall",
         });
     });
 
@@ -901,7 +901,7 @@ describe("its stretch (owner on #634)", () => {
         const comma = param("stretch").type(
             p,
             7,
-            "2,5 deep",
+            "2,5 tall",
             env,
         ) as LineParams;
         expect(arcStretch(comma)).toBeCloseTo(2.5, 6);
@@ -909,9 +909,9 @@ describe("its stretch (owner on #634)", () => {
         expect(param("stretch").type(p, 7, "1.5x2", env)).toBeNull();
     });
 
-    it("makes a circle in one click, its ends and degrees kept", () => {
+    it("makes a circle typed 1, its ends and degrees kept", () => {
         const p = deeper();
-        const round = param("stretch").button!.apply(p, 7, env)!;
+        const round = param("stretch").type(p, 7, "1", env)!;
         expect(isRound(round)).toBe(true);
         expect(ellipseOf(round)).toBeUndefined();
         round.points.forEach((q, i) =>
@@ -978,7 +978,7 @@ describe("dragging its stretch onto a circle (#634)", () => {
         s = pointerMove(s, { x: 130, y: 160 }, env);
         const oval = paramsOf(release(s, ctx, null));
         const stretch = arcTool.params.find((q) => q.key === "stretch")!;
-        const round = stretch.button!.apply(oval, 7, env)!;
+        const round = stretch.type(oval, 7, "1", env)!;
         const keys = (dragged: string | null) =>
             chipLayout(arcTool, round, 7, env, dragged).values.map(
                 (v) => v.param.key,
@@ -986,8 +986,5 @@ describe("dragging its stretch onto a circle (#634)", () => {
         expect(keys(null)).toContain("stretch");
         expect(stretch.display(round, 7, STEP)).toBe("1×");
         expect(stretch.words!(round, 7)!.after).toBe("circle");
-        // Make circle stays, greyed out, so the editor doesn't shift
-        expect(stretch.button!.enabled!(round, 7)).toBe(false);
-        expect(stretch.button!.enabled!(oval, 7)).toBe(true);
     });
 });

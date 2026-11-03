@@ -221,20 +221,20 @@ const DEPTH = guideParam("depth");
 
 /**
  * How stretched an arc's ellipse is, as one number either side of a circle (owner on #634): 0 a
- * circle, 0.3 for 1.3 times as deep as wide ("1.3× deep"), -0.3 for as wide ("1.3× wide")
+ * circle, 0.3 for 1.3 times as tall as wide ("1.3× tall"), -0.3 for as wide ("1.3× wide")
  */
 const signedStretch = (s: number): number => (s >= 1 ? s - 1 : 1 - 1 / s);
 const fromSigned = (v: number): number => (v >= 0 ? 1 + v : 1 / (1 - v));
 /** A dragged stretch moves by this much a notch, and lands on it with the ladder on */
 const STRETCH_NOTCH = 0.05;
 
-/** The stretch with `factor` (1 or more) either way, `deep` deciding which */
-const stretchOf = (factor: number, deep: boolean): number =>
-    deep ? factor : 1 / factor;
+/** The stretch with `factor` (1 or more) either way, `tall` deciding which */
+const stretchOf = (factor: number, tall: boolean): number =>
+    tall ? factor : 1 / factor;
 
 /**
- * How stretched the ellipse an arc is on is, always shown (owner on #634): "· 1.3× deep", "· 1.3×
- * wide" or "· 1× circle", with Make circle after it. Typed or dragged, it keeps its degrees and,
+ * How stretched the ellipse an arc is on is, always shown (owner on #634): "· 1.3× tall", "· 1.3×
+ * wide" or "· 1× circle"; typed 1 or dragged to 1×, the arc is round. Typed or dragged, it keeps its degrees and,
  * up to a half turn, its ends too: only its depth changes, and in Fit its interval follows.
  */
 const STRETCH: ToolParam<LineParams> = {
@@ -242,7 +242,7 @@ const STRETCH: ToolParam<LineParams> = {
     get label() {
         return tolgee.t(
             "shapes.kinds.arc.params.stretch",
-            "How stretched the ellipse the arc is on is: how many times deeper than wide, or wider than deep",
+            "How stretched the ellipse the arc is on is: how many times taller than wide, or wider than tall",
         );
     },
     unit: "ratio",
@@ -258,7 +258,7 @@ const STRETCH: ToolParam<LineParams> = {
         after: isRound(p)
             ? tolgee.t("shapes.kinds.arc.size.round", "circle")
             : (arcStretch(p) ?? 1) >= 1
-              ? tolgee.t("shapes.kinds.arc.size.deep", "deep")
+              ? tolgee.t("shapes.kinds.arc.size.tall", "tall")
               : tolgee.t("shapes.kinds.arc.size.wide", "wide"),
     }),
     display: (p) => {
@@ -274,23 +274,23 @@ const STRETCH: ToolParam<LineParams> = {
         const s = arcStretch(p);
         if (s === null) return null;
         const lower = text.toLowerCase();
-        // One number, with a point or a comma: "1.5", "2,5 deep"; anything else isn't a stretch
+        // One number, with a point or a comma: "1.5", "2,5 tall"; anything else isn't a stretch
         const numbers = lower.match(/\d*[.,]?\d+/g);
         if (numbers?.length !== 1) return null;
         const factor = Number.parseFloat(numbers[0]!.replace(",", "."));
         if (!(factor >= 1)) return null;
-        const deep = lower.includes(
+        const tall = lower.includes(
             tolgee.t("shapes.kinds.arc.size.wide", "wide").toLowerCase(),
         )
             ? false
             : lower.includes(
                     tolgee
-                        .t("shapes.kinds.arc.size.deep", "deep")
+                        .t("shapes.kinds.arc.size.tall", "tall")
                         .toLowerCase(),
                 )
               ? true
               : s >= 1;
-        return keptInterval(withStretch(p, stretchOf(factor, deep)), n, env);
+        return keptInterval(withStretch(p, stretchOf(factor, tall)), n, env);
     },
     scrub(base, n, m, env) {
         const s = arcStretch(base);
@@ -304,14 +304,6 @@ const STRETCH: ToolParam<LineParams> = {
         if (env.snap) v = Math.round(v / STRETCH_NOTCH) * STRETCH_NOTCH;
         if (Math.abs(v - was) < 1e-9) return base;
         return keptInterval(withStretch(base, fromSigned(v)), n, env);
-    },
-    button: {
-        get label() {
-            return tolgee.t("shapes.kinds.arc.makeCircle", "Make circle");
-        },
-        apply: (p, n, env) => keptInterval(withStretch(p, 1), n, env),
-        // Greyed out on a circle, where it has nothing to do
-        enabled: (p) => !isRound(p),
     },
 };
 

@@ -416,25 +416,6 @@ function ShapeEditorBar({
                                     glyph={null}
                                     actions={numbers}
                                 />
-                                {x.param.button && (
-                                    <button
-                                        type="button"
-                                        disabled={
-                                            !(
-                                                x.param.button.enabled?.(
-                                                    shown,
-                                                    spots,
-                                                ) ?? true
-                                            )
-                                        }
-                                        onPointerDown={keepFocus}
-                                        onClick={() => numbers.press(x.param)}
-                                        data-testid={`shape-editor-${x.param.key}-button`}
-                                        className="rounded-4 border-stroke enabled:hover:text-accent border px-6 py-1 disabled:cursor-auto disabled:opacity-50"
-                                    >
-                                        {x.param.button.label}
-                                    </button>
-                                )}
                                 {layout.ratioLock &&
                                     x.param.ratioLockAfter === true && (
                                         <RatioLockButton sizes />
@@ -758,13 +739,6 @@ function numberActions(
             const env = envFor();
             if (env && param.snap)
                 target.apply(param.snap(target.params, target.spots, env));
-        },
-        /** The button after a number (an Arc's Make circle, #634) */
-        press: (param: Param) => {
-            const env = envFor();
-            const next =
-                env && param.button?.apply(target.params, target.spots, env);
-            if (next != null && next !== target.params) target.apply(next);
         },
         type: (param: Param, text: string) => {
             const env = envFor();

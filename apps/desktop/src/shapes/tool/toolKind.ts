@@ -214,19 +214,6 @@ export interface ToolParam<P> {
      * #634)
      */
     readonly ratioLockAfter?: boolean;
-    /**
-     * A button just after the number that changes the shape in one click: an Arc's Make circle
-     * after its stretch (owner on #634). Null from `apply` where it can't.
-     */
-    readonly button?: {
-        readonly label: string;
-        apply(params: P, n: number, env: ToolEnv): P | null;
-        /**
-         * Whether it does anything for this shape; always when absent. It stays in its place
-         * greyed out when it doesn't, so the editor doesn't shift (owner on #634)
-         */
-        enabled?(params: P, n: number): boolean;
-    };
     /** The params with `text` typed over the number; null when the text isn't understood */
     type(params: P, n: number, text: string, env: ToolEnv): P | null;
     /**
