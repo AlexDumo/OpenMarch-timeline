@@ -2,7 +2,7 @@
 // db shape: { marchers:[{id,home:[x,y]}], shapes:{id:{kind,geometry}},
 //             transitions:{id:{id,start,end,dest,slots,style,order,params}},
 //             assignments:[{id,marcher,transition,slot,start,end,layer}] }
-import { lerp, clamp01, destPath, paramT, destinationsOf, arcPoint, flatten, makeTrail } from './geom.mjs';
+import { lerp, clamp01, destPath, paramT, destinationsOf, arcPoint, flatten, makeTrail, routeWalk } from './geom.mjs';
 
 export function makeOracle(db) {
   const T = (id) => db.transitions[id];
@@ -34,6 +34,8 @@ export function makeOracle(db) {
     const o = origin(sp);
     if (t.style === 'follow_the_leader') return lerp(o, ftlEntry(t.id).target.get(sp.m), p); // R-11
     const dst = destinationsOf(t, db.shapes)[sp.row.slot];
+    if (t.style === 'route')                                                           // R-14: founding walks the route,
+      return kind(sp) === 'founding' ? routeWalk(o, db.routes[t.route].geometry.points.map((q) => q.at), dst).at(p) : lerp(o, dst, p); // joins and resumes walk straight
     return t.style === 'arc' ? arcPoint(o, dst, t.params?.bulge ?? 0, p) : lerp(o, dst, p); // R-8 / R-7
   }
 

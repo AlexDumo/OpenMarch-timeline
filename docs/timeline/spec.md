@@ -802,11 +802,14 @@ summed from the first leg in float64, and `L = D_last`.
 ```
 if p ≤ 0: return A                      // endpoints are exact (§8.10)
 if p ≥ 1: return B
-if L < ε_geom: return lerp(A, B, p)
+if V = [A, B] or L < ε_geom: return lerp(A, B, p)   // [A, B] is R-7 bit for bit (QA-RT-2)
 d = p · L
 j = the smallest index with d < D_{j+1}; if there is none (rounding), the last leg
 return lerp(V_j, V_{j+1}, (d − D_j) / ℓ_j)
 ```
+
+With only `[A, B]` left, `(p · L) / L` can differ from `p` in the last bit, so that case is R-7's `lerp`
+itself; otherwise a route with no points would not be bit-identical to `direct` (QA-RT-2).
 
 The marcher moves at **constant speed** along the whole path: the same distance every beat, from
 `s.start` to `T.end_beat`. Corners are passed through without stopping. A founding span clipped by

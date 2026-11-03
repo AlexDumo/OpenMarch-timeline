@@ -105,3 +105,31 @@ export function makeTrail(origins, waypoints, path) {
   const cum = cumOf(pre), destOffset = cum[cum.length - 1];
   return { cum, destOffset, at: (d) => (d < destOffset ? pointAtDist(pre, cum, d) : path.at(d - destOffset)) };
 }
+
+/**
+ * R-14 (v0.9 step 1): the walked path of a founding route span, from A through the route's inner points to B.
+ * Written independently of the app's geometry (a linear leg scan instead of a binary search), so the two
+ * check each other. Cleaning drops inner points within EPS_GEOM of the last kept vertex, then inner points
+ * within EPS_GEOM of B; every leg left is at least EPS_GEOM long unless only [A, B] is left.
+ */
+export function routeWalk(A, inner, B) {
+  const V = [A];
+  for (const P of inner) if (dist(V[V.length - 1], P) >= EPS_GEOM) V.push(P);
+  while (V.length > 1 && dist(V[V.length - 1], B) < EPS_GEOM) V.pop();
+  V.push(B);
+  const D = [0];
+  for (let j = 0; j + 1 < V.length; j++) D.push(D[j] + Math.hypot(V[j + 1][0] - V[j][0], V[j + 1][1] - V[j][1]));
+  const L = D[D.length - 1];
+  return {
+    V, D, L,
+    at(p) {
+      if (p <= 0) return A;
+      if (p >= 1) return B;
+      if (V.length === 2 || L < EPS_GEOM) return lerp(A, B, p);   // [A, B] is R-7, bit for bit (QA-RT-2)
+      const d = p * L;
+      let j = 0;
+      while (j < V.length - 2 && !(d < D[j + 1])) j++;
+      return lerp(V[j], V[j + 1], (d - D[j]) / (D[j + 1] - D[j]));
+    },
+  };
+}
