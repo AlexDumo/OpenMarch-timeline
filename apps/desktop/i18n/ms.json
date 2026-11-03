@@ -3286,11 +3286,11 @@
         "alignment": {
             "lockXCaption": "Kunci X",
             "lockYCaption": "Kunci Y",
-            "snapCaption": "Jajar ke grid",
-            "lockMarchersAriaLabel": "Pergerakan kursor dan jajaran pemain",
+            "snapCaption": "Lekap ke grid",
+            "lockMarchersAriaLabel": "Pergerakan kursor dan lekapan pemain",
             "placeAllMarchers": "Letakkan semua pemain",
             "placeSelectedMarchers": "Letakkan pemain dipilih",
-            "snapToggleCaption": "Jajaran",
+            "snapToggleCaption": "Lekap",
             "toNextPagePositions": "...ke kedudukan halaman seterusnya",
             "toPreviousPagePositions": "...ke kedudukan halaman sebelumnya",
             "setMarcherPositionsAriaLabel": "Tetapkan kedudukan pemain"

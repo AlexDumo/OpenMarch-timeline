@@ -3286,11 +3286,11 @@
         "alignment": {
             "lockXCaption": "Travar X",
             "lockYCaption": "Travar Y",
-            "snapCaption": "Encaixar na grade",
-            "lockMarchersAriaLabel": "Movimento do cursor e encaixe dos integrantes",
+            "snapCaption": "Ajustar à grade",
+            "lockMarchersAriaLabel": "Movimento do cursor e ajuste dos integrantes",
             "placeAllMarchers": "Posicionar todos os integrantes",
             "placeSelectedMarchers": "Posicionar integrantes selecionados",
-            "snapToggleCaption": "Encaixe",
+            "snapToggleCaption": "Ajuste",
             "toNextPagePositions": "...nas posições da próxima página",
             "toPreviousPagePositions": "...nas posições da página anterior",
             "setMarcherPositionsAriaLabel": "Definir posições dos integrantes"

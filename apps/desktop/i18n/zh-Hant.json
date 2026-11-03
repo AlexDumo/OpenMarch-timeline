@@ -3286,11 +3286,11 @@
         "alignment": {
             "lockXCaption": "鎖定X",
             "lockYCaption": "鎖定Y",
-            "snapCaption": "對齊格線",
-            "lockMarchersAriaLabel": "游標移動與隊員吸附",
+            "snapCaption": "貼齊格線",
+            "lockMarchersAriaLabel": "游標移動與隊員貼齊",
             "placeAllMarchers": "放置所有隊員",
             "placeSelectedMarchers": "放置所選隊員",
-            "snapToggleCaption": "吸附",
+            "snapToggleCaption": "貼齊",
             "toNextPagePositions": "…到下一頁的位置",
             "toPreviousPagePositions": "…到上一頁的位置",
             "setMarcherPositionsAriaLabel": "設定隊員位置"

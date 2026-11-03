@@ -3286,11 +3286,11 @@
         "alignment": {
             "lockXCaption": "ล็อก X",
             "lockYCaption": "ล็อก Y",
-            "snapCaption": "จัดชิดกริด",
-            "lockMarchersAriaLabel": "การเคลื่อนเคอร์เซอร์และการจัดชิดผู้แสดง",
+            "snapCaption": "สแนปกับกริด",
+            "lockMarchersAriaLabel": "การเคลื่อนเคอร์เซอร์และการสแนปผู้แสดง",
             "placeAllMarchers": "วางผู้แสดงทั้งหมด",
             "placeSelectedMarchers": "วางผู้แสดงที่เลือก",
-            "snapToggleCaption": "จัดชิด",
+            "snapToggleCaption": "สแนป",
             "toNextPagePositions": "...ตามตำแหน่งในหน้าถัดไป",
             "toPreviousPagePositions": "...ตามตำแหน่งในหน้าก่อนหน้า",
             "setMarcherPositionsAriaLabel": "กำหนดตำแหน่งผู้แสดง"
