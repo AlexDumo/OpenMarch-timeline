@@ -20,7 +20,6 @@ import {
     usePlacedBoxBeat,
 } from "./placedBoxStore";
 import { closedOf } from "../distribute/modes";
-import { FIELD_LABEL_FONT } from "@/styles/textSymbols";
 
 /** One placed shape as the field outlines it, in field units */
 export interface PlacedBoxDrawing {
@@ -214,7 +213,7 @@ export function PlacedBoxesOverlay({
                             x={a.x}
                             y={a.y - LABEL_GAP_PX}
                             fontSize={LABEL_PX}
-                            fontFamily={FIELD_LABEL_FONT}
+                            className="font-sans"
                             fill={color}
                             dominantBaseline="hanging"
                         >

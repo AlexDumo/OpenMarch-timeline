@@ -10,8 +10,6 @@ import "@fontsource/dm-sans/600.css";
 import "@fontsource/dm-sans/700.css";
 import "@fontsource/dm-mono/400.css";
 import "@fontsource/dm-mono/500.css";
-// Text glyphs for symbols a platform could draw as color emoji (↩ ↔); see the file
-import "./styles/text-symbols.css";
 import { ThemeProvider } from "./context/ThemeContext";
 import * as Sentry from "@sentry/electron/renderer";
 import posthog, { type PostHogConfig } from "posthog-js";

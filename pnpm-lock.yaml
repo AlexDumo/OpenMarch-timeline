@@ -248,15 +248,6 @@ importers:
       '@fontsource/dm-sans':
         specifier: ^5.2.6
         version: 5.2.8
-      '@fontsource/noto-sans-math':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource/noto-sans-symbols':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource/noto-sans-symbols-2':
-        specifier: ^5.3.0
-        version: 5.3.0
       '@gltf-transform/core':
         specifier: 4.5.1
         version: 4.5.1
@@ -811,6 +802,15 @@ importers:
       '@fontsource/dm-sans':
         specifier: ^5.2.6
         version: 5.2.8
+      '@fontsource/noto-sans-math':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/noto-sans-symbols':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/noto-sans-symbols-2':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@korhq/undocs':
         specifier: 0.4.1-alpha
         version: 0.4.1-alpha(@types/node@24.12.2)(aws4fetch@1.0.20)(jiti@2.6.1)(lightningcss@1.32.0)(rollup@4.60.1)(sass@1.77.4)(terser@5.16.9)(tsx@4.21.0)(yaml@2.8.3)
@@ -28915,7 +28915,7 @@ snapshots:
   volar-service-typescript@0.0.70(@volar/language-service@2.4.28):
     dependencies:
       path-browserify: 1.0.1
-      semver: 7.8.5
+      semver: 7.7.4
       typescript-auto-import-cache: 0.3.6
       vscode-languageserver-textdocument: 1.0.12
       vscode-nls: 5.2.0

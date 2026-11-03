@@ -12,7 +12,8 @@ export function setTexturePainting(enabled: boolean): void {
     paintingEnabled = enabled;
 }
 
-export const TEXTURE_FONT = '"DM Sans", sans-serif';
+/** Lists the text symbols face (packages/ui text-symbols.css) so ↔ never paints as emoji */
+export const TEXTURE_FONT = '"DM Sans", "OpenMarch Text Symbols", sans-serif';
 
 /**
  * Creates a canvas of the given size and a texture for it, then calls `paint`

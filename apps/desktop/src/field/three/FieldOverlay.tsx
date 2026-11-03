@@ -1,6 +1,5 @@
 import { memo, useCallback, useMemo, useSyncExternalStore } from "react";
 import { GlyphText } from "@/shapes/editor/GlyphText";
-import { FIELD_LABEL_FONT } from "@/styles/textSymbols";
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import type { FieldEditor, FieldModeDrawing } from "@/field/editor/fieldEditor";
 import type { AreaShape } from "@/field/editor/areaGestures";
@@ -478,7 +477,7 @@ function GuideLabel({
                 y={y + h / 2}
                 fontSize={GUIDE_LABEL_PX}
                 fontWeight={600}
-                fontFamily={FIELD_LABEL_FONT}
+                className="font-sans"
                 fill={GUIDE_INK_TEXT}
                 textAnchor="middle"
                 dominantBaseline="central"
@@ -692,7 +691,7 @@ function GroupGapLabel({
                 y={at.y}
                 fontSize={GROUP_LABEL_PX}
                 fontWeight={600}
-                fontFamily={FIELD_LABEL_FONT}
+                className="font-sans"
                 fill={seam ? GROUP_SEAM_INK : "white"}
                 textAnchor="middle"
                 dominantBaseline="central"
@@ -746,7 +745,7 @@ function OffsetStep({
                     y={y}
                     fontSize={GROUP_LABEL_PX}
                     fontWeight={600}
-                    fontFamily={FIELD_LABEL_FONT}
+                    className="font-sans"
                     fill="black"
                     textAnchor="middle"
                     dominantBaseline="central"
@@ -912,7 +911,7 @@ function ModeDrawing({
                         x={p.x}
                         y={p.y - (SPOT_RADIUS + 2) * z}
                         fontSize={SPOT_LABEL_PX}
-                        fontFamily={FIELD_LABEL_FONT}
+                        className="font-sans"
                         textAnchor="middle"
                         fill={shape}
                         data-testid="fieldShapeSpotLabel"

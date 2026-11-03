@@ -6,14 +6,19 @@
  * Why: when DM Sans lacks a character, the browser walks the rest of `--font-sans`.
  * On a Mac, Helvetica and SF lack ↩, so the next family that has it is
  * "Apple Color Emoji" and the key shows as an emoji. A trailing U+FE0E doesn't stop
- * this in Chromium. This family sits right after DM Sans, so these characters are
- * always drawn from a text font on every platform, including the web build.
+ * this in Chromium. This family sits right after DM Sans in `--font-sans` and DM Mono
+ * in `--font-mono` (tailwind.css imports this file, so every app using the shared
+ * styles gets it), so these characters are always drawn from a text font on every
+ * platform, including the web build.
  *
  * Each face is limited to exactly those characters, so every other symbol (⌘ ⇧ ⌥ ←)
  * still comes from the system font as before. A face is only loaded when the page
- * draws one of its characters. Ranges are disjoint, preferring the smallest file.
+ * draws one of its characters, and `font-display: swap` shows the next font in the
+ * stack until then, so a symbol is never blank. Ranges are disjoint, preferring the
+ * smallest file.
  * U+2049 ⁉, U+2139 ℹ, U+303D 〽, U+3297 ㊗ and U+3299 ㊙ have no Noto text glyph; the
- * guard test (__test__/textSymbols.test.ts) rejects them in UI text.
+ * guard test (apps/desktop/src/styles/__test__/textSymbols.test.ts) rejects them in
+ * UI text.
  *
  * Emoji typed by users or written on purpose still show as emoji: characters that are
  * emoji by default (🎺) aren't in these ranges, and Chromium draws a character followed
@@ -25,7 +30,7 @@
     font-family: "OpenMarch Text Symbols";
     font-style: normal;
     font-weight: 400;
-    font-display: block;
+    font-display: swap;
     src: url("@fontsource/noto-sans-symbols/files/noto-sans-symbols-symbols-400-normal.woff2")
         format("woff2");
     unicode-range:
@@ -40,7 +45,7 @@
     font-family: "OpenMarch Text Symbols";
     font-style: normal;
     font-weight: 400;
-    font-display: block;
+    font-display: swap;
     src: url("@fontsource/noto-sans-symbols-2/files/noto-sans-symbols-2-symbols-400-normal.woff2")
         format("woff2");
     unicode-range:
@@ -57,7 +62,7 @@
     font-family: "OpenMarch Text Symbols";
     font-style: normal;
     font-weight: 400;
-    font-display: block;
+    font-display: swap;
     src: url("@fontsource/noto-sans-math/files/noto-sans-math-latin-400-normal.woff2")
         format("woff2");
     unicode-range: U+203C, U+21A9-21AA, U+2934-2935, U+3030;

@@ -2,19 +2,25 @@ import { describe, expect, it } from "vitest";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { relative, resolve } from "node:path";
-import { FIELD_LABEL_FONT, TEXT_SYMBOLS_FAMILY } from "../textSymbols";
+import ts from "typescript";
 
 /**
- * Keeps symbols from showing as color emoji (see text-symbols.css). Some characters, such
- * as ↩ and ↔, are text by default but have an emoji form; when the UI font lacks one, the
- * browser can land on an emoji font in `--font-sans`. A trailing U+FE0E doesn't prevent
- * that in Chromium. So every such character in UI text must be covered by
- * "OpenMarch Text Symbols", and real emoji (🎺, or a character followed by U+FE0F) are
- * only allowed where listed below.
+ * Keeps symbols from showing as color emoji (see packages/ui/src/text-symbols.css). Some
+ * characters, such as ↩ and ↔, are text by default but have an emoji form; when the UI
+ * font lacks one, the browser can land on an emoji font in the stack. A trailing U+FE0E
+ * doesn't prevent that in Chromium. So every such character in UI text must be covered
+ * by "OpenMarch Text Symbols", every in-app font stack built on DM Sans or DM Mono must
+ * list that family, and real emoji (🎺, or a character followed by U+FE0F) are only
+ * allowed where listed below.
+ *
+ * Out of scope: exports (PDF, SVG, coordinate sheets, video overlay text) use system font
+ * stacks of their own and can't load the app's web fonts.
  */
 
+const FAMILY = "OpenMarch Text Symbols";
 const DESKTOP = resolve(__dirname, "../../..");
 const REPO = resolve(DESKTOP, "../..");
+const UI = resolve(REPO, "packages/ui");
 
 /** Emoji written on purpose; each entry must still be in use */
 const INTENDED_EMOJI: { path: RegExp; chars: string; why: string }[] = [
@@ -35,14 +41,18 @@ const IN_DM_SANS = [..."©®™"].map((ch) => ch.codePointAt(0)!);
 
 const VS15 = 0xfe0e;
 const VS16 = 0xfe0f;
-const isPictographic = (ch: string) => /\p{Extended_Pictographic}/u.test(ch);
+const PICTOGRAPHIC = /\p{Extended_Pictographic}/u;
 const isEmojiByDefault = (ch: string) => /\p{Emoji_Presentation}/u.test(ch);
 
 function walk(dir: string, keep: (path: string) => boolean): string[] {
     return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
         const path = resolve(dir, entry.name);
         if (entry.isDirectory()) {
-            if (["node_modules", "__test__", "generated"].includes(entry.name))
+            if (
+                ["node_modules", "__test__", "generated", "dist"].includes(
+                    entry.name,
+                )
+            )
                 return [];
             return walk(path, keep);
         }
@@ -50,21 +60,86 @@ function walk(dir: string, keep: (path: string) => boolean): string[] {
     });
 }
 
-/** Source files whose text can reach the screen, as repo-relative paths */
-function uiTextFiles(): string[] {
+/** Source, style and message files whose text can reach the screen, repo-relative */
+function uiFiles(): string[] {
     const source = (path: string) =>
-        /\.tsx?$/.test(path) && !/\.(test|spec)\.tsx?$/.test(path);
+        /\.(tsx?|css)$/.test(path) && !/\.(test|spec)\.tsx?$/.test(path);
     return [
         ...walk(resolve(DESKTOP, "src"), source).filter(
             (path) => !path.startsWith(resolve(DESKTOP, "src/test") + "/"),
         ),
-        ...walk(resolve(REPO, "packages/ui/src"), source),
+        ...walk(resolve(DESKTOP, "view3d-web"), source),
+        ...walk(resolve(UI, "src"), source),
         ...walk(resolve(DESKTOP, "i18n"), (path) => path.endsWith(".json")),
     ].map((path) => relative(REPO, path));
 }
 
-/** Lines that are only a comment can't reach the screen */
-const isCommentLine = (line: string) => /^\s*(\/\/|\/\*|\*)/.test(line);
+/** A piece of text that can reach the screen, and where it starts */
+interface Text {
+    text: string;
+    line: number;
+}
+
+/** String, template and JSX text in a TS/TSX file; comments are never included */
+function tsTexts(file: string, source: string): Text[] {
+    const sf = ts.createSourceFile(
+        file,
+        source,
+        ts.ScriptTarget.Latest,
+        false,
+        file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    );
+    const texts: Text[] = [];
+    const visit = (node: ts.Node) => {
+        if (
+            ts.isStringLiteral(node) ||
+            ts.isNoSubstitutionTemplateLiteral(node) ||
+            ts.isTemplateHead(node) ||
+            ts.isTemplateMiddle(node) ||
+            ts.isTemplateTail(node) ||
+            ts.isJsxText(node)
+        ) {
+            const start = node.getStart(sf);
+            texts.push({
+                text: node.getText(sf),
+                line: sf.getLineAndCharacterOfPosition(start).line + 1,
+            });
+        }
+        ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    return texts;
+}
+
+/** The file's text with comments blanked out, keeping line numbers */
+function withoutCssComments(css: string): string {
+    return css.replace(/\/\*[\s\S]*?\*\//g, (comment) =>
+        comment.replace(/[^\n]/g, " "),
+    );
+}
+
+/** Texts of a file worth checking, split per line for reporting */
+function textsOf(file: string): Text[] {
+    const source = readFileSync(resolve(REPO, file), "utf8");
+    if (!PICTOGRAPHIC.test(source)) return [];
+    const whole: Text[] = /\.tsx?$/.test(file)
+        ? tsTexts(file, source)
+        : [
+              {
+                  text: file.endsWith(".css")
+                      ? withoutCssComments(source)
+                      : source,
+                  line: 1,
+              },
+          ];
+    return whole.flatMap(({ text, line }) =>
+        PICTOGRAPHIC.test(text)
+            ? text
+                  .split("\n")
+                  .map((part, i) => ({ text: part, line: line + i }))
+            : [],
+    );
+}
 
 function parseUnicodeRanges(css: string): Set<number> {
     const covered = new Set<number>();
@@ -80,39 +155,62 @@ function parseUnicodeRanges(css: string): Set<number> {
     return covered;
 }
 
-const symbolsCss = readFileSync(
-    resolve(DESKTOP, "src/styles/text-symbols.css"),
-    "utf8",
-);
+const symbolsCss = readFileSync(resolve(UI, "src/text-symbols.css"), "utf8");
+const tailwind = readFileSync(resolve(UI, "src/tailwind.css"), "utf8");
+
+function stack(variable: string): string[] {
+    return new RegExp(`${variable}:([^;]+);`)
+        .exec(tailwind)![1]!
+        .split(",")
+        .map((family) => family.trim().replace(/^"|"$/g, ""));
+}
 
 describe("text symbols never show as color emoji", () => {
-    it("lists the symbols family after DM Sans and before every emoji font", () => {
-        const tailwind = readFileSync(
-            resolve(REPO, "packages/ui/src/tailwind.css"),
-            "utf8",
-        );
-        const stack = /--font-sans:([^;]+);/
-            .exec(tailwind)![1]!
-            .split(",")
-            .map((family) => family.trim().replace(/^"|"$/g, ""));
-        expect(stack.slice(0, 2)).toEqual(["DM Sans", TEXT_SYMBOLS_FAMILY]);
-        const firstEmoji = stack.findIndex((family) => /emoji/i.test(family));
-        expect(firstEmoji).toBeGreaterThan(1);
-        expect(FIELD_LABEL_FONT).toContain(`"${TEXT_SYMBOLS_FAMILY}"`);
+    it("lists the symbols family right after the brand font in both shared stacks", () => {
+        const sans = stack("--font-sans");
+        expect(sans.slice(0, 2)).toEqual(["DM Sans", FAMILY]);
+        expect(
+            sans.findIndex((family) => /emoji/i.test(family)),
+        ).toBeGreaterThan(1);
+        expect(stack("--font-mono").slice(0, 2)).toEqual(["DM Mono", FAMILY]);
     });
 
-    it("defines the family from font files that exist, and loads it", () => {
-        const require = createRequire(resolve(DESKTOP, "package.json"));
+    it("defines the family from font files that exist, in the shared styles", () => {
+        const require = createRequire(resolve(UI, "package.json"));
         const urls = [...symbolsCss.matchAll(/url\("([^"]+)"\)/g)].map(
             ([, url]) => url!,
         );
         expect(urls.length).toBeGreaterThan(0);
         for (const url of urls)
             expect(existsSync(require.resolve(url))).toBe(true);
-        expect(symbolsCss).toContain(`font-family: "${TEXT_SYMBOLS_FAMILY}"`);
-        expect(
-            readFileSync(resolve(DESKTOP, "src/main.tsx"), "utf8"),
-        ).toContain('import "./styles/text-symbols.css"');
+        expect(symbolsCss).toContain(`font-family: "${FAMILY}"`);
+        // A face still loading must not leave the symbol blank
+        expect(symbolsCss).not.toMatch(/font-display:\s*block/);
+        expect(tailwind).toContain('@import "./text-symbols.css"');
+    });
+
+    it("lists the family in every other font stack built on DM Sans or DM Mono", () => {
+        const problems: string[] = [];
+        for (const file of uiFiles()) {
+            if (file.endsWith(".json")) continue;
+            const source = readFileSync(resolve(REPO, file), "utf8");
+            if (!/DM (Sans|Mono)/.test(source)) continue;
+            const texts = file.endsWith(".css")
+                ? withoutCssComments(source)
+                      .split("\n")
+                      .map((text, i) => ({ text, line: i + 1 }))
+                : tsTexts(file, source);
+            for (const { text, line } of texts) {
+                const namesBrand =
+                    /DM (Sans|Mono)["']?\s*,/.test(text) ||
+                    /font-family:\s*["']?DM (Sans|Mono)["']?\s*[;}]/.test(text);
+                if (namesBrand && !text.includes(FAMILY))
+                    problems.push(
+                        `${file}:${line}: font stack lacks "${FAMILY}" after DM Sans/DM Mono, or use var(--font-sans)/var(--font-mono)`,
+                    );
+            }
+        }
+        expect(problems).toEqual([]);
     });
 
     it("covers every text-default emoji character in UI text, and emoji are intended", () => {
@@ -120,14 +218,12 @@ describe("text symbols never show as color emoji", () => {
         for (const code of IN_DM_SANS) covered.add(code);
         const used = new Set<RegExp>();
         const problems: string[] = [];
-        for (const file of uiTextFiles()) {
-            const lines = readFileSync(resolve(REPO, file), "utf8").split("\n");
-            lines.forEach((line, index) => {
-                if (isCommentLine(line)) return;
-                const chars = [...line];
+        for (const file of uiFiles()) {
+            for (const { text, line } of textsOf(file)) {
+                const chars = [...text];
                 chars.forEach((ch, i) => {
-                    if (!isPictographic(ch)) return;
-                    const at = `${file}:${index + 1}`;
+                    if (!PICTOGRAPHIC.test(ch)) return;
+                    const at = `${file}:${line}`;
                     const code = ch.codePointAt(0)!;
                     const name = `${ch} U+${code.toString(16).toUpperCase()}`;
                     const next = chars[i + 1]?.codePointAt(0);
@@ -144,11 +240,11 @@ describe("text symbols never show as color emoji", () => {
                             );
                     } else if (!covered.has(code)) {
                         problems.push(
-                            `${at}: ${name} can show as an emoji and "${TEXT_SYMBOLS_FAMILY}" has no text glyph for it${next === VS15 ? " (U+FE0E doesn't stop that in Chromium)" : ""}; add a font face for it or use a Phosphor icon`,
+                            `${at}: ${name} can show as an emoji and "${FAMILY}" has no text glyph for it${next === VS15 ? " (U+FE0E doesn't stop that in Chromium)" : ""}; add a font face for it or use a Phosphor icon`,
                         );
                     }
                 });
-            });
+            }
         }
         expect(problems).toEqual([]);
         expect(
