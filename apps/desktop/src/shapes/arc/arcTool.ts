@@ -233,11 +233,9 @@ const stretchOf = (factor: number, deep: boolean): number =>
     deep ? factor : 1 / factor;
 
 /**
- * How stretched the ellipse an arc is on is, shown while it's on one (owner on #634): "· 1.3×
- * deep" or "· 1.3× wide", with Make circle after it. Typed or dragged, it keeps its degrees and,
+ * How stretched the ellipse an arc is on is, always shown (owner on #634): "· 1.3× deep", "· 1.3×
+ * wide" or "· 1× circle", with Make circle after it. Typed or dragged, it keeps its degrees and,
  * up to a half turn, its ends too: only its depth changes, and in Fit its interval follows.
- * Dragged, it passes through a circle ("1× circle"), and let go there it's gone: a circle needs
- * no stretch, and the step interval sizes it.
  */
 const STRETCH: ToolParam<LineParams> = {
     key: "stretch",
@@ -252,8 +250,9 @@ const STRETCH: ToolParam<LineParams> = {
     drag: "x",
     interval: false,
     blends: true,
-    shown: (p) => arcStretch(p) !== null && !isRound(p),
-    // Dragged onto a circle it stays while the drag lasts, reading "1× circle"
+    // Always there once the arc bends, a circle reading "1× circle" (owner on #634): nothing about
+    // the shape is hidden, and the editor keeps its width through a drag
+    shown: (p) => arcStretch(p) !== null,
     words: (p) => ({
         before: "·",
         after: isRound(p)
@@ -311,7 +310,8 @@ const STRETCH: ToolParam<LineParams> = {
             return tolgee.t("shapes.kinds.arc.makeCircle", "Make circle");
         },
         apply: (p, n, env) => keptInterval(withStretch(p, 1), n, env),
-        shown: (p) => !isRound(p),
+        // Greyed out on a circle, where it has nothing to do
+        enabled: (p) => !isRound(p),
     },
 };
 

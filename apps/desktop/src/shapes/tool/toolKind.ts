@@ -221,8 +221,11 @@ export interface ToolParam<P> {
     readonly button?: {
         readonly label: string;
         apply(params: P, n: number, env: ToolEnv): P | null;
-        /** Whether it's offered for this shape; always when absent */
-        shown?(params: P, n: number): boolean;
+        /**
+         * Whether it does anything for this shape; always when absent. It stays in its place
+         * greyed out when it doesn't, so the editor doesn't shift (owner on #634)
+         */
+        enabled?(params: P, n: number): boolean;
     };
     /** The params with `text` typed over the number; null when the text isn't understood */
     type(params: P, n: number, text: string, env: ToolEnv): P | null;

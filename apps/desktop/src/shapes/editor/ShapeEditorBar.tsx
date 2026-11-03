@@ -416,21 +416,25 @@ function ShapeEditorBar({
                                     glyph={null}
                                     actions={numbers}
                                 />
-                                {x.param.button &&
-                                    (x.param.button.shown?.(shown, spots) ??
-                                        true) && (
-                                        <button
-                                            type="button"
-                                            onPointerDown={keepFocus}
-                                            onClick={() =>
-                                                numbers.press(x.param)
-                                            }
-                                            data-testid={`shape-editor-${x.param.key}-button`}
-                                            className="rounded-4 border-stroke hover:text-accent border px-6 py-1"
-                                        >
-                                            {x.param.button.label}
-                                        </button>
-                                    )}
+                                {x.param.button && (
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            !(
+                                                x.param.button.enabled?.(
+                                                    shown,
+                                                    spots,
+                                                ) ?? true
+                                            )
+                                        }
+                                        onPointerDown={keepFocus}
+                                        onClick={() => numbers.press(x.param)}
+                                        data-testid={`shape-editor-${x.param.key}-button`}
+                                        className="rounded-4 border-stroke enabled:hover:text-accent border px-6 py-1 disabled:cursor-auto disabled:opacity-50"
+                                    >
+                                        {x.param.button.label}
+                                    </button>
+                                )}
                                 {layout.ratioLock &&
                                     x.param.ratioLockAfter === true && (
                                         <RatioLockButton sizes />

@@ -42,8 +42,9 @@ Select some marchers, open the **Shapes** tab and pick **Arc** (after Curve).
   marchers. Both change as you change the degrees; drag or type either. The
   lock after them keeps the two in proportion, for the handles too (Cmd/Ctrl
   frees them for one drag).
-- Stretched onto an ellipse, the editor says how stretched it is ("1.3×
-  deep" or "1.3× wide"); drag or type it, or press **Make circle**. In Fit
+- The editor always says how stretched the arc is: "1× circle", "1.3× deep"
+  or "1.3× wide". Drag or type it (type 1.4 on a circle to make an ellipse),
+  or press **Make circle**, which greys out once it's round. In Fit
   the ends stay and the interval follows; in Keep interval the interval
   holds and the ends move.
 - Try **Open or closed**: **Close with a straight line** and fill it with

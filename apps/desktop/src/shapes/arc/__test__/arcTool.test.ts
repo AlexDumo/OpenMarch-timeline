@@ -867,9 +867,14 @@ describe("its stretch (owner on #634)", () => {
             .choices!.find((c) => c.key === "spacing")!
             .pick(p, 7, "keep", env) as LineParams;
 
-    it("shows the stretch on an ellipse only, and no radius", () => {
+    it("always shows the stretch, a circle as 1× circle, and no radius", () => {
         const round = paramsOf(halfTurn());
-        expect(shown("stretch", round)).toBe(false);
+        expect(shown("stretch", round)).toBe(true);
+        expect(param("stretch").display(round, 7, STEP)).toBe("1×");
+        expect(param("stretch").words!(round, 7)!.after).toBe("circle");
+        // Typed on a circle, it becomes an ellipse again
+        const typed = param("stretch").type(round, 7, "1.4", env) as LineParams;
+        expect(arcStretch(typed)).toBeCloseTo(1.4, 6);
         expect(arcTool.params.map((q) => q.key)).not.toContain("radius");
         const oval = deeper();
         expect(shown("stretch", oval)).toBe(true);
@@ -966,7 +971,7 @@ describe("its stretch (owner on #634)", () => {
 });
 
 describe("dragging its stretch onto a circle (#634)", () => {
-    it("keeps the stretch in the editor while it's dragged, reading 1× circle", () => {
+    it("keeps the stretch in the editor, reading 1× circle", () => {
         const t = halfTurn();
         let s = pointerMove(t, { x: 130, y: 170 }, env);
         s = press(s, { x: 130, y: 170 }, env);
@@ -978,10 +983,11 @@ describe("dragging its stretch onto a circle (#634)", () => {
             chipLayout(arcTool, round, 7, env, dragged).values.map(
                 (v) => v.param.key,
             );
-        expect(keys(null)).not.toContain("stretch");
-        expect(keys("stretch")).toContain("stretch");
+        expect(keys(null)).toContain("stretch");
         expect(stretch.display(round, 7, STEP)).toBe("1×");
         expect(stretch.words!(round, 7)!.after).toBe("circle");
-        expect(stretch.button!.shown!(round, 7)).toBe(false);
+        // Make circle stays, greyed out, so the editor doesn't shift
+        expect(stretch.button!.enabled!(round, 7)).toBe(false);
+        expect(stretch.button!.enabled!(oval, 7)).toBe(true);
     });
 });
