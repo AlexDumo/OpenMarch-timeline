@@ -313,12 +313,14 @@ const STRETCH: ToolParam<LineParams> = {
     interval: false,
     blends: true,
     shown: (p) => arcStretch(p) !== null && !isRound(p),
+    // Dragged onto a circle it stays while the drag lasts, reading "1× circle"
     words: (p) => ({
         before: "·",
-        after:
-            (arcStretch(p) ?? 1) >= 1
-                ? tolgee.t("shapes.kinds.arc.size.deep", "deep")
-                : tolgee.t("shapes.kinds.arc.size.wide", "wide"),
+        after: isRound(p)
+            ? tolgee.t("shapes.kinds.arc.size.round", "circle")
+            : (arcStretch(p) ?? 1) >= 1
+              ? tolgee.t("shapes.kinds.arc.size.deep", "deep")
+              : tolgee.t("shapes.kinds.arc.size.wide", "wide"),
     }),
     display: (p) => {
         const s = arcStretch(p) ?? 1;
@@ -366,6 +368,7 @@ const STRETCH: ToolParam<LineParams> = {
             return tolgee.t("shapes.kinds.arc.makeCircle", "Make circle");
         },
         apply: (p, n, env) => keptInterval(withStretch(p, 1), n, env),
+        shown: (p) => !isRound(p),
     },
 };
 
@@ -492,7 +495,9 @@ export const arcTool: ToolKind<LineParams> = {
     ...lineTool,
     shape: arcShape,
     keywords: ["arc", "bow", "semicircle"],
-    params: [INTERVAL, BEND, WIDTH, DEPTH, RADIUS, STRETCH],
+    // The stretch before the radius: dragged onto a circle, the radius appears after it, not under
+    // the pointer
+    params: [INTERVAL, BEND, WIDTH, DEPTH, STRETCH, RADIUS],
     choices: [ENDS, lineChoice("spacing"), MEASURED],
     readable: isArcParams,
     // Its width and depth can be kept in proportion with the editor's lock (owner on #634)

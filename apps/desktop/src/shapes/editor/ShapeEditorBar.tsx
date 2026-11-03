@@ -1,5 +1,6 @@
 import { T } from "@tolgee/react";
 import Shortcut from "@/components/ui/Shortcut";
+import { create } from "zustand";
 import clsx from "clsx";
 import {
     Fragment,
@@ -290,8 +291,9 @@ function ShapeEditorBar({
         s.held ? s.params : null,
     );
     const shown = !shape.place && previewed !== null ? previewed : params;
+    const dragged = useDraggedNumberStore((s) => s.key);
     const layout = env
-        ? chipLayout(kind, shown, spots, { ...env, stepPx, anchor })
+        ? chipLayout(kind, shown, spots, { ...env, stepPx, anchor }, dragged)
         : {
               values: [],
               intervals: [],
@@ -411,17 +413,21 @@ function ShapeEditorBar({
                                     readOnly={x.readOnly}
                                     actions={numbers}
                                 />
-                                {x.param.button && (
-                                    <button
-                                        type="button"
-                                        onPointerDown={keepFocus}
-                                        onClick={() => numbers.press(x.param)}
-                                        data-testid={`shape-editor-${x.param.key}-button`}
-                                        className="rounded-4 border-stroke hover:text-accent border px-6 py-1"
-                                    >
-                                        {x.param.button.label}
-                                    </button>
-                                )}
+                                {x.param.button &&
+                                    (x.param.button.shown?.(shown, spots) ??
+                                        true) && (
+                                        <button
+                                            type="button"
+                                            onPointerDown={keepFocus}
+                                            onClick={() =>
+                                                numbers.press(x.param)
+                                            }
+                                            data-testid={`shape-editor-${x.param.key}-button`}
+                                            className="rounded-4 border-stroke hover:text-accent border px-6 py-1"
+                                        >
+                                            {x.param.button.label}
+                                        </button>
+                                    )}
                                 {layout.ratioLock &&
                                     x.param.ratioLockAfter === true && (
                                         <RatioLockButton sizes />
@@ -678,16 +684,26 @@ const turnQuarter = (target: ShapeEditTarget) =>
  * shape at the press. A spacing's (`guides`) shows the field lines a corner or the center lands
  * on while it goes (#452).
  */
+/**
+ * The number being dragged, by its key: kept in the editor for its drag even where the shape stops
+ * showing it (an Arc's stretch dragged onto a circle, #634), so the drag doesn't lose its number
+ */
+const useDraggedNumberStore = create<{ key: string | null }>(() => ({
+    key: null,
+}));
+
 const scrubWith = (
     target: ShapeEditTarget,
     base: { current: unknown },
     change: (b: unknown, m: ScrubMove, env: ToolEnv) => unknown,
     guides = false,
+    key: string | null = null,
 ) => ({
     onScrubStart: () => {
         base.current = target.params;
         target.begin();
         if (guides) setShapeScrubbing(true);
+        useDraggedNumberStore.setState({ key });
     },
     onScrub: (m: ScrubMove) => {
         const env = envFor(m.roles);
@@ -695,6 +711,7 @@ const scrubWith = (
     },
     onScrubEnd: (keep: boolean) => {
         setShapeScrubbing(false);
+        useDraggedNumberStore.setState({ key: null });
         target.end(keep);
     },
 });
@@ -727,6 +744,7 @@ function numberActions(
                 base,
                 (b, m, env) => param.scrub(b, target.spots, m, env),
                 param.interval === true,
+                param.key,
             ),
         /** A "≈" number pressed: onto the nearest half step, as an edit of it (#459) */
         snap: (param: Param) => {

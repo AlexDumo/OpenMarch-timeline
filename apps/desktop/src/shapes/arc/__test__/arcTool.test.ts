@@ -28,6 +28,7 @@ import { distributionOf, switchModes } from "../../distribute/modes";
 import { PLACED_KINDS } from "../../placed/placedBox";
 import { SHAPE_TOOLS } from "../../tool/shapeTools";
 import { circleTool } from "../../circle/circleTool";
+import { chipLayout } from "../../editor/chip";
 import type { ToolEnv } from "../../tool/toolKind";
 import {
     edit,
@@ -898,5 +899,26 @@ describe("its radius and stretch (owner on #634)", () => {
         const p = param("stretch").type(most, 7, "2", env) as LineParams;
         expect(arcGuide(p)!.rx).toBeCloseTo(g.rx, 6);
         expect(arcStretch(p)).toBeCloseTo(2, 6);
+    });
+});
+
+describe("dragging its stretch onto a circle (#634)", () => {
+    it("keeps the stretch in the editor while it's dragged, reading 1× circle", () => {
+        const t = halfTurn();
+        let s = pointerMove(t, { x: 130, y: 170 }, env);
+        s = press(s, { x: 130, y: 170 }, env);
+        s = pointerMove(s, { x: 130, y: 160 }, env);
+        const oval = paramsOf(release(s, ctx, null));
+        const stretch = arcTool.params.find((q) => q.key === "stretch")!;
+        const round = stretch.button!.apply(oval, 7, env)!;
+        const keys = (dragged: string | null) =>
+            chipLayout(arcTool, round, 7, env, dragged).values.map(
+                (v) => v.param.key,
+            );
+        expect(keys(null)).not.toContain("stretch");
+        expect(keys("stretch")).toContain("stretch");
+        expect(stretch.display(round, 7, STEP)).toBe("1×");
+        expect(stretch.words!(round, 7)!.after).toBe("circle");
+        expect(stretch.button!.shown!(round, 7)).toBe(false);
     });
 });

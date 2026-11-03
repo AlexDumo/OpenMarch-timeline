@@ -56,9 +56,18 @@ export function chipLayout(
     params: unknown,
     n: number,
     env: ToolEnv,
+    /**
+     * The number being dragged, kept while its drag lasts even where the shape no longer shows it:
+     * an Arc's stretch dragged onto a circle, where the radius takes its place (#634)
+     */
+    dragged: string | null = null,
 ): ChipLayout {
     const numbers: ChipNumber[] = kind.params
-        .filter((p) => p.primary && (p.shown?.(params, n) ?? true))
+        .filter(
+            (p) =>
+                p.primary &&
+                (p.key === dragged || (p.shown?.(params, n) ?? true)),
+        )
         .map((param) => ({
             param,
             display: param.display(params, n, env.stepPx),

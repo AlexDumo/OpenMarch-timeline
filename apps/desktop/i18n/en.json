@@ -2419,7 +2419,8 @@
                     "steps": "steps",
                     "radius": "· r",
                     "deep": "deep",
-                    "wide": "wide"
+                    "wide": "wide",
+                    "round": "circle"
                 },
                 "makeCircle": "Make circle",
                 "radiusKept": "Keep interval sets the radius: change the interval, or switch to Fit"
