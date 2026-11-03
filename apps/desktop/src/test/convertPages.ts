@@ -6,6 +6,8 @@ import { TIMELINE_MODEL_USER_VERSION } from "@/../electron/database/fileVersion"
 import { transactionWithHistory } from "@/db-functions/history";
 import type { DbConnection } from "@/db-functions/types";
 import { LATER_MARCHER_COLUMNS } from "./timelineMode";
+import { triggerStatements } from "@/../electron/database/migrations/triggers";
+import { createAllUndoTriggers } from "@/db-functions/historyTriggers";
 import {
     convertPagesToTimelineInTransaction,
     type ConvertPagesOptions,
@@ -51,14 +53,42 @@ export async function finishTestConversion(db: DbConnection): Promise<void> {
                     `ALTER TABLE \`marchers\` ADD COLUMN \`${c.name}\``,
                 ),
         );
-    await db.transaction(async (tx) => {
-        for (const query of queries)
-            if (query.trim() && !addsExisting(query))
-                await tx.run(sql.raw(query));
-        await tx.run(
-            sql.raw(`PRAGMA user_version = ${TIMELINE_MODEL_USER_VERSION}`),
-        );
-    });
+    // As convert on open does: foreign keys off outside the transaction (inside one SQLite ignores
+    // the pragma), so a migration that rebuilds a parent table (0031) can drop it
+    await db.run(sql`PRAGMA foreign_keys = OFF`);
+    try {
+        await db.transaction(async (tx) => {
+            // And, as the migration service does, the triggers and views come off first and back
+            // after, so a table rebuild neither trips over them nor loses them
+            const names = async (query: string) =>
+                new Set(
+                    (await tx.all(sql.raw(query))).map((r) =>
+                        Array.isArray(r)
+                            ? String(r[0])
+                            : String((r as { name: string }).name),
+                    ),
+                );
+            for (const s of triggerStatements(new Set(), false).drop)
+                await tx.run(sql.raw(s));
+            for (const query of queries)
+                if (query.trim() && !addsExisting(query))
+                    await tx.run(sql.raw(query));
+            const tables = await names(
+                "SELECT name FROM sqlite_schema WHERE type = 'table'",
+            );
+            const route = await names(
+                "SELECT name FROM pragma_table_info('timeline_transitions') WHERE name = 'route_id'",
+            );
+            for (const s of triggerStatements(tables, route.size > 0).create)
+                await tx.run(sql.raw(s));
+            await tx.run(
+                sql.raw(`PRAGMA user_version = ${TIMELINE_MODEL_USER_VERSION}`),
+            );
+        });
+        await createAllUndoTriggers(db);
+    } finally {
+        await db.run(sql`PRAGMA foreign_keys = ON`);
+    }
 }
 
 /**

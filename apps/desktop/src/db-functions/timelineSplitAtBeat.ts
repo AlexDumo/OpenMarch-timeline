@@ -27,6 +27,12 @@ import {
     createTimelineAssignmentsInTransaction,
     type DatabaseTimelineAssignment,
 } from "./timelineAssignments";
+import {
+    planRouteCut,
+    writeRouteCutAfterInTransaction,
+    writeRouteCutBeforeInTransaction,
+    type RouteCut,
+} from "./timelineRoutes";
 
 /**
  * **Split at playhead** (docs/timeline/ui.md UI-27): one move becomes two that meet at a count,
@@ -71,6 +77,11 @@ import {
  * `beat` its marchers go straight to where they were; from `beat` the transition keeps its style
  * and parameters but starts again from there, so the path after `beat` changes too. Those
  * marchers are listed in `motionChanged` from the count their path changes, for the toast.
+ *
+ * **A route is cut, with no change in motion** (spec v0.9 AP-R7). A route transition's half before
+ * the count walks a new route through the corners before it, to where the marcher is on the route
+ * at the count, at the same speed; from the count the route keeps its id and the corners after it.
+ * A route row taken over at the move's start, or resumed at or before the count, is refused.
  *
  * Refused (`E-ARGS`) before any write: a beat that isn't whole or strictly inside the move, a
  * move that already runs over either half (one timeline per range, C-12: only a move split off
@@ -247,6 +258,18 @@ export async function splitTimelineAtBeatInTransaction({
             changed.set(marcherId, fromBeat);
     };
 
+    // AP-R7: route transitions are cut along their path; planned (and refused) before any write
+    const routeCuts = new Map<number, RouteCut>();
+    for (const t of transitions) {
+        if (t.route_id === null) continue;
+        const row = rows.find((r) => r.transition_id === t.id);
+        if (row && row.start_beat < beat)
+            routeCuts.set(
+                t.id,
+                await planRouteCut(tx, { resolver, t, row, beat }),
+            );
+    }
+
     const plans: TransitionPlan[] = transitions.map((t) => {
         const own = rows.filter((r) => r.transition_id === t.id);
         const halves = own
@@ -255,6 +278,7 @@ export async function splitTimelineAtBeatInTransaction({
         const extras = Math.max(0, ...halves.map((h) => h.earlier.length));
         return {
             t,
+            routeCut: routeCuts.get(t.id),
             first: halves.map((h) => h.main),
             earlier: Array.from({ length: extras }, (_, k) =>
                 halves.flatMap((h) => (h.earlier[k] ? [h.earlier[k]] : [])),
@@ -280,6 +304,8 @@ export async function splitTimelineAtBeatInTransaction({
 /** One transition's part of a split: its first-half rows, and whether anyone stays after. */
 interface TransitionPlan {
     t: DatabaseTimelineTransition;
+    /** A route transition's cut (AP-R7); its first half is written from this */
+    routeCut?: RouteCut;
     /** The counterpart's rows */
     first: FirstHalfRow[];
     /** The rows of each extra transition, for pieces cut off by a higher layer */
@@ -337,6 +363,11 @@ async function writeSplit({
             transitionIds: emptied,
         });
 
+    // 2b. A route that stays after the beat keeps its id and the corners after it (AP-R7)
+    for (const p of plans)
+        if (p.routeCut && p.anyAfter)
+            await writeRouteCutAfterInTransaction(tx, p.routeCut);
+
     // 3. The original's transitions now run from the beat; then the timeline that keeps them
     //    (the triggers want a transition inside its timeline, and no stranded row)
     await tx
@@ -362,9 +393,22 @@ async function writeSplit({
                   endBeat: beat,
                   allowSharedRanges,
               });
-    for (const { t, first, earlier } of plans)
+    for (const { t, first, earlier, routeCut } of plans) {
+        if (routeCut) {
+            // One row, founding, with no earlier piece (planRouteCut refuses the rest)
+            const f = first[0]!;
+            await writeRouteCutBeforeInTransaction(tx, {
+                cut: routeCut,
+                beforeTimelineId: before.id,
+                row: f.row,
+                end: f.end,
+                orderMode: t.order_mode as "inherit" | "slot",
+            });
+            continue;
+        }
         for (const halfRows of [first, ...earlier])
             await writeFirstHalfTransition(tx, { before, t, rows: halfRows });
+    }
     // Neither half keeps the id: the original, empty now, goes
     if (idStaysWith === "neither")
         await tx.delete(L).where(eq(L.id, timelineId));

@@ -25,6 +25,7 @@ import {
     type TimelineMarcherMove,
     type TimelineMoveResult,
 } from "./timelineMoves";
+import { text } from "@/timeline/timelineText";
 
 /**
  * Basic mode's writes (docs/timeline/research/basic-mode/README.md, "How Basic writes"): every
@@ -244,6 +245,10 @@ const planMerge = async (
     second: BasicRow,
 ): Promise<void> => {
     const { marcherId } = first;
+    // AP-R6 (spec v0.9 step 1): a merge doesn't keep a drawn path yet. Basic only edits simple
+    // marchers, whose moves are direct, so this is a backstop
+    if (first.pathStyle === "route" || second.pathStyle === "route")
+        refuse(text.t("timeline.refusals.route.cantKeep"));
     const point = await state.positionAt(marcherId, second.end);
     plan.removed.push(first, second);
     const from = await state.positionAt(marcherId, first.start);

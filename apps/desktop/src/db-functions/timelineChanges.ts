@@ -34,6 +34,7 @@ const CHANGE_TABLES: ReadonlySet<string> = new Set<ChangeTable>([
     "transitions",
     "assignments",
     "slot_destinations",
+    "routes",
 ]);
 
 const listeners = new Set<TimelineChangeListener>();

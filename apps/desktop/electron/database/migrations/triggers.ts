@@ -565,3 +565,27 @@ export const createAllTriggers = (dbConnection: DatabaseSync) => {
         }
     }
 };
+
+/**
+ * The statements `dropAllTriggers` and `createAllTriggers` run, for a caller without a raw
+ * connection (tests that convert through the SQL proxy). `tables` are the file's tables after the
+ * migrations, and `transitionRoute` whether `timeline_transitions` has `route_id`.
+ */
+export function triggerStatements(
+    tables: ReadonlySet<string>,
+    transitionRoute: boolean,
+): { drop: string[]; create: string[] } {
+    const all = buildTriggers(transitionRoute);
+    return {
+        drop: [
+            ...Object.keys(triggers).map(
+                (name) => `DROP TRIGGER IF EXISTS ${name}`,
+            ),
+            ...Object.keys(views).map((name) => `DROP VIEW IF EXISTS ${name}`),
+        ],
+        create: [
+            ...Object.values(all).filter((s) => tables.has(triggerTable(s))),
+            ...Object.values(views),
+        ],
+    };
+}

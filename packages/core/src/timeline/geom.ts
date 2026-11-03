@@ -278,22 +278,34 @@ export interface RoutePath {
     V: XY[];
     D: number[];
     L: number;
+    /** For each vertex of `V`, the index of the inner point it is, or -1 for `A` and `B` */
+    source: number[];
 }
 
 /** R-14 cleaning and length. */
 export function routePath(A: XY, inner: readonly XY[], B: XY): RoutePath {
     const V: XY[] = [A];
-    for (const P of inner) if (dist(V[V.length - 1]!, P) >= EPS_GEOM) V.push(P);
+    const source = [-1];
+    inner.forEach((P, i) => {
+        if (dist(V[V.length - 1]!, P) >= EPS_GEOM) {
+            V.push(P);
+            source.push(i);
+        }
+    });
     // Inner points within EPS_GEOM of B go (never A, which is V[0])
-    while (V.length > 1 && dist(V[V.length - 1]!, B) < EPS_GEOM) V.pop();
+    while (V.length > 1 && dist(V[V.length - 1]!, B) < EPS_GEOM) {
+        V.pop();
+        source.pop();
+    }
     V.push(B);
+    source.push(-1);
     const D = [0];
     let total = 0;
     for (let j = 0; j + 1 < V.length; j++) {
         total += dist(V[j]!, V[j + 1]!);
         D.push(total);
     }
-    return { V, D, L: total };
+    return { V, D, L: total, source };
 }
 
 /**

@@ -36,6 +36,7 @@ import {
     moveShapeRecipesInTransaction,
     splitShapeRecipesInTransaction,
 } from "./shapeRecipes";
+import { refuseRouteTransitions, refuseRoutesInMoves } from "./timelineRoutes";
 
 /**
  * Splitting a move and merging moves back (docs/timeline/ui.md UI-25, project owner 2026-10-16).
@@ -283,6 +284,14 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
     });
     if (blocker) refuse(blocker);
     const chosen = new Set(marcherIds.filter((id) => members.has(id)));
+    // AP-R6 (spec v0.9 step 1): a marcher with a drawn path can't be split off yet (holds that
+    // would take one into a move of its own come through here too)
+    await refuseRouteTransitions(
+        tx,
+        rows
+            .filter((r) => chosen.has(r.assignment.marcher_id))
+            .map((r) => r.transition.id),
+    );
     const notInMove = [...new Set(marcherIds)]
         .filter((id) => !members.has(id))
         .sort((a, b) => a - b);
@@ -479,6 +488,8 @@ export const mergeMovesInTransaction = async ({
     if (!source) refuse(`timeline ${sourceId} does not exist`);
     const target = await readTimeline(tx, targetId);
     if (!target) refuse(`timeline ${targetId} does not exist`);
+    // AP-R6 (spec v0.9 step 1): merging doesn't keep a drawn path yet
+    await refuseRoutesInMoves(tx, [sourceId, targetId]);
     const { nameOf, pageTimelineIds } = await timelineWords(tx);
     if (pageTimelineIds.has(sourceId))
         refuse(

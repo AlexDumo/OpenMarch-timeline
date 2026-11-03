@@ -3304,7 +3304,16 @@
             "keep": {
                 "wholePage": "Keep works on a whole page, not {counts}"
             },
-            "tooFarPastEnd": "that is {count, plural, one {# count} other {# counts}} past the end; one edit stores at most {max}"
+            "tooFarPastEnd": "that is {count, plural, one {# count} other {# counts}} past the end; one edit stores at most {max}",
+            "route": {
+                "takenOverAtStart": "{marcher} is taken over at the start of this move",
+                "takenOverEarlier": "{marcher} is taken over earlier in this move",
+                "followsTheLeader": "{marcher} follows the leader in this move, so it can't have a drawn path yet",
+                "removePathFirst": "{move} has a drawn path: remove it first",
+                "notYet": "{move} has a drawn path, which this edit can't keep yet. Remove the path first",
+                "cantKeep": "This edit can't keep a drawn path yet. Remove the path first",
+                "notInMove": "{marcher} isn't in this move"
+            }
         }
     },
     "titlebar": {
