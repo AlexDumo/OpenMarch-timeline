@@ -532,7 +532,8 @@ export interface RouteCut {
  * point at or within `EPS_GEOM` of `C` goes to neither half, and points R-14's cleaning drops are
  * dropped from storage too. Kept points keep their ids.
  *
- * Refused (`E-ARGS`): no founding span ("taken over at the start"), or a visible piece of `row`
+ * Refused (`E-ARGS`): a row not starting with `t`, or no founding span ("taken over at the
+ * start"); more than one row, or a visible piece of the row
  * other than it starting at or before the count ("taken over earlier"), since that resume would
  * become a founding span after the cut and walk the rest of the route.
  */
@@ -541,16 +542,24 @@ export async function planRouteCut(
     {
         resolver,
         t,
-        row,
+        rows,
         beat,
     }: {
         resolver: ReturnType<typeof createResolver>;
         t: typeof schema.timeline_transitions.$inferSelect;
-        row: typeof schema.timeline_assignments.$inferSelect;
+        /** Every row of `t` in the move (one, unless an edit left more) */
+        rows: readonly (typeof schema.timeline_assignments.$inferSelect)[];
         beat: number;
     },
 ): Promise<RouteCut> {
+    const row = rows[0]!;
     const m = row.marcher_id;
+    // A row starting after the move starts is a join now and would become founding after the
+    // cut, walking the route; a second row would be cut blind. Neither is drawn by AP-R1.
+    if (rows.some((r) => r.start_beat !== t.start_beat))
+        refuse(routeRefusal.takenOverAtStart(await marcherName(tx, m)));
+    if (rows.length > 1)
+        refuse(routeRefusal.takenOverEarlier(await marcherName(tx, m)));
     const pieces = resolver
         .spanInfos(m)
         .filter((s) => s.assignmentId === row.id)

@@ -445,7 +445,7 @@ describeDbTests("timeline schema and triggers", (it) => {
             const triggers = allTriggers.filter(
                 ([name]) => !isHistoryTrigger(name),
             );
-            expect(triggers.length).toBe(31);
+            expect(triggers.length).toBe(34);
             for (const [name, triggerSql] of triggers) {
                 const body = triggerSql
                     .slice(triggerSql.search(/\bBEGIN\b/))
@@ -615,6 +615,7 @@ describeDbTests("timeline schema and triggers", (it) => {
                         dest: null,
                         style: "arc",
                         params: { bulge: 0.25 },
+                        route: null,
                         order: "inherit",
                         slots: 1,
                         start: 16,

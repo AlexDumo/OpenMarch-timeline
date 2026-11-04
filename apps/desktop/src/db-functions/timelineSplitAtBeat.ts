@@ -262,11 +262,11 @@ export async function splitTimelineAtBeatInTransaction({
     const routeCuts = new Map<number, RouteCut>();
     for (const t of transitions) {
         if (t.route_id === null) continue;
-        const row = rows.find((r) => r.transition_id === t.id);
-        if (row && row.start_beat < beat)
+        const own = rows.filter((r) => r.transition_id === t.id);
+        if (own.length > 0)
             routeCuts.set(
                 t.id,
-                await planRouteCut(tx, { resolver, t, row, beat }),
+                await planRouteCut(tx, { resolver, t, rows: own, beat }),
             );
     }
 

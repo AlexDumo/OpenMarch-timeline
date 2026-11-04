@@ -23,7 +23,10 @@ import {
     setTimelineTransitionDestinationInTransaction,
 } from "../timelineTransitionsInTransaction";
 import { createTimelineAssignmentsInTransaction } from "../timelineAssignments";
-import { splitTimelineAtBeat } from "../timelineSplitAtBeat";
+import {
+    splitTimelineAtBeat,
+    splitTimelineAtBeatInTransaction,
+} from "../timelineSplitAtBeat";
 import { mergeMoves, splitMarchersIntoNewMove } from "../timelineSplitMoves";
 import { deleteTimeline, setMovePath } from "../timelineCommands";
 import { splitMovesAtBeatInTransaction } from "../timelinePointMoves";
@@ -646,6 +649,112 @@ describeDbTests("Routes: cut at a count (AP-R7, QA-AP-R3)", (it) => {
         );
         void (asc as unknown);
     });
+
+    /** The route row of `m` (one), for setting up edits AP-R1 never draws. */
+    const routeRow = async (db: DbConnection, m: number) => {
+        const rows = await db
+            .select({ a: schema.timeline_assignments })
+            .from(schema.timeline_assignments)
+            .innerJoin(
+                schema.timeline_transitions,
+                eq(
+                    schema.timeline_transitions.id,
+                    schema.timeline_assignments.transition_id,
+                ),
+            )
+            .where(eq(schema.timeline_assignments.marcher_id, m))
+            .all();
+        return rows
+            .map((r) => r.a)
+            .filter((a) => a.start_beat >= 9 && a.end_beat <= 17)[0]!;
+    };
+
+    it("refuses a row taken over at the move's start, and a row starting after it", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { timeline, m } = await setUp(db);
+        const steal = await overlay(db, m, 9, 10, [7, 7]);
+        await expectRefused(
+            db,
+            () =>
+                splitTimelineAtBeat({ db, timelineId: timeline.id, beat: 12 }),
+            /taken over at the start of this move/,
+        );
+        await deleteTimeline({ db, timelineId: steal.id });
+        // A row starting at the count, after its transition: a join now, founding after a cut
+        const row = await routeRow(db, m);
+        await db.run(
+            sql`UPDATE timeline_assignments SET start_beat = 12 WHERE id = ${row.id}`,
+        );
+        await expectRefused(
+            db,
+            () =>
+                splitTimelineAtBeat({ db, timelineId: timeline.id, beat: 12 }),
+            /taken over at the start of this move/,
+        );
+    });
+
+    it("cuts with a takeover starting after the count, and a row ending before it, with no change in motion", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { timeline, m } = await setUp(db);
+        await overlay(db, m, 13, 15, [7, 7]);
+        let positionsBefore = positions(await resolverOf(db), 56);
+        await splitTimelineAtBeat({ db, timelineId: timeline.id, beat: 12 });
+        expectSamePositions(
+            positionsBefore,
+            positions(await resolverOf(db), 56),
+            tolerance(200),
+        );
+        expect(await readRoutes(db)).toHaveLength(2);
+        expect((await performUndo(db)).success).toBe(true);
+
+        // The row ends at 11, before the cut: the part from the count has no row and goes, with
+        // its route
+        const row = await routeRow(db, m);
+        await db.run(
+            sql`UPDATE timeline_assignments SET end_beat = 11 WHERE id = ${row.id}`,
+        );
+        positionsBefore = positions(await resolverOf(db), 56);
+        await splitTimelineAtBeat({ db, timelineId: timeline.id, beat: 12 });
+        expectSamePositions(
+            positionsBefore,
+            positions(await resolverOf(db), 56),
+            tolerance(200),
+        );
+        const routes = await readRoutes(db);
+        expect(routes).toHaveLength(1);
+        expect(routes[0]!.end).toBeLessThanOrEqual(12);
+    });
+
+    for (const idStaysWith of ["before", "neither"] as const)
+        it(`the holds cut with the id kept by ${idStaysWith}: motion unchanged, both routes kept`, async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { timeline } = await setUp(db);
+            const original = await snapshot(db);
+            const positionsBefore = positions(await resolverOf(db), 56);
+            await transactionWithHistory(db, "cut", (tx) =>
+                splitTimelineAtBeatInTransaction({
+                    tx,
+                    timelineId: timeline.id,
+                    beat: 12,
+                    allowSharedRanges: true,
+                    idStaysWith,
+                }),
+            );
+            expectSamePositions(
+                positionsBefore,
+                positions(await resolverOf(db), 56),
+                tolerance(200),
+            );
+            expect(await readRoutes(db)).toHaveLength(2);
+            expect((await performUndo(db)).success).toBe(true);
+            expect((await snapshot(db)).data).toEqual(original.data);
+        });
 });
 
 /** Keeps the type import used in assertions readable. */
