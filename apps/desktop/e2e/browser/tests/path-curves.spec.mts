@@ -62,8 +62,7 @@ const pointsOf = async (show: Show): Promise<StoredPoint[]> => {
     );
     return rows.length === 0
         ? []
-        : (JSON.parse(rows[0]!.geometry) as { points: StoredPoint[] })
-              .points;
+        : (JSON.parse(rows[0]!.geometry) as { points: StoredPoint[] }).points;
 };
 
 const undoSteps = async (show: Show) => {
@@ -128,7 +127,9 @@ test("change: the pen's press-and-drag places a smooth point; a double-click, th
     expect(saved[1]!.tension).toBeUndefined();
     expect(await undoSteps(show)).toBe(steps + 1);
     // The closed path is drawn along its curve
-    await expect.poll(async () => (await outline(page)).length).toBeGreaterThan(20);
+    await expect
+        .poll(async () => (await outline(page)).length)
+        .toBeGreaterThan(20);
 
     // Undo takes it away; redo brings back the same ids and roundness
     await page.keyboard.press("ControlOrMeta+z");
@@ -139,7 +140,9 @@ test("change: the pen's press-and-drag places a smooth point; a double-click, th
     expect(await pointsOf(show)).toEqual(saved);
 
     // A double-click on the curve opens the path
-    await expect.poll(async () => (await outline(page)).length).toBeGreaterThan(20);
+    await expect
+        .poll(async () => (await outline(page)).length)
+        .toBeGreaterThan(20);
     const line = await outline(page);
     const onLine = await toScreen(page, line[Math.floor(line.length / 3)]!);
     await page.mouse.move(onLine.x, onLine.y, { steps: 4 });
@@ -151,7 +154,10 @@ test("change: the pen's press-and-drag places a smooth point; a double-click, th
 
     // A double-click on the corner makes it smooth: one undo step, ids kept
     let before = await undoSteps(show);
-    const corner = await toScreen(page, { x: saved[1]!.at[0], y: saved[1]!.at[1] });
+    const corner = await toScreen(page, {
+        x: saved[1]!.at[0],
+        y: saved[1]!.at[1],
+    });
     await page.mouse.move(corner.x, corner.y, { steps: 4 });
     await page.mouse.dblclick(corner.x, corner.y);
     await waitForIdle(page);
@@ -164,7 +170,10 @@ test("change: the pen's press-and-drag places a smooth point; a double-click, th
     // The first point's menu: Corner | Smooth; Corner makes it a corner, one undo step
     await page.waitForTimeout(600);
     before = await undoSteps(show);
-    const first = await toScreen(page, { x: saved[0]!.at[0], y: saved[0]!.at[1] });
+    const first = await toScreen(page, {
+        x: saved[0]!.at[0],
+        y: saved[0]!.at[1],
+    });
     await page.mouse.move(first.x, first.y, { steps: 4 });
     await page.mouse.click(first.x, first.y, { button: "right" });
     const menu = page.getByTestId("shape-menu");
@@ -172,15 +181,19 @@ test("change: the pen's press-and-drag places a smooth point; a double-click, th
     await expect(menu.getByTestId("shape-menu-smooth")).toBeVisible();
     await menu.getByTestId("shape-menu-corner").click();
     await waitForIdle(page);
-    await expect.poll(async () => (await pointsOf(show))[0]?.tension).toBeUndefined();
+    await expect
+        .poll(async () => (await pointsOf(show))[0]?.tension)
+        .toBeUndefined();
     expect(await undoSteps(show)).toBe(before + 1);
     // The menu stays open on a Corner | Smooth pick; Escape closes it (and may close the path,
     // which a double-click on its line opens again)
     await page.keyboard.press("Escape");
     await expect(menu).toBeHidden();
     if (
-        (await page.getByTestId("path-editor").getAttribute("data-phase").catch(() => null)) !==
-        "open"
+        (await page
+            .getByTestId("path-editor")
+            .getAttribute("data-phase")
+            .catch(() => null)) !== "open"
     ) {
         const again = await outline(page);
         const hit = await toScreen(page, again[Math.floor(again.length / 3)]!);
