@@ -129,5 +129,21 @@ check('QA-RT-1', rt([[3, 4], [3, 10]]), [[1, 0, 0, 0], [1, 1, 1.275, 1.7], [1, 2
   same('QA-RT-6 repeated', rt([[3, 4], [3, 4], [3 + 1e-10, 4], [3, 10]]), rt([[3, 4], [3, 10]]));
   same('QA-RT-6 all close', rt([[1e-10, 0], [9, 10 - 1e-10]]), direct); }
 
+// QA-RT-10 (v0.9 step 2): one smooth point at τ = 1 between A = (0, 0) and B = (8, 0), F = A, G = B. By symmetry the
+// marcher is on the point at beat 4; it walks the curve at one speed; the oracle and the cached resolver agree.
+{ const db = rt([[4, 4]]);
+  db.transitions[1] = { ...db.transitions[1], points: [[8, 0]] };
+  db.routes[1].geometry = { v: 1, from: [0, 0], to: [8, 0], points: [{ id: 'p0', at: [4, 4], tension: 1 }] };
+  const o = makeOracle(db), r = makeResolver(db);
+  const mid = o.positionAt(1, 4);
+  const okMid = Math.hypot(mid[0] - 4, mid[1] - 4) < 1e-9;
+  const ends = [[0, [0, 0]], [8, [8, 0]]].every(([b, q]) => { const p = o.positionAt(1, b); return p[0] === q[0] && p[1] === q[1]; });
+  const agree = Array.from({ length: 65 }, (_, i) => i / 8).every((b) => { const p = o.positionAt(1, b), q = r.positionAt(1, b); return p[0] === q[0] && p[1] === q[1]; });
+  const steps = Array.from({ length: 8 }, (_, i) => { const a = o.positionAt(1, i), b = o.positionAt(1, i + 1); return Math.hypot(b[0] - a[0], b[1] - a[1]); });
+  const curved = Math.hypot(o.positionAt(1, 2)[0] - 2, o.positionAt(1, 2)[1] - 2) > 1e-3;   // not the corner path
+  const ok = okMid && ends && agree && curved && Math.max(...steps) - Math.min(...steps) < 0.05 * Math.max(...steps);
+  ok ? pass++ : fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  QA-RT-10${ok ? '' : ` mid=${mid} ends=${ends} agree=${agree} curved=${curved} steps=${steps}`}`); }
+
 console.log(`${pass} of ${pass + fail} golden fixtures pass (oracle and cached resolver)`);
 if (fail) process.exitCode = 1;

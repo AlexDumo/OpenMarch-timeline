@@ -110,7 +110,7 @@ export function makeResolver(db, { rules = 'v0.2+' } = {}) {
     const o = origin(s);
     if (isFtl(t)) return lerp(o, entry(t.id).target.get(s.m), p);
     const dst = dests.get(t.id)[s.row.slot];
-    if (t.style === 'route') return founding(s) ? routeWalk(o, routeGeo(t.route), dst).at(p) : lerp(o, dst, p); // R-14
+    if (t.style === 'route') return founding(s) ? routeWalk(o, routeGeo(t.route).points, dst, routeGeo(t.route).from, routeGeo(t.route).to).at(p) : lerp(o, dst, p); // R-14
     return t.style === 'arc' ? arcPoint(o, dst, t.params?.bulge ?? 0, p) : lerp(o, dst, p);
   }
   function prevNonHold(s) { const l = spans.get(s.m); for (let j = s.k - 1; j >= 0; j--) if (l[j].row) return l[j]; return null; } // ≤ 2 steps: holds never abut
@@ -185,7 +185,7 @@ export function makeResolver(db, { rules = 'v0.2+' } = {}) {
   }
 
   // routeGeometry (§9.2 #7, v0.9): read from the host mirror on use; a route edit seeds W-3 for its transition (§9.4)
-  const routeGeo = (rid) => { const r = db.routes?.[rid]; if (!r) throw new Error(`route ${rid} not found (I-R2)`); return r.geometry.points.map((q) => q.at); };
+  const routeGeo = (rid) => { const r = db.routes?.[rid]; if (!r) throw new Error(`route ${rid} not found (I-R2)`); return r.geometry; };
 
   /** batch = { rows:[{before,after}], transitions:[{id,before,after}], shapes:[id], marchers:[{id}], destinations:[transitionId], routes:[routeId] } (§9.4 order). */
   function applyBatch(raw) {

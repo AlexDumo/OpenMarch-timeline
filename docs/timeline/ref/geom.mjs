@@ -107,21 +107,48 @@ export function makeTrail(origins, waypoints, path) {
 }
 
 /**
- * R-14 (v0.9 step 1): the walked path of a founding route span, from A through the route's inner points to B.
- * Written independently of the app's geometry (a linear leg scan instead of a binary search), so the two
- * check each other. Cleaning drops inner points within EPS_GEOM of the last kept vertex, then inner points
- * within EPS_GEOM of B; every leg left is at least EPS_GEOM long unless only [A, B] is left.
+ * R-14 (v0.9 steps 1 and 2): the walked path of a founding route span, from A through the route's inner points to B.
+ * Written independently of the app's geometry (linear scans, its own Catmull–Rom and Bézier code), so the two
+ * check each other. `pts` are the route's points ({at, tension?}); `F`, `G` its from and to (tangent neighbours).
  */
-export function routeWalk(A, inner, B) {
-  const V = [A];
-  for (const P of inner) if (dist(V[V.length - 1], P) >= EPS_GEOM) V.push(P);
-  while (V.length > 1 && dist(V[V.length - 1], B) < EPS_GEOM) V.pop();
-  V.push(B);
-  const D = [0];
-  for (let j = 0; j + 1 < V.length; j++) D.push(D[j] + Math.hypot(V[j + 1][0] - V[j][0], V[j + 1][1] - V[j][1]));
+export function routeWalk(A, pts, B, F = A, G = B) {
+  const V = [A], tau = [0], src = [-1];
+  pts.forEach((q, i) => { if (dist(V[V.length - 1], q.at) >= EPS_GEOM) { V.push(q.at); tau.push(q.tension > 0 ? q.tension : 0); src.push(i); } });
+  while (V.length > 1 && dist(V[V.length - 1], B) < EPS_GEOM) { V.pop(); tau.pop(); src.pop(); }
+  V.push(B); tau.push(0); src.push(-1);
+  const m = V.length - 2;
+  // Tangent neighbours from the route alone: N = [F, P'..., G]; rep[i] is P_i's representative's index in N
+  const N = [F], rep = [];
+  pts.forEach((q, i) => { if (i === 0 || dist(N[N.length - 1], q.at) >= EPS_GEOM) N.push(q.at); rep.push(N.length - 1); });
+  N.push(G);
+  const handle = (k) => {
+    if (!(tau[k] > 0)) return null;
+    const q = V[k], a = N[rep[src[k]] - 1], c = N[rep[src[k]] + 1], t = tau[k];
+    let dax = a[0] - q[0], day = a[1] - q[1], dcx = c[0] - q[0], dcy = c[1] - q[1];
+    let ra = Math.hypot(dax, day), rc = Math.hypot(dcx, dcy);
+    if (ra < EPS_GEOM && rc < EPS_GEOM) return { out: q, in: q };
+    if (ra < EPS_GEOM) { dax = -dcx; day = -dcy; ra = rc; } else if (rc < EPS_GEOM) { dcx = -dax; dcy = -day; rc = ra; }
+    const d1 = Math.sqrt(ra), d2 = Math.sqrt(rc), wo = 3 * d1 * (d1 + d2), wi = 3 * d2 * (d1 + d2);
+    return { out: [q[0] + (t * (ra * dcx - rc * dax)) / wo, q[1] + (t * (ra * dcy - rc * day)) / wo],
+             in: [q[0] + (t * (rc * dax - ra * dcx)) / wi, q[1] + (t * (rc * day - ra * dcy)) / wi] };
+  };
+  const K = 64;
+  const bez = (P0, c1, c2, P3, t) => { const u = 1 - t, k0 = u * u * u, k1 = 3 * u * u * t, k2 = 3 * u * t * t, k3 = t * t * t;
+    return [k0 * P0[0] + k1 * c1[0] + k2 * c2[0] + k3 * P3[0], k0 * P0[1] + k1 * c1[1] + k2 * c2[1] + k3 * P3[1]]; };
+  const pieces = [], D = [0];
+  for (let j = 0; j <= m; j++) {
+    const P0 = V[j], P3 = V[j + 1], h0 = handle(j), h3 = handle(j + 1);
+    if (!h0 && !h3) { pieces.push(null); D.push(D[j] + Math.hypot(P3[0] - P0[0], P3[1] - P0[1])); continue; }
+    const c1 = j === 0 ? [P0[0] + (P3[0] - P0[0]) / 3, P0[1] + (P3[1] - P0[1]) / 3] : h0 ? h0.out : P0;
+    const c2 = j === m ? [P3[0] + (P0[0] - P3[0]) / 3, P3[1] + (P0[1] - P3[1]) / 3] : h3 ? h3.in : P3;
+    const e = [0];
+    for (let i = 1; i <= K; i++) { const a = bez(P0, c1, c2, P3, (i - 1) / K), b = bez(P0, c1, c2, P3, i / K); e.push(e[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+    pieces.push({ c1, c2, e });
+    D.push(D[j] + e[K]);
+  }
   const L = D[D.length - 1];
   return {
-    V, D, L,
+    V, D, L, pieces,
     at(p) {
       if (p <= 0) return A;
       if (p >= 1) return B;
@@ -129,7 +156,12 @@ export function routeWalk(A, inner, B) {
       const d = p * L;
       let j = 0;
       while (j < V.length - 2 && !(d < D[j + 1])) j++;
-      return lerp(V[j], V[j + 1], (d - D[j]) / (D[j + 1] - D[j]));
+      const x = d - D[j], pc = pieces[j];
+      if (!pc) return lerp(V[j], V[j + 1], x / (D[j + 1] - D[j]));
+      let i = 1;
+      while (i <= K && !(x < pc.e[i])) i++;
+      if (i > K) return V[j + 1];
+      return bez(V[j], pc.c1, pc.c2, V[j + 1], (i - 1 + (x - pc.e[i - 1]) / (pc.e[i] - pc.e[i - 1])) / K);
     },
   };
 }

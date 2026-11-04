@@ -269,9 +269,36 @@ export function makeTrail(
     };
 }
 
+/** Samples a cubic route piece is measured on (R-14, the Line's count). */
+export const ROUTE_CUBIC_SAMPLES = 64;
+
+/** An inner point of a route as R-14 reads it: a corner, or smooth with its tension (step 2). */
+export interface RouteVertex {
+    at: XY;
+    /** Roundness in (0, 2]; absent or 0 is a corner */
+    tension?: number;
+}
+
+/** The ends a route was drawn against (spec 5.2 `from`, `to`): R-14's tangent neighbors F and G. */
+export interface RouteEnds {
+    from: XY;
+    to: XY;
+}
+
+/** One piece of a route's walked path, from `V[j]` to `V[j+1]` (R-14). */
+export type RoutePiece =
+    | { kind: "line" }
+    | {
+          kind: "cubic";
+          c1: XY;
+          c2: XY;
+          /** Cumulative sample lengths e_0 … e_K (e_0 = 0, e_K the piece's length) */
+          e: number[];
+      };
+
 /**
- * R-14: a route's cleaned walked path `V` from `A` through the inner points to `B`, with the
- * cumulative distances `D` (D[0] = 0) and the total length `L`. Every leg is at least
+ * R-14: a route's cleaned walked path `V` from `A` through the inner points to `B`, its pieces,
+ * the cumulative distances `D` (D[0] = 0) and the total length `L`. Every leg is at least
  * `EPS_GEOM` long, except when `V = [A, B]`.
  */
 export interface RoutePath {
@@ -280,13 +307,106 @@ export interface RoutePath {
     L: number;
     /** For each vertex of `V`, the index of the inner point it is, or -1 for `A` and `B` */
     source: number[];
+    /** Each vertex's tension: 0 for `A`, `B` and corners */
+    tension: number[];
+    /** Piece j runs from V[j] to V[j+1] */
+    pieces: RoutePiece[];
 }
 
-/** R-14 cleaning and length. */
-export function routePath(A: XY, inner: readonly XY[], B: XY): RoutePath {
+/**
+ * A smooth point's handles (R-14 step 2): centripetal Catmull–Rom through its tangent neighbors
+ * `a` (before) and `c` (after), scaled by `tau` from `q`. `out` points toward the next point, `in`
+ * toward the one before. Every operation in the spec's order, so the oracle agrees bit for bit.
+ */
+export function smoothHandles(
+    a: XY,
+    q: XY,
+    c: XY,
+    tau: number,
+): { out: XY; in: XY } {
+    let dax = a[0] - q[0];
+    let day = a[1] - q[1];
+    let dcx = c[0] - q[0];
+    let dcy = c[1] - q[1];
+    let ra = Math.hypot(dax, day);
+    let rc = Math.hypot(dcx, dcy);
+    if (ra < EPS_GEOM && rc < EPS_GEOM) return { out: q, in: q };
+    if (ra < EPS_GEOM) {
+        dax = -dcx;
+        day = -dcy;
+        ra = rc;
+    } else if (rc < EPS_GEOM) {
+        dcx = -dax;
+        dcy = -day;
+        rc = ra;
+    }
+    const d1 = Math.sqrt(ra);
+    const d2 = Math.sqrt(rc);
+    const wOut = 3 * d1 * (d1 + d2);
+    const wIn = 3 * d2 * (d1 + d2);
+    return {
+        out: [
+            q[0] + (tau * (ra * dcx - rc * dax)) / wOut,
+            q[1] + (tau * (ra * dcy - rc * day)) / wOut,
+        ],
+        in: [
+            q[0] + (tau * (rc * dax - ra * dcx)) / wIn,
+            q[1] + (tau * (rc * day - ra * dcy)) / wIn,
+        ],
+    };
+}
+
+/** A cubic Bézier at `t`, each coordinate summed left to right as R-14 writes it. */
+export function cubicPoint(p0: XY, c1: XY, c2: XY, p3: XY, t: number): XY {
+    const u = 1 - t;
+    const k0 = u * u * u;
+    const k1 = 3 * u * u * t;
+    const k2 = 3 * u * t * t;
+    const k3 = t * t * t;
+    return [
+        k0 * p0[0] + k1 * c1[0] + k2 * c2[0] + k3 * p3[0],
+        k0 * p0[1] + k1 * c1[1] + k2 * c2[1] + k3 * p3[1],
+    ];
+}
+
+/** The cumulative sample lengths of a cubic piece (R-14's declared length). */
+function measureCubic(p0: XY, c1: XY, c2: XY, p3: XY): number[] {
+    const K = ROUTE_CUBIC_SAMPLES;
+    const e = [0];
+    let prev = p0;
+    let total = 0;
+    for (let i = 1; i <= K; i++) {
+        const s = i === K ? p3 : cubicPoint(p0, c1, c2, p3, i / K);
+        total += dist(prev, s);
+        e.push(total);
+        prev = s;
+    }
+    return e;
+}
+
+const innerAt = (q: XY | RouteVertex): XY =>
+    Array.isArray(q) ? (q as XY) : (q as RouteVertex).at;
+const innerTension = (q: XY | RouteVertex): number => {
+    if (Array.isArray(q)) return 0;
+    const t = (q as RouteVertex).tension;
+    return t !== undefined && t > 0 ? t : 0;
+};
+
+/**
+ * R-14 cleaning, tangents, pieces and length. `inner` are the route's points (bare corners, or
+ * `{at, tension}`); `ends` are its `from` and `to`, the tangent neighbors of the first and last
+ * inner points (the real ends when absent, as when a path is drawn).
+ */
+export function routePath(
+    A: XY,
+    inner: readonly (XY | RouteVertex)[],
+    B: XY,
+    ends?: RouteEnds,
+): RoutePath {
     const V: XY[] = [A];
     const source = [-1];
-    inner.forEach((P, i) => {
+    inner.forEach((q, i) => {
+        const P = innerAt(q);
         if (dist(V[V.length - 1]!, P) >= EPS_GEOM) {
             V.push(P);
             source.push(i);
@@ -299,19 +419,86 @@ export function routePath(A: XY, inner: readonly XY[], B: XY): RoutePath {
     }
     V.push(B);
     source.push(-1);
+    const tension = source.map((i) => (i < 0 ? 0 : innerTension(inner[i]!)));
+
+    // Tangent neighbors from the route alone: N = [F, P'..., G], P' the inner points deduped
+    // against the last kept inner point; each inner point is represented by the last kept at or
+    // before it
+    const smooth = tension.some((t) => t > 0);
+    let neighbors: ((i: number) => { a: XY; c: XY }) | null = null;
+    if (smooth) {
+        const N: XY[] = [ends?.from ?? A];
+        const rep: number[] = [];
+        inner.forEach((q, i) => {
+            const P = innerAt(q);
+            if (i === 0 || dist(N[N.length - 1]!, P) >= EPS_GEOM) N.push(P);
+            rep.push(N.length - 1);
+        });
+        N.push(ends?.to ?? B);
+        neighbors = (i) => ({ a: N[rep[i]! - 1]!, c: N[rep[i]! + 1]! });
+    }
+    const handles = V.map((q, k) => {
+        if (!neighbors || tension[k]! <= 0) return null;
+        const { a, c } = neighbors(source[k]!);
+        return smoothHandles(a, q, c, tension[k]!);
+    });
+
+    const m = V.length - 2;
+    const pieces: RoutePiece[] = [];
     const D = [0];
     let total = 0;
     for (let j = 0; j + 1 < V.length; j++) {
-        total += dist(V[j]!, V[j + 1]!);
+        const P0 = V[j]!;
+        const P3 = V[j + 1]!;
+        const h0 = handles[j];
+        const h3 = handles[j + 1];
+        if (!h0 && !h3) {
+            pieces.push({ kind: "line" });
+            total += dist(P0, P3);
+        } else {
+            const c1: XY =
+                j === 0
+                    ? [P0[0] + (P3[0] - P0[0]) / 3, P0[1] + (P3[1] - P0[1]) / 3]
+                    : (h0?.out ?? P0);
+            const c2: XY =
+                j === m
+                    ? [P3[0] + (P0[0] - P3[0]) / 3, P3[1] + (P0[1] - P3[1]) / 3]
+                    : (h3?.in ?? P3);
+            const e = measureCubic(P0, c1, c2, P3);
+            pieces.push({ kind: "cubic", c1, c2, e });
+            total += e[ROUTE_CUBIC_SAMPLES]!;
+        }
         D.push(total);
     }
-    return { V, D, L: total, source };
+    return { V, D, L: total, source, tension, pieces };
+}
+
+/** The point `x` along piece `j` of `path` (0 ≤ x ≤ its length), as R-14 evaluates it. */
+export function routePiecePoint(path: RoutePath, j: number, x: number): XY {
+    const { V, D } = path;
+    const piece = path.pieces[j]!;
+    const P0 = V[j]!;
+    const P3 = V[j + 1]!;
+    if (piece.kind === "line") return lerp(P0, P3, x / (D[j + 1]! - D[j]!));
+    const { e } = piece;
+    const K = ROUTE_CUBIC_SAMPLES;
+    // smallest i in 1..K with x < e[i]
+    let lo = 1;
+    let hi = K + 1;
+    while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (x < e[mid]!) hi = mid;
+        else lo = mid + 1;
+    }
+    if (lo > K) return P3;
+    const f = (x - e[lo - 1]!) / (e[lo]! - e[lo - 1]!);
+    return cubicPoint(P0, piece.c1, piece.c2, P3, (lo - 1 + f) / K);
 }
 
 /**
- * R-14 evaluation at progress `p` along a cleaned path: constant speed along the whole
- * polyline, corners passed without stopping. Endpoints are exact. A path with no inner corner
- * left (`V = [A, B]`) is evaluated as R-7 so it is bit-identical to a direct move (QA-RT-2).
+ * R-14 evaluation at progress `p` along a cleaned path: constant speed along the whole path,
+ * points passed without stopping. Endpoints are exact. A path with no inner point left
+ * (`V = [A, B]`) is evaluated as R-7 so it is bit-identical to a direct move (QA-RT-2).
  */
 export function routePoint(path: RoutePath, p: number): XY {
     const { V, D, L } = path;
@@ -321,7 +508,7 @@ export function routePoint(path: RoutePath, p: number): XY {
     if (p >= 1) return B;
     if (V.length === 2 || L < EPS_GEOM) return lerp(A, B, p);
     const d = p * L;
-    // smallest j with d < D[j+1]; the last leg when rounding finds none
+    // smallest j with d < D[j+1]; the last piece when rounding finds none
     let lo = 0;
     let hi = V.length - 2;
     while (lo < hi) {
@@ -329,8 +516,39 @@ export function routePoint(path: RoutePath, p: number): XY {
         if (d < D[mid + 1]!) hi = mid;
         else lo = mid + 1;
     }
-    const lj = D[lo + 1]! - D[lo]!;
-    return lerp(V[lo]!, V[lo + 1]!, (d - D[lo]!) / lj);
+    return routePiecePoint(path, lo, d - D[lo]!);
+}
+
+/**
+ * Points to draw a route's walked path through: its vertices, and each cubic piece's samples
+ * (the polyline R-14 measures it on).
+ */
+export function routePolyline(path: RoutePath): XY[] {
+    const out: XY[] = [path.V[0]!];
+    path.pieces.forEach((piece, j) => {
+        const P0 = path.V[j]!;
+        const P3 = path.V[j + 1]!;
+        if (piece.kind === "cubic")
+            for (let i = 1; i < ROUTE_CUBIC_SAMPLES; i++)
+                out.push(
+                    cubicPoint(
+                        P0,
+                        piece.c1,
+                        piece.c2,
+                        P3,
+                        i / ROUTE_CUBIC_SAMPLES,
+                    ),
+                );
+        out.push(P3);
+    });
+    return out;
+}
+
+/** What R-14 reads of a route: its points (with tensions) and the ends it was drawn against. */
+export interface RouteWalk {
+    points: readonly RouteVertex[];
+    from: XY;
+    to: XY;
 }
 
 /**
@@ -338,7 +556,7 @@ export function routePoint(path: RoutePath, p: number): XY {
  * that starts at `A` and ends at `B` is at progress `p`. Every direct, arc and route span goes
  * through here, so later path kinds plug into one place.
  *
- * @param route the route's inner points, for a `route` transition
+ * @param route the route, for a `route` transition
  * @param founding whether the span is founding (R-3); a route's join or resume walks straight
  */
 export function walkedPoint(
@@ -346,7 +564,7 @@ export function walkedPoint(
     A: XY,
     B: XY,
     p: number,
-    route: readonly XY[] | undefined,
+    route: RouteWalk | undefined,
     founding: boolean,
 ): XY {
     switch (t.style) {
@@ -355,8 +573,8 @@ export function walkedPoint(
         case "route":
             if (!founding) return lerp(A, B, p); // R-14: joins and resumes walk straight
             if (!route) throw new Error("route transition has no route (I-R2)");
-            if (route.length === 0) return lerp(A, B, p);
-            return routePoint(routePath(A, route, B), p);
+            if (route.points.length === 0) return lerp(A, B, p);
+            return routePoint(routePath(A, route.points, B, route), p);
         default:
             return lerp(A, B, p); // R-7
     }

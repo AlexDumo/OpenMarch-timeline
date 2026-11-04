@@ -37,8 +37,24 @@ export type {
 } from "./types";
 export type { Oracle } from "./oracle";
 export { createResolver } from "./resolver";
-export { routePath, routePoint, walkedPoint, EPS_GEOM } from "./geom";
-export type { RoutePath } from "./geom";
+export {
+    routePath,
+    routePoint,
+    routePiecePoint,
+    routePolyline,
+    smoothHandles,
+    cubicPoint,
+    walkedPoint,
+    EPS_GEOM,
+    ROUTE_CUBIC_SAMPLES,
+} from "./geom";
+export type {
+    RoutePath,
+    RoutePiece,
+    RouteVertex,
+    RouteEnds,
+    RouteWalk,
+} from "./geom";
 export {
     validateShapeGeometry,
     validatePathParams,
@@ -48,6 +64,7 @@ export {
     validateRouteGeometry,
     normalizeStartAngle,
     MAX_ROUTE_POINT_ID_LENGTH,
+    MAX_ROUTE_TENSION,
     COORD_BOUND,
     MAX_ABS_BULGE,
 } from "./validate";
