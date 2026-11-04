@@ -42,7 +42,7 @@ afterEach(() => {
 const bar = () => screen.getByTestId("path-editor");
 
 describe("the path's floating editor", () => {
-    it("while drawing: Remove last corner, Cancel and Finish, as icons and one word, opaque, no emoji, no name", () => {
+    it("while drawing: Remove last point, Cancel and Finish, as icons and one word, opaque, no emoji, no name", () => {
         act(() => startDrawing(target(null), "T4"));
         render(<PathEditor fieldProperties={fieldProperties} />);
         const el = bar();
@@ -58,7 +58,7 @@ describe("the path's floating editor", () => {
         ).not.toBeNull();
         expect(
             screen.getByTestId("path-remove-last").getAttribute("aria-label"),
-        ).toBe("Remove last corner");
+        ).toBe("Remove last point");
         expect(
             screen
                 .getByTestId("path-remove-last")

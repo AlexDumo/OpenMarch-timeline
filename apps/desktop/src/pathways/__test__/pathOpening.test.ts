@@ -4,11 +4,11 @@ import type { FieldPointer } from "@/field/editor/fieldEditor";
 import { setShapeField } from "@/shapes/field/shapeField";
 import { PATH_FIELD_MENU, drawingOf, pathPenMode } from "../pathPenMode";
 import {
-    addCorner,
+    addPoint,
     clearPath,
     closePath,
     openPath,
-    selectCorner,
+    selectPoint,
     showPath,
     startDrawing,
     usePathPenStore,
@@ -128,12 +128,12 @@ describe("closing it", () => {
     it("Escape closes the open path, which stays drawn", () => {
         showPath(target(5), "T4");
         openPath();
-        selectCorner("p0");
+        selectPoint("p0");
         closePath();
         const s = usePathPenStore.getState().session!;
         expect(s.phase).toBe("closed");
         expect(s.selected).toBeNull();
-        expect(s.corners).toHaveLength(1);
+        expect(s.points).toHaveLength(1);
     });
 
     it("stays open while the playhead stays on its move, and closes when it leaves it", () => {
@@ -149,11 +149,11 @@ describe("closing it", () => {
 
     it("a drawing cancelled over a stored path shows that path again, closed; over none, nothing", () => {
         startDrawing(target(5), "T4");
-        addCorner({ x: 1, y: 1 });
+        addPoint({ x: 1, y: 1 });
         closePath();
         const s = usePathPenStore.getState().session!;
         expect(s.phase).toBe("closed");
-        expect(s.corners.map((c) => c.id)).toEqual(["c1"]);
+        expect(s.points.map((c) => c.id)).toEqual(["c1"]);
         startDrawing(target(null), "T4");
         closePath();
         expect(usePathPenStore.getState().session).toBeNull();

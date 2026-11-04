@@ -184,11 +184,7 @@ const onRoute = async (db: DbConnection, m: number, beat: number) => {
     const [route] = (await readRoutes(db)).filter((x) => x.marcherId === m);
     const A = r.explain(m, route!.start).origin;
     const B = r.positionAt(m, route!.end);
-    const path = routePath(
-        A,
-        route!.geometry.points.map((p) => p.at),
-        B,
-    );
+    const path = routePath(A, route!.geometry.points, B, route!.geometry);
     return routePoint(
         path,
         (beat - route!.start) / (route!.end - route!.start),
@@ -755,6 +751,254 @@ describeDbTests("Routes: cut at a count (AP-R7, QA-AP-R3)", (it) => {
             expect((await performUndo(db)).success).toBe(true);
             expect((await snapshot(db)).data).toEqual(original.data);
         });
+});
+
+describeDbTests("Routes with curves (step 2: AP-R1, AP-R7, spec I.5)", (it) => {
+    /** Page 2's route of the first marcher, drawn through `make(A, B)` */
+    const drawn = async (
+        db: DbConnection,
+        make: (A: XY, B: XY) => { at: XY; tension?: number }[],
+    ) => {
+        await convertPagesToTimeline(db);
+        const timeline = await page2(db);
+        const r = await resolverOf(db);
+        const m = r.marcherIds()[0]!;
+        const A = r.positionAt(m, 9);
+        const B = r.positionAt(m, 17);
+        await drawRoute({
+            db,
+            timelineId: timeline.id,
+            marcherId: m,
+            points: make(A, B),
+        });
+        return { timeline, m, A, B };
+    };
+    const along = (A: XY, B: XY, t: number, off: number): XY => {
+        const dx = B[0] - A[0];
+        const dy = B[1] - A[1];
+        const l = Math.hypot(dx, dy) || 1;
+        return [A[0] + dx * t - (dy / l) * off, A[1] + dy * t + (dx / l) * off];
+    };
+
+    it("stores smooth points with their tension and corners without; the marcher walks the curve; roundness 0 is a corner", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { m } = await drawn(db, (A, B) => [
+            { at: along(A, B, 0.25, 30), tension: 1 },
+            { at: along(A, B, 0.5, -30), tension: 0 },
+            { at: along(A, B, 0.75, 30), tension: 1.7 },
+        ]);
+        const [route] = await readRoutes(db);
+        expect(route!.geometry.points.map((p) => p.tension)).toEqual([
+            1,
+            undefined,
+            1.7,
+        ]);
+        expect("tension" in route!.geometry.points[1]!).toBe(false);
+        const r = await resolverOf(db);
+        for (const beat of [9, 10, 11.5, 13, 14.25, 16, 17]) {
+            const want = await onRoute(db, m, beat);
+            const got = r.positionAt(m, beat);
+            expect(Math.abs(got[0] - want[0])).toBeLessThan(1e-9);
+            expect(Math.abs(got[1] - want[1])).toBeLessThan(1e-9);
+        }
+    });
+
+    it("every point edit is one undo step; redo restores the same ids and tensions (QA-UNDO-R2)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { timeline, m } = await drawn(db, (A, B) => [
+            { at: along(A, B, 0.3, 25) },
+            { at: along(A, B, 0.7, -25) },
+        ]);
+        const geometryNow = async () => (await readRoutes(db))[0]!.geometry;
+        const start = await geometryNow();
+        const [a, b] = start.points;
+        const edits: { id?: string; at: XY; tension?: number }[][] = [
+            // Smooth
+            [{ ...a!, tension: 1 }, b!],
+            // Roundness
+            [{ ...a!, tension: 1.6 }, b!],
+            // A point added on a curved leg, smooth
+            [
+                { ...a!, tension: 1.6 },
+                { at: along(start.from, start.to, 0.5, 0), tension: 1.6 },
+                b!,
+            ],
+            // The leg made straight, then the point deleted
+            [{ id: a!.id, at: a!.at }, b!],
+        ];
+        const history: RouteGeometry[] = [start];
+        for (const points of edits) {
+            const undoBefore = (
+                await db.select().from(schema.history_undo).all()
+            ).length;
+            await drawRoute({
+                db,
+                timelineId: timeline.id,
+                marcherId: m,
+                points,
+            });
+            history.push(await geometryNow());
+            const groups = new Set(
+                (await db.select().from(schema.history_undo).all()).map(
+                    (u) => u.history_group,
+                ),
+            );
+            expect(groups.size).toBeGreaterThan(0);
+            expect(
+                (await db.select().from(schema.history_undo).all()).length,
+            ).toBeGreaterThan(undoBefore);
+        }
+        expect(history[3]!.points[1]!.tension).toBe(1.6);
+        for (let i = history.length - 1; i > 0; i--) {
+            expect((await performUndo(db)).success).toBe(true);
+            expect(await geometryNow()).toEqual(history[i - 1]);
+        }
+        for (let i = 1; i < history.length; i++) {
+            expect((await performRedo(db)).success).toBe(true);
+            expect(await geometryNow()).toEqual(history[i]);
+        }
+    });
+
+    it("an edit keeps `from` while the first point stays put, and writes the real start when it moves (QA-AP-R6)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { timeline, m, A } = await drawn(db, (A, B) => [
+            { at: along(A, B, 0.25, 20), tension: 1 },
+            { at: along(A, B, 0.5, -20), tension: 1 },
+            { at: along(A, B, 0.75, 20), tension: 1 },
+        ]);
+        const [route] = await readRoutes(db);
+        expect(route!.geometry.from).toEqual(A);
+        // An earlier edit moved where the marcher starts, as far as the route knows
+        const stale = {
+            ...route!.geometry,
+            from: [A[0] - 7, A[1] + 3] as XY,
+            to: [1, 2] as XY,
+        };
+        await db
+            .update(schema.timeline_routes)
+            .set({ geometry: JSON.stringify(stale) })
+            .where(eq(schema.timeline_routes.id, route!.routeId));
+        const [p1, p2, p3] = stale.points;
+        await drawRoute({
+            db,
+            timelineId: timeline.id,
+            marcherId: m,
+            points: [p1!, { ...p2!, at: [p2!.at[0] + 4, p2!.at[1]] }, p3!],
+        });
+        let now = (await readRoutes(db))[0]!.geometry;
+        expect(now.from).toEqual(stale.from);
+        expect(now.to).toEqual(stale.to);
+        await drawRoute({
+            db,
+            timelineId: timeline.id,
+            marcherId: m,
+            points: [
+                { ...p1!, at: [p1!.at[0] + 2, p1!.at[1]] },
+                now.points[1]!,
+                p3!,
+            ],
+        });
+        now = (await readRoutes(db))[0]!.geometry;
+        expect(now.from).toEqual(A);
+        expect(now.to).toEqual(stale.to);
+    });
+
+    it("cuts on a curve: the marcher is at C at the count, points split with their ids and tensions, the ends kept (QA-AP-R5)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { timeline, m } = await drawn(db, (A, B) => [
+            { at: along(A, B, 0.2, 30), tension: 1 },
+            { at: along(A, B, 0.45, -30), tension: 1.4 },
+            { at: along(A, B, 0.7, 30), tension: 1 },
+            { at: along(A, B, 0.9, -10), tension: 0.6 },
+        ]);
+        const [route] = await readRoutes(db);
+        const before = await resolverOf(db);
+        const C = before.positionAt(m, 12);
+        const path0L = routePath(
+            before.explain(m, 9).origin,
+            route!.geometry.points,
+            before.positionAt(m, 17),
+            route!.geometry,
+        ).L;
+        const original = await snapshot(db);
+        const result = await splitTimelineAtBeat({
+            db,
+            timelineId: timeline.id,
+            beat: 12,
+        });
+        const after = await resolverOf(db);
+        expect(after.positionAt(m, 12)).toEqual(C);
+        const routes = await readRoutes(db);
+        const later = routes.find((r) => r.timelineId === result.after.id)!;
+        const earlier = routes.find((r) => r.timelineId === result.before.id)!;
+        expect(later.routeId).toBe(route!.routeId);
+        expect(earlier.geometry.from).toEqual(route!.geometry.from);
+        expect(earlier.geometry.to).toEqual(C);
+        expect(later.geometry.from).toEqual(C);
+        expect(later.geometry.to).toEqual(route!.geometry.to);
+        expect([...earlier.geometry.points, ...later.geometry.points]).toEqual(
+            route!.geometry.points,
+        );
+        // Both halves start and end where they did; in between the curve is redrawn a little
+        for (const beat of [9, 17])
+            expect(after.positionAt(m, beat)).toEqual(
+                before.positionAt(m, beat),
+            );
+        let drift = 0;
+        for (let b = 9; b <= 17; b += 0.25) {
+            const p = before.positionAt(m, b);
+            const q = after.positionAt(m, b);
+            drift = Math.max(drift, Math.hypot(p[0] - q[0], p[1] - q[1]));
+        }
+        // Small next to the path: about 1% of its length here (5.4 of 531 field units)
+        expect(drift).toBeGreaterThan(0);
+        expect(drift).toBeLessThan(0.02 * path0L);
+        expect((await performUndo(db)).success).toBe(true);
+        expect((await snapshot(db)).data).toEqual(original.data);
+    });
+
+    it("cuts on a straight piece of a curved path with no change in motion (QA-AP-R5, line case)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        // A smooth point and a corner close to A, a long straight leg, a smooth point near B: the
+        // count (3/8 of the way) falls on the straight leg between two corners
+        const { timeline, m } = await drawn(db, (A, B) => [
+            { at: along(A, B, 0.02, 3), tension: 1 },
+            { at: along(A, B, 0.05, 6) },
+            { at: along(A, B, 0.9, 6) },
+            { at: along(A, B, 0.95, 2), tension: 1 },
+        ]);
+        const before = await resolverOf(db);
+        const [route] = await readRoutes(db);
+        const r0 = before;
+        const path = routePath(
+            r0.explain(m, 9).origin,
+            route!.geometry.points,
+            r0.positionAt(m, 17),
+            route!.geometry,
+        );
+        const d = (3 / 8) * path.L;
+        const j = path.D.findIndex((x, k) => k > 0 && d < x) - 1;
+        expect(path.pieces[j]!.kind).toBe("line");
+        const positionsBefore = positions(before, 56);
+        await splitTimelineAtBeat({ db, timelineId: timeline.id, beat: 12 });
+        expectSamePositions(
+            positionsBefore,
+            positions(await resolverOf(db), 56),
+            tolerance(path.L),
+        );
+    });
+
+    const tolerance = (L: number) => 1e-9 + 1e-9 * Math.max(1, L);
 });
 
 /** Keeps the type import used in assertions readable. */

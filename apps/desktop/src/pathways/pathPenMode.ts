@@ -23,7 +23,7 @@ import type { XY } from "@/shapes/types";
 import {
     PATH_MENU,
     clickPathHandle,
-    cornerOf,
+    dragNewPoint,
     dragPathHandle,
     landCorner,
     legOf,
@@ -31,22 +31,29 @@ import {
     pathHandleAt,
     pathHandles,
     pathHonors,
+    pathOutline,
     pathPoints,
-    type PathCorner,
+    pointOf,
+    samePoints,
+    tangentHandle,
+    tangentOf,
+    type PathPoint,
     type PathShape,
 } from "./pathEdit";
 import {
-    addCorner,
+    addPoint,
     cancelDrag,
-    commitCorners,
-    deleteCorner,
-    dragCorners,
+    commitPoints,
+    deletePoint,
+    dragPoints,
+    endNewPoint,
     finishDrawing,
-    insertCorner,
     openPath,
-    removeLastCorner,
-    selectCorner,
+    removeLastPoint,
+    selectPoint,
+    setPointSmooth,
     setPointer,
+    shapeNewPoint,
     shapeOf,
     usePathPenStore,
     type PathSession,
@@ -73,22 +80,26 @@ const MENU_KIND = { menu: PATH_MENU };
 export const PATH_FIELD_MENU = ["editPath", "removePath"] as const;
 
 /**
- * The path pen on the field (pathways step 1), working as the shape tool's Line does:
+ * The path pen on the field (pathways steps 1 and 2), working as the shape tool's Line does:
  *
- * - Drawing: every primary press is a click of the next corner, landed on its release (on the
- *   half-step grid or a field line; off the grid with fine, at 45° from the last with constrain).
- *   A double-click, a click on the last corner or on the end spot, or Enter finishes; a
- *   right-click, Backspace or undo takes the last corner back; Escape cancels.
+ * - Drawing: a click places the next point, a corner, landed on its release (on the half-step
+ *   grid or a field line; off the grid with fine, at 45° from the last with constrain). A
+ *   press-and-drag places a smooth point where it was pressed instead, its roundness following
+ *   the drag along its tangent (in tenths, fine for any), its tangent bar shown while dragging. A
+ *   double-click, a click on the last point or on the end spot, or Enter finishes; a right-click,
+ *   Backspace or undo takes the last point back; Escape cancels.
  * - Closed (the selected marcher's path, shown): the path takes no press, so clicks, drags and
  *   marquees around it are the field's. A double-click on its line opens it (a click there keeps
  *   the selection, so the double-click has a first click); a right-click or long press there opens
  *   the field's menu with Edit path and Remove path.
  * - Open: the path takes only presses on its handles, so the marchers stay selectable. A click on
- *   a corner selects it; a drag moves it (fine off the grid, constrain keeping its direction),
- *   saved on release as one undo step; a click on a leg's midpoint adds a corner there, and a drag
- *   adds one and moves it. A right-click opens a corner's or a leg's menu, and elsewhere on the
- *   line the field's menu with Remove path. A click on empty field changes the selection, which
- *   closes it.
+ *   a point selects it, and a selected smooth point shows its tangent bar, whose ends drag its
+ *   roundness; a double-click on a point swaps corner and smooth; a drag moves a point (fine off
+ *   the grid, constrain keeping its direction), saved on release as one undo step; a click on a
+ *   leg's midpoint adds a point there, and a drag adds one and moves it. A right-click or long
+ *   press opens a point's menu (Corner | Smooth, Roundness, Delete point) or a leg's (Add point
+ *   here, Straight | Curved), and elsewhere on the line the field's menu with Remove path. A click
+ *   on empty field changes the selection, which closes it.
  *
  * The held-roles chip names what a drag reads, from the press, as it does for a shape's handles.
  */
@@ -98,8 +109,10 @@ class PathPenMode implements FieldMode {
         /** The handle pressed on the open path, or null (drawing, or a miss) */
         key: string | null;
         base: PathShape;
-        before: readonly PathCorner[];
+        before: readonly PathPoint[];
         moved: boolean;
+        /** Drawing: where the press landed a point, made smooth once the drag leaves the slop */
+        landed: XY | null;
         /** Where the pointer is, for the chip */
         screen: XY;
         keys: HeldGesture<FieldPointer>;
@@ -134,7 +147,9 @@ class PathPenMode implements FieldMode {
 
     private handleAt(s: PathSession, pointer: Pick<FieldPointer, "field">) {
         const env = envOf();
-        return env ? pathHandleAt(shapeOf(s), pointer.field, env) : null;
+        return env
+            ? pathHandleAt(shapeOf(s), pointer.field, env, s.selected)
+            : null;
     }
 
     /** Whether `pointer` is on the path's line, open or closed */
@@ -174,13 +189,18 @@ class PathPenMode implements FieldMode {
                 screen: () => this.held?.screen ?? pointer.screen,
             },
         );
+        const env = envOf(keys.roles());
         this.held = {
             start: pointer,
             screen: pointer.screen,
             key,
             base,
-            before: s.corners,
+            before: s.points,
             moved: false,
+            landed:
+                s.phase === "drawing" && env
+                    ? landCorner(base, pointer.field, env)
+                    : null,
             keys,
         };
         if (s.phase === "drawing") this.preview(pointer, keys.roles());
@@ -205,17 +225,39 @@ class PathPenMode implements FieldMode {
         const s = this.session;
         if (!p || !s) return;
         if (s.phase === "drawing") {
-            this.preview(pointer, roles);
+            if (p.moved && p.landed) this.shapeNew(p, pointer, roles);
+            else this.preview(pointer, roles);
             return;
         }
         if (p.key === null) return;
         const env = envOf(roles);
         if (!env) return;
-        const corner = cornerOf(p.base, p.key);
-        dragCorners(
+        const point = pointOf(p.base, p.key);
+        const tangent = tangentOf(p.base, p.key);
+        dragPoints(
             dragPathHandle(p.base, p.key, pointer.field, env),
-            corner >= 0 ? corner : legOf(p.base, p.key),
+            point >= 0 ? point : tangent ? tangent.index : legOf(p.base, p.key),
         );
+    }
+
+    /**
+     * While drawing, a press-and-drag: the point lands where it was pressed, smooth, its roundness
+     * following the drag. A press on the last point or the end spot finishes instead (on release).
+     */
+    private shapeNew(
+        p: NonNullable<PathPenMode["held"]>,
+        pointer: FieldPointer,
+        roles: Roles,
+    ) {
+        const env = envOf(roles);
+        const s = this.session;
+        if (!env || !s || !p.landed) return;
+        const placed: PathShape = {
+            ...p.base,
+            points: [...p.base.points, { at: p.landed }],
+        };
+        shapeNewPoint(dragNewPoint(placed, pointer.field, env));
+        setPointer(null);
     }
 
     move(pointer: FieldPointer): void {
@@ -246,6 +288,11 @@ class PathPenMode implements FieldMode {
         const s = this.session;
         if (!p || !s) return;
         if (s.phase === "drawing") {
+            // A press-and-drag placed its smooth point as it went
+            if (p.moved && s.dragging !== null) {
+                endNewPoint();
+                return;
+            }
             this.releaseDrawing(s, pointer, click, roles);
             return;
         }
@@ -253,25 +300,36 @@ class PathPenMode implements FieldMode {
         if (p.moved) {
             // Moved past the slop with nothing dragged (no field yet): nothing to save
             if (s.dragging === null) return;
-            // A midpoint dragged adds its corner, which stays unselected; a corner dragged keeps
-            // the selection only if it was that corner
-            const corner = cornerOf(p.base, p.key);
-            const keep = corner >= 0 && p.key === s.selected;
-            void commitCorners(
-                usePathPenStore.getState().session?.corners ?? p.before,
-                p.before,
-                keep ? s.selected : null,
+            const now = usePathPenStore.getState().session?.points ?? p.before;
+            if (samePoints(now, p.before)) {
+                cancelDrag(p.before);
+                return;
+            }
+            // A midpoint dragged adds its point, which stays unselected; a point dragged keeps
+            // the selection only if it was that point; a tangent bar's end keeps its point
+            const point = pointOf(p.base, p.key);
+            const keep =
+                (point >= 0 && p.key === s.selected) ||
+                tangentOf(p.base, p.key) !== null;
+            void commitPoints(now, p.before, keep ? s.selected : null);
+            return;
+        }
+        const point = pointOf(p.base, p.key);
+        // A double-click on a point swaps corner and smooth, as a Line's does (#557)
+        if (point >= 0 && click?.double && click.ownFirst) {
+            void setPointSmooth(
+                point,
+                !((p.base.points[point]?.tension ?? 0) > 0),
             );
             return;
         }
-        // A click: a midpoint adds a corner there; a corner is selected (its double-click turns it
-        // smooth on a Line, which waits for curves)
+        // A click: a midpoint adds a point there; a point is selected
         const added = clickPathHandle(p.base, p.key);
         if (added) {
-            void commitCorners(added, p.before, null);
+            void commitPoints(added, p.before, null);
             return;
         }
-        if (cornerOf(p.base, p.key) >= 0) selectCorner(p.key);
+        if (point >= 0) selectPoint(p.key);
     }
 
     private releaseDrawing(
@@ -293,26 +351,31 @@ class PathPenMode implements FieldMode {
         const near = (q: XY) =>
             Math.hypot(q.x - pointer.field.x, q.y - pointer.field.y) <=
             env.hitRadius;
-        // On the last corner (a Line's last point), or on the end spot the path goes to
-        if ((s.corners.length > 0 && near(last)) || near(end)) {
+        // On the last point (a Line's last point), or on the end spot the path goes to
+        if ((s.points.length > 0 && near(last)) || near(end)) {
             void finishDrawing();
             return;
         }
         const at = landCorner(shapeOf(s), pointer.field, env);
-        // Landed on the last corner: the same as clicking it
-        const prev = s.corners.at(-1)?.at;
+        // Landed on the last point: the same as clicking it
+        const prev = s.points.at(-1)?.at;
         if (prev && prev.x === at.x && prev.y === at.y) {
             void finishDrawing();
             return;
         }
-        addCorner(at);
+        addPoint(at);
         setPointer(at);
     }
 
     cancel(): void {
         const p = this.held;
         this.endHeld();
-        if (p?.moved && this.session?.phase === "open") cancelDrag(p.before);
+        if (!p?.moved) return;
+        if (this.session?.phase === "open") cancelDrag(p.before);
+        // A lost press-and-drag while drawing takes back the point it was placing
+        else if (this.session?.dragging !== null) {
+            cancelDrag(p.before);
+        }
     }
 
     cursorAt(pointer: FieldPointer): FieldCursor | null {
@@ -333,13 +396,14 @@ class PathPenMode implements FieldMode {
     }
 
     /**
-     * While drawing, a right-click (a Mac's Ctrl-click, a long press) takes the last corner back,
-     * as it does a Line's last point. On the open path, a corner's or a leg's menu.
+     * While drawing, a right-click (a Mac's Ctrl-click, a long press) takes the last point back,
+     * as it does a Line's last point. On the open path, a point's or a leg's menu, as a Line's: a
+     * Corner | Smooth pick keeps the menu open, showing the change.
      */
     openMenu(pointer: FieldPointer): boolean {
         const s = this.session;
         if (!s || s.phase === "closed") return false;
-        if (s.phase === "drawing") return removeLastCorner();
+        if (s.phase === "drawing") return removeLastPoint();
         const handle = this.handleAt(s, pointer);
         return openHandleMenu(
             MENU_KIND,
@@ -351,13 +415,32 @@ class PathPenMode implements FieldMode {
                 const now = usePathPenStore.getState().session;
                 if (!now || now.phase !== "open") return null;
                 const shape = shapeOf(now);
-                const corner = cornerOf(shape, key);
-                const leg = legOf(shape, key);
-                if (value === "delete" && corner >= 0)
-                    void deleteCorner(corner);
-                else if (value === "add" && leg >= 0) void insertCorner(leg);
-                // The menu closes: its entries do one thing each
-                return null;
+                const point = pointOf(shape, key);
+                // Deleting the last point removes the path (AP-R2)
+                if (value === "delete" && point >= 0) {
+                    void deletePoint(point);
+                    return null;
+                }
+                const env = envOf();
+                const picked = env
+                    ? PATH_MENU.pick(shape, 1, key, value, env)
+                    : null;
+                if (!picked) return null;
+                if (!samePoints(picked.params.points, now.points))
+                    void commitPoints(
+                        picked.params.points,
+                        now.points,
+                        picked.selected,
+                    );
+                else if (picked.selected !== undefined)
+                    selectPoint(picked.selected);
+                // Corner | Smooth and Straight | Curved stay open, showing the change; the
+                // others do one thing and close
+                return ["corner", "smooth", "straight", "curved"].includes(
+                    value,
+                )
+                    ? { params: picked.params, n: 1 }
+                    : null;
             },
         );
     }
@@ -413,26 +496,51 @@ export function drawingOf(
         const { target, pointer, selected } = session;
         const drawingNow = session.phase === "drawing";
         const shape = shapeOf(session);
-        const middle = session.corners.map((c) => c.at);
-        const outline = [
-            target.from,
-            ...middle,
-            ...(drawingNow && pointer ? [pointer] : []),
-            target.to,
-        ];
+        const middle = session.points.map((c) => c.at);
+        // While drawing, the next leg runs to where the next point would land, straight
+        const outline =
+            drawingNow && pointer
+                ? [
+                      ...pathOutline({
+                          ...shape,
+                          to: pointer,
+                          ends: { from: shape.from, to: pointer },
+                      }),
+                      target.to,
+                  ]
+                : pathOutline(shape);
+        // While a press-and-drag shapes the point just placed, its tangent bar
+        const shaping =
+            drawingNow && session.dragging !== null
+                ? ([1, -1] as const).flatMap((side) => {
+                      const at = tangentHandle(shape, session.dragging!, side);
+                      return at
+                          ? [{ at, from: middle[session.dragging!]! }]
+                          : [];
+                  })
+                : [];
         const handles = drawingNow
-            ? { handles: middle, addHandles: [], selectedHandles: [] }
+            ? {
+                  handles: middle,
+                  addHandles: [],
+                  selectedHandles: [],
+                  barHandles: shaping,
+              }
             : session.phase === "closed"
               ? { handles: [], addHandles: [], selectedHandles: [] }
               : handleDrawing(
-                    { handles: () => pathHandles(shape) },
+                    {
+                        handles: (_p, _n, sel) =>
+                            pathHandles(shape, sel ?? null),
+                    },
                     shape,
                     1,
                     selected,
                 );
         // The point being placed or dragged: guides where it's on a field line, and where it is
         const moving = drawingNow
-            ? pointer
+            ? (pointer ??
+              (session.dragging === null ? null : middle[session.dragging]!))
             : session.dragging === null
               ? null
               : (middle[session.dragging] ?? null);

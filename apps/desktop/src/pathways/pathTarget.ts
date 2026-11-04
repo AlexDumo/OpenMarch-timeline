@@ -23,8 +23,10 @@ export interface PathTarget {
     to: XY;
     /** The route it walks now, or null for a straight (or arc) move */
     routeId: number | null;
-    /** The route's corners, in walking order (none without a route) */
+    /** The route's points, in walking order, smooth ones with their tension (none without a route) */
     points: readonly RoutePoint[];
+    /** The ends the route was drawn against (its `from` and `to`, R-14's F and G), or null */
+    ends: { from: XY; to: XY } | null;
 }
 
 const xy = (p: readonly [number, number]): XY => ({ x: p[0], y: p[1] });
@@ -77,5 +79,8 @@ export async function findPathTarget(
         to: xy(resolver.positionAt(marcherId, transition.end_beat)),
         routeId: transition.route_id,
         points: route?.geometry.points ?? [],
+        ends: route
+            ? { from: xy(route.geometry.from), to: xy(route.geometry.to) }
+            : null,
     };
 }
