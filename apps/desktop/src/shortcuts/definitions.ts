@@ -12,6 +12,7 @@ export type ActionCategory =
     | "cursor"
     | "select"
     | "shape"
+    | "path"
     | "timeline";
 export type ActionArgs = Readonly<Record<string, string | number | boolean>>;
 
@@ -894,7 +895,7 @@ const STATIC_ACTIONS = {
     pathPen: {
         labelKey: "actions.path.pen",
         keywordsKey: "actions.path.keywords",
-        category: "shape",
+        category: "path",
         editsDrill: true,
         scope: "canvas",
         defaultBindings: ["P"],
@@ -904,7 +905,7 @@ const STATIC_ACTIONS = {
     removePath: {
         labelKey: "actions.path.remove",
         keywordsKey: "actions.path.keywords",
-        category: "shape",
+        category: "path",
         editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Shift+Backspace"],

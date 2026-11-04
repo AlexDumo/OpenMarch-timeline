@@ -6,6 +6,7 @@ import {
     ArrowUUpLeftIcon,
     CursorIcon,
     FileIcon,
+    PenNibIcon,
     PlayIcon,
     SelectionAllIcon,
     ShapesIcon,
@@ -43,6 +44,7 @@ const CATEGORY_ICONS: Record<ActionCategory, Icon> = {
     select: SelectionAllIcon,
     cursor: CursorIcon,
     shape: ShapesIcon,
+    path: PenNibIcon,
     ui: SidebarSimpleIcon,
     timeline: WaveformIcon,
 };
@@ -51,6 +53,7 @@ const CATEGORY_ICONS: Record<ActionCategory, Icon> = {
 const PALETTE_CATEGORY_ORDER: readonly ActionCategory[] = [
     "cursor",
     "shape",
+    "path",
     "alignment",
     "select",
     "batchEdit",

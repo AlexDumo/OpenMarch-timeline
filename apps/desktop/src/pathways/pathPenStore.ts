@@ -5,12 +5,14 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import tolgee from "@/global/singletons/Tolgee";
 import type { XY } from "@/shapes/types";
 import type { PathTarget } from "./pathTarget";
+import {
+    cornerKey,
+    splitLeg,
+    type PathCorner,
+    type PathShape,
+} from "./pathEdit";
 
-/** A corner as the pen holds it: a stored corner keeps its `id`, a new one has none yet. */
-export interface PathCorner {
-    readonly id?: string;
-    readonly at: XY;
-}
+export type { PathCorner } from "./pathEdit";
 
 /**
  * The pen's session (pathways step 1): a path being drawn for one marcher (`drawing`), or one
@@ -20,14 +22,17 @@ export interface PathCorner {
 export interface PathSession {
     readonly phase: "drawing" | "open";
     readonly target: PathTarget;
-    /** The marcher's drill number, as the banner and the editor name it */
+    /** The marcher's drill number, as the drawing banner names it */
     readonly drill: string;
     readonly corners: readonly PathCorner[];
-    /** Where the pointer is while drawing, for the leg to it */
+    /**
+     * While drawing, where a click now would put the next corner, landed as a Line's next point
+     * is: the preview's leg goes there
+     */
     readonly pointer: XY | null;
-    /** The corner a click picked (open), which Backspace deletes */
-    readonly selected: number | null;
-    /** The corner being dragged */
+    /** The corner's handle a click picked (open, `p<i>`), which Backspace deletes */
+    readonly selected: string | null;
+    /** The corner being dragged (the corners shown are the drag's, not yet saved), or null */
     readonly dragging: number | null;
 }
 
@@ -40,16 +45,29 @@ interface PathPenState {
      * move changes
      */
     dismissed: string | null;
+    /**
+     * Counts the saves: the open path reads its move again after each, so a path just finished
+     * learns its route (and Remove path shows) even when the timeline caught up during the save
+     */
+    saved: number;
 }
 
 export const usePathPenStore = create<PathPenState>(() => ({
     session: null,
     saving: false,
     dismissed: null,
+    saved: 0,
 }));
 
 export const pathKey = (t: Pick<PathTarget, "timelineId" | "marcherId">) =>
     `${t.timelineId}:${t.marcherId}`;
+
+/** The session's path as the handles work on it */
+export const shapeOf = (s: PathSession): PathShape => ({
+    from: s.target.from,
+    to: s.target.to,
+    corners: s.corners,
+});
 
 const update = (fn: (s: PathSession) => PathSession) => {
     const { session } = usePathPenStore.getState();
@@ -72,19 +90,30 @@ export function startDrawing(target: PathTarget, drill: string): void {
     });
 }
 
-/** Opens `target`'s stored path on the field, or refreshes it after a save. */
+/** Opens `target`'s stored path on the field, or refreshes it after a save, keeping the selection */
 export function openPath(target: PathTarget, drill: string): void {
+    const { session } = usePathPenStore.getState();
+    const corners = target.points.map((p) => ({
+        id: p.id,
+        at: { x: p.at[0], y: p.at[1] },
+    }));
+    const same =
+        session?.phase === "open" &&
+        pathKey(session.target) === pathKey(target);
+    const kept =
+        same && session.selected !== null
+            ? Number(session.selected.slice(1)) < corners.length
+                ? session.selected
+                : null
+            : null;
     usePathPenStore.setState({
         session: {
             phase: "open",
             target,
             drill,
-            corners: target.points.map((p) => ({
-                id: p.id,
-                at: { x: p.at[0], y: p.at[1] },
-            })),
+            corners,
             pointer: null,
-            selected: null,
+            selected: kept,
             dragging: null,
         },
     });
@@ -109,29 +138,36 @@ export function addCorner(at: XY): void {
     update((s) => ({ ...s, corners: [...s.corners, { at }] }));
 }
 
-/** Takes the last corner back while drawing; false when there is none. */
+/** Takes the last corner back while drawing; false when not drawing. */
 export function removeLastCorner(): boolean {
     const { session } = usePathPenStore.getState();
-    if (!session || session.phase !== "drawing" || session.corners.length === 0)
-        return false;
-    update((s) => ({ ...s, corners: s.corners.slice(0, -1) }));
+    if (!session || session.phase !== "drawing") return false;
+    if (session.corners.length > 0)
+        update((s) => ({ ...s, corners: s.corners.slice(0, -1) }));
     return true;
 }
 
 export function setPointer(pointer: XY | null): void {
+    const { session } = usePathPenStore.getState();
+    const was = session?.pointer ?? null;
+    if (
+        was === pointer ||
+        (was && pointer && was.x === pointer.x && was.y === pointer.y)
+    )
+        return;
     update((s) => ({ ...s, pointer }));
 }
 
-export function selectCorner(index: number | null): void {
-    update((s) => ({ ...s, selected: index }));
+export function selectCorner(key: string | null): void {
+    update((s) => (s.selected === key ? s : { ...s, selected: key }));
 }
 
-export function dragCorner(index: number, at: XY): void {
-    update((s) => ({
-        ...s,
-        dragging: index,
-        corners: s.corners.map((c, i) => (i === index ? { ...c, at } : c)),
-    }));
+/** The corners as a drag has them, shown live and saved on release ({@link commitCorners}) */
+export function dragCorners(
+    corners: readonly PathCorner[],
+    index: number,
+): void {
+    update((s) => ({ ...s, dragging: index, corners }));
 }
 
 /** A drag that was lost puts the corners back. */
@@ -139,7 +175,7 @@ export function cancelDrag(before: readonly PathCorner[]): void {
     update((s) => ({ ...s, dragging: null, corners: before }));
 }
 
-/** Writes `corners` as the session's path (AP-R1), then opens it as stored. */
+/** Writes `corners` as the session's path (AP-R1). */
 async function save(corners: readonly PathCorner[]): Promise<boolean> {
     const { session, saving } = usePathPenStore.getState();
     if (!session || saving) return false;
@@ -167,50 +203,78 @@ async function save(corners: readonly PathCorner[]): Promise<boolean> {
 }
 
 /**
- * Enter: the path drawn so far becomes the marcher's (AP-R1). The pen closes; the stored path
- * opens again once the timeline has it (`usePathPen`).
+ * Enter, a double-click or a click on the last corner: the path drawn so far becomes the marcher's
+ * (AP-R1). With no corner placed it's the same as Escape, as a Line with too few points is. The
+ * stored path opens again once the timeline has it (`usePathPen`).
  */
 export async function finishDrawing(): Promise<void> {
     const { session } = usePathPenStore.getState();
     if (!session || session.phase !== "drawing") return;
-    // No corner placed: nothing to keep, the move stays as it was
     if (session.corners.length === 0) {
         closePath();
         return;
     }
     const ok = await save(session.corners);
     if (ok)
-        usePathPenStore.setState({
+        usePathPenStore.setState((state) => ({
             session: { ...session, phase: "open", pointer: null },
-        });
+            saved: state.saved + 1,
+        }));
     else closePath();
 }
 
-/** A dragged corner let go on an open path: saved with every corner's id (AP-R1). */
-export async function commitDrag(before: readonly PathCorner[]): Promise<void> {
+/**
+ * The open path's corners changed by a drag, a click on a midpoint or a menu: saved with every
+ * corner's id (AP-R1), one undo step, the corners as they were when it fails. `selected` is the
+ * corner selected after it, when that changes.
+ */
+export async function commitCorners(
+    corners: readonly PathCorner[],
+    before: readonly PathCorner[],
+    selected?: string | null,
+): Promise<void> {
     const { session } = usePathPenStore.getState();
-    if (!session) return;
-    update((s) => ({ ...s, dragging: null }));
-    if (session.phase === "drawing") return;
-    if (!(await save(session.corners))) cancelDrag(before);
+    if (!session || session.phase !== "open") return;
+    update((s) => ({
+        ...s,
+        dragging: null,
+        corners,
+        ...(selected === undefined ? {} : { selected }),
+    }));
+    if (await save(corners))
+        usePathPenStore.setState((state) => ({ saved: state.saved + 1 }));
+    else cancelDrag(before);
 }
 
-/** Deletes corner `index` of the open path (AP-R1 without it). */
+/** A new corner in the middle of leg `leg` of the open path, selected (a Line's Add point here) */
+export async function insertCorner(leg: number): Promise<void> {
+    const { session } = usePathPenStore.getState();
+    if (!session || session.phase !== "open") return;
+    await commitCorners(
+        splitLeg(shapeOf(session), leg),
+        session.corners,
+        cornerKey(leg),
+    );
+}
+
+/**
+ * Deletes corner `index`. On the open path that's AP-R1 without it, one undo step; its last corner
+ * removes the path instead (AP-R2), so no path with no corner is left behind. While drawing, the
+ * corner just goes.
+ */
 export async function deleteCorner(index: number): Promise<void> {
     const { session } = usePathPenStore.getState();
     if (!session || !session.corners[index]) return;
+    const corners = session.corners.filter((_, i) => i !== index);
     if (session.phase === "drawing") {
-        update((s) => ({
-            ...s,
-            selected: null,
-            corners: s.corners.filter((_, i) => i !== index),
-        }));
+        update((s) => ({ ...s, selected: null, corners }));
         return;
     }
-    const corners = session.corners.filter((_, i) => i !== index);
-    update((s) => ({ ...s, selected: null, corners }));
-    if (!(await save(corners)))
-        update((s) => ({ ...s, corners: session.corners }));
+    if (corners.length === 0) {
+        await removeOpenPath();
+        return;
+    }
+    await commitCorners(corners, session.corners, null);
 }
 
 /** Remove path (AP-R2): the move goes straight again, one undo step. */

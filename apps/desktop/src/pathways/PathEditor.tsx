@@ -1,16 +1,28 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { T } from "@tolgee/react";
-import { PathIcon, XIcon } from "@phosphor-icons/react";
-import { getButtonClassName } from "@openmarch/ui";
+import {
+    BackspaceIcon,
+    TrashIcon,
+    WarningIcon,
+    XIcon,
+} from "@phosphor-icons/react";
 import { routePath, type FieldProperties } from "@openmarch/core";
 import tolgee from "@/global/singletons/Tolgee";
-import ActionButton from "@/shortcuts/ActionButton";
 import Shortcut from "@/components/ui/Shortcut";
-import { Tip } from "@/components/ui/Tip";
+import { RichTips, Tip } from "@/components/ui/Tip";
+import { runAction } from "@/shortcuts/registry";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
+import { getActionShortcutKeys } from "@/shortcuts/labels";
 import { StepSize } from "@/global/classes/StepSize";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
 import { editorPlacement } from "@/shapes/editor/editorPlacement";
+import {
+    Divider,
+    EDITOR_BAR,
+    EditorButton,
+    IconButton,
+} from "@/shapes/editor/EditorBarParts";
 import type { XY } from "@/shapes/types";
 import { usePathPenStore, type PathSession } from "./pathPenStore";
 
@@ -45,20 +57,13 @@ export function bigSteps(
     };
 }
 
-const BAR =
-    "rounded-6 border-stroke bg-modal text-body text-text shadow-modal absolute z-10 flex items-center gap-8 border px-8 py-6";
-const BUTTON = clsx(
-    getButtonClassName({ variant: "secondary", size: "compact" }),
-    "flex items-center gap-6",
-);
-
 /**
- * The path pen's banner and floating editor (pathways step 1; implementation plan, "Where a path is
- * edited"). While drawing, a banner over the field says who the pen draws for and how it works.
- * Beside the path, while drawing or with it open, a small editor holds who the path is for, the
- * amber Big steps advice and the path's commands: Finish, Remove last corner and Cancel while
- * drawing (a finger has no Enter key), Remove path once it's stored. Each is a registered command,
- * with its shortcut shown.
+ * The path pen's hint and floating editor (pathways step 1). While drawing, a hint over the field
+ * says how the pen works, as the shape tool's hint does while a Line's points are clicked. Beside
+ * the path, while drawing or with it open, the editor: the shape editor's bar and controls
+ * (`EditorBarParts`), holding only what a path needs. The Big steps advice when it applies;
+ * Remove last corner, Cancel and Finish while drawing (a finger has no Enter key); Remove path once
+ * it's stored. Each control runs a registered command, its name and shortcut in its tooltip.
  */
 export function PathEditor({
     fieldProperties,
@@ -70,30 +75,44 @@ export function PathEditor({
     return (
         <>
             {session.phase === "drawing" && <PathPenBanner session={session} />}
-            <PathEditorBar
-                session={session}
-                fieldProperties={fieldProperties}
-            />
+            <RichTips>
+                <PathEditorBar
+                    session={session}
+                    fieldProperties={fieldProperties}
+                />
+            </RichTips>
         </>
     );
 }
 
+/** While drawing: who it's for and the Line's ways to go on, the keys as keycaps */
 function PathPenBanner({ session }: { session: PathSession }) {
+    const overrides = useShortcutOverridesStore((s) => s.overrides);
+    const keys = getActionShortcutKeys("shapeRemoveLastPoint", { overrides });
+    const esc = () => <Shortcut action="cancelAlignmentUpdates" />;
     return (
         <div
-            className="rounded-6 border-stroke bg-modal text-body text-text shadow-modal pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 border px-12 py-6"
+            className="rounded-6 border-stroke bg-bg-1 bg-modal text-body text-text shadow-modal pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 border px-12 py-6"
             data-testid="path-pen-banner"
         >
-            <T
-                keyName="pathways.banner.drawing"
-                defaultValue="Path pen · {marcher}: click to place corners from where it starts to its end spot · <finish></finish> finishes · <undo></undo> takes back the last · <cancel></cancel> cancels"
-                params={{
-                    marcher: session.drill,
-                    finish: () => <Shortcut action="applyShape" />,
-                    undo: () => <Shortcut action="shapeRemoveLastPoint" />,
-                    cancel: () => <Shortcut action="cancelAlignmentUpdates" />,
-                }}
-            />
+            {/* With the key unbound, only the right-click is said */}
+            {keys ? (
+                <T
+                    keyName="pathways.banner.drawingFor"
+                    defaultValue="{marcher}'s path: click to place corners · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel"
+                    params={{
+                        marcher: session.drill,
+                        keys: () => <Shortcut action="shapeRemoveLastPoint" />,
+                        esc,
+                    }}
+                />
+            ) : (
+                <T
+                    keyName="pathways.banner.drawingForClick"
+                    defaultValue="{marcher}'s path: click to place corners · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
+                    params={{ marcher: session.drill, esc }}
+                />
+            )}
         </div>
     );
 }
@@ -149,112 +168,85 @@ function PathEditorBar({
     const big = bigSteps(session, fieldProperties);
     const drawing = session.phase === "drawing";
     const stored = session.target.routeId !== null;
-
+    // An open path is always a stored one, so the bar always holds a control
+    const controls = drawing || stored;
     return (
         <div
             ref={ref}
-            className={BAR}
+            className={clsx(
+                EDITOR_BAR,
+                "text-sub text-text absolute z-10 gap-6 whitespace-nowrap",
+            )}
             style={{ left: place.left, top: place.top }}
             data-testid="path-editor"
             data-phase={session.phase}
+            onPointerDown={(e) => e.stopPropagation()}
         >
-            <span
-                className="text-text flex items-center gap-4 whitespace-nowrap"
-                data-testid="path-editor-who"
-            >
-                <PathIcon size={16} weight="bold" aria-hidden />
-                {tolgee.t("pathways.editor.for", "Path · {marcher}", {
-                    marcher: session.drill,
-                })}
-            </span>
             {big && (
                 <Tip
                     label={tolgee.t(
-                        "pathways.editor.bigStepsTip",
-                        "Every leg has this step size. Lengthen the move, or move or take out corners to shorten the path.",
+                        "pathways.editor.bigStepsTipInches",
+                        "{inches} in a step, on every leg. Lengthen the move, or move or take out corners to shorten the path.",
+                        { inches: big.inches },
                     )}
                 >
                     <span
-                        className="border-yellow bg-yellow/20 text-text rounded-full border px-8 py-1 text-[12px] whitespace-nowrap"
+                        className="text-yellow flex items-center gap-4 px-4"
                         data-testid="path-big-steps"
                     >
+                        <WarningIcon size={14} weight="bold" aria-hidden />
                         {tolgee.t(
-                            "pathways.editor.bigSteps",
-                            "Big steps · {steps} ({inches} in)",
-                            { steps: big.steps, inches: big.inches },
+                            "pathways.editor.bigStepsShort",
+                            "Big steps · {steps}",
+                            { steps: big.steps },
                         )}
                     </span>
                 </Tip>
             )}
-            <span aria-hidden className="bg-stroke h-20 w-px" />
+            {big && controls && <Divider />}
             {drawing ? (
                 <>
-                    <ActionButton
-                        action="applyShape"
-                        className={BUTTON}
-                        data-testid="path-finish"
+                    <span className="flex items-center gap-2">
+                        <IconButton
+                            label={tolgee.t(
+                                "pathways.editor.removeLast",
+                                "Remove last corner",
+                            )}
+                            action="shapeRemoveLastPoint"
+                            disabled={session.corners.length === 0}
+                            onClick={() => runAction("shapeRemoveLastPoint")}
+                            testId="path-remove-last"
+                        >
+                            <BackspaceIcon size={14} />
+                        </IconButton>
+                        <IconButton
+                            label={tolgee.t("pathways.editor.cancel", "Cancel")}
+                            action="cancelAlignmentUpdates"
+                            onClick={() => runAction("cancelAlignmentUpdates")}
+                            testId="path-cancel"
+                        >
+                            <XIcon size={14} />
+                        </IconButton>
+                    </span>
+                    <Divider />
+                    <EditorButton
+                        onClick={() => runAction("applyShape")}
+                        testId="path-finish"
                     >
                         {tolgee.t("pathways.editor.finish", "Finish")}
-                        <Shortcut action="applyShape" />
-                    </ActionButton>
-                    <ActionButton
-                        action="shapeRemoveLastPoint"
-                        className={BUTTON}
-                        disabled={session.corners.length === 0}
-                        data-testid="path-remove-last"
-                    >
-                        {tolgee.t(
-                            "pathways.editor.removeLast",
-                            "Remove last corner",
-                        )}
-                        <Shortcut action="shapeRemoveLastPoint" />
-                    </ActionButton>
-                    <ActionButton
-                        action="cancelAlignmentUpdates"
-                        className={BUTTON}
-                        data-testid="path-cancel"
-                    >
-                        {tolgee.t("pathways.editor.cancel", "Cancel")}
-                        <Shortcut action="cancelAlignmentUpdates" />
-                    </ActionButton>
+                    </EditorButton>
                 </>
             ) : (
-                <>
-                    {session.selected !== null && (
-                        <ActionButton
-                            action="shapeRemoveLastPoint"
-                            className={BUTTON}
-                            data-testid="path-delete-corner"
-                        >
-                            {tolgee.t(
-                                "pathways.editor.deleteCorner",
-                                "Delete corner",
-                            )}
-                            <Shortcut action="shapeRemoveLastPoint" />
-                        </ActionButton>
-                    )}
-                    {stored && (
-                        <ActionButton
-                            action="removePath"
-                            className={BUTTON}
-                            data-testid="path-remove"
-                        >
-                            {tolgee.t("actions.path.remove", "Remove path")}
-                            <Shortcut action="removePath" />
-                        </ActionButton>
-                    )}
-                    <ActionButton
-                        action="cancelAlignmentUpdates"
-                        className="text-text-subtitle hover:text-text flex items-center"
-                        aria-label={tolgee.t(
-                            "actions.path.close",
-                            "Close path",
-                        )}
-                        data-testid="path-close"
+                stored && (
+                    <IconButton
+                        label={tolgee.t("actions.path.remove", "Remove path")}
+                        action="removePath"
+                        onClick={() => runAction("removePath")}
+                        testId="path-remove"
                     >
-                        <XIcon size={16} />
-                    </ActionButton>
-                </>
+                        <TrashIcon size={14} />
+                    </IconButton>
+                )
             )}
         </div>
     );

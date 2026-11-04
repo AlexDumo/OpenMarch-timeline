@@ -26,10 +26,11 @@ export const closeHandleMenu = (): void =>
  * Opens the menu of the handle a right-click at `at` landed on, when it's a handle whose kind has
  * one (`ToolKind.menu`); says whether it did. `pick` applies an entry picked to handle `key` and
  * returns the shape after it, so a menu that stays open (a segmented either/or, #568) shows the
- * change; it closes when the handle has no menu any more.
+ * change; it closes when the handle has no menu any more. A path's corners and legs open theirs
+ * through here too (pathways), so only `menu` is read.
  */
 export function openHandleMenu(
-    kind: AnyToolKind,
+    kind: Pick<AnyToolKind, "menu">,
     params: unknown,
     n: number,
     target: ShapeTarget | { type: "draw" } | null,

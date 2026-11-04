@@ -18,7 +18,6 @@ import { useShapeShown, useShapeToolStore } from "./shapeToolStore";
 import { useStarredShapes } from "./starredShapes";
 import ShapePreviewIcon from "../preview/ShapePreviewIcon";
 import { Tip } from "@/components/ui/Tip";
-import { PathPenButton } from "@/pathways/PathPenButton";
 
 /** Shapes show as pictures only, so many fit (#378): the name is the tooltip and the label */
 const PREVIEW_SIZE = 26;
@@ -162,8 +161,6 @@ export default function ShapesTab() {
                     </button>
                 </Tip>
             </ToolbarSection>
-            {/* Pathways step 1: the Path pen draws one marcher's path (ADR 0010) */}
-            <PathPenButton performers={performers.length} />
             {/* The ring has no button, so the tab says how to open it (sims, ring round 1) */}
             {hasRingKey && (
                 <span

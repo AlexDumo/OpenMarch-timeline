@@ -186,7 +186,8 @@
             "removeLastCorner": "Remove last corner",
             "cancel": "Cancel path",
             "deleteCorner": "Delete corner",
-            "close": "Close path"
+            "close": "Close path",
+            "deselect": "Deselect corner"
         }
     },
     "analyticsOptIn": {
@@ -2123,6 +2124,7 @@
         "shortcuts.category.playback": "Playback",
         "shortcuts.category.select": "Selection",
         "shortcuts.category.shape": "Shapes",
+        "shortcuts.category.path": "Paths",
         "shortcuts.category.timeline": "Timeline",
         "shortcuts.category.ui": "Interface",
         "shortcuts.description": "Change the keys for any action. Changes apply right away.",
@@ -3400,7 +3402,8 @@
             "shapesAlways": "Always",
             "shapesOff": "Off",
             "shapesSelected": "When selected"
-        }
+        },
+        "pathsTab": "Paths"
     },
     "versionCheck": {
         "error": {
@@ -4186,7 +4189,8 @@
             "select": "Selection",
             "shape": "Shapes",
             "timeline": "Timeline",
-            "ui": "View"
+            "ui": "View",
+            "path": "Paths"
         }
     },
     "shortcut": {
@@ -4325,20 +4329,16 @@
         "undefined": "Undefined"
     },
     "pathways": {
-        "banner": {
-            "drawing": "Path pen · {marcher}: click to place corners from where it starts to its end spot · <finish></finish> finishes · <undo></undo> takes back the last · <cancel></cancel> cancels"
-        },
         "editor": {
-            "for": "Path · {marcher}",
-            "bigSteps": "Big steps · {steps} ({inches} in)",
-            "bigStepsTip": "Every leg has this step size. Lengthen the move, or move or take out corners to shorten the path.",
             "finish": "Finish",
             "removeLast": "Remove last corner",
             "cancel": "Cancel",
-            "deleteCorner": "Delete corner"
+            "bigStepsShort": "Big steps · {steps}",
+            "bigStepsTipInches": "{inches} in a step, on every leg. Lengthen the move, or move or take out corners to shorten the path."
         },
         "menu": {
-            "deleteCorner": "Delete corner"
+            "deleteCorner": "Delete corner",
+            "addCorner": "Add corner here"
         },
         "errors": {
             "save": "Couldn't save the path",
@@ -4349,6 +4349,10 @@
             "oneMarcher": "One marcher for now: select just one to draw its path",
             "playing": "Stop playback to draw a path",
             "selectOne": "Select a marcher to draw a path for"
+        },
+        "banner": {
+            "drawingFor": "{marcher}'s path: click to place corners · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel",
+            "drawingForClick": "{marcher}'s path: click to place corners · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
         },
         "toolbar": {
             "path": "Path"

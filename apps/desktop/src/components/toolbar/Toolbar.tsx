@@ -3,6 +3,7 @@ import { FileTab } from "./tabs/FileTab";
 import { CollisionsTab } from "./tabs/CollisionsTab";
 import AlignmentTab from "./tabs/AlignmentTab";
 import ShapesTab from "@/shapes/tool/ShapesTab";
+import PathsTab from "@/pathways/PathsTab";
 import { useEffect, useState } from "react";
 import { T } from "@tolgee/react";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
@@ -72,6 +73,13 @@ export default function Topbar() {
                         >
                             <T keyName="inspector.shape.shapesTab" />
                         </TabItem>
+                        {/* Pathways: how a marcher walks its move, apart from shapes */}
+                        <TabItem value="paths" data-testid="toolbar-paths-tab">
+                            <T
+                                keyName="toolbar.pathsTab"
+                                defaultValue="Paths"
+                            />
+                        </TabItem>
 
                         <TabItem value="select">
                             <T keyName="inspector.shape.selectTab" />
@@ -100,6 +108,10 @@ export default function Topbar() {
 
                     <TabContent value="shapes">
                         <ShapesTab />
+                    </TabContent>
+
+                    <TabContent value="paths">
+                        <PathsTab />
                     </TabContent>
 
                     <TabContent value="select">

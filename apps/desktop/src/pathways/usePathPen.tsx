@@ -21,6 +21,7 @@ import {
     pathKey,
     removeLastCorner,
     removeOpenPath,
+    selectCorner,
     startDrawing,
     usePathPenStore,
 } from "./pathPenStore";
@@ -55,6 +56,7 @@ export function usePathPenActions(): void {
     const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
     const version = useTimelineResolverStore((s) => s.version);
     const ready = useTimelineResolverStore((s) => s.status === "ready");
+    const saved = usePathPenStore((s) => s.saved);
 
     useActionHandler("pathPen", () => {
         const refusal = penRefusal(performers.length);
@@ -131,7 +133,7 @@ export function usePathPenActions(): void {
                 openPath(target, one.drill_number);
             },
         );
-    }, [one, playheadBeat, version, ready, isPlaying]);
+    }, [one, playheadBeat, version, ready, isPlaying, saved]);
 
     // A new selection forgets an Escape
     useEffect(() => {
@@ -141,11 +143,13 @@ export function usePathPenActions(): void {
 
 /**
  * The keys the pen takes over while it draws or a path is open, mounted after the editor's own
- * handlers (as the shape tool's are), so they sit on top and go back when the pen closes.
+ * handlers (as the shape tool's are), so they sit on top and go back when the pen closes. They are
+ * the Line's keys (`ShapeToolKeys`):
  *
  * - Drawing: Enter (applyShape) finishes, Backspace or Delete (shapeRemoveLastPoint) and undo take
  *   the last corner back, Escape (cancelAlignmentUpdates) cancels.
- * - Open: Escape closes it, Backspace deletes the picked corner, Shift+Backspace removes the path.
+ * - Open: Escape clears the selected corner, then closes the path; Backspace deletes the selected
+ *   corner (its last removes the path); Shift+Backspace removes the path.
  */
 export function PathPenKeys(): null {
     const phase = usePathPenStore((s) => s.session?.phase ?? null);
@@ -154,11 +158,20 @@ export function PathPenKeys(): null {
         (s) => (s.session?.target.routeId ?? null) !== null,
     );
     const drawing = phase === "drawing";
-    useActionHandler("cancelAlignmentUpdates", () => closePath(!drawing), {
-        label: drawing
-            ? tolgee.t("actions.path.cancel", "Cancel path")
-            : tolgee.t("actions.path.close", "Close path"),
-    });
+    useActionHandler(
+        "cancelAlignmentUpdates",
+        () => {
+            if (!drawing && picked !== null) selectCorner(null);
+            else closePath(!drawing);
+        },
+        {
+            label: drawing
+                ? tolgee.t("actions.path.cancel", "Cancel path")
+                : picked !== null
+                  ? tolgee.t("actions.path.deselect", "Deselect corner")
+                  : tolgee.t("actions.path.close", "Close path"),
+        },
+    );
     useActionHandler(
         "applyShape",
         () => void finishDrawing(),
@@ -171,7 +184,10 @@ export function PathPenKeys(): null {
         "shapeRemoveLastPoint",
         () => {
             if (drawing) removeLastCorner();
-            else if (picked !== null) void deleteCorner(picked);
+            else if (picked !== null) {
+                const index = Number(picked.slice(1));
+                if (Number.isInteger(index)) void deleteCorner(index);
+            }
         },
         {
             label: drawing
@@ -183,11 +199,14 @@ export function PathPenKeys(): null {
         },
         drawing || picked !== null,
     );
-    // While drawing, undo takes corners back first, as the shape tool's points do
+    // While drawing, undo takes corners back first, as a Line's points are; with none left it
+    // cancels
     useActionHandler(
         "performUndo",
         () => {
-            if (!removeLastCorner()) closePath();
+            const s = usePathPenStore.getState().session;
+            if (s && s.corners.length > 0) removeLastCorner();
+            else closePath();
         },
         {},
         drawing,
