@@ -3,11 +3,11 @@
 # Keep `id` stable: feedback is filed under it.
 id: path-pen
 title: Draw a path for one marcher (pathways, step 1)
-summary: The first step of pathways. Select one marcher, press P, click corners between where it starts and its end spot, and double-click or press Enter. The marcher walks your path at one steady speed. This round, a path is no longer editable all the time: it shows on the field, and you double-click it or right-click it to edit it.
+summary: "The first step of pathways. Select one marcher, press P, click corners between where it starts and its end spot, and double-click or press Enter. The marcher walks your path at one steady speed. This round, a path is no longer editable all the time: it shows on the field, and you double-click it or right-click it to edit it."
 status: open
 variants: []
 questions:
-  - Opening a path to edit it: is a double-click on its line, or Edit path in its right-click menu, the way you'd expect? Was the path easy enough to hit, and did a click beside it still do what the field normally does?
+  - "Opening a path to edit it: is a double-click on its line, or Edit path in its right-click menu, the way you'd expect? Was the path easy enough to hit, and did a click beside it still do what the field normally does?"
   - Is the Paths tab the right home for the Path pen, apart from Shapes?
   - Did drawing feel like the Line? Clicks for corners, double-click or Enter to finish, right-click or Backspace to take one back, Escape to cancel.
   - On an open path, did dragging a corner, Shift for fine, Ctrl or Cmd to keep its direction, clicking the small dot mid-leg to add a corner, and the corner's right-click menu work as you expected?
