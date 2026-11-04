@@ -38,7 +38,6 @@ import View3dButton from "@/components/toolbar/View3dButton";
 import Plugin from "./global/classes/Plugin";
 import Sidebar from "@/components/sidebar/Sidebar";
 import Toaster from "./components/ui/Toaster";
-import FocusNotice from "./components/FocusNotice";
 import SvgPreviewHandler from "./utilities/SvgPreviewHandler";
 import { useIsPreviewMode } from "./stores/PreviewModeStore";
 import { PreviewModeHost } from "./components/preview/PreviewMode";
@@ -60,7 +59,6 @@ import {
 } from "./hooks/queries/useHistory";
 import tolgee from "./global/singletons/Tolgee";
 import { InContextTools } from "@tolgee/web/tools";
-import clsx from "clsx";
 import AlertModal from "./components/AlertModal";
 import ConvertShowDialog from "./components/ConvertShowDialog";
 import ShortcutsDialog from "./components/ShortcutsDialog";
@@ -118,9 +116,6 @@ function App() {
     const welcomeFlowAsksAnalytics =
         !editorModeLoaded || (editorMode === null && !databaseIsReady);
     const fetchUiSettings = useUiSettingsStore((s) => s.fetchUiSettings);
-    const focussedComponent = useUiSettingsStore(
-        (s) => s.uiSettings.focussedComponent,
-    );
     const pluginsLoadedRef = useRef(false);
     // Preview watches the show: no toolbar, sidebar or inspector
     const preview = useIsPreviewMode();
@@ -307,10 +302,6 @@ function App() {
         void injectTolgeeApiKey();
     }, []);
 
-    const timelineFocussedClass = clsx({
-        "opacity-30": focussedComponent === "timeline",
-    });
-
     return (
         <ErrorBoundary>
             <QueryClientProvider client={queryClient}>
@@ -371,7 +362,6 @@ function App() {
                                             <SvgPreviewHandler />
                                             <PreviewModeHost />
                                             <TitleBar showControls />
-                                            <FocusNotice />
                                             <>
                                                 <div
                                                     id="app"
@@ -388,20 +378,11 @@ function App() {
                                                                 <WorkspaceViewSwitch />
                                                             </div>
                                                         ) : (
-                                                            <div
-                                                                className={
-                                                                    timelineFocussedClass
-                                                                }
-                                                            >
+                                                            <div>
                                                                 <Toolbar />
                                                             </div>
                                                         )}
-                                                        <div
-                                                            className={clsx(
-                                                                "relative flex h-full min-h-0 min-w-0 gap-8",
-                                                                timelineFocussedClass,
-                                                            )}
-                                                        >
+                                                        <div className="relative flex h-full min-h-0 min-w-0 gap-8">
                                                             {!preview && (
                                                                 <>
                                                                     <Sidebar />
@@ -418,23 +399,15 @@ function App() {
                                                             />
                                                             <FieldDisplayBar />
                                                         </div>
-                                                        {focussedComponent ===
-                                                        "timeline" ? (
+                                                        <TimelineSplitter>
                                                             <TimelineContainer />
-                                                        ) : (
-                                                            <TimelineSplitter>
-                                                                <TimelineContainer />
-                                                            </TimelineSplitter>
-                                                        )}
+                                                        </TimelineSplitter>
                                                     </div>
                                                     {!preview && (
                                                         <InspectorDock
                                                             layout={inspector}
                                                             onOpenChange={
                                                                 setInspectorOpen
-                                                            }
-                                                            className={
-                                                                timelineFocussedClass
                                                             }
                                                         >
                                                             <Inspector />

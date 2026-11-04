@@ -400,7 +400,7 @@ Basic hides only the Move card (Inspector.tsx:34). Everything else is the same i
 
 # Timeline area audit (surface 4), apps/desktop/src/components/timeline
 
-The timeline is almost all new in the fork. Upstream had `PageTimeline`, `CompactTimelineControls`, `PerspectiveSlider` and the old `TimelineControls`, all replaced or deleted. The upstream beat/measure editor (`audio/EditableAudioPlayer`) survives behind `focussedComponent === "timeline"` (TimelineContainer.tsx:20).
+The timeline is almost all new in the fork. Upstream had `PageTimeline`, `CompactTimelineControls`, `PerspectiveSlider` and the old `TimelineControls`, all replaced or deleted. The upstream beat/measure editor (`audio/EditableAudioPlayer`) survived behind `focussedComponent === "timeline"` (TimelineContainer.tsx:20), reachable only by Alt+T or "Edit timeline" in the palette. It has since been removed, with timeline focus, `FocusNotice` and the `"timeline"` shortcut scope.
 
 ## Transport row (TimelinePrimitives.tsx:340-445)
 
@@ -580,7 +580,7 @@ Observations:
 
 ## Unsure
 
-- `timelinePixelsPerSecond` and `TimelineContainer`'s focus branch: I didn't trace whether `focussedComponent === "timeline"` can still be reached in the timelines-only fork.
+- `timelinePixelsPerSecond`: still read by the timeline's pinch zoom. (`TimelineContainer`'s focus branch was reachable by Alt+T and has since been removed.)
 - "Audio Offset" in the show settings modal may duplicate the timeline audio alignment UI. Not traced.
 - The 3D power and resolution defaults live in `view3d/window/drawPolicy.ts` and `renderPrefs.ts`. I didn't open them.
 

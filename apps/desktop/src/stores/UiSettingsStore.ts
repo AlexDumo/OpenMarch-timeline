@@ -12,7 +12,6 @@ import {
     type WaveformStyle,
 } from "@/timeline/timelineWaveform";
 
-export type FocusableComponents = "canvas" | "timeline";
 export interface UiSettings {
     lockX: boolean;
     lockY: boolean;
@@ -55,8 +54,6 @@ export interface UiSettings {
     audioVolume: number;
     /** Whether all app audio is muted */
     audioMuted: boolean;
-    /** The component that is currently focussed */
-    focussedComponent: FocusableComponents;
     /** Mouse settings */
     mouseSettings: {
         /** Whether to enable trackpad mode (specific handling for macOS trackpads) */
@@ -140,7 +137,6 @@ export const defaultSettings: UiSettings = {
     timelineWaveformStyle: "simplified",
     audioVolume: 100,
     audioMuted: false,
-    focussedComponent: "canvas",
     mouseSettings: {
         trackpadMode: true,
         trackpadPanSensitivity: 0.5,
