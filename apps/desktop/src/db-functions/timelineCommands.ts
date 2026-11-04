@@ -27,6 +27,7 @@ import {
     type DatabaseTimeline,
 } from "./timelines";
 import { createTimelineTransitionsInTransaction } from "./timelineTransitions";
+import { refuseMoveRoutesForPath } from "./timelineRoutes";
 import { ensureCountsInTransaction } from "./endlessCounts";
 import {
     marcherLabels,
@@ -737,6 +738,8 @@ export const setMovePath = async ({
         db,
         "setMovePath",
         async (tx) => {
+            // AP-R2: a drawn path goes only by Remove path
+            await refuseMoveRoutesForPath(tx, timelineId);
             // Read in the edit: what changes is judged on the committed paths
             const rows = await moveTransitions(tx, timelineId);
             const changed: ModifiedTimelineTransitionArgs[] = rows

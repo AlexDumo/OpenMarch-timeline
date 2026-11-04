@@ -22,6 +22,16 @@ import {
     TimelineWriteError,
 } from "./timelineErrors";
 import { chunked } from "./timelineAssignments";
+import { text } from "@/timeline/timelineText";
+
+/**
+ * The refusal for an edit that would copy a route transition, change its slots, give it a shape
+ * or change its path some other way than Remove path (AP-R6, spec v0.9 Appendix I.2). Procedures
+ * that know which move they edit refuse first, naming it (`timelineRoutes.refuseRoutesInMoves`);
+ * this is the backstop under all of them, so no edit can leave a broken file.
+ */
+const refuseRouteEdit = (): never =>
+    refuse(text.t("timeline.refusals.route.cantKeep"));
 
 /** A row of `timeline_transitions`; `path_params` is JSON text (spec 5.2). */
 export type DatabaseTimelineTransition =
@@ -51,6 +61,11 @@ export interface NewTimelineTransitionArgs {
     pathStyle?: PathStyle;
     pathParams?: TimelinePathParams;
     orderMode?: OrderMode;
+    /**
+     * The route a `route` transition walks (v0.9). Only the routes module makes route
+     * transitions (`timelineRoutes`): a `route` style without one is refused.
+     */
+    routeId?: number;
 }
 
 export interface ModifiedTimelineTransitionArgs {
@@ -191,6 +206,9 @@ const insertTimelineTransitions = async (
             );
             if (style === "follow_the_leader") refuseFtlWithoutShape();
         }
+        if (style === "route" && t.routeId === undefined) refuseRouteEdit();
+        if (style !== "route" && t.routeId !== undefined)
+            refuse("only a route transition walks a route");
     }
     const created: DatabaseTimelineTransition[] = [];
     for (const t of newTransitions) {
@@ -206,6 +224,7 @@ const insertTimelineTransitions = async (
                     path_style: t.pathStyle ?? "direct",
                     path_params: paramsToJson(t.pathParams),
                     order_mode: t.orderMode ?? "inherit",
+                    route_id: t.routeId ?? null,
                     slot_count: t.slotCount,
                     start_beat: t.startBeat,
                     end_beat: t.endBeat,
@@ -243,6 +262,16 @@ export const updateTimelineTransitionsInTransaction = async ({
     refuseDuplicateIds(modifiedTransitions, "transition");
     for (const m of modifiedTransitions) {
         const existing = await requireTransition(tx, m.id);
+        // Routes change only through the routes module (AP-R1, AP-R2, AP-R7)
+        if (
+            m.pathStyle === "route" ||
+            (existing.route_id !== null &&
+                (m.pathStyle !== undefined ||
+                    m.pathParams !== undefined ||
+                    (m.slotCount !== undefined &&
+                        m.slotCount !== existing.slot_count)))
+        )
+            refuseRouteEdit();
         const set: Partial<typeof schema.timeline_transitions.$inferInsert> =
             {};
         const style = m.pathStyle ?? (existing.path_style as PathStyle);
@@ -466,6 +495,9 @@ export const setTimelineTransitionDestinationInTransaction = async ({
     tx: DbTransaction;
 }): Promise<DatabaseTimelineTransition> => {
     const existing = await requireTransition(tx, transitionId);
+    // I-R2: a route transition has no shape (AP-R6)
+    if (destination.kind === "shape" && existing.route_id !== null)
+        refuseRouteEdit();
     if (destination.kind === "individual") {
         assertValid(
             validateDestinations(destination.points, existing.slot_count),
@@ -635,7 +667,9 @@ export const deleteTimelineTransitionsInTransaction = async ({
 
 /**
  * Deletes transitions and everything under them (C-1), and leaves their timelines alone, for
- * callers that delete the timelines themselves. Missing ids are ignored.
+ * callers that delete the timelines themselves. Missing ids are ignored. A route transition's
+ * route goes after it (AP-R3: the foreign key refuses the other order, I-D3). Ripple, timeline
+ * delete, marcher delete, membership removal and split at a beat all delete through here.
  */
 export const deleteTimelineTransitionRowsInTransaction = async ({
     transitionIds,
@@ -651,9 +685,17 @@ export const deleteTimelineTransitionRowsInTransaction = async ({
             transitionIds: ids,
             tx,
         });
-        return await tx
+        const deleted = await tx
             .delete(schema.timeline_transitions)
             .where(inArray(schema.timeline_transitions.id, ids))
             .returning();
+        const routeIds = deleted.flatMap((t) =>
+            t.route_id === null ? [] : [t.route_id],
+        );
+        if (routeIds.length > 0)
+            await tx
+                .delete(schema.timeline_routes)
+                .where(inArray(schema.timeline_routes.id, routeIds));
+        return deleted;
     });
 };

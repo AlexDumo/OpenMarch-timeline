@@ -177,6 +177,18 @@
             "toggleNextPaths": "Toggle next page paths",
             "togglePreview": "Preview the show",
             "togglePreviewKeywords": "preview cinematic watch present presentation fullscreen play"
+        },
+        "path": {
+            "pen": "Path pen",
+            "remove": "Remove path",
+            "edit": "Edit path",
+            "keywords": "path pen pathway route corner draw curve walk",
+            "finish": "Finish path",
+            "removeLastCorner": "Remove last corner",
+            "cancel": "Cancel path",
+            "deleteCorner": "Delete corner",
+            "close": "Close path",
+            "deselect": "Deselect corner"
         }
     },
     "analyticsOptIn": {
@@ -2113,6 +2125,7 @@
         "shortcuts.category.playback": "Playback",
         "shortcuts.category.select": "Selection",
         "shortcuts.category.shape": "Shapes",
+        "shortcuts.category.path": "Paths",
         "shortcuts.category.timeline": "Timeline",
         "shortcuts.category.ui": "Interface",
         "shortcuts.description": "Change the keys for any action. Changes apply right away.",
@@ -3304,7 +3317,16 @@
             "keep": {
                 "wholePage": "Keep works on a whole page, not {counts}"
             },
-            "tooFarPastEnd": "that is {count, plural, one {# count} other {# counts}} past the end; one edit stores at most {max}"
+            "tooFarPastEnd": "that is {count, plural, one {# count} other {# counts}} past the end; one edit stores at most {max}",
+            "route": {
+                "takenOverAtStart": "{marcher} is taken over at the start of this move",
+                "takenOverEarlier": "{marcher} is taken over earlier in this move",
+                "followsTheLeader": "{marcher} follows the leader in this move, so it can't have a drawn path yet",
+                "removePathFirst": "{move} has a drawn path: remove it first",
+                "notYet": "{move} has a drawn path, which this edit can't keep yet. Remove the path first",
+                "cantKeep": "This edit can't keep a drawn path yet. Remove the path first",
+                "notInMove": "{marcher} isn't in this move"
+            }
         }
     },
     "titlebar": {
@@ -3381,7 +3403,8 @@
             "shapesAlways": "Always",
             "shapesOff": "Off",
             "shapesSelected": "When selected"
-        }
+        },
+        "pathsTab": "Paths"
     },
     "versionCheck": {
         "error": {
@@ -4167,7 +4190,8 @@
             "select": "Selection",
             "shape": "Shapes",
             "timeline": "Timeline",
-            "ui": "View"
+            "ui": "View",
+            "path": "Paths"
         }
     },
     "shortcut": {
@@ -4304,5 +4328,35 @@
         "tiny": "Tiny",
         "toFive": "{steps, number} to 5",
         "undefined": "Undefined"
+    },
+    "pathways": {
+        "editor": {
+            "finish": "Finish",
+            "removeLast": "Remove last corner",
+            "cancel": "Cancel",
+            "bigStepsShort": "Big steps · {steps}",
+            "bigStepsTipInches": "{inches} in a step, on every leg. Lengthen the move, or move or take out corners to shorten the path."
+        },
+        "menu": {
+            "deleteCorner": "Delete corner",
+            "addCorner": "Add corner here"
+        },
+        "errors": {
+            "save": "Couldn't save the path",
+            "remove": "Couldn't remove the path"
+        },
+        "refusals": {
+            "noMove": "{marcher} has no move at the playhead to draw a path on",
+            "oneMarcher": "One marcher for now: select just one to draw its path",
+            "playing": "Stop playback to draw a path",
+            "selectOne": "Select a marcher to draw a path for"
+        },
+        "banner": {
+            "drawingFor": "{marcher}'s path: click to place corners · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel",
+            "drawingForClick": "{marcher}'s path: click to place corners · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
+        },
+        "toolbar": {
+            "path": "Path"
+        }
     }
 }

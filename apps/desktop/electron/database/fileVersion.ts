@@ -16,6 +16,10 @@
  *   that only knows 8 then refuses the file instead of editing a field image nothing reads. A
  *   file without a floor, new or opened, stays at 8, so opening a show to look at it never
  *   changes it.
+ * - 10: route model (ADR 0010, pathways step 1). A move can follow a drawn path, stored in
+ *   `timeline_routes`. A file is written as 10 when it gets its first route (drawing a path), so
+ *   a fork build from before routes refuses it instead of opening a show it would play wrong. A
+ *   file without a route stays at the version it had. Later pathways steps don't bump it again.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -25,11 +29,13 @@ export const PAGE_MODEL_USER_VERSION = 7;
 export const TIMELINE_MODEL_USER_VERSION = 8;
 /** Version of a file whose field image is its floor (written once it has one). */
 export const FLOOR_MODEL_USER_VERSION = 9;
+/** Version of a file that has a route, a drawn path (written with its first one, ADR 0010). */
+export const ROUTE_MODEL_USER_VERSION = 10;
 
 /** Oldest version this build opens. Older files must go through 0.0.10 first. */
 export const MIN_SUPPORTED_USER_VERSION = PAGE_MODEL_USER_VERSION;
 /** Newest version this build opens. Anything higher was written by a newer release. */
-export const MAX_SUPPORTED_USER_VERSION = FLOOR_MODEL_USER_VERSION;
+export const MAX_SUPPORTED_USER_VERSION = ROUTE_MODEL_USER_VERSION;
 /** Version written into a brand-new file: a timeline show, with no floor yet. */
 export const NEW_FILE_USER_VERSION = TIMELINE_MODEL_USER_VERSION;
 

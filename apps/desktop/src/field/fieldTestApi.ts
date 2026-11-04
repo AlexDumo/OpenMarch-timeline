@@ -92,7 +92,9 @@ export type FieldTestGesture =
     | "pan"
     | "shape"
     | "box"
-    | "prop";
+    | "prop"
+    /** The path pen drawing a path, or a path's corner dragged (pathways step 1) */
+    | "path";
 
 /** How the field draws on this machine (the new field only, #205). */
 export type FieldTestQuality = {

@@ -101,5 +101,33 @@ check('G13', {
     [2, 8, -2, 6], [2, 12, 1, 8], [2, 14, 10.5, 14], [2, 16, 20, 20],
     [3, 16, 8, 10], [3, 20, 4, 14], [3, 24, 8, 18]]);
 
+
+// QA-RT-1 (v0.9 step 1, R-14): one marcher walks a route with two corners over an 8-beat move. Legs 5, 6 and 6,
+// so L = 17 and the marcher covers 17/8 every beat, passing the corners without stopping.
+const rt = (points, extra = {}) => ({
+  marchers: [{ id: 1, home: [0, 0] }], shapes: {},
+  transitions: { 1: { id: 1, start: 0, end: 8, dest: null, points: [[9, 10]], slots: 1, style: 'route', order: 'inherit', params: null, route: 1, ...extra } },
+  routes: { 1: { geometry: { v: 1, from: [0, 0], to: [9, 10], points: points.map((at, i) => ({ id: `p${i}`, at })) } } },
+  assignments: [row(1, 1, 0, 0, 8)],
+});
+check('QA-RT-1', rt([[3, 4], [3, 10]]), [[1, 0, 0, 0], [1, 1, 1.275, 1.7], [1, 2, 2.55, 3.4], [1, 3, 3, 5.375], [1, 4, 3, 7.5],
+  [1, 5, 3, 9.625], [1, 6, 4.75, 10], [1, 7, 6.875, 10], [1, 8, 9, 10], [1, 9, 9, 10]]);
+
+// QA-RT-2: a route with no points is bit-identical to the same move as direct. QA-RT-6: an inner point within
+// EPS_GEOM of A, of B, or of the corner before it changes nothing, bit for bit.
+{ const probes = Array.from({ length: 81 }, (_, i) => -1 + i * 0.125);
+  const same = (name, a, b) => {
+    const [oa, ob, ra, rb] = [makeOracle(a), makeOracle(b), makeResolver(a), makeResolver(b)];
+    const bad = probes.filter((t) => [[oa, ob], [ra, rb], [oa, ra]].some(([x, y]) => { const p = x.positionAt(1, t), q = y.positionAt(1, t); return p[0] !== q[0] || p[1] !== q[1]; }));
+    bad.length ? fail++ : pass++;
+    console.log(`${bad.length ? 'FAIL' : 'PASS'}  ${name}${bad.length ? ` differs at beats ${bad.slice(0, 5)}` : ''}`);
+  };
+  const direct = rt([]); direct.transitions[1] = { ...direct.transitions[1], style: 'direct', route: null }; delete direct.routes;
+  same('QA-RT-2', rt([]), direct);
+  same('QA-RT-6 near A', rt([[4e-10, 0], [3, 4], [3, 10]]), rt([[3, 4], [3, 10]]));
+  same('QA-RT-6 near B', rt([[3, 4], [3, 10], [9, 10 - 5e-10], [9 + 3e-10, 10]]), rt([[3, 4], [3, 10]]));
+  same('QA-RT-6 repeated', rt([[3, 4], [3, 4], [3 + 1e-10, 4], [3, 10]]), rt([[3, 4], [3, 10]]));
+  same('QA-RT-6 all close', rt([[1e-10, 0], [9, 10 - 1e-10]]), direct); }
+
 console.log(`${pass} of ${pass + fail} golden fixtures pass (oracle and cached resolver)`);
 if (fail) process.exitCode = 1;

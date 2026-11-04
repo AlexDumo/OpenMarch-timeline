@@ -81,7 +81,8 @@ export interface ChangeBatch {
             | "shapes"
             | "transitions"
             | "assignments"
-            | "slot_destinations";
+            | "slot_destinations"
+            | "routes";
         /** For `slot_destinations`, the transition id */
         rowId: number;
         /** null on insert */
@@ -141,7 +142,7 @@ export interface Resolver {
 export type ShapeKind = "line" | "freehand" | "box" | "circle" | "block";
 /** Shape kinds that have a parameterized path (everything except `block`). */
 export type PathShapeKind = Exclude<ShapeKind, "block">;
-export type PathStyle = "direct" | "arc" | "follow_the_leader";
+export type PathStyle = "direct" | "arc" | "follow_the_leader" | "route";
 export type OrderMode = "inherit" | "slot";
 
 export interface PolylineGeometry {
@@ -182,6 +183,29 @@ export interface PathParams {
     waypoints?: XY[];
 }
 
+/** One inner point of a route (spec 5.2, v0.9 step 1): every point is a corner. */
+export interface RoutePoint {
+    /** Non-empty, at most 16 characters, unique within its route and never reused in it */
+    id: string;
+    at: XY;
+}
+
+/** A route's `geometry` (spec 5.2, I-R1). `from` and `to` are not read by the resolver. */
+export interface RouteGeometry {
+    v: 1;
+    /** Where the marcher stood at the transition's start when the route was drawn */
+    from: XY;
+    /** Its destination when the route was drawn */
+    to: XY;
+    /** Inner points in walking order; may be empty */
+    points: RoutePoint[];
+}
+
+/** A row of the routes table (spec 5.1, D-19). */
+export interface RouteRow {
+    geometry: RouteGeometry;
+}
+
 export interface TransitionRow {
     id: number;
     start: Beat;
@@ -194,6 +218,8 @@ export interface TransitionRow {
     style: PathStyle;
     order: OrderMode;
     params: PathParams | null;
+    /** The route a `route` transition walks (I-R2); null or absent otherwise */
+    route?: number | null;
 }
 
 export interface AssignmentRow {
@@ -212,6 +238,8 @@ export interface TimelineSnapshot {
     shapes: Record<number, ShapeRow>;
     transitions: Record<number, TransitionRow>;
     assignments: AssignmentRow[];
+    /** Routes by id (v0.9, D-19); absent when the show has none */
+    routes?: Record<number, RouteRow>;
 }
 
 /** One piece of a marcher's flattened timeline (R-2). */

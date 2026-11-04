@@ -12,6 +12,7 @@ export type ActionCategory =
     | "cursor"
     | "select"
     | "shape"
+    | "path"
     | "timeline";
 export type ActionArgs = Readonly<Record<string, string | number | boolean>>;
 
@@ -884,6 +885,42 @@ const STATIC_ACTIONS = {
         editsDrill: true,
         scope: "canvas",
         defaultBindings: ["$mod+Shift+G", "Control+Shift+G"],
+        ignoreRepeat: true,
+    },
+
+    // Pathways step 1 (ADR 0010): the Path pen draws a cornered path for one selected marcher's
+    // move at the playhead. P as in design tools' pen. While it draws, Enter (applyShape) finishes,
+    // Backspace (shapeRemoveLastPoint) takes the last corner back and Escape
+    // (cancelAlignmentUpdates) cancels, handled only then (pathways/PathPenKeys)
+    pathPen: {
+        labelKey: "actions.path.pen",
+        keywordsKey: "actions.path.keywords",
+        category: "path",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["P"],
+        ignoreRepeat: true,
+    },
+    // Opens the selected marcher's path at the playhead for editing, as a double-click on it does
+    // (owner, 2026-11-04). No key: shapes have none for editing points (Enter places a shape)
+    editPath: {
+        labelKey: "actions.path.edit",
+        keywordsKey: "actions.path.keywords",
+        category: "path",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    // Remove path (AP-R2), the path open or not: the move goes straight again. No key, so it
+    // can't happen by accident (owner, 2026-11-04): the path's menu, its bar and the palette
+    removePath: {
+        labelKey: "actions.path.remove",
+        keywordsKey: "actions.path.keywords",
+        category: "path",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
         ignoreRepeat: true,
     },
 

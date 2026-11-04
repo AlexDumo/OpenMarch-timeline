@@ -72,6 +72,7 @@ import {
     PlacedBoxesOverlay,
 } from "@/shapes/placed/PlacedBoxesOverlay";
 import { ShapeEditor } from "@/shapes/editor/ShapeEditorBar";
+import { PathEditor } from "@/pathways/PathEditor";
 import HandleMenu from "@/shapes/editor/HandleMenu";
 import { useShapeEditorStore } from "@/shapes/frame/shapeEditorStore";
 import FavoritesRing from "@/shapes/tool/FavoritesRing";
@@ -367,7 +368,9 @@ function ThreeFieldView() {
     };
     // #315: where a right-click opens the field's menu (`useFieldMenu`, below
     // the editor), and whether it's open: a press that closes it does nothing more
-    const openMenuAt = useRef((_at: { x: number; y: number }) => {});
+    const openMenuAt = useRef(
+        (_at: { x: number; y: number }, _actions?: readonly string[]) => {},
+    );
     const menuShown = useRef(false);
 
     const editor = useMemo(
@@ -439,7 +442,8 @@ function ThreeFieldView() {
                         snapToRounding(point, latest.current.fieldProperties),
                     propDrawn: (outline) => latest.current.propDrawn(outline),
                     // #315: a right-click opens the field's menu there
-                    openMenu: (at) => openMenuAt.current(at.screen),
+                    openMenu: (at, actions) =>
+                        openMenuAt.current(at.screen, actions),
                 },
                 {
                     isMac: isMacPlatform(),
@@ -704,6 +708,9 @@ function ThreeFieldView() {
                 {fieldProperties && (
                     <ShapeEditor stepPx={fieldProperties.pixelsPerStep} />
                 )}
+                {fieldProperties && !isPlaying && (
+                    <PathEditor fieldProperties={fieldProperties} />
+                )}
                 {/* Fine, Equal, From center, Add and Snap for a tablet: touch layout only */}
                 {!preview && <TouchModifierButtons marchers={marchers} />}
                 <FavoritesRing />
@@ -713,6 +720,7 @@ function ThreeFieldView() {
                 <HandleMenu />
                 <FieldContextMenu
                     at={menu.at}
+                    actions={menu.actions}
                     onClose={menu.close}
                     selectedCount={selectedIds.length}
                     timelineMode={timelineMode}

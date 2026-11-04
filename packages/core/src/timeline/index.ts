@@ -31,16 +31,23 @@ export type {
     PathParams,
     TransitionRow,
     AssignmentRow,
+    RoutePoint,
+    RouteGeometry,
+    RouteRow,
 } from "./types";
 export type { Oracle } from "./oracle";
 export { createResolver } from "./resolver";
+export { routePath, routePoint, walkedPoint, EPS_GEOM } from "./geom";
+export type { RoutePath } from "./geom";
 export {
     validateShapeGeometry,
     validatePathParams,
     validateDestinations,
     validateDestination,
     validateHome,
+    validateRouteGeometry,
     normalizeStartAngle,
+    MAX_ROUTE_POINT_ID_LENGTH,
     COORD_BOUND,
     MAX_ABS_BULGE,
 } from "./validate";

@@ -6,7 +6,13 @@ import {
     useSyncExternalStore,
 } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { CheckIcon } from "@phosphor-icons/react";
+import {
+    CheckIcon,
+    PencilSimpleIcon,
+    TrashIcon,
+    type Icon,
+} from "@phosphor-icons/react";
+import clsx from "clsx";
 import { useTranslate } from "@tolgee/react";
 import {
     KEEP_MENU_EVENTS,
@@ -47,6 +53,10 @@ import { fieldToElement, useFieldViewStore } from "./fieldView";
  *   "Hold from previous page (3 of 5)", when it would change only some of them.
  * - Arranging the selection: align and distribute, and Swap (two marchers).
  * - **Select all**, which right-clicking empty field reaches for.
+ *
+ * A right-click on what a field mode draws can offer its own actions instead (`actions`): on a
+ * marcher's path, **Edit path** and **Remove path** (pathways). That menu is tighter, sized to its
+ * words, each entry with its icon, as a shape handle's menu (`HandleMenu`) has.
  */
 const GROUPS: readonly (readonly ActionId[])[] = [
     ["shapeGroup", "shapeUngroup"],
@@ -87,6 +97,21 @@ const CHECKABLE: ReadonlySet<ActionId> = new Set(GROUPS[2]);
 /** The entries' style, as the timeline's menus */
 const ITEM_CLASS =
     "rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50";
+/** A mode's menu: its entries closer together, and no wider than its words */
+const MODE_ITEM_CLASS = clsx(ITEM_CLASS, "py-4");
+const MODE_CONTENT_CLASS = TIMELINE_MENU_CONTENT_CLASS.replace(
+    "min-w-[180px]",
+    "",
+).replace("gap-4", "gap-0");
+
+/** A mode's entries' icons */
+const MODE_ICONS: Partial<Record<ActionId, Icon>> = {
+    editPath: PencilSimpleIcon,
+    removePath: TrashIcon,
+};
+/** Entries that delete something: red where highlighted, as a shape handle's Delete */
+const DESTRUCTIVE: ReadonlySet<ActionId> = new Set(["removePath"]);
+
 /** The room for a check in front of a checkable entry's words */
 const CHECK_SLOT_CLASS = "flex w-[14px] shrink-0 justify-center";
 
@@ -102,12 +127,15 @@ const closedSnapshot = () => "";
 
 export default function FieldContextMenu({
     at,
+    actions = null,
     onClose,
     selectedCount,
     timelineMode,
 }: {
     /** Where it opens, in CSS pixels in the field's element; null while closed. */
     at: { x: number; y: number } | null;
+    /** The actions it offers instead of the field's own (a mode's, such as a path's), or null */
+    actions?: readonly ActionId[] | null;
     onClose: () => void;
     selectedCount: number;
     /** Whether the show's timeline is loaded (Unset and the holds need it). */
@@ -139,9 +167,11 @@ export default function FieldContextMenu({
                 : true;
     const enabled = (id: ActionId) =>
         isActionEnabled(id) && (id !== "swapMarchers" || selectedCount === 2);
-    const groups = GROUPS.map((group) => group.filter(shown)).filter(
-        (group) => group.length > 0,
-    );
+    const groups = actions
+        ? [actions]
+        : GROUPS.map((group) => group.filter(shown)).filter(
+              (group) => group.length > 0,
+          );
 
     return (
         <DropdownMenu.Root
@@ -169,7 +199,11 @@ export default function FieldContextMenu({
                     // keys still work
                     onCloseAutoFocus={(event) => event.preventDefault()}
                     {...KEEP_MENU_EVENTS}
-                    className={TIMELINE_MENU_CONTENT_CLASS}
+                    className={
+                        actions
+                            ? MODE_CONTENT_CLASS
+                            : TIMELINE_MENU_CONTENT_CLASS
+                    }
                 >
                     {groups.map((group, i) => (
                         <Fragment key={group[0]}>
@@ -182,11 +216,15 @@ export default function FieldContextMenu({
                                     getActionLabel(id, (key, params) =>
                                         t(key, params as never),
                                     );
+                                // Hidden when the action has no key, so it takes no room
                                 const shortcut = (
-                                    <span className="ml-auto pl-16">
+                                    <span className="ml-auto pl-16 empty:hidden">
                                         <Shortcut action={id} />
                                     </span>
                                 );
+                                const ModeIcon = actions
+                                    ? MODE_ICONS[id]
+                                    : null;
                                 if (isActionChecked(id))
                                     return (
                                         <DropdownMenu.CheckboxItem
@@ -211,8 +249,23 @@ export default function FieldContextMenu({
                                         data-testid={`field-menu-${id}`}
                                         disabled={!enabled(id)}
                                         onSelect={() => runAction(id)}
-                                        className={ITEM_CLASS}
+                                        className={
+                                            actions
+                                                ? clsx(
+                                                      MODE_ITEM_CLASS,
+                                                      DESTRUCTIVE.has(id) &&
+                                                          "data-[highlighted]:text-red",
+                                                  )
+                                                : ITEM_CLASS
+                                        }
                                     >
+                                        {ModeIcon && (
+                                            <ModeIcon
+                                                size={14}
+                                                aria-hidden
+                                                className="shrink-0"
+                                            />
+                                        )}
                                         {CHECKABLE.has(id) && (
                                             <span
                                                 className={CHECK_SLOT_CLASS}
@@ -232,6 +285,8 @@ export default function FieldContextMenu({
 }
 
 type MenuPoint = { x: number; y: number };
+/** Where the menu is open, and the mode's actions it offers there instead of its own, if any */
+type OpenFieldMenu = { at: MenuPoint; actions: readonly ActionId[] | null };
 
 /**
  * Where the field's menu is open, in CSS pixels in the field's element, and
@@ -249,9 +304,17 @@ export function useFieldMenu({
     editor: FieldEditor;
     hasSelection: boolean;
 }) {
-    const [at, setAt] = useState<MenuPoint | null>(null);
-    const openAt = useCallback((point: MenuPoint) => setAt(point), []);
-    const close = useCallback(() => setAt(null), []);
+    const [open, setOpen] = useState<OpenFieldMenu | null>(null);
+    const openAt = useCallback(
+        (point: MenuPoint, actions?: readonly string[]) =>
+            setOpen({
+                at: point,
+                actions: (actions as readonly ActionId[] | undefined) ?? null,
+            }),
+        [],
+    );
+    const close = useCallback(() => setOpen(null), []);
+    const setAt = (at: MenuPoint) => setOpen({ at, actions: null });
     useActionHandler(
         "openFieldMenu",
         () => {
@@ -267,7 +330,12 @@ export function useFieldMenu({
         },
         { enabled: hasSelection },
     );
-    return { at, openAt, close };
+    return {
+        at: open?.at ?? null,
+        actions: open?.actions ?? null,
+        openAt,
+        close,
+    };
 }
 
 /** The middle of the selected marchers drawn (hidden ones aren't), in field units; null with none. */

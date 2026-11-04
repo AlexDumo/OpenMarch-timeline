@@ -170,9 +170,11 @@ export type FieldEditorPorts = {
     /**
      * A right-click (a right press released under the click slop, with no
      * open shape) asks for the field's menu here (#315), after selecting the
-     * marcher clicked if it wasn't selected.
+     * marcher clicked if it wasn't selected. `actions`, when a mode gave them
+     * ({@link FieldMode.fieldMenuAt}), are what the menu offers there instead
+     * of its own (a marcher's path, pathways).
      */
-    openMenu?(at: FieldPointer): void;
+    openMenu?(at: FieldPointer, actions?: readonly string[]): void;
 };
 
 export type DropResult = "saved" | "refused";
@@ -460,6 +462,19 @@ export interface FieldMode {
      * for the field's rules. Absent: always the field's.
      */
     openMenu?(pointer: FieldPointer): boolean;
+    /**
+     * A right-click or long press at `pointer` that `openMenu` didn't take: the actions the
+     * field's menu offers there instead of its own (a marcher's path, pathways), or null for the
+     * field's rules. The selection is left as it is.
+     */
+    fieldMenuAt?(pointer: FieldPointer): readonly string[] | null;
+    /**
+     * A click on empty field (no marcher or handle under it) at `pointer`, before the editor's
+     * rules, which change the selection: the mode takes it and returns true, or returns false for
+     * the editor's. `double` for a double-click's second click. Only clicks come here, so drags,
+     * marquees and lassos from the same spot stay the editor's.
+     */
+    takeClick?(pointer: FieldPointer, double: boolean): boolean;
     /** What `activeGesture` reports while one of its presses is held, and while it's on when `always`. */
     readonly gesture: { kind: FieldTestGesture; always: boolean };
 }
@@ -682,7 +697,7 @@ export class FieldEditor {
             // is held. A mode's own menu first; then the field's, unless the
             // open shape is being edited (a Mac's Ctrl-click has none)
             if (!this.menuFree()) return;
-            if (this.mode?.openMenu?.(pointer)) return;
+            if (this.modeMenu(pointer)) return;
             if (!macCtrl && !this.blocksFieldMenu()) this.openMenu(pointer);
             return;
         }
@@ -748,6 +763,9 @@ export class FieldEditor {
                   screen: press.start.screen,
                   hit: press.hit,
               };
+        // A mode may take a click on empty field (a double-click on a marcher's path opens it)
+        if (press.hit === null && this.mode?.takeClick?.(pointer, press.double))
+            return;
         this.click(press, pointer.shift || press.add === true);
         if (press.double && press.hit !== null)
             this.ports.doubleClickMarcher?.(press.hit);
@@ -758,7 +776,19 @@ export class FieldEditor {
      * is otherwise navigation's, so the field's own menu doesn't open this way.
      */
     longPress(pointer: FieldPointer): void {
-        if (this.menuFree()) this.mode?.openMenu?.(pointer);
+        if (this.menuFree()) this.modeMenu(pointer);
+    }
+
+    /**
+     * A mode's menu at `pointer`: its own (`openMenu`), or the field's with the actions it offers
+     * there (`fieldMenuAt`). Says whether one opened.
+     */
+    private modeMenu(pointer: FieldPointer): boolean {
+        if (this.mode?.openMenu?.(pointer)) return true;
+        const actions = this.mode?.fieldMenuAt?.(pointer) ?? null;
+        if (!actions || actions.length === 0) return false;
+        this.ports.openMenu?.(pointer, actions);
+        return true;
     }
 
     /** No press, drag or prop tool that a menu would cut into */

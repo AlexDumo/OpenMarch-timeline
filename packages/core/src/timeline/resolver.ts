@@ -8,9 +8,11 @@
  *   transition), updated only from batch after-images (spec 10.2). Marchers,
  *   shapes and transitions are read by id from the host's post-commit mirror
  *   (ADR 0001 section 4), which the caller keeps equal to the committed state.
- * - Local caches (9.2 #1-4): `spans`, `spansByTransition`, `destinations`,
- *   `ftlGeometry`. Cascading caches (9.2 #5-6): `origin`, keyed by
- *   (marcher, span.start), and `ftlEntry`.
+ * - Local caches (9.2 #1-4, #7): `spans`, `spansByTransition`, `destinations`,
+ *   `ftlGeometry`, `routeGeometry`. Cascading caches (9.2 #5-6): `origin`, keyed by
+ *   (marcher, span.start), and `ftlEntry`. A route span's cleaned path (R-14) is
+ *   not cached, so W-5 holds trivially: it is rebuilt from `origin`,
+ *   `routeGeometry` and `destinations` on every evaluation.
  * - Pull-compile (9.5) and the dirty walk (9.4, W-1 to W-4) use explicit work
  *   stacks, never recursion, because dependency depth equals chain length
  *   (9.3). A node seen again while its dependencies are unresolved is a cycle,
@@ -18,7 +20,6 @@
  * - All arithmetic and caches are Float64 (spec 10.1).
  */
 import {
-    arcPoint,
     clamp01,
     destPath,
     destinationsOf,
@@ -26,6 +27,7 @@ import {
     lerp,
     makeTrail,
     paramT,
+    walkedPoint,
 } from "./geom";
 import type {
     AssignmentRow,
@@ -156,6 +158,7 @@ function coalesce(batch: ChangeBatch) {
         shapes: new Map<number, NetChange>(),
         transitions: new Map<number, NetChange>(),
         assignments: new Map<number, NetChange>(),
+        routes: new Map<number, NetChange>(),
     };
     const destinations = new Set<number>();
     for (const c of batch.changes) {
@@ -183,6 +186,7 @@ function coalesce(batch: ChangeBatch) {
         shapes: live(byTable.shapes),
         transitions: live(byTable.transitions),
         assignments: live(byTable.assignments),
+        routes: live(byTable.routes),
         destinations,
     };
 }
@@ -274,11 +278,25 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         }
     };
 
+    // routes (v0.9): route -> its transition, and each transition's route, kept in step with the host
+    const routeOwner = new Map<number, number>();
+    const routeOfT = new Map<number, number>();
+    const setRoute = (tid: number, rid: number | null | undefined) => {
+        const old = routeOfT.get(tid);
+        if (old != null && routeOwner.get(old) === tid) routeOwner.delete(old);
+        if (rid == null) routeOfT.delete(tid);
+        else {
+            routeOfT.set(tid, rid);
+            routeOwner.set(rid, tid);
+        }
+    };
+
     // ---- local caches (9.2 #1-4)
     const spans = new Map<number, RSpan[]>(); // marcher -> spans
     const byT = new Map<number, Set<RSpan>>(); // spansByTransition
     const dests = new Map<number, XY[]>(); // destinations
     const paths = new Map<number, DestPath>(); // ftlGeometry
+    const routeGeo = new Map<number, XY[]>(); // routeGeometry (9.2 #7): route -> inner points
     // ---- cascading caches (9.2 #5-6)
     const origins = new Map<string, XY>(); // `${m}|${start}` -> xy
     const entries = new Map<number, Entry>(); // FTL transition -> entry
@@ -338,10 +356,22 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         spans.set(m, l);
         indexAdd(l);
     }
+    /** 9.2 #7: a route's inner points, from the host mirror; dropped when the route is gone. */
+    function computeRoute(rid: number) {
+        const r = host.routes?.[rid];
+        if (!r) routeGeo.delete(rid);
+        else
+            routeGeo.set(
+                rid,
+                r.geometry.points.map((pt): XY => pt.at),
+            );
+    }
     for (const t of Object.values(host.transitions)) {
         setDest(t.id, t.dest);
+        setRoute(t.id, t.route);
         computeLocal(t.id);
     }
+    for (const rid of Object.keys(host.routes ?? {})) computeRoute(Number(rid));
 
     // ---- resolution (pull)
     const spansOf = (m: number): RSpan[] => {
@@ -511,9 +541,24 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         const o = origin(s);
         if (t.style === FTL) return lerp(o, entry(t.id).target.get(s.m)!, p); // R-11
         const dst = dests.get(t.id)![s.row.slot]!;
-        return t.style === "arc"
-            ? arcPoint(o, dst, t.params?.bulge ?? 0, p) // R-8
-            : lerp(o, dst, p); // R-7
+        // R-7, R-8, R-14 through the one walked-path seam
+        return walkedPoint(
+            t,
+            o,
+            dst,
+            p,
+            t.style === "route" ? routeOf(t) : undefined,
+            founding(s),
+        );
+    }
+    /** R-14's inner points for a route transition, from `routeGeometry`. */
+    function routeOf(t: TransitionRow): XY[] {
+        const pts = t.route == null ? undefined : routeGeo.get(t.route);
+        if (!pts)
+            throw new Error(
+                `route transition ${t.id} has no route ${String(t.route)} (I-R2)`,
+            );
+        return pts;
     }
 
     function computeEntry(tid: number) {
@@ -725,9 +770,12 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                 byT.delete(tid);
                 byTR.delete(tid);
                 setDest(tid, null);
+                setRoute(tid, null);
                 continue;
             }
             setDest(tid, T(tid).dest);
+            // T.route_id (9.4): R-14 reads the new route's geometry; seeded below
+            setRoute(tid, T(tid).route);
             if (!tc.before || localInputsChanged(tc.before, tc.after))
                 computeLocal(tid, localRecomputed);
             seedTs.add(tid);
@@ -746,6 +794,13 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                     recomputed.add(tid);
                     seedTs.add(tid);
                 }
+        // Route geometry (9.4, v0.9): recompute, create or drop; seed W-3 for the route's
+        // transition. On insert or delete the same edit changes T.route_id, which seeds above.
+        for (const [rid, rc] of net.routes) {
+            computeRoute(rid);
+            const tid = rc.after ? routeOwner.get(rid) : undefined;
+            if (tid !== undefined && host.transitions[tid]) seedTs.add(tid);
+        }
         for (const tid of seedTs) seed(tid);
 
         return {
@@ -915,6 +970,9 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             if (t.style !== FTL)
                 return `stale ftlEntry ${tid}: transition is not follow-the-leader`;
         }
+        for (const rid of routeGeo.keys())
+            if (!host.routes?.[rid])
+                return `stale routeGeometry ${rid}: route deleted`;
         for (const l of spans.values())
             for (const s of l) {
                 if (!origins.has(key(s))) continue;
