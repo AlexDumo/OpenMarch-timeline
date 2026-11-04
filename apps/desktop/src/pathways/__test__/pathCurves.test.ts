@@ -195,7 +195,7 @@ describe("the pen's press-and-drag", () => {
         to: { x: 100, y: 0 },
         points: [{ at: { x: 50, y: 40 } }],
     };
-    it("makes the point just placed smooth, rounder the farther it's dragged along its tangent, either way", () => {
+    it("makes the point just placed smooth, rounder the farther it's dragged, whichever way", () => {
         const small = dragNewPoint(placed, { x: 58, y: 40 }, env)[0]!.tension!;
         const big = dragNewPoint(placed, { x: 75, y: 40 }, env)[0]!.tension!;
         const back = dragNewPoint(placed, { x: 25, y: 40 }, env)[0]!.tension!;

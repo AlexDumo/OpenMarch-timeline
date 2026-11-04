@@ -407,9 +407,11 @@ export function dragTangent(
 }
 
 /**
- * The pen's press-and-drag on a point just placed (the last): it turns smooth, its roundness
- * following the drag along its tangent, either way, as dragging either end of its tangent bar
- * does. Back on the point it's a corner again.
+ * The pen's press-and-drag on a point just placed (the last): it turns smooth, its roundness how
+ * far the drag went, whichever way, measured against its shorter handle at roundness 1 (so a drag
+ * as long as that handle is the plain curve, twice as long the roundest), in tenths when snapping.
+ * Back on the point it's a corner again. Only the roundness is set: its direction comes from the
+ * points around it, as on a Line.
  */
 export function dragNewPoint(
     shape: PathShape,
@@ -418,17 +420,24 @@ export function dragNewPoint(
 ): readonly PathPoint[] {
     const index = shape.points.length - 1;
     if (index < 0) return shape.points;
-    // Its tangent at roundness 1, from the point with that roundness
+    // Its handles at roundness 1, from the point with that roundness
     const smooth: PathShape = {
         ...shape,
         points: withTension(shape, index, SMOOTH),
     };
     const q = smooth.points[index]!.at;
-    const best = ([1, -1] as const).reduce((t, side) => {
+    const lengths = ([1, -1] as const).flatMap((side) => {
         const full = fullHandle(smooth, index, side);
-        return full ? Math.max(t, roundnessAlong(q, full, to, env)) : t;
-    }, 0);
-    return withTension(shape, index, best);
+        const l = full ? Math.hypot(full.x - q.x, full.y - q.y) : 0;
+        return l > 1e-9 ? [l] : [];
+    });
+    if (lengths.length === 0) return shape.points;
+    let t = Math.min(
+        MAX_TENSION,
+        Math.hypot(to.x - q.x, to.y - q.y) / Math.min(...lengths),
+    );
+    if (env.snap) t = Math.round(t * 10) / 10;
+    return withTension(shape, index, t);
 }
 
 /**

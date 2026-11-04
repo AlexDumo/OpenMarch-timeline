@@ -1973,7 +1973,8 @@ Delete point, and on a leg's midpoint Add point here and Straight | Curved; a cl
 a point there and a drag adds one and moves it. A point added on a leg sits halfway along it, on its
 curve, a corner between corners and otherwise as smooth as the smoother end (`A` and `B` count as
 corners). While drawing, a click places a corner and a press-and-drag places a smooth point whose
-roundness follows the drag along its tangent, as dragging its tangent bar does. **Big steps** uses
+roundness is how far the drag went, against its shorter handle at roundness 1 (its direction comes
+from its neighbors, as on a Line). **Big steps** uses
 the path's length `L`, curves included.
 
 ### I.6 New tests for step 2

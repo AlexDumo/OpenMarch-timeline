@@ -84,8 +84,8 @@ export const PATH_FIELD_MENU = ["editPath", "removePath"] as const;
  *
  * - Drawing: a click places the next point, a corner, landed on its release (on the half-step
  *   grid or a field line; off the grid with fine, at 45° from the last with constrain). A
- *   press-and-drag places a smooth point where it was pressed instead, its roundness following
- *   the drag along its tangent (in tenths, fine for any), its tangent bar shown while dragging. A
+ *   press-and-drag places a smooth point where it was pressed instead, its roundness how far the
+ *   drag went (in tenths, fine for any), its tangent bar shown while dragging. A
  *   double-click, a click on the last point or on the end spot, or Enter finishes; a right-click,
  *   Backspace or undo takes the last point back; Escape cancels.
  * - Closed (the selected marcher's path, shown): the path takes no press, so clicks, drags and
