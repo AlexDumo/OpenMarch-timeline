@@ -912,14 +912,15 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         ignoreRepeat: true,
     },
-    // Remove path (AP-R2), the path open or not: the move goes straight again
+    // Remove path (AP-R2), the path open or not: the move goes straight again. No key, so it
+    // can't happen by accident (owner, 2026-11-04): the path's menu, its bar and the palette
     removePath: {
         labelKey: "actions.path.remove",
         keywordsKey: "actions.path.keywords",
         category: "path",
         editsDrill: true,
         scope: "canvas",
-        defaultBindings: ["Shift+Backspace"],
+        defaultBindings: [],
         ignoreRepeat: true,
     },
 

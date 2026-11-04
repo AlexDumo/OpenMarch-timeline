@@ -28,11 +28,12 @@ spot.
   - **Double-click** the path's line to edit it: its corners, the dots mid-leg
     and the small editor come back.
   - **Right-click** the line (or long-press it on a tablet) for **Edit path**
-    and **Remove path**.
+    and **Remove path**, a small menu with an icon for each.
   - **Escape**, a click on empty field, selecting something else, or moving the
     playhead off the move closes it again. Finishing a drawing leaves the path
     shown, closed.
-  - **Remove path** (Shift+Backspace) works whether the path is open or not.
+  - **Remove path** works whether the path is open or not. It has no keyboard
+    shortcut, so it can't happen by accident.
     **Edit path** is also in the command palette.
 
 **Changed in the round before**
@@ -76,8 +77,8 @@ spot.
    path, or right-click it and pick **Edit path**, to open it with the small
    editor beside it. Drag corners, add them with the dots mid-leg, and delete
    them from their right-click menu or with **Backspace** once selected.
-   **Escape** closes it. **Remove path** (Shift+Backspace, or the right-click
-   menu) makes the move straight again.
+   **Escape** closes it. **Remove path** (in the right-click menu, or the bin
+   on the open path's editor) makes the move straight again.
 7. Try **Split at playhead** on the move: the path is cut at the count, and
    both halves play exactly as the whole did.
 

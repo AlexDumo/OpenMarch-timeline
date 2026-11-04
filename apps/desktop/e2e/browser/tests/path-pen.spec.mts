@@ -23,8 +23,9 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 // right-click menu, opens it; Escape closes it again. On the open path, a corner
 // dragged with Shift (fine) lands off the grid, a click mid-leg adds a corner, each one
 // undo step, and the corner's menu deletes corners; deleting the last one removes the
-// path. Remove path in the floating editor, and Shift+Backspace on the closed path,
-// make the move straight again.
+// path. Remove path in the floating editor, and in the closed path's right-click menu,
+// makes the move straight again; it has no key (owner, 2026-11-04), so Shift+Backspace
+// doesn't.
 
 const HOME: SeedPosition[] = [
     [1, 500, 300],
@@ -214,8 +215,8 @@ test("change: P draws a cornered path for one marcher, Enter saves it as one und
     await expect.poll(() => drawnPath(page)).toEqual({ points: 4, handles: 0 });
     expect((await readField(page)).selection).toEqual([1]);
 
-    // A right-click on its line: the field's menu offers Edit path and Remove path, with its key;
-    // Edit path opens it
+    // A right-click on its line: the field's menu offers Edit path and Remove path; Edit path
+    // opens it
     await page.mouse.click(onLine.x, onLine.y, { button: "right" });
     const fieldMenu = page.getByTestId("field-menu");
     await expect(fieldMenu).toBeVisible();
@@ -277,9 +278,19 @@ test("change: P draws a cornered path for one marcher, Enter saves it as one und
     await expect.poll(() => drawnPath(page)).toEqual({ points: 5, handles: 0 });
     await expect(page.getByTestId("path-editor")).toBeHidden();
 
-    // Shift+Backspace removes the closed path too, as one undo step; undo brings it back
-    const beforeRemove = await undoSteps(show);
+    // Shift+Backspace does nothing to it: Remove path has no key
     await page.keyboard.press("Shift+Backspace");
+    await waitForIdle(page);
+    expect((await routes(show)).length).toBe(1);
+
+    // Remove path in its right-click menu removes the closed path, as one undo step; undo brings
+    // it back
+    const beforeRemove = await undoSteps(show);
+    await page.mouse.click(onLine.x, onLine.y, { button: "right" });
+    await page
+        .getByTestId("field-menu")
+        .getByTestId("field-menu-removePath")
+        .click();
     await waitForIdle(page);
     await expect.poll(async () => routes(show)).toEqual([]);
     expect(await undoSteps(show)).toBe(beforeRemove + 1);

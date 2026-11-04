@@ -110,14 +110,16 @@ describe("FieldContextMenu", () => {
         expect(onClose).toHaveBeenCalled();
     });
 
-    it("offers only a mode's actions where it gives them: a path's Edit path and Remove path, with their keys", () => {
+    it("offers only a mode's actions where it gives them: a path's Edit path and Remove path, with icons and no keys", () => {
         const edit = handle("editPath");
         handle("removePath");
         const { onClose } = open({ actions: ["editPath", "removePath"] });
         expect(item("editPath")?.textContent).toContain("Edit path");
         expect(item("removePath")?.textContent).toContain("Remove path");
-        // Remove path's key as one keycap
-        expect(item("removePath")?.querySelector("kbd")).not.toBeNull();
+        // Each with its icon; Remove path has no key, so it can't happen by accident
+        expect(item("editPath")?.querySelector("svg")).not.toBeNull();
+        expect(item("removePath")?.querySelector("svg")).not.toBeNull();
+        expect(item("removePath")?.querySelector("kbd")).toBeNull();
         // None of the field's own
         for (const id of FIELD_MENU_ACTIONS) expect(item(id)).toBeNull();
         fireEvent.click(item("editPath")!);

@@ -157,8 +157,8 @@ export function usePathPenActions(): void {
  * - Drawing: Enter (applyShape) finishes, Backspace or Delete (shapeRemoveLastPoint) and undo take
  *   the last corner back, Escape (cancelAlignmentUpdates) cancels.
  * - Open: Escape clears the selected corner, then closes the path (it stays drawn); Backspace
- *   deletes the selected corner (its last removes the path). Shift+Backspace (Remove path) is
- *   `usePathPenActions`', open or closed.
+ *   deletes the selected corner (its last removes the path). Remove path has no key (the
+ *   path's menu and bar have it), open or closed, in `usePathPenActions`.
  */
 export function PathPenKeys(): null {
     const phase = usePathPenStore((s) => s.session?.phase ?? null);
