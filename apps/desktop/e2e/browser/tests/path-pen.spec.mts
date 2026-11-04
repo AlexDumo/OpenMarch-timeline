@@ -17,10 +17,14 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 // own Paths tab) starts the pen, clicks place corners on half steps, Backspace takes
 // the last back, Enter saves the route as one undo step (the resolver tests check the
 // marcher walks it). Undo takes the path away and redo brings the same route back.
-// With two marchers selected P refuses ("one marcher for now"). On the open path, a
-// corner dragged with Shift (fine) lands off the grid, a click mid-leg adds a corner,
-// each one undo step, and the corner's menu deletes corners; deleting the last one
-// removes the path. Remove path in the floating editor makes the move straight again.
+// With two marchers selected P refuses ("one marcher for now"). A stored path is shown
+// closed with its marcher selected: drawn, with no handles and no floating editor
+// (owner lab feedback, 2026-11-04). A double-click on its line, or Edit path in its
+// right-click menu, opens it; Escape closes it again. On the open path, a corner
+// dragged with Shift (fine) lands off the grid, a click mid-leg adds a corner, each one
+// undo step, and the corner's menu deletes corners; deleting the last one removes the
+// path. Remove path in the floating editor, and Shift+Backspace on the closed path,
+// make the move straight again.
 
 const HOME: SeedPosition[] = [
     [1, 500, 300],
@@ -65,6 +69,18 @@ const routes = (show: Show) =>
     show.query<{ id: number; geometry: string }>(
         "SELECT id, geometry FROM timeline_routes ORDER BY id",
     );
+
+/** The path as the field draws it: its line, and how many handles it has */
+const drawnPath = (page: Page) =>
+    page.evaluate(() => {
+        const overlay = window.fieldTest!.shapeOverlay?.() ?? null;
+        return overlay
+            ? {
+                  points: overlay.outline?.length ?? 0,
+                  handles: overlay.handles.length + overlay.addHandles.length,
+              }
+            : null;
+    });
 
 const undoSteps = async (show: Show) => {
     const [row] = await show.query<{ count: number }>(
@@ -144,16 +160,12 @@ test("change: P draws a cornered path for one marcher, Enter saves it as one und
         "SELECT path_style, route_id FROM timeline_transitions WHERE route_id IS NOT NULL",
     );
     expect(t).toMatchObject({ path_style: "route", route_id: route!.id });
-    // The path is open with its editor: Remove path, and no name in it
-    await expect(page.getByTestId("path-editor")).toHaveAttribute(
-        "data-phase",
-        "open",
-    );
-    await expect(page.getByTestId("path-editor")).not.toContainText("T1");
-    await expect(page.getByTestId("path-remove")).toBeVisible();
+    // Finished, the path is left shown and closed: drawn through its corners, nothing to
+    // grab and no editor
+    await expect(page.getByTestId("path-editor")).toBeHidden();
+    await expect.poll(() => drawnPath(page)).toEqual({ points: 4, handles: 0 });
 
     // Undo takes it away; redo brings the same route back
-    await page.keyboard.press("Escape");
     await page.keyboard.press("ControlOrMeta+z");
     await waitForIdle(page);
     expect(await routes(show)).toEqual([]);
@@ -161,13 +173,58 @@ test("change: P draws a cornered path for one marcher, Enter saves it as one und
     await waitForIdle(page);
     expect(await routes(show)).toEqual([route]);
 
-    // Empty field clears the selection; selecting T1 again opens its path
+    // Empty field clears the selection, and the path goes; selecting T1 again shows it closed
     const empty = await toScreen(page, { x: 300, y: 300 + 20 * S });
     await page.mouse.click(empty.x, empty.y);
     await expect
         .poll(async () => (await readField(page)).selection)
         .toEqual([]);
+    await expect.poll(() => drawnPath(page)).toBeNull();
     await clickMarcher(page, "T1");
+    await expect.poll(() => drawnPath(page)).toEqual({ points: 4, handles: 0 });
+    await expect(page.getByTestId("path-editor")).toBeHidden();
+
+    // A click on empty field beside the closed path is the field's: it clears the selection
+    const top = { x: 700, y: c1.y };
+    const beside = await toScreen(page, { x: top.x, y: top.y + 2 * S });
+    await page.mouse.click(beside.x, beside.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([]);
+    await clickMarcher(page, "T1");
+    await expect.poll(() => drawnPath(page)).not.toBeNull();
+
+    // A double-click on the path's line opens it, keeping T1 selected: its handles and the
+    // floating editor, Remove path and no name in it
+    const onLine = await toScreen(page, top);
+    await page.mouse.move(onLine.x, onLine.y, { steps: 4 });
+    await page.mouse.dblclick(onLine.x, onLine.y);
+    await expect(page.getByTestId("path-editor")).toHaveAttribute(
+        "data-phase",
+        "open",
+    );
+    expect((await readField(page)).selection).toEqual([1]);
+    expect((await drawnPath(page))!.handles).toBeGreaterThan(0);
+    await expect(page.getByTestId("path-editor")).not.toContainText("T1");
+    await expect(page.getByTestId("path-remove")).toBeVisible();
+
+    // Escape closes it; it stays drawn, with T1 selected
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("path-editor")).toBeHidden();
+    await expect.poll(() => drawnPath(page)).toEqual({ points: 4, handles: 0 });
+    expect((await readField(page)).selection).toEqual([1]);
+
+    // A right-click on its line: the field's menu offers Edit path and Remove path, with its key;
+    // Edit path opens it
+    await page.mouse.click(onLine.x, onLine.y, { button: "right" });
+    const fieldMenu = page.getByTestId("field-menu");
+    await expect(fieldMenu).toBeVisible();
+    await expect(fieldMenu.getByTestId("field-menu-editPath")).toBeVisible();
+    await expect(fieldMenu.getByTestId("field-menu-removePath")).toBeVisible();
+    await expect(
+        fieldMenu.getByTestId("field-menu-selectAllMarchers"),
+    ).toHaveCount(0);
+    await fieldMenu.getByTestId("field-menu-editPath").click();
     await expect(page.getByTestId("path-remove")).toBeVisible();
 
     // A corner dragged with Shift (fine) lands where it's let go, off the half steps, as a
@@ -213,10 +270,25 @@ test("change: P draws a cornered path for one marcher, Enter saves it as one und
     await waitForIdle(page);
     expect(await routes(show)).toEqual([]);
     await expect(page.getByTestId("path-editor")).toBeHidden();
-    // Undo brings it back, with its three corners
+    // Undo brings it back, with its three corners, closed
     await page.keyboard.press("ControlOrMeta+z");
     await waitForIdle(page);
     await expect.poll(async () => (await routes(show)).length).toBe(1);
+    await expect.poll(() => drawnPath(page)).toEqual({ points: 5, handles: 0 });
+    await expect(page.getByTestId("path-editor")).toBeHidden();
+
+    // Shift+Backspace removes the closed path too, as one undo step; undo brings it back
+    const beforeRemove = await undoSteps(show);
+    await page.keyboard.press("Shift+Backspace");
+    await waitForIdle(page);
+    await expect.poll(async () => routes(show)).toEqual([]);
+    expect(await undoSteps(show)).toBe(beforeRemove + 1);
+    await page.keyboard.press("ControlOrMeta+z");
+    await waitForIdle(page);
+    await expect.poll(async () => (await routes(show)).length).toBe(1);
+
+    // Opened again by a double-click on its line
+    await page.mouse.dblclick(onLine.x, onLine.y);
     await expect(page.getByTestId("path-remove")).toBeVisible();
 
     // The corner's menu deletes corners; the last one removes the path, so none is left with

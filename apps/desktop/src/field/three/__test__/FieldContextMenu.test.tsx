@@ -36,11 +36,13 @@ function open({
     selectedCount = 1,
     timelineMode = true,
     onClose = vi.fn(),
+    actions = null as readonly ActionId[] | null,
 } = {}) {
     render(
         <TolgeeProvider tolgee={tolgee} fallback="Loading...">
             <FieldContextMenu
                 at={{ x: 120, y: 80 }}
+                actions={actions}
                 onClose={onClose}
                 selectedCount={selectedCount}
                 timelineMode={timelineMode}
@@ -105,6 +107,21 @@ describe("FieldContextMenu", () => {
         const { onClose } = open();
         fireEvent.click(item("timelineUnsetHere")!);
         expect(run).toHaveBeenCalledTimes(1);
+        expect(onClose).toHaveBeenCalled();
+    });
+
+    it("offers only a mode's actions where it gives them: a path's Edit path and Remove path, with their keys", () => {
+        const edit = handle("editPath");
+        handle("removePath");
+        const { onClose } = open({ actions: ["editPath", "removePath"] });
+        expect(item("editPath")?.textContent).toContain("Edit path");
+        expect(item("removePath")?.textContent).toContain("Remove path");
+        // Remove path's key as one keycap
+        expect(item("removePath")?.querySelector("kbd")).not.toBeNull();
+        // None of the field's own
+        for (const id of FIELD_MENU_ACTIONS) expect(item(id)).toBeNull();
+        fireEvent.click(item("editPath")!);
+        expect(edit).toHaveBeenCalledTimes(1);
         expect(onClose).toHaveBeenCalled();
     });
 

@@ -15,12 +15,14 @@ import {
 export type { PathCorner } from "./pathEdit";
 
 /**
- * The pen's session (pathways step 1): a path being drawn for one marcher (`drawing`), or one
- * marcher's stored path open on the field (`open`) with its corners to drag. Each write is one
- * app procedure (AP-R1, AP-R2) and one undo step.
+ * The pen's session (pathways step 1): a path being drawn for one marcher (`drawing`), the
+ * selected marcher's stored path shown on the field (`closed`: drawn, nothing to grab), or opened
+ * for editing (`open`) with its corners to drag and its floating editor. A double-click or the
+ * right-click menu on the path opens it (owner, 2026-11-04). Each write is one app procedure
+ * (AP-R1, AP-R2) and one undo step.
  */
 export interface PathSession {
-    readonly phase: "drawing" | "open";
+    readonly phase: "drawing" | "closed" | "open";
     readonly target: PathTarget;
     /** The marcher's drill number, as the drawing banner names it */
     readonly drill: string;
@@ -41,11 +43,6 @@ interface PathPenState {
     /** A save is under way: the pen takes no new edit until it settles */
     saving: boolean;
     /**
-     * The open path Escape closed (`timelineId:marcherId`), kept closed until the selection or the
-     * move changes
-     */
-    dismissed: string | null;
-    /**
      * Counts the saves: the open path reads its move again after each, so a path just finished
      * learns its route (and Remove path shows) even when the timeline caught up during the save
      */
@@ -55,12 +52,16 @@ interface PathPenState {
 export const usePathPenStore = create<PathPenState>(() => ({
     session: null,
     saving: false,
-    dismissed: null,
     saved: 0,
 }));
 
-export const pathKey = (t: Pick<PathTarget, "timelineId" | "marcherId">) =>
-    `${t.timelineId}:${t.marcherId}`;
+/** The move a path is for: the same key is the same marcher's same move */
+export const pathKey = (
+    t: Pick<PathTarget, "timelineId" | "transitionId" | "marcherId">,
+) => `${t.timelineId}:${t.transitionId}:${t.marcherId}`;
+
+const cornersOf = (target: PathTarget): PathCorner[] =>
+    target.points.map((p) => ({ id: p.id, at: { x: p.at[0], y: p.at[1] } }));
 
 /** The session's path as the handles work on it */
 export const shapeOf = (s: PathSession): PathShape => ({
@@ -86,29 +87,28 @@ export function startDrawing(target: PathTarget, drill: string): void {
             selected: null,
             dragging: null,
         },
-        dismissed: null,
     });
 }
 
-/** Opens `target`'s stored path on the field, or refreshes it after a save, keeping the selection */
-export function openPath(target: PathTarget, drill: string): void {
+/**
+ * Shows `target`'s stored path on the field, closed, or refreshes it after a save or a move of the
+ * playhead. A path already open for the same move stays open, keeping its selected corner.
+ */
+export function showPath(target: PathTarget, drill: string): void {
     const { session } = usePathPenStore.getState();
-    const corners = target.points.map((p) => ({
-        id: p.id,
-        at: { x: p.at[0], y: p.at[1] },
-    }));
-    const same =
+    const corners = cornersOf(target);
+    const open =
         session?.phase === "open" &&
         pathKey(session.target) === pathKey(target);
     const kept =
-        same && session.selected !== null
+        open && session.selected !== null
             ? Number(session.selected.slice(1)) < corners.length
                 ? session.selected
                 : null
             : null;
     usePathPenStore.setState({
         session: {
-            phase: "open",
+            phase: open ? "open" : "closed",
             target,
             drill,
             corners,
@@ -119,16 +119,47 @@ export function openPath(target: PathTarget, drill: string): void {
     });
 }
 
-/** Closes the pen and any open path; `dismiss` keeps an open path closed (Escape). */
-export function closePath(dismiss = false): void {
+/** Opens the path shown for editing (a double-click on it, or Edit path); false when none is. */
+export function openPath(): boolean {
     const { session } = usePathPenStore.getState();
+    if (!session || session.phase === "drawing") return false;
+    if (session.phase === "closed")
+        usePathPenStore.setState({
+            session: { ...session, phase: "open", selected: null },
+        });
+    return true;
+}
+
+/**
+ * Closes the open path (Escape), leaving it drawn, or cancels a drawing: the path it would have
+ * replaced, if any, is shown again.
+ */
+export function closePath(): void {
+    const { session } = usePathPenStore.getState();
+    if (!session || session.phase === "closed") return;
+    if (session.phase === "drawing" && session.target.routeId === null) {
+        clearPath();
+        return;
+    }
     usePathPenStore.setState({
-        session: null,
-        dismissed:
-            dismiss && session?.phase === "open"
-                ? pathKey(session.target)
-                : null,
+        session: {
+            ...session,
+            phase: "closed",
+            corners:
+                session.phase === "drawing"
+                    ? cornersOf(session.target)
+                    : session.corners,
+            pointer: null,
+            selected: null,
+            dragging: null,
+        },
     });
+}
+
+/** Takes the path off the field: no marcher with a path selected, or playback. */
+export function clearPath(): void {
+    if (usePathPenStore.getState().session)
+        usePathPenStore.setState({ session: null });
 }
 
 export const isDrawing = () =>
@@ -205,7 +236,7 @@ async function save(corners: readonly PathCorner[]): Promise<boolean> {
 /**
  * Enter, a double-click or a click on the last corner: the path drawn so far becomes the marcher's
  * (AP-R1). With no corner placed it's the same as Escape, as a Line with too few points is. The
- * stored path opens again once the timeline has it (`usePathPen`).
+ * path is left shown and closed, read again once the timeline has it (`usePathPen`).
  */
 export async function finishDrawing(): Promise<void> {
     const { session } = usePathPenStore.getState();
@@ -217,7 +248,7 @@ export async function finishDrawing(): Promise<void> {
     const ok = await save(session.corners);
     if (ok)
         usePathPenStore.setState((state) => ({
-            session: { ...session, phase: "open", pointer: null },
+            session: { ...session, phase: "closed", pointer: null },
             saved: state.saved + 1,
         }));
     else closePath();
@@ -271,20 +302,26 @@ export async function deleteCorner(index: number): Promise<void> {
         return;
     }
     if (corners.length === 0) {
-        await removeOpenPath();
+        await removePath();
         return;
     }
     await commitCorners(corners, session.corners, null);
 }
 
-/** Remove path (AP-R2): the move goes straight again, one undo step. */
-export async function removeOpenPath(): Promise<void> {
+/** Remove path (AP-R2), open or closed: the move goes straight again, one undo step. */
+export async function removePath(): Promise<void> {
     const { session, saving } = usePathPenStore.getState();
-    if (!session || saving || session.target.routeId === null) return;
+    if (
+        !session ||
+        session.phase === "drawing" ||
+        saving ||
+        session.target.routeId === null
+    )
+        return;
     usePathPenStore.setState({ saving: true });
     try {
         await removeRoute({ db, transitionId: session.target.transitionId });
-        closePath();
+        clearPath();
     } catch (error) {
         toastTimelineError(
             error,

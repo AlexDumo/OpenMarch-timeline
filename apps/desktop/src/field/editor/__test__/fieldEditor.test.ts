@@ -476,6 +476,38 @@ describe("FieldEditor right-click menu (#315)", () => {
         expect(ports.openMenu).not.toHaveBeenCalled();
     });
 
+    it("opens the field's menu with the mode's actions where it offers them (a path's), keeping the selection", () => {
+        const { editor, ports, state } = setup({ selected: [1] });
+        const fieldMenuAt = vi.fn((p: FieldPointer) =>
+            p.field.y === 300 ? ["editPath", "removePath"] : null,
+        );
+        editor.setMode({
+            ...fakeMode().mode,
+            openMenu: () => false,
+            fieldMenuAt,
+        });
+        rightDown(editor, 250, 300);
+        rightUp(editor, 250, 300);
+        expect(ports.openMenu).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(ports.openMenu!).mock.calls[0]![1]).toEqual([
+            "editPath",
+            "removePath",
+        ]);
+        expect(state.selected).toEqual([1]);
+        // Off it, the field's own menu, with no actions of the mode's
+        rightDown(editor, 250, 200);
+        rightUp(editor, 250, 200);
+        expect(ports.openMenu).toHaveBeenCalledTimes(2);
+        expect(vi.mocked(ports.openMenu!).mock.calls[1]![1]).toBeUndefined();
+        // A long press reaches the same menu on touch
+        editor.longPress(at(250, 300));
+        expect(ports.openMenu).toHaveBeenCalledTimes(3);
+        expect(vi.mocked(ports.openMenu!).mock.calls[2]![1]).toEqual([
+            "editPath",
+            "removePath",
+        ]);
+    });
+
     it("opens the menu for a selected placed box's marchers, keeping the selection", () => {
         const { editor, ports, state } = setup({ selected: [1, 2] });
         editor.setMode(fakeMode().mode);
@@ -2022,6 +2054,43 @@ function fakeMode({
 }
 
 describe("FieldEditor modes (#204)", () => {
+    it("lets a mode take clicks on empty field (a path's line), and leaves drags and marquees there to the field", () => {
+        const { editor, state } = setup({ selected: [1] });
+        const took: string[] = [];
+        const onLine = (p: FieldPointer) => p.field.y === EMPTY.y;
+        editor.setMode({
+            ...fakeMode({ claims: () => false }).mode,
+            ownsSelectionBox: false,
+            locksSelection: false,
+            gesture: { kind: "path", always: false },
+            takeClick: (p, double) => {
+                if (!onLine(p)) return false;
+                took.push(double ? "double" : "click");
+                return true;
+            },
+        });
+        // A click on it keeps the selection; the second click of a double-click is a double
+        click(editor, EMPTY.x, EMPTY.y);
+        expect(state.selected).toEqual([1]);
+        click(editor, EMPTY.x, EMPTY.y);
+        expect(took).toEqual(["click", "double"]);
+        expect(state.selected).toEqual([1]);
+        // A click on a marcher on it is the marcher's
+        click(editor, 300, 100);
+        expect(state.selected).toEqual([3]);
+        expect(took).toEqual(["click", "double"]);
+        // A drag from it is a marquee, the field's
+        editor.pointerDown(at(EMPTY.x - 200, EMPTY.y));
+        editor.pointerMove(at(EMPTY.x - 100, EMPTY.y - 250));
+        editor.pointerMove(at(EMPTY.x, EMPTY.y - 250));
+        editor.pointerUp(at(EMPTY.x, EMPTY.y - 250));
+        expect(took).toEqual(["click", "double"]);
+        expect(state.selected).toEqual([1, 2]);
+        // Off it, a click clears the selection as ever
+        click(editor, EMPTY.x, EMPTY.y - 50);
+        expect(state.selected).toEqual([]);
+    });
+
     it("gives a claimed press to the mode, which selects and drops nothing", () => {
         const { editor, state, ports } = setup({ selected: [2] });
         const { mode, calls } = fakeMode();

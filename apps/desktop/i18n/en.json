@@ -181,6 +181,7 @@
         "path": {
             "pen": "Path pen",
             "remove": "Remove path",
+            "edit": "Edit path",
             "keywords": "path pen pathway route corner draw curve walk",
             "finish": "Finish path",
             "removeLastCorner": "Remove last corner",

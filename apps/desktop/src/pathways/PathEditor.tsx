@@ -60,7 +60,7 @@ export function bigSteps(
 /**
  * The path pen's hint and floating editor (pathways step 1). While drawing, a hint over the field
  * says how the pen works, as the shape tool's hint does while a Line's points are clicked. Beside
- * the path, while drawing or with it open, the editor: the shape editor's bar and controls
+ * the path, while drawing or with it open (not while it's only shown, closed), the editor: the shape editor's bar and controls
  * (`EditorBarParts`), holding only what a path needs. The Big steps advice when it applies;
  * Remove last corner, Cancel and Finish while drawing (a finger has no Enter key); Remove path once
  * it's stored. Each control runs a registered command, its name and shortcut in its tooltip.
@@ -71,7 +71,8 @@ export function PathEditor({
     fieldProperties: FieldProperties;
 }) {
     const session = usePathPenStore((s) => s.session);
-    if (!session) return null;
+    // A path only shown (closed) has no editor: a double-click or its menu opens it
+    if (!session || session.phase === "closed") return null;
     return (
         <>
             {session.phase === "drawing" && <PathPenBanner session={session} />}

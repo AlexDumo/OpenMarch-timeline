@@ -40,8 +40,13 @@ export function useShapeFieldModes(
 ): void {
     const toolOpen = useShapeToolStore((s) => s.tool !== null);
     const hidden = useShapeHidden();
-    // The path pen drawing, or a path open, takes the field's presses first (pathways step 1)
-    const pathOpen = usePathPenStore((s) => s.session !== null);
+    // The path pen drawing, or a path open, takes the field's presses first (pathways step 1). A
+    // path only shown (closed) takes a double-click or a right-click on it, under an open shape or
+    // a selected placed box
+    const pathOpen = usePathPenStore(
+        (s) => s.session !== null && s.session.phase !== "closed",
+    );
+    const pathShown = usePathPenStore((s) => s.session?.phase === "closed");
     const box = useBoxSelectionStore((s) => s.selected);
     const queryClient = useQueryClient();
     useBoxSelection({ isPlaying });
@@ -80,9 +85,9 @@ export function useShapeFieldModes(
                   ? hidden
                       ? null
                       : shapeToolMode
-                  : live,
+                  : (live ?? (pathShown && !isPlaying ? pathPenMode : null)),
         );
-    }, [editor, toolOpen, hidden, live, pathOpen, isPlaying]);
+    }, [editor, toolOpen, hidden, live, pathOpen, pathShown, isPlaying]);
     useEffect(() => () => editor.setMode(null), [editor]);
     // Keyboard focus in the floating editor shows the shape's controls (#430)
     useEffect(() => watchShapeEditorFocus(), []);

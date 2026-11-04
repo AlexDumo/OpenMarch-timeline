@@ -47,6 +47,9 @@ import { fieldToElement, useFieldViewStore } from "./fieldView";
  *   "Hold from previous page (3 of 5)", when it would change only some of them.
  * - Arranging the selection: align and distribute, and Swap (two marchers).
  * - **Select all**, which right-clicking empty field reaches for.
+ *
+ * A right-click on what a field mode draws can offer its own actions instead (`actions`): on a
+ * marcher's path, **Edit path** and **Remove path** (pathways).
  */
 const GROUPS: readonly (readonly ActionId[])[] = [
     ["shapeGroup", "shapeUngroup"],
@@ -102,12 +105,15 @@ const closedSnapshot = () => "";
 
 export default function FieldContextMenu({
     at,
+    actions = null,
     onClose,
     selectedCount,
     timelineMode,
 }: {
     /** Where it opens, in CSS pixels in the field's element; null while closed. */
     at: { x: number; y: number } | null;
+    /** The actions it offers instead of the field's own (a mode's, such as a path's), or null */
+    actions?: readonly ActionId[] | null;
     onClose: () => void;
     selectedCount: number;
     /** Whether the show's timeline is loaded (Unset and the holds need it). */
@@ -139,9 +145,11 @@ export default function FieldContextMenu({
                 : true;
     const enabled = (id: ActionId) =>
         isActionEnabled(id) && (id !== "swapMarchers" || selectedCount === 2);
-    const groups = GROUPS.map((group) => group.filter(shown)).filter(
-        (group) => group.length > 0,
-    );
+    const groups = actions
+        ? [actions]
+        : GROUPS.map((group) => group.filter(shown)).filter(
+              (group) => group.length > 0,
+          );
 
     return (
         <DropdownMenu.Root
@@ -232,6 +240,8 @@ export default function FieldContextMenu({
 }
 
 type MenuPoint = { x: number; y: number };
+/** Where the menu is open, and the mode's actions it offers there instead of its own, if any */
+type OpenFieldMenu = { at: MenuPoint; actions: readonly ActionId[] | null };
 
 /**
  * Where the field's menu is open, in CSS pixels in the field's element, and
@@ -249,9 +259,17 @@ export function useFieldMenu({
     editor: FieldEditor;
     hasSelection: boolean;
 }) {
-    const [at, setAt] = useState<MenuPoint | null>(null);
-    const openAt = useCallback((point: MenuPoint) => setAt(point), []);
-    const close = useCallback(() => setAt(null), []);
+    const [open, setOpen] = useState<OpenFieldMenu | null>(null);
+    const openAt = useCallback(
+        (point: MenuPoint, actions?: readonly string[]) =>
+            setOpen({
+                at: point,
+                actions: (actions as readonly ActionId[] | undefined) ?? null,
+            }),
+        [],
+    );
+    const close = useCallback(() => setOpen(null), []);
+    const setAt = (at: MenuPoint) => setOpen({ at, actions: null });
     useActionHandler(
         "openFieldMenu",
         () => {
@@ -267,7 +285,12 @@ export function useFieldMenu({
         },
         { enabled: hasSelection },
     );
-    return { at, openAt, close };
+    return {
+        at: open?.at ?? null,
+        actions: open?.actions ?? null,
+        openAt,
+        close,
+    };
 }
 
 /** The middle of the selected marchers drawn (hidden ones aren't), in field units; null with none. */

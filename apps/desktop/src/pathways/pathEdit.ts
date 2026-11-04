@@ -98,6 +98,37 @@ export function pathHandleAt(
     return best?.handle ?? null;
 }
 
+/** How far `at` is from the segment `a`–`b` */
+function fromSegment(at: XY, a: XY, b: XY): number {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const l2 = dx * dx + dy * dy;
+    const t =
+        l2 === 0
+            ? 0
+            : Math.max(
+                  0,
+                  Math.min(1, ((at.x - a.x) * dx + (at.y - a.y) * dy) / l2),
+              );
+    return Math.hypot(at.x - (a.x + dx * t), at.y - (a.y + dy * t));
+}
+
+/**
+ * Whether a press at `at` is on the drawn path: within the handle reach (`hitRadius`, a few screen
+ * pixels at any zoom) of one of its legs, as a press is on a Line (`onLine`). Only a double-click
+ * or a right-click there is the path's; empty field around it stays the field's.
+ */
+export function onPath(
+    shape: PathShape,
+    at: XY,
+    env: Pick<ToolEnv, "hitRadius">,
+): boolean {
+    const points = pathPoints(shape);
+    return points
+        .slice(1)
+        .some((b, i) => fromSegment(at, points[i]!, b) <= env.hitRadius);
+}
+
 /**
  * Where a corner clicked at `at` lands while drawing, after the points so far (the marcher's
  * start, then the corners placed): as a Line's clicked point lands, on the half-step grid or a

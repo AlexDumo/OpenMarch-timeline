@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { PathEditor } from "../PathEditor";
-import { closePath, openPath, startDrawing } from "../pathPenStore";
+import { clearPath, openPath, showPath, startDrawing } from "../pathPenStore";
 import type { PathTarget } from "../pathTarget";
 
 /**
@@ -35,7 +35,7 @@ const target = (routeId: number | null, steps = 8): PathTarget => ({
 });
 
 afterEach(() => {
-    act(() => closePath());
+    act(() => clearPath());
     cleanup();
 });
 
@@ -81,7 +81,10 @@ describe("the path's floating editor", () => {
 
     it("open: only Remove path, and Big steps when the path is too long, in the bar's one text size", () => {
         // 64 steps of path in 8 counts: big steps
-        act(() => openPath(target(5, 32), "T4"));
+        act(() => {
+            showPath(target(5, 32), "T4");
+            openPath();
+        });
         render(<PathEditor fieldProperties={fieldProperties} />);
         const el = bar();
         expect(el.dataset.phase).toBe("open");
@@ -98,8 +101,20 @@ describe("the path's floating editor", () => {
         expect(el.textContent).not.toContain("T4");
     });
 
+    it("closed (the path only shown): no editor, until it's opened", () => {
+        act(() => showPath(target(5, 32), "T4"));
+        render(<PathEditor fieldProperties={fieldProperties} />);
+        expect(screen.queryByTestId("path-editor")).toBeNull();
+        expect(screen.queryByTestId("path-pen-banner")).toBeNull();
+        act(() => void openPath());
+        expect(bar().dataset.phase).toBe("open");
+    });
+
     it("open with an easy path: no Big steps", () => {
-        act(() => openPath(target(5), "T4"));
+        act(() => {
+            showPath(target(5), "T4");
+            openPath();
+        });
         render(<PathEditor fieldProperties={fieldProperties} />);
         expect(screen.queryByTestId("path-big-steps")).toBeNull();
         expect(screen.getByTestId("path-remove")).toBeTruthy();

@@ -3,10 +3,11 @@
 # Keep `id` stable: feedback is filed under it.
 id: path-pen
 title: Draw a path for one marcher (pathways, step 1)
-summary: The first step of pathways. Select one marcher, press P, click corners between where it starts and its end spot, and double-click or press Enter. The marcher walks your path at one steady speed. This round, the pen has its own Paths tab, its small editor looks like the shape editor, and drawing and editing work like the Line in the shape tool.
+summary: The first step of pathways. Select one marcher, press P, click corners between where it starts and its end spot, and double-click or press Enter. The marcher walks your path at one steady speed. This round, a path is no longer editable all the time: it shows on the field, and you double-click it or right-click it to edit it.
 status: open
 variants: []
 questions:
+  - Opening a path to edit it: is a double-click on its line, or Edit path in its right-click menu, the way you'd expect? Was the path easy enough to hit, and did a click beside it still do what the field normally does?
   - Is the Paths tab the right home for the Path pen, apart from Shapes?
   - Did drawing feel like the Line? Clicks for corners, double-click or Enter to finish, right-click or Backspace to take one back, Escape to cancel.
   - On an open path, did dragging a corner, Shift for fine, Ctrl or Cmd to keep its direction, clicking the small dot mid-leg to add a corner, and the corner's right-click menu work as you expected?
@@ -20,6 +21,21 @@ marcher walk a path you draw: a run of corners from where it starts to its end
 spot.
 
 **What changed since the last round**
+
+- A path is no longer editable all the time. With its marcher selected, the
+  path is drawn on the field with no handles and no small editor, so clicks and
+  drags around it work as they normally do.
+  - **Double-click** the path's line to edit it: its corners, the dots mid-leg
+    and the small editor come back.
+  - **Right-click** the line (or long-press it on a tablet) for **Edit path**
+    and **Remove path**.
+  - **Escape**, a click on empty field, selecting something else, or moving the
+    playhead off the move closes it again. Finishing a drawing leaves the path
+    shown, closed.
+  - **Remove path** (Shift+Backspace) works whether the path is open or not.
+    **Edit path** is also in the command palette.
+
+**Changed in the round before**
 
 - The Path pen has its own **Paths** tab in the toolbar, apart from Shapes.
   **P** still starts it, and its shortcuts have their own Paths group.
@@ -56,10 +72,12 @@ spot.
 5. Play the page. The marcher walks the whole path at one steady speed, passing
    the corners without stopping. The 3D View and the start flag paths follow it
    too.
-6. With that marcher selected, its path shows on the field with the small editor
-   beside it. Drag corners, add them with the dots mid-leg, and delete them from
-   their right-click menu or with **Backspace** once selected. **Remove path**
-   (Shift+Backspace) makes the move straight again.
+6. With that marcher selected, its path shows on the field. Double-click the
+   path, or right-click it and pick **Edit path**, to open it with the small
+   editor beside it. Drag corners, add them with the dots mid-leg, and delete
+   them from their right-click menu or with **Backspace** once selected.
+   **Escape** closes it. **Remove path** (Shift+Backspace, or the right-click
+   menu) makes the move straight again.
 7. Try **Split at playhead** on the move: the path is cut at the count, and
    both halves play exactly as the whole did.
 

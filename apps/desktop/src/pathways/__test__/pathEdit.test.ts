@@ -8,6 +8,7 @@ import {
     dragPathHandle,
     landCorner,
     midpointKey,
+    onPath,
     pathHandleAt,
     pathHandles,
     pathHonors,
@@ -142,5 +143,19 @@ describe("the menus", () => {
         const added = PATH_MENU.pick(path, 1, "m0", "add", env)!;
         expect(added.params.corners).toHaveLength(3);
         expect(added.selected).toBe("p0");
+    });
+});
+
+describe("the line", () => {
+    it("is hit within the handle reach of any leg, ends included, and not beyond it", () => {
+        // On the first leg, the middle one and the last, within the reach
+        expect(onPath(path, { x: 2, y: 25 }, env)).toBe(true);
+        expect(onPath(path, { x: 50, y: 52 }, env)).toBe(true);
+        expect(onPath(path, { x: 99, y: 10 }, env)).toBe(true);
+        // Inside the path's bend, empty field: not the path's
+        expect(onPath(path, { x: 50, y: 25 }, env)).toBe(false);
+        // Just past the reach, and past an end
+        expect(onPath(path, { x: 50, y: 54 }, env)).toBe(false);
+        expect(onPath(path, { x: -4, y: 0 }, env)).toBe(false);
     });
 });

@@ -27,6 +27,7 @@ import {
     dragPathHandle,
     landCorner,
     legOf,
+    onPath,
     pathHandleAt,
     pathHandles,
     pathHonors,
@@ -42,6 +43,7 @@ import {
     dragCorners,
     finishDrawing,
     insertCorner,
+    openPath,
     removeLastCorner,
     selectCorner,
     setPointer,
@@ -67,6 +69,9 @@ const honored = (shape: PathShape, key: string | null): HonoredRoles => ({
 /** The handle-menu `kind` the path's menus go through, as a shape's do */
 const MENU_KIND = { menu: PATH_MENU };
 
+/** What the field's menu offers on a path: open it, or take it away (one undo step) */
+export const PATH_FIELD_MENU = ["editPath", "removePath"] as const;
+
 /**
  * The path pen on the field (pathways step 1), working as the shape tool's Line does:
  *
@@ -74,10 +79,16 @@ const MENU_KIND = { menu: PATH_MENU };
  *   half-step grid or a field line; off the grid with fine, at 45° from the last with constrain).
  *   A double-click, a click on the last corner or on the end spot, or Enter finishes; a
  *   right-click, Backspace or undo takes the last corner back; Escape cancels.
+ * - Closed (the selected marcher's path, shown): the path takes no press, so clicks, drags and
+ *   marquees around it are the field's. A double-click on its line opens it (a click there keeps
+ *   the selection, so the double-click has a first click); a right-click or long press there opens
+ *   the field's menu with Edit path and Remove path.
  * - Open: the path takes only presses on its handles, so the marchers stay selectable. A click on
  *   a corner selects it; a drag moves it (fine off the grid, constrain keeping its direction),
  *   saved on release as one undo step; a click on a leg's midpoint adds a corner there, and a drag
- *   adds one and moves it. A right-click opens a corner's or a leg's menu.
+ *   adds one and moves it. A right-click opens a corner's or a leg's menu, and elsewhere on the
+ *   line the field's menu with Remove path. A click on empty field changes the selection, which
+ *   closes it.
  *
  * The held-roles chip names what a drag reads, from the press, as it does for a shape's handles.
  */
@@ -126,9 +137,19 @@ class PathPenMode implements FieldMode {
         return env ? pathHandleAt(shapeOf(s), pointer.field, env) : null;
     }
 
+    /** Whether `pointer` is on the path's line, open or closed */
+    private onLine(s: PathSession, pointer: Pick<FieldPointer, "field">) {
+        const env = envOf();
+        return (
+            s.phase !== "drawing" &&
+            !!env &&
+            onPath(shapeOf(s), pointer.field, env)
+        );
+    }
+
     claims(pointer: FieldPointer): boolean {
         const s = this.session;
-        if (!s || pointer.button !== 0) return false;
+        if (!s || pointer.button !== 0 || s.phase === "closed") return false;
         if (s.phase === "drawing") return true;
         if (usePathPenStore.getState().saving) return false;
         return this.handleAt(s, pointer) !== null;
@@ -296,7 +317,7 @@ class PathPenMode implements FieldMode {
 
     cursorAt(pointer: FieldPointer): FieldCursor | null {
         const s = this.session;
-        if (!s) return null;
+        if (!s || s.phase === "closed") return null;
         // Between clicks the next leg follows the pointer with the roles its keys hold, so it
         // lands where a click would, as a Line's does
         if (s.phase === "drawing") {
@@ -317,7 +338,7 @@ class PathPenMode implements FieldMode {
      */
     openMenu(pointer: FieldPointer): boolean {
         const s = this.session;
-        if (!s) return false;
+        if (!s || s.phase === "closed") return false;
         if (s.phase === "drawing") return removeLastCorner();
         const handle = this.handleAt(s, pointer);
         return openHandleMenu(
@@ -341,6 +362,25 @@ class PathPenMode implements FieldMode {
         );
     }
 
+    /** On the path's line (no handle took it): Edit path and Remove path, in the field's menu */
+    fieldMenuAt(pointer: FieldPointer): readonly string[] | null {
+        const s = this.session;
+        if (!s || s.target.routeId === null || !this.onLine(s, pointer))
+            return null;
+        return PATH_FIELD_MENU;
+    }
+
+    /**
+     * A click on the path's line keeps the selection (the field's rule would let the marcher go,
+     * and the path with it); the second click of a double-click opens it. Elsewhere, the field's.
+     */
+    takeClick(pointer: FieldPointer, double: boolean): boolean {
+        const s = this.session;
+        if (!s || !this.onLine(s, pointer)) return false;
+        if (double) openPath();
+        return true;
+    }
+
     drawing(): FieldModeDrawing | null {
         return drawingOf(this.session);
     }
@@ -358,8 +398,8 @@ let last: { session: PathSession | null; drawing: FieldModeDrawing | null } = {
 
 /**
  * What the pen draws: the path from where the marcher starts (its ghost) through the corners to
- * its end spot, its handles as a Line's are drawn (squares on the corners, the selected one
- * filled, small round ones mid-leg), and while drawing a leg to where the next corner would land,
+ * its end spot, the same open or closed; once open, its handles as a Line's are drawn (squares on
+ * the corners, the selected one filled, small round ones mid-leg), and while drawing a leg to where the next corner would land,
  * with where that is in drill terms. While the pointer lands a corner on one of the field's lines,
  * a guide along it, named as the coordinate sheet writes it, as for a Line's points. Worked out
  * once per session state: the overlay reads it as a snapshot.
@@ -382,12 +422,14 @@ export function drawingOf(
         ];
         const handles = drawingNow
             ? { handles: middle, addHandles: [], selectedHandles: [] }
-            : handleDrawing(
-                  { handles: () => pathHandles(shape) },
-                  shape,
-                  1,
-                  selected,
-              );
+            : session.phase === "closed"
+              ? { handles: [], addHandles: [], selectedHandles: [] }
+              : handleDrawing(
+                    { handles: () => pathHandles(shape) },
+                    shape,
+                    1,
+                    selected,
+                );
         // The point being placed or dragged: guides where it's on a field line, and where it is
         const moving = drawingNow
             ? pointer

@@ -901,7 +901,18 @@ const STATIC_ACTIONS = {
         defaultBindings: ["P"],
         ignoreRepeat: true,
     },
-    // The open path's Remove path (AP-R2): the move goes straight again
+    // Opens the selected marcher's path at the playhead for editing, as a double-click on it does
+    // (owner, 2026-11-04). No key: shapes have none for editing points (Enter places a shape)
+    editPath: {
+        labelKey: "actions.path.edit",
+        keywordsKey: "actions.path.keywords",
+        category: "path",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    // Remove path (AP-R2), the path open or not: the move goes straight again
     removePath: {
         labelKey: "actions.path.remove",
         keywordsKey: "actions.path.keywords",
