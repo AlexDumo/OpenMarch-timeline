@@ -102,7 +102,7 @@ const MODE_ITEM_CLASS = clsx(ITEM_CLASS, "py-4");
 const MODE_CONTENT_CLASS = TIMELINE_MENU_CONTENT_CLASS.replace(
     "min-w-[180px]",
     "",
-);
+).replace("gap-4", "gap-0");
 
 /** A mode's entries' icons */
 const MODE_ICONS: Partial<Record<ActionId, Icon>> = {
