@@ -6,6 +6,10 @@ import {
     getNewMeasuresFromCreatedBeats,
     getLastBeatOfTempoGroup,
     tempoGroupFromWorkspaceSettings,
+    sameTempo,
+    beatUpdatesForTempo,
+    beatUpdatesForManualTempos,
+    type TempoGroup,
 } from "../TempoGroup/TempoGroup";
 import type Measure from "../../../global/classes/Measure";
 import { measureIsMixedMeter } from "../TempoGroup/TempoGroup";
@@ -371,9 +375,7 @@ describe("TempoGroupsFromMeasures", () => {
         expect(result[0]).toMatchObject({
             name: "",
             tempo: 100,
-            manualTempos: [100, 133.33, 166.67].map(
-                (t) => Math.round(t * 100) / 100,
-            ),
+            manualTempos: [100, 133.333, 166.667],
             bigBeatsPerMeasure: 3,
             numOfRepeats: 1,
             strongBeatIndexes: undefined,
@@ -866,11 +868,22 @@ describe("measureHasOneTempo", () => {
         expect(measureHasOneTempo(measure)).toBe(true);
     });
 
-    it("should return false for measure with very small duration differences", () => {
+    it("should return true for durations that differ by far less than the tempo shown", () => {
         const measure = createMockMeasure({
             beats: [
                 createMockBeat(0.5),
-                createMockBeat(0.5000001), // Tiny difference
+                createMockBeat(0.5000001), // 119.99998 BPM: shown as 120
+                createMockBeat(0.5),
+            ],
+        });
+        expect(measureHasOneTempo(measure)).toBe(true);
+    });
+
+    it("should return false for measure with a small but real duration difference", () => {
+        const measure = createMockMeasure({
+            beats: [
+                createMockBeat(0.5),
+                createMockBeat(0.501), // 119.76 BPM
                 createMockBeat(0.5),
             ],
         });
@@ -1690,6 +1703,186 @@ describe("tempoGroupFromWorkspaceSettings", () => {
                 );
                 expect(result).toMatchObject(expected);
             },
+        );
+    });
+});
+
+/**
+ * Floating-point rounding: saving the tempo editor without changing anything must not move any
+ * beat, and grouping mustn't depend on how a duration was calculated.
+ */
+describe("tempo rounding", () => {
+    let nextId = 1;
+    const beat = (duration: number): Beat => ({
+        id: nextId++,
+        position: nextId,
+        duration,
+        includeInMeasure: true,
+        notes: null,
+        index: nextId,
+        timestamp: 0,
+    });
+    const measure = (durations: number[], number = 1): Measure => {
+        const beats = durations.map(beat);
+        return {
+            id: nextId++,
+            startBeat: beats[0],
+            number,
+            rehearsalMark: null,
+            notes: null,
+            duration: durations.reduce((a, b) => a + b, 0),
+            counts: beats.length,
+            beats,
+            timestamp: 0,
+        };
+    };
+    // 60 / 152 and the same tempo by way of a 1.5 scale differ in the last bits
+    const q152 = 60 / 152;
+    const q152Scaled = (q152 * 1.5) / 1.5;
+
+    it("the two ways of getting 152 BPM really do differ (the fixture is meaningful)", () => {
+        expect(q152Scaled).not.toBe(q152);
+        expect(sameTempo(q152, q152Scaled)).toBe(true);
+    });
+
+    it("sameTempo tells real tempo differences apart", () => {
+        expect(sameTempo(60 / 152, 60 / 152.01)).toBe(false);
+        expect(sameTempo(0, 0)).toBe(true);
+        expect(sameTempo(0.5, 0)).toBe(false);
+    });
+
+    it("a measure is one tempo however its durations were calculated", () => {
+        expect(
+            measureHasOneTempo(measure([q152, q152Scaled, q152, q152])),
+        ).toBe(true);
+    });
+
+    it("measures at the same tempo stay one group", () => {
+        const groups = TempoGroupsFromMeasures([
+            measure([q152, q152, q152, q152], 1),
+            measure([q152Scaled, q152, q152Scaled, q152], 2),
+        ]);
+        expect(groups).toHaveLength(1);
+        expect(groups[0].numOfRepeats).toBe(2);
+        expect(groups[0].manualTempos).toBeUndefined();
+    });
+
+    it("a mixed meter's long beats are found however they were calculated", () => {
+        const long = q152 * 1.5;
+        const longOtherWay = 60 / (152 / 1.5);
+        expect(long).not.toBe(longOtherWay);
+        const m = measure([q152, q152, long, longOtherWay]);
+        expect(measureIsMixedMeter(m)).toBe(true);
+        expect(getStrongBeatIndexes(m)).toEqual([2, 3]);
+    });
+
+    describe("saving the tempo editor", () => {
+        // fitted to music: not on a round tempo
+        const fitted = 0.41731;
+
+        it("saving without a change writes no beats", () => {
+            const [group] = TempoGroupsFromMeasures([
+                measure([fitted, fitted, fitted, fitted]),
+            ]);
+            const oldBeats = group.measures!.flatMap((m) => m.beats);
+            // the editor's field holds the tempo as text
+            const newTempo = Number(group.tempo.toString());
+            const newBeats = newBeatsFromTempoGroup({
+                tempo: newTempo,
+                numRepeats: group.numOfRepeats,
+                bigBeatsPerMeasure: group.bigBeatsPerMeasure,
+            });
+            // without the check, the rounded tempo would move the beats
+            expect(newBeats[0].duration).not.toBe(fitted);
+            expect(
+                beatUpdatesForTempo(group, oldBeats, newTempo, newBeats),
+            ).toEqual([]);
+        });
+
+        it("saving a mixed meter without a change writes no beats", () => {
+            const [group] = TempoGroupsFromMeasures([
+                measure([fitted, fitted, fitted * 1.5]),
+            ]);
+            const oldBeats = group.measures!.flatMap((m) => m.beats);
+            expect(
+                beatUpdatesForTempo(group, oldBeats, group.tempo, [], [2]),
+            ).toEqual([]);
+        });
+
+        it("a changed tempo writes every beat", () => {
+            const [group] = TempoGroupsFromMeasures([
+                measure([fitted, fitted, fitted, fitted]),
+            ]);
+            const oldBeats = group.measures!.flatMap((m) => m.beats);
+            const newBeats = newBeatsFromTempoGroup({
+                tempo: 150,
+                numRepeats: 1,
+                bigBeatsPerMeasure: 4,
+            });
+            expect(beatUpdatesForTempo(group, oldBeats, 150, newBeats)).toEqual(
+                oldBeats.map((b) => ({ id: b.id, duration: 0.4 })),
+            );
+        });
+
+        it("a changed long-beat pattern writes every beat", () => {
+            const [group] = TempoGroupsFromMeasures([
+                measure([fitted, fitted, fitted * 1.5]),
+            ]);
+            const oldBeats = group.measures!.flatMap((m) => m.beats);
+            const newBeats = newBeatsFromTempoGroup({
+                tempo: group.tempo,
+                numRepeats: 1,
+                bigBeatsPerMeasure: 3,
+                strongBeatIndexes: [0],
+            });
+            expect(
+                beatUpdatesForTempo(
+                    group,
+                    oldBeats,
+                    group.tempo,
+                    newBeats,
+                    [0],
+                ),
+            ).toHaveLength(3);
+        });
+
+        it("per-beat tempos write only the beats edited", () => {
+            const [group] = TempoGroupsFromMeasures([
+                measure([0.41731, 0.42917, 0.44203, 0.45511]),
+            ]);
+            expect(group.manualTempos).toHaveLength(4);
+            const oldBeats = group.measures!.flatMap((m) => m.beats);
+            const edited = [...group.manualTempos!];
+            expect(beatUpdatesForManualTempos(group, oldBeats, edited)).toEqual(
+                [],
+            );
+            edited[2] = 130;
+            expect(beatUpdatesForManualTempos(group, oldBeats, edited)).toEqual(
+                [{ id: oldBeats[2].id, duration: 60 / 130 }],
+            );
+        });
+
+        it("a group's tempo with no measures can't be saved as a change", () => {
+            const group: TempoGroup = {
+                name: "",
+                tempo: 120,
+                bigBeatsPerMeasure: 4,
+                numOfRepeats: 1,
+            };
+            expect(beatUpdatesForTempo(group, [], 120, [])).toEqual([]);
+        });
+    });
+
+    it("a gradual change computes each beat from the start tempo", () => {
+        const beats = newBeatsFromTempoGroup({
+            tempo: 120,
+            numRepeats: 25,
+            bigBeatsPerMeasure: 4,
+            endTempo: 80,
+        });
+        const delta = (80 - 120) / 100;
+        beats.forEach((b, n) =>
+            expect(b.duration).toBe(60 / (120 + delta * n)),
         );
     });
 });

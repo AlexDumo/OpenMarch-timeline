@@ -78,17 +78,35 @@ const aboutEqual = (a: number, b: number, epsilon = 0.00001): boolean => {
 };
 
 /**
- * Checks if all beats in a measure have the same duration.
+ * Whether two beat durations are the same tempo. Durations built different ways (60 / 144 against
+ * 60 / 144 * 1.5 / 1.5, or after a scale) can differ in the last bits, so an exact comparison
+ * split groups at random. The tolerance is the tempo shown in the editor: 0.001 BPM.
+ */
+export const sameTempo = (a: number, b: number): boolean =>
+    a === b || Math.abs(60 / a - 60 / b) < 0.001;
+
+/**
+ * The distinct durations among `durations`, one per tempo (see `sameTempo`), in first-seen order
+ */
+const distinctDurations = (durations: readonly number[]): number[] => {
+    const out: number[] = [];
+    for (const d of durations)
+        if (!out.some((o) => sameTempo(o, d))) out.push(d);
+    return out;
+};
+
+/**
+ * Checks if all beats in a measure have the same tempo.
  */
 export const measureHasOneTempo = (measure: Measure) => {
-    return measure.beats.every(
-        (beat) => beat.duration === measure.beats[0].duration,
+    return measure.beats.every((beat) =>
+        sameTempo(beat.duration, measure.beats[0].duration),
     );
 };
 
-const getTempoFromBeat = (beat: { duration: number }) => {
-    return Math.round((60 / beat.duration) * 100) / 100;
-};
+/** A beat's tempo as the editor shows it: the same rounding as the group's tempo */
+const getTempoFromBeat = (beat: { duration: number }) =>
+    durationToTempo(beat.duration);
 
 /**
  * Checks if two measures have the same tempo.
@@ -125,9 +143,7 @@ export const measureIsSameTempo = (measure1: Measure, measure2: Measure) => {
 };
 
 const getShortestAndLongestDurations = (measure: Measure) => {
-    const durations = new Set<number>(
-        measure.beats.map((beat) => beat.duration),
-    );
+    const durations = measure.beats.map((beat) => beat.duration);
     return {
         shortestDuration: Math.min(...durations),
         longestDuration: Math.max(...durations),
@@ -140,12 +156,12 @@ const getShortestAndLongestDurations = (measure: Measure) => {
  * This is a very common time signature for brass and percussion sections.
  */
 export const measureIsMixedMeter = (measure: Measure) => {
-    const durations = new Set<number>(
+    const durations = distinctDurations(
         measure.beats.map((beat) => beat.duration),
     );
 
     let output = false;
-    if (durations.size === 2) {
+    if (durations.length === 2) {
         const { shortestDuration, longestDuration } =
             getShortestAndLongestDurations(measure);
         const ratio = longestDuration / shortestDuration;
@@ -173,10 +189,10 @@ const measureRangeString = (startMeasure: Measure, endMeasure?: Measure) => {
  * Returns an empty array if the measure is not a valid mixed meter.
  */
 export const getStrongBeatIndexes = (measure: Measure): number[] => {
-    const durations = new Set<number>(
+    const durations = distinctDurations(
         measure.beats.map((beat) => beat.duration),
     );
-    if (durations.size !== 2) {
+    if (durations.length !== 2) {
         console.error("Measure is not a mixed meter", measure);
         return [];
     }
@@ -184,7 +200,7 @@ export const getStrongBeatIndexes = (measure: Measure): number[] => {
 
     const strongBeatIndexes: number[] = [];
     for (let i = 0; i < measure.beats.length; i++) {
-        if (measure.beats[i].duration === strongBeatDuration)
+        if (sameTempo(measure.beats[i].duration, strongBeatDuration))
             strongBeatIndexes.push(i);
     }
     return strongBeatIndexes;
@@ -356,17 +372,14 @@ export const newBeatsFromTempoGroup = ({
             }
         }
     } else {
-        let currentTempo = tempo;
         const tempoDelta =
             (endTempo - tempo) / (bigBeatsPerMeasure * numRepeats);
-        for (let i = 0; i < numRepeats; i++) {
-            for (let j = 0; j < bigBeatsPerMeasure; j++) {
-                beats.push({
-                    duration: 60 / currentTempo,
-                    include_in_measure: true,
-                });
-                currentTempo += tempoDelta;
-            }
+        // each beat from the start tempo, so rounding doesn't add up along the change
+        for (let n = 0; n < numRepeats * bigBeatsPerMeasure; n++) {
+            beats.push({
+                duration: 60 / (tempo + tempoDelta * n),
+                include_in_measure: true,
+            });
         }
     }
     return beats;
@@ -529,6 +542,51 @@ export const _createFromTempoGroupInTransaction = async ({
     return { createdBeats, createdMeasures };
 };
 
+/** Whether two lists of long-beat indexes are the same; `undefined` and `[]` both mean none */
+const sameIndexes = (a?: readonly number[], b?: readonly number[]) => {
+    const x = a ?? [];
+    const y = b ?? [];
+    return x.length === y.length && x.every((v, i) => v === y[i]);
+};
+
+/**
+ * The beats to write when the group's tempo editor is saved. The editor shows the tempo rounded;
+ * if it wasn't changed (and neither was the long-beat pattern), the beats keep their own
+ * durations, since writing 60 / the rounded tempo back would move every beat that wasn't on a
+ * round tempo.
+ */
+export const beatUpdatesForTempo = (
+    tempoGroup: TempoGroup,
+    oldBeats: readonly { id: number }[],
+    newTempo: number,
+    newBeats: readonly { duration: number }[],
+    newStrongBeatIndexes?: number[],
+): ModifiedBeatArgs[] => {
+    const changed =
+        newTempo !== tempoGroup.tempo ||
+        !sameIndexes(newStrongBeatIndexes, tempoGroup.strongBeatIndexes);
+    if (!changed) return [];
+    return oldBeats.map((beat, i) => ({
+        id: beat.id,
+        duration: newBeats[i].duration,
+    }));
+};
+
+/**
+ * The beats to write when a group's per-beat tempos are saved: only the ones edited. The rest keep
+ * their own durations (see `beatUpdatesForTempo`).
+ */
+export const beatUpdatesForManualTempos = (
+    tempoGroup: TempoGroup,
+    oldBeats: readonly { id: number }[],
+    newManualTempos: readonly number[],
+): ModifiedBeatArgs[] =>
+    oldBeats.flatMap((beat, i) =>
+        tempoGroup.manualTempos?.[i] === newManualTempos[i]
+            ? []
+            : [{ id: beat.id, duration: 60 / newManualTempos[i] }],
+    );
+
 export const useUpdateTempoGroup = () => {
     return useTempoGroupMutation(
         _updateTempoGroup,
@@ -569,28 +627,29 @@ export const _updateTempoGroup = async ({
         );
     }
 
-    const updatedBeats: ModifiedBeatArgs[] = [];
-    for (let i = 0; i < oldBeats.length; i++) {
-        updatedBeats.push({
-            id: oldBeats[i].id,
-            duration: newBeats[i].duration,
-        });
-    }
+    const updatedBeats = beatUpdatesForTempo(
+        tempoGroup,
+        oldBeats,
+        newTempo,
+        newBeats,
+        newStrongBeatIndexes,
+    );
+    const nameChanged =
+        newName !== (tempoGroup.measures[0].rehearsalMark ?? "");
+    if (!updatedBeats.length && !nameChanged) return;
 
     await transactionWithHistory(
         db,
         "updateTempoGroup",
         async (tx) =>
             await withTimelinePageRipple(tx, async () => {
-                await updateBeatsInTransaction({
-                    tx,
-                    modifiedBeats: updatedBeats,
-                });
+                if (updatedBeats.length)
+                    await updateBeatsInTransaction({
+                        tx,
+                        modifiedBeats: updatedBeats,
+                    });
 
-                if (
-                    tempoGroup.measures &&
-                    newName !== tempoGroup.measures[0].rehearsalMark
-                ) {
+                if (tempoGroup.measures && nameChanged) {
                     await updateMeasuresInTransaction({
                         tx,
                         modifiedItems: [
@@ -632,13 +691,12 @@ export const _updateManualTempos = async ({
         assertValidTempoBpm(manualTempo);
     }
 
-    const updatedBeats: ModifiedBeatArgs[] = [];
-    for (let i = 0; i < oldBeats.length; i++) {
-        updatedBeats.push({
-            id: oldBeats[i].id,
-            duration: 60 / newManualTempos[i],
-        });
-    }
+    const updatedBeats = beatUpdatesForManualTempos(
+        tempoGroup,
+        oldBeats,
+        newManualTempos,
+    );
+    if (!updatedBeats.length) return;
 
     await transactionWithHistory(
         db,
