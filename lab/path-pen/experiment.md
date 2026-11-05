@@ -20,6 +20,9 @@ this can't be exactly like the line editor, especially once we get to curves?").
 
 **What changed since the last round**
 
+- On an open path, **Backspace** or **Delete** with no point selected removes
+  the path (undo brings it back). With a point selected they delete that point
+  and select the one before it, so pressing on deletes point after point.
 - A drawn path now shows by the same rules as the straight paths: the start
   flag positions setting, and **N** (hold it, or tap it to keep it on). At the
   default, a closed path is hidden until you press N. A path you're editing or

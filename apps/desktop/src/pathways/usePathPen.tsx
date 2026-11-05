@@ -201,15 +201,21 @@ export function PathPenKeys(): null {
             if (drawing) removeLastPoint();
             else if (picked !== null) {
                 const index = Number(picked.slice(1));
-                if (Number.isInteger(index)) void deletePoint(index);
+                if (Number.isInteger(index))
+                    void deletePoint(index, { selectNeighbor: true });
             }
+            // The open path with no point selected: the path goes (owner, 2026-11-04), one undo
+            // step. Only once it's open, so a stray key on a closed path removes nothing
+            else void removePath();
         },
         {
             label: drawing
                 ? tolgee.t("actions.path.removeLastPoint", "Remove last point")
-                : tolgee.t("actions.path.deletePoint", "Delete point"),
+                : picked !== null
+                  ? tolgee.t("actions.path.deletePoint", "Delete point")
+                  : tolgee.t("actions.path.remove", "Remove path"),
         },
-        drawing || picked !== null,
+        drawing || phase === "open",
     );
     // While drawing, undo takes points back first, as a Line's points are; with none left it
     // cancels

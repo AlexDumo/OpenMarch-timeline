@@ -377,7 +377,10 @@ export async function insertPoint(leg: number): Promise<void> {
  * removes the path instead (AP-R2), so no path with no point is left behind. While drawing, the
  * point just goes.
  */
-export async function deletePoint(index: number): Promise<void> {
+export async function deletePoint(
+    index: number,
+    { selectNeighbor = false }: { selectNeighbor?: boolean } = {},
+): Promise<void> {
     const { session } = usePathPenStore.getState();
     if (!session || !session.points[index]) return;
     const points = session.points.filter((_, i) => i !== index);
@@ -389,7 +392,13 @@ export async function deletePoint(index: number): Promise<void> {
         await removePath();
         return;
     }
-    await commitPoints(points, session.points, null);
+    // From the keyboard, the point before it is selected next (the first, when it was the first),
+    // so pressing on deletes point after point, and only the last removes the path
+    await commitPoints(
+        points,
+        session.points,
+        selectNeighbor ? pointKey(Math.max(0, index - 1)) : null,
+    );
 }
 
 /**
