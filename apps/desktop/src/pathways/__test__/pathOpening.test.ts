@@ -4,11 +4,12 @@ import type { FieldPointer } from "@/field/editor/fieldEditor";
 import { setShapeField } from "@/shapes/field/shapeField";
 import { PATH_FIELD_MENU, drawingOf, pathPenMode } from "../pathPenMode";
 import {
-    addCorner,
+    addPoint,
     clearPath,
     closePath,
     openPath,
-    selectCorner,
+    selectPoint,
+    setPathHidden,
     showPath,
     startDrawing,
     usePathPenStore,
@@ -68,6 +69,7 @@ beforeEach(() => {
 
 afterEach(() => {
     clearPath();
+    setPathHidden(false);
     setShapeField(null);
 });
 
@@ -128,12 +130,12 @@ describe("closing it", () => {
     it("Escape closes the open path, which stays drawn", () => {
         showPath(target(5), "T4");
         openPath();
-        selectCorner("p0");
+        selectPoint("p0");
         closePath();
         const s = usePathPenStore.getState().session!;
         expect(s.phase).toBe("closed");
         expect(s.selected).toBeNull();
-        expect(s.corners).toHaveLength(1);
+        expect(s.points).toHaveLength(1);
     });
 
     it("stays open while the playhead stays on its move, and closes when it leaves it", () => {
@@ -149,13 +151,81 @@ describe("closing it", () => {
 
     it("a drawing cancelled over a stored path shows that path again, closed; over none, nothing", () => {
         startDrawing(target(5), "T4");
-        addCorner({ x: 1, y: 1 });
+        addPoint({ x: 1, y: 1 });
         closePath();
         const s = usePathPenStore.getState().session!;
         expect(s.phase).toBe("closed");
-        expect(s.corners.map((c) => c.id)).toEqual(["c1"]);
+        expect(s.points.map((c) => c.id)).toEqual(["c1"]);
         startDrawing(target(null), "T4");
         closePath();
         expect(usePathPenStore.getState().session).toBeNull();
+    });
+});
+
+describe("finishing a drawing (review of #680)", () => {
+    it("a press on the last point that drags past the slop finishes, adding no smooth point", async () => {
+        startDrawing(target(null), "T4");
+        addPoint({ x: 4 * STEP, y: 4 * STEP });
+        pathPenMode.press(at(4 * STEP, 4 * STEP), { isMac: false });
+        pathPenMode.move(at(5 * STEP, 4 * STEP));
+        pathPenMode.move(at(6 * STEP, 4 * STEP));
+        // Still one point while dragging: none was placed under the press
+        expect(usePathPenStore.getState().session?.points).toHaveLength(1);
+        pathPenMode.release(at(6 * STEP, 4 * STEP), null);
+        await new Promise((r) => setTimeout(r, 0));
+        const s = usePathPenStore.getState().session;
+        expect(s?.phase ?? null).not.toBe("drawing");
+        expect(s?.points.length ?? 0).toBeLessThanOrEqual(1);
+    });
+
+    it("a press on the end spot that drags past the slop finishes too", async () => {
+        startDrawing(target(null), "T4");
+        addPoint({ x: 4 * STEP, y: 4 * STEP });
+        pathPenMode.press(at(8 * STEP, 0), { isMac: false });
+        pathPenMode.move(at(8 * STEP, 2 * STEP));
+        expect(usePathPenStore.getState().session?.points).toHaveLength(1);
+        pathPenMode.release(at(8 * STEP, 2 * STEP), null);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(usePathPenStore.getState().session?.phase ?? null).not.toBe(
+            "drawing",
+        );
+    });
+
+    it("a press-and-drag elsewhere still places a smooth point", () => {
+        startDrawing(target(null), "T4");
+        addPoint({ x: 4 * STEP, y: 4 * STEP });
+        pathPenMode.press(at(6 * STEP, 6 * STEP), { isMac: false });
+        pathPenMode.move(at(8 * STEP, 6 * STEP));
+        const points = usePathPenStore.getState().session!.points;
+        expect(points).toHaveLength(2);
+        expect(points[1]!.tension ?? 0).toBeGreaterThan(0);
+        pathPenMode.release(at(8 * STEP, 6 * STEP), null);
+    });
+});
+
+describe("shown by start flag positions' rules (owner, 2026-11-04)", () => {
+    it("a closed path hidden by the paths level isn't drawn and takes no click or menu", () => {
+        showPath(target(5), "T4");
+        setPathHidden(true);
+        expect(pathPenMode.drawing()).toBeNull();
+        expect(pathPenMode.takeClick(ON_LINE, true)).toBe(false);
+        expect(pathPenMode.fieldMenuAt(ON_LINE)).toBeNull();
+        expect(phase()).toBe("closed");
+        // N (or the setting) shows it again
+        setPathHidden(false);
+        expect(pathPenMode.drawing()).not.toBeNull();
+        expect(pathPenMode.fieldMenuAt(ON_LINE)).toEqual(PATH_FIELD_MENU);
+    });
+
+    it("an open path, or one being drawn, shows whatever the level", () => {
+        showPath(target(5), "T4");
+        setPathHidden(true);
+        // Edit path opens a hidden path, which then shows
+        expect(openPath()).toBe(true);
+        expect(pathPenMode.drawing()).not.toBeNull();
+        closePath();
+        expect(pathPenMode.drawing()).toBeNull();
+        startDrawing(target(null), "T4");
+        expect(pathPenMode.drawing()).not.toBeNull();
     });
 });

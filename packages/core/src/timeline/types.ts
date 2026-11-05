@@ -183,14 +183,16 @@ export interface PathParams {
     waypoints?: XY[];
 }
 
-/** One inner point of a route (spec 5.2, v0.9 step 1): every point is a corner. */
+/** One inner point of a route (spec 5.2, v0.9): a corner, or smooth with a tension (step 2). */
 export interface RoutePoint {
     /** Non-empty, at most 16 characters, unique within its route and never reused in it */
     id: string;
     at: XY;
+    /** Roundness in (0, 2], 1 the plain curve (step 2); absent for a corner */
+    tension?: number;
 }
 
-/** A route's `geometry` (spec 5.2, I-R1). `from` and `to` are not read by the resolver. */
+/** A route's `geometry` (spec 5.2, I-R1). `from` and `to` are R-14's tangent neighbors F and G. */
 export interface RouteGeometry {
     v: 1;
     /** Where the marcher stood at the transition's start when the route was drawn */

@@ -28,6 +28,7 @@ import {
     makeTrail,
     paramT,
     walkedPoint,
+    type RouteWalk,
 } from "./geom";
 import type {
     AssignmentRow,
@@ -296,7 +297,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
     const byT = new Map<number, Set<RSpan>>(); // spansByTransition
     const dests = new Map<number, XY[]>(); // destinations
     const paths = new Map<number, DestPath>(); // ftlGeometry
-    const routeGeo = new Map<number, XY[]>(); // routeGeometry (9.2 #7): route -> inner points
+    const routeGeo = new Map<number, RouteWalk>(); // routeGeometry (9.2 #7): route -> points, from, to
     // ---- cascading caches (9.2 #5-6)
     const origins = new Map<string, XY>(); // `${m}|${start}` -> xy
     const entries = new Map<number, Entry>(); // FTL transition -> entry
@@ -361,10 +362,16 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         const r = host.routes?.[rid];
         if (!r) routeGeo.delete(rid);
         else
-            routeGeo.set(
-                rid,
-                r.geometry.points.map((pt): XY => pt.at),
-            );
+            routeGeo.set(rid, {
+                points: r.geometry.points.map((pt) => ({
+                    at: pt.at,
+                    ...(pt.tension === undefined
+                        ? {}
+                        : { tension: pt.tension }),
+                })),
+                from: r.geometry.from,
+                to: r.geometry.to,
+            });
     }
     for (const t of Object.values(host.transitions)) {
         setDest(t.id, t.dest);
@@ -551,8 +558,8 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             founding(s),
         );
     }
-    /** R-14's inner points for a route transition, from `routeGeometry`. */
-    function routeOf(t: TransitionRow): XY[] {
+    /** R-14's route for a route transition, from `routeGeometry`. */
+    function routeOf(t: TransitionRow): RouteWalk {
         const pts = t.route == null ? undefined : routeGeo.get(t.route);
         if (!pts)
             throw new Error(

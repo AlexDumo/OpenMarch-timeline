@@ -1,7 +1,7 @@
 # OpenMarch Timeline Resolution Model: Specification
 
 **Version:** 0.9, growing step by step (routes: Appendix I). 0.8 was revised after four structural reviews, two design changes and one implementation review. Appendices B to E map each review finding to its fix and evidence. Appendix F covers the design change: shapes are optional. Appendix G covers compatibility with the app's undo and redo. Appendix H covers how the app chooses layers. Appendix I covers routes, which v0.9 adds one build step at a time.
-**Date:** 2026-11-03 (v0.9 step 1); 0.8 was 2026-09-29
+**Date:** 2026-11-04 (v0.9 step 2); step 1 was 2026-11-03; 0.8 was 2026-09-29
 **Scope:** The data model and resolution engine behind timelines, shapes, transitions and assignments. It does not cover the editor UI.
 
 ---
@@ -63,7 +63,7 @@ The design replaces the current model, which stores one coordinate per (marcher,
 | **Timeline**               | A container with a range: a track in the UI. It has **no effect on resolution** (R-1). _App restriction (implementation-plan.md C-11): it is the container for start and stop, and every transition in it spans its whole range. App restriction (C-12): at most one timeline has a given range, and a page's box in the UI is the timeline ending at its flag; relaxed by UI-25 (2026-10-16): a move split off another keeps its range, and the page box is the oldest timeline over it._ |
 | **Transition**             | Motion over a range, in a given path style, into slot destinations. The destinations come from a shape or are placed individually. It owns `slot_count` **anonymous slots**. It does **not** store where marchers start.                                                                                                                                                                                                                                                                   |
 | **Slot**                   | An anonymous position within a transition, numbered `0…slot_count-1`. Its destination is sampled from the transition's shape, or is an individually placed point (R-13).                                                                                                                                                                                                                                                                                                                   |
-| **Route**                  | A path a transition's marcher walks from where it starts to its slot destination: a list of points in absolute field coordinates (R-14, v0.9). It has no knowledge of time or of marchers. **Optional**: only `route` transitions have one. |
+| **Route**                  | A path a transition's marcher walks from where it starts to its slot destination: a list of points in absolute field coordinates, each a corner or smooth (R-14, v0.9). It has no knowledge of time or of marchers. **Optional**: only `route` transitions have one. |
 | **Individual destination** | A point placed by hand for one slot of a transition that has no shape (`slot_destinations`, D-16). "Move marcher 7 here" means setting the point of marcher 7's slot.                                                                                                                                                                                                                                                                                                                      |
 | **Assignment**             | A stored row saying _marcher m occupies slot k of transition T over range [s, e), at layer L_. This is the only link between real marchers and slots.                                                                                                                                                                                                                                                                                                                                      |
 | **Layer**                  | An integer precedence. Where a marcher's assignments overlap in time, the higher layer wins. The resolver reads it as stored. The app derives it from the ranges (§6.2, D-18) and never asks the designer for it.                                                                                                                                                                                                                                                                          |
@@ -130,7 +130,7 @@ The four concepts are strictly separated. Merging any two of them is the failure
 | D-16 | **Shapes are optional. A transition's slot destinations come from a shape _or_ from individually placed points, never both.**                                                                                                                                  | Proposed (v0.6)                     | Designers need to move marchers individually as well as by shape. The resolver only ever needed one destination point per slot; a shape is just one way to produce those points. So individual placement is a second _source_ of slot destinations, and assignments, layers, steals, FTL ordering, invalidation and the derived-range bound (§8.11) are unchanged. Points are keyed by slot, not by marcher, which keeps D-4. Follow-the-leader still needs a shape, because it follows a path (I-T5). Mixing the two in one transition (a shape with a few slots nudged) is Q-14.                                                                                               |
 | D-17 | **Triggers check; they never rewrite.** A change that touches several rows, such as the anchored range edit (R-E1), is an app procedure made of explicit statements, ordered so that every intermediate state is valid.                                        | Proposed (v0.7)                     | The app's undo replays each edit's row changes in reverse. That only works if every step of the edit landed on a valid state, and if replaying a statement has no side effects. A trigger that rewrites rows breaks both (§6.1, Appendix G).                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | D-18 | **The app derives every layer from the ranges: base rows lowest, then the later start, then the earlier end (§6.2).** Nobody types or picks a layer, and no code chooses one outside the layer module.                                                         | Decided (project owner, 2026-10-16) | Keeps D-6's stored integer, so the resolver, triggers and `ref/` are unchanged. "Last edited on top" made playback depend on edit history the timeline doesn't show: a page-flag drag hid a breakaway, a one-count nudge flipped a path, and two identical timelines played differently. Start, then end, ranks a marcher's overlapping rows straight off the timeline. Cases and animations: [research/layer-priority](research/layer-priority/README.md).                                                                                                                                                                                                                      |
-| D-19 | **A transition may walk a route: points between where its marcher starts and its destination (R-14).** Routes are resolver data, like shapes; recipes stay app data. | Proposed (v0.9, ADR 0010) | Drill writers need runs, follow the leader on drawn trails, and one marcher bent around a collision. Each needs a path that isn't a straight line or a minor arc, stored where the resolver reads it, since positions come only from the resolver (D-2). v0.9 adds it one build step at a time (Appendix I); step 1 is corners only. |
+| D-19 | **A transition may walk a route: points between where its marcher starts and its destination (R-14).** Routes are resolver data, like shapes; recipes stay app data. | Proposed (v0.9, ADR 0010) | Drill writers need runs, follow the leader on drawn trails, and one marcher bent around a collision. Each needs a path that isn't a straight line or a minor arc, stored where the resolver reads it, since positions come only from the resolver (D-2). v0.9 adds it one build step at a time (Appendix I); step 1 is corners only, step 2 adds smooth points. |
 
 ---
 
@@ -432,7 +432,7 @@ Every number in `geometry` and `path_params` MUST be finite. Every authored poin
 | `follow_the_leader` | `{"waypoints": [[x,y], …]}`. May be empty. Absolute coordinates.                                                                    | **yes**      |
 | `route`             | `NULL` (I-R4). The points live in the route (below).                                                                                | no           |
 
-**Route `geometry`** (I-R1, v0.9 step 1). Absolute field units (D-5):
+**Route `geometry`** (I-R1, v0.9 steps 1 and 2). Absolute field units (D-5):
 
 ```jsonc
 {
@@ -440,23 +440,30 @@ Every number in `geometry` and `path_params` MUST be finite. Every authored poin
   "from": [x, y],   // where the marcher stood at T.start_beat when the route was drawn
   "to": [x, y],     // its destination when the route was drawn
   "points": [       // inner points in walking order; may be empty
-    { "id": "p1", "at": [x, y] },
-    { "id": "p2", "at": [x, y] }
+    { "id": "p1", "at": [x, y] },                  // a corner
+    { "id": "p2", "at": [x, y], "tension": 1 }     // a smooth point (step 2)
   ]
 }
 ```
 
-- `from` and `to` are written by the app and are **not read by the resolver in step 1**. They record
-  what the route was drawn against, for later steps (smooth points need them for tangents next to
-  the ends; re-fit and the "changed" flag compare them with the real ends). The walked path always
-  starts at the marcher's real origin and ends at its real destination (R-14).
+- `from` and `to` are written by the app. They record what the route was drawn against. From step 2
+  the resolver reads them for one thing only: they stand in for the real ends as the outer neighbours
+  of the first and last inner points when R-14 works out a smooth point's tangent, so an earlier edit
+  that moves where the marcher starts never bends the curve between inner points. Later steps also
+  compare them with the real ends (re-fit, the "changed" flag). The walked path always starts at the
+  marcher's real origin and ends at its real destination (R-14).
 - Point ids are non-empty strings of at most 16 characters, unique within the route and never
   reused in it. Later steps name points by id (pins, spots), so editing one point never renumbers
   the others. The app makes each new id fresh (random), never from the route's current points, so
   an id that has left a route (deleted, or moved to another route by AP-R7) never comes back to it.
-- In step 1 a point has exactly the keys `id` and `at`; every point is a corner. Any other key is
-  rejected (E-R1) until the step that defines it.
+- A point has the keys `id` and `at`, and optionally `tension` (step 2). Without `tension` the point
+  is a **corner**: the path turns sharply there. With it the point is **smooth**: the path bends
+  through it, and `tension` is its roundness, a finite number with `0 < tension ≤ 2`. 1 is the plain
+  centripetal Catmull–Rom curve, less is flatter, more is rounder (R-14). A corner never stores
+  `tension: 0`. These are the shape tool's Line points (`LinePoint.tension`, ADR 0006), so a path's
+  curves look and edit as a Line's do. Any other key is rejected (E-R1) until the step that defines it.
 - Every number is finite, and `from`, `to` and every point lie within `[−10⁶, 10⁶]²`.
+- A step 1 route (corners only) is a valid step 2 route and walks exactly as it did (QA-RT-9).
 
 "Left" and "right" for `bulge` follow the rotation `(dx, dy) → (−dy, dx)` in field coordinates. Whether that looks like left on screen depends on which way the renderer's y-axis points. Positive bulge means the arc bows toward `+90°` from the chord direction.
 
@@ -497,7 +504,7 @@ With this wrapper, the resolver never sees a partial edit, and a rejected edit l
 | I-D2 | Individual destinations are finite and within `[−10⁶, 10⁶]²`                                                                                                                                                                                                | CHECK                                                                                                                                                                                                            | constraint |
 | I-N1 | Integer columns (beats, slots, layers, ids) hold integers                                                                                                                                                                                                   | `STRICT` tables                                                                                                                                                                                                  | constraint |
 | I-N2 | Beats lie in `[0, 2³¹−1]`, `layer` in `[−1000, 1000]` and `slot_count` in `[1, 10000]`. Home coordinates are finite with \|x\|, \|y\| ≤ 10⁶.                                                                                                                | CHECK constraints                                                                                                                                                                                                | constraint |
-| I-R1 | Route geometry matches §5.2 (v0.9 step 1): version 1, finite numbers, every point within `[−10⁶, 10⁶]²`, unique point ids, corner points only. | App write path. `json_valid` is a CHECK. | `E-R1` |
+| I-R1 | Route geometry matches §5.2 (v0.9 steps 1 and 2): version 1, finite numbers, every point within `[−10⁶, 10⁶]²`, unique point ids, keys `id`, `at` and an optional `tension` in `(0, 2]`. | App write path. `json_valid` is a CHECK. | `E-R1` |
 | I-R2 | A `route` transition has a route, no shape and `slot_count = 1`. No other transition has a route (step 1; follow the leader on a trail relaxes this). | CHECK; the second sentence at commit | constraint; `E-R2` |
 | I-R4 | A `route` transition's `path_params` is NULL (v0.9 step 1; the group step adds an offset here). | App write path, and a commit check | `E-R4` |
 | I-R3 | Every route is walked by exactly one transition (v0.9 step 1; the group step relaxes this to at least one, with no table change). | `commit_violations` at commit | `E-R3` |
@@ -676,7 +683,7 @@ For joins and resumes, the same formula **rebases** the motion: whatever distanc
 | **R-6** `hold`             | `origin(s)`                                                           |
 | **R-7** `direct`, any kind | `lerp(origin(s), dest, p(s,b))`, where `dest = destinations[T][slot]` |
 | **R-8** `arc`, any kind    | `arcPoint(origin(s), dest, bulge, p(s,b))`, as defined below          |
-| **R-14** `route`          | the walked path of R-14 at `p(s,b)`; a join or resume walks straight, as R-7 (v0.9 step 1) |
+| **R-14** `route`          | the walked path of R-14 at `p(s,b)`; a join or resume walks straight, as R-7 (v0.9 steps 1 and 2) |
 
 `lerp(a, b, t)` is endpoint-exact: it returns `a` for `t ≤ 0` and `b` for `t ≥ 1`, bit for bit (§8.10).
 
@@ -771,7 +778,7 @@ For a transition with `n = slot_count`, slot `i` gets `p_i`:
 
 Curves are never flattened, so FTL arrival and trail adherence are exact at every radius. v0.2 flattened circles into 720 segments, which broke its own 0.01 tolerance above a radius of about 1,050 (Appendix C).
 
-### R-14: Routes [Proposed, v0.9 step 1]
+### R-14: Routes [Proposed, v0.9 steps 1 and 2]
 
 For a span `s` of a `route` transition `T` with route `R` (D-19, I-R2):
 
@@ -779,23 +786,82 @@ For a span `s` of a `route` transition `T` with route `R` (D-19, I-R2):
 A = origin(s)                   the marcher's real start (R-4)
 B = destinations[T][0]          its destination (R-13; a route transition has one slot)
 P_1 … P_n = R.points[·].at      the inner points, in order
+τ_1 … τ_n                       their tensions: R.points[i].tension, or 0 for a corner
+F = R.from, G = R.to            the ends the route was drawn against (§5.2), never walked
 ```
 
-**Founding spans** walk the polyline `A → P_1 → … → P_n → B`. **Joins and resumes** walk straight,
-exactly as R-7, and raise `D-REBASE`. A later step replaces this with a rejoin onto the route.
+**Founding spans** walk the path through `A, P_1, …, P_n, B` described below. **Joins and resumes**
+walk straight, exactly as R-7, and raise `D-REBASE`. A later step replaces this with a rejoin onto the
+route.
 
 **Cleaning.** Build `V` from `A`, the inner points and `B`:
 
 1. Start with `V = [A]`.
-2. For each `P_i` in order, append it only if `|P_i − last(V)| ≥ ε_geom`.
+2. For each `P_i` in order, append it, with its tension, only if `|P_i − last(V)| ≥ ε_geom`.
 3. While `V` has more than one point and `|last(V) − B| < ε_geom`, remove `last(V)` (an inner point,
    never `A`).
 4. Append `B`.
 
-So every leg of `V` is at least `ε_geom` long, except when `V = [A, B]`.
+Write `V = [V_0, …, V_{m+1}]`, with `V_0 = A`, `V_{m+1} = B` and the inner points left `V_1 … V_m`, each
+with its tension `τ(V_k)`. Every leg is at least `ε_geom` long, except when `V = [A, B]`. A point is
+**smooth** when it is an inner point with `τ > 0`; `A`, `B` and every corner are not.
 
-**Length.** `ℓ_j = |V_{j+1} − V_j|` (computed as `hypot`), `D_0 = 0`, `D_{j+1} = D_j + ℓ_j`,
-summed from the first leg in float64, and `L = D_last`.
+**Tangents (step 2).** Tangents come from the route alone, never from `A` or `B`. Let `P′` be the
+inner points with each point within `ε_geom` of the last point kept before it dropped (compared with
+inner points only, never with `F`, `G`, `A` or `B`), and `N = [F, P′_1, …, P′_r, G]`. An inner point
+`P_i` is **represented** by the last point of `P′` at or before it: itself when it was kept, else the
+kept point it was within `ε_geom` of. Each smooth point `V_k = P_i` has two handles, `out_k` toward
+`V_{k+1}` and `in_k` toward `V_{k−1}`, from centripetal Catmull–Rom (α = ½) through its **tangent
+neighbours** `a` and `c`, the entries of `N` just before and just after the point that represents
+`P_i`. With `q = P_i` and `τ = τ(P_i)`, each coordinate evaluated exactly as written:
+
+```
+δa = a − q,  δc = c − q,  r_a = hypot(δa),  r_c = hypot(δc)
+if r_a < ε_geom and r_c < ε_geom:  out_k = in_k = q          (no tangent: a corner in effect)
+else if r_a < ε_geom:  δa = −δc, r_a = r_c                   (mirrored)
+else if r_c < ε_geom:  δc = −δa, r_c = r_a
+d₁ = √r_a,  d₂ = √r_c
+out_k = q + (τ · (r_a · δc − r_c · δa)) / (3 · d₁ · (d₁ + d₂))
+in_k  = q + (τ · (r_c · δa − r_a · δc)) / (3 · d₂ · (d₁ + d₂))
+```
+
+At `τ = 1` these are the Bézier control points of the centripetal Catmull–Rom curve (Yuksel, Schaefer
+and Keyser, 2011), the shape tool's Line's curve (`catmullRomControls`, there in another algebraic
+form, so equal within rounding); `τ` scales both handles from `q`, as the Line's tension does. The
+mirrored case is the route's own: the Line collapses a handle whose neighbour coincides, and mirrors
+only past its open ends. At `τ ≤ 1`, with `F` and `G` at the real ends, centripetal spacing doesn't
+loop or cusp between uneven points; rounder points or a far `F` or `G` can.
+
+**Pieces.** Piece `j` runs from `V_j` to `V_{j+1}`, `j = 0 … m`:
+
+- a **line** when neither end is smooth (every piece in step 1);
+- otherwise a **cubic Bézier** `(V_j, c₁, c₂, V_{j+1})` with
+  - `c₁ = A + (V_1 − A)/3` when `j = 0` (the **chord rule**); else `out_j` when `V_j` is smooth; else
+    `V_j` (a corner);
+  - `c₂ = B + (V_m − B)/3` when `j = m` (the chord rule); else `in_{j+1}` when `V_{j+1}` is smooth; else
+    `V_{j+1}` (a corner).
+
+A corner next to a smooth point keeps its handle on itself, as a Line's corner does. Only the pieces
+touching `A` and `B` read them, as their end and through the chord rule, and no tangent reads them.
+So a piece between two inner points depends only on the route's own data: an earlier edit that moves
+`A` reshapes the first piece and changes the speed, and bends no piece between two inner points that
+stay in `V` (cleaning can still drop a point that `A` lands on, and its pieces with it).
+
+**Length.** A line piece's length is `ℓ_j = |V_{j+1} − V_j|` (`hypot`). A cubic piece is measured
+on `K = 64` samples, the same count the Line measures with:
+
+```
+Q(t) = k₀·V_j + k₁·c₁ + k₂·c₂ + k₃·V_{j+1},   u = 1 − t,
+       k₀ = u·u·u,  k₁ = 3·u·u·t,  k₂ = 3·u·t·t,  k₃ = t·t·t     (each coordinate, summed left to right)
+S_i = Q(i / K) for i = 0 … K                  (so S_0 = V_j and S_K = V_{j+1} exactly)
+e_0 = 0,  e_i = e_{i−1} + |S_i − S_{i−1}|     (hypot, summed from i = 1 in float64)
+ℓ_j = e_K
+```
+
+This sum is the **definition** of a curve's length, not an approximation of one; with the operation
+order given here, two correct implementations agree bit for bit. It is never shorter than the chord, so a cubic piece is at least
+`ε_geom` long. `D_0 = 0`, `D_{j+1} = D_j + ℓ_j`, summed from the first piece in float64, and
+`L = D_{m+1}`.
 
 **Evaluation**, with `p = p(s, b)` from R-5:
 
@@ -804,20 +870,26 @@ if p ≤ 0: return A                      // endpoints are exact (§8.10)
 if p ≥ 1: return B
 if V = [A, B] or L < ε_geom: return lerp(A, B, p)   // [A, B] is R-7 bit for bit (QA-RT-2)
 d = p · L
-j = the smallest index with d < D_{j+1}; if there is none (rounding), the last leg
-return lerp(V_j, V_{j+1}, (d − D_j) / ℓ_j)
+j = the smallest index with d < D_{j+1}; if there is none (rounding), the last piece
+x = d − D_j
+line:  return lerp(V_j, V_{j+1}, x / (D_{j+1} − D_j))
+cubic: i = the smallest index in 1 … K with x < e_i; if there is none (rounding), return V_{j+1}
+       return Q((i − 1 + (x − e_{i−1}) / (e_i − e_{i−1})) / K)
 ```
 
-With only `[A, B]` left, `(p · L) / L` can differ from `p` in the last bit, so that case is R-7's `lerp`
-itself; otherwise a route with no points would not be bit-identical to `direct` (QA-RT-2).
+`e_i > e_{i−1}` for the `i` chosen, and a line piece divides by `D_{j+1} − D_j` exactly as step 1's code does, so nothing divides by zero and step 1 routes walk bit for bit. With only `[A, B]` left, `(p · L) / L`
+can differ from `p` in the last bit, so that case is R-7's `lerp` itself; otherwise a route with no
+points would not be bit-identical to `direct` (QA-RT-2). A route with no smooth point has only line
+pieces, so it walks exactly as in step 1.
 
-The marcher moves at **constant speed** along the whole path: the same distance every beat, from
-`s.start` to `T.end_beat`. Corners are passed through without stopping. A founding span clipped by
-a steal at beat `c` leaves the path at distance `p(s, c) · L`, and the next span starts there (R-4,
+The marcher moves at **constant speed** along the whole path as measured above: the same distance
+every beat, from `s.start` to `T.end_beat`. Corners are passed through without stopping, and a path
+may have more points than the move has counts (a run or a flutter). A founding span clipped by a
+steal at beat `c` leaves the path at distance `p(s, c) · L`, and the next span starts there (R-4,
 D-7), as for every other path style.
 
-Step 1 makes no promise that a marcher lands on a corner bit for bit at any beat: nothing ties a
-corner to a beat until pins (a later step). Facing is not derived from the path (ADR 0010).
+No step so far promises that a marcher lands on a point bit for bit at any beat: nothing ties a
+point to a beat until pins (a later step). Facing is not derived from the path (ADR 0010, P-3).
 
 ### 8.9 Diagnostics
 
@@ -843,7 +915,7 @@ These rules keep every evaluation finite. QA-DG-1 to QA-DG-6 test them, and P-11
 - **One-slot FTL.** On an open shape with `n = 1`, `t₀ = 0`, so the only member ends on the entrance point (QA-DG-1).
 - **FTL with no founders.** When `m = 0`, `D-FTL-EMPTY` is raised and the trail has no member vertices. Every occupant is a non-member, and targets are assigned starting from the far end, `p_{n−1}`, and working back (QA-DG-4).
 - **Coincident samples.** A shape that revisits a point, such as a freehand path that returns to its start, can give distinct sample indexes the same coordinate. That is not an error (QA-DG-5).
-- **Bounded inputs [v0.3, tightened in v0.4].** Every authored point (homes, waypoints, individual destinations, and every point of every shape) lies within `[−10⁶, 10⁶]²`. Circle start angles lie in `[0, 2π)`, and `|bulge| ≤ ½` (I-S1, I-T2). Within those bounds every formula in §8 is finite and well-conditioned. §8.11 then bounds the positions the formulas derive from one another. `props.mjs` checks both on shows built at the bounds (§12.10).
+- **Bounded inputs [v0.3, tightened in v0.4].** Every authored point (homes, waypoints, individual destinations, every point of every shape, and every route's points, `from` and `to`, v0.9) lies within `[−10⁶, 10⁶]²`. Circle start angles lie in `[0, 2π)`, and `|bulge| ≤ ½` (I-S1, I-T2). Within those bounds every formula in §8 is finite and well-conditioned. §8.11 then bounds the positions the formulas derive from one another. `props.mjs` checks both on shows built at the bounds (§12.10).
 - **Normalized angles [v0.4].** Without normalization, a start angle such as 10²⁰ makes a quarter turn vanish into rounding, so all four quarter-circle samples coincide. With `θ₀ ∈ [0, 2π)`, every angle evaluated stays within `(−2π, 4π)`.
 - **Smallest meaningful distance [v0.4].** `ε_geom = 10⁻⁹` field units. An arc whose chord is shorter than `ε_geom` is evaluated as a straight line (R-8).
 - **Exact endpoints [v0.3, extended in v0.4].** `lerp` returns its endpoints bit for bit. `arcPoint` returns A and B exactly (R-8). An FTL founding span returns its origin at `p ≤ 0` and its target at `p ≥ 1` (R-10), and the FTL destination part of a trail uses the shape's exact parameterization (R-13). Every arrival therefore equals the model's own sample point, with no interpolation residue (P-7).
@@ -854,24 +926,24 @@ Authored points are bounded (I-S1), but positions are _derived_. An arc's origin
 
 **Restriction.** Arcs are minor: `|bulge| ≤ ½` (I-T2, D-15).
 
-**Theorem.** Let β be the largest distance from the field origin to any authored point (homes, waypoints, individual destinations, every point of every shape, and every point of every route, v0.9). By I-S1 and I-R1, β ≤ √2·10⁶. Every position the resolver produces satisfies
+**Theorem.** Let β be the largest distance from the field origin to any authored point (homes, waypoints, individual destinations, every point of every shape, and every point of every route with its `from` and `to`, v0.9). By I-S1 and I-R1, β ≤ √2·10⁶. Let `γ = β`, or `γ = (11/3)·β` when some route has a smooth point (v0.9 step 2). Every position the resolver produces satisfies
 
-`|P| ≤ β·√(1 + a)`
+`|P| ≤ γ·√(1 + a)`
 
 where `a` is the number of arc spans on the dependency path that leads to it. The total number of arc spans in the show always works as `a`.
 
 **Why.** Write P for a span's origin and B for its authored target. Each primitive keeps its points Q bounded like this:
 
 - **Direct, FTL fallback, hold:** Q lies on the segment from P to B, so `|Q| ≤ max(|P|, |B|)`.
-- **Route (R-14, v0.9 step 1):** Q lies on the polyline through P, the route's points and B, so `|Q|` is at most the largest of those. A join or resume is direct. Routes never grow the bound.
+- **Route (R-14, v0.9):** a line piece keeps Q on its segment. A cubic piece keeps Q inside the convex hull of its four control points, since every evaluated point is `Q(t)` for some `t ∈ [0, 1]`. Its ends are P, B or inner points. A chord-rule control is a convex combination of an end and an inner point. A handle lies within `τ · (2/3)·max(|a − q|, |c − q|) ≤ (4/3)·2β` of its point `q`, since `|r_a·δc − r_c·δa| ≤ 2·r_a·r_c` and `d₁/(d₁ + d₂) < 1` (for `out`; `in` likewise with `|a − q|`; the mirrored case gives `τ·|c − q|/3`), and its neighbours `a`, `c` are inner points or `F`, `G`, all authored. So `|Q| ≤ max(|P|, (11/3)·β)`, and with no smooth point `|Q| ≤ max(|P|, β)` as in step 1. A join or resume is direct.
 - **FTL founding:** Q lies on a polyline through member origins and waypoints, or on the destination path, so `|Q|` is at most the largest of those vertices.
 - **Minor arc:** Q sees the chord PB at an angle of at least 90°, so by Thales it lies in the disk with diameter PB. Then `|Q| ≤ (|P+B| + |P−B|)/2 ≤ √(|P|² + |B|²)`.
 
-Homes start with `|P| ≤ β`. Only arcs grow the squared norm, and each by at most β². Induction along the dependency DAG (§9.3) gives the bound.
+Homes start with `|P| ≤ β ≤ γ`. A route span leaves the bound as it is, since `γ·√(1 + a) ≥ γ`. Only arcs grow the squared norm, and each by at most `β² ≤ γ²`. Induction along the dependency DAG (§9.3) gives the bound.
 
 **Consequences.**
 
-- Every position is finite for every valid dataset. Even with a million arc spans the bound is about 1.4×10⁹, where float64 still resolves 10⁻⁷.
+- Every position is finite for every valid dataset. Even with a million arc spans the bound is about 1.4×10⁹ (5.2×10⁹ with smooth route points), where float64 still resolves 10⁻⁶.
 - D-5's promise now holds numerically as well as structurally: an upstream edit can make a drill look worse, but it can never make the numbers invalid. Marchers can still be driven off the field. That is ugly, not invalid.
 - In practice positions stay far inside the bound. The reviewer's construction at the maximum allowed bulge ran 1,000 partial arcs without the marcher ever getting farther than its starting distance of 10⁶ (QA-REG-5). A randomized adversarial variant never exceeded about 1.8×10⁶.
 
@@ -938,7 +1010,7 @@ flowchart TB
 | 4   | `ftlGeometry`       | FTL transition        | the exact destination path and its length (R-13)                                                        | dest shape                                                                                         | local         |
 | 5   | `origin`            | (marcher, span.start) | xy                                                                                                      | the previous span's evaluation (R-4)                                                               | **cascading** |
 | 6   | `ftlEntry`          | FTL transition        | members in q order, order source, startDist, endDist, targets (R-9); the trail references `ftlGeometry` | founding origins, `ftlGeometry`, the order source, and **every assignment row of T** (for targets) | **cascading** |
-| 7   | `routeGeometry`     | route                 | the inner points `P_1 … P_n` (R-14), v0.9                                                               | the route's `geometry`                                                                             | local         |
+| 7   | `routeGeometry`     | route                 | the inner points `P_1 … P_n` with their tensions, and `F` and `G` (R-14), v0.9                          | the route's `geometry`                                                                             | local         |
 
 Origins are keyed by `(marcher, span.start)`, not by span index. When `spans[m]` is rebuilt, entries whose start comes before the edit keep their key and stay valid.
 
@@ -1009,7 +1081,7 @@ The resolver processes one **batch** per committed transaction (§10.2). It neve
 - **W-2** Dirtying `ftlEntry(T)` also dirties `origin(next(s))` for every span `s` in `spansByTransition[T]`.
 - **W-3** Seeding for transition `T` dirties `origin(next(s))` for every span `s` in `T`, plus `ftlEntry(T)` if `T` is FTL or was FTL before the edit.
 - **W-4** If a node is already dirty, the walk does **not** continue past it. This is correct because of I-C1.
-- **W-5** (v0.9) An implementation that caches a span's cleaned path `V` and its lengths MUST drop that cache whenever `origin(s)` is dirtied or W-3 is seeded for the span's transition. R-14 reads `origin(s)`, `routeGeometry` and `destinations` and nothing else.
+- **W-5** (v0.9) An implementation that caches a span's cleaned path `V`, its pieces and its lengths MUST drop that cache whenever `origin(s)` is dirtied or W-3 is seeded for the span's transition. R-14 reads `origin(s)`, `routeGeometry` and `destinations` and nothing else.
 
 ```mermaid
 %%{init: {"theme": "neutral"}}%%
@@ -1422,7 +1494,7 @@ M1 MUST NOT end on the same point as M4 at (6,8).
 | P-10 | **Timeline independence.** Changing any timeline's name or range, within I-T1, never changes any position.                                                                                                   |
 | P-11 | **Finite.** No position, distance or target is ever NaN or infinite.                                                                                                                                         |
 | P-12 | **Causality [v0.3].** Adding or removing an assignment in transition `T` changes no position before `T.start_beat`.                                                                                          |
-| P-13 | **Derived range [v0.4].** Every position satisfies `\|P\| ≤ β·√(1 + a)`, where β is the largest distance of any authored point from the field origin and `a` is the number of arc spans in the show (§8.11). |
+| P-13 | **Derived range [v0.4].** Every position satisfies `\|P\| ≤ γ·√(1 + a)`, where β is the largest distance of any authored point from the field origin, `γ` is β, or `(11/3)·β` when a route has a smooth point (v0.9 step 2), and `a` is the number of arc spans in the show (§8.11). |
 
 **How each property is checked.**
 
@@ -1811,7 +1883,7 @@ The spec covers the model, not the editor, but these procedures decide which row
 | AP-R2 | **Remove path** for one marcher's move | Set `path_style = 'direct'`, `route_id = NULL`, `path_params = NULL` in one UPDATE; then delete the route. That order is required: `RESTRICT` refuses the other (I-D3), and undo replays it reversed. One edit, one undo step. The Move card's **Straight** and **Arc** (`setMovePath`) on a move with a route in any of its transitions are **refused** (`E-ARGS`, "this move has a drawn path: remove it first"), and the route stays. |
 | AP-R3 | **Delete a move or transition** with a route | Delete the transition (and what already goes with it), then its route, in `deleteTimelineTransitionRowsInTransaction`, the one helper that ripple, timeline delete, marcher delete, membership removal and split at a beat all delete through. |
 | AP-R4 | **Range edits**: resize, page-flag drags, moving a move in time, R-E1 | Unchanged. The route is untouched; the marcher walks the same path over the new range. |
-| AP-R5 | **End and start changes**: the destination is edited, or an earlier edit moves where the marcher starts | Unchanged. The route is untouched; the last leg goes to the new destination and the first leg starts from the new origin (R-14 always uses the real `A` and `B`). |
+| AP-R5 | **End and start changes**: the destination is edited, or an earlier edit moves where the marcher starts | Unchanged. The route is untouched; the last piece goes to the new destination and the first piece starts from the new origin (R-14 always uses the real `A` and `B`; from step 2 those pieces use the chord rule there). |
 | AP-R6 | **Everything else that would copy, split or merge a route transition, give it a shape, or change its `slot_count`** | Refused with a reason (`E-ARGS`), and nothing is written. A later step lifts each refusal when it supports the edit. By procedure: split by marchers (UI-25) when a marcher it splits off walks a route (marchers without one split off as before; the route transition stays in its move, untouched), and so each holds command that would take a route marcher into a move of its own first (`timelineMoveCuts`); merging moves; a point drag that would merge into the next move when either move has a route (`timelinePointMoves`); Remove keyframe's join (`timelineJoinAtBeat`); adding a marcher to a route transition; any procedure not listed here. |
 | AP-R7 | **Cut at a count `b`**: split at the playhead (UI-27, `splitTimelineAtBeatInTransaction`), and the holds commands' cut that goes through it | As today for every other transition. For a route transition `T` with route `R` and its one row `r`: let `s` be `r`'s founding span, `V`, `D` and `L` its cleaned path and lengths (R-14), `p_b = (b − T.start_beat) / (T.end_beat − T.start_beat)`, `d = p_b · L`, and `C` R-14's evaluation of `s` at `p_b`. (When `s` shows at `b`, `C` is the marcher's position there, bit for bit.) **Before `b`:** insert a route `R′` with the inner points `V_k` whose `D_k < d` and `|V_k − C| ≥ ε_geom`, `from = A` and `to = C`; then the first half's counterpart of `T` is its own one-slot transition with destination `C`, `path_style = 'route'`, `route_id = R′` and `path_params = NULL`, holding `r`'s part before `b`. **From `b`:** update `R`'s geometry in place to the inner points whose `D_k > d` and `|V_k − C| ≥ ε_geom`, `from = C` and `to = B`. A point at or within `ε_geom` of `C` goes to neither, since R-14's cleaning would drop it. Points come from the cleaned `V`, so inner points that cleaning already removed are dropped from storage too, with their ids. Kept points keep their ids. If `r` ends at or before `b`, `T` has no row from `b`, and it goes with its route as AP-R3. **Motion is unchanged:** the first half walks the same path to `C` at the same speed, and from `b` a founding span walks the rest; if `r` is hidden at `b` by a higher layer, its later span from `b` is a join and walks straight, as the resume it replaces did. **Refused** (`E-ARGS`) when `r` has no founding span ("taken over at the start of this move"), or any visible piece of `r` other than `s` starting at or before `b` ("taken over earlier in this move"): a resume at `b` would become a founding span after the cut and walk the rest of the route, where before it walked straight. Basic's **+ page flag** inside a move (`splitMovesAtBeatInTransaction`) is unchanged: a route isn't `direct`, so the marcher isn't simple on the page and is left alone, as an arc is today. |
 
@@ -1843,3 +1915,81 @@ A marcher taken over by a later move partway through a route leaves the route wh
 | QA-MIG-R1 | Migrate a v0.1.7 file and a current fork file | Both open unchanged; `timeline_transitions` keeps every trigger, history trigger and rowid after the rebuild |
 
 The reference implementation in `ref/` gains R-14 in step 1, so the oracle and the app's resolver are checked against each other as for every other rule.
+
+### I.4 Step 2: curves
+
+**Change (fork #644):** a route's inner point can be **smooth**, so a path bends through it. Points
+are the shape tool's Line points: a corner, or smooth with a roundness (`tension`, 0 to 2, 1 the plain
+curve). Drawing and editing a path's curves work as a Line's do (owner, lab feedback on step 1: "Is
+there a reason this can't be exactly like the line editor, especially once we get to curves?").
+
+| Section | Change |
+| ------- | ------ |
+| §2 | **Route**: each point a corner or smooth |
+| §4 | D-19 notes step 2 |
+| §5.2 | A point may carry `tension` in `(0, 2]`; `from` and `to` are read as tangent neighbours |
+| §6 | I-R1 allows `tension` |
+| §8 | R-14 gains tangents, pieces, the chord rule, the declared curve length and evaluation on pieces; §8.11's bound uses `γ` |
+| §9 | `routeGeometry` holds tensions, `F` and `G`; W-5 covers pieces |
+| §12 | P-13 uses `γ` |
+
+**Why these rules.** The Line's model is the route's: centripetal Catmull–Rom at α = ½, a tension
+that scales the handles, and a curve measured on 64 samples. Three things differ, and none is
+visible while drawing:
+
+- **Tangent neighbours come from the route: `F`, the inner points and `G`, never `A` and `B`**
+  (draft model's Case B, fable review 1 §1.3). `F` and `G` equal the real ends when a path is
+  drawn (AP-R1), so the curve drawn is the Line's (as a shape: a Line turns a cubic whose handles lie
+  along its chord into a line, which R-14 doesn't, so collinear smooth points walk within rounding of
+  it). They differ only after an earlier edit moves where the marcher starts or ends; then only the
+  pieces touching `A` and `B` change, and §8.11's bound is a constant.
+- **`A` and `B` use the chord rule**, a handle one third of the way along the piece's chord: the
+  Line's open end at roundness 1. A path's ends aren't its points: they have no menu and no roundness.
+- **The length is declared**, not "exact": the Line's 64-sample measure, written out so the oracle
+  and the app agree bit for bit (fable review 1 §6). Lines are exact; step 1 routes walk as before.
+
+**Files:** no version bump (ADR 0010 §3). A step 1 lab build walks a step 2 file's smooth points as
+corners.
+
+**Unchanged:** joins and resumes walk straight; range edits (AP-R4) and end and start changes (AP-R5)
+leave the route alone; AP-R2, AP-R3 and AP-R6.
+
+**Not in step 2:** handles you aim by hand (a smooth point's tangent always comes from its
+neighbours, as on a Line); arcs inside a route; pins; rejoining after a takeover; groups; follow the
+leader on a trail; steps per count; turns.
+
+### I.5 App procedures for step 2
+
+| ID | Edit | Change from step 1 |
+| --- | --- | --- |
+| AP-R1 | **Draw a route, or edit its points** | Points carry their tension; a point given roundness 0 is written as a corner (no `tension` key). Every edit of a route's points is AP-R1 with the whole new list: moving, adding or deleting a point, Corner or Smooth, roundness, a leg made straight or curved. One edit, one undo step; kept points keep their ids and new points get fresh ones, so redo restores the same ids. **`from` and `to`:** a new route takes the real ends, as in step 1. Editing an existing route keeps its `from` while its first point keeps its id and position, and writes the real start otherwise (the first point moved, deleted, or a point added before it); likewise `to` with the last point and the real destination. So editing a point bends only the pieces near it, as on a Line, and editing the first or last point brings that end's tangent back in line with where the marcher now starts or ends. |
+| AP-R7 | **Cut at a count `b`** | Each kept point keeps its tension. The half before keeps the route's `from`: `R′` gets `from = R.from` (not `A`) and `to = C`; the route from `b` keeps its `to`: `R` gets `from = C` and `to = R.to` (not `B`). In step 1 `from` and `to` were not read, so this changes nothing there; here it keeps the tangents near the route's ends as they were. `C` is computed by R-14 as before, so when `s` shows at `b` the marcher is at `C` at `b`, bit for bit, and both halves meet there. **Motion is unchanged** within QA-AP-R3's tolerance, as in step 1, when the piece holding `C` is a line and no point dropped for being within `ε_geom` of `C` (step 1's rule) has a smooth neighbour: then every other piece keeps its control points. **Otherwise the cut redraws the pieces next to `C`**, through the same points: each half is a route of its own ending (or starting) at `C`; the piece touching `C` is a cubic by the chord rule when its other end is smooth, and a line otherwise (with `j = 0`, `R′` is `[A, C]` and walks direct); a smooth point at the cut piece's ends, or next to a dropped point, takes `C` as its tangent neighbour, so its other piece is redrawn too; and each half's length changes, so its steady speed changes and positions along the whole half shift a little. `C` and every point stay where they were. Keeping a curve exact through a cut needs aimed handles or pins, neither in step 2. |
+
+**Editing a path (app, not a rule).** Everything is the Line's, on a path's inner points (its ends
+are fixed and have no handles): a click selects a point; a double-click on it swaps corner and
+smooth; a selected smooth point shows its tangent bar, whose ends drag its roundness (in tenths,
+Shift for fine); the right-click or long-press menu on a point has Corner | Smooth, Roundness and
+Delete point, and on a leg's midpoint Add point here and Straight | Curved; a click on a midpoint adds
+a point there and a drag adds one and moves it. A point added on a leg sits halfway along it, on its
+curve, a corner between corners and otherwise as smooth as the smoother end (`A` and `B` count as
+corners). While drawing, a click places a corner and a press-and-drag places a smooth point whose
+roundness is how far the drag went, against its shorter handle at roundness 1 (its direction comes
+from its neighbors, as on a Line). **Big steps** uses
+the path's length `L`, curves included.
+
+### I.6 New tests for step 2
+
+| ID | Setup | Expected |
+| --- | --- | --- |
+| QA-RT-9 | Every step 1 route fixture (no `tension`) | Bit-identical to step 1 as built (`routePoint` and `ref/` before step 2) at every probe; QA-RT-1's values unchanged |
+| QA-RT-10 | Golden: `A = (0, 0)`, one smooth point `(4, 4)` at `τ = 1`, `B = (8, 0)`, `F = A`, `G = B`, an 8-beat move | Positions at every beat match the `ref/` oracle's independent code within 10⁻¹²; beat 4 is `(4, 4)` within 10⁻⁹ (symmetry); the ends are exact |
+| QA-RT-11 | Property: random routes with random corners and tensions, founding spans | At every probe the position is `Q(t)` on piece `j`, `t = (i − 1 + f)/K`, with `D_j + e_{i−1} + f·(e_i − e_{i−1}) = p·L` within `10⁻⁹·L`, so a walk at constant parameter speed fails; P-1, P-11 and P-13 (with `γ`) hold |
+| QA-RT-12 | The chord rule: an earlier edit moves `A` (and, separately, `B`), including onto the first (last) inner point | Every piece between two inner points that stay in `V` keeps its control points bit for bit; only the first (last) piece changes |
+| QA-RT-13 | Degenerate: `F` within `ε_geom` of `V_1` (mirrored); `F` and `G` both within `ε_geom` of the only inner point (a corner in effect); a smooth point next to a dropped repeated point; `τ = 2` at a hairpin; a smooth point within `ε_geom` of `A` | Every position finite; ends exact; no zero-length piece; a dropped point's tension has no effect |
+| QA-RT-14 | `τ = 1` handles against the shape tool's `catmullRomControls` for the same four points, none coinciding | Equal within `10⁻¹²·max(1, the largest coordinate)` |
+| QA-DB-R5 | Route geometry with `tension` 0, −1, 2.5, NaN, `"1"`, or another key; and with 0.1 and 2 | The first six refused by the write path, `E-R1`; the last two accepted |
+| QA-AP-R5 | AP-R7 with `b` on a cubic piece; on a line piece of a route that has smooth points; exactly on a corner whose next point is smooth | The marcher is at `C` at `b` exactly when `s` shows there; the halves' points, ids and tensions as specified; `R′.from = R.from`, `R.to` unchanged. Cubic and the corner case: every piece that touches neither `C` nor a smooth point next to it keeps its control points. Line: QA-AP-R3's tolerance. All: one undo step restores the database exactly, ids included |
+| QA-AP-R6 | AP-R1 on a route whose `from` is stale: edit a middle point; then move the first point | The middle edit keeps `from`; moving the first point writes the real start |
+| QA-UNDO-R2 | Each point edit: Corner, Smooth, roundness, add a point (straight leg, curved leg), delete, a leg Straight and Curved, and a pen drawing with smooth points | One undo step each; redo restores the same ids and tensions |
+
+The `ref/` oracle gains step 2's R-14, coded independently of the app's geometry (QA-RT-10, QA-RT-11).

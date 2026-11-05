@@ -24,7 +24,8 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 // dragged with Shift (fine) lands off the grid, a click mid-leg adds a corner, each one
 // undo step, and the corner's menu deletes corners; deleting the last one removes the
 // path. Remove path in the floating editor, and in the closed path's right-click menu,
-// makes the move straight again; it has no key (owner, 2026-11-04), so Shift+Backspace
+// makes the move straight again, as does Backspace on the open path with no point selected;
+// on a closed path no key does (owner, 2026-11-04), so Shift+Backspace
 // doesn't.
 
 const HOME: SeedPosition[] = [
@@ -161,9 +162,13 @@ test("change: P draws a cornered path for one marcher, Enter saves it as one und
         "SELECT path_style, route_id FROM timeline_transitions WHERE route_id IS NOT NULL",
     );
     expect(t).toMatchObject({ path_style: "route", route_id: route!.id });
-    // Finished, the path is left shown and closed: drawn through its corners, nothing to
-    // grab and no editor
+    // Finished, the path closes: no editor. It shows by start flag positions' rules, as the
+    // straight paths do (owner, 2026-11-04): hidden at the default (paths off), shown while N
+    // is held or after a tap of N, which the rest of this test keeps on
     await expect(page.getByTestId("path-editor")).toBeHidden();
+    await expect.poll(() => drawnPath(page)).toBeNull();
+    await page.keyboard.press("n");
+    // Drawn through its corners, nothing to grab
     await expect.poll(() => drawnPath(page)).toEqual({ points: 4, handles: 0 });
 
     // Undo takes it away; redo brings the same route back
@@ -299,6 +304,19 @@ test("change: P draws a cornered path for one marcher, Enter saves it as one und
     await expect.poll(async () => (await routes(show)).length).toBe(1);
 
     // Opened again by a double-click on its line
+    await page.mouse.dblclick(onLine.x, onLine.y);
+    await expect(page.getByTestId("path-remove")).toBeVisible();
+
+    // Open with no point selected, Backspace removes the path (owner, 2026-11-04), one undo step;
+    // undo brings it back, and it's opened again
+    const beforeKey = await undoSteps(show);
+    await page.keyboard.press("Backspace");
+    await waitForIdle(page);
+    await expect.poll(async () => routes(show)).toEqual([]);
+    expect(await undoSteps(show)).toBe(beforeKey + 1);
+    await page.keyboard.press("ControlOrMeta+z");
+    await waitForIdle(page);
+    await expect.poll(async () => (await routes(show)).length).toBe(1);
     await page.mouse.dblclick(onLine.x, onLine.y);
     await expect(page.getByTestId("path-remove")).toBeVisible();
 

@@ -4,7 +4,7 @@ import type { ToolEnv } from "@/shapes/tool/toolKind";
 import {
     PATH_MENU,
     clickPathHandle,
-    cornerKey,
+    pointKey,
     dragPathHandle,
     landCorner,
     midpointKey,
@@ -40,7 +40,7 @@ const constrain: ToolEnv = { ...env, constrain: true };
 const path: PathShape = {
     from: { x: 0, y: 0 },
     to: { x: 100, y: 0 },
-    corners: [
+    points: [
         { id: "a", at: { x: 0, y: 50 } },
         { id: "b", at: { x: 100, y: 50 } },
     ],
@@ -73,13 +73,13 @@ describe("a path's handles", () => {
             [undefined, { x: 50, y: 50 }],
             ["b", { x: 100, y: 50 }],
         ]);
-        expect(clickPathHandle(path, cornerKey(0))).toBeNull();
+        expect(clickPathHandle(path, pointKey(0))).toBeNull();
     });
 });
 
 describe("placing a corner while drawing", () => {
     it("lands as a Line's clicked point does: on half steps, off them with fine, at 45° from the last with constrain", () => {
-        const drawing: PathShape = { ...path, corners: [path.corners[0]!] };
+        const drawing: PathShape = { ...path, points: [path.points[0]!] };
         const at = { x: 23.4, y: 71.2 };
         expect(landCorner(drawing, at, env)).toEqual({ x: 25, y: 70 });
         expect(landCorner(drawing, at, fine)).toEqual(at);
@@ -93,7 +93,7 @@ describe("placing a corner while drawing", () => {
     });
 
     it("with no corner yet, constrain goes 45° from where the marcher starts", () => {
-        const empty: PathShape = { ...path, corners: [] };
+        const empty: PathShape = { ...path, points: [] };
         const at = landCorner(empty, { x: 30, y: 2 }, constrain);
         expect(at.y).toBeCloseTo(0);
     });
@@ -126,22 +126,27 @@ describe("dragging", () => {
 });
 
 describe("the menus", () => {
-    it("a corner's deletes it; a leg's adds a corner there, selected", () => {
-        expect(
-            PATH_MENU.sections(path, 1, "p0")?.flatMap((s) =>
+    it("a point's: Corner | Smooth (Roundness when smooth) and Delete point; a leg's: Add point here and Straight | Curved", () => {
+        const values = (key: string, shape = path) =>
+            PATH_MENU.sections(shape, 1, key)?.flatMap((s) =>
                 s.items.map((i) => i.value),
-            ),
-        ).toEqual(["delete"]);
-        expect(
-            PATH_MENU.sections(path, 1, "m0")?.flatMap((s) =>
-                s.items.map((i) => i.value),
-            ),
-        ).toEqual(["add"]);
+            );
+        expect(values("p0")).toEqual(["corner", "smooth", "delete"]);
+        expect(values("m0")).toEqual(["add", "straight", "curved"]);
+        const smooth = PATH_MENU.pick(path, 1, "p0", "smooth", env)!;
+        expect(smooth.params.points[0]!.tension).toBe(1);
+        expect(smooth.selected).toBe("p0");
+        expect(values("p0", smooth.params)).toEqual([
+            "corner",
+            "smooth",
+            "roundness",
+            "delete",
+        ]);
         const deleted = PATH_MENU.pick(path, 1, "p0", "delete", env)!;
-        expect(deleted.params.corners.map((c) => c.id)).toEqual(["b"]);
+        expect(deleted.params.points.map((c) => c.id)).toEqual(["b"]);
         expect(deleted.selected).toBeNull();
         const added = PATH_MENU.pick(path, 1, "m0", "add", env)!;
-        expect(added.params.corners).toHaveLength(3);
+        expect(added.params.points).toHaveLength(3);
         expect(added.selected).toBe("p0");
     });
 });

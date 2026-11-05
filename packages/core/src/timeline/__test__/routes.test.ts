@@ -1,6 +1,7 @@
 // cspell:ignore lerp
 /**
- * Routes, v0.9 step 1 (spec R-14, Appendix I.3): QA-RT-1 to QA-RT-7, and a route-edit fuzz
+ * Routes, v0.9 step 1 (spec R-14, Appendix I.3): QA-RT-1 to QA-RT-7, and a route-edit fuzz, whose
+ * routes have smooth points since step 2
  * (QA-RT-8 at the resolver seam: draw, redraw, Remove path, delete, steals and origin moves,
  * with each batch's inverse applied as undo).
  *
@@ -444,6 +445,13 @@ function routeWorld(seed: number) {
         );
     const pick = <T>(xs: T[]): T | undefined => xs[ri(0, xs.length - 1)];
     const randPoints = (): XY[] => Array.from({ length: ri(0, 4) }, pt);
+    // Step 2 (QA-RT-8 with curves): about half the points smooth, at a random roundness
+    const curvy = (g: RouteGeometry): RouteGeometry => ({
+        ...g,
+        points: g.points.map((q) =>
+            R() < 0.5 ? q : { ...q, tension: Math.round(R() * 20) / 10 || 1 },
+        ),
+    });
 
     /** Applies `edit`, returning the forward changes; `undo` applies their inverse. */
     function updateTransition(t: TransitionRow, next: TransitionRow): Change {
@@ -462,7 +470,7 @@ function routeWorld(seed: number) {
             const t = pick(ownTransitions().filter((x) => x.style !== "route"));
             if (!t) return null;
             const rid = nextR++;
-            const g = routeGeometry(randPoints());
+            const g = curvy(routeGeometry(randPoints(), pt(), pt()));
             db.routes![rid] = { geometry: g };
             return [
                 {
@@ -484,7 +492,7 @@ function routeWorld(seed: number) {
             if (!t) return null;
             const rid = t.route!;
             const before = rImg(rid, db.routes![rid]!.geometry);
-            const g = routeGeometry(randPoints());
+            const g = curvy(routeGeometry(randPoints(), pt(), pt()));
             db.routes![rid] = { geometry: g };
             return [
                 { table: "routes", rowId: rid, before, after: rImg(rid, g) },

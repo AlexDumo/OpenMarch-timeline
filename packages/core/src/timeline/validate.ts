@@ -21,6 +21,9 @@ export type ValidationCode = "E-S1" | "E-P1" | "E-D2" | "E-N2" | "E-R1";
 /** Longest route point id (spec 5.2, I-R1). */
 export const MAX_ROUTE_POINT_ID_LENGTH = 16;
 
+/** Roundest a smooth route point can be (spec 5.2, v0.9 step 2), as the Line's `MAX_TENSION`. */
+export const MAX_ROUTE_TENSION = 2;
+
 export interface ValidationError {
     code: ValidationCode;
     /** Where in the input the problem is, such as `points[1][0]` or `radius` */
@@ -348,7 +351,8 @@ export function validateHome(home: unknown): ValidationResult {
 /**
  * Validate a route's `geometry` (spec 5.2, I-R1): version 1, `from`, `to` and every point
  * finite and within the bound, point ids non-empty strings of at most 16 characters and unique,
- * and every point exactly `{id, at}` (corners only in step 1). Errors are `E-R1`.
+ * and every point `{id, at}` with an optional `tension` in (0, 2] (a smooth point, step 2).
+ * Errors are `E-R1`.
  */
 export function validateRouteGeometry(geometry: unknown): ValidationResult {
     const { push, result } = collector("E-R1");
@@ -372,8 +376,21 @@ export function validateRouteGeometry(geometry: unknown): ValidationResult {
             return;
         }
         for (const key of Object.keys(pt))
-            if (key !== "id" && key !== "at")
+            if (key !== "id" && key !== "at" && key !== "tension")
                 push(`${path}.${key}`, `unexpected field "${key}"`);
+        if (
+            "tension" in pt &&
+            !(
+                typeof pt.tension === "number" &&
+                Number.isFinite(pt.tension) &&
+                pt.tension > 0 &&
+                pt.tension <= MAX_ROUTE_TENSION
+            )
+        )
+            push(
+                `${path}.tension`,
+                `${path}.tension must be a number above 0 and at most ${MAX_ROUTE_TENSION}`,
+            );
         const id = pt.id;
         if (
             typeof id !== "string" ||

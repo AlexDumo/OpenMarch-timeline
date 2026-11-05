@@ -184,11 +184,13 @@
             "edit": "Edit path",
             "keywords": "path pen pathway route corner draw curve walk",
             "finish": "Finish path",
-            "removeLastCorner": "Remove last corner",
             "cancel": "Cancel path",
-            "deleteCorner": "Delete corner",
             "close": "Close path",
-            "deselect": "Deselect corner"
+            "removeLastPoint": "Remove last point",
+            "deletePoint": "Delete point",
+            "deselectPoint": "Deselect point",
+            "pointCorner": "Corner point",
+            "pointSmooth": "Smooth point"
         }
     },
     "analyticsOptIn": {
@@ -4332,14 +4334,23 @@
     "pathways": {
         "editor": {
             "finish": "Finish",
-            "removeLast": "Remove last corner",
             "cancel": "Cancel",
             "bigStepsShort": "Big steps · {steps}",
-            "bigStepsTipInches": "{inches} in a step, on every leg. Lengthen the move, or move or take out corners to shorten the path."
+            "removeLastPoint": "Remove last point",
+            "pointType": "Point type",
+            "bigStepsTipPoints": "{inches} in a step, all along the path. Lengthen the move, or move or take out points to shorten the path."
         },
         "menu": {
-            "deleteCorner": "Delete corner",
-            "addCorner": "Add corner here"
+            "pointType": "Corner type",
+            "swapHint": "Double-click a point to swap",
+            "corner": "Corner",
+            "smooth": "Smooth",
+            "roundness": "Roundness",
+            "deletePoint": "Delete point",
+            "addPoint": "Add point here",
+            "straight": "Straight",
+            "curved": "Curved",
+            "noCurve": "The path runs straight through here"
         },
         "errors": {
             "save": "Couldn't save the path",
@@ -4352,8 +4363,8 @@
             "selectOne": "Select a marcher to draw a path for"
         },
         "banner": {
-            "drawingFor": "{marcher}'s path: click to place corners · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel",
-            "drawingForClick": "{marcher}'s path: click to place corners · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
+            "drawingPoints": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel",
+            "drawingPointsClick": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
         },
         "toolbar": {
             "path": "Path"

@@ -1,7 +1,7 @@
 /**
- * Routes, pathways step 1 (ADR 0010; spec v0.9 R-14, Appendix I.2): a move's marcher walks a drawn
- * path of corner points from where it starts to its end spot. This module holds the app
- * procedures that write routes, and the refusals other procedures use:
+ * Routes, pathways steps 1 and 2 (ADR 0010; spec v0.9 R-14, Appendix I.2 and I.5): a move's
+ * marcher walks a drawn path of corners and smooth points from where it starts to its end spot.
+ * This module holds the app procedures that write routes, and the refusals other procedures use:
  *
  * - **AP-R1** `drawRouteInTransaction`: draw a route for one marcher's move, or draw it again.
  * - **AP-R2** `removeRouteInTransaction`: Remove path. The Move card's Straight and Arc
@@ -204,11 +204,29 @@ export async function readRoutes(
 // AP-R1: draw a route, or draw it again
 // ---------------------------------------------------------------------------
 
-/** A point to draw: an existing point's `id` keeps it (a drag); a point without one is new. */
+/**
+ * A point to draw: an existing point's `id` keeps it (a drag); a point without one is new. A
+ * `tension` above 0 makes it smooth (step 2); 0 or none is a corner.
+ */
 export interface RoutePointInput {
     id?: string;
     at: XY;
+    tension?: number;
 }
+
+/** A stored point as R-14 reads it: a corner has no `tension` key (spec 5.2). */
+const storedPoint = (id: string, at: XY, tension?: number): RoutePoint =>
+    tension !== undefined && tension > 0
+        ? { id, at: [at[0], at[1]], tension }
+        : { id, at: [at[0], at[1]] };
+
+/** Whether two points are the same point in the same place, bit for bit */
+const samePoint = (a: RoutePoint | undefined, b: RoutePoint | undefined) =>
+    !!a &&
+    !!b &&
+    a.id === b.id &&
+    Object.is(a.at[0], b.at[0]) &&
+    Object.is(a.at[1], b.at[1]);
 
 const ID_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -307,13 +325,10 @@ export async function drawRouteInTransaction({
                   .from(schema.timeline_routes)
                   .where(eq(schema.timeline_routes.id, transition.route_id))
                   .get();
-    const currentIds = new Set(
-        current
-            ? (JSON.parse(current.geometry) as RouteGeometry).points.map(
-                  (p) => p.id,
-              )
-            : [],
-    );
+    const currentGeometry = current
+        ? (JSON.parse(current.geometry) as RouteGeometry)
+        : null;
+    const currentIds = new Set(currentGeometry?.points.map((p) => p.id) ?? []);
     const taken = new Set(currentIds);
     for (const p of points)
         if (p.id !== undefined && !currentIds.has(p.id))
@@ -321,12 +336,20 @@ export async function drawRouteInTransaction({
     const routePoints: RoutePoint[] = points.map((p) => {
         const id = p.id ?? freshPointId(taken);
         taken.add(id);
-        return { id, at: [p.at[0], p.at[1]] };
+        return storedPoint(id, p.at, p.tension);
     });
+    // Step 2 (AP-R1): an edit keeps `from` while the first point stays put, and `to` while the
+    // last does, so a point edited bends only the pieces near it; otherwise the real ends
+    const keepFrom =
+        currentGeometry !== null &&
+        samePoint(currentGeometry.points[0], routePoints[0]);
+    const keepTo =
+        currentGeometry !== null &&
+        samePoint(currentGeometry.points.at(-1), routePoints.at(-1));
     const geometry: RouteGeometry = {
         v: 1,
-        from: [from[0], from[1]],
-        to: [to[0], to[1]],
+        from: keepFrom ? currentGeometry.from : [from[0], from[1]],
+        to: keepTo ? currentGeometry.to : [to[0], to[1]],
         points: routePoints,
     };
     assertValid(validateRouteGeometry(geometry), "route");
@@ -578,11 +601,8 @@ export async function planRouteCut(
     const geometry = JSON.parse(route.geometry) as RouteGeometry;
     const A = resolver.explain(m, t.start_beat).origin;
     const B = await destinationOf(tx, t, row.slot_index);
-    const path = routePath(
-        A,
-        geometry.points.map((p) => p.at),
-        B,
-    );
+    // R-14 with the route's tensions and the ends it was drawn against (step 2)
+    const path = routePath(A, geometry.points, B, geometry);
     const pB = (beat - t.start_beat) / (t.end_beat - t.start_beat);
     const d = pB * path.L;
     const C = routePoint(path, pB);
@@ -593,16 +613,18 @@ export async function planRouteCut(
         .filter(({ src }) => src >= 0);
     const pointAt = (src: number): RoutePoint => {
         const p = geometry.points[src]!;
-        return { id: p.id, at: [p.at[0], p.at[1]] };
+        return storedPoint(p.id, p.at, p.tension);
     };
     const xy = (p: XY): XY => [p[0], p[1]];
     return {
         transitionId: t.id,
         routeId: route.id,
         C,
+        // Step 2 (AP-R7): the half before keeps the route's `from`, the route from the count
+        // keeps its `to`, so the tangents near the ends stay as they were
         before: {
             v: 1,
-            from: xy(A),
+            from: xy(geometry.from),
             to: xy(C),
             points: inner
                 .filter(({ k }) => path.D[k]! < d && far(k))
@@ -611,7 +633,7 @@ export async function planRouteCut(
         after: {
             v: 1,
             from: xy(C),
-            to: xy(B),
+            to: xy(geometry.to),
             points: inner
                 .filter(({ k }) => path.D[k]! > d && far(k))
                 .map(({ src }) => pointAt(src)),

@@ -7,6 +7,7 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { useStartFlagLevelsInEffect } from "@/stores/StartFlagKeyStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import {
     closeShapeTool,
@@ -16,12 +17,14 @@ import { findPathTarget } from "./pathTarget";
 import {
     clearPath,
     closePath,
-    deleteCorner,
+    deletePoint,
     finishDrawing,
     openPath,
-    removeLastCorner,
+    removeLastPoint,
     removePath,
-    selectCorner,
+    selectPoint,
+    setPathHidden,
+    setPointSmooth,
     showPath,
     startDrawing,
     usePathPenStore,
@@ -101,6 +104,12 @@ export function usePathPenActions(): void {
         });
     });
 
+    // The closed path shows by start flag positions' paths level in effect, as the straight paths
+    // do: the setting, and N held or tapped (owner, 2026-11-04). The marcher is selected, so
+    // Selected and All both show it. Edit path still opens a hidden one
+    const pathsLevel = useStartFlagLevelsInEffect().paths;
+    useEffect(() => setPathHidden(pathsLevel === "off"), [pathsLevel]);
+
     // Edit path: opens the selected marcher's path at the playhead, as a double-click on it does.
     // No key of its own: the shape tool has none for editing points (Enter places a shape)
     useActionHandler("editPath", () => void openPath(), {
@@ -155,9 +164,9 @@ export function usePathPenActions(): void {
  * and go back when the pen closes. They are the Line's keys (`ShapeToolKeys`):
  *
  * - Drawing: Enter (applyShape) finishes, Backspace or Delete (shapeRemoveLastPoint) and undo take
- *   the last corner back, Escape (cancelAlignmentUpdates) cancels.
- * - Open: Escape clears the selected corner, then closes the path (it stays drawn); Backspace
- *   deletes the selected corner (its last removes the path). Remove path has no key (the
+ *   the last point back, Escape (cancelAlignmentUpdates) cancels.
+ * - Open: Escape clears the selected point, then closes the path (it stays drawn); Backspace
+ *   deletes the selected point (its last removes the path). Remove path has no key (the
  *   path's menu and bar have it), open or closed, in `usePathPenActions`.
  */
 export function PathPenKeys(): null {
@@ -167,14 +176,14 @@ export function PathPenKeys(): null {
     useActionHandler(
         "cancelAlignmentUpdates",
         () => {
-            if (!drawing && picked !== null) selectCorner(null);
+            if (!drawing && picked !== null) selectPoint(null);
             else closePath();
         },
         {
             label: drawing
                 ? tolgee.t("actions.path.cancel", "Cancel path")
                 : picked !== null
-                  ? tolgee.t("actions.path.deselect", "Deselect corner")
+                  ? tolgee.t("actions.path.deselectPoint", "Deselect point")
                   : tolgee.t("actions.path.close", "Close path"),
         },
     );
@@ -189,33 +198,53 @@ export function PathPenKeys(): null {
     useActionHandler(
         "shapeRemoveLastPoint",
         () => {
-            if (drawing) removeLastCorner();
+            if (drawing) removeLastPoint();
             else if (picked !== null) {
                 const index = Number(picked.slice(1));
-                if (Number.isInteger(index)) void deleteCorner(index);
+                if (Number.isInteger(index))
+                    void deletePoint(index, { selectNeighbor: true });
             }
+            // The open path with no point selected: the path goes (owner, 2026-11-04), one undo
+            // step. Only once it's open, so a stray key on a closed path removes nothing
+            else void removePath();
         },
         {
             label: drawing
-                ? tolgee.t(
-                      "actions.path.removeLastCorner",
-                      "Remove last corner",
-                  )
-                : tolgee.t("actions.path.deleteCorner", "Delete corner"),
+                ? tolgee.t("actions.path.removeLastPoint", "Remove last point")
+                : picked !== null
+                  ? tolgee.t("actions.path.deletePoint", "Delete point")
+                  : tolgee.t("actions.path.remove", "Remove path"),
         },
-        drawing || picked !== null,
+        drawing || phase === "open",
     );
-    // While drawing, undo takes corners back first, as a Line's points are; with none left it
+    // While drawing, undo takes points back first, as a Line's points are; with none left it
     // cancels
     useActionHandler(
         "performUndo",
         () => {
             const s = usePathPenStore.getState().session;
-            if (s && s.corners.length > 0) removeLastCorner();
+            if (s && s.points.length > 0) removeLastPoint();
             else closePath();
         },
         {},
         drawing,
+    );
+    // Corner and Smooth for the selected point of the open path (the editor bar's either/or, the
+    // palette); no keys of their own, as a Line's corner type has none
+    const pickedIndex =
+        !drawing && picked !== null ? Number(picked.slice(1)) : -1;
+    const pointPicked = phase === "open" && pickedIndex >= 0;
+    useActionHandler(
+        "pathPointCorner",
+        () => void setPointSmooth(pickedIndex, false),
+        {},
+        pointPicked,
+    );
+    useActionHandler(
+        "pathPointSmooth",
+        () => void setPointSmooth(pickedIndex, true),
+        {},
+        pointPicked,
     );
     return null;
 }

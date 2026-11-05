@@ -924,6 +924,28 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // Pathways step 2: the selected point of an open path made a corner, or smooth, as a Line's
+    // Corner | Smooth (the point's menu, a double-click, the path's floating editor). No keys,
+    // as a Line's corner type has none
+    pathPointCorner: {
+        labelKey: "actions.path.pointCorner",
+        keywordsKey: "actions.path.keywords",
+        category: "path",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    pathPointSmooth: {
+        labelKey: "actions.path.pointSmooth",
+        keywordsKey: "actions.path.keywords",
+        category: "path",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+
     // Cursor mode
     cancelAlignmentUpdates: {
         labelKey: "actions.alignment.cancelUpdates",
