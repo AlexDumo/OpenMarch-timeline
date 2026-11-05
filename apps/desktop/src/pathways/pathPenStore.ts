@@ -1,6 +1,15 @@
 import { create } from "zustand";
 import { db } from "@/global/database/db";
+import { toast } from "sonner";
 import { drawRoute, removeRoute } from "@/db-functions/timelineRoutes";
+import {
+    drawGroupRoute,
+    editGroupRoutePoints,
+    ownPath,
+    rejoinGroupPath,
+} from "@/db-functions/timelineGroupRoutes";
+import { subscribeHistoryChanges } from "@/db-functions/history";
+import { runAction } from "@/shortcuts/registry";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import tolgee from "@/global/singletons/Tolgee";
 import type { XY } from "@/shapes/types";
@@ -59,6 +68,36 @@ interface PathPenState {
      * setting and N). An open or drawn path always shows.
      */
     hidden: boolean;
+    /**
+     * After Own path for one marcher (step 15): that marcher's own path opens once it's read
+     * again, as the spec's "its own path is then shown, open" says; null otherwise
+     */
+    openNext: number | null;
+    /** Selected marchers on the shown group path, whom Own path gives a lane each (step 15) */
+    ownable: readonly number[];
+    /** Whom Rejoin puts on which group path, or null when it isn't offered (step 15) */
+    rejoin: RejoinTarget | null;
+}
+
+/** Rejoin's target (AP-R10): the group path in a move, and the selected marchers off it */
+export interface RejoinTarget {
+    timelineId: number;
+    routeId: number;
+    marcherIds: readonly number[];
+}
+
+/** What Own path and Rejoin act on for the selection now (spec Appendix I.8) */
+export function setGroupCommands(
+    ownable: readonly number[],
+    rejoin: RejoinTarget | null,
+): void {
+    const s = usePathPenStore.getState();
+    if (
+        s.ownable.join(",") === ownable.join(",") &&
+        JSON.stringify(s.rejoin) === JSON.stringify(rejoin)
+    )
+        return;
+    usePathPenStore.setState({ ownable, rejoin });
 }
 
 /** Whether the session's path is drawn on the field now */
@@ -76,15 +115,27 @@ export function setPathHidden(hidden: boolean): void {
 
 export const usePathPenStore = create<PathPenState>(() => ({
     hidden: false,
+    openNext: null,
+    ownable: [],
+    rejoin: null,
     session: null,
     saving: false,
     saved: 0,
 }));
 
-/** The move a path is for: the same key is the same marcher's same move */
+/**
+ * The move a path is for: the same key is the same marcher's same move, or the same group path
+ * in the same move (step 15)
+ */
 export const pathKey = (
-    t: Pick<PathTarget, "timelineId" | "transitionId" | "marcherId">,
-) => `${t.timelineId}:${t.transitionId}:${t.marcherId}`;
+    t: Pick<
+        PathTarget,
+        "timelineId" | "transitionId" | "marcherId" | "group" | "routeId"
+    >,
+) =>
+    t.group
+        ? `${t.timelineId}:g${t.routeId ?? "new"}`
+        : `${t.timelineId}:${t.transitionId}:${t.marcherId}`;
 
 const pointsOf = (target: PathTarget): PathPoint[] =>
     target.points.map((p) => ({
@@ -160,11 +211,16 @@ export function startDrawing(target: PathTarget, drill: string): void {
 export function showPath(target: PathTarget, drill: string): void {
     const { session } = usePathPenStore.getState();
     const points = pointsOf(target);
+    const { openNext } = usePathPenStore.getState();
+    const next =
+        openNext !== null && !target.group && target.marcherId === openNext;
+    if (next) usePathPenStore.setState({ openNext: null });
     const open =
-        session?.phase === "open" &&
-        pathKey(session.target) === pathKey(target);
+        next ||
+        (session?.phase === "open" &&
+            pathKey(session.target) === pathKey(target));
     const kept =
-        open && session.selected !== null
+        open && session && session.selected !== null
             ? Number(session.selected.slice(1)) < points.length
                 ? session.selected
                 : null
@@ -289,17 +345,35 @@ async function save(points: readonly PathPoint[]): Promise<boolean> {
     const { session, saving } = usePathPenStore.getState();
     if (!session || saving) return false;
     usePathPenStore.setState({ saving: true });
+    const stored = points.map((c) => ({
+        ...(c.id === undefined ? {} : { id: c.id }),
+        at: [c.at.x, c.at.y] as [number, number],
+        ...((c.tension ?? 0) > 0 ? { tension: c.tension } : {}),
+    }));
+    const { target } = session;
     try {
-        await drawRoute({
-            db,
-            timelineId: session.target.timelineId,
-            marcherId: session.target.marcherId,
-            points: points.map((c) => ({
-                ...(c.id === undefined ? {} : { id: c.id }),
-                at: [c.at.x, c.at.y],
-                ...((c.tension ?? 0) > 0 ? { tension: c.tension } : {}),
-            })),
-        });
+        if (target.group && session.phase === "open" && target.routeId !== null)
+            // Point edits on the open group path move every lane (AP-R1, step 15)
+            await editGroupRoutePoints({
+                db,
+                routeId: target.routeId,
+                points: stored,
+            });
+        else if (target.group)
+            // The pen with several marchers: a group path (AP-R8)
+            await drawGroupRoute({
+                db,
+                timelineId: target.timelineId,
+                marcherIds: target.group.members.map((m) => m.marcherId),
+                points: stored,
+            });
+        else
+            await drawRoute({
+                db,
+                timelineId: target.timelineId,
+                marcherId: target.marcherId,
+                points: stored,
+            });
         return true;
     } catch (error) {
         toastTimelineError(
@@ -424,7 +498,31 @@ export async function setPointSmooth(
     );
 }
 
-/** Remove path (AP-R2), open or closed: the move goes straight again, one undo step. */
+/** How long the Remove path toast with Undo stays, unless the next history change closes it */
+const TOAST_MS = 8000;
+
+/** A success toast with Undo that closes on the next history change, as split and merge's do */
+function toastWithUndo(message: string): void {
+    let unsubscribe = () => {};
+    const id = toast.success(message, {
+        duration: TOAST_MS,
+        action: {
+            label: tolgee.t("actions.edit.undo", "Undo"),
+            onClick: () => runAction("performUndo"),
+        },
+        onDismiss: () => unsubscribe(),
+        onAutoClose: () => unsubscribe(),
+    });
+    unsubscribe = subscribeHistoryChanges(() => {
+        unsubscribe();
+        toast.dismiss(id);
+    });
+}
+
+/**
+ * Remove path (AP-R2), open or closed: the move goes straight again, one undo step. On a group
+ * path the whole group's path goes, and the toast says for how many marchers (step 15).
+ */
 export async function removePath(): Promise<void> {
     const { session, saving } = usePathPenStore.getState();
     if (
@@ -436,12 +534,81 @@ export async function removePath(): Promise<void> {
         return;
     usePathPenStore.setState({ saving: true });
     try {
-        await removeRoute({ db, transitionId: session.target.transitionId });
+        const { marcherIds } = await removeRoute({
+            db,
+            transitionId: session.target.transitionId,
+        });
         clearPath();
+        if (session.target.group)
+            toastWithUndo(
+                tolgee.t(
+                    "pathways.toasts.removedGroup",
+                    "Removed the path for {count, plural, one {# marcher} other {# marchers}}",
+                    { count: marcherIds.length },
+                ),
+            );
     } catch (error) {
         toastTimelineError(
             error,
             tolgee.t("pathways.errors.remove", "Couldn't remove the path"),
+        );
+    } finally {
+        usePathPenStore.setState({ saving: false });
+    }
+}
+
+/**
+ * Own path (AP-R9, step 15): the selected marchers on the shown group path each get a copy of
+ * their lane, one undo step. With one marcher, its own path is then shown, open (the hook reads
+ * it again after the save and keeps it open).
+ */
+export async function ownPathFor(marcherIds: readonly number[]): Promise<void> {
+    const { session, saving } = usePathPenStore.getState();
+    if (!session?.target.group || saving || marcherIds.length === 0) return;
+    // Opened again after the save (`openNext`), not kept open as the group path
+    if (marcherIds.length === 1) clearPath();
+    usePathPenStore.setState({ saving: true });
+    try {
+        await ownPath({
+            db,
+            timelineId: session.target.timelineId,
+            marcherIds,
+        });
+        usePathPenStore.setState((state) => ({
+            saved: state.saved + 1,
+            openNext: marcherIds.length === 1 ? marcherIds[0]! : null,
+        }));
+    } catch (error) {
+        toastTimelineError(
+            error,
+            tolgee.t("pathways.errors.save", "Couldn't save the path"),
+        );
+    } finally {
+        usePathPenStore.setState({ saving: false });
+    }
+}
+
+/**
+ * Rejoin (AP-R10, step 15): the selected marchers off the group path follow it, one undo step: a
+ * member that took Own path gets its lane back, another marcher joins the group. The group path
+ * is the one shown, or with only marchers off any group path selected, the move's only one.
+ */
+export async function rejoinFor(target: RejoinTarget | null): Promise<void> {
+    const { saving } = usePathPenStore.getState();
+    if (!target || saving || target.marcherIds.length === 0) return;
+    usePathPenStore.setState({ saving: true });
+    try {
+        await rejoinGroupPath({
+            db,
+            timelineId: target.timelineId,
+            routeId: target.routeId,
+            marcherIds: target.marcherIds,
+        });
+        usePathPenStore.setState((state) => ({ saved: state.saved + 1 }));
+    } catch (error) {
+        toastTimelineError(
+            error,
+            tolgee.t("pathways.errors.save", "Couldn't save the path"),
         );
     } finally {
         usePathPenStore.setState({ saving: false });

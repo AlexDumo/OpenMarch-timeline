@@ -20,13 +20,18 @@ import { lineCoordinate } from "@/shapes/field/lineCoordinate";
 import { toolEnvFor } from "@/shapes/tool/toolEnv";
 import type { ToolEnv } from "@/shapes/tool/toolKind";
 import type { XY } from "@/shapes/types";
+import tolgee from "@/global/singletons/Tolgee";
 import {
     PATH_MENU,
+    laneOutline,
+    memberWalkOf,
+    scheduleOf,
     clickPathHandle,
     dragNewPoint,
     dragPathHandle,
     landCorner,
     legOf,
+    onLine,
     onPath,
     pathHandleAt,
     pathHandles,
@@ -166,11 +171,11 @@ class PathPenMode implements FieldMode {
     /** Whether `pointer` is on the path's line, open or closed */
     private onLine(s: PathSession, pointer: Pick<FieldPointer, "field">) {
         const env = envOf();
-        return (
-            s.phase !== "drawing" &&
-            !!env &&
-            onPath(shapeOf(s), pointer.field, env)
-        );
+        if (s.phase === "drawing" || !env) return false;
+        if (onPath(shapeOf(s), pointer.field, env)) return true;
+        // A group path's lanes open it too (step 15)
+        const lanes = drawingOf(s)?.lanes ?? [];
+        return lanes.some((lane) => onLine(lane, pointer.field, env.hitRadius));
     }
 
     claims(pointer: FieldPointer): boolean {
@@ -557,15 +562,60 @@ export function drawingOf(
               ? null
               : (middle[session.dragging] ?? null);
         const tipText = moving ? drillTerms(moving) : null;
+        // A group path (step 15): the reference line, every member's lane thin and faint (while
+        // drawing, to where the next point would land), its members' ghosts and end spots, and the
+        // rings saying who follows it
+        const group = target.group;
+        const laneShape =
+            group && drawingNow && pointer
+                ? {
+                      ...shape,
+                      points: [...shape.points, { at: pointer }],
+                      ends: shape.ends ?? { from: shape.from, to: shape.to },
+                  }
+                : shape;
+        const schedule = group ? scheduleOf(laneShape) : null;
+        const lanes =
+            group && schedule
+                ? group.members.map((m) =>
+                      laneOutline(memberWalkOf(schedule, m)),
+                  )
+                : undefined;
+        const memberRings = group
+            ? [
+                  ...group.members.map((m) => ({
+                      at: m.from,
+                      kind: "group" as const,
+                      label: tolgee.t(
+                          "pathways.rings.group",
+                          "Follows the group path",
+                      ),
+                  })),
+                  ...group.outside.map((m) => ({
+                      at: m.from,
+                      kind: "own" as const,
+                      label: m.ownPath
+                          ? tolgee.t("pathways.rings.own", "Own path")
+                          : tolgee.t(
+                                "pathways.rings.offGroup",
+                                "Not on the group path",
+                            ),
+                  })),
+              ]
+            : undefined;
         drawing = {
             outline,
             openOutline: true,
             stage: drawingNow ? "drawing" : "open",
-            spots: [target.to],
+            spots: group ? group.members.map((m) => m.to) : [target.to],
             walks: [],
             ...handles,
-            rings: [target.from],
-            ringIds: [target.marcherId],
+            rings: group ? group.members.map((m) => m.from) : [target.from],
+            ringIds: group
+                ? group.members.map((m) => m.marcherId)
+                : [target.marcherId],
+            ...(lanes ? { lanes } : {}),
+            ...(memberRings ? { memberRings } : {}),
             ...guidesFor(moving ? [moving] : [], outline),
             ...(tipText && moving
                 ? { tip: { at: moving, text: tipText } }

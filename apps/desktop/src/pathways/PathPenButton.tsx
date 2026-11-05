@@ -12,7 +12,7 @@ const BUTTON =
 
 /**
  * The toolbar's Path pen (pathways step 1): runs `pathPen` (P), lit while it draws. With no marcher
- * or several selected it's greyed and its tooltip says why ("one marcher for now").
+ * selected it's greyed and its tooltip says why; with several it draws a group path (step 15).
  */
 export function PathPenButton({ performers }: { performers: number }) {
     const drawing = usePathPenStore((s) => s.session?.phase === "drawing");

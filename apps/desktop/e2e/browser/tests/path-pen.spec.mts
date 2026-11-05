@@ -17,7 +17,7 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 // own Paths tab) starts the pen, clicks place corners on half steps, Backspace takes
 // the last back, Enter saves the route as one undo step (the resolver tests check the
 // marcher walks it). Undo takes the path away and redo brings the same route back.
-// With two marchers selected P refuses ("one marcher for now"). A stored path is shown
+// With two marchers selected P draws a group path (step 15). A stored path is shown
 // closed with its marcher selected: drawn, with no handles and no floating editor
 // (owner lab feedback, 2026-11-04). A double-click on its line, or Edit path in its
 // right-click menu, opens it; Escape closes it again. On the open path, a corner
@@ -111,11 +111,15 @@ test("change: P draws a cornered path for one marcher, Enter saves it as one und
     };
 
     await selectPage(show, "Page 2");
-    // Several marchers: the pen refuses
+    // Several marchers: the pen draws one group path for them (step 15, path-group.spec.mts);
+    // Escape cancels it
     await clickMarcher(page, "T1");
     await clickMarcher(page, "T2", { add: true });
     await page.keyboard.press("p");
-    await expect(page.getByText("One marcher for now")).toBeVisible();
+    await expect(page.getByTestId("path-pen-banner")).toContainText(
+        "Group path for 2 marchers",
+    );
+    await page.keyboard.press("Escape");
     await expect(page.getByTestId("path-pen-banner")).toBeHidden();
 
     // One marcher: the pen is in its own tab, and the hint says who it's for

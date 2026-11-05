@@ -197,6 +197,14 @@ export type FieldTestShapeOverlay = {
     walks: { from: { x: number; y: number }; to: { x: number; y: number } }[];
     /** The hollow rings where its marchers start (at the start flag), field units. */
     rings: { x: number; y: number }[];
+    /** How many group path lanes are drawn (pathways step 15) */
+    lanes: number;
+    /** The rings round a group's members and selected marchers off it (pathways step 15) */
+    memberRings: {
+        at: { x: number; y: number };
+        kind: "group" | "own";
+        label: string;
+    }[];
     /** Spots it leaves empty on purpose (an odd-count outline's gap), field units. */
     gaps: { x: number; y: number }[];
     /** Its handles, in the viewport. */

@@ -300,6 +300,21 @@ export type FieldModeDrawing = {
     /** The marcher at each of `rings`, whose ghost is drawn in its own color */
     ringIds?: readonly number[];
     /**
+     * Thin, faint lines (pathways step 15): each member's lane of a group path, from its start
+     * along its copy of the path to its end spot
+     */
+    lanes?: readonly (readonly FieldPoint[])[];
+    /**
+     * Rings round marchers' starts (pathways step 15): `group` on each member of the group path
+     * shown ("Follows the group path"), `own` on a selected marcher in the move that isn't on it
+     * ("Own path" when it walks one); `label` is the ring's tooltip
+     */
+    memberRings?: readonly {
+        at: FieldPoint;
+        kind: "group" | "own";
+        label: string;
+    }[];
+    /**
      * Spots the shape leaves empty on purpose, drawn as dashed rings: an odd-count outline's gap
      * (#390), which a click on another spot between corners moves
      */

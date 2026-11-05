@@ -924,6 +924,27 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // Pathways step 15: a group path's members break off with a copy of their lane (Own path,
+    // AP-R9) or follow it (Rejoin, AP-R10). On the floating path bar and in the palette; no keys
+    ownPath: {
+        labelKey: "actions.path.ownPath",
+        keywordsKey: "actions.path.keywords",
+        category: "path",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    rejoinPath: {
+        labelKey: "actions.path.rejoin",
+        keywordsKey: "actions.path.keywords",
+        category: "path",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+
     // Pathways step 2: the selected point of an open path made a corner, or smooth, as a Line's
     // Corner | Smooth (the point's menu, a double-click, the path's floating editor). No keys,
     // as a Line's corner type has none

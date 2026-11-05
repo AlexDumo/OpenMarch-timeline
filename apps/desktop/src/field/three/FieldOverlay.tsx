@@ -375,6 +375,15 @@ function Lasso({
  * marchers will stand on, a faint line from each marcher to its spot, and its
  * handles, in the theme's shape color.
  */
+/** A group path's lanes (pathways step 15): thin and faint beside the reference line */
+const LANE_ALPHA = 0.45;
+const LANE_WIDTH = 1;
+/** Rings round a group's members (blue) and selected marchers off it (orange), pathways step 15 */
+const GROUP_RING = "rgb(59, 130, 246)";
+const OWN_RING = "rgb(249, 115, 22)";
+const MEMBER_RING_SCALE = 1.9;
+const MEMBER_RING_WIDTH = 2;
+
 /** How see-through a start ghost is (#417; the owner picked ghosts over rings in the lab) */
 const GHOST_OPACITY = 0.35;
 
@@ -553,6 +562,17 @@ const ShapeBody = memo(function ShapeBody({
                         vectorEffect="non-scaling-stroke"
                     />
                 ))}
+            {drawing.lanes?.map((lane, i) => (
+                <polyline
+                    key={`lane${i}`}
+                    points={lane.map((p) => `${p.x},${p.y}`).join(" ")}
+                    fill="none"
+                    stroke={rgbaToString({ ...theme.shape, a: LANE_ALPHA })}
+                    strokeWidth={LANE_WIDTH}
+                    vectorEffect="non-scaling-stroke"
+                    data-testid="pathGroupLane"
+                />
+            ))}
             <StartMarks
                 drawing={drawing}
                 theme={theme}
@@ -560,6 +580,23 @@ const ShapeBody = memo(function ShapeBody({
                 looks={looks}
                 scale={scale}
             />
+            {drawing.memberRings?.map((ring, i) => (
+                <circle
+                    key={`ring${i}`}
+                    cx={ring.at.x}
+                    cy={ring.at.y}
+                    r={DOT_RADIUS * scale * MEMBER_RING_SCALE}
+                    fill="none"
+                    stroke={ring.kind === "group" ? GROUP_RING : OWN_RING}
+                    strokeWidth={MEMBER_RING_WIDTH}
+                    vectorEffect="non-scaling-stroke"
+                    data-testid="pathMemberRing"
+                    data-kind={ring.kind}
+                    aria-label={ring.label}
+                >
+                    <title>{ring.label}</title>
+                </circle>
+            ))}
             {drawing.walks.map(({ from: a, to: b }, i) => {
                 return (
                     <line

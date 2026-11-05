@@ -1,7 +1,14 @@
 import {
+    cubicPoint,
+    groupMemberWalk,
+    groupSchedule,
     routePath,
     routePiecePoint,
     routePolyline,
+    ROUTE_CUBIC_SAMPLES,
+    type GroupLeg,
+    type GroupMemberWalk,
+    type GroupSchedule,
     type RoutePath,
 } from "@openmarch/core";
 import tolgee from "@/global/singletons/Tolgee";
@@ -271,6 +278,11 @@ function fromSegment(at: XY, a: XY, b: XY): number {
  * pixels at any zoom) of its line, curves included, as a press is on a Line (`onLine`). Only a
  * double-click or a right-click there is the path's; empty field around it stays the field's.
  */
+/** Whether `at` is within `radius` of the polyline `line` */
+export function onLine(line: readonly XY[], at: XY, radius: number): boolean {
+    return line.slice(1).some((b, i) => fromSegment(at, line[i]!, b) <= radius);
+}
+
 export function onPath(
     shape: PathShape,
     at: XY,
@@ -695,3 +707,135 @@ export const PATH_MENU: ToolHandleMenu<PathShape> = {
         }
     },
 };
+
+// ---------------------------------------------------------------------------
+// Group paths (pathways step 15, spec R-14 "Group schedule")
+// ---------------------------------------------------------------------------
+
+/** The route a group path's shape describes: its reference line from F to G, as R-14 reads it */
+export function scheduleOf(shape: PathShape): GroupSchedule {
+    const from = tuple(shape.ends?.from ?? shape.from);
+    const to = tuple(shape.ends?.to ?? shape.to);
+    return groupSchedule({
+        from,
+        to,
+        points: shape.points.map((p) =>
+            (p.tension ?? 0) > 0
+                ? { at: tuple(p.at), tension: p.tension }
+                : { at: tuple(p.at) },
+        ),
+    });
+}
+
+/** One member's walk on the group path `shape`: its own legs onto and off its lane */
+export const memberWalkOf = (
+    schedule: GroupSchedule,
+    member: { from: XY; to: XY; offset: XY },
+): GroupMemberWalk =>
+    groupMemberWalk(
+        schedule,
+        tuple(member.from),
+        tuple(member.to),
+        tuple(member.offset),
+    );
+
+const legLine = (leg: GroupLeg): XY[] => {
+    const [S, E] = [leg.path.V[0]!, leg.path.V[1]!];
+    const piece = leg.path.pieces[0]!;
+    if (piece.kind === "line" || leg.length < 1e-9) return [xy(S), xy(E)];
+    return Array.from({ length: ROUTE_CUBIC_SAMPLES + 1 }, (_, i) =>
+        xy(
+            i === ROUTE_CUBIC_SAMPLES
+                ? E
+                : cubicPoint(S, piece.c1, piece.c2, E, i / ROUTE_CUBIC_SAMPLES),
+        ),
+    );
+};
+
+/**
+ * The line a member walks on a group path, to draw as its lane: its first leg, its copy of the
+ * reference walk between its first and last points, and its last leg (R-14 group schedule)
+ */
+export function laneOutline(walk: GroupMemberWalk): XY[] {
+    const { schedule, first, last, offset } = walk;
+    if (!first || !last) return [xy(walk.A), xy(walk.B)];
+    const W = schedule.W;
+    const m = W.V.length - 2;
+    const middle: XY[] = [];
+    const place = (q: readonly [number, number]): XY => ({
+        x: q[0] + offset[0],
+        y: q[1] + offset[1],
+    });
+    for (let j = 1; j < m; j++) {
+        const piece = W.pieces[j]!;
+        const P0 = W.V[j]!;
+        const P3 = W.V[j + 1]!;
+        if (piece.kind === "cubic")
+            for (let i = 1; i < ROUTE_CUBIC_SAMPLES; i++)
+                middle.push(
+                    place(
+                        cubicPoint(
+                            P0,
+                            piece.c1,
+                            piece.c2,
+                            P3,
+                            i / ROUTE_CUBIC_SAMPLES,
+                        ),
+                    ),
+                );
+        middle.push(place(P3));
+    }
+    return [...legLine(first), ...middle, ...legLine(last).slice(1)];
+}
+
+/**
+ * Each leg of each member as Big steps judges it (spec Appendix I.8): the first leg's distance
+ * per move as `ℓ_first · L^W / D^W_1`, the middle as `L^W` (once), the last leg's as
+ * `ℓ_last · L^W / (L^W − D^W_m)`, Infinity when that difference rounds to 0. A leg under
+ * `EPS_GEOM` is never big, so it's left out. Each is the distance a steady walker would cover
+ * over the whole move at that leg's speed, to test against the move's counts.
+ */
+export function groupLegDistances(
+    schedule: GroupSchedule,
+    walks: readonly { marcherId: number; walk: GroupMemberWalk }[],
+): {
+    where: "onto" | "along" | "off";
+    marcherId: number | null;
+    distance: number;
+}[] {
+    const W = schedule.W;
+    const m = W.V.length - 2;
+    const out: {
+        where: "onto" | "along" | "off";
+        marcherId: number | null;
+        distance: number;
+    }[] = [];
+    if (m < 1) {
+        for (const { marcherId, walk } of walks) {
+            const d = Math.hypot(walk.B[0] - walk.A[0], walk.B[1] - walk.A[1]);
+            if (d >= 1e-9) out.push({ where: "along", marcherId, distance: d });
+        }
+        return out;
+    }
+    const L = W.L;
+    if (m > 1) out.push({ where: "along", marcherId: null, distance: L });
+    for (const { marcherId, walk } of walks) {
+        const first = walk.first!.length;
+        const last = walk.last!.length;
+        if (first >= 1e-9)
+            out.push({
+                where: "onto",
+                marcherId,
+                distance: (first * L) / W.D[1]!,
+            });
+        if (last >= 1e-9) {
+            const rest = L - W.D[m]!;
+            out.push({
+                where: "off",
+                marcherId,
+                distance: rest > 0 ? (last * L) / rest : Infinity,
+            });
+        }
+    }
+    return out;
+}

@@ -190,7 +190,9 @@
             "deletePoint": "Delete point",
             "deselectPoint": "Deselect point",
             "pointCorner": "Corner point",
-            "pointSmooth": "Smooth point"
+            "pointSmooth": "Smooth point",
+            "ownPath": "Own path",
+            "rejoin": "Rejoin"
         }
     },
     "analyticsOptIn": {
@@ -4342,7 +4344,14 @@
             "bigStepsShort": "Big steps · {steps}",
             "removeLastPoint": "Remove last point",
             "pointType": "Point type",
-            "bigStepsTipPoints": "{inches} in a step, all along the path. Lengthen the move, or move or take out points to shorten the path."
+            "bigStepsTipPoints": "{inches} in a step, all along the path. Lengthen the move, or move or take out points to shorten the path.",
+            "bigStepsLeg": "Big steps · {steps} {where}",
+            "bigStepsTipLegs": "Big steps on {legs}. Every marcher passes each point of the path at the same moment, so only the legs onto and off the path change speed. Lengthen the move, or move points to even out the legs.",
+            "legOnto": "onto the path",
+            "legOff": "off the path",
+            "legAlong": "along the path",
+            "ownPathTip": "Give the selected marchers their own copy of their part of the path",
+            "rejoinTip": "Put the selected marchers back on the group path, each from where it stands"
         },
         "menu": {
             "pointType": "Corner type",
@@ -4362,16 +4371,25 @@
         },
         "refusals": {
             "noMove": "{marcher} has no move at the playhead to draw a path on",
-            "oneMarcher": "One marcher for now: select just one to draw its path",
             "playing": "Stop playback to draw a path",
-            "selectOne": "Select a marcher to draw a path for"
+            "selectOne": "Select a marcher to draw a path for",
+            "twoMoves": "These marchers are in different moves at the playhead: select marchers of one move to draw a group path"
         },
         "banner": {
             "drawingPoints": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel",
-            "drawingPointsClick": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
+            "drawingPointsClick": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
+            "groupDrawing": "Group path for {count} marchers: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
         },
         "toolbar": {
             "path": "Path"
+        },
+        "toasts": {
+            "removedGroup": "Removed the path for {count, plural, one {# marcher} other {# marchers}}"
+        },
+        "rings": {
+            "group": "Follows the group path",
+            "own": "Own path",
+            "offGroup": "Not on the group path"
         }
     }
 }
