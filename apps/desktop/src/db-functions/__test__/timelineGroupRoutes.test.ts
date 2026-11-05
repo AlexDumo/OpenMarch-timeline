@@ -208,6 +208,118 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
         await expectOneUndoStep(db, original);
     });
 
+    it("a block four rows deep (16 marchers) holds its shape along a curve and lands on its end set; redo keeps the ids (review of #683)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        const timeline = await page2(db);
+        // The move ends in one line across the field: not the start block moved over
+        const D = schema.timeline_slot_destinations;
+        const own = new Set(
+            (
+                await db
+                    .select()
+                    .from(schema.timeline_transitions)
+                    .where(
+                        eq(
+                            schema.timeline_transitions.timeline_id,
+                            timeline.id,
+                        ),
+                    )
+                    .all()
+            ).map((t) => t.id),
+        );
+        const destinations = (await db.select().from(D).all()).filter((d) =>
+            own.has(d.transition_id),
+        );
+        expect(destinations.length).toBeGreaterThan(16);
+        for (const d of destinations)
+            await db
+                .update(D)
+                .set({ x: 200 + 9 * d.slot_index, y: 520 })
+                .where(eq(D.id, d.id));
+        const before = await resolverOf(db);
+        // Four marchers from each of four rows (by where they stand at the move's start)
+        const rows = new Map<number, number[]>();
+        for (const m of before.marcherIds()) {
+            const y = Math.round(before.positionAt(m, 9)[1]);
+            rows.set(y, [...(rows.get(y) ?? []), m]);
+        }
+        const deep = [...rows.values()].filter((r) => r.length >= 4);
+        expect(deep.length).toBeGreaterThanOrEqual(4);
+        const ids = deep.slice(0, 4).flatMap((r) => r.slice(0, 4));
+        expect(ids).toHaveLength(16);
+        const starts = ids.map((m) => before.positionAt(m, 9) as XY);
+        const ends = ids.map((m) => before.positionAt(m, 17) as XY);
+        // The end set isn't the start block moved over, so the legs differ
+        const shifts = ids.map((_, i) => [
+            ends[i]![0] - starts[i]![0],
+            ends[i]![1] - starts[i]![1],
+        ]);
+        expect(shifts.some((d) => dist(d as XY, shifts[0] as XY) > 1e-3)).toBe(
+            true,
+        );
+        const original = await dataOf(db);
+        const result = await drawGroupRoute({
+            db,
+            timelineId: timeline.id,
+            marcherIds: ids,
+            points: await groupPoints(db, ids),
+        });
+        const geometry = await routeOf(db, result.routeId);
+        const schedule = groupSchedule(geometry);
+        const after = await resolverOf(db);
+        const shape = (b: number) => {
+            const p0 = after.positionAt(ids[0]!, b);
+            return ids.map((m) => {
+                const p = after.positionAt(m, b);
+                return [p[0] - p0[0], p[1] - p0[1]] as XY;
+            });
+        };
+        // Rigid from the first point to the last: every member's place in the block is kept
+        const first = 9 + 8 * schedule.uFirst;
+        const last = 9 + 8 * schedule.uLast;
+        const ref = shape(first);
+        for (const f of [0.25, 0.5, 0.75, 1]) {
+            const now = shape(first + (last - first) * f);
+            for (const [i, d] of now.entries())
+                expect(dist(d, ref[i]!)).toBeLessThan(1e-6);
+        }
+        // Everyone starts and lands where they should
+        for (const [i, m] of ids.entries()) {
+            expect(after.positionAt(m, 9)).toEqual(starts[i]);
+            expect(after.positionAt(m, 17)).toEqual(ends[i]);
+        }
+        await expectOneUndoStep(db, original);
+    });
+
+    it("Rejoin naming only marchers already on the group path is refused, writing nothing (review of #683)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        const timeline = await page2(db);
+        const ids = (await resolverOf(db)).marcherIds().slice(0, 4);
+        const drawn = await drawGroupRoute({
+            db,
+            timelineId: timeline.id,
+            marcherIds: ids,
+            points: await groupPoints(db, ids),
+        });
+        await expectRefused(
+            db,
+            () =>
+                rejoinGroupPath({
+                    db,
+                    timelineId: timeline.id,
+                    routeId: drawn.routeId,
+                    marcherIds: [ids[0]!, ids[1]!],
+                }),
+            /already follow the group path/,
+        );
+    });
+
     it("draws again on the same marchers in place; on two of them a new path, the old keeps the other two (QA-AP-R8)", async ({
         db,
         marchersAndPages: _,

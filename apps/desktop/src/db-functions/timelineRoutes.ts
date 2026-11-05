@@ -74,6 +74,9 @@ export const routeRefusal = {
     /** AP-R10 (step 15): Rejoin with no group path in the move */
     noGroupPath: (move: TimelineTextArg) =>
         text.t("timeline.refusals.route.noGroupPath", { move }),
+    /** AP-R10 (step 15): Rejoin naming only marchers already on the group path */
+    alreadyOnGroupPath: () =>
+        text.t("timeline.refusals.route.alreadyOnGroupPath"),
     /** AP-R8 (step 15): a group path needs two or more marchers */
     groupTooSmall: () => text.t("timeline.refusals.route.groupTooSmall"),
 };

@@ -273,16 +273,16 @@ function fromSegment(at: XY, a: XY, b: XY): number {
     return Math.hypot(at.x - (a.x + dx * t), at.y - (a.y + dy * t));
 }
 
-/**
- * Whether a press at `at` is on the drawn path: within the handle reach (`hitRadius`, a few screen
- * pixels at any zoom) of its line, curves included, as a press is on a Line (`onLine`). Only a
- * double-click or a right-click there is the path's; empty field around it stays the field's.
- */
 /** Whether `at` is within `radius` of the polyline `line` */
 export function onLine(line: readonly XY[], at: XY, radius: number): boolean {
     return line.slice(1).some((b, i) => fromSegment(at, line[i]!, b) <= radius);
 }
 
+/**
+ * Whether a press at `at` is on the drawn path: within the handle reach (`hitRadius`, a few screen
+ * pixels at any zoom) of its line, curves included, as a press is on a Line (`onLine`). Only a
+ * double-click or a right-click there is the path's; empty field around it stays the field's.
+ */
 export function onPath(
     shape: PathShape,
     at: XY,
@@ -795,25 +795,30 @@ export function laneOutline(walk: GroupMemberWalk): XY[] {
  * `EPS_GEOM` is never big, so it's left out. Each is the distance a steady walker would cover
  * over the whole move at that leg's speed, to test against the move's counts.
  */
+/** A leg of a group path: onto it, along it, off it, or straight to the spot when it has no point */
+export type LegWhere = "onto" | "along" | "off" | "straight";
+
 export function groupLegDistances(
     schedule: GroupSchedule,
     walks: readonly { marcherId: number; walk: GroupMemberWalk }[],
 ): {
-    where: "onto" | "along" | "off";
+    where: LegWhere;
     marcherId: number | null;
     distance: number;
 }[] {
     const W = schedule.W;
     const m = W.V.length - 2;
     const out: {
-        where: "onto" | "along" | "off";
+        where: LegWhere;
         marcherId: number | null;
         distance: number;
     }[] = [];
+    // No point on the path: each member walks straight to its spot, no path to be along
     if (m < 1) {
         for (const { marcherId, walk } of walks) {
             const d = Math.hypot(walk.B[0] - walk.A[0], walk.B[1] - walk.A[1]);
-            if (d >= 1e-9) out.push({ where: "along", marcherId, distance: d });
+            if (d >= 1e-9)
+                out.push({ where: "straight", marcherId, distance: d });
         }
         return out;
     }

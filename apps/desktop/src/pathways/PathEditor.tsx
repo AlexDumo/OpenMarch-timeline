@@ -37,6 +37,7 @@ import {
     pathOutline,
     pointOf,
     scheduleOf,
+    type LegWhere,
 } from "./pathEdit";
 
 /**
@@ -73,9 +74,9 @@ export interface BigSteps {
     steps: string;
     inches: number;
     /** Which leg of a group path is worst; null for one marcher's own path */
-    where: "onto" | "along" | "off" | null;
+    where: LegWhere | null;
     legs: {
-        where: "onto" | "along" | "off";
+        where: LegWhere;
         drill: string | null;
         steps: string;
     }[];
@@ -132,12 +133,14 @@ function groupBigSteps(
 }
 
 /** How Big steps names a leg of a group path */
-const legWords = (where: "onto" | "along" | "off") =>
+const legWords = (where: LegWhere) =>
     where === "onto"
         ? tolgee.t("pathways.editor.legOnto", "onto the path")
         : where === "off"
           ? tolgee.t("pathways.editor.legOff", "off the path")
-          : tolgee.t("pathways.editor.legAlong", "along the path");
+          : where === "straight"
+            ? tolgee.t("pathways.editor.legStraight", "straight to the spot")
+            : tolgee.t("pathways.editor.legAlong", "along the path");
 
 /**
  * The path pen's hint and floating editor (pathways steps 1 and 2). While drawing, a hint over the field

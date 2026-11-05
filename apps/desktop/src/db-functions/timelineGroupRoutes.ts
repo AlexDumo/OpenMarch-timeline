@@ -244,7 +244,11 @@ export async function drawGroupRouteInTransaction({
     // Again: the selection is exactly the walkers of one group path in the move
     const groupRoutes = new Set(
         members
-            .filter((m) => m.transition.path_params !== null)
+            .filter(
+                (m) =>
+                    m.transition.path_style === "route" &&
+                    m.transition.path_params !== null,
+            )
             .map((m) => m.transition.route_id!),
     );
     let again: { routeId: number; geometry: RouteGeometry } | null = null;
@@ -539,11 +543,10 @@ export async function rejoinGroupPathInTransaction({
     )
         refuse(routeRefusal.noGroupPath(await moveNameOf(tx, timelineId)));
     const on = new Set(walkers.map((w) => w.row.marcher_id));
-    const members = await readMembers(
-        tx,
-        timelineId,
-        marcherIds.filter((id) => !on.has(id)),
-    );
+    const joining = marcherIds.filter((id) => !on.has(id));
+    // Nothing to rejoin: refused, not an empty edit (review of #683)
+    if (joining.length === 0) refuse(routeRefusal.alreadyOnGroupPath());
+    const members = await readMembers(tx, timelineId, joining);
     const R = await routeGeometryOf(tx, routeId);
     return await mapDbErrors(async () => {
         const transitions: Record<number, number> = {};
