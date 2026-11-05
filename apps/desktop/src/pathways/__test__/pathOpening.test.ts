@@ -159,3 +159,44 @@ describe("closing it", () => {
         expect(usePathPenStore.getState().session).toBeNull();
     });
 });
+
+describe("finishing a drawing (review of #680)", () => {
+    it("a press on the last point that drags past the slop finishes, adding no smooth point", async () => {
+        startDrawing(target(null), "T4");
+        addPoint({ x: 4 * STEP, y: 4 * STEP });
+        pathPenMode.press(at(4 * STEP, 4 * STEP), { isMac: false });
+        pathPenMode.move(at(5 * STEP, 4 * STEP));
+        pathPenMode.move(at(6 * STEP, 4 * STEP));
+        // Still one point while dragging: none was placed under the press
+        expect(usePathPenStore.getState().session?.points).toHaveLength(1);
+        pathPenMode.release(at(6 * STEP, 4 * STEP), null);
+        await new Promise((r) => setTimeout(r, 0));
+        const s = usePathPenStore.getState().session;
+        expect(s?.phase ?? null).not.toBe("drawing");
+        expect(s?.points.length ?? 0).toBeLessThanOrEqual(1);
+    });
+
+    it("a press on the end spot that drags past the slop finishes too", async () => {
+        startDrawing(target(null), "T4");
+        addPoint({ x: 4 * STEP, y: 4 * STEP });
+        pathPenMode.press(at(8 * STEP, 0), { isMac: false });
+        pathPenMode.move(at(8 * STEP, 2 * STEP));
+        expect(usePathPenStore.getState().session?.points).toHaveLength(1);
+        pathPenMode.release(at(8 * STEP, 2 * STEP), null);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(usePathPenStore.getState().session?.phase ?? null).not.toBe(
+            "drawing",
+        );
+    });
+
+    it("a press-and-drag elsewhere still places a smooth point", () => {
+        startDrawing(target(null), "T4");
+        addPoint({ x: 4 * STEP, y: 4 * STEP });
+        pathPenMode.press(at(6 * STEP, 6 * STEP), { isMac: false });
+        pathPenMode.move(at(8 * STEP, 6 * STEP));
+        const points = usePathPenStore.getState().session!.points;
+        expect(points).toHaveLength(2);
+        expect(points[1]!.tension ?? 0).toBeGreaterThan(0);
+        pathPenMode.release(at(8 * STEP, 6 * STEP), null);
+    });
+});

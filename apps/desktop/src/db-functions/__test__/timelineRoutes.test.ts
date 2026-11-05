@@ -965,6 +965,54 @@ describeDbTests("Routes with curves (step 2: AP-R1, AP-R7, spec I.5)", (it) => {
         expect((await snapshot(db)).data).toEqual(original.data);
     });
 
+    it("cuts exactly on a corner whose neighbors are smooth: the corner goes, C is kept, the pieces beside it are redrawn (QA-AP-R5, corner case)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        // Mirror-symmetric about the middle, so the corner sits halfway along: count 13 of 9–17
+        const { timeline, m } = await drawn(db, (A, B) => [
+            { at: along(A, B, 0.25, 30), tension: 1 },
+            { at: along(A, B, 0.5, 0) },
+            { at: along(A, B, 0.75, 30), tension: 1 },
+        ]);
+        const [route] = await readRoutes(db);
+        const [first, corner, last] = route!.geometry.points;
+        const before = await resolverOf(db);
+        const C = before.positionAt(m, 13);
+        expect(
+            Math.hypot(C[0] - corner!.at[0], C[1] - corner!.at[1]),
+        ).toBeLessThan(1e-6);
+        const original = await snapshot(db);
+        const result = await splitTimelineAtBeat({
+            db,
+            timelineId: timeline.id,
+            beat: 13,
+        });
+        const after = await resolverOf(db);
+        expect(after.positionAt(m, 13)).toEqual(C);
+        const routes = await readRoutes(db);
+        const earlier = routes.find((r) => r.timelineId === result.before.id)!;
+        const later = routes.find((r) => r.timelineId === result.after.id)!;
+        // The corner is within ε of C, so neither half keeps it (spec I.5)
+        expect(earlier.geometry.points).toEqual([first]);
+        expect(later.geometry.points).toEqual([last]);
+        for (const beat of [9, 17])
+            expect(after.positionAt(m, beat)).toEqual(
+                before.positionAt(m, beat),
+            );
+        // The pieces beside C now follow the chord rule there, so the motion near it changes a
+        // little: the case owner question 1 on #680 covers
+        let drift = 0;
+        for (let b = 9; b <= 17; b += 0.25) {
+            const p = before.positionAt(m, b);
+            const q = after.positionAt(m, b);
+            drift = Math.max(drift, Math.hypot(p[0] - q[0], p[1] - q[1]));
+        }
+        expect(drift).toBeGreaterThan(0);
+        expect((await performUndo(db)).success).toBe(true);
+        expect((await snapshot(db)).data).toEqual(original.data);
+    });
+
     it("cuts on a straight piece of a curved path with no change in motion (QA-AP-R5, line case)", async ({
         db,
         marchersAndPages: _,

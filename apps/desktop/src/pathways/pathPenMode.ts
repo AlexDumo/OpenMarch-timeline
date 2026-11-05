@@ -111,7 +111,11 @@ class PathPenMode implements FieldMode {
         base: PathShape;
         before: readonly PathPoint[];
         moved: boolean;
-        /** Drawing: where the press landed a point, made smooth once the drag leaves the slop */
+        /**
+         * Drawing: where the press landed a point, made smooth once the drag leaves the slop; null
+         * when the press was on the last point or the end spot, which finishes on release however
+         * far it moved (review of #680)
+         */
         landed: XY | null;
         /** Where the pointer is, for the chip */
         screen: XY;
@@ -198,7 +202,9 @@ class PathPenMode implements FieldMode {
             before: s.points,
             moved: false,
             landed:
-                s.phase === "drawing" && env
+                s.phase === "drawing" &&
+                env &&
+                !onFinishSpot(s, pointer.field, env)
                     ? landCorner(base, pointer.field, env)
                     : null,
             keys,
@@ -293,6 +299,11 @@ class PathPenMode implements FieldMode {
                 endNewPoint();
                 return;
             }
+            // Pressed on the last point or the end spot and moved a little: still a finish
+            if (p.moved && p.landed === null) {
+                void finishDrawing();
+                return;
+            }
             this.releaseDrawing(s, pointer, click, roles);
             return;
         }
@@ -345,14 +356,8 @@ class PathPenMode implements FieldMode {
             void finishDrawing();
             return;
         }
-        const points = pathPoints(shapeOf(s));
-        const last = points[points.length - 2]!;
-        const end = points[points.length - 1]!;
-        const near = (q: XY) =>
-            Math.hypot(q.x - pointer.field.x, q.y - pointer.field.y) <=
-            env.hitRadius;
         // On the last point (a Line's last point), or on the end spot the path goes to
-        if ((s.points.length > 0 && near(last)) || near(end)) {
+        if (onFinishSpot(s, pointer.field, env)) {
             void finishDrawing();
             return;
         }
@@ -595,3 +600,12 @@ function guidesFor(
 
 /** The one pen mode the field editor is given while a path is drawn or open. */
 export const pathPenMode = new PathPenMode();
+
+/** Whether `at` is on the drawing's last point or on the end spot the path goes to */
+function onFinishSpot(s: PathSession, at: XY, env: ToolEnv): boolean {
+    const points = pathPoints(shapeOf(s));
+    const last = points[points.length - 2]!;
+    const end = points[points.length - 1]!;
+    const near = (q: XY) => Math.hypot(q.x - at.x, q.y - at.y) <= env.hitRadius;
+    return (s.points.length > 0 && near(last)) || near(end);
+}
