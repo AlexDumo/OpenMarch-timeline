@@ -181,6 +181,11 @@ export interface PathParams {
     bulge?: number;
     /** Extra trail vertices (follow_the_leader style) */
     waypoints?: XY[];
+    /**
+     * A group path member's offset from the route's reference line, field units (route style,
+     * v0.9 step 15, I-R4). Absent (params null) for one marcher's own path.
+     */
+    offset?: XY;
 }
 
 /** One inner point of a route (spec 5.2, v0.9): a corner, or smooth with a tension (step 2). */

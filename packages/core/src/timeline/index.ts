@@ -65,6 +65,7 @@ export {
     normalizeStartAngle,
     MAX_ROUTE_POINT_ID_LENGTH,
     MAX_ROUTE_TENSION,
+    MAX_ROUTE_OFFSET,
     COORD_BOUND,
     MAX_ABS_BULGE,
 } from "./validate";

@@ -701,7 +701,7 @@ For joins and resumes, the same formula **rebases** the motion: whatever distanc
 | **R-6** `hold`             | `origin(s)`                                                           |
 | **R-7** `direct`, any kind | `lerp(origin(s), dest, p(s,b))`, where `dest = destinations[T][slot]` |
 | **R-8** `arc`, any kind    | `arcPoint(origin(s), dest, bulge, p(s,b))`, as defined below          |
-| **R-14** `route`          | the walked path of R-14 at `p(s,b)`; a join or resume walks straight, as R-7 (v0.9 steps 1 and 2) |
+| **R-14** `route`          | the walked path of R-14 at `p(s,b)`; a join or resume walks straight, as R-7 (v0.9 steps 1, 2 and 15) |
 
 `lerp(a, b, t)` is endpoint-exact: it returns `a` for `t ≤ 0` and `b` for `t ≥ 1`, bit for bit (§8.10).
 
@@ -814,7 +814,7 @@ steps 1 and 2 (QA-RT-9, QA-RT-17). When it is `{"offset": o}`, `T` is a member o
 and a founding span walks by the **group schedule** below, which places copies of the route's
 reference walk by `o`.
 
-**Founding spans** walk the path through `A, P_1, …, P_n, B` described below. **Joins and resumes**
+An own path's **founding spans** walk the path through `A, P_1, …, P_n, B` described below. **Joins and resumes**
 walk straight, exactly as R-7, and raise `D-REBASE`. A later step replaces this with a rejoin onto the
 route.
 
@@ -925,20 +925,27 @@ differ, in length and so in speed. For a founding span of member `T` with offset
    `lerp(A, B, p)`, and the rest of this list doesn't apply.
 3. **The moments.** `u_first = D^W_1 / L^W` and `u_last = D^W_m / L^W`: the fractions of the move at
    which the reference walk, at its one steady speed, reaches its first and its last kept inner point.
-   Every leg of `W` is at least `ε_geom` long (cleaning), so `0 < u_first ≤ u_last < 1`; they are equal
-   when `m = 1`. They are fractions of the move, so they need not fall on whole counts (putting a point
-   on a count is pins, a later step). Every member shares them, since every member has the same range
-   (I-R5) and the same route.
+   Every leg of `W` is at least `ε_geom` long (cleaning), so in exact arithmetic `0 < u_first ≤ u_last < 1`;
+   they are equal when `m = 1`. In float64 `u_first > 0` always holds (`D^W_1 ≥ ε_geom` and `L^W` is finite),
+   but `u_last` can round to 1 when the last leg of `W` is below `L^W · 2⁻⁵³` (a leg of `10⁻⁹` on a path
+   longer than about `10⁷`); the member then stays on its lane until `p = 1`, where it is at `B` (item 6
+   never reaches the last leg, so nothing divides by zero). They are fractions of the move, so they need not fall on whole counts (putting a point
+   on a count is pins, a later step). They depend on the route alone, so every member has the same
+   ones; and every member reaches them on the same beat, `T.start_beat + u · c`, because every member
+   has the same range (I-R5) and its founding span starts at `T.start_beat` (R-3), so every member has
+   the same `p` at every beat. Item 7's rigidity rests on that.
 4. **Placing.** `q + o` is `[q_x + o_x, q_y + o_y]`, each one float64 addition. The member's first
    point is `W_1 + o` and its last point `W_m + o`. Placing is a translation, so each member's
    **lane** is a parallel copy of the reference walk and the group keeps its orientation (it slides
    and never turns with the path: G-1).
-5. **The legs.** The **first leg** runs from `A` to `W_1 + o`: a line when `W_1` is a corner, else the
+5. **The legs.** The **first leg** runs from `A` to `W_1 + o`: a line when `W_1` is a corner or
+   `|(W_1 + o) − A| < ε_geom`, else the
    cubic `(A, A + ((W_1 + o) − A)/3, in^W_1 + o, W_1 + o)` (the chord rule at `A`). The **last leg** runs
-   from `W_m + o` to `B`: a line when `W_m` is a corner, else the cubic
+   from `W_m + o` to `B`: a line when `W_m` is a corner or `|B − (W_m + o)| < ε_geom`, else the cubic
    `(W_m + o, out^W_m + o, B + ((W_m + o) − B)/3, B)`. Each is measured as a piece is (Length above), giving
    `ℓ_first` and `ℓ_last`. Nothing is cleaned against the member's own `A` or `B`: every member keeps
-   every point `W` kept, and a leg may be shorter than `ε_geom`, even zero long.
+   every point `W` kept, and a leg may be shorter than `ε_geom`, even zero long; such a leg is a line, so a
+   member standing on its first point waits there until `u_first` instead of looping out to a handle.
 6. **Evaluation**, with `p = p(s, b)` from R-5:
 
    ```
@@ -955,7 +962,7 @@ differ, in length and so in speed. For a founding span of member `T` with offset
    divides by zero: `u_first > 0`, `1 − u_last > 0`, and a sample interval chosen is positive.
 7. **Speeds.** Between `u_first` and `u_last` every member is `walk(W, p) + o`: the same point moved by
    its own offset, within one rounding, so the group is **rigid** there and walks at the reference
-   walk's speed `L^W / c`, where `c = T.end_beat − T.start_beat` counts. The first leg's speed is
+   walk's speed `L^W / c`, where `c = T.end_beat − T.start_beat` beats. The first leg's speed is
    `ℓ_first / (u_first · c)` and the last leg's `ℓ_last / ((1 − u_last) · c)`, each steady along its leg.
    Every member leaves its own start on the first count and lands on its own end spot on the last
    (the group **lands on its end set**, bit for bit).
@@ -965,7 +972,8 @@ differ, in length and so in speed. For a founding span of member `T` with offset
    formation moved over by `G − F` stays rigid and moves at steady speed for the whole move (QA-RT-15).
    AP-R8 and AP-R10 set `o = A − F`, so every member starts at `F + o` when the path is drawn or
    joined: first legs differ only after an earlier edit moves a start (AP-R5), and last legs differ
-   whenever the end set isn't the start formation moved over.
+   whenever the end set isn't the start formation moved over (and both after a point edit rewrites `from`
+   or `to`, AP-R1).
 9. **Inputs.** The schedule reads `origin(s)`, the destination, the route and the member's own offset,
    the same inputs as an own path (W-5). It reads nothing of the other members, so an edit to one
    member never moves another, and §9's invalidation is unchanged.
@@ -1024,7 +1032,7 @@ where `a` is the number of arc spans on the dependency path that leads to it. Th
 
 - **Direct, FTL fallback, hold:** Q lies on the segment from P to B, so `|Q| ≤ max(|P|, |B|)`.
 - **Route (R-14, v0.9):** a line piece keeps Q on its segment. A cubic piece keeps Q inside the convex hull of its four control points, since every evaluated point is `Q(t)` for some `t ∈ [0, 1]`. Its ends are P, B or inner points. A chord-rule control is a convex combination of an end and an inner point. A handle lies within `τ · (2/3)·max(|a − q|, |c − q|) ≤ (4/3)·2β` of its point `q`, since `|r_a·δc − r_c·δa| ≤ 2·r_a·r_c` and `d₁/(d₁ + d₂) < 1` (for `out`; `in` likewise with `|a − q|`; the mirrored case gives `τ·|c − q|/3`), and its neighbours `a`, `c` are inner points or `F`, `G`, all authored. So `|Q| ≤ max(|P|, (11/3)·β)`, and with no smooth point `|Q| ≤ max(|P|, β)` as in step 1. A join or resume is direct.
-- **Group member (R-14, step 15):** between its moments Q is a reference walk's point, within the bound above for the unplaced route, plus the offset. A leg's points lie on a line or in the hull of `A`, a chord-rule control, a placed handle and a placed point. With `|o| ≤ 2·√2·10⁶` (§5.2) and unplaced points within `√2·10⁶`, each is within `(11/3)·√2·10⁶ + 2·√2·10⁶ < (11/3)·3·√2·10⁶`, so `|Q| ≤ max(|P|, γ)` with β taken as `3·√2·10⁶`.
+- **Group member (R-14, step 15):** between its moments Q is a reference walk's point, within the bound above for the unplaced route, plus the offset. A leg's points lie on a line or in the hull of `A`, a chord-rule control, a placed handle and a placed point. With `|o| ≤ 2·√2·10⁶` (§5.2) and unplaced points within `√2·10⁶`, each is within `(11/3)·√2·10⁶ + 2·√2·10⁶ < (11/3)·3·√2·10⁶`, so `|Q| ≤ max(|P|, γ)` with β taken as `3·√2·10⁶`. With corners only every leg and every piece of `W` is a line, and `|Q| ≤ max(|P|, β)` with the same β.
 - **FTL founding:** Q lies on a polyline through member origins and waypoints, or on the destination path, so `|Q|` is at most the largest of those vertices.
 - **Minor arc:** Q sees the chord PB at an angle of at least 90°, so by Thales it lies in the disk with diameter PB. Then `|Q| ≤ (|P+B| + |P−B|)/2 ≤ √(|P|² + |B|²)`.
 
@@ -1170,7 +1178,7 @@ The resolver processes one **batch** per committed transaction (§10.2). It neve
 - **W-2** Dirtying `ftlEntry(T)` also dirties `origin(next(s))` for every span `s` in `spansByTransition[T]`.
 - **W-3** Seeding for transition `T` dirties `origin(next(s))` for every span `s` in `T`, plus `ftlEntry(T)` if `T` is FTL or was FTL before the edit.
 - **W-4** If a node is already dirty, the walk does **not** continue past it. This is correct because of I-C1.
-- **W-5** (v0.9) An implementation that caches a span's cleaned path `V`, its pieces and its lengths MUST drop that cache whenever `origin(s)` is dirtied or W-3 is seeded for the span's transition. R-14 reads `origin(s)`, `routeGeometry`, `destinations` and (step 15) the offset in `T.path_params`, and nothing else; an offset change is a `T.path_params` change, which seeds W-3 for T.
+- **W-5** (v0.9) An implementation that caches a span's cleaned path `V`, its pieces and its lengths MUST drop that cache whenever `origin(s)` is dirtied or W-3 is seeded for the span's transition. R-14 reads `origin(s)`, `routeGeometry`, `destinations` and (step 15) the offset in `T.path_params`, and nothing else; an offset change is a `T.path_params` change, which seeds W-3 for T. A group member's reference walk `W` and its moments depend on the route alone and may be cached per route (dropped when the route changes); its legs depend on `origin(s)`, the destination and the offset, and are dropped with the span's cache as above.
 
 ```mermaid
 %%{init: {"theme": "neutral"}}%%
@@ -2118,7 +2126,7 @@ Built third, after curves (implementation plan, build order).
   first leg (onto the path) and last leg (off it to its own end spot) differ in speed; Big steps
   judges each leg (I.8). The moments come from the route alone, so the resolver reads nothing new and
   members never move each other. A block whose end set is its start formation moved over walks at one
-  steady speed throughout, as ADR 0010's steady speed asks; any other end set changes speed twice,
+  steady speed throughout, as the implementation plan's "steady speed stays the rule until pins" asks; any other end set changes speed twice,
   where the member joins and leaves the path. The rejected draft (each member at its own steady speed
   along its whole lane) kept speed steady but sheared the block through every turn.
 - **The reference line is the group's centre** (`from` = mean start, `to` = mean end): it is what
@@ -2152,11 +2160,11 @@ float64, then one division by `n`.
 | --- | --- | --- |
 | AP-R8 | **Draw a group path** for the marchers `S` (two or more) in one move, or **draw it again** | **Refused** (`E-ARGS`, nothing written) when a marcher of `S` has no row in the move ("not in this move"), follows the leader there, or is taken over at the move's start (AP-R1's reasons, naming the first such marcher). **Read first**, from the rows as they are: each member's `A_m` (the origin of its founding span at the move's start) and `B_m` (its destination, R-13); `F = mean(A_m)`, `G = mean(B_m)`; `o_m = A_m − F`, per coordinate. The geometry is `{v: 1, from: F, to: G, points}`, the drawn points as the reference line, each new point with a fresh id (§5.2). **Again:** when `S` is exactly the set of marchers walking one group path `R` in the move, `R`'s geometry is updated in place (it keeps its id), and each member's `path_params` is rewritten to `{"offset": o_m}`, so lanes start from where the members stand now. **Otherwise:** each member whose transition has a shape or more than one slot first gets its own one-slot shapeless transition ending at `B_m` (as AP-R1); a new route is inserted; each member's transition is set to `path_style = 'route'`, `route_id` the new route and `path_params = {"offset": o_m}` **in one UPDATE** (I-R2); then every route that no transition walks any more is deleted (the members' earlier own paths, and a group path all of whose members were in `S`). A group path that keeps members outside `S` stays as it is, so they keep their lanes. |
 | AP-R1 | **Draw one marcher's path**, or edit points (change for step 15) | A marcher on a group path gets a **new own route** (`path_params` NULL in the same UPDATE as `route_id`), drawn as in step 1, and the group path is deleted if no one is left on it; the other members keep their lanes. "With a route: update its geometry in place" now applies only to an own route. **Editing a group path's points** (the open group path, step 2's point edits on the reference line): `R`'s geometry is updated in place with the whole new list, ids kept as in step 2, and no offset changes, so every lane moves with the edit. `from` is kept while the first point keeps its id and position, else written as `mean(A_m − o_m)` over the members that have a founding span at the move's start, with their current starts and offsets (kept when no member has one); `to` likewise with the last point and `mean(B_m − o_m)` over every member (step 2's rule: `mean(A_m − o_m)` is `F` within rounding when every member stands where it did). |
-| AP-R9 | **Own path** for the marchers `K` on group paths in one move | **Refused** (`E-ARGS`) when a marcher of `K` doesn't walk a group path in the move ("doesn't follow a group path"). For each member `k` on group path `R` with offset `o`: insert a route with `from = R.from + o`, `to = R.to + o` and `points` = `R`'s points, each `at + o`, keeping its id and tension; then set `k`'s `route_id` to it and `path_params = NULL` in one UPDATE. Then delete every group path no transition walks any more (all its members took Own path). A copy outside I-R1's bounds is refused (`E-R1`), and nothing is written. **The line is kept, the timing becomes its own:** the copy's points, `from` and `to` are the lane's (R-14 adds the same offset to the same numbers), and an own path's tangents read `from` and `to`, so the member walks the same line, except where an own path's cleaning drops a point within `ε_geom` of its own `A` or `B`. It now walks it at its own steady speed (R-14 for an own path) instead of the group schedule: unchanged within rounding for a member whose start and end are `F + o` and `G + o` (R-14, group schedule item 8); otherwise its speed evens out over the move and it leaves the group's moments. Ids may repeat across routes (§5.2 makes them unique within one). |
+| AP-R9 | **Own path** for the marchers `K` on group paths in one move | **Refused** (`E-ARGS`) when a marcher of `K` doesn't walk a group path in the move ("doesn't follow a group path"). For each member `k` on group path `R` with offset `o`: insert a route with `from = R.from + o`, `to = R.to + o` and `points` = `R`'s points, each `at + o`, keeping its id and tension; then set `k`'s `route_id` to it and `path_params = NULL` in one UPDATE. Then delete every group path no transition walks any more (all its members took Own path). A copy outside I-R1's bounds is refused (`E-R1`), and nothing is written. **The line is kept, the timing becomes its own:** the copy's points, `from` and `to` are the lane's (R-14 adds the same offset to the same numbers), and an own path's tangents read `from` and `to`, so the member walks the same line, except where the two cleanings differ: an own path drops a point within `ε_geom` of the member's own `A` or `B`, which the group schedule kept, and keeps a point that `W` dropped within `ε_geom` of `F` or `G` when `A ≠ F + o` or `B ≠ G + o`. It now walks it at its own steady speed (R-14 for an own path) instead of the group schedule: unchanged within rounding for a member whose start and end are `F + o` and `G + o` (R-14, group schedule item 8); otherwise its speed evens out over the move and it leaves the group's moments. Ids may repeat across routes (§5.2 makes them unique within one). |
 | AP-R10 | **Rejoin**: the marchers `J` in one move, not on `R`, follow the group path `R` there | **Refused** (`E-ARGS`) when a marcher of `J` has no row in the move, follows the leader there, or is taken over at the move's start (AP-R1's reasons); and when `R` isn't a group path in the move. For each `j`: `o_j = A_j − R.from` (its real start now). A marcher on a straight, arc or shape move first gets its own one-slot shapeless transition ending at its destination (as AP-R1); then `j`'s transition is set to `path_style = 'route'`, `route_id = R` and `path_params = {"offset": o_j}` in one UPDATE; then every route no transition walks any more is deleted (its own path, or another group path it was the last member of). So Rejoin both brings back a member that took Own path and adds a marcher to the group. A member that took Own path gets back its old offset and lane exactly, bit for bit, while its start and `R.from` are both unchanged since; a group point edit that rewrote `from` (AP-R1) or a moved start gives it the lane from where it stands now. An edit to its own path is dropped (undo brings it back). **Which group path** is the app's: the one the selected marchers' group members walk, or the move's only group path (I.8, "Editing a group path"). |
 | AP-R2 | **Remove path** (change for step 15) | On a group path, every transition walking it goes back to `direct` with `route_id = NULL` and `path_params = NULL`, then the route is deleted. The whole group's path goes, whichever members are selected; Own path first keeps one member's. |
 | AP-R3 | **Delete a move or transition** (change for step 15) | The transitions go first, then each of their routes that **no transition walks any more**. A group member removed from its move, or deleted, leaves the path to the others. |
-| AP-R4, AP-R5 | Range edits; end and start changes | Unchanged. Range edits change every transition of a move together (C-11), so I-R5 holds. A member whose start or end moved walks its own first or last piece to it; the lanes stay where they are (re-fit is step 3). |
+| AP-R4, AP-R5 | Range edits; end and start changes | Unchanged. Range edits change every transition of a move together (C-11), so I-R5 holds. A member whose start or end moved walks its own first or last leg to it, at that leg's own speed (R-14, group schedule); the lanes and the moments stay where they are (re-fit is step 3). |
 | AP-R6 | Edits that can't keep a route exact | Unchanged, and they apply to group paths the same way: split by marchers when a marcher it splits off walks a route, merging, a point drag that would merge moves, Remove keyframe's join, adding a marcher to a route transition, any procedure not listed. |
 | AP-R7 | **Cut at a count `b`** (change for step 15) | **Refused** (`E-ARGS`, "can't split a group path yet: give its marchers their own paths, or remove it, first") when any transition the cut would split walks a group path; nothing is written. The group schedule's moments come from the whole reference walk, so cutting the route at `b` would move them for both halves, and a cut in a first or last leg finds every member at a different place along its own leg: no one split of the reference line keeps every member's motion. Own path for the whole group, then the cut, keeps each member's motion as step 2's AP-R7 does. Basic's **+ page flag** inside a move leaves group members alone, as it leaves any route marcher. |
 
@@ -2194,23 +2202,27 @@ command in the palette; neither has a shortcut.
 - **Remove path** removes the shown path, for the whole group (AP-R2), and its toast says so
   ("Removed the path for 16 marchers", with Undo). Backspace or Delete on the open path with no point
   selected does the same, as in step 2.
-- **Big steps** judges each leg of each member (R-14, group schedule): the first leg, `ℓ_first` over
-  `u_first · c` counts; the middle, `D^W_m − D^W_1` over `(u_last − u_first) · c` (skipped when
-  `m = 1`, no distance in no time); and the last leg, `ℓ_last` over `(1 − u_last) · c`. Each uses the
-  same test as straight moves (`StepSize`). The label names the worst big leg ("Big steps · 4 to 5
-  off the path", "onto the path" or "along the path") and its tooltip lists every big leg with its
-  marcher. With `m = 0` each member has one straight leg over the whole move. An own path keeps
-  step 2's one-length test.
+- **Big steps** judges each leg of each member (R-14, group schedule), each with the same test as
+  straight moves (`StepSize`) applied to a distance over `c` beats, written so nothing divides by a
+  rounded difference: the **first leg** as `ℓ_first · L^W / D^W_1` over `c` (its speed, since its time
+  is `u_first · c = D^W_1 · c / L^W`, and `D^W_1 ≥ ε_geom`); the **middle** as `L^W` over `c`, the same
+  for every member and judged once (skipped when `m = 1`, no distance in no time); the **last leg** as
+  `ℓ_last · L^W / (L^W − D^W_m)` over `c`, and big without dividing when `L^W − D^W_m` is 0 in float64
+  and `ℓ_last ≥ ε_geom`. A leg shorter than `ε_geom` is never big. The label names the worst big leg
+  ("Big steps · 4 to 5 off the path", "onto the path" or "along the path") and its tooltip lists every
+  big leg, the first and last with their marchers and the middle once. With `m = 0` each member has one
+  straight leg over the whole move. An own path keeps step 2's one-length test.
 
 ### I.9 New tests for step 15
 
 | ID | Setup | Expected |
 | --- | --- | --- |
-| QA-RT-15 | Golden: a 2 × 2 block, a group path with one smooth point and one corner, an end set that is the start moved by `G − F`, a 16-beat move | Every member at every probe equals the reference walk plus its offset within 10⁻⁹ (rigid for the whole move), and its distance per beat is the same within 10⁻⁶ of the path length on every beat (steady speed); ends exact; oracle and resolver agree bit for bit |
-| QA-RT-16 | Golden: the same block and path, the end set a 4-marcher line | Oracle and resolver agree bit for bit at every probe; every member is on `W_1 + o` at `u_first` and on `W_m + o` at `u_last` within 10⁻⁹; between them every two members differ by their offsets' difference within 10⁻⁹ (rigid); each member's first and last legs are walked at steady speed (equal distance per sub-step within 10⁻⁶), and members' last-leg speeds differ; every member is at its own end spot at the last beat, bit for bit |
-| QA-RT-19 | Degenerate group schedules: a group path with no points; with one point (`u_first = u_last`); a member standing on `W_1 + o` (a zero-length first leg); a first point the reference cleaning drops (within `ε_geom` of `F`); offsets at `±2·10⁶` | Finite everywhere (P-11) and within P-13; no points: R-7's line for each member; one point: every member on its placed point at `u_first`; zero leg: the member stands until `u_first` and then moves with the group; oracle and resolver agree bit for bit |
-| QA-RT-17 | Every step 1 and 2 route fixture (`path_params` NULL), and the same with `{"offset": [0, 0]}` | NULL: bit-identical to step 2 at every probe. Zero offset (every fixture has `from = A` and `to = B`, so the member is a block moved over): equal within 10⁻⁹, since the group schedule walks the same line at the same steady speed by another sum |
-| QA-RT-18 | Invalidation: edit a group path's geometry; change one member's offset; Own path; Rejoin; remove a member's transition; undo and redo each | After every batch the resolver matches a fresh oracle at every probe for every member (a route edit seeds W-3 for every walker) |
+| QA-RT-15 | Golden: a 2 × 2 block, a group path with one smooth point then one corner, an end set that is the start moved by `G − F`, a 16-beat move | Every member at every probe equals the own path oracle's walk of `W` (from `F` to `G`) at the same `p`, plus its offset, within 10⁻⁹: rigid for the whole move and at `W`'s one steady speed; ends exact; oracle and resolver agree bit for bit |
+| QA-RT-16 | Golden: the same block and path, the end set a 4-marcher line; and the same with the corner first and the smooth point last | Oracle and resolver agree bit for bit at every probe; at the beat `u_first · 16` (where `p` is `u_first` within rounding) every member is on `W_1 + o`, and at `u_last · 16` on `W_m + o`, within 10⁻⁹; between them every two members differ by their offsets' difference within 10⁻⁹ (rigid); each leg is walked at steady speed, measured along the leg (a line: equal distance per sub-step within 10⁻⁹·ℓ; a cubic: the distance along its samples at `f` is `f · ℓ` within 10⁻⁹·ℓ); members' last-leg lengths differ; every member is at its own end spot at the last beat, bit for bit. The two orders check both cubic leg formulas |
+| QA-RT-17 | Every step 1 and 2 route fixture (`path_params` NULL); and, for the fixtures with `from = A` and `to = B`, the same with `{"offset": [0, 0]}` | NULL: bit-identical to step 2 at every probe. Zero offset: equal within 10⁻⁹ (a block moved over: the group schedule walks the same line at the same steady speed by another sum). Fixtures with `from ≠ A` or `to ≠ B` aren't compared: the two cleanings keep different points, so the moments differ by design |
+| QA-RT-18 | Invalidation: edit a group path's geometry; change one member's offset; Own path; Rejoin; move an end; remove a member's transition; undo and redo each | After every batch the resolver matches a fresh build bit for bit and the oracle at every probe for every member (a route edit seeds W-3 for every walker) |
+| QA-RT-19 | Degenerate group schedules: a group path with no points; with one smooth point (`u_first = u_last`); a member standing on a smooth `W_1 + o` (a zero-length first leg); a first point the reference cleaning drops (within `ε_geom` of `F`); offsets at `±2·10⁶` | Finite everywhere (P-11) and within P-13; no points: R-7's line for each member, bit for bit; one point: every member on its placed point at the beat `u_first · 16` within 10⁻⁹; zero leg: the member stands on its point, bit for bit, until `u_first` (no loop to the handle) and then moves with the group; oracle and resolver agree bit for bit |
+| QA-RT-20 | Property, random group shows (2 to 6 members, 0 to 5 points, corners and smooth, random starts, ends and offsets including `±2·10⁶`) | Rigid in `[u_first, u_last]` within 10⁻⁹ relative to the path's scale; on `W_1 + o` and `W_m + o` at the moments; P-1 (ends exact), P-11 and P-13; the app's `u_first`, `u_last`, `ℓ_first` and `ℓ_last` equal the oracle's bit for bit. QA-RT-3 and QA-RT-11 (distance along the path is `p · L`) apply to own paths only: a group member changes speed by design |
 | QA-DB-R6 | Two transitions on one route, one with NULL `path_params`; two on one route with different ranges; a route with no walker; an offset with a NaN, a string, a third number, a value beyond `2·10⁶`, or another key | Refused: at commit `E-R4`, `E-R5`, `E-R3`; by the write path `E-P1` |
 | QA-AP-R7 | AP-R8 on 4 marchers in a block move: one has a shape slot, one has its own path, two are straight | One undo step; the shape member got its own transition; the own path is deleted; every member walks its lane; undo restores the database exactly, ids included; redo restores the same ids |
 | QA-AP-R8 | AP-R8 again on the same 4 after an earlier edit moved their starts; and AP-R8 on 2 of them | Again: the route keeps its id and the offsets are rewritten. On 2: a new route for them, the old group path keeps the other 2 with their offsets unchanged |
@@ -2221,4 +2233,18 @@ command in the palette; neither has a shortcut.
 | QA-AP-R13 | Range edits (resize, a page-flag drag) on a move with a group path | Every member's transition keeps the route; E-R5 holds; positions follow the new range |
 | QA-UNDO-R3 | AP-R8 (new and again), AP-R9, AP-R10, AP-R2 on a group, AP-R1 on a group's points | Each round trip restores the database exactly, ids and point ids included |
 
-The `ref/` oracle and resolver gain the offset (QA-RT-15, QA-RT-16), coded independently of the app.
+**What the `ref/` oracle computes** (coded independently of the app, QA-RT-15 to QA-RT-20). Both its
+uncached oracle and its cached resolver branch on `path_params`: NULL walks `routeWalk` as in step 2; an
+offset walks `groupWalk(A, points, B, F, G, o)`, which
+
+1. builds `W = routeWalk(F, points, G, F, G)` with its own cleaning, Catmull–Rom and Bézier code, exposing
+   `V`, `D`, `L`, its pieces and each kept vertex's tension;
+2. with `m = 0` returns R-7's `lerp(A, B, p)`;
+3. sets `u_first = D[1] / L` and `u_last = D[m] / L`;
+4. takes `in^W_1` as piece 0's second control and `out^W_m` as piece `m`'s first control (the cubic
+   pieces next to a smooth `W_1` or `W_m`), places them and `W_1`, `W_m` by one addition per coordinate,
+   and builds each leg as a line (a corner end, or ends within `ε_geom`) or the cubic of item 5,
+   measured with its own 64-sample code;
+5. evaluates by item 6, `W`'s own evaluation placed in the middle.
+
+Its schema's `commit_violations` carries E-R3, E-R4 and E-R5 as §5.1 writes them.

@@ -279,16 +279,21 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         }
     };
 
-    // routes (v0.9): route -> its transition, and each transition's route, kept in step with the host
-    const routeOwner = new Map<number, number>();
+    // routes (v0.9): route -> the transitions walking it (several for a group path, step 15), and
+    // each transition's route, kept in step with the host
+    const routeWalkers = new Map<number, Set<number>>();
     const routeOfT = new Map<number, number>();
     const setRoute = (tid: number, rid: number | null | undefined) => {
         const old = routeOfT.get(tid);
-        if (old != null && routeOwner.get(old) === tid) routeOwner.delete(old);
+        if (old != null) {
+            const w = routeWalkers.get(old);
+            w?.delete(tid);
+            if (w && w.size === 0) routeWalkers.delete(old);
+        }
         if (rid == null) routeOfT.delete(tid);
         else {
             routeOfT.set(tid, rid);
-            routeOwner.set(rid, tid);
+            setOf(routeWalkers, rid).add(tid);
         }
     };
 
@@ -801,12 +806,14 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                     recomputed.add(tid);
                     seedTs.add(tid);
                 }
-        // Route geometry (9.4, v0.9): recompute, create or drop; seed W-3 for the route's
-        // transition. On insert or delete the same edit changes T.route_id, which seeds above.
+        // Route geometry (9.4, v0.9): recompute, create or drop; seed W-3 for every transition
+        // walking it (a group path has several, step 15). On insert or delete the same edit
+        // changes T.route_id, which seeds above.
         for (const [rid, rc] of net.routes) {
             computeRoute(rid);
-            const tid = rc.after ? routeOwner.get(rid) : undefined;
-            if (tid !== undefined && host.transitions[tid]) seedTs.add(tid);
+            if (!rc.after) continue;
+            for (const tid of routeWalkers.get(rid) ?? [])
+                if (host.transitions[tid]) seedTs.add(tid);
         }
         for (const tid of seedTs) seed(tid);
 

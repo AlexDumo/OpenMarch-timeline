@@ -107,20 +107,20 @@ const views = {
      * write wrapper reads this view only once the table exists.
      */
     /**
-     * The routes' commit-time invariants (spec v0.9 §5.1, ADR 0010): every route is walked by
-     * exactly one transition (E-R3), no other path style carries a route yet (E-R2), and a route
-     * transition has no path_params (E-R4). Apart from `timeline_commit_violations` for the same
-     * reason as `timeline_held_violations`: the write wrapper reads it once the routes table
-     * exists, and a view that names a missing table would break a later table rebuild.
+     * The routes' commit-time invariants (spec v0.9 §5.1, ADR 0010): every route is walked by at
+     * least one transition (E-R3, step 15), no other path style carries a route yet (E-R2), a
+     * route transition with no offset walks its route alone (E-R4, step 15), and every transition
+     * walking one route is in one timeline over one range (E-R5, step 15). Apart from
+     * `timeline_commit_violations` for the same reason as `timeline_held_violations`: the write
+     * wrapper reads it once the routes table exists, and a view that names a missing table would
+     * break a later table rebuild.
      */
     timeline_route_violations: `
         CREATE VIEW IF NOT EXISTS timeline_route_violations AS
             SELECT 'E-R3' AS code, NULL AS transition_id,
-                   'route ' || r.id || ' is used by '
-                       || (SELECT count(*) FROM timeline_transitions t WHERE t.route_id = r.id)
-                       || ' transitions' AS detail
+                   'route ' || r.id || ' is used by no transition' AS detail
               FROM timeline_routes r
-             WHERE (SELECT count(*) FROM timeline_transitions t WHERE t.route_id = r.id) <> 1
+             WHERE NOT EXISTS (SELECT 1 FROM timeline_transitions t WHERE t.route_id = r.id)
             UNION ALL
             SELECT 'E-R2' AS code, t.id AS transition_id,
                    'a ' || t.path_style || ' transition has a route' AS detail
@@ -128,9 +128,17 @@ const views = {
              WHERE t.path_style <> 'route' AND t.route_id IS NOT NULL
             UNION ALL
             SELECT 'E-R4' AS code, t.id AS transition_id,
-                   'route transition has path_params' AS detail
+                   'route ' || t.route_id || ' is shared but this transition has no offset' AS detail
               FROM timeline_transitions t
-             WHERE t.path_style = 'route' AND t.path_params IS NOT NULL;
+             WHERE t.path_style = 'route' AND t.path_params IS NULL
+               AND (SELECT count(*) FROM timeline_transitions u WHERE u.route_id = t.route_id) > 1
+            UNION ALL
+            SELECT 'E-R5' AS code, t.id AS transition_id,
+                   'route ' || t.route_id || ' is walked in two moves or over two ranges' AS detail
+              FROM timeline_transitions t
+              JOIN timeline_transitions u ON u.route_id = t.route_id AND u.id < t.id
+             WHERE t.timeline_id <> u.timeline_id OR t.start_beat <> u.start_beat
+                OR t.end_beat <> u.end_beat;
     `,
     timeline_held_violations: `
         CREATE VIEW IF NOT EXISTS timeline_held_violations AS

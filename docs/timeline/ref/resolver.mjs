@@ -3,7 +3,7 @@
 //
 // The resolver keeps its own row index, updated only from batch row images (§10.2). It reads marchers,
 // shapes and transitions by id from the host's post-commit mirror (`db`).
-import { lerp, clamp01, destPath, paramT, destinationsOf, arcPoint, flatten, makeTrail, routeWalk } from './geom.mjs';
+import { lerp, clamp01, destPath, paramT, destinationsOf, arcPoint, flatten, makeTrail, routeWalk, groupWalk } from './geom.mjs';
 
 export function makeResolver(db, { rules = 'v0.2+' } = {}) {
   const T = (id) => db.transitions[id];
@@ -110,7 +110,7 @@ export function makeResolver(db, { rules = 'v0.2+' } = {}) {
     const o = origin(s);
     if (isFtl(t)) return lerp(o, entry(t.id).target.get(s.m), p);
     const dst = dests.get(t.id)[s.row.slot];
-    if (t.style === 'route') return founding(s) ? routeWalk(o, routeGeo(t.route).points, dst, routeGeo(t.route).from, routeGeo(t.route).to).at(p) : lerp(o, dst, p); // R-14
+    if (t.style === 'route') return founding(s) ? (t.params?.offset ? groupWalk(o, routeGeo(t.route).points, dst, routeGeo(t.route).from, routeGeo(t.route).to, t.params.offset).at(p) : routeWalk(o, routeGeo(t.route).points, dst, routeGeo(t.route).from, routeGeo(t.route).to).at(p)) : lerp(o, dst, p); // R-14
     return t.style === 'arc' ? arcPoint(o, dst, t.params?.bulge ?? 0, p) : lerp(o, dst, p);
   }
   function prevNonHold(s) { const l = spans.get(s.m); for (let j = s.k - 1; j >= 0; j--) if (l[j].row) return l[j]; return null; } // ≤ 2 steps: holds never abut
