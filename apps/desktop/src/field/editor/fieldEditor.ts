@@ -293,6 +293,12 @@ export type FieldModeDrawing = {
     /** The outline is open: drawn without joining its last point to its first (a line, #524) */
     openOutline?: boolean;
     /**
+     * The outline is a drawn path (pathways): drawn solid and heavier than a shape's outline, so it
+     * reads over a group's faint lanes; heaviest while drawn or open (`edited`), a little lighter
+     * while only shown (`shown`, closed)
+     */
+    pathLine?: "shown" | "edited";
+    /**
      * Where the shape's marchers start the move (08-shape-system-ux.md, "Marcher styling"), drawn
      * as faint ghosts of them (#417): at the start flag, the same points the walks leave from
      */

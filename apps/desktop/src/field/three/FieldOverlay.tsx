@@ -375,9 +375,14 @@ function Lasso({
  * marchers will stand on, a faint line from each marcher to its spot, and its
  * handles, in the theme's shape color.
  */
-/** A group path's lanes (pathways step 15): thin and faint beside the reference line */
-const LANE_ALPHA = 0.45;
+/**
+ * A group path's lanes (pathways step 15): thin and very faint, so the reference line, the one
+ * being edited, stands out (owner, 2026-11-05: too much noise at 0.45)
+ */
+const LANE_ALPHA = 0.18;
 const LANE_WIDTH = 1;
+/** A drawn path's line (pathways), solid and heavier than a shape's outline: drawn or open, shown */
+const PATH_LINE_WIDTH = { edited: 2.5, shown: 1.75 } as const;
 /** Rings round a group's members (blue) and selected marchers off it (orange), pathways step 15 */
 const GROUP_RING = "rgb(59, 130, 246)";
 const OWN_RING = "rgb(249, 115, 22)";
@@ -536,6 +541,18 @@ const ShapeBody = memo(function ShapeBody({
     const dots = drawing.stage === "drawing";
     return (
         <>
+            {/* Under the path's line, which is the one being edited */}
+            {drawing.lanes?.map((lane, i) => (
+                <polyline
+                    key={`lane${i}`}
+                    points={lane.map((p) => `${p.x},${p.y}`).join(" ")}
+                    fill="none"
+                    stroke={rgbaToString({ ...theme.shape, a: LANE_ALPHA })}
+                    strokeWidth={LANE_WIDTH}
+                    vectorEffect="non-scaling-stroke"
+                    data-testid="pathGroupLane"
+                />
+            ))}
             {drawing.outline &&
                 (drawing.openOutline ? (
                     // A line has no inside to fill (#524)
@@ -545,9 +562,20 @@ const ShapeBody = memo(function ShapeBody({
                             .join(" ")}
                         fill="none"
                         stroke={shape}
-                        strokeWidth={SHAPE_OUTLINE_WIDTH}
-                        strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
+                        strokeWidth={
+                            drawing.pathLine
+                                ? PATH_LINE_WIDTH[drawing.pathLine]
+                                : SHAPE_OUTLINE_WIDTH
+                        }
+                        strokeDasharray={
+                            open || drawing.pathLine
+                                ? undefined
+                                : SHAPE_OUTLINE_DASH
+                        }
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
                         vectorEffect="non-scaling-stroke"
+                        data-testid={drawing.pathLine ? "pathLine" : undefined}
                     />
                 ) : (
                     <polygon
@@ -562,17 +590,6 @@ const ShapeBody = memo(function ShapeBody({
                         vectorEffect="non-scaling-stroke"
                     />
                 ))}
-            {drawing.lanes?.map((lane, i) => (
-                <polyline
-                    key={`lane${i}`}
-                    points={lane.map((p) => `${p.x},${p.y}`).join(" ")}
-                    fill="none"
-                    stroke={rgbaToString({ ...theme.shape, a: LANE_ALPHA })}
-                    strokeWidth={LANE_WIDTH}
-                    vectorEffect="non-scaling-stroke"
-                    data-testid="pathGroupLane"
-                />
-            ))}
             <StartMarks
                 drawing={drawing}
                 theme={theme}

@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
+import { pathMarcherIds, usePathPenStore } from "@/pathways/pathPenStore";
 import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 
 /**
@@ -15,12 +17,21 @@ export function withoutShapeMarchers(
     return ids.filter((id) => !members.has(id));
 }
 
-/** The open shape's marchers while it shows, or null */
+/**
+ * The open shape's marchers while it shows, and the path pen's marchers while it draws their path
+ * (pathways), or null
+ */
 export function useShowingShapeMarchers(): ReadonlySet<number> | null {
     const marchers = useShapeToolStore((s) => s.tool?.marchers ?? null);
     const hidden = useShapeHidden();
-    return useMemo(
-        () => (marchers && !hidden ? new Set(marchers.map((m) => m.id)) : null),
-        [marchers, hidden],
+    const onPath = usePathPenStore(
+        useShallow((s) => pathMarcherIds(s.session, s.hidden)),
     );
+    return useMemo(() => {
+        const ids = [
+            ...(marchers && !hidden ? marchers.map((m) => m.id) : []),
+            ...onPath,
+        ];
+        return ids.length > 0 ? new Set(ids) : null;
+    }, [marchers, hidden, onPath]);
 }

@@ -107,6 +107,22 @@ export const pathShown = (
 ): session is PathSession =>
     session !== null && (session.phase !== "closed" || !hidden);
 
+/**
+ * The marchers whose path the pen draws now (the one marcher, or every member of the group path),
+ * or an empty list. Their start flag positions give way to the pen's line, lanes and ghosts while
+ * it shows, as an open shape's marchers' do (#417): otherwise each member's lane is drawn twice
+ * over the line being edited (owner, 2026-11-05).
+ */
+export const pathMarcherIds = (
+    session: PathSession | null,
+    hidden: boolean,
+): readonly number[] =>
+    !pathShown(session, hidden)
+        ? []
+        : session.target.group
+          ? session.target.group.members.map((m) => m.marcherId)
+          : [session.target.marcherId];
+
 /** Hides or shows the closed path, as start flag positions' paths level in effect says */
 export function setPathHidden(hidden: boolean): void {
     if (usePathPenStore.getState().hidden !== hidden)

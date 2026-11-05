@@ -567,6 +567,7 @@ export function drawingOf(
         drawing = {
             outline,
             openOutline: true,
+            pathLine: session.phase === "closed" ? "shown" : "edited",
             stage: drawingNow ? "drawing" : "open",
             spots: group ? group.members.map((m) => m.to) : [target.to],
             walks: [],
