@@ -66,10 +66,48 @@ export const routeRefusal = {
     /** The marcher has no part in the move */
     notInMove: (marcher: string) =>
         text.t("timeline.refusals.route.notInMove", { marcher }),
+    /** AP-R7 (step 15): split at the playhead on a group path */
+    groupSplit: () => text.t("timeline.refusals.route.groupSplit"),
+    /** AP-R9 (step 15): Own path for a marcher not on a group path */
+    notOnGroupPath: (marcher: string) =>
+        text.t("timeline.refusals.route.notOnGroupPath", { marcher }),
+    /** AP-R10 (step 15): Rejoin with no group path in the move */
+    noGroupPath: (move: TimelineTextArg) =>
+        text.t("timeline.refusals.route.noGroupPath", { move }),
+    /** AP-R8 (step 15): a group path needs two or more marchers */
+    groupTooSmall: () => text.t("timeline.refusals.route.groupTooSmall"),
 };
 
+/**
+ * AP-R3, AP-R8 to AP-R10 (step 15): deletes each of `routeIds` that no transition walks any more.
+ * Run after the transitions' UPDATEs, so the foreign key (I-D3) lets the delete through.
+ */
+export async function deleteOrphanRoutesInTransaction(
+    tx: DbTransaction,
+    routeIds: Iterable<number>,
+): Promise<number[]> {
+    const ids = [...new Set(routeIds)];
+    if (ids.length === 0) return [];
+    const T = schema.timeline_transitions;
+    const walked = new Set(
+        (
+            await tx
+                .select({ route: T.route_id })
+                .from(T)
+                .where(inArray(T.route_id, ids))
+                .all()
+        ).map((r) => r.route),
+    );
+    const orphans = ids.filter((id) => !walked.has(id));
+    if (orphans.length > 0)
+        await tx
+            .delete(schema.timeline_routes)
+            .where(inArray(schema.timeline_routes.id, orphans));
+    return orphans;
+}
+
 /** A marcher's drill number, as refusals name it. */
-const marcherName = async (tx: DbTransaction, marcherId: number) => {
+export const marcherName = async (tx: DbTransaction, marcherId: number) => {
     const m = await tx
         .select({
             prefix: schema.marchers.drill_prefix,
@@ -82,7 +120,7 @@ const marcherName = async (tx: DbTransaction, marcherId: number) => {
 };
 
 /** How refusals name the move (timeline) `timelineId`. */
-const moveNameOf = async (tx: DbTransaction, timelineId: number) => {
+export const moveNameOf = async (tx: DbTransaction, timelineId: number) => {
     const t = await tx
         .select()
         .from(schema.timelines)
@@ -215,13 +253,20 @@ export interface RoutePointInput {
 }
 
 /** A stored point as R-14 reads it: a corner has no `tension` key (spec 5.2). */
-const storedPoint = (id: string, at: XY, tension?: number): RoutePoint =>
+export const storedPoint = (
+    id: string,
+    at: XY,
+    tension?: number,
+): RoutePoint =>
     tension !== undefined && tension > 0
         ? { id, at: [at[0], at[1]], tension }
         : { id, at: [at[0], at[1]] };
 
 /** Whether two points are the same point in the same place, bit for bit */
-const samePoint = (a: RoutePoint | undefined, b: RoutePoint | undefined) =>
+export const samePoint = (
+    a: RoutePoint | undefined,
+    b: RoutePoint | undefined,
+) =>
     !!a &&
     !!b &&
     a.id === b.id &&
@@ -244,7 +289,9 @@ export function freshPointId(taken: ReadonlySet<string>): string {
 }
 
 /** Writes the route-model file version (10) with a file's first route (ADR 0010). */
-async function markRouteModelInTransaction(tx: DbTransaction): Promise<void> {
+export async function markRouteModelInTransaction(
+    tx: DbTransaction,
+): Promise<void> {
     const row = await tx
         .select({ version: sql<number>`user_version` })
         .from(sql`pragma_user_version`)
@@ -316,9 +363,12 @@ export async function drawRouteInTransaction({
     const from = resolver.explain(marcherId, transition.start_beat).origin;
     const to = await destinationOf(tx, transition, row.slot_index);
 
-    // The route's points: kept ids stay, new points get fresh ones
+    // The route's points: kept ids stay, new points get fresh ones. A marcher on a group path
+    // (step 15) gets a new own route; the group path stays with the others
+    const onGroup =
+        transition.route_id !== null && transition.path_params !== null;
     const current =
-        transition.route_id === null
+        transition.route_id === null || onGroup
             ? null
             : await tx
                   .select()
@@ -387,13 +437,15 @@ export async function drawRouteInTransaction({
             .update(T)
             .set({ path_style: "route", route_id: route.id, path_params: null })
             .where(eq(T.id, transitionId));
+        if (onGroup)
+            await deleteOrphanRoutesInTransaction(tx, [transition.route_id!]);
         await markRouteModelInTransaction(tx);
         return { routeId: route.id, transitionId, ownTransition };
     });
 }
 
 /** Where slot `slot` of `transition` ends (R-13): its shape's sample or its placed point. */
-async function destinationOf(
+export async function destinationOf(
     tx: DbTransaction,
     transition: typeof schema.timeline_transitions.$inferSelect,
     slot: number,
@@ -425,7 +477,7 @@ async function destinationOf(
  * own in the same move, ending at `point`, over the same counts and layer. The others keep their
  * slots (a vacancy is allowed, D-13), so nobody else moves; a transition left with nobody goes.
  */
-async function giveOwnTransition(
+export async function giveOwnTransition(
     tx: DbTransaction,
     {
         transition,
@@ -495,7 +547,8 @@ export async function drawRoute(args: {
 /**
  * AP-R2: the route transition `transitionId` goes back to `direct` in one UPDATE, then its route
  * is deleted. That order is required: the foreign key refuses the other (I-D3), and undo replays
- * it reversed.
+ * it reversed. On a group path (step 15) every transition walking it goes back to `direct`, so
+ * the whole group's path goes whichever member is named. Returns the marchers that lost it.
  */
 export async function removeRouteInTransaction({
     tx,
@@ -503,20 +556,42 @@ export async function removeRouteInTransaction({
 }: {
     tx: DbTransaction;
     transitionId: number;
-}): Promise<void> {
+}): Promise<{ marcherIds: number[] }> {
     const T = schema.timeline_transitions;
+    const A = schema.timeline_assignments;
     const t = await tx.select().from(T).where(eq(T.id, transitionId)).get();
     if (!t) refuse(`transition ${transitionId} does not exist`);
     if (t.route_id === null) refuse(`transition ${transitionId} has no path`);
+    const walkers = (
+        await tx
+            .select({ id: T.id })
+            .from(T)
+            .where(eq(T.route_id, t.route_id))
+            .orderBy(asc(T.id))
+            .all()
+    ).map((w) => w.id);
+    const marcherIds = [
+        ...new Set(
+            (
+                await tx
+                    .select({ m: A.marcher_id })
+                    .from(A)
+                    .where(inArray(A.transition_id, walkers))
+                    .orderBy(asc(A.marcher_id))
+                    .all()
+            ).map((r) => r.m),
+        ),
+    ];
     await mapDbErrors(async () => {
         await tx
             .update(T)
             .set({ path_style: "direct", route_id: null, path_params: null })
-            .where(eq(T.id, transitionId));
+            .where(inArray(T.id, walkers));
         await tx
             .delete(schema.timeline_routes)
             .where(eq(schema.timeline_routes.id, t.route_id!));
     });
+    return { marcherIds };
 }
 
 /** AP-R2 as one undoable edit. */
@@ -526,8 +601,8 @@ export async function removeRoute({
 }: {
     db: DbConnection;
     transitionId: number;
-}): Promise<void> {
-    await transactionWithHistory(db, "removeRoute", (tx) =>
+}): Promise<{ marcherIds: number[] }> {
+    return await transactionWithHistory(db, "removeRoute", (tx) =>
         removeRouteInTransaction({ tx, transitionId }),
     );
 }

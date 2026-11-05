@@ -689,13 +689,34 @@ export const deleteTimelineTransitionRowsInTransaction = async ({
             .delete(schema.timeline_transitions)
             .where(inArray(schema.timeline_transitions.id, ids))
             .returning();
+        // AP-R3 (step 15): a route goes once no transition walks it any more; a group member
+        // deleted leaves the group path to the others
         const routeIds = deleted.flatMap((t) =>
             t.route_id === null ? [] : [t.route_id],
         );
-        if (routeIds.length > 0)
-            await tx
-                .delete(schema.timeline_routes)
-                .where(inArray(schema.timeline_routes.id, routeIds));
+        if (routeIds.length > 0) {
+            const walked = new Set(
+                (
+                    await tx
+                        .select({ route: schema.timeline_transitions.route_id })
+                        .from(schema.timeline_transitions)
+                        .where(
+                            inArray(
+                                schema.timeline_transitions.route_id,
+                                routeIds,
+                            ),
+                        )
+                        .all()
+                ).map((r) => r.route),
+            );
+            const orphans = [...new Set(routeIds)].filter(
+                (id) => !walked.has(id),
+            );
+            if (orphans.length > 0)
+                await tx
+                    .delete(schema.timeline_routes)
+                    .where(inArray(schema.timeline_routes.id, orphans));
+        }
         return deleted;
     });
 };

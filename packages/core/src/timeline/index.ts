@@ -45,6 +45,10 @@ export {
     smoothHandles,
     cubicPoint,
     walkedPoint,
+    groupSchedule,
+    groupMemberWalk,
+    groupPoint,
+    placed,
     EPS_GEOM,
     ROUTE_CUBIC_SAMPLES,
 } from "./geom";
@@ -54,6 +58,9 @@ export type {
     RouteVertex,
     RouteEnds,
     RouteWalk,
+    GroupSchedule,
+    GroupMemberWalk,
+    GroupLeg,
 } from "./geom";
 export {
     validateShapeGeometry,
