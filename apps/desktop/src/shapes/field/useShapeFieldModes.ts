@@ -46,7 +46,10 @@ export function useShapeFieldModes(
     const pathOpen = usePathPenStore(
         (s) => s.session !== null && s.session.phase !== "closed",
     );
-    const pathShown = usePathPenStore((s) => s.session?.phase === "closed");
+    // A closed path start flag positions hide (paths level off) isn't the field's mode
+    const pathShown = usePathPenStore(
+        (s) => s.session?.phase === "closed" && !s.hidden,
+    );
     const box = useBoxSelectionStore((s) => s.selected);
     const queryClient = useQueryClient();
     useBoxSelection({ isPlaying });

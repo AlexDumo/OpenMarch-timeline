@@ -161,9 +161,13 @@ test("change: P draws a cornered path for one marcher, Enter saves it as one und
         "SELECT path_style, route_id FROM timeline_transitions WHERE route_id IS NOT NULL",
     );
     expect(t).toMatchObject({ path_style: "route", route_id: route!.id });
-    // Finished, the path is left shown and closed: drawn through its corners, nothing to
-    // grab and no editor
+    // Finished, the path closes: no editor. It shows by start flag positions' rules, as the
+    // straight paths do (owner, 2026-11-04): hidden at the default (paths off), shown while N
+    // is held or after a tap of N, which the rest of this test keeps on
     await expect(page.getByTestId("path-editor")).toBeHidden();
+    await expect.poll(() => drawnPath(page)).toBeNull();
+    await page.keyboard.press("n");
+    // Drawn through its corners, nothing to grab
     await expect.poll(() => drawnPath(page)).toEqual({ points: 4, handles: 0 });
 
     // Undo takes it away; redo brings the same route back

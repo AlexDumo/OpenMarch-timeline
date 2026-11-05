@@ -55,6 +55,7 @@ import {
     setPointer,
     shapeNewPoint,
     shapeOf,
+    pathShown,
     usePathPenStore,
     type PathSession,
 } from "./pathPenStore";
@@ -131,6 +132,12 @@ class PathPenMode implements FieldMode {
 
     private get session() {
         return usePathPenStore.getState().session;
+    }
+
+    /** The session when its path is drawn now (a closed one can be hidden), else null */
+    private get shownSession() {
+        const { session, hidden } = usePathPenStore.getState();
+        return pathShown(session, hidden) ? session : null;
     }
 
     get ownsSelectionBox() {
@@ -452,7 +459,7 @@ class PathPenMode implements FieldMode {
 
     /** On the path's line (no handle took it): Edit path and Remove path, in the field's menu */
     fieldMenuAt(pointer: FieldPointer): readonly string[] | null {
-        const s = this.session;
+        const s = this.shownSession;
         if (!s || s.target.routeId === null || !this.onLine(s, pointer))
             return null;
         return PATH_FIELD_MENU;
@@ -463,14 +470,14 @@ class PathPenMode implements FieldMode {
      * and the path with it); the second click of a double-click opens it. Elsewhere, the field's.
      */
     takeClick(pointer: FieldPointer, double: boolean): boolean {
-        const s = this.session;
+        const s = this.shownSession;
         if (!s || !this.onLine(s, pointer)) return false;
         if (double) openPath();
         return true;
     }
 
     drawing(): FieldModeDrawing | null {
-        return drawingOf(this.session);
+        return drawingOf(this.shownSession);
     }
 
     subscribe(listener: () => void): () => void {

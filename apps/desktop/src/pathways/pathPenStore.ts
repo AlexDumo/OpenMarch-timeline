@@ -53,9 +53,29 @@ interface PathPenState {
      * learns its route (and Remove path shows) even when the timeline caught up during the save
      */
     saved: number;
+    /**
+     * The closed path isn't drawn and takes no click: start flag positions' paths level in effect
+     * is off (owner, 2026-11-04: a path shows by the same rules as the straight ones, the
+     * setting and N). An open or drawn path always shows.
+     */
+    hidden: boolean;
+}
+
+/** Whether the session's path is drawn on the field now */
+export const pathShown = (
+    session: PathSession | null,
+    hidden: boolean,
+): session is PathSession =>
+    session !== null && (session.phase !== "closed" || !hidden);
+
+/** Hides or shows the closed path, as start flag positions' paths level in effect says */
+export function setPathHidden(hidden: boolean): void {
+    if (usePathPenStore.getState().hidden !== hidden)
+        usePathPenStore.setState({ hidden });
 }
 
 export const usePathPenStore = create<PathPenState>(() => ({
+    hidden: false,
     session: null,
     saving: false,
     saved: 0,

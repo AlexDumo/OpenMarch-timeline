@@ -7,6 +7,7 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { useStartFlagLevelsInEffect } from "@/stores/StartFlagKeyStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import {
     closeShapeTool,
@@ -22,6 +23,7 @@ import {
     removeLastPoint,
     removePath,
     selectPoint,
+    setPathHidden,
     setPointSmooth,
     showPath,
     startDrawing,
@@ -101,6 +103,12 @@ export function usePathPenActions(): void {
             startDrawing(target, marcher.drill_number);
         });
     });
+
+    // The closed path shows by start flag positions' paths level in effect, as the straight paths
+    // do: the setting, and N held or tapped (owner, 2026-11-04). The marcher is selected, so
+    // Selected and All both show it. Edit path still opens a hidden one
+    const pathsLevel = useStartFlagLevelsInEffect().paths;
+    useEffect(() => setPathHidden(pathsLevel === "off"), [pathsLevel]);
 
     // Edit path: opens the selected marcher's path at the playhead, as a double-click on it does.
     // No key of its own: the shape tool has none for editing points (Enter places a shape)

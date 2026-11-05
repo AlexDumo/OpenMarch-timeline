@@ -126,7 +126,8 @@ test("change: the pen's press-and-drag places a smooth point; a double-click, th
     expect(saved[0]!.tension).toBeGreaterThan(0);
     expect(saved[1]!.tension).toBeUndefined();
     expect(await undoSteps(show)).toBe(steps + 1);
-    // The closed path is drawn along its curve
+    // The closed path, shown by a tap of N (the default hides paths), is drawn along its curve
+    await page.keyboard.press("n");
     await expect
         .poll(async () => (await outline(page)).length)
         .toBeGreaterThan(20);

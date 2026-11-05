@@ -9,6 +9,7 @@ import {
     closePath,
     openPath,
     selectPoint,
+    setPathHidden,
     showPath,
     startDrawing,
     usePathPenStore,
@@ -68,6 +69,7 @@ beforeEach(() => {
 
 afterEach(() => {
     clearPath();
+    setPathHidden(false);
     setShapeField(null);
 });
 
@@ -198,5 +200,32 @@ describe("finishing a drawing (review of #680)", () => {
         expect(points).toHaveLength(2);
         expect(points[1]!.tension ?? 0).toBeGreaterThan(0);
         pathPenMode.release(at(8 * STEP, 6 * STEP), null);
+    });
+});
+
+describe("shown by start flag positions' rules (owner, 2026-11-04)", () => {
+    it("a closed path hidden by the paths level isn't drawn and takes no click or menu", () => {
+        showPath(target(5), "T4");
+        setPathHidden(true);
+        expect(pathPenMode.drawing()).toBeNull();
+        expect(pathPenMode.takeClick(ON_LINE, true)).toBe(false);
+        expect(pathPenMode.fieldMenuAt(ON_LINE)).toBeNull();
+        expect(phase()).toBe("closed");
+        // N (or the setting) shows it again
+        setPathHidden(false);
+        expect(pathPenMode.drawing()).not.toBeNull();
+        expect(pathPenMode.fieldMenuAt(ON_LINE)).toEqual(PATH_FIELD_MENU);
+    });
+
+    it("an open path, or one being drawn, shows whatever the level", () => {
+        showPath(target(5), "T4");
+        setPathHidden(true);
+        // Edit path opens a hidden path, which then shows
+        expect(openPath()).toBe(true);
+        expect(pathPenMode.drawing()).not.toBeNull();
+        closePath();
+        expect(pathPenMode.drawing()).toBeNull();
+        startDrawing(target(null), "T4");
+        expect(pathPenMode.drawing()).not.toBeNull();
     });
 });
