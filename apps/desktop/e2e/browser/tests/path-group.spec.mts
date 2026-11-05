@@ -212,7 +212,9 @@ test("change: P with a block selected draws one group path; Own path and Rejoin;
     const fieldMenu = page.getByTestId("field-menu");
     await expect(fieldMenu.getByTestId("field-menu-removePath")).toBeVisible();
     await fieldMenu.getByTestId("field-menu-removePath").click();
-    await expect(page.getByText("Removed the path for 4 marchers")).toBeVisible();
+    await expect(
+        page.getByText("Removed the path for 4 marchers"),
+    ).toBeVisible();
     await expect.poll(async () => (await routes(show)).length).toBe(0);
     expect((await walkers(show, timeline)).map((w) => w.style)).toEqual(
         Array(4).fill("direct"),

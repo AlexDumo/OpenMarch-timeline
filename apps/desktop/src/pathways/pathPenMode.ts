@@ -562,47 +562,8 @@ export function drawingOf(
               ? null
               : (middle[session.dragging] ?? null);
         const tipText = moving ? drillTerms(moving) : null;
-        // A group path (step 15): the reference line, every member's lane thin and faint (while
-        // drawing, to where the next point would land), its members' ghosts and end spots, and the
-        // rings saying who follows it
         const group = target.group;
-        const laneShape =
-            group && drawingNow && pointer
-                ? {
-                      ...shape,
-                      points: [...shape.points, { at: pointer }],
-                      ends: shape.ends ?? { from: shape.from, to: shape.to },
-                  }
-                : shape;
-        const schedule = group ? scheduleOf(laneShape) : null;
-        const lanes =
-            group && schedule
-                ? group.members.map((m) =>
-                      laneOutline(memberWalkOf(schedule, m)),
-                  )
-                : undefined;
-        const memberRings = group
-            ? [
-                  ...group.members.map((m) => ({
-                      at: m.from,
-                      kind: "group" as const,
-                      label: tolgee.t(
-                          "pathways.rings.group",
-                          "Follows the group path",
-                      ),
-                  })),
-                  ...group.outside.map((m) => ({
-                      at: m.from,
-                      kind: "own" as const,
-                      label: m.ownPath
-                          ? tolgee.t("pathways.rings.own", "Own path")
-                          : tolgee.t(
-                                "pathways.rings.offGroup",
-                                "Not on the group path",
-                            ),
-                  })),
-              ]
-            : undefined;
+        const { lanes, memberRings } = groupParts(session, shape);
         drawing = {
             outline,
             openOutline: true,
@@ -624,6 +585,51 @@ export function drawingOf(
     }
     last = { session, drawing };
     return drawing;
+}
+
+/**
+ * A group path's parts of the drawing (step 15): every member's lane, thin and faint (while
+ * drawing, to where the next point would land), and the rings saying who follows it
+ */
+function groupParts(
+    session: PathSession,
+    shape: PathShape,
+): Pick<FieldModeDrawing, "lanes" | "memberRings"> {
+    const group = session.target.group;
+    if (!group) return {};
+    const { pointer } = session;
+    const laneShape =
+        session.phase === "drawing" && pointer
+            ? {
+                  ...shape,
+                  points: [...shape.points, { at: pointer }],
+                  ends: shape.ends ?? { from: shape.from, to: shape.to },
+              }
+            : shape;
+    const schedule = scheduleOf(laneShape);
+    return {
+        lanes: group.members.map((m) => laneOutline(memberWalkOf(schedule, m))),
+        memberRings: [
+            ...group.members.map((m) => ({
+                at: m.from,
+                kind: "group" as const,
+                label: tolgee.t(
+                    "pathways.rings.group",
+                    "Follows the group path",
+                ),
+            })),
+            ...group.outside.map((m) => ({
+                at: m.from,
+                kind: "own" as const,
+                label: m.ownPath
+                    ? tolgee.t("pathways.rings.own", "Own path")
+                    : tolgee.t(
+                          "pathways.rings.offGroup",
+                          "Not on the group path",
+                      ),
+            })),
+        ],
+    };
 }
 
 /** Guides along the field's lines that `points` lie on, as a shape's are drawn while it's edited */

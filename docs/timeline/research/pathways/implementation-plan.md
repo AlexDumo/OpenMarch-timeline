@@ -114,6 +114,8 @@ Spec: fork issue #640. Tickets #641–#663 (sub-issues of #640, native blocking 
 
 Filled in as we go: one row per step, the owner's verdict, and what changed because of it.
 
-| Step | PR  | Lab | Verdict | Fixes / notes |
-| ---- | --- | --- | ------- | ------------- |
-| 1    |     |     |         |               |
+| Step | PR   | Lab      | Verdict  | Fixes / notes                                                                                                                                                                                                                                                    |
+| ---- | ---- | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | #674 | path-pen | Accepted | Lab feedback: draw and edit like the Line; a path is shown closed and opened by a double-click or its menu (moved here from step 3)                                                                                                                              |
+| 2    | #680 | path-pen | Accepted | Curves as the Line's; Backspace or Delete on the open path with no point selected removes it; a closed path shows by start flag positions' rules                                                                                                                 |
+| 15   | this | path-pen | Pending  | Owner 2026-11-04: a group path holds its shape (every member passes each point at the same moment; spec R-14 "Group schedule"). Settled: split at playhead refused with a reason; Remove path removes the group's; Rejoin adds a marcher with no path of its own |
