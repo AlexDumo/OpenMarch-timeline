@@ -98,7 +98,10 @@ const shots = [
                 .evaluate((el) => el.scrollIntoView({ block: "start" }));
             await wait(400);
             // Open the first checkpoint's editor
-            await panel(page).getByText("0 yard line", { exact: true }).first().click();
+            await panel(page)
+                .getByText("0 yard line", { exact: true })
+                .first()
+                .click();
             await wait(600);
             const p = await panel(page).boundingBox();
             const tabs = await panel(page)
@@ -109,7 +112,8 @@ const shots = [
                     x: p.x,
                     y: tabs.y - 12,
                     width: p.width,
-                    height: Math.min(p.y + p.height, tabs.y + 600) - (tabs.y - 12),
+                    height:
+                        Math.min(p.y + p.height, tabs.y + 600) - (tabs.y - 12),
                 },
             };
         },

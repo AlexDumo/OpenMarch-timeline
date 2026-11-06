@@ -1,3 +1,4 @@
+# cspell:disable -- Debian package names
 # The machine every recording runs on: Debian, Xvfb, ffmpeg (with libwebp), Node 24 and the
 # fonts the app falls back to. Same image every run, so a changed recording means the app changed.
 FROM debian:trixie

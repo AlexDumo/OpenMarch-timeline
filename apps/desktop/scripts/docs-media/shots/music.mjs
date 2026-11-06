@@ -136,7 +136,12 @@ const shots = [
             const band = await box(page.getByTestId("tempo-band"));
             const m = await box(menu);
             const b = union(
-                { x: band.x, y: band.y, width: m.x + m.width - band.x, height: 1 },
+                {
+                    x: band.x,
+                    y: band.y,
+                    width: m.x + m.width - band.x,
+                    height: 1,
+                },
                 m,
             );
             return {
@@ -157,7 +162,10 @@ const shots = [
         async setup({ page, wait, union }) {
             await wait(3000);
             await editMusic(page, wait);
-            await page.getByTitle(/^Time signature 2\/4/).first().click();
+            await page
+                .getByTitle(/^Time signature 2\/4/)
+                .first()
+                .click();
             const menu = page.getByTestId("tempo-menu");
             await menu.waitFor();
             await wait(500);
@@ -220,7 +228,9 @@ const shots = [
         async setup({ page, wait, around }) {
             await wait(3000);
             await tidy(page);
-            await page.locator('[id="sidebar-launcher-@openmarch/metronome"]').click();
+            await page
+                .locator('[id="sidebar-launcher-@openmarch/metronome"]')
+                .click();
             const panel = page.locator("div.absolute.z-40.bg-modal").first();
             await panel.waitFor();
             await wait(600);
@@ -247,7 +257,9 @@ const shots = [
             const button = page.getByTestId("timeline-sound");
             await button.click();
             await wait(600);
-            const pop = page.locator("[data-radix-popper-content-wrapper]").last();
+            const pop = page
+                .locator("[data-radix-popper-content-wrapper]")
+                .last();
             const b = union(await box(button), await box(pop));
             return {
                 box: {

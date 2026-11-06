@@ -440,7 +440,10 @@ const shots = [
             const rect = await page
                 .getByRole("button", { name: "Rectangle" })
                 .boundingBox();
-            const at = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+            const at = {
+                x: rect.x + rect.width / 2,
+                y: rect.y + rect.height / 2,
+            };
             await page.mouse.move(at.x + 120, at.y + 120);
             await film.hold(0.3);
             await film.moveTo(page, { x: at.x + 120, y: at.y + 120 }, at, 0.6);
@@ -498,7 +501,12 @@ const shots = [
             const right = Math.max(...xs) + 140;
             const bottom = Math.max(...ys) + 130;
             return {
-                box: { x: left, y: top, width: right - left, height: bottom - top },
+                box: {
+                    x: left,
+                    y: top,
+                    width: right - left,
+                    height: bottom - top,
+                },
             };
         },
         async perform({ page, film, overlay }) {
@@ -523,12 +531,7 @@ const shots = [
             );
             const se = handles.se;
             await film.moveTo(page, end, se, 0.5);
-            await film.drag(
-                page,
-                se,
-                { x: se.x + 40, y: se.y + 30 },
-                0.9,
-            );
+            await film.drag(page, se, { x: se.x + 40, y: se.y + 30 }, 0.9);
             await page.waitForTimeout(600);
             await film.hold(1.2);
         },

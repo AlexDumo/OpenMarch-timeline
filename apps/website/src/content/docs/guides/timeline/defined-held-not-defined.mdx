@@ -54,7 +54,7 @@ Use Held when the marcher's standing still is part of the drill and should stay 
 Select marchers, and the timeline shows their states:
 
 - A diamond at the bottom edge of the page row marks each count where the selected marchers have a keyframe, a position you set. It's filled when every selected marcher has a keyframe there, and hollow when only some do. A Defined marcher has a diamond at the page's flag.
-- A link mark in a page's box means some of the selected marchers have no position of their own on that page and show an earlier one. Point at it to see who.
+- A link mark in a page's box means some of the selected marchers have no position of their own on that page and show an earlier one. Point at it to see who. Marchers that haven't moved since the start of the show don't get one.
 - A solid bar along the bottom of a page's box marks where the selected marchers are Held. Point at it to see how many.
 
 On the field, a marcher with no position of its own on the playhead's page is drawn with a dashed outline. In the inspector, the selected marchers' section says <Ui k="inspector.marcher.timeline.movesOnThisPage" /> when they're Defined on the page, or names the page where they last moved, as a link that takes you there.
@@ -66,7 +66,7 @@ On the field, a marcher with no position of its own on the playhead's page is dr
 
 ## Define as shown
 
-<Ui k="timeline.terms.defineAsShown" /> makes Not defined marchers Defined where they stand now, so later changes to earlier pages no longer move them on this page.
+<Ui k="timeline.terms.defineAsShown" /> makes Not defined marchers Defined where they stand now, so later changes to earlier pages no longer move them on this page. Held marchers stay Held.
 
 1. Select the marchers.
 2. Right-click the page's box and select <Ui k="timeline.terms.defineAsShown" />, or select the link mark in the page's box.
@@ -80,7 +80,7 @@ Dragging a Not defined marcher on a page also makes it Defined, at the spot you 
 1. Go to the page and select the marchers.
 2. Right-click the page's box and select <Ui k="timeline.terms.holdFromPrevious" />, or press <Kbd action="timelineHoldFromPrevious" />.
 
-A marcher that had its own move on the page loses it and stays still for the page. A message says who is now Held, and lists anyone who couldn't be, with the reason; a marcher can only be Held where it has a position set on the page before.
+A marcher that had its own move on the page loses it and stays still for the page. A message says who is now Held, and lists anyone who couldn't be, with the reason: for example a marcher with no position of its own on the page before, or one in the middle of a move that crosses the page's start.
 
 <Media
   id="timeline-held"

@@ -53,7 +53,7 @@ You can also pick a kind three other ways:
 - Press <Kbd action="openCommandBar" /> and type the shape's name, such as "box". The command bar then asks for the shape's numbers one at a time, and places the shape after the last one. See [Draw a box](/guides/shapes/draw-a-box/).
 - Search for "Shape" in the command palette (<Kbd action="openCommandPalette" />).
 
-Shapes need marchers to place, so select them first. With nobody selected the kinds are greyed out and say <Ui k="shapes.tool.selectMarchersFirst" />. Shapes work the same in Basic and Expert.
+Shapes need marchers to place, so select them first. With nobody selected the kinds are greyed out and say <Ui k="shapes.tool.selectMarchersFirst" />. The shape tools are the same in Basic and Expert; only where marchers start from differs, as below.
 
 ## A shape on the field
 
@@ -82,7 +82,7 @@ How the spots fill a shape depends on its kind:
 
 ## Who goes where
 
-When a shape is drawn, OpenMarch gives each marcher the spot that makes the total walk shortest, measured from where they stand at the start flag. Paths don't cross. Moving, turning, stretching or flipping the shape keeps each marcher on their own spot, so a flipped form is the same form mirrored. Select <Ui k="shapes.edit.recalculate.label" /> (<Kbd action="shapeRecalculate" />) to work out the shortest walks again after a change.
+When a shape is drawn, OpenMarch gives each marcher the spot that makes the total walk shortest, measured from where they start: the start flag in Expert, the start of the page in Basic. Paths don't cross. Moving, turning, stretching or flipping the shape keeps each marcher on their own spot, so a flipped form is the same form mirrored. Select <Ui k="shapes.edit.recalculate.label" /> (<Kbd action="shapeRecalculate" />) to work out the shortest walks again after a change.
 
 A line, curve or arc also has a <Ui k="shapes.edit.order.label" /> menu. <Ui k="shapes.edit.order.reverse" /> turns the order along the line end for end, and when the marchers all come from one placed line, <Ui k="shapes.edit.order.keep" /> keeps them in the same order along the new one.
 

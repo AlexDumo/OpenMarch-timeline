@@ -58,7 +58,7 @@ Drag the page's flag: the top of the line at the right end of its box. The page 
   alt="The flag at the end of Page 3 is dragged two counts later. Page 3's box grows by two counts and Page 4's box shrinks by two; the pages after them don't move."
 />
 
-While you drag, the flag lands on page lines, the playhead and measures when it's near one. Hold <Kbd keys="Alt" gesture="drag" /> to put it on any count. A label shows the page's counts before and after.
+While you drag, the flag lands on the playhead and on the start of a measure when it's near one. Hold <Kbd keys="Alt" gesture="drag" /> to put it on any count. A label shows the page's counts before and after.
 
 To move a flag with the keyboard, press <Kbd keys="Tab" /> until the flag is focused, then press <Kbd keys="Left" /> or <Kbd keys="Right" />.
 
@@ -84,7 +84,7 @@ The page is cut in half at its middle count. The first half keeps the page's num
 
 Right-click the page's box and choose one:
 
-- <Ui k="timeline.rangeMenu.deletePage" /> removes the page's flag. Its counts join the next page, which takes its number, and the pages after it are numbered one lower. The marchers still move as they did, so every page after it looks as it did before.
+- <Ui k="timeline.rangeMenu.deletePage" /> removes the page's flag. Its counts join the next page, which takes its number, and the pages after it are numbered one lower. Deleting the last page instead makes the page before it the last one, and its counts leave the end of the show. The marchers still move as they did, so every page after it looks as it did before.
 - <Ui k="timeline.rangeMenu.deleteWithMoves" /> removes the page and the positions set on it. Marchers that only held on later pages go back to where they were before the deleted page, and a message lists the pages that now look different.
 
 Both can be undone with <Kbd action="performUndo" />.

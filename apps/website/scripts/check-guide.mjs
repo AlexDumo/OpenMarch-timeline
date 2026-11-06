@@ -118,6 +118,13 @@ for (const file of files) {
                 `<Media id="${m[1]}">: not recorded (run docs:media ${m[1]})`,
             );
     }
+    // A component used but not imported fails only at build time
+    for (const c of ["Ui", "Kbd", "Media", "ShortcutList"])
+        if (
+            new RegExp(`<${c}[\\s/>]`).test(text) &&
+            !new RegExp(`^import ${c}\\b`, "m").test(text)
+        )
+            fail(file, 1, `uses <${c}> but doesn't import it`);
     const lines = text.split("\n");
     let inCode = false;
     lines.forEach((line, i) => {

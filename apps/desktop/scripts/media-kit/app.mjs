@@ -118,11 +118,7 @@ export async function launch({
     // late, so keep watching for it until the show's marchers are on the field.
     const convert = page.getByRole("button", { name: "Confirm" });
     for (let i = 0; i < 240; i++) {
-        if (
-            await convert
-                .isVisible()
-                .catch(() => false)
-        )
+        if (await convert.isVisible().catch(() => false))
             await convert.click().catch(() => {});
         const loaded = await page
             .evaluate(() => (window.fieldTest?.marchers?.().length ?? 0) > 0)

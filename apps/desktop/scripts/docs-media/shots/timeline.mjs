@@ -30,7 +30,8 @@ async function tidy(page) {
 }
 
 /** A page box on the timeline, by page id. */
-const pageBox = (page, id) => page.locator(`[data-timeline-range-page="${id}"]`).first();
+const pageBox = (page, id) =>
+    page.locator(`[data-timeline-range-page="${id}"]`).first();
 
 /** Selects a page by clicking near the start of its box (the playhead sits on its end). */
 async function selectPage(page, id, wait) {
@@ -161,7 +162,9 @@ const shots = [
         },
         async perform({ page, film, overlay }) {
             await overlay.enable();
-            const ph = await page.getByTestId("timeline-playhead").boundingBox();
+            const ph = await page
+                .getByTestId("timeline-playhead")
+                .boundingBox();
             const { box: p3 } = await countWidth(page, 11);
             const grab = { x: ph.x + ph.width / 2, y: ph.y + 8 };
             await page.mouse.move(grab.x, grab.y + 80);
@@ -202,7 +205,10 @@ const shots = [
         },
         async perform({ page, film, overlay, box }) {
             await overlay.enable();
-            await page.mouse.move(box.x + box.width / 2, box.y + box.height - 10);
+            await page.mouse.move(
+                box.x + box.width / 2,
+                box.y + box.height - 10,
+            );
             await film.hold(0.5);
             await page.keyboard.press("KeyC");
             await film.hold(1);
@@ -217,7 +223,12 @@ const shots = [
                     grab,
                     0.6,
                 );
-                await film.drag(page, grab, { x: p4.x + p4.width, y: grab.y }, 1);
+                await film.drag(
+                    page,
+                    grab,
+                    { x: p4.x + p4.width, y: grab.y },
+                    1,
+                );
             }
             await film.hold(1.2);
         },
@@ -232,12 +243,18 @@ const shots = [
             await ready(page, wait);
             await page.keyboard.press("End");
             await wait(1500);
-            const ph0 = await page.getByTestId("timeline-playhead").boundingBox();
+            const ph0 = await page
+                .getByTestId("timeline-playhead")
+                .boundingBox();
             const { perCount } = await countWidth(page, 13);
             await page.mouse.click(ph0.x + ph0.width / 2 + perCount * 5, 950);
             await wait(1200);
-            const ph = await page.getByTestId("timeline-playhead").boundingBox();
-            await page.mouse.click(ph.x + ph.width / 2, ph.y + 30, { button: "right" });
+            const ph = await page
+                .getByTestId("timeline-playhead")
+                .boundingBox();
+            await page.mouse.click(ph.x + ph.width / 2, ph.y + 30, {
+                button: "right",
+            });
             await wait(800);
             await tidy(page);
             const menu = page.getByRole("menu").first();
@@ -269,7 +286,12 @@ const shots = [
             const dropped = { x: grip.x + perCount * 2, y: grip.y };
             await film.drag(page, grip, dropped, 1.2);
             await film.hold(0.4);
-            await film.moveTo(page, dropped, { x: dropped.x + 40, y: box.y + box.height - 20 }, 0.5);
+            await film.moveTo(
+                page,
+                dropped,
+                { x: dropped.x + 40, y: box.y + box.height - 20 },
+                0.5,
+            );
             await film.hold(1.2);
         },
     },
@@ -290,14 +312,31 @@ const shots = [
         async perform({ page, film, overlay }) {
             await overlay.enable();
             const { perCount } = await countWidth(page, 11);
-            const sp = await page.getByTestId("timeline-start-pennant").boundingBox();
+            const sp = await page
+                .getByTestId("timeline-start-pennant")
+                .boundingBox();
             const flag = { x: sp.x + sp.width / 2, y: sp.y + sp.height / 2 };
             await page.mouse.move(flag.x + 200, flag.y - 200);
-            await film.moveTo(page, { x: flag.x + 200, y: flag.y - 200 }, flag, 0.7);
-            await film.drag(page, flag, { x: flag.x + perCount * 4, y: flag.y }, 1);
+            await film.moveTo(
+                page,
+                { x: flag.x + 200, y: flag.y - 200 },
+                flag,
+                0.7,
+            );
+            await film.drag(
+                page,
+                flag,
+                { x: flag.x + perCount * 4, y: flag.y },
+                1,
+            );
             await film.hold(0.6);
             const b1 = (await marchers(page)).get("B1");
-            await film.moveTo(page, { x: flag.x + perCount * 4, y: flag.y }, b1, 0.8);
+            await film.moveTo(
+                page,
+                { x: flag.x + perCount * 4, y: flag.y },
+                b1,
+                0.8,
+            );
             await film.drag(page, b1, { x: b1.x, y: b1.y + 40 }, 1);
             await page.mouse.move(800, 990);
             await film.hold(1.5);
@@ -368,18 +407,39 @@ const shots = [
         async perform({ page, film, overlay, box }) {
             await overlay.enable();
             const { perCount } = await countWidth(page, 11);
-            const clip = await page.locator("[data-timeline-range-track]").first().boundingBox();
-            const right = { x: clip.x + clip.width - 2, y: clip.y + clip.height / 2 };
+            const clip = await page
+                .locator("[data-timeline-range-track]")
+                .first()
+                .boundingBox();
+            const right = {
+                x: clip.x + clip.width - 2,
+                y: clip.y + clip.height / 2,
+            };
             const rest = { x: right.x + 60, y: box.y + 20 };
             await page.mouse.move(rest.x, rest.y);
             await film.moveTo(page, rest, right, 0.6);
             await film.hold(0.3);
-            await film.drag(page, right, { x: right.x + perCount * 2, y: right.y }, 1);
+            await film.drag(
+                page,
+                right,
+                { x: right.x + perCount * 2, y: right.y },
+                1,
+            );
             await film.hold(0.8);
             const left = { x: clip.x + 2, y: right.y };
-            await film.moveTo(page, { x: right.x + perCount * 2, y: right.y }, left, 0.7);
+            await film.moveTo(
+                page,
+                { x: right.x + perCount * 2, y: right.y },
+                left,
+                0.7,
+            );
             await film.hold(0.3);
-            await film.drag(page, left, { x: left.x - perCount * 4, y: left.y }, 1);
+            await film.drag(
+                page,
+                left,
+                { x: left.x - perCount * 4, y: left.y },
+                1,
+            );
             await film.hold(1.3);
         },
     },
@@ -390,7 +450,10 @@ const shots = [
         async setup({ page, wait }) {
             await ready(page, wait);
             await withMove(page, wait);
-            await page.locator("[data-timeline-range-track]").first().dblclick();
+            await page
+                .locator("[data-timeline-range-track]")
+                .first()
+                .dblclick();
             await wait(1500);
             await page.mouse.move(800, 990);
             await tidy(page);
@@ -408,12 +471,18 @@ const shots = [
             await ready(page, wait);
             await selectPage(page, 12, wait);
             await select(page, range("T", 1, 4), wait);
-            await pageBox(page, 12).click({ button: "right", position: { x: 8, y: 13 } });
+            await pageBox(page, 12).click({
+                button: "right",
+                position: { x: 8, y: 13 },
+            });
             await wait(800);
             await tidy(page);
             const menu = page.getByRole("menu").first();
             return {
-                box: union(await around(pageBox(page, 12), 40), await around(menu, 8)),
+                box: union(
+                    await around(pageBox(page, 12), 40),
+                    await around(menu, 8),
+                ),
             };
         },
     },
@@ -443,7 +512,9 @@ const shots = [
             await ready(page, wait);
             await page.keyboard.press("End");
             await wait(1500);
-            const ph0 = await page.getByTestId("timeline-playhead").boundingBox();
+            const ph0 = await page
+                .getByTestId("timeline-playhead")
+                .boundingBox();
             await page.mouse.click(ph0.x + ph0.width / 2 + 16 * 5, 950);
             await wait(1000);
             await page.keyboard.press("KeyF");
@@ -470,8 +541,12 @@ const shots = [
             const button = page.getByTestId("start-flag-positions");
             await button.click();
             await wait(800);
-            const menu = page.locator("[data-radix-popper-content-wrapper]").last();
-            return { box: union(await around(button, 8), await around(menu, 8)) };
+            const menu = page
+                .locator("[data-radix-popper-content-wrapper]")
+                .last();
+            return {
+                box: union(await around(button, 8), await around(menu, 8)),
+            };
         },
     },
     {
@@ -490,8 +565,18 @@ const shots = [
             await selectPage(page, 13, wait);
             await page.mouse.move(800, 990);
             await tidy(page);
-            const c = await page.getByTestId("fieldCanvas").first().boundingBox();
-            return { box: { x: Math.round(c.x), y: Math.round(c.y), width: Math.round(c.width), height: Math.round(c.height) } };
+            const c = await page
+                .getByTestId("fieldCanvas")
+                .first()
+                .boundingBox();
+            return {
+                box: {
+                    x: Math.round(c.x),
+                    y: Math.round(c.y),
+                    width: Math.round(c.width),
+                    height: Math.round(c.height),
+                },
+            };
         },
     },
 ];

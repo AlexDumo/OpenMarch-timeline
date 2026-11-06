@@ -87,7 +87,10 @@ const shots = [
                 box: {
                     x,
                     y,
-                    width: Math.min(1000, Math.max(a.x + a.width, b.x + b.width) - x),
+                    width: Math.min(
+                        1000,
+                        Math.max(a.x + a.width, b.x + b.width) - x,
+                    ),
                     height: Math.max(a.y + a.height, b.y + b.height) - y,
                 },
             };
@@ -127,7 +130,9 @@ const shots = [
             await page.locator("#sidebar-launcher-mobile-export").click();
             await wait(3000);
             await page.mouse.move(1596, 996);
-            const panel = page.locator("div.backdrop-blur-32.absolute.z-40").first();
+            const panel = page
+                .locator("div.backdrop-blur-32.absolute.z-40")
+                .first();
             return { box: await around(panel, 12) };
         },
     },

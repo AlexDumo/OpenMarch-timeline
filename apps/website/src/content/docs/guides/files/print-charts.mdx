@@ -76,7 +76,7 @@ When the export is done, select the message that appears to open the file or fol
 ### Drill chart options
 
 - <Ui k="exportCoordinates.individualCharts" />: makes a chart PDF for each marcher. Each page shows the whole band with that marcher picked out, a box on where they were on the previous page, a circle on where they go next, the paths between them, and their coordinates. Without it, you get one overview PDF with every marcher on every page and no paths.
-- <Ui k="exportCoordinates.includeNotesAppendix" />: each page's notes are printed under its chart, cut short if they're long. This adds pages at the end with the full notes for every page that has notes.
+- <Ui k="exportCoordinates.includeNotesAppendix" />: each page's notes are always printed under its chart, cut short if they're long. Turn this on to add pages at the end with the full notes for every page that has notes.
 
 The charts draw your show's field, with its markings and field image, and the grid lines you have turned on for the field in the editor.
 
@@ -86,7 +86,7 @@ The exports end at the last page. If a move runs past it, the dialog says how ma
 
 ## If you can't export
 
-The <Ui k="exportCoordinates.export" plain /> button stays off until the show has at least one marcher, at least one page after the first, and its field settings. The preview area says which one is missing.
+For drill charts, the <Ui k="exportCoordinates.export" plain /> button stays off until the show has at least one marcher, at least one page after the first, and its field settings, and the preview area says which one is missing. Coordinate sheets can be exported as soon as the marchers have loaded.
 
 ## Related
 

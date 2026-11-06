@@ -19,7 +19,9 @@ const shots = [
             await ctx.wait(2000);
             const framed = await settingsWindow(ctx, "Keyboard shortcuts");
             // A few rows with their keys, rather than the File group's menu-only actions
-            await framed.target.getByPlaceholder("Search shortcuts").fill("play");
+            await framed.target
+                .getByPlaceholder("Search shortcuts")
+                .fill("play");
             await ctx.wait(600);
             await framed.target.evaluate(() => document.activeElement?.blur());
             return framed;
