@@ -117,7 +117,7 @@ function performers(fp: FieldProperties) {
 const SAMPLE_CREDITS: ShowCredits = {
     title: "Spring Show 2026",
     designer: "Sam Rivera",
-    client: "Centerville High School",
+    client: "Lincoln High School",
 };
 
 export interface LoadOptions {
