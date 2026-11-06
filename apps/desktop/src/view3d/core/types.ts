@@ -11,7 +11,14 @@ import type { FieldFootprint } from "@openmarch/core";
 import type { Object3D, Vector3Tuple } from "three";
 
 /** Venue kits shipped in the MVP. `blank` is the field on a plain ground. */
-export type VenueKitId = "hs" | "bighs" | "college" | "pro" | "gym" | "blank";
+export type VenueKitId =
+    | "hs"
+    | "bighs"
+    | "college"
+    | "pro"
+    | "gym"
+    | "arena"
+    | "blank";
 
 /** Lighting presets. Each kit lists the ones it supports. */
 export type LightingPreset =

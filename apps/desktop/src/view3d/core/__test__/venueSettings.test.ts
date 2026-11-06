@@ -70,7 +70,7 @@ describe("venueSettingsSchema", () => {
     it.each([
         ["a different version", { ...valid, version: 2 }],
         ["a missing version", { ...valid, version: undefined }],
-        ["an unknown kit", { ...valid, kit: "arena" }],
+        ["an unknown kit", { ...valid, kit: "stadium" }],
         ["an unknown lighting preset", { ...valid, lighting: "noon" }],
         ["a non-boolean crowd", { ...valid, crowd: "yes" }],
         ["an unknown uniform preset", { ...valid, uniforms: "plaid" }],
@@ -114,10 +114,12 @@ describe("lighting", () => {
     it("keeps lighting the kit supports", () => {
         expect(lightingForKit("pro", "roofClosed")).toBe("roofClosed");
         expect(lightingForKit("gym", "show")).toBe("show");
+        expect(lightingForKit("arena", "show")).toBe("show");
     });
 
     it("falls back to the kit's default for unsupported lighting", () => {
         expect(lightingForKit("gym", "night")).toBe("house");
+        expect(lightingForKit("arena", "day")).toBe("house");
         expect(lightingForKit("hs", "roofClosed")).toBe("day");
         expect(lightingForKit("pro", "dusk")).toBe("roofClosed");
     });

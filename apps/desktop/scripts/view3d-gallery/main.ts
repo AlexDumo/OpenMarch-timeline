@@ -52,6 +52,7 @@ const KIT_FIELD: Record<string, keyof typeof FIELDS> = {
     college: "college",
     pro: "pro",
     gym: "indoor",
+    arena: "indoor",
     blank: "football",
 };
 

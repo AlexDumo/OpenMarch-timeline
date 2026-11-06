@@ -1,5 +1,6 @@
 import type { FieldSurfaceStyle } from "../field";
 import type { KitBuilder, VenueKitId } from "../types";
+import { buildArena } from "./arena";
 import { buildBighs } from "./bighs";
 import { buildBlank } from "./blank";
 import { buildCollege } from "./college";
@@ -17,6 +18,7 @@ export const KIT_BUILDERS: Readonly<Record<VenueKitId, KitBuilder>> = {
     college: buildCollege,
     pro: buildProKit,
     gym: buildGym,
+    arena: buildArena,
     blank: buildBlank,
 };
 
@@ -32,6 +34,7 @@ export const KIT_FIELD_STYLE: Readonly<Record<VenueKitId, FieldSurfaceStyle>> =
         college: "turf",
         pro: "turf",
         gym: "tarp",
+        arena: "tarp",
         blank: "theme",
     };
 
