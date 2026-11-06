@@ -150,13 +150,58 @@ describe.each(Object.entries(footprints))("gym kit, %s", (_name, fp) => {
         kit.dispose();
     });
 
-    it("hides ceiling panels when the camera is above the ceiling", () => {
+    it("hides the overhead structure when the camera is above the ceiling", () => {
         const kit = build(fp);
         const panels = kit.root.getObjectByName("gym-panels")!;
+        const ceiling = kit.root.getObjectByName("gym-ceiling")!;
         kit.onFrame!({ cameraPosition: [0, 70, 0], dt: 0.016 });
         expect(panels.visible).toBe(false);
+        expect(ceiling.visible).toBe(false);
         kit.onFrame!({ cameraPosition: [0, 5, 0], dt: 0.016 });
         expect(panels.visible).toBe(true);
+        expect(ceiling.visible).toBe(true);
+        kit.dispose();
+    });
+
+    it("builds the room dressing: trusses, banners, doors, scoreboard, mats", () => {
+        const kit = build(fp);
+        for (const name of [
+            "gym-trusses",
+            "gym-joists",
+            "gym-ducts",
+            "gym-bleacher-treads",
+            "gym-bleacher-rails",
+            "gym-scoreboard",
+            "gym-wordmark",
+            "gym-wall-mats",
+            "gym-door-leaves",
+            "gym-exit-signs",
+            "gym-hoops",
+            "gym-windows-east",
+        ])
+            expect(kit.root.getObjectByName(name), name).toBeDefined();
+        const banners: Object3D[] = [];
+        kit.root.traverse((o) => {
+            if (o.name.startsWith("gym-banner-")) banners.push(o);
+        });
+        expect(banners.length).toBeGreaterThanOrEqual(8);
+        kit.dispose();
+    });
+
+    it("shows haze beams and blacks out the windows only in show", () => {
+        const kit = build(fp);
+        const beams: Object3D[] = [];
+        kit.root.traverse((o) => {
+            if (o.name === "gym-beam") beams.push(o);
+        });
+        const win = kit.root.getObjectByName("gym-windows-east") as Mesh;
+        const wm = win.material as { color: { r: number } };
+        expect(beams).toHaveLength(4);
+        expect(beams.some((b) => b.visible)).toBe(false);
+        expect(wm.color.r).toBe(1);
+        kit.setLighting("show");
+        expect(beams.every((b) => b.visible)).toBe(true);
+        expect(wm.color.r).toBeLessThan(0.1);
         kit.dispose();
     });
 
