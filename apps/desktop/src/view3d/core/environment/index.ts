@@ -9,6 +9,8 @@
  *   sets `scene.fog = env.fog` and, after `env.setLighting(preset, focus)`,
  *   `renderer.toneMappingExposure = env.exposure`. The camera's far plane must
  *   exceed `SKY_RADIUS` (1524 m).
+ * - `createEnvironment` also owns the horizon (hills, treeline, town; `env.horizon`)
+ *   and a procedural sky with sun, clouds, stars and moon; both follow the preset.
  * - `lightingValues(preset)` -> `LightingValues`: every preset's numbers.
  *   `values.kit` holds what kits drive themselves: `lampsOn` and `lampScale`
  *   for poles, `barEmissive`, `roofSpotIntensity` and `roofOpen` for the pro
@@ -34,6 +36,8 @@ export * from "./units";
 export * from "./random";
 export * from "./lighting";
 export * from "./sky";
+export * from "./skyShader";
+export * from "./horizon";
 export * from "./envMap";
 export * from "./rig";
 export * from "./materials";

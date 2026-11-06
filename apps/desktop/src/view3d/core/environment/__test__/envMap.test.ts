@@ -12,8 +12,8 @@ describe("environmentScene", () => {
         expect(ground).toBeInstanceOf(Mesh);
         const u = (sky.material as ShaderMaterial).uniforms;
         const day = lightingValues("day");
-        expect(u.top.value.getHex()).toBe(day.skyTop);
-        expect(u.bottom.value.getHex()).toBe(day.skyBottom);
+        expect(u.uTop.value.getHex()).toBe(day.skyTop);
+        expect(u.uHorizon.value.getHex()).toBe(day.atmosphere.horizon);
         expect(ground.position.y).toBeLessThan(0);
     });
 
@@ -21,7 +21,7 @@ describe("environmentScene", () => {
         const night = environmentScene("night");
         const u = (night.getObjectByName("env-sky") as Mesh)
             .material as ShaderMaterial;
-        expect(u.uniforms.top.value.getHex()).toBe(
+        expect(u.uniforms.uTop.value.getHex()).toBe(
             lightingValues("night").skyTop,
         );
     });

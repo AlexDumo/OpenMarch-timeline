@@ -27,8 +27,45 @@ export interface LightingValues {
     };
     /** Apply to `renderer.toneMappingExposure`. */
     exposure: number;
+    /** Sky and distant-landscape look, read by the sky dome, horizon and env map. */
+    atmosphere: Atmosphere;
     kit: KitLightingValues;
 }
+
+/** What the procedural sky and the horizon draw for a preset. */
+export interface Atmosphere {
+    /** Sky color just above the horizon. Matches `fog` so land fades into it. */
+    horizon: number;
+    /** Color a third of the way up, between horizon and `skyTop`. */
+    mid: number;
+    /** Color of the glow around the sun (or moon at night). */
+    glow: number;
+    /** 0 to 1: how far the glow reaches across the sky. */
+    glowStrength: number;
+    /** Direction toward the sun, unit length. */
+    sunDir: Vector3Tuple;
+    /** Sun disk color; black hides the disk. */
+    sunColor: number;
+    /** Cloud cover 0 (clear) to 1 (overcast). */
+    cloudCover: number;
+    /** Cloud colors on the lit and shadowed sides. */
+    cloudLit: number;
+    cloudShade: number;
+    /** 0 to 1 star brightness. */
+    stars: number;
+    /** 0 to 1 moon brightness, drawn toward `moonDir`. */
+    moon: number;
+    moonDir: Vector3Tuple;
+    /** Multiplies the horizon land (hills, treeline, town) colors. */
+    land: number;
+    /** 0 to 1: how many town windows are lit. */
+    windows: number;
+}
+
+const unit = (x: number, y: number, z: number): Vector3Tuple => {
+    const l = Math.hypot(x, y, z);
+    return [x / l, y / l, z / l];
+};
 
 /** Values for lights and emissive parts that kits own. */
 export interface KitLightingValues {
@@ -75,6 +112,22 @@ const day: LightingValues = {
     hemisphere: { sky: 0xcfe3ff, ground: 0x4a5d33, intensity: 1.1 },
     sun: { color: 0xffffff, intensity: 2.3, offset: sunOffset(300, 520, 260) },
     exposure: 1,
+    atmosphere: {
+        horizon: 0xcfe2f5,
+        mid: 0x8db8e8,
+        glow: 0xfff2d0,
+        glowStrength: 0.35,
+        sunDir: unit(300, 520, 260),
+        sunColor: 0xfff6e0,
+        cloudCover: 0.5,
+        cloudLit: 0xffffff,
+        cloudShade: 0xa9bcd6,
+        stars: 0,
+        moon: 0,
+        moonDir: unit(-1, 0.5, -1),
+        land: 1,
+        windows: 0,
+    },
     kit: { ...kitOff },
 };
 
@@ -86,6 +139,22 @@ const dusk: LightingValues = {
     hemisphere: { sky: 0xffc49a, ground: 0x3a3440, intensity: 0.55 },
     sun: { color: 0xffa860, intensity: 1.4, offset: sunOffset(-700, 120, -60) },
     exposure: 1.05,
+    atmosphere: {
+        horizon: 0xf2995a,
+        mid: 0xb4668a,
+        glow: 0xff8a3c,
+        glowStrength: 1,
+        sunDir: unit(-700, 70, -60),
+        sunColor: 0xffc27a,
+        cloudCover: 0.55,
+        cloudLit: 0xffb28a,
+        cloudShade: 0x5a4670,
+        stars: 0.1,
+        moon: 0,
+        moonDir: unit(-1, 0.5, -1),
+        land: 0.55,
+        windows: 0.5,
+    },
     kit: {
         ...kitOff,
         lampsOn: true,
@@ -103,6 +172,22 @@ const night: LightingValues = {
     hemisphere: { sky: 0x1b2440, ground: 0x0a0a0c, intensity: 0.3 },
     sun: { color: 0x8899cc, intensity: 0, offset: sunOffset(0, 500, 0) },
     exposure: 1.15,
+    atmosphere: {
+        horizon: 0x17203a,
+        mid: 0x0b1226,
+        glow: 0x5a78c8,
+        glowStrength: 0.5,
+        sunDir: unit(-0.45, 0.55, -0.7),
+        sunColor: 0x000000,
+        cloudCover: 0.3,
+        cloudLit: 0x4a5b88,
+        cloudShade: 0x0c1226,
+        stars: 1,
+        moon: 1,
+        moonDir: unit(-0.45, 0.55, -0.7),
+        land: 0.12,
+        windows: 1,
+    },
     kit: {
         ...kitOff,
         lampsOn: true,
@@ -129,6 +214,7 @@ const house: LightingValues = {
     hemisphere: { sky: 0xfff4e0, ground: 0x6b5a44, intensity: 0.9 },
     sun: { color: 0xffffff, intensity: 0, offset: sunOffset(0, 500, 0) },
     exposure: 1,
+    atmosphere: { ...day.atmosphere, stars: 0, moon: 0, windows: 0 },
     kit: { ...kitOff, panelEmissive: 1.4, overheadIntensity: 1.1 },
 };
 

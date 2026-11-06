@@ -6,7 +6,6 @@
  * testable; `createEnvironmentMap` needs a renderer.
  */
 import {
-    BackSide,
     CircleGeometry,
     Color,
     Mesh,
@@ -20,34 +19,18 @@ import {
 } from "three";
 import type { LightingPreset } from "../types";
 import { lightingValues } from "./lighting";
+import { createSkyMaterial, setSkyPreset } from "./skyShader";
 
 /** Turf as the ground sees it from the field: a mid green. */
 const GROUND = 0x3f6b2e;
-
-/** The sky gradient shader, as `sky.ts` draws it, on a small sphere. */
-function skyMaterial(top: number, bottom: number): ShaderMaterial {
-    return new ShaderMaterial({
-        side: BackSide,
-        depthWrite: false,
-        uniforms: {
-            top: { value: new Color(top) },
-            bottom: { value: new Color(bottom) },
-        },
-        vertexShader:
-            "varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-        fragmentShader:
-            "uniform vec3 top; uniform vec3 bottom; varying vec3 vP; void main(){ float h = clamp(vP.y * 1.5 + 0.06, 0.0, 1.0); gl_FragColor = vec4(mix(bottom, top, pow(h, 0.65)), 1.0); }",
-    });
-}
 
 /** The scene the environment map is rendered from: sky dome and ground. */
 export function environmentScene(preset: LightingPreset): Scene {
     const v = lightingValues(preset);
     const scene = new Scene();
-    const sky = new Mesh(
-        new SphereGeometry(50, 32, 16),
-        skyMaterial(v.skyTop, v.skyBottom),
-    );
+    const skyMat = createSkyMaterial({ quality: "low", sunBoost: 2.5 });
+    setSkyPreset(skyMat, preset);
+    const sky = new Mesh(new SphereGeometry(50, 32, 16), skyMat);
     sky.name = "env-sky";
     const ground = new Mesh(
         new CircleGeometry(60, 32),

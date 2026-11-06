@@ -11,8 +11,16 @@ import {
     setLightIntensity,
     type LightingValues,
 } from "./lighting";
+import { createHorizon, type Horizon } from "./horizon";
 import { createSkyDome, type SkyDome } from "./sky";
 import { ft } from "./units";
+
+/**
+ * Fog starts past the stands and is total at the hills' rim, so the land
+ * fades into the sky's horizon color (aerial perspective).
+ */
+export const FOG_NEAR = 300;
+export const FOG_FAR = 1350;
 
 export interface EnvironmentOptions {
     /** "low" never casts shadows. Default "high". */
@@ -25,6 +33,8 @@ export interface Environment {
     /** Sky dome, hemisphere light, sun and the sun's target. Add to the scene. */
     root: Group;
     sky: SkyDome;
+    /** Hills, treeline and town past the stands; centered on the focus point. */
+    horizon: Horizon;
     hemisphere: HemisphereLight;
     sun: DirectionalLight;
     /** Assign to `scene.fog`. Its color follows the preset. */
@@ -54,7 +64,8 @@ export function createEnvironment(
 
     const root = new Group();
     root.name = "environment";
-    const sky = createSkyDome();
+    const sky = createSkyDome({ quality });
+    const horizon = createHorizon({ quality });
     const hemisphere = new HemisphereLight(0xcfe3ff, 0x4a5d33, 1);
     const sun = new DirectionalLight(0xffffff, 2);
     sun.shadow.mapSize.set(2048, 2048);
@@ -68,13 +79,14 @@ export function createEnvironment(
     });
     sun.shadow.bias = -0.0004;
     sun.shadow.camera.updateProjectionMatrix();
-    root.add(sky.mesh, hemisphere, sun, sun.target);
-    const fog = new Fog(0xcfe2f5, ft(1800), ft(5000));
+    root.add(sky.mesh, horizon.root, hemisphere, sun, sun.target);
+    const fog = new Fog(0xcfe2f5, FOG_NEAR, FOG_FAR);
 
     let exposure = 1;
     const env: Environment = {
         root,
         sky,
+        horizon,
         hemisphere,
         sun,
         fog,
@@ -85,7 +97,9 @@ export function createEnvironment(
             if (f) focus = f;
             const v = lightingValues(preset);
             sky.setPreset(preset);
-            fog.color.setHex(v.fog);
+            horizon.setPreset(preset);
+            horizon.setCenter(focus);
+            fog.color.setHex(v.atmosphere.horizon);
             hemisphere.color.setHex(v.hemisphere.sky);
             hemisphere.groundColor.setHex(v.hemisphere.ground);
             hemisphere.intensity = v.hemisphere.intensity;
@@ -103,10 +117,12 @@ export function createEnvironment(
         },
         setFocus(f) {
             focus = f;
+            horizon.setCenter(f);
             sun.target.position.set(...f);
         },
         dispose() {
             sky.dispose();
+            horizon.dispose();
             sun.shadow.dispose();
         },
     };
