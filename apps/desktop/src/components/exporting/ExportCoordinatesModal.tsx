@@ -1,4 +1,5 @@
 /* eslint-disable no-control-regex */
+import { useAudioOffsetSeconds } from "@/tempo/audioOffset";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MarcherCoordinateSheetPreview from "./MarcherCoordinateSheet";
 import {
@@ -42,7 +43,6 @@ import { useAppDialogStore, type ExportTab } from "@/stores/AppDialogStore";
 import { coordinateRoundingOptions } from "../../config/exportOptions";
 import "../../styles/shimmer.css";
 import { T } from "@tolgee/react";
-import { ShareNoteExportLine } from "@/components/assets/ShowCredits";
 import tolgee from "@/global/singletons/Tolgee";
 import { formatFixed } from "@/utilities/formatLocale";
 import { useQuery } from "@tanstack/react-query";
@@ -59,7 +59,6 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useShallow } from "zustand/react/shallow";
 import { notesHtmlToPlainText, truncateHtmlNotes } from "@/utilities/notesText";
 import Constants from "@/global/Constants";
-import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSettings";
 import { db } from "@/global/database/db";
 import { showEndTime } from "@/timeline/timeMap";
 import {
@@ -513,7 +512,7 @@ function CoordinateSheetExport() {
                         <T keyName="exportCoordinates.preview" />
                     </h5>
                 </div>
-                <div className="mx-2 max-h-[28vh] overflow-auto rounded-md border border-gray-200 bg-white text-black">
+                <div className="rounded-6 mx-2 max-h-[28vh] overflow-auto border border-gray-200 bg-white text-black">
                     <MarcherCoordinateSheetPreview
                         terse={isTerse}
                         includeMeasures={includeMeasures}
@@ -1016,7 +1015,7 @@ function DrillChartExport() {
                 {/* Show Demo SVGs or Error if Export Requirement Not Met */}
                 {canExport ? (
                     <div className="flex flex-col items-center gap-8">
-                        <div className="max-h-[20rem] w-full max-w-[20rem] rounded-md border border-gray-200 bg-white px-8 py-4 text-black">
+                        <div className="rounded-6 max-h-[20rem] w-full max-w-[20rem] border border-gray-200 bg-white px-8 py-4 text-black">
                             <img
                                 src={
                                     individualCharts
@@ -1147,9 +1146,8 @@ function VideoExport() {
     // Each marcher's appearance over the show, as the field draws it (#207)
     const appearanceSteps = useMarcherAppearanceSteps(true);
     const fieldImage = useFieldImage();
-    const { data: workspaceSettings } = useQuery(
-        workspaceSettingsQueryOptions(),
-    );
+    // Tempo mode: the offset in the show's history, else the workspace setting
+    const audioOffsetSeconds = useAudioOffsetSeconds();
     const { data: selectedAudioFile } = useQuery({
         queryKey: ["selectedAudioFileDetails"],
         queryFn: async () =>
@@ -1270,7 +1268,6 @@ function VideoExport() {
                     frameSampler: previewSampler,
                     appearanceSteps,
                     backgroundImage: fieldImage.image,
-                    backgroundImageSize: fieldImage.size,
                     // The preview sizes it to its own canvas on the first frame
                     width: 1,
                     height: 1,
@@ -1308,7 +1305,6 @@ function VideoExport() {
         appearanceSteps,
         fieldImage.loaded,
         fieldImage.image,
-        fieldImage.size,
     ]);
 
     const previewLoading =
@@ -1423,9 +1419,8 @@ function VideoExport() {
                 frameSampler,
                 appearanceSteps,
                 backgroundImage: fieldImage.image,
-                backgroundImageSize: fieldImage.size,
                 audioData: audioFile.data,
-                audioOffsetSeconds: workspaceSettings?.audioOffsetSeconds ?? 0,
+                audioOffsetSeconds,
                 width,
                 height,
                 fps: frameRate,
@@ -1503,8 +1498,7 @@ function VideoExport() {
         marchers,
         appearanceSteps,
         fieldImage.image,
-        fieldImage.size,
-        workspaceSettings?.audioOffsetSeconds,
+        audioOffsetSeconds,
         frameRate,
         videoTheme,
         measures,
@@ -2019,7 +2013,7 @@ function MobileExportOption({ onClick }: { onClick: () => void }) {
                             key={`${url}-${index}`}
                             src={url}
                             alt=""
-                            className="border-stroke shadow-fg-1 aspect-[9/19.5] w-[10rem] shrink-0 rounded-[1.25rem] border object-cover"
+                            className="border-stroke shadow-fg-1 rounded-20 aspect-[9/19.5] w-[10rem] shrink-0 border object-cover"
                             draggable={false}
                         />
                     ))}
@@ -2106,7 +2100,6 @@ export default function ExportCoordinatesModal() {
                             <T keyName="exportCoordinates.title" />
                         )}
                     </DialogTitle>
-                    <ShareNoteExportLine />
                     <ExportModalContents
                         onMobileExportClick={handleMobileExportClick}
                     />

@@ -4,12 +4,11 @@ import {
     DatabaseBeat,
     DbConnection,
     DbTransaction,
-    deleteBeatsCarryingCuesInTransaction,
+    deleteBeatsCarryingItemChangesInTransaction,
     NewBeatArgs,
     transactionWithHistory,
 } from "@/db-functions";
 import { schema } from "@/global/database/db";
-import type { CueCarryResult } from "./cues";
 
 /** How a measure is represented in the database */
 export interface DatabaseMeasure {
@@ -17,6 +16,12 @@ export interface DatabaseMeasure {
     start_beat: number;
     rehearsal_mark: string | null;
     notes: string | null;
+    /** Tempo mode: this measure's number set by hand; the ones after count on */
+    number_override?: number | null;
+    /** Tempo mode: the time signature written here, "7/8"; null = the one before carries on */
+    meter?: string | null;
+    /** Tempo mode: how it is counted, in eighths, "2+2+3"; null = its usual counting */
+    grouping?: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -38,12 +43,16 @@ export interface NewMeasureArgs {
     start_beat: number;
     rehearsal_mark?: string | null;
     notes?: string | null;
+    meter?: string | null;
+    grouping?: string | null;
 }
 
 interface RealNewMeasureArgs {
     start_beat: number;
     rehearsal_mark?: string | null;
     notes?: string | null;
+    meter?: string | null;
+    grouping?: string | null;
 }
 
 const newMeasureArgsToRealNewMeasureArgs = (
@@ -60,6 +69,9 @@ export interface ModifiedMeasureArgs {
     start_beat?: number;
     rehearsal_mark?: string | null;
     notes?: string | null;
+    number_override?: number | null;
+    meter?: string | null;
+    grouping?: string | null;
 }
 
 interface RealModifiedMeasureArgs {
@@ -67,6 +79,9 @@ interface RealModifiedMeasureArgs {
     start_beat?: number;
     rehearsal_mark?: string | null;
     notes?: string | null;
+    number_override?: number | null;
+    meter?: string | null;
+    grouping?: string | null;
 }
 
 const modifiedMeasureArgsToRealModifiedMeasureArgs = (
@@ -401,7 +416,7 @@ export const deleteMeasuresAndBeatsInTransaction = async ({
 }: {
     measureIds: Set<number>;
     tx: DbTransaction;
-}): Promise<CueCarryResult> => {
+}): Promise<void> => {
     const fetchedBeatIds: number[] = [];
 
     for (const measureId of measureIds) {
@@ -419,10 +434,9 @@ export const deleteMeasuresAndBeatsInTransaction = async ({
         tx,
     });
 
-    // delete beats, carrying their cues forward
-    const { cues } = await deleteBeatsCarryingCuesInTransaction({
+    // delete beats, carrying their item changes forward
+    await deleteBeatsCarryingItemChangesInTransaction({
         beatIds: uniqueBeatIds,
         tx,
     });
-    return cues;
 };

@@ -1,5 +1,5 @@
 /**
- * Routes, pathways steps 1 and 2 (ADR 0010; spec v0.9 R-14, Appendix I.2 and I.5): a move's
+ * Routes, pathways steps 1 and 2 (ADR 0014; spec v0.9 R-14, Appendix I.2 and I.5): a move's
  * marcher walks a drawn path of corners and smooth points from where it starts to its end spot.
  * This module holds the app procedures that write routes, and the refusals other procedures use:
  *
@@ -291,7 +291,7 @@ export function freshPointId(taken: ReadonlySet<string>): string {
     }
 }
 
-/** Writes the route-model file version (10) with a file's first route (ADR 0010). */
+/** Writes the route-model file version (10) with a file's first route (ADR 0014). */
 export async function markRouteModelInTransaction(
     tx: DbTransaction,
 ): Promise<void> {

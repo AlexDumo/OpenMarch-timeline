@@ -2,7 +2,7 @@
 
 # 07: Re-check of revised model C against review 06
 
-2026-11-05. Inputs: `draft/adr-0011-lanes-on-slots.md`, `draft/spec-changes.md` (SC), `draft/build-steps.md` (BS),
+2026-11-05. Inputs: `draft/adr-0015-lanes-on-slots.md`, `draft/spec-changes.md` (SC), `draft/build-steps.md` (BS),
 `draft/open-questions.md`, and my `06-adversarial-review.md`. Read-only. `ε_geom = 1e-9`
 (`core/geom.ts:24`).
 

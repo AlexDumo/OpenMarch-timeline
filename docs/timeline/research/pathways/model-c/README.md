@@ -2,7 +2,7 @@
 
 # Pathways data model: the "lanes on slots" grill (2026-11-05)
 
-These are the reports behind [ADR 0011](../../../../adr/0011-lanes-on-slots.md) and spec v0.10
+These are the reports behind [ADR 0015](../../../../adr/0015-lanes-on-slots.md) and spec v0.10
 ([spec.md](../../../spec.md), Appendix J). They are copied as written, so they cite the drafts by their
 working names and some paths outside the repo.
 
@@ -27,4 +27,4 @@ working names and some paths outside the repo.
   the [implementation plan](../implementation-plan.md) (steps 24 to 27 and amended steps 3, 5, 12
   and 17). Draft 1's M0 to M9 map to plan steps as the plan says.
 - The ADR renumbering the drafts predicted (0013 and 0014) is out of date: fork main also has
-  0012 and 0013, so the pathways ADRs get the next free numbers at the rebase (B0).
+  0012 and 0013, so the pathways ADRs became 0014 and 0015 when fork main was merged in (B0).

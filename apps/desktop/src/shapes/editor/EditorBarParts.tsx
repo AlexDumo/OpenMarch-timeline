@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import clsx from "clsx";
+import { getButtonClassName } from "@openmarch/ui";
 import { Tip } from "@/components/ui/Tip";
 import type { ActionId } from "@/shortcuts/definitions";
 import { keepFocus } from "./keepFocus";
@@ -20,8 +21,8 @@ export function Divider() {
 }
 
 /**
- * The editor's one main action, in words on the accent (a new shape's Place, a path's Finish).
- * A press keeps focus where it was, as every control in the editor does.
+ * The editor's one main action, a primary pill (a new shape's Place, a path's Finish). A press
+ * keeps focus where it was, as every control in the editor does.
  */
 export function EditorButton({
     onClick,
@@ -35,7 +36,11 @@ export function EditorButton({
     return (
         <button
             type="button"
-            className="bg-accent text-text-invert rounded-4 px-8 py-2 font-medium hover:opacity-90"
+            // text-body after twMerge, which drops it (docs/conventions/ui-styling.md)
+            className={`${getButtonClassName({
+                variant: "primary",
+                size: "compact",
+            })} text-body`}
             onPointerDown={keepFocus}
             onClick={onClick}
             data-testid={testId}

@@ -1,26 +1,15 @@
 import { threeZoomControls } from "@/field/three/fieldNavigation";
 import Toolbar from "@/components/toolbar/Toolbar";
 import Inspector from "@/components/inspector/Inspector";
-import VisualsInspector from "@/components/visuals/VisualsInspector";
-import { VisualsProvider } from "@/components/visuals/VisualsProvider";
-import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import SidebarModal from "@/components/sidebar/SidebarModal";
 import { SelectedPageProvider } from "@/context/SelectedPageContext";
 import { SelectedMarchersProvider } from "@/context/SelectedMarchersContext";
 import { IsPlayingProvider } from "@/context/IsPlayingContext";
 import StateInitializer from "@/components/singletons/StateInitializer";
 import { View3dPublisher } from "@/view3d/sync/useView3dPublisher";
-import { AssetsHost } from "@/components/assets/AssetsModal";
 import TimelineResolverHost from "@/timeline/TimelineResolverHost";
 import LaunchPage from "@/components/launchpage/LaunchPage";
-import {
-    lazy,
-    Suspense,
-    useCallback,
-    useEffect,
-    useRef,
-    useState,
-} from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import CommandPalette from "@/shortcuts/palette/CommandPalette";
 import LongPressGuard from "@/components/ui/LongPressGuard";
 import ExportCoordinatesModal from "@/components/exporting/ExportCoordinatesModal";
@@ -31,6 +20,8 @@ import {
 } from "@/shortcuts/ActionHandlers";
 import TimelineContainer from "@/components/timeline/TimelineContainer";
 import { TimelineSplitter } from "@/components/timeline/TimelineSplitter";
+import clsx from "clsx";
+import { useTempoModeStore } from "@/tempo/tempoModeStore";
 import { SelectedAudioFileProvider } from "@/context/SelectedAudioFileContext";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
 import TitleBar from "@/components/titlebar/TitleBar";
@@ -38,16 +29,13 @@ import { useUiSettingsStore } from "./stores/UiSettingsStore";
 import { useSnapOnWhenFileOpens } from "./hooks/useSnapOnWhenFileOpens";
 import CanvasZoomControls from "@/components/canvas/CanvasZoomControls";
 import FieldDisplayBar from "@/components/canvas/display/FieldDisplayBar";
-import View3dButton from "@/components/visuals/View3dButton";
-import Plugin from "./global/classes/Plugin";
+import View3dButton from "@/components/toolbar/View3dButton";
 import Sidebar from "@/components/sidebar/Sidebar";
 import Toaster from "./components/ui/Toaster";
-import FocusNotice from "./components/FocusNotice";
 import SvgPreviewHandler from "./utilities/SvgPreviewHandler";
 import { useIsPreviewMode } from "./stores/PreviewModeStore";
 import { PreviewModeHost } from "./components/preview/PreviewMode";
-import WorkspaceViewSwitch from "./components/visuals/WorkspaceViewSwitch";
-import AnalyticsOptInModal from "./components/AnalyticsOptInModal";
+import WorkspaceViewSwitch from "./components/toolbar/WorkspaceViewSwitch";
 import { useEditorModeStore } from "./stores/EditorModeStore";
 import ErrorBoundary from "./ErrorBoundary";
 import {
@@ -64,7 +52,6 @@ import {
 } from "./hooks/queries/useHistory";
 import tolgee from "./global/singletons/Tolgee";
 import { InContextTools } from "@tolgee/web/tools";
-import clsx from "clsx";
 import AlertModal from "./components/AlertModal";
 import ConvertShowDialog from "./components/ConvertShowDialog";
 import ShortcutsDialog from "./components/ShortcutsDialog";
@@ -78,7 +65,9 @@ import { useLoadFileErrorHandler } from "./hooks/useLoadFileErrorHandler";
 import { toast } from "sonner";
 import { version as currentVersion } from "../package.json";
 import { shouldShowUpdateNotification } from "./utilities/updateNotification";
-import { isAnalyticsChoiceMade } from "./components/welcome/welcomeFlowSteps";
+import { shouldShowWelcomeFlow } from "./components/welcome/welcomeFlowSteps";
+import WelcomeScreen from "./components/welcome/WelcomeScreen";
+import { useAnalyticsQuestionStore } from "./stores/AnalyticsQuestionStore";
 import { useIsTouchMode } from "./stores/InputModeStore";
 import { useOnScreenKeyboard } from "./hooks/useOnScreenKeyboard";
 import { startAudioUnlock } from "./utilities/audioUnlock";
@@ -112,23 +101,23 @@ export const queryClient = new QueryClient({
 function App() {
     useLoadFileErrorHandler();
     const [databaseIsReady, setDatabaseIsReady] = useState(false);
-    const [analyticsConsent, setAnalyticsConsent] = useState<boolean | null>(
-        null,
-    );
     const editorModeLoaded = useEditorModeStore((s) => s.loaded);
     const editorMode = useEditorModeStore((s) => s.mode);
-    // With no mode chosen, the launch page's welcome flow asks about analytics
-    // instead (UI-19). Automated sessions get Expert, so they still come here.
-    const welcomeFlowAsksAnalytics =
-        !editorModeLoaded || (editorMode === null && !databaseIsReady);
+    const analyticsQuestion = useAnalyticsQuestionStore((s) => s.status);
+    // Setup isn't finished (no mode, or the analytics question unanswered) but
+    // a show opened at launch: the welcome flow comes first (desktop only; the
+    // launch page shows it when no show is open).
+    const welcomeBeforeShow =
+        !isWebBuild &&
+        databaseIsReady &&
+        shouldShowWelcomeFlow({
+            loaded: editorModeLoaded,
+            mode: editorMode,
+            analytics: analyticsQuestion,
+        });
     const fetchUiSettings = useUiSettingsStore((s) => s.fetchUiSettings);
-    const focussedComponent = useUiSettingsStore(
-        (s) => s.uiSettings.focussedComponent,
-    );
-    const pluginsLoadedRef = useRef(false);
     // Preview watches the show: no toolbar, sidebar or inspector
     const preview = useIsPreviewMode();
-    const visuals = useIsVisualsView();
     const isTouchMode = useIsTouchMode();
     const windowSize = useWindowSize();
     const [inspectorChoices, setInspectorChoices] = useState<InspectorChoices>({
@@ -163,55 +152,6 @@ function App() {
         // eslint-disable-next-line no-console
         console.log("🎭 React app running in Playwright Codegen mode");
     }
-
-    useEffect(() => {
-        if (pluginsLoadedRef.current) return;
-        // Only load plugins after database is ready and canvas is available
-        if (!databaseIsReady) return;
-        pluginsLoadedRef.current = true;
-        console.debug("Loading plugins...");
-        void window.plugins
-            ?.list()
-            .then(async (pluginPaths: string[]) => {
-                for (const path of pluginPaths) {
-                    const pluginName =
-                        path.split(/[/\\]/).pop() || "Unknown Plugin";
-                    console.debug(`Loading plugin: ${pluginName}`);
-                    try {
-                        const code = await window.plugins.get(path);
-
-                        let metadata = Plugin.getMetadata(code);
-
-                        if (!metadata) {
-                            throw new Error(
-                                `Plugin ${pluginName} is missing metadata.`,
-                            );
-                        }
-
-                        new Plugin(
-                            metadata.name,
-                            metadata.version,
-                            metadata.description,
-                            metadata.author,
-                            pluginName,
-                        );
-
-                        const script = document.createElement("script");
-                        script.type = "text/javascript";
-                        script.text = code;
-                        document.body.appendChild(script);
-                    } catch (error) {
-                        console.error(
-                            `Failed to load plugin ${pluginName}:`,
-                            error,
-                        );
-                    }
-                }
-            })
-            .then(() => {
-                console.debug("All plugins loaded.");
-            });
-    }, [databaseIsReady]);
 
     useEffect(() => {
         // Check if database is ready
@@ -265,17 +205,6 @@ function App() {
     useEffect(() => refreshAfterStoredCounts(queryClient), [databaseIsReady]);
 
     useEffect(() => {
-        void window.electron
-            .invoke("settings:get", "optOutAnalytics")
-            .then((optOut) => {
-                // Same rule as the welcome flow: a stored null is unanswered too
-                setAnalyticsConsent(
-                    isAnalyticsChoiceMade(optOut) ? !optOut : null,
-                );
-            });
-    }, []);
-
-    useEffect(() => {
         if (databaseIsReady)
             createAllUndoTriggers(db).catch((error) => {
                 console.error("Error creating undo triggers:", error);
@@ -312,9 +241,13 @@ function App() {
         void injectTolgeeApiKey();
     }, []);
 
-    const timelineFocussedClass = clsx({
-        "opacity-30": focussedComponent === "timeline",
-    });
+    // Tempo mode: the tempo lanes are the only thing in focus; the rest steps back and
+    // takes no input until tempo mode is done
+    const tempoMode = useTempoModeStore((s) => s.on);
+    const tempoModeClass = clsx(
+        "transition-opacity duration-200",
+        tempoMode && "pointer-events-none opacity-30 select-none",
+    );
 
     return (
         <ErrorBoundary>
@@ -322,24 +255,7 @@ function App() {
                 {process.env.NODE_ENV !== "production" && (
                     <ReactQueryDevtools initialIsOpen={false} />
                 )}
-                <main
-                    data-workspace={visuals ? "visuals" : "editor"}
-                    className={clsx(
-                        "app-frame bg-bg-1 text-text outline-accent fixed inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden font-sans",
-                        // Visuals mode is its own workspace (performer-behavior.md 7.1): a tint says so
-                        visuals &&
-                            "before:to-accent/10 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:bg-linear-to-b before:from-transparent",
-                    )}
-                >
-                    {analyticsConsent === null &&
-                        !isCodegen &&
-                        !welcomeFlowAsksAnalytics && (
-                            <AnalyticsOptInModal
-                                onChoice={(choice) =>
-                                    setAnalyticsConsent(choice)
-                                }
-                            />
-                        )}
+                <main className="app-frame bg-bg-1 text-text outline-accent fixed inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden font-sans">
                     {/* Codegen mode indicator */}
                     {isCodegen && (
                         <div className="bg-yellow px-16 py-8 text-center font-bold text-black">
@@ -366,6 +282,8 @@ function App() {
                                 setDatabaseIsReady={setDatabaseIsReady}
                             />
                         </SelectedAudioFileProvider>
+                    ) : welcomeBeforeShow ? (
+                        <WelcomeScreen />
                     ) : (
                         <TooltipProvider
                             delayDuration={500}
@@ -381,12 +299,10 @@ function App() {
                                             <ExportCoordinatesModal />
                                             <TimelineResolverHost />
                                             <View3dPublisher />
-                                            <AssetsHost />
                                             <SvgPreviewHandler />
                                             <PreviewModeHost />
                                             <TitleBar showControls />
-                                            <FocusNotice />
-                                            <VisualsProvider>
+                                            <>
                                                 <div
                                                     id="app"
                                                     className="relative flex h-full min-h-0 w-full gap-8 px-8 pb-8"
@@ -404,7 +320,10 @@ function App() {
                                                         ) : (
                                                             <div
                                                                 className={
-                                                                    timelineFocussedClass
+                                                                    tempoModeClass
+                                                                }
+                                                                inert={
+                                                                    tempoMode
                                                                 }
                                                             >
                                                                 <Toolbar />
@@ -413,16 +332,19 @@ function App() {
                                                         <div
                                                             className={clsx(
                                                                 "relative flex h-full min-h-0 min-w-0 gap-8",
-                                                                timelineFocussedClass,
+                                                                tempoModeClass,
+                                                                // the taller tempo pane can leave the sidebar short
+                                                                tempoMode &&
+                                                                    "overflow-hidden",
                                                             )}
+                                                            inert={tempoMode}
                                                         >
-                                                            {!preview &&
-                                                                !visuals && (
-                                                                    <>
-                                                                        <Sidebar />
-                                                                        <SidebarModal />
-                                                                    </>
-                                                                )}
+                                                            {!preview && (
+                                                                <>
+                                                                    <Sidebar />
+                                                                    <SidebarModal />
+                                                                </>
+                                                            )}
                                                             <Suspense>
                                                                 <ThreeField />
                                                             </Suspense>
@@ -433,14 +355,9 @@ function App() {
                                                             />
                                                             <FieldDisplayBar />
                                                         </div>
-                                                        {focussedComponent ===
-                                                        "timeline" ? (
+                                                        <TimelineSplitter>
                                                             <TimelineContainer />
-                                                        ) : (
-                                                            <TimelineSplitter>
-                                                                <TimelineContainer />
-                                                            </TimelineSplitter>
-                                                        )}
+                                                        </TimelineSplitter>
                                                     </div>
                                                     {!preview && (
                                                         <InspectorDock
@@ -449,18 +366,15 @@ function App() {
                                                                 setInspectorOpen
                                                             }
                                                             className={
-                                                                timelineFocussedClass
+                                                                tempoModeClass
                                                             }
+                                                            inert={tempoMode}
                                                         >
-                                                            {visuals ? (
-                                                                <VisualsInspector />
-                                                            ) : (
-                                                                <Inspector />
-                                                            )}
+                                                            <Inspector />
                                                         </InspectorDock>
                                                     )}
                                                 </div>
-                                            </VisualsProvider>
+                                            </>
                                             <Toaster />
                                         </SelectedAudioFileProvider>
                                     </SelectedMarchersProvider>

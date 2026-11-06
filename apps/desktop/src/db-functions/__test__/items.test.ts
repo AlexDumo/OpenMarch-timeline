@@ -3,9 +3,8 @@ import { count, eq } from "drizzle-orm";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { describeDbTests, schema, type DbConnection } from "@/test/base";
 import { getTestWithHistory } from "@/test/history";
-import { libraryReferences } from "../libraryReferences";
 import { performUndo } from "../history";
-import { deleteBeatsCarryingCues } from "../beat";
+import { deleteBeats } from "../beat";
 import {
     createItems,
     getItemGeometry,
@@ -14,8 +13,6 @@ import {
     updateItems,
     type NewItemArgs,
 } from "../items";
-
-const LIBRARY_ITEM = "11111111-1111-4111-8111-111111111111";
 
 const firstBeatIds = async (db: DbConnection) =>
     (
@@ -80,8 +77,6 @@ describeDbTests("items", (it) => {
                 expect(item).toMatchObject({
                     kind: "prop",
                     surface_type: "platform",
-                    library_item_id: null,
-                    library_version_hash: null,
                 });
                 expect(await getItemGeometry({ db })).toEqual([
                     expect.objectContaining({
@@ -116,10 +111,6 @@ describeDbTests("items", (it) => {
                             name: "Rifle",
                             home: [0, 0],
                             beatId: beat,
-                            library: {
-                                itemId: LIBRARY_ITEM,
-                                versionHash: "a".repeat(64),
-                            },
                             geometry: {
                                 outlineType: "rectangle",
                                 width: 0.1,
@@ -144,22 +135,7 @@ describeDbTests("items", (it) => {
                 expect(created[1]).toMatchObject({
                     kind: "equipment",
                     surface_type: null,
-                    library_item_id: LIBRARY_ITEM,
-                    library_version_hash: "a".repeat(64),
                 });
-                // The show Library's prune keeps the Version it pins
-                expect(
-                    (await libraryReferences({ db })).filter(
-                        (r) => r.source === "itemModels",
-                    ),
-                ).toEqual([
-                    {
-                        source: "itemModels",
-                        itemId: LIBRARY_ITEM,
-                        versionHash: "a".repeat(64),
-                        marcherId: created[1]!.marcher_id,
-                    },
-                ]);
             },
         );
 
@@ -285,6 +261,47 @@ describeDbTests("items", (it) => {
             },
         );
 
+        testWithHistory(
+            "colors several props in one step, and clears a color",
+            async ({ db, beats }) => {
+                expect(beats).toBeDefined();
+                const [beat] = await firstBeatIds(db);
+                const [a, b] = await createItems({
+                    db,
+                    newItems: [riser(beat), riser(beat)],
+                });
+                expect(a.color).toBeNull();
+
+                const red = "rgba(220, 38, 38, 1)";
+                await updateItems({
+                    db,
+                    modifiedItems: [
+                        { itemId: a.id, color: red },
+                        { itemId: b.id, color: red },
+                    ],
+                });
+                expect((await getItems({ db })).map((i) => i.color)).toEqual([
+                    red,
+                    red,
+                ]);
+                await performUndo(db);
+                expect((await getItems({ db })).map((i) => i.color)).toEqual([
+                    null,
+                    null,
+                ]);
+
+                await updateItems({
+                    db,
+                    modifiedItems: [{ itemId: a.id, color: red }],
+                });
+                await updateItems({
+                    db,
+                    modifiedItems: [{ itemId: a.id, color: null }],
+                });
+                expect((await getItems({ db }))[0].color).toBeNull();
+            },
+        );
+
         it("refuses a surface type on equipment", async ({ db, beats }) => {
             expect(beats).toBeDefined();
             const [beat] = await firstBeatIds(db);
@@ -323,7 +340,7 @@ describeDbTests("items", (it) => {
             expect(beats).toBeDefined();
             const [, b1, b2, b3] = await firstBeatIds(db);
             await createItems({ db, newItems: [riser(b1!)] });
-            await deleteBeatsCarryingCues({ db, beatIds: new Set([b1!, b2!]) });
+            await deleteBeats({ db, beatIds: new Set([b1!, b2!]) });
             expect(await geometryBeats(db)).toEqual([b3]);
             await performUndo(db);
             expect(await geometryBeats(db)).toEqual([b1]);
@@ -348,7 +365,7 @@ describeDbTests("items", (it) => {
                 beatId: b3!,
                 geometry: { outlineType: "rectangle", width: 7, depth: 1 },
             });
-            await deleteBeatsCarryingCues({ db, beatIds: new Set([b1!, b2!]) });
+            await deleteBeats({ db, beatIds: new Set([b1!, b2!]) });
             const rows = await getItemGeometry({ db });
             expect(rows.map((g) => [g.beat_id, g.width])).toEqual([[b3, 7]]);
         });
