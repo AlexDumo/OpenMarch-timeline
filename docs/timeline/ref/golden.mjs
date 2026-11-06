@@ -104,10 +104,12 @@ check('G13', {
 
 
 // QA-RT-1 (v0.9 step 1, R-14): one marcher walks a route with two corners over an 8-beat move. Legs 5, 6 and 6,
-// so L = 17 and the marcher covers 17/8 every beat, passing the corners without stopping.
+// so L = 17 and the marcher covers 17/8 every beat, passing the corners without stopping. Stored as an own lane
+// on slot 0 since v0.10 (D-20), so these goldens are also QA-RT-L1's bit-identity with step 15.
 const rt = (points, extra = {}) => ({
   marchers: [{ id: 1, home: [0, 0] }], shapes: {},
-  transitions: { 1: { id: 1, start: 0, end: 8, dest: null, points: [[9, 10]], slots: 1, style: 'route', order: 'inherit', params: null, route: 1, ...extra } },
+  transitions: { 1: { id: 1, start: 0, end: 8, dest: null, points: [[9, 10]], slots: 1, style: 'direct', order: 'inherit', params: null, ...extra } },
+  lanes: { 1: { transition: 1, slot: 0, route: 1, offset: null } },
   routes: { 1: { geometry: { v: 1, from: [0, 0], to: [9, 10], points: points.map((at, i) => ({ id: `p${i}`, at })) } } },
   assignments: [row(1, 1, 0, 0, 8)],
 });
@@ -123,7 +125,7 @@ check('QA-RT-1', rt([[3, 4], [3, 10]]), [[1, 0, 0, 0], [1, 1, 1.275, 1.7], [1, 2
     bad.length ? fail++ : pass++;
     console.log(`${bad.length ? 'FAIL' : 'PASS'}  ${name}${bad.length ? ` differs at beats ${bad.slice(0, 5)}` : ''}`);
   };
-  const direct = rt([]); direct.transitions[1] = { ...direct.transitions[1], style: 'direct', route: null }; delete direct.routes;
+  const direct = rt([]); delete direct.lanes; delete direct.routes;
   same('QA-RT-2', rt([]), direct);
   same('QA-RT-6 near A', rt([[4e-10, 0], [3, 4], [3, 10]]), rt([[3, 4], [3, 10]]));
   same('QA-RT-6 near B', rt([[3, 4], [3, 10], [9, 10 - 5e-10], [9 + 3e-10, 10]]), rt([[3, 4], [3, 10]]));
@@ -150,7 +152,8 @@ check('QA-RT-1', rt([[3, 4], [3, 10]]), [[1, 0, 0, 0], [1, 1, 1.275, 1.7], [1, 2
 const H = [[0, 0], [2, 0], [0, 2], [2, 2]], FROM = [1, 1];
 const groupShow = (points, ends, to, offsets = H.map((h) => [h[0] - FROM[0], h[1] - FROM[1]])) => ({
   marchers: H.map((home, i) => ({ id: i + 1, home })), shapes: {},
-  transitions: Object.fromEntries(H.map((_, i) => [i + 1, { id: i + 1, start: 0, end: 16, dest: null, points: [ends[i]], slots: 1, style: 'route', order: 'inherit', params: { offset: offsets[i] }, route: 1 }])),
+  transitions: Object.fromEntries(H.map((_, i) => [i + 1, { id: i + 1, start: 0, end: 16, dest: null, points: [ends[i]], slots: 1, style: 'direct', order: 'inherit', params: null }])),
+  lanes: Object.fromEntries(H.map((_, i) => [i + 1, { transition: i + 1, slot: 0, route: 1, offset: offsets[i] }])),
   routes: { 1: { geometry: { v: 1, from: FROM, to, points: points.map((q, i) => ({ id: `p${i}`, ...q })) } } },
   assignments: H.map((_, i) => row(i + 1, i + 1, 0, 0, 16)),
 });
@@ -164,7 +167,7 @@ const report = (name, bad) => { bad.length ? fail++ : pass++; console.log(`${bad
   const G = [16, 4], ends = H.map((h) => [h[0] + G[0] - FROM[0], h[1] + G[1] - FROM[1]]);
   const db = groupShow(PTS, ends, G), o = makeOracle(db);
   const ref = routeWalk(FROM, PTS, G, FROM, G), bad = agreeBits(db);
-  for (let m = 1; m <= 4; m++) { const off = db.transitions[m].params.offset;
+  for (let m = 1; m <= 4; m++) { const off = db.lanes[m].offset;
     for (const b of gProbes) { const p = o.positionAt(m, b), w = ref.at(Math.min(1, Math.max(0, b / 16)));
       if (Math.hypot(p[0] - off[0] - w[0], p[1] - off[1] - w[1]) > 1e-9) { bad.push(`M${m}@${b} off the moved reference walk`); break; } }
     const e = o.positionAt(m, 16); if (e[0] !== ends[m - 1][0] || e[1] !== ends[m - 1][1]) bad.push(`M${m} not on its end spot`); }
@@ -172,7 +175,7 @@ const report = (name, bad) => { bad.length ? fail++ : pass++; console.log(`${bad
 { // QA-RT-16: the end set is a line; rigid between the first and last points, own legs at steady speed each
   const G = [13, 8], ends = [[10, 8], [12, 8], [14, 8], [16, 8]];
   const db = groupShow(PTS, ends, G), o = makeOracle(db), bad = agreeBits(db);
-  const off = (m) => db.transitions[m].params.offset;
+  const off = (m) => db.lanes[m].offset;
   const gw = (m) => groupWalk(H[m - 1], PTS, ends[m - 1], FROM, G, off(m));
   const { uFirst, uLast, W } = gw(1), m1 = W.V.length - 2;
   for (let m = 1; m <= 4; m++) {
@@ -196,10 +199,10 @@ const report = (name, bad) => { bad.length ? fail++ : pass++; console.log(`${bad
   bad.push(...agreeBits(none));
   for (const m of [1, 2, 3, 4]) { const p = on.positionAt(m, 5), a = H[m - 1], e = ends[m - 1];
     if (p[0] !== a[0] + (e[0] - a[0]) * (5 / 16) || p[1] !== a[1] + (e[1] - a[1]) * (5 / 16)) bad.push(`no points: M${m} not on R-7's line`); }
-  const one = groupShow([{ at: [8, 9], tension: 1 }], ends, G), oo = makeOracle(one), g1 = groupWalk(H[0], one.routes[1].geometry.points, ends[0], FROM, G, one.transitions[1].params.offset);
+  const one = groupShow([{ at: [8, 9], tension: 1 }], ends, G), oo = makeOracle(one), g1 = groupWalk(H[0], one.routes[1].geometry.points, ends[0], FROM, G, one.lanes[1].offset);
   bad.push(...agreeBits(one));
   if (g1.uFirst !== g1.uLast) bad.push('one point: u_first should equal u_last');
-  for (const m of [1, 2, 3, 4]) { const p = oo.positionAt(m, g1.uFirst * 16), off = one.transitions[m].params.offset; if (Math.hypot(p[0] - 8 - off[0], p[1] - 9 - off[1]) > 1e-9) bad.push(`one point: M${m} off its point`); }
+  for (const m of [1, 2, 3, 4]) { const p = oo.positionAt(m, g1.uFirst * 16), off = one.lanes[m].offset; if (Math.hypot(p[0] - 8 - off[0], p[1] - 9 - off[1]) > 1e-9) bad.push(`one point: M${m} off its point`); }
   // M1 stands on its placed first point: a zero-length first leg, so it stands until u_first
   const zero = groupShow(PTS, ends, G); zero.marchers[0].home = [6 - 1, 6 - 1];   // offset [-1,-1] places (6,6) at (5,5)
   const oz = makeOracle(zero), gz = groupWalk([5, 5], PTS, ends[0], FROM, G, [-1, -1]);
@@ -212,6 +215,18 @@ const report = (name, bad) => { bad.length ? fail++ : pass++; console.log(`${bad
   if (![none, one, zero, near, big].every(finite)) bad.push('a position is not finite');
   bad.push(...agreeBits(big));
   report('QA-RT-19', bad); }
+{ // QA-RT-L1 (v0.10, D-20): the same block on ONE shared transition, a lane per slot (what step 24 writes), walks
+  // bit-identically to step 15's breakout (one transition per member), even with an arc style the lanes override
+  const G = [13, 8], ends = [[10, 8], [12, 8], [14, 8], [16, 8]], bad = [];
+  const broken = groupShow(PTS, ends, G);
+  const shared = { ...broken,
+    transitions: { 1: { id: 1, start: 0, end: 16, dest: null, points: ends, slots: 4, style: 'arc', order: 'inherit', params: { bulge: 0.3 } } },
+    assignments: H.map((_, i) => row(i + 1, 1, i, 0, 16)),
+    lanes: Object.fromEntries(H.map((_, i) => [i + 1, { ...broken.lanes[i + 1], transition: 1, slot: i }])) };
+  const a = makeOracle(broken), b = makeOracle(shared), c = makeResolver(shared);
+  for (const m of [1, 2, 3, 4]) for (const t of gProbes) { const p = a.positionAt(m, t), q = b.positionAt(m, t), r = c.positionAt(m, t);
+    if (p[0] !== q[0] || p[1] !== q[1] || p[0] !== r[0] || p[1] !== r[1]) { bad.push(`M${m}@${t}: ${p} vs ${q} / ${r}`); break; } }
+  report('QA-RT-L1', bad); }
 
 console.log(`${pass} of ${pass + fail} golden fixtures pass (oracle and cached resolver)`);
 if (fail) process.exitCode = 1;

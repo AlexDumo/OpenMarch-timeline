@@ -36,7 +36,13 @@ import {
     moveShapeRecipesInTransaction,
     splitShapeRecipesInTransaction,
 } from "./shapeRecipes";
-import { refuseRouteTransitions, refuseRoutesInMoves } from "./timelineRoutes";
+import {
+    moveNameOf,
+    refuseLanedRows,
+    refuseRoutesInMoves,
+    routeRefusal,
+} from "./timelineRoutes";
+import { lanesOfTransitions } from "./timelineLanes";
 
 /**
  * Splitting a move and merging moves back (docs/timeline/ui.md UI-25, project owner 2026-10-16).
@@ -284,13 +290,15 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
     });
     if (blocker) refuse(blocker);
     const chosen = new Set(marcherIds.filter((id) => members.has(id)));
-    // AP-R6 (spec v0.9 step 1): a marcher with a drawn path can't be split off yet (holds that
-    // would take one into a move of its own come through here too)
-    await refuseRouteTransitions(
+    // AP-H2 (spec v0.10 J.8): a marcher whose spot walks a drawn path can't be split off yet
+    // (AP-R21's copy is a later step); holds that would take one into a move of its own come
+    // through here too. A marcher off the path may leave a move whose other spots walk one:
+    // compaction carries their lanes (AP-R15)
+    await refuseLanedRows(
         tx,
         rows
             .filter((r) => chosen.has(r.assignment.marcher_id))
-            .map((r) => r.transition.id),
+            .map((r) => r.assignment),
     );
     const notInMove = [...new Set(marcherIds)]
         .filter((id) => !members.has(id))
@@ -331,6 +339,11 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
         }
         peeled.push(...leaving);
     }
+    // AP-H2: a transition that moves whole takes its lanes with it; one whose vacant spot still
+    // has a lane (owner Q1) would split its path across two moves (I-LN5), so it refuses too
+    const vacantLane = (await lanesOfTransitions(tx, whole))[0];
+    if (vacantLane)
+        refuse(routeRefusal.notYet(await moveNameOf(tx, timelineId)));
 
     // Each peeled slot's new one-slot transition, read and checked before anything is written
     const d = schema.timeline_slot_destinations;

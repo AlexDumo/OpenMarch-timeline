@@ -25,6 +25,7 @@ import {
     MAX_SUPPORTED_USER_VERSION,
     PAGE_MODEL_USER_VERSION,
     readUserVersion,
+    markLaneModelIfLaned,
 } from "../fileVersion";
 
 /**
@@ -312,6 +313,8 @@ export class DrizzleMigrationService {
             // makes sure the change-log bodies are current without relying on that. It runs after
             // the file-version guard above, so it never writes to a file this build refuses.
             recreateChangeLogTriggers(this.rawDb);
+            // A step-15 file whose paths 0020 moved to lanes is written as 11 (ADR 0015 §9)
+            markLaneModelIfLaned(this.rawDb);
 
             console.log("Drizzle migrations applied successfully.");
         } catch (error) {

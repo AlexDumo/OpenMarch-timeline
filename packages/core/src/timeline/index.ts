@@ -34,6 +34,7 @@ export type {
     RoutePoint,
     RouteGeometry,
     RouteRow,
+    LaneRow,
 } from "./types";
 export type { Oracle } from "./oracle";
 export { createResolver } from "./resolver";
@@ -58,6 +59,7 @@ export type {
     RouteVertex,
     RouteEnds,
     RouteWalk,
+    LaneWalk,
     GroupSchedule,
     GroupMemberWalk,
     GroupLeg,
@@ -69,6 +71,7 @@ export {
     validateDestination,
     validateHome,
     validateRouteGeometry,
+    validateLaneOffset,
     normalizeStartAngle,
     MAX_ROUTE_POINT_ID_LENGTH,
     MAX_ROUTE_TENSION,

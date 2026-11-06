@@ -14,6 +14,7 @@ import { createCachedResolver } from "../resolver";
 import type {
     AssignmentRow,
     ChangeBatch,
+    LaneRow,
     RouteGeometry,
     RowImage,
     TimelineSnapshot,
@@ -50,12 +51,13 @@ function oneRoute(
                 dest: null,
                 points: [dest],
                 slots: 1,
-                style: "route",
+                style: "direct",
                 order: "inherit",
                 params: null,
-                route: 1,
             },
         },
+        // an own lane (v0.10): step 15's `route` transition, migrated
+        lanes: { 1: { transition: 1, slot: 0, route: 1, offset: null } },
         routes: { 1: { geometry: routeGeometry(points, home, dest) } },
         assignments: [
             {
@@ -162,11 +164,7 @@ describe("routes (spec R-14, v0.9 step 1)", () => {
     it("QA-RT-2: a route with no points is bit-identical to direct", () => {
         const route = oneRoute([], { home: [0.3, -7.1], dest: [13.7, 2.9] });
         const direct = clone(route);
-        direct.transitions[1] = {
-            ...direct.transitions[1]!,
-            style: "direct",
-            route: null,
-        };
+        delete direct.lanes;
         delete direct.routes;
         const a = createCachedResolver(route);
         const b = createCachedResolver(direct);
@@ -379,8 +377,8 @@ const tImg = (t: TransitionRow): RowImage => ({
     slots: t.slots,
     start: t.start,
     end: t.end,
-    route: t.route ?? null,
 });
+const lImg = (id: number, l: LaneRow): RowImage => ({ id, ...clone(l) });
 const aImg = (r: AssignmentRow): RowImage => ({ ...r });
 const rImg = (id: number, g: RouteGeometry): RowImage => ({
     id,
@@ -408,10 +406,17 @@ function routeWorld(seed: number) {
         transitions: {},
         assignments: [],
         routes: {},
+        lanes: {},
     };
     let nextT = 1;
     let nextA = 1;
     let nextR = 1;
+    let nextL = 1;
+    /** The own lane on slot 0 of `t`, as [lane id, lane] */
+    const laneOf = (t: TransitionRow) =>
+        Object.entries(db.lanes!)
+            .map(([id, l]) => [Number(id), l] as const)
+            .find(([, l]) => l.transition === t.id);
     for (const m of [1, 2, 3])
         for (const start of [0, 8, 16]) {
             const id = nextT++;
@@ -453,25 +458,21 @@ function routeWorld(seed: number) {
         ),
     });
 
-    /** Applies `edit`, returning the forward changes; `undo` applies their inverse. */
-    function updateTransition(t: TransitionRow, next: TransitionRow): Change {
-        const before = tImg(t);
-        db.transitions[t.id] = next;
-        return {
-            table: "transitions",
-            rowId: t.id,
-            before,
-            after: tImg(next),
-        };
-    }
-
     const ops: Record<string, () => Change[] | null> = {
         draw() {
-            const t = pick(ownTransitions().filter((x) => x.style !== "route"));
+            const t = pick(ownTransitions().filter((x) => !laneOf(x)));
             if (!t) return null;
             const rid = nextR++;
             const g = curvy(routeGeometry(randPoints(), pt(), pt()));
             db.routes![rid] = { geometry: g };
+            const lid = nextL++;
+            const lane: LaneRow = {
+                transition: t.id,
+                slot: 0,
+                route: rid,
+                offset: null,
+            };
+            db.lanes![lid] = lane;
             return [
                 {
                     table: "routes",
@@ -479,18 +480,18 @@ function routeWorld(seed: number) {
                     before: null,
                     after: rImg(rid, g),
                 },
-                updateTransition(t, {
-                    ...t,
-                    style: "route",
-                    params: null,
-                    route: rid,
-                }),
+                {
+                    table: "lanes",
+                    rowId: lid,
+                    before: null,
+                    after: lImg(lid, lane),
+                },
             ];
         },
         redraw() {
-            const t = pick(ownTransitions().filter((x) => x.style === "route"));
+            const t = pick(ownTransitions().filter((x) => !!laneOf(x)));
             if (!t) return null;
-            const rid = t.route!;
+            const rid = laneOf(t)![1].route;
             const before = rImg(rid, db.routes![rid]!.geometry);
             const g = curvy(routeGeometry(randPoints(), pt(), pt()));
             db.routes![rid] = { geometry: g };
@@ -499,19 +500,20 @@ function routeWorld(seed: number) {
             ];
         },
         removePath() {
-            const t = pick(ownTransitions().filter((x) => x.style === "route"));
+            const t = pick(ownTransitions().filter((x) => !!laneOf(x)));
             if (!t) return null;
-            const rid = t.route!;
+            const [lid, lane] = laneOf(t)!;
+            const rid = lane.route;
             const g = db.routes![rid]!.geometry;
-            const c = updateTransition(t, {
-                ...t,
-                style: "direct",
-                params: null,
-                route: null,
-            });
+            delete db.lanes![lid];
             delete db.routes![rid];
             return [
-                c,
+                {
+                    table: "lanes",
+                    rowId: lid,
+                    before: lImg(lid, lane),
+                    after: null,
+                },
                 {
                     table: "routes",
                     rowId: rid,
@@ -610,16 +612,31 @@ function routeWorld(seed: number) {
             const t = pick(Object.values(db.transitions));
             if (!t) return null;
             const rows = db.assignments.filter((a) => a.transition === t.id);
+            const laned = laneOf(t);
             db.assignments = db.assignments.filter(
                 (a) => a.transition !== t.id,
             );
             delete db.transitions[t.id];
-            const out: Change[] = rows.map((a) => ({
-                table: "assignments",
-                rowId: a.id,
-                before: aImg(a),
-                after: null,
-            }));
+            if (laned) delete db.lanes![laned[0]];
+            const out: Change[] = [];
+            // AP-R3: the lane goes before its transition, the route after
+            if (laned)
+                out.push({
+                    table: "lanes",
+                    rowId: laned[0],
+                    before: lImg(laned[0], laned[1]),
+                    after: null,
+                });
+            out.push(
+                ...rows.map(
+                    (a): Change => ({
+                        table: "assignments",
+                        rowId: a.id,
+                        before: aImg(a),
+                        after: null,
+                    }),
+                ),
+            );
             out.push(
                 {
                     table: "slot_destinations",
@@ -634,14 +651,15 @@ function routeWorld(seed: number) {
                     after: null,
                 },
             );
-            if (t.route != null) {
+            if (laned) {
+                const rid = laned[1].route;
                 out.push({
                     table: "routes",
-                    rowId: t.route,
-                    before: rImg(t.route, db.routes![t.route]!.geometry),
+                    rowId: rid,
+                    before: rImg(rid, db.routes![rid]!.geometry),
                     after: null,
                 });
-                delete db.routes![t.route];
+                delete db.routes![rid];
             }
             return out;
         },
@@ -653,6 +671,7 @@ function routeWorld(seed: number) {
         db.transitions = saved.transitions;
         db.assignments = saved.assignments;
         db.routes = saved.routes;
+        db.lanes = saved.lanes;
         return [...forward]
             .reverse()
             .map((c) => ({ ...c, before: c.after, after: c.before }));

@@ -1,5 +1,8 @@
 /**
- * Group paths, v0.9 step 15 (spec R-14 "Group schedule", Appendix I.9): QA-RT-15 to QA-RT-19.
+ * Group paths, v0.9 step 15 (spec R-14 "Group schedule", Appendix I.9): QA-RT-15 to QA-RT-19,
+ * stored as lanes since plan step 24 (spec v0.10 R-14′, D-20). The expected values are step 15's,
+ * so these are also QA-RT-L1's bit-identity checks; QA-RT-L1 below adds the same group on one
+ * shared transition, a lane per slot, which step 15 could only store broken out.
  *
  * Positions are checked against the `ref/` oracle (`docs/timeline/ref`, written separately from
  * this package) bit for bit, and rigidity, steady speed and landing on the end set from first
@@ -19,13 +22,15 @@ import { createCachedResolver } from "../resolver";
 import type {
     AssignmentRow,
     ChangeBatch,
+    LaneRow,
     RouteGeometry,
     RowImage,
     TimelineSnapshot,
     TransitionRow,
     XY,
 } from "../types";
-import { validatePathParams } from "../validate";
+import { validateLaneOffset } from "../validate";
+import { offsetOn } from "./laneFixtures";
 import { mulberry32 } from "./showGenerators";
 
 type Change = ChangeBatch["changes"][number];
@@ -77,7 +82,10 @@ const mean = (ps: XY[]): XY => {
 };
 const PTS: RouteVertex[] = [{ at: [6, 6], tension: 1 }, { at: [12, 2] }];
 
-/** A block of `homes` walking one group path to `ends` over [0, 16). */
+/**
+ * A block of `homes` walking one group path to `ends` over [0, 16): marcher `i + 1` alone in
+ * transition `i + 1`, with lane `i + 1` on its slot 0 (step 15's breakout, migrated to lanes).
+ */
 function groupShow(
     points: RouteVertex[],
     ends: XY[],
@@ -100,11 +108,21 @@ function groupShow(
                     dest: null,
                     points: [ends[i]!],
                     slots: 1,
-                    style: "route",
+                    style: "direct",
                     order: "inherit",
-                    params: { offset: offs[i]! },
-                    route: 1,
+                    params: null,
                 } satisfies TransitionRow,
+            ]),
+        ),
+        lanes: Object.fromEntries(
+            homes.map((_, i) => [
+                i + 1,
+                {
+                    transition: i + 1,
+                    slot: 0,
+                    route: 1,
+                    offset: offs[i]!,
+                } satisfies LaneRow,
             ]),
         ),
         routes: {
@@ -162,7 +180,7 @@ describe("group paths (spec R-14 group schedule, v0.9 step 15)", () => {
         const r = createCachedResolver(clone(db));
         const ref = refRoute(from, PTS, G, from, G);
         for (let m = 1; m <= 4; m++) {
-            const o = db.transitions[m]!.params!.offset!;
+            const o = offsetOn(db, m);
             for (const b of probes) {
                 const p = r.positionAt(m, b);
                 const w = ref.at(Math.min(1, Math.max(0, b / 16)));
@@ -186,7 +204,7 @@ describe("group paths (spec R-14 group schedule, v0.9 step 15)", () => {
         const schedule = groupSchedule(db.routes![1]!.geometry);
         const { uFirst, uLast, W } = schedule;
         const m1 = W.V.length - 2;
-        const off = (m: number) => db.transitions[m]!.params!.offset!;
+        const off = (m: number) => offsetOn(db, m);
         for (let m = 1; m <= 4; m++) {
             const o = off(m);
             expect(
@@ -242,7 +260,7 @@ describe("group paths (spec R-14 group schedule, v0.9 step 15)", () => {
         expectAgreesWithRef(db);
         const schedule = groupSchedule(db.routes![1]!.geometry);
         const r = createCachedResolver(clone(db));
-        const off = (m: number) => db.transitions[m]!.params!.offset!;
+        const off = (m: number) => offsetOn(db, m);
         for (let m = 1; m <= 4; m++) {
             const walk = groupMemberWalk(
                 schedule,
@@ -302,7 +320,7 @@ describe("group paths (spec R-14 group schedule, v0.9 step 15)", () => {
             const m1 = schedule.W.V.length - 2;
             const tol = 1e-9 * Math.max(1, scale, offsets ? 4e6 : 0);
             for (let m = 1; m <= n; m++) {
-                const o = db.transitions[m]!.params!.offset!;
+                const o = offsetOn(db, m);
                 const walk = groupMemberWalk(
                     schedule,
                     homes[m - 1]!,
@@ -338,7 +356,7 @@ describe("group paths (spec R-14 group schedule, v0.9 step 15)", () => {
                         16 *
                         (schedule.uFirst +
                             ((schedule.uLast - schedule.uFirst) * q) / 8);
-                    const o1 = db.transitions[1]!.params!.offset!;
+                    const o1 = offsetOn(db, 1);
                     expect(
                         dist(
                             sub(r.positionAt(m, b), r.positionAt(1, b)),
@@ -363,7 +381,7 @@ describe("group paths (spec R-14 group schedule, v0.9 step 15)", () => {
             );
             const [A, B] = [pt(), pt()];
             const own = groupShow(pts, [B], [A], [[0, 0]]);
-            own.transitions[1]!.params = null;
+            own.lanes![1]!.offset = null;
             const zero = groupShow(pts, [B], [A], [[0, 0]]);
             const ro = createCachedResolver(own);
             const rz = createCachedResolver(zero);
@@ -421,20 +439,80 @@ describe("group paths (spec R-14 group schedule, v0.9 step 15)", () => {
         const sz = groupSchedule(zero.routes![1]!.geometry);
         for (const b of [0.5, 2, sz.uFirst * 16 - 0.01])
             expect(same(rz.positionAt(1, b), [5, 5])).toBe(true);
-        expect(validatePathParams("route", { offset: [2e6, -2e6] }).ok).toBe(
-            true,
-        );
+        expect(validateLaneOffset([2e6, -2e6]).ok).toBe(true);
+        expect(validateLaneOffset(null).ok).toBe(true);
         for (const bad of [
-            { offset: [Number.NaN, 0] },
-            { offset: ["1", 0] },
-            { offset: [1, 2, 3] },
-            { offset: [2e6 + 1, 0] },
-            { offset: [0, 0], extra: 1 },
+            [Number.NaN, 0],
+            ["1", 0],
+            [1, 2, 3],
+            [2e6 + 1, 0],
+            { offset: [0, 0] },
         ])
-            expect(
-                validatePathParams("route", bad).ok,
-                JSON.stringify(bad),
-            ).toBe(false);
+            expect(validateLaneOffset(bad).ok, JSON.stringify(bad)).toBe(false);
+    });
+
+    it("QA-RT-L1: the same group on one shared transition, a lane per slot, is bit-identical to step 15's breakout", () => {
+        const R = mulberry32(241);
+        for (let k = 0; k < 60; k++) {
+            const pt = (): XY => [
+                Math.round((R() - 0.5) * 200) / 4,
+                Math.round((R() - 0.5) * 200) / 4,
+            ];
+            const n = 2 + Math.floor(R() * 6);
+            const homes = Array.from({ length: n }, pt);
+            const ends = Array.from({ length: n }, pt);
+            const pts: RouteVertex[] = Array.from(
+                { length: Math.floor(R() * 5) },
+                () => (R() < 0.5 ? { at: pt(), tension: 1.3 } : { at: pt() }),
+            );
+            const broken = groupShow(pts, ends, homes);
+            // One shared transition (as a block's move is), slot i holding marcher i + 1, and an
+            // arc style that the lanes override (R-14′: lane first, whatever the style)
+            const shared: TimelineSnapshot = {
+                ...clone(broken),
+                transitions: {
+                    1: {
+                        id: 1,
+                        start: 0,
+                        end: 16,
+                        dest: null,
+                        points: ends,
+                        slots: n,
+                        style: k % 2 ? "arc" : "direct",
+                        order: "inherit",
+                        params: k % 2 ? { bulge: 0.3 } : null,
+                    },
+                },
+                assignments: homes.map((_, i) => ({
+                    id: i + 1,
+                    marcher: i + 1,
+                    transition: 1,
+                    slot: i,
+                    start: 0,
+                    end: 16,
+                    layer: 0,
+                })),
+                lanes: Object.fromEntries(
+                    homes.map((_, i) => [
+                        i + 1,
+                        { ...broken.lanes![i + 1]!, transition: 1, slot: i },
+                    ]),
+                ),
+            };
+            const a = createCachedResolver(clone(broken));
+            const b = createCachedResolver(clone(shared));
+            const o = createOracle(clone(shared));
+            const ref = refOracle(clone(shared));
+            for (let m = 1; m <= n; m++)
+                for (const t of probes) {
+                    const p = a.positionAt(m, t);
+                    expect(same(p, b.positionAt(m, t)), `M${m}@${t}`).toBe(
+                        true,
+                    );
+                    expect(same(p, o.positionAt(m, t))).toBe(true);
+                    expect(same(p, ref.positionAt(m, t))).toBe(true);
+                }
+        }
     });
 });
 
@@ -451,8 +529,8 @@ const tImg = (t: TransitionRow): RowImage => ({
     slots: t.slots,
     start: t.start,
     end: t.end,
-    route: t.route ?? null,
 });
+const lImg = (id: number, l: LaneRow): RowImage => ({ id, ...clone(l) });
 const rImg = (id: number, g: RouteGeometry): RowImage => ({
     id,
     geometry: clone(g),
@@ -474,14 +552,17 @@ function groupWorld(seed: number) {
     const ends = HOMES.map(() => pt());
     const db = groupShow(PTS, ends);
     let nextRoute = 2;
-    const tr = (id: number) => db.transitions[id]!;
     const route = (rid: number) => db.routes![rid]!;
+    /** The lanes on route `rid`, as [lane id, lane] */
     const members = (rid: number) =>
-        Object.values(db.transitions).filter((t) => t.route === rid);
-    const updT = (id: number, f: (t: TransitionRow) => void): Change => {
-        const before = tImg(tr(id));
-        f(tr(id));
-        return { table: "transitions", rowId: id, before, after: tImg(tr(id)) };
+        Object.entries(db.lanes!)
+            .filter(([, l]) => l.route === rid)
+            .map(([id, l]) => [Number(id), l] as const);
+    const updL = (id: number, f: (l: LaneRow) => void): Change => {
+        const lane = db.lanes![id]!;
+        const before = lImg(id, lane);
+        f(lane);
+        return { table: "lanes", rowId: id, before, after: lImg(id, lane) };
     };
     const ops: Record<string, () => Change[] | null> = {
         editPoints() {
@@ -506,18 +587,13 @@ function groupWorld(seed: number) {
         changeOffset() {
             const t = members(1)[Math.floor(R() * members(1).length)];
             if (!t) return null;
-            return [
-                updT(
-                    t.id,
-                    (x) => (x.params = { offset: [R() * 4 - 2, R() * 4 - 2] }),
-                ),
-            ];
+            return [updL(t[0], (x) => (x.offset = [R() * 4 - 2, R() * 4 - 2]))];
         },
         ownPath() {
             const g = members(1);
             const t = g[Math.floor(R() * g.length)];
             if (!t) return null;
-            const o = t.params!.offset!;
+            const o = t[1].offset!;
             const src = route(1).geometry;
             const rid = nextRoute++;
             db.routes![rid] = {
@@ -538,9 +614,9 @@ function groupWorld(seed: number) {
                     before: null,
                     after: rImg(rid, db.routes![rid]!.geometry),
                 },
-                updT(t.id, (x) => {
+                updL(t[0], (x) => {
                     x.route = rid;
-                    x.params = null;
+                    x.offset = null;
                 }),
             ];
             if (g.length === 1) {
@@ -556,16 +632,15 @@ function groupWorld(seed: number) {
         },
         rejoin() {
             if (!db.routes![1]) return null;
-            const t = Object.values(db.transitions).find((x) => x.route !== 1);
+            const t = Object.entries(db.lanes!).find(([, x]) => x.route !== 1);
             if (!t) return null;
-            const old = t.route;
-            const A = db.marchers.find((m) => m.id === t.id)!.home;
+            const old = t[1].route;
+            const A = db.marchers.find((m) => m.id === t[1].transition)!.home;
             const f = route(1).geometry.from;
             const out: Change[] = [
-                updT(t.id, (x) => {
-                    x.style = "route";
+                updL(Number(t[0]), (x) => {
                     x.route = 1;
-                    x.params = { offset: [A[0] - f[0], A[1] - f[1]] };
+                    x.offset = [A[0] - f[0], A[1] - f[1]];
                 }),
             ];
             if (old != null && !members(old).length) {
@@ -596,13 +671,22 @@ function groupWorld(seed: number) {
         deleteMember() {
             const g = members(1);
             if (g.length < 2) return null;
-            const t = g[Math.floor(R() * g.length)]!;
+            const [laneId, lane] = g[Math.floor(R() * g.length)]!;
+            const t = db.transitions[lane.transition]!;
             const rows = db.assignments.filter((a) => a.transition === t.id);
             db.assignments = db.assignments.filter(
                 (a) => a.transition !== t.id,
             );
             delete db.transitions[t.id];
+            delete db.lanes![laneId];
             return [
+                // the lane goes first (AP-R3: it references its transition)
+                {
+                    table: "lanes",
+                    rowId: laneId,
+                    before: lImg(laneId, lane),
+                    after: null,
+                },
                 ...rows.map(
                     (a): Change => ({
                         table: "assignments",
@@ -631,6 +715,7 @@ function groupWorld(seed: number) {
         db.transitions = saved.transitions;
         db.assignments = saved.assignments;
         db.routes = saved.routes;
+        db.lanes = saved.lanes;
         return [...forward]
             .reverse()
             .map((c) => ({ ...c, before: c.after, after: c.before }));

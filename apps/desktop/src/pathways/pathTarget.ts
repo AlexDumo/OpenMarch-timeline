@@ -3,11 +3,8 @@ import type { Resolver, RoutePoint } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import type { DbConnection } from "@/db-functions/types";
 import { readRoutes } from "@/db-functions/timelineRoutes";
-import {
-    meanOf,
-    offsetOf,
-    readGroupPaths,
-} from "@/db-functions/timelineGroupRoutes";
+import { meanOf, readGroupPaths } from "@/db-functions/timelineGroupRoutes";
+import { laneOn } from "@/db-functions/timelineLanes";
 import type { XY } from "@/shapes/types";
 
 /**
@@ -46,7 +43,7 @@ export interface GroupMember {
     marcherId: number;
     transitionId: number;
     drill: string;
-    /** Its offset (`path_params.offset`): its lane is the reference line moved by it */
+    /** Its lane's offset: its lane is the reference line moved by it */
     offset: XY;
     /** Its real start at the move's start (R-14's A) */
     from: XY;
@@ -145,15 +142,12 @@ export async function findGroupTarget(
         (r) => r.routeId === group.routeId,
     );
     if (route.length === 0) return null;
-    const T = schema.timeline_transitions;
     const members: GroupMember[] = [];
+    const seen = new Set<number>();
     for (const r of [...route].sort((a, b) => a.marcherId - b.marcherId)) {
-        const t = (await db
-            .select({ params: T.path_params })
-            .from(T)
-            .where(eq(T.id, r.transitionId))
-            .get())!;
-        const o = offsetOf(t.params) ?? [0, 0];
+        if (seen.has(r.marcherId)) continue;
+        seen.add(r.marcherId);
+        const o = r.offset ?? [0, 0];
         members.push({
             marcherId: r.marcherId,
             transitionId: r.transitionId,
@@ -167,11 +161,14 @@ export async function findGroupTarget(
     for (const id of [...marcherIds].sort((a, b) => a - b)) {
         if (group.marcherIds.includes(id)) continue;
         const at = await moveAt(db, id, beat);
+        const lane = at
+            ? await laneOn(db, at.transition.id, at.row.slot_index)
+            : undefined;
         outside.push({
             marcherId: id,
             drill: drills.get(id) ?? `${id}`,
             from: xy(resolver.explain(id, move.start).origin),
-            ownPath: at?.transition.route_id != null,
+            ownPath: lane !== undefined && lane.offset_x === null,
         });
     }
     const g = route[0]!.geometry;
@@ -290,13 +287,14 @@ export async function findPathTarget(
     if (!pick) return null;
     const { transition } = pick;
     // A member of a group path has no path of its own (step 15): drawing gives it one (AP-R1)
+    const lane = await laneOn(db, transition.id, pick.row.slot_index);
     const ownRouteId =
-        transition.path_params === null ? transition.route_id : null;
+        lane !== undefined && lane.offset_x === null ? lane.route_id : null;
     const route =
         ownRouteId === null
             ? undefined
             : (await readRoutes(db, transition.timeline_id)).find(
-                  (r) => r.routeId === transition.route_id,
+                  (r) => r.routeId === ownRouteId,
               );
     return {
         timelineId: transition.timeline_id,

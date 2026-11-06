@@ -410,9 +410,10 @@ export const timeline_shapes = sqliteTable(
 );
 
 /**
- * The path a `route` transition walks (spec v0.9 §5.1 `routes`, ADR 0014, D-19): a list of
- * corner points in absolute field coordinates, from where the marcher starts to its destination.
- * No owner column, like shapes; exactly one transition walks each route (I-R3, at commit).
+ * A drawn path (spec v0.9 §5.1 `routes`, ADR 0014, D-19): corner and smooth points in absolute
+ * field coordinates, between the `from` and `to` it was drawn against. No owner column, like
+ * shapes. Since v0.10 (ADR 0015, plan step 24) a slot walks it through a lane
+ * (`timeline_lanes`); every route has a lane whose slot holds a marcher (I-R3′, at commit).
  */
 export const timeline_routes = sqliteTable(
     "timeline_routes",
@@ -438,11 +439,17 @@ export const timeline_transitions = sqliteTable(
         dest_shape_id: integer().references(() => timeline_shapes.id, {
             onDelete: "restrict",
         }),
-        /** direct, arc, follow_the_leader or route (v0.9) */
+        /**
+         * direct, arc or follow_the_leader. `route` (v0.9) is retired since v0.10 (I-R2′): no
+         * transition has it, and the CHECK keeps it only so the table isn't rebuilt
+         */
         path_style: text().notNull().default("direct"),
         /** JSON path parameters, by path_style (spec §5.2) */
         path_params: text(),
-        /** The route a `route` transition walks (v0.9, I-R2); NULL otherwise */
+        /**
+         * NULL. Reserved for a follow-the-leader trail (v0.10, I-R2′, a later step); a slot walks
+         * a route through a lane instead
+         */
         route_id: integer().references(() => timeline_routes.id, {
             onDelete: "restrict",
         }),
@@ -491,8 +498,8 @@ export const timeline_transitions = sqliteTable(
             sql`route_id IS NULL OR typeof(route_id) = 'integer'`,
         ),
         // I-R2 (v0.9): a route transition walks a route, has no shape and exactly one slot.
-        // Rules later steps relax are commit checks instead (E-R2, E-R4), so relaxing them never
-        // rebuilds this table.
+        // Vacuous since v0.10 (no transition is `route`, I-R2′, checked at commit as E-R2); kept
+        // so the table isn't rebuilt.
         check(
             "timeline_transitions_route_check",
             sql`path_style <> 'route' OR (route_id IS NOT NULL AND dest_shape_id IS NULL AND slot_count = 1)`,
@@ -500,6 +507,55 @@ export const timeline_transitions = sqliteTable(
         index("timeline_idx_tr_shape").on(table.dest_shape_id),
         index("timeline_idx_tr_route").on(table.route_id),
         index("timeline_idx_tr_timeline").on(table.timeline_id),
+    ],
+);
+
+/**
+ * A lane (spec v0.10 J.1, D-20, ADR 0015; plan step 24): slot `slot_index` of transition
+ * `transition_id` walks route `route_id`. Whoever occupies the slot walks it, so drawing a path
+ * never moves a marcher out of its move. `offset_x`/`offset_y` are the start offset `o_s` from the
+ * route's `from`: a group path's lane; both NULL for an own lane (one marcher's own path, walked
+ * alone, I-LN4). At most one lane per slot (I-LN3); the slot is one of the transition's (I-LN1,
+ * triggers). `adjust` and `group_adjust_id` come with later steps, as `ADD COLUMN`.
+ */
+export const timeline_lanes = sqliteTable(
+    "timeline_lanes",
+    {
+        id: integer().primaryKey(),
+        transition_id: integer()
+            .notNull()
+            .references(() => timeline_transitions.id, {
+                onDelete: "restrict",
+            }),
+        slot_index: integer().notNull(),
+        route_id: integer()
+            .notNull()
+            .references(() => timeline_routes.id, { onDelete: "restrict" }),
+        offset_x: real(),
+        offset_y: real(),
+    },
+    (table) => [
+        integerTypeCheck("timeline_lanes", "transition_id"),
+        integerTypeCheck("timeline_lanes", "slot_index"),
+        integerTypeCheck("timeline_lanes", "route_id"),
+        check("timeline_lanes_slot_index_check", sql`slot_index >= 0`),
+        check(
+            "timeline_lanes_offset_x_check",
+            sql`offset_x IS NULL OR (typeof(offset_x) IN ('integer', 'real') AND offset_x BETWEEN -2000000 AND 2000000)`,
+        ),
+        check(
+            "timeline_lanes_offset_y_check",
+            sql`offset_y IS NULL OR (typeof(offset_y) IN ('integer', 'real') AND offset_y BETWEEN -2000000 AND 2000000)`,
+        ),
+        check(
+            "timeline_lanes_offset_check",
+            sql`(offset_x IS NULL) = (offset_y IS NULL)`,
+        ),
+        unique("timeline_lanes_transition_slot_unique").on(
+            table.transition_id,
+            table.slot_index,
+        ),
+        index("timeline_idx_lane_route").on(table.route_id),
     ],
 );
 

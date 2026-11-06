@@ -22,13 +22,19 @@ import {
     TimelineWriteError,
 } from "./timelineErrors";
 import { chunked } from "./timelineAssignments";
+import {
+    deleteLanesFromSlotInTransaction,
+    deleteLanesOfTransitionsInTransaction,
+    lanesOfTransitions,
+    sweepOrphanRoutesInTransaction,
+} from "./timelineLanes";
 import { text } from "@/timeline/timelineText";
 
 /**
- * The refusal for an edit that would copy a route transition, change its slots, give it a shape
- * or change its path some other way than Remove path (AP-R6, spec v0.9 Appendix I.2). Procedures
- * that know which move they edit refuse first, naming it (`timelineRoutes.refuseRoutesInMoves`);
- * this is the backstop under all of them, so no edit can leave a broken file.
+ * The refusal for an edit that would make a laned transition follow the leader (AP-R6, spec v0.10
+ * J.8: only a trail lane may sit on one, a later step). Procedures that know which move they edit
+ * refuse first, naming it (`timelineRoutes.refuseRoutesInMoves`); this is the backstop under all
+ * of them, so no edit can leave a broken file.
  */
 const refuseRouteEdit = (): never =>
     refuse(text.t("timeline.refusals.route.cantKeep"));
@@ -61,11 +67,6 @@ export interface NewTimelineTransitionArgs {
     pathStyle?: PathStyle;
     pathParams?: TimelinePathParams;
     orderMode?: OrderMode;
-    /**
-     * The route a `route` transition walks (v0.9). Only the routes module makes route
-     * transitions (`timelineRoutes`): a `route` style without one is refused.
-     */
-    routeId?: number;
 }
 
 export interface ModifiedTimelineTransitionArgs {
@@ -206,9 +207,6 @@ const insertTimelineTransitions = async (
             );
             if (style === "follow_the_leader") refuseFtlWithoutShape();
         }
-        if (style === "route" && t.routeId === undefined) refuseRouteEdit();
-        if (style !== "route" && t.routeId !== undefined)
-            refuse("only a route transition walks a route");
     }
     const created: DatabaseTimelineTransition[] = [];
     for (const t of newTransitions) {
@@ -224,7 +222,6 @@ const insertTimelineTransitions = async (
                     path_style: t.pathStyle ?? "direct",
                     path_params: paramsToJson(t.pathParams),
                     order_mode: t.orderMode ?? "inherit",
-                    route_id: t.routeId ?? null,
                     slot_count: t.slotCount,
                     start_beat: t.startBeat,
                     end_beat: t.endBeat,
@@ -258,20 +255,22 @@ export const updateTimelineTransitionsInTransaction = async ({
         m: ModifiedTimelineTransitionArgs;
         set: Partial<typeof schema.timeline_transitions.$inferInsert>;
         replaceDestinations: boolean;
+        /** AP-R20: the slot count drops below a lane, whose lanes from there go first */
+        dropLanesFrom: number | null;
     }[] = [];
     refuseDuplicateIds(modifiedTransitions, "transition");
     for (const m of modifiedTransitions) {
         const existing = await requireTransition(tx, m.id);
-        // Routes change only through the routes module (AP-R1, AP-R2, AP-R7)
-        if (
-            m.pathStyle === "route" ||
-            (existing.route_id !== null &&
-                (m.pathStyle !== undefined ||
-                    m.pathParams !== undefined ||
-                    (m.slotCount !== undefined &&
-                        m.slotCount !== existing.slot_count)))
-        )
+        // v0.10 (AP-R6, I-LN2): a laned transition doesn't follow the leader. Any other style
+        // change keeps its lanes, which a laned slot walks whatever the style (R-14′)
+        const lanes = await lanesOfTransitions(tx, [m.id]);
+        if (m.pathStyle === "follow_the_leader" && lanes.length > 0)
             refuseRouteEdit();
+        const dropLanesFrom =
+            m.slotCount !== undefined &&
+            lanes.some((l) => l.slot_index >= m.slotCount!)
+                ? m.slotCount
+                : null;
         const set: Partial<typeof schema.timeline_transitions.$inferInsert> =
             {};
         const style = m.pathStyle ?? (existing.path_style as PathStyle);
@@ -311,12 +310,18 @@ export const updateTimelineTransitionsInTransaction = async ({
             refuse("a transition with a destination shape has no points");
         }
 
-        plans.push({ m, set, replaceDestinations });
+        plans.push({ m, set, replaceDestinations, dropLanesFrom });
     }
 
     const updated: DatabaseTimelineTransition[] = [];
-    for (const { m, set, replaceDestinations } of plans) {
+    let lanesDropped = false;
+    for (const { m, set, replaceDestinations, dropLanesFrom } of plans) {
         const row = await mapDbErrors(async () => {
+            // AP-R20: lanes on slots the transition loses go first (I-LN1)
+            if (dropLanesFrom !== null) {
+                await deleteLanesFromSlotInTransaction(tx, m.id, dropLanesFrom);
+                lanesDropped = true;
+            }
             // The triggers reject a slot count below a placed destination, so clear first
             if (replaceDestinations)
                 await tx
@@ -342,6 +347,8 @@ export const updateTimelineTransitionsInTransaction = async ({
         });
         updated.push(row);
     }
+    // AP-H3: a path whose last walked lane went with the slots goes too
+    if (lanesDropped) await sweepOrphanRoutesInTransaction(tx);
     return updated;
 };
 
@@ -495,9 +502,6 @@ export const setTimelineTransitionDestinationInTransaction = async ({
     tx: DbTransaction;
 }): Promise<DatabaseTimelineTransition> => {
     const existing = await requireTransition(tx, transitionId);
-    // I-R2: a route transition has no shape (AP-R6)
-    if (destination.kind === "shape" && existing.route_id !== null)
-        refuseRouteEdit();
     if (destination.kind === "individual") {
         assertValid(
             validateDestinations(destination.points, existing.slot_count),
@@ -614,6 +618,8 @@ export const deleteTimelineTransitionChildrenInTransaction = async ({
     tx: DbTransaction;
 }): Promise<void> => {
     if (transitionIds.length === 0) return;
+    // AP-R3 (v0.10): a transition's lanes go with it; their routes go in the caller's sweep
+    await deleteLanesOfTransitionsInTransaction(tx, transitionIds);
     await tx
         .delete(schema.timeline_assignments)
         .where(
@@ -667,9 +673,10 @@ export const deleteTimelineTransitionsInTransaction = async ({
 
 /**
  * Deletes transitions and everything under them (C-1), and leaves their timelines alone, for
- * callers that delete the timelines themselves. Missing ids are ignored. A route transition's
- * route goes after it (AP-R3: the foreign key refuses the other order, I-D3). Ripple, timeline
- * delete, marcher delete, membership removal and split at a beat all delete through here.
+ * callers that delete the timelines themselves. Missing ids are ignored. A deleted transition's
+ * lanes go before it, and then every route left with no walker (AP-R3 and AP-H3, spec v0.10: the
+ * foreign keys refuse the other order, I-D3). Ripple, timeline delete, marcher delete, membership
+ * removal and split at a beat all delete through here.
  */
 export const deleteTimelineTransitionRowsInTransaction = async ({
     transitionIds,
@@ -689,34 +696,9 @@ export const deleteTimelineTransitionRowsInTransaction = async ({
             .delete(schema.timeline_transitions)
             .where(inArray(schema.timeline_transitions.id, ids))
             .returning();
-        // AP-R3 (step 15): a route goes once no transition walks it any more; a group member
+        // AP-R3, AP-H3 (v0.10): a route goes once no lane of it has a marcher; a group member
         // deleted leaves the group path to the others
-        const routeIds = deleted.flatMap((t) =>
-            t.route_id === null ? [] : [t.route_id],
-        );
-        if (routeIds.length > 0) {
-            const walked = new Set(
-                (
-                    await tx
-                        .select({ route: schema.timeline_transitions.route_id })
-                        .from(schema.timeline_transitions)
-                        .where(
-                            inArray(
-                                schema.timeline_transitions.route_id,
-                                routeIds,
-                            ),
-                        )
-                        .all()
-                ).map((r) => r.route),
-            );
-            const orphans = [...new Set(routeIds)].filter(
-                (id) => !walked.has(id),
-            );
-            if (orphans.length > 0)
-                await tx
-                    .delete(schema.timeline_routes)
-                    .where(inArray(schema.timeline_routes.id, orphans));
-        }
+        await sweepOrphanRoutesInTransaction(tx);
         return deleted;
     });
 };
