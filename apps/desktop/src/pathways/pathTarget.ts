@@ -2,7 +2,7 @@ import { and, desc, eq, gt, lte } from "drizzle-orm";
 import type { Resolver, RoutePoint } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import type { DbConnection } from "@/db-functions/types";
-import { readRoutes } from "@/db-functions/timelineRoutes";
+import { readRoutes, type MoveRoute } from "@/db-functions/timelineRoutes";
 import { meanOf, readGroupPaths } from "@/db-functions/timelineGroupRoutes";
 import { laneOn } from "@/db-functions/timelineLanes";
 import type { XY } from "@/shapes/types";
@@ -311,4 +311,141 @@ export async function findPathTarget(
             : null,
         group: null,
     };
+}
+
+/**
+ * The path `routeId` as a target, read by the path and not by who is selected (spec I.10, AP-O1):
+ * a group path with every walker of its lanes as members, or an own path with the marcher on its
+ * lane. A selected or open path object is read again this way after each edit, so after spots
+ * change hands it still shows the same path, walked by whoever holds its spots now. Null when the
+ * route is gone (deleted, or undone) or nobody walks it.
+ */
+export async function findRouteTarget(
+    db: DbConnection,
+    resolver: Pick<Resolver, "explain" | "positionAt">,
+    routeId: number,
+    drills: ReadonlyMap<number, string>,
+): Promise<PathTarget | null> {
+    const entries = (await readRoutes(db)).filter((r) => r.routeId === routeId);
+    return targetOfRoute(entries, resolver, drills);
+}
+
+/** A route's lanes and walkers (`readRoutes`, one route) as the target the pen shows */
+export function targetOfRoute(
+    entries: readonly MoveRoute[],
+    resolver: Pick<Resolver, "explain" | "positionAt">,
+    drills: ReadonlyMap<number, string>,
+): PathTarget | null {
+    const first = entries[0];
+    if (!first) return null;
+    const g = first.geometry;
+    const byMarcher = [...entries].sort(
+        (a, b) => a.marcherId - b.marcherId || a.start - b.start,
+    );
+    if (entries.every((r) => r.offset === null)) {
+        const r = byMarcher[0]!;
+        return {
+            timelineId: r.timelineId,
+            transitionId: r.transitionId,
+            marcherId: r.marcherId,
+            start: r.start,
+            end: r.end,
+            from: xy(resolver.explain(r.marcherId, r.start).origin),
+            to: xy(resolver.positionAt(r.marcherId, r.end)),
+            routeId: r.routeId,
+            points: g.points,
+            ends: { from: xy(g.from), to: xy(g.to) },
+            group: null,
+        };
+    }
+    const members: GroupMember[] = [];
+    const seen = new Set<number>();
+    for (const r of byMarcher) {
+        if (seen.has(r.marcherId)) continue;
+        seen.add(r.marcherId);
+        const o = r.offset ?? [0, 0];
+        members.push({
+            marcherId: r.marcherId,
+            transitionId: r.transitionId,
+            drill: drills.get(r.marcherId) ?? `${r.marcherId}`,
+            offset: { x: o[0], y: o[1] },
+            from: xy(resolver.explain(r.marcherId, r.start).origin),
+            to: xy(resolver.positionAt(r.marcherId, r.end)),
+        });
+    }
+    return {
+        timelineId: first.timelineId,
+        transitionId: members[0]!.transitionId,
+        marcherId: members[0]!.marcherId,
+        start: first.start,
+        end: first.end,
+        from: xy(g.from),
+        to: xy(g.to),
+        routeId: first.routeId,
+        points: g.points,
+        ends: { from: xy(g.from), to: xy(g.to) },
+        group: { members, outside: [] },
+    };
+}
+
+/**
+ * Whether a lane's transition `[start, end]` is the walker's move at `beat`, by the rule a
+ * selected marcher's path is found by (`findPathTarget`): the move holding the beat, or arriving
+ * on it when the beat is its end. `arrives` says whether the walker has another row arriving on
+ * `beat` (its end is `beat`), which wins over one leaving from it.
+ */
+export function moveIsAt(
+    span: { start: number; end: number },
+    beat: number,
+    arrives: boolean,
+): boolean {
+    if (span.start < beat && beat <= span.end) return true;
+    return span.start === beat && beat < span.end && !arrives;
+}
+
+/**
+ * Every path in a move at `beat` (spec I.10, AP-O2): the paths Paths **All** draws and lets a
+ * click select with nothing selected. A route is at the beat when one of its walkers' rows on its
+ * lanes is that walker's move there (`moveIsAt`). By route id.
+ */
+export async function findPathObjects(
+    db: DbConnection,
+    resolver: Pick<Resolver, "explain" | "positionAt">,
+    beat: number,
+    drills: ReadonlyMap<number, string>,
+): Promise<PathTarget[]> {
+    const all = await readRoutes(db);
+    if (all.length === 0) return [];
+    const byRoute = new Map<number, MoveRoute[]>();
+    for (const r of all) {
+        const list = byRoute.get(r.routeId) ?? [];
+        list.push(r);
+        byRoute.set(r.routeId, list);
+    }
+    // Rows arriving on the beat, for walkers whose path's move would only leave from it
+    const A = schema.timeline_assignments;
+    const leaving = all.filter((r) => r.start === beat && beat < r.end);
+    const arriving = new Set<number>();
+    for (const m of new Set(leaving.map((r) => r.marcherId))) {
+        const row = await db
+            .select({ id: A.id })
+            .from(A)
+            .where(
+                and(
+                    eq(A.marcher_id, m),
+                    lte(A.start_beat, beat - 1e-9),
+                    gt(A.end_beat, beat - 1e-9),
+                ),
+            )
+            .get();
+        if (row) arriving.add(m);
+    }
+    const out: PathTarget[] = [];
+    for (const entries of byRoute.values()) {
+        if (!entries.some((r) => moveIsAt(r, beat, arriving.has(r.marcherId))))
+            continue;
+        const target = targetOfRoute(entries, resolver, drills);
+        if (target) out.push(target);
+    }
+    return out;
 }

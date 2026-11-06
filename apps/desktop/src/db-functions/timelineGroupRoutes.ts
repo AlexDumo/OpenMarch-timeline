@@ -148,14 +148,14 @@ async function readMembers(
 }
 
 /** One lane of a route with the row on its slot (its marcher) and its transition. */
-interface Walker {
+export interface Walker {
     lane: DatabaseTimelineLane;
     transition: TransitionRow;
     row: AssignmentRow;
 }
 
 /** Every lane of `routeId` with a marcher on its slot, by marcher id. */
-async function walkersOf(
+export async function walkersOf(
     tx: DbTransaction,
     routeId: number,
 ): Promise<Walker[]> {
@@ -191,7 +191,7 @@ async function lanesWithTransitions(tx: DbTransaction, routeId: number) {
         .all();
 }
 
-async function routeGeometryOf(
+export async function routeGeometryOf(
     tx: DbTransaction,
     routeId: number,
 ): Promise<RouteGeometry> {
@@ -231,7 +231,7 @@ async function setLane(
 }
 
 /** Points to store: kept ids stay (refused when not `current`'s), new points get fresh ids. */
-function pointsToStore(
+export function pointsToStore(
     points: readonly RoutePointInput[],
     current: RouteGeometry | null,
 ): RoutePoint[] {

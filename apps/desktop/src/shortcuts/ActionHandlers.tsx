@@ -52,10 +52,12 @@ export function EditorActionHandlers() {
         (s) => s.selected !== null || s.inside !== null,
     );
     const shapeDiscarded = useShapeToolStore((s) => s.discarded !== null);
-    // The path pen drawing, or a path open on the field, takes its keys over everything (pathways);
-    // a path only shown (closed) takes none
+    // The path pen drawing, a path open on the field, or a path selected as an object (step 3a)
+    // takes its keys over everything (pathways); a path only shown (closed) takes none
     const pathOpen = usePathPenStore(
-        (s) => s.session !== null && s.session.phase !== "closed",
+        (s) =>
+            s.session !== null &&
+            (s.session.phase !== "closed" || s.session.object),
     );
     if (pathOpen) return <PathPenKeys />;
     if (shapeToolOpen && !shapeHidden) return <ShapeToolKeys />;

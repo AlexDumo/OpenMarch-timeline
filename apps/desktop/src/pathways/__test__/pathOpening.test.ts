@@ -97,16 +97,19 @@ describe("a stored path, shown", () => {
     it("takes no press, keeps the field's menu open and the selection box its own", () => {
         showPath(target(5), "T4");
         expect(pathPenMode.claims(ON_LINE)).toBe(false);
-        expect(pathPenMode.cursorAt(ON_LINE)).toBeNull();
+        // Something to click, though (step 3a: a click selects the path)
+        expect(pathPenMode.cursorAt(ON_LINE)).toBe("pointer");
+        expect(pathPenMode.cursorAt(NEAR)).toBeNull();
         expect(pathPenMode.ownsSelectionBox).toBe(false);
         expect(pathPenMode.blocksFieldMenu).toBe(false);
         expect(pathPenMode.gesture.always).toBe(false);
     });
 
-    it("opens on a double-click on its line; a single click there only keeps the selection", () => {
+    it("opens on a double-click on its line; a single click there selects the path (step 3a)", () => {
         showPath(target(5), "T4");
         expect(pathPenMode.takeClick(ON_LINE, false)).toBe(true);
         expect(phase()).toBe("closed");
+        expect(usePathPenStore.getState().session?.object).toBe(true);
         expect(pathPenMode.takeClick(ON_LINE, true)).toBe(true);
         expect(phase()).toBe("open");
     });

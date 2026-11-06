@@ -21,9 +21,16 @@ import { forgetDiscardedShape } from "../tool/shapeLeave";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import { shapeToolMode } from "../tool/shapeToolMode";
 import { resetShapePointer, watchShapeEditorFocus } from "./shapePointer";
-import { usePathPenStore } from "@/pathways/pathPenStore";
-import { drawingOf, pathPenMode } from "@/pathways/pathPenMode";
-import { setFieldUnderlay } from "@/field/editor/fieldUnderlayStore";
+import { objectsDrawn, usePathPenStore } from "@/pathways/pathPenStore";
+import {
+    drawingOf,
+    objectDrawingOf,
+    pathPenMode,
+} from "@/pathways/pathPenMode";
+import {
+    setFieldObjects,
+    setFieldUnderlay,
+} from "@/field/editor/fieldUnderlayStore";
 
 /**
  * Puts the shapes on the field's editor (#204): the open Shape tool takes every edit press
@@ -47,9 +54,13 @@ export function useShapeFieldModes(
     const pathOpen = usePathPenStore(
         (s) => s.session !== null && s.session.phase !== "closed",
     );
-    // A closed path start flag positions hide (paths level off) isn't the field's mode
+    // A closed path start flag positions hide (paths level off) isn't the field's mode; a selected
+    // path object always is, and so are Paths All's paths, so a click selects one (step 3a)
     const pathShown = usePathPenStore(
-        (s) => s.session?.phase === "closed" && !s.hidden,
+        (s) =>
+            (s.session?.phase === "closed" &&
+                (!s.hidden || s.session.object)) ||
+            s.objects.length > 0,
     );
     const box = useBoxSelectionStore((s) => s.selected);
     const queryClient = useQueryClient();
@@ -106,6 +117,19 @@ export function useShapeFieldModes(
         setFieldUnderlay(underBox ? drawingOf(underBox) : null);
     }, [underBox]);
     useEffect(() => () => setFieldUnderlay(null), []);
+    // Paths All's group paths, each as its one line with faint lanes (step 3a, AP-O7)
+    const session = usePathPenStore((s) => s.session);
+    const objects = usePathPenStore((s) => s.objects);
+    useEffect(() => {
+        setFieldObjects(
+            isPlaying
+                ? []
+                : objectsDrawn(objects, session, toolOpen).flatMap(
+                      (o) => objectDrawingOf(o) ?? [],
+                  ),
+        );
+    }, [objects, session, toolOpen, isPlaying]);
+    useEffect(() => () => setFieldObjects([]), []);
     // Keyboard focus in the floating editor shows the shape's controls (#430)
     useEffect(() => watchShapeEditorFocus(), []);
 

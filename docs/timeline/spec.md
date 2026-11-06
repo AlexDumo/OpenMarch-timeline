@@ -2534,6 +2534,53 @@ offset walks `groupWalk(A, points, B, F, G, o)`, which
 
 Its schema's `commit_violations` carries E-R3, E-R4 and E-R5 as §5.1 writes them.
 
+### I.10 Step 3a: paths as objects
+
+**Change (owner, 2026-11-06):** a drawn path is a thing on the field you can select, as a shape is in
+Figma or a clip in a DAW, and not only a property of the marchers you happened to select. The owner
+split step 3 into three lab builds: **3a** paths as objects (this section), **3b** Adjust and Re-fit,
+**3c** Detach and Rejoin (implementation plan, step 3). Step 3a stores nothing new: no table,
+column, JSON key or file version changes, and the model sections (§2 to §12, Appendix J) are
+unchanged. These are app rules, fixed here because they decide what an edit writes and when.
+
+**Already there from steps 1, 2, 15 and 24 (step 3's "kept" items, audited 2026-11-06):** dragging,
+adding and deleting points (I.5); Corner ↔ Smooth (I.5); Paths Off / Selected / All, the start flag
+positions' paths level, which hides or shows a closed path (I.8, "Closed and open"). 3a builds none
+of them again.
+
+| ID | Rule |
+| --- | --- |
+| AP-O1 | **A path object is a route** (a row of `timeline_routes` with at least one lane), named by its route id: one marcher's own path, or a group path with all its lanes. It has three states on the field: **shown** (closed, because its marchers are selected, I.8), **selected** (the object is the selection), and **open** (being edited, step 1). Selected and open are about the path, not about who walks it: a selected or open path is read again by its route id after every edit, undo and redo, so when its spots change hands it stays the same path, walked by whoever holds them now (D-22). It is let go of when the route is gone (Remove path, an undo). |
+| AP-O2 | **Which paths can be clicked:** the path shown for the selected marchers (I.8, "What shows"), and, while start flag positions draw every marcher's path (the paths level in effect is **All**, with the start flag positions drawn at all: a range selected, not isolating, the start flag not hidden, the beat shown after it), **every path in a move at the playhead**. A path is in a move at the playhead when one of its walkers' rows on its lanes is that walker's move there by `findPathTarget`'s rule: the row holding the beat, or arriving on it when the beat is its end; a row leaving from the beat counts only when the walker has no row arriving on it. Nothing is drawn or clickable while playing. |
+| AP-O3 | **A click or tap on a path's line selects the path**, also with nothing selected. On its line means within the handle reach (`hitRadius`, a few screen pixels at any zoom) of what is drawn for it: a shown or selected path's line (curves included) or a group lane; a Paths All group path's reference line or lanes (AP-O7); an own path's start flag positions' path, which is its marcher's walk sampled between the later of the start flag and the move's start and the earlier of the beat shown and the move's end. The shown path is tested first, then Paths All's paths in route id order. **The path becomes the selection**: the marchers selected are let go of (a field has one selection, as in Figma), and Shift doesn't add a path to marchers. A press on a marcher's dot is the dot's, and a press on a line that moves past the click slop is the field's (a marquee): **dragging a dot still makes a new move and never edits a path (P-1)**. Selecting writes nothing and is not an undo step. A right-click, a Mac's Ctrl-click or a long press on a line selects that path too, then opens the field's menu with Edit path and Remove path; on the open path's line it keeps the path open. |
+| AP-O4 | **A selected path** is drawn in the selection color with a halo under its line, with its marchers' ghosts and end spots (a group path also its faint lanes and its members' rings), whatever the paths level, and its marchers' start flag positions give way to it, as for a shown path (I.8). The pointer over any clickable line is a hand. It is let go of by **Escape**, a **click on empty field**, **selecting anything else** (a marcher, a box, another path), playback, or the **playhead leaving its move** (outside `[start, end]` of its transitions). **Opening** works as in step 1: a double-click on its line (the first click selects it, the second opens it) or **Edit path** in its menu. Escape on an open path that was selected goes back to selected first (as leaving a vector's edit mode does), with a point selected it clears the point first; a path opened from a marcher's selection (Edit path) closes to shown, as in step 1. |
+| AP-O5 | **Touch and pencil** reach the same actions: a tap selects (AP-O3), a double-tap opens, a long press on a line selects it and opens its menu (Edit path, Remove path), and on the open path a long press on a point or a leg's midpoint opens that point's or leg's menu (I.5). Nothing needs a hover, a right-click or a modifier key. |
+| AP-O6 | **Delete or Backspace on a selected path removes it**: exactly AP-R2 (J.8), the whole path for every marcher on it, in one write-wrapper transaction, so one undo step, and undo restores the route, its lanes and every id. The selection goes with it. The key repeat is ignored, so a held key removes one path. A path only shown for its selected marchers takes no key (a stray Delete there removes nothing, owner 2026-11-04); the open path keeps step 2's keys (Backspace or Delete deletes the selected point, and with no point selected removes the path). Remove path in the menu, the open path's bar and the palette is unchanged. |
+| AP-O7 | **Paths All draws a group path as its one line:** each group path in a move at the playhead (AP-O2) is drawn as the closed group path is (I.8, "What shows"): its reference line, every member's lane thin and faint, the members' ghosts and end spots, but no rings naming who follows it (those are for a selection). Its members' start flag positions (dots and paths) give way to it, as for the shown path, so no lane is drawn twice. **One marcher's own path draws as before**: its start flag positions' path, at the paths level's normal weight. Paths All draws nothing of its own while the pen draws or an open shape has the field; the shown or selected path is drawn once, by itself. |
+| AP-O8 | **Edits on an open or selected path are path edits (07 N3).** A point edit on the open path (drag, add, delete, Corner, Smooth, roundness, Straight, Curved) writes J.8 AP-R1's "editing a route's points" **by its route id**, own or group; **drawing it again** (the pen, P, with a path selected or open and no marcher selected) writes AP-R1 or AP-R8 "again" by its route id, keeping the id. Neither is refused for who holds its spots: not for a marcher with more than one row in the move, not for `SHARED`, not for a spot taken over at the move's start. **Own path, edited:** `from` is kept while the first point keeps its id and position, else written as the real start `A` of the lane's founding occupant (kept when the spot has none); `to` likewise with the last point and the lane slot's destination `B`. **Own path, again:** every point is new (fresh ids), so `from = A` and `to = B`. **Group path, again:** `F` and `G` are the means of `A` and `B` over the lanes' founding occupants in ascending marcher id, each of their lanes' offset is rewritten to `A − F`, and a lane whose spot has no founding occupant keeps its offset; refused (`E-ARGS`) when no lane has a founding occupant. **Group path, edited:** J.8 AP-R1 unchanged. Drawing a path with marchers selected is still the personal edit (AP-R1, AP-R8), with every refusal. |
+
+**Not built in 3a (owner, 2026-11-06):** Adjust and Re-fit (3b); Detach and Rejoin, which replace Own
+path for group members (3c). **Collisions sampled along the path** and a "No collisions" state are
+not built: collision detection is off app-wide (`showCollisions` is forced off, the Collisions tab is
+hidden and `useCollisionDetection` is unmounted), so there is nothing to sample into. The
+implementation plan moves them out of step 3.
+
+**Existing edits** (resize, page-flag drags, split at the playhead, split by marchers, merge, holds)
+are unchanged by 3a: selecting a path writes nothing, and every write above is an existing
+procedure or AP-R1/AP-R8 by route, which never change a transition or a row.
+
+### I.11 New tests for step 3a
+
+| ID | Setup | Expected |
+| --- | --- | --- |
+| QA-AP-O1 | Hit tests: a click on a shown path's line; on a Paths All group path's line and on one of its lanes with nothing selected; on an own path's drawn walk; on empty field; a press on a line (claims) | The first three select that path (closed, object) by its route; empty field selects nothing and is the field's; the pointer is a hand over lines only; a press is never the path's (P-1) |
+| QA-AP-O2 | Selection state: a selected path under paths level Off; a click on empty field; a double-click; Escape twice; a right-click on a line; a click on another path | Drawn selected whatever the level; let go of; open (first click selects); open → selected → nothing; selected with Edit path and Remove path offered; the other path replaces it |
+| QA-AP-O3 | Delete on a selected path; on a path only shown for its marchers | Enabled and labeled Remove path; a shown path takes no key |
+| QA-AP-O4 | Paths All with a group path and an own path | The group path draws its line and faint lanes, no member rings, and its members give way; the own path has no drawing of its own; `moveIsAt` holds, arrives on, and leaves from a beat as AP-O2 says |
+| QA-AP-O5 | An own path; two marchers trade slots (the lane stays with the slot); a point edit by the route; then drawing it again | The same route and point id, moved; no route added and no lane, row or transition written; the spot's new marcher walks through the moved point; again: same id, fresh point ids, `from = A`, `to = B`; one undo step each, redo restores the same rows |
+| QA-AP-O6 | A group path; two members trade slots; drawing it again by the route | The same id; `F`, `G` the means over the founding occupants; each lane's offset is its slot's marcher's start less `F`; one undo step |
+| QA-UNDO-O1 | A point edit by the route on a group path, then Remove path by the route | Every marcher on it listed; the route gone; one undo step restores every row and id, redo the same |
+
 ---
 
 ## Appendix J: Design change: lanes on slots (v0.9 → v0.10)

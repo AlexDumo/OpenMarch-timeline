@@ -295,9 +295,10 @@ export type FieldModeDrawing = {
     /**
      * The outline is a drawn path (pathways): drawn solid and heavier than a shape's outline, so it
      * reads over a group's faint lanes; heaviest while drawn or open (`edited`), a little lighter
-     * while only shown (`shown`, closed)
+     * while only shown (`shown`, closed); `selected` while the path is selected as an object
+     * (pathways step 3a), drawn in the selection color with a halo
      */
-    pathLine?: "shown" | "edited";
+    pathLine?: "shown" | "edited" | "selected";
     /**
      * Circles the shape is drawn on, quiet solid lines under it: an Arc's whole circle (#634)
      */
