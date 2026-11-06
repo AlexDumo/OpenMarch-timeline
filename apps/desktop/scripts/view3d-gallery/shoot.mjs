@@ -3,6 +3,7 @@
 //   node scripts/view3d-gallery/shoot.mjs --kits hs,gym --out /mnt/data/om-capture/venues/run1
 //     [--lighting all|day,night] [--cameras all|pressBox,frontRow] [--quality high|low]
 //     [--size 1280x720] [--no-crowd] [--poses poses.json]
+//     [--field football|footballNoEndZones|college|collegeNoEndZones|pro|indoor]
 // poses.json: [{ "name": "x", "position": [x,y,z], "target": [x,y,z], "fov": 45 }]
 // Writes <out>/<kit>/<lighting>--<camera>.png, <out>/<kit>/sheet.png and <out>/report.json.
 import fs from "node:fs";
@@ -28,6 +29,7 @@ const camerasArg = opt("cameras", "all");
 const quality = opt("quality", "high");
 const [W, H] = opt("size", "1280x720").split("x").map(Number);
 const crowd = !args.includes("--no-crowd");
+const field = opt("field");
 const poses = opt("poses")
     ? JSON.parse(fs.readFileSync(opt("poses"), "utf8"))
     : [];
@@ -84,6 +86,7 @@ try {
             kit: kitId,
             quality,
             crowd,
+            field,
         });
         const lightings =
             lightingArg === "all"
