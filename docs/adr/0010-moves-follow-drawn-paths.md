@@ -3,6 +3,8 @@
 - Status: proposed
 - Date: 2026-11-03
 - Amends: [0001](0001-timeline-motion-model.md) §7, C-8 ("No new path style is added")
+- Amended by: [0011](0011-lanes-on-slots.md) (§1: a slot walks a route through a lane; §3: file
+  version bumps)
 
 ## Context
 
