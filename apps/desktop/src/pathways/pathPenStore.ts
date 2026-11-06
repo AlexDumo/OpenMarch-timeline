@@ -119,7 +119,7 @@ export const pathMarcherIds = (
     /**
      * An open shape has the field (`useShapeFieldModes`), so a closed path isn't drawn and its
      * marchers keep their start flag positions (owner on #683). Under a selected placed box it
-     * still is (`useClosedPathUnderBox`)
+     * still is, as the field's underlay (`useShapeFieldModes`)
      */
     closedUnder: boolean,
 ): readonly number[] =>

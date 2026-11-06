@@ -173,7 +173,11 @@ export default function FieldOverlay({
         editor.propToolShape(),
     );
     // A selected box's members' closed group path, under the box (pathways)
-    const pathUnder = useFieldUnderlayStore((s) => s.drawing);
+    const under = useFieldUnderlayStore((s) => s.drawing);
+    const pathUnder = useMemo(
+        () => (under && hideMarchers ? shapeAlone(under) : under),
+        [under, hideMarchers],
+    );
 
     return (
         <>
