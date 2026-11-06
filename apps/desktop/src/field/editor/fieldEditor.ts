@@ -445,6 +445,12 @@ export type FieldModePress = {
     readonly isMac: boolean;
 };
 
+/** What the editor knows of the pointer when it asks a mode for its cursor. */
+export type FieldModeHover = {
+    /** Whether a marcher's dot (or an item) is under the pointer, so a press there is the marcher's */
+    onDot(): boolean;
+};
+
 /**
  * A tool that takes edit presses before the editor's own rules (the shape
  * tool, a selected placed box). The editor asks it about every edit press
@@ -470,8 +476,11 @@ export interface FieldMode {
     ): void;
     /** The press it claimed was lost: nothing is saved. */
     cancel(): void;
-    /** The cursor over `pointer` with no button down, or null for the editor's. */
-    cursorAt(pointer: FieldPointer): FieldCursor | null;
+    /**
+     * The cursor over `pointer` with no button down, or null for the editor's. `hover.onDot` says
+     * whether a marcher's dot (or an item) is under it, which the editor's rules give the press.
+     */
+    cursorAt(pointer: FieldPointer, hover?: FieldModeHover): FieldCursor | null;
     /** The pointer left the field with no button down. */
     leave?(): void;
     /** What it draws over the field, or null for nothing. */
@@ -499,7 +508,7 @@ export interface FieldMode {
     /**
      * A right-click or long press at `pointer` that `openMenu` didn't take: the actions the
      * field's menu offers there instead of its own (a marcher's path, pathways), or null for the
-     * field's rules. The selection is left as it is.
+     * field's rules. Not asked over a marcher's dot, which is the dot's (pathways AP-O3).
      */
     fieldMenuAt?(pointer: FieldPointer): readonly string[] | null;
     /**
@@ -686,7 +695,10 @@ export class FieldEditor {
         if (this.ignoredButton !== null) return;
         const press = this.press;
         if (!press) {
-            const modeCursor = this.mode?.cursorAt(pointer) ?? null;
+            const modeCursor =
+                this.mode?.cursorAt(pointer, {
+                    onDot: () => this.marcherAt(pointer.field) !== null,
+                }) ?? null;
             if (modeCursor) {
                 this.setHover(modeCursor);
                 return;
@@ -819,6 +831,9 @@ export class FieldEditor {
      */
     private modeMenu(pointer: FieldPointer): boolean {
         if (this.mode?.openMenu?.(pointer)) return true;
+        // A marcher's dot is the dot's (pathways AP-O3): a path line under it isn't asked, so the
+        // press doesn't pick that path and the marcher's own menu opens
+        if (this.marcherAt(pointer.field) !== null) return false;
         const actions = this.mode?.fieldMenuAt?.(pointer) ?? null;
         if (!actions || actions.length === 0) return false;
         this.ports.openMenu?.(pointer, actions);

@@ -1,7 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render } from "@testing-library/react";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
-import type { FieldPointer } from "@/field/editor/fieldEditor";
+import {
+    FieldEditor,
+    type FieldEditorPorts,
+    type FieldPointer,
+} from "@/field/editor/fieldEditor";
 import { setShapeField } from "@/shapes/field/shapeField";
 import {
     actionLabelNow,
@@ -26,7 +30,15 @@ import {
     usePathPenStore,
     type PathObject,
 } from "../pathPenStore";
-import { moveIsAt, type PathTarget } from "../pathTarget";
+import type { Resolver } from "@openmarch/core";
+import type { MoveRoute } from "@/db-functions/timelineRoutes";
+import {
+    moveIsAt,
+    pathObjectsAt,
+    targetOfRoute,
+    type PathObjectIndex,
+    type PathTarget,
+} from "../pathTarget";
 import { PathPenKeys } from "../usePathPen";
 
 /**
@@ -97,7 +109,7 @@ const groupObject = (routeId = 9): PathObject => ({
 const ownObject = (routeId = 5): PathObject => ({
     target: { ...own(routeId), marcherId: 4 },
     drill: "T4",
-    walk: [
+    walk: () => [
         { x: 0, y: 40 * STEP },
         { x: 8 * STEP, y: 40 * STEP },
     ],
@@ -240,8 +252,19 @@ describe("Delete on a selected path (QA-AP-O3)", () => {
     it("Backspace or Delete removes the selected path; not a path only shown for its marchers", () => {
         render(<PathPenKeys />);
         act(() => showPath(own(5), "T4"));
-        // A closed path shown for its marchers takes no keys at all (ActionHandlers mounts none)
+        // A closed path shown for its marchers takes no keys at all: Delete there does nothing,
+        // no remove starts and the path stays shown
         expect(session()!.object).toBe(false);
+        const shown = session();
+        let removing = false;
+        const unsubscribe = usePathPenStore.subscribe((s) => {
+            removing ||= s.saving;
+        });
+        expect(isActionEnabled("shapeRemoveLastPoint")).toBe(false);
+        act(() => void runAction("shapeRemoveLastPoint"));
+        unsubscribe();
+        expect(removing).toBe(false);
+        expect(session()).toBe(shown);
         act(() => selectPathObject(own(5), "T4"));
         expect(isActionEnabled("shapeRemoveLastPoint")).toBe(true);
         expect(actionLabelNow("shapeRemoveLastPoint")).toBe("Remove path");
@@ -276,5 +299,189 @@ describe("Paths All draws a group path as its one line (QA-AP-O4)", () => {
         expect(moveIsAt({ start: 8, end: 16 }, 8, true)).toBe(false);
         expect(moveIsAt({ start: 0, end: 8 }, 0, false)).toBe(true);
         expect(moveIsAt({ start: 0, end: 8 }, 9, false)).toBe(false);
+    });
+});
+
+/**
+ * A field editor with the pen as its mode, as the field has it while a path is shown or Paths All
+ * lists paths: marcher 3's dot on its own path's first leg (`ON_OWN`), marcher 10's on the group
+ * path's upper lane, and marcher 2 far off any line.
+ */
+function fieldWithPen(selected: number[]) {
+    const state = { selected: [...selected] as readonly number[] };
+    const dots: [number, { x: number; y: number }][] = [
+        [3, ON_OWN.field],
+        [10, ON_LANE.field],
+        [2, EMPTY.field],
+    ];
+    const ports: FieldEditorPorts = {
+        selection: {
+            get: () => state.selected,
+            set: (ids) => {
+                state.selected = ids;
+            },
+        },
+        marchers: () => ({
+            ids: dots.map(([id]) => id),
+            positions: Float64Array.from(dots.flatMap(([, p]) => [p.x, p.y])),
+            hidden: Uint8Array.from(dots.map(() => 0)),
+        }),
+        zoom: () => ZOOM,
+        canSelect: () => true,
+        selectionBoxPadding: () => 10,
+        openMenu: vi.fn(),
+        showPositions: vi.fn(),
+        drop: vi.fn(() => new Promise<never>(() => {})),
+    };
+    const editor = new FieldEditor(ports, { now: () => 1000 });
+    editor.setMode(pathPenMode);
+    const right = (p: FieldPointer) => {
+        editor.pointerDown({ ...p, button: 2 });
+        editor.pointerUp({ ...p, button: 2 });
+    };
+    return { editor, ports, state, right };
+}
+
+describe("a marcher's dot on a path's line is the dot's (AP-O3, review of #737 B1)", () => {
+    it("a right-click on the selected marcher's dot, on its own shown path, keeps the marcher and opens its menu", () => {
+        showPath(own(5), "T4");
+        const { ports, state, right } = fieldWithPen([3]);
+        right(ON_OWN);
+        expect(session()).toMatchObject({ object: false, phase: "closed" });
+        expect(state.selected).toEqual([3]);
+        expect(ports.openMenu).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(ports.openMenu!).mock.calls[0]![1]).toBeUndefined();
+    });
+
+    it("a long press on that dot picks no path either", () => {
+        showPath(own(5), "T4");
+        const { editor, ports, state } = fieldWithPen([3]);
+        editor.longPress(ON_OWN);
+        expect(session()).toMatchObject({ object: false });
+        expect(state.selected).toEqual([3]);
+        expect(ports.openMenu).not.toHaveBeenCalled();
+    });
+
+    it("with Paths All, a right-click or long press on a dot a group lane runs through is the marcher's", () => {
+        setPathObjects([groupObject(9)]);
+        const { editor, ports, state, right } = fieldWithPen([]);
+        editor.longPress(ON_LANE);
+        expect(session()).toBeNull();
+        expect(ports.openMenu).not.toHaveBeenCalled();
+        right(ON_LANE);
+        expect(session()).toBeNull();
+        // The field's own menu, for the marcher pressed
+        expect(state.selected).toEqual([10]);
+        expect(vi.mocked(ports.openMenu!).mock.calls[0]![1]).toBeUndefined();
+    });
+
+    it("off the dots, a right-click on the line still selects the path and offers its actions", () => {
+        setPathObjects([groupObject(9)]);
+        const { ports, right } = fieldWithPen([]);
+        right(ON_GROUP);
+        expect(session()).toMatchObject({ object: true });
+        expect(vi.mocked(ports.openMenu!).mock.calls[0]![1]).toEqual(
+            PATH_FIELD_MENU,
+        );
+    });
+
+    it("shows no hand over a dot on a line", () => {
+        showPath(own(5), "T4");
+        expect(pathPenMode.cursorAt(ON_OWN, { onDot: () => false })).toBe(
+            "pointer",
+        );
+        expect(pathPenMode.cursorAt(ON_OWN, { onDot: () => true })).toBeNull();
+    });
+});
+
+/** One lane of route 5 on transition `t`, for `pathObjectsAt` and `targetOfRoute` */
+const entry = (
+    marcherId: number,
+    start: number,
+    end: number,
+    offset: [number, number] | null,
+    routeId = 5,
+): MoveRoute => ({
+    routeId,
+    laneId: marcherId,
+    transitionId: 100 + start,
+    slot: 0,
+    timelineId: 1,
+    marcherId,
+    start,
+    end,
+    offset,
+    geometry: { v: 1, from: [0, 0], to: [80, 0], points: [] },
+});
+const stillResolver = {
+    explain: () => ({ origin: [0, 0] }),
+    positionAt: () => [0, 0],
+} as unknown as Pick<Resolver, "explain" | "positionAt">;
+
+describe("Paths All per playhead step (review of #737, S1, S2)", () => {
+    it("a route read by its id spans all its transitions: members in [0, 8] and [4, 12]", () => {
+        const t = targetOfRoute(
+            [entry(10, 0, 8, [0, -2]), entry(11, 4, 12, [0, 2])],
+            stillResolver,
+            new Map(),
+        )!;
+        expect(t.span).toEqual({ start: 0, end: 12 });
+        expect(t.group!.members.map((m) => m.marcherId)).toEqual([10, 11]);
+    });
+
+    it("filters the routes read once, keeping each route's target while nothing changed", () => {
+        const index: PathObjectIndex = {
+            routes: new Map([
+                [5, [entry(3, 0, 8, null)]],
+                [6, [entry(4, 8, 16, null, 6)]],
+            ]),
+            rows: new Map([
+                [3, [{ start: 0, end: 8 }]],
+                [
+                    4,
+                    [
+                        { start: 0, end: 8 },
+                        { start: 8, end: 16 },
+                    ],
+                ],
+            ]),
+            targets: new Map(),
+            drills: null,
+        };
+        const drills = new Map<number, string>();
+        const at4 = pathObjectsAt(index, stillResolver, 4, drills);
+        const at5 = pathObjectsAt(index, stillResolver, 5, drills);
+        expect(at4.map((t) => t.routeId)).toEqual([5]);
+        expect(at5[0]).toBe(at4[0]);
+        // On beat 8 marcher 4 arrives (its row [0, 8]), so its route leaving from 8 isn't at it
+        expect(
+            pathObjectsAt(index, stillResolver, 8, drills).map(
+                (t) => t.routeId,
+            ),
+        ).toEqual([5]);
+        expect(
+            pathObjectsAt(index, stillResolver, 9, drills).map(
+                (t) => t.routeId,
+            ),
+        ).toEqual([6]);
+        // Other drill numbers: targets are built again
+        expect(pathObjectsAt(index, stillResolver, 4, new Map())[0]).not.toBe(
+            at4[0],
+        );
+    });
+
+    it("the same objects set nothing; an own path's walk is sampled only when tested", () => {
+        const walk = vi.fn(() => [
+            { x: 0, y: 40 * STEP },
+            { x: 8 * STEP, y: 40 * STEP },
+        ]);
+        const objects = [groupObject(9), { ...ownObject(5), walk }];
+        setPathObjects(objects);
+        const list = usePathPenStore.getState().objects;
+        setPathObjects([...objects]);
+        expect(usePathPenStore.getState().objects).toBe(list);
+        expect(walk).not.toHaveBeenCalled();
+        expect(pathPenMode.takeClick(ON_WALK, false)).toBe(true);
+        expect(walk).toHaveBeenCalled();
     });
 });

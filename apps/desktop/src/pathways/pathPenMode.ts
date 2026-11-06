@@ -2,6 +2,7 @@ import type {
     FieldCursor,
     FieldMode,
     FieldModeDrawing,
+    FieldModeHover,
     FieldPointer,
 } from "@/field/editor/fieldEditor";
 import { CLICK_SLOP } from "@/field/editor/fieldEditor";
@@ -421,11 +422,15 @@ class PathPenMode implements FieldMode {
         }
     }
 
-    cursorAt(pointer: FieldPointer): FieldCursor | null {
+    cursorAt(
+        pointer: FieldPointer,
+        hover?: FieldModeHover,
+    ): FieldCursor | null {
         const s = this.session;
-        // A path's line, shown or one of Paths All's, is something to click (AP-O3)
+        // A path's line, shown or one of Paths All's, is something to click (AP-O3); not under a
+        // marcher's dot, which a press there selects instead
         if (!s || s.phase === "closed")
-            return this.pathAt(pointer) ? "pointer" : null;
+            return !hover?.onDot() && this.pathAt(pointer) ? "pointer" : null;
         // Between clicks the next leg follows the pointer with the roles its keys hold, so it
         // lands where a click would, as a Line's does
         if (s.phase === "drawing") {
@@ -741,7 +746,7 @@ export function objectDrawingOf(o: PathObject): FieldModeDrawing | null {
 
 /** Whether `at` is on a path object's drawn line (AP-O3) */
 function objectHit(o: PathObject, at: XY, radius: number): boolean {
-    if (o.walk) return onLine(o.walk, at, radius);
+    if (o.walk) return onLine(o.walk(), at, radius);
     const d = objectDrawingOf(o);
     if (!d) return false;
     return [d.outline ?? [], ...(d.lanes ?? [])].some((line) =>

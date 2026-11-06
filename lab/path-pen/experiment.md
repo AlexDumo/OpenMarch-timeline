@@ -33,6 +33,9 @@ of its own**, as a shape is in a drawing app.
 - **Right-click or long-press** a path's line selects it and offers **Edit path**
   and **Remove path**. On a tablet, tap selects and double-tap opens.
 - Dragging a dot still moves that dot, never the path.
+- **P on a selected or open path** draws that path again, and it stays the same
+  path: a group path opened through one of its marchers is drawn again as the
+  group's path, not as that marcher's own.
 
 **Try it**
 
@@ -57,3 +60,5 @@ of its own**, as a shape is in a drawing app.
   back): step 3c. Own path and Rejoin from step 15 still work as before.
 - **Collisions along a path**: collision checking is switched off in the app for
   now, so this waits.
+- A marquee (drag on empty field) that selects nothing keeps the selected path;
+  only a click on empty field lets it go.

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { allMarchersQueryOptions } from "@/hooks/queries";
@@ -15,6 +15,7 @@ import {
 } from "@/stores/TimelineSelectionStore";
 import { useStartFlagLevelsInEffect } from "@/stores/StartFlagKeyStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import type { XY } from "@/shapes/types";
 import {
     closeShapeTool,
     useShapeToolStore,
@@ -22,10 +23,12 @@ import {
 import {
     findGroupDrawTarget,
     findGroupTarget,
-    findPathObjects,
     findPathTarget,
     findRouteTarget,
     groupMoveAt,
+    pathObjectsAt,
+    readPathObjectIndex,
+    type PathObjectIndex,
     type PathTarget,
 } from "./pathTarget";
 import {
@@ -92,19 +95,27 @@ export function usePathPenActions(): void {
     const hasRoute = usePathPenStore(
         (s) => (s.session?.target.routeId ?? null) !== null,
     );
+    const selectedIds = performers.map((m) => m.id).sort((a, b) => a - b);
+    const selectionKey = selectedIds.join(",");
 
+    // The marchers selected when P drew the open path again (AP-O8): the drawing goes when they
+    // change, as a personal drawing does
+    const againFor = useRef("");
     useActionHandler("pathPen", () => {
-        // With a path selected as an object (or open from one) and no marcher, P draws that path
-        // again: a path edit by its route, keeping its id (AP-O8)
+        // With a path selected as an object, or a path open however it was opened, P draws that
+        // path again: a path edit by its route, keeping its id, never refused for who holds its
+        // spots (AP-O8, J.8 AP-R1, 07 N3)
         const now = usePathPenStore.getState().session;
         if (
-            performers.length === 0 &&
-            now?.object &&
+            now &&
+            now.target.routeId !== null &&
+            (now.object || now.phase === "open") &&
             now.phase !== "drawing" &&
             !isPlaying
         ) {
             if (useShapeToolStore.getState().tool) closeShapeTool();
-            startDrawing(now.target, now.drill, true);
+            againFor.current = now.object ? "" : selectionKey;
+            startDrawing(now.target, now.drill, now.object, true);
             return;
         }
         const refusal = penRefusal(performers.length);
@@ -203,8 +214,6 @@ export function usePathPenActions(): void {
     // The path shown follows the selection, the playhead and each committed edit; a path opened
     // stays open while it's the same marcher's same move
     const asked = useRef(0);
-    const selectedIds = performers.map((m) => m.id).sort((a, b) => a - b);
-    const selectionKey = selectedIds.join(",");
     useEffect(() => {
         const { session } = usePathPenStore.getState();
         const resolver = useTimelineResolverStore.getState().resolver;
@@ -220,18 +229,23 @@ export function usePathPenActions(): void {
             // The marchers drawn for are let go of: the drawing goes. Drawing a selected path
             // again (AP-O8) has no marcher selected, and goes when one is
             const drawnFor = session.object
-                ? []
-                : session.target.group
-                  ? session.target.group.members.map((m) => m.marcherId)
-                  : [session.target.marcherId];
-            if (drawnFor.join(",") !== selectionKey) clearPath();
+                ? ""
+                : session.byRoute
+                  ? againFor.current
+                  : (session.target.group
+                        ? session.target.group.members.map((m) => m.marcherId)
+                        : [session.target.marcherId]
+                    ).join(",");
+            if (drawnFor !== selectionKey) clearPath();
             return;
         }
         // A path selected as an object (step 3a, AP-O1, AP-O4): read again by its route while no
         // marcher is selected; let go of once the playhead leaves its move or the route is gone
         if (session?.object && selectedIds.length === 0 && ready && resolver) {
             const ask = ++asked.current;
-            const { routeId, start, end } = session.target;
+            const { routeId } = session.target;
+            // Its transitions' whole reach: a group's members can be in several (AP-R8)
+            const { start, end } = session.target.span ?? session.target;
             if (
                 routeId === null ||
                 playheadBeat < start - 1e-9 ||
@@ -317,6 +331,22 @@ export function usePathPenActions(): void {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectionKey, playheadBeat, version, ready, isPlaying, saved, drills]);
 
+    // A marcher selected (a click on a dot) replaces a selected path at once, before the path for
+    // the marchers is read, so a Delete in between can't remove the old path (AP-O4, AP-O6)
+    const selectedBefore = useRef(selectionKey);
+    useLayoutEffect(() => {
+        const was = selectedBefore.current;
+        selectedBefore.current = selectionKey;
+        const { session } = usePathPenStore.getState();
+        if (
+            was === "" &&
+            selectionKey !== "" &&
+            session?.object &&
+            session.phase !== "drawing"
+        )
+            clearPath();
+    }, [selectionKey]);
+
     // A path selected as an object is the selection (AP-O3): the marchers selected are let go of
     const objectSelected = usePathPenStore((s) => s.session?.object ?? false);
     useEffect(() => {
@@ -338,12 +368,68 @@ const drillOf = (target: PathTarget, drills: ReadonlyMap<number, string>) =>
 /** How many points an own path object's drawn walk is sampled at, for its click test */
 const WALK_SAMPLES = 96;
 
+/** The start flag window an own path object's walk is drawn in, as Paths All has it now */
+let walkWindow = { from: 0, to: 0 };
+
+/** Each own path's sampled walk, for the window it was sampled in */
+const walks = new WeakMap<
+    PathTarget,
+    { from: number; to: number; walk: readonly XY[] }
+>();
+
+/**
+ * An own path's drawn line (AP-O3): its marcher's walk inside the window, from the start flag (or
+ * the move's start) to the beat shown (or the move's end), sampled the first time it's tested for
+ * this window. A target belongs to one timeline version, so its walk can be kept.
+ */
+function walkOf(target: PathTarget): readonly XY[] {
+    const lo = Math.max(walkWindow.from, target.start);
+    const hi = Math.min(walkWindow.to, target.end);
+    const kept = walks.get(target);
+    if (kept && kept.from === lo && kept.to === hi) return kept.walk;
+    const resolver = useTimelineResolverStore.getState().resolver;
+    const walk: XY[] = [];
+    if (resolver && hi > lo)
+        for (let i = 0; i <= WALK_SAMPLES; i++) {
+            const p = resolver.positionAt(
+                target.marcherId,
+                lo + ((hi - lo) * i) / WALK_SAMPLES,
+            );
+            walk.push({ x: p[0], y: p[1] });
+        }
+    walks.set(target, { from: lo, to: hi, walk });
+    return walk;
+}
+
+/** Each target's object, so the same target gives the same object (and drawing) */
+const objectsByTarget = new WeakMap<PathTarget, PathObject>();
+
+function objectOf(
+    target: PathTarget,
+    drills: ReadonlyMap<number, string>,
+): PathObject {
+    let o = objectsByTarget.get(target);
+    if (!o) {
+        o = {
+            target,
+            drill: drillOf(target, drills),
+            walk: target.group ? null : () => walkOf(target),
+        };
+        objectsByTarget.set(target, o);
+    }
+    return o;
+}
+
 /**
  * Paths All's path objects (step 3a, AP-O2): with start flag positions drawing every marcher's
  * path, every path in a move at the playhead is listed, so a click selects it with nothing
  * selected, and each group path is drawn as its one line with faint lanes (AP-O7). An own path's
  * line is the start flag positions' path, so its walk inside the window (from the start flag, or
  * the move's start, to the beat shown, or the move's end) is what a click tests. None otherwise.
+ *
+ * The routes are read once per timeline version; a playhead step only filters them, and a route
+ * keeps its target and object until the next version, so a step that changes no path sets
+ * nothing (review of #737, S2).
  */
 function usePathObjects(drills: ReadonlyMap<number, string>): void {
     const level = useStartFlagLevelsInEffect();
@@ -367,7 +453,13 @@ function usePathObjects(drills: ReadonlyMap<number, string>): void {
         !isolating &&
         !startHidden &&
         toBeat > fromBeat;
+    walkWindow = { from: fromBeat, to: toBeat };
     const asked = useRef(0);
+    const index = useRef<{
+        version: number;
+        resolver: unknown;
+        read: Promise<PathObjectIndex>;
+    } | null>(null);
     useEffect(() => {
         const resolver = useTimelineResolverStore.getState().resolver;
         const ask = ++asked.current;
@@ -375,41 +467,31 @@ function usePathObjects(drills: ReadonlyMap<number, string>): void {
             setPathObjects([]);
             return;
         }
-        void findPathObjects(db, resolver, playheadBeat, drills).then(
-            (targets) => {
+        let cached = index.current;
+        if (
+            !cached ||
+            cached.version !== version ||
+            cached.resolver !== resolver
+        ) {
+            cached = { version, resolver, read: readPathObjectIndex(db) };
+            index.current = cached;
+        }
+        const beat = playheadBeat;
+        cached.read.then(
+            (read) => {
                 if (ask !== asked.current) return;
-                const objects: PathObject[] = targets.map((target) => {
-                    if (target.group)
-                        return {
-                            target,
-                            drill: drillOf(target, drills),
-                            walk: null,
-                        };
-                    const lo = Math.max(fromBeat, target.start);
-                    const hi = Math.min(toBeat, target.end);
-                    const walk =
-                        hi > lo
-                            ? Array.from(
-                                  { length: WALK_SAMPLES + 1 },
-                                  (_, i) => {
-                                      const p = resolver.positionAt(
-                                          target.marcherId,
-                                          lo + ((hi - lo) * i) / WALK_SAMPLES,
-                                      );
-                                      return { x: p[0], y: p[1] };
-                                  },
-                              )
-                            : [];
-                    return {
-                        target,
-                        drill: drillOf(target, drills),
-                        walk,
-                    };
-                });
-                setPathObjects(objects);
+                setPathObjects(
+                    pathObjectsAt(read, resolver, beat, drills).map((t) =>
+                        objectOf(t, drills),
+                    ),
+                );
+            },
+            () => {
+                if (index.current === cached) index.current = null;
+                if (ask === asked.current) setPathObjects([]);
             },
         );
-    }, [wanted, playheadBeat, fromBeat, toBeat, version, drills]);
+    }, [wanted, playheadBeat, version, drills]);
     useEffect(() => () => setPathObjects([]), []);
 }
 

@@ -58,18 +58,25 @@ export interface PathSession {
      * Delete removes it (AP-O6), and Escape lets it go (from open, back to selected first).
      */
     readonly object: boolean;
+    /**
+     * While drawing: the path drawn again by its route id (AP-O8, J.8 AP-R1, 07 N3), a path edit
+     * that keeps the id and is never refused for who holds its spots. Set when P draws the
+     * selected path or the open path again, however it was opened.
+     */
+    readonly byRoute?: boolean;
 }
 
 /**
  * A path Paths **All** draws in a move at the playhead (step 3a, AP-O2, AP-O7), which a click
- * selects with nothing selected. `walk` is an own path's drawn line, its marcher's walk inside the
- * start flag window (the start flag positions' path, which is what's drawn for it); null for a
- * group path, drawn as its reference line and faint lanes.
+ * selects with nothing selected. `walk` gives an own path's drawn line, its marcher's walk inside
+ * the start flag window (the start flag positions' path, which is what's drawn for it), sampled
+ * only when a click or the pointer tests it; null for a group path, drawn as its reference line
+ * and faint lanes.
  */
 export interface PathObject {
     readonly target: PathTarget;
     readonly drill: string;
-    readonly walk: readonly XY[] | null;
+    readonly walk: (() => readonly XY[]) | null;
 }
 
 interface PathPenState {
@@ -129,15 +136,16 @@ export const pathShown = (
     session !== null &&
     (session.phase !== "closed" || session.object || !hidden);
 
-/** Sets the paths Paths All draws as objects; the same list keeps its identity */
+/**
+ * Sets the paths Paths All draws as objects. The same objects (by identity: a route's object is
+ * kept while its target is) keep the list as it was, so a playhead step that changes no path sets
+ * nothing and nothing is drawn again.
+ */
 export function setPathObjects(objects: readonly PathObject[]): void {
     const now = usePathPenStore.getState().objects;
-    const key = (list: readonly PathObject[]) =>
-        JSON.stringify(
-            list.map((o) => [o.target.routeId, o.target, o.walk, o.drill]),
-        );
-    if (now.length === 0 && objects.length === 0) return;
-    if (key(now) !== key(objects)) usePathPenStore.setState({ objects });
+    if (now.length === objects.length && now.every((o, i) => o === objects[i]))
+        return;
+    usePathPenStore.setState({ objects });
 }
 
 /**
@@ -277,12 +285,14 @@ const update = (fn: (s: PathSession) => PathSession) => {
 
 /**
  * Starts drawing a new path for `target` (the old one stays until Enter replaces it). `object`:
- * drawing the selected or open path again, a path edit by its route (AP-O8).
+ * drawing the selected path again, which stays the selection. `byRoute`: drawing the selected or
+ * the open path again, a path edit by its route (AP-O8); always so for the selected path.
  */
 export function startDrawing(
     target: PathTarget,
     drill: string,
     object = false,
+    byRoute = object,
 ): void {
     usePathPenStore.setState({
         session: {
@@ -294,6 +304,7 @@ export function startDrawing(
             selected: null,
             dragging: null,
             object,
+            byRoute,
         },
     });
 }
@@ -516,8 +527,8 @@ async function save(points: readonly PathPoint[]): Promise<boolean> {
                 routeId: target.routeId,
                 points: stored,
             });
-        else if (session.object && target.routeId !== null)
-            // The selected path drawn again: a path edit too, keeping its id (AP-O8)
+        else if (session.byRoute && target.routeId !== null)
+            // The selected or open path drawn again: a path edit too, keeping its id (AP-O8)
             await redrawPath({
                 db,
                 routeId: target.routeId,

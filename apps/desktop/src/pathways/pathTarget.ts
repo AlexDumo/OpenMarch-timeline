@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, lte } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lte } from "drizzle-orm";
 import type { Resolver, RoutePoint } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import type { DbConnection } from "@/db-functions/types";
@@ -36,6 +36,13 @@ export interface PathTarget {
      * `transitionId` are its first member's.
      */
     group: GroupTarget | null;
+    /**
+     * A path read by its route (`targetOfRoute`): from the earliest start to the latest end of
+     * the transitions its lanes are on. A group path's members can be in several transitions of
+     * one move (AP-R8), so a selected path stays selected while the playhead is anywhere in them
+     * (AP-O4). Absent otherwise: then `start` and `end` are the move's.
+     */
+    span?: { start: number; end: number };
 }
 
 /** A member of a group path: where it starts and ends, and its lane's offset from the reference */
@@ -339,6 +346,10 @@ export function targetOfRoute(
     const first = entries[0];
     if (!first) return null;
     const g = first.geometry;
+    const span = {
+        start: Math.min(...entries.map((r) => r.start)),
+        end: Math.max(...entries.map((r) => r.end)),
+    };
     const byMarcher = [...entries].sort(
         (a, b) => a.marcherId - b.marcherId || a.start - b.start,
     );
@@ -356,6 +367,7 @@ export function targetOfRoute(
             points: g.points,
             ends: { from: xy(g.from), to: xy(g.to) },
             group: null,
+            span,
         };
     }
     const members: GroupMember[] = [];
@@ -385,6 +397,7 @@ export function targetOfRoute(
         points: g.points,
         ends: { from: xy(g.from), to: xy(g.to) },
         group: { members, outside: [] },
+        span,
     };
 }
 
@@ -404,48 +417,103 @@ export function moveIsAt(
 }
 
 /**
- * Every path in a move at `beat` (spec I.10, AP-O2): the paths Paths **All** draws and lets a
- * click select with nothing selected. A route is at the beat when one of its walkers' rows on its
- * lanes is that walker's move there (`moveIsAt`). By route id.
+ * Every route's lanes and walkers, and each walker's rows, read once per timeline version so a
+ * playhead step only filters them (`pathObjectsAt`). Targets are built the first time a route is
+ * at the playhead and kept, so the same route gives the same target (and drawing) until the next
+ * version.
  */
+export interface PathObjectIndex {
+    /** Each route's entries (`readRoutes`), by route id in id order */
+    readonly routes: ReadonlyMap<number, readonly MoveRoute[]>;
+    /** Every row of each marcher that walks a route, for "a row arriving on the beat" */
+    readonly rows: ReadonlyMap<
+        number,
+        readonly { start: number; end: number }[]
+    >;
+    /** Targets built so far, for `drills` */
+    targets: Map<number, PathTarget | null>;
+    drills: ReadonlyMap<number, string> | null;
+}
+
+/** How many marcher ids go in one `IN (...)`, under SQLite's bound-parameter limit */
+const IDS_PER_QUERY = 500;
+
+/** Reads the routes and their walkers' rows for `pathObjectsAt` (spec I.10, AP-O2). */
+export async function readPathObjectIndex(
+    db: DbConnection,
+): Promise<PathObjectIndex> {
+    const all = await readRoutes(db);
+    const routes = new Map<number, MoveRoute[]>();
+    for (const r of all) {
+        const list = routes.get(r.routeId) ?? [];
+        list.push(r);
+        routes.set(r.routeId, list);
+    }
+    const A = schema.timeline_assignments;
+    const walkers = [...new Set(all.map((r) => r.marcherId))];
+    const rows = new Map<number, { start: number; end: number }[]>();
+    for (let i = 0; i < walkers.length; i += IDS_PER_QUERY) {
+        const found = await db
+            .select({
+                marcherId: A.marcher_id,
+                start: A.start_beat,
+                end: A.end_beat,
+            })
+            .from(A)
+            .where(inArray(A.marcher_id, walkers.slice(i, i + IDS_PER_QUERY)))
+            .all();
+        for (const r of found) {
+            const list = rows.get(r.marcherId) ?? [];
+            list.push({ start: r.start, end: r.end });
+            rows.set(r.marcherId, list);
+        }
+    }
+    return { routes, rows, targets: new Map(), drills: null };
+}
+
+/**
+ * Every path in a move at `beat` (spec I.10, AP-O2), from `index`: the paths Paths **All** draws
+ * and lets a click select with nothing selected. A route is at the beat when one of its walkers'
+ * rows on its lanes is that walker's move there (`moveIsAt`). By route id. No database read: the
+ * same route gives the same target while `index` and `drills` are the same.
+ */
+export function pathObjectsAt(
+    index: PathObjectIndex,
+    resolver: Pick<Resolver, "explain" | "positionAt">,
+    beat: number,
+    drills: ReadonlyMap<number, string>,
+): PathTarget[] {
+    if (index.drills !== drills) {
+        index.targets = new Map();
+        index.drills = drills;
+    }
+    // A row arriving on the beat wins over one leaving from it
+    const arrives = (marcherId: number) =>
+        (index.rows.get(marcherId) ?? []).some(
+            (r) => r.start <= beat - 1e-9 && r.end > beat - 1e-9,
+        );
+    const out: PathTarget[] = [];
+    for (const [routeId, entries] of index.routes) {
+        const at = entries.some((r) =>
+            moveIsAt(r, beat, r.start === beat && arrives(r.marcherId)),
+        );
+        if (!at) continue;
+        let target = index.targets.get(routeId);
+        if (target === undefined) {
+            target = targetOfRoute(entries, resolver, drills);
+            index.targets.set(routeId, target);
+        }
+        if (target) out.push(target);
+    }
+    return out;
+}
+
+/** `pathObjectsAt` with the index read now: every path in a move at `beat` (AP-O2) */
 export async function findPathObjects(
     db: DbConnection,
     resolver: Pick<Resolver, "explain" | "positionAt">,
     beat: number,
     drills: ReadonlyMap<number, string>,
 ): Promise<PathTarget[]> {
-    const all = await readRoutes(db);
-    if (all.length === 0) return [];
-    const byRoute = new Map<number, MoveRoute[]>();
-    for (const r of all) {
-        const list = byRoute.get(r.routeId) ?? [];
-        list.push(r);
-        byRoute.set(r.routeId, list);
-    }
-    // Rows arriving on the beat, for walkers whose path's move would only leave from it
-    const A = schema.timeline_assignments;
-    const leaving = all.filter((r) => r.start === beat && beat < r.end);
-    const arriving = new Set<number>();
-    for (const m of new Set(leaving.map((r) => r.marcherId))) {
-        const row = await db
-            .select({ id: A.id })
-            .from(A)
-            .where(
-                and(
-                    eq(A.marcher_id, m),
-                    lte(A.start_beat, beat - 1e-9),
-                    gt(A.end_beat, beat - 1e-9),
-                ),
-            )
-            .get();
-        if (row) arriving.add(m);
-    }
-    const out: PathTarget[] = [];
-    for (const entries of byRoute.values()) {
-        if (!entries.some((r) => moveIsAt(r, beat, arriving.has(r.marcherId))))
-            continue;
-        const target = targetOfRoute(entries, resolver, drills);
-        if (target) out.push(target);
-    }
-    return out;
+    return pathObjectsAt(await readPathObjectIndex(db), resolver, beat, drills);
 }
