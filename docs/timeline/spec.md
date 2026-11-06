@@ -1,7 +1,7 @@
 # OpenMarch Timeline Resolution Model: Specification
 
-**Version:** 0.9, growing step by step (routes: Appendix I). 0.8 was revised after four structural reviews, two design changes and one implementation review. Appendices B to E map each review finding to its fix and evidence. Appendix F covers the design change: shapes are optional. Appendix G covers compatibility with the app's undo and redo. Appendix H covers how the app chooses layers. Appendix I covers routes, which v0.9 adds one build step at a time.
-**Date:** 2026-11-04 (v0.9 steps 2 and 15); step 1 was 2026-11-03; 0.8 was 2026-09-29
+**Version:** 0.10: a slot walks a drawn path through a **lane** (ADR 0011, Appendix J). It builds on 0.9, which added routes step by step (Appendix I). 0.8 was revised after four structural reviews, two design changes and one implementation review. Appendices B to E map each review finding to its fix and evidence. Appendix F covers the design change: shapes are optional. Appendix G covers compatibility with the app's undo and redo. Appendix H covers how the app chooses layers. Appendix I covers routes, which v0.9 adds one build step at a time.
+**Date:** 2026-11-06 (v0.10 decided; it is built from plan step 24 on); v0.9 steps 2 and 15 were 2026-11-04; step 1 was 2026-11-03; 0.8 was 2026-09-29
 **Scope:** The data model and resolution engine behind timelines, shapes, transitions and assignments. It does not cover the editor UI.
 
 ---
@@ -63,7 +63,19 @@ The design replaces the current model, which stores one coordinate per (marcher,
 | **Timeline**               | A container with a range: a track in the UI. It has **no effect on resolution** (R-1). _App restriction (implementation-plan.md C-11): it is the container for start and stop, and every transition in it spans its whole range. App restriction (C-12): at most one timeline has a given range, and a page's box in the UI is the timeline ending at its flag; relaxed by UI-25 (2026-10-16): a move split off another keeps its range, and the page box is the oldest timeline over it._ |
 | **Transition**             | Motion over a range, in a given path style, into slot destinations. The destinations come from a shape or are placed individually. It owns `slot_count` **anonymous slots**. It does **not** store where marchers start.                                                                                                                                                                                                                                                                   |
 | **Slot**                   | An anonymous position within a transition, numbered `0…slot_count-1`. Its destination is sampled from the transition's shape, or is an individually placed point (R-13).                                                                                                                                                                                                                                                                                                                   |
-| **Route**                  | A path a transition's marcher walks from where it starts to its slot destination: a list of points in absolute field coordinates, each a corner or smooth (R-14, v0.9). It has no knowledge of time or of marchers. **Optional**: only `route` transitions have one. Several transitions can walk one route as a **group path**, each at its own offset (v0.9 step 15). |
+| **Route** | _(v0.10)_ A drawn path in absolute field coordinates: `from`, `to`, and inner points with stable ids, each a corner or smooth (R-14). It has no knowledge of marchers. Its optional `timing` holds pins, holds and the spacing handoff. **Optional.** A slot walks a route only through a **lane**. A follow-the-leader transition may use one as its trail. |
+| **Lane** | _(v0.10)_ A stored binding of one slot of one transition to a route: `(transition, slot) → route`. It carries the start offset `o_s` (both coordinates NULL for an **own** lane), the spot's own Adjust profile and an optional linked Adjust. Whoever occupies the slot at a beat walks the lane (D-4). A slot has at most one lane per move. |
+| **Group path** | _(v0.10)_ A route whose lanes carry offsets. Every lane walks a parallel copy of the reference walk `W`, moved by its offset. |
+| **Own path** | _(v0.10)_ A route walked by exactly one own lane (offset NULL). It walks R-14's own-path rule, through the marcher's real start and end. |
+| **Spot** | _(v0.10, UI word)_ A slot as the designer sees it: a place in the formation. "The Adjust belongs to the spot." |
+| **Occupancy** | _(v0.10)_ One assignment row seen as "marcher m holds spot k of T over `[start, end)`". A spot can have several occupancies in one move, one after another (I-A4′). |
+| **Adjust** | _(v0.10)_ A displacement profile at places on a group path. It belongs to a spot (on the lane) or to a linked sub-group (a `route_adjusts` row shared by several lanes). It moves with the group path when the path is reshaped or retimed. |
+| **Detach** | _(v0.10)_ Copy the group path for one spot. The spot keeps its offset and Adjust, so it walks in step with the group until the copy is edited. |
+| **Anchor** | _(v0.10)_ A place on the reference walk named by `(a, b, f)`. `a` is a point id or `'from'`, `b` is a point id or `'to'`, and `f ∈ [0, 1]` is the fraction of the distance between them. |
+| **Group clock** | _(v0.10)_ The route's map from a beat in `[T.start, T.end]` to a distance along `W`. It is linear without pins, and piecewise linear through the pins and holds with them. |
+| **Lane clock** | _(v0.10)_ The occupancy's map from its beat to a group-clock beat. It is the identity for `cut_in` (the default). For `whole` it rescales the occupancy's own window onto the move. |
+| **Handoff** | _(v0.10)_ Where a group path's spacing changes from start spacing (`o_s`) to destination spacing (`o_e`). It is a ramp between two anchors on the route. |
+| **Checkpoint** | _(v0.10)_ On a follow-the-leader trail: a trail point, or a member's own start or end. An Adjust is zero at every checkpoint, and the member passes it on its unchanged count. |
 | **Individual destination** | A point placed by hand for one slot of a transition that has no shape (`slot_destinations`, D-16). "Move marcher 7 here" means setting the point of marcher 7's slot.                                                                                                                                                                                                                                                                                                                      |
 | **Assignment**             | A stored row saying _marcher m occupies slot k of transition T over range [s, e), at layer L_. This is the only link between real marchers and slots.                                                                                                                                                                                                                                                                                                                                      |
 | **Layer**                  | An integer precedence. Where a marcher's assignments overlap in time, the higher layer wins. The resolver reads it as stored. The app derives it from the ranges (§6.2, D-18) and never asks the designer for it.                                                                                                                                                                                                                                                                          |
@@ -71,7 +83,7 @@ The design replaces the current model, which stores one coordinate per (marcher,
 | **Span**                   | A derived, non-overlapping piece of one marcher's timeline, produced by flattening that marcher's assignments across layers (R-2). A span is either a **hold** (no assignment) or covers part of exactly one assignment.                                                                                                                                                                                                                                                                   |
 | **Origin**                 | Where a marcher actually is at the start of a span (R-4). Derived, never stored.                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Founding span**          | A span that starts exactly at its transition's `start_beat` (R-3).                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **Join / resume**          | A non-founding span. A **join** is the first span of its assignment. A **resume** is a later span of the same assignment, after a higher layer let go.                                                                                                                                                                                                                                                                                                                                     |
+| **Join / resume**          | A non-founding span. A **join** is the first span of its assignment. A **resume** is a later span of the same assignment, after a higher layer let go. _v0.10:_ on a lane it enters the path by the entry rule (R-14′ item 8) instead of walking straight. |
 | **Steal**                  | A higher-layer assignment that overrides part of a lower-layer one. The overridden transition keeps running _hypothetically_.                                                                                                                                                                                                                                                                                                                                                              |
 | **Order-sensitive**        | A path style that reads marcher ordering as well as positions. Only `follow_the_leader` is order-sensitive.                                                                                                                                                                                                                                                                                                                                                                                |
 | **Trail**                  | For follow-the-leader: the polyline every member walks along (R-9).                                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -88,7 +100,10 @@ flowchart LR
   TL["Timeline<br/>range · container only"]
   TR["Transition<br/>how + when<br/>owns N anonymous slots"]
   MA["Marcher<br/>real performer"]
-  AS["Assignment<br/>marcher → slot<br/>range · layer"]
+  AS["Assignment<br/>marcher → slot<br/>range · layer · path timing"]
+  RO["Route<br/>drawn path · pins · handoff<br/>no marchers"]
+  LA["Lane<br/>(transition, slot) → route<br/>offset · Adjust"]
+  AD["Linked Adjust<br/>shared by several lanes"]
   Q(["position(marcher, beat)"])
   PT["Individual destinations<br/>one point per slot"]
   SH -.->|"dest_shape_id (optional)"| TR
@@ -96,6 +111,9 @@ flowchart LR
   TL -->|contains| TR
   TR --> AS
   MA --> AS
+  TR -.->|"slot k (optional)"| LA
+  RO --> LA
+  AD -.->|optional| LA
   AS -.->|resolved by §8| Q
 ```
 
@@ -105,6 +123,8 @@ The four concepts are strictly separated. Merging any two of them is the failure
 - **Timelines** say _which track_. They carry no motion. In the app they also say _when_: every transition in a timeline starts and ends with it (C-11 in implementation-plan.md), while assignments still come and go inside it.
 - **Transitions** say _how and when_ for anonymous slots. A transition is a function whose starting point is filled in at resolve time. Its start state is an input to resolution, not stored data.
 - **Assignments** say _who_, _when_ and _with what precedence_.
+- **Routes** (v0.10) say _which way_, with no time beyond their own pins and no marchers. They are optional.
+- **Lanes** (v0.10) say _which spot walks which route_. A lane belongs to a slot, not to a marcher, so whoever holds the spot at a beat walks it (D-4, D-22). Lanes never name a timeline (R-1).
 
 ---
 
@@ -130,13 +150,23 @@ The four concepts are strictly separated. Merging any two of them is the failure
 | D-16 | **Shapes are optional. A transition's slot destinations come from a shape _or_ from individually placed points, never both.**                                                                                                                                  | Proposed (v0.6)                     | Designers need to move marchers individually as well as by shape. The resolver only ever needed one destination point per slot; a shape is just one way to produce those points. So individual placement is a second _source_ of slot destinations, and assignments, layers, steals, FTL ordering, invalidation and the derived-range bound (§8.11) are unchanged. Points are keyed by slot, not by marcher, which keeps D-4. Follow-the-leader still needs a shape, because it follows a path (I-T5). Mixing the two in one transition (a shape with a few slots nudged) is Q-14.                                                                                               |
 | D-17 | **Triggers check; they never rewrite.** A change that touches several rows, such as the anchored range edit (R-E1), is an app procedure made of explicit statements, ordered so that every intermediate state is valid.                                        | Proposed (v0.7)                     | The app's undo replays each edit's row changes in reverse. That only works if every step of the edit landed on a valid state, and if replaying a statement has no side effects. A trigger that rewrites rows breaks both (§6.1, Appendix G).                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | D-18 | **The app derives every layer from the ranges: base rows lowest, then the later start, then the earlier end (§6.2).** Nobody types or picks a layer, and no code chooses one outside the layer module.                                                         | Decided (project owner, 2026-10-16) | Keeps D-6's stored integer, so the resolver, triggers and `ref/` are unchanged. "Last edited on top" made playback depend on edit history the timeline doesn't show: a page-flag drag hid a breakaway, a one-count nudge flipped a path, and two identical timelines played differently. Start, then end, ranks a marcher's overlapping rows straight off the timeline. Cases and animations: [research/layer-priority](research/layer-priority/README.md).                                                                                                                                                                                                                      |
-| D-19 | **A transition may walk a route: points between where its marcher starts and its destination (R-14).** Routes are resolver data, like shapes; recipes stay app data. | Proposed (v0.9, ADR 0010) | Drill writers need runs, follow the leader on drawn trails, and one marcher bent around a collision. Each needs a path that isn't a straight line or a minor arc, stored where the resolver reads it, since positions come only from the resolver (D-2). v0.9 adds it one build step at a time (Appendix I); step 1 is corners only, step 2 adds smooth points, step 15 lets a group share one route at an offset per member. |
+| D-19 | **A transition may walk a route: points between where its marcher starts and its destination (R-14).** Routes are resolver data, like shapes; recipes stay app data. _Amended by D-20 (v0.10): a slot walks a route through a lane. The `route` path style is retired, and a transition carries a route only as a follow-the-leader trail._ | Proposed (v0.9, ADR 0010) | Drill writers need runs, follow the leader on drawn trails, and one marcher bent around a collision. Each needs a path that isn't a straight line or a minor arc, stored where the resolver reads it, since positions come only from the resolver (D-2). v0.9 adds it one build step at a time (Appendix I); step 1 is corners only, step 2 adds smooth points, step 15 lets a group share one route at an offset per member. |
+| D-20 | **A group path is one route. A lane binds (transition, slot) to it.** Drawing a path never moves a marcher to another transition. | Decided (owner, 2026-11-05) | Breakout (step 15) dropped shape links, left vacant slots and had no place for per-spot facts. A lane is the narrowest fact: one row per spot (ADR 0011, 04 §2.6). |
+| D-21 | **Two overrides. Adjust is a profile at places on the group path, keyed by stable point id plus fraction. Detach is a copy.** A Detached spot walks in step with the group until its copy is edited. | Decided (owner) | Places inherit every retime, because pins map places to counts. Counts fail reshape and indexes fail point inserts (04 J.3). The precedents are an After Effects child layer, a Figma instance override, and Figma's Detach. |
+| D-22 | **An Adjust belongs to the spot. A personal edit is refused while another marcher occupies the spot during the move.** | Decided (owner) | A person-keyed Adjust would need a marcher key and an occupant lookup in the resolver. Keying by slot keeps R-14 item 9 ("reads nothing of the other members"). The refusal keeps R-other: a personal edit never moves another marcher. |
+| D-23 | **Spot occupancy is by count range** (I-A4′, I-A5′). Follow-the-leader keeps the timeless rules. | Decided (owner) | Swaps, re-entry on another spot, and "a marcher doesn't own a spot forever". R-9 step 5 needs a timeless I-A4 on follow-the-leader transitions. |
+| D-24 | **Leaving and entering a path happen at counts, as assignment-row bounds. The spacing handoff happens at a place, as anchors on the route. `o_e` is derived from the spot's own destination.** | Decided (owner) | Counts are what a designer peels off on. "When the destination shape takes over" is a place on the path. A derived `o_e` passes S-22 #1 and #3 and reads only own data (06 MAJOR-6). |
+| D-25 | **Late join: `cut_in` (the default) or `whole`, stored per occupancy on the assignment row.** | Decided (owner); storage Proposed | The window is meaningful only relative to one occupancy (06 MAJOR-2). The row already holds the occupancy's counts, so storing the window there needs no extra table and makes the window move with the row. |
+| D-26 | **Copies now, links later.** One route's lanes sit in one move. Mirror, paste, split by marchers and a continuation into the next move write copies plus app-data links. | Decided (owner) | One range per route is what lets every lane share one group clock. A page flag inside one move is only a mark in time. |
+| D-27 | **A follow-the-leader member may be Adjusted between locked checkpoints.** The Adjust is zero at checkpoints, their counts are kept, and the speed between them follows the adjusted length. | Decided (owner); details Proposed | It reuses the lane's `adjust`. It needs a trail with point ids (the trail step). On a follow-the-leader transition the slot is not the end spot (Appendix J.4). |
 
 ---
 
 ## 5. Storage [Decided schema shape; triggers Proposed]
 
 ### 5.1 DDL
+
+> **v0.10 (ADR 0011).** The DDL below is the v0.9 step 15 schema the branch runs until plan step 24. v0.10 adds `timeline_lanes`, `timeline_route_adjusts`, `routes.timing` and `assignments.path_timing`, retires the `route` path style and turns I-A4 and I-A5 into overlap triggers. Those additions are in Appendix J.1; none rebuilds a table.
 
 This schema was run against SQLite 3.45 (Python) and 3.51 (Node), using QA-DB-01 to QA-DB-24, QA-DB-13b and QA-DB-26 to QA-DB-41 (§12.2), and QA-UNDO-1 to QA-UNDO-8 with the app's history triggers installed (§6.1). It is also the schema the end-to-end fuzzer runs on, with undo and redo mixed into the edits (§12.10). Every check passes. `STRICT` tables need SQLite 3.37 or later. `PRAGMA foreign_keys = ON` MUST be set on every connection.
 
@@ -436,7 +466,7 @@ Every number in `geometry` and `path_params` MUST be finite. Every authored poin
 | `direct`            | `NULL`                                                                                                                              | no           |
 | `arc`               | `{"bulge": k}` with \|k\| ≤ ½: minor arcs only (D-15, enforced by a CHECK). k = 0 is a straight line and \|k\| = ½ is a semicircle. | no           |
 | `follow_the_leader` | `{"waypoints": [[x,y], …]}`. May be empty. Absolute coordinates.                                                                    | **yes**      |
-| `route`             | `NULL` for one marcher's own path, or `{"offset": [dx, dy]}` for a member of a group path (I-R4, v0.9 step 15). The points live in the route (below). | no           |
+| `route`             | `NULL` for one marcher's own path, or `{"offset": [dx, dy]}` for a member of a group path (I-R4, v0.9 step 15). The points live in the route (below). _Removed in v0.10:_ no transition has `path_style = 'route'` (I-R2′); a slot walks a route through a lane, whose JSON is in Appendix J.2. | no |
 
 **Route `geometry`** (I-R1, v0.9 steps 1 and 2). Absolute field units (D-5):
 
@@ -512,8 +542,8 @@ With this wrapper, the resolver never sees a partial edit, and a rejected edit l
 | I-A1 | An assignment's range lies inside its transition's range                                                                                                                                                                                                    | Triggers `asn_bounds_*`, `tr_range_check`                                                                                                                                                                        | `E-A1`     |
 | I-A2 | `0 ≤ slot_index < slot_count`                                                                                                                                                                                                                               | CHECK constraint plus triggers `asn_bounds_*`, `tr_slots_upd`                                                                                                                                                    | `E-A2`     |
 | I-A3 | A marcher has no two assignments that overlap in time **at the same layer**                                                                                                                                                                                 | Triggers `asn_overlap_*`                                                                                                                                                                                         | `E-A3`     |
-| I-A4 | Each (transition, slot) holds at most one assignment                                                                                                                                                                                                        | `UNIQUE(transition_id, slot_index)`                                                                                                                                                                              | constraint |
-| I-A5 | A marcher appears at most once per transition                                                                                                                                                                                                               | `UNIQUE(transition_id, marcher_id)`                                                                                                                                                                              | constraint |
+| ~~I-A4~~ → **I-A4′** | Rows sharing `(transition_id, slot_index)` don't overlap in `[start, end)`, at any layer. On a `follow_the_leader` transition, at most one row per slot whatever the beats. | Triggers `asn_slot_overlap_ins/upd`. `tr_ftl_unique_upd` checks a change of `path_style` to FTL | `E-A4` |
+| ~~I-A5~~ → **I-A5′** | One marcher's rows in one transition don't overlap, at any layer. On a `follow_the_leader` transition, at most one row per marcher. | Triggers `asn_marcher_overlap_ins/upd`, `tr_ftl_unique_upd` | `E-A5` |
 | I-A6 | Every range has positive length                                                                                                                                                                                                                             | CHECK `end_beat > start_beat`                                                                                                                                                                                    | constraint |
 | I-D1 | A shape that a transition uses cannot be deleted                                                                                                                                                                                                            | FK `ON DELETE RESTRICT`                                                                                                                                                                                          | constraint |
 | I-T5 | A `follow_the_leader` transition has a shape                                                                                                                                                                                                                | CHECK                                                                                                                                                                                                            | constraint |
@@ -522,11 +552,24 @@ With this wrapper, the resolver never sees a partial edit, and a rejected edit l
 | I-N1 | Integer columns (beats, slots, layers, ids) hold integers                                                                                                                                                                                                   | `STRICT` tables                                                                                                                                                                                                  | constraint |
 | I-N2 | Beats lie in `[0, 2³¹−1]`, `layer` in `[−1000, 1000]` and `slot_count` in `[1, 10000]`. Home coordinates are finite with \|x\|, \|y\| ≤ 10⁶.                                                                                                                | CHECK constraints                                                                                                                                                                                                | constraint |
 | I-R1 | Route geometry matches §5.2 (v0.9 steps 1 and 2): version 1, finite numbers, every point within `[−10⁶, 10⁶]²`, unique point ids, keys `id`, `at` and an optional `tension` in `(0, 2]`. | App write path. `json_valid` is a CHECK. | `E-R1` |
-| I-R2 | A `route` transition has a route, no shape and `slot_count = 1`. No other transition has a route (step 1; follow the leader on a trail relaxes this). | CHECK; the second sentence at commit | constraint; `E-R2` |
-| I-R4 | A `route` transition's `path_params` is NULL or `{"offset": [dx, dy]}` (§5.2, v0.9 step 15). A transition with NULL walks its route alone. | Shape and bounds: app write path (`E-P1`). Walks alone: a commit check | `E-P1`, `E-R4` |
-| I-R3 | Every route is walked by at least one transition (v0.9 step 15; step 1 required exactly one). | `commit_violations` at commit | `E-R3` |
-| I-R5 | Every transition walking one route is in one timeline and has the same `start_beat` and `end_beat` (v0.9 step 15): a group path belongs to one move. The resolver needs only the range; the timeline keeps a split-off move (UI-25), which keeps its range, from sharing a route. | `commit_violations` at commit | `E-R5` |
+| ~~I-R2~~ → **I-R2′** | No transition has `path_style = 'route'`. A transition carries a route only when it is `follow_the_leader` (its trail, the trail step). | Branch: the old CHECK holds vacuously. Commit: E-R2. Main: a CHECK on the trail step's terms | `E-R2` |
+| ~~I-R4~~ → **I-LN4** | An own lane (offset NULL) on a non-FTL transition is the only lane of its route, and has `adjust IS NULL`. | `commit_violations` | `E-R4` |
+| ~~I-R3~~ → **I-R3′** | Every route is used by at least one lane whose slot holds a row at some beat, or is a follow-the-leader trail. | `commit_violations` | `E-R3` |
+| ~~I-R5~~ → **I-LN5** | Every lane of a route is on a transition of one timeline. The same range follows from C-11. | `commit_violations` | `E-R5` |
+| I-LN1 | `lane.slot_index < T.slot_count` | Triggers `lane_slot_ins/upd` and `tr_slots_lane_upd` (on `slot_count` decrease) | `E-LN1` |
+| I-LN2 | A lane on a `follow_the_leader` transition is a **trail lane**: offset NULL, `group_adjust_id` NULL, and `route_id = T.route_id`. | `commit_violations` | `E-LN2` |
+| I-LN3 | At most one lane per (transition, slot). | UNIQUE | constraint |
+| I-J1 | A linked Adjust's `route_id` equals the `route_id` of every lane that points at it. | `commit_violations` | `E-J1` |
+| I-J2 | Every linked Adjust has at least one lane (no orphans). | `commit_violations` | `E-J2` |
+| I-J3 | Every id named by an anchor (in `lanes.adjust`, `route_adjusts.profile` or `routes.timing.handoff`) is a point id of the anchor's route. Profile and anchor JSON match J.2. | Ids: `commit_violations` (below). Shape and bounds: app write path | `E-J3`, `E-P1` |
+| I-J4 | Profile keys are strictly increasing in place, at least `s_min` apart, and inside `[D_1, D_m]`. **Why one step (07 N2):** at `ε_geom` spacing a 1.5-step bulge is crossed in `10⁻⁹` of travel, a teleport in one frame. One step is the travel of one count at the standard step, the finest place a designer marks, so every change of an Adjust takes at least a count of travel at normal speed. It bounds the sideways rate at `|Δd|` steps per step of travel (P-14b). Whether that rate is marchable depends on `|Δd|` and the tempo, which change after the key is written, so feasibility is Big steps' job, not a refusal. A larger minimum (two steps) would refuse S-08's tight dodge outright. | App write path, in full (it needs `D` on curves). Commit view I-J5 for the part SQL can measure | `E-ARGS` |
+| I-J5 | The SQL-visible part of I-J4 and I-H1: within one profile, or a handoff's two ends, two anchors that name the same `(a, b)`, where `a` and `b` are adjacent stored points and both are corners (no `tension`), are at least `s_min` apart. On that stretch `W` is a straight line, so their distance is exactly `|f₁ − f₂| · |b − a|` (to `ε_geom`, cleaning). The view compares squares, so it needs no `sqrt`. Two keys of one profile with equal `(a, b, f)` are refused wherever they lie. A handoff with `from = to` is the instant form and is exempt (I-H1 places it). | `commit_violations` (J.3) | `E-J5` |
+| I-H1 | Handoff: `x(from) ≤ x(to)`. Either `x(to) − x(from) ≥ s_min`, or the handoff is instant (`from = to`) at a place `≤ D_1` ("immediately") or `≥ D_m` ("at the end"), never inside the rigid part. | App write path. Commit: I-J5 | `E-ARGS` |
+| I-P1 | Every pin and hold names a point id of its route. Every pin's `at` lies in `(0, c)` for the move its lanes are in. Pins are strictly increasing in `at` along route order. | Ids and range: `commit_violations`. Order: app write path | `E-R7` |
+| I-A7 | `path_timing` matches J.2: `join ∈ {cut_in, whole}`, `counts` an integer ≥ 1 only with `whole`, `entry` an integer ≥ 1 only with `cut_in`, `offset` two bounded finite numbers only on a row with no founding span, and no other key. | App write path; `json_valid` CHECK | `E-P1` |
 | I-D3 | A route that a transition uses cannot be deleted | FK `ON DELETE RESTRICT` | constraint |
+
+**v0.10 (ADR 0011).** Struck ids are replaced by the primed or new id beside them; the old text is in Appendix I. E-R2 now reads "a non-FTL transition with a route", and its old second sentence ("no other transition has a route") is part of I-R2′. The lane invariants are numbered I-LN1 to I-LN5 because I-L1 and I-L2 are §6.2's layer invariants. Their commit views and the overlap triggers are in Appendix J.3. `s_min` is defined in Appendix J.
 
 Because of I-A3, at most one winner exists for any beat in R-2.
 
@@ -590,6 +633,14 @@ That argument needs four things. The schema in §5.1 meets all four, and they ar
 - **Pruning drops whole groups, oldest first.** Undo only ever replays the newest group, so dropping old groups just shortens the stack (QA-UNDO-8). Dropping part of a group would corrupt it.
 - The reference triggers identify rows by `rowid`, so tracked tables must not be `WITHOUT ROWID`. Keying by primary key works equally well.
 
+**Lanes (v0.10).**
+
+- **Statement order** for deletes: rows' `path_timing` (no FK), lanes, linked Adjusts, K6 rows,
+  routes. Inserts go in the reverse order.
+- Lanes reference transitions and routes with RESTRICT. Linked Adjusts reference routes with
+  RESTRICT. Lanes reference linked Adjusts with RESTRICT.
+- Undo replays every row image with its rowid (C-2), as for routes.
+
 ### 6.2 Layer priority [Decided, project owner 2026-10-16]
 
 The resolver only reads `layer` (R-2). This section says how the app's write path chooses it, so that who wins depends only on what the timeline shows, never on the order of edits. Cases, a simulator and animations: [research/layer-priority](research/layer-priority/README.md).
@@ -625,7 +676,7 @@ Sections 8.1–8.8 **are the reference oracle**. An optimised implementation MUS
 
 ### R-1: Inputs
 
-The resolver reads `marchers`, `shapes`, `transitions` and `assignments`. It MUST NOT read `timelines`. Timelines exist for organisation and containment (I-T1) only.
+The resolver reads `marchers`, `shapes`, `transitions`, `assignments` (including `path_timing`), `slot_destinations`, `routes`, `lanes` and `route_adjusts`. It MUST NOT read `timelines` or any app-data table (recipes, `route_sources`, held marks). Timelines exist for organisation and containment (I-T1) only. _(v0.10: adds `path_timing`, `slot_destinations`, `routes`, `lanes` and `route_adjusts`, and app data.)_
 
 ### R-2: Flattening assignments into spans
 
@@ -669,6 +720,8 @@ For a span `s` whose winner is row `r` in transition `T`:
 
 Note: a row that begins at `T.start_beat`, but is overridden at that moment by a higher layer, produces a first span that is a **join**, not founding (QA-FL-03).
 
+_v0.10:_ A row whose slot has another occupant earlier in the move is still classified by its own spans: its first span is a join unless it starts at `T.start_beat`.
+
 ### R-4: Origins
 
 For `spans[m] = s₀, s₁, …` (where `s₀` is always the leading hold):
@@ -701,7 +754,7 @@ For joins and resumes, the same formula **rebases** the motion: whatever distanc
 | **R-6** `hold`             | `origin(s)`                                                           |
 | **R-7** `direct`, any kind | `lerp(origin(s), dest, p(s,b))`, where `dest = destinations[T][slot]` |
 | **R-8** `arc`, any kind    | `arcPoint(origin(s), dest, bulge, p(s,b))`, as defined below          |
-| **R-14** `route`          | the walked path of R-14 at `p(s,b)`; a join or resume walks straight, as R-7 (v0.9 steps 1, 2 and 15) |
+| **R-14′** lane on `(T, k)` (v0.10) | The lane rule R-14′, in place of R-7 or R-8, whatever `T.path_style` is, except that follow-the-leader uses R-10′. |
 
 `lerp(a, b, t)` is endpoint-exact: it returns `a` for `t ≤ 0` and `b` for `t ≥ 1`, bit for bit (§8.10).
 
@@ -797,6 +850,8 @@ For a transition with `n = slot_count`, slot `i` gets `p_i`:
 Curves are never flattened, so FTL arrival and trail adherence are exact at every radius. v0.2 flattened circles into 720 segments, which broke its own 0.01 tolerance above a radius of about 1,050 (Appendix C).
 
 ### R-14: Routes [Proposed, v0.9 steps 1, 2 and 15]
+
+> **v0.10 (ADR 0011).** R-14′ below replaces this rule's dispatch ("For a span of a `route` transition"), "Own path or group member" and the group schedule. The geometry (cleaning, tangents, pieces, length and evaluation) is unchanged and R-14′ uses it as `walk`. The group schedule stays written here because R-14′ item 1 reads its item 1 and item 9 must match it bit for bit.
 
 For a span `s` of a `route` transition `T` with route `R` (D-19, I-R2):
 
@@ -987,14 +1042,233 @@ not bit for bit (QA-RT-17).
 No step so far promises that a marcher lands on a point bit for bit at any beat: nothing ties a
 point to a beat until pins (a later step). Facing is not derived from the path (ADR 0010, P-3).
 
+### R-14′: Lanes [Decided, v0.10; replaces R-14's dispatch, "Own path or group member" and the group schedule]
+
+The cleaning, tangents, pieces, length and evaluation of R-14 are **unchanged** and are used
+below as `walk`. `walk_x(W, x)` is R-14's Evaluation entered at distance `d = x` instead of
+`d = p · L`.
+
+**Dispatch.** For a span `s` of row `r` in `T` at slot `k`:
+
+- With **no lane** on `(T, k)`, evaluate by `T.path_style` as R-7, R-8 or R-10/R-11. `path_timing`
+  is ignored.
+- With a **trail lane** (on follow-the-leader), use R-10′.
+- With an **own lane** (offset NULL):
+  - a founding span uses R-14's own path, verbatim;
+  - a join or resume uses item 8, with the own path's founding walk as reference.
+- With a **group lane**, use items 1 to 9 below.
+
+For a group lane, with `A = origin(s)` and `B = destinations[T][k]`, the start offset `o_s` is
+`r.path_timing.offset` when `r` has no founding span and that key is set (a later occupant kept
+on its old offset by a recast, AP-R16), and `(offset_x, offset_y)` otherwise:
+
+1. **Reference walk.** `W`, `D_1 … D_m` and `L` come from the route alone (R-14, group schedule
+   item 1).
+   - With `m = 0` the member walks R-7's line: `lerp(A, B, q)`, where `q` is R-5's `p` when R has
+     no pins or holds, and `x / L` otherwise.
+   - If `L < ε_geom`, `q = (β(b) − T.start)/c`.
+   - Adjust and handoff are ignored (T-11).
+
+2. **Group clock `X(β)`.** It maps `[T.start, T.end]` onto `[0, L]`.
+   - **Knots.** Start with `(T.start, 0)`. Add R-15's pin and hold knots (draft-model §3.2), each
+     point's place being `D` of the kept point that represents it. End with `(T.end, L)`.
+   - **Total rule T-6.** Drop a knot whose beat is outside `(T.start, T.end)`, or whose id isn't
+     in the route. Then, scanning in route order, drop every knot whose beat isn't strictly
+     greater than the previous kept knot's, or whose place is smaller than the previous kept
+     knot's. Raise `D-PIN` for each drop.
+   - `X` is linear between consecutive knots. Two knots at one place are a stop.
+   - With no pins or holds, `X(β) = p · L`, with `p` computed by R-5's formula with
+     `s.start = T.start`, so that item 9's bit-identity holds.
+
+3. **Lane clock `β(b)`.** It comes from the row's `path_timing`.
+   - **`cut_in`** (or NULL): `β(b) = b`.
+   - **`whole`:** `ws = r.start_beat`, and `we = min(ws + counts, T.end)` (`T.end` when `counts`
+     is absent). Then
+     `β(b) = clamp(T.start + (b − ws) · c / (we − ws), T.start, T.end)`.
+   - `we > ws` always, because `r.start_beat < r.end_beat ≤ T.end` (I-A1, I-A6) and
+     `counts ≥ 1`.
+   - **Total rule T-7.** Malformed `counts` is read as absent, and raises `D-TIMING`.
+   - Before `ws` there is no span of `r`, so nothing is evaluated. After `we` the member is at `B`.
+   - The place is `x(b) = X(β(b))`.
+
+4. **Anchors.** An anchor's place is `x = D(a) + clamp01(f) · (D(b) − D(a))`, with:
+   - `D('from') = 0` and `D('to') = L`;
+   - for an id, `D` of the kept point that represents it (R-14, "represented").
+   - **Total rule T-1.** An id not in the route reads as `'from'` for `a` and `'to'` for `b`, and
+     raises `D-ANCHOR`. I-J3 keeps this from being committed.
+   - **T-2.** `D(a) > D(b)` is evaluated by the same formula (the place lies between them), and
+     raises `D-ANCHOR`.
+
+5. **Offset `o(x)` and the handoff.**
+   - `o_e = B − G`, per coordinate. It is the spot's own destination relative to the stored `G`,
+     derived and never stored.
+   - **No handoff:** `o(x) = o_s`.
+   - **With a handoff:** let `h0` and `h1` be the places of `handoff.from` and `handoff.to`,
+     swapped if `h1 < h0` (`D-ANCHOR`). The effective ramp (total rule **T-5**) is:
+     - `h1 − h0 ≥ ε_geom`: the ramp `[h0, h1]`;
+     - otherwise, with `h = h0`:
+       - `h ≤ D_1`: `w ≡ 1` ("immediately"), so the first leg aims at destination spacing;
+       - `h ≥ D_m`: `w ≡ 0` ("at the end"; the last leg reads only `P(D_m)`, so nothing jumps);
+       - otherwise (`D_1 < h < D_m`): the kept stretch `[D_j, D_{j+1}]` with
+         `D_j ≤ h < D_{j+1}`, raising `D-HANDOFF-WIDENED`.
+     - The two ends are now symmetric (07 N4): an instant handoff on a kept end point reads as
+       outside the rigid part, and only a strictly interior one is widened, always forward.
+     - This rule is the resolver's ε-scale backstop. The write path keeps every interior ramp at
+       least `s_min` long (I-H1), so T-5 fires only on states written without the app checks.
+   - **Weight on a ramp `[ρ0, ρ1]`:** `w = 0` for `x ≤ ρ0`, `w = 1` for `x ≥ ρ1`, otherwise
+     `(x − ρ0)/(ρ1 − ρ0)`. The denominator is at least `ε_geom`.
+   - **Value:** `o(x) = o_s` when `w = 0`, `o_e` when `w = 1`, otherwise `o_s + w · (o_e − o_s)`
+     per coordinate.
+
+6. **Adjust `δ(x)`.** For each profile, the lane's linked Adjust `δ_g` and its own `δ_ℓ`
+   (either may be absent, which counts as zero):
+   - (i) Compute each key's place.
+     - **T-3.** Clamp each place into `[D_1, D_m]`, raising `D-ADJUST-CLAMP` when one moves.
+       Clamping keeps the profile's effect inside the rigid part, which is the only part that
+       reads it (06 m9).
+   - (ii) Sort the keys by place. Ties keep stored order.
+   - (iii) **T-4.** Single-linkage scan in sorted order (07 N5): walk the sorted keys and start
+     a new cluster whenever the gap to the previous key is at least `ε_geom`. So a cluster is a
+     maximal run whose consecutive gaps are all below `ε_geom`, which makes the result
+     independent of reading order. From each cluster keep the key that is last in stored order
+     and drop the rest (`D-ADJUST-TIE`). This keeps the profile continuous (06 MAJOR-4). The
+     oracle implements the same scan.
+   - (iv) Evaluate:
+     - no keys: `δ = 0`;
+     - `x ≤` the first key's place: that key's `d`;
+     - `x ≥` the last key's place: that key's `d`;
+     - otherwise, between consecutive keys `i` and `i+1`:
+       `d_i + (x − x_i)/(x_{i+1} − x_i) · (d_{i+1} − d_i)` per coordinate.
+
+7. **Placing, legs and evaluation.**
+   - **Placing:** `P(x) = ((walk_x(W, x) + o(x)) + δ_g(x)) + δ_ℓ(x)`. Each `+` is one float64
+     addition per coordinate, in this order (06 m3).
+   - **Placed handles:**
+     - `in_1 = ((in^W_1 + o(D_1)) + δ_g(D_1)) + δ_ℓ(D_1)`;
+     - `out_m` likewise, from `out^W_m` at `D_m`.
+   - **First leg:** from `A` to `P(D_1)`.
+     - It is a line when `W_1` is a corner or `|P(D_1) − A| < ε_geom`.
+     - Otherwise it is the cubic `(A, A + (P(D_1) − A)/3, in_1, P(D_1))`.
+   - **Last leg:** from `P(D_m)` to `B`, symmetric.
+   - Both are measured as R-14's pieces.
+   - **Evaluation** at `x = x(b)`:
+     - `b ≤ s.start` and the span is founding: `A`;
+     - `x ≥ L` with `β(b) = T.end`: `B`;
+     - `x < D_1`: `leg(first, x / D_1)`;
+     - `x ≤ D_m`: `P(x)`;
+     - otherwise: `leg(last, (x − D_m)/(L − D_m))`.
+   - Nothing divides by zero: `D_1 ≥ ε_geom` (cleaning), and `x > D_m` implies `L > D_m`.
+
+8. **Joins and resumes (the entry rule; replaces "Joins and resumes walk straight").**
+   - A non-founding span of `r` enters by the entry rule of draft-model §3.3, items 2 to 6.
+   - The **reference** `Ref(b)` is items 1 to 7 evaluated for a hypothetical span of `r` with
+     `A_ref`:
+     - **`cut_in`:** `A_ref` is the origin of `r`'s founding span if `r` has one, else `F + o_s`,
+       with `o_s` the row's own `path_timing.offset` when set (see the head of this rule).
+     - **`whole`:** the reference uses `r`'s own lane clock (item 3), so a resume of a `whole`
+       occupancy aims at its own windowed schedule, never at the founding one (06 MAJOR-2).
+       `A_ref` is the origin of `r`'s first span if that span starts at `ws`, else `F + o_s`.
+   - **Horizon:** the beat of the next knot after `b₀` in member beats, else `we` (`whole`) or
+     `T.end`.
+   - **Entry length:**
+     - `path_timing.entry`, when set, clamped to the horizon;
+     - otherwise the first fit at a normal step on the move's rate grid. Until steps per count
+       ship, the grid is one step per beat and the step is the app's standard 8-to-5.
+   - **Walk:** a straight line from `origin(s)` to `Ref(b_i)` over `[b₀, b_i]`, using R-7's
+     `lerp`, which is endpoint-exact. Then `Ref` exactly.
+   - **Diagnostics:** `D-REBASE` is replaced by `D-ENTRY` (info), and `D-ENTRY-LATE` (warning)
+     is raised when nothing fits before the horizon.
+   - 06 m11 (note only): a joiner with no founding row uses `F + o_s` as its reference start,
+     which may differ from the first leg the founder walked. This matters only when the entry
+     aims inside the first leg.
+
+9. **Bit-identity rule.** For a founding span with `cut_in` or NULL `path_timing`, a route with
+   no `timing`, and a lane with no `adjust` and no `group_adjust_id`, evaluation MUST be R-14's
+   step 15 group schedule in its u-form (`core/geom.ts:568–723`), with `o = o_s`. QA-RT-15 to
+   QA-RT-20 then stay bit-identical.
+   - This covers **founding spans only.** Joins and resumes change by design from the
+     range-occupancy step, because they enter the path instead of walking straight (06
+     MAJOR-11).
+
+**Inputs.** A lane reads `origin(s)`, its own destination, its own lane row, its own row's
+`path_timing`, its linked Adjust and its route. It reads nothing of other members, so R-14 item 9
+and §9's acyclicity hold. D-7 still applies: a steal at beat `c` leaves the member at its
+evaluation at `c`.
+
+**Consequences.**
+
+- Lanes that share a lane clock and have no Adjust pass their copies of each kept point on the
+  same beat, so the group holds its shape (R-hold).
+- An adjusted lane passes `W_k + o(D_k) + δ(D_k)` on that same beat.
+- Lanes only translate: nothing rotates (G-1).
+- An exit is the row's `end_beat`. The next span starts where this one left off (R-4).
+
+### R-10′: Follow-the-leader with a trail lane [v0.10, D-27; adds to R-10]
+
+For a founding span of member `q` on an FTL transition with a trail route and a trail lane:
+
+1. **Distance.** `d(β) = lerp(startDist[q], endDist[q], p)` as R-10, with `β = b`.
+2. **Checkpoints.** The trail-route points at their trail distances `C_1 < … < C_n`, plus
+   `startDist[q]` and `endDist[q]`. Sort them, merge those closer than `ε_geom`, and call them
+   `κ_0 < … < κ_J`.
+3. **Profile.**
+   - Evaluate the lane's `adjust` as R-14′ item 6, with places measured along the trail.
+   - Add a zero key at every checkpoint.
+   - **T-3′.** A key outside `[κ_0, κ_J]`, or in the line-up part, is dropped (`D-ADJUST-CLAMP`).
+   - **T-4.** Ties within `ε_geom` (the same single-linkage scan) keep the **checkpoint's** zero
+     key. The write path keeps every key at least `s_min` from every checkpoint and from other
+     keys (AP-R19).
+4. **Adjusted stretch.**
+   - For `κ_j ≤ d < κ_{j+1}`, the adjusted curve is `Γ_j(t) = trail(t) + δ(t)` for
+     `t ∈ [κ_j, κ_{j+1}]`.
+   - Its length `λ_j` is measured on the union of the trail's piece boundaries and the profile's
+     key places. A line piece with linear δ gives a polyline, which is exact. A cubic piece uses
+     R-14's 64-sample rule.
+5. **Evaluation.** The member is at the point of `Γ_j` at adjusted arc length
+   `λ_j · (d − κ_j)/(κ_{j+1} − κ_j)`.
+   - It passes every checkpoint on its unchanged beat. `δ = 0` there, so it is on the trail.
+   - Its speed within the stretch is `λ_j / (κ_{j+1} − κ_j)` times its trail speed.
+6. **Total rule T-12.** A join or resume (R-11) ignores the trail lane.
+
+### Total rules T-1 to T-14 [v0.10]
+
+Every stored state that passes `json_valid` evaluates to a finite, continuous position, whatever
+the app's write checks missed. Each rule raises its diagnostic.
+
+| Rule | Case | What the resolver does | Prevented on write by |
+| --- | --- | --- | --- |
+| T-1 | An anchor id is missing | Reads as `'from'` / `'to'` (`D-ANCHOR`) | I-J3 commit |
+| T-2 | An anchor's ends are reversed | Formula as written (`D-ANCHOR`) | write path |
+| T-3 | A key outside `[D_1, D_m]` | Clamped (`D-ADJUST-CLAMP`) | I-J4 |
+| T-4 | Keys tied within `ε_geom` (single-linkage clusters) | Last stored kept per cluster (`D-ADJUST-TIE`) | I-J4, I-J5 |
+| T-5 | An instant handoff strictly inside `(D_1, D_m)` | Widened forward to its kept stretch (`D-HANDOFF-WIDENED`). At `≤ D_1` it is "immediately", at `≥ D_m` "at the end" | I-H1, I-J5 |
+| T-6 | A pin outside `(0, c)`, a missing id, or out of order | Knot dropped (`D-PIN`) | I-P1 |
+| T-7 | Malformed `counts` | Read as absent (`D-TIMING`) | I-A7 |
+| T-8 | A lane on a slot ≥ `slot_count`; or any lane on a follow-the-leader transition that isn't a valid trail lane: a route other than `T.route_id`, a non-NULL offset, or a non-NULL `group_adjust_id` (07 N6) | Ignored; walks by `path_style` (R-10/R-11 on follow-the-leader) (`D-LANE-IGNORED`) | I-LN1, I-LN2 |
+| T-9 | An own lane with `adjust` | `adjust` ignored | I-LN4 |
+| T-10 | A linked Adjust of another route | Ignored | I-J1 |
+| T-11 | `m = 0` | R-7 line; Adjust and handoff ignored | none (valid) |
+| T-12 | A follow-the-leader join or resume | R-11; trail lane ignored | none (valid) |
+| T-13 | `path_timing` with no lane | Ignored | none (valid) |
+| T-14 | `path_timing.offset` on a row that has a founding span | Ignored; the lane's offset is used (`D-TIMING`) | I-A7 |
+
 ### 8.9 Diagnostics
 
 Diagnostics never block playback or writes. The inspector MUST show them.
 
 | Code                | Level   | Raised when                                                               |
 | ------------------- | ------- | ------------------------------------------------------------------------- |
-| `D-VACANT`          | warning | Slot `k` of `T` has no assignment                                         |
+| `D-VACANT` (changed in v0.10) | warning | Slot `k` of `T` has no row over some range inside `T`. The range is reported. |
 | `D-REBASE`          | info    | A direct, arc or route span is a join or resume (R-5 rebase; R-14)        |
+| `D-ENTRY` (replaces `D-REBASE` for lanes) | info | A lane span is a join or resume and enters by the entry rule |
+| `D-ENTRY-LATE` (v0.10) | warning | No entry fits at a normal step before the horizon |
+| `D-ANCHOR` (v0.10) | warning | T-1 or T-2 |
+| `D-ADJUST-CLAMP` (v0.10) | warning | T-3 or T-3′ |
+| `D-ADJUST-TIE` (v0.10) | warning | T-4 |
+| `D-HANDOFF-WIDENED` (v0.10) | warning | T-5 |
+| `D-PIN` (v0.10) | warning | T-6 |
+| `D-TIMING` (v0.10) | warning | T-7 |
+| `D-LANE-IGNORED` (v0.10) | warning | T-8 |
 | `D-FTL-NONFOUNDING` | warning | An FTL span is a join or resume, so R-11 applies                          |
 | `D-FTL-EMPTY`       | warning | An FTL transition has no founding spans                                   |
 | `D-ORDER-FALLBACK`  | info    | `inherit` could not find a single upstream source, so slot order was used |
@@ -1032,7 +1306,12 @@ where `a` is the number of arc spans on the dependency path that leads to it. Th
 
 - **Direct, FTL fallback, hold:** Q lies on the segment from P to B, so `|Q| ≤ max(|P|, |B|)`.
 - **Route (R-14, v0.9):** a line piece keeps Q on its segment. A cubic piece keeps Q inside the convex hull of its four control points, since every evaluated point is `Q(t)` for some `t ∈ [0, 1]`. Its ends are P, B or inner points. A chord-rule control is a convex combination of an end and an inner point. A handle lies within `τ · (2/3)·max(|a − q|, |c − q|) ≤ (4/3)·2β` of its point `q`, since `|r_a·δc − r_c·δa| ≤ 2·r_a·r_c` and `d₁/(d₁ + d₂) < 1` (for `out`; `in` likewise with `|a − q|`; the mirrored case gives `τ·|c − q|/3`), and its neighbours `a`, `c` are inner points or `F`, `G`, all authored. So `|Q| ≤ max(|P|, (11/3)·β)`, and with no smooth point `|Q| ≤ max(|P|, β)` as in step 1. A join or resume is direct.
-- **Group member (R-14, step 15):** between its moments Q is a reference walk's point, within the bound above for the unplaced route, plus the offset. A leg's points lie on a line or in the hull of `A`, a chord-rule control, a placed handle and a placed point. With `|o| ≤ 2·√2·10⁶` (§5.2) and unplaced points within `√2·10⁶`, each is within `(11/3)·√2·10⁶ + 2·√2·10⁶ < (11/3)·3·√2·10⁶`, so `|Q| ≤ max(|P|, γ)` with β taken as `3·√2·10⁶`. With corners only every leg and every piece of `W` is a line, and `|Q| ≤ max(|P|, β)` with the same β.
+- **Lane (R-14′, v0.10; replaces the step 15 group-member bullet):** between its moments `Q` is a reference-walk point plus `o(x) + δ_g(x) + δ_ℓ(x)`.
+  - `o(x)` is a convex combination of `o_s` and `o_e`. Both are within `2·√2·10⁶` in norm: by the CHECK on `o_s` (or I-A7's bound when `o_s` comes from a row's `path_timing.offset`), and because `o_e = B − G` is the difference of two bounded points.
+  - Each δ is within `2·√2·10⁶` (I-J3).
+  - So `|Q| ≤ (11/3)·√2·10⁶ + 3·2·√2·10⁶ < (11/3)·7·√2·10⁶`, and `|Q| ≤ max(|P|, γ)` with β taken as `7·√2·10⁶`.
+  - Legs lie in the hull of `A`, a chord-rule control, a placed handle and a placed point, so the same bound holds.
+  - A trail lane adds one δ to a trail point: `β = 3·√2·10⁶`.
 - **FTL founding:** Q lies on a polyline through member origins and waypoints, or on the destination path, so `|Q|` is at most the largest of those vertices.
 - **Minor arc:** Q sees the chord PB at an angle of at least 90°, so by Thales it lies in the disk with diameter PB. Then `|Q| ≤ (|P+B| + |P−B|)/2 ≤ √(|P|² + |B|²)`.
 
@@ -1040,7 +1319,7 @@ Homes start with `|P| ≤ β ≤ γ`. A route span leaves the bound as it is, si
 
 **Consequences.**
 
-- Every position is finite for every valid dataset. Even with a million arc spans the bound is about 1.4×10⁹ (5.2×10⁹ with smooth route points; three times each when a route is walked with an offset, step 15), where float64 still resolves 10⁻⁶.
+- Every position is finite for every valid dataset. Even with a million arc spans the bound is about 1.4×10⁹ (5.2×10⁹ with smooth route points; three times each when a route is walked with an offset, step 15; seven times each when a lane has an offset and Adjusts, v0.10), where float64 still resolves 10⁻⁶.
 - D-5's promise now holds numerically as well as structurally: an upstream edit can make a drill look worse, but it can never make the numbers invalid. Marchers can still be driven off the field. That is ugly, not invalid.
 - In practice positions stay far inside the bound. The reviewer's construction at the maximum allowed bulge ran 1,000 partial arcs without the marcher ever getting farther than its starting distance of 10⁶ (QA-REG-5). A randomized adversarial variant never exceeded about 1.8×10⁶.
 
@@ -1049,6 +1328,8 @@ Homes start with `|P| ≤ β ≤ γ`. A route span leaves the bound as it is, si
 ---
 
 ## 9. Derived state and caching [Proposed, refining Decided D-3/D-8]
+
+> **v0.10.** The per-route schedule and profile caches, and the seeds for lanes, linked Adjusts and `path_timing`, are in Appendix J.7.
 
 ### 9.1 The three tiers
 
@@ -1359,6 +1640,8 @@ It MUST NOT be read back into the editor as state (D-2).
 
 ## 12. QA plan
 
+> **v0.10.** The new rows (QA-DB-L, QA-RT-L, QA-AP-L, QA-MIG-L, QA-FV-L and the rest) are in Appendix J.9, and P-14 and P-14b in Appendix J.5.
+
 ### 12.1 Conventions
 
 - **Tolerance ε:**
@@ -1592,6 +1875,8 @@ M1 MUST NOT end on the same point as M4 at (6,8).
 | P-11 | **Finite.** No position, distance or target is ever NaN or infinite.                                                                                                                                         |
 | P-12 | **Causality [v0.3].** Adding or removing an assignment in transition `T` changes no position before `T.start_beat`.                                                                                          |
 | P-13 | **Derived range [v0.4].** Every position satisfies `\|P\| ≤ γ·√(1 + a)`, where β is the largest distance of any authored point from the field origin (route points placed by each walker's offset, v0.9 step 15), `γ` is β, or `(11/3)·β` when a route has a smooth point (v0.9 step 2), and `a` is the number of arc spans in the show (§8.11). |
+| P-14 | **No jumps [v0.10].** For every marcher, the position is continuous in `b` everywhere, including at handoff ramp ends, Adjust keys, entries, exits and changes of spot (Appendix J.5). |
+| P-14b | **Bounded speed [v0.10].** On a lane's rigid part the speed is bounded by the reference walk's speed times `1 + |o_e − o_s| / s_min + Σ max |Δd| / s_min`, for every show that passes the write checks (Appendix J.5). |
 
 **How each property is checked.**
 
@@ -2248,3 +2533,645 @@ offset walks `groupWalk(A, points, B, F, G, o)`, which
 5. evaluates by item 6, `W`'s own evaluation placed in the middle.
 
 Its schema's `commit_violations` carries E-R3, E-R4 and E-R5 as §5.1 writes them.
+
+---
+
+## Appendix J: Design change: lanes on slots (v0.9 → v0.10)
+
+**Change (project owner, 2026-11-05 and 2026-11-06; [ADR 0011](../adr/0011-lanes-on-slots.md)):** a group path is one route, and a **lane** binds one slot of one transition to it (D-20). Marchers are no longer moved out of their transitions to get a path. Overrides are **Adjust** (a displacement profile at places on the group path, owned by the spot) and **Detach** (a copy that keeps the group's timing). Occupancy of a spot is by count range (D-23).
+
+**Status.** v0.10 is decided. It is built from plan step 24 on ([implementation plan](research/pathways/implementation-plan.md): steps 24 to 27, and amended steps 3, 5, 12 and 17). Until step 24 merges, the branch runs v0.9 step 15 (I.7 to I.9). Each step still writes its own detail into this spec when it starts.
+
+**Where the reasoning is.** [research/pathways/model-c/](research/pathways/model-c/README.md) holds the grill's reports: 01 (today's model), 02 (scenarios), 03 (precedents), 04 (evaluation), 05 (model C for review), 06 (adversarial review), 07 (re-check) and the owner's answers. "06 MAJOR-n", "06 mn" and "07 Nn" below cite them. "M0" to "M9" are the first draft's build track; the implementation plan maps them to steps. K1, K5 and K6 are storage keys from draft-model and 04.
+
+**Main-body changes.**
+
+| Section | Change |
+| ------- | ------ |
+| §2 | Route replaced; new Lane, Group path, Own path, Spot, Occupancy, Adjust, Detach, Anchor, Group clock, Lane clock, Handoff, Checkpoint; Join / resume amended |
+| §3 | Diagram gains Route, Lane and Linked Adjust; two new bullets |
+| §4 | D-19 amended; new D-20 to D-27 |
+| §5.1, §5.2 | Pointers to J.1 and J.2; `route` `path_params` removed |
+| §6 | I-R2 → I-R2′, I-R3 → I-R3′, I-R4 → I-LN4, I-R5 → I-LN5, I-A4 → I-A4′, I-A5 → I-A5′; new I-LN1 to I-LN3, I-J1 to I-J5, I-H1, I-P1, I-A7 |
+| §6.1 | Delete and insert order for lanes |
+| §8 | R-1 replaced; R-3 one sentence; R-6 to R-8's `route` row replaced; new R-14′, R-10′ and total rules T-1 to T-14; §8.9 `D-VACANT` changed and nine new codes; §8.11 lane bound |
+| §9, §12 | Pointers to J.7 and J.9; P-14 and P-14b in §12.5 |
+
+**Ids.** New ids continue the spec's sequences. A primed id (I-A4′) replaces the unprimed one. The lane invariants are I-LN1 to I-LN5 and their errors `E-LN1` and `E-LN2`, because I-L1 and I-L2 are §6.2's layer invariants (the grill drafts called them I-L1 to I-L5). AP-R ids keep their numbers when the edit is the same edit (AP-R1 is still "draw one marcher's path"), and their text is replaced. T-1 to T-14 are the resolver's total rules; they are not the turn rules of draft-model.
+
+Short paths: `core/` is `packages/core/src/timeline/` and `db/` is `apps/desktop/src/db-functions/`.
+
+Symbols used throughout:
+
+- `T` is a transition, `k` a slot and `r` an assignment row (marcher `m`).
+- `ℓ = lane(T, k)` is the lane on that slot, if there is one.
+- `R` is a route, with `F = R.from` and `G = R.to`.
+- `c = T.end_beat − T.start_beat`.
+- `W` is R's reference walk (R-14, group schedule item 1), with `V^W = [F, W_1 … W_m, G]`.
+- `D_k` is the distance of kept point `W_k` along `W`, and `L = L^W`.
+- `ε_geom` is §8.10's geometric scale.
+- `s_min = 11.25` field units: the **minimum spacing** for Adjust keys and handoff ramp ends
+  (one 8-to-5 step on the default field, `stepSizeInches = 22.5` × `PIXELS_PER_INCH = 0.5`).
+  It is a file-independent constant, so changing the field's step size never makes a saved show
+  fail its commit checks. Big steps still uses the field's real step size. Why one step: see
+  I-J4.
+
+### J.1 Storage (§5.1 additions)
+
+```sql
+-- K1 adds timing; ADD COLUMN, no rebuild
+ALTER TABLE timeline_routes ADD COLUMN timing TEXT
+  CHECK (timing IS NULL OR json_valid(timing));
+
+-- a slot walks a route
+CREATE TABLE timeline_lanes (
+  id              INTEGER PRIMARY KEY,
+  transition_id   INTEGER NOT NULL REFERENCES timeline_transitions(id) ON DELETE RESTRICT,
+  slot_index      INTEGER NOT NULL CHECK (slot_index >= 0),
+  route_id        INTEGER NOT NULL REFERENCES timeline_routes(id) ON DELETE RESTRICT,
+  offset_x        REAL CHECK (offset_x IS NULL OR offset_x BETWEEN -2000000 AND 2000000),
+  offset_y        REAL CHECK (offset_y IS NULL OR offset_y BETWEEN -2000000 AND 2000000),
+  adjust          TEXT CHECK (adjust IS NULL OR json_valid(adjust)),
+  group_adjust_id INTEGER REFERENCES timeline_route_adjusts(id) ON DELETE RESTRICT,
+  UNIQUE (transition_id, slot_index),                                  -- I-LN3
+  CHECK ((offset_x IS NULL) = (offset_y IS NULL)),
+  CHECK (offset_x IS NOT NULL OR group_adjust_id IS NULL)              -- own or trail lane: no linked Adjust
+) STRICT;
+CREATE INDEX timeline_idx_lane_route  ON timeline_lanes(route_id);
+CREATE INDEX timeline_idx_lane_adjust ON timeline_lanes(group_adjust_id);
+
+-- a linked Adjust shared by several lanes of one route (depth is fixed: route → this → lane)
+CREATE TABLE timeline_route_adjusts (
+  id       INTEGER PRIMARY KEY,
+  route_id INTEGER NOT NULL REFERENCES timeline_routes(id) ON DELETE RESTRICT,
+  profile  TEXT NOT NULL CHECK (json_valid(profile))
+) STRICT;
+CREATE INDEX timeline_idx_radj_route ON timeline_route_adjusts(route_id);
+
+-- per-occupancy timing; ADD COLUMN on a STRICT table, no rebuild
+ALTER TABLE timeline_assignments ADD COLUMN path_timing TEXT
+  CHECK (path_timing IS NULL OR json_valid(path_timing));
+
+-- I-A4/I-A5 become overlap triggers (I-A4′/I-A5′); the UNIQUE indexes go, plain indexes replace them (06 m1)
+DROP INDEX timeline_assignments_transition_slot_unique;
+DROP INDEX timeline_assignments_transition_marcher_unique;
+CREATE INDEX timeline_idx_asn_slot    ON timeline_assignments(transition_id, slot_index, start_beat);
+CREATE INDEX timeline_idx_asn_tr_marcher ON timeline_assignments(transition_id, marcher_id, start_beat);
+```
+
+Notes:
+
+- **The change log** captures `timeline_lanes` and `timeline_route_adjusts` like routes (§10.2).
+  The assignment log image and the history triggers gain `path_timing`.
+- **K6 app data.** `timeline_route_sources(route_id, kind ∈ {detached_from, recipe, mirror_of,
+  pasted_from, split_from, continues}, source_route_id NULL, data JSON)` gets history triggers
+  but is outside the change log. The resolver never reads it.
+- **Main.** The folded migration (0019 or later on fork main) creates these tables directly. It
+  never adds `'route'` to `path_style` and never adds the I-R2 CHECK. On fork main the two
+  UNIQUE indexes are standalone `CREATE UNIQUE INDEX` statements
+  (`0017_timeline_model.sql:71–72`), so dropping them needs no table rebuild.
+  `timeline_transitions.route_id` exists only for the follow-the-leader trail step. If that step
+  isn't in the fold, the column isn't either, and adding it later is an `ADD COLUMN`.
+- **The `route` path style is retired.** On the branch, the lanes storage step's migration rewrites every `route`
+  transition to `direct` and moves its route into a lane (implementation plan, step 24). The I-R2 CHECK then
+  holds vacuously until the fold.
+
+### J.2 JSON (§5.2 additions)
+
+**`path_params` for `route`: removed.** No transition has `path_style = 'route'` (I-R2′).
+
+**Anchor:**
+
+```jsonc
+{ "a": "p1" | "from", "b": "p2" | "to", "f": 0.25 }
+```
+
+- `a` and `b` are point ids of the route, or the ends.
+- `f` is finite and in `[0, 1]`.
+- `a` comes at or before `b` in route order (write path).
+
+**Adjust profile** (`lanes.adjust`, `route_adjusts.profile`):
+
+```jsonc
+{ "v": 1,
+  "keys": [ { "a": "p1", "b": "p2", "f": 0.5, "d": [dx, dy] }, … ],   // 1 or more
+  "rehomed": true }                                                   // optional, UI badge only
+```
+
+- `d` is a field-axis displacement. Each coordinate is finite and within `[−2·10⁶, 2·10⁶]`.
+- Keys are strictly increasing in place, at least `s_min` apart, and inside `[D_1, D_m]`. The
+  app write path checks this (I-J4), and a commit view checks the part SQL can measure (I-J5).
+  The resolver has total rules for anything else (R-14′ T-3 and T-4).
+
+**Route `timing`** (K1 from plan step 5, plus the handoff):
+
+```jsonc
+{ "v": 1,
+  "pins":  [ { "point": "p3", "at": 6 } ],          // beats from T.start, 0 < at < c (I-P1)
+  "holds": { "start": 0, "end": 0, "at": [ { "point": "p3", "for": 2 } ] },   // draft-model §3.2
+  "handoff": { "from": Anchor, "to": Anchor,         // optional (I-H1)
+               "rehomed": true } }                    // optional, UI badge only (07 N4)
+```
+
+**`assignments.path_timing`** (one occupancy):
+
+```jsonc
+{ "v": 1,
+  "join": "cut_in" | "whole",   // default cut_in
+  "counts": 10,                 // only with whole: walk the path in this many counts from start_beat; integer ≥ 1
+  "entry": 3,                   // only with cut_in: typed entry length in counts; integer ≥ 1
+  "offset": [dx, dy] }          // only on a row with no founding span: the o_s this occupancy rides (Q2, 07 N9)
+```
+
+- NULL means `cut_in` with first-fit entry.
+- The resolver ignores `path_timing` on a row whose slot has no lane.
+- `offset` is written only by AP-R16, when the spot's start-of-move occupant changes, so that a
+  later occupant keeps riding where it rode. Each coordinate is finite and within
+  `[−2·10⁶, 2·10⁶]`, like the lane's. It is ignored on a founding row (T-14).
+
+### J.3 Commit views and overlap triggers
+
+Every rule above that can be written in SQL is a commit view, and the write path checks the rest.
+Two examples:
+
+```sql
+-- E-J3: an anchor names a missing id (lanes; route_adjusts and handoff likewise)
+SELECT 'E-J3', l.id FROM timeline_lanes l, json_each(l.adjust, '$.keys') k, timeline_routes r
+ WHERE r.id = l.route_id
+   AND ( (json_extract(k.value,'$.a') <> 'from' AND NOT EXISTS (SELECT 1 FROM json_each(r.geometry,'$.points') p
+          WHERE json_extract(p.value,'$.id') = json_extract(k.value,'$.a')))
+      OR (json_extract(k.value,'$.b') <> 'to'   AND NOT EXISTS (SELECT 1 FROM json_each(r.geometry,'$.points') p
+          WHERE json_extract(p.value,'$.id') = json_extract(k.value,'$.b'))) );
+
+-- E-R7: a pin outside (0, c) of the move its lanes are in
+SELECT 'E-R7', r.id FROM timeline_routes r, json_each(r.timing, '$.pins') p
+ WHERE EXISTS (SELECT 1 FROM timeline_lanes l JOIN timeline_transitions t ON t.id = l.transition_id
+                WHERE l.route_id = r.id
+                  AND NOT (json_extract(p.value,'$.at') > 0
+                           AND json_extract(p.value,'$.at') < t.end_beat - t.start_beat));
+
+-- E-J5: two keys of one lane profile on one straight corner-to-corner stretch, closer than s_min
+-- (route_adjusts.profile likewise; timing.handoff likewise but skipping from = to; 126.5625 = s_min²)
+WITH pts AS (
+  SELECT r.id AS route_id, CAST(p.key AS INTEGER) AS i, json_extract(p.value,'$.id') AS pid,
+         json_extract(p.value,'$.at[0]') AS x, json_extract(p.value,'$.at[1]') AS y,
+         json_type(p.value,'$.tension') IS NULL AS corner
+    FROM timeline_routes r, json_each(r.geometry,'$.points') p),
+keys AS (
+  SELECT l.id AS lane_id, l.route_id, k.key AS n, json_extract(k.value,'$.a') AS a,
+         json_extract(k.value,'$.b') AS b, json_extract(k.value,'$.f') AS f
+    FROM timeline_lanes l, json_each(l.adjust,'$.keys') k)
+SELECT 'E-J5', k1.lane_id
+  FROM keys k1 JOIN keys k2 ON k2.lane_id = k1.lane_id AND k2.n > k1.n
+                           AND k2.a = k1.a AND k2.b = k1.b
+ WHERE k1.f = k2.f
+    OR EXISTS (SELECT 1 FROM pts pa JOIN pts pb ON pb.route_id = pa.route_id AND pb.i = pa.i + 1
+                WHERE pa.route_id = k1.route_id AND pa.pid = k1.a AND pb.pid = k1.b
+                  AND pa.corner AND pb.corner
+                  AND (k1.f - k2.f) * (k1.f - k2.f)
+                      * ((pb.x - pa.x) * (pb.x - pa.x) + (pb.y - pa.y) * (pb.y - pa.y)) < 126.5625);
+```
+
+E-J5 never refuses a legal state: on a straight corner-to-corner stretch the along-path distance
+equals `|Δf|` times the chord. Keys on curves or on different stretches are left to the write
+path (I-J4), because their distance needs R-14's cleaning and tangents.
+
+**Overlap triggers (I-A4′, sketch).**
+
+```sql
+CREATE TRIGGER timeline_asn_slot_overlap_ins BEFORE INSERT ON timeline_assignments
+WHEN EXISTS (SELECT 1 FROM timeline_assignments o JOIN timeline_transitions t ON t.id = NEW.transition_id
+             WHERE o.transition_id = NEW.transition_id AND o.slot_index = NEW.slot_index
+               AND (t.path_style = 'follow_the_leader'
+                    OR (o.start_beat < NEW.end_beat AND NEW.start_beat < o.end_beat)))
+BEGIN SELECT RAISE(ABORT, 'E-A4'); END;
+```
+
+- The `_upd` trigger is the same, with `o.id <> NEW.id`.
+- The I-A5′ triggers are the same on `marcher_id`.
+- `tr_ftl_unique_upd` refuses `path_style → 'follow_the_leader'` when two rows share a slot or a
+  marcher.
+
+**Procedure rule (06 m2).** An edit that moves the boundary between two occupancies of one slot,
+or exchanges two occupants, deletes the affected rows and then inserts them, as the
+`reinsertWithSlots` pattern does (`db/timelineAssignmentEdits.ts:74–99`). An UPDATE would pass
+through an overlapping state, which the triggers refuse.
+
+### J.4 Follow-the-leader: what makes Adjust harder (D-27)
+
+1. **It needs a trail with ids.**
+   - Today's trail is derived: R-9's line-up through member origins, then `waypoints` as plain
+     `[x, y]`, then the destination path. Nothing on it has a stable id.
+   - So D-27 waits for the trail step (K5: `transitions.route_id` on FTL, draft-model §4).
+   - Until then AP-R19 refuses: "this follow the leader has no drawn trail".
+2. **The slot is not the end spot.**
+   - R-9 gives founder `q` the spot `p_{n−m+q}`, ordered by R-12. It does not use the slot index.
+   - Spots are timeless on a follow-the-leader transition (I-A4′ exception), so slot k is one
+     marcher for the whole move, and the Adjust follows that marcher.
+   - If upstream order changes and the marcher lands on another spot, its Adjust goes with it.
+   - This is the one place where "Adjust belongs to the spot" reads as "belongs to the person".
+     **Decided (owner, Q3): keyed by the slot**, `lanes.slot_index`. Keying by end spot would
+     need a stored target index that moves whenever founders change (R-9, QA-REG-4), so a tweak
+     would jump between marchers after an unrelated edit upstream.
+3. **There is no shared clock.**
+   - Every member walks its own constant speed from `startDist[q]` to `endDist[q]` (R-10).
+   - So the adjusted stretch lengths are cached per lane, not per route.
+4. **Overtaking (P-5) is kept only along the trail.**
+   - An Adjust can move a member sideways across a neighbour's line.
+   - Collision checks see it; no rule forbids it.
+5. **Joins and resumes on follow-the-leader stay R-11 (straight to a target).** The Adjust is
+   ignored there (T-12).
+6. **The line-up part of the trail has no ids**, because it runs through other members' origins.
+   Keys there are refused, so the Adjust is zero before the first trail point.
+
+### J.5 Properties P-14 and P-14b
+
+#### P-14: No jumps
+
+**Statement.** For every marcher, the position is continuous in `b` everywhere: within every
+span, and at every span boundary. In particular it is continuous at the ends of a handoff ramp,
+at every Adjust key, at the end of an entry, at an exit (row end), and where a marcher moves to
+another spot.
+
+**Why it holds:**
+
+- **The clocks are continuous.** `X` is piecewise linear and continuous. `β` is continuous
+  and clamped.
+- **`o(x)` is continuous.** `w` is continuous on every effective ramp: T-5 never leaves a step
+  inside `(D_1, D_m)`. The steps T-5 does allow are at `≤ D_1` and `≥ D_m`, where no `P(x)` is
+  evaluated on the far side:
+  - the first leg reads only `P(D_1)` with `w(D_1) = 1`;
+  - the last leg reads only `P(D_m)` with `w(D_m) = 0`.
+- **`δ(x)` is continuous.** T-3 and T-4 leave keys strictly increasing, and the profile is
+  linear between keys and constant beyond them.
+- **The legs meet the rigid part exactly.** They end at `P(D_1)` and start at `P(D_m)`, using
+  the same additions.
+- **An entry is continuous at both ends.** It starts at `origin(s)` and its `lerp` is
+  endpoint-exact at `Ref(b_i)`.
+- **Span boundaries are continuous by R-4.**
+- **R-10′ is continuous.** δ is zero at every checkpoint, and the arc-length fraction is
+  continuous in `d`.
+
+**Checked by** QA-P-14.
+
+#### P-14b: Bounded speed (07 N2)
+
+P-14 alone is only continuity at the `ε_geom` scale: keys `10⁻⁹` apart are continuous and still
+a teleport. P-14b bounds the speed for every show that passes the write checks (I-J4, I-H1).
+
+**Statement.** On a lane's rigid part, between consecutive breakpoints (kept points, key places,
+ramp ends and clock knots), the lane's speed is at most
+`v_W · (1 + |o_e − o_s| / s_min + Σ_profiles max_i |d_{i+1} − d_i| / s_min)`, where `v_W` is the
+reference walk's speed there (`dX/dβ`, from the group clock). Legs are bounded by their length
+over their time, as today.
+
+**Why it holds.** `walk_x` has unit speed in `x`. `o` changes by at most `|o_e − o_s|` over a ramp
+at least `s_min` long. Each profile changes by `|d_{i+1} − d_i|` over at least `s_min`. Each term
+scales by `dX/dβ`.
+
+**Checked by** QA-P-14b. States written without the app checks keep P-14 (continuity) only.
+
+### J.6 Big steps on lanes (app advice; extends step 15's per-leg rule, 07 N2)
+
+- Big steps judges each lane of the open path. It includes the lane's adjusted speed on its
+  rigid part, not just the reference walk's `L^W / c`.
+- **Stretches.** Split the rigid part at every kept point, key place (both profiles), handoff
+  ramp end and clock knot. On each stretch `[x₀, x₁]`, the lane's travel is the length of
+  `P(x)` there. That is a polyline (exact) on a line piece, since `o` and `δ` are linear there,
+  and R-14's 64-sample rule on a cubic piece. The counts spent there are `β(x₁) − β(x₀)`,
+  through the group and lane clocks.
+- **Test.** The same `StepSize` test as straight moves, applied to travel over counts, at the
+  field's real step size.
+- **Legs.** The first and last legs keep step 15's rule.
+- **Label.** It names the worst stretch with its spot and counts, for example "Big steps ·
+  spot 3, counts 5 to 6 (adjusted)" or "… (spacing change)". The tooltip lists every big
+  stretch.
+- **Ungated.** An Adjust or ramp that is legal (`≥ s_min`) but too steep to march is advice,
+  never a refusal.
+
+### J.7 Caching and invalidation (§9 additions)
+
+**Caches:**
+
+- `routeSchedule[R]` holds `W`, `D`, `L`, the kept points, the knots of `X`, the effective
+  handoff ramp, and each anchor's place. It depends on R's geometry and timing only, and replaces
+  today's per-point `groupSchedule` rebuild (W-5 allows it).
+- `profile[R, P]` holds a profile's resolved, sorted, tie-merged keys. It depends on R and P.
+
+**Seeds (W-3 means "the transition's spans and origins downstream"):**
+
+| Change | Seeds |
+| --- | --- |
+| A route's geometry or timing | W-3 for every `T` with a lane on R. `routeWalkers` becomes route → lanes → transitions. An FTL trail also seeds R-9 entry invalidation for its `T` (§9.4 step 3.4) |
+| A lane is inserted, updated or deleted | W-3 for its `T` (old and new `T` on update) |
+| A linked Adjust | W-3 for every `T` that has a lane pointing at it |
+| An assignment's `path_timing` | As any assignment change (§9.4) |
+| A destination of `(T, k)` | As today. `o_e` derives from it, so nothing more |
+
+W-3 per `T` over-invalidates the other occupants of a large transition, but stays correct.
+Per-(T, slot) seeding is an optimisation.
+
+### J.8 App procedures (replace I.2, I.5 and I.8 where they conflict)
+
+Each edit below is one write-wrapper transaction, so it is one undo step. Redo restores the same
+ids.
+
+Terms:
+
+- **"The move"** is one timeline M.
+- **"Member"** means `(r, m, T, k)`.
+- **`SHARED(T, k, m)`** means slot `k` of `T` has a row of a marcher other than `m` at any beat
+  of M.
+- **"Founding occupant of `(T, k)`"** is the row on that slot with a founding span, if any.
+- Member lists are processed in ascending marcher id. Means are `fl(Σ)/n`, as in I.8.
+
+#### Helpers
+
+| ID | Helper | Rule |
+| --- | --- | --- |
+| AP-H1 | **Re-home** (`rehome(R, oldGeom, newGeom)`) | **Called by every writer of R's geometry**: AP-R1 point edits, AP-R8 "again", AP-R7, Re-fit, AP-R21 merge and join. It covers every anchor on R: in lane `adjust`s, in linked Adjusts, in `timing.handoff`, and every pin or hold id. **For an anchor naming an id not in `newGeom`:** <br>1. Let `x_old` be its place on the old `W`. <br>2. Let `a′` be the nearest point at or before `x_old` in old route order that survives in `newGeom`, else `'from'`. Let `b′` be the nearest such point after it, else `'to'`. <br>3. Set `f′ = (x_old − D_old(a′)) / (D_old(b′) − D_old(a′))`, or 0 when the denominator is 0. <br>4. Anchors whose ids survive are untouched. <br>5. A redraw (no id survives) gives `('from', 'to', x_old / L_old)`. <br>**Then, on the new geometry:** clamp keys into `[D_1, D_m]`. **Spacing (07 N2):** scan each profile's keys in place order, keeping the first. When a key is closer than `s_min` to the last kept key, drop whichever of the two was re-homed by this edit (if both or neither, drop the earlier in stored order). Untouched keys already satisfy I-J4, so only keys this edit moved are ever dropped. **Handoff:** a ramp now shorter than `s_min` is re-written as a ramp of length `s_min` centred on its old midpoint and shifted to fit inside `[0, L]`. An instant handoff that now falls strictly inside `(D_1, D_m)` becomes that ramp too. So what is written always satisfies I-H1, and the resolver's T-5 never has to widen it. **Badge:** set `"rehomed": true` on every profile and on `timing.handoff` when this edit changed them (07 N4: the widened handoff is badged, not silent). **Pins and holds** on a deleted point are deleted with it (plan step 5). **The app** badges a re-homed Adjust and its toast says so, so an Adjust is never dropped silently. |
+| AP-H2 | **Carry or refuse** (`laneGuard`) | Any procedure that moves a row to another transition or slot, deletes or renumbers slots, or copies a transition MUST, in the same edit, (a) carry the lane by the rule its row below states, and (b) copy `path_timing` with the row. Otherwise it refuses with `E-ARGS` ("<marcher> walks a drawn path in this move"). One helper replaces the scattered `pathStyle === 'route'` tests. **Row writers that must copy `path_timing` (07 N8).** Each uses an explicit field list today that drops the new column: `reinsertWithSlots` (`db/timelineAssignmentEdits.ts:84–97`), `writeFirstHalfTransition` (`db/timelineSplitAtBeat.ts:588–597`), `createOwnTransitionsInTransaction` (`db/timelineMembership.ts:152`), the layer writers, and every other `insert` into `timeline_assignments` (the storage step greps them and lists them in its PR). The assignment change-log image and the history triggers also name fields explicitly, so they gain `path_timing` in the same migration. QA-DB-L10 checks every writer. |
+| AP-H3 | **Orphan sweep** | Runs at the end of every procedure that deletes or re-points lanes or rows. In order: <br>1. Delete linked Adjusts with no lane. <br>2. For each route none of whose lanes has a row at any beat of M: delete its lanes. This is the vacancy default, Q1. <br>3. Delete K6 rows naming routes about to go. <br>4. Delete routes with no lane that aren't follow-the-leader trails. |
+
+#### Procedures
+
+| ID | Edit | Statements |
+| --- | --- | --- |
+| AP-R1 | **Own path** for one marcher `m` in M, drawn or drawn again; or **edit a route's points** | **Scope of the refusals (07 N3).** They gate only the personal edit reached by selecting a marcher: drawing a new own path for `m`. **Editing an open path's points** (own or group), and **drawing it again from the open path**, are path edits. They are never refused for multiple rows or `SHARED`, so a reshape after a swap works (S-20 #1, S-27 #1). They move every occupant of the path's spots, because the path belongs to the spots (D-22). **Refused (`E-ARGS`)** when: `m` has no row in M; `m` has more than one row in M ("is in more than one spot in this move"); its row has no founding span ("taken over at the start of this move"); its transition is follow-the-leader; or `SHARED(T, k, m)` ("spot k is also walked by <other> from count n", D-22). **Writes:** <br>• No lane on `(T, k)`: insert the route (`from = A`, `to = B`), then the lane with offset NULL. <br>• An own lane: update its route's geometry in place, then AP-H1. <br>• A group lane: insert a new own route; update the lane to that route with offset, `adjust` and `group_adjust_id` all NULL; then AP-H3. <br>**No transition or row is written.** <br>**Editing a route's points:** the whole new list, with ids kept as in step 2, then AP-H1. Own route: `from`/`to` as step 2. Group route: `from` is kept while the first point keeps its id and position, else written as `mean(A − o_s)` over the founding occupants. `to` is kept while the last point does, **and always when R has a handoff** (06 m7: `G` is `o_e`'s origin, so changing it would move every handed-off lane). Otherwise it is written as `mean(B − o_s)` over the lanes' slots. |
+| AP-R2 | **Remove path** (a group path, or an own path) | Delete R's lanes, then its linked Adjusts, then K6 rows naming R, then R. Members never left their transitions, so a shaped move is a shape again (S-02-a, S-06 #7, S-13 #5). **Adjusted members:** the app may offer Logic's choice first: **Convert** runs AP-R9 on each adjusted spot, then AP-R2 on the rest. **Revert** is AP-R2 alone. Either way it is one edit. |
+| AP-R2b | **Leave the path** for marchers `K` (the spot walks its transition's style again) | Refused when `SHARED` (D-22). Delete each lane, then AP-H3. |
+| AP-R3 | **Delete a move, transition or marcher** | In `deleteTimelineTransitionRowsInTransaction`: <br>1. Delete the lanes of the deleted transitions. <br>2. Delete their rows and transitions as today. <br>3. AP-H3. <br>**Deleting a marcher** deletes its rows (`compact = true`), then AP-R15, then AP-H3. |
+| AP-R4 | **Range edits**: resize, page-flag drags, `shiftTimeline`, R-E1, Alt-scale | **Rows:** as today. `path_timing.counts` is relative to the row's start, so it moves with the row and is never rewritten. A `whole` window past `T.end` is clamped by item 3. **Pins and holds (R-pin):** <br>• an end-edge drag writes nothing; <br>• a start-edge drag by `Δ` subtracts `Δ` from every pin offset of every route with a lane in M, in the same edit; <br>• Alt-scale multiplies them by `new/old`. <br>A drag that would put a pin outside `(0, c)` stops short (`timelineResizeLimits` gains a `pin` stop), and I-P1 refuses anything the drag limit missed. Lanes are untouched. **A page flag inside a move** is a mark in time and writes nothing here. |
+| AP-R5 | **End and start changes** | Unchanged: lanes are untouched. A moved `B` changes `o_e` (derived), so a spot past its handoff follows its new destination. A moved `A` changes the first leg. |
+| AP-R6 | **Refused edits** (until a later step lifts each) | Merging two moves when either has lanes. Remove keyframe's join (`timelineJoinAtBeat`) when the next move has lanes. Adding a lane to a follow-the-leader transition other than a trail lane. Any procedure that AP-H2 doesn't cover. |
+| AP-R7 | **Cut at a count `b`**: split at the playhead and the holds cuts | **Own lanes:** step 2's AP-R7, unchanged. The first half's lane is a new own lane on the first half's slot. **Group lanes on `T`, route `R`, with `x_b = X(b)`:** see "AP-R7 for group lanes" below this table. **Reach (07 N10):** `splitRefusal` returns its refusal per route, with the spots it covers, instead of one boolean for the edit. Split at the playhead still refuses the whole edit and names the first reason. The callers that cut many spots at once (the holds cuts in `timelineMoveCuts`, and `keepThroughMovesAcross`) skip the refused route's spots, leave them uncut, and finish the rest. The toast counts the skipped marchers ("3 marchers on a drawn path were left as they were"). A group route is cut whole or not at all, so the skip is per route, never per spot. |
+| AP-R8 | **Draw a group path** for marchers `S` (two or more) in M, or draw it again | **Refused** (`E-ARGS`, naming the first marcher found) for: fewer than two; a marcher not in M; one with more than one row in M; one with no founding span; one on follow-the-leader; or `SHARED(T_m, k_m, m)` with the other marcher **not in `S`**. **Read:** `A_m`, `B_m`, `F = mean(A)`, `G = mean(B)`, `o_m = A_m − F`. **Again** (from the open path, or S equals the founding occupants of R's lanes): a path edit, so the multiple-row and `SHARED` refusals don't apply (07 N3). Update R's geometry in place, then AP-H1. Then set each lane's offset to `o_m` of its founding occupant. A lane whose spot has no founding occupant keeps its offset, and rows' `path_timing.offset` are kept. **Otherwise:** <br>1. Insert R. <br>2. For each member, insert the lane `(T_m, k_m, R, o_m)`. If the slot already has a lane, update it to R with `o_m` and clear its `adjust` and `group_adjust_id`, since those were anchored on another route; the toast counts them ("2 adjustments removed"). <br>3. AP-H3. <br>**No transition is written.** Members may sit in several transitions of M. |
+| AP-R9 | **Detach** marchers `K` from their group path | Refused when a marcher isn't on a group lane, or when `SHARED` (D-22). For each spot `(T, k)` on R: <br>1. Insert `R* = copy(R)` with geometry and timing verbatim, ids kept. <br>2. If the lane has `group_adjust_id`, insert a copy of that linked Adjust on R*. <br>3. Update the lane: `route_id = R*`, `group_adjust_id` = the copy. Offset and `adjust` are kept. <br>4. Insert K6 `(R*, detached_from, R)`. <br>5. AP-H3, which deletes R if every spot left. <br>**Positions are bit-identical**, because every input is the same. The spot passes each point on the group's counts until R or R* is edited (owner). **The editor** shows and edits the copy's lane (its points plus `o_s`) and writes points minus `o_s`. |
+| AP-R10 | **Rejoin**: marchers `J` follow group path R in M (back from Detach, or new to R) | Refused for a marcher not in M, on follow-the-leader, or with more than one row in M. Refused when `SHARED` and the other occupant's lane isn't already on R. **From Detach** (K6 says the lane's route was `detached_from` R): <br>• re-point the lane to R; <br>• set `adjust` and `group_adjust_id` to NULL, always (owner, Q4): the spot walks the plain group lane. There is no toast. Undo restores both. <br>• delete the copy, and the copy's linked Adjust, with AP-H3. <br>The offset is unchanged. So a spot that had no Adjust is bit-identical to before Detach, provided R wasn't edited since. An adjusted spot visibly drops its tweak, which is the decided behaviour. K6's `data.group_adjust_id` is no longer needed and isn't written (AP-R9 step 4). **New to R:** <br>• a founding marcher gets `o_s = A_j − R.from`; <br>• a marcher with no founding span (a joiner) gets `o_s = B_j − G`, a destination-derived lane (S-17-a default); <br>• then upsert the lane on `(T_j, k_j)` and run AP-H3. |
+| AP-R11 | **Adjust** a spot (a lane drag on the open group path, or a key edit) | Refused when: the spot isn't on a group lane; `SHARED` (D-22); I-J4 fails (a key outside `[D_1, D_m]` reads "Adjust reaches only the shared part of the path; drag the end spot for the legs"); or a key is closer than `s_min` to another (I-J4, "keep adjustments at least a step apart"). **Writes** the lane's `adjust` as a whole new JSON value. The default gesture is a drag at the playhead: place `x = x(b)` and `d` = the drag, as a key at the anchor of `x` within its kept stretch. If no key lies on either side within the stretch, it also writes zero keys, each at the stretch end or `s_min` from the new key, whichever is farther from it, clamped into `[D_1, D_m]`. So the bulge stays local and every gap is at least `s_min`. A drag closer than `s_min` to an existing key edits that key instead of adding one. When the rigid part is shorter than `2·s_min` the gesture is refused ("this path's shared part is too short to adjust; Detach to edit it"). A reset is `adjust = NULL`. **Point drags** (AP-R1 path edits) that would bring two keys of any profile, or a ramp's ends, closer than `s_min` stop short, as a resize stops at a pin. A point delete re-homes through AP-H1. |
+| AP-R12 | **Linked Adjust** for spots `K` on R | **Create:** insert a linked Adjust on R, then set `group_adjust_id` on each lane. A lane already in another linked Adjust is moved; the app confirms. **Edit:** update its profile. **Reset** (06 m5): set `group_adjust_id = NULL` on its lanes first, then delete the row. The spots' own Adjusts are kept, since they are relative (S-14-a default). **Detach the sub-group:** AP-R9 for all of `K`, with one shared copy of the linked Adjust. Refused when any spot in `K` is `SHARED` (D-22). |
+| AP-R13 | **Set the handoff** on R | Writes `timing.handoff`. The UI presets are: <br>• **"Immediately"**: `from = to = ('from', W_1, 0)`; <br>• **"At the end"**: no handoff; <br>• **"Over a stretch"**: two anchors at least `s_min` apart; dragging a marker stops at `s_min` from the other. <br>Refused when I-H1 fails. One edit for the whole route. |
+| AP-R14 | **Occupancy timing**: join mode, walk counts, entry length; the ripple tool | Writes `path_timing` on each selected row. The ripple tool (S-32) is app logic: "by rank, interval 2" writes each rank's rows (`start_beat` and `counts`) through AP-R16's delete-then-insert. The rule itself is app data, so deleting B2 leaves the B rank on count 2. Not refused by D-22, because these are the occupancy's own facts. |
+| AP-R15 | **Vacancy and compaction** (`removeAssignmentRowsInTransaction`) | **A free slot** has no row at any beat of M (06 MAJOR-7). **Compaction** (shapeless, non-FTL, `compact = true`), for each free slot `k` and the top slot `t > k`: <br>1. delete `lane(T, k)` if any; <br>2. update `lane(T, t).slot_index = k` if any; <br>3. update every row on `t` to slot `k`. Valid as an UPDATE, because `k` holds no row at any beat; <br>4. copy `t`'s point to `k`, then delete `t`'s point; <br>5. lower `slot_count`. <br>I-LN1 and I-A4′ hold after each statement. Then AP-H3. **A shaped transition** is never compacted (`db/timelineMembership.ts:547`). A slot that is now free keeps its lane, with its offset and Adjust, while another lane of the route still has an occupant (owner, Q1). Whoever is cast there next takes it over, and the app says "takes over spot 3's path (adjusted)". AP-H3 removes the whole path once no lane has an occupant. **Partly vacant** slots keep their lanes. |
+| AP-R16 | **Recast and reassignment**: `castMarchersIntoTransition`, `recastTransition`, `setAssignmentSlot`, least-travel reassignment, swapping end spots by slot | **Rows** go through delete-then-insert (06 m2), and `path_timing` goes with its row, because it belongs to the person's occupancy. **Lanes stay with the spot:** route, `adjust` and `group_adjust_id` are untouched (D-22). **Start spacing (owner, Q2; 07 N9):** when the founding occupant of `(T, k)` changes, the edit runs, in order: (1) for every other row on `(T, k)` (a later occupant) whose `path_timing` has no `offset`, write `offset` = the lane's current `o_s` into that row's `path_timing`; (2) rewrite the lane's offset to `A_new − F`. So the new start-of-move occupant's lane starts where it stands and first legs don't cross (06 MAJOR-8). Later occupants evaluate exactly as before, because they read their own frozen offset (R-14′ head), and a recast of one person moves no one else. A recast of a later occupant changes no offset, and the row's `path_timing` (including `offset`) goes with its occupancy to the newly cast person. A founding-occupant change on a spot with no later occupants writes only step 2. **On a `dest_shape_id` transition**, the reassignment is a slot change, so the new occupant takes the spot's Adjust and handoff destination. **On a points transition**, "swap end spots" by destination edit writes points only: lanes stay, and `o_e` (derived) swaps the two spots' destination-side spacing (S-22 #3). **Recipes** (06 m8): reopen and re-place use the slot the marcher holds at `T.end`, if any. |
+| AP-R17 | **Paste** a move with paths | Copy each route of the source move, with geometry translated by the paste offset (none when absolute) and timing verbatim. Copy each lane to the mapped `(T′, k)` (mapping by slot, S-35-a), with its offset and `adjust` verbatim. Copy linked Adjusts. Copy `path_timing` with the rows. Insert K6 `pasted_from`. A source lane whose slot has no target is refused (`E-ARGS`, naming it). |
+| AP-R18 | **Mirror** about `x = 0` (side 1 ↔ side 2) | As AP-R17, with `x → −x` on `from`, `to` and every point (ids and tensions kept), on the offset's x, on every key's `d.x`, and on every copied row's `path_timing.offset` x. Anchors, pins and the handoff are unchanged. `o_e` comes from the mirrored destinations. Insert K6 `mirror_of`. The copy is one-time. A live link would need the resolver to read a transform, which is not allowed (D-26). |
+| AP-R19 | **Adjust a follow-the-leader member** (D-27) | Refused when the transition's trail isn't a route ("this follow the leader has no drawn trail", J.4 item 1); for a key in the line-up part or outside the member's `[startDist, endDist]`; or for a key within `s_min` of a checkpoint or of another key (I-J4's spacing, measured along the trail). **Writes** the trail lane `(T, k, T.route_id, offset NULL, adjust)`, inserting it if missing. The app shows each checkpoint's count unchanged. |
+| AP-R20 | **Shape or slot-count change** on a transition with lanes (06 m6) | Before `slot_count` is lowered, delete lanes on slots `≥` the new count, then AP-H3. The toast counts the paths removed. A shape change that keeps the count keeps every lane: destinations move, so last legs and `o_e` follow. |
+| AP-R21 | **Split by marchers**, **merge**, **Basic** and other breakouts | **Split by marchers** (peel): each peeled spot with a group lane gets `copy(R)` with ids and timing (plus a linked-Adjust copy) in the new move; a lane on its new one-slot transition, slot 0, with offset and `adjust` kept; and K6 `split_from`. Positions are identical. R keeps the other lanes. An own lane moves with its row: the lane is re-pointed to the new transition. **Merge**, and **Remove keyframe's join**: AP-R6, refused. **Basic** (`basicSimple`): a marcher whose slot has a lane isn't simple and is left alone. **Basic's + page flag** inside a move therefore leaves a path untouched; that page flag is a mark in time (owner). **`holdFromPreviousPage`**: laned marchers are skipped. **Point drags:** destinations only. A shape-to-points switch keeps slots, and so keeps lanes. `severalMoves` refuses a marcher with two rows in M until point drags iterate. |
+
+#### AP-R7 for group lanes
+
+This is the procedure for the AP-R7 row above when the transition's lanes are on a group route.
+It is revised for 07 N1.
+
+**Notation.**
+
+- `T` is the transition, `R` its route, `x_b = X(b)` and `C = walk_x(W, x_b)`.
+- `D_p` is the last kept point with `D_k < x_b`, and `D_n` the first with `D_k > x_b`.
+- **The stretches next to the cut** are the open intervals `(D_p, x_b)` and `(x_b, D_n)`. Both
+  lie on the one piece of `W` that contains `C`.
+- **A bend** is a place where some lane's original motion `walk + o + δ` changes slope inside
+  that piece: a key place of any profile (own or linked) on any lane of R, or a handoff ramp
+  end `ρ0`, `ρ1`.
+
+**The goal: no Adjust key or ramp end is straightened.** The first draft made each stretch next
+to the cut into a leg. A leg is straight, so a bend inside the stretch was lost, by up to the
+key's `d` (07 N1).
+
+**How.**
+
+- **C is a fixed corner of both halves:** the first half's `to` and the second half's `from`.
+- **Every bend inside a stretch next to the cut becomes a new kept corner** of that half, at
+  `walk_x(W, x_bend)`.
+- So each leg next to `C` runs between `C` and the nearest bend, where the original motion has
+  no bend. A straight leg traced linearly in `x` reproduces it exactly.
+- **Why C isn't also stored as an inner point.** The first half's clock must end at `x_b`. That
+  holds only if its `to` is `C`, and cleaning would then merge an inner point at `C` into `to`.
+  Making `C` the end point and every bend a kept corner gives the same guarantee. The
+  alternative would be a new stored clock fact ("arrive at the last point on the last count").
+
+**Refused** (`E-ARGS`, naming the marcher and the count; nothing is written) in these cases:
+
+- (a) A row on a lane of R has no founding span ("taken over at the start of this move").
+- (b) A visible piece other than the founding span starts at or before `b` ("taken over earlier
+  in this move"). This and (a) are today's two refusals (06 MAJOR-5).
+- (c) A row starts after `T.start` and at or before `b` ("joins this path at count n").
+- (d) The marcher is in an entry at `b`.
+- (e) A row has `join = 'whole'` (its own window; cohort split deferred, J.11).
+- (f) `x_b < D_1` or `x_b > D_m` ("the cut falls on the legs"; S-44-a).
+- (g) **Narrowed.** Some lane has `δ(x_b) ≠ 0`, and the handoff ramp starts before the first
+  half's last kept point (`ρ0 < D_p′`, where `D_p′` is that point after bends become corners).
+  - **Why it can't be exact:** the first half's derived `o_e1 = B1 − C`, and `B1` (the lane's
+    position at `b`) includes `δ(x_b)`. So its ramp would aim at `o_e + δ(x_b)`, and add the
+    Adjust twice after it. Fixing that needs a stored per-lane end offset, which D-24 keeps
+    derived.
+  - **Accepted instead:** a ramp that starts at or after `D_p′` is simply dropped from the first
+    half. That is exact whatever `δ(x_b)` is, because the first half's last leg ends at `B1`.
+- (h) The transition is follow-the-leader with trail lanes.
+- (i) **New.** A bend lies in a stretch next to the cut, and that stretch's piece is a cubic
+  (one of its ends is a smooth point). A corner put on a cubic changes the neighbouring smooth
+  points' tangents, so the bend can't be kept exactly. Message: "spot 3's adjustment bends on
+  the curve at the cut. Move the playhead off this curve, or past the bend". A cut on a cubic
+  with no bend in its two stretches is accepted at step 2's redraw tolerance, as for an own
+  path.
+- (j) **New.** A profile changes across the cut, and its last key before `D_p′` lies within
+  `s_min` of `D_p′` (or, on the second half, its first key after `D_n′` lies within `s_min` of
+  `D_n′`).
+  - **Why it can't be exact:** keeping the profile exact needs a key at `D_p′` with the value
+    `δ` has there (item 4 below). That key would sit closer than a step to the other one, which
+    I-J4 forbids. Moving or dropping either key would change the motion.
+  - The same applies to a ramp that item 3 gives a half (`(ρ0, 'to')` or `('from', ρ1)`): if its
+    ends would be closer than `s_min`, the cut is refused, since the ramp can't be lengthened
+    without changing the motion.
+  - Message: "spot 3's adjustment has a key less than a step before point p4. Cut on another
+    stretch", or "the spacing change ends less than a step from the cut".
+
+**Otherwise it writes:**
+
+1. **The two routes.**
+   - `R1` (first half) is new. Its points are the kept points with `D_k < x_b` and
+     `|W_k − C| ≥ ε_geom`, then a new corner, with a new id, at each bend in `(D_p, x_b)`. Its
+     `from = R.from` and its `to = C`.
+   - `R` (second half) is updated in place. Its points are a new corner at each bend in
+     `(x_b, D_n)`, then the kept points with `D_k > x_b`. Its `from = C` and its
+     `to = R.to`. AP-H1 runs on it.
+   - The new corners lie on the piece containing `C`. That piece is a line, by (i) whenever a
+     bend exists, so `W`'s shape and every distance along it are unchanged. Bends within
+     `ε_geom` of each other share one corner.
+2. **Pins.**
+   - Pins before `b` go to R1 with their offsets unchanged.
+   - Pins after `b` stay on R, with `b − T.start` subtracted from their offsets.
+   - A pin at `b` goes, along with its point, because the point is `C`.
+   - `X` is piecewise linear, so each half's clock equals the original restricted to that half.
+3. **Handoff** (`ρ0 ≤ ρ1`).
+   - **Wholly after the cut** (`ρ0 ≥ x_b`): R keeps it and R1 has none.
+   - **Starting before the cut, at or after `D_p′`:** R1 has none (exact, see (g)).
+   - **Starting before `D_p′`** (every `δ(x_b) = 0`, by (g)):
+     - if it ends by the cut (`ρ1 ≤ x_b`), R1 keeps `(ρ0, ρ1)`, and `o_e1 = B1 − C = o_e`;
+     - if it straddles the cut, R1 gets `(ρ0, 'to')`, and `o_e1 = o(x_b)`.
+   - **On R:**
+     - if it ended by the cut, R gets "immediately";
+     - if it straddles, R gets `('from', ρ1)`. Every lane on R gets offset `o(x_b)`, and every
+       row on T with a `path_timing.offset` gets its own `o(x_b)` likewise.
+   - Each half's `o` equals the original restricted to that half, exactly in real arithmetic.
+     Ramp ends inside the stretches are bends, so they are kept corners of their half.
+4. **Adjusts.**
+   - For each profile, R1's copy keeps the keys at or before `D_p′`. If the profile changes
+     between its last such key and its next key, it also gets a key at `D_p′` with the value
+     `δ` has there.
+   - R's copy is the mirror image, at `D_n′`.
+   - A key at a bend is now on a kept corner, so it is simply re-anchored there.
+   - This preserves `δ` on each half's rigid part. (j) guarantees that the added key is at least
+     `s_min` from the others.
+   - Linked Adjusts on R1 are new rows. R keeps its own.
+5. **Lanes.** The first half's transitions renumber slots per row (`writeFirstHalfTransition`).
+   For each row moved there, insert the lane `(T1, k1, R1, o_s, adjust copy, linked copy)`. T
+   keeps its lanes.
+6. **`path_timing`** goes with each half's row. Both are founding.
+
+**Exactness:**
+
+- **Exact within QA-AP-R3's tolerance** when `C`'s piece is a line. Every bend next to `C` is a
+  kept corner, so the legs next to `C` trace motion with no bend.
+- **On a cubic piece with no bend** in the two stretches: within step 2's redraw tolerance, as
+  for an own path.
+- **Refused** on a cubic piece with a bend (i), when an added key would break the spacing (j),
+  and in case (g).
+- The handoff and Adjust splits are exact in real arithmetic.
+
+### J.9 New tests
+
+| ID | Setup | Expected |
+| --- | --- | --- |
+| QA-DB-L1 | A lane with `slot_index ≥ slot_count`; lower `slot_count` below a lane | Refused, `E-LN1` |
+| QA-DB-L2 | Two lanes on one (T, k); a trail lane with another route; an own lane with `adjust`; an own lane plus another lane on its route | UNIQUE; `E-LN2`; `E-R4`; `E-R4` |
+| QA-DB-L3 | Lanes of one route in two timelines; a route with no lane; a route whose lanes' slots all have no row | `E-R5`; `E-R3`; `E-R3` |
+| QA-DB-L4 | A linked Adjust with no lane; one whose route differs from its lane's | `E-J2`; `E-J1` |
+| QA-DB-L5 | An anchor naming a missing id (lane adjust, linked Adjust, handoff); a pin outside `(0, c)`; a pin on a missing id | `E-J3`; `E-R7`; `E-R7` |
+| QA-DB-L6 | Overlapping rows on one slot (same layer and different layers); a marcher in two slots at once; back-to-back rows `[0,6)` and `[6,16)` on one slot | `E-A4`; `E-A5`; accepted |
+| QA-DB-L7 | On FTL: two rows on one slot in disjoint ranges; one marcher twice; change a direct transition holding such rows to FTL | `E-A4`; `E-A5`; `E-A4` from `tr_ftl_unique_upd` |
+| QA-DB-L8 | `path_timing` with `counts: 0`, `1.5` or `"3"`; `counts` with `cut_in`; `entry` with `whole`; another key | `E-P1` |
+| QA-DB-L9 | Insert 2,000 rows into one transition (paste) | Under QA-CX's counter budget; uses `timeline_idx_asn_slot` (06 m1) |
+| QA-DB-L10 | **Column carried (07 N8).** For every row writer listed in AP-H2 (`reinsertWithSlots`, `writeFirstHalfTransition`, `createOwnTransitionsInTransaction`, the layer writers, and each other `insert` into `timeline_assignments`), run its edit on a row with a non-NULL `path_timing` that includes `offset`; then undo | The written row carries `path_timing` byte for byte; the change log and history images include it; undo restores it |
+| QA-DB-L11 | E-J5: two keys of one profile on a straight corner-to-corner stretch `0.9·s_min` apart; the same at `1.0·s_min`; the same pair on a smooth stretch; two keys with equal `(a, b, f)`; a handoff with `from = to` | `E-J5`; accepted; accepted by the view (left to I-J4); `E-J5`; accepted |
+| QA-RT-L1 | Bit-identity: every QA-RT-15 to QA-RT-20 fixture migrated to lanes, founding spans | Bit-identical to step 15 at every probe |
+| QA-RT-L2 | Golden: S-08's Adjust (2×2 block, keys around `Q1..Q2`); add a point between them; drag `Q2`; resize; pin `Q2` at 8 | Oracle equals resolver bit for bit. The adjusted spot passes `W_k + o + δ(D_k)` on the same beat as the others. After the point insert the bulge stays on its stretch. After the pin it passes `Q2` on 8 |
+| QA-RT-L3 | Golden: handoff "immediately", "over `Q1..Q2`", "at the end", for a block into a line (S-22, S-23, S-24) | "At the end" is bit-identical to step 15. "Immediately": the first leg aims at `W_1 + o_e`. Ramp: `o` is linear in place between the anchors. End-recipe 4→3 step: every handed-off lane spaces at 3 (S-22 #1) |
+| QA-RT-L4 | T-5 cases (written without the app checks): an instant handoff at `D_1`, inside `(D_1, D_m)`, at `D_m`, past `D_m` | No jump (P-14). At `D_1`: "immediately". At and past `D_m`: "at the end" (`w ≡ 0`, 07 N4). Inside: widened forward to its kept stretch, with `D-HANDOFF-WIDENED` |
+| QA-RT-L5 | T-3 and T-4: keys tied, keys `10⁻¹²` apart, a chain of three keys each `0.6·ε_geom` apart (07 N5), keys in the first-leg region | Continuous; diagnostics raised; the chain is one cluster and keeps its last stored key; resolver and oracle agree |
+| QA-RT-L6 | `whole`: Y joins at 8 over a 16-count move (S-18); the same with `counts: 6`; with a pin at 4 (proportional); Y's row taken over at `[8,10)` then resumed | Y passes each kept point at `ws + (β_k − T.start)·(we − ws)/c`. The resume aims at Y's own windowed reference, not X's (06 MAJOR-2 scenario 2) |
+| QA-RT-L7 | Entry rule: a `cut_in` joiner at 6 (S-17); a resume after a takeover (S-21 #3); typed entry 3; nothing fits before the horizon | Continuous at the entry start and end. On the reference after `b_i`. `D-ENTRY-LATE` in the last case |
+| QA-RT-L8 | K3 swap (S-20): m3 on slot 3 `[0,6)`, an excursion row elsewhere `[6,10)`, slot 7 `[10,16)`; m7 mirrored | m3 rides lane 7 from 10 after an entry. Reshaping R moves both lanes. Positions continuous at 6 and 10 |
+| QA-RT-L9 | Detach (AP-R9), then edit the group path, then edit the copy | Bit-identical at Detach. The group edit doesn't move the detached spot; the copy edit doesn't move the group |
+| QA-RT-L10 | R-10′: an L-shaped trail, one member adjusted between the corners | On every checkpoint on its unchanged beat. δ is zero there. Steady speed within each stretch at `λ_j / stretch` times its trail speed |
+| QA-RT-L11 | Total rules T-1, T-6, T-7, T-8 (including a lane on a follow-the-leader transition with an offset, and one with a `group_adjust_id`, 07 N6) and T-14, forced by writing rows without the app checks (commit views off) | Every position finite and continuous; each diagnostic raised; the FTL members walk R-10 as if the lane weren't there |
+| QA-RT-L12 | Later occupant's frozen offset: m3 founds spot 7 `[0,8)`, m9 rides it `[10,16)`; recast m3 → m21 standing elsewhere | m9's positions are bit-identical before and after; m21's first leg starts at m21 |
+| QA-P-14 | Property: random lane shows (2 to 6 lanes, 0 to 5 points, random keys, handoffs, `whole` windows, K3 swaps, takeovers) | P-1 at every beat, at sub-beat steps of `10⁻³` around every ramp end, key place, entry end, row end and slot change. P-11 and P-13 with `β = 7·√2·10⁶` |
+| QA-P-14b | Property: the same generator, restricted to shows that pass the write checks (keys and ramp ends `≥ s_min`) | Over every sub-beat step `h` on a rigid part, the position moves at most `h` times P-14b's bound. A second run with keys `ε_geom` apart (write checks off) fails the bound, which shows that the test can see a teleport |
+| QA-BS-L1 | Big steps on an adjusted lane: S-08's 1.5-step bulge over one step at 8-to-5; the same over four steps; a block-to-line ramp over one step | The first and third are flagged, naming the spot, counts and "(adjusted)" or "(spacing change)"; the second isn't |
+| QA-INV-L1 | Each AP-R1 to AP-R21 edit, and its undo and redo | The resolver matches a fresh build bit for bit and the oracle at every probe |
+| QA-AP-L1 | AP-R8 on a recipe block in a shaped move; then AP-R2 | No transition or row written. Remove path leaves the block shaped with its recipe. One undo step each |
+| QA-AP-L2 | D-22: own path, Adjust, Detach and Leave the path on m7 while m3 holds slot 7 from 10 | `E-ARGS` naming m3 and count 10; nothing written |
+| QA-AP-L3 | AP-H1: delete an anchored point; redraw ("again"); delete both anchors of a key; a delete that re-homes a key to within `0.5·s_min` of a surviving key; a delete that leaves a ramp `0.3·s_min` long; a point drag that would squeeze two keys under `s_min` | Keys re-homed by fraction; the re-homed key dropped, never the surviving one; the ramp re-written to `s_min` about its midpoint; `rehomed: true` on the profile and on `timing.handoff`; the drag stops short. Positions before and after the edit are equal at places away from the deleted points |
+| QA-AP-L4 | AP-R7 group cut (07 N1): between corners with no bend near (exact); between corners with an Adjust key at `x_b − 0.4` and a ramp end at `x_b + 0.3` in the stretches next to the cut, with `δ(x_b) = 0`; the same with `δ(x_b) ≠ 0` and the ramp starting on the inserted corner; on a cubic with no bend (redraw tolerance); each refusal (a) to (j) | Exact within QA-AP-R3: the bends become kept corners and every lane matches the uncut show at every probe. The ramp case is accepted with R1 having no handoff. Redraw tolerance on the cubic. Each refusal reports its reason and writes nothing |
+| QA-AP-L11 | Holds cuts and `keepThroughMovesAcross` over a move where one group route is refused (07 N10) | The other marchers are cut; the refused route's spots are left uncut; the toast counts them; one undo step |
+| QA-AP-L12 | Path edits after a swap (07 N3): m3 and m7 trade spots at 10 (S-20); edit a point of the open group path; draw it again from the open path; try "own path" on m7 | The point edit and the redraw succeed and move both occupants; own path is refused, naming m3 and count 10 |
+| QA-AP-L5 | AP-R15: delete m3 under K3 (S-20); delete B3 from a shaped move (S-46) | Shapeless: compaction moves rows and lanes, and I-A4′ holds throughout. Shaped: lane 3 kept while the group has occupants (Q1) |
+| QA-AP-L6 | AP-R16: least-travel on a shaped arc (S-30); recast m3 → m21 (S-20 #3); recast the founder of a spot that has a later occupant (07 N9) | The new founding occupant's offset is `A_new − F`, so first legs don't cross. The Adjust stays on the spot. m21 does m3's whole story. The later occupant's row gains `path_timing.offset` = the old `o_s`, and its positions don't change (QA-RT-L12) |
+| QA-AP-L7 | AP-R17 and AP-R18 on S-34 and S-35 setups | Copies exact; mirror positions are the mirror within `10⁻⁹`; K6 rows written |
+| QA-AP-L8 | AP-R19 refusals: no trail route; a key on a checkpoint; a key in the line-up part | `E-ARGS` with its reason |
+| QA-AP-L9 | AP-R20: re-place a recipe with fewer marchers over lanes on high slots | Lanes deleted in the same edit, with a toast; no raw trigger error (06 m6) |
+| QA-AP-L10 | AP-R10 after AP-R9: on an unadjusted spot; on a spot with its own Adjust; on a spot in a linked Adjust; each with R unedited and with R edited | Unadjusted, R unedited: bit-identical to before Detach. Adjusted: `adjust` and `group_adjust_id` NULL, the spot on the plain group lane, no toast (Q4). Undo restores both exactly |
+| QA-AP-L13 | Q1: delete B3 from a shaped move with an adjusted lane 3, then cast B9 into spot 3 | B9 walks lane 3 with its Adjust; the app shows "takes over spot 3's path (adjusted)". Deleting every occupant of the route removes the path |
+| QA-UNDO-L1 | Each procedure above | One undo step; the database restored exactly, ids and point ids included; redo restores the same ids |
+| QA-MIG-L1 | A v0.1.7 file; a new file; a step-15 lab file | Converts unchanged with the new tables empty and `path_timing` NULL; a new file has exactly `schema.ts`'s tables; a lab file from before the lanes storage step (step 24) is refused unchanged (file version) |
+| QA-MIG-L2 | Step 24's migration on a branch file with a group path and an own path | Each `route` transition becomes a lane `(T, 0)`, and the transition becomes `direct`. Positions bit-identical (QA-RT-L1) |
+| QA-FV-L1 | For each bumping step, open a file it wrote in the build before it. For the storage step in particular, a laned shapeless show opened in the step-15 build (07 N7: compaction there would leave lanes on the wrong spot) | Refused with the existing "newer release" message |
+
+### J.10 Review findings (06, 07) and how each is resolved
+
+#### MAJOR
+
+| # | Finding | Resolution | Where |
+| --- | --- | --- | --- |
+| 1 | Personal edits on a multi-occupant lane leak to other occupants | The owner decided that an Adjust belongs to the spot. Every personal edit (AP-R1 own path, AP-R2b leave, AP-R9 Detach, AP-R11 Adjust) is refused while `SHARED(T, k, m)`, naming the other marcher and count. A group draw is refused when the other occupant isn't in the selection. The S-27 #3 "F2 before 8" workaround is dropped: a count-bounded personal Adjust isn't offered | D-22, AP-R1/R2b/R8/R9/R11/R12, QA-AP-L2 |
+| 2 | Lane timing is per-occupancy data stored per slot; `ws` derived from `s.start` gives a negative denominator, and a resume of a `whole` occupancy aims at the founding schedule | Timing moves to `assignments.path_timing`, one per occupancy. `ws` is the row's stored `start_beat`, never `s.start`. `we = min(ws + counts, T.end) > ws` by construction, so there is no window to invert. A resume of a `whole` occupancy aims at its own windowed reference | D-25, J.2, R-14′ items 3 and 8, QA-RT-L6 |
+| 3 | A handoff can jump at the last kept point; `0/0` at `x_h0 = x_h1`; near-equal anchors; I-J4 isn't commit-checkable | `w` is defined by cases with no `0/0`. An instant handoff is allowed only at `≤ D_1` (w ≡ 1) or `≥ D_m` (w ≡ 0, 07 N4). Every other ramp is at least `s_min` long (I-H1, 07 N2), checked by the write path and, where SQL can measure it, by I-J5; AP-H1 re-writes a squeezed ramp to `s_min`. The resolver's T-5 widening stays as the ε-scale backstop. The old I-J4 is gone, because `o_e` is derived | R-14′ item 5, T-5, I-H1, QA-RT-L4 |
+| 4 | Adjust profiles jump when two keys share a place | The writer keeps keys at least `s_min` apart (I-J4, I-J5; 07 N2). The resolver clusters keys within `ε_geom` by a single-linkage scan and keeps the last stored per cluster (T-4, 07 N5), which keeps the profile continuous; the review's "use the later key from that place on" would still jump. AP-H1 drops a re-homed key that lands within `s_min` of another | R-14′ item 6, AP-H1, QA-RT-L5 |
+| 5 | Split at the playhead dropped today's refusals and is unspecified for non-founding spans | Today's two refusals are kept, and refusals are added for joiners at or before `b`, being in an entry at `b`, `whole` occupancies, cuts on legs, a handoff begun before the cut with a nonzero Adjust there, and follow-the-leader trail lanes. Revision 2 makes the accepted cases exact (07 N1): `C` is the fixed end of both halves, and every Adjust key or ramp end between `C` and its neighbouring kept point becomes a kept corner, so nothing is straightened. (g) is narrowed; (i) refuses a bend on a cubic at the cut and (j) a cut that would need a key closer than `s_min` | AP-R7, QA-AP-L4 |
+| 6 | A frozen `o_e` fails S-22 #1 and #3 | `o_e = B − G`, derived from the spot's own destination. G stays frozen (S-42). The end-offset columns are dropped | D-24, R-14′ item 5, QA-RT-L3 |
+| 7 | Compaction and vacancy under K3 are undefined; vacated shaped slots keep zombie lanes | A free slot has no row at any beat. Compaction moves or deletes lanes before lowering `slot_count`, in a stated order. AP-H3 deletes every lane of a route none of whose lanes is occupied, and I-R3′ (occupied lane) makes that a commit check, so routes that can't be selected can't exist. A vacated spot on a shaped move keeps its lane and Adjust while the group has occupants (owner, Q1). `D-VACANT` is per range | AP-R15, AP-H3, I-R3′, QA-AP-L5 |
+| 8 | "Recast touches rows only" is wrong for shaped end sets | The documented rule: lanes (route, Adjust, linked Adjust) stay with the spot (D-22), `path_timing` goes with the person, and the lane's offset is rewritten for a new founding occupant so first legs don't cross (owner, Q2). Later occupants keep their old offset on their own row, so they don't move (07 N9). Swapping end spots by destination edit writes points only | AP-R16, QA-AP-L6 |
+| 9 | The file version must bump at M0, M4, M6 and M7; the baseline is stale | Bump at every step that adds a fact an older build would play **or edit** wrong instead of refusing (07 N7). Never reuse a lab-written number: the step-15 lab wrote 10, so the storage step takes 11. Rebase on fork main's collapsed migrations (`0017_timeline_model`, next 0019, max version 8 with 9 parked). Pathways-lab files are dropped: fork main's legacy repair already refuses route-prototype files | ADR §9, build-steps B0 and per step, QA-FV-L1 |
+| 10 | Out-of-range pins, windows and anchors have no total rule; about 10 procedures must rewrite JSON | Windows no longer need rewriting: `counts` is relative to the row. Pin range and every anchor id are commit views (I-P1, I-J3). The resolver has total rules T-1 to T-13. One re-home helper (AP-H1) is called by every geometry writer. The pin rewrite on a start-edge drag stays (R-pin), now checked at commit | §5.2, AP-H1, AP-R4, QA-RT-L11 |
+| 11 | "Bit-identical to today" holds only for founding spans | The rule is scoped to founding spans with no new facts. Joins and resumes change on purpose at the range-occupancy step (the entry rule). Row-level parity tests allow the split's extra rows | R-14′ item 9, QA-RT-L1 |
+
+#### MINOR
+
+| # | Finding | Status |
+| --- | --- | --- |
+| m1 | Dropping the UNIQUE indexes drops the index the trigger needs | **Resolved.** Plain indexes on `(transition_id, slot_index, start_beat)` and `(transition_id, marcher_id, start_beat)` (J.1); QA-DB-L9 |
+| m2 | UPDATE-swapping occupants passes through an overlapping state | **Resolved.** Delete-then-insert as a procedure rule (J.3, AP-R16) |
+| m3 | Float order of the δ sum | **Resolved.** A fixed order: offset, linked, own (R-14′ item 7) |
+| m4 | §8.11's bound with two profiles | **Resolved.** β = `7·√2·10⁶` for lanes (§8.11) |
+| m5 | Reset sub-group order | **Resolved.** Lanes first, then the row (AP-R12). With depth fixed by structure, no child nodes exist |
+| m6 | A shape or slot-count change over lanes on high slots | **Resolved.** AP-R20 |
+| m7 | AP-R1's `to` rewrite with a handoff | **Resolved.** `to` is kept whenever R has a handoff (AP-R1) |
+| m8 | Recipes keyed by marcher under K3 | **Resolved.** Use the slot held at `T.end` (AP-R16) |
+| m9 | Adjust keys on legs have no effect | **Resolved.** Refused on write (AP-R11) and clamped by the resolver (T-3). A leg bulge is a product limit (J.11 #3) |
+| m10 | A lane-marker drag with a pinned count can't be per member | **Deferred, accepted as a limit.** An Adjust is a place; the pin stays route-level. Not counted as a pass for S-48 #2 |
+| m11 | A joiner's reference start `F + o_s` differs from the founder's first leg | **Noted** in R-14′ item 8; it matters only when the entry aims inside the first leg |
+
+#### Re-check (07) and owner answers
+
+| # | Finding | Resolution | Where |
+| --- | --- | --- | --- |
+| N1 MAJOR | The accepted group cut straightens an Adjust key or ramp end that lies between the cut and its neighbouring kept point | **Resolved.** `C` is the fixed end of both halves. Every bend in the stretches next to `C` becomes a new kept corner of its half, on the straight piece, so legs next to `C` trace motion with no bend. **Refused only where exactness is impossible:** (g) narrowed, where the first half's derived `o_e1` would include `δ(x_b)`; (i) a bend on a cubic at the cut, where a corner would change the smooth tangents; (j) a boundary key or ramp that would be closer than `s_min`. `C` isn't also stored as an inner corner, because the first half's `to` must be `C` for its clock, and cleaning would merge the two | AP-R7, QA-AP-L4 |
+| N2 MAJOR | "No jumps" is only ε-continuity; keys or ramps `10⁻⁹` apart teleport | **Resolved.** `s_min` = one step (11.25 field units) between keys of a profile, between a ramp's ends, and between a follow-the-leader key and a checkpoint. It is checked in full by the write path, and by commit view I-J5 where SQL can measure it exactly (straight corner-to-corner stretches, equal anchors). Point drags stop short; AP-H1 drops a re-homed key or re-writes a squeezed ramp. Big steps judges each adjusted stretch (spot, counts). P-14b and QA-P-14b assert bounded speed. The resolver stays ε-total (T-4, T-5) for states written without the app checks | J.2, I-J4, I-J5, I-H1, AP-H1, AP-R11, AP-R13, AP-R19, P-14b, Big steps on lanes, QA-DB-L11, QA-P-14b, QA-BS-L1 |
+| N3 | Unclear whether AP-R1's "more than one row" refusal gates point edits and "again" | **Resolved.** Point edits on an open path and drawing it again from the open path are path edits, never refused for multiple rows or `SHARED`. Only drawing a new own path for a selected marcher is personal | AP-R1, AP-R8, QA-AP-L12 |
+| N4 | T-5 widens asymmetrically; widened anchors are persisted with no badge | **Resolved.** An instant handoff at `≥ D_m` is "at the end" (`w ≡ 0`), mirroring `≤ D_1`, and only strictly interior ones widen, forward. The write path never stores an interior instant handoff (I-H1). AP-H1's re-written ramp sets `timing.handoff.rehomed` for the badge | R-14′ item 5, T-5, AP-H1, QA-RT-L4 |
+| N5 | T-4's "less than ε apart" doesn't say pairwise or transitive | **Resolved.** Single-linkage scan in sorted order; keep the last stored key per cluster; the oracle uses the same scan | R-14′ item 6, QA-RT-L5 |
+| N6 | T-8 has no branch for a lane on a follow-the-leader transition with an offset or a `group_adjust_id` | **Resolved.** Added to T-8: ignored, `D-LANE-IGNORED`, walks R-10/R-11 | T-8, QA-RT-L11 |
+| N7 | The bump criterion misses steps that edit wrong (M1 lanes on multi-slot transitions) | **Resolved.** "Play **or edit** wrong." The storage step (M0 and M1 together) bumps once, to 11 | ADR 0011 §9, implementation plan, QA-FV-L1 |
+| N8 | Row writers with explicit field lists drop `path_timing` | **Resolved.** AP-H2 names them: `reinsertWithSlots`, `writeFirstHalfTransition`, `createOwnTransitionsInTransaction`, the layer writers and every other `insert`, plus the change-log and history triggers. QA-DB-L10 is the "column carried" row | AP-H2, QA-DB-L10 |
+| N9 | The Q2 offset rewrite also moves the spot's later occupants | **Resolved per owner.** Only the start-of-move occupant's offset is rewritten. Each later occupant first gets the old `o_s` on its own row (`path_timing.offset`), so it doesn't move. This adds one optional JSON key to an existing column (open-questions.md) | J.2, I-A7, R-14′ head, AP-R16, T-14, QA-RT-L12, QA-AP-L6 |
+| N10 | The new split refusals make the holds cuts and `keepThroughMovesAcross` abort whole edits more often | **Resolved.** `splitRefusal` reports per route. Those callers skip the refused routes' spots, finish the rest, and count the skipped marchers in the toast. Split at the playhead still refuses whole | AP-R7 row, QA-AP-L11 |
+| 3, 4, 5 (PARTLY in 07) | Ramps and keys at ε scale; split not exact | Closed by N2 (3, 4) and N1 (5) above | — |
+| Q1 | Emptied spot | **Decided:** keeps lane and Adjust while the route has an occupied lane | AP-R15, AP-H3, QA-AP-L13 |
+| Q2 | Recast start offset | **Decided:** follows the new start-of-move occupant; path and Adjust stay with the spot; later occupants are not moved (N9) | AP-R16 |
+| Q3 | Follow-the-leader Adjust key | **Decided:** the slot | J.4 item 2, D-27 |
+| Q4 | Rejoin after Detach | **Decided, changed from the draft's recommendation:** always drops the Adjust (own and linked); no toast; undo restores | AP-R10, AP-R9, QA-AP-L10 |
+
+#### 04 claims that change
+
+- **Lane survival.** "The lane survives on the vacant slot" (04 F-36) holds while the route has another occupied lane (owner, Q1).
+- **Fixed depth.** "Depth ≤ 2 by I-J1" is replaced by depth fixed by structure (06 §D.2).
+- **Where facts live.** The lane no longer stores `end_offset` or `timing` (06 §D.1 and §D.3).
+- **Follow-the-leader Adjust.** 04's "I-L2: no lane on follow-the-leader" becomes I-LN2 (trail lanes),
+  by owner decision D-27.
+
+### J.11 What the model still can't do (product limits)
+
+1. **A person-keyed Adjust**, one that follows a marcher to another spot. By owner decision, a
+   personal edit on a shared spot is refused (D-22).
+2. **A slot walking two routes in one move** (I-LN3). Use another spot (K3) or a takeover move.
+3. **An Adjust on a first or last leg** (refused). Drag the end spot, or Detach and edit.
+4. **Live links:** a mirror, a route shared by two moves, or a path continued into the next move
+   (D-26). A page flag inside one move is unaffected.
+5. **Exits and entries at a place or a sub-beat.** They are row bounds, which are integers (I-N1).
+   Handoffs and Adjusts are places.
+6. **A group split at the playhead** in the AP-R7 refusal cases: joins, entries, legs,
+   follow-the-leader trails, and the three cases where an exact cut is impossible ((g) a ramp
+   begun before the last kept point with an Adjust at the cut, (i) a bend on a curve at the cut,
+   (j) a cut that would need keys or ramp ends closer than a step). In particular, `whole`
+   occupancies (cohort split) are deferred. Re-expressing pins through two composed clock maps
+   isn't exact in float64, and the review found that the cohort rule as drafted couldn't see
+   derived windows.
+7. **Turning with the path** (G-1). Lanes and Adjusts only translate.
+8. **A follow-the-leader Adjust before the trail step** (J.4 item 1).
+9. **Merge and Remove keyframe's join with paths** (AP-R6) until a step defines how routes reunite.
+10. **Adjust keys or a spacing change tighter than one step** (I-J4, I-H1). A steeper tweak than
+    that is allowed, but Big steps flags it.
+11. **Keeping an Adjust through Rejoin.** Rejoin after Detach always drops it (Q4). To keep a
+    tweak, stay detached, or Adjust again after Rejoin.
