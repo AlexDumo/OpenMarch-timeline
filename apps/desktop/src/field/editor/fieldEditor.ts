@@ -317,6 +317,8 @@ export type FieldModeDrawing = {
      */
     memberRings?: readonly {
         at: FieldPoint;
+        /** The marcher it rings, whose shape it takes */
+        marcherId: number;
         kind: "group" | "own";
         label: string;
     }[];

@@ -15,6 +15,14 @@ import {
     type DrawnSelectionBox,
 } from "./selectionFrame";
 import { dotSizes, SELECTION_COLOR } from "./selectionRing";
+import MarkerSvg from "./MarkerSvg";
+import {
+    markerShapeOf,
+    ringShapeOf,
+    spotShapeOf,
+    type MarkerShape,
+} from "../markerShape";
+import { marcherShapes } from "./useMarcherShapes";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import { GUIDE_INK, GUIDE_INK_TEXT } from "./guideInk";
@@ -398,7 +406,10 @@ const LANE_ALPHA = 0.18;
 const LANE_WIDTH = 1;
 /** A drawn path's line (pathways), solid and heavier than a shape's outline: drawn or open, shown */
 const PATH_LINE_WIDTH = { edited: 2.5, shown: 1.75 } as const;
-/** Rings round a group's members (blue) and selected marchers off it (orange), pathways step 15 */
+/**
+ * Rings round a group's members (blue) and selected marchers off it (orange), pathways step 15, in
+ * each marcher's shape (`ringShapeOf`)
+ */
 const GROUP_RING = "rgb(59, 130, 246)";
 const OWN_RING = "rgb(249, 115, 22)";
 const MEMBER_RING_SCALE = 1.9;
@@ -409,7 +420,7 @@ const GHOST_OPACITY = 0.35;
 
 /**
  * Where an open shape's marchers start (#346, #417): a faint, see-through dot in each marcher's
- * own color, at the start flag
+ * own color and shape, at the start flag
  */
 const StartMarks = memo(function StartMarks({
     drawing,
@@ -429,21 +440,20 @@ const StartMarks = memo(function StartMarks({
     const ringIds = drawing.ringIds;
     const ringKey = ringIds?.join(",");
     const { ids } = marchers;
-    // Each ring's color, worked out again only when whose rings or their looks change (#455)
-    const colors = useMemo(() => {
-        const shape = rgbaToString(theme.shape);
+    // Each ghost's color and shape, worked out again only when whose ghosts or their looks change
+    // (#455)
+    const ghosts = useMemo(() => {
         const index = new Map(marchers.ids.map((id, i) => [id, i]));
         return (ringIds ?? []).map((id) => {
             const row = index.get(id);
-            const look =
-                row === undefined
-                    ? null
-                    : resolveMarcherLook(marchers.stacks[row] ?? [], theme);
-            return look
-                ? rgbaToString(
-                      look.shape === "cross" ? look.crossColor : look.fill,
-                  )
-                : shape;
+            if (row === undefined) return null;
+            const look = resolveMarcherLook(marchers.stacks[row] ?? [], theme);
+            return {
+                color: rgbaToString(
+                    look.shape === "cross" ? look.crossColor : look.fill,
+                ),
+                shape: markerShapeOf(look.shape),
+            };
         });
         // ringIds by content, marchers by their versions
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -453,12 +463,14 @@ const StartMarks = memo(function StartMarks({
     return (
         <>
             {drawing.rings?.map((point, i) => (
-                <circle
+                // In the marcher's own shape, as where it stands now is
+                <MarkerSvg
                     key={i}
-                    cx={point.x}
-                    cy={point.y}
+                    shape={ghosts[i]?.shape ?? "circle"}
+                    x={point.x}
+                    y={point.y}
                     r={r}
-                    fill={colors[i] ?? shape}
+                    fill={ghosts[i]?.color ?? shape}
                     opacity={GHOST_OPACITY}
                     data-testid="fieldShapeStartGhost"
                 />
@@ -541,6 +553,7 @@ const ShapeBody = memo(function ShapeBody({
     marchers,
     looks,
     scale,
+    spotShape,
 }: {
     drawing: FieldModeDrawing;
     theme: FieldTheme;
@@ -548,12 +561,24 @@ const ShapeBody = memo(function ShapeBody({
     /** The marchers' appearance version: their looks changed, so the ghosts redraw */
     looks: number;
     scale: number;
+    /** The marchers' shared shape, for the spots (`spotShapeOf`) */
+    spotShape: MarkerShape;
 }) {
     const shape = rgbaToString(theme.shape);
     const walk = rgbaToString({ ...theme.shape, a: 0.4 });
     const fill = rgbaToString({ ...theme.shape, a: 0.06 });
     const open = drawing.stage === "open";
     const dots = drawing.stage === "drawing";
+    // Each marcher's shape, for the member rings
+    const ringShapes = useMemo(
+        () =>
+            drawing.memberRings?.length
+                ? marcherShapes(marchers, theme)
+                : new Map<number, MarkerShape>(),
+        // marchers by their looks
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [drawing.memberRings, marchers, theme, looks],
+    );
     return (
         <>
             {/* Under the path's line, which is the one being edited */}
@@ -613,10 +638,12 @@ const ShapeBody = memo(function ShapeBody({
                 scale={scale}
             />
             {drawing.memberRings?.map((ring, i) => (
-                <circle
+                // In the marcher's shape, as its selection ring is
+                <MarkerSvg
                     key={`ring${i}`}
-                    cx={ring.at.x}
-                    cy={ring.at.y}
+                    shape={ringShapeOf(ringShapes.get(ring.marcherId))}
+                    x={ring.at.x}
+                    y={ring.at.y}
                     r={DOT_RADIUS * scale * MEMBER_RING_SCALE}
                     fill="none"
                     stroke={ring.kind === "group" ? GROUP_RING : OWN_RING}
@@ -627,7 +654,7 @@ const ShapeBody = memo(function ShapeBody({
                     aria-label={ring.label}
                 >
                     <title>{ring.label}</title>
-                </circle>
+                </MarkerSvg>
             ))}
             {drawing.walks.map(({ from: a, to: b }, i) => {
                 return (
@@ -644,16 +671,20 @@ const ShapeBody = memo(function ShapeBody({
             })}
             {drawing.spots.map((p, i) => {
                 return (
-                    <circle
+                    // In the marchers' shape, so a spot under a square marcher doesn't read as a
+                    // round mark on it
+                    <MarkerSvg
                         key={i}
-                        cx={p.x}
-                        cy={p.y}
+                        shape={spotShape}
+                        x={p.x}
+                        y={p.y}
                         r={SPOT_RADIUS}
                         // Solid while drawn and once open (#403): the spots are where everyone will
                         // stand, unlike the hollow start rings
                         fill={dots || open ? shape : "none"}
                         stroke={dots || open ? "white" : shape}
                         strokeWidth={SPOT_WIDTH}
+                        data-testid="fieldShapeSpot"
                     />
                 );
             })}
@@ -665,9 +696,12 @@ const ShapeBody = memo(function ShapeBody({
 const ShapeOnGuides = memo(function ShapeOnGuides({
     drawing,
     theme,
+    spotShape,
 }: {
     drawing: FieldModeDrawing;
     theme: FieldTheme;
+    /** The marchers' shared shape, for the spots (`spotShapeOf`) */
+    spotShape: MarkerShape;
 }) {
     const shape = rgbaToString(theme.shape);
     const controls = controlsStyle(drawing.calm);
@@ -675,10 +709,11 @@ const ShapeOnGuides = memo(function ShapeOnGuides({
         <>
             {drawing.onGuides?.map((p, i) => {
                 return (
-                    <circle
+                    <MarkerSvg
                         key={i}
-                        cx={p.x}
-                        cy={p.y}
+                        shape={spotShape}
+                        x={p.x}
+                        y={p.y}
                         r={SPOT_RADIUS}
                         fill={GUIDE_INK}
                         stroke="white"
@@ -688,10 +723,11 @@ const ShapeOnGuides = memo(function ShapeOnGuides({
             })}
             {drawing.gaps?.map((p, i) => {
                 return (
-                    <circle
+                    <MarkerSvg
                         key={i}
-                        cx={p.x}
-                        cy={p.y}
+                        shape={spotShape}
+                        x={p.x}
+                        y={p.y}
                         r={SPOT_RADIUS}
                         fill="none"
                         stroke={shape}
@@ -853,6 +889,24 @@ function OffsetStep({
     );
 }
 
+/** The shape a mode's spots take: its marchers' when they share one (`spotShapeOf`). */
+function useSpotShape(
+    drawing: FieldModeDrawing,
+    marchers: FieldMarchers,
+    theme: FieldTheme,
+): MarkerShape {
+    const ringKey = drawing.ringIds?.join(",");
+    const looks = marchers.appearanceVersion;
+    return useMemo(() => {
+        const shapes = marcherShapes(marchers, theme);
+        return spotShapeOf(
+            (drawing.ringIds ?? []).map((id) => shapes.get(id) ?? "circle"),
+        );
+        // ringIds by content, marchers by their versions
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ringKey, looks, marchers, theme]);
+}
+
 function ModeDrawing({
     drawing,
     theme,
@@ -875,6 +929,7 @@ function ModeDrawing({
     // What scales with the field is drawn in field units under the view's transform, and redrawn
     // only when the drawing changes, not on every pan or zoom frame (#455)
     const transform = `translate(${view.panX} ${view.panY}) scale(${z})`;
+    const spotShape = useSpotShape(drawing, marchers, theme);
     return (
         <g data-testid={testId} data-stage={drawing.stage}>
             <g transform={transform}>
@@ -884,6 +939,7 @@ function ModeDrawing({
                     marchers={marchers}
                     looks={marchers.appearanceVersion}
                     scale={dotSizes(z).scale}
+                    spotShape={spotShape}
                 />
             </g>
             {drawing.guides?.map(({ from, to }, i) => {
@@ -949,7 +1005,11 @@ function ModeDrawing({
                 );
             })}
             <g transform={transform}>
-                <ShapeOnGuides drawing={drawing} theme={theme} />
+                <ShapeOnGuides
+                    drawing={drawing}
+                    theme={theme}
+                    spotShape={spotShape}
+                />
             </g>
             {drawing.groupLabels &&
                 placeGroupLabels(
