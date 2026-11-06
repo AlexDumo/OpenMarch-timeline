@@ -30,6 +30,6 @@ CREATE TABLE IF NOT EXISTS `timeline_lanes` (
 CREATE INDEX IF NOT EXISTS `timeline_idx_lane_route` ON `timeline_lanes` (`route_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS `timeline_lanes_transition_slot_unique` ON `timeline_lanes` (`transition_id`,`slot_index`);--> statement-breakpoint
 INSERT INTO `timeline_lanes` (`transition_id`, `slot_index`, `route_id`, `offset_x`, `offset_y`) SELECT `id`, 0, `route_id`, json_extract(`path_params`, '$.offset[0]'), json_extract(`path_params`, '$.offset[1]') FROM `timeline_transitions` WHERE `path_style` = 'route' AND `route_id` IS NOT NULL ORDER BY `id`;--> statement-breakpoint
+UPDATE `timeline_transitions` SET `path_style` = 'direct', `path_params` = NULL, `route_id` = NULL WHERE `path_style` = 'route';--> statement-breakpoint
 DELETE FROM `history_undo` WHERE EXISTS (SELECT 1 FROM `timeline_lanes`);--> statement-breakpoint
-DELETE FROM `history_redo` WHERE EXISTS (SELECT 1 FROM `timeline_lanes`);--> statement-breakpoint
-UPDATE `timeline_transitions` SET `path_style` = 'direct', `path_params` = NULL, `route_id` = NULL WHERE `path_style` = 'route';
+DELETE FROM `history_redo` WHERE EXISTS (SELECT 1 FROM `timeline_lanes`);

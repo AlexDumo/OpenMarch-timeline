@@ -49,7 +49,8 @@ const ROUTE_GROUP = {
 };
 
 /**
- * A new show, then rows as a step-15 build stored them: marcher 1 on an own route, marchers 2
+ * A new show, then rows as a step-15 build stored them (with an undo trigger, as a real file
+ * has): marcher 1 on an own route, marchers 2
  * and 3 on one group route, each alone in a one-slot `route` transition; 0020 unrecorded and its
  * table gone, version 10, and one stored undo step.
  */
@@ -78,6 +79,13 @@ async function stepFifteenFile(file: string) {
             INSERT INTO timeline_assignments (marcher_id, transition_id, slot_index, start_beat, end_beat) VALUES
               (1, 1, 0, 0, 8), (2, 2, 0, 0, 8), (3, 3, 0, 0, 8);
             INSERT INTO history_undo (history_group, sql) VALUES (1, 'DELETE FROM timeline_routes WHERE rowid=2');
+            -- A real file keeps the renderer's undo triggers across migrations: one that logs an
+            -- update, so 0020's own UPDATE would leave an undo step back to route transitions
+            -- if the history were cleared before it (review of #734)
+            CREATE TRIGGER IF NOT EXISTS timeline_transitions_ut AFTER UPDATE ON timeline_transitions
+            BEGIN
+              INSERT INTO history_undo (history_group, sql) VALUES (2, 'UPDATE timeline_transitions SET path_style=''route'' WHERE rowid=' || OLD.id);
+            END;
             PRAGMA user_version = 10;
         `);
     });
