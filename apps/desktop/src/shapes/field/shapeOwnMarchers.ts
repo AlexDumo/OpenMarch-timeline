@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { pathMarcherIds, usePathPenStore } from "@/pathways/pathPenStore";
-import { useBoxSelectionStore } from "../placed/boxSelectionStore";
 import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 
 /**
@@ -25,14 +24,9 @@ export function withoutShapeMarchers(
 export function useShowingShapeMarchers(): ReadonlySet<number> | null {
     const marchers = useShapeToolStore((s) => s.tool?.marchers ?? null);
     const hidden = useShapeHidden();
-    const boxSelected = useBoxSelectionStore((s) => s.selected !== null);
     const onPath = usePathPenStore(
         useShallow((s) =>
-            pathMarcherIds(
-                s.session,
-                s.hidden,
-                marchers !== null || boxSelected,
-            ),
+            pathMarcherIds(s.session, s.hidden, marchers !== null),
         ),
     );
     return useMemo(() => {

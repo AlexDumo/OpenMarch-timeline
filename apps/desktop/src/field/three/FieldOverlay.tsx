@@ -26,6 +26,7 @@ import {
     placeGroupLabels,
 } from "@/shapes/field/groupDrawing";
 import HeldRolesChip, { HeldRolesChipBelowTip } from "./HeldRolesChip";
+import { useFieldUnderlayStore } from "@/field/editor/fieldUnderlayStore";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -171,6 +172,8 @@ export default function FieldOverlay({
     const propTool = useSyncExternalStore(subscribeEditor, () =>
         editor.propToolShape(),
     );
+    // A selected box's members' closed group path, under the box (pathways)
+    const pathUnder = useFieldUnderlayStore((s) => s.drawing);
 
     return (
         <>
@@ -190,6 +193,14 @@ export default function FieldOverlay({
                     />
                 )}
                 {area?.kind === "lasso" && <Lasso lasso={area} theme={theme} />}
+                {pathUnder && pathUnder !== modeDrawing && (
+                    <ModeDrawing
+                        drawing={pathUnder}
+                        theme={theme}
+                        marchers={marchers}
+                        testId="fieldPathUnderBox"
+                    />
+                )}
                 {modeDrawing && (
                     <ModeDrawing
                         drawing={modeDrawing}
@@ -842,10 +853,13 @@ function ModeDrawing({
     drawing,
     theme,
     marchers,
+    testId = "fieldShapeMode",
 }: {
     drawing: FieldModeDrawing;
     theme: FieldTheme;
     marchers: FieldMarchers;
+    /** Another drawing than the mode's, under it, names itself */
+    testId?: string;
 }) {
     const view = useFieldViewStore();
     const shape = rgbaToString(theme.shape);
@@ -858,7 +872,7 @@ function ModeDrawing({
     // only when the drawing changes, not on every pan or zoom frame (#455)
     const transform = `translate(${view.panX} ${view.panY}) scale(${z})`;
     return (
-        <g data-testid="fieldShapeMode" data-stage={drawing.stage}>
+        <g data-testid={testId} data-stage={drawing.stage}>
             <g transform={transform}>
                 <ShapeBody
                     drawing={drawing}

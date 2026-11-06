@@ -22,7 +22,8 @@ import { subscribeHistoryChanges } from "@/db-functions/history";
 import { shapeToolMode } from "../tool/shapeToolMode";
 import { resetShapePointer, watchShapeEditorFocus } from "./shapePointer";
 import { usePathPenStore } from "@/pathways/pathPenStore";
-import { pathPenMode } from "@/pathways/pathPenMode";
+import { drawingOf, pathPenMode } from "@/pathways/pathPenMode";
+import { setFieldUnderlay } from "@/field/editor/fieldUnderlayStore";
 
 /**
  * Puts the shapes on the field's editor (#204): the open Shape tool takes every edit press
@@ -92,6 +93,19 @@ export function useShapeFieldModes(
         );
     }, [editor, toolOpen, hidden, live, pathOpen, pathShown, isPlaying]);
     useEffect(() => () => editor.setMode(null), [editor]);
+    // A selected box takes the presses, but its members' closed group path is still drawn, under
+    // it: the group's line and faint lanes, as when the box isn't selected (owner on #683)
+    const closedSession = usePathPenStore((s) =>
+        s.session?.phase === "closed" && !s.hidden ? s.session : null,
+    );
+    const underBox =
+        live !== null && !toolOpen && !pathOpen && !isPlaying
+            ? closedSession
+            : null;
+    useEffect(() => {
+        setFieldUnderlay(underBox ? drawingOf(underBox) : null);
+    }, [underBox]);
+    useEffect(() => () => setFieldUnderlay(null), []);
     // Keyboard focus in the floating editor shows the shape's controls (#430)
     useEffect(() => watchShapeEditorFocus(), []);
 

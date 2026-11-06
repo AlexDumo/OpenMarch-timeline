@@ -22,13 +22,13 @@ describe("pathMarcherIds", () => {
         expect(pathMarcherIds(session("open"), false, false)).toEqual([7]);
     });
 
-    it("names no one while a closed path is hidden or under a box or shape", () => {
+    it("names no one while a closed path is hidden or under an open shape", () => {
         expect(pathMarcherIds(session("closed"), true, false)).toEqual([]);
         expect(pathMarcherIds(session("closed"), false, true)).toEqual([]);
         expect(pathMarcherIds(null, false, false)).toEqual([]);
     });
 
-    it("an open or drawn path takes the field over a box", () => {
+    it("an open or drawn path takes the field over a shape", () => {
         expect(pathMarcherIds(session("open"), false, true)).toEqual([7]);
         expect(pathMarcherIds(session("drawing"), false, true)).toEqual([7]);
     });
