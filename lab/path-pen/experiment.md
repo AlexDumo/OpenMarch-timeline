@@ -2,75 +2,66 @@
 # The lab reads this file when this branch's test build is published.
 # Keep `id` stable: feedback is filed under it.
 id: path-pen
-title: "Paths for a group (pathways, step 15)"
-summary: "Step 15 of pathways: draw one path for a whole block. Select several marchers and press P. The block slides along the path keeping its shape and lands on its end set. Any one marcher can break off with Own path and come back with Rejoin."
+title: "Paths stay in their move (pathways, step 24)"
+summary: "Step 24 of pathways: drawing a path no longer takes marchers out of their move. Everything that worked in step 15 should look and play exactly the same. New: a block in a shape keeps its shape under a path, follows the shape when you change it, and is back in the shape when you remove the path."
 status: open
 variants: []
 questions:
-  - "Select a block and draw a path through a turn. Does the block hold its shape all the way between the first and last points, and land where it should?"
-  - "When the end set isn't the start formation moved over, each marcher changes speed where it joins the path and where it leaves it, and walks with the group in between. Does that read right in playback and the 3D View, or would you rather each marcher kept one steady speed and the block bent through turns?"
-  - "Big steps now names the leg (onto the path, along it, off it). Is it clear which marchers it means, and what to do about it?"
-  - "Own path and Rejoin on the floating bar: did they do what you expected? Was it clear from the blue and orange rings who follows the group path and who doesn't?"
-  - "Remove path with one marcher selected removes the path for the whole group (the toast says how many). Is that what you wanted, or should it take only that marcher off?"
+  - "Redo what you tried in step 15 (a path for one marcher, a group path with a curve, Own path, Rejoin, editing points, Remove path, undo and redo). Did anything look, play or behave differently?"
+  - "Draw a group path on a block you placed with a shape, then Remove path. Is the block still that shape, with nobody left out of it?"
+  - "On a move into a shape, draw a group path, then change the end shape (bigger spacing, or a different shape). Do the marchers on the path land on the new spots?"
+  - "Give one marcher of a block its own path. Did the rest of the block stay exactly as it was?"
+  - "Split at playhead, split by marchers and the holds tools on a move with a path should each either keep the path or refuse with a message. Did any of them do something else, or show a message that didn't make sense?"
 ---
 
-Steps 1 and 2 drew a path for one marcher. This build draws **one path for a
-group**: the block slides along it, keeps facing the same way, and lands on its
-end set.
+This build changes how a path is **stored**, not how it looks. Until now, drawing
+a path took each marcher out of its move into a move of its own, so a block in a
+shape lost its link to the shape. Now a path is attached to the marcher's **spot**
+in its move instead, and nobody leaves the move.
+
+**What should be the same**
+
+Everything from steps 1, 2 and 15: drawing a path for one marcher, curves, a group
+path that holds its shape, Own path, Rejoin, editing points, Remove path, Big
+steps, and undo and redo. Positions are the same to the last digit: we checked
+the step 15 build against this one on the same edits (about 1.5 million
+positions, all identical).
 
 **What's new**
 
-- **Drawing for a group.** Select two or more marchers in the same move and
-  press **P**. The hint says "Group path for 16 marchers". You draw one line
-  from the middle of the block; every marcher's own copy of it (its **lane**)
-  is drawn faint as you go. Points, curves, Enter and Escape work as before.
-- **The block holds its shape.** Every marcher passes its copy of each point at
-  the same moment, so between the first and last points the block moves as one.
-  Only the stretch from each marcher's start onto the path, and from the path to
-  its own end spot, can be faster or slower. A block whose end set is its start
-  formation moved over walks at one steady speed the whole way.
-- **Rings.** With a group path shown, each marcher on it gets a blue ring
-  ("Follows the group path"). A selected marcher in the move that isn't on it
-  gets an orange ring ("Own path" when it walks its own).
-- **Editing.** Double-click the line, or any lane, to open it (or right-click
-  for Edit path). Point edits move every lane at once.
-- **Own path · Rejoin.** On the floating bar. **Own path** gives the selected
-  marchers their own copy of their lane, which you can then edit alone. It then
-  walks that line at its own steady speed. **Rejoin** puts selected marchers
-  back on the group path, each from where it stands. It also adds a marcher that
-  wasn't on it. Both are in the command palette too.
-- **Remove path** on a group path removes it for the whole group, whichever
-  marcher is selected, and the toast says how many marchers lost it (with Undo).
-  **Own path** first keeps one marcher's.
-- **Big steps** now judges each leg: onto the path, along it, and off it.
-- Each edit is one undo step, and redo brings back the same paths.
+- **Remove path puts the block back in its shape.** A block placed with a shape
+  tool, or a move into a shape, is still that shape after you remove a path, with
+  no empty spots left behind.
+- **A path follows the end shape.** Change the end shape of a move that has a
+  group path, and the marchers on the path land on the new spots.
+- **One marcher's own path leaves the others alone.** The rest of its block stay
+  in their move, as they were.
+- **Edits that can't keep a path yet refuse** with a message, instead of breaking
+  it: split by marchers of a marcher on a path, merging moves, Remove keyframe's
+  join, and making a move with a path follow the leader. Split at playhead keeps
+  a marcher's own path and refuses a group path, as before.
 
 **Try it**
 
-1. Put the playhead on a page where a block moves. Select the whole block.
-2. Press **P**, place a smooth point and a corner, and press **Enter**.
-3. Play it, and watch the 3D View. Try an end set that's a different shape
-   (a line, an arc) and watch where the speed changes.
-4. Select one marcher of the block, double-click the path, and press
-   **Own path**. Edit its path. Then press **Rejoin**.
-5. Try **Remove path** with one marcher selected, then Undo.
+1. Open a show you used for step 15, or make a new one. Redo the step 15 tries:
+   a group path with a curve, Own path, Rejoin, Remove path, undo and redo.
+2. Place a block with a shape tool. Select it, press **P**, draw a path, press
+   **Enter**. Play it. Then **Remove path**: is it still the shape?
+3. On a move into a shape, draw a group path. Change the end shape. Play it.
+4. Select one marcher in a block and draw it its own path. Play the block.
+5. Try Split at playhead, split by marchers, Hold, and Clear this page on moves
+   with paths.
 
 **Good to know**
 
-- The moments the block reaches the first and last points come from the path
-  you drew. They don't fall on whole counts. Pins (a later step) will put a
-  point on a count.
-- **Split at playhead** on a move with a group path refuses, and says to give
-  the marchers their own paths (Own path) or remove the path first.
-- With marchers from different moves selected, the pen refuses and says so.
+- A file saved by this build is **version 11**. The step 15 build refuses it
+  ("saved by a newer version"). Files from step 15 open here and are moved to the
+  new storage when they open; their undo history from step 15 is cleared.
 
 **Not in this step, on purpose**
 
-- Wheeling or turning the block with the path. It always slides, facing the
-  same way.
-- Pins and holds shared by the group, re-fitting the path when the starts or
-  ends move, follow the leader along a drawn path.
-- Tablet polish. Long-press still opens the menus.
-
-Shows with a group path open in this build and later ones. The step 2 build
-ignores the offsets (every marcher walks the middle line) and can't edit them.
+- Adjusting one marcher's lane, Detach (Own path that keeps the group's counts),
+  pins, the spacing handoff, and marchers joining a path partway. Those are the
+  next steps.
+- Splitting a group path, and copying a path when marchers are split into a new
+  move. They still refuse.
