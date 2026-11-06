@@ -145,6 +145,7 @@ To review the hidden slides before then, run or build the app with
   the whole line, with Moves 2–4 nested under it. Its undo history and music are stripped to
   keep it small.
 - `tempo-changes.dots`: the tempo clip's show: ♩118, a gradual change from ♩118 to ♩81 over
-  counts 28–34 (ending on a 2/4 bar), then ♩118 again from count 35. Its music is cut to the
-  first 30 s, in mono, and its undo history is stripped.
+  counts 28–34 (ending on a 2/4 bar), then ♩118 again from count 35. Its music is the first
+  30 s of Sousa's _The Washington Post_ march (with a metronome), in mono; its undo history is
+  stripped.
 - `placeholder.mjs`: a plain poster for a slide whose feature isn't on main yet.
