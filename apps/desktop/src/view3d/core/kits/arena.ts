@@ -787,7 +787,7 @@ function addRafters(ctx: Ctx, upper: BuiltTier) {
         // Ceiling deck.
         { p: [cx, R + 0.2, ocz], s: [2 * hx, 0.4, 2 * hz], color: 0x101114 },
     ];
-    // Purlins along X and deep trusses along Z.
+    // Light beams along X and deep trusses along Z.
     for (let z = ocz - hz + 2; z < ocz + hz; z += 4)
         boxes.push({
             p: [cx, R - 0.35, z],
@@ -883,9 +883,9 @@ function addRafters(ctx: Ctx, upper: BuiltTier) {
     along(cx + tx, cz - tz, cx + tx, cz + tz);
     for (const { position: p, aim } of fixtures) {
         const dir = aim.clone().sub(p).normalize();
-        const horiz = Math.hypot(dir.x, dir.z);
+        const flat = Math.hypot(dir.x, dir.z);
         const ry = Math.atan2(-dir.x, -dir.z);
-        const rx = Math.atan2(horiz, -dir.y);
+        const rx = Math.atan2(flat, -dir.y);
         boxes.push({
             p: [p.x, p.y, p.z],
             s: [0.36, 0.5, 0.36],
