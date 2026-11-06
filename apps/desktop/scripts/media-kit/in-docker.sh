@@ -28,6 +28,8 @@ docker image inspect "$IMAGE" >/dev/null 2>&1 ||
     docker build -q -t "$IMAGE" "$HERE" >/dev/null
 MOUNTS=(-v "$REPO:$REPO")
 [ "$COMMON" != "$REPO" ] && MOUNTS+=(-v "$COMMON:$COMMON:ro")
+# Created here, as you: Docker would create a missing mount point as root
+[ -n "${DOCS_MEDIA_WORK:-}" ] && mkdir -p "$DOCS_MEDIA_WORK"
 [ -n "${DOCS_MEDIA_WORK:-}" ] && MOUNTS+=(-v "$DOCS_MEDIA_WORK:$DOCS_MEDIA_WORK") &&
     ENV_WORK=(-e "DOCS_MEDIA_WORK=$DOCS_MEDIA_WORK") || ENV_WORK=()
 docker run --rm --init --shm-size=1g --user "$(id -u):$(id -g)" -e HOME=/tmp \

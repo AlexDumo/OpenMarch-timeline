@@ -29,6 +29,21 @@ const redirects = new Set(
     ),
 );
 
+/** A key's value; a key may itself contain dots ("settings" › "field.gridLines"), so the longest match wins at each level. */
+function lookup(obj, key) {
+    if (obj === null || typeof obj !== "object") return undefined;
+    const parts = key.split(".");
+    for (let i = parts.length; i > 0; i--) {
+        const head = parts.slice(0, i).join(".");
+        if (!(head in (obj))) continue;
+        const value = (obj)[head];
+        if (i === parts.length) return value;
+        const found = lookup(value, parts.slice(i).join("."));
+        if (found !== undefined) return found;
+    }
+    return undefined;
+}
+
 const BANNED = [
     "simply",
     "just",
@@ -94,6 +109,10 @@ for (const file of files) {
         for (const key of ["title", "description", "type"])
             if (!new RegExp(`^${key}:`, "m").test(fm[1]))
                 fail(file, 1, `frontmatter has no ${key}`);
+    for (const m of text.matchAll(/<Media\b[^>]*?\bid="([^"]+)"/gs)) {
+        const n = text.slice(0, m.index).split("\n").length;
+        if (!media[m[1]]) fail(file, n, `<Media id="${m[1]}">: not recorded (run docs:media ${m[1]})`);
+    }
     const lines = text.split("\n");
     let inCode = false;
     lines.forEach((line, i) => {
@@ -101,7 +120,7 @@ for (const file of files) {
         if (line.startsWith("```")) inCode = !inCode;
         if (inCode) return;
         for (const m of line.matchAll(/<Ui\s+k="([^"]+)"/g)) {
-            const v = m[1].split(".").reduce((o, k) => o?.[k], en);
+            const v = lookup(en, m[1]);
             if (typeof v !== "string")
                 fail(file, n, `<Ui k="${m[1]}">: no such string in en.json`);
         }
@@ -115,13 +134,6 @@ for (const file of files) {
                     `<Kbd action="${m[1]}">: the action has no shortcut`,
                 );
         }
-        for (const m of line.matchAll(/<Media\s+id="([^"]+)"/g))
-            if (!media[m[1]])
-                fail(
-                    file,
-                    n,
-                    `<Media id="${m[1]}">: not recorded (run docs:media ${m[1]})`,
-                );
         for (const m of line.matchAll(
             /\]\((\/(?:guides|troubleshooting)[^)#\s]*)/g,
         )) {

@@ -114,17 +114,22 @@ export async function launch({
         win.show();
         win.focus();
     }, size);
-    // A show from before timelines asks to convert first
+    // A show from before timelines asks to convert first. Under load the question can come
+    // late, so keep watching for it until the show's marchers are on the field.
     const convert = page.getByRole("button", { name: "Confirm" });
-    const asked = await convert
-        .waitFor({ state: "visible", timeout: 10000 })
-        .then(() => true)
-        .catch(() => false);
-    if (asked) await convert.click();
-    await waitInPage(
-        page,
-        () => (window.fieldTest?.marchers?.().length ?? 0) > 0,
-    );
+    for (let i = 0; i < 240; i++) {
+        if (
+            await convert
+                .isVisible()
+                .catch(() => false)
+        )
+            await convert.click().catch(() => {});
+        const loaded = await page
+            .evaluate(() => (window.fieldTest?.marchers?.().length ?? 0) > 0)
+            .catch(() => false);
+        if (loaded) break;
+        await wait(500);
+    }
     if (uiSettings)
         await page.evaluate((patch) => {
             const key = "openmarch:uiSettings";
