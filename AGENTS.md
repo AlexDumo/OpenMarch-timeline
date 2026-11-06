@@ -38,9 +38,11 @@
 
 - The user guide (openmarch.com/guides, `apps/website/src/content/docs/guides`) describes how
   the app behaves. Read it to learn how a feature is meant to work for users.
-- A change to what users see or do updates the guide and its recorded media in the same pull
-  request: use the `user-docs` skill (`.claude/skills/user-docs`), or list the pages to update
-  in the pull request.
+- A change to what users see or do isn't finished until the guide says so. Before pushing it,
+  update the guide's pages and recorded pictures and read the result as it renders, following
+  "When the app changes" in [apps/website/AGENTS.md](apps/website/AGENTS.md); agents use the
+  `user-docs` skill (`.claude/skills/user-docs`). Fill in the pull request's User guide section.
+- Start with `pnpm --dir apps/website docs:impact`, which lists the pages a change may affect.
 
 ## Durable decisions and generated files
 

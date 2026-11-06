@@ -35,8 +35,8 @@ function lookup(obj, key) {
     const parts = key.split(".");
     for (let i = parts.length; i > 0; i--) {
         const head = parts.slice(0, i).join(".");
-        if (!(head in (obj))) continue;
-        const value = (obj)[head];
+        if (!(head in obj)) continue;
+        const value = obj[head];
         if (i === parts.length) return value;
         const found = lookup(value, parts.slice(i).join("."));
         if (found !== undefined) return found;
@@ -111,7 +111,12 @@ for (const file of files) {
                 fail(file, 1, `frontmatter has no ${key}`);
     for (const m of text.matchAll(/<Media\b[^>]*?\bid="([^"]+)"/gs)) {
         const n = text.slice(0, m.index).split("\n").length;
-        if (!media[m[1]]) fail(file, n, `<Media id="${m[1]}">: not recorded (run docs:media ${m[1]})`);
+        if (!media[m[1]])
+            fail(
+                file,
+                n,
+                `<Media id="${m[1]}">: not recorded (run docs:media ${m[1]})`,
+            );
     }
     const lines = text.split("\n");
     let inCode = false;

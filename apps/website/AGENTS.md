@@ -8,19 +8,35 @@ to make and check the pages.
 
 ## When the app changes
 
-The guide describes the app on `main`, so a change to how the app looks or behaves changes the
-guide in the same pull request:
+The guide describes the app on `main`, so a change to how the app looks or behaves updates the
+guide **in the same pull request, before it's pushed**. This is part of finishing the change,
+like its tests. Whoever makes the change, person or agent, does all of it:
 
-1. Find the pages that describe what changed:
-   `grep -rln "<folder, action id or i18n key>" src/content/docs` finds pages whose `covers`
-   or text mention it. Also search for the old label text.
-2. Update the words, then the pictures: rerun the shots that show the changed area (below). Look
-   at every new image before committing it.
-3. If an action, shortcut or setting changed, run `pnpm --dir apps/desktop docs:reference`.
-4. Build the site (below). A renamed label or removed action fails the build in the pages that
-   use it; fix them.
+1. **Find the pages.** `pnpm --dir apps/website docs:impact` lists the guide pages whose `covers`
+   name a file you changed, and the pages using a label or shortcut you changed. Also search the
+   guide for the feature's name and its old label text: `covers` isn't complete.
+2. **Update the words.** Read each page and fix what's no longer true, including what's
+   missing: a new option, a new step, a new limit. Write to `docs/conventions/user-docs.md`.
+   A new feature gets its section or page.
+3. **Re-record the pictures** that show what changed (`node scripts/docs-media/capture.mjs <shot>`
+   from `apps/desktop`, below), and add shots for anything new.
+4. **Regenerate the reference** if an action, shortcut or hold term changed:
+   `pnpm --dir apps/desktop docs:reference`.
+5. **Check:** `pnpm --dir apps/website check:guide`, then build the site.
+6. **Review what you changed as a reader would**, before pushing:
+   - Look at every new or re-recorded picture (open the WebP; pull frames from clips).
+   - Read every changed page as it renders, in light and dark: `pnpm site dev` in a browser, or
+     `node apps/website/scripts/page-shots.mjs /guides/<page>/ ...` and look at the screenshots
+     it writes (that's how an agent reads them).
+   - Check that the steps work: follow them in the app, or check each one against the code.
+7. **Fill in the pull request's User guide section**: pages updated and reviewed, or why the
+   change isn't user-visible, or which pages still need updating and why.
 
-If you can't update the guide in the same change, say so in the pull request and list the pages.
+In CI, the **User guide** check fails when a page names a label, shortcut, picture or page that
+no longer exists, when the generated shortcut data is stale, or when the site doesn't build. A
+comment on the pull request lists the guide pages the change may affect; it's advisory, and the
+`no-docs-needed` label silences it for changes users can't see. Neither can tell whether a
+page's words are still true: steps 1, 2 and 6 are how that happens.
 
 ## Pages
 
@@ -140,6 +156,7 @@ default keys (`actions.json`), and the hold terms (`terms.json`). Never edit the
 
 ```sh
 pnpm --dir apps/website check:guide                     # one second: labels, shortcuts, media, links, banned words
+pnpm --dir apps/website docs:impact                     # the pages your change may affect
 pnpm --dir apps/website run build                       # builds every page; fails on bad <Ui>, <Kbd>, <Media>
 pnpm --dir apps/desktop docs:reference --check          # generated data is current
 pnpm format:check && pnpm spellcheck                    # from the repo root
