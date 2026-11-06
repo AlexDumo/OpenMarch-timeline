@@ -684,40 +684,56 @@ export interface RouteWalk {
 }
 
 /**
- * The walked path of one span of an order-free transition (R-7, R-8, R-14): where a marcher
- * that starts at `A` and ends at `B` is at progress `p`. Every direct, arc and route span goes
+ * What a slot's lane gives R-14′ (spec v0.10, D-20): the route it walks, the lane's start offset
+ * (null for an own lane), and the route's group schedule when the caller caches it (J.7).
+ */
+export interface LaneWalk {
+    route: RouteWalk;
+    offset: XY | null;
+    /** `groupSchedule(route)`, cached per route; computed here when absent */
+    schedule?: GroupSchedule;
+}
+
+/**
+ * The walked path of one span of an order-free transition (R-7, R-8, R-14′): where a marcher
+ * that starts at `A` and ends at `B` is at progress `p`. Every direct, arc and laned span goes
  * through here, so later path kinds plug into one place.
  *
- * @param route the route, for a `route` transition
- * @param founding whether the span is founding (R-3); a route's join or resume walks straight
+ * Lane first (R-14′ dispatch): a slot with a lane walks it whatever the transition's style. A
+ * group lane walks the group schedule placed by its offset; an own lane walks R-14's own path.
+ *
+ * @param lane the slot's lane, if it has one
+ * @param founding whether the span is founding (R-3); a lane's join or resume walks straight
+ *   until the entry rule (plan step 12)
  */
 export function walkedPoint(
     t: Pick<TransitionRow, "style" | "params">,
     A: XY,
     B: XY,
     p: number,
-    route: RouteWalk | undefined,
+    lane: LaneWalk | undefined,
     founding: boolean,
 ): XY {
+    if (lane) {
+        if (!founding) return lerp(A, B, p); // joins and resumes walk straight (step 15)
+        const { route, offset } = lane;
+        if (offset)
+            // a group lane walks the group schedule (R-14 items 1 to 9, step 15)
+            return groupPoint(
+                groupMemberWalk(
+                    lane.schedule ?? groupSchedule(route),
+                    A,
+                    B,
+                    offset,
+                ),
+                p,
+            );
+        if (route.points.length === 0) return lerp(A, B, p);
+        return routePoint(routePath(A, route.points, B, route), p);
+    }
     switch (t.style) {
         case "arc":
             return arcPoint(A, B, t.params?.bulge ?? 0, p); // R-8
-        case "route":
-            if (!founding) return lerp(A, B, p); // R-14: joins and resumes walk straight
-            if (!route) throw new Error("route transition has no route (I-R2)");
-            if (t.params?.offset)
-                // step 15: a group member walks the group schedule
-                return groupPoint(
-                    groupMemberWalk(
-                        groupSchedule(route),
-                        A,
-                        B,
-                        t.params.offset,
-                    ),
-                    p,
-                );
-            if (route.points.length === 0) return lerp(A, B, p);
-            return routePoint(routePath(A, route.points, B, route), p);
         default:
             return lerp(A, B, p); // R-7
     }

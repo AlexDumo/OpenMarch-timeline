@@ -107,38 +107,57 @@ const views = {
      * write wrapper reads this view only once the table exists.
      */
     /**
-     * The routes' commit-time invariants (spec v0.9 §5.1, ADR 0014): every route is walked by at
-     * least one transition (E-R3, step 15), no other path style carries a route yet (E-R2), a
-     * route transition with no offset walks its route alone (E-R4, step 15), and every transition
-     * walking one route is in one timeline over one range (E-R5, step 15). Apart from
+     * The routes' and lanes' commit-time invariants (spec v0.10 §6 and J.3, ADR 0015; plan step
+     * 24): every route is walked through a lane whose slot holds a marcher at some beat (E-R3,
+     * I-R3′); only a follow-the-leader transition carries a route, as its trail (E-R2, I-R2′),
+     * which also keeps step 15's retired `route` style out; an own lane is its route's only lane
+     * (E-R4, I-LN4); every lane of a route is in one move (E-R5, I-LN5; one range by C-11); and a
+     * lane on a follow-the-leader transition is its trail lane (E-LN2, I-LN2). Apart from
      * `timeline_commit_violations` for the same reason as `timeline_held_violations`: the write
-     * wrapper reads it once the routes table exists, and a view that names a missing table would
+     * wrapper reads it once the lanes table exists, and a view that names a missing table would
      * break a later table rebuild.
      */
     timeline_route_violations: `
         CREATE VIEW IF NOT EXISTS timeline_route_violations AS
             SELECT 'E-R3' AS code, NULL AS transition_id,
-                   'route ' || r.id || ' is used by no transition' AS detail
+                   'route ' || r.id || ' is walked by nobody' AS detail
               FROM timeline_routes r
-             WHERE NOT EXISTS (SELECT 1 FROM timeline_transitions t WHERE t.route_id = r.id)
+             WHERE NOT EXISTS (SELECT 1 FROM timeline_lanes l
+                                 JOIN timeline_assignments a
+                                   ON a.transition_id = l.transition_id AND a.slot_index = l.slot_index
+                                WHERE l.route_id = r.id)
+               AND NOT EXISTS (SELECT 1 FROM timeline_transitions t
+                                WHERE t.route_id = r.id AND t.path_style = 'follow_the_leader')
             UNION ALL
             SELECT 'E-R2' AS code, t.id AS transition_id,
                    'a ' || t.path_style || ' transition has a route' AS detail
               FROM timeline_transitions t
-             WHERE t.path_style <> 'route' AND t.route_id IS NOT NULL
+             WHERE (t.path_style <> 'follow_the_leader' AND t.route_id IS NOT NULL)
+                OR t.path_style = 'route'
             UNION ALL
-            SELECT 'E-R4' AS code, t.id AS transition_id,
-                   'route ' || t.route_id || ' is shared but this transition has no offset' AS detail
-              FROM timeline_transitions t
-             WHERE t.path_style = 'route' AND t.path_params IS NULL
-               AND (SELECT count(*) FROM timeline_transitions u WHERE u.route_id = t.route_id) > 1
+            SELECT 'E-R4' AS code, l.transition_id AS transition_id,
+                   'route ' || l.route_id || ' is shared but the lane on slot ' || l.slot_index
+                       || ' has no offset' AS detail
+              FROM timeline_lanes l
+              JOIN timeline_transitions t ON t.id = l.transition_id
+             WHERE l.offset_x IS NULL AND t.path_style <> 'follow_the_leader'
+               AND (SELECT count(*) FROM timeline_lanes u WHERE u.route_id = l.route_id) > 1
             UNION ALL
-            SELECT 'E-R5' AS code, t.id AS transition_id,
-                   'route ' || t.route_id || ' is walked in two moves or over two ranges' AS detail
-              FROM timeline_transitions t
-              JOIN timeline_transitions u ON u.route_id = t.route_id AND u.id < t.id
-             WHERE t.timeline_id <> u.timeline_id OR t.start_beat <> u.start_beat
-                OR t.end_beat <> u.end_beat;
+            SELECT 'E-R5' AS code, l.transition_id AS transition_id,
+                   'route ' || l.route_id || ' has lanes in two moves' AS detail
+              FROM timeline_lanes l
+              JOIN timeline_transitions t ON t.id = l.transition_id
+              JOIN timeline_lanes u ON u.route_id = l.route_id AND u.id < l.id
+              JOIN timeline_transitions v ON v.id = u.transition_id
+             WHERE t.timeline_id <> v.timeline_id
+            UNION ALL
+            SELECT 'E-LN2' AS code, l.transition_id AS transition_id,
+                   'the lane on slot ' || l.slot_index
+                       || ' of a follow-the-leader move is not its trail' AS detail
+              FROM timeline_lanes l
+              JOIN timeline_transitions t ON t.id = l.transition_id
+             WHERE t.path_style = 'follow_the_leader'
+               AND (l.offset_x IS NOT NULL OR t.route_id IS NULL OR l.route_id <> t.route_id);
     `,
     timeline_held_violations: `
         CREATE VIEW IF NOT EXISTS timeline_held_violations AS
@@ -172,6 +191,34 @@ function timelineInvariantTriggers(): Record<string, string> {
     return {
         ...timelineRangeTriggers(),
         ...timelineDestinationTriggers(),
+        ...timelineLaneTriggers(),
+    };
+}
+
+/**
+ * I-LN1 (spec v0.10 §6, plan step 24): a lane's slot is one of its transition's, checked from both
+ * sides (U-3): when a lane is written, and when a transition's `slot_count` drops. The edits that
+ * lower a slot count delete or move the lanes above it first (AP-R15, AP-R20).
+ */
+function timelineLaneTriggers(): Record<string, string> {
+    const laneSlotWhen = `
+        WHEN NOT EXISTS (SELECT 1 FROM timeline_transitions t WHERE t.id = NEW.transition_id
+                         AND NEW.slot_index < t.slot_count)`;
+    const laneSlotMessage = "E-LN1: lane outside the slots of its transition";
+    return {
+        timeline_lane_slot_ins: `
+            CREATE TRIGGER IF NOT EXISTS timeline_lane_slot_ins BEFORE INSERT ON timeline_lanes
+            ${laneSlotWhen}
+            ${raise(laneSlotMessage)}`,
+        timeline_lane_slot_upd: `
+            CREATE TRIGGER IF NOT EXISTS timeline_lane_slot_upd BEFORE UPDATE ON timeline_lanes
+            ${laneSlotWhen}
+            ${raise(laneSlotMessage)}`,
+        timeline_tr_slots_lane_upd: `
+            CREATE TRIGGER IF NOT EXISTS timeline_tr_slots_lane_upd BEFORE UPDATE OF slot_count ON timeline_transitions
+            WHEN EXISTS (SELECT 1 FROM timeline_lanes l WHERE l.transition_id = NEW.id
+                         AND l.slot_index >= NEW.slot_count)
+            ${raise("E-LN1: slot_count below a lane")}`,
     };
 }
 
@@ -377,6 +424,17 @@ function timelineChangeLogTriggers(
                 `json_object('id', ${r}.id, 'geometry', json(${r}.geometry))`,
         },
         {
+            // Lanes are logged like routes (spec v0.10 J.1, §10.2); the resolver reads them from
+            // the host mirror and seeds their transitions
+            table: "timeline_lanes",
+            logicalName: "lanes",
+            rowId: (r) => `${r}.id`,
+            image: (r) =>
+                `json_object('id', ${r}.id, 'transition', ${r}.transition_id, 'slot', ${r}.slot_index, ` +
+                `'route', ${r}.route_id, 'offset', CASE WHEN ${r}.offset_x IS NULL THEN NULL ` +
+                `ELSE json_array(${exactReal(`${r}.offset_x`)}, ${exactReal(`${r}.offset_y`)}) END)`,
+        },
+        {
             table: "timeline_assignments",
             logicalName: "assignments",
             rowId: (r) => `${r}.id`,
@@ -463,8 +521,17 @@ export const triggerTable = (triggerSql: string): string => {
 };
 
 /**
+ * Whether a trigger can be created on a file with `tables`: its table exists, and so does the
+ * lanes table when its body reads it (`timeline_tr_slots_lane_upd` is on transitions).
+ */
+const triggerFits = (sql: string, tables: ReadonlySet<string>): boolean =>
+    tables.has(triggerTable(sql)) &&
+    (!/\btimeline_lanes\b/.test(sql) || tables.has("timeline_lanes"));
+
+/**
  * Only the triggers whose table the file has. A table a later migration adds, such as the routes
- * table (0019), is missing from a page-era file until it converts; its triggers come with it.
+ * table (0019) or the lanes table (0020), is missing from a page-era file until it converts; its
+ * triggers come with it.
  */
 const onExistingTables = (
     dbConnection: DatabaseSync,
@@ -478,9 +545,7 @@ const onExistingTables = (
         ).map((row) => row.name),
     );
     return Object.fromEntries(
-        Object.entries(wanted).filter(([, sql]) =>
-            tables.has(triggerTable(sql)),
-        ),
+        Object.entries(wanted).filter(([, sql]) => triggerFits(sql, tables)),
     );
 };
 
@@ -592,7 +657,7 @@ export function triggerStatements(
             ...Object.keys(views).map((name) => `DROP VIEW IF EXISTS ${name}`),
         ],
         create: [
-            ...Object.values(all).filter((s) => tables.has(triggerTable(s))),
+            ...Object.values(all).filter((s) => triggerFits(s, tables)),
             ...Object.values(views),
         ],
     };

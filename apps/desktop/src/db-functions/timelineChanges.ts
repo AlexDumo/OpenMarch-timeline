@@ -35,6 +35,7 @@ const CHANGE_TABLES: ReadonlySet<string> = new Set<ChangeTable>([
     "assignments",
     "slot_destinations",
     "routes",
+    "lanes",
 ]);
 
 const listeners = new Set<TimelineChangeListener>();
@@ -124,7 +125,7 @@ const rowValue = (row: unknown, index: number, key: string): unknown =>
 /**
  * Throws `TimelineCommitViolationError` if `timeline_commit_violations`, or
  * `timeline_held_violations` once the file has Held marks (a page-era file being converted
- * doesn't yet), or `timeline_route_violations` once it has routes (v0.9), returns any row.
+ * doesn't yet), or `timeline_route_violations` once it has lanes (v0.10), returns any row.
  */
 export async function assertNoTimelineCommitViolationsInTransaction(
     tx: DbTransaction,
@@ -138,7 +139,7 @@ export async function assertNoTimelineCommitViolationsInTransaction(
                 sql`SELECT code, transition_id, detail FROM timeline_held_violations`,
             )) as unknown[]),
         );
-    if (await hasRoutesTable(tx))
+    if (await hasLanesTable(tx))
         rows.push(
             ...((await tx.all(
                 sql`SELECT code, transition_id, detail FROM timeline_route_violations`,
@@ -164,10 +165,13 @@ export async function assertNoTimelineCommitViolationsInTransaction(
     );
 }
 
-/** Whether the file has the routes table (spec v0.9; migration 0019). */
-async function hasRoutesTable(tx: DbTransaction): Promise<boolean> {
+/**
+ * Whether the file has the lanes table (spec v0.10; migration 0020, which comes after the routes
+ * table, 0019). A page-era file being converted has neither until its timeline migrations run.
+ */
+async function hasLanesTable(tx: DbTransaction): Promise<boolean> {
     const rows = (await tx.all(
-        sql`SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'timeline_routes'`,
+        sql`SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'timeline_lanes'`,
     )) as unknown[];
     return rows.length > 0;
 }

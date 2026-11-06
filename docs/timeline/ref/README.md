@@ -53,7 +53,9 @@ All randomness is seeded (mulberry32), so every run reproduces exactly.
   marchers:    [{ id, home: [x, y] }],
   shapes:      { [id]: { kind, geometry } },
   transitions: { [id]: { id, start, end, dest, slots, style, order, params } },
-  assignments: [{ id, marcher, transition, slot, start, end, layer }]
+  assignments: [{ id, marcher, transition, slot, start, end, layer }],
+  routes:      { [id]: { geometry: { v, from, to, points } } },          // v0.9, optional
+  lanes:       { [id]: { transition, slot, route, offset } }             // v0.10, optional; offset null = own lane
 }
 ```
 

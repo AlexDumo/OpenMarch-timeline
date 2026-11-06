@@ -288,7 +288,7 @@ describe(`Migration ${ROUTES_MIGRATION.tag} (QA-MIG-R1)`, () => {
     });
 });
 
-describe("routes storage (QA-DB-R1 to QA-DB-R3)", () => {
+describe("routes and lanes storage (QA-DB-R1, QA-DB-R2, QA-DB-L1 to QA-DB-L3)", () => {
     let tempDir: string;
     let db: DatabaseSync;
 
@@ -302,8 +302,11 @@ describe("routes storage (QA-DB-R1 to QA-DB-R3)", () => {
         db.exec("PRAGMA foreign_keys = ON");
         db.exec(`
             INSERT INTO marchers (id, section, drill_prefix, drill_order) VALUES (1, 'Brass', 'B', 1);
+            INSERT INTO marchers (id, section, drill_prefix, drill_order) VALUES (2, 'Brass', 'B', 2);
             INSERT INTO timelines (id, start_beat, end_beat) VALUES (1, 0, 8);
+            INSERT INTO timelines (id, start_beat, end_beat) VALUES (2, 0, 8);
             INSERT INTO timeline_routes (id, geometry) VALUES (1, '{"v":1,"from":[0,0],"to":[4,4],"points":[]}');
+            INSERT INTO timeline_shapes (id, kind, geometry) VALUES (1, 'line', '{"points":[[0,0],[1,0]]}');
         `);
     });
 
@@ -317,9 +320,10 @@ describe("routes storage (QA-DB-R1 to QA-DB-R3)", () => {
         const all = {
             id: 1,
             timeline_id: 1,
-            slot_count: 1,
+            slot_count: 2,
             start_beat: 0,
             end_beat: 8,
+            dest_shape_id: 1,
             ...cols,
         };
         const keys = Object.keys(all);
@@ -327,6 +331,20 @@ describe("routes storage (QA-DB-R1 to QA-DB-R3)", () => {
             `INSERT INTO timeline_transitions (${keys.join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`,
         ).run(...Object.values(all));
     };
+    const row = (marcher: number, transition: number, slot: number) =>
+        db.exec(
+            `INSERT INTO timeline_assignments (marcher_id, transition_id, slot_index, start_beat, end_beat) VALUES (${marcher}, ${transition}, ${slot}, 0, 8)`,
+        );
+    const lane = (
+        id: number,
+        transition: number,
+        slot: number,
+        offset: [number, number] | null,
+        route = 1,
+    ) =>
+        db.exec(
+            `INSERT INTO timeline_lanes (id, transition_id, slot_index, route_id, offset_x, offset_y) VALUES (${id}, ${transition}, ${slot}, ${route}, ${offset?.[0] ?? "NULL"}, ${offset?.[1] ?? "NULL"})`,
+        );
     const violations = () =>
         (
             db.prepare("SELECT code FROM timeline_route_violations").all() as {
@@ -334,88 +352,77 @@ describe("routes storage (QA-DB-R1 to QA-DB-R3)", () => {
             }[]
         ).map((r) => r.code);
 
-    it("QA-DB-R1: the I-R2 CHECK refuses a route transition with no route, a shape or two slots", () => {
-        expect(() => insertTransition({ path_style: "route" })).toThrow(
-            /CHECK constraint failed/,
-        );
-        db.exec(
-            `INSERT INTO timeline_shapes (id, kind, geometry) VALUES (1, 'line', '{"points":[[0,0],[1,0]]}')`,
-        );
-        expect(() =>
-            insertTransition({
-                path_style: "route",
-                route_id: 1,
-                dest_shape_id: 1,
-            }),
-        ).toThrow(/CHECK constraint failed/);
-        expect(() =>
-            insertTransition({
-                path_style: "route",
-                route_id: 1,
-                slot_count: 2,
-            }),
-        ).toThrow(/CHECK constraint failed/);
-        insertTransition({ path_style: "route", route_id: 1 });
-        expect(violations()).toEqual([]);
-    });
-
-    it("QA-DB-R1: a direct transition with a route fails at commit (E-R2); a route transition may carry an offset (step 15)", () => {
+    it("QA-DB-R1 (v0.10, I-R2′): no transition may be `route` or carry a route outside follow the leader (E-R2)", () => {
         insertTransition({ path_style: "direct", route_id: 1 });
+        row(1, 1, 0);
+        lane(1, 1, 0, null);
         expect(violations()).toEqual(["E-R2"]);
-        db.exec(
-            `UPDATE timeline_transitions SET path_style = 'route', path_params = '{"offset":[1,2]}' WHERE id = 1`,
-        );
+        db.exec("UPDATE timeline_transitions SET route_id = NULL WHERE id = 1");
         expect(violations()).toEqual([]);
     });
 
-    it("QA-DB-R2: a route a transition uses can't be deleted (I-D3)", () => {
-        insertTransition({ path_style: "route", route_id: 1 });
+    it("QA-DB-R2: a route a lane uses can't be deleted, nor a transition with a lane (I-D3, RESTRICT)", () => {
+        insertTransition({});
+        row(1, 1, 0);
+        lane(1, 1, 0, null);
         expect(() =>
             db.exec("DELETE FROM timeline_routes WHERE id = 1"),
         ).toThrow(/FOREIGN KEY constraint failed/);
+        db.exec("DELETE FROM timeline_assignments");
+        expect(() =>
+            db.exec("DELETE FROM timeline_transitions WHERE id = 1"),
+        ).toThrow(/FOREIGN KEY constraint failed/);
     });
 
-    it("QA-DB-R3: an unused route fails at commit (E-R3); two walkers are a group path (step 15)", () => {
-        expect(violations()).toEqual(["E-R3"]);
-        insertTransition({
-            path_style: "route",
-            route_id: 1,
-            path_params: '{"offset":[0,0]}',
-        });
-        expect(violations()).toEqual([]);
+    it("QA-DB-L1: a lane's slot is one of its transition's, from both sides (E-LN1)", () => {
+        insertTransition({});
+        expect(() => lane(1, 1, 2, null)).toThrow(/E-LN1/);
+        lane(1, 1, 1, null);
         db.exec(
-            "INSERT INTO marchers (id, section, drill_prefix, drill_order) VALUES (2, 'Brass', 'B', 2)",
+            "UPDATE timeline_transitions SET dest_shape_id = NULL WHERE id = 1",
         );
-        insertTransition({
-            id: 2,
-            path_style: "route",
-            route_id: 1,
-            path_params: '{"offset":[2,0]}',
-        });
-        expect(violations()).toEqual([]);
+        expect(() =>
+            db.exec(
+                "UPDATE timeline_transitions SET slot_count = 1 WHERE id = 1",
+            ),
+        ).toThrow(/E-LN1/);
+        expect(() =>
+            db.exec("UPDATE timeline_lanes SET slot_index = 5 WHERE id = 1"),
+        ).toThrow(/E-LN1/);
     });
 
-    it("QA-DB-R6: a shared route with an own-path walker (E-R4), or walked in two moves or ranges (E-R5)", () => {
-        insertTransition({ path_style: "route", route_id: 1 });
-        insertTransition({
-            id: 2,
-            path_style: "route",
-            route_id: 1,
-            path_params: '{"offset":[2,0]}',
-        });
+    it("QA-DB-L2: one lane per slot (UNIQUE), an own lane alone on its route (E-R4), a lane on follow the leader is a trail (E-LN2)", () => {
+        insertTransition({});
+        row(1, 1, 0);
+        row(2, 1, 1);
+        lane(1, 1, 0, null);
+        expect(() => lane(2, 1, 0, [1, 0])).toThrow(/UNIQUE/);
+        lane(2, 1, 1, [1, 0]);
         expect(violations()).toEqual(["E-R4"]);
         db.exec(
-            `UPDATE timeline_transitions SET path_params = '{"offset":[0,0]}' WHERE id = 1`,
+            "UPDATE timeline_lanes SET offset_x = -1, offset_y = 0 WHERE id = 1",
         );
         expect(violations()).toEqual([]);
         db.exec(
-            "INSERT INTO timelines (id, start_beat, end_beat) VALUES (2, 0, 8)",
+            `UPDATE timeline_transitions SET path_style = 'follow_the_leader', path_params = '{"waypoints":[]}' WHERE id = 1`,
         );
-        db.exec("UPDATE timeline_transitions SET timeline_id = 2 WHERE id = 2");
-        expect(violations()).toEqual(["E-R5"]);
-        db.exec(
-            "UPDATE timeline_transitions SET timeline_id = 1, end_beat = 6 WHERE id = 2",
-        );
-        expect(violations()).toEqual(["E-R5"]);
+        expect(violations()).toEqual(["E-LN2", "E-LN2"]);
+    });
+
+    it("QA-DB-L3: lanes of one route in one move (E-R5); a route walked by nobody fails (E-R3), a vacant spot keeps its lane while another has a marcher (Q1)", () => {
+        expect(violations()).toEqual(["E-R3"]);
+        insertTransition({});
+        insertTransition({ id: 2, timeline_id: 2, slot_count: 1 });
+        row(1, 1, 0);
+        row(2, 2, 0);
+        lane(1, 1, 0, [0, 0]);
+        lane(2, 1, 1, [2, 0]);
+        expect(violations()).toEqual([]);
+        lane(3, 2, 0, [4, 0]);
+        // one per pair of lanes in different moves
+        expect(violations()).toEqual(["E-R5", "E-R5"]);
+        db.exec("DELETE FROM timeline_lanes WHERE id = 3");
+        db.exec("DELETE FROM timeline_assignments WHERE marcher_id = 1");
+        expect(violations()).toEqual(["E-R3"]);
     });
 });

@@ -21,7 +21,7 @@ import {
     makeTrail,
     paramT,
     walkedPoint,
-    type RouteWalk,
+    type LaneWalk,
 } from "./geom";
 import type {
     AssignmentRow,
@@ -134,14 +134,26 @@ export function createOracle(db: TimelineSnapshot): Oracle {
             return lerp(o, ftlEntryRaw(t.id).target.get(sp.m)!, p);
         }
         const dst = destinationsOf(t, db.shapes)[sp.row.slot]!;
-        let route: RouteWalk | undefined;
-        if (t.style === "route") {
-            const r = t.route == null ? undefined : db.routes?.[t.route];
-            if (!r) throw new Error(`route transition ${t.id} has no route`);
-            route = r.geometry;
+        // R-7, R-8, R-14′ (lane first)
+        return walkedPoint(
+            t,
+            o,
+            dst,
+            p,
+            laneAt(t.id, sp.row.slot),
+            kind(sp) === "founding",
+        );
+    }
+
+    /** R-14′: the lane on slot `slot` of `tid`, with its route, or undefined (uncached). */
+    function laneAt(tid: number, slot: number): LaneWalk | undefined {
+        for (const l of Object.values(db.lanes ?? {})) {
+            if (l.transition !== tid || l.slot !== slot) continue;
+            const r = db.routes?.[l.route];
+            if (!r) throw new Error(`lane on ${tid}:${slot} has no route`);
+            return { route: r.geometry, offset: l.offset };
         }
-        // R-7, R-8, R-14
-        return walkedPoint(t, o, dst, p, route, kind(sp) === "founding");
+        return undefined;
     }
 
     function prevNonHold(sp: OracleSpan): OracleSpan | null {

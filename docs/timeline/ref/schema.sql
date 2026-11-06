@@ -30,7 +30,7 @@ CREATE TABLE timelines (
   CHECK (end_beat > start_beat)
 ) STRICT;
 
--- v0.9 (D-19, Appendix I): the path a route transition walks. No owner column, like shapes.
+-- v0.9 (D-19, Appendix I): a drawn path. No owner column, like shapes; a slot walks it through a lane (v0.10, D-20).
 CREATE TABLE routes (
   id        INTEGER PRIMARY KEY,
   geometry  TEXT NOT NULL CHECK (json_valid(geometry))    -- §5.2, I-R1
@@ -41,9 +41,9 @@ CREATE TABLE transitions (
   timeline_id    INTEGER NOT NULL REFERENCES timelines(id) ON DELETE CASCADE,
   dest_shape_id  INTEGER          REFERENCES shapes(id)    ON DELETE RESTRICT,   -- NULL: slots placed individually (D-16)
   path_style     TEXT NOT NULL DEFAULT 'direct'
-                 CHECK (path_style IN ('direct','arc','follow_the_leader','route')),
+                 CHECK (path_style IN ('direct','arc','follow_the_leader')),         -- v0.10: 'route' retired (I-R2′)
   path_params    TEXT CHECK (path_params IS NULL OR json_valid(path_params)),
-  route_id       INTEGER          REFERENCES routes(id)    ON DELETE RESTRICT,   -- v0.9: required for 'route' (I-R2)
+  route_id       INTEGER          REFERENCES routes(id)    ON DELETE RESTRICT,   -- v0.10: a follow-the-leader trail only (I-R2′)
   order_mode     TEXT NOT NULL DEFAULT 'inherit' CHECK (order_mode IN ('inherit','slot')),
   slot_count     INTEGER NOT NULL CHECK (slot_count BETWEEN 1 AND 10000),
   start_beat     INTEGER NOT NULL CHECK (start_beat BETWEEN 0 AND 2147483647),
@@ -53,9 +53,7 @@ CREATE TABLE transitions (
   CHECK (dest_shape_id IS NOT NULL OR path_style <> 'follow_the_leader'),
   -- I-T2 (partial, DB-enforced): an arc carries a numeric bulge with |bulge| <= 0.5 (minor arcs only, §8.11)
   CHECK (path_style <> 'arc' OR (coalesce(json_type(path_params, '$.bulge'), '') IN ('integer', 'real')
-                                 AND abs(json_extract(path_params, '$.bulge')) <= 0.5)),
-  -- I-R2 (v0.9): a route transition walks a route, has no shape and exactly one slot
-  CHECK (path_style <> 'route' OR (route_id IS NOT NULL AND dest_shape_id IS NULL AND slot_count = 1))
+                                 AND abs(json_extract(path_params, '$.bulge')) <= 0.5))
 ) STRICT;
 
 CREATE TABLE assignments (
@@ -160,21 +158,59 @@ CREATE VIEW commit_violations AS
    WHERE t.dest_shape_id IS NULL
      AND (SELECT count(*) FROM slot_destinations d WHERE d.transition_id = t.id) <> t.slot_count
   UNION ALL
-  SELECT 'E-R3', NULL, 'route ' || r.id || ' is used by no transition'
-    FROM routes r WHERE NOT EXISTS (SELECT 1 FROM transitions t WHERE t.route_id = r.id)
+  -- I-R3′ (v0.10): every route is walked through a lane whose slot holds a row, or is a follow-the-leader trail
+  SELECT 'E-R3', NULL, 'route ' || r.id || ' is walked by nobody'
+    FROM routes r
+   WHERE NOT EXISTS (SELECT 1 FROM lanes l JOIN assignments a ON a.transition_id = l.transition_id AND a.slot_index = l.slot_index
+                      WHERE l.route_id = r.id)
+     AND NOT EXISTS (SELECT 1 FROM transitions t WHERE t.route_id = r.id AND t.path_style = 'follow_the_leader')
   UNION ALL
-  SELECT 'E-R2', t.id, 'a ' || t.path_style || ' transition has a route' FROM transitions t WHERE t.path_style <> 'route' AND t.route_id IS NOT NULL
+  -- I-R2′ (v0.10): only a follow-the-leader transition carries a route (its trail)
+  SELECT 'E-R2', t.id, 'a ' || t.path_style || ' transition has a route' FROM transitions t
+   WHERE t.path_style <> 'follow_the_leader' AND t.route_id IS NOT NULL
   UNION ALL
-  -- I-R4 (v0.9 step 15): a route transition without an offset walks its route alone
-  SELECT 'E-R4', t.id, 'route ' || t.route_id || ' is shared but this transition has no offset' FROM transitions t
-   WHERE t.path_style = 'route' AND t.path_params IS NULL AND (SELECT count(*) FROM transitions u WHERE u.route_id = t.route_id) > 1
+  -- I-LN4 (v0.10): an own lane (no offset) on a non-FTL transition is the only lane of its route
+  SELECT 'E-R4', l.transition_id, 'route ' || l.route_id || ' is shared but the lane on slot ' || l.slot_index || ' has no offset'
+    FROM lanes l JOIN transitions t ON t.id = l.transition_id
+   WHERE l.offset_x IS NULL AND t.path_style <> 'follow_the_leader'
+     AND (SELECT count(*) FROM lanes u WHERE u.route_id = l.route_id) > 1
   UNION ALL
-  -- I-R5 (v0.9 step 15): every transition walking one route is in one timeline, over the same range
-  SELECT 'E-R5', t.id, 'route ' || t.route_id || ' is walked in two moves or over two ranges' FROM transitions t
-    JOIN transitions u ON u.route_id = t.route_id AND u.id < t.id
-   WHERE t.timeline_id <> u.timeline_id OR t.start_beat <> u.start_beat OR t.end_beat <> u.end_beat;
+  -- I-LN5 (v0.10): every lane of a route is on a transition of one timeline (one range by C-11)
+  SELECT 'E-R5', l.transition_id, 'route ' || l.route_id || ' has lanes in two moves'
+    FROM lanes l JOIN transitions t ON t.id = l.transition_id
+    JOIN lanes u ON u.route_id = l.route_id AND u.id < l.id JOIN transitions v ON v.id = u.transition_id
+   WHERE t.timeline_id <> v.timeline_id
+  UNION ALL
+  -- I-LN2 (v0.10): a lane on a follow-the-leader transition is its trail lane
+  SELECT 'E-LN2', l.transition_id, 'the lane on slot ' || l.slot_index || ' of a follow-the-leader move is not its trail'
+    FROM lanes l JOIN transitions t ON t.id = l.transition_id
+   WHERE t.path_style = 'follow_the_leader' AND (l.offset_x IS NOT NULL OR t.route_id IS NULL OR l.route_id <> t.route_id);
 
 CREATE INDEX idx_tr_route ON transitions(route_id);
+
+-- v0.10 (D-20, J.1, plan step 24): a slot walks a route. `adjust` and `group_adjust_id` come with later steps (ADD COLUMN).
+CREATE TABLE lanes (
+  id             INTEGER PRIMARY KEY,
+  transition_id  INTEGER NOT NULL REFERENCES transitions(id) ON DELETE RESTRICT,
+  slot_index     INTEGER NOT NULL CHECK (slot_index >= 0),
+  route_id       INTEGER NOT NULL REFERENCES routes(id)      ON DELETE RESTRICT,
+  offset_x       REAL CHECK (offset_x IS NULL OR offset_x BETWEEN -2000000 AND 2000000),
+  offset_y       REAL CHECK (offset_y IS NULL OR offset_y BETWEEN -2000000 AND 2000000),
+  UNIQUE (transition_id, slot_index),                                  -- I-LN3
+  CHECK ((offset_x IS NULL) = (offset_y IS NULL))
+) STRICT;
+CREATE INDEX idx_lane_route ON lanes(route_id);
+
+-- I-LN1: a lane's slot is one of its transition's, checked from both sides (U-3)
+CREATE TRIGGER lane_slot_ins BEFORE INSERT ON lanes
+WHEN NOT EXISTS (SELECT 1 FROM transitions t WHERE t.id = NEW.transition_id AND NEW.slot_index < t.slot_count)
+BEGIN SELECT RAISE(ABORT, 'E-LN1: lane outside its transition''s slots'); END;
+CREATE TRIGGER lane_slot_upd BEFORE UPDATE ON lanes
+WHEN NOT EXISTS (SELECT 1 FROM transitions t WHERE t.id = NEW.transition_id AND NEW.slot_index < t.slot_count)
+BEGIN SELECT RAISE(ABORT, 'E-LN1: lane outside its transition''s slots'); END;
+CREATE TRIGGER tr_slots_lane_upd BEFORE UPDATE OF slot_count ON transitions
+WHEN EXISTS (SELECT 1 FROM lanes l WHERE l.transition_id = NEW.id AND l.slot_index >= NEW.slot_count)
+BEGIN SELECT RAISE(ABORT, 'E-LN1: slot_count below a lane'); END;
 
 -- I-A1 (transition side): a transition's range must still contain every one of its assignments.
 -- A pure check. The anchored rewrite (R-E1) is an app procedure, NOT a trigger: a trigger that modifies rows
@@ -234,4 +270,7 @@ CREATE TRIGGER log_slot_destinations_upd AFTER UPDATE ON slot_destinations BEGIN
 CREATE TRIGGER log_routes_ins AFTER INSERT ON routes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('routes',NEW.id,NULL,json_object('id',NEW.id,'geometry',json(NEW.geometry))); END;
 CREATE TRIGGER log_routes_upd AFTER UPDATE ON routes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('routes',NEW.id,json_object('id',OLD.id,'geometry',json(OLD.geometry)),json_object('id',NEW.id,'geometry',json(NEW.geometry))); END;
 CREATE TRIGGER log_routes_del AFTER DELETE ON routes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('routes',OLD.id,json_object('id',OLD.id,'geometry',json(OLD.geometry)),NULL); END;
+CREATE TRIGGER log_lanes_ins AFTER INSERT ON lanes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('lanes',NEW.id,NULL,json_object('id',NEW.id,'transition',NEW.transition_id,'slot',NEW.slot_index,'route',NEW.route_id,'offset',CASE WHEN NEW.offset_x IS NULL THEN NULL ELSE json_array(NEW.offset_x,NEW.offset_y) END)); END;
+CREATE TRIGGER log_lanes_upd AFTER UPDATE ON lanes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('lanes',NEW.id,json_object('id',OLD.id,'transition',OLD.transition_id,'slot',OLD.slot_index,'route',OLD.route_id,'offset',CASE WHEN OLD.offset_x IS NULL THEN NULL ELSE json_array(OLD.offset_x,OLD.offset_y) END),json_object('id',NEW.id,'transition',NEW.transition_id,'slot',NEW.slot_index,'route',NEW.route_id,'offset',CASE WHEN NEW.offset_x IS NULL THEN NULL ELSE json_array(NEW.offset_x,NEW.offset_y) END)); END;
+CREATE TRIGGER log_lanes_del AFTER DELETE ON lanes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('lanes',OLD.id,json_object('id',OLD.id,'transition',OLD.transition_id,'slot',OLD.slot_index,'route',OLD.route_id,'offset',CASE WHEN OLD.offset_x IS NULL THEN NULL ELSE json_array(OLD.offset_x,OLD.offset_y) END),NULL); END;
 CREATE TRIGGER log_slot_destinations_del AFTER DELETE ON slot_destinations BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('slot_destinations',OLD.transition_id,json_object('transition',OLD.transition_id,'slot',OLD.slot_index,'x',OLD.x,'y',OLD.y),NULL); END;

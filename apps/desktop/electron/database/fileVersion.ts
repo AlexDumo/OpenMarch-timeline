@@ -12,10 +12,16 @@
  * - 9: a fork-only floor model (the field image as an embedded Base floor), since parked. No
  *   release wrote it. Such a file opens as the timeline file it is and is written back as 8,
  *   with its floor's image put back as the field image (`parkedFloor.ts`).
- * - 10: route model (ADR 0014, pathways step 1). A move can follow a drawn path, stored in
- *   `timeline_routes`. A file is written as 10 when it gets its first route (drawing a path), so
- *   a fork build from before routes refuses it instead of opening a show it would play wrong. A
- *   file without a route stays at the version it had. Later pathways steps don't bump it again.
+ * - 10: route model (ADR 0014, pathways steps 1 to 15, fork lab builds only). A move could follow
+ *   a drawn path, stored in `timeline_routes` and walked by one-slot `route` transitions. Such a
+ *   file opens here: migration 0020 moves its paths to lanes, and it is then written as 11.
+ * - 11: lane model (ADR 0015 §9, pathways step 24). A slot walks a route through a lane
+ *   (`timeline_lanes`), so a path no longer moves a marcher out of its move. A build that doesn't
+ *   know lanes would play such a file wrong and edit it wrong (compact, split or recast a laned
+ *   show and leave lanes on the wrong spot), so a file is written as 11 with its first lane (drawing
+ *   a path), or when it opens with lanes (a migrated version-10 file). A file without a lane stays
+ *   at the version it had. ADR 0015 §9: each later step that stores a fact an older build would
+ *   play or edit wrong takes the next number; a number a lab build wrote is never reused.
  */
 import type { DatabaseSync } from "node:sqlite";
 import { recoverParkedFloorInTransaction } from "./parkedFloor";
@@ -27,13 +33,15 @@ export const TIMELINE_MODEL_USER_VERSION = 8;
 
 /** Version of a fork-internal file from the parked floor model. Opened, then written as 8. */
 export const PARKED_FLOOR_USER_VERSION = 9;
-/** Version of a file that has a route, a drawn path (written with its first one, ADR 0014). */
+/** Version a fork lab build (pathways steps 1 to 15) wrote with a file's first route (ADR 0014). */
 export const ROUTE_MODEL_USER_VERSION = 10;
+/** Version of a file that has a lane, a drawn path (ADR 0015 §9, pathways step 24). */
+export const LANE_MODEL_USER_VERSION = 11;
 
 /** Oldest version this build opens. Older files must go through 0.0.10 first. */
 export const MIN_SUPPORTED_USER_VERSION = PAGE_MODEL_USER_VERSION;
 /** Newest version this build opens. Anything higher was written by a newer release. */
-export const MAX_SUPPORTED_USER_VERSION = ROUTE_MODEL_USER_VERSION;
+export const MAX_SUPPORTED_USER_VERSION = LANE_MODEL_USER_VERSION;
 /** Version written into a brand-new file: a new show is a timeline show. */
 export const NEW_FILE_USER_VERSION = TIMELINE_MODEL_USER_VERSION;
 
@@ -139,4 +147,21 @@ export function applyFileVersionDecision(
 /** Message for a file from a newer release. The renderer shows a translated one. */
 export function fileTooNewMessage(userVersion: number): string {
     return `This file was saved by a newer version of OpenMarch (file format ${userVersion}; this version supports up to ${MAX_SUPPORTED_USER_VERSION}). Update OpenMarch to open it.`;
+}
+
+/**
+ * Writes the lane-model version (11) when the file has a lane and an older version: a version-10
+ * file whose paths migration 0020 moved to lanes. Run after the migrations, on every open; a file
+ * without lanes, or already at 11, is left as it is (ADR 0015 §9, QA-FV-L1).
+ */
+export function markLaneModelIfLaned(db: DatabaseSync): void {
+    const hasTable = db
+        .prepare(
+            "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'timeline_lanes'",
+        )
+        .get();
+    if (!hasTable) return;
+    if (!db.prepare("SELECT 1 FROM timeline_lanes LIMIT 1").get()) return;
+    if (readUserVersion(db) < LANE_MODEL_USER_VERSION)
+        db.prepare(`PRAGMA user_version = ${LANE_MODEL_USER_VERSION}`).run();
 }

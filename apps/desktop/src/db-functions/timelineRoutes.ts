@@ -1,20 +1,24 @@
 /**
- * Routes, pathways steps 1 and 2 (ADR 0014; spec v0.9 R-14, Appendix I.2 and I.5): a move's
- * marcher walks a drawn path of corners and smooth points from where it starts to its end spot.
- * This module holds the app procedures that write routes, and the refusals other procedures use:
+ * Routes, pathways steps 1, 2 and 24 (ADR 0014 and 0015; spec v0.10 R-14′, Appendix J.8): a
+ * move's marcher walks a drawn path of corners and smooth points from where it starts to its end
+ * spot. Since step 24 a slot walks a route through a **lane** (`timeline_lanes`), so drawing a path
+ * never moves a marcher out of its move: a shaped or shared move stays as it is. This module holds
+ * the app procedures that write own paths, and the refusals other procedures use:
  *
  * - **AP-R1** `drawRouteInTransaction`: draw a route for one marcher's move, or draw it again.
- * - **AP-R2** `removeRouteInTransaction`: Remove path. The Move card's Straight and Arc
- *   (`setMovePath`) refuse a move with a route (`refuseMoveRoutesForPath`).
- * - **AP-R3** a deleted transition takes its route with it, in
- *   `deleteTimelineTransitionRowsInTransaction`.
- * - **AP-R6** `refuseRoutesInMoves`: edits that can't keep a route exact refuse, and write nothing.
+ * - **AP-R2** `removeRouteInTransaction`: Remove path deletes the route's lanes, then the route.
+ *   The Move card's Straight and Arc (`setMovePath`) refuse a move with a path
+ *   (`refuseMoveRoutesForPath`).
+ * - **AP-R3** a deleted transition takes its lanes with it, and a route nobody walks goes, in
+ *   `deleteTimelineTransitionRowsInTransaction` (`timelineLanes`).
+ * - **AP-R6** `refuseRoutesInMoves`, `refuseLanedRows`: edits that can't keep a path exact refuse,
+ *   and write nothing.
  * - **AP-R7** the cut at a count lives in `timelineSplitAtBeat` (`planRouteCut` here).
  *
  * Range edits (AP-R4) and end and start changes (AP-R5) leave routes alone: R-14 always walks from
  * the marcher's real start to its real destination.
  */
-import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import {
     createResolver,
     EPS_GEOM,
@@ -25,22 +29,26 @@ import {
     type RoutePoint,
     type XY,
 } from "@openmarch/core";
-import { ROUTE_MODEL_USER_VERSION } from "@om-electron/database/fileVersion";
 import { schema } from "@/global/database/db";
 import { readTimelineTables } from "@/timeline/timelineRows";
 import { moveName } from "@/timeline/timelineRangeWords";
 import { text, type TimelineTextArg } from "@/timeline/timelineText";
-import { sql } from "drizzle-orm";
 import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { assertValid, mapDbErrors, refuse } from "./timelineErrors";
 import { readMoveWords } from "./timelineMoveNames";
 import { sampleShape } from "./timelineMoveHelpers";
-import {
-    createTimelineTransitionsInTransaction,
-    deleteTimelineTransitionRowsInTransaction,
-} from "./timelineTransitionsInTransaction";
+import { createTimelineTransitionsInTransaction } from "./timelineTransitionsInTransaction";
 import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
+import {
+    firstLanedRow,
+    laneOn,
+    lanesOfRoute,
+    lanesOfTransitions,
+    markLaneModelInTransaction,
+    sweepOrphanRoutesInTransaction,
+    type DatabaseTimelineLane,
+} from "./timelineLanes";
 
 // ---------------------------------------------------------------------------
 // Refusals (E-ARGS with the spec's reasons)
@@ -81,34 +89,6 @@ export const routeRefusal = {
     groupTooSmall: () => text.t("timeline.refusals.route.groupTooSmall"),
 };
 
-/**
- * AP-R3, AP-R8 to AP-R10 (step 15): deletes each of `routeIds` that no transition walks any more.
- * Run after the transitions' UPDATEs, so the foreign key (I-D3) lets the delete through.
- */
-export async function deleteOrphanRoutesInTransaction(
-    tx: DbTransaction,
-    routeIds: Iterable<number>,
-): Promise<number[]> {
-    const ids = [...new Set(routeIds)];
-    if (ids.length === 0) return [];
-    const T = schema.timeline_transitions;
-    const walked = new Set(
-        (
-            await tx
-                .select({ route: T.route_id })
-                .from(T)
-                .where(inArray(T.route_id, ids))
-                .all()
-        ).map((r) => r.route),
-    );
-    const orphans = ids.filter((id) => !walked.has(id));
-    if (orphans.length > 0)
-        await tx
-            .delete(schema.timeline_routes)
-            .where(inArray(schema.timeline_routes.id, orphans));
-    return orphans;
-}
-
 /** A marcher's drill number, as refusals name it. */
 export const marcherName = async (tx: DbTransaction, marcherId: number) => {
     const m = await tx
@@ -138,57 +118,62 @@ export const moveNameOf = async (tx: DbTransaction, timelineId: number) => {
     );
 };
 
+/** The first of `timelineIds` (ascending) with a lane on any of its transitions. */
+async function firstMoveWithLanes(
+    tx: DbTransaction,
+    timelineIds: readonly number[],
+): Promise<number | undefined> {
+    if (timelineIds.length === 0) return undefined;
+    const T = schema.timeline_transitions;
+    const L = schema.timeline_lanes;
+    const row = await tx
+        .select({ timelineId: T.timeline_id })
+        .from(L)
+        .innerJoin(T, eq(T.id, L.transition_id))
+        .where(inArray(T.timeline_id, [...timelineIds]))
+        .orderBy(asc(T.timeline_id))
+        .get();
+    return row?.timelineId;
+}
+
 /**
  * AP-R6: refuses (`E-ARGS`, "this move has a drawn path") when any of the moves `timelineIds`
- * has a route transition. For edits step 1 can't keep a route through: split by marchers,
- * merging, Remove keyframe's join, holds that would take a route marcher into its own move.
+ * has a lane. For edits that can't keep a path through yet: merging, Remove keyframe's join.
  */
 export async function refuseRoutesInMoves(
     tx: DbTransaction,
     timelineIds: Iterable<number>,
 ): Promise<void> {
-    const ids = [...new Set(timelineIds)];
-    if (ids.length === 0) return;
-    const T = schema.timeline_transitions;
-    const withRoute = await tx
-        .select({ timelineId: T.timeline_id })
-        .from(T)
-        .where(and(inArray(T.timeline_id, ids), isNotNull(T.route_id)))
-        .orderBy(asc(T.timeline_id))
-        .get();
-    if (withRoute)
-        refuse(routeRefusal.notYet(await moveNameOf(tx, withRoute.timelineId)));
+    const withLanes = await firstMoveWithLanes(tx, [...new Set(timelineIds)]);
+    if (withLanes !== undefined)
+        refuse(routeRefusal.notYet(await moveNameOf(tx, withLanes)));
 }
 
-/** AP-R6 by transition: refuses when any of `transitionIds` walks a route. */
-export async function refuseRouteTransitions(
+/**
+ * AP-H2 (refuse half): refuses (`E-ARGS`, "this move has a drawn path") when any of `rows` sits on
+ * a laned slot. For edits that would move such a row to another transition and can't carry its
+ * lane yet: split by marchers, and holds that would take a path's marcher into a move of its own.
+ */
+export async function refuseLanedRows(
     tx: DbTransaction,
-    transitionIds: Iterable<number>,
+    rows: readonly { transition_id: number; slot_index: number }[],
 ): Promise<void> {
-    const ids = [...new Set(transitionIds)];
-    if (ids.length === 0) return;
-    const T = schema.timeline_transitions;
-    const withRoute = await tx
-        .select({ timelineId: T.timeline_id })
-        .from(T)
-        .where(and(inArray(T.id, ids), isNotNull(T.route_id)))
+    const laned = await firstLanedRow(tx, rows);
+    if (!laned) return;
+    const t = await tx
+        .select({ timelineId: schema.timeline_transitions.timeline_id })
+        .from(schema.timeline_transitions)
+        .where(eq(schema.timeline_transitions.id, laned.transition_id))
         .get();
-    if (withRoute)
-        refuse(routeRefusal.notYet(await moveNameOf(tx, withRoute.timelineId)));
+    refuse(routeRefusal.notYet(await moveNameOf(tx, t?.timelineId ?? 0)));
 }
 
-/** AP-R2: the Move card's Straight and Arc refuse a move with a route; the route stays. */
+/** AP-R2: the Move card's Straight and Arc refuse a move with a path; the path stays. */
 export async function refuseMoveRoutesForPath(
     tx: DbTransaction,
     timelineId: number,
 ): Promise<void> {
-    const T = schema.timeline_transitions;
-    const withRoute = await tx
-        .select({ id: T.id })
-        .from(T)
-        .where(and(eq(T.timeline_id, timelineId), isNotNull(T.route_id)))
-        .get();
-    if (withRoute)
+    if ((await firstMoveWithLanes(tx, [timelineId])) !== undefined)
         refuse(routeRefusal.removePathFirst(await moveNameOf(tx, timelineId)));
 }
 
@@ -196,18 +181,25 @@ export async function refuseMoveRoutesForPath(
 // Reads
 // ---------------------------------------------------------------------------
 
-/** One marcher's route in one move. */
+/** One marcher's route in one move: a lane with a marcher on its slot. */
 export interface MoveRoute {
     routeId: number;
+    laneId: number;
     transitionId: number;
+    slot: number;
     timelineId: number;
     marcherId: number;
     start: number;
     end: number;
+    /** The lane's start offset (a group path's), or null for an own path */
+    offset: XY | null;
     geometry: RouteGeometry;
 }
 
-/** Every route, with its transition, move and marcher; or only those of `timelineId`. */
+/**
+ * Every route with a marcher on one of its lanes, one entry per lane and marcher, with the lane's
+ * transition, move and slot; or only those of `timelineId`. By route, then marcher.
+ */
 export async function readRoutes(
     db: DbConnection | DbTransaction,
     timelineId?: number,
@@ -215,29 +207,43 @@ export async function readRoutes(
     const T = schema.timeline_transitions;
     const R = schema.timeline_routes;
     const A = schema.timeline_assignments;
+    const L = schema.timeline_lanes;
     const rows = await db
         .select({
             routeId: R.id,
+            laneId: L.id,
             geometry: R.geometry,
             transitionId: T.id,
+            slot: L.slot_index,
             timelineId: T.timeline_id,
             start: T.start_beat,
             end: T.end_beat,
             marcherId: A.marcher_id,
+            offsetX: L.offset_x,
+            offsetY: L.offset_y,
         })
-        .from(R)
-        .innerJoin(T, eq(T.route_id, R.id))
-        .innerJoin(A, eq(A.transition_id, T.id))
+        .from(L)
+        .innerJoin(R, eq(R.id, L.route_id))
+        .innerJoin(T, eq(T.id, L.transition_id))
+        .innerJoin(
+            A,
+            and(
+                eq(A.transition_id, L.transition_id),
+                eq(A.slot_index, L.slot_index),
+            ),
+        )
         .where(
             timelineId === undefined
                 ? undefined
                 : eq(T.timeline_id, timelineId),
         )
-        .orderBy(asc(R.id))
+        .orderBy(asc(R.id), asc(A.marcher_id), asc(A.start_beat))
         .all();
-    return rows.map((r) => ({
+    return rows.map(({ offsetX, offsetY, geometry, ...r }) => ({
         ...r,
-        geometry: JSON.parse(r.geometry) as RouteGeometry,
+        offset:
+            offsetX === null || offsetY === null ? null : [offsetX, offsetY],
+        geometry: JSON.parse(geometry) as RouteGeometry,
     }));
 }
 
@@ -291,38 +297,28 @@ export function freshPointId(taken: ReadonlySet<string>): string {
     }
 }
 
-/** Writes the route-model file version (10) with a file's first route (ADR 0014). */
-export async function markRouteModelInTransaction(
-    tx: DbTransaction,
-): Promise<void> {
-    const row = await tx
-        .select({ version: sql<number>`user_version` })
-        .from(sql`pragma_user_version`)
-        .get();
-    if ((row?.version ?? 0) < ROUTE_MODEL_USER_VERSION)
-        await tx.run(
-            sql.raw(`PRAGMA user_version = ${ROUTE_MODEL_USER_VERSION}`),
-        );
-}
+/** Writes the lane-model file version (11) with a file's first path (ADR 0015 §9). */
+export const markRouteModelInTransaction = markLaneModelInTransaction;
 
 export interface DrawRouteResult {
     routeId: number;
     transitionId: number;
-    /** The marcher got its own transition first (it was in a shape or shared move) */
-    ownTransition: boolean;
+    /** The slot whose lane walks the route (the marcher's, in its own move) */
+    slot: number;
 }
 
 /**
- * AP-R1: marcher `marcherId` walks `points` (inner corners, in walking order) in move
- * `timelineId`. A marcher in a shape or shared transition first gets its own one-slot shapeless
- * transition ending at its resolved destination, as point drags make one. With no route yet, the
- * route is inserted and the transition becomes `route` in one UPDATE (I-R2); with one, its
- * geometry is updated in place, keeping its id. `from` and `to` are the founding span's origin
- * and destination.
+ * AP-R1 (spec v0.10 J.8): marcher `marcherId` walks `points` (inner points, in walking order) in
+ * move `timelineId`, on an own lane of its slot. The marcher stays in its move, so a shape or a
+ * shared move stays as it is. With no lane on the slot, the route is inserted, then its lane; with
+ * an own lane, the route's geometry is updated in place, keeping its id; on a group path's lane, a
+ * new own route is inserted and the lane re-pointed at it with no offset, and the group path stays
+ * with the others. `from` and `to` are the founding span's origin and destination. No transition
+ * or row is written.
  *
  * Refused (`E-ARGS`, nothing written): a marcher not in the move; one taken over at the move's
- * start (its span there is a join, which step 1 walks straight); one following the leader (leaving
- * that move would move the others' targets). Invalid points are `E-R1`.
+ * start (its span there is a join, which walks straight); one following the leader (a lane there
+ * would have to be a trail lane, a later step). Invalid points are `E-R1`.
  */
 // One procedure, read then written in the order the spec gives (AP-R1)
 // eslint-disable-next-line max-lines-per-function
@@ -344,6 +340,7 @@ export async function drawRouteInTransaction({
         .from(A)
         .innerJoin(T, eq(A.transition_id, T.id))
         .where(and(eq(T.timeline_id, timelineId), eq(A.marcher_id, marcherId)))
+        .orderBy(asc(A.start_beat), asc(A.id))
         .get();
     if (!found)
         refuse(routeRefusal.notInMove(await marcherName(tx, marcherId)));
@@ -366,18 +363,17 @@ export async function drawRouteInTransaction({
     const from = resolver.explain(marcherId, transition.start_beat).origin;
     const to = await destinationOf(tx, transition, row.slot_index);
 
-    // The route's points: kept ids stay, new points get fresh ones. A marcher on a group path
-    // (step 15) gets a new own route; the group path stays with the others
-    const onGroup =
-        transition.route_id !== null && transition.path_params !== null;
-    const current =
-        transition.route_id === null || onGroup
-            ? null
-            : await tx
-                  .select()
-                  .from(schema.timeline_routes)
-                  .where(eq(schema.timeline_routes.id, transition.route_id))
-                  .get();
+    // The route's points: kept ids stay, new points get fresh ones. A spot on a group path gets a
+    // new own route; the group path stays with the others
+    const lane = await laneOn(tx, transition.id, row.slot_index);
+    const ownLane = lane !== undefined && lane.offset_x === null;
+    const current = ownLane
+        ? await tx
+              .select()
+              .from(schema.timeline_routes)
+              .where(eq(schema.timeline_routes.id, lane.route_id))
+              .get()
+        : undefined;
     const currentGeometry = current
         ? (JSON.parse(current.geometry) as RouteGeometry)
         : null;
@@ -407,6 +403,11 @@ export async function drawRouteInTransaction({
     };
     assertValid(validateRouteGeometry(geometry), "route");
     const json = JSON.stringify(geometry);
+    const result = (routeId: number): DrawRouteResult => ({
+        routeId,
+        transitionId: transition.id,
+        slot: row.slot_index,
+    });
 
     return await mapDbErrors(async () => {
         if (current) {
@@ -414,36 +415,32 @@ export async function drawRouteInTransaction({
                 .update(schema.timeline_routes)
                 .set({ geometry: json })
                 .where(eq(schema.timeline_routes.id, current.id));
-            return {
-                routeId: current.id,
-                transitionId: transition.id,
-                ownTransition: false,
-            };
-        }
-        let transitionId = transition.id;
-        let ownTransition = false;
-        if (transition.dest_shape_id !== null || transition.slot_count > 1) {
-            transitionId = await giveOwnTransition(tx, {
-                transition,
-                row,
-                point: to,
-            });
-            ownTransition = true;
+            return result(current.id);
         }
         const route = (await tx
             .insert(schema.timeline_routes)
             .values({ geometry: json })
             .returning()
             .get())!;
-        // One UPDATE: any two-statement order breaks the I-R2 CHECK
-        await tx
-            .update(T)
-            .set({ path_style: "route", route_id: route.id, path_params: null })
-            .where(eq(T.id, transitionId));
-        if (onGroup)
-            await deleteOrphanRoutesInTransaction(tx, [transition.route_id!]);
-        await markRouteModelInTransaction(tx);
-        return { routeId: route.id, transitionId, ownTransition };
+        const L = schema.timeline_lanes;
+        if (lane)
+            // Off the group path: its lane walks the new own route, with no offset (I-LN4)
+            await tx
+                .update(L)
+                .set({ route_id: route.id, offset_x: null, offset_y: null })
+                .where(eq(L.id, lane.id));
+        else
+            await tx.insert(L).values({
+                transition_id: transition.id,
+                slot_index: row.slot_index,
+                route_id: route.id,
+                offset_x: null,
+                offset_y: null,
+            });
+        // AP-H3: a group path left by its last marcher goes
+        if (lane) await sweepOrphanRoutesInTransaction(tx);
+        await markLaneModelInTransaction(tx);
+        return result(route.id);
     });
 }
 
@@ -475,61 +472,6 @@ export async function destinationOf(
     return [point.x, point.y];
 }
 
-/**
- * Moves `row` out of its shape or shared transition into a one-slot shapeless transition of its
- * own in the same move, ending at `point`, over the same counts and layer. The others keep their
- * slots (a vacancy is allowed, D-13), so nobody else moves; a transition left with nobody goes.
- */
-export async function giveOwnTransition(
-    tx: DbTransaction,
-    {
-        transition,
-        row,
-        point,
-    }: {
-        transition: typeof schema.timeline_transitions.$inferSelect;
-        row: typeof schema.timeline_assignments.$inferSelect;
-        point: XY;
-    },
-): Promise<number> {
-    const A = schema.timeline_assignments;
-    await tx.delete(A).where(eq(A.id, row.id));
-    const left = await tx
-        .select({ id: A.id })
-        .from(A)
-        .where(eq(A.transition_id, transition.id))
-        .get();
-    if (!left)
-        await deleteTimelineTransitionRowsInTransaction({
-            tx,
-            transitionIds: new Set([transition.id]),
-        });
-    const [own] = await createTimelineTransitionsInTransaction({
-        tx,
-        newTransitions: [
-            {
-                timelineId: transition.timeline_id,
-                slotCount: 1,
-                destination: { kind: "individual", points: [point] },
-            },
-        ],
-    });
-    await createTimelineAssignmentsInTransaction({
-        tx,
-        newAssignments: [
-            {
-                marcherId: row.marcher_id,
-                transitionId: own!.id,
-                slotIndex: 0,
-                startBeat: row.start_beat,
-                endBeat: row.end_beat,
-                layer: row.layer,
-            },
-        ],
-    });
-    return own!.id;
-}
-
 /** AP-R1 as one undoable edit. */
 export async function drawRoute(args: {
     db: DbConnection;
@@ -548,65 +490,83 @@ export async function drawRoute(args: {
 // ---------------------------------------------------------------------------
 
 /**
- * AP-R2: the route transition `transitionId` goes back to `direct` in one UPDATE, then its route
- * is deleted. That order is required: the foreign key refuses the other (I-D3), and undo replays
- * it reversed. On a group path (step 15) every transition walking it goes back to `direct`, so
- * the whole group's path goes whichever member is named. Returns the marchers that lost it.
+ * AP-R2 (spec v0.10 J.8): Remove path. The route's lanes go, then the route (the foreign key
+ * refuses the other order, I-D3, and undo replays it reversed). Its marchers never left their
+ * moves, so a shaped move is a shape again and nobody else moves. On a group path the whole
+ * group's path goes, whichever marcher is named. Name the path by `routeId`, or by a transition
+ * whose lanes walk one route (`transitionId`, step 15's form). Returns the marchers that lost it.
  */
 export async function removeRouteInTransaction({
     tx,
+    routeId,
     transitionId,
 }: {
     tx: DbTransaction;
-    transitionId: number;
+    routeId?: number;
+    transitionId?: number;
 }): Promise<{ marcherIds: number[] }> {
-    const T = schema.timeline_transitions;
-    const A = schema.timeline_assignments;
-    const t = await tx.select().from(T).where(eq(T.id, transitionId)).get();
-    if (!t) refuse(`transition ${transitionId} does not exist`);
-    if (t.route_id === null) refuse(`transition ${transitionId} has no path`);
-    const walkers = (
-        await tx
-            .select({ id: T.id })
-            .from(T)
-            .where(eq(T.route_id, t.route_id))
-            .orderBy(asc(T.id))
-            .all()
-    ).map((w) => w.id);
-    const marcherIds = [
-        ...new Set(
-            (
-                await tx
-                    .select({ m: A.marcher_id })
-                    .from(A)
-                    .where(inArray(A.transition_id, walkers))
-                    .orderBy(asc(A.marcher_id))
-                    .all()
-            ).map((r) => r.m),
-        ),
-    ];
+    let rid = routeId;
+    if (rid === undefined) {
+        if (transitionId === undefined) refuse("name the path to remove");
+        const routes = new Set(
+            (await lanesOfTransitions(tx, [transitionId])).map(
+                (l) => l.route_id,
+            ),
+        );
+        if (routes.size !== 1) refuse(`transition ${transitionId} has no path`);
+        rid = [...routes][0]!;
+    }
+    const lanes = await lanesOfRoute(tx, rid);
+    if (lanes.length === 0) refuse(`route ${rid} has no lane`);
+    const marcherIds = await marchersOnLanes(tx, lanes);
     await mapDbErrors(async () => {
-        await tx
-            .update(T)
-            .set({ path_style: "direct", route_id: null, path_params: null })
-            .where(inArray(T.id, walkers));
+        await tx.delete(schema.timeline_lanes).where(
+            inArray(
+                schema.timeline_lanes.id,
+                lanes.map((l) => l.id),
+            ),
+        );
         await tx
             .delete(schema.timeline_routes)
-            .where(eq(schema.timeline_routes.id, t.route_id!));
+            .where(eq(schema.timeline_routes.id, rid));
     });
     return { marcherIds };
+}
+
+/** The marchers on `lanes`' slots, at any beat, ascending. */
+export async function marchersOnLanes(
+    db: DbConnection | DbTransaction,
+    lanes: readonly DatabaseTimelineLane[],
+): Promise<number[]> {
+    const A = schema.timeline_assignments;
+    const out = new Set<number>();
+    for (const l of lanes)
+        for (const r of await db
+            .select({ m: A.marcher_id })
+            .from(A)
+            .where(
+                and(
+                    eq(A.transition_id, l.transition_id),
+                    eq(A.slot_index, l.slot_index),
+                ),
+            )
+            .all())
+            out.add(r.m);
+    return [...out].sort((a, b) => a - b);
 }
 
 /** AP-R2 as one undoable edit. */
 export async function removeRoute({
     db,
+    routeId,
     transitionId,
 }: {
     db: DbConnection;
-    transitionId: number;
+    routeId?: number;
+    transitionId?: number;
 }): Promise<{ marcherIds: number[] }> {
     return await transactionWithHistory(db, "removeRoute", (tx) =>
-        removeRouteInTransaction({ tx, transitionId }),
+        removeRouteInTransaction({ tx, routeId, transitionId }),
     );
 }
 
@@ -614,10 +574,11 @@ export async function removeRoute({
 // AP-R7: cut a route at a count
 // ---------------------------------------------------------------------------
 
-/** How one route transition is cut at a count (AP-R7), planned before anything is written. */
+/** How one own lane is cut at a count (AP-R7), planned before anything is written. */
 export interface RouteCut {
-    /** The transition and its route, which stay with the half from the count */
+    /** The lane's transition, slot and route, which stay with the half from the count */
     transitionId: number;
+    slot: number;
     routeId: number;
     /** The route's geometry from the count: `from = C`, the points past `d` */
     after: RouteGeometry;
@@ -628,10 +589,10 @@ export interface RouteCut {
 }
 
 /**
- * Plans AP-R7 for route transition `t`, whose one row `row` must have a founding span: `C` is
- * R-14's evaluation of that span at the count, and the cleaned path's points split at `d`. A
- * point at or within `EPS_GEOM` of `C` goes to neither half, and points R-14's cleaning drops are
- * dropped from storage too. Kept points keep their ids.
+ * Plans AP-R7 for the own lane `lane` of transition `t`, whose one row (`rows`, the rows on its
+ * slot) must have a founding span: `C` is R-14's evaluation of that span at the count, and the
+ * cleaned path's points split at `d`. A point at or within `EPS_GEOM` of `C` goes to neither half,
+ * and points R-14's cleaning drops are dropped from storage too. Kept points keep their ids.
  *
  * Refused (`E-ARGS`): a row not starting with `t`, or no founding span ("taken over at the
  * start"); more than one row, or a visible piece of the row
@@ -643,12 +604,14 @@ export async function planRouteCut(
     {
         resolver,
         t,
+        lane,
         rows,
         beat,
     }: {
         resolver: ReturnType<typeof createResolver>;
         t: typeof schema.timeline_transitions.$inferSelect;
-        /** Every row of `t` in the move (one, unless an edit left more) */
+        lane: DatabaseTimelineLane;
+        /** Every row on the lane's slot (one, unless an edit left more) */
         rows: readonly (typeof schema.timeline_assignments.$inferSelect)[];
         beat: number;
     },
@@ -673,9 +636,9 @@ export async function planRouteCut(
     const route = await tx
         .select()
         .from(schema.timeline_routes)
-        .where(eq(schema.timeline_routes.id, t.route_id!))
+        .where(eq(schema.timeline_routes.id, lane.route_id))
         .get();
-    if (!route) refuse(`route ${t.route_id} does not exist`);
+    if (!route) refuse(`route ${lane.route_id} does not exist`);
     const geometry = JSON.parse(route.geometry) as RouteGeometry;
     const A = resolver.explain(m, t.start_beat).origin;
     const B = await destinationOf(tx, t, row.slot_index);
@@ -696,6 +659,7 @@ export async function planRouteCut(
     const xy = (p: XY): XY => [p[0], p[1]];
     return {
         transitionId: t.id,
+        slot: lane.slot_index,
         routeId: route.id,
         C,
         // Step 2 (AP-R7): the half before keeps the route's `from`, the route from the count
@@ -720,9 +684,9 @@ export async function planRouteCut(
 }
 
 /**
- * Writes the half before the count of a route cut: a new route, then the first half's own
- * one-slot transition in `beforeTimelineId` walking it to `C`, holding `row`'s part before the
- * count. The route goes first so the transition is inserted with it (I-R2).
+ * Writes the half before the count of an own lane's cut: a new route, the first half's own
+ * one-slot transition in `beforeTimelineId` ending at `C`, `row`'s part before the count on its
+ * slot 0, and the lane binding that slot to the new route.
  */
 export async function writeRouteCutBeforeInTransaction(
     tx: DbTransaction,
@@ -753,10 +717,7 @@ export async function writeRouteCutBeforeInTransaction(
                 timelineId: beforeTimelineId,
                 slotCount: 1,
                 destination: { kind: "individual", points: [cut.C] },
-                pathStyle: "route",
-                pathParams: null,
                 orderMode,
-                routeId: route.id,
             },
         ],
     });
@@ -772,6 +733,13 @@ export async function writeRouteCutBeforeInTransaction(
                 layer: row.layer,
             },
         ],
+    });
+    await tx.insert(schema.timeline_lanes).values({
+        transition_id: created!.id,
+        slot_index: 0,
+        route_id: route.id,
+        offset_x: null,
+        offset_y: null,
     });
 }
 

@@ -21,7 +21,7 @@ export type ValidationCode = "E-S1" | "E-P1" | "E-D2" | "E-N2" | "E-R1";
 /** Longest route point id (spec 5.2, I-R1). */
 export const MAX_ROUTE_POINT_ID_LENGTH = 16;
 
-/** Largest |dx| or |dy| of a group path member's offset (spec 5.2, v0.9 step 15): two points' difference. */
+/** Largest |dx| or |dy| of a lane's offset (spec J.1, v0.10): two points' difference. */
 export const MAX_ROUTE_OFFSET = 2 * COORD_BOUND;
 
 /** Roundest a smooth route point can be (spec 5.2, v0.9 step 2), as the Line's `MAX_TENSION`. */
@@ -289,31 +289,6 @@ export function validatePathParams(
             }
             break;
         }
-        case "route": {
-            // I-R4 (v0.9 step 15): null for an own path, or {offset: [dx, dy]} for a group member
-            if (params === null) break;
-            if (!isRecord(params)) {
-                push("", "route path_params must be null or {offset}");
-                break;
-            }
-            noExtraKeys(params, ["offset"], push);
-            const o = params.offset;
-            if (!Array.isArray(o) || o.length !== 2) {
-                push("offset", "offset must be an [dx, dy] pair");
-                break;
-            }
-            o.forEach((n, i) => {
-                if (
-                    finiteNumber(n, `offset[${i}]`, push) &&
-                    Math.abs(n) > MAX_ROUTE_OFFSET
-                )
-                    push(
-                        `offset[${i}]`,
-                        `offset[${i}] must be within [-2e6, 2e6]`,
-                    );
-            });
-            break;
-        }
         case "follow_the_leader": {
             if (!isRecord(params)) {
                 push("", "follow_the_leader path_params must be {waypoints}");
@@ -365,6 +340,27 @@ export function validateDestination(point: unknown): ValidationResult {
 export function validateHome(home: unknown): ValidationResult {
     const { push, result } = collector("E-N2");
     pointOf(home, "home", push);
+    return result();
+}
+
+/**
+ * Validate a lane's start offset (spec v0.10 J.1): null for an own lane, or `[dx, dy]`, each
+ * finite and within `[-2e6, 2e6]`. Errors are `E-P1`.
+ */
+export function validateLaneOffset(offset: unknown): ValidationResult {
+    const { push, result } = collector("E-P1");
+    if (offset === null) return result();
+    if (!Array.isArray(offset) || offset.length !== 2) {
+        push("offset", "offset must be an [dx, dy] pair");
+        return result();
+    }
+    offset.forEach((n, i) => {
+        if (
+            finiteNumber(n, `offset[${i}]`, push) &&
+            Math.abs(n) > MAX_ROUTE_OFFSET
+        )
+            push(`offset[${i}]`, `offset[${i}] must be within [-2e6, 2e6]`);
+    });
     return result();
 }
 

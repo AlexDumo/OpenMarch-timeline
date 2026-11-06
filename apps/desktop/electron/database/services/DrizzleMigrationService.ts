@@ -25,6 +25,7 @@ import {
     MAX_SUPPORTED_USER_VERSION,
     PAGE_MODEL_USER_VERSION,
     readUserVersion,
+    markLaneModelIfLaned,
 } from "../fileVersion";
 
 /**
@@ -37,7 +38,8 @@ import {
 export const FIRST_TIMELINE_MIGRATION_TAG = "0018_drop_page_era";
 
 /**
- * Timeline-only migrations that change a table the page conversion writes (`timeline_transitions`).
+ * Timeline-only migrations that change a table the page conversion writes (`timeline_transitions`),
+ * or add one the timeline reads beside it (`timeline_lanes`, which the resolver's cold build reads).
  * The converter writes through this build's schema before the timeline-only migrations run, so
  * these also run, unrecorded, after a page-model file's page-era migrations, both on open
  * (`applyPendingMigrations`) and in its conversion (`applyPageMigrationsInTransaction`); the
@@ -45,7 +47,10 @@ export const FIRST_TIMELINE_MIGRATION_TAG = "0018_drop_page_era";
  * Each must be safe to run twice on a file being converted: `IF NOT EXISTS` for new tables, and a
  * table rebuild that copies every row (a converting file has no rows that use what it adds).
  */
-export const CONVERTER_SCHEMA_MIGRATION_TAGS = ["0019_timeline_routes"];
+export const CONVERTER_SCHEMA_MIGRATION_TAGS = [
+    "0019_timeline_routes",
+    "0020_timeline_lanes",
+];
 
 /** The migrations folder, also found from a built `dist-electron/main`. */
 export function resolveMigrationsFolder(migrationsFolder?: string): string {
@@ -312,6 +317,8 @@ export class DrizzleMigrationService {
             // makes sure the change-log bodies are current without relying on that. It runs after
             // the file-version guard above, so it never writes to a file this build refuses.
             recreateChangeLogTriggers(this.rawDb);
+            // A step-15 file whose paths 0020 moved to lanes is written as 11 (ADR 0015 §9)
+            markLaneModelIfLaned(this.rawDb);
 
             console.log("Drizzle migrations applied successfully.");
         } catch (error) {
