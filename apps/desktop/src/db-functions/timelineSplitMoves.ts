@@ -123,6 +123,23 @@ const timelineWords = async (
 const canPeelSlot = (style: string): style is "direct" | "arc" =>
     style === "direct" || style === "arc";
 
+/**
+ * AP-H2 (spec v0.10 J.8) for split by marcher: a marcher whose spot walks a drawn path can't be
+ * split off yet (AP-R21's copy is a later step; `refuseLanedRows`, before planning), and holds
+ * that would take one into a move of its own come through here too. A marcher off the path may
+ * leave a move whose other spots walk one: compaction carries their lanes (AP-R15). A transition
+ * that moves whole takes its lanes with it, so one whose vacant spot still has a lane (owner Q1)
+ * would split its path across two moves (I-LN5), and refuses too.
+ */
+const refuseLanesMovingWhole = async (
+    tx: DbTransaction,
+    timelineId: number,
+    whole: readonly number[],
+): Promise<void> => {
+    if ((await lanesOfTransitions(tx, whole)).length > 0)
+        refuse(routeRefusal.notYet(await moveNameOf(tx, timelineId)));
+};
+
 /** Moves transitions to timeline `timelineId`, as they are (same range, C-11). */
 const moveTransitionsTo = async (
     tx: DbTransaction,
@@ -290,10 +307,6 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
     });
     if (blocker) refuse(blocker);
     const chosen = new Set(marcherIds.filter((id) => members.has(id)));
-    // AP-H2 (spec v0.10 J.8): a marcher whose spot walks a drawn path can't be split off yet
-    // (AP-R21's copy is a later step); holds that would take one into a move of its own come
-    // through here too. A marcher off the path may leave a move whose other spots walk one:
-    // compaction carries their lanes (AP-R15)
     await refuseLanedRows(
         tx,
         rows
@@ -339,11 +352,7 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
         }
         peeled.push(...leaving);
     }
-    // AP-H2: a transition that moves whole takes its lanes with it; one whose vacant spot still
-    // has a lane (owner Q1) would split its path across two moves (I-LN5), so it refuses too
-    const vacantLane = (await lanesOfTransitions(tx, whole))[0];
-    if (vacantLane)
-        refuse(routeRefusal.notYet(await moveNameOf(tx, timelineId)));
+    await refuseLanesMovingWhole(tx, timelineId, whole);
 
     // Each peeled slot's new one-slot transition, read and checked before anything is written
     const d = schema.timeline_slot_destinations;

@@ -316,12 +316,14 @@ export const updateTimelineTransitionsInTransaction = async ({
     const updated: DatabaseTimelineTransition[] = [];
     let lanesDropped = false;
     for (const { m, set, replaceDestinations, dropLanesFrom } of plans) {
+        // AP-R20: lanes on slots the transition loses go first (I-LN1)
+        if (dropLanesFrom !== null) {
+            await mapDbErrors(() =>
+                deleteLanesFromSlotInTransaction(tx, m.id, dropLanesFrom),
+            );
+            lanesDropped = true;
+        }
         const row = await mapDbErrors(async () => {
-            // AP-R20: lanes on slots the transition loses go first (I-LN1)
-            if (dropLanesFrom !== null) {
-                await deleteLanesFromSlotInTransaction(tx, m.id, dropLanesFrom);
-                lanesDropped = true;
-            }
             // The triggers reject a slot count below a placed destination, so clear first
             if (replaceDestinations)
                 await tx

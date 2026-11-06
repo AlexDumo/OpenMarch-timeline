@@ -209,6 +209,9 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
     // it is safe (it runs twice in a conversion too); rolling back 0017 drops its table.
     // `rollBackRoutesSchema` restores the real older schema for 0019's own test.
     19: () => {},
+    // Lanes, pathways step 24 (ADR 0015): a new table, dropped (its indexes and triggers go with
+    // it). Re-running 0020 is safe (IF NOT EXISTS; it runs twice in a conversion too).
+    20: (db) => db.exec("DROP TABLE IF EXISTS timeline_lanes"),
 };
 
 /**

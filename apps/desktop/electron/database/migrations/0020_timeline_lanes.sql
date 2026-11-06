@@ -6,8 +6,10 @@
 -- params and no route (I-R2′), so it plays exactly as before (QA-MIG-L2). Those files' undo and
 -- redo steps name the old storage, so they are cleared with it; a file with no route (every
 -- release file) keeps its history and is otherwise untouched. The app writes file version 11
--- once a file has a lane (`fileVersion.ts`).
-CREATE TABLE `timeline_lanes` (
+-- once a file has a lane (`fileVersion.ts`). Like 0019 it also runs, unrecorded, on a page-era
+-- file before its conversion (`CONVERTER_SCHEMA_MIGRATION_TAGS`), so it is safe to run twice:
+-- IF NOT EXISTS, and a converting file has no route transitions to move.
+CREATE TABLE IF NOT EXISTS `timeline_lanes` (
 	`id` integer PRIMARY KEY NOT NULL,
 	`transition_id` integer NOT NULL,
 	`slot_index` integer NOT NULL,
@@ -25,8 +27,8 @@ CREATE TABLE `timeline_lanes` (
 	CONSTRAINT "timeline_lanes_offset_check" CHECK((offset_x IS NULL) = (offset_y IS NULL))
 );
 --> statement-breakpoint
-CREATE INDEX `timeline_idx_lane_route` ON `timeline_lanes` (`route_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `timeline_lanes_transition_slot_unique` ON `timeline_lanes` (`transition_id`,`slot_index`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `timeline_idx_lane_route` ON `timeline_lanes` (`route_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS `timeline_lanes_transition_slot_unique` ON `timeline_lanes` (`transition_id`,`slot_index`);--> statement-breakpoint
 INSERT INTO `timeline_lanes` (`transition_id`, `slot_index`, `route_id`, `offset_x`, `offset_y`) SELECT `id`, 0, `route_id`, json_extract(`path_params`, '$.offset[0]'), json_extract(`path_params`, '$.offset[1]') FROM `timeline_transitions` WHERE `path_style` = 'route' AND `route_id` IS NOT NULL ORDER BY `id`;--> statement-breakpoint
 DELETE FROM `history_undo` WHERE EXISTS (SELECT 1 FROM `timeline_lanes`);--> statement-breakpoint
 DELETE FROM `history_redo` WHERE EXISTS (SELECT 1 FROM `timeline_lanes`);--> statement-breakpoint

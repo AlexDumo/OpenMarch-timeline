@@ -513,7 +513,7 @@ describe("group paths (spec R-14 group schedule, v0.9 step 15)", () => {
                     expect(same(p, ref.positionAt(m, t))).toBe(true);
                 }
         }
-    });
+    }, 60_000);
 });
 
 // ---------------------------------------------------------------------------

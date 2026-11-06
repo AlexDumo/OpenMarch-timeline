@@ -49,6 +49,7 @@ const TABLES = [
     schema.timeline_assignments,
     schema.timeline_slot_destinations,
     schema.timeline_routes,
+    schema.timeline_lanes,
 ];
 
 const dataOf = async (db: DbConnection) => {
@@ -192,7 +193,7 @@ const onRoute = async (db: DbConnection, m: number, beat: number) => {
 };
 
 describeDbTests("Routes: draw a path (AP-R1, AP-R2, AP-R3)", (it) => {
-    it("draws a route for one marcher of a shared move: own transition, one undo step, others unchanged; redo restores the same ids", async ({
+    it("draws a route for one marcher of a shared move: a lane on its slot, its move untouched, one undo step, others unchanged; redo restores the same ids", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -210,7 +211,33 @@ describeDbTests("Routes: draw a path (AP-R1, AP-R2, AP-R3)", (it) => {
             marcherId: m,
             points: corners.map((at) => ({ at })),
         });
-        expect(result.ownTransition).toBe(true);
+        // Step 24: an own lane on its slot of the shared move; no transition or row is written
+        const shared = (
+            await db
+                .select()
+                .from(schema.timeline_assignments)
+                .where(eq(schema.timeline_assignments.marcher_id, m))
+                .all()
+        ).find((r) => r.start_beat === 9)!;
+        expect(result.transitionId).toBe(shared.transition_id);
+        expect(result.slot).toBe(shared.slot_index);
+        expect((await snapshot(db)).data["timeline_transitions"]).toEqual(
+            original.data["timeline_transitions"],
+        );
+        expect((await snapshot(db)).data["timeline_assignments"]).toEqual(
+            original.data["timeline_assignments"],
+        );
+        expect(
+            await db.select().from(schema.timeline_lanes).all(),
+        ).toMatchObject([
+            {
+                transition_id: shared.transition_id,
+                slot_index: shared.slot_index,
+                route_id: result.routeId,
+                offset_x: null,
+                offset_y: null,
+            },
+        ]);
         const [route] = await readRoutes(db);
         expect(route).toMatchObject({
             routeId: result.routeId,
@@ -223,7 +250,7 @@ describeDbTests("Routes: draw a path (AP-R1, AP-R2, AP-R3)", (it) => {
         expect(route!.geometry.points.map((p) => p.at)).toEqual(corners);
         expect(route!.geometry.from).toEqual(before.positionAt(m, 9));
         expect(route!.geometry.to).toEqual(before.positionAt(m, 17));
-        expect(await userVersion(db)).toBe(10);
+        expect(await userVersion(db)).toBe(11);
 
         // The others are where they were at every beat; the marcher walks the route
         const after = await resolverOf(db);
@@ -342,7 +369,7 @@ describeDbTests("Routes: draw a path (AP-R1, AP-R2, AP-R3)", (it) => {
         expect(again).toMatchObject({
             routeId: first.routeId,
             transitionId: first.transitionId,
-            ownTransition: false,
+            slot: first.slot,
         });
         const [redrawn] = await readRoutes(db);
         const ids = redrawn!.geometry.points.map((p) => p.id);
@@ -379,7 +406,7 @@ describeDbTests("Routes: draw a path (AP-R1, AP-R2, AP-R3)", (it) => {
         const drawn = await snapshot(db);
         const drawnPositions = positions(await resolverOf(db), 56);
 
-        await removeRoute({ db, transitionId: result.transitionId });
+        await removeRoute({ db, routeId: result.routeId });
         expect(await readRoutes(db)).toEqual([]);
         const t = (await db
             .select()

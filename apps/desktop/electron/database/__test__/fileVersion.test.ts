@@ -12,9 +12,9 @@ import {
 } from "../fileVersion";
 
 describe("file-format version", () => {
-    it("supports the page model (7), the timeline model (8) and the route model (10)", () => {
+    it("supports the page model (7), the timeline model (8), the step-15 route model (10) and the lane model (11)", () => {
         expect(MIN_SUPPORTED_USER_VERSION).toBe(7);
-        expect(MAX_SUPPORTED_USER_VERSION).toBe(10);
+        expect(MAX_SUPPORTED_USER_VERSION).toBe(11);
         expect(NEW_FILE_USER_VERSION).toBe(8);
     });
 
@@ -26,14 +26,14 @@ describe("file-format version", () => {
             });
         });
 
-        it.each([7, 8, 10])("accepts an existing file at %i", (version) => {
+        it.each([7, 8, 10, 11])("accepts an existing file at %i", (version) => {
             expect(decideFileVersion(version, false)).toEqual({
                 action: "accept",
                 version,
             });
         });
 
-        it.each([7, 8, 10])(
+        it.each([7, 8, 10, 11])(
             "accepts a 'new' file already at %i without rewriting it",
             (version) => {
                 expect(decideFileVersion(version, true)).toEqual({
@@ -53,7 +53,7 @@ describe("file-format version", () => {
             },
         );
 
-        it.each([11, 12, 42, 2 ** 31 - 1])(
+        it.each([12, 13, 42, 2 ** 31 - 1])(
             "refuses a file at %i as too new, new or not",
             (version) => {
                 for (const isNewFile of [false, true]) {
@@ -81,16 +81,10 @@ describe("file-format version", () => {
         });
     });
 
-    it("isSupportedUserVersion covers exactly 7, 8 and 10", () => {
-        expect([0, 6, 7, 8, 9, 10, 11].map(isSupportedUserVersion)).toEqual([
-            false,
-            false,
-            true,
-            true,
-            false,
-            true,
-            false,
-        ]);
+    it("isSupportedUserVersion covers exactly 7, 8, 10 and 11", () => {
+        expect([0, 6, 7, 8, 9, 10, 11, 12].map(isSupportedUserVersion)).toEqual(
+            [false, false, true, true, false, true, true, false],
+        );
     });
 
     describe("applyFileVersionDecision", () => {
