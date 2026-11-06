@@ -61,24 +61,36 @@ export const OTM_LOGO_ASPECT = OTM_IMAGE.crop.w / OTM_IMAGE.crop.h;
 
 let otmImage: HTMLImageElement | null = null;
 let otmReady = false;
-const otmWaiters: (() => void)[] = [];
+/** Set once the image has loaded or failed: nothing more to wait for. */
+let otmSettled = false;
+const otmWaiters = new Set<() => void>();
+
+function settleOtm(loaded: boolean): void {
+    otmReady = loaded;
+    otmSettled = true;
+    const waiters = [...otmWaiters];
+    otmWaiters.clear();
+    waiters.forEach((f) => f());
+}
 
 function loadOtm(): void {
     if (otmImage || typeof Image === "undefined") return;
     otmImage = new Image();
     otmImage.decoding = "async";
-    otmImage.onload = () => {
-        otmReady = true;
-        otmWaiters.splice(0).forEach((f) => f());
-    };
+    otmImage.onload = () => settleOtm(true);
+    // Signage just goes without the logo; waiters must not pile up.
+    otmImage.onerror = () => settleOtm(false);
     otmImage.src = otmLogoUrl;
 }
 
-/** Resolves once the On The Move logo has loaded (or at once without `Image`). */
+/**
+ * Resolves once the On The Move logo has loaded or failed to (or at once
+ * without `Image`).
+ */
 export function brandArtReady(): Promise<void> {
     loadOtm();
-    if (otmReady || !otmImage) return Promise.resolve();
-    return new Promise((resolve) => otmWaiters.push(resolve));
+    if (otmSettled || !otmImage) return Promise.resolve();
+    return new Promise((resolve) => otmWaiters.add(() => resolve()));
 }
 
 /**
@@ -118,37 +130,52 @@ export function drawOtmLogo(
 
 /**
  * Repaints `texture` with `paint` once the On The Move logo has loaded (the
- * first paint, from `paintCanvasTexture`, had no logo yet). Returns a function
- * that cancels the repaint, for disposal.
+ * first paint, from `paintCanvasTexture`, had no logo yet). Disposing the
+ * texture first cancels the repaint; so does the returned function.
  */
 export function paintWithOtmLogo(
     texture: CanvasTexture,
     paint: (g: CanvasRenderingContext2D, width: number, height: number) => void,
 ): () => void {
     loadOtm();
-    if (otmReady) return () => {};
-    let live = true;
-    otmWaiters.push(() => {
-        if (live) repaintCanvasTexture(texture, paint);
-    });
-    return () => {
-        live = false;
+    if (otmSettled || !otmImage) return () => {};
+    const cancel = () => {
+        otmWaiters.delete(repaint);
+        texture.removeEventListener("dispose", cancel);
     };
+    const repaint = () => {
+        cancel();
+        if (otmReady) repaintCanvasTexture(texture, paint);
+    };
+    otmWaiters.add(repaint);
+    texture.addEventListener("dispose", cancel);
+    return cancel;
 }
 
-/** For fitting a line of text: shrinks the font until it fits `maxWidth`. */
-export function fitFont(
+/**
+ * For fitting a line of text: shrinks the font until the text fits
+ * `maxWidth`, down to `min`, then shortens the text with an ellipsis. Sets
+ * `g.font` and returns the text to draw.
+ */
+export function fitText(
     g: CanvasRenderingContext2D,
     text: string,
     weight: number,
     size: number,
     min: number,
     maxWidth: number,
-): number {
+): string {
     g.font = `${weight} ${size}px ${TEXTURE_FONT}`;
     while (size > min && g.measureText(text).width > maxWidth) {
-        size -= 2;
+        size = Math.max(min, size - 2);
         g.font = `${weight} ${size}px ${TEXTURE_FONT}`;
     }
-    return size;
+    if (g.measureText(text).width <= maxWidth) return text;
+    let chars = [...text];
+    while (chars.length > 1) {
+        chars = chars.slice(0, -1);
+        const short = `${chars.join("").trimEnd()}…`;
+        if (g.measureText(short).width <= maxWidth) return short;
+    }
+    return "…";
 }

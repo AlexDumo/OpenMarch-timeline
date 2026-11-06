@@ -3,7 +3,7 @@ import type { ShowCredits } from "../types";
 import {
     drawOpenMarchLogo,
     drawOtmLogo,
-    fitFont,
+    fitText,
     paintWithOtmLogo,
 } from "./brand";
 import {
@@ -110,16 +110,14 @@ export function paintCreditsCard(
     y += (46 + 52) * s;
     g.fillStyle = SIGN.text;
     const title = credits.title || "Untitled show";
-    fitFont(g, title, 600, 92 * s, 40 * s, w - 160 * s);
-    g.fillText(title, cx, y);
+    g.fillText(fitText(g, title, 600, 92 * s, 40 * s, w - 160 * s), cx, y);
     y += (52 + 34) * s;
     g.fillStyle = SIGN.purple;
     g.fillRect(cx - 36 * s, y - 1.5 * s, 72 * s, 3 * s);
     y += (10 + 30) * s;
     g.fillStyle = SIGN.muted;
     for (const l of lines) {
-        fitFont(g, l, 400, 34 * s, 20 * s, w - 200 * s);
-        g.fillText(l, cx, y);
+        g.fillText(fitText(g, l, 400, 34 * s, 20 * s, w - 200 * s), cx, y);
         y += 52 * s;
     }
     drawOpenMarchLogo(g, cx, h - 70 * s, 64 * s, "rgba(207,203,230,0.72)");
