@@ -114,75 +114,84 @@ export function seatBackTexture(): CanvasTexture {
     return tex;
 }
 
-/** OpenMarch purple and its family, for signage. */
-const PURPLE = "#6442ff";
-const PURPLE_DEEP = "#1a0f4d";
-const PURPLE_INK = "#0a0620";
-const PURPLE_SOFT = "#b9a8ff";
+/**
+ * Signage palette. The arena's boards are quiet: a near-black band, soft
+ * lavender-white marks and the brand purple only as hairlines, so nothing
+ * competes with the performers on the floor.
+ */
+const SIGN = {
+    /** Board background: LED black with a hint of violet. */
+    ground: "#07060d",
+    /** Brand purple, for hairlines and small accents only. */
+    purple: "#6442ff",
+    /** Logos on the boards: a soft white, never pure. */
+    mark: "#cfcbe6",
+    /** The On The Move logo's tint: muted brand lavender. */
+    otm: "#a99cf2",
+    /** Primary and secondary text on the screens. */
+    text: "#ecebf3",
+    muted: "rgba(236,235,243,0.56)",
+    label: "rgba(185,168,255,0.62)",
+};
 
-/** Darkens every 4th pixel row and column, like an LED panel. */
-function ledGrid(g: CanvasRenderingContext2D, w: number, h: number): void {
-    g.fillStyle = "rgba(0,0,0,0.28)";
-    for (let x = 0; x < w; x += 4) g.fillRect(x, 0, 1, h);
-    for (let y = 0; y < h; y += 4) g.fillRect(0, y, w, 1);
-}
+/** Short copy under the On The Move logo. Awaiting owner approval. */
+export const OTM_TAGLINE = "Your drill, on every phone.";
 
-/** Fills a panel with a left-to-right two-stop gradient and top/bottom bars. */
-function panelBack(
-    g: CanvasRenderingContext2D,
-    x: number,
-    w: number,
-    h: number,
-    from: string,
-    to: string,
-    accent: string,
-): void {
-    const bg = g.createLinearGradient(x, 0, x + w, h);
-    bg.addColorStop(0, from);
-    bg.addColorStop(1, to);
-    g.fillStyle = bg;
-    g.fillRect(x, 0, w, h);
-    g.fillStyle = accent;
-    g.fillRect(x, 0, w, 8);
-    g.fillRect(x, h - 8, w, 8);
-}
-
-function paintRibbon(g: CanvasRenderingContext2D): void {
-    const H = 128;
-    const pw = 512;
-    // 1. OpenMarch logo and the web address.
-    panelBack(g, 0, pw, H, PURPLE_DEEP, PURPLE_INK, PURPLE);
-    drawOpenMarchLogo(g, 120, H / 2, 92, "#ffffff");
-    g.fillStyle = PURPLE_SOFT;
-    g.textAlign = "left";
-    g.textBaseline = "middle";
-    fitFont(g, "openmarch.com", 700, 44, 24, 270);
-    g.fillText("openmarch.com", 228, H / 2 + 2);
-    // 2. On The Move ad: logo and a line of copy.
-    panelBack(g, pw, pw, H, "#7b5cff", "#3d1fd1", "#ffffff");
-    drawOtmLogo(g, { x: pw + 18, y: 14, w: 250, h: 100 });
-    g.fillStyle = "#ffffff";
-    g.textAlign = "center";
-    fitFont(g, "YOUR DRILL,", 800, 34, 18, 200);
-    g.fillText("YOUR DRILL,", pw + 390, 46);
-    fitFont(g, "IN EVERY POCKET", 800, 34, 18, 210);
-    g.fillText("IN EVERY POCKET", pw + 390, 86);
-    // 3. OpenMarch logo alone on black.
-    panelBack(g, 2 * pw, pw, H, "#05070c", "#101622", PURPLE);
-    drawOpenMarchLogo(g, 2 * pw + pw / 2, H / 2, 96, PURPLE_SOFT);
-    // 4. On The Move logo alone, purple on white.
-    panelBack(g, 3 * pw, pw, H, "#f4f1ff", "#ddd5ff", PURPLE);
-    drawOtmLogo(g, { x: 3 * pw + 40, y: 12, w: pw - 80, h: 104 }, PURPLE);
-    ledGrid(g, 2048, H);
+/** Sets canvas letter spacing where supported (Chromium; not every test DOM). */
+function tracking(g: CanvasRenderingContext2D, px: number): void {
+    const c = g as CanvasRenderingContext2D & { letterSpacing?: string };
+    if ("letterSpacing" in c) c.letterSpacing = `${px}px`;
 }
 
 /**
- * The LED ribbon boards (front wall, upper fascia and the scoreboard rings):
- * four panels that repeat along U, alternating the OpenMarch logo and On The
- * Move ads. 2048 x 128; one tile spans 16 band meters at 1 m tall.
+ * The LED ribbon's layout. One texture tile spans `tileHeights` band heights
+ * (the 2048 x 128 texture is squeezed along U, so marks are painted narrower
+ * to read true on the band). Each tile carries two ads with long dark
+ * stretches between: the OpenMarch logo at `firstAd` and the On The Move
+ * logo half a tile on. `quiet` is a U with nothing on it but the hairlines,
+ * for bands that should stay dark.
+ */
+export const ARENA_RIBBON = {
+    tileHeights: 32,
+    firstAd: 0.25,
+    quiet: 0.5,
+} as const;
+const RIBBON_W = 2048;
+const RIBBON_H = 128;
+
+function paintRibbon(g: CanvasRenderingContext2D): void {
+    const W = RIBBON_W;
+    const H = RIBBON_H;
+    g.fillStyle = SIGN.ground;
+    g.fillRect(0, 0, W, H);
+    // Hairlines along both edges, the one constant all the way round.
+    g.fillStyle = "rgba(140,120,255,0.32)";
+    g.fillRect(0, 0, W, 2);
+    g.fillRect(0, H - 2, W, 2);
+    // Each ad is drawn in square "band pixels" and squeezed onto the tile.
+    const k = W / (ARENA_RIBBON.tileHeights * H);
+    const slot = (u: number, draw: () => void) => {
+        g.save();
+        g.translate(u * W, 0);
+        g.scale(k, 1);
+        draw();
+        g.restore();
+    };
+    const a = ARENA_RIBBON.firstAd;
+    slot(a, () => drawOpenMarchLogo(g, 0, H / 2, 80, SIGN.mark));
+    slot(a + 0.5, () =>
+        drawOtmLogo(g, { x: -200, y: H / 2 - 38, w: 400, h: 76 }, SIGN.otm),
+    );
+}
+
+/**
+ * The LED ribbon boards (lower front wall; the upper fascia and scoreboard
+ * rings sample its quiet stretch). See `ARENA_RIBBON` for the layout.
  */
 export function arenaRibbonTexture(): CanvasTexture {
-    const tex = paintCanvasTexture(2048, 128, paintRibbon, { repeat: true });
+    const tex = paintCanvasTexture(RIBBON_W, RIBBON_H, paintRibbon, {
+        repeat: true,
+    });
     paintWithOtmLogo(tex, paintRibbon);
     return tex;
 }
@@ -196,6 +205,46 @@ export const SCOREBOARD_ATLAS = {
 };
 
 /**
+ * The screens' width over height in the arena (`addScoreboard`: width 1,
+ * depth 0.62 and height 0.42 of the board width). The atlas regions are
+ * narrower than that, so faces are painted wide and squeezed to fit.
+ */
+const SCREEN_ASPECT = { side: 1 / 0.42, end: 0.62 / 0.42 };
+
+/**
+ * Runs `draw` in a face's own coordinates: `w` x 512 square pixels, where `w`
+ * keeps the face's true aspect, squeezed into the atlas region.
+ */
+function inFace(
+    g: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    regionW: number,
+    aspect: number,
+    draw: (w: number, h: number) => void,
+): void {
+    const h = 512;
+    const w = h * aspect;
+    g.save();
+    g.beginPath();
+    g.rect(x, y, regionW, h);
+    g.clip();
+    g.translate(x, y);
+    g.scale(regionW / w, 1);
+    draw(w, h);
+    g.restore();
+}
+
+/** A screen's ground: flat near black with the faintest lift toward the top. */
+function screenGround(g: CanvasRenderingContext2D, w: number, h: number) {
+    const bg = g.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, "#0e0c19");
+    bg.addColorStop(1, "#08070e");
+    g.fillStyle = bg;
+    g.fillRect(0, 0, w, h);
+}
+
+/**
  * Paints the center-hung scoreboard's screens: the show's credits on the long
  * faces and an On The Move ad on the ends. V runs up (three.js convention),
  * so the canvas's top half is the long-face image.
@@ -205,57 +254,50 @@ function paintScoreboard(
     credits: ShowCredits,
 ): void {
     g.clearRect(0, 0, 1024, 1024);
-    // Long face: 1024 x 512, top half of the canvas.
-    const bg = g.createLinearGradient(0, 0, 1024, 512);
-    bg.addColorStop(0, "#1d1060");
-    bg.addColorStop(0.55, "#0b0a24");
-    bg.addColorStop(1, "#24071a");
-    g.fillStyle = bg;
-    g.fillRect(0, 0, 1024, 512);
-    const glow = g.createRadialGradient(512, 200, 20, 512, 200, 420);
-    glow.addColorStop(0, "rgba(160,130,255,0.5)");
-    glow.addColorStop(1, "rgba(160,130,255,0)");
-    g.fillStyle = glow;
-    g.fillRect(0, 0, 1024, 512);
     g.textAlign = "center";
     g.textBaseline = "middle";
-    g.fillStyle = "rgba(255,255,255,0.7)";
-    g.font = `600 38px ${TEXTURE_FONT}`;
-    g.fillText("NOW PERFORMING", 512, 70);
-    g.fillStyle = "#ffffff";
-    const title = credits.title || "Untitled show";
-    fitFont(g, title, 800, 120, 44, 920);
-    g.fillText(title, 512, 175);
-    g.fillStyle = PURPLE;
-    g.fillRect(312, 252, 400, 6);
-    const lines = [
-        credits.designer && `Designed by ${credits.designer}`,
-        credits.client && `For ${credits.client}`,
-    ].filter((l): l is string => !!l);
-    g.fillStyle = "rgba(255,255,255,0.85)";
-    lines.forEach((l, i) => {
-        fitFont(g, l, 500, 46, 24, 900);
-        g.fillText(l, 512, 312 + i * 62);
+    // Long face: the credits card, set like a title card.
+    inFace(g, 0, 0, 1024, SCREEN_ASPECT.side, (w, h) => {
+        screenGround(g, w, h);
+        const cx = w / 2;
+        const lines = [
+            credits.designer && `Designed by ${credits.designer}`,
+            credits.client && `For ${credits.client}`,
+        ].filter((l): l is string => !!l);
+        // Label, title, rule, then the lines; centered as a block.
+        const block = 46 + 104 + 44 + lines.length * 52;
+        let y = (h - 64 - block) / 2 + 12;
+        g.fillStyle = SIGN.label;
+        g.font = `600 24px ${TEXTURE_FONT}`;
+        tracking(g, 6);
+        g.fillText("NOW PERFORMING", cx, y);
+        tracking(g, 0);
+        y += 46 + 52;
+        g.fillStyle = SIGN.text;
+        const title = credits.title || "Untitled show";
+        fitFont(g, title, 600, 92, 40, w - 160);
+        g.fillText(title, cx, y);
+        y += 52 + 34;
+        g.fillStyle = SIGN.purple;
+        g.fillRect(cx - 36, y - 1.5, 72, 3);
+        y += 10 + 30;
+        g.fillStyle = SIGN.muted;
+        for (const l of lines) {
+            fitFont(g, l, 400, 34, 20, w - 200);
+            g.fillText(l, cx, y);
+            y += 52;
+        }
+        // The OpenMarch logo, small, as the screen's signature.
+        drawOpenMarchLogo(g, cx, h - 46, 34, "rgba(207,203,230,0.42)");
     });
-    // Footer strip with the OpenMarch logo.
-    g.fillStyle = "rgba(0,0,0,0.35)";
-    g.fillRect(0, 440, 1024, 72);
-    drawOpenMarchLogo(g, 512, 476, 56, "rgba(255,255,255,0.85)");
-
-    // End face: 634 x 512, bottom-left of the canvas. On The Move ad.
-    const end = g.createLinearGradient(0, 512, 634, 1024);
-    end.addColorStop(0, "#7b5cff");
-    end.addColorStop(1, "#2a1290");
-    g.fillStyle = end;
-    g.fillRect(0, 512, 634, 512);
-    drawOtmLogo(g, { x: 40, y: 560, w: 554, h: 240 });
-    g.fillStyle = "#ffffff";
-    g.font = `800 44px ${TEXTURE_FONT}`;
-    g.fillText("YOUR DRILL, IN EVERY POCKET", 317, 860);
-    g.fillStyle = "rgba(255,255,255,0.75)";
-    g.font = `600 32px ${TEXTURE_FONT}`;
-    g.fillText("openmarch.com", 317, 930);
-    ledGrid(g, 1024, 1024);
+    // End face: one ad, the On The Move logo and one line.
+    inFace(g, 0, 512, 634, SCREEN_ASPECT.end, (w, h) => {
+        screenGround(g, w, h);
+        drawOtmLogo(g, { x: w * 0.14, y: 150, w: w * 0.72, h: 150 }, SIGN.otm);
+        g.fillStyle = SIGN.muted;
+        fitFont(g, OTM_TAGLINE, 500, 30, 18, w - 120);
+        g.fillText(OTM_TAGLINE, w / 2, 372);
+    });
 }
 
 /**
@@ -283,45 +325,50 @@ export function scoreboardTexture(): {
     };
 }
 
-/** Rafter banner field colors; each carries the OpenMarch logo. */
+/**
+ * Rafter banner fabrics, one per banner. A matched set in deep ink, each with
+ * the OpenMarch logo.
+ */
 export const ARENA_BANNERS: string[] = [
-    PURPLE,
-    "#1d2c5e",
-    "#ececec",
-    PURPLE_DEEP,
-    "#1d2c5e",
-    "#ececec",
+    "#1b1834",
+    "#1b1834",
+    "#1b1834",
+    "#1b1834",
+    "#1b1834",
+    "#1b1834",
 ];
+
+/** A banner's width over height in the arena (1.5 x 4.4 m in `addBanners`). */
+const BANNER_ASPECT = 1.5 / 4.4;
 
 /**
  * Every rafter banner side by side in one atlas, 128 x 512 each, so the
  * banners draw as one mesh. Banner `i` spans U from i / n to (i + 1) / n.
+ * Each is painted at its true aspect and squeezed into its 128 px column.
  */
 export function bannerAtlasTexture(): CanvasTexture {
     const n = ARENA_BANNERS.length;
     return paintCanvasTexture(128 * n, 512, (g) => {
+        g.clearRect(0, 0, 128 * n, 512);
+        const w = 512 * BANNER_ASPECT;
         ARENA_BANNERS.forEach((color, i) => {
-            const x = i * 128;
-            const light = color === "#ececec";
-            g.fillStyle = color;
-            g.fillRect(x, 0, 128, 512);
-            g.fillStyle = light ? PURPLE : "#d8b45a";
-            g.fillRect(x + 10, 26, 108, 6);
-            g.fillRect(x + 10, 430, 108, 6);
-            // Pointed bottom.
-            g.clearRect(x, 470, 128, 42);
+            g.save();
+            g.translate(i * 128, 0);
+            g.scale(128 / w, 1);
+            // Field with a pointed bottom.
             g.fillStyle = color;
             g.beginPath();
-            g.moveTo(x, 470);
-            g.lineTo(x + 128, 470);
-            g.lineTo(x + 64, 508);
+            g.moveTo(0, 0);
+            g.lineTo(w, 0);
+            g.lineTo(w, 462);
+            g.lineTo(w / 2, 508);
+            g.lineTo(0, 462);
             g.closePath();
             g.fill();
-            // The logo turned to run up the banner, as large as fits.
-            g.save();
-            g.translate(x + 64, 230);
-            g.rotate(-Math.PI / 2);
-            drawOpenMarchLogo(g, 0, 0, 104, light ? PURPLE : "#ffffff");
+            // Logo upright near the top, a hairline under it, then fabric.
+            drawOpenMarchLogo(g, w / 2, 112, 62, "#e6e3f2");
+            g.fillStyle = "rgba(169,156,242,0.7)";
+            g.fillRect(w / 2 - 22, 176, 44, 2);
             g.restore();
         });
     });

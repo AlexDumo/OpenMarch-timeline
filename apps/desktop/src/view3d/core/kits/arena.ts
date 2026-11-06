@@ -43,6 +43,7 @@ import {
     type BowlOutline,
     type BowlTier,
     type BuiltTier,
+    type Ring,
     type RingPair,
 } from "./bowl";
 import {
@@ -58,6 +59,7 @@ import {
 } from "./arena/geometry";
 import {
     ARENA_BANNERS,
+    ARENA_RIBBON,
     arenaFloorTexture,
     arenaRibbonTexture,
     bannerAtlasTexture,
@@ -289,6 +291,37 @@ function ribbonMaterial(ctx: Ctx): MeshStandardMaterial {
     return mat;
 }
 
+/**
+ * How the ribbon texture runs along a band `height` meters tall: a whole
+ * number of tiles round the ring (so there's no seam), each as close to
+ * `ARENA_RIBBON.tileHeights` band heights as that allows, with the first ad
+ * centered on the ring's first straight (it starts at that straight's end,
+ * `cx` is its middle). The texture is mirrored (`repeat.x = -1`), so texture
+ * U is minus band U.
+ */
+function ribbonLayout(
+    points: Ring,
+    height: number,
+    cx: number,
+): { tile: number; uOffset: number } {
+    let length = 0;
+    for (let i = 0; i < points.length; i++)
+        length += points[i].distanceTo(points[(i + 1) % points.length]);
+    const n = Math.max(
+        1,
+        Math.round(length / (height * ARENA_RIBBON.tileHeights)),
+    );
+    const tile = length / n;
+    const toMiddle = Math.abs(cx - points[0].x);
+    return { tile, uOffset: -ARENA_RIBBON.firstAd - toMiddle / tile };
+}
+
+/**
+ * A band that shows only the ribbon's quiet stretch (dark with hairlines):
+ * one texture column all the way round.
+ */
+const QUIET_RIBBON = { tile: 1e6, uOffset: -ARENA_RIBBON.quiet };
+
 /** The floor inside the bowl, with the event flooring and boundary tape. */
 function addFloor(ctx: Ctx): void {
     const { cx, ocz, ax, az, fp } = ctx;
@@ -395,7 +428,6 @@ function addBowl(ctx: Ctx, ribbonMat: Material, hole: Hole) {
     const tiers = bowlTiers(ring, [ARENA_LOWER, ARENA_UPPER], {
         rim: RIM,
         seatHeight: SEAT_HEIGHT,
-        fasciaTile: 16 * ARENA_LOWER.base,
     });
     const [lower, upper] = tiers.tiers as [BuiltTier, BuiltTier];
 
@@ -424,15 +456,19 @@ function addBowl(ctx: Ctx, ribbonMat: Material, hole: Hole) {
         "arena.concrete",
     );
     // Lower front wall and the upper fascia ribbon share one LED material.
+    // The front wall carries the ads; the fascia stays a quiet dark band.
     const ribbonY0 = LOWER_TOP + 2.62;
     const ribbonY1 = upper.base - 0.08;
     const ribbons = ctx.addMesh(
         bandGeometry([
-            ...tiers.fascia,
+            ...tiers.fascia.map((p) => ({
+                ...p,
+                ...ribbonLayout(p.b, ARENA_LOWER.base, ctx.cx),
+            })),
             {
                 a: ring(upper.offset - 0.05, ribbonY0),
                 b: ring(upper.offset - 0.05, ribbonY1),
-                tile: 16 * (ribbonY1 - ribbonY0),
+                ...QUIET_RIBBON,
             },
         ]),
         ribbonMat,
@@ -1057,12 +1093,12 @@ function addScoreboard(
         halfZ: bd / 2 + 0.2,
         cornerRadius: 0.5,
     });
+    // The rings stay quiet; the screens carry the content.
     const r = (y: number) => ring(0, y).reverse();
-    const tile = 16 * ringH;
     ctx.addMesh(
         bandGeometry([
-            { a: r(y0), b: r(y0 + ringH), tile },
-            { a: r(sy1 + 0.1), b: r(top), tile },
+            { a: r(y0), b: r(y0 + ringH), ...QUIET_RIBBON },
+            { a: r(sy1 + 0.1), b: r(top), ...QUIET_RIBBON },
         ]),
         ribbonMat,
         "arena.scoreboardRings",
