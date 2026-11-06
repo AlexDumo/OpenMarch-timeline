@@ -302,7 +302,35 @@ describe("turf on football fields", () => {
         });
         const p = plan(cropped, "turf");
         expect(count(p, "endZone")).toBe(2);
+        expect(count(p, "yardLine")).toBe(23);
         expect(p.footprint).toEqual(full.footprint);
+
+        // a changed step size keeps the added lines on the show's grid
+        for (const stepSizeInches of [21, 24]) {
+            const resized = plan(
+                new FieldProperties({ ...noEz, stepSizeInches }),
+                "turf",
+            );
+            expect(count(resized, "endZone")).toBe(2);
+            expect(count(resized, "yardLine")).toBe(23);
+        }
+
+        // hidden end lines count as missing
+        const hidden = plan(
+            new FieldProperties({
+                ...withEz,
+                xCheckpoints: withEz.xCheckpoints.map((c) =>
+                    c.name === "end zone" ? { ...c, visible: false } : c,
+                ),
+            }),
+            "turf",
+        );
+        expect(count(hidden, "endZone")).toBe(2);
+        expect(count(hidden, "yardLine")).toBe(23);
+
+        // a stadium on an indoor grid keeps the grid's footprint
+        const indoor = T.INDOOR_50x80_8to5;
+        expect(venueFootprint(indoor, "turf")).toEqual(fieldFootprint(indoor));
 
         // the show's own field keeps its grid on the other styles
         const theme = plan(noEz, "theme");
