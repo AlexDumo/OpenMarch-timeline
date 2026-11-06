@@ -1,5 +1,6 @@
 import { ft } from "../environment";
 import type { KitBuilder } from "../types";
+import { buildDress, teamStyle } from "./hs/dress";
 import { buildStandsKit } from "./stands";
 
 /**
@@ -7,8 +8,9 @@ import { buildStandsKit } from "./stands";
  * stands, a three-story press box, a video board behind the side-2 end zone,
  * a plaza behind the side-1 end zone and six poles. Default night.
  */
-export const buildBighs: KitBuilder = (input) =>
-    buildStandsKit(
+export const buildBighs: KitBuilder = (input) => {
+    const team = teamStyle(input.params, "concrete");
+    return buildStandsKit(
         {
             id: "bighs",
             groundColor: 0x55575c,
@@ -28,6 +30,7 @@ export const buildBighs: KitBuilder = (input) =>
                         lift: ft(4),
                         stories: 3,
                     },
+                    style: team.home,
                 },
             },
             back: {
@@ -38,6 +41,7 @@ export const buildBighs: KitBuilder = (input) =>
                     depth: ft(2.7),
                     rise: ft(1.05),
                     base: ft(6),
+                    style: team.away,
                 },
             },
             board: {
@@ -68,6 +72,8 @@ export const buildBighs: KitBuilder = (input) =>
             },
             crowdDensity: 0.56,
             defaultLighting: "night",
+            dress: buildDress("bighs"),
         },
         input,
     );
+};

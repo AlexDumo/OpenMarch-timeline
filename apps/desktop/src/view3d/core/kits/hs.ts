@@ -1,14 +1,17 @@
 import { ft } from "../environment";
 import type { KitBuilder } from "../types";
+import { buildDress, teamStyle } from "./hs/dress";
 import { buildStandsKit } from "./stands";
 
 /**
  * High school kit (design.md section 6, P2.3): grass, a 6-lane track, a home
- * stand with a press box, a smaller visitor stand, a podium and four poles.
+ * aluminum stand with a press box, a smaller visitor stand, a podium, four
+ * poles, a chain-link fence, scoreboard, goal posts, school and parking lot.
  * Day, dusk and night; default day.
  */
-export const buildHs: KitBuilder = (input) =>
-    buildStandsKit(
+export const buildHs: KitBuilder = (input) => {
+    const team = teamStyle(input.params, "aluminum");
+    return buildStandsKit(
         {
             id: "hs",
             groundColor: 0x4a6b35,
@@ -22,6 +25,7 @@ export const buildHs: KitBuilder = (input) =>
                     rise: ft(1),
                     base: ft(4),
                     pressBox: { width: ft(90), height: ft(12), lift: ft(8) },
+                    style: team.home,
                 },
             },
             back: {
@@ -32,6 +36,7 @@ export const buildHs: KitBuilder = (input) =>
                     depth: ft(2.6),
                     rise: ft(1),
                     base: ft(3),
+                    style: team.away,
                 },
             },
             podium: true,
@@ -51,6 +56,8 @@ export const buildHs: KitBuilder = (input) =>
             },
             crowdDensity: 0.5,
             defaultLighting: "day",
+            dress: buildDress("hs"),
         },
         input,
     );
+};

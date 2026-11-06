@@ -28,6 +28,7 @@ import {
     type SharedMaterials,
     type VideoBoard,
 } from "../environment";
+import { buildStyledStand } from "./hs/bleachers";
 import type {
     CameraSeat,
     FieldFootprint,
@@ -75,6 +76,19 @@ export interface PressBoxSpec {
     stories?: number;
 }
 
+/**
+ * Opt-in detailed stand (hs and bighs): aluminum planks on a visible frame or
+ * solid concrete, a padded team-colored front wall, rails and a real press
+ * box. Stands without a style keep the plain look (college).
+ */
+export interface StandStyle {
+    kind: "aluminum" | "concrete";
+    /** The front wall, seat and sign color. */
+    teamColor: number;
+    /** Lettering on the front wall and the press box sign. */
+    label: string;
+}
+
 /** A stand in its own frame: front edge at z = 0, rising toward +z. */
 export interface StandSpec {
     length: number;
@@ -86,6 +100,7 @@ export interface StandSpec {
     base: number;
     side: SeatRow["side"];
     pressBox?: PressBoxSpec;
+    style?: StandStyle;
 }
 
 /** Where a stand's local origin goes: world x and z, and its yaw about +Y. */
@@ -105,6 +120,8 @@ export interface Stand {
     pressEye?: Vector3Tuple;
     /** Eye position above row `i`, kit frame. */
     rowEye(i: number): Vector3Tuple;
+    /** Lit press box windows: intensity 0 (off) and up. Styled stands only. */
+    glow?(intensity: number): void;
     dispose(): void;
 }
 
@@ -118,7 +135,11 @@ export function buildStand(
     spec: StandSpec,
     placement: StandPlacement,
     shared: SharedMaterials,
+    quality: "low" | "high" = "high",
 ): Stand {
+    if (spec.style) {
+        return buildStyledStand(spec, placement, shared, quality);
+    }
     const { length, rows, depth, rise, base } = spec;
     const group = new Group();
     group.name = `stand:${spec.side}`;
@@ -269,7 +290,11 @@ const TRACK_Y = 0.015;
 const LANE_Y = 0.02;
 
 /** A 6-lane track around the field: 29 to 38.1 m radius on a football field. */
-export function buildTrack(frame: Frame, shared: SharedMaterials): TrackResult {
+export function buildTrack(
+    frame: Frame,
+    shared: SharedMaterials,
+    material?: MeshStandardMaterial,
+): TrackResult {
     const straight = Math.max(frame.halfW - ft(30), ft(30));
     const inner = frame.halfD + TRACK_INNER_GAP;
     const outer = inner + TRACK_WIDTH;
@@ -281,7 +306,10 @@ export function buildTrack(frame: Frame, shared: SharedMaterials): TrackResult {
     const hole = flip(stadiumPoints(frame.cx, frame.cz, straight, inner));
     shape.holes.push(new Shape(hole.reverse()));
     const geometry = new ShapeGeometry(shape);
-    const track = new Mesh(geometry, shared.std(0xa24a36, { roughness: 0.95 }));
+    const track = new Mesh(
+        geometry,
+        material ?? shared.std(0xa24a36, { roughness: 0.95 }),
+    );
     track.name = "track";
     track.rotation.x = -Math.PI / 2;
     track.position.y = TRACK_Y;
@@ -394,6 +422,30 @@ export interface PoleSpot {
     dz: number;
 }
 
+/** What a kit adds around the stands: surfaces, buildings, fences and so on. */
+export interface KitDress {
+    objects: Object3D[];
+    /** Textured replacements for the plain ground materials. */
+    surfaces?: Partial<
+        Record<
+            "ground" | "apron" | "infield" | "track" | "plaza",
+            MeshStandardMaterial
+        >
+    >;
+    /** True when the dress builds its own podium (the camera stays). */
+    podium?: boolean;
+    /** Lamps on or off with a 0..1 scale, as for the light poles. */
+    setLighting?(on: boolean, scale: number): void;
+    dispose(): void;
+}
+
+export interface DressContext {
+    frame: Frame;
+    shared: SharedMaterials;
+    cfg: StandsKitConfig;
+    input: KitBuildInput;
+}
+
 export interface StandsKitConfig {
     id: Extract<VenueKitId, "hs" | "bighs" | "college">;
     groundColor: number;
@@ -428,6 +480,8 @@ export interface StandsKitConfig {
     };
     crowdDensity: number;
     defaultLighting: LightingPreset;
+    /** Optional scenery: textured surfaces, buildings, fences, scoreboard. */
+    dress?: (ctx: DressContext) => KitDress;
 }
 
 const FRONT_ROW_OFFSET = -ft(36);
@@ -448,11 +502,17 @@ export function buildStandsKit(
     root.name = `kit:${cfg.id}`;
     const geometries: { dispose(): void }[] = [];
     const disposables: { dispose(): void }[] = [];
+    const dress = cfg.dress?.({ frame: f, shared, cfg, input });
+    if (dress) {
+        disposables.push(dress);
+        root.add(...dress.objects);
+    }
+    const surf = dress?.surfaces ?? {};
 
     const ground = groundPlane(
         GROUND_SIZE,
         GROUND_SIZE,
-        shared.std(cfg.groundColor, { roughness: 1 }),
+        surf.ground ?? shared.std(cfg.groundColor, { roughness: 1 }),
         f.cx,
         GROUND_Y,
         f.cz,
@@ -464,7 +524,7 @@ export function buildStandsKit(
         const lawn = groundPlane(
             f.halfW * 2 + cfg.infield.extraW,
             f.halfD * 2 + cfg.infield.extraD,
-            shared.std(0x3d6e31, { roughness: 1 }),
+            surf.infield ?? shared.std(0x3d6e31, { roughness: 1 }),
             f.cx,
             GROUND_Y + ft(0.1),
             f.cz,
@@ -476,7 +536,7 @@ export function buildStandsKit(
     const apron = groundPlane(
         f.halfW * 2 + ft(40),
         f.halfD * 2 + ft(40),
-        shared.std(0x3a7330, { roughness: 1 }),
+        surf.apron ?? shared.std(0x3a7330, { roughness: 1 }),
         f.cx,
         APRON_Y,
         f.cz,
@@ -486,7 +546,7 @@ export function buildStandsKit(
     geometries.push(apron.geometry);
 
     if (cfg.track) {
-        const track = buildTrack(f, shared);
+        const track = buildTrack(f, shared, surf.track);
         root.add(...track.objects);
         disposables.push(track);
     }
@@ -497,7 +557,12 @@ export function buildStandsKit(
         side: SeatRow["side"],
         placement: StandPlacement,
     ) => {
-        const stand = buildStand({ ...spec, side }, placement, shared);
+        const stand = buildStand(
+            { ...spec, side },
+            placement,
+            shared,
+            input.quality,
+        );
         root.add(stand.group);
         stands.push(stand);
         return stand;
@@ -526,7 +591,7 @@ export function buildStandsKit(
         const plaza = groundPlane(
             cfg.plaza.w,
             cfg.plaza.d,
-            shared.std(0x8a8c90, { roughness: 1 }),
+            surf.plaza ?? shared.std(0x8a8c90, { roughness: 1 }),
             f.minX - cfg.plaza.dx,
             GROUND_Y + ft(0.2),
             f.cz,
@@ -553,7 +618,7 @@ export function buildStandsKit(
         boards.push(board);
     }
 
-    if (cfg.podium) {
+    if (cfg.podium && !dress?.podium) {
         const podium = new Mesh(shared.unitBox, shared.std(0xe6e3dc));
         podium.name = "podium";
         podium.scale.set(PODIUM.w, PODIUM.h, PODIUM.d);
@@ -630,6 +695,10 @@ export function buildStandsKit(
         if (!OUTDOOR_PRESETS.includes(preset)) return;
         const k = lightingValues(preset).kit;
         poles.forEach((p) => p.setOn(k.lampsOn, k.lampScale));
+        dress?.setLighting?.(k.lampsOn, k.lampScale);
+        stands.forEach((s) =>
+            s.glow?.(k.lampsOn ? 0.35 + 0.65 * k.lampScale : 0),
+        );
     };
     setLighting(cfg.defaultLighting);
 
