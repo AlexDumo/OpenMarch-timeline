@@ -764,9 +764,11 @@
             "stepSizeWarning": "Step size exceeds threshold",
             "swapMarchers": "Swap marchers",
             "timeline": {
+                "goToBorrowedPage": "Go to Page {page}, whose spot this hold keeps",
                 "goToHeldPage": "Go to Page {page}, where this hold starts",
                 "goToPage": "Go to Page {page}, where these marchers last moved",
                 "goToStart": "Go to the start",
+                "heldBorrowed": "{held} · Page {page}'s spot",
                 "heldFromStart": "{held} · since the start",
                 "heldSince": "{held} · since Page {page}",
                 "holdFrom": "Last moved on Page {page}",
@@ -2165,7 +2167,6 @@
             "followLeaderBlock": "A follow-the-leader transition can't end on a block. Choose a line, curve, circle or box instead.",
             "followLeaderNeedsShape": "A follow-the-leader transition needs a shape to follow.",
             "heldConflict": "{count, plural, =1 {{names} is {held} on {pages}. {clearThisPage} to remove the hold, or drag inside it to move it.} other {{names} are {held} on {pages}. {clearThisPage} to remove the holds, or drag inside them to move them.}}",
-            "heldDropped": "{count, plural, =1 {{names} is no longer {held} on {pages}: it was {heldLower} from the starting spot, and now a move before it ends somewhere else.} other {{names} are no longer {held} on {pages}: they were {heldLower} from the starting spot, and now a move before it ends somewhere else.}}",
             "heldHoldsOverlap": "A marcher can't have two {held} holds over the same counts.",
             "heldPages": "{count, plural, =1 {Page {pages}} other {Pages {pages}}}",
             "legacyConvertedTimeline": "This file was converted to timelines by an earlier development build, which put several page moves in one timeline, so it can't be edited. Convert it again: open its backup (the file saved next to it before the conversion).",
@@ -2202,6 +2203,9 @@
             "splitError": "Error splitting the hold"
         },
         "heldBar": {
+            "borrowed": "Standing at Page {page}'s spot",
+            "borrowedChip": "{held} · Page {page}'s spot",
+            "borrowedChipMixed": "{held} · borrowed spots",
             "detail": "{held} of {total} selected",
             "shape": "Its shape carries on here",
             "title": "{held} · Page {page}",
@@ -2214,11 +2218,11 @@
             "count": "{count, plural, one {# marcher} other {# marchers}}",
             "crossesFlag": "{names}: a move runs across one of the page's flags",
             "done": "{names} {held} on {page}",
+            "endsWithoutArriving": "{names}: a move ends where {page} starts without arriving there",
             "expertMoves": "{names}: Expert moves on this page",
             "followLeader": "{names}: follows the leader on this page",
             "held": "{names}: already {held} here",
             "homeShape": "{names}: a shape sets the starting spot. Ungroup it at the start of the show to hold them one by one",
-            "noArrival": "{names}: no move ends where {page} starts",
             "none": "Nobody {held} on {page}",
             "notHeldReasons": "Not {heldLower}: {reasons}",
             "shape": "{names}: in a shape on this page"

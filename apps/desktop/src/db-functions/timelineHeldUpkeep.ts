@@ -9,7 +9,6 @@ import {
 } from "./timelineHeldArrival";
 import {
     nameHeldConflict,
-    type HeldConflict,
     type HeldConflictSpot,
 } from "./timelineHeldConflict";
 
@@ -37,15 +36,17 @@ import {
  *    out), **delete** it: the hold meant "stand at this spot", and the spot is gone (holds
  *    decision 17). The edits that can do this as a side effect name it
  *    (`arrivalHoldsLostInTransaction`).
- * 4. Else it had no arrival row. A mark that grows out of the marcher's **starting spot**
- *    (`homeArrivalSql`, #619: no row of the marcher starts before it) stays. One an edit gave a
- *    move starting before it, not ending at its start (a move on an earlier page, or Set as shown
- *    there), has nothing left to grow out of and is deleted: holding from where that move ends is
- *    a borrowed hold (#474). The edits that can do this say whose holds went
- *    (`startHoldsLostInTransaction`).
- * 5. **Trim** what is left of it where a row the edit re-timed now covers it (H-1): it ends where
- *    that row starts, and a part after the row is dropped (excursions are deferred, holds decision
- *    7). A mark left with no counts is deleted. Only **re-timed** rows trim: a move an edit writes
+ * 4. Else it had no arrival row, and it stays: it grows out of the marcher's **starting spot**
+ *    (`homeArrivalSql`, #619: no row of the marcher starts before it), or it is a **borrowed
+ *    hold** (#474; holds 04-anchors), which holds wherever the marcher already is there. So an
+ *    edit that takes away the set a borrowed hold borrows from, or gives a hold from the starting
+ *    spot a move on an earlier page that doesn't end at its start, leaves the hold, now borrowing
+ *    from the set before it: the hold says "stand still here", not "stand at that spot".
+ * 5. **Trim** what is left of it where a row the edit re-timed now covers it (H-1). A row over its
+ *    start trims it from the start: it now starts where that row ends, and grows out of that end
+ *    (04-anchors; a resize or clip drag of the move before a borrowed hold into it). A row starting
+ *    inside it ends it where that row starts, and a part after the row is dropped (excursions are
+ *    deferred, holds decision 7). A mark left with no counts is deleted. Only **re-timed** rows trim: a move an edit writes
  *    over a hold is still refused at commit (`E-H1`, `timeline_held_violations`), since that is an
  *    edit, not a retime (04-anchors: "a move created over a hold's start trims it" applies only to
  *    re-times such as clip drags and resizes).
@@ -178,31 +179,6 @@ const arrivalBefore = (
 ): RowIdentity | null => before.get(mark.id) ?? null;
 
 /**
- * The holds from the starting spots (#619) that the upkeep after this edit will delete, named for
- * the edit's message, or `undefined` when there are none: marks that had no arrival row before the
- * edit, and now have neither a row nor the starting spot to grow out of, because the edit gave the
- * marcher a move starting before the hold that doesn't end at its start. Call it at the end of the
- * edit's function, with the arrivals read at its start (`readHeldArrivalsBefore`).
- */
-export async function startHoldsLostInTransaction(
-    tx: DbTransaction,
-    before: HeldArrivalsBefore,
-): Promise<HeldConflict | undefined> {
-    const lost = (await readHeldMarkArrivals(tx)).filter(
-        (m) =>
-            m.arrivalId === null &&
-            !m.fromHome &&
-            before.has(m.id) &&
-            before.get(m.id) === null,
-    );
-    if (lost.length === 0) return undefined;
-    return nameHeldConflict(
-        tx,
-        lost.map((m) => ({ marcherId: m.marcherId, beat: m.start })),
-    );
-}
-
-/**
  * The holds whose arrival row this edit deleted, which the upkeep after it will delete (step 3 of
  * the module comment), as the spots where they start: for an edit that takes a move away as a side
  * effect of something else (Clear this page on the page a hold arrives from) to say so. Call it at
@@ -331,18 +307,19 @@ export async function keepHeldMarksTrueInTransaction(
                 // row now arrives there too): refuse rather than drop the hold without a word
                 refused.push(mark);
                 continue;
-                // 4. Nothing to grow out of any more, unless the starting spot
-            } else if (!mark.fromHome) continue;
+            }
+            // 4. Else it grows out of the starting spot, or borrows its spot: it stays
         }
-        // 5. Trimmed where a re-timed row now covers it
+        // 5. Trimmed where a re-timed row now covers it. A row over its start trims it from the
+        // start, so it grows out of that row's end (holds 04-anchors; demo `normalize`); then a
+        // row starting inside it ends it there. By start, so a row over the new start comes later
+        const own = shifted
+            .filter((r) => r.marcherId === mark.marcherId)
+            .sort((x, y) => x.start - y.start);
+        for (const r of own)
+            if (r.start <= start && start < r.end) start = r.end;
         let end = mark.end;
-        for (const r of shifted)
-            if (
-                r.marcherId === mark.marcherId &&
-                r.start < end &&
-                start < r.end
-            )
-                end = Math.max(start, r.start);
+        for (const r of own) if (r.start < end && start < r.end) end = r.start;
         if (end > start)
             kept.push({ id: mark.id, marcherId: mark.marcherId, start, end });
     }

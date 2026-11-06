@@ -1035,6 +1035,11 @@ export const TimelineRuler = memo(function TimelineRuler({
                     holds={holds}
                     pages={pages}
                     pixelsPerBeat={pixelsPerBeat}
+                    selectedEnd={
+                        selection?.kind === "range"
+                            ? selection.range.endBeatIndex
+                            : null
+                    }
                 />
             )}
             {holdEdges && (
