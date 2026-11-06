@@ -4,6 +4,8 @@ import {
     bandGeometry,
     bowlOutline,
     bowlTiers,
+    ringLength,
+    sectioned,
     outlineOffset,
     RING_POINTS,
     type BowlOutlineOptions,
@@ -70,6 +72,9 @@ describe("bowlTiers and bandGeometry", () => {
         expect(tiers.fascia).toHaveLength(1);
         // 6 regular risers, 2 back walls and 1 soffit.
         expect(tiers.risers).toHaveLength(9);
+        // The back walls are also listed on their own, as the same objects.
+        expect(tiers.backWalls).toHaveLength(2);
+        tiers.backWalls.forEach((w) => expect(tiers.risers).toContain(w));
         expect(tiers.tiers[0]).toMatchObject({ back: 4, top: 2.5 });
         expect(tiers.tiers[1]).toMatchObject({ back: 9, top: 7 });
         tiers.seatRows.forEach((row) => {
@@ -88,6 +93,29 @@ describe("bowlTiers and bandGeometry", () => {
         // Treads are flat: every normal is vertical.
         for (let i = 0; i < normals.count; i++)
             expect(Math.abs(normals.getY(i))).toBeCloseTo(1, 5);
+        geo.dispose();
+    });
+});
+
+describe("sectioned", () => {
+    it("sets each pair's tile to its ring length over the section count", () => {
+        const ring = bowlOutline(options);
+        const pairs = sectioned(
+            [
+                { a: ring(0, 0), b: ring(0, 1) },
+                { a: ring(10, 0), b: ring(10, 1) },
+            ],
+            20,
+        );
+        expect(pairs[0].tile).toBeCloseTo(ringLength(pairs[0].a) / 20, 9);
+        // Outer rings are longer, so their sections are wider.
+        expect(pairs[1].tile!).toBeGreaterThan(pairs[0].tile!);
+        // One tile of U per section: the last quad ends at exactly 20.
+        const geo = bandGeometry(pairs.slice(0, 1));
+        const uv = geo.getAttribute("uv");
+        let maxU = 0;
+        for (let i = 0; i < uv.count; i++) maxU = Math.max(maxU, uv.getX(i));
+        expect(maxU).toBeCloseTo(20, 6);
         geo.dispose();
     });
 });

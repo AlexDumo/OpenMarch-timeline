@@ -147,6 +147,23 @@ export function ringBand(
 /** Default texture tile along a band: 40 ft, as in the demo. */
 export const DEFAULT_BAND_TILE = ft(40);
 
+/** Length of a closed ring in meters. */
+export function ringLength(ring: Ring): number {
+    let sum = 0;
+    for (let i = 0; i < ring.length; i++)
+        sum += ring[i].distanceTo(ring[(i + 1) % ring.length]);
+    return sum;
+}
+
+/**
+ * Pairs whose texture tile is `ring length / sections`, so a pattern with one
+ * period per tile (an aisle between seating sections) lines up from row to
+ * row, fanning out toward the back like real seating blocks.
+ */
+export function sectioned(pairs: RingPair[], sections: number): RingPair[] {
+    return pairs.map((p) => ({ ...p, tile: ringLength(p.a) / sections }));
+}
+
 /** One non-indexed geometry holding every band in `pairs`. */
 export function bandGeometry(pairs: RingPair[]): BufferGeometry {
     const pos: number[] = [];
@@ -204,6 +221,8 @@ export interface BowlTiers {
     treads: RingPair[];
     /** Risers, back walls and soffits. */
     risers: RingPair[];
+    /** The tiers' back walls, each also listed in `risers`, from the tier's rim to the floor. */
+    backWalls: RingPair[];
     /** Front risers of tiers marked `fascia`. */
     fascia: RingPair[];
     /** One closed seat row per tread, at seat height. */
@@ -229,6 +248,7 @@ export function bowlTiers(
         tiers: [],
         treads: [],
         risers: [],
+        backWalls: [],
         fascia: [],
         seatRows: [],
     };
@@ -258,7 +278,9 @@ export function bowlTiers(
         }
         const back = t.offset + t.rows * t.depth;
         const top = t.base + (t.rows - 1) * t.rise;
-        out.risers.push({ a: outline(back, top + rim), b: outline(back, 0) });
+        const wall = { a: outline(back, top + rim), b: outline(back, 0) };
+        out.risers.push(wall);
+        out.backWalls.push(wall);
         if (t.bottom > 0)
             out.risers.push({
                 a: outline(t.offset, t.bottom),

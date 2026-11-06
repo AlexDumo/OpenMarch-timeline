@@ -3,7 +3,10 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
     Box3,
     DoubleSide,
+    InstancedMesh,
+    Matrix4,
     Mesh,
+    MeshStandardMaterial,
     Raycaster,
     SpotLight,
     Triangle,
@@ -67,6 +70,29 @@ const byName = (root: Object3D, name: string) => {
     });
     return out;
 };
+/** One box per mesh, or per instance for an instanced mesh. */
+const boxesOf = (m: Mesh): Box3[] => {
+    if (!(m instanceof InstancedMesh)) return [new Box3().setFromObject(m)];
+    m.geometry.computeBoundingBox();
+    const out: Box3[] = [];
+    const matrix = new Matrix4();
+    for (let i = 0; i < m.count; i++) {
+        m.getMatrixAt(i, matrix);
+        out.push(
+            m.geometry
+                .boundingBox!.clone()
+                .applyMatrix4(matrix.premultiply(m.matrixWorld)),
+        );
+    }
+    return out;
+};
+/** Meshes outside the bowl's reach: the ground, plaza and its masts. */
+const OUTSIDE = new Set([
+    "pro.ground",
+    "pro.plaza",
+    "pro.masts",
+    "pro.mastLamps",
+]);
 const outline = (fp: FieldFootprint) => ({
     centerX: (fp.minX + fp.maxX) / 2,
     centerZ: (fp.minZ + fp.maxZ) / 2,
@@ -99,7 +125,7 @@ describe("pro dome kit", () => {
             const kit = build(fp);
             const box = new Box3();
             for (const m of meshes(kit.root)) {
-                if (m.name === "pro.ground") continue;
+                if (OUTSIDE.has(m.name)) continue;
                 const pos = m.geometry.getAttribute("position");
                 for (let i = 0; i < pos.array.length; i++)
                     expect(Number.isNaN(pos.array[i])).toBe(false);
@@ -133,7 +159,7 @@ describe("pro dome kit", () => {
             byName(kit.root, "pro.suites")[0],
         );
         expect(suites.min.y).toBeCloseTo(11.3, 1);
-        expect(suites.max.y).toBeCloseTo(14.9, 1);
+        expect(suites.max.y).toBeCloseTo(14.2, 1);
         // The roof opening is about 128 x 73 m when open.
         const panels = byName(kit.root, "pro.roofPanel") as Mesh[];
         const width = panels.reduce((s, p) => s + p.scale.x, 0);
@@ -188,7 +214,7 @@ describe("pro dome kit", () => {
         const triangles = bandTriangles(kit);
         const boxes = meshes(kit.root)
             .filter((m) => m.geometry.type === "BoxGeometry")
-            .map((m) => new Box3().setFromObject(m));
+            .flatMap((m) => boxesOf(m));
         const solid = meshes(kit.root).filter((m) => m.name !== "pro.ground");
         // Raycast both faces of every mesh.
         solid.forEach(
@@ -349,6 +375,65 @@ describe("pro dome kit", () => {
         spots.forEach((s) => expect(s.visible).toBe(true));
         kit.setLighting("roofClosed");
         spots.forEach((s) => expect(s.intensity).toBe(1.4));
+    });
+
+    it("reads as a building: facade, fins, suites, ribbons, steel", () => {
+        const kit = build();
+        for (const name of [
+            "pro.facade",
+            "pro.fins",
+            "pro.cornice",
+            "pro.plaza",
+            "pro.adBoards",
+            "pro.suiteRibbon",
+            "pro.cove",
+            "pro.roofSteel",
+            "pro.roofLamps",
+            "pro.boardSteel",
+            "pro.masts",
+        ])
+            expect(byName(kit.root, name), name).toHaveLength(1);
+        // The facade is one band, as tall as the upper tier's rim, and the
+        // concrete no longer duplicates that wall.
+        const facade = new Box3().setFromObject(
+            byName(kit.root, "pro.facade")[0],
+        );
+        const upper = PRO_TIERS[1];
+        const rim = upper.base + (upper.rows - 1) * upper.rise + ft(4);
+        expect(facade.max.y).toBeCloseTo(rim, 3);
+        expect(facade.min.y).toBeCloseTo(0, 3);
+        const steel = byName(kit.root, "pro.roofSteel")[0] as InstancedMesh;
+        expect(steel.count).toBeGreaterThan(500);
+        // Secondary trusses drop out at low quality, the main ones stay.
+        const low = build(football, "low");
+        const lowSteel = byName(low.root, "pro.roofSteel")[0] as InstancedMesh;
+        expect(lowSteel.count).toBeGreaterThan(100);
+        expect(lowSteel.count).toBeLessThan(steel.count);
+    });
+
+    it("glows at night and not in the day", () => {
+        const kit = build();
+        const facade = (byName(kit.root, "pro.facade")[0] as Mesh)
+            .material as MeshStandardMaterial;
+        const lamps = (byName(kit.root, "pro.mastLamps")[0] as Mesh)
+            .material as MeshStandardMaterial;
+        kit.setLighting("night");
+        const nightFacade = facade.emissiveIntensity;
+        expect(lamps.emissiveIntensity).toBeGreaterThan(1);
+        kit.setLighting("day");
+        expect(facade.emissiveIntensity).toBeLessThan(nightFacade);
+        expect(lamps.emissiveIntensity).toBeLessThan(1);
+    });
+
+    it("hangs the video boards from the roof steel on cables", () => {
+        const kit = build();
+        const steel = byName(kit.root, "pro.boardSteel")[0] as InstancedMesh;
+        const bounds = boxesOf(steel).reduce((a, b) => a.union(b), new Box3());
+        // Cables reach up to the roof's truss bottom, below the roof slab.
+        expect(bounds.max.y).toBeGreaterThan(
+            PRO_BOARD.y + PRO_BOARD.height / 2,
+        );
+        expect(bounds.max.y).toBeLessThan(PRO_ROOF_Y);
     });
 
     it("stays under the draw-call budget, crowd included", () => {
