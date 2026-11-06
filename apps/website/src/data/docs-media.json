@@ -1,0 +1,15 @@
+{
+    "field-pan-zoom": {
+        "chapter": "workspace",
+        "kind": "clip",
+        "width": 1280,
+        "height": 796,
+        "seconds": 5.2
+    },
+    "window-overview": {
+        "chapter": "workspace",
+        "kind": "still",
+        "width": 1600,
+        "height": 1000
+    }
+}
