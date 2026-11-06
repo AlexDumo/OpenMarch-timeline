@@ -4,6 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 import type { FieldProperties } from "@openmarch/core";
 import type Page from "@/global/classes/Page";
 import { db } from "@/global/database/db";
+import type { MarkerShape } from "@/field/markerShape";
 import { useCollisionStore } from "@/stores/CollisionStore";
 import {
     fieldBeat,
@@ -55,6 +56,7 @@ export function useTimelineVisuals({
     marcherIds,
     fieldProperties,
     hiddenIds = null,
+    shapeOf,
 }: {
     isPlaying: boolean;
     selectedPage: Page | null;
@@ -62,6 +64,8 @@ export function useTimelineVisuals({
     marcherIds: readonly number[] | undefined;
     fieldProperties: FieldProperties | undefined;
     hiddenIds?: ReadonlySet<number> | null;
+    /** Each marcher's shape, for isolation's marks of where marchers are */
+    shapeOf?: (marcherId: number) => MarkerShape;
 }): {
     paths: OverlayPlan | null;
     focus: OverlayPlan | null;
@@ -126,9 +130,14 @@ export function useTimelineVisuals({
     const focus = useMemo(
         () =>
             scene && theme
-                ? planFocusOverlay(scene, ghostColorFor(theme), emphasis)
+                ? planFocusOverlay(
+                      scene,
+                      ghostColorFor(theme),
+                      emphasis,
+                      shapeOf,
+                  )
                 : null,
-        [scene, theme, emphasis],
+        [scene, theme, emphasis, shapeOf],
     );
 
     // The selected page's collisions

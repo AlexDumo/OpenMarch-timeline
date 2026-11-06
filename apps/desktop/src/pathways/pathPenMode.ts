@@ -613,6 +613,7 @@ function groupParts(
         memberRings: [
             ...group.members.map((m) => ({
                 at: m.from,
+                marcherId: m.marcherId,
                 kind: "group" as const,
                 label: tolgee.t(
                     "pathways.rings.group",
@@ -621,6 +622,7 @@ function groupParts(
             })),
             ...group.outside.map((m) => ({
                 at: m.from,
+                marcherId: m.marcherId,
                 kind: "own" as const,
                 label: m.ownPath
                     ? tolgee.t("pathways.rings.own", "Own path")
