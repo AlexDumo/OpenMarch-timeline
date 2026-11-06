@@ -3,7 +3,7 @@
 # Pathways: draft model (first full draft, for adversarial review)
 
 Status: draft 1, 2026-11-02. **Superseded by [draft-model.md](draft-model.md) (draft 2)**; kept because [fable-review-1.md](fable-review-1.md) cites its sections. Written against fork main f2f3cce41, the spec (`docs/timeline/spec.md`
-v0.8), ADR 0001 and ADR 0006. Decisions and open questions live in the [register](README.md); this
+v0.8), ADR 0012 and ADR 0006. Decisions and open questions live in the [register](README.md); this
 file is the concrete model they produce. Every rule here is meant to be exact. Where a rule is a
 guess, it says so and names the register entry.
 
@@ -28,7 +28,7 @@ guess, it says so and names the register entry.
 6. **Positions stay bounded.** Every new primitive keeps a point inside the convex hull of its
    origin and bounded authored points, so §8.11's theorem extends unchanged (argued in §6).
 
-ADR 0001 C-8 ("no new path style") is amended by a new ADR; the spec gets a v0.9 with R-14 to
+ADR 0012 C-8 ("no new path style") is amended by a new ADR; the spec gets a v0.9 with R-14 to
 R-17 below. Shape recipes (ADR 0006) stay app data: the app writes routes from them, the
 resolver never reads them.
 

@@ -1,3 +1,6 @@
+import clsx from "clsx";
+import { TEMPO_BAND, useTempoModeStore } from "@/tempo/TempoBand";
+import { TempoModeButton } from "@/tempo/TempoModeButton";
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -90,7 +93,6 @@ import { usePageKeepChains } from "./PageKeepChain";
 import { useHoldCommands } from "@/timeline/useHoldCommands";
 import { clearPageMenu } from "@/timeline/timelineClearPage";
 import { describeMoveClips } from "./moveClipText";
-import { useMoveNotesStore } from "@/stores/MoveNotesStore";
 import { useClearLeftoverMoveSelection } from "./useMoveMemberSelection";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useBasicLocksStore } from "@/timeline/basicLocks";
@@ -149,7 +151,18 @@ const LOOP_BUTTONS = (
     </>
 );
 const SPEED_BUTTON = <TimelineSpeedButton />;
-const EXPERT_VIEW_CONTROLS = <TimelineCompactButton />;
+/**
+ * Tempo mode: the Tempo button leads the transport's view controls. In tempo mode
+ * it's the only one: Play loops the selected measures, so no Loop button
+ */
+const TEMPO_VIEW_CONTROLS = <TempoModeButton />;
+const BASIC_VIEW_CONTROLS = <TempoModeButton />;
+const EXPERT_VIEW_CONTROLS = (
+    <>
+        <TempoModeButton />
+        <TimelineCompactButton />
+    </>
+);
 
 /** The store's selection as the timeline draws it (spec beats; `Timeline` maps them to its axis) */
 export const toTimelineSelection = (
@@ -185,8 +198,7 @@ export const toTimelineSelection = (
  * or a dragged range selects that range, and each seeks (home to beat 0, a range to its end).
  * **Create page at playhead** on the free paused playhead's right-click menu adds a page flag there and selects
  * the new page; a page box's right-click menu deletes its flag (P8.13's writes, wired by P8.15), or the page and its
- * moves (defined coordinates, owner decision 3). Neither Create Track
- * nor **Add selected marchers** is offered: dragging marchers adds them (UI-10). Double-clicking
+ * moves (defined coordinates, owner decision 3). Double-clicking
  * a page box or clip isolates its stored timeline (docs/timeline/research/ownership/09-isolation.md).
  * A clip is a move: its menu, its ⋯ button and Delete edit, rename and delete it (UI-14).
  */
@@ -194,7 +206,9 @@ export default function TimelineModePanel() {
     const { beats, pages, measures, countGrid } = useTimingObjects()!;
     // UI-19: Basic is this timeline with its page boxes holding the music, and none of the
     // Expert parts (clips, the loop, isolation, moves): docs/timeline/research/basic-mode
-    const basic = useIsBasicMode();
+    // Tempo mode: the timeline shows the tempo lanes in place of the clips, in Basic too
+    const tempoMode = useTempoModeStore((s) => s.on);
+    const basic = useIsBasicMode() && !tempoMode;
     const basicExtras = useBasicTimelineExtras(pages);
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
     // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis, in
@@ -206,7 +220,8 @@ export default function TimelineModePanel() {
     );
     const musicEnd = useMusicEndSeconds();
     const waveform = useMemo(() => {
-        if (!envelope || waveformHidden) return null;
+        // Tempo mode draws the music in its own lane: one waveform, not two
+        if (!envelope || waveformHidden || tempoMode) return null;
         const through =
             musicEnd === null ? 0 : musicEndBeat(countGrid, musicEnd);
         const peaks = peaksByBeat(
@@ -219,7 +234,15 @@ export default function TimelineModePanel() {
         if (basic && !peaks.some((beat) => beat.some((peak) => peak > 0)))
             return null;
         return { peaksByBeat: peaks };
-    }, [envelope, beats, countGrid, musicEnd, waveformHidden, basic]);
+    }, [
+        envelope,
+        beats,
+        countGrid,
+        musicEnd,
+        waveformHidden,
+        basic,
+        tempoMode,
+    ]);
     const zoomFitted = useUiSettingsStore(
         (s) => s.uiSettings.timelineZoomFitted,
     );
@@ -311,7 +334,7 @@ export default function TimelineModePanel() {
             timelines.flatMap((t) => (clipped.has(t) ? [] : [t.id])),
         );
     }, [timelines, clipTimelines]);
-    const { clips: offPage, overridden } = useMemo(
+    const { clips: offPage } = useMemo(
         () =>
             describeMoveClips({
                 clips: clipTimelines,
@@ -322,16 +345,11 @@ export default function TimelineModePanel() {
         // eslint-disable-next-line react-hooks/exhaustive-deps -- language: the words are tolgee.t's
         [clipTimelines, pages, storedTimelines, pageBoxes, language],
     );
-    // The Move card says it too
-    useEffect(() => {
-        useMoveNotesStore.getState().setOverridden(overridden);
-    }, [overridden]);
-    // UI-14 round-2 review: a "Select them" selection doesn't follow you to another move
+    // UI-14 round-2 review: a "Select marchers" selection doesn't follow you to another move
     useClearLeftoverMoveSelection();
     const commands = useTimelineCommands({
         database: db,
         timelines,
-        selectedMarcherIds,
     });
     // UI-25: a move can be split, and moves merged (not in Basic, which gets no clips)
     const splitMerge = useSplitMergeMoves({
@@ -355,6 +373,7 @@ export default function TimelineModePanel() {
             onDelete: (id: number) => {
                 if (!isPlaying) void moves.deleteMove(id);
             },
+            onSelectMarchers: (id: number) => void moves.selectMarchers(id),
             // UI-27: two moves that meet at the playhead
             onSplit: (id: number) =>
                 void moves.splitMoveAtPlayhead(id, isPlaying),
@@ -542,16 +561,28 @@ export default function TimelineModePanel() {
                     {...(basic ? basicExtras : {})}
                     zoomFitted={zoomFitted}
                     onZoomFittedChange={setZoomFitted}
-                    className="w-full"
+                    zoomButtons={tempoMode}
+                    // Tempo mode is a focused mode: the timeline is framed in the accent
+                    className={clsx(
+                        "w-full",
+                        tempoMode && "ring-accent ring-2",
+                    )}
                     beats={beats}
                     pages={pages}
                     measures={measures}
-                    timelines={basic ? NO_CLIPS : offPage}
+                    timelines={basic || tempoMode ? NO_CLIPS : offPage}
+                    band={tempoMode ? TEMPO_BAND : undefined}
                     pageMoves={pageMoves}
-                    transportAccessories={basic ? SPEED_BUTTON : LOOP_BUTTONS}
+                    transportAccessories={
+                        basic || tempoMode ? SPEED_BUTTON : LOOP_BUTTONS
+                    }
                     transportSecondary={SOUND_BUTTON}
                     transportViewControls={
-                        basic ? undefined : EXPERT_VIEW_CONTROLS
+                        tempoMode
+                            ? TEMPO_VIEW_CONTROLS
+                            : basic
+                              ? BASIC_VIEW_CONTROLS
+                              : EXPERT_VIEW_CONTROLS
                     }
                     keyframes={keyframes}
                     keyframeMenu={keyframeMenu}

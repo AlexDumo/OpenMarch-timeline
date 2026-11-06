@@ -104,10 +104,12 @@ export function ShortcutTooltip({
                         // Above the transport, so it never covers the page boxes under it
                         side={side}
                         sideOffset={4}
+                        // kept clear of the window's edges, not just inside them
+                        collisionPadding={8}
                         className={TooltipClassName}
                     >
                         {!hideLabel && (
-                            <span className="flex items-center gap-8 text-[12px]">
+                            <span className="text-body flex items-center gap-8">
                                 {label}
                                 {action ? (
                                     <Shortcut action={action} />
@@ -117,7 +119,7 @@ export function ShortcutTooltip({
                             </span>
                         )}
                         {typeof hint === "string" ? (
-                            <span className="text-text-subtitle block text-[11px]">
+                            <span className="text-text-subtitle text-sub block">
                                 {hint}
                             </span>
                         ) : (

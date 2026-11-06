@@ -5,7 +5,7 @@
 Status: **draft 2**, 2026-11-02. Draft 1 ([draft-model-1.md](draft-model-1.md)) was reviewed in
 [fable-review-1.md](fable-review-1.md); the owner settled the review's questions (register F-1 to
 F-6). This draft applies the review's changes. Written against fork main f2f3cce41, the spec
-(`docs/timeline/spec.md` v0.8), ADR 0001 and ADR 0006. Decisions and open questions live in the
+(`docs/timeline/spec.md` v0.8), ADR 0012 and ADR 0006. Decisions and open questions live in the
 [register](README.md); the controls are in the [UX sheet](ux-sheet.md).
 
 Every rule here is meant to be exact. Where a rule is still a guess it names the register entry.
@@ -27,7 +27,7 @@ Every rule here is meant to be exact. Where a rule is still a guess it names the
 6. **Positions stay bounded by a constant**, `max(|A|, 7/3·β′)` per route span; only arc pieces
    add to the spec's `√(1 + a)` bound (§6).
 
-ADR 0001 C-8 ("no new path style") is amended by a new ADR, and the spec gets a v0.9 with R-14 to
+ADR 0012 C-8 ("no new path style") is amended by a new ADR, and the spec gets a v0.9 with R-14 to
 R-18 below. Shape recipes (ADR 0006) stay app data: the app writes routes from them, the
 resolver never reads them.
 
@@ -170,7 +170,7 @@ NULL`. A `route` transition keeps its one destination row.
 - Changing a CHECK rebuilds the table (Drizzle generates it). The migration test asserts that
   every trigger in `triggers.ts` for `timeline_transitions` and its history triggers exist after
   the rebuild, and that `rowid`s are preserved (history inverses use `WHERE rowid =`).
-- The file version is bumped; older builds refuse the file (ADR 0001). O-17 is closed by that.
+- The file version is bumped; older builds refuse the file (ADR 0012). O-17 is closed by that.
 
 **`path_params` by style** (spec §5.2):
 

@@ -7,7 +7,7 @@
  * - The resolver keeps its own assignment row index (by id, by marcher and by
  *   transition), updated only from batch after-images (spec 10.2). Marchers,
  *   shapes and transitions are read by id from the host's post-commit mirror
- *   (ADR 0001 section 4), which the caller keeps equal to the committed state.
+ *   (ADR 0012 section 4), which the caller keeps equal to the committed state.
  * - Local caches (9.2 #1-4, #7): `spans`, `spansByTransition`, `destinations`,
  *   `ftlGeometry`, `routeGeometry`. Cascading caches (9.2 #5-6): `origin`, keyed by
  *   (marcher, span.start), and `ftlEntry`. A route span's cleaned path (R-14) is
@@ -216,7 +216,7 @@ function localInputsChanged(before: RowImage, after: RowImage): boolean {
     );
 }
 
-/** Cold build of the cached resolver (ADR 0001 section 4). */
+/** Cold build of the cached resolver (ADR 0012 section 4). */
 // The caches are closure state shared by every query, so they live together.
 // eslint-disable-next-line max-lines-per-function
 export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
@@ -1051,10 +1051,10 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
     };
 }
 
-/** Cold build of the resolver (ADR 0001 section 4, spec 10.1). */
+/** Cold build of the resolver (ADR 0012 section 4, spec 10.1). */
 export function createResolver(host: TimelineSnapshot): Resolver {
     const r = createCachedResolver(host);
-    // Only the public interface (spec 10.1 plus `spanInfos`, ADR 0001 section 4):
+    // Only the public interface (spec 10.1 plus `spanInfos`, ADR 0012 section 4):
     // the internal caches, introspection and test hooks on the cached resolver
     // stay unreachable at runtime too.
     return {

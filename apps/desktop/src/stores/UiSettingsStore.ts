@@ -12,7 +12,6 @@ import {
     type WaveformStyle,
 } from "@/timeline/timelineWaveform";
 
-export type FocusableComponents = "canvas" | "timeline";
 export interface UiSettings {
     lockX: boolean;
     lockY: boolean;
@@ -55,8 +54,6 @@ export interface UiSettings {
     audioVolume: number;
     /** Whether all app audio is muted */
     audioMuted: boolean;
-    /** The component that is currently focussed */
-    focussedComponent: FocusableComponents;
     /** Mouse settings */
     mouseSettings: {
         /** Whether to enable trackpad mode (specific handling for macOS trackpads) */
@@ -91,11 +88,6 @@ export interface UiSettings {
      */
     shapes?: ShapeOutlines;
     /**
-     * While a shape is open, who isn't in it is faded (`rest`, the default) or only while the
-     * shape is being drawn (`drawing`) (docs/timeline/research/shapes/08-shape-system-ux.md)
-     */
-    shapeFocus?: ShapeFocus;
-    /**
      * Whether an open shape shows its walks and start rings (#403): the floating editor's
      * Pathways toggle. Off by default.
      */
@@ -115,7 +107,6 @@ export interface UiSettings {
 export type MarcherLabelForm = "auto" | "names" | "numbers" | "off";
 export type MarcherLabelSize = "small" | "normal" | "large";
 export type ShapeOutlines = "selected" | "always" | "off";
-export type ShapeFocus = "rest" | "drawing";
 
 /** How much each label size scales the labels' normal size */
 export const LABEL_SIZE_SCALE: Record<MarcherLabelSize, number> = {
@@ -146,7 +137,6 @@ export const defaultSettings: UiSettings = {
     timelineWaveformStyle: "simplified",
     audioVolume: 100,
     audioMuted: false,
-    focussedComponent: "canvas",
     mouseSettings: {
         trackpadMode: true,
         trackpadPanSensitivity: 0.5,
@@ -160,7 +150,6 @@ export const defaultSettings: UiSettings = {
     },
     marcherLabels: "auto",
     shapes: "selected",
-    shapeFocus: "rest",
     shapeWalks: false,
     showPropNames: false,
     propNameOverrides: {},
@@ -176,10 +165,16 @@ const clampZoomSensitivity = (value: number): number =>
 // Helper function to parse settings from a JSON string
 // Throws on bad JSON or invalid structure
 const parseSettings = (raw: string): UiSettings => {
-    // `previousPaths` (Previous paths) gave way to start flag positions (#331): dropped
-    const { previousPaths: _previousPaths, ...parsed } = JSON.parse(
-        raw,
-    ) as UiSettings & { previousPaths?: unknown };
+    // Dropped: `previousPaths` (Previous paths) gave way to start flag positions (#331), and
+    // `focussedComponent` went with the old timeline focus (beat editor)
+    const {
+        previousPaths: _previousPaths,
+        focussedComponent: _focussedComponent,
+        ...parsed
+    } = JSON.parse(raw) as UiSettings & {
+        previousPaths?: unknown;
+        focussedComponent?: unknown;
+    };
     const mergedMouseSettings = {
         ...defaultSettings.mouseSettings,
         ...parsed.mouseSettings,

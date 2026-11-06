@@ -3,7 +3,7 @@
 # Pathways draft 1: adversarial review
 
 Status: review 1, 2026-11-02, of [draft-model-1.md](draft-model-1.md) (draft 1) against the
-[register](README.md), `docs/timeline/spec.md` v0.8, ADR 0001 and ADR 0006, and the code on fork
+[register](README.md), `docs/timeline/spec.md` v0.8, ADR 0012 and ADR 0006, and the code on fork
 main f2f3cce41 (`packages/core/src/timeline/{resolver,geom,types}.ts`,
 `apps/desktop/src/db-functions/{timelineSplitAtBeat,timelineSplitMoves,timelineResize,historyTriggers}.ts`,
 `electron/database/migrations/schema.ts`).
@@ -263,7 +263,7 @@ rebuild; Drizzle generates it. The invariant triggers come from `createAllTrigge
 triggers from `createAllUndoTriggers`, both run after migration, so O-2's worry is already
 covered by practice, but the migration test must assert every trigger named in `triggers.ts` for
 `timeline_transitions` exists afterwards, and that the rebuild preserved `rowid`s (history
-inverses say `WHERE rowid=`). Also bump the file version: ADR 0001 refuses newer files in older
+inverses say `WHERE rowid=`). Also bump the file version: ADR 0012 refuses newer files in older
 builds, so **O-17 is moot** (an older fork build never opens a file with routes; it refuses it).
 
 ### 3.4 Checks the draft gets wrong or leaves out
@@ -619,7 +619,7 @@ local inputs. The shape row's behaviour is the model.
 
 ### 10.8 File version and O-17
 
-A schema change bumps the file version and older builds refuse the file (ADR 0001 verification).
+A schema change bumps the file version and older builds refuse the file (ADR 0012 verification).
 O-17's "older builds play straight lines" never happens; close it.
 
 ### 10.9 Explain and QA

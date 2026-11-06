@@ -1,10 +1,8 @@
 import {
     createResolver,
-    withPutDowns,
     type ChangeBatch,
     type InvalidationReport,
-    type PutDownItem,
-    type PutDownResolver,
+    type Resolver,
     type TimelineSnapshot,
     type XY,
 } from "@openmarch/core";
@@ -22,7 +20,7 @@ import {
 } from "./timelineRows";
 
 /**
- * The resolver host for one open file (ADR 0001 §4, spec §10.2): the resolver plus the
+ * The resolver host for one open file (ADR 0012 §4, spec §10.2): the resolver plus the
  * post-commit mirror it reads marchers, shapes and transitions from.
  *
  * The resolver keeps a reference to `snapshot` and reads `marchers`, `shapes`, `transitions` and `routes`
@@ -36,18 +34,12 @@ export interface TimelineHost {
     readonly destinations: SlotDestinationIndex;
     /** Marcher homes by id, behind `snapshot.marchers` */
     readonly homes: Map<number, XY>;
-    /**
-     * The resolver, with items put down where their holders release them (`withPutDowns`, ADR
-     * 0002 D-9): what every view reads. Batches go through it to the base resolver.
-     */
-    readonly resolver: PutDownResolver;
+    /** The resolver: what every view reads */
+    readonly resolver: Resolver;
 }
 
-/** Cold build: the resolver over a freshly read state, putting down `items`. */
-export function createTimelineHost(
-    tables: TimelineTables,
-    items: readonly PutDownItem[] = [],
-): TimelineHost {
+/** Cold build: the resolver over a freshly read state. */
+export function createTimelineHost(tables: TimelineTables): TimelineHost {
     const { snapshot, destinations } = tables;
     const homes = new Map<number, XY>(
         snapshot.marchers.map((m) => [m.id, m.home]),
@@ -56,7 +48,7 @@ export function createTimelineHost(
         snapshot,
         destinations,
         homes,
-        resolver: withPutDowns(createResolver(snapshot), items),
+        resolver: createResolver(snapshot),
     };
 }
 

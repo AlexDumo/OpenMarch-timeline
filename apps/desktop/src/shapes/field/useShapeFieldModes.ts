@@ -31,7 +31,7 @@ import { setFieldUnderlay } from "@/field/editor/fieldUnderlayStore";
  * inside it (`LiveBoxMode`). Also keeps placed boxes in the selection (`useBoxSelection`).
  *
  * The tool is about one moment and one group of marchers. Only Place (Enter) places it (#416):
- * moving around the timeline, playing, Visuals and a new selection leave it open. While it waits
+ * moving around the timeline, playing and a new selection leave it open. While it waits
  * out of sight (`useShapeHidden`) the field doesn't draw it or give it presses, and an armed tool
  * with nothing drawn yet closes once the timeline moves off its moment.
  */
