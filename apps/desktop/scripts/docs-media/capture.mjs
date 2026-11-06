@@ -106,6 +106,42 @@ function union(...boxes) {
 
 const WHOLE = { x: 0, y: 0, ...WINDOW };
 
+/** Merges this run's entries into the manifest, under a lock (runs can overlap). */
+function writeManifest() {
+    const lock = `${MANIFEST}.lock`;
+    fs.mkdirSync(path.dirname(MANIFEST), { recursive: true });
+    for (let i = 0; ; i++) {
+        try {
+            fs.mkdirSync(lock);
+            break;
+        } catch {
+            if (i > 600) throw new Error(`${lock} is stuck: delete it`);
+            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+        }
+    }
+    try {
+        const current = fs.existsSync(MANIFEST)
+            ? JSON.parse(fs.readFileSync(MANIFEST, "utf8"))
+            : {};
+        const next = { ...current, ...manifest };
+        // Shots that no longer exist leave the manifest (their files are reported, not deleted)
+        if (pruneMissing)
+            for (const id of Object.keys(next))
+                if (!shots.some((s) => s.id === id)) {
+                    log(
+                        `   ${id} is no longer a shot: delete its files in public/docs/media`,
+                    );
+                    delete next[id];
+                }
+        const sorted = Object.fromEntries(
+            Object.entries(next).sort(([a], [b]) => a.localeCompare(b)),
+        );
+        fs.writeFileSync(MANIFEST, `${JSON.stringify(sorted, null, 4)}\n`);
+    } finally {
+        fs.rmdirSync(lock);
+    }
+}
+
 const options = parseArgs(process.argv.slice(2));
 const shots = await loadShots();
 if (options.list) {
@@ -133,17 +169,9 @@ const log = (line) => {
 };
 const PRELOAD = writePreload(WORK, { overlay: true });
 
-const manifest = fs.existsSync(MANIFEST)
-    ? JSON.parse(fs.readFileSync(MANIFEST, "utf8"))
-    : {};
-// Shots that no longer exist leave the manifest (their files are reported, not deleted)
-for (const id of Object.keys(manifest))
-    if (!shots.some((s) => s.id === id)) {
-        log(
-            `   ${id} is no longer a shot: delete its files in public/docs/media`,
-        );
-        delete manifest[id];
-    }
+// This run's entries; merged into the manifest at the end (other runs may be writing it too)
+const manifest = {};
+const pruneMissing = options.names.length === 0;
 
 log(
     `Docs media: ${chosen.length} shot(s), ${options.themes.join(" and ")}; work folder ${WORK}`,
@@ -281,11 +309,7 @@ for (const shot of chosen) {
         }
     }
 }
-const sorted = Object.fromEntries(
-    Object.entries(manifest).sort(([a], [b]) => a.localeCompare(b)),
-);
-fs.mkdirSync(path.dirname(MANIFEST), { recursive: true });
-fs.writeFileSync(MANIFEST, `${JSON.stringify(sorted, null, 4)}\n`);
+writeManifest();
 if (clips.length)
     log(
         `Contact sheet: ${contactSheet(clips, path.join(WORK, "contact-sheet.png"))}`,

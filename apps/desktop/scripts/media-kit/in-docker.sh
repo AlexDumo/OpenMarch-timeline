@@ -12,12 +12,24 @@ DESKTOP="$(cd "$HERE/../.." && pwd)"
 REPO="$(cd "$DESKTOP" && git rev-parse --show-toplevel)"
 COMMON="$(cd "$DESKTOP" && cd "$(git rev-parse --git-common-dir)/.." && pwd)"
 IMAGE=openmarch-media
+# At most MEDIA_SLOTS (default 3) recordings at once on this machine: each one is a whole
+# Electron app drawing in software. Later ones wait for a free slot.
+SLOTS="${MEDIA_SLOTS:-3}"
+LOCKS="${TMPDIR:-/tmp}/openmarch-media-locks"
+mkdir -p "$LOCKS"
+while :; do
+    for i in $(seq "$SLOTS"); do
+        exec 9>"$LOCKS/slot-$i"
+        if flock -n 9; then break 2; fi
+    done
+    sleep 2
+done
 docker image inspect "$IMAGE" >/dev/null 2>&1 ||
     docker build -q -t "$IMAGE" "$HERE" >/dev/null
 MOUNTS=(-v "$REPO:$REPO")
 [ "$COMMON" != "$REPO" ] && MOUNTS+=(-v "$COMMON:$COMMON:ro")
 [ -n "${DOCS_MEDIA_WORK:-}" ] && MOUNTS+=(-v "$DOCS_MEDIA_WORK:$DOCS_MEDIA_WORK") &&
     ENV_WORK=(-e "DOCS_MEDIA_WORK=$DOCS_MEDIA_WORK") || ENV_WORK=()
-exec docker run --rm --init --shm-size=1g --user "$(id -u):$(id -g)" -e HOME=/tmp \
+docker run --rm --init --shm-size=1g --user "$(id -u):$(id -g)" -e HOME=/tmp \
     -e MEDIA_EXTRA_ARGS="${MEDIA_EXTRA_ARGS:-}" "${ENV_WORK[@]}" "${MOUNTS[@]}" -w "$DESKTOP" "$IMAGE" \
     xvfb-run -a -s "-screen 0 3840x2400x24" node "$@" --software-gl

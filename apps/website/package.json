@@ -15,7 +15,8 @@
         "lint:check": "eslint .",
         "format": "prettier --write .",
         "spellcheck": "cspell 'src/**' 'electron/**' '*.md'",
-        "fix": "prettier --write . && eslint . --fix && cspell 'src/**' 'electron/**' '*.md'"
+        "fix": "prettier --write . && eslint . --fix && cspell 'src/**' 'electron/**' '*.md'",
+        "check:guide": "node scripts/check-guide.mjs"
     },
     "dependencies": {
         "@ascorbic/csv-loader": "^2.0.3",

@@ -1,0 +1,46 @@
+---
+/**
+ * A label exactly as the app shows it, read from the app's English strings
+ * (apps/desktop/i18n/en.json), in bold. A key that no longer exists fails the build, so a
+ * renamed button can't leave the guide behind.
+ *
+ *   Select <Ui k="timeline.clipMenu.split" />.
+ *   <Ui k="actions.alignment.lockX" />
+ *
+ * Placeholders such as {held} are filled from the hold terms (src/data/generated/terms.json);
+ * pass others as `values`. A trailing "…" is dropped, the way UI names are written in prose.
+ */
+import en from "../../../../desktop/i18n/en.json";
+import terms from "../../data/generated/terms.json";
+
+interface Props {
+    k: string;
+    values?: Record<string, string | number>;
+    /** Plain text instead of bold (inside a heading or a table cell that's already a label) */
+    plain?: boolean;
+}
+
+const { k, values, plain } = Astro.props;
+const found = k
+    .split(".")
+    .reduce<unknown>(
+        (o, part) => (o as Record<string, unknown> | undefined)?.[part],
+        en,
+    );
+if (typeof found !== "string")
+    throw new Error(
+        `<Ui k="${k}">: no such string in apps/desktop/i18n/en.json`,
+    );
+const fill = { ...terms, ...values } as Record<string, string | number>;
+const text = found
+    .replace(/\{(\w+)\}/g, (all, name: string) =>
+        name in fill ? String(fill[name]) : all,
+    )
+    .replace(/(…|\.\.\.)$/, "");
+if (/\{\w+[,}]/.test(text))
+    throw new Error(
+        `<Ui k="${k}">: "${found}" needs values for its placeholders`,
+    );
+---
+
+{plain ? text : <strong>{text}</strong>}
