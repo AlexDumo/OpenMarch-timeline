@@ -116,8 +116,13 @@ export const pathShown = (
 export const pathMarcherIds = (
     session: PathSession | null,
     hidden: boolean,
+    /**
+     * An open shape or a selected placed box has the field (`useShapeFieldModes`), so a closed
+     * path isn't drawn and its marchers keep their start flag positions (owner on #683)
+     */
+    closedUnder: boolean,
 ): readonly number[] =>
-    !pathShown(session, hidden)
+    !pathShown(session, hidden) || (session.phase === "closed" && closedUnder)
         ? []
         : session.target.group
           ? session.target.group.members.map((m) => m.marcherId)
