@@ -148,7 +148,7 @@ export function routeWalk(A, pts, B, F = A, G = B) {
   }
   const L = D[D.length - 1];
   return {
-    V, D, L, pieces,
+    V, D, L, pieces, tau,
     at(p) {
       if (p <= 0) return A;
       if (p >= 1) return B;
@@ -162,6 +162,56 @@ export function routeWalk(A, pts, B, F = A, G = B) {
       while (i <= K && !(x < pc.e[i])) i++;
       if (i > K) return V[j + 1];
       return bez(V[j], pc.c1, pc.c2, V[j + 1], (i - 1 + (x - pc.e[i - 1]) / (pc.e[i] - pc.e[i - 1])) / K);
+    },
+  };
+}
+
+/**
+ * R-14 group schedule (v0.9 step 15): a group path member's walk. `W` is the reference walk from F to G (routeWalk,
+ * this file's own code); every member passes its placed copy of W's first and last kept inner points at the moments
+ * W reaches them at its steady speed (uFirst, uLast), walks W placed by its offset between them, and walks its own
+ * first leg (A onto W_1 + o) and last leg (W_m + o to B) at steady speed each. Written from the spec, not the app.
+ */
+export function groupWalk(A, pts, B, F, G, o) {
+  const W = routeWalk(F, pts, G, F, G), m = W.V.length - 2;
+  const add = (q) => [q[0] + o[0], q[1] + o[1]];
+  if (m < 1) return { W, uFirst: NaN, uLast: NaN, first: null, last: null, at: (p) => (p <= 0 ? A : p >= 1 ? B : lerp(A, B, p)) };
+  const uFirst = W.D[1] / W.L, uLast = W.D[m] / W.L;
+  const K = 64;
+  const bez = (P0, c1, c2, P3, t) => { const u = 1 - t, k0 = u * u * u, k1 = 3 * u * u * t, k2 = 3 * u * t * t, k3 = t * t * t;
+    return [k0 * P0[0] + k1 * c1[0] + k2 * c2[0] + k3 * P3[0], k0 * P0[1] + k1 * c1[1] + k2 * c2[1] + k3 * P3[1]]; };
+  // A leg: a line, or a cubic measured on K samples as R-14's Length
+  const leg = (S, E, c1, c2) => {
+    if (!c1) return { S, E, len: Math.hypot(E[0] - S[0], E[1] - S[1]), at: (f) => lerp(S, E, f) };
+    const e = [0];
+    for (let i = 1; i <= K; i++) { const a = bez(S, c1, c2, E, (i - 1) / K), b = i === K ? E : bez(S, c1, c2, E, i / K); e.push(e[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+    const len = e[K];
+    return { S, E, len, at(f) {
+      if (len < EPS_GEOM) return lerp(S, E, f);
+      const x = f * len;
+      let i = 1;
+      while (i <= K && !(x < e[i])) i++;
+      if (i > K) return E;
+      return bez(S, c1, c2, E, (i - 1 + (x - e[i - 1]) / (e[i] - e[i - 1])) / K);
+    } };
+  };
+  const W1 = add(W.V[1]), Wm = add(W.V[m]);
+  const p0 = W.pieces[0], pm = W.pieces[m];
+  // The piece next to W_1 (W_m) is a cubic exactly when some end of it is smooth; the leg reads W_1's own handle
+  // only when W_1 itself is smooth (its `in`, the reference piece's second control), else it is a line (a corner).
+  // A leg whose ends are within EPS_GEOM is a line, so a member standing on its point doesn't loop out to a handle
+  const near = (p, q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < EPS_GEOM;
+  const smooth1 = W.tau[1] > 0 && !near(A, W1), smoothM = W.tau[m] > 0 && !near(Wm, B);
+  const first = smooth1 ? leg(A, W1, [A[0] + (W1[0] - A[0]) / 3, A[1] + (W1[1] - A[1]) / 3], add(p0.c2)) : leg(A, W1, null, null);
+  const last = smoothM ? leg(Wm, B, add(pm.c1), [B[0] + (Wm[0] - B[0]) / 3, B[1] + (Wm[1] - B[1]) / 3]) : leg(Wm, B, null, null);
+  return {
+    W, uFirst, uLast, first, last,
+    at(p) {
+      if (p <= 0) return A;
+      if (p >= 1) return B;
+      if (p < uFirst) return first.at(p / uFirst);
+      if (p <= uLast) return add(W.at(p));
+      return last.at((p - uLast) / (1 - uLast));
     },
   };
 }

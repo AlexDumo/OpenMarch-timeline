@@ -544,6 +544,138 @@ export function routePolyline(path: RoutePath): XY[] {
     return out;
 }
 
+/** One leg of a group member's walk (R-14 group schedule, step 15): a single line or cubic piece. */
+export interface GroupLeg {
+    /** A one-piece path from the leg's start to its end (`V`, `D`, `L` as a route path) */
+    path: RoutePath;
+    /** The leg's length, measured as a piece is (R-14 Length); may be below `EPS_GEOM` */
+    length: number;
+}
+
+/**
+ * The parts of R-14's group schedule (v0.9 step 15) that come from the route alone: the
+ * reference walk `W` from `from` to `to`, and the moments `uFirst` and `uLast` at which it reaches
+ * its first and last kept inner points. With no inner point kept (`W.V` is `[F, G]`), both are
+ * NaN and every member walks R-7's line.
+ */
+export interface GroupSchedule {
+    W: RoutePath;
+    uFirst: number;
+    uLast: number;
+}
+
+/** R-14 group schedule items 1-3: the reference walk and its moments. */
+export function groupSchedule(route: RouteWalk): GroupSchedule {
+    const W = routePath(route.from, route.points, route.to, route);
+    const m = W.V.length - 2;
+    if (m < 1) return { W, uFirst: NaN, uLast: NaN };
+    return { W, uFirst: W.D[1]! / W.L, uLast: W.D[m]! / W.L };
+}
+
+/** `q + o`, one float64 addition per coordinate (R-14 group schedule item 4). */
+export const placed = (q: XY, o: XY): XY => [q[0] + o[0], q[1] + o[1]];
+
+function legOf(S: XY, E: XY, c1: XY | null, c2: XY | null): GroupLeg {
+    if (!c1 || !c2) {
+        const length = dist(S, E);
+        return {
+            path: {
+                V: [S, E],
+                D: [0, length],
+                L: length,
+                source: [-1, -1],
+                tension: [0, 0],
+                pieces: [{ kind: "line" }],
+            },
+            length,
+        };
+    }
+    const e = measureCubic(S, c1, c2, E);
+    const length = e[ROUTE_CUBIC_SAMPLES]!;
+    return {
+        path: {
+            V: [S, E],
+            D: [0, length],
+            L: length,
+            source: [-1, -1],
+            tension: [0, 0],
+            pieces: [{ kind: "cubic", c1, c2, e }],
+        },
+        length,
+    };
+}
+
+/** A group member's walk: the schedule placed by its offset, with its own legs (R-14 item 5). */
+export interface GroupMemberWalk {
+    schedule: GroupSchedule;
+    A: XY;
+    B: XY;
+    offset: XY;
+    /** null when the reference walk kept no inner point (the member walks R-7's line) */
+    first: GroupLeg | null;
+    last: GroupLeg | null;
+}
+
+/**
+ * R-14 group schedule item 5: a member's first leg (from `A` onto `W_1 + o`) and last leg (from
+ * `W_m + o` to `B`). A leg is a line when its path end is a corner, else a cubic with the chord
+ * rule at the member's own end and the reference handle placed at the path end.
+ */
+export function groupMemberWalk(
+    schedule: GroupSchedule,
+    A: XY,
+    B: XY,
+    offset: XY,
+): GroupMemberWalk {
+    const { W } = schedule;
+    const m = W.V.length - 2;
+    if (m < 1) return { schedule, A, B, offset, first: null, last: null };
+    const W1 = placed(W.V[1]!, offset);
+    const Wm = placed(W.V[m]!, offset);
+    const p1 = W.pieces[0]!;
+    const pm = W.pieces[m]!;
+    // A leg whose ends are within EPS_GEOM is a line, so a member standing on its point doesn't
+    // loop out to the handle. A leg's path end is smooth exactly when the reference piece touching it is a cubic whose
+    // inner-side handle is that point's own (W_1's `in`, W_m's `out`): the reference's chord-rule
+    // control sits at F or G, so only the inner handle is read here.
+    const first =
+        W.tension[1]! > 0 && p1.kind === "cubic" && dist(A, W1) >= EPS_GEOM
+            ? legOf(
+                  A,
+                  W1,
+                  [A[0] + (W1[0] - A[0]) / 3, A[1] + (W1[1] - A[1]) / 3],
+                  placed(p1.c2, offset),
+              )
+            : legOf(A, W1, null, null);
+    const last =
+        W.tension[m]! > 0 && pm.kind === "cubic" && dist(Wm, B) >= EPS_GEOM
+            ? legOf(Wm, B, placed(pm.c1, offset), [
+                  B[0] + (Wm[0] - B[0]) / 3,
+                  B[1] + (Wm[1] - B[1]) / 3,
+              ])
+            : legOf(Wm, B, null, null);
+    return { schedule, A, B, offset, first, last };
+}
+
+function legPoint(leg: GroupLeg, f: number): XY {
+    const { path } = leg;
+    if (leg.length < EPS_GEOM || path.pieces[0]!.kind === "line")
+        return lerp(path.V[0]!, path.V[1]!, f);
+    return routePiecePoint(path, 0, f * leg.length);
+}
+
+/** R-14 group schedule item 6: where the member is at progress `p`. */
+export function groupPoint(walk: GroupMemberWalk, p: number): XY {
+    const { schedule, A, B, offset, first, last } = walk;
+    if (p <= 0) return A;
+    if (p >= 1) return B;
+    if (!first || !last) return lerp(A, B, p);
+    const { uFirst, uLast } = schedule;
+    if (p < uFirst) return legPoint(first, p / uFirst);
+    if (p <= uLast) return placed(routePoint(schedule.W, p), offset);
+    return legPoint(last, (p - uLast) / (1 - uLast));
+}
+
 /** What R-14 reads of a route: its points (with tensions) and the ends it was drawn against. */
 export interface RouteWalk {
     points: readonly RouteVertex[];
@@ -573,6 +705,17 @@ export function walkedPoint(
         case "route":
             if (!founding) return lerp(A, B, p); // R-14: joins and resumes walk straight
             if (!route) throw new Error("route transition has no route (I-R2)");
+            if (t.params?.offset)
+                // step 15: a group member walks the group schedule
+                return groupPoint(
+                    groupMemberWalk(
+                        groupSchedule(route),
+                        A,
+                        B,
+                        t.params.offset,
+                    ),
+                    p,
+                );
             if (route.points.length === 0) return lerp(A, B, p);
             return routePoint(routePath(A, route.points, B, route), p);
         default:

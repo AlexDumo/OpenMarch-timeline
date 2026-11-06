@@ -160,12 +160,19 @@ CREATE VIEW commit_violations AS
    WHERE t.dest_shape_id IS NULL
      AND (SELECT count(*) FROM slot_destinations d WHERE d.transition_id = t.id) <> t.slot_count
   UNION ALL
-  SELECT 'E-R3', NULL, 'route ' || r.id || ' is used by ' || (SELECT count(*) FROM transitions t WHERE t.route_id = r.id) || ' transitions'
-    FROM routes r WHERE (SELECT count(*) FROM transitions t WHERE t.route_id = r.id) <> 1
+  SELECT 'E-R3', NULL, 'route ' || r.id || ' is used by no transition'
+    FROM routes r WHERE NOT EXISTS (SELECT 1 FROM transitions t WHERE t.route_id = r.id)
   UNION ALL
   SELECT 'E-R2', t.id, 'a ' || t.path_style || ' transition has a route' FROM transitions t WHERE t.path_style <> 'route' AND t.route_id IS NOT NULL
   UNION ALL
-  SELECT 'E-R4', t.id, 'route transition has path_params' FROM transitions t WHERE t.path_style = 'route' AND t.path_params IS NOT NULL;
+  -- I-R4 (v0.9 step 15): a route transition without an offset walks its route alone
+  SELECT 'E-R4', t.id, 'route ' || t.route_id || ' is shared but this transition has no offset' FROM transitions t
+   WHERE t.path_style = 'route' AND t.path_params IS NULL AND (SELECT count(*) FROM transitions u WHERE u.route_id = t.route_id) > 1
+  UNION ALL
+  -- I-R5 (v0.9 step 15): every transition walking one route is in one timeline, over the same range
+  SELECT 'E-R5', t.id, 'route ' || t.route_id || ' is walked in two moves or over two ranges' FROM transitions t
+    JOIN transitions u ON u.route_id = t.route_id AND u.id < t.id
+   WHERE t.timeline_id <> u.timeline_id OR t.start_beat <> u.start_beat OR t.end_beat <> u.end_beat;
 
 CREATE INDEX idx_tr_route ON transitions(route_id);
 

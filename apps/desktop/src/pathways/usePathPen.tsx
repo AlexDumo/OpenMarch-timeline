@@ -1,5 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { allMarchersQueryOptions } from "@/hooks/queries";
+import { readGroupPaths } from "@/db-functions/timelineGroupRoutes";
 import tolgee from "@/global/singletons/Tolgee";
 import { db } from "@/global/database/db";
 import { performersOnly } from "@/global/classes/Marcher";
@@ -13,13 +16,22 @@ import {
     closeShapeTool,
     useShapeToolStore,
 } from "@/shapes/tool/shapeToolStore";
-import { findPathTarget } from "./pathTarget";
 import {
+    findGroupDrawTarget,
+    findGroupTarget,
+    findPathTarget,
+    groupMoveAt,
+} from "./pathTarget";
+import {
+    setGroupCommands,
+    type RejoinTarget,
     clearPath,
     closePath,
     deletePoint,
     finishDrawing,
     openPath,
+    ownPathFor,
+    rejoinFor,
     removeLastPoint,
     removePath,
     selectPoint,
@@ -30,17 +42,15 @@ import {
     usePathPenStore,
 } from "./pathPenStore";
 
-/** Why the pen can't start for this selection, or null when it can (one performer). */
+/**
+ * Why the pen can't start for this selection, or null when it can: one performer draws its own
+ * path, two or more a group path (step 15).
+ */
 export function penRefusal(selectedCount: number): string | null {
     if (selectedCount === 0)
         return tolgee.t(
             "pathways.refusals.selectOne",
             "Select a marcher to draw a path for",
-        );
-    if (selectedCount > 1)
-        return tolgee.t(
-            "pathways.refusals.oneMarcher",
-            "One marcher for now: select just one to draw its path",
         );
     return null;
 }
@@ -58,6 +68,12 @@ export function usePathPenActions(): void {
     const isPlaying = useIsPlaying()?.isPlaying ?? false;
     const performers = performersOnly(selected ?? []);
     const one = performers.length === 1 ? performers[0]! : null;
+    // Every marcher's drill number, as a group path's members are named
+    const { data: allMarchers } = useQuery(allMarchersQueryOptions());
+    const drills = useMemo(
+        () => new Map((allMarchers ?? []).map((m) => [m.id, m.drill_number])),
+        [allMarchers],
+    );
     const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
     const version = useTimelineResolverStore((s) => s.version);
     const ready = useTimelineResolverStore((s) => s.status === "ready");
@@ -85,8 +101,40 @@ export function usePathPenActions(): void {
         }
         const resolver = useTimelineResolverStore.getState().resolver;
         if (!resolver) return;
-        const marcher = one!;
         const beat = useTimelineSelectionStore.getState().playheadBeat;
+        if (!one) {
+            // Two or more: one group path for them all (AP-R8), from the middle of their starts
+            const ids = performers.map((m) => m.id);
+            void findGroupDrawTarget(db, resolver, ids, drills, beat).then(
+                (target) => {
+                    if ("kind" in target) {
+                        const who = performers.find(
+                            (m) =>
+                                target.kind === "noMove" &&
+                                m.id === target.marcherId,
+                        );
+                        toast.error(
+                            target.kind === "noMove"
+                                ? tolgee.t(
+                                      "pathways.refusals.noMove",
+                                      "{marcher} has no move at the playhead to draw a path on",
+                                      { marcher: who?.drill_number ?? "" },
+                                  )
+                                : tolgee.t(
+                                      "pathways.refusals.twoMoves",
+                                      "These marchers are in different moves at the playhead: select marchers of one move to draw a group path",
+                                  ),
+                            { id: "path-pen" },
+                        );
+                        return;
+                    }
+                    if (useShapeToolStore.getState().tool) closeShapeTool();
+                    startDrawing(target, `${ids.length}`);
+                },
+            );
+            return;
+        }
+        const marcher = one;
         void findPathTarget(db, resolver, marcher.id, beat).then((target) => {
             if (!target) {
                 toast.error(
@@ -119,43 +167,101 @@ export function usePathPenActions(): void {
     useActionHandler("removePath", () => void removePath(), {
         enabled: hasRoute && phase !== "drawing",
     });
+    // Own path and Rejoin (step 15), enabled whenever a group path is shown, closed too
+    const ownIds = usePathPenStore((s) => s.ownable);
+    const rejoin = usePathPenStore((s) => s.rejoin);
+    useActionHandler("ownPath", () => void ownPathFor(ownIds), {
+        enabled: ownIds.length > 0 && phase !== "drawing",
+    });
+    useActionHandler("rejoinPath", () => void rejoinFor(rejoin), {
+        enabled: rejoin !== null && phase !== "drawing",
+    });
 
     // The path shown follows the selection, the playhead and each committed edit; a path opened
     // stays open while it's the same marcher's same move
     const asked = useRef(0);
-    const selectedId = one?.id ?? null;
+    const selectedIds = performers.map((m) => m.id).sort((a, b) => a - b);
+    const selectionKey = selectedIds.join(",");
     useEffect(() => {
         const { session } = usePathPenStore.getState();
         const resolver = useTimelineResolverStore.getState().resolver;
-        if (isPlaying) {
+        const clear = () => {
             clearPath();
+            setGroupCommands([], null);
+        };
+        if (isPlaying) {
+            clear();
             return;
         }
         if (session?.phase === "drawing") {
-            // The marcher drawn for is let go of: the drawing goes
-            if (selectedId !== session.target.marcherId) clearPath();
+            // The marchers drawn for are let go of: the drawing goes
+            const drawnFor = session.target.group
+                ? session.target.group.members.map((m) => m.marcherId)
+                : [session.target.marcherId];
+            if (drawnFor.join(",") !== selectionKey) clearPath();
             return;
         }
-        if (selectedId === null || !ready || !resolver) {
-            clearPath();
+        if (selectedIds.length === 0 || !ready || !resolver) {
+            clear();
             return;
         }
-        // Another marcher: whatever was open closes, before its path is read
-        if (session && session.target.marcherId !== selectedId) clearPath();
         const ask = ++asked.current;
-        const drill = one!.drill_number;
-        void findPathTarget(db, resolver, selectedId, playheadBeat).then(
-            (target) => {
-                if (ask !== asked.current) return;
-                const now = usePathPenStore.getState();
-                if (now.session?.phase === "drawing") return;
-                if (!target || target.routeId === null) clearPath();
-                else showPath(target, drill);
-            },
-        );
-        // The marcher's id, not its row: a row read again is the same selection
+        const beat = playheadBeat;
+        void (async () => {
+            // A group path when any selected marcher walks one (step 15), else one marcher's own
+            const group = await findGroupTarget(
+                db,
+                resolver,
+                selectedIds,
+                drills,
+                beat,
+            );
+            const own =
+                group === null && one
+                    ? await findPathTarget(db, resolver, one.id, beat)
+                    : null;
+            // Rejoin onto the move's only group path, with only marchers off it selected
+            let rejoinTarget: RejoinTarget | null = null;
+            if (group === null) {
+                const move = await groupMoveAt(db, selectedIds, beat);
+                if (move.kind === "move") {
+                    const groups = await readGroupPaths(db, move.timelineId);
+                    if (groups.length === 1)
+                        rejoinTarget = {
+                            timelineId: move.timelineId,
+                            routeId: groups[0]!.routeId,
+                            marcherIds: selectedIds,
+                        };
+                }
+            }
+            if (ask !== asked.current) return;
+            const now = usePathPenStore.getState();
+            if (now.session?.phase === "drawing") return;
+            if (group) {
+                const members = new Set(
+                    group.group!.members.map((m) => m.marcherId),
+                );
+                showPath(group, `${members.size}`);
+                const outside = group.group!.outside.map((m) => m.marcherId);
+                setGroupCommands(
+                    selectedIds.filter((id) => members.has(id)),
+                    outside.length > 0
+                        ? {
+                              timelineId: group.timelineId,
+                              routeId: group.routeId!,
+                              marcherIds: outside,
+                          }
+                        : null,
+                );
+                return;
+            }
+            setGroupCommands([], rejoinTarget);
+            if (!own || own.routeId === null) clearPath();
+            else showPath(own, one!.drill_number);
+        })();
+        // The marchers' ids, not their rows: a row read again is the same selection
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedId, playheadBeat, version, ready, isPlaying, saved]);
+    }, [selectionKey, playheadBeat, version, ready, isPlaying, saved, drills]);
 }
 
 /**

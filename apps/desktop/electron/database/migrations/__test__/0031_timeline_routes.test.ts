@@ -359,13 +359,13 @@ describe("routes storage (QA-DB-R1 to QA-DB-R3)", () => {
         expect(violations()).toEqual([]);
     });
 
-    it("QA-DB-R1: a direct transition with a route (E-R2) and a route transition with params (E-R4) fail at commit", () => {
+    it("QA-DB-R1: a direct transition with a route fails at commit (E-R2); a route transition may carry an offset (step 15)", () => {
         insertTransition({ path_style: "direct", route_id: 1 });
         expect(violations()).toEqual(["E-R2"]);
         db.exec(
-            "UPDATE timeline_transitions SET path_style = 'route', path_params = '{}' WHERE id = 1",
+            `UPDATE timeline_transitions SET path_style = 'route', path_params = '{"offset":[1,2]}' WHERE id = 1`,
         );
-        expect(violations()).toEqual(["E-R4"]);
+        expect(violations()).toEqual([]);
     });
 
     it("QA-DB-R2: a route a transition uses can't be deleted (I-D3)", () => {
@@ -375,19 +375,47 @@ describe("routes storage (QA-DB-R1 to QA-DB-R3)", () => {
         ).toThrow(/FOREIGN KEY constraint failed/);
     });
 
-    it("QA-DB-R3: an unused route, or one route on two transitions, fails at commit (E-R3)", () => {
+    it("QA-DB-R3: an unused route fails at commit (E-R3); two walkers are a group path (step 15)", () => {
         expect(violations()).toEqual(["E-R3"]);
+        insertTransition({
+            path_style: "route",
+            route_id: 1,
+            path_params: '{"offset":[0,0]}',
+        });
+        expect(violations()).toEqual([]);
+        db.exec(
+            "INSERT INTO marchers (id, section, drill_prefix, drill_order) VALUES (2, 'Brass', 'B', 2)",
+        );
+        insertTransition({
+            id: 2,
+            path_style: "route",
+            route_id: 1,
+            path_params: '{"offset":[2,0]}',
+        });
+        expect(violations()).toEqual([]);
+    });
+
+    it("QA-DB-R6: a shared route with an own-path walker (E-R4), or walked in two moves or ranges (E-R5)", () => {
         insertTransition({ path_style: "route", route_id: 1 });
+        insertTransition({
+            id: 2,
+            path_style: "route",
+            route_id: 1,
+            path_params: '{"offset":[2,0]}',
+        });
+        expect(violations()).toEqual(["E-R4"]);
+        db.exec(
+            `UPDATE timeline_transitions SET path_params = '{"offset":[0,0]}' WHERE id = 1`,
+        );
         expect(violations()).toEqual([]);
         db.exec(
             "INSERT INTO timelines (id, start_beat, end_beat) VALUES (2, 0, 8)",
         );
-        insertTransition({
-            id: 2,
-            timeline_id: 2,
-            path_style: "route",
-            route_id: 1,
-        });
-        expect(violations()).toEqual(["E-R3"]);
+        db.exec("UPDATE timeline_transitions SET timeline_id = 2 WHERE id = 2");
+        expect(violations()).toEqual(["E-R5"]);
+        db.exec(
+            "UPDATE timeline_transitions SET timeline_id = 1, end_beat = 6 WHERE id = 2",
+        );
+        expect(violations()).toEqual(["E-R5"]);
     });
 });

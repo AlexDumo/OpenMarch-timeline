@@ -293,12 +293,33 @@ export type FieldModeDrawing = {
     /** The outline is open: drawn without joining its last point to its first (a line, #524) */
     openOutline?: boolean;
     /**
+     * The outline is a drawn path (pathways): drawn solid and heavier than a shape's outline, so it
+     * reads over a group's faint lanes; heaviest while drawn or open (`edited`), a little lighter
+     * while only shown (`shown`, closed)
+     */
+    pathLine?: "shown" | "edited";
+    /**
      * Where the shape's marchers start the move (08-shape-system-ux.md, "Marcher styling"), drawn
      * as faint ghosts of them (#417): at the start flag, the same points the walks leave from
      */
     rings?: readonly FieldPoint[];
     /** The marcher at each of `rings`, whose ghost is drawn in its own color */
     ringIds?: readonly number[];
+    /**
+     * Thin, faint lines (pathways step 15): each member's lane of a group path, from its start
+     * along its copy of the path to its end spot
+     */
+    lanes?: readonly (readonly FieldPoint[])[];
+    /**
+     * Rings round marchers' starts (pathways step 15): `group` on each member of the group path
+     * shown ("Follows the group path"), `own` on a selected marcher in the move that isn't on it
+     * ("Own path" when it walks one); `label` is the ring's tooltip
+     */
+    memberRings?: readonly {
+        at: FieldPoint;
+        kind: "group" | "own";
+        label: string;
+    }[];
     /**
      * Spots the shape leaves empty on purpose, drawn as dashed rings: an odd-count outline's gap
      * (#390), which a click on another spot between corners moves

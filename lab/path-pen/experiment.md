@@ -2,96 +2,75 @@
 # The lab reads this file when this branch's test build is published.
 # Keep `id` stable: feedback is filed under it.
 id: path-pen
-title: Paths with curves (pathways, step 2)
-summary: "Step 2 of pathways: curves. A path's points can now be smooth, and you draw and edit them the way you do a Line's points. In the pen, click for a corner or press and drag for a smooth point. On an open path, double-click a point to swap corner and smooth, drag the ends of its tangent bar for roundness, and use the point and leg menus."
+title: "Paths for a group (pathways, step 15)"
+summary: "Step 15 of pathways: draw one path for a whole block. Select several marchers and press P. The block slides along the path keeping its shape and lands on its end set. Any one marcher can break off with Own path and come back with Rejoin."
 status: open
 variants: []
 questions:
-  - "Is drawing and editing curves now like the Line? Think about press-and-drag in the pen, double-click to swap, the tangent bar, Corner | Smooth and Roundness in the point's menu, and Straight | Curved on a leg's dot. Tell us anything that works differently from the Line."
-  - "In the pen, a press-and-drag sets how round the new point is, but not its direction: the curve's direction comes from the points around it, as on a Line. Did you expect to aim the curve with the drag, as in Figma or Illustrator?"
-  - Draw a run or a flutter with more points than counts. Does the marcher walk it at one steady speed in playback, the 3D View and the start flag paths?
-  - "Split at playhead on a curved stretch: the curve near the cut is redrawn slightly, and the marcher can drift about half a step there. Is that acceptable, or should a split on a curve be refused until it can stay exact?"
-  - Do the Corner and Smooth buttons in the small editor (shown with a point selected) earn their place, or is the point's menu enough?
+  - "Select a block and draw a path through a turn. Does the block hold its shape all the way between the first and last points, and land where it should?"
+  - "When the end set isn't the start formation moved over, each marcher changes speed where it joins the path and where it leaves it, and walks with the group in between. Does that read right in playback and the 3D View, or would you rather each marcher kept one steady speed and the block bent through turns?"
+  - "Big steps now names the leg (onto the path, along it, off it). Is it clear which marchers it means, and what to do about it?"
+  - "Own path and Rejoin on the floating bar: did they do what you expected? Was it clear from the blue and orange rings who follows the group path and who doesn't?"
+  - "Remove path with one marcher selected removes the path for the whole group (the toast says how many). Is that what you wanted, or should it take only that marcher off?"
 ---
 
-Step 1 drew paths with sharp corners only. This build adds curves, drawn and
-edited like the shape tool's Line (owner feedback on step 1: "Is there a reason
-this can't be exactly like the line editor, especially once we get to curves?").
+Steps 1 and 2 drew a path for one marcher. This build draws **one path for a
+group**: the block slides along it, keeps facing the same way, and lands on its
+end set.
 
-**What changed since the last round**
+**What's new**
 
-- On an open path, **Backspace** or **Delete** with no point selected removes
-  the path (undo brings it back). With a point selected they delete that point
-  and select the one before it, so pressing on deletes point after point.
-- A drawn path now shows by the same rules as the straight paths: the start
-  flag positions setting, and **N** (hold it, or tap it to keep it on). At the
-  default, a closed path is hidden until you press N. A path you're editing or
-  drawing always shows.
-- A path's points are **corners** or **smooth**. A smooth point bends the path
-  through it. Its **roundness** goes from flat to very round, and 1 is the plain
-  curve, as on a Line.
-- **Drawing (the pen, P):**
-  - A **click** places a corner, as before.
-  - A **press and drag** places a smooth point where you pressed. The further
-    you drag along the curve, the rounder it gets. Drag back onto the point to
-    make it a corner. Roundness moves in tenths; hold **Shift** (fine) for any
-    value. While you drag, the point's tangent bar shows.
-  - The hint over the field says so: "click for a corner, drag for a smooth
-    point".
-- **Editing an open path** works like a Line's points:
-  - **Double-click** a point to swap corner and smooth.
-  - Click a smooth point to select it and show its **tangent bar**. Drag either
-    end to change its roundness (tenths, **Shift** for fine). Drag behind the
-    point to make it a corner.
-  - **Right-click** (or long-press) a point: **Corner | Smooth**, **Roundness**
-    (selects it so its bar shows) and **Delete point**.
-  - The small **dot in the middle of each leg** now sits on the curve. Click it
-    to add a point, or drag it to add one and move it. A point added on a curved
-    leg is as smooth as the smoother end. Right-click the dot for **Add point
-    here** and **Straight | Curved**.
-  - With a point selected, the small editor has **Corner** and **Smooth**
-    buttons. They're also in the command palette.
-- Words: "corner" became "point" wherever a point can be either (Delete point,
-  Remove last point, Add point here).
-- Each edit is one undo step, and redo brings back the same points.
+- **Drawing for a group.** Select two or more marchers in the same move and
+  press **P**. The hint says "Group path for 16 marchers". You draw one line
+  from the middle of the block; every marcher's own copy of it (its **lane**)
+  is drawn faint as you go. Points, curves, Enter and Escape work as before.
+- **The block holds its shape.** Every marcher passes its copy of each point at
+  the same moment, so between the first and last points the block moves as one.
+  Only the stretch from each marcher's start onto the path, and from the path to
+  its own end spot, can be faster or slower. A block whose end set is its start
+  formation moved over walks at one steady speed the whole way.
+- **Rings.** With a group path shown, each marcher on it gets a blue ring
+  ("Follows the group path"). A selected marcher in the move that isn't on it
+  gets an orange ring ("Own path" when it walks its own).
+- **Editing.** Double-click the line, or any lane, to open it (or right-click
+  for Edit path). Point edits move every lane at once.
+- **Own path · Rejoin.** On the floating bar. **Own path** gives the selected
+  marchers their own copy of their lane, which you can then edit alone. It then
+  walks that line at its own steady speed. **Rejoin** puts selected marchers
+  back on the group path, each from where it stands. It also adds a marcher that
+  wasn't on it. Both are in the command palette too.
+- **Remove path** on a group path removes it for the whole group, whichever
+  marcher is selected, and the toast says how many marchers lost it (with Undo).
+  **Own path** first keeps one marcher's.
+- **Big steps** now judges each leg: onto the path, along it, and off it.
+- Each edit is one undo step, and redo brings back the same paths.
 
 **Try it**
 
-1. Open a demo show or start a new one with a few pages. Put the playhead on a
-   page where a marcher moves, and select **one** marcher.
-2. Press **P**. Press and drag to place a couple of smooth points, click once
-   for a corner, then double-click or press **Enter**.
-3. Play the page. The marcher walks the curve at one steady speed. Try a
-   flutter: more points than the move has counts.
-4. Double-click the path to open it. Double-click a point, drag its tangent
-   bar, and try the point's and the leg dot's right-click menus.
-5. Try **Split at playhead** in the middle of a curve, and on a straight leg.
+1. Put the playhead on a page where a block moves. Select the whole block.
+2. Press **P**, place a smooth point and a corner, and press **Enter**.
+3. Play it, and watch the 3D View. Try an end set that's a different shape
+   (a line, an arc) and watch where the speed changes.
+4. Select one marcher of the block, double-click the path, and press
+   **Own path**. Edit its path. Then press **Rejoin**.
+5. Try **Remove path** with one marcher selected, then Undo.
 
 **Good to know**
 
-- The curve is the Line's: centripetal Catmull–Rom, the same roundness scale.
-  The path's two ends (where the marcher starts and its end spot) aren't
-  points. They have no roundness, and the path leaves and arrives along a
-  natural curve.
-- If an earlier page moves where the marcher starts, only the first stretch of
-  the path changes. The curve between your points stays put.
-- **Split at playhead** on a straight leg keeps the motion exactly. On a curved
-  stretch, the marcher is still exactly where it was at the split count, and
-  every point stays put. The curve right next to the cut is redrawn, though, so
-  the marcher can drift a little in between. In tests that was about 1% of the
-  path's length.
-- Split by marchers, merging moves, and the Move card's Straight and Arc still
-  refuse on a move with a path, and say why.
+- The moments the block reaches the first and last points come from the path
+  you drew. They don't fall on whole counts. Pins (a later step) will put a
+  point on a count.
+- **Split at playhead** on a move with a group path refuses, and says to give
+  the marchers their own paths (Own path) or remove the path first.
+- With marchers from different moves selected, the pen refuses and says so.
 
 **Not in this step, on purpose**
 
-- Handles you aim by hand. A smooth point's direction comes from its
-  neighbors, as on a Line, and a drag sets only how round it is.
-- Arcs inside a path, pins (a point on a count), midsets.
-- Paths for groups, follow the leader along a drawn path, rejoining after a
-  takeover, steps per count, turns.
-- Tablet polish. Long-press still opens a point's menu, but nothing else was
-  tuned for touch.
+- Wheeling or turning the block with the path. It always slides, facing the
+  same way.
+- Pins and holds shared by the group, re-fitting the path when the starts or
+  ends move, follow the leader along a drawn path.
+- Tablet polish. Long-press still opens the menus.
 
-Shows saved with a smooth point open in this build and later ones. The step 1
-build walks a smooth point as a corner.
+Shows with a group path open in this build and later ones. The step 2 build
+ignores the offsets (every marcher walks the middle line) and can't edit them.

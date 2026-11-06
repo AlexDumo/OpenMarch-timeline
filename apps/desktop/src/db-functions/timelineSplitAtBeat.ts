@@ -29,6 +29,7 @@ import {
 } from "./timelineAssignments";
 import {
     planRouteCut,
+    routeRefusal,
     writeRouteCutAfterInTransaction,
     writeRouteCutBeforeInTransaction,
     type RouteCut,
@@ -262,6 +263,8 @@ export async function splitTimelineAtBeatInTransaction({
     const routeCuts = new Map<number, RouteCut>();
     for (const t of transitions) {
         if (t.route_id === null) continue;
+        // Step 15: a group path isn't cut (its moments come from the whole reference walk)
+        if (t.path_params !== null) refuse(routeRefusal.groupSplit());
         const own = rows.filter((r) => r.transition_id === t.id);
         if (own.length > 0)
             routeCuts.set(

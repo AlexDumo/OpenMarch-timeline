@@ -2,6 +2,8 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { T } from "@tolgee/react";
 import {
+    ArrowsMergeIcon,
+    ArrowsSplitIcon,
     BackspaceIcon,
     LineSegmentsIcon,
     TrashIcon,
@@ -27,7 +29,16 @@ import {
 } from "@/shapes/editor/EditorBarParts";
 import type { XY } from "@/shapes/types";
 import { shapeOf, usePathPenStore, type PathSession } from "./pathPenStore";
-import { curveOf, isSmooth, pathOutline, pointOf } from "./pathEdit";
+import {
+    curveOf,
+    groupLegDistances,
+    isSmooth,
+    memberWalkOf,
+    pathOutline,
+    pointOf,
+    scheduleOf,
+    type LegWhere,
+} from "./pathEdit";
 
 /**
  * The Big steps advice for a path (spec v0.9 Appendix I.2, I.5): one steady speed means every leg
@@ -38,9 +49,10 @@ import { curveOf, isSmooth, pathOutline, pointOf } from "./pathEdit";
 export function bigSteps(
     session: PathSession,
     fieldProperties: FieldProperties,
-): { steps: string; inches: number } | null {
+): BigSteps | null {
     const { target } = session;
     const counts = target.end - target.start;
+    if (target.group) return groupBigSteps(session, fieldProperties);
     const size = StepSize.fromDistance({
         marcher_id: target.marcherId,
         distance: curveOf(shapeOf(session)).L,
@@ -52,8 +64,83 @@ export function bigSteps(
     return {
         steps: size.displayString(),
         inches: Math.round(size.inchesPerStep),
+        where: null,
+        legs: [],
     };
 }
+
+/** Big steps' verdict: the worst big leg, and every big leg (a group path's, step 15) */
+export interface BigSteps {
+    steps: string;
+    inches: number;
+    /** Which leg of a group path is worst; null for one marcher's own path */
+    where: LegWhere | null;
+    legs: {
+        where: LegWhere;
+        drill: string | null;
+        steps: string;
+    }[];
+}
+
+/**
+ * Big steps on a group path (spec Appendix I.8): each member's first leg onto the path, the middle
+ * along it (the same for every member, judged once) and each member's last leg off it, each with
+ * the straight moves' test. A leg whose speed is unbounded (its time rounds to nothing) is big.
+ */
+function groupBigSteps(
+    session: PathSession,
+    fieldProperties: FieldProperties,
+): BigSteps | null {
+    const { target } = session;
+    const group = target.group!;
+    const counts = target.end - target.start;
+    const schedule = scheduleOf(shapeOf(session));
+    const walks = group.members.map((m) => ({
+        marcherId: m.marcherId,
+        walk: memberWalkOf(schedule, m),
+    }));
+    const drill = new Map(group.members.map((m) => [m.marcherId, m.drill]));
+    const threshold = fieldProperties.stepSizeWarningThresholdInches;
+    const big: (BigSteps["legs"][number] & { inches: number })[] = [];
+    for (const leg of groupLegDistances(schedule, walks)) {
+        const size = StepSize.fromDistance({
+            marcher_id: leg.marcherId ?? target.marcherId,
+            distance: Number.isFinite(leg.distance)
+                ? leg.distance
+                : Number.MAX_SAFE_INTEGER,
+            counts,
+            fieldProperties,
+        });
+        if (!size.exceedsThreshold(threshold)) continue;
+        big.push({
+            where: leg.where,
+            drill:
+                leg.marcherId === null
+                    ? null
+                    : (drill.get(leg.marcherId) ?? null),
+            steps: size.displayString(),
+            inches: size.inchesPerStep,
+        });
+    }
+    if (big.length === 0) return null;
+    const worst = big.reduce((a, b) => (b.inches > a.inches ? b : a));
+    return {
+        steps: worst.steps,
+        inches: Math.round(worst.inches),
+        where: worst.where,
+        legs: big.map(({ where, drill, steps }) => ({ where, drill, steps })),
+    };
+}
+
+/** How Big steps names a leg of a group path */
+const legWords = (where: LegWhere) =>
+    where === "onto"
+        ? tolgee.t("pathways.editor.legOnto", "onto the path")
+        : where === "off"
+          ? tolgee.t("pathways.editor.legOff", "off the path")
+          : where === "straight"
+            ? tolgee.t("pathways.editor.legStraight", "straight to the spot")
+            : tolgee.t("pathways.editor.legAlong", "along the path");
 
 /**
  * The path pen's hint and floating editor (pathways steps 1 and 2). While drawing, a hint over the field
@@ -95,7 +182,16 @@ function PathPenBanner({ session }: { session: PathSession }) {
             data-testid="path-pen-banner"
         >
             {/* With the key unbound, only the right-click is said */}
-            {keys ? (
+            {session.target.group ? (
+                <T
+                    keyName="pathways.banner.groupDrawing"
+                    defaultValue="Group path for {count} marchers: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
+                    params={{
+                        count: session.target.group.members.length,
+                        esc,
+                    }}
+                />
+            ) : keys ? (
                 <T
                     keyName="pathways.banner.drawingPoints"
                     defaultValue="{marcher}'s path: click for a corner, drag for a smooth point · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel"
@@ -167,6 +263,10 @@ function PathEditorBar({
     const shape = shapeOf(session);
     const picked = drawing ? -1 : pointOf(shape, session.selected);
     const smooth = picked >= 0 && isSmooth(shape, picked);
+    // Own path and Rejoin for a group path (step 15): who they act on comes from the selection
+    const ownable = usePathPenStore((s) => s.ownable);
+    const rejoin = usePathPenStore((s) => s.rejoin);
+    const groupControls = !drawing && (ownable.length > 0 || rejoin !== null);
     // An open path is always a stored one, so the bar always holds a control
     const controls = drawing || stored;
     return (
@@ -183,22 +283,47 @@ function PathEditorBar({
         >
             {big && (
                 <Tip
-                    label={tolgee.t(
-                        "pathways.editor.bigStepsTipPoints",
-                        "{inches} in a step, all along the path. Lengthen the move, or move or take out points to shorten the path.",
-                        { inches: big.inches },
-                    )}
+                    label={
+                        big.where === null
+                            ? tolgee.t(
+                                  "pathways.editor.bigStepsTipPoints",
+                                  "{inches} in a step, all along the path. Lengthen the move, or move or take out points to shorten the path.",
+                                  { inches: big.inches },
+                              )
+                            : tolgee.t(
+                                  "pathways.editor.bigStepsTipLegs",
+                                  "Big steps on {legs}. Every marcher passes each point of the path at the same moment, so only the legs onto and off the path change speed. Lengthen the move, or move points to even out the legs.",
+                                  {
+                                      legs: big.legs
+                                          .map((l) =>
+                                              l.drill === null
+                                                  ? `${legWords(l.where)} (${l.steps})`
+                                                  : `${l.drill} ${legWords(l.where)} (${l.steps})`,
+                                          )
+                                          .join(", "),
+                                  },
+                              )
+                    }
                 >
                     <span
                         className="text-yellow flex items-center gap-4 px-4"
                         data-testid="path-big-steps"
                     >
                         <WarningIcon size={14} weight="bold" aria-hidden />
-                        {tolgee.t(
-                            "pathways.editor.bigStepsShort",
-                            "Big steps · {steps}",
-                            { steps: big.steps },
-                        )}
+                        {big.where === null
+                            ? tolgee.t(
+                                  "pathways.editor.bigStepsShort",
+                                  "Big steps · {steps}",
+                                  { steps: big.steps },
+                              )
+                            : tolgee.t(
+                                  "pathways.editor.bigStepsLeg",
+                                  "Big steps · {steps} {where}",
+                                  {
+                                      steps: big.steps,
+                                      where: legWords(big.where),
+                                  },
+                              )}
                     </span>
                 </Tip>
             )}
@@ -271,6 +396,47 @@ function PathEditorBar({
                                 >
                                     <WaveSineIcon size={14} />
                                 </IconButton>
+                            </span>
+                            {stored && <Divider />}
+                        </>
+                    )}
+                    {groupControls && (
+                        <>
+                            <span className="flex items-center gap-2">
+                                {ownable.length > 0 && (
+                                    <IconButton
+                                        label={tolgee.t(
+                                            "pathways.editor.ownPathTip",
+                                            "Give the selected marchers their own copy of their part of the path",
+                                        )}
+                                        action="ownPath"
+                                        onClick={() => runAction("ownPath")}
+                                        testId="path-own"
+                                    >
+                                        <ArrowsSplitIcon size={14} />
+                                        {tolgee.t(
+                                            "actions.path.ownPath",
+                                            "Own path",
+                                        )}
+                                    </IconButton>
+                                )}
+                                {rejoin !== null && (
+                                    <IconButton
+                                        label={tolgee.t(
+                                            "pathways.editor.rejoinTip",
+                                            "Put the selected marchers back on the group path, each from where it stands",
+                                        )}
+                                        action="rejoinPath"
+                                        onClick={() => runAction("rejoinPath")}
+                                        testId="path-rejoin"
+                                    >
+                                        <ArrowsMergeIcon size={14} />
+                                        {tolgee.t(
+                                            "actions.path.rejoin",
+                                            "Rejoin",
+                                        )}
+                                    </IconButton>
+                                )}
                             </span>
                             {stored && <Divider />}
                         </>
