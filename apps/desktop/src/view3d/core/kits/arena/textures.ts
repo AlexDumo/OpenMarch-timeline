@@ -134,9 +134,6 @@ const SIGN = {
     label: "rgba(185,168,255,0.62)",
 };
 
-/** Short copy under the On The Move logo. Awaiting owner approval. */
-export const OTM_TAGLINE = "Your drill, on every phone.";
-
 /** Sets canvas letter spacing where supported (Chromium; not every test DOM). */
 function tracking(g: CanvasRenderingContext2D, px: number): void {
     const c = g as CanvasRenderingContext2D & { letterSpacing?: string };
@@ -290,13 +287,14 @@ function paintScoreboard(
         // The OpenMarch logo, small, as the screen's signature.
         drawOpenMarchLogo(g, cx, h - 46, 34, "rgba(207,203,230,0.42)");
     });
-    // End face: one ad, the On The Move logo and one line.
+    // End face: one ad, the On The Move logo alone.
     inFace(g, 0, 512, 634, SCREEN_ASPECT.end, (w, h) => {
         screenGround(g, w, h);
-        drawOtmLogo(g, { x: w * 0.14, y: 150, w: w * 0.72, h: 150 }, SIGN.otm);
-        g.fillStyle = SIGN.muted;
-        fitFont(g, OTM_TAGLINE, 500, 30, 18, w - 120);
-        g.fillText(OTM_TAGLINE, w / 2, 372);
+        drawOtmLogo(
+            g,
+            { x: w * 0.14, y: h / 2 - 80, w: w * 0.72, h: 160 },
+            SIGN.otm,
+        );
     });
 }
 
