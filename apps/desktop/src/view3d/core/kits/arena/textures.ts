@@ -1,14 +1,13 @@
 import { ClampToEdgeWrapping, type CanvasTexture } from "three";
 import {
-    drawOpenMarchLogo,
-    drawOtmLogo,
-    fitFont,
+    creditsTexture,
+    inFace,
     paintCanvasTexture,
-    paintWithOtmLogo,
-    repaintCanvasTexture,
-    TEXTURE_FONT,
+    paintCreditsCard,
+    paintLogoBanner,
+    paintOtmAd,
+    type CreditsTexture,
 } from "../../environment";
-import type { ShowCredits } from "../../types";
 
 /**
  * Canvas textures for the arena kit. Everything is painted here at build time;
@@ -114,85 +113,6 @@ export function seatBackTexture(): CanvasTexture {
     return tex;
 }
 
-/**
- * Signage palette. The arena's boards are quiet: a near-black band, soft
- * lavender-white marks and the brand purple only as hairlines, so nothing
- * competes with the performers on the floor.
- */
-const SIGN = {
-    /** Board background: LED black with a hint of violet. */
-    ground: "#07060d",
-    /** Brand purple, for hairlines and small accents only. */
-    purple: "#6442ff",
-    /** Logos on the boards: a soft white, never pure. */
-    mark: "#cfcbe6",
-    /** The On The Move logo's tint: muted brand lavender. */
-    otm: "#a99cf2",
-    /** Primary and secondary text on the screens. */
-    text: "#ecebf3",
-    muted: "rgba(236,235,243,0.56)",
-    label: "rgba(185,168,255,0.62)",
-};
-
-/** Sets canvas letter spacing where supported (Chromium; not every test DOM). */
-function tracking(g: CanvasRenderingContext2D, px: number): void {
-    const c = g as CanvasRenderingContext2D & { letterSpacing?: string };
-    if ("letterSpacing" in c) c.letterSpacing = `${px}px`;
-}
-
-/**
- * The LED ribbon's layout. One texture tile spans `tileHeights` band heights
- * (the 2048 x 128 texture is squeezed along U, so marks are painted narrower
- * to read true on the band). Each tile carries two ads with long dark
- * stretches between: the OpenMarch logo at `firstAd` and the On The Move
- * logo half a tile on. `quiet` is a U with nothing on it but the hairlines,
- * for bands that should stay dark.
- */
-export const ARENA_RIBBON = {
-    tileHeights: 32,
-    firstAd: 0.25,
-    quiet: 0.5,
-} as const;
-const RIBBON_W = 2048;
-const RIBBON_H = 128;
-
-function paintRibbon(g: CanvasRenderingContext2D): void {
-    const W = RIBBON_W;
-    const H = RIBBON_H;
-    g.fillStyle = SIGN.ground;
-    g.fillRect(0, 0, W, H);
-    // Hairlines along both edges, the one constant all the way round.
-    g.fillStyle = "rgba(140,120,255,0.32)";
-    g.fillRect(0, 0, W, 2);
-    g.fillRect(0, H - 2, W, 2);
-    // Each ad is drawn in square "band pixels" and squeezed onto the tile.
-    const k = W / (ARENA_RIBBON.tileHeights * H);
-    const slot = (u: number, draw: () => void) => {
-        g.save();
-        g.translate(u * W, 0);
-        g.scale(k, 1);
-        draw();
-        g.restore();
-    };
-    const a = ARENA_RIBBON.firstAd;
-    slot(a, () => drawOpenMarchLogo(g, 0, H / 2, 80, SIGN.mark));
-    slot(a + 0.5, () =>
-        drawOtmLogo(g, { x: -200, y: H / 2 - 38, w: 400, h: 76 }, SIGN.otm),
-    );
-}
-
-/**
- * The LED ribbon boards (lower front wall; the upper fascia and scoreboard
- * rings sample its quiet stretch). See `ARENA_RIBBON` for the layout.
- */
-export function arenaRibbonTexture(): CanvasTexture {
-    const tex = paintCanvasTexture(RIBBON_W, RIBBON_H, paintRibbon, {
-        repeat: true,
-    });
-    paintWithOtmLogo(tex, paintRibbon);
-    return tex;
-}
-
 /** Where each scoreboard face sits in the 1024 x 1024 atlas, in UV units. */
 export const SCOREBOARD_ATLAS = {
     /** The two long faces (toward the front and back sides). */
@@ -209,118 +129,20 @@ export const SCOREBOARD_ATLAS = {
 const SCREEN_ASPECT = { side: 1 / 0.42, end: 0.62 / 0.42 };
 
 /**
- * Runs `draw` in a face's own coordinates: `w` x 512 square pixels, where `w`
- * keeps the face's true aspect, squeezed into the atlas region.
+ * The center-hung scoreboard's screens: the show's credits on the long faces
+ * and an On The Move ad on the ends. V runs up (three.js convention), so the
+ * canvas's top half is the long-face image. Blank credits until `setCredits`.
  */
-function inFace(
-    g: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    regionW: number,
-    aspect: number,
-    draw: (w: number, h: number) => void,
-): void {
-    const h = 512;
-    const w = h * aspect;
-    g.save();
-    g.beginPath();
-    g.rect(x, y, regionW, h);
-    g.clip();
-    g.translate(x, y);
-    g.scale(regionW / w, 1);
-    draw(w, h);
-    g.restore();
-}
-
-/** A screen's ground: flat near black with the faintest lift toward the top. */
-function screenGround(g: CanvasRenderingContext2D, w: number, h: number) {
-    const bg = g.createLinearGradient(0, 0, 0, h);
-    bg.addColorStop(0, "#0e0c19");
-    bg.addColorStop(1, "#08070e");
-    g.fillStyle = bg;
-    g.fillRect(0, 0, w, h);
-}
-
-/**
- * Paints the center-hung scoreboard's screens: the show's credits on the long
- * faces and an On The Move ad on the ends. V runs up (three.js convention),
- * so the canvas's top half is the long-face image.
- */
-function paintScoreboard(
-    g: CanvasRenderingContext2D,
-    credits: ShowCredits,
-): void {
-    g.clearRect(0, 0, 1024, 1024);
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    // Long face: the credits card, set like a title card.
-    inFace(g, 0, 0, 1024, SCREEN_ASPECT.side, (w, h) => {
-        screenGround(g, w, h);
-        const cx = w / 2;
-        const lines = [
-            credits.designer && `Designed by ${credits.designer}`,
-            credits.client && `For ${credits.client}`,
-        ].filter((l): l is string => !!l);
-        // Label, title, rule, then the lines; centered as a block.
-        const block = 46 + 104 + 44 + lines.length * 52;
-        let y = (h - 64 - block) / 2 + 12;
-        g.fillStyle = SIGN.label;
-        g.font = `600 24px ${TEXTURE_FONT}`;
-        tracking(g, 6);
-        g.fillText("NOW PERFORMING", cx, y);
-        tracking(g, 0);
-        y += 46 + 52;
-        g.fillStyle = SIGN.text;
-        const title = credits.title || "Untitled show";
-        fitFont(g, title, 600, 92, 40, w - 160);
-        g.fillText(title, cx, y);
-        y += 52 + 34;
-        g.fillStyle = SIGN.purple;
-        g.fillRect(cx - 36, y - 1.5, 72, 3);
-        y += 10 + 30;
-        g.fillStyle = SIGN.muted;
-        for (const l of lines) {
-            fitFont(g, l, 400, 34, 20, w - 200);
-            g.fillText(l, cx, y);
-            y += 52;
-        }
-        // The OpenMarch logo, small, as the screen's signature.
-        drawOpenMarchLogo(g, cx, h - 46, 34, "rgba(207,203,230,0.42)");
-    });
-    // End face: one ad, the On The Move logo alone.
-    inFace(g, 0, 512, 634, SCREEN_ASPECT.end, (w, h) => {
-        screenGround(g, w, h);
-        drawOtmLogo(
-            g,
-            { x: w * 0.14, y: h / 2 - 80, w: w * 0.72, h: 160 },
-            SIGN.otm,
+export function scoreboardTexture(): CreditsTexture {
+    return creditsTexture(1024, 1024, (g, credits) => {
+        g.clearRect(0, 0, 1024, 1024);
+        inFace(g, 0, 0, 1024, 512, SCREEN_ASPECT.side, (w, h) =>
+            paintCreditsCard(g, w, h, credits),
+        );
+        inFace(g, 0, 512, 634, 512, SCREEN_ASPECT.end, (w, h) =>
+            paintOtmAd(g, w, h),
         );
     });
-}
-
-/**
- * The scoreboard's screen atlas (see `paintScoreboard`), blank credits until
- * `setCredits` is called. Every repaint, the logo's included, uses the latest.
- */
-export function scoreboardTexture(): {
-    texture: CanvasTexture;
-    setCredits(credits: ShowCredits): void;
-} {
-    let credits: ShowCredits = { title: "" };
-    const paint = (g: CanvasRenderingContext2D) => paintScoreboard(g, credits);
-    const texture = paintCanvasTexture(1024, 1024, paint);
-    paintWithOtmLogo(texture, paint);
-    let last = JSON.stringify(credits);
-    return {
-        texture,
-        setCredits(next) {
-            const key = JSON.stringify(next);
-            if (key === last) return;
-            last = key;
-            credits = next;
-            repaintCanvasTexture(texture, paint);
-        },
-    };
 }
 
 /**
@@ -353,20 +175,7 @@ export function bannerAtlasTexture(): CanvasTexture {
             g.save();
             g.translate(i * 128, 0);
             g.scale(128 / w, 1);
-            // Field with a pointed bottom.
-            g.fillStyle = color;
-            g.beginPath();
-            g.moveTo(0, 0);
-            g.lineTo(w, 0);
-            g.lineTo(w, 462);
-            g.lineTo(w / 2, 508);
-            g.lineTo(0, 462);
-            g.closePath();
-            g.fill();
-            // Logo upright near the top, a hairline under it, then fabric.
-            drawOpenMarchLogo(g, w / 2, 112, 62, "#e6e3f2");
-            g.fillStyle = "rgba(169,156,242,0.7)";
-            g.fillRect(w / 2 - 22, 176, 44, 2);
+            paintLogoBanner(g, w, 512, color, true);
             g.restore();
         });
     });

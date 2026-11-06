@@ -51,7 +51,6 @@ export const buildCollege: KitBuilder = (input) =>
                 legs: 0,
                 dx: ft(150.8),
                 y: ft(70),
-                title: "SPRING SHOW",
             },
             podium: false,
             poles: {

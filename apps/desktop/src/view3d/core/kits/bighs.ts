@@ -46,7 +46,6 @@ export const buildBighs: KitBuilder = (input) =>
                 legs: ft(34),
                 dx: ft(138),
                 y: ft(60),
-                title: "SPRING SHOW",
             },
             plaza: { dx: ft(180), w: ft(160), d: ft(300) },
             podium: true,
