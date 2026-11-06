@@ -148,7 +148,7 @@ describe("turf on football fields", () => {
                 );
                 expect(logo.rotation).toBe(0);
                 expect(logo.color).toBe("#f4f6f1");
-                // fits between the middle hash rows, at most 15 yards wide
+                // fits between the middle hash rows, at most 20 yards wide
                 const height = (logo.width * 128) / 230;
                 const mid = (p.footprint.minZ + p.footprint.maxZ) / 2;
                 for (const h of p.items.filter((i) => i.role === "hash"))
@@ -156,7 +156,7 @@ describe("turf on football fields", () => {
                         expect(
                             Math.abs((h.minZ + h.maxZ) / 2 - mid),
                         ).toBeGreaterThan(height / 2);
-                expect(logo.width).toBeLessThanOrEqual(3 * FIVE_YARDS + 1e-9);
+                expect(logo.width).toBeLessThanOrEqual(4 * FIVE_YARDS + 1e-9);
                 // painted over the center yard line, under the numbers
                 const at = (role: FieldRole) =>
                     p.items.findIndex((i) => i.role === role);

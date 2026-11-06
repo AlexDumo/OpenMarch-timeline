@@ -80,7 +80,7 @@ export function screenGround(
 
 /**
  * The credits card, set like a title card: "NOW PERFORMING", the title, a
- * short purple rule, "Designed by" and "For" (when set), and a faint
+ * short purple rule, "Designed by" and "For" (when set), and the
  * OpenMarch logo as the signature. Painted in a `w` x `h` face (h ~512).
  */
 export function paintCreditsCard(
@@ -101,7 +101,7 @@ export function paintCreditsCard(
     ].filter((l): l is string => !!l);
     // Label, title, rule, then the lines; centered as a block.
     const block = (46 + 104 + 44 + lines.length * 52) * s;
-    let y = (h - 64 * s - block) / 2 + 12 * s;
+    let y = (h - 104 * s - block) / 2 + 12 * s;
     g.fillStyle = SIGN.label;
     g.font = `600 ${24 * s}px ${TEXTURE_FONT}`;
     tracking(g, 6 * s);
@@ -122,7 +122,7 @@ export function paintCreditsCard(
         g.fillText(l, cx, y);
         y += 52 * s;
     }
-    drawOpenMarchLogo(g, cx, h - 46 * s, 34 * s, "rgba(207,203,230,0.42)");
+    drawOpenMarchLogo(g, cx, h - 70 * s, 64 * s, "rgba(207,203,230,0.72)");
 }
 
 /** An On The Move ad: the logo alone, centered on the screen ground. */

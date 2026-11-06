@@ -136,8 +136,8 @@ function planEndZones(ctx: PlanContext, play: PlayingRegion): void {
     }
 }
 
-/** Widest midfield logo: fifteen yards, like a large college logo. */
-const LOGO_MAX_WIDTH = 3 * FIVE_YARDS;
+/** Widest midfield logo: twenty yards, like a large college logo. */
+const LOGO_MAX_WIDTH = 4 * FIVE_YARDS;
 /** Narrower than this, the logo is skipped. */
 const LOGO_MIN_WIDTH = FIVE_YARDS;
 
