@@ -1,5 +1,13 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { InstancedMesh, Mesh, SpotLight } from "three";
+import {
+    InstancedMesh,
+    Matrix4,
+    Mesh,
+    Quaternion,
+    ShaderMaterial,
+    SpotLight,
+    Vector3,
+} from "three";
 import type { LightingPreset, SeatRow } from "../../types";
 import {
     buildCrowd,
@@ -7,9 +15,13 @@ import {
     createSharedMaterials,
     defaultCrowdPalette,
     FT,
+    HORIZON_FAR_RADIUS,
+    horizonGeometry,
     LIGHTING_PRESET_IDS,
     lightingValues,
+    personGeometry,
     lightPole,
+    PERSON_HEIGHT,
     PERSON_SPACING,
     setTexturePainting,
     videoBoard,
@@ -37,8 +49,7 @@ function straightRows(
 describe("lighting presets", () => {
     it("ports the demo's SKY table in meters", () => {
         const day = lightingValues("day");
-        expect(day.skyTop).toBe(0x3d7fd6);
-        expect(day.skyBottom).toBe(0xcfe2f5);
+        expect(day.skyBottom).toBe(day.fog);
         expect(day.hemisphere).toEqual({
             sky: 0xcfe3ff,
             ground: 0x4a5d33,
@@ -85,7 +96,14 @@ describe("lighting presets", () => {
                 v.sun.intensity,
                 ...v.sun.offset,
             ];
+            nums.push(
+                v.fogNear,
+                v.fogFar,
+                ...Object.values(v.sky).flat().map(Number),
+            );
             nums.forEach((n) => expect(Number.isFinite(n)).toBe(true));
+            expect(v.fogFar).toBeGreaterThan(v.fogNear);
+            expect(v.sky.cloudCover).toBeLessThanOrEqual(1);
         }
         expect(LIGHTING_PRESET_IDS.sort()).toEqual(
             ["day", "dusk", "house", "night", "roofClosed", "show"].sort(),
@@ -100,7 +118,9 @@ describe("createEnvironment", () => {
         expect(env.hemisphere.intensity).toBe(v.hemisphere.intensity);
         expect(env.sun.color.getHex()).toBe(0xffa860);
         expect(env.sun.castShadow).toBe(true);
-        expect(env.fog.color.getHex()).toBe(0xf2995a);
+        expect(env.fog.color.getHex()).toBe(v.fog);
+        expect(env.fog.near).toBe(v.fogNear);
+        expect(env.fog.far).toBe(v.fogFar);
         expect(env.exposure).toBe(1.05);
         expect(env.sun.position.z).toBeCloseTo(-24 + -60 * FT);
         expect(env.sun.target.position.z).toBe(-24);
@@ -114,9 +134,11 @@ describe("createEnvironment", () => {
         expect(env.sun.visible).toBe(false);
         env.setLighting("house");
         expect(env.sky.mesh.visible).toBe(false);
+        expect(env.horizon.mesh.visible).toBe(false);
         expect(env.sun.visible).toBe(false);
         env.setLighting("day");
         expect(env.sky.mesh.visible).toBe(true);
+        expect(env.horizon.mesh.visible).toBe(true);
         expect(env.sun.castShadow).toBe(true);
         expect(env.sun.visible).toBe(true);
         env.dispose();
@@ -129,11 +151,44 @@ describe("createEnvironment", () => {
         env.dispose();
     });
 
-    it("disposes the sky", () => {
+    it("disposes the sky and horizon", () => {
         const env = createEnvironment();
         const geo = vi.spyOn(env.sky.mesh.geometry, "dispose");
+        const horizon = vi.spyOn(env.horizon.mesh.geometry, "dispose");
         env.dispose();
         expect(geo).toHaveBeenCalled();
+        expect(horizon).toHaveBeenCalled();
+    });
+
+    it("keeps one sky program across presets and centers the horizon", () => {
+        const env = createEnvironment({ focus: [10, 0, -24] });
+        const material = env.sky.mesh.material as ShaderMaterial;
+        const shader = material.fragmentShader;
+        const u = material.uniforms;
+        env.setLighting("night");
+        expect(material.fragmentShader).toBe(shader);
+        expect(u.uStars.value).toBeGreaterThan(0);
+        expect(u.uSunDisc.value).toBe(0);
+        expect(u.uMoon.value).toBeGreaterThan(0);
+        env.setLighting("day");
+        expect(u.uStars.value).toBe(0);
+        expect(u.uSunDisc.value).toBeGreaterThan(0);
+        expect(u.uSunDir.value.length()).toBeCloseTo(1);
+        expect(u.bottom.value.getHex()).toBe(lightingValues("day").fog);
+        expect(env.horizon.mesh.position.x).toBe(10);
+        expect(env.horizon.mesh.position.z).toBe(-24);
+        env.dispose();
+    });
+
+    it("builds a cheaper sky at low quality", () => {
+        const high = createEnvironment();
+        const low = createEnvironment({ quality: "low" });
+        const frag = (e: typeof high) =>
+            (e.sky.mesh.material as ShaderMaterial).fragmentShader;
+        expect(frag(low)).not.toBe(frag(high));
+        expect(frag(low)).toContain("i < 3");
+        high.dispose();
+        low.dispose();
     });
 });
 
@@ -315,6 +370,94 @@ describe("buildCrowd", () => {
         crowd.dispose();
         expect(geo).toHaveBeenCalled();
         expect(mat).toHaveBeenCalled();
+    });
+});
+
+describe("crowd figures", () => {
+    const triangles = (g: ReturnType<typeof personGeometry>) =>
+        g.index!.count / 3;
+
+    it("is a person of at most 28 triangles, 20 at low quality", () => {
+        const high = personGeometry("high");
+        const low = personGeometry("low");
+        expect(triangles(high)).toBe(28);
+        expect(triangles(low)).toBe(20);
+        high.computeBoundingBox();
+        const box = high.boundingBox!;
+        expect(box.min.y).toBeCloseTo(0);
+        expect(box.max.y).toBeCloseTo(PERSON_HEIGHT);
+        expect(high.getAttribute("aPart").itemSize).toBe(2);
+        high.dispose();
+        low.dispose();
+    });
+
+    it("faces down the stand, toward the field", () => {
+        // Rows rise toward +Z, so the field is toward -Z; and the reverse.
+        for (const dir of [1, -1]) {
+            const rows: SeatRow[] = Array.from({ length: 4 }, (_, i) => ({
+                points: [
+                    [-10 * dir, 1 + i * 0.4, dir * (10 + i)],
+                    [10 * dir, 1 + i * 0.4, dir * (10 + i)],
+                ],
+                closed: false,
+                depth: 0.8,
+                side: "home",
+            }));
+            const crowd = buildCrowd(rows, { density: 1 });
+            const m = new Matrix4();
+            const q = new Quaternion();
+            const p = new Vector3();
+            const sc = new Vector3();
+            for (let i = 0; i < crowd.count; i++) {
+                crowd.mesh.getMatrixAt(i, m);
+                m.decompose(p, q, sc);
+                const forward = new Vector3(0, 0, 1).applyQuaternion(q);
+                expect(forward.z * dir).toBeLessThan(-0.9);
+            }
+            crowd.dispose();
+        }
+    });
+
+    it("faces the middle of a ring", () => {
+        const ring: SeatRow = {
+            points: [
+                [-20, 1, -20],
+                [20, 1, -20],
+                [20, 1, 20],
+                [-20, 1, 20],
+            ],
+            closed: true,
+            depth: 0.8,
+            side: "neutral",
+        };
+        const crowd = buildCrowd([ring], { density: 1 });
+        const m = new Matrix4();
+        const q = new Quaternion();
+        const p = new Vector3();
+        const sc = new Vector3();
+        for (let i = 0; i < crowd.count; i++) {
+            crowd.mesh.getMatrixAt(i, m);
+            m.decompose(p, q, sc);
+            const forward = new Vector3(0, 0, 1).applyQuaternion(q);
+            const inward = new Vector3(-p.x, 0, -p.z).normalize();
+            expect(forward.dot(inward)).toBeGreaterThan(0);
+        }
+        crowd.dispose();
+    });
+});
+
+describe("horizon", () => {
+    it("is two sloped rings in one geometry inside the kits' ground", () => {
+        const g = horizonGeometry(64);
+        const layers = new Set(Array.from(g.getAttribute("aLayer").array));
+        expect([...layers].sort()).toEqual([0, 1]);
+        g.computeBoundingBox();
+        const box = g.boundingBox!;
+        expect(box.max.x).toBeCloseTo(HORIZON_FAR_RADIUS);
+        // The kits' ground plane is 9000 ft (2743 m) square.
+        expect(HORIZON_FAR_RADIUS).toBeLessThan(2743 / 2);
+        expect(box.min.y).toBeLessThan(0);
+        g.dispose();
     });
 });
 

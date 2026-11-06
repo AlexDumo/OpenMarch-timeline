@@ -4,8 +4,10 @@
  *
  * Exports, for the kit builders (P2.3 to P2.5) and the scene (P3.1):
  *
- * - `createEnvironment({ quality, focus })` -> `Environment`: the sky dome,
- *   hemisphere light, shadow-casting sun and fog. The scene adds `env.root`,
+ * - `createEnvironment({ quality, focus })` -> `Environment`: the procedural
+ *   sky dome (`skyShader.ts`: clouds, sun, dusk band, stars, moon), the
+ *   distant horizon (`horizon.ts`: treeline, town, hills), hemisphere light,
+ *   shadow-casting sun and fog. The scene adds `env.root`,
  *   sets `scene.fog = env.fog` and, after `env.setLighting(preset, focus)`,
  *   `renderer.toneMappingExposure = env.exposure`. The camera's far plane must
  *   exceed `SKY_RADIUS` (1524 m).
@@ -34,6 +36,8 @@ export * from "./units";
 export * from "./random";
 export * from "./lighting";
 export * from "./sky";
+export * from "./skyShader";
+export * from "./horizon";
 export * from "./envMap";
 export * from "./rig";
 export * from "./materials";
