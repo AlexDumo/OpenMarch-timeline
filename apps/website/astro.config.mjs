@@ -26,6 +26,8 @@ export default defineConfig({
         "/guides/reverting": "/troubleshooting/open-in-an-older-version/",
         "/guides/repairing-database": "/troubleshooting/repair-a-file/",
         "/guides/submitting-feedback": "/guides/start/get-help/",
+        // The app's Learn page links here
+        "/guides/music": "/guides/music/counts-and-music/",
         "/privacy": "/legal/privacy",
         "/refunds": "/legal/refunds",
         "/terms": "/legal/terms",
