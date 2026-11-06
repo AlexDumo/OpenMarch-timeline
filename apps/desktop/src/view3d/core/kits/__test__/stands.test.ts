@@ -5,13 +5,14 @@ import {
     LineSegments,
     Matrix4,
     Mesh,
+    MeshStandardMaterial,
     SpotLight,
     Vector3,
     type BufferGeometry,
     type Material,
     type Object3D,
 } from "three";
-import { buildCrowd, setTexturePainting } from "../../environment";
+import { buildCrowd, ft, setTexturePainting } from "../../environment";
 import type {
     FieldFootprint,
     KitBuilder,
@@ -24,6 +25,7 @@ import { buildBighs } from "../bighs";
 import { buildBlank } from "../blank";
 import { buildCollege } from "../college";
 import { buildHs } from "../hs";
+import { aisleCenters } from "../stands";
 
 beforeAll(() => setTexturePainting(false));
 
@@ -369,5 +371,98 @@ describe("stand kit proportions (meters)", () => {
         expect(build(buildHs).root.getObjectByName("track")).toBeDefined();
         expect(build(buildBighs).root.getObjectByName("track")).toBeDefined();
         expect(build(buildBlank).root.getObjectByName("track")).toBeUndefined();
+    });
+});
+
+describe("high school dressing", () => {
+    const meshNamed = (kit: KitResult, name: string) =>
+        kit.root.getObjectByName(name) as Mesh | undefined;
+    const material = (kit: KitResult, name: string) =>
+        meshNamed(kit, name)!.material as MeshStandardMaterial;
+
+    it("hs: aluminum stands on steel frames, press box, fence, goal posts, scoreboard, campus", () => {
+        const kit = build(buildHs);
+        for (const name of [
+            "standSteel",
+            "standWall",
+            "pressBoxFace",
+            "fence",
+            "goalPosts",
+            "scoreboard",
+            "site",
+            "trees",
+            "buildings",
+            "cars",
+            "finishLine",
+        ]) {
+            expect(kit.root.getObjectByName(name), name).toBeDefined();
+        }
+        const steel = meshNamed(kit, "standSteel") as InstancedMesh;
+        // stringers, posts, bracing and railings: hundreds of pieces, one draw call
+        expect(steel.count).toBeGreaterThan(150);
+        kit.dispose();
+    });
+
+    it("bighs: concrete stands, a video board instead of the scoreboard", () => {
+        const kit = build(buildBighs);
+        expect(kit.root.getObjectByName("videoBoard")).toBeDefined();
+        expect(kit.root.getObjectByName("scoreboard")).toBeUndefined();
+        expect(kit.root.getObjectByName("goalPosts")).toBeDefined();
+        kit.dispose();
+    });
+
+    it("college keeps its bowl: no campus, fence or goal posts", () => {
+        const kit = build(buildCollege);
+        for (const name of ["site", "fence", "goalPosts", "scoreboard"]) {
+            expect(kit.root.getObjectByName(name), name).toBeUndefined();
+        }
+        kit.dispose();
+    });
+
+    it("lights the press box and school windows at dusk and night only", () => {
+        const kit = build(buildHs);
+        kit.setLighting("day");
+        expect(material(kit, "pressBoxFace").emissiveIntensity).toBe(0);
+        expect(material(kit, "buildings").emissiveIntensity).toBe(0);
+        kit.setLighting("night");
+        expect(material(kit, "pressBoxFace").emissiveIntensity).toBeGreaterThan(0.5);
+        expect(material(kit, "buildings").emissiveIntensity).toBeGreaterThan(0.5);
+        kit.dispose();
+    });
+
+    it("puts aisle handrails where the crowd leaves its aisles", () => {
+        const kit = build(buildHs);
+        const home = kit.seatRows.filter((r) => r.side === "home");
+        const crowd = buildCrowd([home[10]], { density: 1 });
+        const m = new Matrix4();
+        const xs: number[] = [];
+        for (let i = 0; i < crowd.count; i++) {
+            crowd.mesh.getMatrixAt(i, m);
+            xs.push(new Vector3().setFromMatrixPosition(m).x);
+        }
+        const centers = aisleCenters(ft(260));
+        expect(centers.length).toBeGreaterThan(2);
+        for (const c of centers) {
+            for (const x of xs) expect(Math.abs(x - c)).toBeGreaterThan(0.3);
+        }
+        crowd.dispose();
+        kit.dispose();
+    });
+
+    it("skips goal posts on a surface shorter than a football field", () => {
+        const kit = build(buildHs, SMALL);
+        expect(kit.root.getObjectByName("goalPosts")).toBeUndefined();
+        expect(kit.root.getObjectByName("fence")).toBeDefined();
+        kit.dispose();
+    });
+
+    it("plants fewer trees at low quality", () => {
+        const count = (q: "low" | "high") => {
+            const kit = build(buildHs, FOOTBALL, q);
+            const n = (kit.root.getObjectByName("trees") as InstancedMesh).count;
+            kit.dispose();
+            return n;
+        };
+        expect(count("low")).toBeLessThan(count("high"));
     });
 });

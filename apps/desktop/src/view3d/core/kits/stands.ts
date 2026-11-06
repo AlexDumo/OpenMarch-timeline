@@ -1,20 +1,17 @@
 // cspell:ignore metalness
 import {
-    BufferGeometry,
-    Float32BufferAttribute,
+    DoubleSide,
+    FrontSide,
     Group,
     InstancedMesh,
-    LineBasicMaterial,
-    LineSegments,
     Matrix4,
     Mesh,
     MeshStandardMaterial,
     PlaneGeometry,
     Quaternion,
-    Shape,
-    ShapeGeometry,
     Vector2,
     Vector3,
+    type BufferGeometry,
     type Object3D,
     type Vector3Tuple,
 } from "three";
@@ -37,6 +34,10 @@ import type {
     SeatRow,
     VenueKitId,
 } from "../types";
+import { BoxBatch, QuadBuilder } from "./hs/geometry";
+import { buildPressBox, type PressBox } from "./hs/pressBox";
+import { buildTrackRibbon } from "./hs/track";
+import { STAND_BANDS, STAND_TILE, standTexture, wallTexture } from "./hs/textures";
 
 /**
  * Rectangular stands and the shared builder behind the `hs`, `bighs`, `college`
@@ -69,7 +70,7 @@ export function frameOf(fp: FieldFootprint): Frame {
 export interface PressBoxSpec {
     width: number;
     height: number;
-    /** Lift above the top row, on a concrete column. */
+    /** Lift above the top row, on steel columns. */
     lift: number;
     /** Glass bands, default 1. */
     stories?: number;
@@ -86,6 +87,21 @@ export interface StandSpec {
     base: number;
     side: SeatRow["side"];
     pressBox?: PressBoxSpec;
+    /**
+     * `aluminum`: open bleachers on a steel frame (high school). `concrete`:
+     * a closed precast stand. Default `concrete`.
+     */
+    style?: "aluminum" | "concrete";
+}
+
+/** Team dressing for a stand: wall pad color and painted text. */
+export interface StandDressing {
+    /** "#rrggbb" */
+    color: string;
+    /** Painted on the front wall, e.g. "HOME"; may be empty. */
+    wallText: string;
+    /** Fascia text on the press box; may be empty. */
+    pressText: string;
 }
 
 /** Where a stand's local origin goes: world x and z, and its yaw about +Y. */
@@ -99,36 +115,237 @@ export interface Stand {
     group: Group;
     /** One polyline per row, in the kit root's frame (placement applied). */
     seatRows: SeatRow[];
-    /** The instanced tread boxes: what pick-a-seat raycasts against. */
-    pickTarget: InstancedMesh;
+    /** The stepped seating surface: what pick-a-seat raycasts against. */
+    pickTarget: Object3D;
     /** Eye position in front of the press box glass, kit frame. */
     pressEye?: Vector3Tuple;
     /** Eye position above row `i`, kit frame. */
     rowEye(i: number): Vector3Tuple;
+    /** Press box window glow, 0 (day) to 1 (night). */
+    setGlow(k: number): void;
     dispose(): void;
 }
 
 const BENCH_LIFT = ft(1.35);
 const BENCH_THICK = ft(0.25);
 const BENCH_DEPTH = ft(0.9);
-const PRESS_BODY_DEPTH = ft(14);
+/** Steel frame spacing along an aluminum stand. */
+const FRAME_EVERY = ft(12);
+/** People per aisle block and aisle width in people (matches buildCrowd). */
+const AISLE_BLOCK = 18;
+const AISLE_GAP = 2;
+const PERSON_STEP = 0.64;
 
-/** Builds one rectangular stand, positioned by `placement`. */
+/** Aisle center positions along a stand of `length`, in its local x. */
+export function aisleCenters(length: number): number[] {
+    const out: number[] = [];
+    for (let k = 0; ; k++) {
+        const x =
+            -length / 2 +
+            PERSON_STEP * (AISLE_BLOCK + (AISLE_GAP - 1) / 2 + k * (AISLE_BLOCK + AISLE_GAP));
+        if (x > length / 2 - 2) break;
+        out.push(x);
+    }
+    return out;
+}
+
+/** Builds the stepped surface (treads, risers, and for concrete the walls). */
+function standSurface(
+    spec: StandSpec,
+    concrete: boolean,
+): BufferGeometry {
+    const { length: L, rows, depth: d, rise, base } = spec;
+    const q = new QuadBuilder();
+    const h = (i: number) => base + i * rise;
+    const xa = -L / 2;
+    const xb = L / 2;
+    const u = (x: number) => x / STAND_TILE;
+    const { tread, riser, side } = STAND_BANDS;
+    const up = new Vector3(0, 1, 0);
+    const front = new Vector3(0, 0, -1);
+    for (let i = 0; i < rows; i++) {
+        const z0 = i * d;
+        const z1 = (i + 1) * d;
+        const y = h(i);
+        q.quad(
+            new Vector3(xa, y, z0),
+            new Vector3(xb, y, z0),
+            new Vector3(xb, y, z1),
+            new Vector3(xa, y, z1),
+            [u(xa), tread[0]],
+            [u(xb), tread[0]],
+            [u(xb), tread[1]],
+            [u(xa), tread[1]],
+            undefined,
+            up,
+        );
+        const yb = i === 0 ? 0 : h(i - 1);
+        q.quad(
+            new Vector3(xa, yb, z0),
+            new Vector3(xb, yb, z0),
+            new Vector3(xb, y, z0),
+            new Vector3(xa, y, z0),
+            [u(xa), riser[0]],
+            [u(xb), riser[0]],
+            [u(xb), riser[1]],
+            [u(xa), riser[1]],
+            undefined,
+            front,
+        );
+    }
+    if (concrete) {
+        const top = h(rows - 1);
+        const back = rows * d;
+        const vy = (y: number) => side[0] + ((side[1] - side[0]) * y) / top;
+        for (const sx of [-1, 1]) {
+            const x = (sx * L) / 2;
+            const out = new Vector3(sx, 0, 0);
+            for (let i = 0; i < rows; i++) {
+                const z0 = i * d;
+                const z1 = (i + 1) * d;
+                const y = h(i);
+                q.quad(
+                    new Vector3(x, 0, z0),
+                    new Vector3(x, 0, z1),
+                    new Vector3(x, y, z1),
+                    new Vector3(x, y, z0),
+                    [u(z0), vy(0)],
+                    [u(z1), vy(0)],
+                    [u(z1), vy(y)],
+                    [u(z0), vy(y)],
+                    undefined,
+                    out,
+                );
+            }
+        }
+        q.quad(
+            new Vector3(xa, 0, back),
+            new Vector3(xb, 0, back),
+            new Vector3(xb, top, back),
+            new Vector3(xa, top, back),
+            [u(xa), vy(0)],
+            [u(xb), vy(0)],
+            [u(xb), vy(top)],
+            [u(xa), vy(top)],
+            undefined,
+            new Vector3(0, 0, 1),
+        );
+        // pilasters on the back wall, so it reads as structure, not a slab
+        const n = Math.max(2, Math.round(L / 6.1));
+        for (let k = 0; k <= n; k++) {
+            const x = xa + 0.35 + ((L - 0.7) * k) / n;
+            q.box(
+                new Vector3(x - 0.35, 0, back),
+                new Vector3(x + 0.35, top + 0.4, back + 0.55),
+                STAND_TILE,
+                side,
+                [0.5, (side[0] + side[1]) / 2],
+                top + 0.4,
+            );
+        }
+    }
+    return q.build();
+}
+
+/**
+ * Railings for every stand (back rail, end rails, aisle handrails) and, for
+ * aluminum, the steel understructure: sloped stringers, posts and bracing.
+ */
+function standSteel(spec: StandSpec, aluminum: boolean, s: BoxBatch): void {
+    const { length: L, rows, depth: d, rise, base } = spec;
+    const h = (i: number) => base + i * rise;
+    const top = h(rows - 1);
+    const back = rows * d;
+    const rail = ft(3.5);
+    const t = ft(0.17);
+    // back rail
+    for (let x = -L / 2; x <= L / 2 + 1e-3; x += ft(8)) {
+        s.add([x, top + rail / 2, back - t], [t, rail, t]);
+    }
+    s.beam([-L / 2, top + rail, back - t], [L / 2, top + rail, back - t], ft(0.2));
+    s.beam([-L / 2, top + rail * 0.5, back - t], [L / 2, top + rail * 0.5, back - t], t);
+    // end rails follow the slope, with a post every four rows
+    for (const sx of [-1, 1]) {
+        const x = sx * (L / 2 - t);
+        s.beam([x, base + rail, d * 0.5], [x, top + rail, back - d * 0.5], ft(0.2));
+        s.beam([x, base + rail * 0.5, d * 0.5], [x, top + rail * 0.5, back - d * 0.5], t);
+        for (let i = 0; i < rows; i += 4) {
+            s.add([x, h(i) + rail / 2, i * d + d * 0.5], [t, rail, t]);
+        }
+    }
+    // aisle handrails from row 3 up, at the aisle centers the crowd leaves free
+    const hand = ft(2.8);
+    for (const x of aisleCenters(L)) {
+        const i0 = Math.min(3, rows - 1);
+        s.beam([x, h(i0) + hand, i0 * d + d * 0.5], [x, top + hand, back - d * 0.5], ft(0.15));
+        for (let i = i0; i < rows; i += 4) {
+            s.add([x, h(i) + hand / 2, i * d + d * 0.5], [ft(0.15), hand, ft(0.15)]);
+        }
+    }
+    if (!aluminum) return;
+    const frames = Math.max(2, Math.ceil(L / FRAME_EVERY) + 1);
+    const beam = ft(0.45);
+    const postEvery = 4;
+    for (let k = 0; k < frames; k++) {
+        const x = -L / 2 + 0.3 + ((L - 0.6) * k) / (frames - 1);
+        // stringer under the nosings
+        s.beam([x, base - beam, 0.15], [x, top - beam, back - 0.15], beam);
+        for (let i = 0; i < rows; i += postEvery) {
+            const y = h(i) - beam;
+            s.add([x, y / 2, i * d + 0.15], [ft(0.35), y, ft(0.35)]);
+        }
+        const yb = top - beam;
+        s.add([x, yb / 2, back - 0.15], [ft(0.4), yb, ft(0.4)]);
+        // diagonal brace in the back bay, alternating direction
+        if (k < frames - 1) {
+            const x2 = -L / 2 + 0.3 + ((L - 0.6) * (k + 1)) / (frames - 1);
+            const lo = 0.4;
+            const hi = yb * 0.85;
+            if (k % 2 === 0) s.beam([x, lo, back - 0.15], [x2, hi, back - 0.15], ft(0.3));
+            else s.beam([x, hi, back - 0.15], [x2, lo, back - 0.15], ft(0.3));
+        }
+    }
+    // ledgers along the back and the middle
+    const yb = top - beam;
+    for (const y of [yb * 0.35, yb * 0.7]) {
+        s.beam([-L / 2, y, back - 0.15], [L / 2, y, back - 0.15], ft(0.35));
+    }
+    const midRow = Math.floor(rows / 2 / postEvery) * postEvery;
+    const ym = (h(midRow) - beam) * 0.5;
+    s.beam([-L / 2, ym, midRow * d + 0.15], [L / 2, ym, midRow * d + 0.15], ft(0.3));
+}
+
+/** Builds one stand, positioned by `placement`. */
 export function buildStand(
     spec: StandSpec,
     placement: StandPlacement,
     shared: SharedMaterials,
+    dressing: StandDressing = { color: "#3a3d44", wallText: "", pressText: "" },
 ): Stand {
     const { length, rows, depth, rise, base } = spec;
+    const aluminum = spec.style === "aluminum";
     const group = new Group();
     group.name = `stand:${spec.side}`;
     group.position.set(placement.x, 0, placement.z);
     group.rotation.y = placement.yaw;
     group.updateMatrix();
+    const owned: { dispose(): void }[] = [];
 
-    const treads = new InstancedMesh(shared.unitBox, shared.concrete, rows);
-    const bench = new InstancedMesh(shared.unitBox, shared.bench, rows);
+    const surfaceGeo = standSurface(spec, !aluminum);
+    const surfaceMap = standTexture(aluminum ? "aluminum" : "concrete");
+    surfaceMap.repeat.set(1, 1);
+    const surfaceMat = new MeshStandardMaterial({
+        map: surfaceMap,
+        roughness: aluminum ? 0.5 : 0.95,
+        metalness: aluminum ? 0.45 : 0,
+        side: aluminum ? DoubleSide : FrontSide,
+    });
+    owned.push(surfaceGeo, surfaceMap, surfaceMat);
+    const treads = new Mesh(surfaceGeo, surfaceMat);
     treads.name = "treads";
+    treads.castShadow = treads.receiveShadow = true;
+
+    const bench = new InstancedMesh(shared.unitBox, shared.bench, rows);
     bench.name = "bench";
     const m = new Matrix4();
     const q = new Quaternion();
@@ -139,12 +356,6 @@ export function buildStand(
     };
     for (let i = 0; i < rows; i++) {
         const h = base + i * rise;
-        m.compose(
-            new Vector3(0, h / 2, i * depth + depth / 2),
-            q,
-            new Vector3(length, h, depth),
-        );
-        treads.setMatrixAt(i, m);
         m.compose(
             new Vector3(0, h + BENCH_LIFT, i * depth + depth * 0.32),
             q,
@@ -159,51 +370,57 @@ export function buildStand(
             side: spec.side,
         });
     }
-    treads.castShadow = treads.receiveShadow = true;
     bench.receiveShadow = true;
+    bench.castShadow = true;
     group.add(treads, bench);
 
+    // The padded front wall with the team's color and painted text.
+    const wallMap = wallTexture(
+        dressing.color,
+        dressing.wallText,
+        length,
+        length > 70 ? 3 : 2,
+    );
+    const wallMat = new MeshStandardMaterial({ map: wallMap, roughness: 0.7 });
+    const wallGeo = new PlaneGeometry(length, base);
+    const wall = new Mesh(wallGeo, wallMat);
+    wall.name = "standWall";
+    wall.rotation.y = Math.PI;
+    wall.position.set(0, base / 2, -0.04);
+    wall.receiveShadow = true;
+    group.add(wall);
+    owned.push(wallMap, wallMat, wallGeo);
+
+    const steel = new BoxBatch();
+    standSteel(spec, aluminum, steel);
+
     let pressEye: Vector3Tuple | undefined;
+    let press: PressBox | undefined;
     if (spec.pressBox) {
         const pb = spec.pressBox;
-        const top = base + (rows - 1) * rise;
-        const zb = rows * depth;
-        const stories = pb.stories ?? 1;
-        const storyH = pb.height / stories;
-        const y0 = top + pb.lift;
-        const box = new Group();
-        box.name = "pressBox";
-        const body = new Mesh(shared.unitBox, shared.std(0xe6e3dc));
-        body.scale.set(pb.width, pb.height, PRESS_BODY_DEPTH);
-        body.position.set(0, y0 + pb.height / 2, zb + PRESS_BODY_DEPTH / 2);
-        const roof = new Mesh(shared.unitBox, shared.std(0x55585f));
-        roof.scale.set(pb.width + ft(4), ft(1.2), ft(18));
-        roof.position.set(0, y0 + pb.height + ft(0.6), zb + ft(6));
-        for (const part of [body, roof]) {
-            part.castShadow = part.receiveShadow = true;
-        }
-        const glassMat = shared.std(0x1d2a3d, {
-            roughness: 0.15,
-            metalness: 0.4,
-            emissive: 0x0b1320,
+        press = buildPressBox({
+            width: pb.width,
+            height: pb.height,
+            lift: pb.lift,
+            stories: pb.stories ?? 1,
+            top: base + (rows - 1) * rise,
+            back: rows * depth,
+            homeColor: dressing.color,
+            text: dressing.pressText,
+            shared,
+            steel,
         });
-        for (let k = 0; k < stories; k++) {
-            const glass = new Mesh(shared.unitBox, glassMat);
-            glass.scale.set(pb.width - ft(3), storyH * 0.45, ft(0.4));
-            glass.position.set(0, y0 + storyH * (k + 0.58), zb - ft(0.1));
-            box.add(glass);
-        }
-        if (pb.lift > 0) {
-            const column = new Mesh(shared.unitBox, shared.concrete);
-            column.scale.set(pb.width * 0.9, pb.lift + ft(0.5), ft(12));
-            column.position.set(0, top + pb.lift / 2, zb + ft(7));
-            column.castShadow = true;
-            box.add(column);
-        }
-        box.add(body, roof);
-        group.add(box);
-        pressEye = toKit([0, y0 + storyH * (stories - 1 + 0.55), zb - ft(2)]);
+        group.add(press.group);
+        pressEye = toKit(press.eye);
     }
+
+    const steelMat = aluminum
+        ? new MeshStandardMaterial({ color: 0x8d939c, metalness: 0.55, roughness: 0.45 })
+        : new MeshStandardMaterial({ color: 0x41454d, metalness: 0.3, roughness: 0.6 });
+    owned.push(steelMat);
+    const steelMesh = steel.build(shared.unitBox, steelMat, "standSteel");
+    steelMesh.castShadow = true;
+    group.add(steelMesh);
 
     return {
         group,
@@ -212,9 +429,14 @@ export function buildStand(
         pressEye,
         rowEye: (i) =>
             toKit([0, base + i * rise + ft(4), i * depth + depth * 0.45]),
+        setGlow(k) {
+            press?.setGlow(k);
+        },
         dispose() {
-            treads.dispose();
             bench.dispose();
+            steelMesh.dispose();
+            press?.dispose();
+            owned.forEach((o) => o.dispose());
         },
     };
 }
@@ -261,57 +483,15 @@ export interface TrackResult {
     dispose(): void;
 }
 
-const TRACK_INNER_GAP = ft(15);
-const TRACK_WIDTH = ft(30);
-/** Height of the apron, track and lane lines above y = 0. */
+/** Height of the apron above y = 0. */
 const APRON_Y = 0.005;
-const TRACK_Y = 0.015;
-const LANE_Y = 0.02;
 
-/** A 6-lane track around the field: 29 to 38.1 m radius on a football field. */
-export function buildTrack(frame: Frame, shared: SharedMaterials): TrackResult {
-    const straight = Math.max(frame.halfW - ft(30), ft(30));
-    const inner = frame.halfD + TRACK_INNER_GAP;
-    const outer = inner + TRACK_WIDTH;
-    // Shape space is (x, -z); a rotation of -90 degrees about X maps it to the ground.
-    const flip = (pts: Vector2[]) => pts.map((p) => new Vector2(p.x, -p.y));
-    const shape = new Shape(
-        flip(stadiumPoints(frame.cx, frame.cz, straight, outer)),
-    );
-    const hole = flip(stadiumPoints(frame.cx, frame.cz, straight, inner));
-    shape.holes.push(new Shape(hole.reverse()));
-    const geometry = new ShapeGeometry(shape);
-    const track = new Mesh(geometry, shared.std(0xa24a36, { roughness: 0.95 }));
-    track.name = "track";
-    track.rotation.x = -Math.PI / 2;
-    track.position.y = TRACK_Y;
-    track.receiveShadow = true;
-
-    const lanes: number[] = [];
-    for (let r = inner; r <= outer + 1e-6; r += ft(5)) {
-        const pts = stadiumPoints(frame.cx, frame.cz, straight, r);
-        pts.forEach((p, i) => {
-            const n = pts[(i + 1) % pts.length];
-            lanes.push(p.x, LANE_Y, p.y, n.x, LANE_Y, n.y);
-        });
-    }
-    const laneGeo = new BufferGeometry();
-    laneGeo.setAttribute("position", new Float32BufferAttribute(lanes, 3));
-    const laneMat = new LineBasicMaterial({
-        color: 0xf2f2f2,
-        transparent: true,
-        opacity: 0.8,
-    });
-    const laneLines = new LineSegments(laneGeo, laneMat);
-    laneLines.name = "trackLanes";
-    return {
-        objects: [track, laneLines],
-        dispose() {
-            geometry.dispose();
-            laneGeo.dispose();
-            laneMat.dispose();
-        },
-    };
+/**
+ * A 6-lane track around the field: 29 to 38.1 m radius on a football field.
+ * One textured ribbon (lanes baked in) plus a finish line decal.
+ */
+export function buildTrack(frame: Frame): TrackResult {
+    return buildTrackRibbon(frame);
 }
 
 /** A flat ground plane, centered at (x, y, z). */
@@ -394,6 +574,19 @@ export interface PoleSpot {
     dz: number;
 }
 
+/** What a kit's `decorate` hook adds around the stadium. */
+export interface Decoration {
+    objects: Object3D[];
+    setLighting(preset: LightingPreset): void;
+    dispose(): void;
+}
+
+export interface DecorateContext {
+    frame: Frame;
+    shared: SharedMaterials;
+    input: KitBuildInput;
+}
+
 export interface StandsKitConfig {
     id: Extract<VenueKitId, "hs" | "bighs" | "college">;
     groundColor: number;
@@ -422,16 +615,75 @@ export interface StandsKitConfig {
     cameras: {
         /** The press box camera aims this far behind the field center. */
         pressTargetBack: number;
-        /** End-zone camera: end, distance past the end edge and height. */
-        endZone: { sx: -1 | 1; dx: number; y: number };
+        /**
+         * End-zone camera: end, distance past the end edge, height, and an
+         * optional sideways nudge toward the home side (clears goal posts).
+         */
+        endZone: { sx: -1 | 1; dx: number; y: number; dz?: number };
         topDownHeight: number;
     };
     crowdDensity: number;
     defaultLighting: LightingPreset;
+    /** Adds the surroundings (site, buildings, fence, scoreboard...). */
+    decorate?: (ctx: DecorateContext) => Decoration;
 }
+
+/** Press box and building window glow per lighting preset. */
+export const WINDOW_GLOW: Partial<Record<LightingPreset, number>> = {
+    day: 0,
+    dusk: 0.75,
+    night: 1.1,
+};
 
 const FRONT_ROW_OFFSET = -ft(36);
 const PODIUM = { w: ft(6), h: ft(8), d: ft(6), z: ft(26) };
+
+/**
+ * The director's podium: an aluminum scaffold tower with a deck at 8 ft,
+ * rails on the back and sides, a ladder and a team-colored skirt in front.
+ * Its origin is the center of its footprint on the ground.
+ */
+function buildPodium(
+    homeColor: string,
+    shared: SharedMaterials,
+): InstancedMesh {
+    const { w, h, d } = PODIUM;
+    const b = new BoxBatch();
+    const t = ft(0.25);
+    const rail = ft(3.5);
+    const team = parseInt(homeColor.replace("#", ""), 16);
+    b.add([0, h - ft(0.2), 0], [w, ft(0.4), d]);
+    for (const sx of [-1, 1]) {
+        for (const sz of [-1, 1]) {
+            b.add([(sx * w) / 2, h / 2, (sz * d) / 2], [t, h, t]);
+        }
+        // X braces on the sides and the back
+        const x = (sx * w) / 2;
+        b.beam([x, 0.2, -d / 2], [x, h - 0.3, d / 2], ft(0.15));
+        b.beam([x, 0.2, d / 2], [x, h - 0.3, -d / 2], ft(0.15));
+        b.beam([x, h + rail, -d / 2], [x, h + rail, d / 2], ft(0.18));
+        b.add([x, h + rail / 2, -d / 2], [t, rail, t]);
+        b.add([x, h + rail / 2, d / 2], [t, rail, t]);
+    }
+    b.beam([-w / 2, h + rail, d / 2], [w / 2, h + rail, d / 2], ft(0.18));
+    b.beam([-w / 2, h + rail / 2, d / 2], [w / 2, h + rail / 2, d / 2], ft(0.15));
+    // ladder at the back
+    for (const sx of [-1, 1]) {
+        b.add([sx * ft(0.8), h / 2, d / 2 + ft(0.4)], [ft(0.18), h, ft(0.18)]);
+    }
+    for (let y = ft(1); y < h; y += ft(1)) {
+        b.add([0, y, d / 2 + ft(0.4)], [ft(1.6), ft(0.12), ft(0.12)]);
+    }
+    // skirt in the team color under the deck, facing the field
+    b.add([0, h - ft(1.8), -d / 2 - ft(0.05)], [w, ft(3), ft(0.1)], [0, 0, 0], team);
+    const mesh = b.build(
+        shared.unitBox,
+        shared.std(0xd5d9de, { metalness: 0.45, roughness: 0.45 }),
+        "podium",
+    );
+    mesh.castShadow = true;
+    return mesh;
+}
 
 /**
  * Shared builder for the three rectangular-stand kits. Builds the ground, the
@@ -486,18 +738,33 @@ export function buildStandsKit(
     geometries.push(apron.geometry);
 
     if (cfg.track) {
-        const track = buildTrack(f, shared);
+        const track = buildTrack(f);
         root.add(...track.objects);
         disposables.push(track);
     }
 
     const stands: Stand[] = [];
+    const p = input.params;
+    const dressings: Record<SeatRow["side"], StandDressing> = {
+        home: {
+            color: p.homeColor,
+            wallText: "HOME",
+            pressText: p.endZoneText,
+        },
+        away: { color: p.awayColor, wallText: "VISITORS", pressText: "" },
+        neutral: { color: "#3a3d44", wallText: "", pressText: "" },
+    };
     const addStand = (
         spec: Omit<StandSpec, "side">,
         side: SeatRow["side"],
         placement: StandPlacement,
     ) => {
-        const stand = buildStand({ ...spec, side }, placement, shared);
+        const stand = buildStand(
+            { ...spec, side },
+            placement,
+            shared,
+            dressings[side],
+        );
         root.add(stand.group);
         stands.push(stand);
         return stand;
@@ -554,12 +821,10 @@ export function buildStandsKit(
     }
 
     if (cfg.podium) {
-        const podium = new Mesh(shared.unitBox, shared.std(0xe6e3dc));
-        podium.name = "podium";
-        podium.scale.set(PODIUM.w, PODIUM.h, PODIUM.d);
-        podium.position.set(f.cx, PODIUM.h / 2, f.maxZ + PODIUM.z);
-        podium.castShadow = true;
+        const podium = buildPodium(p.homeColor, shared);
+        podium.position.set(f.cx, 0, f.maxZ + PODIUM.z);
         root.add(podium);
+        disposables.push(podium);
     }
 
     const poles: LightPole[] = cfg.poles.spots.map((s) => {
@@ -576,6 +841,9 @@ export function buildStandsKit(
         root.add(pole.object);
         return pole;
     });
+
+    const decoration = cfg.decorate?.({ frame: f, shared, input });
+    if (decoration) root.add(...decoration.objects);
 
     const seatRows = stands.flatMap((s) => s.seatRows);
 
@@ -613,7 +881,7 @@ export function buildStandsKit(
         cameraSeat(
             "endZone",
             "seat",
-            [f.cx + ez.sx * (f.halfW + ez.dx), ez.y, f.cz],
+            [f.cx + ez.sx * (f.halfW + ez.dx), ez.y, f.cz + (ez.dz ?? 0)],
             [f.cx, 0, f.cz],
         ),
         blimpCamera(f),
@@ -630,6 +898,9 @@ export function buildStandsKit(
         if (!OUTDOOR_PRESETS.includes(preset)) return;
         const k = lightingValues(preset).kit;
         poles.forEach((p) => p.setOn(k.lampsOn, k.lampScale));
+        const glow = WINDOW_GLOW[preset] ?? 0;
+        stands.forEach((s) => s.setGlow(glow));
+        decoration?.setLighting(preset);
     };
     setLighting(cfg.defaultLighting);
 
@@ -648,6 +919,7 @@ export function buildStandsKit(
             boards.forEach((b) => b.dispose());
             poles.forEach((p) => p.dispose());
             disposables.forEach((d) => d.dispose());
+            decoration?.dispose();
             geometries.forEach((g) => g.dispose());
             shared.dispose();
         },
