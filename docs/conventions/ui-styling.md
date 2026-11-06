@@ -28,7 +28,8 @@ defaults (`rounded-md`, `text-xs`, `p-2` meaning 8 px) do not describe this app.
 - The theme's radii are `rounded-4`, `-6`, `-8`, `-12`, `-16`, `-20`, `-24`, `-32`
   and `-full`. `rounded-2` doesn't exist and silently draws square corners.
 - Don't use `rounded-[3px]`, `rounded-md` or bare `rounded`. Lint rejects the
-  arbitrary values and Tailwind's default names.
+  arbitrary values and Tailwind's default names (`-sm`, `-md`, `-lg` and so on), but
+  not bare `rounded`, which older code still uses.
 - A box nested inside a bordered rounded box may need the inner radius (outer minus
   border). Keep that as the one exception, with an
   `eslint-disable-next-line no-restricted-syntax -- <why>` comment.
@@ -42,8 +43,9 @@ defaults (`rounded-md`, `text-xs`, `p-2` meaning 8 px) do not describe this app.
 | Labels inside timeline and tempo lanes (counts, clip names, lane headings) only   | `text-micro`   |
 | Headings and large readouts (Tap tempo's BPM is `text-h3`)                        | `text-h5`–`h1` |
 
-- No `text-[11px]`: lint rejects arbitrary font sizes. 12 px and 13 px are not
-  sizes in this app; pick `text-body` or `text-sub`.
+- No `text-[11px]`: lint rejects arbitrary pixel font sizes. 12 px and 13 px are not
+  sizes in this app; pick `text-body` or `text-sub`. Tailwind's `text-xs`/`text-sm`
+  aren't either, though lint doesn't catch those.
 - Show emphasis with weight (`font-medium`, `font-bold`) or color
   (`text-text-subtitle`, `text-accent`), not with another size.
 - A tiny picture drawn with text (a time signature in a 16 px icon slot) may keep
@@ -71,6 +73,11 @@ hand:
   in toolbars and floating bars.
 - Don't build a button out of `bg-accent text-text-invert rounded-6 px-10`. Add
   extra classes through `className` so `twMerge` resolves conflicts.
+- `twMerge` doesn't know this theme's font sizes: it reads `text-body` and `text-sub`
+  as text colors. So the Button's own `text-body` loses to its variant's color and the
+  button inherits its parent's size, and a size passed through `className` removes
+  the variant's color. Append the size after the merge instead:
+  `` `${getButtonClassName({ ... })} text-body` ``.
 - Inputs use `Input`/`Select` from `@openmarch/ui`, or their look:
   `rounded-6 border-stroke bg-fg-2 text-body`, 26 px tall when compact.
 - Icons come from `@phosphor-icons/react`.
@@ -85,8 +92,9 @@ mode both work. Don't use Tailwind palette colors (`bg-white`, `border-gray-200`
 ## Checking
 
 - `pnpm lint:check` (the `no-restricted-syntax` rule in `.eslintrc.cjs`) rejects
-  arbitrary font sizes and non-theme radii in `apps/desktop/src` and
-  `packages/ui/src`.
+  `text-[<number>...]`, `rounded-[...]` and Tailwind's default radius names in
+  `apps/desktop/src` and `packages/ui/src`. It doesn't check spacing, bare `rounded`
+  or `text-xs`/`text-sm`; those are on you.
 - Put a new surface next to an existing one in a screenshot and compare corners,
   text size and padding. The Inspector, the music file menu and the shape editor bar
   follow this style.

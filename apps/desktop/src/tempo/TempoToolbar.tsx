@@ -27,16 +27,24 @@ import { TempoMusicFile } from "./TempoMusicFile";
  * `on`. Extra classes go through `className` so they win over the button's own.
  */
 export const toolButton = (on = false, iconOnly = false, className?: string) =>
-    getButtonClassName({
-        variant: "secondary",
-        size: "compact",
-        content: iconOnly ? "icon" : "text",
-        className: clsx(
-            "pointer-events-auto shrink-0 whitespace-nowrap enabled:hover:border-accent focus-visible:ring-accent focus-visible:ring-2",
-            on && "border-accent text-accent",
-            className,
-        ),
-    });
+    withTextBody(
+        getButtonClassName({
+            variant: "secondary",
+            size: "compact",
+            content: iconOnly ? "icon" : "text",
+            className: clsx(
+                "pointer-events-auto shrink-0 whitespace-nowrap enabled:hover:border-accent focus-visible:ring-accent focus-visible:ring-2",
+                on && "border-accent text-accent",
+                className,
+            ),
+        }),
+    );
+
+/**
+ * Adds `text-body` after getButtonClassName's twMerge, which reads `text-body` as a text color
+ * and drops it in favour of the variant's color. See docs/conventions/ui-styling.md.
+ */
+export const withTextBody = (className: string) => `${className} text-body`;
 
 /**
  * Tempo mode's header row: the mode's name, its tools, help and Done. Narrow, the tools drop
@@ -125,12 +133,14 @@ export function TempoToolbar(props: {
                     <button
                         type="button"
                         aria-label={tolgee.t("tempoMode.toolbar.done", "Done")}
-                        className={getButtonClassName({
-                            variant: "primary",
-                            size: "compact",
-                            className:
-                                "focus-visible:ring-accent pointer-events-auto shrink-0 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-offset-1",
-                        })}
+                        className={withTextBody(
+                            getButtonClassName({
+                                variant: "primary",
+                                size: "compact",
+                                className:
+                                    "focus-visible:ring-accent pointer-events-auto shrink-0 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-offset-1",
+                            }),
+                        )}
                         onClick={() =>
                             useTempoModeStore.getState().setOn(false)
                         }

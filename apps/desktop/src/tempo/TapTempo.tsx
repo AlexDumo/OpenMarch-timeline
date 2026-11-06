@@ -10,7 +10,7 @@ import { ShortcutTooltip } from "@/components/timeline/ShortcutTooltip";
 import Shortcut from "@/components/ui/Shortcut";
 import tolgee from "@/global/singletons/Tolgee";
 import { tapBpm } from "./tapTempoMath";
-import { toolButton } from "./TempoToolbar";
+import { toolButton, withTextBody } from "./TempoToolbar";
 import { useTempoUi } from "./tempoUi";
 import { getButtonClassName } from "@openmarch/ui";
 import { POPOVER_CLASS } from "@/components/ui/popupClasses";
@@ -110,11 +110,14 @@ export function TapTempo(props: {
                     <button
                         type="button"
                         aria-label={tolgee.t("tempoMode.tap.tap", "Tap")}
-                        className={getButtonClassName({
-                            variant: "secondary",
-                            className:
-                                "border-accent text-accent w-full select-none",
-                        })}
+                        // No press bounce: it would jump on every beat you tap
+                        className={withTextBody(
+                            getButtonClassName({
+                                variant: "secondary",
+                                className:
+                                    "border-accent text-accent w-full select-none enabled:hover:translate-y-0 enabled:focus-visible:translate-y-0 enabled:active:translate-y-0",
+                            }),
+                        )}
                         // on press, not on release: a click lands later than the beat it's for
                         onPointerDown={(e) => {
                             e.preventDefault();

@@ -3379,7 +3379,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 {LANES.map((lane) => (
                     <div
                         key={lane.name}
-                        className="border-stroke text-text-subtitle text-micro absolute inset-x-0 border-b px-4 pt-3 leading-[12px] tracking-wide uppercase"
+                        className="border-stroke text-text-subtitle text-micro absolute inset-x-0 truncate border-b pt-3 pl-4 leading-[12px] uppercase"
                         style={{ top: lane.top, height: lane.height }}
                         title={lane.title}
                     >

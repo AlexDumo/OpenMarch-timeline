@@ -89,6 +89,7 @@ export default function HandleMenu() {
             </>
         );
         const className = clsx(
+            MENU_ITEM_CLASS,
             item.destructive && "data-[highlighted]:text-red",
         );
         if (item.disabled)

@@ -1184,10 +1184,11 @@ const EndControls = memo(function EndControls({
                     <Divider />
                     <button
                         type="button"
-                        className={getButtonClassName({
+                        // text-body after twMerge, which drops it (docs/conventions/ui-styling.md)
+                        className={`${getButtonClassName({
                             variant: "primary",
                             size: "compact",
-                        })}
+                        })} text-body`}
                         onPointerDown={keepFocus}
                         onClick={() => target.place?.()}
                         data-testid="shape-editor-place"
