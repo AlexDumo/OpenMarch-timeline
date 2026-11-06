@@ -24,7 +24,7 @@ import {
     createEnvironmentMap,
     defaultCrowdPalette,
 } from "@/view3d/core/environment";
-import { buildFieldSurface } from "@/view3d/core/field";
+import { buildFieldSurface, venueFootprint } from "@/view3d/core/field";
 import {
     DEFAULT_CROWD_DENSITY,
     KIT_BUILDERS,
@@ -42,7 +42,11 @@ import type {
 const FIELDS: Record<string, FieldProperties> = {
     football:
         FieldPropertiesTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES,
+    footballNoEndZones:
+        FieldPropertiesTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_NO_END_ZONES,
     college: FieldPropertiesTemplates.COLLEGE_FOOTBALL_FIELD_WITH_END_ZONES,
+    collegeNoEndZones:
+        FieldPropertiesTemplates.COLLEGE_FOOTBALL_FIELD_NO_END_ZONES,
     pro: FieldPropertiesTemplates.PRO_FOOTBALL_FIELD_WITH_END_ZONES,
     indoor: FieldPropertiesTemplates.INDOOR_50x80_8to5,
 };
@@ -144,7 +148,7 @@ async function load(options: LoadOptions): Promise<LoadResult> {
     scene.add(env.root);
     scene.fog = env.fog;
     const built = KIT_BUILDERS[options.kit]({
-        footprint: fieldFootprint(fp),
+        footprint: venueFootprint(fp, KIT_FIELD_STYLE[options.kit]),
         params,
         quality,
     });
