@@ -27,14 +27,18 @@ const desktop = path.resolve(
     "../../..",
 );
 const DEMOS = path.join(desktop, "view3d-web/public/demos");
-const STRESS = path.join(OUT, "stress-1925.dots");
-
 /**
  * A large timeline show of your own (`LARGE_SHOW=<path to .dots>`), which the
  * stress show is cloned from. The repository has no large show it can share,
  * so without it the corpus is the Part 1 demo alone.
  */
 const LARGE_SHOW = process.env.LARGE_SHOW;
+/** Named after its source, so a cached one from another show isn't reused. */
+const STRESS = path.join(
+    OUT,
+    `stress-${path.basename(LARGE_SHOW ?? "none", ".dots")}.dots`,
+);
+
 const SHOWS = [
     { name: "part1", file: path.join(DEMOS, "part1-demo.dots") },
     ...(LARGE_SHOW
