@@ -1,17 +1,23 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import {
     Box3,
+    CubeTexture,
     DirectionalLight,
     InstancedMesh,
+    Matrix4,
     Mesh,
+    MeshLambertMaterial,
     SpotLight,
+    Texture,
     Vector3,
+    type Material,
     type Object3D,
 } from "three";
-import { setTexturePainting } from "../../environment";
+import { buildCrowd, setTexturePainting } from "../../environment";
 import type { FieldFootprint, KitBuildInput, KitResult } from "../../types";
 import {
     buildGym,
+    gymAisles,
     GYM_BLEACHER_ROWS,
     GYM_BLEACHER_TREAD,
     GYM_ROOM_HEIGHT,
@@ -150,24 +156,91 @@ describe.each(Object.entries(footprints))("gym kit, %s", (_name, fp) => {
         kit.dispose();
     });
 
-    it("hides ceiling panels when the camera is above the ceiling", () => {
+    it("hides the ceiling lights and roof steel when the camera is above the ceiling", () => {
         const kit = build(fp);
-        const panels = kit.root.getObjectByName("gym-panels")!;
+        const parts = ["gym-panels", "gym-roof-steel", "gym-roof-pipes"].map(
+            (n) => kit.root.getObjectByName(n)!,
+        );
         kit.onFrame!({ cameraPosition: [0, 70, 0], dt: 0.016 });
-        expect(panels.visible).toBe(false);
+        expect(parts.every((p) => !p.visible)).toBe(true);
         kit.onFrame!({ cameraPosition: [0, 5, 0], dt: 0.016 });
-        expect(panels.visible).toBe(true);
+        expect(parts.every((p) => p.visible)).toBe(true);
         kit.dispose();
     });
 
-    it("stays under 300 draw calls and disposes", () => {
+    it("shows the spot beams and lit spot lenses only in show lighting", () => {
+        const kit = build(fp);
+        const beams = kit.root.getObjectByName("gym-spot-beams")!;
+        const lenses = kit.root.getObjectByName("gym-spot-lenses") as Mesh;
+        const lensMat = lenses.material as { emissiveIntensity: number };
+        expect(beams.visible).toBe(false);
+        expect(lensMat.emissiveIntensity).toBe(0);
+        kit.setLighting("show");
+        expect(beams.visible).toBe(true);
+        expect(lensMat.emissiveIntensity).toBeGreaterThan(1);
+        kit.setLighting("house");
+        expect(beams.visible).toBe(false);
+        kit.dispose();
+    });
+
+    it("puts aisle steps where the crowd leaves its aisles", () => {
+        const kit = build(fp);
+        const [row] = kit.seatRows;
+        const aisles = gymAisles(row.points[0][0], row.points[1][0]);
+        expect(aisles.length).toBeGreaterThan(0);
+        const crowd = buildCrowd([row], { density: 1 });
+        const m = new Matrix4();
+        const p = new Vector3();
+        for (let i = 0; i < crowd.mesh.count; i++) {
+            crowd.mesh.getMatrixAt(i, m);
+            p.setFromMatrixPosition(m);
+            for (const x of aisles) {
+                expect(Math.abs(p.x - x)).toBeGreaterThan(0.5);
+            }
+        }
+        crowd.dispose();
+        kit.dispose();
+    });
+
+    it("keeps matte surfaces out of the scene environment map", () => {
+        const kit = build(fp);
+        const room = kit.root.getObjectByName("gym-room") as Mesh;
+        const mats = room.material as Material[];
+        for (const i of [0, 2, 4]) {
+            const mat = mats[i] as MeshLambertMaterial;
+            expect(mat).toBeInstanceOf(MeshLambertMaterial);
+            expect(mat.envMap).toBeInstanceOf(CubeTexture);
+            expect(mat.reflectivity).toBe(0);
+        }
+        kit.dispose();
+    });
+
+    it("stays under 40 draw calls and disposes everything", () => {
         const kit = build(fp, "low");
-        expect(drawCalls(kit.root)).toBeLessThan(300);
+        expect(drawCalls(kit.root)).toBeLessThan(40);
         const geo = (kit.root.getObjectByName("gym-room") as Mesh).geometry;
         let disposed = 0;
         geo.addEventListener("dispose", () => disposed++);
+        const textures = new Set<Texture>();
+        kit.root.traverse((o) => {
+            if (!(o instanceof Mesh)) return;
+            const mats: Material[] = Array.isArray(o.material)
+                ? o.material
+                : [o.material];
+            for (const mat of mats) {
+                for (const v of Object.values(mat)) {
+                    if (v instanceof Texture) textures.add(v);
+                }
+            }
+        });
+        expect(textures.size).toBeGreaterThan(8);
+        const undisposed = new Set(textures);
+        textures.forEach((t) =>
+            t.addEventListener("dispose", () => undisposed.delete(t)),
+        );
         kit.dispose();
         expect(disposed).toBe(1);
+        expect(undisposed.size).toBe(0);
         expect(kit.root.children).toHaveLength(0);
     });
 });
