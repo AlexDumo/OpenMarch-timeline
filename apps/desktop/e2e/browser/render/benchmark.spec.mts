@@ -8,8 +8,9 @@ import type { BenchmarkReport } from "../../../src/field/benchmark/frameStats";
 import { makeStressShow } from "./stressShow.mjs";
 
 /**
- * The in-app field benchmark (#205) on the parity gate's corpus (#208): both
- * demo shows and the 1,925-marcher stress show.
+ * The in-app field benchmark (#205) on the parity gate's corpus (#208): the
+ * Part 1 demo and, with `LARGE_SHOW`, that show and the 1,925-marcher stress
+ * show.
  * Not a pass/fail suite: it only runs with `BENCHMARK_OUT=<folder>`, and
  * writes each report there as JSON, plus one line per scenario to
  * `summary.tsv` (show, scenario, fps, p95 ms, CPU avg ms, renderer). The browser build is a
@@ -30,10 +31,20 @@ const STRESS = path.join(
     "stress-1925.dots",
 );
 
+/**
+ * A large timeline show of your own (`LARGE_SHOW=<path to .dots>`), which the
+ * stress show is cloned from. The repository has no large show it can share,
+ * so without it the corpus is the Part 1 demo alone.
+ */
+const LARGE_SHOW = process.env.LARGE_SHOW;
 const SHOWS = [
     { name: "part1", file: path.join(DEMOS, "part1-demo.dots") },
-    { name: "daft-punk", file: path.join(DEMOS, "lhb-daft-punk-pt2.dots") },
-    { name: "stress", file: STRESS },
+    ...(LARGE_SHOW
+        ? [
+              { name: "large", file: LARGE_SHOW },
+              { name: "stress", file: STRESS },
+          ]
+        : []),
 ];
 
 for (const show of SHOWS)
@@ -42,11 +53,7 @@ for (const show of SHOWS)
         test.use({ showFile: show.file });
         test.beforeAll(() => {
             fs.mkdirSync(path.dirname(STRESS), { recursive: true });
-            if (show.file === STRESS)
-                makeStressShow(
-                    path.join(DEMOS, "lhb-daft-punk-pt2.dots"),
-                    STRESS,
-                );
+            if (show.file === STRESS) makeStressShow(LARGE_SHOW!, STRESS);
         });
 
         test("benchmark", async ({ show: app }) => {
