@@ -33,6 +33,7 @@ import type {
     KitBuilder,
     LightingPreset,
     SeatRow,
+    ShowCredits,
 } from "../types";
 import {
     bandGeometry,
@@ -176,7 +177,7 @@ interface Ctx {
     glow: BoxSpec[];
 }
 
-export const buildArena: KitBuilder = ({ footprint, params, quality }) => {
+export const buildArena: KitBuilder = ({ footprint, quality }) => {
     const fp = footprint;
     const shadows = quality === "high";
     const shared = createSharedMaterials();
@@ -225,15 +226,14 @@ export const buildArena: KitBuilder = ({ footprint, params, quality }) => {
         glow: [],
     };
 
-    const text = params.endZoneText.trim() || "OPENMARCH";
-    const ribbonMat = ribbonMaterial(ctx, text);
+    const ribbonMat = ribbonMaterial(ctx);
     addFloor(ctx);
     const tunnel = tunnelBox(ctx);
     const bowl = addBowl(ctx, ribbonMat, tunnel.hole);
     addTunnel(ctx, tunnel);
     addJudgesTable(ctx);
     const rafters = addRafters(ctx, bowl.upper);
-    addScoreboard(ctx, ribbonMat, text);
+    const setShowCredits = addScoreboard(ctx, ribbonMat);
     addBanners(ctx, bowl.upper);
     addGlow(ctx);
     const lights = addLights(ctx, rafters);
@@ -257,6 +257,7 @@ export const buildArena: KitBuilder = ({ footprint, params, quality }) => {
         lightingPresets,
         defaultLighting,
         setLighting,
+        setShowCredits,
         onFrame({ cameraPosition }) {
             overhead.visible = cameraPosition[1] < ARENA_ROOF_Y - 0.3;
         },
@@ -269,8 +270,8 @@ export const buildArena: KitBuilder = ({ footprint, params, quality }) => {
 };
 
 /** The shared LED ribbon material; its texture repeats along U. */
-function ribbonMaterial(ctx: Ctx, text: string): MeshStandardMaterial {
-    const map = arenaRibbonTexture(text);
+function ribbonMaterial(ctx: Ctx): MeshStandardMaterial {
+    const map = arenaRibbonTexture();
     // Bowl rings run counterclockwise seen from above, so from the floor U
     // runs right to left; mirror it so the text reads (as in pro.ts).
     map.repeat.set(-1, 1);
@@ -922,7 +923,11 @@ function addRafters(ctx: Ctx, upper: BuiltTier) {
  * front and back, short ones toward the ends), LED rings above and below,
  * a crown and cables up to the roof.
  */
-function addScoreboard(ctx: Ctx, ribbonMat: Material, text: string): void {
+/** Builds the center-hung scoreboard; returns the credits setter for its screens. */
+function addScoreboard(
+    ctx: Ctx,
+    ribbonMat: Material,
+): (credits: ShowCredits) => void {
     const { cx, cz, fp } = ctx;
     const bw = Math.min(12, Math.max(8, (fp.maxX - fp.minX) * 0.24));
     const bd = bw * 0.62;
@@ -1029,7 +1034,7 @@ function addScoreboard(ctx: Ctx, ribbonMat: Material, text: string): void {
     geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
     geo.setAttribute("uv", new Float32BufferAttribute(uv, 2));
     geo.computeVertexNormals();
-    const map = scoreboardTexture(text);
+    const { texture: map, setCredits } = scoreboardTexture();
     const screenMat = new MeshStandardMaterial({
         color: 0x000000,
         emissive: 0xffffff,
@@ -1063,6 +1068,8 @@ function addScoreboard(ctx: Ctx, ribbonMat: Material, text: string): void {
         "arena.scoreboardRings",
         ctx.overhead,
     ).receiveShadow = false;
+
+    return setCredits;
 }
 
 /** Championship banners hanging from the roof above the back upper level. */

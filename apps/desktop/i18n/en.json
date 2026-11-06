@@ -3121,7 +3121,14 @@
         "unsavedChanges": "You have unsaved changes",
         "close": "Close",
         "saved": "Show settings saved",
-        "updateFailed": "Failed to update workspace settings"
+        "updateFailed": "Failed to update workspace settings",
+        "showInfo": {
+            "projectName": "Show name",
+            "projectNamePlaceholder": "Uses the file name",
+            "designer": "Designer",
+            "client": "Client",
+            "optional": "Optional"
+        }
     },
     "canvas": {
         "zoom": {

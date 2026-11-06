@@ -18,6 +18,7 @@ import {
 import { fieldFootprint, type FieldProperties } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import {
+    brandArtReady,
     buildCrowd,
     createEnvironment,
     createEnvironmentMap,
@@ -34,6 +35,7 @@ import type {
     CameraSeat,
     KitResult,
     LightingPreset,
+    ShowCredits,
     VenueKitId,
 } from "@/view3d/core/types";
 
@@ -108,11 +110,19 @@ function performers(fp: FieldProperties) {
     };
 }
 
+const SAMPLE_CREDITS: ShowCredits = {
+    title: "Spring Show 2026",
+    designer: "Sam Rivera",
+    client: "Centerville High School",
+};
+
 export interface LoadOptions {
     kit: VenueKitId;
     field?: keyof typeof FIELDS;
     quality?: "low" | "high";
     crowd?: boolean;
+    /** Credits for the kit's video boards; a sample show by default. */
+    credits?: ShowCredits;
 }
 
 export interface LoadResult {
@@ -139,6 +149,8 @@ async function load(options: LoadOptions): Promise<LoadResult> {
         quality,
     });
     kit = built;
+    built.setShowCredits?.(options.credits ?? SAMPLE_CREDITS);
+    await brandArtReady();
     scene.add(built.root);
     const surface = buildFieldSurface({
         fieldProperties: fp,

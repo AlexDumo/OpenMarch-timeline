@@ -38,6 +38,7 @@ export * from "./envMap";
 export * from "./rig";
 export * from "./materials";
 export * from "./textures";
+export * from "./brand";
 export * from "./lightPole";
 export * from "./videoBoard";
 export * from "./crowd";

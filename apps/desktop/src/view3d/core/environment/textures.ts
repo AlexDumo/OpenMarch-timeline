@@ -43,6 +43,23 @@ export function paintCanvasTexture(
     return tex;
 }
 
+/**
+ * Clears and repaints a texture made by `paintCanvasTexture` (when painting is
+ * enabled), then flags it for upload.
+ */
+export function repaintCanvasTexture(
+    texture: CanvasTexture,
+    paint: (g: CanvasRenderingContext2D, width: number, height: number) => void,
+): void {
+    if (!paintingEnabled) return;
+    const canvas = texture.image as HTMLCanvasElement | undefined;
+    const g = canvas?.getContext("2d");
+    if (!canvas || !g) return;
+    g.clearRect(0, 0, canvas.width, canvas.height);
+    paint(g, canvas.width, canvas.height);
+    texture.needsUpdate = true;
+}
+
 /** Video board face: purple-to-dark gradient, a title and a subtitle. */
 export function boardTexture(title: string, sub: string): CanvasTexture {
     return paintCanvasTexture(1024, 560, (g) => {
