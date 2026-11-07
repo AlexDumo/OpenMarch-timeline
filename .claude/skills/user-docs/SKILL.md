@@ -12,7 +12,7 @@ A change that alters what users see or do isn't done until the guide matches it.
 3. Learn the new behavior from the code you changed and its tests, not from memory or the old page.
 4. Update every affected page: fix what's no longer true, add what's new. `<Ui k>` for labels, `<Kbd>` for shortcuts, one paragraph per line.
 5. Re-record the shots that show the change, and add shots for anything new (`node scripts/docs-media/capture.mjs <shot>` from `apps/desktop`; `scripts/media-kit/in-docker.sh` on a headless machine).
-6. If actions, shortcuts or hold terms changed: `pnpm --dir apps/desktop docs:reference`.
+6. If actions, shortcuts, hold terms, menu items or settings changed: `pnpm --dir apps/desktop docs:reference`.
 7. Check: `pnpm --dir apps/website check:guide`, then `pnpm --dir apps/website run build`.
 8. Review as a reader, and don't skip it:
    - Open every new or re-recorded picture with the Read tool; for clips, read a frame sheet.
