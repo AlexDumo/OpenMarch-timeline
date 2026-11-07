@@ -251,7 +251,9 @@ const REVOKE_TIMEOUT_MS = 10 * 1000;
  * The desktop app is a public client, so the request carries only its
  * client ID. Best effort: offline, the token stays valid at Clerk until it
  * expires, and sign-out on this computer goes ahead either way.
- * @returns Whether Clerk confirmed the revocation.
+ * Quitting the app straight after sign-out can drop the request too.
+ * @returns Whether Clerk accepted the request (it answers 200 for a token it
+ *   doesn't know as well, per RFC 7009).
  */
 export async function revokeRefreshToken(
     refreshToken: string,
