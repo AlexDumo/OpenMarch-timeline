@@ -249,16 +249,11 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 ReturnType<typeof sectionCueCarry>,
             ][],
         );
-        return compileWindowCues(
-            marchers,
-            beats,
-            STEP_OFF_FOOT,
-            {
-                sections: JSON.parse(cueSectionsKey) as CueSection[],
-                bandMoving: Array.from(bandMovingKey, Number),
-            },
-            (id) => carries.get(id) ?? "none",
-        );
+        return compileWindowCues(marchers, beats, STEP_OFF_FOOT, {
+            sections: JSON.parse(cueSectionsKey) as CueSection[],
+            bandMoving: Array.from(bandMovingKey, Number),
+            carries: (id) => carries.get(id) ?? "none",
+        });
     }, [marchers, beats, carriesKey, cueSectionsKey, bandMovingKey]);
     const previousPlans = useRef<ShowPlans | null>(null);
     const showPlans = useMemo(() => {
