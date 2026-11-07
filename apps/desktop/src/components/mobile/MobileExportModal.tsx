@@ -26,6 +26,8 @@ import { getGetApiEditorV1EnsemblesAnyQueryOptions } from "@/api/generated/ensem
 import { getGetApiEditorV1ProductionsProductionIdAudioFilesQueryOptions } from "@/api/generated/audio-files/audio-files";
 import { getClerkSignUpUrl, isSignInEnabled } from "@/global/auth/constants";
 import { T, useTranslate } from "@tolgee/react";
+import { isWebBuild } from "@/utilities/webBuild";
+import WebMobileUnavailable from "./WebMobileUnavailable";
 
 const mobileExportScreenshotUrls = [1, 2, 3, 4, 5].map(
     (index) => `https://assets.openmarch.com/desktop/mobile-wipe/${index}.webp`,
@@ -90,7 +92,9 @@ export default function MobileExportModal({
     const { t } = useTranslate();
 
     useEffect(() => {
-        if (productionId == null) return;
+        // Not on the web: asking the API means loading sign-in (ClerkJS),
+        // which waits until someone opens Mobile export.
+        if (productionId == null || isWebBuild) return;
 
         void queryClient.prefetchQuery(
             currentProductionQueryOptions(productionId),
@@ -98,6 +102,8 @@ export default function MobileExportModal({
     }, [productionId, queryClient]);
 
     const prefetchMobileExportData = useCallback(() => {
+        // A web build that can't sign in has nothing to fetch.
+        if (isWebBuild && !isSignInEnabled) return;
         void queryClient.prefetchQuery(
             getGetApiEditorV1EnsemblesAnyQueryOptions(),
         );
@@ -211,7 +217,9 @@ export function MobileExportModalContents() {
                         !isSignedInView && "min-h-0 flex-1",
                     )}
                 >
-                    {validationState.type === "no-access" ? (
+                    {isWebBuild && !isSignInEnabled ? (
+                        <WebMobileUnavailable />
+                    ) : validationState.type === "no-access" ? (
                         <MobileExportAccessError />
                     ) : isAuthLoading ? (
                         <MobileExportLoading
@@ -272,8 +280,20 @@ function MobileExportAccessError() {
     );
 }
 
+/** What went wrong with signing in, in the user's language; null if nothing. */
+function signInErrorKey(code: string | undefined) {
+    if (!code) return null;
+    if (code === "TOKEN_EXPIRED")
+        return "mobileExport.signedOut.errors.sessionExpired";
+    if (code === "AUTH_UNAVAILABLE")
+        return "mobileExport.signedOut.errors.unavailable";
+    return "mobileExport.signedOut.errors.failed";
+}
+
 function SignedOutMobileExportContent() {
     const { t } = useTranslate();
+    const { error } = useAuth();
+    const errorKey = signInErrorKey(error?.code);
     const signUpUrl = isSignInEnabled ? getClerkSignUpUrl() : null;
     const handleSetupAccount = useCallback(() => {
         if (!signUpUrl) return;
@@ -323,9 +343,18 @@ function SignedOutMobileExportContent() {
                 {isSignInEnabled && (
                     <div className="flex w-[85%] flex-col items-center gap-12">
                         <p className="text-body text-text-subtitle">
-                            <T keyName="mobileExport.signedOut.signInPrompt" />
+                            {isWebBuild ? (
+                                <T keyName="mobileExport.signedOut.signInPromptWeb" />
+                            ) : (
+                                <T keyName="mobileExport.signedOut.signInPrompt" />
+                            )}
                         </p>
                         <SignInButton variant="secondary" />
+                        {errorKey && (
+                            <p role="alert" className="text-sub text-red">
+                                {t(errorKey)}
+                            </p>
+                        )}
                     </div>
                 )}
             </div>
