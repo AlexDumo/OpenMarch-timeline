@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
+import tolgee from "@/global/singletons/Tolgee";
+import { getActionLabel } from "../labels";
 import en from "../../../i18n/en.json";
 import { canonicalBinding } from "../bindings";
 import {
     ACTIONS,
     ACTION_IDS,
     NUDGE_ACTION_IDS,
-    TAP_BEATS_ACTION_IDS,
     type ActionId,
 } from "../definitions";
 
@@ -18,18 +19,13 @@ const NOT_IN_PALETTE: Partial<Record<ActionId, string>> = {
     holdSlowerPlayback: "plays slower only while its key is held",
     openCommandPalette: "opens the palette itself",
     openCommandBar: "opens the palette itself",
-    exitTimelineFocus:
-        "Escape on the timeline; the palette lists Focus canvas, which does the same",
-    timelinePlayPause:
-        "Space on the timeline; the palette lists Play / stop, which does the same",
-    timelinePreviousPage:
-        "← on the timeline; the palette lists Previous page, which does the same",
-    timelineNextPage:
-        "→ on the timeline; the palette lists Next page, which does the same",
     openFieldMenu:
         "the keyboard's right-click: opens the field's menu at the selection, which the palette would cover",
     shapeBlock: "listed as Shape › Box, which asks the box's numbers",
     shapeCircle: "listed as Shape › Circle, which asks the circle's numbers",
+    shapeLine: "listed as Shape › Line, which asks the line's numbers",
+    shapeRemoveLastPoint:
+        "works only between clicks while drawing a line point by point",
 };
 
 function lookup(key: string): unknown {
@@ -109,14 +105,55 @@ describe("ACTIONS", () => {
         );
     });
 
-    it("generates 24 nudge actions and 9 tap-beat actions", () => {
+    it("registers the hold commands next to Clear this page, named from the hold terms", async () => {
+        await tolgee.run();
+        const t = (key: string, params?: Record<string, unknown>) =>
+            tolgee.t(key, params as never);
+        expect(getActionLabel("timelineDefineAsShown", t)).toBe(
+            "Define as shown",
+        );
+        expect(getActionLabel("timelineHoldFromPrevious", t)).toBe(
+            "Hold from previous page",
+        );
+        const clear = ACTIONS.setSelectedMarchersToPreviousPage;
+        for (const id of [
+            "timelineDefineAsShown",
+            "timelineHoldFromPrevious",
+        ] as const) {
+            const def = ACTIONS[id] as {
+                category: string;
+                scope: string;
+                hiddenFromPalette?: boolean;
+            };
+            expect(def).toMatchObject({
+                category: clear.category,
+                scope: clear.scope,
+            });
+            expect(def.hiddenFromPalette).toBeUndefined();
+        }
+        expect(ACTIONS.timelineHoldFromPrevious.defaultBindings).toEqual([
+            "$mod+H",
+            "Control+H",
+        ]);
+        expect(ACTIONS.timelineDefineAsShown.defaultBindings).toEqual([]);
+        // ⌘H / Ctrl+H is no other action's key; plain H stays the shape editor's hide-marchers
+        const keys = ["$mod+H", "Control+H"].map(canonicalBinding);
+        expect(
+            ACTION_IDS.filter((id) =>
+                ACTIONS[id].defaultBindings.some((b) =>
+                    keys.includes(canonicalBinding(b)),
+                ),
+            ),
+        ).toEqual(["timelineHoldFromPrevious"]);
+        expect(ACTIONS.shapeHideMarchers.defaultBindings).toEqual(["H"]);
+    });
+
+    it("generates 24 nudge actions", () => {
         expect(NUDGE_ACTION_IDS).toHaveLength(24);
-        expect(TAP_BEATS_ACTION_IDS).toHaveLength(9);
         expect(ACTIONS.moveSelectedMarchersLeftFine.args).toEqual({
             direction: "left",
             step: "quarter",
             snap: false,
         });
-        expect(ACTIONS.timelineTapBeats3.args).toEqual({ count: 3 });
     });
 });

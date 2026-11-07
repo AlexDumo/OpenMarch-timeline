@@ -1,10 +1,9 @@
 /**
- * The props at a moment, shared by the 3D View's props and performers (C4.5): `Props.tsx` draws
- * them and `Performers.tsx` stands performers on them, both from one layout a frame.
+ * The props at a moment, shared by the 3D View's props and performers (C4.5): `PropBlocks.tsx`
+ * stands each block on the platform under it and `Performers.tsx` stands performers on them, both
+ * from one layout a frame.
  */
 import type { FieldProperties } from "@openmarch/core";
-import type { CountClock } from "@/timeline/countGrid";
-import { playbackBeat } from "@/timeline/positionBuffer";
 import {
     liftPlatforms,
     writeLifts,
@@ -25,8 +24,6 @@ export const stepRamp = (fieldProperties: FieldProperties): number =>
 export interface PropsMoment {
     props: readonly PropInput[];
     positions: ShowPositions | null;
-    /** The show's counts, for the beat at `ms` */
-    countGrid: CountClock;
     ms: number;
     fieldProperties: FieldProperties;
 }
@@ -36,7 +33,7 @@ const NO_SOLIDS: PropSolid[] = [];
 /** The last layout, so the props and the performers lay them out once a frame. */
 let last: {
     props: readonly PropInput[];
-    countGrid: CountClock;
+    positions: ShowPositions | null;
     fieldProperties: FieldProperties;
     ms: number;
     solids: PropSolid[];
@@ -44,24 +41,24 @@ let last: {
 } | null = null;
 
 function layout(moment: PropsMoment) {
-    const { props, positions, countGrid, ms, fieldProperties } = moment;
+    const { props, positions, ms, fieldProperties } = moment;
     if (
         last &&
         last.props === props &&
-        last.countGrid === countGrid &&
+        last.positions === positions &&
         last.fieldProperties === fieldProperties &&
         last.ms === ms
     )
         return last;
     const solids =
         positions && props.length > 0
-            ? propsAt(props, playbackBeat(countGrid, ms), (id) =>
+            ? propsAt(props, positions.beatAt(ms), (id) =>
                   positions.positionAt(id, ms, fieldProperties),
               )
             : NO_SOLIDS;
     return (last = {
         props,
-        countGrid,
+        positions,
         fieldProperties,
         ms,
         solids,

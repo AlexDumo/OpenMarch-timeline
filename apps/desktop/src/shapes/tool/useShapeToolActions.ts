@@ -13,7 +13,8 @@ import { kindPickGate, pickShapeKind } from "./pickKind";
 import { SHAPE_TOOLS } from "./shapeTools";
 import type { ToolState } from "./toolMachine";
 import { useShapePaletteSource } from "../command/useShapePaletteSource";
-import { keepSavedShapeInShow } from "../library/saveShape";
+import { GROUP_MIN, groupMarchers } from "../placed/groupMarchers";
+import { useBoxSelectionStore } from "../placed/boxSelectionStore";
 import {
     closeShapeTool,
     isShapeHidden,
@@ -38,15 +39,12 @@ export async function placeShape(
     if (!field) return false;
     const placement = placementOf(tool, shapeContextFor(field));
     if (!placement) return false;
-    const placed = await writePlacement(
+    return writePlacement(
         placement,
         queryClient,
         tolgee.t("shapes.tool.placeError", "Error placing the shape"),
         plan,
     );
-    // A show that uses a saved shape keeps a copy of it (#353)
-    if (placed) await keepSavedShapeInShow(tool.kind, queryClient);
-    return placed;
 }
 
 /** Place (Enter): places the open shape at the edit window now, then closes the tool */
@@ -59,7 +57,10 @@ export function useApplyShape(): () => Promise<void> {
     }, [queryClient]);
 }
 
-/** Opens and places the shape tool from shortcuts, buttons and the command palette */
+/**
+ * Opens and places the shape tool from shortcuts, buttons and the command palette, and groups the
+ * selection (#603)
+ */
 export function useShapeToolActions(): void {
     const { ready, selectedPerformers } = useEditorReadiness();
     const placeable = useShapeToolStore(
@@ -78,6 +79,26 @@ export function useShapeToolActions(): void {
             if (entry) pickShapeKind(entry.kind, selectedPerformers);
         },
         { enabled: ready && kindPickGate(shown, selectedPerformers).ok },
+    );
+    // Group the selected performers as they stand (#603); not one placed shape selected whole,
+    // which is a shape already (Ungroup is offered there instead)
+    const shapeSelected = useBoxSelectionStore((s) => s.selected !== null);
+    const queryClient = useQueryClient();
+    useActionHandler(
+        "shapeGroup",
+        () =>
+            void groupMarchers(
+                selectedPerformers.map((m) => m.id),
+                queryClient,
+            ),
+        {
+            enabled:
+                ready &&
+                !shown &&
+                !shapeSelected &&
+                selectedPerformers.length >= GROUP_MIN,
+            ignoreRepeat: true,
+        },
     );
     useActionHandler(
         "applyShape",

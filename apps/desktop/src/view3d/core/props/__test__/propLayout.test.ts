@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GeometryChange, PlacementChange } from "@openmarch/core";
+import type { GeometryChange } from "@openmarch/core";
 import {
     platformTopAt,
     propsAt,
@@ -27,25 +27,11 @@ const box = (
     ...more,
 });
 
-const placement = (
-    beat: number,
-    state: PlacementChange["state"],
-    holders: number[] = [],
-): PlacementChange => ({
-    id: beat,
-    beat,
-    state,
-    holders: holders.map((marcherId) => ({ marcherId, hand: "both" })),
-    crew: [],
-    groupId: null,
-});
-
 const prop = (
     id: number,
     surface: PropInput["surface"],
     changes: GeometryChange[],
-    placements: PlacementChange[] = [],
-): PropInput => ({ id, surface, changes, placements });
+): PropInput => ({ id, surface, changes });
 
 const at =
     (where: Record<number, { x: number; z: number }>) =>
@@ -95,38 +81,6 @@ describe("propsAt", () => {
             propsAt(
                 [prop(1, "obstacle", [box(8, 1, 1, 1)])],
                 7,
-                at({ 1: { x: 0, z: 0 } }),
-            ),
-        ).toEqual([]);
-    });
-
-    it("leaves out a prop that is Off field, and draws it again once placed", () => {
-        const input = [
-            prop(
-                1,
-                "obstacle",
-                [box(0, 1, 1, 1)],
-                [placement(4, "off_field"), placement(10, "placed")],
-            ),
-        ];
-        const where = at({ 1: { x: 0, z: 0 } });
-        expect(propsAt(input, 3, where)).toHaveLength(1);
-        expect(propsAt(input, 4, where)).toEqual([]);
-        expect(propsAt(input, 10, where)).toHaveLength(1);
-    });
-
-    it("leaves a held prop to its holder's hands", () => {
-        expect(
-            propsAt(
-                [
-                    prop(
-                        1,
-                        "obstacle",
-                        [box(0, 1, 1, 1)],
-                        [placement(2, "held", [5])],
-                    ),
-                ],
-                3,
                 at({ 1: { x: 0, z: 0 } }),
             ),
         ).toEqual([]);

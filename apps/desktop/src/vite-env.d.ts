@@ -13,7 +13,7 @@ interface ImportMetaEnv {
     readonly VITE_EDITOR_API_URL?: string;
     /** "true" in the web build (vite.web.config.mts). */
     readonly VITE_PUBLIC_WEB_BUILD?: string;
-    /** The web build's channel: "stable", "nightly", "dev", "preview" or "lab". */
+    /** The web build's channel: "stable", "nightly", "preview", "dev", "examples" or "lab". */
     readonly VITE_PUBLIC_WEB_CHANNEL?: string;
     /** Names the web build's browser storage: the channel, or "lab-<test id>". */
     readonly VITE_PUBLIC_WEB_STORAGE_NAMESPACE?: string;
@@ -27,6 +27,8 @@ interface ImportMetaEnv {
     readonly VITE_VIEW3D_NO_SETTINGS_WINDOW?: string;
     /** The app's version, in the web build's worker. */
     readonly VITE_PUBLIC_APP_VERSION?: string;
+    /** "true" shows the welcome flow's What's new slides for features not on main yet, for review. */
+    readonly VITE_PUBLIC_WHATS_NEW_PREVIEW?: string;
 }
 declare module "@fontsource/dm-mono";
 declare module "@fontsource/dm-sans";

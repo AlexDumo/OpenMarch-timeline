@@ -44,7 +44,7 @@ group to rejoin it, merge-in-time) was **dropped**.
 
 For one marcher, a **hold** is any stretch where it stands still. Which move is in charge at a
 count comes from the layers. The spec §6.2 rules are decided (a page's move is underneath, a
-later start wins, and on the same start the shorter wins; ADR 0001 amendment 2026-10-16) but not
+later start wins, and on the same start the shorter wins; ADR 0012 amendment 2026-10-16) but not
 built: today each edit still chooses layers (`stealLayer`, `db-functions/timelineCommands.ts:285`).
 A move hidden under another neither breaks a hold nor makes one. Nothing here depends on the
 derivation being built: the hold invariants are checked against the stored rows (Storage).
@@ -92,6 +92,10 @@ follow-the-leader (decisions 4, 16, R4, R5), it is provisional until the ownersh
 Tickets built from this doc should say the same.
 
 ## Vocabulary (owner, 2026-10-28)
+
+Working words since 2026-11-02 (owner): **Defined · Held · Not defined**, and **Define as shown**
+for Set as shown. They live only in the `timeline.terms.*` block of `apps/desktop/i18n/en.json`,
+read through `apps/desktop/src/timeline/holdTerms.ts`; the rest of this doc still says Set/Not set.
 
 The UI uses three words for a marcher's state on a count:
 
@@ -212,6 +216,15 @@ from stale copies (defined-coordinates finding 7).
       does (review, storage M4 and semantics B1). Other pages keep their motion. The Expert drag
       back in a shared move gets the same fix (storage M6). Shapes and follow-the-leader are
       owner question R5.
+    - **Shared curved moves (fork #584, 2026-11-01):** a cut restarts a curved path after the
+      cut, which would change the motion of the others in the move. So where others share such a move,
+      the marcher is first taken into a move of its own and only that is cut. A direct path is
+      still cut for everyone, since no one's motion changes. Where split by marcher refuses (an
+      inheriting follow-the-leader order), the marcher keeps its moves and is named.
+    - **The cleared marcher's own arc (fork #591, 2026-11-01):** the part of an arc before the page
+      stays an arc of the same circle at the same speed (a smaller bulge), so every count before
+      the page is where it was. Rows whose spans start at different counts need different bulges,
+      so they get transitions of their own.
 17. **Removing the keyframe where a Held hold begins removes the hold too.** The pages become
     Following. The hold meant "stand at this spot", and the spot is gone. No next-page stay is
     written inside the hold (review, semantics M3). Undo restores both. See

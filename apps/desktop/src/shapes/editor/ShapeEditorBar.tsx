@@ -1,5 +1,10 @@
+import { T } from "@tolgee/react";
+import Shortcut from "@/components/ui/Shortcut";
+import { create } from "zustand";
 import clsx from "clsx";
+import { getButtonClassName } from "@openmarch/ui";
 import {
+    Fragment,
     memo,
     useCallback,
     useEffect,
@@ -14,16 +19,21 @@ import {
 import { animated, to, useSpring } from "@react-spring/web";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { editorPlacement } from "./editorPlacement";
+import { usePlacedBoxPreviewStore } from "../placed/boxSelectionStore";
 import { keepInView } from "./keepInView";
 import { glideTo, isGliding } from "@/field/three/fieldNavigation";
-import { setShapeScrubbing, useShapePointerStore } from "../field/shapePointer";
+import {
+    engageStep,
+    setShapeScrubbing,
+    useShapePointerStore,
+} from "../field/shapePointer";
 import { keepFocus } from "./keepFocus";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { runAction } from "@/shortcuts/registry";
-import { getActionShortcutLabel } from "@/shortcuts/labels";
 import type { ActionId } from "@/shortcuts/definitions";
+import type { OrderChoice } from "../assign";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
-import { RichTips, Tip } from "./Tip";
+import { RichTips, Tip } from "@/components/ui/Tip";
 import {
     ActionFace,
     RecalculateFace,
@@ -33,12 +43,16 @@ import {
     FlipHorizontalIcon,
     FlipVerticalIcon,
     LinkSimpleIcon,
+    LockSimpleIcon,
+    LockSimpleOpenIcon,
     MinusIcon,
     PlusIcon,
     ArrowClockwiseIcon,
     EqualsIcon,
     MagnetIcon,
     PathIcon,
+    EyeIcon,
+    EyeSlashIcon,
     SelectionSlashIcon,
 } from "@phosphor-icons/react";
 import {
@@ -53,16 +67,24 @@ import {
     frameControls,
     scrubTurn,
     shapeOutline,
+    shapeTurn,
     turnShape,
 } from "../frame/gestures";
 import { currentShapeField } from "../field/shapeFieldContext";
 import {
     toggleRatioLock,
+    toggleSizesLock,
     useShapeEditorStore,
 } from "../frame/shapeEditorStore";
 import { HANDLE_REACH_PX, toolEnvFor } from "../tool/toolEnv";
 import type { Roles } from "@/input/modifierRoles";
-import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
+import {
+    paramGlyph,
+    toolId,
+    type AnyToolKind,
+    type ParamGlyph,
+    type ToolEnv,
+} from "../tool/toolKind";
 import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 import { ShapeAwayChip } from "./ShapeAwayChip";
 import { GlyphText } from "./GlyphText";
@@ -83,20 +105,37 @@ import {
 } from "./editTargets";
 import { parseDegrees, scrubDistance } from "./scrub";
 import { ScrubNumber, type ScrubMove } from "./ScrubNumber";
-import { SaveShapeButton } from "../library/SaveShapeButton";
 import { LayoutMenu } from "./LayoutPicker";
 import { ReshuffleButton } from "./ReshuffleButton";
 import { EdgeToggle } from "./EdgeToggle";
 import { ModeMenu } from "./ModeMenu";
+import { ChoiceMenus, GuidesMenu } from "./ChoiceMenu";
+import { GroupChips } from "./GroupChips";
+import { GROUP_MENU_ATTRIBUTE, GroupMenu } from "./GroupMenu";
+import { useFocusCarry } from "./focusCarry";
+import { OrderMenu } from "./OrderMenu";
 import { OutlineGap } from "./OutlineGap";
 import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
 import { ScaleButtons, scaledOnce, scaleOnce } from "./ScaleButtons";
-import { distributionOf, edgeSplitOf, layoutOf } from "../distribute/modes";
+import {
+    closedOf,
+    distributionOf,
+    edgeSplitOf,
+    layoutOf,
+} from "../distribute/modes";
 import { outlineGapOf } from "../distribute/outlineGap";
 import type { XY } from "../types";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import tolgee from "@/global/singletons/Tolgee";
+import { getActionShortcutKeys } from "@/shortcuts/labels";
+import {
+    isHiding,
+    pressHideMarchers,
+    releaseHideMarchers,
+    toggleHideMarchers,
+    useMarchersHiddenStore,
+} from "../field/marchersHidden";
 
 /** How long the editor stays still after a press on it ends, so a second click lands */
 const PRESS_HOLD_MS = 450;
@@ -120,9 +159,9 @@ const EDIT_WINDOW_MS = 1000;
  * typed or dragged, and follows the field: across is side to side however the box is turned. ↻
  * adds a quarter turn to the degrees beside it, and ⌖▾ opens the pivot grid (#435). After the
  * flips, Shrink and Expand scale the shape keeping its proportions (#489, `ScaleButtons`).
- * Recalculate works out who goes where again by least travel, which moving and turning keep until
- * it's pressed, and shows its word only when it would change something; Close up shows for a
- * placed shape with holes (#392). Pathways and ☆ Save, which leave the shape as it is, come last
+ * Recalculate works out who goes where again by least travel (a Line in Keep order or Reverse: in
+ * that order), which moving and turning keep until it's pressed, and shows its word only when it
+ * would change something; Close up shows for a placed shape with holes (#392). Pathways, which leave the shape as it is, come last
  * before Place. Its controls show the app's tooltips (`RichTips`). Under the editor, a pill of
  * its own says how the shape is filled (#435): the mode menu (Grid, Outline, Spread, each with a
  * picture of this shape in it), then after a divider the box's layout menu in Grid, the leftover
@@ -135,21 +174,39 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
     const armed = useShapeToolStore((s) =>
         s.tool !== null && s.tool.params === null ? s.tool.kind : null,
     );
+    // Clicking a line's points (#524): how to go on, even once two make a line
+    const clicking = useShapeToolStore(
+        (s) => s.tool?.gesture?.type === "points",
+    );
     const toolOpen = useShapeToolStore((s) => s.tool !== null);
     const hidden = useShapeHidden();
     const tool = useToolEditTarget();
     const placed = usePlacedEditTarget();
     if (hidden) return <ShapeAwayChip />;
-    if (armed)
+    if (armed || clicking)
         return (
             <div
                 className="rounded-6 border-stroke bg-bg-1 bg-modal text-body text-text shadow-modal pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 border px-12 py-6"
                 data-testid="shape-tool-hint"
             >
-                {tolgee.t(
-                    "shapes.edit.drawHint",
-                    "Drag on the field to draw a {shape} · Esc to cancel",
-                    { shape: armed.shape.label.toLowerCase() },
+                {clicking ? (
+                    <RemovePointHint />
+                ) : armed!.clickPoints ? (
+                    <T
+                        keyName="shapes.edit.drawPointsHintFor"
+                        params={{
+                            shape: toolId(armed!),
+                            keys: () => <Shortcut binding="Escape" />,
+                        }}
+                    />
+                ) : (
+                    <T
+                        keyName="shapes.edit.drawHintFor"
+                        params={{
+                            shape: toolId(armed!),
+                            keys: () => <Shortcut binding="Escape" />,
+                        }}
+                    />
                 )}
             </div>
         );
@@ -163,6 +220,35 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
                 testId={toolOpen ? "shape-tool-readout" : "placed-box-readout"}
             />
         </RichTips>
+    );
+}
+
+/**
+ * While clicking a line's points (owner, option A on #522): how to take the last one back and
+ * finish, the key as keycaps
+ */
+function RemovePointHint() {
+    const overrides = useShortcutOverridesStore((s) => s.overrides);
+    const keys = getActionShortcutKeys("shapeRemoveLastPoint", { overrides });
+    const esc = () => <Shortcut binding="Escape" />;
+    // With the key unbound, only the right-click is said
+    if (!keys)
+        return (
+            <T
+                keyName="shapes.edit.removePointHintClick"
+                defaultValue="Right-click removes the last point · Double-click to finish · <esc></esc> to cancel"
+                params={{ esc }}
+            />
+        );
+    return (
+        <T
+            keyName="shapes.edit.removePointHint"
+            defaultValue="Right-click or <keys></keys> removes the last point · Double-click to finish · <esc></esc> to cancel"
+            params={{
+                keys: () => <Shortcut action="shapeRemoveLastPoint" />,
+                esc,
+            }}
+        />
     );
 }
 
@@ -200,9 +286,25 @@ function ShapeEditorBar({
     const run = useRef<SizeRun | null>(null);
     const anchor = sizeRun(run.current, kind, params, spots);
     const env = envFor();
+    // A placed shape's number drag is previewed on the field until it's saved on release: its
+    // numbers show the preview meanwhile, so the dragged number moves with it
+    const previewed = usePlacedBoxPreviewStore((s) =>
+        s.held ? s.params : null,
+    );
+    const shown = !shape.place && previewed !== null ? previewed : params;
+    const dragged = useDraggedNumberStore((s) => s.key);
+    // An editor closed mid-drag never sees its drag end: let go of its number so later editors
+    // don't keep showing it
+    useEffect(() => () => useDraggedNumberStore.setState({ key: null }), []);
     const layout = env
-        ? chipLayout(kind, params, spots, { ...env, stepPx, anchor })
-        : { values: [], intervals: [], ratioLock: false };
+        ? chipLayout(kind, shown, spots, { ...env, stepPx, anchor }, dragged)
+        : {
+              values: [],
+              intervals: [],
+              groups: null,
+              ratioLock: false,
+              lock: null,
+          };
     const chips = useRef({ layout, anchor });
     // What the − and + presses act on: what this render shows
     chips.current = { layout, anchor };
@@ -247,6 +349,24 @@ function ShapeEditorBar({
         ignoreRepeat: true,
     });
 
+    // The shape on its own (#558): hold H to hide the marchers, tap to keep them hidden. The
+    // button and the palette turn the latch over. A key still down when the editor goes (the show
+    // plays) is let go, so it doesn't stay hidden once the editor is back
+    useActionHandler("shapeHideMarchers", () => toggleHideMarchers(), {
+        onPress: () => pressHideMarchers(),
+        onRelease: (reason) =>
+            releaseHideMarchers(Date.now(), reason === "lost"),
+    });
+    useEffect(() => () => releaseHideMarchers(Date.now(), true), []);
+
+    // One interval number, a single counted group's chips, or the group menu: focus stays there
+    // as one becomes another (owner feedback on #526)
+    const groupCount = layout.groups?.length ?? 0;
+    const intervalsCarry = useFocusCarry<HTMLSpanElement>(
+        groupCount > 1 ? "menu" : groupCount === 1 ? "chips" : "number",
+        (el) => el.closest(`[${GROUP_MENU_ATTRIBUTE}]`) !== null,
+    );
+
     const whatRow = useRef<HTMLSpanElement>(null);
     const doRow = useRef<HTMLSpanElement>(null);
     const twoRows = useTwoRows(whatRow, doRow, place.fieldWidth, place.held);
@@ -284,16 +404,23 @@ function ShapeEditorBar({
                         data-testid={`${testId}-text`}
                     >
                         {layout.values.map((x) => (
-                            <NumberChip
-                                key={x.param.key}
-                                param={x.param}
-                                display={x.display}
-                                note={x.note}
-                                canLess={x.less !== null}
-                                canMore={x.more !== null}
-                                glyph={false}
-                                actions={numbers}
-                            />
+                            <Fragment key={x.param.key}>
+                                <NumberChip
+                                    param={x.param}
+                                    display={x.display}
+                                    note={x.note}
+                                    before={x.before}
+                                    after={x.after}
+                                    canLess={x.less !== null}
+                                    canMore={x.more !== null}
+                                    glyph={null}
+                                    actions={numbers}
+                                />
+                                {layout.ratioLock &&
+                                    x.param.ratioLockAfter === true && (
+                                        <RatioLockButton sizes />
+                                    )}
+                            </Fragment>
                         ))}
                         {target.empty > 0 && (
                             <span className="text-text/60">
@@ -308,30 +435,85 @@ function ShapeEditorBar({
                             </span>
                         )}
                     </span>
-                    {layout.intervals.length > 0 && (
-                        <>
-                            <Divider />
-                            <span className="flex items-center gap-2">
-                                {layout.intervals.map((x) => (
-                                    <NumberChip
-                                        key={x.param.key}
-                                        param={x.param}
-                                        display={x.display}
-                                        note={null}
-                                        canLess={false}
-                                        canMore={false}
-                                        glyph
-                                        derived={x.derived}
-                                        actions={numbers}
+                    <span className="contents" {...intervalsCarry}>
+                        {layout.groups && layout.groups.length > 1 && (
+                            <>
+                                <Divider />
+                                <GroupMenu
+                                    target={live}
+                                    groups={layout.groups}
+                                    envFor={envFor}
+                                    onScrubbing={setShapeScrubbing}
+                                />
+                                {layout.lock !== null && (
+                                    <IntervalLockButton
+                                        live={live}
+                                        locked={layout.lock}
                                     />
-                                ))}
+                                )}
+                            </>
+                        )}
+                        {layout.groups?.length === 1 && (
+                            <>
+                                <Divider />
+                                <GroupChips
+                                    target={live}
+                                    groups={layout.groups}
+                                    envFor={envFor}
+                                    onScrubbing={setShapeScrubbing}
+                                />
                                 <span className="text-text/60">
                                     {tolgee.t("shapes.edit.steps", "steps")}
                                 </span>
-                                {layout.ratioLock && <RatioLockButton />}
-                            </span>
-                        </>
-                    )}
+                                {layout.lock !== null && (
+                                    <IntervalLockButton
+                                        live={live}
+                                        locked={layout.lock}
+                                    />
+                                )}
+                            </>
+                        )}
+                        {layout.intervals.length > 0 && (
+                            <>
+                                <Divider />
+                                <span className="flex items-center gap-2">
+                                    {layout.intervals.map((x) => (
+                                        <NumberChip
+                                            key={x.param.key}
+                                            param={x.param}
+                                            display={x.display}
+                                            note={null}
+                                            canLess={false}
+                                            canMore={false}
+                                            glyph={paramGlyph(
+                                                x.param,
+                                                params,
+                                                spots,
+                                            )}
+                                            glyphAfter={
+                                                x.param.glyphAfter === true
+                                            }
+                                            derived={x.derived}
+                                            actions={numbers}
+                                        />
+                                    ))}
+                                    <span className="text-text/60">
+                                        {tolgee.t("shapes.edit.steps", "steps")}
+                                    </span>
+                                    {layout.ratioLock &&
+                                        layout.intervals.length > 1 && (
+                                            <RatioLockButton />
+                                        )}
+                                    {layout.lock !== null && (
+                                        <IntervalLockButton
+                                            live={live}
+                                            locked={layout.lock}
+                                        />
+                                    )}
+                                </span>
+                            </>
+                        )}
+                    </span>
                     {target.drawnOn && (
                         <span className="text-text/50">
                             {tolgee.t("shapes.edit.drawnOn", "from {page}", {
@@ -348,22 +530,27 @@ function ShapeEditorBar({
                 >
                     <TurnControls
                         live={live}
-                        degrees={rotationDegrees(frame.rotation)}
+                        degrees={rotationDegrees(
+                            shapeTurn(kind, params, spots),
+                        )}
                         rotation={frame.rotation}
                         pivot={pivotOf(params)}
                         canRecalculate={target.recalculate !== null}
+                        inOrder={
+                            target.order !== undefined &&
+                            target.order.current !== "nearest"
+                        }
                         empty={target.empty}
                         canCloseUp={target.closeUp !== undefined}
                         evenState={evenState}
                         canShrink={canShrink}
                         canExpand={canExpand}
+                        asIs={kind.asIs === true}
                     />
-                    {/* What doesn't change the shape itself, at the end (owner): its pathways
-                        and saving it to the library */}
+                    {/* What doesn't change the shape itself, at the end (owner): its pathways */}
                     <Divider />
                     <EndControls
                         live={live}
-                        stepPx={stepPx}
                         canPlace={target.place !== undefined}
                     />
                 </span>
@@ -373,6 +560,8 @@ function ShapeEditorBar({
                 kind={kind}
                 shown={fillShown(kind, params, spots)}
                 canPlace={target.place !== undefined}
+                order={target.order?.current}
+                keepOffered={target.order?.keepOffered}
                 testId={testId}
             />
         </animated.div>
@@ -413,6 +602,9 @@ function useLiveTarget(target: ShapeEditTarget): ShapeEditTarget {
             get closeUp() {
                 return latest.current.closeUp;
             },
+            get order() {
+                return latest.current.order;
+            },
             begin: () => latest.current.begin(),
             preview: (params) => latest.current.preview(params),
             end: (keep) => latest.current.end(keep),
@@ -432,7 +624,8 @@ function evenStateOf(
     spots: number,
 ): EvenState {
     const env = envFor();
-    const evened = env && kind.closed?.evenOut?.(params, spots, env);
+    const evened =
+        env && closedOf(kind, params, spots)?.evenOut?.(params, spots, env);
     if (evened === undefined || evened === null) return "none";
     return evened === params ? "even" : "uneven";
 }
@@ -440,11 +633,11 @@ function evenStateOf(
 /** "Even out": the shape as even as its frame allows, as one undo step (owner on #459) */
 const evenOut = (target: ShapeEditTarget) =>
     applyWith(target, (env) => {
-        const evened = target.kind.closed?.evenOut?.(
+        const evened = closedOf(
+            target.kind,
             target.params,
             target.spots,
-            env,
-        );
+        )?.evenOut?.(target.params, target.spots, env);
         return evened ?? target.params;
     });
 
@@ -472,6 +665,14 @@ const turnQuarter = (target: ShapeEditTarget) =>
     );
 
 /**
+ * The number being dragged, by its key: kept in the editor for its drag even where the shape stops
+ * showing it (an Arc's stretch dragged onto a circle, #634), so the drag doesn't lose its number
+ */
+const useDraggedNumberStore = create<{ key: string | null }>(() => ({
+    key: null,
+}));
+
+/**
  * A number's drag: the change from the shape at the press, previewed live. `base` holds the
  * shape at the press. A spacing's (`guides`) shows the field lines a corner or the center lands
  * on while it goes (#452).
@@ -481,11 +682,13 @@ const scrubWith = (
     base: { current: unknown },
     change: (b: unknown, m: ScrubMove, env: ToolEnv) => unknown,
     guides = false,
+    key: string | null = null,
 ) => ({
     onScrubStart: () => {
         base.current = target.params;
         target.begin();
         if (guides) setShapeScrubbing(true);
+        useDraggedNumberStore.setState({ key });
     },
     onScrub: (m: ScrubMove) => {
         const env = envFor(m.roles);
@@ -493,6 +696,7 @@ const scrubWith = (
     },
     onScrubEnd: (keep: boolean) => {
         setShapeScrubbing(false);
+        useDraggedNumberStore.setState({ key: null });
         target.end(keep);
     },
 });
@@ -525,6 +729,7 @@ function numberActions(
                 base,
                 (b, m, env) => param.scrub(b, target.spots, m, env),
                 param.interval === true,
+                param.key,
             ),
         /** A "≈" number pressed: onto the nearest half step, as an edit of it (#459) */
         snap: (param: Param) => {
@@ -548,29 +753,87 @@ const NumberChip = memo(function NumberChip({
     param,
     display,
     note,
+    before = null,
+    after = null,
     canLess,
     canMore,
     glyph,
+    glyphAfter = false,
     derived = false,
     actions,
 }: {
     param: Param;
     display: string;
     note: string | null;
+    /** Words just before and after the number, muted ("Circle", "steps") */
+    before?: string | null;
+    after?: string | null;
     canLess: boolean;
     canMore: boolean;
-    /** The spacings show their glyph */
-    glyph: boolean;
+    /** The mark the spacings show before them, if any */
+    glyph: ParamGlyph | null;
+    /** The mark goes after the number (a Line's offset, `2 ↔ 1 ↕`) */
+    glyphAfter?: boolean;
     /** Shown as about so much: pressing it snaps it to a half step (owner on #459) */
     derived?: boolean;
     actions: ReturnType<typeof numberActions>;
 }) {
-    const scrub = useMemo(() => actions.scrub(param), [actions, param]);
+    const plain = useMemo(() => actions.scrub(param), [actions, param]);
+    const showsStep = param.showsStep === true;
+    const key = param.key;
+    // A number setting the kind's step: the field draws it while it's pointed at, focused (typing
+    // too) or dragged (owner on #596)
+    const scrub = useMemo(
+        () =>
+            showsStep
+                ? {
+                      ...plain,
+                      onScrubStart: () => {
+                          engageStep(`${key}:drag`, true);
+                          plain.onScrubStart();
+                      },
+                      onScrubEnd: (keep: boolean) => {
+                          engageStep(`${key}:drag`, false);
+                          plain.onScrubEnd(keep);
+                      },
+                  }
+                : plain,
+        [plain, showsStep, key],
+    );
+    useEffect(
+        () => () => {
+            for (const how of ["hover", "focus", "typing", "drag"])
+                engageStep(`${key}:${how}`, false);
+        },
+        [key],
+    );
+    // Focused is the number itself (Tab reaches it) or typing into it: the button gives way to
+    // the input and back without a blur, so a change of one clears the other
+    const engage = showsStep
+        ? {
+              onPointerEnter: () => engageStep(`${key}:hover`, true),
+              onPointerLeave: () => engageStep(`${key}:hover`, false),
+              onFocus: () => engageStep(`${key}:focus`, true),
+              onBlur: () => engageStep(`${key}:focus`, false),
+          }
+        : {};
+    const onTyping = useCallback(
+        (typing: boolean) => {
+            engageStep(`${key}:focus`, false);
+            engageStep(`${key}:typing`, typing);
+        },
+        [key],
+    );
     return (
-        <span className="flex items-center gap-2">
-            {glyph && param.glyph && (
+        <span
+            className="flex items-center gap-2"
+            data-shows-step={showsStep || undefined}
+            {...engage}
+        >
+            {before && <span className="text-text/60">{before}</span>}
+            {glyph && !glyphAfter && (
                 <span className="text-text/60" aria-hidden>
-                    <GlyphText text={param.glyph} />
+                    <GlyphText text={glyph} />
                 </span>
             )}
             {param.stepper && (
@@ -589,6 +852,7 @@ const NumberChip = memo(function NumberChip({
                 testId={`shape-editor-${param.key}`}
                 {...scrub}
                 onType={(text) => actions.type(param, text)}
+                onTyping={showsStep ? onTyping : undefined}
                 onSnap={
                     derived && param.snap
                         ? () => actions.snap(param)
@@ -605,29 +869,87 @@ const NumberChip = memo(function NumberChip({
                     <PlusIcon size={12} />
                 </IconButton>
             )}
+            {glyph && glyphAfter && (
+                <span className="text-text/60" aria-hidden>
+                    <GlyphText text={glyph} />
+                </span>
+            )}
+            {after && <span className="text-text/60">{after}</span>}
             {note && <span className="text-text/60">· {note}</span>}
         </span>
     );
 });
 
+/**
+ * The kind's interval lock (a Line's, owner decision on #522): locked, dragging an end keeps the
+ * interval; unlocked, it changes it. A press is one change of the shape (one undo step).
+ */
+const IntervalLockButton = memo(function IntervalLockButton({
+    live,
+    locked,
+}: {
+    live: ShapeEditTarget;
+    locked: boolean;
+}) {
+    const lock = live.kind.lock;
+    if (!lock) return null;
+    return (
+        <IconButton
+            label={lock.label(locked)}
+            pressed={locked}
+            onClick={() => {
+                const env = envFor();
+                if (!env) return;
+                const next = lock.toggle(live.params, live.spots, env);
+                if (next !== live.params) live.apply(next);
+            }}
+            testId="shape-editor-interval-lock"
+        >
+            {locked ? (
+                <LockSimpleIcon size={14} />
+            ) : (
+                <LockSimpleOpenIcon size={14} />
+            )}
+        </IconButton>
+    );
+});
+
 /** Keeps the two spacings in proportion */
-const RatioLockButton = memo(function RatioLockButton() {
-    const ratioLocked = useShapeEditorStore((s) => s.ratioLocked);
+const RatioLockButton = memo(function RatioLockButton({
+    sizes = false,
+}: {
+    /** It locks two sizes rather than spacings: an Arc's width and height (#634) */
+    sizes?: boolean;
+}) {
+    // Each its own: an Arc's width-and-depth lock doesn't lock a box's spacings (owner on #634)
+    const ratioLocked = useShapeEditorStore((s) =>
+        sizes ? s.sizesLocked : s.ratioLocked,
+    );
     return (
         <IconButton
             label={
-                ratioLocked
-                    ? tolgee.t(
-                          "shapes.edit.ratioLock.locked",
-                          "Spacings locked together: click to unlock",
-                      )
-                    : tolgee.t(
-                          "shapes.edit.ratioLock.unlocked",
-                          "Lock the two spacings together",
-                      )
+                sizes
+                    ? ratioLocked
+                        ? tolgee.t(
+                              "shapes.edit.ratioLock.sizesLocked",
+                              "Width and height locked together: click to unlock",
+                          )
+                        : tolgee.t(
+                              "shapes.edit.ratioLock.sizesUnlocked",
+                              "Lock the width and height together",
+                          )
+                    : ratioLocked
+                      ? tolgee.t(
+                            "shapes.edit.ratioLock.locked",
+                            "Spacings locked together: click to unlock",
+                        )
+                      : tolgee.t(
+                            "shapes.edit.ratioLock.unlocked",
+                            "Lock the two spacings together",
+                        )
             }
             pressed={ratioLocked}
-            onClick={toggleRatioLock}
+            onClick={sizes ? toggleSizesLock : toggleRatioLock}
             testId="shape-editor-ratio-lock"
         >
             {/* One chain either way, lit in the accent when locked: a broken
@@ -644,16 +966,20 @@ const TurnControls = memo(function TurnControls({
     rotation,
     pivot,
     canRecalculate,
+    inOrder,
     empty,
     evenState,
     canShrink,
     canExpand,
+    asIs,
 }: {
     live: ShapeEditTarget;
     degrees: number;
     rotation: number;
     pivot: Pivot;
     canRecalculate: boolean;
+    /** Who goes where follows a Line's order (Keep order or Reverse, #528), not least travel */
+    inOrder: boolean;
     empty: number;
     /** Whether "Even out" applies, and whether there's anything to even (#459) */
     evenState: EvenState;
@@ -662,12 +988,12 @@ const TurnControls = memo(function TurnControls({
     canExpand: boolean;
     /** Only redraws it */
     canCloseUp: boolean;
+    /** Who stands where is part of the shape (a group, #603): no Recalculate */
+    asIs: boolean;
 }) {
     const base = useRef<unknown>(null);
     const recalculateLook = useActionLook(canRecalculate);
     const evenLook = useActionLook(evenState === "uneven");
-    const overrides = useShortcutOverridesStore((s) => s.overrides);
-    const keyOf = (id: ActionId) => getActionShortcutLabel(id, { overrides });
     const flip = (axis: "across" | "deep") =>
         updateWith(target, (now, env) =>
             flipShape(target.kind, now, target.spots, axis, pivotOf(now), env),
@@ -681,7 +1007,7 @@ const TurnControls = memo(function TurnControls({
                     "shapes.edit.quarterTurn",
                     "Turn 90° clockwise",
                 )}
-                shortcut={keyOf("shapeQuarterTurn")}
+                action="shapeQuarterTurn"
                 onClick={() => turnQuarter(target)}
                 testId="shape-editor-quarter-turn"
             >
@@ -726,13 +1052,15 @@ const TurnControls = memo(function TurnControls({
                 pivot={pivot}
                 rotation={rotation}
                 onPick={(key) =>
-                    updateWith(target, (now) => withPivot(now, key))
+                    target.pickPivot
+                        ? target.pickPivot(key)
+                        : updateWith(target, (now) => withPivot(now, key))
                 }
                 testId="shape-editor-pivot"
             />
             <IconButton
                 label={tolgee.t("shapes.edit.flipAcross", "Flip side to side")}
-                shortcut={keyOf("flipHorizontal")}
+                action="flipHorizontal"
                 onClick={() => flip("across")}
                 testId="shape-editor-flip-across"
             >
@@ -740,7 +1068,7 @@ const TurnControls = memo(function TurnControls({
             </IconButton>
             <IconButton
                 label={tolgee.t("shapes.edit.flipDeep", "Flip front to back")}
-                shortcut={keyOf("flipVertical")}
+                action="flipVertical"
                 onClick={() => flip("deep")}
                 testId="shape-editor-flip-deep"
             >
@@ -751,36 +1079,46 @@ const TurnControls = memo(function TurnControls({
                 envFor={envFor}
                 canShrink={canShrink}
                 canExpand={canExpand}
-                shrinkKey={keyOf("shapeShrink")}
-                expandKey={keyOf("shapeExpand")}
             />
-            <IconButton
-                label={
-                    canRecalculate
-                        ? tolgee.t(
-                              "shapes.edit.recalculate.title",
-                              "Recalculate who goes where, by least travel",
-                          )
-                        : empty > 0
-                          ? tolgee.t(
-                                "shapes.edit.recalculate.closeUpFirst",
-                                "Recalculate who goes where: close up the empty spots first",
-                            )
-                          : tolgee.t(
-                                "shapes.edit.recalculate.already",
-                                "Who goes where is already least travel",
-                            )
-                }
-                disabled={!canRecalculate}
-                shortcut={keyOf("shapeRecalculate")}
-                className="relative"
-                onClick={() => target.recalculate?.()}
-                testId="shape-editor-recalculate"
-            >
-                {/* The word only when it can do something: greyed out, it's the widest
+            {!asIs && (
+                <IconButton
+                    label={
+                        canRecalculate
+                            ? inOrder
+                                ? tolgee.t(
+                                      "shapes.edit.recalculate.titleInOrder",
+                                      "Recalculate who goes where, in order along the line",
+                                  )
+                                : tolgee.t(
+                                      "shapes.edit.recalculate.title",
+                                      "Recalculate who goes where, by least travel",
+                                  )
+                            : empty > 0
+                              ? tolgee.t(
+                                    "shapes.edit.recalculate.closeUpFirst",
+                                    "Recalculate who goes where: close up the empty spots first",
+                                )
+                              : inOrder
+                                ? tolgee.t(
+                                      "shapes.edit.recalculate.alreadyInOrder",
+                                      "Who goes where is already in order along the line",
+                                  )
+                                : tolgee.t(
+                                      "shapes.edit.recalculate.already",
+                                      "Who goes where is already least travel",
+                                  )
+                    }
+                    disabled={!canRecalculate}
+                    action="shapeRecalculate"
+                    className="relative"
+                    onClick={() => target.recalculate?.()}
+                    testId="shape-editor-recalculate"
+                >
+                    {/* The word only when it can do something: greyed out, it's the widest
                     thing on the bar for nothing (owner, review round r429) */}
-                <RecalculateFace look={recalculateLook} />
-            </IconButton>
+                    <RecalculateFace look={recalculateLook} />
+                </IconButton>
+            )}
             {evenState !== "none" && (
                 <IconButton
                     label={
@@ -794,7 +1132,7 @@ const TurnControls = memo(function TurnControls({
                                   "The marchers are as even as the box allows",
                               )
                     }
-                    shortcut={keyOf("shapeEvenOut")}
+                    action="shapeEvenOut"
                     disabled={evenState !== "uneven"}
                     className="relative"
                     onClick={() => evenOut(target)}
@@ -821,36 +1159,36 @@ const TurnControls = memo(function TurnControls({
     );
 });
 
-/** Snap, Pathways and ☆ Save, then Place for a new shape or Ungroup for a placed one */
+/**
+ * The eye, Guides (#634), Snap and Pathways, then Place for a new shape or Ungroup for a placed one
+ */
 const EndControls = memo(function EndControls({
     live: target,
-    stepPx,
     canPlace,
 }: {
     live: ShapeEditTarget;
-    stepPx: number;
     canPlace: boolean;
 }) {
-    const overrides = useShortcutOverridesStore((s) => s.overrides);
     return (
         <>
             <span className="flex items-center gap-2">
+                <HideMarchersButton />
+                {/* Which guides a shape draws, beside the other view controls: an Arc's circle
+                    and angle lines (#634) */}
+                <GuidesMenu target={target} />
                 <SnapButton />
                 {canPlace && <PathwaysButton />}
-                <SaveShapeButton
-                    shape={target}
-                    stepPx={stepPx}
-                    compact
-                    className="rounded-4 hover:text-accent flex min-h-24 min-w-24 items-center justify-center p-4"
-                    testId="shape-editor-save"
-                />
             </span>
             {canPlace && (
                 <>
                     <Divider />
                     <button
                         type="button"
-                        className="bg-accent text-text-invert rounded-4 px-8 py-2 font-medium hover:opacity-90"
+                        // text-body after twMerge, which drops it (docs/conventions/ui-styling.md)
+                        className={`${getButtonClassName({
+                            variant: "primary",
+                            size: "compact",
+                        })} text-body`}
                         onPointerDown={keepFocus}
                         onClick={() => target.place?.()}
                         data-testid="shape-editor-place"
@@ -867,9 +1205,7 @@ const EndControls = memo(function EndControls({
                             "shapes.edit.ungroup",
                             "Ungroup: the marchers stay where they are",
                         )}
-                        shortcut={getActionShortcutLabel("shapeUngroup", {
-                            overrides,
-                        })}
+                        action="shapeUngroup"
                         onClick={() => runAction("shapeUngroup")}
                         testId="shape-editor-ungroup"
                     >
@@ -896,14 +1232,20 @@ const fillShown = (kind: AnyToolKind, params: unknown, spots: number) => {
         outlineGapOf(kind, params, spots),
         // Edge's tip says how many stand on the edge, which the proportions change (#450)
         edgeSplitOf(kind, params, spots),
+        // The kind's own menus show the answer the shape has (#523), and only while they apply
+        // (a Line's Open or closed from its third point, #529)
+        kind.choices?.map((c) => [
+            c.current(params, spots),
+            c.shown?.(params, spots) ?? true,
+        ]),
         flipX,
         flipY,
     ]);
 };
 
 /**
- * How it's filled: a pill of its own under the editor (owner, #435), the mode switch first, then
- * what that mode has (a box's layout in Grid, the gap in Outline, Reshuffle and Edge in Spread). Hidden
+ * How it's filled: a pill of its own under the editor (owner, #435), the kind's own menus (a
+ * Line's spacing, #523), who goes where on a Line (#528) and the mode switch first, then what that mode has (a box's layout in Grid, the gap in Outline, Reshuffle and Edge in Spread). Hidden
  * when the kind has none of them. Only the bar and the pill take the pointer, not the empty
  * space beside the pill
  */
@@ -917,6 +1259,9 @@ const FillPill = memo(function FillPill({
     kind: AnyToolKind;
     shown: string;
     canPlace: boolean;
+    /** Only redraw it: who goes where, and whether Keep order is offered */
+    order: OrderChoice | undefined;
+    keepOffered: boolean | undefined;
     testId: string;
 }) {
     const env = () => envFor();
@@ -925,6 +1270,10 @@ const FillPill = memo(function FillPill({
             className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-6 border px-6 py-2 empty:hidden"
             data-testid={`${testId}-fill`}
         >
+            {/* The kind's own menus (a Line's spacing, #523) */}
+            <ChoiceMenus target={target} envFor={env} />
+            {/* Who goes where on a Line (#528) */}
+            <OrderMenu target={target} />
             <ModeMenu target={target} envFor={env} />
             {/* What the mode has, after a divider (owner); nothing, and no divider, when it
                 has none */}
@@ -974,7 +1323,7 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         fieldWidth: Infinity,
         fieldHeight: Infinity,
     });
-    // Its own size (the Save form opens) and the field's, as they change
+    // Its own size and the field's, as they change
     useLayoutEffect(() => {
         const el = ref.current;
         const field = el?.offsetParent;
@@ -1006,6 +1355,9 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         return editorPlacement({
             outline: outline.map((p) => fieldToElement(view, p.x, p.y)),
             knob: fieldToElement(view, knob.x, knob.y),
+            handles: kind
+                .handles(params, spots, null)
+                .map(({ at }) => fieldToElement(view, at.x, at.y)),
             width: room.width,
             height: room.height,
             fieldWidth: room.fieldWidth,
@@ -1320,6 +1672,35 @@ function Divider() {
 }
 
 /**
+ * The eye (#558): shows whether the marchers, the shape's spots and its walks are hidden, held or
+ * latched, and turns the latch over. Its tooltip shows the key, which is held to peek.
+ */
+function HideMarchersButton() {
+    const hidden = useMarchersHiddenStore(isHiding);
+    return (
+        <IconButton
+            label={
+                hidden
+                    ? tolgee.t(
+                          "shapes.edit.hideMarchers.show",
+                          "Show the marchers",
+                      )
+                    : tolgee.t(
+                          "shapes.edit.hideMarchers.hide",
+                          "Hide the marchers",
+                      )
+            }
+            action="shapeHideMarchers"
+            pressed={hidden}
+            onClick={toggleHideMarchers}
+            testId="shape-editor-hide-marchers"
+        >
+            {hidden ? <EyeSlashIcon size={14} /> : <EyeIcon size={14} />}
+        </IconButton>
+    );
+}
+
+/**
  * Pathways (#403): shows or hides the open shape's walks; its start rings always show (#417).
  * Off until asked for, so the shape reads clearly while it's drawn; the choice is remembered.
  */
@@ -1361,7 +1742,6 @@ function PathwaysButton() {
  */
 export function SnapButton() {
     const on = useUiSettingsStore((s) => s.uiSettings.snap);
-    const overrides = useShortcutOverridesStore((s) => s.overrides);
     return (
         <IconButton
             label={
@@ -1372,7 +1752,7 @@ export function SnapButton() {
                           "Snap off: turn it back on",
                       )
             }
-            shortcut={getActionShortcutLabel("toggleSnap", { overrides })}
+            action="toggleSnap"
             pressed={!on}
             onClick={() => useUiSettingsStore.getState().setSnap()}
             testId="shape-editor-snap"
@@ -1384,7 +1764,7 @@ export function SnapButton() {
 
 function IconButton({
     label,
-    shortcut,
+    action,
     className,
     onClick,
     disabled,
@@ -1393,8 +1773,8 @@ function IconButton({
     children,
 }: {
     label: string;
-    /** Its keys, shown in the tooltip as keycaps */
-    shortcut?: string;
+    /** The action it runs, whose shortcut the tooltip shows */
+    action?: ActionId;
     className?: string;
     onClick: () => void;
     disabled?: boolean;
@@ -1403,7 +1783,7 @@ function IconButton({
     children: ReactNode;
 }) {
     return (
-        <Tip label={label} shortcut={shortcut}>
+        <Tip label={label} action={action}>
             <button
                 type="button"
                 aria-label={label}

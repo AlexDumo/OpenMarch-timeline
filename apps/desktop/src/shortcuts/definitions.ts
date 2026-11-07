@@ -1,5 +1,5 @@
 import { isWebBuild } from "@/utilities/webBuild";
-export type ActionScope = "global" | "canvas" | "timeline";
+export type ActionScope = "global" | "canvas";
 export type ActionCategory =
     | "file"
     | "edit"
@@ -40,16 +40,11 @@ export interface ActionDefinition {
     keywordsKey?: string;
     /** i18n key appended in parentheses, e.g. "(fine)" */
     labelSuffixKey?: string;
-    labelParams?: Readonly<Record<string, string | number>>;
+    /** The label names a page state or a hold command, filled from `holdTerms` */
+    labelHoldTerms?: true;
     toggleOnKey?: string;
     toggleOffKey?: string;
     category: ActionCategory;
-    /**
-     * Whether the action edits the drill: the marchers' positions, the pages or the moves.
-     * Visuals mode edits cues, not the drill, so it turns these off (`isActionOffInWorkspace`,
-     * performer-behavior.md section 7.1). Required, so a new action has to say.
-     */
-    editsDrill: boolean;
     scope: ActionScope;
     /**
      * Binding strings, see bindings.ts. Empty = unbound. The first binding is the one shown in tooltips.
@@ -64,6 +59,11 @@ export interface ActionDefinition {
      * definitions test lists those with why.
      */
     hiddenFromPalette?: boolean;
+    /**
+     * Turned off in Basic mode (UI-19), so left out of the command palette and the Shortcuts
+     * dialog there. The app menu marks its own items the same way (`menuActions.ts`).
+     */
+    expertOnly?: boolean;
     /** A held key runs the action once, not again on each repeat (for toggles) */
     ignoreRepeat?: boolean;
     args?: ActionArgs;
@@ -149,7 +149,6 @@ function buildNudgeActions(): Record<NudgeActionId, ActionDefinition> {
                 labelKey: `actions.movement.move${dirName}`,
                 labelSuffixKey: variant.suffix,
                 category: "movement",
-                editsDrill: true,
                 scope: "canvas",
                 defaultBindings: variant.bindings(dir.letter, dir.arrow),
                 args: {
@@ -163,30 +162,11 @@ function buildNudgeActions(): Record<NudgeActionId, ActionDefinition> {
     return result;
 }
 
-type TapBeatsActionId = `timelineTapBeats${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`;
-
-function buildTapBeatsActions(): Record<TapBeatsActionId, ActionDefinition> {
-    const result = {} as Record<TapBeatsActionId, ActionDefinition>;
-    for (let count = 1; count <= 9; count++) {
-        result[`timelineTapBeats${count}` as TapBeatsActionId] = {
-            labelKey: "actions.timeline.tapBeats",
-            labelParams: { count },
-            category: "timeline",
-            editsDrill: false,
-            scope: "timeline",
-            defaultBindings: [String(count)],
-            args: { count },
-        };
-    }
-    return result;
-}
-
 const STATIC_ACTIONS = {
     // File
     launchLoadFileDialogue: {
         labelKey: "actions.file.loadDialogue",
         category: "file",
-        editsDrill: false,
         scope: "global",
         // Electron binds this in the native menu; the web build has none.
         defaultBindings: isWebBuild ? ["$mod+O"] : [],
@@ -194,7 +174,6 @@ const STATIC_ACTIONS = {
     launchSaveFileDialogue: {
         labelKey: "actions.file.saveDialogue",
         category: "file",
-        editsDrill: false,
         scope: "global",
         // Electron binds this in the native menu; the web build has none.
         defaultBindings: isWebBuild ? ["$mod+S"] : [],
@@ -202,28 +181,24 @@ const STATIC_ACTIONS = {
     launchNewFileDialogue: {
         labelKey: "actions.file.newDialogue",
         category: "file",
-        editsDrill: false,
         scope: "global",
         defaultBindings: [],
     },
     launchInsertAudioFileDialogue: {
         labelKey: "actions.file.insertAudio",
         category: "file",
-        editsDrill: false,
         scope: "global",
         defaultBindings: [],
     },
     closeFile: {
         labelKey: "actions.file.closeFile",
         category: "file",
-        editsDrill: false,
         scope: "global",
         defaultBindings: [],
     },
     openExportDialog: {
         labelKey: "actions.file.openExport",
         category: "file",
-        editsDrill: false,
         scope: "global",
         defaultBindings: [],
         args: { tab: "mobile" },
@@ -232,7 +207,6 @@ const STATIC_ACTIONS = {
         labelKey: "actions.file.exportCoordinateSheets",
         keywordsKey: "actions.file.exportCoordinateSheetsKeywords",
         category: "file",
-        editsDrill: false,
         scope: "global",
         defaultBindings: [],
         args: { tab: "coordinate-sheets" },
@@ -241,7 +215,6 @@ const STATIC_ACTIONS = {
         labelKey: "actions.file.exportDrillCharts",
         keywordsKey: "actions.file.exportDrillChartsKeywords",
         category: "file",
-        editsDrill: false,
         scope: "global",
         defaultBindings: [],
         args: { tab: "drill-charts" },
@@ -250,7 +223,6 @@ const STATIC_ACTIONS = {
         labelKey: "actions.file.exportVideo",
         keywordsKey: "actions.file.exportVideoKeywords",
         category: "file",
-        editsDrill: false,
         scope: "global",
         defaultBindings: [],
         args: { tab: "video" },
@@ -259,7 +231,6 @@ const STATIC_ACTIONS = {
         labelKey: "actions.file.exportToMobile",
         keywordsKey: "actions.file.exportToMobileKeywords",
         category: "file",
-        editsDrill: false,
         scope: "global",
         defaultBindings: [],
         args: { tab: "mobile" },
@@ -267,7 +238,6 @@ const STATIC_ACTIONS = {
     launchImportMusicXmlFileDialogue: {
         labelKey: "actions.file.importMusicXml",
         category: "file",
-        editsDrill: false,
         scope: "global",
         defaultBindings: [],
         hiddenFromPalette: true,
@@ -277,14 +247,12 @@ const STATIC_ACTIONS = {
     performUndo: {
         labelKey: "actions.edit.undo",
         category: "edit",
-        editsDrill: false,
         scope: "global",
         defaultBindings: ["$mod+Z", "Control+Z"],
     },
     performRedo: {
         labelKey: "actions.edit.redo",
         category: "edit",
-        editsDrill: false,
         scope: "global",
         defaultBindings: ["$mod+Shift+Z", "Control+Shift+Z"],
     },
@@ -293,28 +261,24 @@ const STATIC_ACTIONS = {
     nextPage: {
         labelKey: "actions.navigation.nextPage",
         category: "navigation",
-        editsDrill: false,
         scope: "global",
         defaultBindings: ["E"],
     },
     lastPage: {
         labelKey: "actions.navigation.lastPage",
         category: "navigation",
-        editsDrill: false,
         scope: "global",
         defaultBindings: ["Alt+E", "End", "Alt+Shift+E"],
     },
     previousPage: {
         labelKey: "actions.navigation.previousPage",
         category: "navigation",
-        editsDrill: false,
         scope: "global",
         defaultBindings: ["Q"],
     },
     firstPage: {
         labelKey: "actions.navigation.firstPage",
         category: "navigation",
-        editsDrill: false,
         scope: "global",
         defaultBindings: ["Alt+Q", "Home", "Alt+Shift+Q"],
     },
@@ -323,14 +287,12 @@ const STATIC_ACTIONS = {
     nextBeat: {
         labelKey: "actions.navigation.nextBeat",
         category: "navigation",
-        editsDrill: false,
         scope: "global",
         defaultBindings: ["Shift+E"],
     },
     previousBeat: {
         labelKey: "actions.navigation.previousBeat",
         category: "navigation",
-        editsDrill: false,
         scope: "global",
         defaultBindings: ["Shift+Q"],
     },
@@ -339,7 +301,6 @@ const STATIC_ACTIONS = {
         toggleOnKey: "actions.playback.play",
         toggleOffKey: "actions.playback.pause",
         category: "playback",
-        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["Space"],
     },
@@ -347,7 +308,6 @@ const STATIC_ACTIONS = {
     playPage: {
         labelKey: "actions.playback.playPage",
         category: "playback",
-        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["Shift+Space"],
     },
@@ -356,24 +316,23 @@ const STATIC_ACTIONS = {
     playOn: {
         labelKey: "actions.playback.playOn",
         category: "playback",
-        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["Alt+Space"],
+        expertOnly: true,
     },
     // UI-17: C turns looping on over the page being edited, or off (timeline mode)
     toggleLoop: {
         labelKey: "actions.playback.toggleLoop",
         category: "playback",
-        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["C"],
+        expertOnly: true,
     },
     // Playback speed: held, ] plays at double the speed and [ at half, back on release (VLC and
     // mpv use the brackets for speed). Hidden from the palette, which can't hold a key
     holdFasterPlayback: {
         labelKey: "actions.playback.holdFaster",
         category: "playback",
-        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["BracketRight"],
         ignoreRepeat: true,
@@ -382,7 +341,6 @@ const STATIC_ACTIONS = {
     holdSlowerPlayback: {
         labelKey: "actions.playback.holdSlower",
         category: "playback",
-        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["BracketLeft"],
         ignoreRepeat: true,
@@ -392,7 +350,6 @@ const STATIC_ACTIONS = {
         labelKey: "actions.playback.nextSpeed",
         keywordsKey: "actions.playback.speedKeywords",
         category: "playback",
-        editsDrill: false,
         scope: "global",
         defaultBindings: [],
     },
@@ -400,7 +357,6 @@ const STATIC_ACTIONS = {
         labelKey: "actions.playback.previousSpeed",
         keywordsKey: "actions.playback.speedKeywords",
         category: "playback",
-        editsDrill: false,
         scope: "global",
         defaultBindings: [],
     },
@@ -408,44 +364,79 @@ const STATIC_ACTIONS = {
         labelKey: "actions.playback.resetSpeed",
         keywordsKey: "actions.playback.speedKeywords",
         category: "playback",
-        editsDrill: false,
         scope: "global",
         defaultBindings: [],
     },
     toggleMetronome: {
         labelKey: "actions.playback.toggleMetronome",
         category: "playback",
-        editsDrill: false,
         scope: "global",
         defaultBindings: ["$mod+M", "Control+M"],
     },
 
     // Batch editing
     setAllMarchersToPreviousPage: {
-        labelKey: "actions.batchEdit.setAllToPrevious",
+        labelKey: "actions.batchEdit.clearThisPageAll",
+        labelHoldTerms: true,
         category: "batchEdit",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["$mod+Shift+P", "Control+Shift+P"],
     },
     setSelectedMarchersToPreviousPage: {
-        labelKey: "actions.batchEdit.setSelectedToPrevious",
+        labelKey: "actions.batchEdit.clearThisPageSelected",
+        labelHoldTerms: true,
         category: "batchEdit",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Shift+P"],
+    },
+    // #573: as Clear this page, but the later pages that showed the page's spot move back to the
+    // page before instead of keeping where they were. Its handler names the pages ("Clear Page 3,
+    // Pages 4–6 move back too"). Unbound
+    setAllMarchersToPreviousPageAndFollowing: {
+        labelKey: "actions.batchEdit.clearThisPageAllAndFollowing",
+        labelHoldTerms: true,
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    setSelectedMarchersToPreviousPageAndFollowing: {
+        labelKey: "actions.batchEdit.clearThisPageSelectedAndFollowing",
+        labelHoldTerms: true,
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    // Holds: the selected marchers on the current page box become Defined where they are shown
+    // (the page box menu's entry and the inspector's button run this). Unbound
+    timelineDefineAsShown: {
+        labelKey: "actions.batchEdit.defineAsShown",
+        labelHoldTerms: true,
+        keywordsKey: "actions.batchEdit.holdKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    // Holds (#472): the selected marchers on the current page box are Held where the previous
+    // page leaves them, as the page box menu's entry. ⌘H / Ctrl+H for hold (owner, 2026-11-02); plain
+    // H is the shape editor's hide-marchers. On macOS the app menu's Hide takes ⌘H, so Control+H is
+    // listed as well, as Metronome does with ⌘M
+    timelineHoldFromPrevious: {
+        labelKey: "actions.batchEdit.holdFromPrevious",
+        labelHoldTerms: true,
+        keywordsKey: "actions.batchEdit.holdKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: ["$mod+H", "Control+H"],
     },
     setAllMarchersToNextPage: {
         labelKey: "actions.batchEdit.setAllToNext",
         category: "batchEdit",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["$mod+Shift+N", "Control+Shift+N"],
     },
     setSelectedMarchersToNextPage: {
         labelKey: "actions.batchEdit.setSelectedToNext",
         category: "batchEdit",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Shift+N"],
     },
@@ -454,7 +445,6 @@ const STATIC_ACTIONS = {
     snapToNearestCustomFraction: {
         labelKey: "actions.alignment.snapToCustomFraction",
         category: "alignment",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["1"],
     },
@@ -463,7 +453,6 @@ const STATIC_ACTIONS = {
         toggleOnKey: "actions.alignment.lockXOn",
         toggleOffKey: "actions.alignment.lockXOff",
         category: "alignment",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Y"],
     },
@@ -472,7 +461,6 @@ const STATIC_ACTIONS = {
         toggleOnKey: "actions.alignment.lockYOn",
         toggleOffKey: "actions.alignment.lockYOff",
         category: "alignment",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["X"],
     },
@@ -484,7 +472,6 @@ const STATIC_ACTIONS = {
         toggleOffKey: "actions.alignment.snapOff",
         keywordsKey: "actions.alignment.toggleSnapKeywords",
         category: "alignment",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Shift+M"],
         ignoreRepeat: true,
@@ -492,49 +479,42 @@ const STATIC_ACTIONS = {
     alignVertically: {
         labelKey: "actions.alignment.alignVertically",
         category: "alignment",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Alt+V"],
     },
     alignHorizontally: {
         labelKey: "actions.alignment.alignHorizontally",
         category: "alignment",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Alt+H"],
     },
     evenlyDistributeVertically: {
         labelKey: "actions.alignment.distributeVertically",
         category: "alignment",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Shift+V"],
     },
     evenlyDistributeHorizontally: {
         labelKey: "actions.alignment.distributeHorizontally",
         category: "alignment",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Shift+H"],
     },
     flipHorizontal: {
         labelKey: "actions.alignment.flipHorizontal",
         category: "alignment",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Alt+F"],
     },
     flipVertical: {
         labelKey: "actions.alignment.flipVertical",
         category: "alignment",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Alt+Shift+F"],
     },
     swapMarchers: {
         labelKey: "actions.swap.swap",
         category: "alignment",
-        editsDrill: true,
         scope: "canvas",
         // On the web, Cmd/Ctrl+S downloads the show (saving), so swap moves.
         defaultBindings: isWebBuild
@@ -550,7 +530,6 @@ const STATIC_ACTIONS = {
         toggleOnKey: "actions.ui.showStartFlagPositions",
         toggleOffKey: "actions.ui.hideStartFlagPositions",
         category: "ui",
-        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["N"],
         ignoreRepeat: true,
@@ -560,77 +539,37 @@ const STATIC_ACTIONS = {
         toggleOnKey: "actions.ui.showNextPaths",
         toggleOffKey: "actions.ui.hideNextPaths",
         category: "ui",
-        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["M"],
-    },
-    focusCanvas: {
-        labelKey: "actions.ui.focusCanvas",
-        category: "ui",
-        editsDrill: false,
-        scope: "global",
-        defaultBindings: ["Alt+C"],
     },
     // #315: the field's right-click menu, from the keyboard, at the selection. Enabled only with
     // a selection
     openFieldMenu: {
         labelKey: "actions.ui.openFieldMenu",
         category: "ui",
-        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["ContextMenu", "Shift+F10"],
         hiddenFromPalette: true,
     },
-    focusTimeline: {
-        labelKey: "actions.ui.focusTimeline",
-        category: "ui",
-        editsDrill: false,
-        scope: "global",
-        defaultBindings: ["Alt+T"],
-    },
     openSettings: {
         labelKey: "actions.ui.openSettings",
         category: "ui",
-        editsDrill: false,
         scope: "global",
         defaultBindings: ["$mod+Comma"],
-    },
-    // Measures the field's frame rate on this machine (ADR 0005, #205); both fields register it
-    // until #209. Unbound
-    runFieldBenchmark: {
-        labelKey: "actions.ui.runFieldBenchmark",
-        keywordsKey: "actions.ui.runFieldBenchmarkKeywords",
-        category: "ui",
-        editsDrill: false,
-        scope: "global",
-        defaultBindings: [],
     },
     // Opens the 3D View window, or focuses it (3D View UI-1). Unbound by default.
     openView3d: {
         labelKey: "actions.ui.openView3d",
         keywordsKey: "actions.ui.openView3dKeywords",
         category: "ui",
-        editsDrill: false,
         scope: "global",
         defaultBindings: [],
     },
-    // Switches between the Editor and Visuals mode (performer-behavior.md section 7.1). Expert
-    // only: Basic has no Visuals mode
-    toggleWorkspace: {
-        labelKey: "actions.ui.toggleWorkspace",
-        keywordsKey: "actions.ui.toggleWorkspaceKeywords",
-        category: "ui",
-        editsDrill: false,
-        scope: "global",
-        defaultBindings: ["$mod+Shift+V"],
-        ignoreRepeat: true,
-    },
-    // Preview: watch the show without editing it (the workspace switch's third mode)
+    // Preview: watch the show without editing it (the workspace switch's other mode)
     togglePreview: {
         labelKey: "actions.ui.togglePreview",
         keywordsKey: "actions.ui.togglePreviewKeywords",
         category: "ui",
-        editsDrill: false,
         scope: "global",
         defaultBindings: ["Alt+P"],
         ignoreRepeat: true,
@@ -639,14 +578,12 @@ const STATIC_ACTIONS = {
     showShortcuts: {
         labelKey: "actions.ui.showShortcuts",
         category: "ui",
-        editsDrill: false,
         scope: "global",
         defaultBindings: ["Shift+Slash"],
     },
     openCommandPalette: {
         labelKey: "actions.ui.openCommandPalette",
         category: "ui",
-        editsDrill: false,
         scope: "global",
         defaultBindings: ["$mod+K"],
         allowInInputs: true,
@@ -657,18 +594,8 @@ const STATIC_ACTIONS = {
     openCommandBar: {
         labelKey: "actions.ui.openCommandBar",
         category: "ui",
-        editsDrill: false,
         scope: "global",
         defaultBindings: ["Slash"],
-        hiddenFromPalette: true,
-    },
-    exitTimelineFocus: {
-        labelKey: "actions.ui.exitTimelineFocus",
-        category: "ui",
-        editsDrill: false,
-        scope: "timeline",
-        defaultBindings: ["Escape"],
-        allowInInputs: true,
         hiddenFromPalette: true,
     },
 
@@ -679,7 +606,6 @@ const STATIC_ACTIONS = {
         labelKey: "actions.shape.block",
         keywordsKey: "actions.shape.keywords",
         category: "shape",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["B"],
         args: { kind: "block" },
@@ -690,11 +616,40 @@ const STATIC_ACTIONS = {
         labelKey: "actions.shape.circle",
         keywordsKey: "actions.shape.keywords",
         category: "shape",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["O"],
         args: { kind: "circle" },
         // The command bar lists Shape › Circle instead, which asks the circle's numbers
+        hiddenFromPalette: true,
+    },
+    shapeLine: {
+        labelKey: "actions.shape.line",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["L"],
+        args: { kind: "line" },
+        // The command bar lists Shape › Line instead, which asks the line's numbers
+        hiddenFromPalette: true,
+    },
+    // The Curve (#525): a Line whose points start smooth. No key of its own yet
+    shapeCurve: {
+        labelKey: "actions.shape.curve",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { kind: "curve" },
+        hiddenFromPalette: true,
+    },
+    // The Arc (#634): a Line of two points bent as a circular arc. No key of its own yet
+    shapeArc: {
+        labelKey: "actions.shape.arc",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { kind: "arc" },
         hiddenFromPalette: true,
     },
     // The favorites ring (#351): hold to aim and let go to pick a shape, tap to keep it open.
@@ -704,7 +659,6 @@ const STATIC_ACTIONS = {
         labelKey: "actions.shape.ring",
         keywordsKey: "actions.shape.keywords",
         category: "shape",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["R"],
         ignoreRepeat: true,
@@ -713,9 +667,19 @@ const STATIC_ACTIONS = {
     applyShape: {
         labelKey: "actions.shape.apply",
         category: "shape",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Enter"],
+    },
+    // While drawing a line point by point, the last point taken back (owner, option A on #522).
+    // Handled only then (shapes/tool/ShapeToolKeys), so the keys do nothing else meanwhile
+    shapeRemoveLastPoint: {
+        labelKey: "actions.shape.removeLastPoint",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["Backspace", "Delete"],
+        // One point a press: a held key doesn't run the line back to its start
+        ignoreRepeat: true,
+        hiddenFromPalette: true,
     },
     // The floating editor's turn and Recalculate (#429), for the open or selected shape only. While
     // one is shown, Alt+F and Alt+Shift+F (flipHorizontal/flipVertical) flip the shape instead of
@@ -724,7 +688,6 @@ const STATIC_ACTIONS = {
         labelKey: "actions.shape.quarterTurn",
         keywordsKey: "actions.shape.keywords",
         category: "shape",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Alt+R"],
         // One press, one turn or recalculation: a held key doesn't repeat it (review)
@@ -734,7 +697,6 @@ const STATIC_ACTIONS = {
         labelKey: "actions.shape.evenOut",
         keywordsKey: "actions.shape.keywords",
         category: "shape",
-        editsDrill: true,
         scope: "canvas",
         // No key: every letter a designer would reach for is taken (Shift+E steps a beat)
         defaultBindings: [],
@@ -746,7 +708,6 @@ const STATIC_ACTIONS = {
         labelKey: "actions.shape.expand",
         keywordsKey: "actions.shape.keywords",
         category: "shape",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: [],
     },
@@ -754,7 +715,6 @@ const STATIC_ACTIONS = {
         labelKey: "actions.shape.shrink",
         keywordsKey: "actions.shape.keywords",
         category: "shape",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: [],
     },
@@ -762,10 +722,32 @@ const STATIC_ACTIONS = {
         labelKey: "actions.shape.recalculate",
         keywordsKey: "actions.shape.keywords",
         category: "shape",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Shift+R"],
         // One press, one turn or recalculation: a held key doesn't repeat it (review)
+        ignoreRepeat: true,
+    },
+    // The shape on its own (#558): hold H to hide the marchers, its spots and walks, tap to keep
+    // them hidden; the editor's eye button and the palette turn the latch over. Drawing only, but
+    // filed with the shape's keys, which Preview turns off: no shape is edited there
+    shapeHideMarchers: {
+        labelKey: "actions.shape.hideMarchers",
+        keywordsKey: "actions.shape.hideMarchersKeywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["H"],
+        ignoreRepeat: true,
+    },
+
+    // Group the selected marchers into a shape as they stand (#603): nobody moves. ⌘G / Ctrl+G, as
+    // in design tools, paired with Ungroup; Go to keeps plain G (owner, 2026-11-02)
+    // (shapes/placed/groupMarchers)
+    shapeGroup: {
+        labelKey: "actions.shape.group",
+        keywordsKey: "actions.shape.groupKeywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["$mod+G", "Control+G"],
         ignoreRepeat: true,
     },
 
@@ -775,7 +757,6 @@ const STATIC_ACTIONS = {
         labelKey: "actions.shape.ungroup",
         keywordsKey: "actions.shape.ungroupKeywords",
         category: "shape",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["$mod+Shift+G", "Control+Shift+G"],
         ignoreRepeat: true,
@@ -785,7 +766,6 @@ const STATIC_ACTIONS = {
     cancelAlignmentUpdates: {
         labelKey: "actions.alignment.cancelUpdates",
         category: "cursor",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Escape"],
     },
@@ -795,29 +775,17 @@ const STATIC_ACTIONS = {
     selectAllMarchers: {
         labelKey: "actions.select.selectAll",
         category: "select",
-        editsDrill: false,
         scope: "global",
         defaultBindings: ["$mod+A", "Control+A"],
-    },
-
-    // UI-18 keep later pages: K keeps the selection where it holds on this page, or lets it
-    // follow again (timeline mode)
-    toggleKeepOnPage: {
-        labelKey: "actions.timeline.toggleKeepOnPage",
-        category: "timeline",
-        editsDrill: true,
-        scope: "canvas",
-        defaultBindings: ["K"],
-        ignoreRepeat: true,
     },
 
     // Set vs Following (#304): the selected marchers Set on the count shown lose that
     // coordinate and follow from earlier; later pages keep their spots. Unbound
     timelineUnsetHere: {
         labelKey: "actions.timeline.unsetHere",
+        labelHoldTerms: true,
         keywordsKey: "actions.timeline.unsetHereKeywords",
         category: "timeline",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: [],
     },
@@ -826,9 +794,9 @@ const STATIC_ACTIONS = {
     // back to the earlier one. Its handler names the pages ("Unset here and on Pages 3–5"). Unbound
     timelineUnsetHereAndFollowing: {
         labelKey: "actions.timeline.unsetHereAndFollowing",
+        labelHoldTerms: true,
         keywordsKey: "actions.timeline.unsetHereKeywords",
         category: "timeline",
-        editsDrill: true,
         scope: "canvas",
         defaultBindings: [],
     },
@@ -837,9 +805,8 @@ const STATIC_ACTIONS = {
     timelineGoTo: {
         labelKey: "actions.timeline.goTo",
         category: "timeline",
-        editsDrill: false,
         scope: "global",
-        defaultBindings: ["G", "$mod+G", "Control+G"],
+        defaultBindings: ["G"],
         ignoreRepeat: true,
     },
 
@@ -848,7 +815,6 @@ const STATIC_ACTIONS = {
     timelineCreatePageAtPlayhead: {
         labelKey: "actions.timeline.createPageAtPlayhead",
         category: "timeline",
-        editsDrill: true,
         scope: "global",
         defaultBindings: ["F"],
         ignoreRepeat: true,
@@ -856,7 +822,6 @@ const STATIC_ACTIONS = {
     timelineCreateSubsetAtPlayhead: {
         labelKey: "actions.timeline.createSubsetAtPlayhead",
         category: "timeline",
-        editsDrill: true,
         scope: "global",
         defaultBindings: ["Shift+F"],
         ignoreRepeat: true,
@@ -866,7 +831,6 @@ const STATIC_ACTIONS = {
     timelineSplitMoveAtPlayhead: {
         labelKey: "actions.timeline.splitMoveAtPlayhead",
         category: "timeline",
-        editsDrill: true,
         scope: "global",
         defaultBindings: [],
     },
@@ -875,50 +839,20 @@ const STATIC_ACTIONS = {
     splitSelectedIntoNewMove: {
         labelKey: "actions.timeline.splitSelectedIntoNewMove",
         category: "timeline",
-        editsDrill: true,
         scope: "global",
         defaultBindings: [],
     },
     mergeMoveIntoPage: {
         labelKey: "actions.timeline.mergeMoveIntoPage",
         category: "timeline",
-        editsDrill: true,
         scope: "global",
         defaultBindings: [],
-    },
-
-    // Timeline (audio editor)
-    timelinePlayPause: {
-        labelKey: "actions.timeline.playPause",
-        category: "timeline",
-        editsDrill: false,
-        scope: "timeline",
-        defaultBindings: ["Space"],
-        hiddenFromPalette: true,
-    },
-    // Arrow keys step between pages while the timeline has focus (on the canvas they nudge marchers).
-    timelinePreviousPage: {
-        labelKey: "actions.timeline.previousPage",
-        category: "timeline",
-        editsDrill: false,
-        scope: "timeline",
-        defaultBindings: ["ArrowLeft"],
-        hiddenFromPalette: true,
-    },
-    timelineNextPage: {
-        labelKey: "actions.timeline.nextPage",
-        category: "timeline",
-        editsDrill: false,
-        scope: "timeline",
-        defaultBindings: ["ArrowRight"],
-        hiddenFromPalette: true,
     },
 } satisfies Record<string, ActionDefinition>;
 
 export const ACTIONS = {
     ...STATIC_ACTIONS,
     ...buildNudgeActions(),
-    ...buildTapBeatsActions(),
 } as const satisfies Record<string, ActionDefinition>;
 
 export type ActionId = keyof typeof ACTIONS;
@@ -936,10 +870,6 @@ export const EXPORT_ACTION_IDS = [
     "exportVideo",
     "exportToMobile",
 ] as const satisfies readonly ActionId[];
-
-export const TAP_BEATS_ACTION_IDS = ACTION_IDS.filter((id) =>
-    id.startsWith("timelineTapBeats"),
-);
 
 export function getActionDefinition(id: ActionId): ActionDefinition {
     return ACTIONS[id];

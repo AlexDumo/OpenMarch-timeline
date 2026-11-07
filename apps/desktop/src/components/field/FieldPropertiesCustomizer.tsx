@@ -11,7 +11,7 @@ import * as Form from "@radix-ui/react-form";
 import { Button, Tabs, TabsList, TabItem } from "@openmarch/ui";
 import { toast } from "sonner";
 import { RgbaColor } from "@uiw/react-color";
-import { T, useTolgee } from "@tolgee/react";
+import { T, useTranslate } from "@tolgee/react";
 import {
     fieldPropertiesQueryOptions,
     updateFieldPropertiesMutationOptions,
@@ -22,12 +22,13 @@ import { CheckpointsTab } from "./customizer/CheckpointsTab";
 import { ImageTab } from "./customizer/ImageTab";
 import { ThemeTab } from "./customizer/ThemeTab";
 import { blurOnEnterFunc } from "./customizer/utils";
+import { siteUrl } from "@/global/siteUrl";
 
 const defaultFieldProperties =
     FieldPropertiesTemplates.COLLEGE_FOOTBALL_FIELD_NO_END_ZONES;
 
 export default function FieldPropertiesCustomizer() {
-    const { t } = useTolgee();
+    const { t } = useTranslate();
     const queryClient = useQueryClient();
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
     const { mutate: updateFieldProperties } = useMutation(
@@ -282,7 +283,7 @@ export default function FieldPropertiesCustomizer() {
                     <T keyName="fieldProperties.customField" />
                 </h4>
                 <a
-                    href="https://openmarch.com/guides/editing-the-grid"
+                    href={siteUrl("/guides/editing-the-grid")}
                     target="_blank"
                     rel="noreferrer"
                     className="h-fit w-fit"

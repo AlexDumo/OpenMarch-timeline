@@ -7,6 +7,7 @@ import {
 import { getActionDefinition, type ActionId } from "./definitions";
 import { getEffectiveBindings, type ShortcutOverrides } from "./keymap";
 import { isMacPlatform } from "./platform";
+import { holdTerms } from "@/timeline/holdTerms";
 
 export type Translate = (
     key: string,
@@ -15,10 +16,15 @@ export type Translate = (
 
 export function getActionLabel(id: ActionId, t: Translate): string {
     const def = getActionDefinition(id);
-    const base = def.labelParams
-        ? t(def.labelKey, { ...def.labelParams })
+    const base = def.labelHoldTerms
+        ? t(def.labelKey, { ...holdTerms() })
         : t(def.labelKey);
-    return def.labelSuffixKey ? `${base} (${t(def.labelSuffixKey)})` : base;
+    return def.labelSuffixKey
+        ? t("actions.labelWithVariant", {
+              label: base,
+              variant: t(def.labelSuffixKey),
+          })
+        : base;
 }
 
 export function getActionShortcutLabel(
@@ -50,25 +56,4 @@ export function getModifierLabel(
     isMac: boolean = isMacPlatform(),
 ): string {
     return formatModifier(modifier, isMac);
-}
-
-export function getActionTooltip(
-    id: ActionId,
-    t: Translate,
-    options: {
-        toggleState?: "on" | "off";
-        overrides?: ShortcutOverrides;
-        isMac?: boolean;
-    } = {},
-): string {
-    const def = getActionDefinition(id);
-    const toggleKey =
-        options.toggleState === "on"
-            ? def.toggleOnKey
-            : options.toggleState === "off"
-              ? def.toggleOffKey
-              : undefined;
-    const label = toggleKey ? t(toggleKey) : getActionLabel(id, t);
-    const shortcut = getActionShortcutLabel(id, options);
-    return shortcut ? `${label} [${shortcut}]` : label;
 }

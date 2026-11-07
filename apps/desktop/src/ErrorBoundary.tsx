@@ -8,6 +8,7 @@ import {
 } from "@phosphor-icons/react";
 import React from "react";
 import tolgee from "@/global/singletons/Tolgee";
+import { siteUrl } from "@/global/siteUrl";
 
 export default class ErrorBoundary extends React.Component<
     { children: React.ReactNode },
@@ -39,14 +40,14 @@ export default class ErrorBoundary extends React.Component<
                     <div className="rounded-16 text-text border-stroke bg-fg-1 flex w-full max-w-[90vw] flex-col items-center gap-12 border p-24 shadow-xl sm:w-[36rem]">
                         <SealWarningIcon size={48} className="text-red" />
                         <div className="text-h3 font-bold">
-                            Something went wrong :(
+                            {tolgee.t("errorBoundary.title")}
                         </div>
                         <div className="flex w-full flex-col items-center gap-16 text-center text-base">
                             <div className="text-text-subtitle">
-                                OpenMarch stopped due to the following error
+                                {tolgee.t("errorBoundary.stoppedBecause")}
                             </div>
 
-                            <div className="border-stroke bg-bg-1 group relative my-4 flex w-full rounded border p-8 font-mono text-xs">
+                            <div className="border-stroke bg-bg-1 group rounded-4 relative my-4 flex w-full border p-8 font-mono text-xs">
                                 <div className="flex-grow text-center">
                                     {this.state.error?.message}
                                 </div>
@@ -64,11 +65,12 @@ export default class ErrorBoundary extends React.Component<
                                             2000,
                                         );
                                     }}
-                                    className="touch:min-h-44 touch:min-w-44 touch:justify-center flex items-center gap-4 rounded px-4"
-                                    title="Copy error message"
+                                    className="touch:min-h-44 touch:min-w-44 touch:justify-center rounded-4 flex items-center gap-4 px-4"
+                                    title={tolgee.t(
+                                        "errorBoundary.copyErrorMessage",
+                                    )}
                                     aria-label={tolgee.t(
                                         "errorBoundary.copyErrorMessage",
-                                        "Copy error message",
                                     )}
                                 >
                                     <>
@@ -77,8 +79,10 @@ export default class ErrorBoundary extends React.Component<
                                             className="text-text-subtitle hover:text-text"
                                         />
                                         {this.state.copied && (
-                                            <span className="text-green bg-bg-1 absolute right-0 mr-8 rounded p-2 text-xs">
-                                                Error copied
+                                            <span className="text-green bg-bg-1 rounded-4 absolute right-0 mr-8 p-2 text-xs">
+                                                {tolgee.t(
+                                                    "errorBoundary.errorCopied",
+                                                )}
                                             </span>
                                         )}
                                     </>
@@ -86,12 +90,9 @@ export default class ErrorBoundary extends React.Component<
                             </div>
 
                             <div className="text-h4 mt-16">
-                                We want to hear about this!
+                                {tolgee.t("errorBoundary.hearAboutThis")}
                             </div>
-                            <div>
-                                Please reach out to us so we can fix this.
-                                Hearing from you is what makes OpenMarch great!
-                            </div>
+                            <div>{tolgee.t("errorBoundary.reachOut")}</div>
                             <div className="grid w-full grid-cols-3 gap-8 text-sm">
                                 <Button
                                     variant="secondary"
@@ -99,7 +100,9 @@ export default class ErrorBoundary extends React.Component<
                                     size="compact"
                                     onClick={() =>
                                         window.open(
-                                            "https://openmarch.com/guides/submitting-feedback/",
+                                            siteUrl(
+                                                "/guides/submitting-feedback/",
+                                            ),
                                             "_blank",
                                             "noopener,noreferrer",
                                         )
@@ -109,7 +112,7 @@ export default class ErrorBoundary extends React.Component<
                                         size={20}
                                         className="-ml-2"
                                     />
-                                    Report the issue
+                                    {tolgee.t("errorBoundary.reportIssue")}
                                 </Button>
                                 <Button
                                     variant="secondary"
@@ -127,7 +130,7 @@ export default class ErrorBoundary extends React.Component<
                                         size={20}
                                         className="-ml-2"
                                     />
-                                    Join our Discord community
+                                    {tolgee.t("errorBoundary.joinDiscord")}
                                 </Button>
                                 <Button
                                     variant="secondary"
@@ -137,19 +140,23 @@ export default class ErrorBoundary extends React.Component<
                                         void navigator.clipboard.writeText(
                                             "contact@openmarch.com",
                                         );
-                                        alert("Email copied to clipboard!");
+                                        alert(
+                                            tolgee.t(
+                                                "errorBoundary.emailCopied",
+                                            ),
+                                        );
                                     }}
                                 >
                                     <EnvelopeSimpleIcon
                                         size={20}
                                         className="-ml-2"
                                     />
-                                    Copy support email
+                                    {tolgee.t("errorBoundary.copySupportEmail")}
                                 </Button>
                             </div>
                         </div>
                         <Button variant="primary" onClick={this.handleReload}>
-                            Refresh App
+                            {tolgee.t("errorBoundary.refreshApp")}
                         </Button>
                     </div>
                 </div>

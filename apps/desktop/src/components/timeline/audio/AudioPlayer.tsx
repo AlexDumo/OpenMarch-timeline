@@ -1,4 +1,5 @@
 import { useIsPlaying } from "@/context/IsPlayingContext";
+import { useAudioOffsetSeconds } from "@/tempo/audioOffset";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSelectedAudioFile } from "@/context/SelectedAudioFileContext";
@@ -9,7 +10,7 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useTimingObjects } from "@/hooks";
 import { toast } from "sonner";
 import { useMetronomeStore } from "@/stores/MetronomeStore";
-import { useTolgee } from "@tolgee/react";
+import { useTranslate } from "@tolgee/react";
 import { createMetronomeWav, SAMPLE_RATE } from "@openmarch/metronome";
 import { calculateMasterVolume } from "./volume";
 import { useQuery } from "@tanstack/react-query";
@@ -41,7 +42,7 @@ export const lightProgressColor = "rgb(100, 66, 255)";
 export const darkProgressColor = "rgb(150, 126, 255)";
 const PLAYBACK_DELAY = 0.1; // Delay in seconds to start playback
 // The live position leads the audio by this much wall time (the delay, plus a little)
-const LIVE_LEAD = PLAYBACK_DELAY + 0.01;
+export const LIVE_LEAD = PLAYBACK_DELAY + 0.01;
 // Stopping fades the sources out over this many seconds, so a stop or restart doesn't click
 const STOP_FADE = 0.008;
 
@@ -145,7 +146,7 @@ function metronomeGainValue(audioVolume: number): number {
  */
 // eslint-disable-next-line max-lines-per-function
 export default function AudioPlayer() {
-    const { t } = useTolgee();
+    const { t } = useTranslate();
     const audioMuted = useUiSettingsStore((s) => s.uiSettings.audioMuted);
     const audioVolume = useUiSettingsStore((s) => s.uiSettings.audioVolume);
     const selectedPageContext = useSelectedPage();
@@ -174,7 +175,9 @@ export default function AudioPlayer() {
     const { data: workspaceSettings } = useQuery(
         workspaceSettingsQueryOptions(),
     );
-    const audioOffsetSeconds = workspaceSettings?.audioOffsetSeconds ?? 0;
+    // Tempo mode: the offset in the show's history, else the workspace setting
+    const audioOffsetSeconds = useAudioOffsetSeconds();
+    void workspaceSettings;
     const contextsReady =
         !!selectedPageContext &&
         !!isPlayingContext &&

@@ -1,4 +1,11 @@
 words:
+  - bpms
+  - nyquist
+  - respace
+  - neighbours
+  - respaced
+  - retime
+  - segs
   - allarg
   - cresc
   - dacapo
@@ -28,6 +35,7 @@ words:
   - nightlies
   - xattr
   - Kagelok
+  - meshopt
   - lods
   - Sketchfab
   - gltf
@@ -37,8 +45,14 @@ words:
   - Huttenlocher
   - swiftshader
   - marktime
+  - Noto
+  - notdef
+  - cmap
+  - subsetter
+  - unicodes
   - stepoff
   - menuitemradio
+  - menuitemcheckbox
   - prefs
   - frameloop
   - powermetrics
@@ -47,6 +61,8 @@ words:
   - metalness
   - leadpipe
   - mellophone
+  - mellophones
+  - scorewriter
   - crossfade
   - crossfades
   - smootherstep
@@ -104,6 +120,7 @@ words:
   - Chakravarthi
   - CHANGEME
   - choco
+  - choreo
   - Cinnaminson
   - clsx
   - codegen
@@ -258,6 +275,7 @@ words:
   - ungroups
   - unistyles
   - unmaximize
+  - unmute
   - unpreview
   - unstub
   - unstar
@@ -307,8 +325,8 @@ ignorePaths:
   - docs/timeline/ref/**
   - node_modules/**
   - docs/3d/ref/**
-  # Verbatim license texts (CC0 1.0, GPL-3.0) in the Blender Starter kit
-  - apps/desktop/starter-kit/**/LICENSE
+  # Verbatim SIL Open Font License for the vendored text symbols fonts
+  - packages/ui/src/fonts/OFL.txt
   - "**/view3d/assets/om-pose/**"
   - "**/view3d/assets/instruments/*.json"
   - "**/node_modules/**"
@@ -360,6 +378,9 @@ ignoreRegExpList:
 overrides:
   - filename:
       - "**/i18n/**"
+      # Words in every language: the glossary and the style guide for translators
+      - "**/i18n-meta/glossary.json"
+      - "**/i18n-meta/style.md"
     enabled: false
   - filename:
       - "**/i18n/en.json"

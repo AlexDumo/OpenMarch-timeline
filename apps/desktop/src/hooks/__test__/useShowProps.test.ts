@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { DatabaseItemGeometry } from "@/db-functions/items";
-import { _combineShowPropsQueries } from "../useShowProps";
+import { _combineShowPropsQueries, propInputs } from "../useShowProps";
 
 type Results = Parameters<typeof _combineShowPropsQueries>[0];
 
@@ -35,21 +35,6 @@ const results = (): Results => [
         { id: 3, marcher_id: 103, kind: "prop", surface_type: "floor" },
     ]),
     ok([geometryRow(1, 30, 2), geometryRow(1, 10, 4), geometryRow(3, 20, 1)]),
-    ok([
-        {
-            marcherId: 101,
-            changes: [
-                {
-                    id: 1,
-                    beat: 2,
-                    state: "off_field",
-                    holders: [],
-                    crew: [],
-                    groupId: null,
-                },
-            ],
-        },
-    ]),
     // beat ids out of position order
     ok([
         { id: 30, position: 2 },
@@ -58,13 +43,20 @@ const results = (): Results => [
     ]),
 ];
 
+const propsOf = (r: Results, hidden?: ReadonlySet<number>) => {
+    const { combined } = _combineShowPropsQueries(r);
+    return combined
+        ? propInputs(combined.items, combined.outlines, hidden)
+        : [];
+};
+
 describe("_combineShowPropsQueries", () => {
-    it("gives each prop its surface, Outline and Placement changes by beat ordinal", () => {
-        const { props, isLoading, hasError } =
-            _combineShowPropsQueries(results());
+    it("gives each prop its surface and Outline changes by beat ordinal", () => {
+        const { isLoading, hasError } = _combineShowPropsQueries(results());
         expect(isLoading).toBe(false);
         expect(hasError).toBe(false);
-        // equipment is the Carry and Placement layers' (C4.6), not a prop
+        const props = propsOf(results());
+        // equipment is carried, not stood on
         expect(props.map((p) => [p.id, p.surface])).toEqual([
             [101, "platform"],
             [103, "floor"],
@@ -73,9 +65,13 @@ describe("_combineShowPropsQueries", () => {
             [0, 4],
             [2, 2],
         ]);
-        expect(props[0]!.placements).toHaveLength(1);
         expect(props[1]!.changes.map((c) => c.beat)).toEqual([1]);
-        expect(props[1]!.placements).toEqual([]);
+    });
+
+    it("leaves out a prop hidden on the field, by item id", () => {
+        expect(propsOf(results(), new Set([1])).map((p) => p.id)).toEqual([
+            103,
+        ]);
     });
 
     it("has no props while a query loads or fails", () => {
@@ -86,18 +82,18 @@ describe("_combineShowPropsQueries", () => {
             isError: false,
         } as UseQueryResult<DatabaseItemGeometry[]>;
         expect(_combineShowPropsQueries(loading)).toEqual({
-            props: [],
+            combined: null,
             isLoading: true,
             hasError: false,
         });
         const failed = results();
-        failed[3] = {
+        failed[2] = {
             data: undefined,
             isLoading: false,
             isError: true,
-        } as unknown as Results[3];
+        } as unknown as Results[2];
         expect(_combineShowPropsQueries(failed)).toMatchObject({
-            props: [],
+            combined: null,
             hasError: true,
         });
     });

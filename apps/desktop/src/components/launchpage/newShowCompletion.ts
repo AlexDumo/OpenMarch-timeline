@@ -14,9 +14,10 @@ import {
     FIRST_PAGE_ID,
 } from "@/db-functions/page";
 import { transactionWithHistory } from "@/db-functions/history";
-import { updateFieldProperties } from "@/global/classes/FieldProperties";
-import { showLibraryKeys } from "@/hooks/queries/useShowLibrary";
-import { conToastError } from "@/utilities/utils";
+import {
+    updateFieldProperties,
+    updateFieldPropertiesImage,
+} from "@/global/classes/FieldProperties";
 import {
     updateWorkspaceSettingsParsed,
     getWorkspaceSettingsParsed,
@@ -68,6 +69,17 @@ import { measureKeys } from "@/hooks/queries/useMeasures";
 import type { DbTransaction } from "@/db-functions/types";
 import type { DatabaseMeasure } from "@/db-functions/measures";
 
+/**
+ * An error whose message is already translated for the person creating the show. Any other
+ * error from creating a show is internal: the dialog shows a general failure and logs it.
+ */
+export class NewShowError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "NewShowError";
+    }
+}
+
 const DEFAULT_NEW_PAGE_COUNTS = 16;
 const TEMPO_ONLY_DEFAULT_NEW_PAGE_MEASURES = 4;
 const DEFAULT_LAST_PAGE_COUNTS = 8;
@@ -108,7 +120,12 @@ export function resolveNewShowFilePath(
 ): string {
     const trimmed = filePath.trim();
     if (!trimmed) {
-        throw new Error("File path is required");
+        throw new NewShowError(
+            tolgee.t(
+                "launchpage.newShow.errors.filePathRequired",
+                "File path is required",
+            ),
+        );
     }
 
     const normalizedPath = trimmed.replace(/\\/g, "/");
@@ -215,7 +232,7 @@ async function applyMusicSettings(
     if (audio?.method === "audio") {
         const audioFiles = await AudioFile.getAudioFilesDetails();
         if (audioFiles.length === 0) {
-            throw new Error(
+            throw new NewShowError(
                 tolgee.t("launchpage.newShow.errors.audioNotSaved"),
             );
         }
@@ -224,7 +241,7 @@ async function applyMusicSettings(
     if (tempo?.method === "xml") {
         const measures = await getMeasures({ db });
         if (measures.length === 0) {
-            throw new Error(
+            throw new NewShowError(
                 tolgee.t("launchpage.newShow.errors.xmlNotImported"),
             );
         }
@@ -309,29 +326,17 @@ async function applyPreviousDotsCoordinates(
     });
 }
 
-export async function applyPreviousDotsFieldImage(
+async function applyPreviousDotsFieldImage(
     form: NewShowFormState,
     queryClient: QueryClient,
 ): Promise<void> {
-    const fieldFloor = form.previousDotsImport?.fieldFloor;
     const fieldImage = form.previousDotsImport?.fieldImage;
-    if (!fieldFloor && (fieldImage == null || fieldImage.length === 0)) return;
+    if (fieldImage == null || fieldImage.length === 0) return;
 
-    // The new show's floor (D-23): the previous show's floor Version as it is, or one made in
-    // main from a previous show's legacy image. The rest of the copy goes on without it: a floor
-    // that can't be made is a toast, not a failed show.
-    try {
-        if (fieldFloor)
-            await window.electron.setNewShowFloorFromVersion(fieldFloor);
-        else await window.electron.setNewShowFloorFromImage(fieldImage!);
-    } catch (error) {
-        conToastError("Couldn't copy the previous show's field image", error);
-        return;
-    }
+    await updateFieldPropertiesImage(fieldImage);
     await queryClient.invalidateQueries({
         queryKey: fieldPropertiesKeys.detail(),
     });
-    await queryClient.invalidateQueries({ queryKey: showLibraryKeys.all() });
 }
 
 async function applyPreviousDotsSectionAppearances(
@@ -719,8 +724,11 @@ export async function completeNewShow(
 
     const dbReady = await window.electron.databaseIsReady();
     if (!dbReady) {
-        throw new Error(
-            "Database is not ready. Complete the project step first.",
+        throw new NewShowError(
+            tolgee.t(
+                "launchpage.newShow.errors.databaseNotReady",
+                "Database is not ready. Complete the project step first.",
+            ),
         );
     }
 
@@ -751,7 +759,13 @@ export async function completeNewShow(
     // it didn't open (convert on open), and the window is reloading.
     if (finalizeResult === OPEN_STOPPED_STATUS) return;
     if (finalizeResult !== 200) {
-        throw new Error(`Failed to save show at ${targetPath}`);
+        throw new NewShowError(
+            tolgee.t(
+                "launchpage.newShow.errors.saveFailed",
+                "Failed to save show at {path}",
+                { path: targetPath },
+            ),
+        );
     }
 
     await queryClient.invalidateQueries({

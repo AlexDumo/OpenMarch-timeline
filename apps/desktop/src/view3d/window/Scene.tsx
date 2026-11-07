@@ -20,7 +20,8 @@
  *
  * What it built is published in `useView3dSceneStore` (`sceneStore.ts`) for
  * the camera rig and the overlay. The camera rig (`camera/CameraRig.tsx`,
- * P3.2) places and moves the camera.
+ * P3.2) places and moves the camera. Performers (`performers/`) and props
+ * (`props/PropBlocks.tsx`) follow the editor's playback.
  */
 // cspell:ignore frameloop
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -29,7 +30,7 @@ import DrawWhenNeeded from "./DrawWhenNeeded";
 import { requestDraw } from "./drawWake";
 import { frameCapped } from "./drawPolicy";
 import { useQuery } from "@tanstack/react-query";
-import { fieldFootprint, type FieldProperties } from "@openmarch/core";
+import type { FieldProperties } from "@openmarch/core";
 import {
     ACESFilmicToneMapping,
     PCFShadowMap,
@@ -50,7 +51,7 @@ import {
     defaultCrowdPalette,
     type Environment,
 } from "@/view3d/core/environment";
-import { buildFieldSurface } from "@/view3d/core/field";
+import { buildFieldSurface, venueFootprint } from "@/view3d/core/field";
 import {
     DEFAULT_CROWD_DENSITY,
     KIT_BUILDERS,
@@ -67,14 +68,13 @@ import CameraRig from "./camera/CameraRig";
 import { DEFAULT_NEAR } from "./camera/rigMath";
 import { CROWD_CLEAR_RADIUS, useView3dSceneStore } from "./sceneStore";
 import { useFieldImage } from "./useFieldImage";
-import type { FieldImageSize } from "@/db-functions/fieldFloor";
 import {
     FALLBACK_LOG_MESSAGE,
     createQualityFallbackState,
     stepQualityFallback,
 } from "./qualityFallback";
 import Performers from "./performers/Performers";
-import Props from "./props/Props";
+import PropBlocks from "./props/PropBlocks";
 import { warmLightingPresets } from "./warmLighting";
 import { maxPixelRatio } from "./renderPrefs";
 
@@ -124,15 +124,11 @@ export default function Scene() {
     const venue = useVenueSettings();
     const showCameras = useShowCameras();
     const field = useQuery(fieldPropertiesQueryOptions());
-    // The tarp is a GPU texture: the floor's display texture, not its original
-    const fieldImage = useFieldImage("display");
+    const fieldImage = useFieldImage();
     const kitId = useView3dSceneStore((s) => s.kitId);
     const lighting = useView3dSceneStore((s) => s.lighting);
     const quality = useView3dSceneStore((s) => s.quality);
     const onBattery = useView3dSceneStore((s) => s.onBattery);
-    const saveOnBattery = useView3dSceneStore(
-        (s) => s.powerPrefs.saveOnBattery,
-    );
     const resolution = useView3dSceneStore((s) => s.resolution);
 
     // Cameras load first too, so a venue opens on the show's first camera.
@@ -151,10 +147,10 @@ export default function Scene() {
                 // Draw only when something changes (`DrawWhenNeeded`).
                 frameloop="demand"
                 // `low` renders at 1x so HiDPI screens on integrated GPUs keep
-                // up; so does battery power when saving power is on. Otherwise
+                // up; so does battery power. Otherwise
                 // the Resolution setting caps it (`renderPrefs.ts`).
                 dpr={
-                    quality === "low" || (onBattery && saveOnBattery)
+                    quality === "low" || onBattery
                         ? 1
                         : [1, maxPixelRatio(resolution)]
                 }
@@ -175,7 +171,6 @@ export default function Scene() {
                         savedCameras={showCameras.data!.venues}
                         fieldProperties={field.data!}
                         image={fieldImage.image}
-                        imageSize={fieldImage.size}
                     />
                 )}
                 {ready && <CameraRig />}
@@ -190,7 +185,6 @@ interface SceneContentsProps {
     savedCameras: ShowVenueCameras;
     fieldProperties: FieldProperties;
     image: ImageBitmap | null;
-    imageSize: FieldImageSize | null;
 }
 
 /** How long the scene must add no shaders before the warm-up runs (ms). */
@@ -202,7 +196,6 @@ function SceneContents({
     savedCameras,
     fieldProperties: fieldPropertiesIn,
     image,
-    imageSize,
 }: SceneContentsProps) {
     const gl = useThree((s) => s.gl);
     const scene = useThree((s) => s.scene);
@@ -220,14 +213,14 @@ function SceneContents({
         fieldPropertiesIn,
         JSON.stringify(fieldPropertiesIn),
     );
-    const footprintKey = useMemo(
-        () => JSON.stringify(fieldFootprint(fieldProperties)),
-        [fieldProperties],
-    );
     const paramsKey = JSON.stringify(settings.params);
     const params = useStable<VenueParams>(settings.params, paramsKey);
     const kitId = settings.kit;
     const fieldStyle = KIT_FIELD_STYLE[kitId];
+    const footprintKey = useMemo(
+        () => JSON.stringify(venueFootprint(fieldProperties, fieldStyle)),
+        [fieldProperties, fieldStyle],
+    );
     const { homeColor, awayColor } = params;
 
     // Renderer settings that follow quality. Kits and the crowd rebuild on a
@@ -280,7 +273,6 @@ function SceneContents({
             style: fieldStyle,
             params,
             image,
-            imageSizeM: imageSize,
             maxTextureSize: gl.capabilities.maxTextureSize,
             anisotropy: gl.capabilities.getMaxAnisotropy(),
         });
@@ -289,7 +281,7 @@ function SceneContents({
             scene.remove(surface.mesh);
             surface.dispose();
         };
-    }, [scene, gl, fieldProperties, fieldStyle, params, image, imageSize]);
+    }, [scene, gl, fieldProperties, fieldStyle, params, image]);
 
     // Crowd: one instanced mesh from the kit's seat rows.
     useEffect(() => {
@@ -387,16 +379,14 @@ function SceneContents({
     const fallbackRef = useRef(createQualityFallbackState());
     const qualityMode = useView3dSceneStore((s) => s.qualityMode);
     const autoLowered = useView3dSceneStore((s) => s.autoLowered);
-    const capped = useView3dSceneStore((s) =>
-        frameCapped(s.onBattery, s.powerPrefs),
-    );
+    const capped = useView3dSceneStore((s) => frameCapped(s.onBattery));
     useEffect(() => {
         fallbackRef.current = createQualityFallbackState();
     }, [qualityMode, autoLowered, capped]);
     useFrame((_, dt) => {
         const store = useView3dSceneStore.getState();
         if (store.qualityMode !== "auto" || store.quality !== "high") return;
-        if (frameCapped(store.onBattery, store.powerPrefs)) return;
+        if (frameCapped(store.onBattery)) return;
         if (stepQualityFallback(fallbackRef.current, dt)) {
             // eslint-disable-next-line no-console -- design.md §9 asks for a log line
             console.info(FALLBACK_LOG_MESSAGE);
@@ -423,7 +413,7 @@ function SceneContents({
     return (
         <>
             <Performers fieldProperties={fieldProperties} />
-            <Props fieldProperties={fieldProperties} />
+            <PropBlocks fieldProperties={fieldProperties} />
         </>
     );
 }

@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import { boxTool } from "../../box/boxTool";
+import { curveTool, lineTool } from "../../line/lineTool";
 import { rowTool } from "../../__test__/fakeRowKind";
-import { savedShapeItems } from "../../command/useShapePaletteSource";
-import { savedShapeRows } from "../../library/savedShapes";
-import { SHAPE_TOOLS } from "../../tool/shapeTools";
 import ShapePreviewIcon from "../ShapePreviewIcon";
 import { PREVIEW_SPOTS } from "../shapePreview";
 
@@ -25,6 +23,15 @@ describe("a shape's picture (#378)", () => {
         const svg = svgOf(<ShapePreviewIcon kind={rowTool} />);
         expect(svg.querySelectorAll("circle")).toHaveLength(PREVIEW_SPOTS);
         expect(svg.querySelector("polygon")).toBeNull();
+    });
+
+    it("draws an open line and curve with a polyline, not a closed polygon", () => {
+        for (const kind of [lineTool, curveTool]) {
+            const svg = svgOf(<ShapePreviewIcon kind={kind} />);
+            expect(svg.querySelector("polyline")).not.toBeNull();
+            expect(svg.querySelector("polygon")).toBeNull();
+            cleanup();
+        }
     });
 
     it("leads with the outline: a full line and a fill, with smaller, lighter dots (#382)", () => {
@@ -72,39 +79,5 @@ describe("a shape's picture (#378)", () => {
         const row = dot(rowTool);
         expect(row.r).toBeGreaterThan(box.r);
         expect(row.opacity).toBeGreaterThan(box.opacity);
-    });
-
-    it("is the same picture in the command bar as anywhere else, for a saved shape too", () => {
-        const [row] = savedShapeRows(
-            [
-                {
-                    id: "wide",
-                    name: "Wide box",
-                    kind: "block",
-                    kindVersion: 1,
-                    intervals: { across: 4, deep: 1 },
-                },
-            ],
-            [],
-            SHAPE_TOOLS,
-        );
-        const [item] = savedShapeItems(
-            [row],
-            true,
-            [{ id: 1 }],
-            (key) => key,
-            async () => {},
-        );
-        const inBar = svgOf(<>{item.icon}</>).outerHTML;
-        cleanup();
-        const own = svgOf(
-            <ShapePreviewIcon kind={row.kind} size={18} />,
-        ).outerHTML;
-        expect(inBar).toBe(own);
-        // ...and not the plain box's picture: the saved spacing shows
-        cleanup();
-        expect(
-            svgOf(<ShapePreviewIcon kind={boxTool} size={18} />).outerHTML,
-        ).not.toBe(own);
     });
 });

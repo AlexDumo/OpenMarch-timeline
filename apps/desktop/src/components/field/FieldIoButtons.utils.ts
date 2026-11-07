@@ -3,8 +3,8 @@ import {
     updateFieldsPropertiesJSON,
 } from "@/global/classes/FieldProperties";
 import { FieldPropertiesSchema } from "./fieldPropertiesSchema";
-import { exportableFieldJson, importedFieldJson } from "./fieldFileFloor";
 import type { ZodError } from "zod";
+import tolgee from "@/global/singletons/Tolgee";
 
 /**
  * Extracts detailed field error messages from Zod validation errors
@@ -19,10 +19,12 @@ function formatZodError(error: ZodError): string {
     });
 
     if (issues.length === 0) {
-        return "Unknown validation error";
+        return tolgee.t("fieldProperties.errors.unknownValidation");
     }
 
-    return `The following fields have errors:\n${issues.join("\n")}`;
+    return tolgee.t("fieldProperties.errors.fieldsHaveErrors", {
+        issues: issues.join("\n"),
+    });
 }
 
 /**
@@ -56,9 +58,7 @@ export const handleFileInputChange = async (
             parsedJson = JSON.parse(text);
         } catch (parseError) {
             console.error("JSON parsing error:", parseError);
-            alert(
-                "Invalid JSON file.\n\nPlease ensure the file contains valid JSON syntax.",
-            );
+            alert(tolgee.t("fieldProperties.errors.invalidJson"));
             throw new Error("Invalid JSON file.");
         }
 
@@ -70,16 +70,15 @@ export const handleFileInputChange = async (
             const errorDetails = formatZodError(result.error);
             console.error("Field properties validation error:", errorDetails);
             alert(
-                `Invalid field properties file.\n\n${errorDetails}\n\nPlease ensure the file contains all required fields with correct values.`,
+                tolgee.t("fieldProperties.errors.invalidFile", {
+                    details: errorDetails,
+                }),
             );
             throw new Error(errorDetails);
         }
 
-        // Validation succeeded, proceed with import. The show keeps its own floor (D-23).
-        const validatedJson = importedFieldJson(
-            result.data,
-            await getFieldPropertiesJSON(),
-        );
+        // Validation succeeded, proceed with import
+        const validatedJson = JSON.stringify(result.data);
 
         // Update field properties with validated data
         await updateFieldsPropertiesJSON(validatedJson);
@@ -99,7 +98,7 @@ export const handleFileInputChange = async (
  */
 export const handleExport = async () => {
     try {
-        const jsonStr = exportableFieldJson(await getFieldPropertiesJSON());
+        const jsonStr = await getFieldPropertiesJSON();
         const blob = new Blob([jsonStr], { type: "application/json" });
         const url = URL.createObjectURL(blob);
 

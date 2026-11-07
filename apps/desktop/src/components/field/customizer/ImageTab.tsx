@@ -1,5 +1,6 @@
 import { FieldProperties } from "@openmarch/core";
-import { TabContent, Switch, Slider } from "@openmarch/ui";
+import { updateFieldPropertiesImage } from "@/global/classes/FieldProperties";
+import { TabContent, Button, Switch, Slider } from "@openmarch/ui";
 import {
     Select,
     SelectContent,
@@ -8,9 +9,9 @@ import {
     SelectTriggerButton,
 } from "@openmarch/ui";
 import { T, useTolgee } from "@tolgee/react";
+import { fieldLengthText } from "./fieldSizeText";
 import FormField, { StaticFormField } from "../../ui/FormField";
 import { inputClassname } from "./utils";
-import FieldFloorControls from "./FieldFloorControls";
 import clsx from "clsx";
 import { useState, useEffect, useMemo, useCallback } from "react";
 
@@ -23,7 +24,9 @@ export function ImageTab({
     currentFieldProperties,
     updateFieldProperties,
 }: ImageTabProps) {
-    const { t } = useTolgee();
+    const tolgee = useTolgee(["language"]);
+    const t = tolgee.t;
+    const language = tolgee.getLanguage();
     const [opacityValue, setOpacityValue] = useState(
         currentFieldProperties.backgroundImageOpacity,
     );
@@ -135,7 +138,56 @@ export function ImageTab({
                     </div>
                 </StaticFormField>
 
-                <FieldFloorControls fieldProperties={currentFieldProperties} />
+                <div className="flex h-fit min-h-0 items-center gap-8">
+                    <label htmlFor="field-properties-image-input">
+                        <Button
+                            className="w-full"
+                            tooltipText={t(
+                                "fieldProperties.tooltips.importImage",
+                            )}
+                            tooltipSide="right"
+                            variant="primary"
+                            type="button"
+                            size="compact"
+                            onClick={() => {
+                                // one would hope the label "for" would be good enough, but it's not
+                                // so we need to manually click the file input
+                                document
+                                    .getElementById(
+                                        "field-properties-image-input",
+                                    )
+                                    ?.click();
+                            }}
+                        >
+                            <T keyName="fieldProperties.buttons.importImage" />
+                        </Button>
+                    </label>
+                    <input
+                        type="file"
+                        id="field-properties-image-input"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={async (
+                            e: React.ChangeEvent<HTMLInputElement>,
+                        ) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const arrayBuffer = await file.arrayBuffer();
+                            const raw = new Uint8Array(arrayBuffer);
+                            await updateFieldPropertiesImage(raw);
+                            updateFieldProperties(
+                                new FieldProperties({
+                                    ...currentFieldProperties,
+                                    showFieldImage: true,
+                                    backgroundImageOpacity: 1.0,
+                                }),
+                            );
+                        }}
+                    />
+                    <div className="text-sub text-text-subtitle h-fit min-h-0 w-fit leading-none whitespace-nowrap">
+                        <T keyName="fieldProperties.messages.refreshAfterImporting" />
+                    </div>
+                </div>
             </div>
 
             <div className="flex flex-col gap-12">
@@ -148,12 +200,19 @@ export function ImageTab({
                     </div>
                     <div className="flex w-full gap-8">
                         <div className="bg-fg-2 border-stroke rounded-6 w-full border px-8 py-2 text-center font-mono">
-                            {currentFieldProperties.width /
-                                currentFieldProperties.pixelsPerStep}{" "}
-                            <T keyName="fieldProperties.units.steps" />
+                            {t("fieldProperties.measurements.steps", {
+                                count:
+                                    currentFieldProperties.width /
+                                    currentFieldProperties.pixelsPerStep,
+                            })}
                         </div>
                         <div className="bg-fg-2 border-stroke rounded-6 w-full border px-8 py-2 text-center font-mono">
-                            {currentFieldProperties.prettyWidth}
+                            {fieldLengthText(
+                                currentFieldProperties.totalWidthInches,
+                                currentFieldProperties.measurementSystem,
+                                t,
+                                language,
+                            )}
                         </div>
                     </div>
                 </div>
@@ -163,12 +222,19 @@ export function ImageTab({
                     </div>
                     <div className="flex w-full gap-8">
                         <div className="bg-fg-2 border-stroke rounded-6 w-full border px-8 py-2 text-center font-mono">
-                            {currentFieldProperties.height /
-                                currentFieldProperties.pixelsPerStep}{" "}
-                            <T keyName="fieldProperties.units.steps" />
+                            {t("fieldProperties.measurements.steps", {
+                                count:
+                                    currentFieldProperties.height /
+                                    currentFieldProperties.pixelsPerStep,
+                            })}
                         </div>
                         <div className="bg-fg-2 border-stroke rounded-6 w-full border px-8 py-2 text-center font-mono">
-                            {currentFieldProperties.prettyHeight}
+                            {fieldLengthText(
+                                currentFieldProperties.totalHeightInches,
+                                currentFieldProperties.measurementSystem,
+                                t,
+                                language,
+                            )}
                         </div>
                     </div>
                 </div>
@@ -212,7 +278,9 @@ export function ImageTab({
                         <div className="bg-fg-2 border-stroke rounded-6 w-full border px-8 py-2 text-center font-mono">
                             {(() => {
                                 if (!FieldProperties.imageDimensions) {
-                                    return "N/A";
+                                    return t(
+                                        "fieldProperties.labels.noBackgroundImage",
+                                    );
                                 }
                                 const w = FieldProperties.imageDimensions.width;
                                 const h =
@@ -225,12 +293,18 @@ export function ImageTab({
                                 if (ratioStr.length > 12) {
                                     return divStr;
                                 } else {
-                                    return `${ratioStr}  or  ${divStr}`;
+                                    return t(
+                                        "fieldProperties.messages.fieldRatio",
+                                        {
+                                            ratio: ratioStr,
+                                            decimal: divStr,
+                                        },
+                                    );
                                 }
                             })()}
                         </div>
                         <div className="bg-fg-2 border-stroke rounded-6 w-fit border px-8 py-2 text-center font-mono">
-                            w/h
+                            <T keyName="fieldProperties.labels.widthHeight" />
                         </div>
                     </div>
                 </div>

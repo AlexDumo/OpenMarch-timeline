@@ -14,14 +14,9 @@ import {
     PlusIcon,
     XIcon,
 } from "@phosphor-icons/react";
-import {
-    bindingFromEvent,
-    formatBinding,
-    formatBindingKeys,
-} from "@/shortcuts/bindings";
+import { bindingFromEvent, formatBinding } from "@/shortcuts/bindings";
 import {
     ACTION_IDS,
-    TAP_BEATS_ACTION_IDS,
     getActionDefinition,
     type ActionCategory,
     type ActionId,
@@ -30,7 +25,7 @@ import { findBindingOwners, getDisplayBindings } from "@/shortcuts/keymap";
 import { getActionLabel, type Translate } from "@/shortcuts/labels";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { searchItems } from "@/shortcuts/search";
-import Keycaps from "@/components/ui/Keycaps";
+import Shortcut from "@/components/ui/Shortcut";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 
 /** What the settings view shows as one group; the command palette still groups by raw category. */
@@ -49,9 +44,6 @@ const DISPLAY_GROUPS: readonly {
     { id: "shape", categories: ["shape"] },
     { id: "ui", categories: ["ui"] },
 ];
-
-const TAP_BEATS_ROW_ID = "tapBeats";
-const TAP_BEATS_DIGITS = Array.from({ length: 9 }, (_, i) => String(i + 1));
 
 interface PendingConflict {
     id: ActionId;
@@ -98,25 +90,11 @@ function useKeyRecorder(
 }
 
 interface Row {
-    /** The nine "tap N beats" actions are folded into one read-only row. */
-    id: ActionId | typeof TAP_BEATS_ROW_ID;
+    id: ActionId;
     category: ActionCategory;
     label: string;
     bindings: string[];
     formatted: string[];
-}
-
-function TapBeatsRow({ row }: { row: Row }) {
-    return (
-        <li className="flex min-h-[48px] items-center justify-between gap-16 py-12">
-            <span className="text-body text-text">{row.label}</span>
-            <div className="flex items-center gap-4">
-                <Keycaps keys={["1–9"]} />
-                {/* Matches the hidden remove (16px + 2px gap) and add (22px) buttons on other rows, so keycaps line up. */}
-                <span aria-hidden className="h-[22px] w-[40px] shrink-0" />
-            </div>
-        </li>
-    );
 }
 
 function ShortcutRow({
@@ -125,6 +103,7 @@ function ShortcutRow({
     isRecording,
     conflict,
     t,
+    language,
     isMac,
     onStartRecording,
     onRemove,
@@ -137,6 +116,8 @@ function ShortcutRow({
     isRecording: boolean;
     conflict: PendingConflict | null;
     t: Translate;
+    /** The app's language, for the list of conflicting actions */
+    language: string;
     isMac: boolean;
     onStartRecording: () => void;
     onRemove: (binding: string) => void;
@@ -151,7 +132,11 @@ function ShortcutRow({
                 <div className="flex flex-wrap items-center justify-end gap-4">
                     {row.bindings.map((binding, i) => (
                         <span key={binding} className="flex items-center gap-2">
-                            <Keycaps keys={formatBindingKeys(binding, isMac)} />
+                            <Shortcut
+                                binding={binding}
+                                size="md"
+                                isMac={isMac}
+                            />
                             <button
                                 type="button"
                                 className="hover:text-red text-text-subtitle touch:flex touch:size-44 touch:items-center touch:justify-center touch:opacity-100 rounded-full p-2 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
@@ -169,7 +154,17 @@ function ShortcutRow({
                             role="status"
                             className="border-accent text-accent rounded-6 text-sub border px-6 py-2"
                         >
-                            <T keyName="settings.shortcuts.recording" />
+                            <T
+                                keyName="settings.shortcuts.recordingHint"
+                                params={{
+                                    keys: () => (
+                                        <Shortcut
+                                            binding="Escape"
+                                            isMac={isMac}
+                                        />
+                                    ),
+                                }}
+                            />
                         </span>
                     ) : (
                         <button
@@ -203,12 +198,24 @@ function ShortcutRow({
                     className="bg-fg-2 rounded-6 flex flex-wrap items-center justify-between gap-8 px-8 py-6"
                 >
                     <span className="text-sub text-text">
-                        {t("settings.shortcuts.conflict", {
-                            binding: formatBinding(conflict.binding, isMac),
-                            actions: conflict.owners
-                                .map((owner) => getActionLabel(owner, t))
-                                .join(", "),
-                        })}
+                        <T
+                            keyName="settings.shortcuts.conflictWith"
+                            params={{
+                                keys: () => (
+                                    <Shortcut
+                                        binding={conflict.binding}
+                                        isMac={isMac}
+                                    />
+                                ),
+                                actions: new Intl.ListFormat(language, {
+                                    type: "conjunction",
+                                }).format(
+                                    conflict.owners.map((owner) =>
+                                        getActionLabel(owner, t),
+                                    ),
+                                ),
+                            }}
+                        />
                     </span>
                     <div className="flex gap-6">
                         <Button size="compact" onClick={onReassign}>
@@ -229,7 +236,8 @@ function ShortcutRow({
 }
 
 export default function ShortcutSettings() {
-    const { t: tolgeeT } = useTolgee();
+    const { t: tolgeeT, getLanguage } = useTolgee(["language"]);
+    const language = getLanguage() ?? "en";
     const t: Translate = useCallback(
         (key, params) => tolgeeT(key, params as never),
         [tolgeeT],
@@ -261,10 +269,8 @@ export default function ShortcutSettings() {
     );
 
     const rows = useMemo<Row[]>(
-        () => [
-            ...ACTION_IDS.filter(
-                (id) => !TAP_BEATS_ACTION_IDS.includes(id),
-            ).map((id) => {
+        () =>
+            ACTION_IDS.map((id) => {
                 const bindings = getDisplayBindings(id, overrides, isMac);
                 return {
                     id,
@@ -274,14 +280,6 @@ export default function ShortcutSettings() {
                     formatted: bindings.map((b) => formatBinding(b, isMac)),
                 };
             }),
-            {
-                id: TAP_BEATS_ROW_ID,
-                category: "timeline",
-                label: t("settings.shortcuts.tapBeats"),
-                bindings: TAP_BEATS_DIGITS,
-                formatted: TAP_BEATS_DIGITS,
-            },
-        ],
         [overrides, isMac, t],
     );
 
@@ -353,53 +351,40 @@ export default function ShortcutSettings() {
                             />
                         </h2>
                         <ul className="bg-fg-1 rounded-6 divide-stroke flex flex-col divide-y px-16">
-                            {groupRows.map((row) =>
-                                row.id === TAP_BEATS_ROW_ID ? (
-                                    <TapBeatsRow key={row.id} row={row} />
-                                ) : (
-                                    <ShortcutRow
-                                        key={row.id}
-                                        row={row as Row & { id: ActionId }}
-                                        isOverridden={
-                                            overrides[row.id as ActionId] !==
-                                            undefined
-                                        }
-                                        isRecording={recording === row.id}
-                                        conflict={
-                                            pending?.id === row.id
-                                                ? pending
-                                                : null
-                                        }
-                                        t={t}
-                                        isMac={isMac}
-                                        onStartRecording={() => {
-                                            setPending(null);
-                                            setRecording(row.id as ActionId);
-                                        }}
-                                        onRemove={(binding) =>
-                                            removeBinding(
-                                                row.id as ActionId,
-                                                binding,
-                                            )
-                                        }
-                                        onReset={() =>
-                                            resetAction(row.id as ActionId)
-                                        }
-                                        onReassign={() => {
-                                            if (!pending) return;
-                                            addBinding(
-                                                pending.id,
-                                                pending.binding,
-                                                pending.owners,
-                                            );
-                                            setPending(null);
-                                        }}
-                                        onDismissConflict={() =>
-                                            setPending(null)
-                                        }
-                                    />
-                                ),
-                            )}
+                            {groupRows.map((row) => (
+                                <ShortcutRow
+                                    key={row.id}
+                                    row={row}
+                                    isOverridden={
+                                        overrides[row.id] !== undefined
+                                    }
+                                    isRecording={recording === row.id}
+                                    conflict={
+                                        pending?.id === row.id ? pending : null
+                                    }
+                                    t={t}
+                                    language={language}
+                                    isMac={isMac}
+                                    onStartRecording={() => {
+                                        setPending(null);
+                                        setRecording(row.id);
+                                    }}
+                                    onRemove={(binding) =>
+                                        removeBinding(row.id, binding)
+                                    }
+                                    onReset={() => resetAction(row.id)}
+                                    onReassign={() => {
+                                        if (!pending) return;
+                                        addBinding(
+                                            pending.id,
+                                            pending.binding,
+                                            pending.owners,
+                                        );
+                                        setPending(null);
+                                    }}
+                                    onDismissConflict={() => setPending(null)}
+                                />
+                            ))}
                         </ul>
                     </div>
                 );

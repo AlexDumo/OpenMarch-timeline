@@ -11,7 +11,13 @@ import en from "../../../../i18n/en.json";
 import es from "../../../../i18n/es.json";
 import fr from "../../../../i18n/fr.json";
 import ja from "../../../../i18n/ja.json";
+import fil from "../../../../i18n/fil.json";
+import id from "../../../../i18n/id.json";
+import ms from "../../../../i18n/ms.json";
 import ptBR from "../../../../i18n/pt-BR.json";
+import th from "../../../../i18n/th.json";
+import zhHans from "../../../../i18n/zh-Hans.json";
+import zhHant from "../../../../i18n/zh-Hant.json";
 import { GESTURE_CHIP_KEYS, gestureChipSegments } from "../heldRoleChipText";
 import HeldRolesChip, { HeldRolesChipBelowTip } from "../HeldRolesChip";
 
@@ -27,10 +33,6 @@ const { chipT } = vi.hoisted(() => ({
             "field.gestureChip.keepRatio": "keep ratio",
             "field.gestureChip.snapOff": "Snap off",
         })[key] ?? `?${key}`,
-}));
-
-vi.mock("@tolgee/react", () => ({
-    useTranslate: () => ({ t: chipT }),
 }));
 
 beforeEach(() => {
@@ -83,9 +85,9 @@ const sync = (...args: Parameters<typeof syncGestureChip>) =>
 describe("gestureChipSegments", () => {
     it("names only the roles the gesture honors, in its own words, and Snap off where it snaps", () => {
         expect(gestureChipSegments(MOVE, ALL, false, false, chipT)).toEqual([
-            "Shift fine",
-            "Ctrl one axis",
-            "Snap off",
+            { key: "Shift", word: "fine" },
+            { key: "Ctrl", word: "one axis" },
+            { key: null, word: "Snap off" },
         ]);
     });
 
@@ -97,8 +99,8 @@ describe("gestureChipSegments", () => {
             snaps: false,
         };
         expect(gestureChipSegments(scale, ALL, false, false, chipT)).toEqual([
-            "Shift fine",
-            "Ctrl free ratio",
+            { key: "Shift", word: "fine" },
+            { key: "Ctrl", word: "free ratio" },
         ]);
     });
 
@@ -121,7 +123,7 @@ describe("gestureChipSegments", () => {
                 chipT,
                 map,
             ),
-        ).toEqual(["Alt fine"]);
+        ).toEqual([{ key: "Alt", word: "fine" }]);
     });
 });
 
@@ -140,6 +142,12 @@ describe("the chip's words", () => {
         ["fr", fr],
         ["ja", ja],
         ["pt-BR", ptBR],
+        ["id", id],
+        ["ms", ms],
+        ["fil", fil],
+        ["zh-Hans", zhHans],
+        ["zh-Hant", zhHant],
+        ["th", th],
     ])("are all in %s", (_, locale) => {
         for (const key of GESTURE_CHIP_KEYS)
             expect(typeof lookup(locale, key), key).toBe("string");
@@ -151,6 +159,12 @@ describe("the chip's words", () => {
         ["fr", fr],
         ["ja", ja],
         ["pt-BR", ptBR],
+        ["id", id],
+        ["ms", ms],
+        ["fil", fil],
+        ["zh-Hans", zhHans],
+        ["zh-Hant", zhHant],
+        ["th", th],
     ])("say Snap off in %s with the Snap toggle's term", (_, locale) => {
         const caption = lookup(
             locale,
@@ -166,6 +180,8 @@ describe("HeldRolesChip", () => {
         renderChip();
         sync(MOVE, { ...NONE, fine: true }, { x: 100, y: 200 });
         expect(chip()).toHaveTextContent("Shift fine");
+        // The held key is a keycap, not plain text
+        expect(chip()!.querySelector("kbd")).toHaveTextContent("Shift");
         expect(chip()).toHaveStyle({ left: "116px", top: "218px" });
     });
 
@@ -207,7 +223,10 @@ describe("HeldRolesChip", () => {
             x: 0,
             y: 0,
         });
-        expect(chip()).toHaveTextContent("⇧ fine · ⌘ one axis · ⌥ from center");
+        // As shown: a screen reader hears the symbols as words instead
+        const shown = chip()!.cloneNode(true) as Element;
+        shown.querySelectorAll(".sr-only").forEach((node) => node.remove());
+        expect(shown).toHaveTextContent("⇧ fine · ⌘ one axis · ⌥ from center");
     });
 
     it("doesn't render again as the pointer moves while it's hidden", () => {

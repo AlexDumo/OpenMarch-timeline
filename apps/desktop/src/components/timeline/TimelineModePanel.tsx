@@ -1,7 +1,10 @@
+import clsx from "clsx";
+import { TEMPO_BAND, useTempoModeStore } from "@/tempo/TempoBand";
+import { TempoModeButton } from "@/tempo/TempoModeButton";
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useTolgee } from "@tolgee/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTolgee, useTranslate } from "@tolgee/react";
 import {
     pageFlagMoveLimits,
     type AddedPageFlag,
@@ -13,6 +16,7 @@ import {
     movePageFlagMutationOptions,
     useAddPageFlag,
 } from "@/hooks/queries/usePageFlags";
+import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { updatePagesMutationOptions } from "@/hooks/queries/usePages";
 import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
 import { useTimingObjects } from "@/hooks";
@@ -79,20 +83,16 @@ import { useSplitMergeActions, useSplitMergeMoves } from "./useSplitMergeMoves";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 import { jumpTimelinePlayback } from "@/timeline/timelineTransport";
 import { useSelectionKeyframes } from "@/timeline/useSelectionKeyframes";
+import { useSelectionHeldBars } from "@/timeline/useHeldMarks";
 import { marcherNamesText } from "@/timeline/timelineKeepLater";
 import tolgee from "@/global/singletons/Tolgee";
 import type { TimelineKeyframe } from "./TimelineKeyframes";
 import { useKeyframeUnsetMenu } from "@/timeline/timelineUnset";
-import {
-    useKeepToggle,
-    useMarcherNameOf,
-    usePageKeepStates,
-} from "@/timeline/useKeepLaterPages";
-import { useSelectedPage } from "@/context/SelectedPageContext";
-import { keepHereMenu, usePageKeepChains } from "./PageKeepChain";
-import { setAsShownMenu } from "@/timeline/timelineSetAsShown";
+import { useMarcherNameOf } from "@/timeline/useKeepLaterPages";
+import { usePageKeepChains } from "./PageKeepChain";
+import { useHoldCommands } from "@/timeline/useHoldCommands";
+import { clearPageMenu } from "@/timeline/timelineClearPage";
 import { describeMoveClips } from "./moveClipText";
-import { useMoveNotesStore } from "@/stores/MoveNotesStore";
 import { useClearLeftoverMoveSelection } from "./useMoveMemberSelection";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useBasicLocksStore } from "@/timeline/basicLocks";
@@ -127,7 +127,10 @@ function useBasicTimelineExtras(pages: readonly Page[]) {
         return {
             basicPoints: points.map((point) => ({
                 beat: point.beat,
-                label: `count ${point.beat - point.box.start} of page ${names.get(`${point.box.start}:${point.box.end}`)?.name ?? ""}`,
+                count: point.beat - point.box.start,
+                page:
+                    names.get(`${point.box.start}:${point.box.end}`)?.name ??
+                    "",
             })),
             onRemoveBasicPoint: (beat: number) => {
                 const point = points.find((p) => p.beat === beat);
@@ -148,7 +151,18 @@ const LOOP_BUTTONS = (
     </>
 );
 const SPEED_BUTTON = <TimelineSpeedButton />;
-const EXPERT_VIEW_CONTROLS = <TimelineCompactButton />;
+/**
+ * Tempo mode: the Tempo button leads the transport's view controls. In tempo mode
+ * it's the only one: Play loops the selected measures, so no Loop button
+ */
+const TEMPO_VIEW_CONTROLS = <TempoModeButton />;
+const BASIC_VIEW_CONTROLS = <TempoModeButton />;
+const EXPERT_VIEW_CONTROLS = (
+    <>
+        <TempoModeButton />
+        <TimelineCompactButton />
+    </>
+);
 
 /** The store's selection as the timeline draws it (spec beats; `Timeline` maps them to its axis) */
 export const toTimelineSelection = (
@@ -184,8 +198,7 @@ export const toTimelineSelection = (
  * or a dragged range selects that range, and each seeks (home to beat 0, a range to its end).
  * **Create page at playhead** on the free paused playhead's right-click menu adds a page flag there and selects
  * the new page; a page box's right-click menu deletes its flag (P8.13's writes, wired by P8.15), or the page and its
- * moves (defined coordinates, owner decision 3). Neither Create Track
- * nor **Add selected marchers** is offered: dragging marchers adds them (UI-10). Double-clicking
+ * moves (defined coordinates, owner decision 3). Double-clicking
  * a page box or clip isolates its stored timeline (docs/timeline/research/ownership/09-isolation.md).
  * A clip is a move: its menu, its ⋯ button and Delete edit, rename and delete it (UI-14).
  */
@@ -193,7 +206,9 @@ export default function TimelineModePanel() {
     const { beats, pages, measures, countGrid } = useTimingObjects()!;
     // UI-19: Basic is this timeline with its page boxes holding the music, and none of the
     // Expert parts (clips, the loop, isolation, moves): docs/timeline/research/basic-mode
-    const basic = useIsBasicMode();
+    // Tempo mode: the timeline shows the tempo lanes in place of the clips, in Basic too
+    const tempoMode = useTempoModeStore((s) => s.on);
+    const basic = useIsBasicMode() && !tempoMode;
     const basicExtras = useBasicTimelineExtras(pages);
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
     // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis, in
@@ -205,7 +220,8 @@ export default function TimelineModePanel() {
     );
     const musicEnd = useMusicEndSeconds();
     const waveform = useMemo(() => {
-        if (!envelope || waveformHidden) return null;
+        // Tempo mode draws the music in its own lane: one waveform, not two
+        if (!envelope || waveformHidden || tempoMode) return null;
         const through =
             musicEnd === null ? 0 : musicEndBeat(countGrid, musicEnd);
         const peaks = peaksByBeat(
@@ -218,7 +234,15 @@ export default function TimelineModePanel() {
         if (basic && !peaks.some((beat) => beat.some((peak) => peak > 0)))
             return null;
         return { peaksByBeat: peaks };
-    }, [envelope, beats, countGrid, musicEnd, waveformHidden, basic]);
+    }, [
+        envelope,
+        beats,
+        countGrid,
+        musicEnd,
+        waveformHidden,
+        basic,
+        tempoMode,
+    ]);
     const zoomFitted = useUiSettingsStore(
         (s) => s.uiSettings.timelineZoomFitted,
     );
@@ -242,6 +266,8 @@ export default function TimelineModePanel() {
     const keepNameOf = useMarcherNameOf(selectedMarchers);
     // #303: where the selected marchers are Set, as keyframes on the timeline, each naming who
     const selectionKeyframes = useSelectionKeyframes(selectedIdList);
+    // Words built here with tolgee.t are built again when the language changes
+    const language = useTolgee(["language"]).getLanguage();
     const keyframes = useMemo<readonly TimelineKeyframe[]>(
         () =>
             selectionKeyframes.map((keyframe) => ({
@@ -253,25 +279,36 @@ export default function TimelineModePanel() {
                         tolgee.t(key, defaultValue, params),
                 ),
             })),
-        [selectionKeyframes, keepNameOf],
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- language: the words are tolgee.t's
+        [selectionKeyframes, keepNameOf, language],
     );
+    // #472: the selected marchers' Held holds, as solid bars from their arrivals' diamonds
+    const heldBars = useSelectionHeldBars(selectedIdList);
     // #306: a diamond's right-click Unset actions at its count
     const keyframeMenu = useKeyframeUnsetMenu(selectedIdList, isPlaying);
-    // UI-18 keep later pages: the chains on the page boxes, and the page box menu's entries
-    // (named up to three; K's target says so, from the current page)
-    const keepStates = usePageKeepStates(pages, selectedIdList);
-    const keepK = useKeepToggle(
+    // UI-18 keep later pages: the chains on the page boxes (named up to three)
+    // Holds: Define as shown (#466) and Hold from previous page (#472) on a page box, the same
+    // commands the timelineDefineAsShown and timelineHoldFromPrevious actions run on the current page
+    const {
         keepStates,
-        pages,
-        useSelectedPage()?.selectedPage?.id,
+        defineAsShown: setAsShown,
+        holdFromPrevious,
+        entriesOn,
+    } = useHoldCommands(pages, selectedIdList, keepNameOf);
+    const keepChains = usePageKeepChains(keepStates, keepNameOf);
+    // #573: Clear Page N, for the selected marchers or every performer when none is selected;
+    // ticked when every selected marcher is already Not defined on the page (`entriesOn`)
+    const { data: performers } = useQuery(allMarchersQueryOptions());
+    const clearPage = useMemo(
+        () =>
+            clearPageMenu({
+                pages,
+                selectedIds: selectedIdList,
+                performerIds: (performers ?? []).map((m) => m.id),
+                entryOn: (pageId) => entriesOn(pageId)?.clearThisPage,
+            }),
+        [pages, selectedIdList, performers, entriesOn],
     );
-    const keepChains = usePageKeepChains(keepStates, keepNameOf, keepK);
-    const keepHere = useMemo(
-        () => keepHereMenu(keepStates, keepK),
-        [keepStates, keepK],
-    );
-    // Holds (#466): Set as shown on a page box, for the selected marchers Not set there
-    const setAsShown = useMemo(() => setAsShownMenu(keepStates), [keepStates]);
     const { tracks: timelines, current: tracksCurrent } =
         useTimelineTracksState({
             database: db,
@@ -297,7 +334,7 @@ export default function TimelineModePanel() {
             timelines.flatMap((t) => (clipped.has(t) ? [] : [t.id])),
         );
     }, [timelines, clipTimelines]);
-    const { clips: offPage, overridden } = useMemo(
+    const { clips: offPage } = useMemo(
         () =>
             describeMoveClips({
                 clips: clipTimelines,
@@ -305,18 +342,14 @@ export default function TimelineModePanel() {
                 pageBoxes,
                 pages,
             }),
-        [clipTimelines, pages, storedTimelines, pageBoxes],
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- language: the words are tolgee.t's
+        [clipTimelines, pages, storedTimelines, pageBoxes, language],
     );
-    // The Move card says it too
-    useEffect(() => {
-        useMoveNotesStore.getState().setOverridden(overridden);
-    }, [overridden]);
-    // UI-14 round-2 review: a "Select them" selection doesn't follow you to another move
+    // UI-14 round-2 review: a "Select marchers" selection doesn't follow you to another move
     useClearLeftoverMoveSelection();
     const commands = useTimelineCommands({
         database: db,
         timelines,
-        selectedMarcherIds,
     });
     // UI-25: a move can be split, and moves merged (not in Basic, which gets no clips)
     const splitMerge = useSplitMergeMoves({
@@ -340,6 +373,7 @@ export default function TimelineModePanel() {
             onDelete: (id: number) => {
                 if (!isPlaying) void moves.deleteMove(id);
             },
+            onSelectMarchers: (id: number) => void moves.selectMarchers(id),
             // UI-27: two moves that meet at the playhead
             onSplit: (id: number) =>
                 void moves.splitMoveAtPlayhead(id, isPlaying),
@@ -527,22 +561,36 @@ export default function TimelineModePanel() {
                     {...(basic ? basicExtras : {})}
                     zoomFitted={zoomFitted}
                     onZoomFittedChange={setZoomFitted}
-                    className="w-full"
+                    zoomButtons={tempoMode}
+                    // Tempo mode is a focused mode: the timeline is framed in the accent
+                    className={clsx(
+                        "w-full",
+                        tempoMode && "ring-accent ring-2",
+                    )}
                     beats={beats}
                     pages={pages}
                     measures={measures}
-                    timelines={basic ? NO_CLIPS : offPage}
+                    timelines={basic || tempoMode ? NO_CLIPS : offPage}
+                    band={tempoMode ? TEMPO_BAND : undefined}
                     pageMoves={pageMoves}
-                    transportAccessories={basic ? SPEED_BUTTON : LOOP_BUTTONS}
+                    transportAccessories={
+                        basic || tempoMode ? SPEED_BUTTON : LOOP_BUTTONS
+                    }
                     transportSecondary={SOUND_BUTTON}
                     transportViewControls={
-                        basic ? undefined : EXPERT_VIEW_CONTROLS
+                        tempoMode
+                            ? TEMPO_VIEW_CONTROLS
+                            : basic
+                              ? BASIC_VIEW_CONTROLS
+                              : EXPERT_VIEW_CONTROLS
                     }
                     keyframes={keyframes}
                     keyframeMenu={keyframeMenu}
+                    heldBars={heldBars}
                     keepChains={keepChains}
-                    keepHere={keepHere}
                     setAsShown={setAsShown}
+                    holdFromPrevious={holdFromPrevious}
+                    clearPage={clearPage}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={
                         basic ? undefined : commands.commitTimelineRange
@@ -576,7 +624,9 @@ export default function TimelineModePanel() {
                                       );
                                   else
                                       toast.info(
-                                          "Nothing moves here yet. Drag marchers in this range to make a move, then double-click it to isolate it.",
+                                          tolgee.t(
+                                              "timeline.isolation.nothingToIsolate",
+                                          ),
                                       );
                               }
                     }
@@ -747,7 +797,7 @@ export function PlayingTimeline({
         enabled: addPageFlag.insertion !== null,
     });
     // Past the last page, the playhead offers **+ Add N-Count Page**: a page from the last flag to it
-    const { t } = useTolgee();
+    const { t } = useTranslate();
     const { insertion, add: addPage, addSubset } = addPageFlag;
     const appendAtPlayhead = useMemo(() => {
         if (insertion?.kind !== "append") return undefined;
@@ -931,7 +981,7 @@ export function describePageFlagBlock(
     pages: readonly (FlagPage & { readonly name: string })[],
     timelines: readonly Pick<
         TimelineInput,
-        "linkId" | "label" | "startBeatIndex" | "endBeatIndex"
+        "linkId" | "label" | "unnamed" | "startBeatIndex" | "endBeatIndex"
     >[],
 ): string {
     // Nothing stops the last flag past every move (endless counts); never shown
@@ -939,7 +989,9 @@ export function describePageFlagBlock(
     const flags = pageFlags(pages);
     if (block.kind === "flag") {
         const flag = flags.find((f) => f.page.id === block.pageId);
-        return !flag || !flag.range ? "Home" : `Page ${flag.page.name}'s flag`;
+        return !flag || !flag.range
+            ? tolgee.t("timeline.pageFlagBlock.home")
+            : tolgee.t("timeline.rangeName.flag", { page: flag.page.name });
     }
     const track =
         block.timelineId === undefined
@@ -953,15 +1005,18 @@ export function describePageFlagBlock(
           )
         : undefined;
     const who = page
-        ? `Page ${page.page.name}'s move`
-        : track && !/^Timeline \d+$/.test(track.label)
-          ? `"${track.label}"`
-          : "A move";
-    if (block.message.includes("share"))
-        return `${who} already has these counts`;
-    if (block.message.includes("left behind"))
-        return `${who} starts or ends on this flag`;
-    return `${who} is in the way`;
+        ? { who: "page", page: page.page.name, name: "" }
+        : track && !track.unnamed
+          ? { who: "named", page: "", name: track.label }
+          : { who: "other", page: "", name: "" };
+    switch (block.reason) {
+        case "sharesRange":
+            return tolgee.t("timeline.pageFlagBlock.sharesCounts", who);
+        case "leftBehind":
+            return tolgee.t("timeline.pageFlagBlock.startsOrEnds", who);
+        default:
+            return tolgee.t("timeline.pageFlagBlock.inTheWay", who);
+    }
 }
 
 /** `value` as it was the last time `current` was true, or as it is now while `current` is. */

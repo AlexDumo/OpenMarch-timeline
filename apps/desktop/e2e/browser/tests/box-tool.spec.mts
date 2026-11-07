@@ -47,6 +47,16 @@ const HOME: SeedPosition[] = [
 ];
 const ALL = HOME.map(([id]) => id);
 
+/**
+ * A click that can't pair with the one before it into a double-click (which goes inside a
+ * shape): the field takes two clicks on one spot within 500 ms as one (`DOUBLE_CLICK_MS`),
+ * however much happened between them.
+ */
+async function freshClick(page: Page, at: Point) {
+    await page.waitForTimeout(550);
+    await page.mouse.click(at.x, at.y);
+}
+
 test.use({
     seedSql: seedShowSql({
         beats: 48,
@@ -458,7 +468,6 @@ test("change: one row with no ⋯; after a move and a quarter turn, Recalculate 
         "shape-editor-rotation",
         "shape-editor-flip-across",
         "shape-editor-flip-deep",
-        "shape-editor-save",
     ])
         await expect(page.getByTestId(id)).toBeVisible();
     await expect(page.getByTestId("shape-editor-order")).toHaveCount(0);
@@ -704,39 +713,19 @@ test("change: the field display bar holds paths, labels and shapes; the rest is 
         "field-display-shapes",
     ])
         await expect(bar.getByTestId(id)).toBeVisible();
-    // Nothing else crept in: those three and the two placeholders
-    await expect(bar.getByRole("button")).toHaveCount(5);
+    // Nothing else crept in
+    await expect(bar.getByRole("button")).toHaveCount(3);
     await expect(page.getByTestId("open-view3d")).toBeVisible();
 
     const settings = await openSettings(page, "Field");
     for (const name of ["Grid lines", "Half lines", "Step size warnings"])
         await expect(settings.getByRole("switch", { name })).toBeVisible();
-    for (const name of ["Normal", "Above the dot", "Fade the rest"])
+    for (const name of ["Normal", "Above the dot"])
         await expect(settings.getByRole("radio", { name })).toBeChecked();
-});
-
-test("change: Settings › Field › While shaping changes who fades on the open field at once", async ({
-    show,
-}) => {
-    const { page } = show;
-    const settings = await openSettings(page, "Field");
-    const dimmedIds = async () =>
-        (await drawnMarchers(page)).filter((m) => m.dimmed).map((m) => m.id);
-    await page.bringToFront();
-    await page.mouse.click(...(await screenOf(page, 1)));
-    await page.keyboard.down("Shift");
-    await page.mouse.click(...(await screenOf(page, 2)));
-    await page.keyboard.up("Shift");
-    await page.keyboard.press("b");
-    await expect.poll(dimmedIds).toEqual([3, 4, 5, 6, 7, 8]);
-
-    // Only while a drag draws it: an open box at rest fades nobody
-    await settings
-        .getByRole("radio", { name: "Fade only while drawing" })
-        .click();
-    await expect.poll(dimmedIds).toEqual([]);
-    await settings.getByRole("radio", { name: "Fade the rest" }).click();
-    await expect.poll(dimmedIds).toEqual([3, 4, 5, 6, 7, 8]);
+    // While shaping is gone: an open shape always fades the rest
+    await expect(
+        settings.getByRole("radio", { name: "Fade the rest" }),
+    ).toHaveCount(0);
 });
 
 test("change: Settings › Field › Grid lines redraws the open field at once", async ({
@@ -821,7 +810,6 @@ test("change: the chip and the plain selection's Transform section draw their di
     const transform = page.getByTestId("transform-section");
     await expect(transform).toBeVisible();
     expect(await transform.innerText()).not.toMatch(PICTOGRAPHIC);
-    await expect(transform.locator("[data-glyph]")).not.toHaveCount(0);
 });
 
 test("change: start positions show as faint dots in the marchers' own color", async ({
@@ -1222,7 +1210,7 @@ test("change: Escape while typing a number cancels only the number", async ({
 // to the moment it was drawn at. Away from it the shape and its editor hide
 // behind a chip with Go back. Only Enter or Place places it (owner lab
 // feedback): Enter and Escape act only on a shape you can see, playback and
-// Visuals hide it until they end, and a new selection leaves it open.
+// Preview hide it until they end, and a new selection leaves it open.
 
 const awayChip = (page: Page) => page.getByTestId("shape-away-chip");
 
@@ -1384,7 +1372,7 @@ for (const [how, start] of [
         await expect.poll(onNewSpots).toBe(true);
     });
 
-test("change: playing hides an open box until it stops, and Visuals until the Editor is back; neither places it", async ({
+test("change: playing hides an open box until it stops, and Preview until the Editor is back; neither places it", async ({
     show,
 }) => {
     const { page } = show;
@@ -1400,7 +1388,7 @@ test("change: playing hides an open box until it stops, and Visuals until the Ed
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
     expect(await openBox(page)).toEqual(before);
 
-    await page.getByTestId("workspace-view-visuals").click();
+    await page.getByTestId("workspace-view-preview").click();
     await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
     await expect(awayChip(page)).toBeHidden();
     await page.getByTestId("workspace-view-editor").click();
@@ -2023,32 +2011,22 @@ async function spacings(page: Page): Promise<[number, number]> {
     ];
 }
 
-test("change: the Transform section flips and turns a plain selection around the pivot, writing positions only", async ({
+test("change: the Transform section turns a plain selection around the pivot, writing positions only", async ({
     show,
 }) => {
     const { page } = show;
     await selectAll(page);
     const section = page.getByTestId("transform-section");
     await expect(section).toBeVisible();
-    // A plain selection has no scale
+    // A plain selection has no scale, and the Align row has the flips
     await expect(section.getByTestId("transform-scale-more")).toHaveCount(0);
     const steps = await undoSteps(show);
 
-    // Around the left edge: everyone mirrors to the left of the leftmost marcher
-    const left = Math.min(...HOME.map(([, x]) => x));
-    await section.getByTestId("transform-pivot-w").click();
-    await section.getByTestId("transform-flip-across").click();
-    await expect
-        .poll(() => savedPositions(show, 0))
-        .toEqual(asPositions(HOME.map(([id, x, y]) => [id, 2 * left - x, y])));
-    expect(await undoSteps(show)).toBe(steps + 1);
-    expect(await recipeCount(show)).toBe(0);
-
     // A quarter turn clockwise around the back-left corner of their box
-    const flipped = await savedPositions(show, 0);
+    const before = await savedPositions(show, 0);
     const corner = {
-        x: Math.min(...flipped.map((p) => p.x)),
-        y: Math.min(...flipped.map((p) => p.y)),
+        x: Math.min(...before.map((p) => p.x)),
+        y: Math.min(...before.map((p) => p.y)),
     };
     await section.getByTestId("transform-pivot-nw").click();
     const rotation = section.getByRole("textbox", { name: "Rotation" });
@@ -2057,7 +2035,7 @@ test("change: the Transform section flips and turns a plain selection around the
     await expect
         .poll(async () =>
             (await savedPositions(show, 0)).every((p) => {
-                const was = flipped.find((f) => f.id === p.id)!;
+                const was = before.find((f) => f.id === p.id)!;
                 const want = {
                     x: corner.x - (was.y - corner.y),
                     y: corner.y + (was.x - corner.x),
@@ -2066,7 +2044,7 @@ test("change: the Transform section flips and turns a plain selection around the
             }),
         )
         .toBe(true);
-    expect(await undoSteps(show)).toBe(steps + 2);
+    expect(await undoSteps(show)).toBe(steps + 1);
     expect(await recipeCount(show)).toBe(0);
     await expectCanvasMatchesShow(show);
 });
@@ -2083,7 +2061,6 @@ test("change: with a kind armed and nothing drawn yet, the Transform section sho
     await expect(
         section.getByRole("textbox", { name: "Rotation" }),
     ).toBeVisible();
-    await expect(section.getByTestId("transform-flip-across")).toBeVisible();
     await expect(section.getByTestId("transform-scale-more")).toHaveCount(0);
 });
 
@@ -2157,7 +2134,7 @@ test("change: handles snap spacings to half steps, Shift (fine) to hundredths, w
     await expect(bar.getByTestId("shape-editor-across")).toHaveText("2.37");
 });
 
-test("change: a typed 1 2/3 stays exactly 1⅔ steps and shows as 1⅔, − and + leave the box where it was, and Save keeps 2⅔ exactly (#423)", async ({
+test("change: a typed 1 2/3 stays exactly 1⅔ steps and shows as 1⅔, and − and + leave the box where it was (#423)", async ({
     show,
 }) => {
     const { page } = show;
@@ -2205,24 +2182,6 @@ test("change: a typed 1 2/3 stays exactly 1⅔ steps and shows as 1⅔, − and 
     await page.keyboard.press("Enter");
     await expect(bar.getByTestId("shape-editor-deep")).toHaveText("2⅔");
     allClose((await gaps()).deep, 8 / 3);
-
-    // Saved, the show's copy keeps the intervals exactly, not as shown
-    await page.getByTestId("shape-editor-save").click();
-    const name = page.getByTestId("shape-editor-save-name");
-    await expect(name).toHaveValue("Box 1⅔ × 2⅔ apart");
-    await page.keyboard.press("Enter");
-    await expect
-        .poll(
-            async () =>
-                (await show.query("SELECT id FROM saved_shapes")).length,
-        )
-        .toBe(1);
-    const [{ intervals }] = await show.query<{ intervals: string }>(
-        "SELECT intervals FROM saved_shapes",
-    );
-    const saved = JSON.parse(intervals) as { across: number; deep: number };
-    expect(Math.abs(saved.across - 5 / 3)).toBeLessThan(1e-9);
-    expect(Math.abs(saved.deep - 8 / 3)).toBeLessThan(1e-9);
 });
 
 test("change: Expand twice and Shrink once keep the across:deep ratio and the pivot, one undo step a click; a hold is one undo step, and Shrink stops at half a step (#489)", async ({
@@ -2367,9 +2326,11 @@ test("change: a press that makes the editor too wide for one row keeps its rows 
     show,
 }) => {
     const { page } = show;
-    // One row only just fits here (with the Snap button), and a + that leaves marchers short widens
-    // it past the field
-    await page.setViewportSize({ width: 1030, height: 1000 });
+    // One row only just fits here (with the Snap and eye buttons), and a + that leaves marchers short
+    // widens it past the field. 1034 is the 1060 this was tuned at, less the 26 px the editor's
+    // Save button took before it was removed. Sized before the box is drawn: narrowed after, the
+    // pressed + moved.
+    await page.setViewportSize({ width: 1034, height: 1000 });
     await drawBox(show);
     const bar = page.getByTestId("shape-tool-readout-bar");
     await expect(bar).toHaveAttribute("data-rows", "1");
@@ -4832,7 +4793,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         // From the floating editor, on Page 2, where the box is only carried
         await selectPage(show, "Page 2");
         const member = await marcherScreen(page, 1);
-        await page.mouse.click(member.x, member.y);
+        await freshClick(page, member);
         await expect(readoutShown).toBeVisible();
         const steps = await undoSteps(show);
         await readoutShown.getByTestId("shape-editor-ungroup").click();
@@ -4849,14 +4810,14 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         expect((await readField(page)).selection).toEqual(ALL);
         // A click on a member picks just that marcher
         await page.keyboard.press("Escape");
-        await page.mouse.click(member.x, member.y);
+        await freshClick(page, member);
         expect((await readField(page)).selection).toEqual([1]);
         await expect(readoutShown).toBeHidden();
 
         // Page 1 keeps its box
         await page.keyboard.press("Escape");
         await selectPage(show, "Page 1");
-        await page.mouse.click(member.x, member.y);
+        await freshClick(page, member);
         await expect(readoutShown).toBeVisible();
 
         // Undo shares Page 1's box with Page 2 again
@@ -4866,7 +4827,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         expect(await laterMoves()).toBe(0);
         await page.keyboard.press("Escape");
         await selectPage(show, "Page 2");
-        await page.mouse.click(member.x, member.y);
+        await freshClick(page, member);
         await expect(readoutShown).toBeVisible();
 
         // Page 2's own copy (a pivot change there) ungroups too, and Page 1's box doesn't come
@@ -4885,7 +4846,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         await expect.poll(kinds).toEqual(["block"]);
         await waitForIdle(page);
         await page.keyboard.press("Escape");
-        await page.mouse.click(member.x, member.y);
+        await freshClick(page, member);
         await expect(readoutShown).toBeVisible();
 
         // The field's menu offers it for a selected box only, first
@@ -4899,7 +4860,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         // On Page 1, the shortcut ends the box there: nobody moves, and Page 2 follows
         await page.keyboard.press("Escape");
         await selectPage(show, "Page 1");
-        await page.mouse.click(member.x, member.y);
+        await freshClick(page, member);
         await expect(readoutShown).toBeVisible();
         await page.keyboard.press("ControlOrMeta+Shift+g");
         await expect.poll(kinds).toEqual(["ungrouped"]);
@@ -4914,6 +4875,104 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         await page.keyboard.press("Escape");
         await selectPage(show, "Page 2");
         expect(await placedBoxes(page)).toEqual([]);
+    });
+
+    test("change: Group makes the selected marchers a shape where they stand on Page 1 and Page 2 carries it; Ungroup on Page 2 ends it there; each one undo step (#603)", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const kinds = async () =>
+            (
+                await show.query<{ kind: string }>(
+                    "SELECT kind FROM timeline_shape_recipes ORDER BY id",
+                )
+            ).map((r) => r.kind);
+        const laterMoves = async () =>
+            (
+                await show.query<{ count: number }>(
+                    "SELECT COUNT(*) AS count FROM timelines WHERE end_beat > 32",
+                )
+            )[0]!.count;
+        const readoutShown = page.getByTestId("placed-box-readout");
+        const menu = page.getByTestId("field-menu");
+        await selectPage(show, "Page 1");
+        const standing = await savedPositions(show, 1);
+        const member = await marcherScreen(page, 1);
+
+        // From the field's menu, first, with the marchers selected
+        await selectAll(page);
+        const steps = await undoSteps(show);
+        await page.mouse.click(member.x, member.y, { button: "right" });
+        await expect(menu).toBeVisible();
+        await expect(menu.getByRole("menuitem").first()).toHaveText(
+            /Group selection/,
+        );
+        await menu.getByRole("menuitem").first().click();
+        await expect.poll(kinds).toEqual(["group"]);
+        await waitForIdle(page);
+        // Nobody moves; Page 1 takes the change, as one undo step
+        expect(await savedPositions(show, 1)).toEqual(standing);
+        expect(await laterMoves()).toBe(0);
+        expect(await undoSteps(show)).toBe(steps + 1);
+        // Selected whole, with no Recalculate, and Ungroup in its place in the menu
+        // (the selected shape draws its own outline, so it isn't in placedBoxes)
+        await expect(readoutShown).toBeVisible();
+        expect((await readField(page)).selection).toEqual(ALL);
+        await expect(
+            readoutShown.getByTestId("shape-editor-recalculate"),
+        ).toHaveCount(0);
+        await page.mouse.click(member.x, member.y, { button: "right" });
+        await expect(menu).toBeVisible();
+        await expect(menu.getByRole("menuitem").first()).toHaveText(/Ungroup/);
+        await page.keyboard.press("Escape");
+        await expect(menu).toBeHidden();
+
+        // A click on a member selects the whole group, on Page 2 too, where it's carried
+        await page.keyboard.press("Escape");
+        await selectPage(show, "Page 2");
+        await freshClick(page, member);
+        await expect(readoutShown).toBeVisible();
+        expect((await readField(page)).selection).toEqual(ALL);
+
+        // Ungroup there: Page 2 takes the change, and the group ends there
+        await readoutShown.getByTestId("shape-editor-ungroup").click();
+        await expect.poll(kinds).toEqual(["group", "ungrouped"]);
+        await waitForIdle(page);
+        await expect(readoutShown).toBeHidden();
+        expect(await placedBoxes(page)).toEqual([]);
+        expect(await laterMoves()).toBe(1);
+        expect(await savedPositions(show, 2)).toEqual(standing);
+        expect(await undoSteps(show)).toBe(steps + 2);
+
+        // Page 1 keeps its group
+        await page.keyboard.press("Escape");
+        await selectPage(show, "Page 1");
+        await freshClick(page, member);
+        await expect(readoutShown).toBeVisible();
+
+        // Undo carries it to Page 2 again; a second undo takes the group away
+        await page.keyboard.press("ControlOrMeta+z");
+        await expect.poll(kinds).toEqual(["group"]);
+        await waitForIdle(page);
+        expect(await laterMoves()).toBe(0);
+        await page.keyboard.press("Escape");
+        await selectPage(show, "Page 2");
+        await freshClick(page, member);
+        await expect(readoutShown).toBeVisible();
+        await page.keyboard.press("ControlOrMeta+z");
+        await expect.poll(kinds).toEqual([]);
+        await waitForIdle(page);
+        await expect(readoutShown).toBeHidden();
+        expect(await savedPositions(show, 1)).toEqual(standing);
+
+        // ⌘G / Ctrl+G groups too, and no longer opens Go to (plain G does)
+        await page.keyboard.press("Escape");
+        await selectPage(show, "Page 1");
+        await selectAll(page);
+        await page.keyboard.press("ControlOrMeta+g");
+        await expect.poll(kinds).toEqual(["group"]);
+        await expect(page.getByTestId("timeline-go-to")).toHaveCount(0);
+        expect(await savedPositions(show, 1)).toEqual(standing);
     });
 
     test("change: turned about a member on the next page, the member at the pivot stays in the box there (owner on #486)", async ({
@@ -5261,7 +5320,9 @@ test("the Shapes tab lists the kinds, greyed out until marchers are selected; pi
     await expect(box).toHaveAttribute("aria-pressed", "false");
     await box.hover();
     await expect(page.getByRole("tooltip")).toContainText("Box");
-    await expect(page.getByRole("tooltip").locator("kbd")).toHaveText("B");
+    await expect(
+        page.getByRole("tooltip").locator(".shortcut-keys"),
+    ).toHaveText("B");
     await page.mouse.move(5, 5);
 
     // Picking it arms the box: the field draws it on the next drag
@@ -5297,9 +5358,9 @@ test("the Shapes tab lists the kinds, greyed out until marchers are selected; pi
         .toBe(true);
 });
 
-// The favorites ring (#351): hold R around the cursor and let go over a shape
-// to arm it, or tap R to keep it open until a click. It holds the starred
-// shapes, then the basic kinds.
+// The shape ring (#351): hold R around the cursor and let go over a shape
+// to arm it, or tap R to keep it open until a click. It holds the shape kinds
+// in the Shapes tab's order.
 const ring = (page: Page) => page.getByTestId("shape-ring");
 const ringSlot = (page: Page, id: string) =>
     page.getByTestId(`shape-ring-slot-${id}`);
@@ -5528,377 +5589,6 @@ test.describe("with the ring rebound to J", () => {
         await expect(page.getByTestId("shapes-tab-ring-hint")).toHaveText(
             "Hold J on the field for the shape ring",
         );
-    });
-});
-
-// The shape library (#352): a Shapes entry in the left sidebar lists the basic
-// kinds; a star puts a shape in the Shapes tab and the ring, for this user
-// across shows and restarts. The ninth-star question is a component test
-// (ShapeLibraryPanel.test.tsx): with one basic kind, nine can't be starred here.
-test("the Shapes tab's Library button opens the library; a star puts Box in the tab and the ring, and it's kept after a reload", async ({
-    show,
-}) => {
-    const { page } = show;
-    const shapesTab = () => page.getByRole("tab", { name: "Shapes" }).click();
-    await shapesTab();
-    await expect(page.getByTestId("shapes-tab-starred-block")).toHaveCount(0);
-
-    await page.getByTestId("shapes-tab-library").click();
-    const library = page.getByTestId("shape-library");
-    await expect(library).toBeVisible();
-    const row = page.getByTestId("shape-library-row-block");
-    await expect(row).toContainText("Box");
-    await expect(row).toContainText("2 apart");
-    const star = page.getByTestId("shape-library-star-block");
-    await expect(star).toHaveAttribute("aria-pressed", "false");
-
-    // Before any star the ring's Box only fills an empty slot. R again
-    // closes the tapped ring (Escape would also close the sidebar)
-    await selectAll(page);
-    await pointAtField(show);
-    await page.keyboard.press("r");
-    await expect(ringSlot(page, "block")).toHaveAttribute(
-        "data-starred",
-        "false",
-    );
-    await page.keyboard.press("r");
-    await expect(ring(page)).toBeHidden();
-
-    await star.click();
-    await expect(star).toHaveAttribute("aria-pressed", "true");
-
-    // In the ring, marked as starred
-    await pointAtField(show);
-    await page.keyboard.press("r");
-    await expect(ringSlot(page, "block")).toHaveAttribute(
-        "data-starred",
-        "true",
-    );
-    await page.keyboard.press("r");
-    await expect(ring(page)).toBeHidden();
-
-    // In the Shapes tab after the divider, and picking it arms the box
-    const starred = page.getByTestId("shapes-tab-starred-block");
-    await expect(starred).toHaveAccessibleName("Box");
-    await starred.click();
-    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(page.getByTestId("shape-tool-hint")).toBeHidden();
-
-    // The star is the user's, so it outlasts a reload
-    await page.reload();
-    await waitForField(page);
-    await shapesTab();
-    await expect(page.getByTestId("shapes-tab-starred-block")).toBeVisible();
-    await page.getByTestId("shape-library-tab").click();
-    await expect(star).toHaveAttribute("aria-pressed", "true");
-
-    // Unstarring takes it out of the tab again
-    await star.click();
-    await expect(star).toHaveAttribute("aria-pressed", "false");
-    await expect(page.getByTestId("shapes-tab-starred-block")).toHaveCount(0);
-});
-
-// Saved shapes (#353): ☆ Save keeps a shape's kind and spacing, not its size
-// or count, starred, in the user's library and in the show; picked for another
-// selection it draws at its spacing, and the show keeps its copy for a machine
-// whose library doesn't have it.
-/**
- * Draws a box on everyone, sets its spacing to 2½ × 1½ and saves it from the
- * ⋯ row as "Wide box", leaving it open. Returns the saved shape's id.
- */
-async function saveWideBox(show: Show): Promise<string> {
-    const { page } = show;
-    await drawBox(show);
-    await page.getByTestId("shape-editor-across").click();
-    await page.keyboard.type("2.5");
-    await page.keyboard.press("Enter");
-    await expect.poll(() => readout(page)).toBe("4 × 2 · 2½ × 6 steps");
-    await page.getByTestId("shape-editor-deep").click();
-    await page.keyboard.type("1.5");
-    await page.keyboard.press("Enter");
-    await expect.poll(() => readout(page)).toBe("4 × 2 · 2½ × 1½ steps");
-
-    // Save asks for a name, offering the kind and its spacing
-    await page.getByTestId("shape-editor-save").click();
-    const name = page.getByTestId("shape-editor-save-name");
-    await expect(name).toBeFocused();
-    await expect(name).toHaveValue("Box 2½ × 1½ apart");
-    await name.fill("Wide box");
-    await page.keyboard.press("Enter");
-    // An icon on the editor's one row (#429): the words are its name and tooltip
-    await expect(page.getByTestId("shape-editor-save")).toHaveAttribute(
-        "aria-label",
-        "Saved as Wide box",
-    );
-    // Enter named it: the box is still open
-    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
-
-    // The show keeps a copy: the kind and its intervals, no size or count
-    await expect
-        .poll(() =>
-            show.query<{ name: string; kind: string; intervals: string }>(
-                "SELECT name, kind, intervals FROM saved_shapes",
-            ),
-        )
-        .toEqual([
-            {
-                name: "Wide box",
-                kind: "block",
-                intervals: JSON.stringify({ across: 2.5, deep: 1.5 }),
-            },
-        ]);
-    const [{ id }] = await show.query<{ id: string }>(
-        "SELECT id FROM saved_shapes",
-    );
-    return id;
-}
-
-test("change: ☆ Save keeps a box's spacing as a starred saved shape that draws at that spacing on another selection, and the show keeps a copy", async ({
-    show,
-}) => {
-    const { page } = show;
-    const id = await saveWideBox(show);
-    await page.keyboard.press("Escape");
-    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
-
-    // Starred: it's in the Shapes tab. Picked for five marchers, a drag draws
-    // a box of five at the saved spacing
-    await page.keyboard.press("Escape");
-    for (const [i, drill] of ["T1", "T2", "T3", "T4", "T5"].entries())
-        await clickMarcher(page, drill, { add: i > 0 });
-    await expect
-        .poll(async () => (await readField(page)).selection)
-        .toEqual([1, 2, 3, 4, 5]);
-    await page.getByRole("tab", { name: "Shapes" }).click();
-    const starred = page.getByTestId(`shapes-tab-starred-${id}`);
-    await expect(starred).toHaveAccessibleName("Wide box");
-    // Its picture is drawn at its own spacing, so it isn't the plain box's (#378)
-    const picture = (id: string) =>
-        page.getByTestId(id).getByTestId("shape-preview").innerHTML();
-    expect(await picture(`shapes-tab-starred-${id}`)).not.toBe(
-        await picture("shapes-tab-block"),
-    );
-    await starred.click();
-    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
-    const grid = await fieldGrid(show);
-    const S = grid.pixelsPerStep;
-    const cf = grid.centerFront;
-    await drag(
-        page,
-        await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
-        await toScreen(page, { x: cf.x - 5 * S, y: cf.y - 19 * S }),
-    );
-    expect((await shapeOverlay(page))!.spots).toHaveLength(5);
-    await expect.poll(() => readout(page)).toMatch(/ · 2½ × 1½ steps$/);
-    await page.keyboard.press("Enter");
-    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
-    // An ordinary box recipe: it reopens without the saved shape
-    await expect
-        .poll(async () =>
-            (
-                await show.query<{ kind: string }>(
-                    "SELECT kind FROM timeline_shape_recipes",
-                )
-            ).map((r) => r.kind),
-        )
-        .toEqual(["block"]);
-
-    // On a machine whose library doesn't have it, the show still lists it,
-    // and it can be deleted there
-    await page.evaluate(() => localStorage.removeItem("openmarch:savedShapes"));
-    await page.reload();
-    await waitForField(page);
-    await page.getByTestId("shape-library-tab").click();
-    const row = page.getByTestId(`shape-library-row-${id}`);
-    await expect(row).toContainText("Wide box");
-    await expect(row).toContainText("Box · 2½ × 1½ apart · this show only");
-    await page.getByTestId(`shape-library-delete-${id}`).click();
-    await expect(row).toHaveCount(0);
-    await expect
-        .poll(() => show.query("SELECT id FROM saved_shapes"))
-        .toEqual([]);
-    await expect(page.getByTestId("shape-library-saved-empty")).toBeVisible();
-});
-
-test("change: ☆ Save in the floating editor saves a selected placed box, starred in the library", async ({
-    show,
-}) => {
-    const { page } = show;
-    await placeBox(show);
-    const t3 = await marcherScreen(page, 3);
-    await page.mouse.click(t3.x, t3.y);
-    await expect(page.getByTestId("placed-box-readout")).toBeVisible();
-
-    const editor = page.getByTestId("placed-box-readout");
-    await editor.getByTestId("shape-editor-save").click();
-    const name = page.getByTestId("shape-editor-save-name");
-    await expect(name).toBeFocused();
-    await name.fill("Placed box");
-    await page.getByTestId("shape-editor-save-confirm").click();
-    await expect(editor.getByTestId("shape-editor-save")).toHaveAttribute(
-        "aria-label",
-        "Saved as Placed box",
-    );
-
-    await expect
-        .poll(() => show.query("SELECT name FROM saved_shapes"))
-        .toEqual([{ name: "Placed box" }]);
-    const [{ id }] = await show.query<{ id: string }>(
-        "SELECT id FROM saved_shapes",
-    );
-    await page.getByTestId("shape-library-tab").click();
-    await expect(page.getByTestId(`shape-library-row-${id}`)).toContainText(
-        "Placed box",
-    );
-    await expect(page.getByTestId(`shape-library-star-${id}`)).toHaveAttribute(
-        "aria-pressed",
-        "true",
-    );
-});
-
-// Saved shapes keep a description, how they're filled and their dates (#393):
-// saved with a description, the show's copy has them all, and on a machine
-// whose library doesn't have it the library lists it with its description and
-// can take it in, dates and all.
-test("change: a box saved with a description reopens from the show's copy with its description, distribution and dates", async ({
-    show,
-}) => {
-    const { page } = show;
-    await placeBox(show);
-    const t3 = await marcherScreen(page, 3);
-    await page.mouse.click(t3.x, t3.y);
-    await expect(page.getByTestId("placed-box-readout")).toBeVisible();
-
-    const editor = page.getByTestId("placed-box-readout");
-    await editor.getByTestId("shape-editor-save").click();
-    const name = page.getByTestId("shape-editor-save-name");
-    await expect(name).toBeFocused();
-    await name.fill("Opener block");
-    const description = "Company front for the opener, then into the arc";
-    await page.getByTestId("shape-editor-save-description").fill(description);
-    await page.keyboard.press("Enter");
-    await expect(editor.getByTestId("shape-editor-save")).toHaveAttribute(
-        "aria-label",
-        "Saved as Opener block",
-    );
-
-    type Row = {
-        id: string;
-        description: string | null;
-        distribution: string | null;
-        created_at: string;
-        updated_at: string;
-    };
-    await expect
-        .poll(
-            async () =>
-                (await show.query<Row>("SELECT * FROM saved_shapes")).length,
-        )
-        .toBe(1);
-    const [copy] = await show.query<Row>("SELECT * FROM saved_shapes");
-    expect(copy.description).toBe(description);
-    // Files, Short back: the layout without its size
-    expect(JSON.parse(copy.distribution!)).toEqual({
-        mode: "files",
-        layout: { family: "shortBack", byFile: false },
-        stagger: [0, 1],
-    });
-    expect(copy.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(copy.updated_at).toBe(copy.created_at);
-
-    // Another machine: my library doesn't have it, the show's copy does
-    await page.evaluate(() => localStorage.removeItem("openmarch:savedShapes"));
-    await page.reload();
-    await waitForField(page);
-    await page.getByTestId("shape-library-tab").click();
-    const row = page.getByTestId(`shape-library-row-${copy.id}`);
-    await expect(row).toContainText("Opener block");
-    await expect(row).toContainText("this show only");
-    const shown = page.getByTestId(`shape-library-description-${copy.id}`);
-    await expect(shown).toHaveText(description);
-    await shown.hover();
-    await expect(page.getByRole("tooltip")).toContainText(description);
-    await page.mouse.move(5, 5);
-
-    // Taken into my library, it keeps the description and dates
-    await page.getByTestId(`shape-library-add-${copy.id}`).click();
-    await expect(row).not.toContainText("this show only");
-    const library = await page.evaluate(() =>
-        JSON.parse(localStorage.getItem("openmarch:savedShapes") ?? "[]"),
-    );
-    expect(library).toEqual([
-        expect.objectContaining({
-            id: copy.id,
-            name: "Opener block",
-            description,
-            distribution: JSON.parse(copy.distribution!),
-            createdAt: copy.created_at,
-            updatedAt: copy.updated_at,
-        }),
-    ]);
-});
-
-// Another show, with my library from the show a shape was saved in: the
-// harness opens one show per test, so this show starts with the user's
-// library as the app keeps it (#353 "saved shapes appear in another show").
-const SAVED_ELSEWHERE = {
-    id: "0b6c1f4e-6f5d-4a0e-9a57-3f1f2f6b9b11",
-    name: "Wide box",
-    kind: "block",
-    kindVersion: 1,
-    intervals: { across: 2.5, deep: 1.5 },
-};
-
-test.describe("another show, with a shape saved in my library", () => {
-    test.use({
-        initScript: `localStorage.setItem("openmarch:savedShapes", ${JSON.stringify(
-            JSON.stringify([SAVED_ELSEWHERE]),
-        )})`,
-    });
-
-    test("change: the library lists my saved shape, and placing it from there gives this show its own copy", async ({
-        show,
-    }) => {
-        const { page } = show;
-        const { id } = SAVED_ELSEWHERE;
-        expect(await show.query("SELECT id FROM saved_shapes")).toEqual([]);
-
-        await page.getByTestId("shape-library-tab").click();
-        const row = page.getByTestId(`shape-library-row-${id}`);
-        await expect(row).toContainText("Wide box");
-        await expect(row).toContainText("Box · 2½ × 1½ apart");
-        await expect(row).not.toContainText("this show only");
-
-        await selectAll(page);
-        await page.getByTestId(`shape-library-pick-${id}`).click();
-        await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
-        const grid = await fieldGrid(show);
-        const S = grid.pixelsPerStep;
-        const cf = grid.centerFront;
-        await drag(
-            page,
-            await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
-            await toScreen(page, { x: cf.x - 5 * S, y: cf.y - 19 * S }),
-        );
-        await expect.poll(() => readout(page)).toMatch(/ · 2½ × 1½ steps$/);
-        await page.keyboard.press("Enter");
-        await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
-
-        await expect
-            .poll(() =>
-                show.query(
-                    "SELECT id, name, kind, intervals FROM saved_shapes",
-                ),
-            )
-            .toEqual([
-                {
-                    id,
-                    name: "Wide box",
-                    kind: "block",
-                    intervals: JSON.stringify(SAVED_ELSEWHERE.intervals),
-                },
-            ]);
     });
 });
 

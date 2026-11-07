@@ -9,7 +9,6 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import {
     startFlagLevelsDrawAnything,
     type StartFlagLevels,
@@ -19,7 +18,6 @@ import {
     resolverSpans,
     useTimelineResolverStore,
 } from "@/timeline/timelineStore";
-import { useKeptAssignmentsStore } from "@/timeline/useKeepLaterPages";
 import {
     levelDraws,
     planStartFlagMarcher,
@@ -35,10 +33,10 @@ const sameDeps = (a: readonly unknown[], b: readonly unknown[] | null) =>
     a.every((d, i) => Object.is(d, b[i]));
 
 /**
- * Each marcher's dot (and route, with its squares) kept per resolver version, window, warnings
- * and kept markers, so changing the selection or the levels only samples the marchers that
- * weren't sampled yet. A marcher's Set beats (for its route squares) are kept per resolver
- * version and kept markers, so moving the window doesn't work them out again.
+ * Each marcher's dot (and route, with its squares) kept per resolver version, window and
+ * warnings, so changing the selection or the levels only samples the marchers that weren't
+ * sampled yet. A marcher's Set beats (for its route squares) are kept per resolver version, so
+ * moving the window doesn't work them out again.
  */
 class StartFlagPieces {
     private context: readonly unknown[] | null = null;
@@ -52,13 +50,11 @@ class StartFlagPieces {
         marcherIds: readonly number[];
         selectedIds: ReadonlySet<number>;
         levels: StartFlagLevels;
-        /** The kept assignments' ids: a kept spot isn't set (`marcherSetBeats`) */
-        kept: ReadonlySet<number>;
         /** Dots only: no route is sampled (a scrub or a line drag) */
         dotsOnly: boolean;
     }): StartFlagOverlay {
-        const { window, levels, selectedIds, kept } = input;
-        const setBeatsContext = [window.resolver, input.version, kept];
+        const { window, levels, selectedIds } = input;
+        const setBeatsContext = [window.resolver, input.version];
         if (!sameDeps(setBeatsContext, this.setBeatsContext)) {
             this.setBeats.clear();
             this.setBeatsContext = setBeatsContext;
@@ -90,7 +86,7 @@ class StartFlagPieces {
                     window,
                     marcherId,
                     withPath,
-                    squares ? this.setBeatsOf(window, marcherId, kept) : null,
+                    squares ? this.setBeatsOf(window, marcherId) : null,
                 );
                 this.pieces.set(key, piece);
             }
@@ -102,11 +98,10 @@ class StartFlagPieces {
     private setBeatsOf(
         { resolver }: { readonly resolver: Resolver },
         marcherId: number,
-        kept: ReadonlySet<number>,
     ): readonly number[] {
         let beats = this.setBeats.get(marcherId);
         if (!beats) {
-            beats = marcherSetBeats(resolverSpans(resolver, marcherId), kept);
+            beats = marcherSetBeats(resolverSpans(resolver, marcherId));
             this.setBeats.set(marcherId, beats);
         }
         return beats;
@@ -132,7 +127,7 @@ function useStartFlagWindow() {
 /**
  * Start flag positions on the field (fork #331): the dots and paths plans for the edit window at
  * the levels in effect (`useStartFlagLevelsInEffect`), or `null` when nothing is drawn: every
- * level off, isolating (isolation draws its own route and ghosts), the Visuals workspace, at home,
+ * level off, isolating (isolation draws its own route and ghosts), at home,
  * before the resolver is ready, or when the beat the canvas shows isn't after the start flag.
  *
  * The window runs from the start flag to the beat the canvas shows: the cursor (a held preview
@@ -166,9 +161,9 @@ export function useStartFlagOverlay({
     const version = useTimelineResolverStore((s) => s.version);
     const { inRange, fromBeat, toBeat, gesture } = useStartFlagWindow();
     const isolating = useTimelineSelectionStore((s) => s.isolation !== null);
-    const visuals = useIsVisualsView();
+    // Tempo mode hides the start flag, so nothing is drawn from it
+    const startHidden = useTimelineSelectionStore((s) => s.startHidden);
     const levels = useStartFlagLevelsInEffect();
-    const kept = useKeptAssignmentsStore((s) => s.ids);
     const stepSizeWarnings = useUiSettingsStore(
         (s) => s.uiSettings.stepSizeWarnings,
     );
@@ -179,7 +174,7 @@ export function useStartFlagOverlay({
     const shown =
         enabled &&
         !isolating &&
-        !visuals &&
+        !startHidden &&
         startFlagLevelsDrawAnything(levels) &&
         inRange &&
         resolver !== null &&
@@ -202,7 +197,6 @@ export function useStartFlagOverlay({
                       marcherIds: marcherIds!,
                       selectedIds: selected,
                       levels,
-                      kept,
                       dotsOnly: gesture,
                   })
                 : null,
@@ -217,7 +211,6 @@ export function useStartFlagOverlay({
             fromBeat,
             toBeat,
             levels,
-            kept,
             gesture,
             stepSizeWarnings,
             fieldProperties,

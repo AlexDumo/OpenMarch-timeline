@@ -6,9 +6,10 @@ import type {
     TimelineKeyframeMenu,
 } from "./TimelineKeyframes";
 import type { TimelineClipPeel } from "./TimelineClipPeel";
+import type { SelectionHeldBar } from "@/timeline/timelineHeldBars";
 import type { ReactNode } from "react";
 import type {
-    TimelineAddMarchersMenu,
+    TimelinePageMenu,
     TimelineMoveCommands,
     TimelineMenuTarget,
 } from "./TimelineRangeMenu";
@@ -266,7 +267,6 @@ export interface TimelineInteractionProps {
     readonly returnBeat?: BeatPosition;
     readonly isPlaying: boolean;
     readonly selection?: TimelineSelection;
-    readonly selectedTarget?: TimelineTarget | null;
     readonly onSeek?: TimelineSeek;
     readonly onPlayingChange?: (isPlaying: boolean) => void;
     /** Looping is on, so Play loops (UI-17) */
@@ -275,11 +275,12 @@ export interface TimelineInteractionProps {
     readonly onPlayFromPlayhead?: () => void;
     /** Alt+click on Play (Alt+Space): plays on from the start flag (Expert, UI-26) */
     readonly onPlayOn?: () => void;
+    /** Tempo mode: Play's one action, as its tooltip names it */
+    readonly playOnly?: string;
     readonly onNavigate?: (direction: TimelineNavigation) => void;
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
-    readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
-    /** The right-click menu's **Add selected marchers** (UI-9, P8.14), in view beats here */
-    readonly addSelectedMarchers?: TimelineAddMarchersMenu<TimelineMenuTarget>;
+    /** The right-click menu's page-box entries (UI-9), in view beats here */
+    readonly pageMenu?: TimelinePageMenu;
     /** A clip's move commands (UI-14), by track id here: its menu, ⋯ button and keys */
     readonly moveCommands?: TimelineMoveCommands<TimelineTrackId>;
     /**
@@ -313,6 +314,8 @@ export interface TimelineScaleProps {
     /** The zoom was fitted to the show last time (UI-12): the timeline opens fitted */
     readonly zoomFitted?: boolean;
     readonly onZoomFittedChange?: (fitted: boolean) => void;
+    /** Zoom out and Zoom in buttons beside Fit, for mouse users (tempo mode) */
+    readonly zoomButtons?: boolean;
 }
 
 export interface TimelineCommonProps
@@ -322,7 +325,7 @@ export interface TimelineCommonProps
     /** The playback clock shown in the transport. The app passes its audio clock; stories pass none. */
     readonly transportClock?: ReactNode;
     /**
-     * A timeline that only navigates (Visuals mode, performer-behavior.md section 7.1): page
+     * A timeline that only navigates (Preview): page
      * boxes select and the ruler seeks, but nothing draws a range. The owner passes no editing
      * commands
      */
@@ -332,7 +335,7 @@ export interface TimelineCommonProps
      * so it shows even where nothing moves it by hand
      */
     readonly startFlagBeat?: number;
-    /** Lanes drawn where the clip rows go, under the waveform (Visuals mode's cue lanes) */
+    /** Lanes drawn where the clip rows go, under the waveform (tempo mode's lanes) */
     readonly band?: TimelineBand;
     /** Extra transport controls, such as volume, the metronome and fullscreen */
     readonly transportAccessories?: ReactNode;
@@ -356,6 +359,8 @@ export interface TimelineCommonProps
     readonly keyframes?: readonly TimelineKeyframe[];
     /** #306: a keyframe diamond's right-click Unset actions, by view beat; without it, no menu */
     readonly keyframeMenu?: TimelineKeyframeMenu;
+    /** #472: the selected marchers' Held holds, view beats; none without a selection */
+    readonly heldBars?: readonly SelectionHeldBar[];
     /** The chains on the page boxes (UI-18 keep later pages); none without a selection */
     readonly keepChains?: PageKeepChains;
     /**
@@ -372,11 +377,13 @@ export interface TimelineCommonProps
     readonly expertMarks?: ReadonlyMap<string | number, number>;
 }
 
-/** A mid-page position on a Basic page box (UI-19): its beat and its count in words */
+/** A mid-page position on a Basic page box (UI-19): its beat, and its count on its page */
 export interface TimelineBasicPoint {
     readonly beat: number;
-    /** "count 4 of page 2" */
-    readonly label: string;
+    /** Its count on its page, from 1 */
+    readonly count: number;
+    /** Its page's name, "2" */
+    readonly page: string;
 }
 
 export interface TimelineRangeChange extends TimelineBeatRange {
@@ -389,8 +396,3 @@ export interface TimelineRangeChange extends TimelineBeatRange {
  * failed). It never rejects. Nothing (`void`) leaves the preview until the new range arrives.
  */
 export type TimelineRangeCommitResult = Promise<boolean> | void;
-
-export interface TimelineCreateTrackRequest {
-    readonly target: TimelineTarget;
-    readonly range: TimelineBeatRange;
-}

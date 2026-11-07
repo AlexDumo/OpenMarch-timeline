@@ -15,9 +15,10 @@ import {
     type TimelineSelectionState,
 } from "@/stores/TimelineSelectionStore";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import type { TimelineText } from "@/timeline/timelineText";
+import { translateTimelineText } from "@/timeline/translateTimelineText";
 import {
     isPageTimeline,
-    moveLabel,
     moveLabels,
     pageTimelineOver as storedPageTimelineOver,
 } from "@/timeline/timelineViewModel";
@@ -38,13 +39,11 @@ import type {
 export const pauseToSplit = () =>
     tolgee.t("timeline.split.paused", "Pause to split or merge moves.");
 
-/** "Page 3", or "this page" / "This page" when it has no name. */
-const pageWords = (name: string | undefined, start: "lower" | "upper") =>
+/** "Page 3", or "this page" when it has no name: a page's move, named inside a merge entry. */
+const pageWords = (name: string | undefined) =>
     name !== undefined
         ? tolgee.t("timeline.merge.page", "Page {name}", { name })
-        : start === "lower"
-          ? tolgee.t("timeline.merge.thisPage", "this page")
-          : tolgee.t("timeline.merge.thisPageStart", "This page");
+        : tolgee.t("timeline.merge.thisPage", "this page");
 
 /** What the entries read: the store's stored timelines and page boxes, and who is selected. */
 export interface SplitMergeContext {
@@ -85,11 +84,12 @@ export function timelineLabel(ctx: SplitMergeContext, id: number): string {
     if (!t) return tolgee.t("timeline.merge.thisMove", "this move");
     if (isPage(ctx, t)) {
         const name = boxOf(ctx, t)?.name;
-        return pageWords(name, "lower");
+        return pageWords(name);
     }
     return (
         moveLabels(ctx.storedTimelines, ctx.pageBoxes).get(id) ??
-        moveLabel({ name: t.name })
+        t.name ??
+        tolgee.t("timeline.moveName.unnamed")
     );
 }
 
@@ -114,14 +114,20 @@ export const selectedMembers = (
     return t ? chosenIn(ctx, t) : [];
 };
 
+const translateBlocker = (blocker: TimelineText | null) =>
+    blocker && translateTimelineText(blocker);
+
 /** Why splitting the selected marchers off `t` can't run, or `null` (the menus' and the drag's). */
 const splitBlocker = (ctx: SplitMergeContext, t: StoredTimelineMembership) =>
     ctx.isPlaying
         ? pauseToSplit()
-        : splitMembershipBlocker(
-              t.marcherIds,
-              ctx.selectedMarcherIds,
-              timelineLabel(ctx, t.id),
+        : translateBlocker(
+              splitMembershipBlocker(
+                  t.marcherIds,
+                  ctx.selectedMarcherIds,
+                  timelineLabel(ctx, t.id),
+                  { pageMove: isPage(ctx, t) },
+              ),
           );
 
 /** **Split N selected into new move** on move `timelineId`: its words and why it can't run. */
@@ -136,7 +142,7 @@ export function splitEntryState(
         n > 0
             ? tolgee.t(
                   "timeline.split.menu",
-                  "Split {count} selected into new move",
+                  "{count, plural, one {Split # selected into new move} other {Split # selected into new move}}",
                   { count: n },
               )
             : tolgee.t(
@@ -163,7 +169,7 @@ export function mergeBlocker(
     if (both.length > 0)
         return tolgee.t(
             "timeline.merge.inBoth",
-            "{count, plural, one {A marcher is} other {# marchers are}} in both moves, so merging would give them two moves at once.",
+            "{count, plural, =1 {A marcher is} other {# marchers are}} in both moves, so merging would give them two moves at once.",
             { count: both.length },
         );
     return null;
@@ -310,7 +316,18 @@ export function pageMenuEntries(
 ): TimelineMenuEntry[] {
     if (!range) return [];
     const page = pageTimelineOver(ctx, range);
-    if (!page)
+    // Its timeline is gone, or left empty with a move split off it whole (#581). Only a move over
+    // the box's counts is a clip to split instead
+    const clipOver =
+        page !== null &&
+        ctx.storedTimelines.some(
+            (t) =>
+                t.id !== page.id &&
+                t.start === range.start &&
+                t.end === range.end &&
+                t.marcherIds.size > 0,
+        );
+    if (!page || page.marcherIds.size === 0)
         return ctx.selectedMarcherIds.size === 0
             ? []
             : [
@@ -321,10 +338,15 @@ export function pageMenuEntries(
                           "timeline.split.menuNone",
                           "Split selected into new move",
                       ),
-                      disabledReason: tolgee.t(
-                          "timeline.split.nothingOnPage",
-                          "Nothing moves on this page yet, so there is nothing to split.",
-                      ),
+                      disabledReason: clipOver
+                          ? tolgee.t(
+                                "timeline.split.pageSplitOff",
+                                "This page has no move of its own. To split a move over it, use the move's clip.",
+                            )
+                          : tolgee.t(
+                                "timeline.split.nothingOnPage",
+                                "Nothing moves on this page yet, so there is nothing to split.",
+                            ),
                       onSelect: () => {},
                   },
               ];
@@ -374,11 +396,17 @@ export function dropTargetTimeline(
     if (page) return { id: page.id };
     const name = range ? boxOf(ctx, range)?.name : undefined;
     return {
-        missing: tolgee.t(
-            "timeline.merge.noPageMove",
-            "{page} has no move of its own to merge into.",
-            { page: pageWords(name, "upper") },
-        ),
+        missing:
+            name !== undefined
+                ? tolgee.t(
+                      "timeline.merge.noPageMove",
+                      "Page {page} has no move of its own to merge into.",
+                      { page: name },
+                  )
+                : tolgee.t(
+                      "timeline.merge.noPageMoveUnnamed",
+                      "This page has no move of its own to merge into.",
+                  ),
     };
 }
 

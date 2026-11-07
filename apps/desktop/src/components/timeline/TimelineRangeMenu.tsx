@@ -12,40 +12,40 @@ import { TooltipClassName } from "@openmarch/ui";
 import {
     CursorTextIcon,
     DiamondIcon,
+    EraserIcon,
+    PauseIcon,
     FlagIcon,
-    LinkBreakIcon,
-    LinkSimpleIcon,
     ArrowsMergeIcon,
     ArrowsSplitIcon,
     PencilSimpleIcon,
     TrashIcon,
-    UserPlusIcon,
+    UsersThreeIcon,
     ScissorsIcon,
     QuestionIcon,
+    CheckIcon,
 } from "@phosphor-icons/react";
 import tolgee from "@/global/singletons/Tolgee";
+import { holdTerms } from "@/timeline/holdTerms";
+import {
+    type HoldCommand,
+    type HoldEntryState,
+} from "@/timeline/holdMenuState";
+import { useTranslate } from "@tolgee/react";
 import type { TimelineBeatRange } from "./TimelineViewModel";
+import {
+    MENU_CONTENT_CLASS,
+    MENU_ITEM_CLASS,
+    MENU_SEPARATOR_CLASS,
+} from "@/components/ui/popupClasses";
 
 /**
- * The timeline's right-click menu (ui.md UI-9 Adding marchers, P8.14). It offers **Add selected
- * marchers** on a page box, a clip (its timeline) or a dragged range, for the range under the
- * pointer. Opening it doesn't change the timeline selection: the marchers to add are picked first,
- * where they can be selected. On a page box it also offers **Delete page** (UI-9 Deleting a flag,
- * P8.15), which keeps every later page's look, and next to it **Delete page and its moves**
- * (defined coordinates, owner decision 3). On a clip it offers the move's entries (UI-14):
- * **Edit move**, **Rename move…** and **Delete move**, the same entries as the selected clip's ⋯
- * button.
+ * The timeline's right-click menu (ui.md UI-9, P8.14). On a page box it offers **Delete page**
+ * (UI-9 Deleting a flag, P8.15), which keeps every later page's look, and next to it **Delete page
+ * and its moves** (defined coordinates, owner decision 3), plus the hold and subset entries. On a
+ * clip it offers the move's entries (UI-14): **Edit move**, **Rename move…** and **Delete move**,
+ * the same entries as the selected clip's ⋯ button. A dragged range with none of those opens
+ * nothing.
  */
-
-/**
- * The menus' entry style; `data-[disabled]` dims a Radix-disabled one (Keep here, Follow again).
- * Entries with a reason dim themselves (`MenuItemWithReason`).
- */
-export const TIMELINE_MENU_ITEM_CLASS =
-    "rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50";
-
-/** A shortcut after an entry's words, as the transport's popover shows Ctrl+M */
-const SHORTCUT_CLASS = "text-text-subtitle ml-auto pl-16 font-mono text-[11px]";
 
 /**
  * A small switch in front of a checkbox entry's words, drawn from the entry's `data-state`. It's
@@ -71,14 +71,16 @@ export const TimelineMenuClose = createContext<(() => void) | null>(null);
  * menu's arrow-key order, as menus keep disabled entries, but does nothing: its words dim and a
  * **?** at its end opens the reason beside it while the entry is highlighted (hover or keys) or
  * pressed (touch). Screen readers hear the reason as the entry's description. Escape closes the
- * tip and the menu together (`TimelineMenuClose`).
+ * tip and the menu together (`TimelineMenuClose`). With `checked`, it's one of a set of answers
+ * (`menuitemradio`), and says whether it's the one chosen whether or not it's available.
  */
-function MenuItemWithReason({
+export function MenuItemWithReason({
     testId,
     reason,
     reasonTestId,
     onSelect,
-    className = TIMELINE_MENU_ITEM_CLASS,
+    className = MENU_ITEM_CLASS,
+    checked,
     children,
 }: {
     testId: string;
@@ -86,6 +88,7 @@ function MenuItemWithReason({
     reasonTestId: string;
     onSelect: () => void;
     className?: string;
+    checked?: boolean;
     children: ReactNode;
 }) {
     const reasonId = useId();
@@ -99,6 +102,9 @@ function MenuItemWithReason({
         <>
             <DropdownMenu.Item
                 data-testid={testId}
+                {...(checked === undefined
+                    ? {}
+                    : { role: "menuitemradio", "aria-checked": checked })}
                 aria-disabled={unavailable ? "true" : undefined}
                 aria-describedby={unavailable ? reasonId : undefined}
                 onSelect={(event) => {
@@ -141,7 +147,7 @@ function MenuItemWithReason({
                                                 ? closeMenu()
                                                 : setOpen(false)
                                         }
-                                        className={`${TooltipClassName} max-w-[240px] text-[12px]`}
+                                        className={`${TooltipClassName} text-body max-w-[240px]`}
                                     >
                                         {reason}
                                     </Tooltip.Content>
@@ -162,17 +168,60 @@ function MenuItemWithReason({
     );
 }
 
-/** The entry's key, right-aligned and quiet; nothing without one. */
-const MenuShortcut = ({ keys }: { keys?: string }) =>
-    keys ? (
-        <span className={SHORTCUT_CLASS} data-testid="timeline-menu-shortcut">
-            {keys}
-        </span>
-    ) : null;
+/**
+ * A hold command's page box entry (holds), by its name. When every selected
+ * marcher is already in the state it sets, it's checked and does nothing (a disabled checkbox
+ * entry with a check in place of its icon); otherwise it's unavailable with its reason, or runs.
+ */
+function HoldCommandItem({
+    command,
+    testId,
+    menu,
+    pageId,
+    reason,
+    icon,
+    name,
+}: {
+    command: HoldCommand;
+    testId: string;
+    menu: TimelinePageCommandMenu;
+    pageId: string | number;
+    reason: string | null;
+    icon: ReactNode;
+    /** The entry's name */
+    name: string;
+}) {
+    const entry = menu.entryOn?.(pageId);
+    const label = name;
+    if (entry?.checked)
+        return (
+            <DropdownMenu.CheckboxItem
+                data-testid={testId}
+                checked
+                disabled
+                className={MENU_ITEM_CLASS}
+            >
+                <DropdownMenu.ItemIndicator className="flex">
+                    <CheckIcon size={14} />
+                </DropdownMenu.ItemIndicator>
+                {label}
+            </DropdownMenu.CheckboxItem>
+        );
+    return (
+        <MenuItemWithReason
+            testId={testId}
+            reason={reason}
+            reasonTestId={`${testId}-reason`}
+            onSelect={() => menu.onSet(pageId)}
+        >
+            {icon}
+            {label}
+        </MenuItemWithReason>
+    );
+}
 
 /** The menus' panel style */
-export const TIMELINE_MENU_CONTENT_CLASS =
-    "bg-modal text-text rounded-6 border-stroke shadow-modal z-50 flex min-w-[180px] flex-col gap-4 border p-4 backdrop-blur-md";
+export const TIMELINE_MENU_CONTENT_CLASS = `${MENU_CONTENT_CLASS} min-w-180`;
 
 /**
  * For a menu's content: React events bubble out of a portal through the component tree, so a
@@ -242,6 +291,8 @@ export interface TimelineMoveMenuActions {
     readonly onEdit: () => void;
     readonly onRename: () => void;
     readonly onDelete: () => void;
+    /** **Select marchers**: selects the move's marchers; without it the entry isn't offered */
+    readonly onSelectMarchers?: () => void;
     /** **Split at playhead** (UI-27); without it the entry isn't offered */
     readonly onSplit?: () => void;
     /** Why **Split at playhead** is unavailable now (read when the menu renders), or null */
@@ -261,6 +312,8 @@ export interface TimelineMoveCommands<Id = number> {
     readonly onEdit: (id: Id) => void;
     readonly onRename: (id: Id, name: string) => void;
     readonly onDelete: (id: Id) => void;
+    /** **Select marchers**; without it the entry isn't offered */
+    readonly onSelectMarchers?: (id: Id) => void;
     /** **Split at playhead** (UI-27); without it the entry isn't offered */
     readonly onSplit?: (id: Id) => void;
     /** Why **Split at playhead** is unavailable for the move now, or null */
@@ -273,7 +326,7 @@ export interface TimelineMoveCommands<Id = number> {
 
 /**
  * A move's entries (UI-14), for the clip's right-click menu and its ⋯ button: **Edit move**,
- * **Rename move…**, then **Delete move**, red and last. Editing and deleting wait while playing,
+ * **Select marchers**, **Rename move…**, then **Delete move**, red and last. Editing and deleting wait while playing,
  * each with the reason behind a **?**; renaming only changes a label, so it doesn't.
  */
 export function TimelineMoveMenuItems({
@@ -281,6 +334,7 @@ export function TimelineMoveMenuItems({
 }: {
     actions: TimelineMoveMenuActions;
 }) {
+    const { t } = useTranslate();
     const reason = actions.disabledReason ?? null;
     // Read as the menu renders: the playhead may have moved since the clip's actions were made.
     // Its own reason first, so playing says "Pause to split a move."
@@ -297,15 +351,25 @@ export function TimelineMoveMenuItems({
                 onSelect={actions.onEdit}
             >
                 <PencilSimpleIcon size={14} />
-                Edit move
+                {t("timeline.moveMenu.edit")}
             </MenuItemWithReason>
+            {actions.onSelectMarchers && (
+                <DropdownMenu.Item
+                    data-testid="timeline-move-menu-select-marchers"
+                    onSelect={actions.onSelectMarchers}
+                    className={MENU_ITEM_CLASS}
+                >
+                    <UsersThreeIcon size={14} />
+                    {t("timeline.moveMenu.selectMarchers")}
+                </DropdownMenu.Item>
+            )}
             <DropdownMenu.Item
                 data-testid="timeline-move-menu-rename"
                 onSelect={actions.onRename}
-                className={TIMELINE_MENU_ITEM_CLASS}
+                className={MENU_ITEM_CLASS}
             >
                 <CursorTextIcon size={14} />
-                Rename move…
+                {t("timeline.moveMenu.rename")}
             </DropdownMenu.Item>
             {actions.onSplit && (
                 <MenuItemWithReason
@@ -315,39 +379,35 @@ export function TimelineMoveMenuItems({
                     onSelect={actions.onSplit}
                 >
                     <ScissorsIcon size={14} />
-                    Split at playhead
+                    {t("timeline.moveMenu.splitAtPlayhead")}
                 </MenuItemWithReason>
             )}
             {extra.length > 0 && (
                 <>
-                    <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                    <DropdownMenu.Separator className={MENU_SEPARATOR_CLASS} />
                     <TimelineMenuEntries entries={extra} />
                 </>
             )}
-            <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+            <DropdownMenu.Separator className={MENU_SEPARATOR_CLASS} />
             <MenuItemWithReason
                 testId="timeline-move-menu-delete"
                 reason={reason}
                 reasonTestId="timeline-move-menu-delete-reason"
                 onSelect={actions.onDelete}
-                className={`${TIMELINE_MENU_ITEM_CLASS} text-red`}
+                className={`${MENU_ITEM_CLASS} text-red`}
             >
                 <TrashIcon size={14} />
-                Delete move
+                {t("timeline.moveMenu.delete")}
             </MenuItemWithReason>
         </>
     );
 }
 
 /**
- * The menu's command. `Timeline` takes it in spec beats; inside, it gets `TimelineMenuTarget`s
- * (`T`), whose ranges are view beats.
+ * The page-box side of the timeline's right-click menu. `Timeline` builds it from its page
+ * commands; ranges are view beats on the surface.
  */
-export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
-    /** **Add selected marchers**; without it, the menu has no add entry */
-    readonly onAdd?: (target: T) => void;
-    /** Why the command is unavailable (for example, no marchers are selected), or null */
-    readonly disabledReason?: string | null;
+export interface TimelinePageMenu {
     /**
      * **Delete page** on a page box (UI-9 Deleting a flag, P8.15): the page whose flag goes.
      * Without it, the menu has no delete entry.
@@ -359,14 +419,19 @@ export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
      */
     readonly onDeleteWithMoves?: (pageId: string | number) => void;
     /**
-     * **Keep selected marchers here** and **Let selected marchers follow again** on a page box
-     * (UI-18 keep later pages), above the deletes. Without it, the menu has no such entries.
-     */
-    readonly keepHere?: TimelineKeepHereMenu;
-    /**
      * **Set as shown** on a page box (holds, fork #466). Without it, the menu has no such entry.
      */
     readonly setAsShown?: TimelineSetAsShownMenu;
+    /**
+     * **Hold from previous page** on a page box (holds, fork #472). Without it, the menu has no
+     * such entry.
+     */
+    readonly holdFromPrevious?: TimelinePageCommandMenu;
+    /**
+     * **Clear Page N** on a page box, and **Clear Page N, Pages N–M move back too** where later
+     * pages would (#573). Without it, the menu has no such entries.
+     */
+    readonly clearPage?: TimelineClearPageMenu;
     /**
      * **Subset** on a page box (UI-9): a switch that shows whether the page is a subset, and
      * flips it. Without it, the menu has no such entry.
@@ -381,32 +446,44 @@ export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
     ) => readonly TimelineMenuEntry[];
 }
 
-/** The page box menu's keep entries (UI-18 keep later pages), by page id. */
-export interface TimelineKeepHereMenu {
+/** A page box menu entry for the selected marchers (holds), by page id. */
+export interface TimelinePageCommandMenu {
     /**
-     * Whether some selected marchers follow on the page (Keep applies) or were kept there
-     * (Follow again applies); null when no marchers are selected, so neither entry shows
-     */
-    readonly stateFor: (pageId: string | number) => {
-        readonly canKeep: boolean;
-        readonly canFollow: boolean;
-        /** The key that runs the entry from here (**K**), shown after it */
-        readonly keepShortcut?: string;
-        readonly followShortcut?: string;
-    } | null;
-    readonly onKeep: (pageId: string | number) => void;
-    readonly onFollow: (pageId: string | number) => void;
-}
-
-/** The page box menu's **Set as shown** entry (holds, fork #466), by page id. */
-export interface TimelineSetAsShownMenu {
-    /**
-     * Why the entry can't run on the page (no selected marcher is Not set there), or null when it
-     * can; undefined when no marchers are selected, so the entry doesn't show
+     * Why the entry can't run on the page, or null when it can; undefined when no marchers are
+     * selected, so the entry doesn't show
      */
     readonly reasonFor: (pageId: string | number) => string | null | undefined;
     readonly onSet: (pageId: string | number) => void;
+    /**
+     * What the entry would do for the selection on the page (`holdEntryStates`): checked when it
+     * would change nobody because every selected marcher is already in its state, and how many it
+     * would change for its label
+     */
+    readonly entryOn?: (pageId: string | number) => HoldEntryState | undefined;
 }
+
+/** The page box menu's **Clear Page N** entries (#573), by page id. */
+export interface TimelineClearPageMenu {
+    /**
+     * The entries' labels on the page, read when its menu opens; undefined for none (home).
+     * `checked` when every selected marcher is already Not defined there (`holdEntryStates`): the
+     * Clear Page N entry shows ticked and off, and the follow-back entry doesn't show.
+     */
+    readonly labelsFor: (pageId: string | number) =>
+        | {
+              clear: string;
+              followBack: string | null;
+              checked?: boolean;
+          }
+        | undefined;
+    readonly onClear: (pageId: string | number, followBack: boolean) => void;
+}
+
+/**
+ * The page box menu's **Set as shown** entry (holds, fork #466), by page id: unavailable when no
+ * selected marcher is Not set there.
+ */
+export type TimelineSetAsShownMenu = TimelinePageCommandMenu;
 
 /**
  * What was right-clicked, in view beats. A clip names its track, so `Timeline` can send the
@@ -474,7 +551,7 @@ export function useTimelineRangeMenu({
     movesFor,
     resolveRange,
 }: {
-    menu?: TimelineAddMarchersMenu<TimelineMenuTarget>;
+    menu?: TimelinePageMenu;
     /** A clip's move entries (UI-14) by its track id, or null where it has none */
     movesFor?: (trackId: string) => TimelineMoveMenuActions | null;
     resolveRange: (event: MouseEvent<HTMLElement>) => TimelineMenuTarget | null;
@@ -495,28 +572,32 @@ export function useTimelineRangeMenu({
         if (!menu && !movesFor) return;
         const target = resolveRange(event);
         if (!target) return;
-        // Nothing to offer here: no add, no page box to delete the flag of, and no move
+        // Nothing to offer here: no page-box entry, and no move
         const canDelete =
             (menu?.onDeleteFlag !== undefined ||
                 menu?.onDeleteWithMoves !== undefined ||
-                menu?.keepHere !== undefined ||
                 menu?.setAsShown !== undefined ||
+                menu?.holdFromPrevious !== undefined ||
+                menu?.clearPage !== undefined ||
                 menu?.subset !== undefined ||
                 menu?.extraFor !== undefined) &&
             target.pageId !== undefined;
-        if (!menu?.onAdd && !canDelete && !movesOf(target)) return;
+        if (!canDelete && !movesOf(target)) return;
         event.preventDefault();
         setOpen({ target, x: event.clientX, y: event.clientY });
     };
-    const disabledReason = menu?.disabledReason ?? null;
     const moves = open ? movesOf(open.target) : null;
-    const keepState =
-        open && menu?.keepHere && open.target.pageId !== undefined
-            ? menu.keepHere.stateFor(open.target.pageId)
-            : null;
     const setAsShownReason =
         open && menu?.setAsShown && open.target.pageId !== undefined
             ? menu.setAsShown.reasonFor(open.target.pageId)
+            : undefined;
+    const holdReason =
+        open && menu?.holdFromPrevious && open.target.pageId !== undefined
+            ? menu.holdFromPrevious.reasonFor(open.target.pageId)
+            : undefined;
+    const clearLabels =
+        open && menu?.clearPage && open.target.pageId !== undefined
+            ? menu.clearPage.labelsFor(open.target.pageId)
             : undefined;
     const pageExtra =
         open && menu?.extraFor && open.target.pageId !== undefined
@@ -548,89 +629,106 @@ export function useTimelineRangeMenu({
                     className={TIMELINE_MENU_CONTENT_CLASS}
                 >
                     <TimelineMenuClose.Provider value={() => setOpen(null)}>
-                        {menu?.onAdd && (
-                            <MenuItemWithReason
-                                testId="timeline-range-menu-add"
-                                reason={disabledReason}
-                                reasonTestId="timeline-range-menu-reason"
-                                onSelect={() => menu.onAdd?.(open.target)}
-                            >
-                                <UserPlusIcon size={14} />
-                                Add selected marchers
-                            </MenuItemWithReason>
-                        )}
                         {pageExtra.length > 0 && (
                             <>
                                 <TimelineMenuEntries entries={pageExtra} />
-                                <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                                <DropdownMenu.Separator
+                                    className={MENU_SEPARATOR_CLASS}
+                                />
                             </>
                         )}
                         {setAsShownReason !== undefined && (
                             <>
-                                <MenuItemWithReason
+                                <HoldCommandItem
+                                    command="defineAsShown"
                                     testId="timeline-range-menu-set-as-shown"
+                                    menu={menu!.setAsShown!}
+                                    pageId={open.target.pageId!}
                                     reason={setAsShownReason}
-                                    reasonTestId="timeline-range-menu-set-as-shown-reason"
-                                    onSelect={() =>
-                                        menu?.setAsShown?.onSet(
-                                            open.target.pageId!,
-                                        )
-                                    }
-                                >
-                                    <DiamondIcon size={14} />
-                                    {tolgee.t(
+                                    icon={<DiamondIcon size={14} />}
+                                    name={tolgee.t(
                                         "timeline.rangeMenu.setAsShown",
-                                        "Set as shown",
+                                        "{defineAsShown}",
+                                        holdTerms(),
                                     )}
-                                </MenuItemWithReason>
-                                {!keepState && (
-                                    <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                                />
+                                {holdReason === undefined && (
+                                    <DropdownMenu.Separator
+                                        className={MENU_SEPARATOR_CLASS}
+                                    />
                                 )}
                             </>
                         )}
-                        {keepState && (
+                        {holdReason !== undefined && (
                             <>
-                                <DropdownMenu.Item
-                                    data-testid="timeline-range-menu-keep-here"
-                                    disabled={!keepState.canKeep}
-                                    aria-keyshortcuts={keepState.keepShortcut}
-                                    onSelect={() =>
-                                        menu?.keepHere?.onKeep(
-                                            open.target.pageId!,
-                                        )
-                                    }
-                                    className={TIMELINE_MENU_ITEM_CLASS}
-                                >
-                                    <LinkBreakIcon size={14} />
-                                    {tolgee.t(
-                                        "timeline.rangeMenu.keepHere",
-                                        "Keep selected marchers here",
+                                <HoldCommandItem
+                                    command="holdFromPrevious"
+                                    testId="timeline-range-menu-hold-from-previous"
+                                    menu={menu!.holdFromPrevious!}
+                                    pageId={open.target.pageId!}
+                                    reason={holdReason}
+                                    icon={<PauseIcon size={14} />}
+                                    name={tolgee.t(
+                                        "timeline.rangeMenu.holdFromPrevious",
+                                        "{holdFromPrevious}",
+                                        holdTerms(),
                                     )}
-                                    <MenuShortcut
-                                        keys={keepState.keepShortcut}
+                                />
+                                {clearLabels === undefined && (
+                                    <DropdownMenu.Separator
+                                        className={MENU_SEPARATOR_CLASS}
                                     />
-                                </DropdownMenu.Item>
-                                <DropdownMenu.Item
-                                    data-testid="timeline-range-menu-follow-again"
-                                    disabled={!keepState.canFollow}
-                                    aria-keyshortcuts={keepState.followShortcut}
-                                    onSelect={() =>
-                                        menu?.keepHere?.onFollow(
-                                            open.target.pageId!,
-                                        )
-                                    }
-                                    className={TIMELINE_MENU_ITEM_CLASS}
-                                >
-                                    <LinkSimpleIcon size={14} />
-                                    {tolgee.t(
-                                        "timeline.rangeMenu.followAgain",
-                                        "Let selected marchers follow again",
+                                )}
+                            </>
+                        )}
+                        {clearLabels !== undefined && (
+                            <>
+                                {clearLabels.checked ? (
+                                    <DropdownMenu.CheckboxItem
+                                        data-testid="timeline-range-menu-clear-page"
+                                        checked
+                                        disabled
+                                        className={MENU_ITEM_CLASS}
+                                    >
+                                        <DropdownMenu.ItemIndicator className="flex">
+                                            <CheckIcon size={14} />
+                                        </DropdownMenu.ItemIndicator>
+                                        {clearLabels.clear}
+                                    </DropdownMenu.CheckboxItem>
+                                ) : (
+                                    <DropdownMenu.Item
+                                        data-testid="timeline-range-menu-clear-page"
+                                        className={MENU_ITEM_CLASS}
+                                        onSelect={() =>
+                                            menu?.clearPage?.onClear(
+                                                open.target.pageId!,
+                                                false,
+                                            )
+                                        }
+                                    >
+                                        <EraserIcon size={14} />
+                                        {clearLabels.clear}
+                                    </DropdownMenu.Item>
+                                )}
+                                {!clearLabels.checked &&
+                                    clearLabels.followBack !== null && (
+                                        <DropdownMenu.Item
+                                            data-testid="timeline-range-menu-clear-page-follow-back"
+                                            className={MENU_ITEM_CLASS}
+                                            onSelect={() =>
+                                                menu?.clearPage?.onClear(
+                                                    open.target.pageId!,
+                                                    true,
+                                                )
+                                            }
+                                        >
+                                            <EraserIcon size={14} />
+                                            {clearLabels.followBack}
+                                        </DropdownMenu.Item>
                                     )}
-                                    <MenuShortcut
-                                        keys={keepState.followShortcut}
-                                    />
-                                </DropdownMenu.Item>
-                                <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                                <DropdownMenu.Separator
+                                    className={MENU_SEPARATOR_CLASS}
+                                />
                             </>
                         )}
                         {menu?.subset && open.target.pageId !== undefined && (
@@ -646,7 +744,7 @@ export function useTimelineRangeMenu({
                                             checked,
                                         )
                                     }
-                                    className={`${TIMELINE_MENU_ITEM_CLASS} group`}
+                                    className={`${MENU_ITEM_CLASS} group`}
                                 >
                                     <MenuSwitch />
                                     {tolgee.t(
@@ -654,7 +752,9 @@ export function useTimelineRangeMenu({
                                         "Subset",
                                     )}
                                 </DropdownMenu.CheckboxItem>
-                                <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                                <DropdownMenu.Separator
+                                    className={MENU_SEPARATOR_CLASS}
+                                />
                             </>
                         )}
                         {menu?.onDeleteFlag &&
@@ -664,10 +764,10 @@ export function useTimelineRangeMenu({
                                     onSelect={() =>
                                         menu.onDeleteFlag?.(open.target.pageId!)
                                     }
-                                    className={`${TIMELINE_MENU_ITEM_CLASS} text-red`}
+                                    className={`${MENU_ITEM_CLASS} text-red`}
                                 >
                                     <FlagIcon size={14} />
-                                    Delete page
+                                    {tolgee.t("timeline.rangeMenu.deletePage")}
                                 </DropdownMenu.Item>
                             )}
                         {menu?.onDeleteWithMoves &&
@@ -679,7 +779,7 @@ export function useTimelineRangeMenu({
                                             open.target.pageId!,
                                         )
                                     }
-                                    className={`${TIMELINE_MENU_ITEM_CLASS} text-red`}
+                                    className={`${MENU_ITEM_CLASS} text-red`}
                                 >
                                     <TrashIcon size={14} />
                                     {tolgee.t(

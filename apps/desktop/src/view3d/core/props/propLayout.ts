@@ -3,8 +3,7 @@
  * obstacles", ADR 0002 D-10): its Outline at real size around where the timeline has it, raised
  * onto the platform under it.
  *
- * - A prop is drawn from the count it was made on, and not while it is Off field. A held prop is
- *   its holder's to draw (C4.6), so it is left out here.
+ * - A prop stands from the count it was made on, wherever the timeline has its Outline.
  * - A platform or an obstacle sits on the top of the tallest platform under its footprint center.
  *   Of two platforms over each other's centers, the smaller stands on the larger, and of two the
  *   same size the later made (the higher id) on the earlier, so stacking makes steps. A loop of
@@ -16,10 +15,8 @@
  */
 import {
     itemGeometryAt,
-    placementAt,
     type GeometryChange,
     type ItemGeometry,
-    type PlacementChange,
 } from "@openmarch/core";
 import type { SurfaceType } from "@/db-functions/items";
 import {
@@ -40,8 +37,6 @@ export interface PropInput {
     surface: SurfaceType;
     /** Its Outline changes, by beat ordinal */
     changes: readonly GeometryChange[];
-    /** Its Placement changes, by beat ordinal */
-    placements: readonly PlacementChange[];
 }
 
 /** A prop as the 3D View draws it at one moment. */
@@ -129,7 +124,6 @@ export function propsAt(
     for (const input of props) {
         const geometry = itemGeometryAt(input.changes, beat);
         if (!geometry) continue;
-        if (placementAt(input.placements, beat).state !== "placed") continue;
         const center = positionOf(input.id);
         if (!center) continue;
         drawn.push(footprintOf(input, geometry, { ...center }));

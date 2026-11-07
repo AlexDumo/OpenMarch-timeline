@@ -9,13 +9,8 @@ import {
     unique,
     customType,
     sqliteView,
-    primaryKey,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
-import {
-    ARTWORK_SLOT_ID_BAD_GLOB,
-    ARTWORK_SLOT_ID_MAX_LENGTH,
-} from "./artworkSlotId";
 
 /*************** COMMON COLUMNS ***************/
 
@@ -90,6 +85,10 @@ export const beats = sqliteTable(
         include_in_measure: integer().default(1).notNull(),
         /** Human readable notes. */
         notes: text(),
+        /** Tempo mode: 1 when this beat is a hold (a fermata: one count, its own length) */
+        tempo_hold: integer().default(0).notNull(),
+        /** Tempo mode: 1 when a tempo change starts on this beat (the tempo lane's points) */
+        tempo_change: integer().default(0).notNull(),
         ...timestamps,
     },
     (_table) => [
@@ -106,6 +105,12 @@ export const measures = sqliteTable("measures", {
         .references(() => beats.id),
     rehearsal_mark: text(),
     notes: text(),
+    /** Tempo mode: the number this measure gets; the ones after count on from it */
+    number_override: integer(),
+    /** Tempo mode: the time signature written here, as "7/8"; null = the one before carries on (ADR 0007) */
+    meter: text(),
+    /** Tempo mode: how the time signature is counted, in eighths, as "2+2+3"; null = its usual counting */
+    grouping: text(),
     created_at: text()
         .default(sql`(CURRENT_TIMESTAMP)`)
         .notNull(),
@@ -275,6 +280,20 @@ export const utility = sqliteTable(
     ],
 );
 
+/**
+ * Tempo mode: show settings that are part of the show's history, so tempo edits that
+ * change them undo with the rest. One row (id 0).
+ */
+export const tempo_settings = sqliteTable(
+    "tempo_settings",
+    {
+        id: integer().primaryKey(),
+        /** Seconds the music is moved by (positive: later); null = the workspace setting's */
+        audio_offset_seconds: real(),
+    },
+    (_table) => [check("tempo_settings_id_check", sql`id = 0`)],
+);
+
 export const workspace_settings = sqliteTable(
     "workspace_settings",
     {
@@ -286,7 +305,7 @@ export const workspace_settings = sqliteTable(
 );
 
 /**
- * The show's 3D View venue (ADR 0002 D-5). A single row with `id = 1` whose
+ * The show's 3D View venue (ADR 0010 D-5). A single row with `id = 1` whose
  * `json_data` is validated by `venueSettingsSchema` in
  * `src/view3d/core/venueSettings.ts`. No row means "use the default for the
  * field"; the row is created on the first change.
@@ -301,7 +320,7 @@ export const view3d_venue = sqliteTable(
 );
 
 /**
- * The show's 3D View cameras (ADR 0002 D-5, amended 2026-10-16). A single
+ * The show's 3D View cameras (ADR 0010 D-5, amended 2026-10-16). A single
  * row with `id = 1` whose `json_data` is validated by `showCamerasSchema` in
  * `src/view3d/core/cameraList.ts`: the show's own camera list for each venue
  * it changed, and the camera profile each one came from. No row means every
@@ -319,7 +338,7 @@ export const view3d_cameras = sqliteTable(
 
 /* ========================= TIMELINES ========================= */
 /*
- * The timeline motion model (docs/timeline/spec.md §5.1, ADR 0001). Column names follow the
+ * The timeline motion model (docs/timeline/spec.md §5.1, ADR 0012). Column names follow the
  * spec; tables carry a `timeline_` prefix (C-4). Drizzle can't declare STRICT tables, so every
  * column the spec's I-N1 covers has a `typeof` CHECK instead (C-3). Invariant triggers, the
  * `timeline_commit_violations` view and the change-log triggers live in `triggers.ts`.
@@ -529,28 +548,35 @@ export const timeline_slot_destinations = sqliteTable(
 );
 
 /**
- * A **kept** spot (ADR 0001 amendment 2026-10-09): the marcher's own zero-motion move over a page
- * box that the designer kept there, so edits of earlier pages stop at it. The move itself is an
- * ordinary one-slot shapeless transition and its assignment; this row only marks that
- * assignment as kept, so it can be told apart from a move that happens to go nowhere.
- *
- * App data, not resolver data: it isn't in `timeline_change_log` and the resolver never reads it.
- * The assignment id is the rowid, so undo restores the same row (C-2). Deleting the assignment
- * cascades here; no trigger reads this table, so undo, which replays with foreign keys off, may
- * re-insert it before its assignment (C-1).
+ * A **Held** hold (holds README decision 2; ADR 0012 amendment 2026-10-30): one marcher stands
+ * still on purpose over `[start_beat, end_beat)`, where it has no move. Editing a count inside
+ * it edits the move that arrives at `start_beat`, so the whole hold moves. App data, kept apart
+ * from the motion tables: not in `timeline_change_log`, never read by the
+ * resolver (the marcher holds there anyway, spec R-6). No move of the marcher overlaps a mark
+ * (H-1) and one marcher's marks don't overlap (H-3), checked at commit
+ * (`timeline_held_violations`). A rowid key, so undo restores the same row (C-2).
  */
-export const timeline_kept_assignments = sqliteTable(
-    "timeline_kept_assignments",
+export const timeline_held_marks = sqliteTable(
+    "timeline_held_marks",
     {
-        assignment_id: integer()
-            .primaryKey()
-            .references(() => timeline_assignments.id, {
-                onDelete: "cascade",
-            }),
-        created_at: text()
+        id: integer().primaryKey(),
+        marcher_id: integer()
             .notNull()
-            .default(sql`(CURRENT_TIMESTAMP)`),
+            .references(() => marchers.id, { onDelete: "cascade" }),
+        start_beat: integer().notNull(),
+        end_beat: integer().notNull(),
     },
+    (table) => [
+        unique().on(table.marcher_id, table.start_beat),
+        check(
+            "timeline_held_marks_start_beat_check",
+            sql`typeof(start_beat) = 'integer' AND start_beat >= 0`,
+        ),
+        check(
+            "timeline_held_marks_end_beat_check",
+            sql`typeof(end_beat) = 'integer' AND end_beat > start_beat`,
+        ),
+    ],
 );
 
 /**
@@ -588,7 +614,7 @@ export const timeline_shape_recipes = sqliteTable(
 /**
  * A marcher placed by a recipe: its spot in the recipe's slot order and where the recipe put it
  * when last placed (ADR 0006). Where the marcher stands now, less this point, is its override.
- * A surrogate id, so undo restores the same row (ADR 0001 C-2).
+ * A surrogate id, so undo restores the same row (ADR 0012 C-2).
  */
 export const timeline_shape_recipe_marchers = sqliteTable(
     "timeline_shape_recipe_marchers",
@@ -613,46 +639,6 @@ export const timeline_shape_recipe_marchers = sqliteTable(
 );
 
 /**
- * The show's copies of the saved shapes it uses (ADR 0006, saved shapes; #353): a shape kind and
- * its intervals, kept in the user's library across shows and copied here so the show opens with
- * them on a machine without that library entry. App data, outside undo history like
- * `library_items`: saving a shape isn't a drill edit.
- */
-export const saved_shapes = sqliteTable(
-    "saved_shapes",
-    {
-        /** The saved shape's id, the same as in the user's library */
-        id: text().primaryKey(),
-        name: text().notNull(),
-        /** The shape kind's id and generator version, as in `timeline_shape_recipes` */
-        kind: text().notNull(),
-        kind_version: integer().notNull(),
-        /** JSON object, each interval parameter's key to its value in steps */
-        intervals: text().notNull(),
-        /** What the user wrote about it; NULL for nothing */
-        description: text(),
-        /**
-         * JSON object, how a closed kind is filled, as in a recipe's `params.distribution` but
-         * without its size or seed (ADR 0006); NULL for an open kind
-         */
-        distribution: text(),
-        created_at: text()
-            .notNull()
-            .default(sql`(CURRENT_TIMESTAMP)`),
-        updated_at: text()
-            .notNull()
-            .default(sql`(CURRENT_TIMESTAMP)`),
-    },
-    (_table) => [
-        check("saved_shapes_intervals_check", sql`json_valid(intervals)`),
-        check(
-            "saved_shapes_distribution_check",
-            sql`distribution IS NULL OR json_valid(distribution)`,
-        ),
-    ],
-);
-
-/**
  * Bookkeeping, not data: one row per changed timeline row, written by triggers and drained by
  * the write wrapper inside each transaction (spec §10.2). Has no history triggers.
  */
@@ -666,250 +652,6 @@ export const timeline_change_log = sqliteTable("timeline_change_log", {
     /** JSON row image; NULL on delete */
     after: text(),
 });
-
-/* ======================= PERFORMER CUES ======================= */
-/*
- * What performers do, count by count (ADR 0004, docs/3d/performer-behavior.md). Cues sit on beat
- * ids, so beat edits never rewrite them; deleting a beat deletes its cues. No trigger reads or
- * writes these tables. The compile step (`@openmarch/core` cues) reads them; storage keeps the
- * columns consistent, and compile applies the behavior rules (fits, states-only channels,
- * take-overs).
- */
-
-/** The channels a cue can set (ADR 0004 D-1, and its 2026-10-11 amendment for the last three). */
-export const CUE_CHANNELS = [
-    "feet",
-    "horn_equipment",
-    "facing",
-    "body",
-    "carry",
-    "silk",
-    "uniform",
-] as const;
-
-/** Channels whose values name Library items (`library:<uuid>@<version hash>`; amendment 2026-10-11). */
-const LIBRARY_VALUE_CHANNELS_SQL = "'carry', 'silk', 'uniform'";
-
-/**
- * A show-stored phrase asset (ADR 0004 D-3). Built-ins aren't stored; cues name them by id.
- * `data_json` is the versioned phrase format (spec section 5); readers migrate older
- * `format_version`s on load and never write back silently.
- */
-export const phrase_assets = sqliteTable(
-    "phrase_assets",
-    {
-        id: integer().primaryKey(),
-        name: text().notNull(),
-        label: text().notNull(),
-        /** copied_builtin, posed or imported; v1 writes only copied_builtin */
-        source: text().notNull(),
-        /** JSON array of the channels the phrase plays on and takes over */
-        channels_json: text().notNull(),
-        format_version: integer().notNull(),
-        data_json: text().notNull(),
-        ...timestamps,
-    },
-    (_table) => [
-        check(
-            "phrase_assets_source_check",
-            sql`source IN ('copied_builtin', 'posed', 'imported')`,
-        ),
-        check(
-            "phrase_assets_channels_json_check",
-            sql`json_valid(channels_json) AND json_type(channels_json) = 'array'`,
-        ),
-        check(
-            "phrase_assets_format_version_check",
-            sql`typeof(format_version) = 'integer' AND format_version >= 1`,
-        ),
-        check(
-            "phrase_assets_data_json_check",
-            sql`json_valid(data_json) AND json_type(data_json) = 'object'`,
-        ),
-    ],
-);
-
-/**
- * A cue: on one channel, for one target, on one beat (ADR 0004 D-1). Same-count,
- * same-specificity ties go to the higher `id`. Hand-picked set members are in `cue_marchers`.
- */
-export const cues = sqliteTable(
-    "cues",
-    {
-        id: integer().primaryKey(),
-        /** One of `CUE_CHANNELS` */
-        channel: text().notNull(),
-        /** state or phrase */
-        kind: text().notNull(),
-        /** band, section, tag or set */
-        target_kind: text().notNull(),
-        /** Set only for a section target */
-        target_section: text(),
-        /** Set only for a tag target. Deleting the tag deletes its cues. */
-        target_tag_id: integer().references(() => tags.id, {
-            onDelete: "cascade",
-        }),
-        /** The beat the cue sits on; its instant is the start of the beat (the count's click) */
-        beat_id: integer()
-            .notNull()
-            .references(() => beats.id, { onDelete: "cascade" }),
-        /**
-         * `builtin:<channel>.<family>.<value>`, `show:<phrase_assets.id>`,
-         * `library:<uuid>@<version hash>` (Carry, Silk, Uniform) or `none` (Carry)
-         */
-        value: text().notNull(),
-        /** Set only for a show phrase; a phrase asset in use can't be deleted */
-        phrase_asset_id: integer().references(() => phrase_assets.id, {
-            onDelete: "restrict",
-        }),
-        /** Phrases only: the length in counts, inclusive, at least 2 */
-        length: integer(),
-        /** States only: the transition length in counts, at least 1; null is the library default */
-        transition_length: integer(),
-        /** The value's settings as a JSON object */
-        settings_json: text().notNull().default("{}"),
-        /** `{ version: 1, span, order }`, or null for no ripple. Never on Feet. */
-        ripple_json: text(),
-        notes: text(),
-        ...timestamps,
-    },
-    (table) => [
-        check(
-            "cues_channel_check",
-            sql.raw(
-                `channel IN (${CUE_CHANNELS.map((c) => `'${c}'`).join(", ")})`,
-            ),
-        ),
-        check("cues_kind_check", sql`kind IN ('state', 'phrase')`),
-        check(
-            "cues_target_check",
-            sql`(target_kind IN ('band', 'set') AND target_section IS NULL AND target_tag_id IS NULL) OR (target_kind = 'section' AND target_section IS NOT NULL AND target_tag_id IS NULL) OR (target_kind = 'tag' AND target_tag_id IS NOT NULL AND target_section IS NULL)`,
-        ),
-        check(
-            "cues_length_check",
-            sql`(kind = 'phrase' AND typeof(length) = 'integer' AND length >= 2 AND transition_length IS NULL) OR (kind = 'state' AND length IS NULL AND (transition_length IS NULL OR (typeof(transition_length) = 'integer' AND transition_length >= 1)))`,
-        ),
-        check(
-            "cues_value_check",
-            sql.raw(
-                `(value GLOB 'builtin:?*' AND phrase_asset_id IS NULL) OR (kind = 'phrase' AND phrase_asset_id IS NOT NULL AND value = 'show:' || phrase_asset_id) OR (channel IN (${LIBRARY_VALUE_CHANNELS_SQL}) AND kind = 'state' AND value GLOB 'library:?*@?*' AND phrase_asset_id IS NULL) OR (channel = 'carry' AND kind = 'state' AND value = 'none' AND phrase_asset_id IS NULL)`,
-            ),
-        ),
-        check(
-            "cues_settings_json_check",
-            sql`json_valid(settings_json) AND json_type(settings_json) = 'object'`,
-        ),
-        check(
-            "cues_ripple_json_check",
-            sql`ripple_json IS NULL OR (channel <> 'feet' AND json_valid(ripple_json) AND json_type(ripple_json) = 'object' AND json_extract(ripple_json, '$.version') = 1 AND json_type(ripple_json, '$.span') = 'integer' AND json_extract(ripple_json, '$.span') >= 1 AND json_extract(ripple_json, '$.order') IN ('drill', 'left_right', 'right_left', 'down_form'))`,
-        ),
-        index("cues_beat_id_idx").on(table.beat_id),
-        index("cues_channel_beat_id_idx").on(table.channel, table.beat_id),
-    ],
-);
-
-/**
- * The marchers of a hand-picked set cue (ADR 0004 D-2). The marcher deletion write path deletes
- * a set cue left with no members, in the same transaction.
- *
- * Has a surrogate `id`, unique on (cue, marcher), rather than the ADR's two-column primary key:
- * history replays by rowid, so undo has to restore the same rowid (as `marcher_tags` does).
- */
-export const cue_marchers = sqliteTable(
-    "cue_marchers",
-    {
-        id: integer().primaryKey(),
-        cue_id: integer()
-            .notNull()
-            .references(() => cues.id, { onDelete: "cascade" }),
-        marcher_id: integer()
-            .notNull()
-            .references(() => marchers.id, { onDelete: "cascade" }),
-    },
-    (table) => [
-        unique("cue_marchers_cue_marcher_unique").on(
-            table.cue_id,
-            table.marcher_id,
-        ),
-        index("cue_marchers_marcher_id_idx").on(table.marcher_id),
-    ],
-);
-
-/** Per-set performer settings (ADR 0004 D-4). No row means the show default. */
-export const page_performer_settings = sqliteTable(
-    "page_performer_settings",
-    {
-        page_id: integer()
-            .primaryKey()
-            .references(() => pages.id, { onDelete: "cascade" }),
-        /** What the set's dot marks: the landing foot or the body's center */
-        dot_mode: text().notNull(),
-    },
-    (_table) => [
-        check(
-            "page_performer_settings_dot_mode_check",
-            sql`dot_mode IN ('foot', 'body')`,
-        ),
-    ],
-);
-
-/* ======================= SHOW LIBRARY ======================== */
-/*
- * The show's copies of the Library items it uses (ADR 0002 D-12, props-spec.md section 2,
- * package C1.11). Following `audio_files` and `field_properties.image`, the bytes live in the
- * show file, so a show renders on a machine whose local Library is empty. Neither table has
- * history triggers: embedding and pruning are not undoable edits.
- */
-
-/** Content-addressed bytes, deduped across every embedded Version. */
-export const library_blobs = sqliteTable(
-    "library_blobs",
-    {
-        /** sha256 of `data`, lowercase hex */
-        hash: text().primaryKey(),
-        data: browserSafeBinaryBlob().notNull(),
-    },
-    (_table) => [
-        check("library_blobs_hash_check", sql`length(hash) = 64`),
-        check("library_blobs_data_type_check", sql`typeof(data) = 'blob'`),
-    ],
-);
-
-/** One embedded Version of a Library item. A show may keep several Versions of one item. */
-export const library_items = sqliteTable(
-    "library_items",
-    {
-        item_id: text().notNull(),
-        version_hash: text().notNull(),
-        kind: text().notNull(),
-        name: text().notNull(),
-        /** Built-ins are embedded too, so app updates never change old shows */
-        built_in: integer().notNull().default(0),
-        /** JSON object, part role to `library_blobs.hash` */
-        parts: text().notNull(),
-        /** JSON array of `{ itemId, versionHash }` this Version pins, such as a Uniform's Garments */
-        pins: text().notNull().default("[]"),
-        /** JSON snapshot of the item's metadata (tags, license, dates) when it was embedded */
-        metadata: text().notNull(),
-        /** A model's sidecar JSON, so the show reads it at open without a blob read */
-        sidecar: text(),
-        embedded_at: text()
-            .notNull()
-            .default(sql`(CURRENT_TIMESTAMP)`),
-    },
-    (table) => [
-        primaryKey({ columns: [table.item_id, table.version_hash] }),
-        check(
-            "library_items_kind_check",
-            sql`kind IN ('model', 'artwork', 'uniform')`,
-        ),
-        check("library_items_built_in_check", sql`built_in IN (0, 1)`),
-        check(
-            "library_items_version_hash_check",
-            sql`length(version_hash) = 64`,
-        ),
-    ],
-);
 
 /* =========================== ITEMS =========================== */
 
@@ -929,7 +671,7 @@ const sqlList = (values: readonly string[]) =>
     values.map((v) => `'${v}'`).join(", ");
 
 /**
- * A prop or piece of equipment with its own identity in the show (ADR 0002 D-9, props-spec
+ * A prop or piece of equipment with its own identity in the show (ADR 0010 D-9, props-spec
  * section 4). Backed by a `marchers` row of type `item`, so its positions come from the timeline
  * resolver and its motion and undo are inherited.
  */
@@ -946,11 +688,10 @@ export const items = sqliteTable(
         /** floor, platform or obstacle. Props only. */
         surface_type: text().$type<(typeof SURFACE_TYPES)[number]>(),
         /**
-         * The Library model and the Version it pins, or both null for a plain Outline. No foreign
-         * key: the show's Library is pruned separately and keeps what this names (D-12).
+         * The prop's color, as `rgba(r, g, b, a)`, on the field and in the 3D View; null draws
+         * it in the field theme's line color (2D) and neutral grey (3D).
          */
-        library_item_id: text(),
-        library_version_hash: text(),
+        color: text(),
         ...timestamps,
     },
     (_table) => [
@@ -961,15 +702,11 @@ export const items = sqliteTable(
                 `(kind = 'prop' AND surface_type IS NOT NULL AND surface_type IN (${sqlList(SURFACE_TYPES)})) OR (kind = 'equipment' AND surface_type IS NULL)`,
             ),
         ),
-        check(
-            "items_library_check",
-            sql`(library_item_id IS NULL AND library_version_hash IS NULL) OR (library_item_id IS NOT NULL AND library_version_hash IS NOT NULL AND length(library_item_id) = 36 AND length(library_version_hash) = 64)`,
-        ),
     ],
 );
 
 /**
- * An item's Outline from a beat on (ADR 0002 D-10, props-spec section 5). Latest wins: the row
+ * An item's Outline from a beat on (ADR 0010 D-10, props-spec section 5). Latest wins: the row
  * on beat B is fully in place on B's click and eases in from the click of B - L + 1, so a
  * transition of 1 is instant (ADR 0004's state counting). Independent of moves. Sizes are meters,
  * rotation degrees.
@@ -1029,184 +766,6 @@ export const item_geometry = sqliteTable(
             sql.raw(
                 `(rolls_out = 0 AND leading_edge IS NULL) OR (rolls_out = 1 AND leading_edge IS NOT NULL AND leading_edge IN (${sqlList(LEADING_EDGES)}))`,
             ),
-        ),
-    ],
-);
-
-export const PLACEMENT_STATES = ["held", "placed", "off_field"] as const;
-export const HANDS = ["left", "right", "both"] as const;
-export const PLACEMENT_ROLES = ["holder", "crew"] as const;
-/** The orders an item ripple runs in, as a cue ripple's (`cues.ripple_json`) */
-export const ITEM_RIPPLE_ORDERS = [
-    "drill",
-    "left_right",
-    "right_left",
-    "down_form",
-] as const;
-
-/**
- * Where an item is from a beat on (ADR 0002 D-10, props-spec section 4): held by performers
- * (`item_placement_marchers`), placed at its own position with an optional crew, or Off field.
- * Latest wins and the change is instant on its beat's click. Before an item's first change it is
- * placed at its own position (Off field before its first Outline); an item that comes from a flag
- * gets an explicit held change on its first beat, so nothing about an item's origin is stored.
- *
- * Of two items' changes on one beat, the higher `beat_rank`, then the higher `id`, is newer: a
- * write makes its change the newest on its beat, and a beat deletion or replacement that lands
- * changes on a beat ranks them below the ones already there, so who holds what stays put.
- *
- * The changes of an item ripple, one per item at staggered counts, each with its own value, share
- * a `group_id` and the ripple they were spread by (`ripple_json`, `{ version: 1, span, order }`
- * as on a cue), so the group can be shown, re-timed and edited together. A held change keeps at
- * least one holder, and only a placed change has crew: the write path keeps both
- * (`itemPlacements.ts`).
- */
-export const item_placements = sqliteTable(
-    "item_placements",
-    {
-        id: integer().primaryKey(),
-        item_id: integer()
-            .notNull()
-            .references(() => items.id, { onDelete: "cascade" }),
-        beat_id: integer()
-            .notNull()
-            .references(() => beats.id, { onDelete: "cascade" }),
-        /** held, placed or off_field */
-        state: text().notNull(),
-        /** Ties between items' changes on one beat: the higher is newer, then the higher id */
-        beat_rank: integer().notNull().default(0),
-        /** The item ripple this row is part of, or null */
-        group_id: integer(),
-        /** The group's ripple, `{ version: 1, span, order }`: set exactly when `group_id` is */
-        ripple_json: text(),
-        ...timestamps,
-    },
-    (table) => [
-        unique("item_placements_item_beat_unique").on(
-            table.item_id,
-            table.beat_id,
-        ),
-        index("item_placements_beat_id_idx").on(table.beat_id),
-        index("item_placements_group_id_idx").on(table.group_id),
-        check(
-            "item_placements_state_check",
-            sql.raw(`state IN (${sqlList(PLACEMENT_STATES)})`),
-        ),
-        check(
-            "item_placements_beat_rank_check",
-            sql`typeof(beat_rank) = 'integer'`,
-        ),
-        check(
-            "item_placements_group_check",
-            sql.raw(
-                `(group_id IS NULL AND ripple_json IS NULL) OR (typeof(group_id) = 'integer' AND group_id >= 1 AND ripple_json IS NOT NULL AND json_valid(ripple_json) AND json_type(ripple_json) = 'object' AND json_extract(ripple_json, '$.version') = 1 AND json_type(ripple_json, '$.span') = 'integer' AND json_extract(ripple_json, '$.span') >= 1 AND json_extract(ripple_json, '$.order') IN (${sqlList(ITEM_RIPPLE_ORDERS)}))`,
-            ),
-        ),
-    ],
-);
-
-/**
- * The performers on a Placement change: its holders, each with a hand, or its crew. A surrogate
- * `id` unique on (placement, marcher), as `cue_marchers` has, so undo restores the same rowid.
- */
-export const item_placement_marchers = sqliteTable(
-    "item_placement_marchers",
-    {
-        id: integer().primaryKey(),
-        placement_id: integer()
-            .notNull()
-            .references(() => item_placements.id, { onDelete: "cascade" }),
-        marcher_id: integer()
-            .notNull()
-            .references(() => marchers.id, { onDelete: "cascade" }),
-        /** holder or crew */
-        role: text().notNull(),
-        /** left, right or both: holders only */
-        hand: text(),
-    },
-    (table) => [
-        unique("item_placement_marchers_placement_marcher_unique").on(
-            table.placement_id,
-            table.marcher_id,
-        ),
-        index("item_placement_marchers_marcher_id_idx").on(table.marcher_id),
-        check(
-            "item_placement_marchers_role_check",
-            sql.raw(
-                `(role = 'holder' AND hand IS NOT NULL AND hand IN (${sqlList(HANDS)})) OR (role = 'crew' AND hand IS NULL)`,
-            ),
-        ),
-    ],
-);
-
-export const ARTWORK_FITS = ["fill", "fit"] as const;
-
-/**
- * Which Artwork sits on an item slot from a beat on (ADR 0002 D-10, props-spec section 4). Latest
- * wins per (item, slot), a hard cut on its beat's click. Both Library columns null leave the slot
- * bare from that beat. The slot is an id, not a foreign key: an item's slots come from its model's
- * declarations or its Outline, so a row whose slot an update drops stays stored but dormant and is
- * live again on revert. Fill or fit, pan and pad color sit on the row, so one Artwork can sit
- * differently on two slots.
- */
-export const item_artwork_slots = sqliteTable(
-    "item_artwork_slots",
-    {
-        id: integer().primaryKey(),
-        item_id: integer()
-            .notNull()
-            .references(() => items.id, { onDelete: "cascade" }),
-        beat_id: integer()
-            .notNull()
-            .references(() => beats.id, { onDelete: "cascade" }),
-        /**
-         * The slot id: `top`, `front` or `back` with no model, else one the model declares; 1 to
-         * 64 letters, digits, underscores or dashes (`artworkSlotId.ts`)
-         */
-        slot: text().notNull(),
-        /**
-         * The Artwork and the Version it pins, or both null for a bare slot. No foreign key, as on
-         * `items`: the show's Library is pruned separately and keeps what this names (D-12).
-         */
-        library_item_id: text(),
-        library_version_hash: text(),
-        /** fill (crop to cover, centered unless panned) or fit (pad) */
-        fit: text().notNull().default("fill"),
-        /** A filled crop's offset from center, -1 to 1 of the overflow on each axis */
-        pan_x: real().notNull().default(0),
-        pan_y: real().notNull().default(0),
-        /** `#rrggbb` padding for fit, or null: transparent where the surface allows, else its base color */
-        pad_color: text(),
-        ...timestamps,
-    },
-    (table) => [
-        unique("item_artwork_slots_item_slot_beat_unique").on(
-            table.item_id,
-            table.slot,
-            table.beat_id,
-        ),
-        index("item_artwork_slots_beat_id_idx").on(table.beat_id),
-        check(
-            "item_artwork_slots_slot_check",
-            sql.raw(
-                `slot IS NOT NULL AND length(slot) BETWEEN 1 AND ${ARTWORK_SLOT_ID_MAX_LENGTH} AND slot NOT GLOB '${ARTWORK_SLOT_ID_BAD_GLOB}'`,
-            ),
-        ),
-        check(
-            "item_artwork_slots_library_check",
-            sql`(library_item_id IS NULL AND library_version_hash IS NULL) OR (library_item_id IS NOT NULL AND library_version_hash IS NOT NULL AND length(library_item_id) = 36 AND length(library_version_hash) = 64)`,
-        ),
-        check(
-            "item_artwork_slots_fit_check",
-            sql.raw(`fit IS NOT NULL AND fit IN (${sqlList(ARTWORK_FITS)})`),
-        ),
-        check(
-            "item_artwork_slots_pan_check",
-            sql`pan_x IS NOT NULL AND pan_y IS NOT NULL AND typeof(pan_x) IN ('real', 'integer') AND typeof(pan_y) IN ('real', 'integer') AND pan_x BETWEEN -1 AND 1 AND pan_y BETWEEN -1 AND 1`,
-        ),
-        check(
-            "item_artwork_slots_pad_color_check",
-            sql`pad_color IS NULL OR (length(pad_color) = 7 AND pad_color GLOB '#[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]')`,
         ),
     ],
 );

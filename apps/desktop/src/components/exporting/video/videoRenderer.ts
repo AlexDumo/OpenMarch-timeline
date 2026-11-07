@@ -1,4 +1,4 @@
-import type { FieldImageSize } from "@/db-functions/fieldFloor";
+import tolgee from "@/global/singletons/Tolgee";
 import {
     AudioBufferSource,
     CanvasSource,
@@ -43,8 +43,6 @@ export interface VideoExportArgs {
     appearanceSteps: AppearanceStepsByMarcherId | undefined;
     /** The decoded field image, or null when the show has none */
     backgroundImage: ImageBitmap | null;
-    /** The floor's physical size, centered on the field; null places the image by fill or fit */
-    backgroundImageSize?: FieldImageSize | null;
     /** Raw bytes of the selected audio file */
     audioData: ArrayBuffer;
     /** Same offset that live playback applies (workspace setting) */
@@ -151,12 +149,22 @@ export async function exportVideo(
     } = args;
 
     if (sortedPages.length === 0)
-        throw new Error("The show has no pages to export");
+        throw new Error(
+            tolgee.t(
+                "exportCoordinates.videoNoPages",
+                "The show has no pages to export",
+            ),
+        );
 
     const lastPage = sortedPages[sortedPages.length - 1];
     const durationSeconds = lastPage.timestamp + lastPage.duration;
     if (durationSeconds <= 0)
-        throw new Error("The show has no duration to export");
+        throw new Error(
+            tolgee.t(
+                "exportCoordinates.videoNoDuration",
+                "The show has no duration to export",
+            ),
+        );
 
     const encodingTarget = await chooseEncodingTarget(width, height, {
         web: isWebBuild,
@@ -191,7 +199,6 @@ export async function exportVideo(
             frameSampler: args.frameSampler,
             appearanceSteps: args.appearanceSteps,
             backgroundImage: args.backgroundImage,
-            backgroundImageSize: args.backgroundImageSize,
             width,
             height,
         });
@@ -200,7 +207,13 @@ export async function exportVideo(
         frameCanvas.width = width;
         frameCanvas.height = height;
         const frameContext = frameCanvas.getContext("2d");
-        if (!frameContext) throw new Error("Could not create export canvas");
+        if (!frameContext)
+            throw new Error(
+                tolgee.t(
+                    "exportCoordinates.videoNoCanvas",
+                    "Could not create export canvas",
+                ),
+            );
 
         const videoSource = new CanvasSource(frameCanvas, {
             codec: encodingTarget.videoCodec,

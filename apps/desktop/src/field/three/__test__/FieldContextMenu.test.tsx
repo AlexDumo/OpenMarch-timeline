@@ -14,7 +14,11 @@ import FieldContextMenu, { FIELD_MENU_ACTIONS } from "../FieldContextMenu";
 const handlers: (() => void)[] = [];
 function handle(
     id: ActionId,
-    { enabled = true, label }: { enabled?: boolean; label?: string } = {},
+    {
+        enabled = true,
+        label,
+        checked = false,
+    }: { enabled?: boolean; label?: string; checked?: boolean } = {},
 ) {
     const run = vi.fn();
     handlers.push(
@@ -22,6 +26,7 @@ function handle(
             run,
             isEnabled: () => enabled,
             label: () => label,
+            checked: () => checked,
         }),
     );
     return run;
@@ -70,10 +75,35 @@ describe("FieldContextMenu", () => {
         expect(screen.queryByTestId("field-menu")).toBeNull();
     });
 
+    it("reads no labels or enabled states while closed, as handlers change (#573 re-review)", () => {
+        const label = vi.fn(() => "Clear Page 3");
+        const isEnabled = vi.fn(() => true);
+        handlers.push(
+            registerActionHandler("setSelectedMarchersToPreviousPage", {
+                run: vi.fn(),
+                isEnabled,
+                label,
+            }),
+        );
+        render(
+            <TolgeeProvider tolgee={tolgee} fallback="Loading...">
+                <FieldContextMenu
+                    at={null}
+                    onClose={vi.fn()}
+                    selectedCount={1}
+                    timelineMode
+                />
+            </TolgeeProvider>,
+        );
+        handle("alignHorizontally");
+        expect(label).not.toHaveBeenCalled();
+        expect(isEnabled).not.toHaveBeenCalled();
+    });
+
     it("runs the action chosen through the actions layer, then closes", () => {
-        const run = handle("timelineUnsetHere");
+        const run = handle("setSelectedMarchersToPreviousPage");
         const { onClose } = open();
-        fireEvent.click(item("timelineUnsetHere")!);
+        fireEvent.click(item("setSelectedMarchersToPreviousPage")!);
         expect(run).toHaveBeenCalledTimes(1);
         expect(onClose).toHaveBeenCalled();
     });
@@ -88,30 +118,106 @@ describe("FieldContextMenu", () => {
         expect(item("alignVertically")).toHaveAttribute("data-disabled");
     });
 
-    it("names the pages in Unset here and on Pages N–M, and hides it when no pages follow", () => {
-        handle("timelineUnsetHere");
-        const off = registerActionHandler("timelineUnsetHereAndFollowing", {
-            run: vi.fn(),
-            isEnabled: () => true,
-            label: () => "Remove keyframe, Pages 3–4 follow back",
-        });
+    it("lists the actions in groups, with the page state commands together", () => {
+        for (const id of FIELD_MENU_ACTIONS) handle(id);
+        handle("shapeGroup", { enabled: false });
+        handle("shapeUngroup", { enabled: false });
         open();
-        expect(item("timelineUnsetHereAndFollowing")).toHaveTextContent(
-            "Remove keyframe, Pages 3–4 follow back",
+        const content = screen.getByTestId("field-menu");
+        const groups: string[][] = [[]];
+        for (const el of Array.from(content.children)) {
+            if (el.getAttribute("role") === "separator") groups.push([]);
+            else
+                groups[groups.length - 1]!.push(
+                    el.getAttribute("data-testid")!.replace("field-menu-", ""),
+                );
+        }
+        expect(groups).toEqual([
+            [
+                "timelineHoldFromPrevious",
+                "setSelectedMarchersToPreviousPage",
+                "setSelectedMarchersToNextPage",
+            ],
+            [
+                "alignHorizontally",
+                "alignVertically",
+                "evenlyDistributeHorizontally",
+                "evenlyDistributeVertically",
+                "swapMarchers",
+            ],
+            ["selectAllMarchers"],
+        ]);
+        expect(item("timelineHoldFromPrevious")).toHaveTextContent(
+            "Hold from previous page",
         );
-        cleanup();
-        off();
-        handle("timelineUnsetHereAndFollowing", { enabled: false });
-        open();
-        expect(item("timelineUnsetHere")).not.toBeNull();
-        expect(item("timelineUnsetHereAndFollowing")).toBeNull();
+        expect(item("setSelectedMarchersToPreviousPage")).toHaveTextContent(
+            "Clear this page (selected)",
+        );
     });
 
-    it("leaves Unset out outside timeline mode, as the inspector does", () => {
-        handle("timelineUnsetHere");
+    it("runs the hold command through the actions layer, and greys it out where it can't run", () => {
+        const blocked = handle("timelineHoldFromPrevious", { enabled: false });
+        open();
+        fireEvent.click(item("timelineHoldFromPrevious")!);
+        expect(blocked).not.toHaveBeenCalled();
+        expect(item("timelineHoldFromPrevious")).toHaveAttribute(
+            "data-disabled",
+        );
+        cleanup();
+        handlers.splice(0).forEach((off) => off());
+        const hold = handle("timelineHoldFromPrevious");
+        open();
+        expect(item("timelineHoldFromPrevious")).not.toHaveAttribute(
+            "data-disabled",
+        );
+        fireEvent.click(item("timelineHoldFromPrevious")!);
+        expect(hold).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows a hold command every selected marcher is already in as checked, and it does nothing", () => {
+        // All Held: the handler says checked (and off), as useHoldActionHandlers does
+        const hold = handle("timelineHoldFromPrevious", {
+            enabled: false,
+            checked: true,
+        });
+        handle("setSelectedMarchersToPreviousPage");
+        open();
+        const entry = item("timelineHoldFromPrevious")!;
+        expect(entry).toHaveAttribute("role", "menuitemcheckbox");
+        expect(entry).toHaveAttribute("aria-checked", "true");
+        expect(entry).toHaveAttribute("data-disabled");
+        expect(entry).toHaveTextContent(/^Hold from previous page/);
+        fireEvent.click(entry);
+        expect(hold).not.toHaveBeenCalled();
+        expect(item("setSelectedMarchersToPreviousPage")).not.toHaveAttribute(
+            "data-disabled",
+        );
+    });
+
+    it("shows a mixed selection's count in the label, and runs", () => {
+        const hold = handle("timelineHoldFromPrevious", {
+            label: "Hold from previous page (3 of 5)",
+        });
+        handle("setSelectedMarchersToPreviousPage", {
+            label: "Clear this page (2 of 5 selected)",
+        });
+        open();
+        const entry = item("timelineHoldFromPrevious")!;
+        expect(entry).toHaveTextContent("Hold from previous page (3 of 5)");
+        expect(entry).not.toHaveAttribute("data-disabled");
+        expect(item("setSelectedMarchersToPreviousPage")).toHaveTextContent(
+            "Clear this page (2 of 5 selected)",
+        );
+        fireEvent.click(entry);
+        expect(hold).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves the hold command out outside timeline mode, but keeps Clear this page", () => {
+        handle("timelineHoldFromPrevious");
+        handle("setSelectedMarchersToPreviousPage");
         open({ timelineMode: false });
-        expect(item("timelineUnsetHere")).toBeNull();
-        expect(item("alignHorizontally")).not.toBeNull();
+        expect(item("timelineHoldFromPrevious")).toBeNull();
+        expect(item("setSelectedMarchersToPreviousPage")).not.toBeNull();
     });
 
     it("offers Swap only with two marchers selected", () => {
@@ -132,7 +238,7 @@ describe("FieldContextMenu", () => {
             screen.getAllByRole("menuitem").map((el) => el.textContent),
         ).toEqual(
             expect.arrayContaining([
-                expect.stringContaining("Remove keyframe"),
+                expect.stringContaining("Swap"),
                 expect.stringContaining("Align horizontally"),
                 expect.stringContaining("Select all"),
             ]),

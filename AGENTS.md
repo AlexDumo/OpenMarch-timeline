@@ -25,13 +25,24 @@
 - `apps/cms` is a Next/Payload/Cloudflare app with its own `apps/cms/AGENTS.md`; read that before CMS changes.
 - `packages/core`, `packages/musicxml-parser`, and `packages/ui` are publishable/shared packages built with `tsup`; `packages/ui/src/tailwind.css` is the shared style source.
 - Prefer existing UI primitives in `packages/ui/src/components/base`; icons should come from `@phosphor-icons/react`.
+- Match the app's visual scale instead of inventing one: theme radii (`rounded-6` surfaces, `rounded-full` buttons), theme font sizes (`text-body`, `text-sub`), and the shared popover and menu classes. Read [UI styling](docs/conventions/ui-styling.md) before building or restyling any UI.
 - Read [change routing](docs/conventions/change-routing.md) when ownership is unclear or a change crosses packages.
-- `docs/conventions/` holds the long-form patterns: [database interactions](docs/conventions/database-interactions.md), [transactions across tables](docs/conventions/database-transactions.md), [multi-query hooks](docs/conventions/multi-query-hooks.md), [testing](docs/conventions/testing.md), and [troubleshooting](docs/conventions/troubleshooting.md). Read the relevant one before non-trivial work in that area.
+- `docs/conventions/` holds the long-form patterns: [database interactions](docs/conventions/database-interactions.md), [transactions across tables](docs/conventions/database-transactions.md), [multi-query hooks](docs/conventions/multi-query-hooks.md), [localization](docs/conventions/localization.md), [testing](docs/conventions/testing.md), [UI styling](docs/conventions/ui-styling.md), and [troubleshooting](docs/conventions/troubleshooting.md). Read the relevant one before non-trivial work in that area.
 
 ## Verification
 
 - Read [verification](docs/conventions/verification.md) and run its scoped checks for the changed area.
 - Lint commands ending in `:check` are non-mutating; `lint` and `fix` may rewrite files.
+
+## User guide
+
+- The user guide (openmarch.com/guides, `apps/website/src/content/docs/guides`) describes how
+  the app behaves. Read it to learn how a feature is meant to work for users.
+- A change to what users see or do isn't finished until the guide says so. Before pushing it,
+  update the guide's pages and recorded pictures and read the result as it renders, following
+  "When the app changes" in [apps/website/AGENTS.md](apps/website/AGENTS.md); agents use the
+  `user-docs` skill (`.claude/skills/user-docs`). Fill in the pull request's User guide section.
+- Start with `pnpm --dir apps/website docs:impact`, which lists the pages a change may affect.
 
 ## Durable decisions and generated files
 

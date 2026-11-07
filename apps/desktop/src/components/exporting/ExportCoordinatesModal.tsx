@@ -1,4 +1,5 @@
 /* eslint-disable no-control-regex */
+import { useAudioOffsetSeconds } from "@/tempo/audioOffset";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MarcherCoordinateSheetPreview from "./MarcherCoordinateSheet";
 import {
@@ -42,8 +43,8 @@ import { useAppDialogStore, type ExportTab } from "@/stores/AppDialogStore";
 import { coordinateRoundingOptions } from "../../config/exportOptions";
 import "../../styles/shimmer.css";
 import { T } from "@tolgee/react";
-import { ShareNoteExportLine } from "@/components/assets/ShowCredits";
 import tolgee from "@/global/singletons/Tolgee";
+import { formatFixed } from "@/utilities/formatLocale";
 import { useQuery } from "@tanstack/react-query";
 import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { assert } from "@/utilities/utils";
@@ -58,7 +59,6 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useShallow } from "zustand/react/shallow";
 import { notesHtmlToPlainText, truncateHtmlNotes } from "@/utilities/notesText";
 import Constants from "@/global/Constants";
-import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSettings";
 import { db } from "@/global/database/db";
 import { showEndTime } from "@/timeline/timeMap";
 import {
@@ -101,6 +101,7 @@ import {
     videoResolutionsFor,
     type EncodingSupport,
 } from "./video/exportSettings";
+import { formatList } from "@/utilities/formatList";
 
 /** The error message `readExportPositions` throws when the show changed mid-export (P7.7). */
 const showChangedMessage = () =>
@@ -116,7 +117,7 @@ function warnMarchersWithoutPositions(
 ) {
     const missing = marchersWithoutPositions(marchers, positions);
     if (missing.length === 0) return;
-    const drillNumbers = missing.map((m) => m.drill_number).join(", ");
+    const drillNumbers = formatList(missing.map((m) => m.drill_number));
     console.warn(`Coordinate sheets: no positions for ${drillNumbers}`);
     toast.warning(
         tolgee.t("exportCoordinates.marchersWithoutPositions", {
@@ -302,7 +303,7 @@ function CoordinateSheetExport() {
             // Add success toast message
             toast.success(
                 <span>
-                    {t("exportCoordinates.exportSuccess", {
+                    {t("exportCoordinates.exportedCount", {
                         count: processedMarchers.length,
                     })}
                     <button
@@ -344,7 +345,7 @@ function CoordinateSheetExport() {
                     error:
                         error instanceof Error
                             ? error.message
-                            : "Unknown error",
+                            : t("exportCoordinates.unknownError"),
                 }),
             );
         } finally {
@@ -463,7 +464,7 @@ function CoordinateSheetExport() {
                         side="top"
                         contentClassName="z-[100000] p-16"
                         content={
-                            <T keyName="exportCoordinates.organizeBySectionTooltip" />
+                            <T keyName="exportCoordinates.organizeBySectionHint" />
                         }
                     />
                 </Form.Field>
@@ -511,7 +512,7 @@ function CoordinateSheetExport() {
                         <T keyName="exportCoordinates.preview" />
                     </h5>
                 </div>
-                <div className="mx-2 max-h-[28vh] overflow-auto rounded-md border border-gray-200 bg-white text-black">
+                <div className="rounded-6 mx-2 max-h-[28vh] overflow-auto border border-gray-200 bg-white text-black">
                     <MarcherCoordinateSheetPreview
                         terse={isTerse}
                         includeMeasures={includeMeasures}
@@ -550,28 +551,14 @@ function CoordinateSheetExport() {
                 <div className="flex flex-col gap-8">
                     {/* Status Text */}
                     <div className="flex flex-col gap-4">
-                        {/* Page processing info (only for drill charts) */}
-                        {currentStep.includes("Processing page") && (
-                            <div className="flex items-center justify-between">
-                                <span className="text-body text-text/75">
-                                    {currentStep}
-                                </span>
-                                <span className="text-sub text-text/60">
-                                    {Math.round(progress)}%
-                                </span>
-                            </div>
-                        )}
-
                         {/* Fun phrase */}
                         <div className="flex items-center justify-between">
                             <span className="text-body text-text/75">
                                 {currentStep}
                             </span>
-                            {!currentStep.includes("Processing page") && (
-                                <span className="text-sub text-text/60">
-                                    {Math.round(progress)}%
-                                </span>
-                            )}
+                            <span className="text-sub text-text/60">
+                                {Math.round(progress)}%
+                            </span>
                         </div>
                     </div>
 
@@ -850,7 +837,7 @@ function DrillChartExport() {
                     error:
                         error instanceof Error
                             ? error.message
-                            : "Unknown error",
+                            : t("exportCoordinates.unknownError"),
                 }),
             );
             setCurrentStep(t("exportCoordinates.exportFailed"));
@@ -921,7 +908,7 @@ function DrillChartExport() {
                     error:
                         error instanceof Error
                             ? error.message
-                            : "Unknown error",
+                            : t("exportCoordinates.unknownError"),
                 }),
             );
             setCurrentStep(t("exportCoordinates.exportFailed"));
@@ -1028,14 +1015,16 @@ function DrillChartExport() {
                 {/* Show Demo SVGs or Error if Export Requirement Not Met */}
                 {canExport ? (
                     <div className="flex flex-col items-center gap-8">
-                        <div className="max-h-[20rem] w-full max-w-[20rem] rounded-md border border-gray-200 bg-white px-8 py-4 text-black">
+                        <div className="rounded-6 max-h-[20rem] w-full max-w-[20rem] border border-gray-200 bg-white px-8 py-4 text-black">
                             <img
                                 src={
                                     individualCharts
                                         ? individualDemoSVG
                                         : overviewDemoSVG
                                 }
-                                alt="Drill Chart Preview"
+                                alt={t(
+                                    "exportCoordinates.drillChartPreviewAlt",
+                                )}
                                 className="block w-full"
                                 style={{
                                     maxHeight: "20rem",
@@ -1054,21 +1043,21 @@ function DrillChartExport() {
                         </p>
                         <div className="text-center text-xs text-gray-500">
                             <div>
-                                {t("exportCoordinates.fieldProperties", {
-                                    status: fieldProperties ? "✓" : "✗",
+                                {t("exportCoordinates.checkFieldProperties", {
+                                    status: fieldProperties ? "ok" : "missing",
                                 })}
                             </div>
                             <div>
-                                {t("exportCoordinates.page", {
-                                    status: pages.length > 1 ? "✓" : "✗",
+                                {t("exportCoordinates.checkPage", {
+                                    status: pages.length > 1 ? "ok" : "missing",
                                 })}
                             </div>
                             <div>
-                                {t("exportCoordinates.marcher", {
+                                {t("exportCoordinates.checkMarcher", {
                                     status:
                                         marchers && marchers.length > 0
-                                            ? "✓"
-                                            : "✗",
+                                            ? "ok"
+                                            : "missing",
                                 })}
                             </div>
                         </div>
@@ -1157,9 +1146,8 @@ function VideoExport() {
     // Each marcher's appearance over the show, as the field draws it (#207)
     const appearanceSteps = useMarcherAppearanceSteps(true);
     const fieldImage = useFieldImage();
-    const { data: workspaceSettings } = useQuery(
-        workspaceSettingsQueryOptions(),
-    );
+    // Tempo mode: the offset in the show's history, else the workspace setting
+    const audioOffsetSeconds = useAudioOffsetSeconds();
     const { data: selectedAudioFile } = useQuery({
         queryKey: ["selectedAudioFileDetails"],
         queryFn: async () =>
@@ -1280,7 +1268,6 @@ function VideoExport() {
                     frameSampler: previewSampler,
                     appearanceSteps,
                     backgroundImage: fieldImage.image,
-                    backgroundImageSize: fieldImage.size,
                     // The preview sizes it to its own canvas on the first frame
                     width: 1,
                     height: 1,
@@ -1318,7 +1305,6 @@ function VideoExport() {
         appearanceSteps,
         fieldImage.loaded,
         fieldImage.image,
-        fieldImage.size,
     ]);
 
     const previewLoading =
@@ -1331,8 +1317,25 @@ function VideoExport() {
             showMeasures: showMeasures && measures.length > 0,
             showTempo,
             showClock,
-            setLabel: t("exportCoordinates.videoOverlaySetLabel"),
-            countLabel: t("exportCoordinates.videoOverlayCountLabel"),
+            text: {
+                set: (set) => t("exportCoordinates.videoOverlaySet", { set }),
+                setTransition: (from, to) =>
+                    t("exportCoordinates.videoOverlaySetTransition", {
+                        from,
+                        to,
+                    }),
+                count: (count, total) =>
+                    t("exportCoordinates.videoOverlayCount", { count, total }),
+                measure: (measure) =>
+                    t("exportCoordinates.videoOverlayMeasure", { measure }),
+                measureWithMark: (measure, mark) =>
+                    t("exportCoordinates.videoOverlayMeasureWithMark", {
+                        measure,
+                        mark,
+                    }),
+                tempo: (bpm) =>
+                    t("exportCoordinates.videoOverlayTempoValue", { bpm }),
+            },
         }),
         [showSetCounts, showMeasures, measures.length, showTempo, showClock, t],
     );
@@ -1402,7 +1405,7 @@ function VideoExport() {
             const { width, height } = selectedResolution;
 
             const audioFile = await AudioFile.getSelectedAudioFile();
-            assert(audioFile.data, "Audio file has no data");
+            assert(audioFile.data, t("exportCoordinates.videoAudioNoData"));
             // The store's resolver when ready, else one cold-built for this export (P7.8)
             const frameSampler = new ResolverFrameSampler(
                 await acquireExportResolver(db),
@@ -1416,9 +1419,8 @@ function VideoExport() {
                 frameSampler,
                 appearanceSteps,
                 backgroundImage: fieldImage.image,
-                backgroundImageSize: fieldImage.size,
                 audioData: audioFile.data,
-                audioOffsetSeconds: workspaceSettings?.audioOffsetSeconds ?? 0,
+                audioOffsetSeconds,
                 width,
                 height,
                 fps: frameRate,
@@ -1470,7 +1472,7 @@ function VideoExport() {
                     error:
                         error instanceof Error
                             ? error.message
-                            : "Unknown error",
+                            : t("exportCoordinates.unknownError"),
                 }),
             );
         } finally {
@@ -1496,8 +1498,7 @@ function VideoExport() {
         marchers,
         appearanceSteps,
         fieldImage.image,
-        fieldImage.size,
-        workspaceSettings?.audioOffsetSeconds,
+        audioOffsetSeconds,
         frameRate,
         videoTheme,
         measures,
@@ -1549,13 +1550,18 @@ function VideoExport() {
                         }
                     >
                         <SelectTriggerButton
-                            label={`${frameRate} fps`}
+                            label={t("exportCoordinates.videoFrameRateValue", {
+                                fps: frameRate,
+                            })}
                             className="w-[10rem] whitespace-nowrap"
                         />
                         <SelectContent>
                             {VIDEO_FRAME_RATES.map((fps) => (
                                 <SelectItem key={fps} value={fps.toString()}>
-                                    {fps} fps
+                                    {t(
+                                        "exportCoordinates.videoFrameRateValue",
+                                        { fps },
+                                    )}
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -1640,10 +1646,11 @@ function VideoExport() {
                                     }),
                                 )
                             }
+                            aria-label={t("exportCoordinates.videoFieldScale")}
                             className="relative flex h-5 w-full touch-none items-center select-none"
                         />
                         <span className="text-sub text-text/60 w-[3rem] text-right tabular-nums">
-                            {fieldFraming.scale.toFixed(2)}×
+                            {formatFixed(fieldFraming.scale, 2)}×
                         </span>
 
                         <span className="text-body whitespace-nowrap">
@@ -1662,10 +1669,13 @@ function VideoExport() {
                                     }),
                                 )
                             }
+                            aria-label={t(
+                                "exportCoordinates.videoFieldOffsetX",
+                            )}
                             className="relative flex h-5 w-full touch-none items-center select-none"
                         />
                         <span className="text-sub text-text/60 w-[3rem] text-right tabular-nums">
-                            {fieldFraming.offsetX.toFixed(2)}
+                            {formatFixed(fieldFraming.offsetX, 2)}
                         </span>
 
                         <span className="text-body whitespace-nowrap">
@@ -1684,10 +1694,13 @@ function VideoExport() {
                                     }),
                                 )
                             }
+                            aria-label={t(
+                                "exportCoordinates.videoFieldOffsetY",
+                            )}
                             className="relative flex h-5 w-full touch-none items-center select-none"
                         />
                         <span className="text-sub text-text/60 w-[3rem] text-right tabular-nums">
-                            {fieldFraming.offsetY.toFixed(2)}
+                            {formatFixed(fieldFraming.offsetY, 2)}
                         </span>
                     </div>
                     <Button
@@ -2000,7 +2013,7 @@ function MobileExportOption({ onClick }: { onClick: () => void }) {
                             key={`${url}-${index}`}
                             src={url}
                             alt=""
-                            className="border-stroke shadow-fg-1 aspect-[9/19.5] w-[10rem] shrink-0 rounded-[1.25rem] border object-cover"
+                            className="border-stroke shadow-fg-1 rounded-20 aspect-[9/19.5] w-[10rem] shrink-0 border object-cover"
                             draggable={false}
                         />
                     ))}
@@ -2087,7 +2100,6 @@ export default function ExportCoordinatesModal() {
                             <T keyName="exportCoordinates.title" />
                         )}
                     </DialogTitle>
-                    <ShareNoteExportLine />
                     <ExportModalContents
                         onMobileExportClick={handleMobileExportClick}
                     />

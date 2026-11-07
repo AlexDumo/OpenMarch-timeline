@@ -22,6 +22,7 @@ import { stealLayer } from "./timelineCommands";
 import { ensureCountsInTransaction } from "./endlessCounts";
 import {
     createRangeTimelineInTransaction,
+    marcherLabels,
     readMoveWords,
 } from "./timelineMoveNames";
 import {
@@ -29,8 +30,14 @@ import {
     countsText,
     moveInSentence,
 } from "@/timeline/timelineRangeWords";
+import type { HeldConflict } from "./timelineHeldConflict";
+import {
+    readHeldArrivalsBefore,
+    startHoldsLostInTransaction,
+} from "./timelineHeldUpkeep";
+import { text } from "@/timeline/timelineText";
 
-export { findTimelineByRange };
+export { findTimelineByRange, marcherLabels };
 
 /**
  * Who is in a timeline (docs/timeline/phases/08-authoring-ui.md P8.14; ui.md UI-9: Adding
@@ -73,24 +80,6 @@ export const partlyOverlaps = (a: BeatRange, b: BeatRange): boolean =>
     !containsRange(b, a);
 
 const rangeText = ({ start, end }: BeatRange) => `[${start}, ${end})`;
-
-/** Each marcher's drill number ("T3"), for refusals. */
-export const marcherLabels = async (
-    tx: DbTransaction,
-    marcherIds: readonly number[],
-): Promise<Map<number, string>> => {
-    if (marcherIds.length === 0) return new Map();
-    const rows = await tx
-        .select({
-            id: schema.marchers.id,
-            prefix: schema.marchers.drill_prefix,
-            order: schema.marchers.drill_order,
-        })
-        .from(schema.marchers)
-        .where(inArray(schema.marchers.id, [...marcherIds]))
-        .all();
-    return new Map(rows.map((r) => [r.id, `${r.prefix}${r.order}`]));
-};
 
 /**
  * Marchers in an inheriting follow-the-leader transition, whose order R-12 may read from the slot
@@ -216,6 +205,11 @@ export interface AddMarchersToTimelineResult {
      * resumes at the range's end and catches up to its own destination (R-5 rebase)
      */
     caughtUp: PassedMove[];
+    /**
+     * Holds from the starting spots the edit left nothing to grow out of, so they went (#619):
+     * the new move starts before the hold and doesn't end at its start
+     */
+    droppedHolds?: HeldConflict;
 }
 
 /** One marcher's move that an add over a range passes through or runs into. */
@@ -276,7 +270,8 @@ export const addMarchersToTimelineInTransaction = async ({
         refuse(
             `a timeline needs whole beats with its end after its start, not ${rangeText(range)}`,
         );
-    if (marcherIds.length === 0) refuse("select the marchers to add");
+    if (marcherIds.length === 0)
+        refuse(text.t("timeline.refusals.members.selectToAdd"));
     if (new Set(marcherIds).size !== marcherIds.length)
         refuse("a marcher appears more than once");
     const ids = [...marcherIds].sort((x, y) => x - y);
@@ -303,9 +298,9 @@ export const addMarchersToTimelineInTransaction = async ({
     const toAdd = ids.filter((id) => !alreadyIn.includes(id));
     if (toAdd.length === 0)
         refuse(
-            alreadyIn.length === 1
-                ? "the selected marcher is already in this timeline"
-                : "every selected marcher is already in this timeline",
+            text.t("timeline.refusals.members.alreadyIn", {
+                count: alreadyIn.length,
+            }),
         );
     const overridden: PassedMove[] = [];
     const caughtUp: PassedMove[] = [];
@@ -327,8 +322,22 @@ export const addMarchersToTimelineInTransaction = async ({
                     continue;
                 }
                 const { boxes, moves } = await readMoveWords(tx);
+                const start = beatWhere(other.start, boxes);
+                const params = {
+                    marcher: labels.get(id)!,
+                    move: moveInSentence(other, boxes, moves),
+                    counts: countsText(range, boxes),
+                };
                 refuse(
-                    `${labels.get(id)} is in ${moveInSentence(other, boxes, moves)}, which only partly overlaps ${countsText(range, boxes)}: joining a move partway isn't supported yet. End the range at ${beatWhere(other.start, boxes) ?? "that move's start"}.`,
+                    start
+                        ? text.t("timeline.refusals.members.joinPartway", {
+                              ...params,
+                              start,
+                          })
+                        : text.t(
+                              "timeline.refusals.members.joinPartwayNoStart",
+                              params,
+                          ),
                 );
             }
             if (!containsRange(other, range) && containsRange(range, other)) {
@@ -338,7 +347,11 @@ export const addMarchersToTimelineInTransaction = async ({
                 }
                 const { boxes, moves } = await readMoveWords(tx);
                 refuse(
-                    `${labels.get(id)} is in ${moveInSentence(other, boxes, moves)}, inside ${countsText(range, boxes)}; adding it would replace that move`,
+                    text.t("timeline.refusals.members.wouldReplace", {
+                        marcher: labels.get(id)!,
+                        move: moveInSentence(other, boxes, moves),
+                        counts: countsText(range, boxes),
+                    }),
                 );
             }
         }
@@ -351,10 +364,21 @@ export const addMarchersToTimelineInTransaction = async ({
     for (const marcherId of toAdd) {
         const [x, y] = resolver.positionAt(marcherId, end);
         const point: XY = [x, y];
-        if (!validateDestination(point).ok)
+        if (!validateDestination(point).ok) {
+            const { boxes } = await readMoveWords(tx);
+            const at = beatWhere(end, boxes);
+            const marcher = labels.get(marcherId)!;
             refuse(
-                `${labels.get(marcherId)} is outside the field's bounds at beat ${end}`,
+                at
+                    ? text.t("timeline.refusals.members.offField", {
+                          marcher,
+                          at,
+                      })
+                    : text.t("timeline.refusals.members.offFieldNoWhere", {
+                          marcher,
+                      }),
             );
+        }
         members.push({
             marcherId,
             point,
@@ -400,9 +424,16 @@ export const addMarchersToTimeline = async ({
     range: BeatRange;
     marcherIds: readonly number[];
 }): Promise<AddMarchersToTimelineResult> =>
-    await transactionWithHistory(db, "addMarchersToTimeline", (tx) =>
-        addMarchersToTimelineInTransaction({ tx, range, marcherIds }),
-    );
+    await transactionWithHistory(db, "addMarchersToTimeline", async (tx) => {
+        const heldBefore = await readHeldArrivalsBefore(tx);
+        const result = await addMarchersToTimelineInTransaction({
+            tx,
+            range,
+            marcherIds,
+        });
+        const dropped = await startHoldsLostInTransaction(tx, heldBefore);
+        return dropped ? { ...result, droppedHolds: dropped } : result;
+    });
 
 // ---------------------------------------------------------------------------
 // Removing assignments
@@ -654,13 +685,14 @@ export const removeMarchersFromTimelineInTransaction = async ({
         .where(eq(schema.timelines.id, timelineId))
         .get();
     if (!timeline) refuse(`timeline ${timelineId} does not exist`);
-    if (marcherIds.length === 0) refuse("select the marchers to remove");
+    if (marcherIds.length === 0)
+        refuse(text.t("timeline.refusals.members.selectToRemove"));
     const removed = await assignmentsInTimeline(tx, timelineId, marcherIds);
     if (removed.length === 0)
         refuse(
-            marcherIds.length === 1
-                ? "the marcher isn't in this timeline"
-                : "none of the selected marchers is in this timeline",
+            text.t("timeline.refusals.members.notIn", {
+                count: marcherIds.length,
+            }),
         );
     return await removeAssignmentRowsInTransaction({
         tx,

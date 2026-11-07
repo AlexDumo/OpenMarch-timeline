@@ -6,11 +6,20 @@ import OpenMarchLogo from "@/components/OpenMarchLogo";
 import launchImage from "@/assets/welcome/launch-image.webp";
 import { APP_LANGUAGES, type AppLanguage } from "@/utilities/languages";
 import CyclingText, { useCycleIndex } from "../CyclingText";
+import DevSkipSetupButton from "../DevSkipSetupButton";
 
 /** The page's text that changes language along with the greeting. */
 const CYCLED_KEYS = {
+    title: "welcomeFlow.welcome.title",
     description: "welcomeFlow.welcome.description",
     getStarted: "welcomeFlow.getStarted",
+} as const;
+
+/** The same page for someone who used OpenMarch before. */
+const RETURNING_KEYS = {
+    title: "welcomeFlow.welcomeBack.title",
+    description: "welcomeFlow.welcomeBack.description",
+    getStarted: "welcomeFlow.continue",
 } as const;
 
 /**
@@ -19,20 +28,34 @@ const CYCLED_KEYS = {
  * Get started on the other. The page's text fades through every app language
  * together, starting on `startLanguage`; the next step is in the app's
  * language again. Narrow windows stack the two sides.
+ *
+ * A returning person (`returning`) gets "Welcome back" instead, in the app's
+ * language only (their language is known or was English, and the language
+ * step still follows if it was never chosen), and Continue on to the steps,
+ * What's new among them.
  */
 // eslint-disable-next-line max-lines-per-function
 export default function WelcomeStep({
     onStart,
+    onDevSkip,
+    devSkipDisabled,
     startLanguage,
+    returning = false,
     "aria-label": ariaLabel,
 }: {
     onStart: () => void;
+    /** Skips setup; the button shows in developer builds only. */
+    onDevSkip: () => void;
+    /** Disables that button, e.g. while settings are still being read. */
+    devSkipDisabled?: boolean;
     /** The language to show first: the one the flow will suggest. */
     startLanguage: string;
+    /** The person used OpenMarch before: "Welcome back", no cycling. */
+    returning?: boolean;
     "aria-label"?: string;
 }) {
     const { t } = useTranslate();
-    const tolgee = useTolgee();
+    const tolgee = useTolgee(["language"]);
     const [imageFailed, setImageFailed] = useState(false);
     // Only the app's language is loaded at first; cycle once all are.
     const [allLoaded, setAllLoaded] = useState(false);
@@ -50,13 +73,15 @@ export default function WelcomeStep({
         };
     }, [tolgee]);
 
+    const keys = returning ? RETURNING_KEYS : CYCLED_KEYS;
+    const cycling = allLoaded && !returning;
     const languages: readonly AppLanguage[] = useMemo(() => {
-        if (allLoaded) return APP_LANGUAGES;
+        if (cycling) return APP_LANGUAGES;
         const current = tolgee.getLanguage();
         return [
             APP_LANGUAGES.find((l) => l.code === current) ?? APP_LANGUAGES[0],
         ];
-    }, [allLoaded, tolgee]);
+    }, [cycling, tolgee]);
 
     const index = useCycleIndex(
         languages.length,
@@ -74,7 +99,7 @@ export default function WelcomeStep({
         }));
     const translated = (key: string) =>
         texts((language) =>
-            allLoaded ? tolgee.t({ key, language: language.code }) : t(key),
+            cycling ? tolgee.t({ key, language: language.code }) : t(key),
         );
 
     return (
@@ -101,19 +126,23 @@ export default function WelcomeStep({
                     {/* The visible text changes language, so screen readers
                         get it in the app's language. */}
                     <h1 className="sr-only">
-                        <T keyName="welcomeFlow.welcome.title" />
+                        <T keyName={keys.title} />
                     </h1>
                     <CyclingText
-                        texts={texts((language) => language.greeting)}
+                        texts={
+                            returning
+                                ? translated(keys.title)
+                                : texts((language) => language.greeting)
+                        }
                         index={index}
                         className="text-h1 text-text leading-tight font-medium"
                         data-testid="welcome-greeting"
                     />
                     <p className="sr-only">
-                        <T keyName={CYCLED_KEYS.description} />
+                        <T keyName={keys.description} />
                     </p>
                     <CyclingText
-                        texts={translated(CYCLED_KEYS.description)}
+                        texts={translated(keys.description)}
                         index={index}
                         wrap
                         className="text-body text-text-subtitle"
@@ -123,16 +152,21 @@ export default function WelcomeStep({
                         size="default"
                         onClick={onStart}
                         className="mt-8 gap-8 px-24"
-                        aria-label={t(CYCLED_KEYS.getStarted)}
+                        aria-label={t(keys.getStarted)}
                         data-testid="welcome-continue"
                         autoFocus
                     >
                         <CyclingText
-                            texts={translated(CYCLED_KEYS.getStarted)}
+                            texts={translated(keys.getStarted)}
                             index={index}
                         />
                         <ArrowRightIcon size={18} />
                     </Button>
+                    <DevSkipSetupButton
+                        onSkip={onDevSkip}
+                        disabled={devSkipDisabled}
+                        className="-mt-16"
+                    />
                 </div>
             </div>
         </main>

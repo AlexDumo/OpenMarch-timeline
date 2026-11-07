@@ -2,20 +2,14 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { db } from "@/global/database/db";
 import type { DbConnection } from "@/db-functions/types";
-import {
-    setTimelinePutDownItems,
-    startTimelineResolver,
-    stopTimelineResolver,
-} from "./timelineStore";
-import { usePutDownItems } from "@/hooks/queries/usePutDownItems";
+import { startTimelineResolver, stopTimelineResolver } from "./timelineStore";
 import { useTimelineSelectionHost } from "./useTimelineSelectionHost";
 import { useTimelinePageBridge } from "./useTimelinePageBridge";
 import { useDeselectDimmedMarchers } from "./useTimelineDimming";
 import { useTimelinePlaybackDriver } from "./useTimelinePlaybackDriver";
-import { useKeptAssignmentsHost } from "./useKeepLaterPages";
+import { useHeldMarksHost } from "./useHeldMarks";
 import { useBasicModeGuards } from "./useBasicModeGuards";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
-import { useCollisionDetection } from "@/hooks/useCollisionDetection";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { pageFlags } from "./timelinePlayhead";
 import { useBasicLocksHost } from "./basicLocks";
@@ -44,17 +38,6 @@ export function useTimelineResolverSession(
         void startTimelineResolver(database);
         return () => stopTimelineResolver();
     }, [database, enabled]);
-}
-
-/**
- * Feeds the resolver the items it puts down where their holders release them (ADR 0002 D-9):
- * Placement isn't in the timeline change log, so the store gets it from a query.
- */
-export function useTimelinePutDownFeed(): void {
-    const items = usePutDownItems();
-    useEffect(() => {
-        if (items) setTimelinePutDownItems(items);
-    }, [items]);
 }
 
 /**
@@ -102,8 +85,6 @@ function useTimelinePageBoxes(enabled: boolean): void {
  */
 export default function TimelineResolverHost() {
     useTimelineResolverSession(db, true);
-    // C2.5: released items are put down at their holders
-    useTimelinePutDownFeed();
     // The stored timelines the UI-9 selection resolves to (P8.11)
     useTimelineSelectionHost(db, true);
     // TEMPORARY (P8.12): the legacy selected page follows the playhead
@@ -118,10 +99,10 @@ export default function TimelineResolverHost() {
     useBasicModeGuards(true);
     // UI-19: the marchers Basic can't edit, per page
     useBasicLocksHost(true);
-    // UI-18 keep later pages: the kept spots the chains and the inspector line read
-    useKeptAssignmentsHost(db, true);
-    // #226: the selected page's collisions, for both fields and the Collisions tab
-    useCollisionDetection();
+    // Holds (#472): the Held marks the timeline's Held bars read
+    useHeldMarksHost(db, true);
+    // #226's collision detection (useCollisionDetection) is unmounted while Collisions is
+    // hidden; mount it here again with the toolbar's Collisions tab.
     // The console API can write fixtures into the file: development builds only
     useTimelineDevApi(db, import.meta.env.DEV);
     return null;

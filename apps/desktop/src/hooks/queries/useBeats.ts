@@ -6,12 +6,13 @@ import {
 } from "@tanstack/react-query";
 import { queryClient } from "@/App";
 import { conToastError } from "@/utilities/utils";
+import tolgee from "@/global/singletons/Tolgee";
 import {
     DbConnection,
     DatabaseBeat,
     createBeats,
     getBeats,
-    deleteBeatsCarryingCues,
+    deleteBeats,
     updateBeats,
     shiftBeats,
     flattenOrder,
@@ -19,7 +20,6 @@ import {
     NewBeatArgs,
 } from "@/db-functions";
 import { DEFAULT_STALE_TIME } from "./constants";
-import { showCueCarryNotice } from "@/utilities/cueCarryNotice";
 import { itemGeometryKeys } from "./useItems";
 
 /**
@@ -81,7 +81,7 @@ export const createBeatsMutationOptions = (qc: QueryClient) => {
             });
         },
         onError: (e, variables) => {
-            conToastError(`Error creating beats`, e, variables);
+            conToastError(tolgee.t("audio.beats.create.error"), e, variables);
         },
     });
 };
@@ -100,26 +100,24 @@ export const updateBeatsMutationOptions = (qc: QueryClient) => {
             });
         },
         onError: (e, variables) => {
-            conToastError(`Error updating beats`, e, variables);
+            conToastError(tolgee.t("audio.beats.update.error"), e, variables);
         },
     });
 };
 
 export const deleteBeatsMutationOptions = (qc: QueryClient) => {
     return mutationOptions({
-        mutationFn: (beatIds: Set<number>) =>
-            deleteBeatsCarryingCues({ db, beatIds }),
-        onSuccess: ({ cues }) => {
+        mutationFn: (beatIds: Set<number>) => deleteBeats({ db, beatIds }),
+        onSuccess: () => {
             // Invalidate all beat queries
             void qc.invalidateQueries({
                 queryKey: [KEY_BASE],
             });
             // Item Outline changes on the deleted beats were carried to other beats
             void qc.invalidateQueries({ queryKey: itemGeometryKeys.all() });
-            showCueCarryNotice(cues, qc);
         },
         onError: (e, variables) => {
-            conToastError(`Error deleting beats`, e, variables);
+            conToastError(tolgee.t("audio.beats.delete.error"), e, variables);
         },
     });
 };
@@ -134,7 +132,7 @@ export const shiftBeatsMutationOptions = (qc: QueryClient) => {
             });
         },
         onError: (e, variables) => {
-            conToastError(`Error shifting beats`, e, variables);
+            conToastError(tolgee.t("audio.beats.shift.error"), e, variables);
         },
     });
 };
@@ -149,7 +147,7 @@ export const flattenOrderMutationOptions = (qc: QueryClient) => {
             });
         },
         onError: (e) => {
-            conToastError(`Error flattening beat order`, e);
+            conToastError(tolgee.t("audio.beats.flatten.error"), e);
         },
     });
 };

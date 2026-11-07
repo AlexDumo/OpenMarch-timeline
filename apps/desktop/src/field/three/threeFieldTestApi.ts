@@ -1,4 +1,5 @@
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
+import { useShapeGuidesStore } from "@/shapes/field/shapeGuides";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import type { FieldModeDrawing, FieldPoint } from "@/field/editor/fieldEditor";
 import type {
@@ -20,6 +21,7 @@ import type { FieldMarchers } from "./fieldMarchers";
 import type { FieldItems } from "./fieldItems";
 import { fieldToElement, type FieldViewState } from "./fieldView";
 import type { CurrentFieldQuality } from "./useFieldQuality";
+import { marchersHiddenNow, shapeAlone } from "@/shapes/field/marchersHidden";
 
 /** What the field test API reads from the new field. */
 export type ThreeFieldState = {
@@ -120,6 +122,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
         },
         fieldImage: () => field.fieldImage(),
         shapeOverlay: () => shapeOverlayOf(field),
+        marchersShown: () => !marchersHiddenNow(),
         placedBoxes: () =>
             field.placedBoxes().map(({ id, label, rect }) => ({
                 id,
@@ -157,11 +160,31 @@ function lookOf(
     };
 }
 
+/** A shape's construction as the test API reads it, with what the Guides menu shows (#634) */
+function constructionOf(
+    drawing: FieldModeDrawing,
+    copy: (p: { x: number; y: number }) => { x: number; y: number },
+): FieldTestShapeOverlay["construction"] {
+    const { shown } = useShapeGuidesStore.getState();
+    return (drawing.construction ?? []).map(
+        ({ center, rx, ry, rotation, spokes }) => ({
+            center: copy(center),
+            rx,
+            ry,
+            rotation,
+            shown: shown.circle,
+            spokes: shown.angles ? (spokes ?? []).map(copy) : [],
+        }),
+    );
+}
+
 /** What the editor's mode draws, with its handles in viewport CSS px (#204). */
 function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
-    const drawing = field.modeDrawing();
+    const drawn = field.modeDrawing();
     const element = field.element();
-    if (!drawing || !element) return null;
+    if (!drawn || !element) return null;
+    // As drawn: on its own while H hides the shape's marchers (#558)
+    const drawing = marchersHiddenNow() ? shapeAlone(drawn) : drawn;
     const rect = element.getBoundingClientRect();
     const view = field.view();
     const copy = (p: FieldPoint) => ({ x: p.x, y: p.y });
@@ -173,8 +196,15 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
             to: copy(to),
         })),
         handles: drawing.handles.map(screen),
+        addHandles: (drawing.addHandles ?? []).map(screen),
+        selectedHandles: (drawing.selectedHandles ?? []).map(screen),
+        barHandles: (drawing.barHandles ?? []).map((h) => ({
+            at: screen(h.at),
+            from: screen(h.from),
+        })),
         rings: (drawing.rings ?? []).map(copy),
         gaps: (drawing.gaps ?? []).map(copy),
+        construction: constructionOf(drawing, copy),
         stage: drawing.stage ?? null,
         knob: drawing.knob ? screen(drawing.knob.at) : null,
         centerDot: drawing.centerDot ? screen(drawing.centerDot) : null,
@@ -195,6 +225,25 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
         })),
         guideMarks: (drawing.guideMarks ?? []).map(copy),
         onGuides: (drawing.onGuides ?? []).map(copy),
+        groupMarks: (drawing.groupMarks ?? []).map(({ at, shade, group }) => ({
+            ...copy(at),
+            shade,
+            group,
+        })),
+        groupLabels: (drawing.groupLabels ?? []).map(({ at, text, seam }) => ({
+            ...copy(at),
+            text,
+            seam,
+        })),
+        offsetStep: drawing.offsetStep
+            ? {
+                  from: copy(drawing.offsetStep.from),
+                  corner: copy(drawing.offsetStep.corner),
+                  to: copy(drawing.offsetStep.to),
+                  across: drawing.offsetStep.across,
+                  deep: drawing.offsetStep.deep,
+              }
+            : null,
     };
     function screen(at: FieldPoint) {
         const { x, y } = fieldToElement(view, at.x, at.y);

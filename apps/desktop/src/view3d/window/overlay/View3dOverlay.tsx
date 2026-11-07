@@ -7,8 +7,9 @@
  * - top right: fullscreen and the settings button, with the settings panel
  *   under them when open;
  * - bottom left: playback controls, then the readout;
- * - bottom right: why the view went to low quality, when it did on its own
- *   (`QualityNotice.tsx`).
+ * - bottom right: whether to keep opening the 3D View with every show, until
+ *   answered (`AutoOpenQuestion.tsx`), and why the view went to low quality,
+ *   when it did on its own (`QualityNotice.tsx`).
  *
  * In fullscreen, everything but the readout hides after 3 s without pointer
  * movement (not while the settings panel is open), and the readout grows.
@@ -19,7 +20,7 @@
  * closes the settings panel, then the Cameras panel, then leaves fullscreen. The camera rig (P3.2)
  * owns 1–9, and Esc for pick-a-seat.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslate } from "@tolgee/react";
 import {
     CornersInIcon,
@@ -33,6 +34,7 @@ import { CamerasPanel } from "./CamerasPanel";
 import { Panel, ToggleButton } from "./Panel";
 import { HELD_PLAYBACK_ACTIONS, playbackActionForKey } from "./playback";
 import type { View3dPlaybackAction } from "@/view3d/sync/protocol";
+import { AutoOpenQuestion } from "./AutoOpenQuestion";
 import { QualityNotice } from "./QualityNotice";
 import { Readout } from "./Readout";
 import { SettingsPanel } from "./SettingsPanel";
@@ -180,15 +182,12 @@ export default function View3dOverlay() {
     const { t } = useTranslate();
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [camerasOpen, setCamerasOpen] = useState(false);
-    /** A just-saved camera whose name field should take focus. */
-    const [focusCameraId, setFocusCameraId] = useState<string | null>(null);
     const { isFullscreen, toggleFullscreen } = useFullscreen();
     const hidden = usePointerIdle(
         isFullscreen && !settingsOpen && !camerasOpen,
     );
     const closeSettings = () => setSettingsOpen(false);
     const closeCameras = () => setCamerasOpen(false);
-    const clearFocusCamera = useCallback(() => setFocusCameraId(null), []);
     usePlaybackShortcuts();
     useOverlayShortcuts(
         toggleFullscreen,
@@ -226,18 +225,10 @@ export default function View3dOverlay() {
                 )}
             >
                 <div className="flex max-h-full min-h-0 flex-col items-start gap-8">
-                    <CameraBar
-                        onEdit={() => setCamerasOpen(true)}
-                        onSaved={(id) => {
-                            setCamerasOpen(true);
-                            setFocusCameraId(id);
-                        }}
-                    />
+                    <CameraBar onEdit={() => setCamerasOpen(true)} />
                     {camerasOpen && (
                         <CamerasPanel
                             onClose={closeCameras}
-                            focusId={focusCameraId}
-                            onFocused={clearFocusCamera}
                             className="min-h-0"
                         />
                     )}
@@ -256,6 +247,7 @@ export default function View3dOverlay() {
                             }
                             label={fullscreenLabel}
                             tooltip={fullscreenLabel}
+                            shortcut="F"
                             iconOnly
                             testId="view3d-fullscreen"
                         />
@@ -283,7 +275,8 @@ export default function View3dOverlay() {
                     <TransportBar />
                 </div>
                 <Readout large={isFullscreen} />
-                <div className="ml-auto">
+                <div className="ml-auto flex flex-col items-end gap-8">
+                    <AutoOpenQuestion />
                     <QualityNotice />
                 </div>
             </div>

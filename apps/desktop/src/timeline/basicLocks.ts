@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { create } from "zustand";
+import tolgee from "@/global/singletons/Tolgee";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { toastBasicLock } from "./basicLockToast";
 import {
@@ -68,12 +69,6 @@ export function useBasicLocksHost(enabled: boolean): void {
     }, [on, rows, boxes]);
 }
 
-/** "Page 4", "Pages 4 and 6", "Pages 4, 5 and 9" (names as the boxes have them) */
-export function describePages(names: readonly string[]): string {
-    if (names.length === 1) return `Page ${names[0]}`;
-    return `Pages ${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
-
 /** The index of `box` in the store's boxes, or -1 */
 const boxIndexOf = (
     state: Pick<BasicLocksState, "boxes">,
@@ -119,8 +114,10 @@ export function withoutLockedMarchers<
  */
 export function toastLockedMarchers(count: number, wrote: boolean): void {
     if (count === 0) return;
-    const who = count === 1 ? "One marcher uses" : `${count} marchers use`;
     toastBasicLock(
-        `${who} Expert moves on this page${wrote ? `, so ${count === 1 ? "it wasn't" : "they weren't"} moved` : ""}. Switch to Expert to edit ${count === 1 ? "it" : "them"}.`,
+        tolgee.t(
+            wrote ? "timeline.basic.lockedNotMoved" : "timeline.basic.locked",
+            { count },
+        ),
     );
 }

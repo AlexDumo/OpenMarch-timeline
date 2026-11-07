@@ -1,10 +1,12 @@
 /**
- * Editor side of the 3D View sync (ADR 0002 D-4, docs/3d/design.md §7).
+ * Editor side of the 3D View sync (ADR 0010 D-4, docs/3d/design.md §7).
  *
  * Mounted once in the editor. While a 3D View window is open it publishes:
  * - `clock` on play, pause, seek and page change, and every second while
  *   playing;
  * - `selection` on change;
+ * - `hidden-props` (the props hidden on the field, a local UI setting) on
+ *   change;
  * - `invalidate` for every query the editor invalidates (writes, undo, redo
  *   and rolled-back transactions all end in `invalidateQueries`), and of
  *   `VIEW3D_TIMELINE_QUERY_KEY` after every committed timeline change.
@@ -17,9 +19,11 @@
  * settings with history, camera lists without) and playback
  * requests (playback runs the editor's own actions). With no window open it does nothing, except that it opens the
  * window when the show opens if the app setting
- * `VIEW3D_AUTO_OPEN_SETTING` is on.
+ * `VIEW3D_AUTO_OPEN_SETTING` is on, or was never answered (the window then
+ * asks, `view3dAutoOpenOnShow`). It keeps `useView3dWindowStore` up to date, so
+ * the 3D View button shows only while the window is closed.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
     useMutation,
     useQueryClient,
@@ -50,12 +54,18 @@ import { updateShowCamerasMutationOptions } from "@/hooks/queries/useShowCameras
 import { showCamerasSchema } from "@/view3d/core/cameraList";
 import { pressAction, type ReleaseReason } from "@/shortcuts/registry";
 import { subscribeTimelineChanges } from "@/db-functions/timelineChanges";
+import { useView3dWindowStore } from "@/stores/View3dWindowStore";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { isWebBuild } from "@/utilities/webBuild";
+import { view3dAutoOpenOnShow } from "./view3dAutoOpen";
 import {
     VIEW3D_AUTO_OPEN_SETTING,
     VIEW3D_CLOCK_CHANNEL,
+    VIEW3D_HIDDEN_PROPS_CHANNEL,
     VIEW3D_INVALIDATE_CHANNEL,
     VIEW3D_SELECTION_CHANNEL,
     VIEW3D_TIMELINE_QUERY_KEY,
+    hiddenPropsOf,
     isView3dPlaybackAction,
     VIEW3D_SET_SPEED,
     wallNowMs,
@@ -155,7 +165,10 @@ export function useView3dPublisher() {
     const { mutate: updateCameras } = useMutation(
         updateShowCamerasMutationOptions(queryClient),
     );
-    const [windowOpen, setWindowOpen] = useState(false);
+    const windowOpen = useView3dWindowStore((s) => s.open);
+    const setWindowOpen = useView3dWindowStore((s) => s.setOpen);
+    // The window goes with the show
+    useEffect(() => () => setWindowOpen(false), [setWindowOpen]);
 
     // Starts above any earlier editor session's numbers, so a reloaded
     // editor's clocks aren't ignored by a window that stayed open.
@@ -216,6 +229,15 @@ export function useView3dPublisher() {
         window.electron.publishToView3d(VIEW3D_SELECTION_CHANNEL, selection);
     }, []);
 
+    const sendHiddenProps = useCallback(() => {
+        window.electron.publishToView3d(
+            VIEW3D_HIDDEN_PROPS_CHANNEL,
+            hiddenPropsOf(
+                useUiSettingsStore.getState().uiSettings.hiddenPropIds,
+            ),
+        );
+    }, []);
+
     // Window state, hello and venue requests. Main pushes the state when the
     // window opens or closes; a hello also means it's open. An editor that
     // (re)loads with a window already open asks, after subscribing.
@@ -241,6 +263,7 @@ export function useView3dPublisher() {
                 setWindowOpen(true);
                 sendClock();
                 sendSelection();
+                sendHiddenProps();
             }),
             electron.onView3dVenueChangeRequest((request) => {
                 if (request?.cameras !== undefined) {
@@ -272,11 +295,19 @@ export function useView3dPublisher() {
             cancelled = true;
             cleanups.forEach((cleanup) => cleanup());
         };
-    }, [sendClock, sendSelection, updateVenue, updateCameras]);
+    }, [
+        sendClock,
+        sendSelection,
+        sendHiddenProps,
+        updateVenue,
+        updateCameras,
+        setWindowOpen,
+    ]);
 
-    // Opens the window with the show when the app setting asks for it, in
-    // the background so the editor keeps focus. This runs after the effect
-    // above, so the window-state push and the window's hello aren't missed.
+    // Opens the window with the show when the app setting asks for it, or
+    // while it was never answered (the window asks), in the background so the
+    // editor keeps focus. This runs after the effect above, so the
+    // window-state push and the window's hello aren't missed.
     useEffect(() => {
         const electron = window.electron;
         if (!electron?.openView3d || !electron.invoke) return;
@@ -284,9 +315,12 @@ export function useView3dPublisher() {
         void Promise.resolve(
             electron.invoke("settings:get", VIEW3D_AUTO_OPEN_SETTING),
         ).then((autoOpen) => {
-            if (!cancelled && autoOpen === true) {
+            const canAutoOpen = !isWebBuild && !electron.isPlaywrightSession;
+            if (
+                !cancelled &&
+                view3dAutoOpenOnShow(autoOpen, { canAutoOpen }) === "open"
+            )
                 void electron.openView3d({ background: true });
-            }
         });
         return () => {
             cancelled = true;
@@ -326,6 +360,11 @@ export function useView3dPublisher() {
     useEffect(() => {
         if (windowOpen) sendSelection();
     }, [windowOpen, selectedPageId, selectedMarcherIdsKey, sendSelection]);
+
+    const hiddenPropIds = useUiSettingsStore((s) => s.uiSettings.hiddenPropIds);
+    useEffect(() => {
+        if (windowOpen) sendHiddenProps();
+    }, [windowOpen, hiddenPropIds, sendHiddenProps]);
 
     useEffect(() => {
         if (!windowOpen) return;
@@ -372,7 +411,7 @@ export function relayTimelineChanges(send: () => void): () => void {
 /** Mount point for `useView3dPublisher`; renders nothing. */
 /**
  * Playback buttons and shortcuts in the 3D View window run the same actions
- * as the editor's own (ADR 0002 D-4, `view3d:playback-request`). An action
+ * as the editor's own (ADR 0010 D-4, `view3d:playback-request`). An action
  * that is disabled right now does nothing, as in the editor. A held action (a
  * playback speed key) lasts until the window lets go of its key, or closes.
  */

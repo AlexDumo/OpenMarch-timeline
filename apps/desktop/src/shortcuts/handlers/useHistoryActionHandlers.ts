@@ -1,11 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { useTolgee } from "@tolgee/react";
+import { useTranslate } from "@tolgee/react";
 import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
-import { isVisualsView } from "@/stores/WorkspaceViewStore";
 import { useActionHandler } from "../useActionHandler";
-import { historyEditWorkspace } from "./historyWorkspace";
 import {
     queueHistoryAction,
     setHistoryPerformer,
@@ -17,20 +15,8 @@ const NOTHING_TO_DO_KEYS = {
     redo: "actions.edit.noRedoAvailable",
 } as const;
 
-/** Where an undone or redone edit was made, when that isn't the workspace on screen */
-const OTHER_WORKSPACE_KEYS = {
-    undo: {
-        editor: "actions.edit.undidDrillEdit",
-        visuals: "actions.edit.undidCueEdit",
-    },
-    redo: {
-        editor: "actions.edit.redidDrillEdit",
-        visuals: "actions.edit.redidCueEdit",
-    },
-} as const;
-
 export function useHistoryActionHandlers() {
-    const { t } = useTolgee();
+    const { t } = useTranslate();
     const databaseReady = useDatabaseReady();
     const { mutateAsync: performHistoryAction } = usePerformHistoryAction();
 
@@ -45,12 +31,6 @@ export function useHistoryActionHandlers() {
             });
             return false;
         }
-        // One stack for both workspaces: an edit made in the other one says so, as nothing on
-        // screen shows it changing
-        const workspace = historyEditWorkspace(response.tableNames ?? []);
-        const shown = isVisualsView() ? "visuals" : "editor";
-        if (workspace && workspace !== shown)
-            toast.info(t(OTHER_WORKSPACE_KEYS[direction][workspace]));
         return true;
     };
     const runRef = useRef(run);

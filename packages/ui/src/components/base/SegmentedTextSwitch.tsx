@@ -15,7 +15,8 @@ interface SegmentedTextSwitchProps {
     setSelected: (value: string) => void;
     className?: string;
     itemClassName?: string;
-    ariaLabel?: string;
+    /** The switch's name for screen readers, already translated (the package has no translations). */
+    ariaLabel: string;
     testId?: string;
 }
 
@@ -25,7 +26,7 @@ export function SegmentedTextSwitch({
     setSelected,
     className,
     itemClassName,
-    ariaLabel = "Segmented text switch",
+    ariaLabel,
     testId,
 }: SegmentedTextSwitchProps) {
     return (
@@ -37,7 +38,7 @@ export function SegmentedTextSwitch({
                 if (value) setSelected(value);
             }}
             className={clsx(
-                "bg-fg-1 border-stroke inline-flex flex-wrap items-center gap-2 rounded-[24px] border p-4",
+                "bg-fg-1 border-stroke inline-flex flex-wrap items-center gap-2 rounded-full border p-4",
                 "shadow-inner",
                 className,
             )}

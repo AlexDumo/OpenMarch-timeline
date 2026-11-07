@@ -7,26 +7,23 @@ import {
     renameTimeline,
     shiftTimeline,
 } from "@/db-functions/timelineCommands";
-import { addMarchersToTimeline } from "@/db-functions/timelineMembership";
 import type { DbConnection } from "@/db-functions/types";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
 import { allMarcherRowsQueryOptions } from "@/hooks/queries/useMarchers";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
-import {
-    isPageTimeline,
-    moveLabel,
-    moveLabels,
-} from "@/timeline/timelineViewModel";
+import { isPageTimeline, moveLabels } from "@/timeline/timelineViewModel";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import { timelineExists } from "@/db-functions/timelines";
-import { pageRunsLabel, type NamedPage } from "@/db-functions/pageDelete";
+import { pageRuns, type NamedPage } from "@/db-functions/pageDelete";
+import { formatList } from "@/utilities/formatList";
 import {
     splitTimelineAtBeat,
     type MotionChange,
 } from "@/db-functions/timelineSplitAtBeat";
 import { beatWhere } from "@/timeline/timelineRangeWords";
-import { useMoveCardRevealStore } from "@/stores/MoveCardRevealStore";
+import type { TimelineText } from "@/timeline/timelineText";
+import { translateTimelineText } from "@/timeline/translateTimelineText";
 import { useMoveMemberSelectionStore } from "@/stores/MoveMemberSelectionStore";
 import {
     useTimelineSelectionStore,
@@ -35,9 +32,7 @@ import {
     type TimelineSelectionState,
 } from "@/stores/TimelineSelectionStore";
 import type { TimelineInput } from "./Timeline";
-import type { TimelineAddMarchersMenu } from "./TimelineRangeMenu";
 import type {
-    TimelineBeatRange,
     TimelineRangeChange,
     TimelineRangeCommitResult,
 } from "./TimelineViewModel";
@@ -63,32 +58,17 @@ export function timelineShiftFor(
     return { timelineId: Number(track.linkId), delta };
 }
 
-/** Why **Add selected marchers** is unavailable, or null when it can run. */
-export function addSelectedMarchersBlocker(
-    selectedMarcherIds: ReadonlySet<number>,
-): string | null {
-    return selectedMarcherIds.size === 0
-        ? "Select marchers first: at home, on a range with no timeline yet, or in a timeline they're in."
-        : null;
-}
-
 /**
  * The panel's side of the commands: the callbacks that run each command as one undoable edit and
  * show a refusal's friendly message (P8.6) as a toast. A clip move of the selected timeline moves
  * the selection with it (UI-9).
- *
- * Create Track isn't offered (P8.15): with one timeline per page it would give a
- * marcher a second transition in a page timeline. **Add selected marchers** replaces it (UI-9
- * Creating a timeline).
  */
 export function useTimelineCommands({
     database,
     timelines,
-    selectedMarcherIds,
 }: {
     database: DbConnection;
     timelines: readonly TimelineInput[];
-    selectedMarcherIds: ReadonlySet<number>;
 }) {
     const commitTimelineRange = useCallback(
         (change: TimelineRangeChange): TimelineRangeCommitResult => {
@@ -122,44 +102,12 @@ export function useTimelineCommands({
 
     return {
         commitTimelineRange,
-        addSelectedMarchers: useAddSelectedMarchers(
-            database,
-            selectedMarcherIds,
-        ),
     };
-}
-
-/**
- * UI-9 Adding marchers: the selected marchers join the timeline over the right-clicked range
- * (spec beats), which is created if none has it, as one undoable edit; a refusal is a toast. The
- * menu doesn't change the selection.
- */
-function useAddSelectedMarchers(
-    database: DbConnection,
-    selectedMarcherIds: ReadonlySet<number>,
-): TimelineAddMarchersMenu {
-    return useMemo(
-        (): TimelineAddMarchersMenu => ({
-            disabledReason: addSelectedMarchersBlocker(selectedMarcherIds),
-            onAdd: (range: TimelineBeatRange) => {
-                if (selectedMarcherIds.size === 0) return;
-                addMarchersToTimeline({
-                    db: database,
-                    range: {
-                        start: range.startBeatIndex,
-                        end: range.endBeatIndex,
-                    },
-                    marcherIds: [...selectedMarcherIds],
-                }).catch((error: unknown) => toastTimelineError(error));
-            },
-        }),
-        [database, selectedMarcherIds],
-    );
 }
 
 /** Why **Edit move** and **Delete move** are unavailable (UI-14), or null when they can run. */
 export function moveCommandBlocker(isPlaying: boolean): string | null {
-    return isPlaying ? "Pause to edit or delete a move." : null;
+    return isPlaying ? tolgee.t("timeline.moveMenu.paused") : null;
 }
 
 /**
@@ -205,18 +153,12 @@ export function moveDeletedMessage(
         return tolgee.t("timeline.moveDeleted.message", "Deleted {label}", {
             label,
         });
-    const pages = pageRunsLabel(changedPages);
-    return changedPages.length === 1
-        ? tolgee.t(
-              "timeline.moveDeleted.withPage",
-              "Deleted {label} · Page {pages} changed",
-              { label, pages },
-          )
-        : tolgee.t(
-              "timeline.moveDeleted.withPages",
-              "Deleted {label} · Pages {pages} changed",
-              { label, pages },
-          );
+    const pages = formatList(pageRuns(changedPages));
+    return tolgee.t(
+        "timeline.moveDeleted.withPages",
+        "{count, plural, =1 {Deleted {label} · Page {pages} changed} other {Deleted {label} · Pages {pages} changed}}",
+        { label, pages, count: changedPages.length },
+    );
 }
 
 /**
@@ -237,7 +179,7 @@ function toastMoveEdit(message: string, undo: () => void): void {
     let unsubscribe = () => {};
     const id = toast.success(message, {
         duration: DELETE_TOAST_MS,
-        action: { label: "Undo", onClick: undo },
+        action: { label: tolgee.t("actions.edit.undo", "Undo"), onClick: undo },
         onDismiss: () => unsubscribe(),
         onAutoClose: () => unsubscribe(),
     });
@@ -291,7 +233,7 @@ export function moveAtPlayhead(
             (t) => t.id === state.isolation!.timelineId,
         );
         if (isolated && inside(isolated)) return isolated;
-        return "Put the playhead inside the move you're editing to split it.";
+        return tolgee.t("timeline.moveSplit.isolatedOutside");
     }
     const current = windowMove(state);
     if (current && inside(current)) return current;
@@ -302,44 +244,76 @@ export function moveAtPlayhead(
         (t) => inside(t) && !isPageTimeline(t, stored, state.pageBoxes),
     );
     if (crossing.length === 1) return crossing[0]!;
-    const where = beatWhere(beat, state.pageBoxes) ?? "the playhead";
-    return crossing.length === 0
-        ? `No move crosses ${where}. Put the playhead inside a move to split it.`
-        : `Several moves cross ${where}. Right-click the one to split.`;
+    const where = beatWhere(beat, state.pageBoxes);
+    if (where === null)
+        return tolgee.t(
+            crossing.length === 0
+                ? "timeline.moveSplit.noneAtPlayhead"
+                : "timeline.moveSplit.severalAtPlayhead",
+        );
+    return tolgee.t(
+        crossing.length === 0
+            ? "timeline.moveSplit.noneAt"
+            : "timeline.moveSplit.severalAt",
+        { where: translateTimelineText(where) },
+    );
 }
 
 /**
- * "Split Move 2 at Page 3 count 4", and when paths changed (a path that wasn't a straight line
- * before the split, UI-27), "… · 3 marchers' paths are redrawn: straight before it, restarted
- * after".
+ * "Split Move 2 at Page 3 count 4" ("… at the playhead" where the moment has no page to say it
+ * by), and when paths changed (UI-27): "… · 3 marchers' curved paths restart after it" when every
+ * change starts at the split `beat` (an arc keeps its curve before it, #591), else "… · 3
+ * marchers' paths are redrawn: straight before it, restarted after" (follow the leader goes
+ * straight before it).
  */
 export function moveSplitMessage(
     label: string,
-    where: string,
+    where: TimelineText | null,
     changed: readonly MotionChange[],
+    beat: number,
 ): string {
-    const base = tolgee.t(
-        "timeline.moveSplit.message",
-        "Split {label} at {where}",
-        { label, where },
-    );
+    const base = where
+        ? tolgee.t("timeline.moveSplit.message", "Split {label} at {where}", {
+              label,
+              where: translateTimelineText(where),
+          })
+        : tolgee.t(
+              "timeline.moveSplit.messageAtPlayhead",
+              "Split {label} at the playhead",
+              { label },
+          );
     if (changed.length === 0) return base;
-    const note =
-        changed.length === 1
-            ? tolgee.t(
-                  "timeline.moveSplit.oneChanged",
-                  "1 marcher's path is redrawn: straight before it, restarted after",
-              )
-            : tolgee.t(
-                  "timeline.moveSplit.changed",
-                  "{count} marchers' paths are redrawn: straight before it, restarted after",
-                  { count: changed.length },
-              );
-    return `${base} · ${note}`;
+    // Curved paths keep every count before the split and only restart after it (#591); a path
+    // that changes before it too (follow the leader) is redrawn straight there. Each is counted
+    // on its own, so a move with both says both
+    const restarted = changed.filter((c) => c.fromBeat >= beat).length;
+    const redrawn = changed.length - restarted;
+    const notes: string[] = [];
+    if (restarted > 0)
+        notes.push(
+            tolgee.t(
+                "timeline.moveSplit.restarted",
+                "{count, plural, one {# marcher's curved path restarts after it} other {# marchers' curved paths restart after it}}",
+                { count: restarted },
+            ),
+        );
+    if (redrawn > 0)
+        notes.push(
+            tolgee.t(
+                "timeline.moveSplit.changed",
+                "{count, plural, one {# marcher's path is redrawn: straight before it, restarted after} other {# marchers' paths are redrawn: straight before it, restarted after}}",
+                { count: redrawn },
+            ),
+        );
+    return notes.reduce(
+        (message, note) =>
+            tolgee.t("timeline.moveSplit.withNote", { message, note }),
+        base,
+    );
 }
 
 /**
- * A move's commands (ui.md UI-14), for the timeline's clips and the inspector's Move card. Each
+ * A move's commands (ui.md UI-14), for the timeline's clips and their menu. Each
  * write is one undoable edit, and a refusal is a toast (P8.6).
  *
  * - **Delete move** deletes the timeline, its transitions and assignments; moves it passed through
@@ -349,11 +323,10 @@ export function moveSplitMessage(
  *   stale button), is ignored without an error.
  * - **Rename** stores the name as `renameTimeline` normalizes it; an unchanged name writes nothing,
  *   and a move that is gone (its field left open while it was deleted) is skipped.
- * - **Select its marchers** selects the marchers with an assignment in it on the canvas, and
+ * - **Select marchers** selects the marchers with an assignment in it on the canvas, and
  *   records them, so going to another move clears them (`useClearLeftoverMoveSelection`).
  * - **Edit move** isolates the move (09-isolation.md), so its paths show and canvas drags edit
- *   where it ends; on a move already isolated it stays so. It selects nobody (one Esc leaves),
- *   and brings the inspector's Move card into view, with focus on it.
+ *   where it ends; on a move already isolated it stays so. It selects nobody (one Esc leaves).
  * - Deleting moves focus to the next clip, else the previous one, else the timeline.
  */
 export function useMoveCommands(database: DbConnection) {
@@ -384,6 +357,16 @@ export function useMoveCommands(database: DbConnection) {
     );
 }
 
+/** A stored move's label (UI-14), for its toasts. */
+const storedMoveLabel = (timelineId: number) => {
+    const s = useTimelineSelectionStore.getState();
+    return (
+        moveLabels(s.storedTimelines ?? [], s.pageBoxes).get(timelineId) ??
+        s.storedTimelines?.find((t) => t.id === timelineId)?.name ??
+        tolgee.t("timeline.moveName.unnamed")
+    );
+};
+
 /** `useMoveCommands` without React: the app's undo and marcher selection are passed in. */
 export function createMoveCommands({
     database,
@@ -398,13 +381,7 @@ export function createMoveCommands({
         useTimelineSelectionStore
             .getState()
             .storedTimelines?.find((t) => t.id === timelineId);
-    const labelOf = (timelineId: number) => {
-        const s = useTimelineSelectionStore.getState();
-        return (
-            moveLabels(s.storedTimelines ?? [], s.pageBoxes).get(timelineId) ??
-            moveLabel({ name: stored(timelineId)?.name })
-        );
-    };
+    const labelOf = storedMoveLabel;
     /** A refusal is shown, unless the move is gone by now (then there's nothing to say) */
     const report = async (timelineId: number, error: unknown) => {
         if (!(await timelineExists(database, timelineId).catch(() => true)))
@@ -453,8 +430,8 @@ export function createMoveCommands({
         selectMarchers,
         /**
          * **Split at playhead** (UI-27): the move becomes two that meet at the playhead, the one
-         * before it new. That new move becomes the window (its clip selected, the Move card on
-         * it), ending any isolation. Resolves once the split has settled.
+         * before it new. That new move becomes the window (its clip selected), ending any
+         * isolation. Resolves once the split has settled.
          */
         splitMoveAtPlayhead: (timelineId: number, isPlaying = false) =>
             splitMoveAtPlayhead({
@@ -469,9 +446,8 @@ export function createMoveCommands({
         editMove: (timelineId: number) => {
             if (!stored(timelineId)) return;
             // UI-14 review: isolation shows who is in it, so nobody is selected (one Esc
-            // leaves); **Select them** on the card selects them
+            // leaves); the clip menu's **Select marchers** selects them
             useTimelineSelectionStore.getState().isolate(timelineId);
-            useMoveCardRevealStore.getState().reveal(timelineId);
         },
     };
 }
@@ -519,8 +495,9 @@ async function splitMoveAtPlayhead({
         toastMoveEdit(
             moveSplitMessage(
                 label,
-                beatWhere(playheadBeat, pageBoxes) ?? "the playhead",
+                beatWhere(playheadBeat, pageBoxes),
                 motionChanged,
+                playheadBeat,
             ),
             undo,
         );

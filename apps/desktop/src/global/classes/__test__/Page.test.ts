@@ -6,12 +6,18 @@ import Page, {
     yankOrPushPagesAfterIndex,
 } from "../Page";
 import Measure from "../Measure";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import Beat from "../Beat";
 import { conToastError } from "@/utilities/utils";
 import { DatabasePage, FIRST_BEAT_ID, FIRST_PAGE_ID } from "@/db-functions";
+import tolgee from "@/global/singletons/Tolgee";
 
 describe("Page", () => {
+    // The toasts are translated: load English so they read as written
+    beforeAll(async () => {
+        await tolgee.run();
+    });
+
     describe("generatePageNames", () => {
         it('should generate a list with just "0" when input is empty', () => {
             const result = generatePageNames([]);
@@ -359,6 +365,48 @@ describe("Page", () => {
     });
 
     describe("fromDatabasePages", () => {
+        it("leaves the measures in playing order when numbers go down (tempo mode renumbering)", () => {
+            const beats: Beat[] = [0, 1, 2, 3, 4].map(
+                (i) =>
+                    ({
+                        id: i === 0 ? FIRST_BEAT_ID : i,
+                        position: i,
+                        duration: i === 0 ? 0 : 1,
+                        includeInMeasure: true,
+                        notes: null,
+                        index: i,
+                        timestamp: Math.max(0, i - 1),
+                    }) satisfies Beat,
+            );
+            // measure 1, then a measure renumbered -12, then -11
+            const measures = [
+                { id: 1, number: 1, startBeat: beats[1], beats: [beats[1]] },
+                { id: 2, number: -12, startBeat: beats[2], beats: [beats[2]] },
+                {
+                    id: 3,
+                    number: -11,
+                    startBeat: beats[3],
+                    beats: [beats[3], beats[4]],
+                },
+            ] as unknown as Measure[];
+            const pages = fromDatabasePages({
+                databasePages: [
+                    {
+                        id: FIRST_PAGE_ID,
+                        start_beat: FIRST_BEAT_ID,
+                        is_subset: false,
+                        notes: null,
+                    },
+                    { id: 1, start_beat: 1, is_subset: false, notes: null },
+                ] as DatabasePage[],
+                allMeasures: measures,
+                allBeats: beats,
+                lastPageCounts: 4,
+            });
+            expect(measures.map((m) => m.id)).toEqual([1, 2, 3]);
+            expect(pages[1]!.measures?.map((m) => m.id)).toEqual([1, 2, 3]);
+        });
+
         it("should return an empty array when no database pages are provided", () => {
             const result = fromDatabasePages({
                 databasePages: [],

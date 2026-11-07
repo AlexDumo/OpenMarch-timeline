@@ -1,5 +1,5 @@
 /**
- * Performer blocks for the 3D View (P4.2, ADR 0002 D-7, design.md §8,
+ * Performer blocks for the 3D View (P4.2, ADR 0010 D-7, design.md §8,
  * ui.md UI-4).
  *
  * - One `InstancedMesh` of cylinders (0.3 m radius, 1.75 m tall) standing on
@@ -39,8 +39,7 @@ import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppearances";
 import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionAppearances";
 import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
-import { showLibraryItemsQueryOptions } from "@/hooks/queries/useShowLibrary";
-import { cueLibraryItemsOf, cueSectionsOf } from "@/view3d/library/cueAspects";
+import { cueSectionsOf } from "./cueSections";
 import {
     guardUniformPresetOf,
     uniformPresetOf,
@@ -80,6 +79,7 @@ import {
 } from "./performerData";
 import type { MarcherSlotLook } from "./marchers/marcherBodies";
 import {
+    bandMovingCounts,
     compileWindowCues,
     MarcherMotion,
     planShow,
@@ -94,18 +94,14 @@ import {
 } from "./marchers/useMarcherBodies";
 import { clipsToLoad } from "./marchers/marcherBodies";
 import { hornRowsOf } from "./marchers/hornRows";
-import { useShowPerformerDefaults, useStoredCues } from "./useStoredCues";
 import { sectionCueCarry } from "@/view3d/core/marchers/hornChannel";
-import {
-    windowHornEvents,
-    windowLookHold,
-    windowStepOffFoot,
-} from "./previewOverrides";
-import { dotModesPerCount } from "@/view3d/core/marchers/dotModes";
+import { DEFAULT_HOLD, windowHornEvents } from "./windowHorn";
 import { SilkMotion } from "./marchers/silkMotion";
 
 const CYLINDER_SEGMENTS = 20;
 const RING_SEGMENTS = 32;
+/** Every marcher steps off with the left foot, and the dot marks the foot on every count. */
+const STEP_OFF_FOOT = "left";
 
 interface PerformersProps {
     fieldProperties: FieldProperties;
@@ -116,17 +112,6 @@ interface PerformersProps {
 export default function Performers({ fieldProperties }: PerformersProps) {
     const queryClient = useQueryClient();
     const quality = useView3dSceneStore((s) => s.quality);
-    // The window's preview overrides: null (the start) follows the show.
-    const hornOverride = useView3dSceneStore((s) => s.hornState);
-    const guardOverride = useView3dSceneStore((s) => s.guardEquipment);
-    const footOverride = useView3dSceneStore((s) => s.stepOffFoot);
-    const showDefaults = useShowPerformerDefaults();
-    const stepOffFoot = windowStepOffFoot(
-        footOverride,
-        showDefaults.stepOffFoot,
-    );
-    const lookHold = windowLookHold(hornOverride);
-    const stored = useStoredCues();
     const selectedPageId = useView3dSyncStore(
         (s) => s.selection.selectedPageId,
     );
@@ -154,11 +139,11 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const count = slots.ids.length;
 
     // the show's band and guard uniform presets, from its venue settings
-    // (ADR 0002 D-18)
+    // (ADR 0010 D-18)
     const { data: venue } = useVenueSettings();
     const uniformPreset = uniformPresetOf(venue?.uniforms);
     const guardUniformPreset = guardUniformPresetOf(venue?.guardUniforms);
-    // om-pose marchers (ADR 0002 D-7); the cylinders stand in until they load.
+    // om-pose marchers (ADR 0010 D-7); the cylinders stand in until they load.
     const { data: sectionAppearances } = useQuery(
         allSectionAppearancesQueryOptions(),
     );
@@ -195,38 +180,31 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             body: defaultPerformerBody(id, { varyHeight: quality === "high" }),
             uniform: sectionUniform(
                 section,
-                lookHold,
+                DEFAULT_HOLD,
                 options[i],
                 fill ? fillToNumber(fill) : undefined,
-                guardOverride ?? undefined,
+                undefined,
                 uniformPreset,
                 guardUniformPreset,
             ),
             // no Silk cues yet: the silks take the uniform's carry (the
             // section's 2D fill, else the preset's color and pattern)
         }));
-    }, [
-        looksKey,
-        quality,
-        lookHold,
-        guardOverride,
-        uniformPreset,
-        guardUniformPreset,
-    ]);
+    }, [looksKey, quality, uniformPreset, guardUniformPreset]);
     const heightClasses = useMemo(
         () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
         [marcherLooks],
     );
     const marcherAssets = useMarcherAssets(heightClasses);
     // The count clock and every marcher's clip plan for the whole show.
-    const { beats, pages, countGrid } = useTimingObjects();
-    // Performers stand on the platform under their dot (C4.5)
-    const { props: showProps } = useShowProps();
+    const { beats } = useTimingObjects();
+    // Performers stand on the platform under their dot (C4.5), as drawn
+    const hiddenItemIds = useView3dSyncStore((s) => s.hiddenItemIds);
+    const { props: showProps } = useShowProps(hiddenItemIds);
     const clock = useMemo(() => buildCountClock(beats), [beats]);
-    // What each marcher carries, for the cues that fit them: their section's
-    // usual equipment, as in the editor, whatever the guard preview shows.
-    // Keyed on the carry alone, so a preview or quality change doesn't
-    // recompile.
+    // What each marcher carries, for the Horn/Equipment default: their
+    // section's usual equipment, as in the editor. Keyed on the carry alone,
+    // so a quality change doesn't recompile.
     const carriesKey = useMemo(
         () =>
             marchers
@@ -236,8 +214,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 : null,
         [marchers],
     );
-    // Each flag section's usual flag, with its Cut's aspect, for the Silk
-    // aspect note; keyed on the sections' flags alone, like the carries.
+    // Each flag section's usual flag, for the Carry default; keyed on the
+    // sections' flags alone, like the carries.
     const cueSectionsKey = useMemo(() => {
         if (!marchers || !marcherLooks) return null;
         const sectionById = new Map(marchers.map((m) => [m.id, m.section]));
@@ -251,28 +229,25 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             ),
         );
     }, [marchers, marcherLooks, slots.ids]);
-    // The show's Silk Artwork Versions, with their aspects
-    const { data: showLibrary } = useQuery(showLibraryItemsQueryOptions());
-    const cueLibraryItems = useMemo(
-        () => cueLibraryItemsOf(showLibrary ?? []),
-        [showLibrary],
-    );
-    // Positional ripple orders read where marchers stand. Only those need the
-    // drill, so a drill edit doesn't recompile the cues and replan everyone.
-    const rippleNeedsPositions = useMemo(
+    // Which counts anyone travels on, for the Feet default (marchers mark
+    // time while the band moves). Keyed on its content, so a drill edit that
+    // keeps the band's moving counts doesn't recompile and replan everyone.
+    const bandMovingKey = useMemo(
         () =>
-            (stored?.cues ?? []).some(
-                (c) => c.ripple && c.ripple.order !== "drill",
-            ),
-        [stored],
+            bandMovingCounts(
+                slots.ids,
+                slots.positions,
+                clock,
+                fieldProperties,
+            ).join(""),
+        [slots, clock, fieldProperties],
     );
-    const cuePositions = rippleNeedsPositions ? slots.positions : null;
-    // The show's stored cues compiled for every marcher (stand on holds, face
-    // the front and hold horns up where none apply), with the
-    // show's step-off foot or the window's unsaved preview of it.
-    // `carries` decides which Horn/Equipment cues fit each marcher.
+    // The show defaults compiled for every marcher (no cues are stored): mark
+    // time while the band moves, else stand; face the front; horns up; the
+    // left foot steps off. `carries` decides each marcher's Horn/Equipment
+    // default.
     const cues = useMemo(() => {
-        if (!marchers || !stored || !carriesKey || !cueSectionsKey) return null;
+        if (!marchers || !carriesKey || !cueSectionsKey) return null;
         const carries = new Map(
             JSON.parse(carriesKey) as [
                 number,
@@ -282,54 +257,14 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         return compileWindowCues(
             marchers,
             beats,
-            stepOffFoot,
+            STEP_OFF_FOOT,
             {
-                cues: stored.cues,
-                tagIds: stored.tagIds,
-                phraseAssets: stored.phraseAssets,
-                positionAt: cuePositions
-                    ? (id, count) => {
-                          const p = cuePositions.positionAt(
-                              id,
-                              clock.boundariesMs[Math.min(count, clock.counts)],
-                              fieldProperties,
-                          );
-                          return p ? { x: p.x, y: p.z } : { x: 0, y: 0 };
-                      }
-                    : undefined,
-                libraryItems: cueLibraryItems,
                 sections: JSON.parse(cueSectionsKey) as CueSection[],
+                bandMoving: Array.from(bandMovingKey, Number),
             },
             (id) => carries.get(id) ?? "none",
         );
-    }, [
-        marchers,
-        beats,
-        stepOffFoot,
-        stored,
-        carriesKey,
-        cueSectionsKey,
-        cueLibraryItems,
-        cuePositions,
-        clock,
-        fieldProperties,
-    ]);
-    // What each count's dot marks: each set's stored mode, else the show's.
-    const dotModes = useMemo(() => {
-        if (!stored) return null;
-        if (stored.pageSettings.length === 0 && showDefaults.dotMode === "foot")
-            return null;
-        const countBeatIds = beats
-            .filter((b) => b.duration > 0)
-            .sort((a, b) => a.timestamp - b.timestamp)
-            .map((b) => b.id);
-        return dotModesPerCount(
-            pages,
-            countBeatIds,
-            stored.pageSettings,
-            showDefaults.dotMode,
-        );
-    }, [stored, showDefaults.dotMode, beats, pages]);
+    }, [marchers, beats, carriesKey, cueSectionsKey, bandMovingKey]);
     const previousPlans = useRef<ShowPlans | null>(null);
     const showPlans = useMemo(() => {
         if (!marcherAssets || !marcherLooks || !cues) return null;
@@ -342,7 +277,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             marcherAssets.manifest,
             cues,
             previousPlans.current,
-            dotModes,
+            null,
         );
         previousPlans.current = planned;
         // eslint-disable-next-line no-console -- planning time is a cost to watch at 2,000 marchers
@@ -352,15 +287,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 `${clock.counts} counts in ${planned.planMs.toFixed(0)} ms`,
         );
         return planned;
-    }, [
-        marcherAssets,
-        marcherLooks,
-        slots,
-        clock,
-        fieldProperties,
-        cues,
-        dotModes,
-    ]);
+    }, [marcherAssets, marcherLooks, slots, clock, fieldProperties, cues]);
     const clipNames = useMemo(() => {
         const names = plannedClips(
             (showPlans?.plans ?? []).filter((p) => p !== null),
@@ -384,7 +311,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         return [...out];
     }, [marcherLooks, showPlans]);
     // Each carrier's Horn/Equipment channel over the show: horns up, then
-    // whatever the cues say; the window's horn preview, when set, instead.
+    // whatever the cues say.
     const hornSlots = useMemo<(HornSlot | null)[] | null>(() => {
         if (!marcherLooks || !cues) return null;
         const secondsPerCount = (k: number) =>
@@ -396,12 +323,11 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 family: carry.family,
                 events: windowHornEvents(
                     cues.segments(slots.ids[i], "horn_equipment"),
-                    hornOverride,
                     { secondsPerCount },
                 ),
             };
         });
-    }, [marcherLooks, cues, clock, slots.ids, hornOverride]);
+    }, [marcherLooks, cues, clock, slots.ids]);
     const hornRows = useMemo(() => {
         const out = new Set<string>();
         for (const h of hornSlots ?? [])
@@ -564,7 +490,6 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         motion,
         silkMotion,
         showProps,
-        countGrid,
     ]);
 
     // Colors and visibility, only when the looks change.
@@ -661,7 +586,6 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             const propsNow = {
                 props: showProps,
                 positions: slots.positions,
-                countGrid,
                 ms,
                 fieldProperties,
             };

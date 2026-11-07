@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import type {
     BeatPosition,
     TimelineBeatRange,
@@ -154,13 +155,16 @@ export const getTimelineRows = ({
     expanded,
     showWaveform,
     rowCount,
+    measureRow = true,
 }: {
     expanded: boolean;
     showWaveform: boolean;
     rowCount: number;
+    /** Whether the measure row shows (a focused band, tempo mode, has its own) */
+    measureRow?: boolean;
 }): TimelineRows => {
     // The measure row, under the page boxes
-    const railHeight = expanded ? 20 : 17;
+    const railHeight = measureRow ? (expanded ? 20 : 17) : 0;
     const waveformHeight = expanded ? 32 : 12;
     const audioTop = TIMELINE_PAGE_ROW_BOTTOM + railHeight + 2;
     const trackTop = showWaveform ? audioTop + waveformHeight + 4 : audioTop;
@@ -412,26 +416,56 @@ export const getPageCountAt = (
 export const getPlayheadReadout = (
     model: Pick<TimelineViewModel, "pages" | "measures" | "beatCount">,
     positionBeat: BeatPosition,
+    /**
+     * Where the measure and beat are read, when not at `positionBeat`: while playing, the page
+     * count names the count being marched (the next one to land) but the beat is the one the
+     * music is in, so the transport reads them from different places (jo: the beat read one
+     * ahead of the clock)
+     */
+    measurePositionBeat: BeatPosition = positionBeat,
 ) => {
     const at = getPageCountAt(model, positionBeat);
-    const measureAt = at.home ? null : getMeasureAt(model, positionBeat);
+    const measureAt = at.home ? null : getMeasureAt(model, measurePositionBeat);
     const page = at.home
-        ? "Home"
+        ? tolgee.t("timeline.readout.home")
         : at.after
-          ? `END +${at.count}`
-          : `Pg ${at.pageLabel} · ct ${at.count}${at.total != null ? `/${at.total}` : ""}`;
+          ? tolgee.t("timeline.readout.pastEnd", { count: at.count })
+          : at.total != null
+            ? tolgee.t("timeline.readout.pageCountOf", {
+                  page: at.pageLabel,
+                  count: at.count,
+                  total: at.total,
+              })
+            : tolgee.t("timeline.readout.pageCount", {
+                  page: at.pageLabel,
+                  count: at.count,
+              });
     const measure = measureAt
-        ? `m${measureAt.measure} beat ${measureAt.beat}`
+        ? tolgee.t("timeline.readout.measure", {
+              measure: measureAt.measure,
+              beat: measureAt.beat,
+          })
         : null;
     const spokenPage = at.home
-        ? `Home, page ${at.pageLabel}`
+        ? tolgee.t("timeline.readout.spoken.home", { page: at.pageLabel })
         : at.after
-          ? at.count === 1
-              ? "1 count past the end of the show"
-              : `${at.count} counts past the end of the show`
-          : `Page ${at.pageLabel}, count ${at.count}${at.total != null ? ` of ${at.total}` : ""}`;
+          ? tolgee.t("timeline.readout.spoken.pastEnd", { count: at.count })
+          : at.total != null
+            ? tolgee.t("timeline.readout.spoken.pageCountOf", {
+                  page: at.pageLabel,
+                  count: at.count,
+                  total: at.total,
+              })
+            : tolgee.t("timeline.readout.spoken.pageCount", {
+                  page: at.pageLabel,
+                  count: at.count,
+              });
     const spoken = measureAt
-        ? `${spokenPage}, measure ${measureAt.measure} beat ${measureAt.beat}`
+        ? tolgee.t("timeline.readout.spoken.withMeasure", {
+              where: spokenPage,
+              measure: measureAt.measure,
+              beat: measureAt.beat,
+          })
         : spokenPage;
     return { page, measure, spoken };
 };
@@ -443,7 +477,10 @@ export const getPlayheadLabel = (
 ) => {
     const readout = getPlayheadReadout(model, positionBeat);
     return readout.measure
-        ? `${readout.page} · ${readout.measure}`
+        ? tolgee.t("timeline.readout.withMeasure", {
+              page: readout.page,
+              measure: readout.measure,
+          })
         : readout.page;
 };
 
@@ -488,10 +525,13 @@ export const getWindowCountLabel = (
     ) {
         const first = range.startBeatIndex - at.startBeat + 1;
         return first === at.count
-            ? `count ${first}`
-            : `counts ${first}–${at.count}`;
+            ? tolgee.t("timeline.windowCount.one", { count: first })
+            : tolgee.t("timeline.windowCount.range", {
+                  from: first,
+                  to: at.count,
+              });
     }
-    return length === 1 ? "1 count" : `${length} counts`;
+    return tolgee.t("timeline.windowCount.length", { count: length });
 };
 
 /**

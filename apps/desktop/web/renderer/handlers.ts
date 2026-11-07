@@ -5,12 +5,12 @@
  * native open dialogs, downloads in place of "Save As", and links.
  *
  * Electron features with no web equivalent answer the way the app expects
- * when they are unavailable (no recent files, no plugins, signed out), and
+ * when they are unavailable (no recent files, signed out), and
  * window controls do nothing. Everything else goes to the worker.
  */
-import { PAGE_CHANNELS, WEB_CHANNELS, type FlushResult } from "../protocol";
-import { rasterizeImage } from "./rasterize";
+import { WEB_CHANNELS, type FlushResult } from "../protocol";
 import { leaveDecision, leaveQuestion } from "./leave";
+import { workerErrorText } from "./workerErrors";
 import { emit, handleInPage, invokeWorker, listenInPage } from "./ipc";
 import { storageKey } from "./channel";
 import { handOffShow } from "./handoff";
@@ -384,7 +384,7 @@ async function closeShow() {
     return 200;
 }
 
-/** Opens one of a preview build's example shows. 404 if `path` isn't one. */
+/** Opens one of an examples build's example shows. 404 if `path` isn't one. */
 async function openExampleShow(path: string): Promise<number> {
     const example = webExampleShows.find((show) => show.file === path);
     if (!example) return 404;
@@ -404,7 +404,6 @@ export function registerPageHandlers({ isSettingsTab = false } = {}) {
     listenInPage("settings:set", (values: Record<string, unknown>) =>
         setSettings(values),
     );
-    handleInPage(PAGE_CHANNELS.rasterizeImage, rasterizeImage);
     handleInPage("get-theme", () => settings.get("theme") ?? "light");
     handleInPage("set-theme", (theme: string) => setSettings({ theme }));
     handleInPage("get-language", () => settings.get("language") ?? "en");
@@ -450,12 +449,11 @@ export function registerPageHandlers({ isSettingsTab = false } = {}) {
         "recent-files:clear-missing",
     ])
         handleInPage(channel, () => undefined);
-    // A preview build's start page opens its example shows by path, the
+    // An examples build's start page opens its example shows by path, the
     // way a recent file opens (see ExampleShows.tsx).
     handleInPage("recent-files:open", (path: string) =>
         isSettingsTab ? 404 : openExampleShow(path),
     );
-    handleInPage("plugins:list", () => []);
     handleInPage("newShow:getPending", () => false);
     handleInPage("newShow:clearPending", () => undefined);
     handleInPage("auth:get-state", () => ({
@@ -558,11 +556,21 @@ export function registerPageHandlers({ isSettingsTab = false } = {}) {
                         "insertAudioFile: Operation was cancelled or no audio file was provided",
                 },
             };
-        return invokeWorker(
-            WEB_CHANNELS.insertAudio,
-            await file.arrayBuffer(),
-            file.name,
-        );
+        const response = await invokeWorker<{
+            success: boolean;
+            error?: { message?: string };
+        }>(WEB_CHANNELS.insertAudio, await file.arrayBuffer(), file.name);
+        // The worker sends a key for the page to word (`WORKER_ERRORS`)
+        const message = response.error?.message;
+        return message === undefined
+            ? response
+            : {
+                  ...response,
+                  error: {
+                      ...response.error,
+                      message: workerErrorText(message),
+                  },
+              };
     });
     // Video export: the renderer encodes, the file goes to browser storage
     // and is saved from a tap (see ./videoExport.ts).
@@ -593,6 +601,6 @@ export function registerPageHandlers({ isSettingsTab = false } = {}) {
     );
 
     handleInPage("database:repair", () => {
-        throw new Error("Repairing a file isn't available on the web yet");
+        throw new Error(tolgee.t("web.repairUnavailable"));
     });
 }

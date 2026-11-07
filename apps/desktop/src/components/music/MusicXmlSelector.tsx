@@ -2,17 +2,49 @@ import { useRef } from "react";
 import { touchSafeAccept } from "@/utilities/fileAccept";
 import { toast } from "sonner";
 import { Button } from "@openmarch/ui";
-import { T, useTolgee } from "@tolgee/react";
+import { T, useTranslate } from "@tolgee/react";
 import { useTimingObjects } from "@/hooks";
 import { useImportMusicXml, type ImportResult } from "./MusicXmlImport";
 import { useMusicXmlChecksStore } from "@/stores/MusicXmlChecksStore";
+import tolgee from "@/global/singletons/Tolgee";
 
 /** The toast that offers an import's checks; a new import replaces it. */
 const CHECKS_TOAST_ID = "musicxml-import-checks";
 
+/**
+ * Say how an import went: a success toast, or one that offers the checks (what the importer
+ * guessed or couldn't read), kept until dismissed. One at a time: a new import's replaces it.
+ */
+export function showMusicXmlImportResult(
+    fileName: string,
+    result: Pick<ImportResult, "message" | "checks">,
+) {
+    const { checks } = result;
+    if (checks.length === 0) {
+        toast.dismiss(CHECKS_TOAST_ID);
+        toast.success(result.message);
+        return;
+    }
+    // The same id updates an open checks toast in place (dismissing it first would remove the
+    // new one too)
+    toast.warning(result.message, {
+        id: CHECKS_TOAST_ID,
+        description: tolgee.t("music.importChecksCount", {
+            count: checks.length,
+        }),
+        duration: Infinity,
+        action: {
+            label: tolgee.t("music.importChecksShow"),
+            // This import's checks, whatever was imported since
+            onClick: () =>
+                useMusicXmlChecksStore.getState().showChecks(fileName, checks),
+        },
+    });
+}
+
 export default function MusicXmlSelector() {
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const { t } = useTolgee();
+    const { t } = useTranslate();
     const { measures, pages: allPages, beats: allBeats } = useTimingObjects();
 
     const importMusicXmlMutation = useImportMusicXml();
@@ -24,7 +56,7 @@ export default function MusicXmlSelector() {
 
         try {
             if (!allPages || !allBeats) {
-                toast.error("Failed to fetch required data");
+                toast.error(t("music.importDataMissing"));
                 return;
             }
             const result = await importMusicXmlMutation.mutateAsync({
@@ -42,32 +74,8 @@ export default function MusicXmlSelector() {
         }
     };
 
-    const showResult = (fileName: string, result: ImportResult) => {
-        const { checks } = result;
-        // One checks toast at a time: a new import's result replaces the last one's
-        if (checks.length === 0) {
-            toast.dismiss(CHECKS_TOAST_ID);
-            toast.success(result.message);
-            return;
-        }
-        // Kept until dismissed: the list says what to check in the score. The same id updates
-        // an open checks toast in place (dismissing it first would remove the new one too)
-        toast.warning(result.message, {
-            id: CHECKS_TOAST_ID,
-            description: t("music.importChecksCount", {
-                count: checks.length,
-            }),
-            duration: Infinity,
-            action: {
-                label: t("music.importChecksShow"),
-                // This import's checks, whatever was imported since
-                onClick: () =>
-                    useMusicXmlChecksStore
-                        .getState()
-                        .showChecks(fileName, checks),
-            },
-        });
-    };
+    const showResult = (fileName: string, result: ImportResult) =>
+        showMusicXmlImportResult(fileName, result);
 
     return (
         <div className="mt-8 flex items-center gap-8 px-12">

@@ -7,23 +7,20 @@
  *   which saves it with undo.
  * - Graphics: quality and resolution live in the app's Settings window (3D View section). Where
  *   there is no Settings window (the web preview), they are here too.
- * - Preview only, never saved: horns, guard equipment and the step-off foot,
- *   overriding the cues in this window alone.
  * - The keyboard and mouse controls, so they can be found.
  *
  * It floats at the right and doesn't block the scene, so the viewer can
  * orbit while trying a look.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useTranslate } from "@tolgee/react";
+import { T, useTranslate } from "@tolgee/react";
 import { XIcon } from "@phosphor-icons/react";
 import { Input, Switch } from "@openmarch/ui";
 import clsx from "clsx";
+import Shortcut from "@/components/ui/Shortcut";
 import { useView3dSceneStore } from "../sceneStore";
 import { QUALITY_MODES } from "../qualityPreference";
 import { HAS_SETTINGS_WINDOW, RESOLUTIONS } from "../renderPrefs";
-import { HOLD_STATES } from "../hornState";
-import { GUARD_EQUIPMENT } from "@/view3d/core/instruments/catalog";
 import { Segmented } from "./Panel";
 import {
     LightingControl,
@@ -32,7 +29,6 @@ import {
     VenuePicker,
     useVenueRequest,
 } from "./VenueControls";
-import { useShowPerformerDefaults } from "../performers/useStoredCues";
 
 /** End-zone lettering longer than this doesn't fit at a readable size. */
 export const END_ZONE_TEXT_MAX = 24;
@@ -90,7 +86,8 @@ export function SettingsPanel({
                         <GuardUniformPicker />
                     </Row>
                     {hasStands && <CrowdRows />}
-                    {kitId !== "gym" && <EndZoneRow />}
+                    {/* Indoor floors have no end zones */}
+                    {kitId !== "gym" && kitId !== "arena" && <EndZoneRow />}
                 </Section>
                 {/* Graphics live in the Settings window; the web preview has none */}
                 {!HAS_SETTINGS_WINDOW && (
@@ -102,16 +99,6 @@ export function SettingsPanel({
                         <ResolutionRow />
                     </Section>
                 )}
-                {/* Its own section: window state only, never saved (performer-behavior.md 7.5) */}
-                <Section
-                    title={t("view3d.settings.previewSection")}
-                    hint={t("view3d.settings.previewHint")}
-                    testId="view3d-preview-section"
-                >
-                    <HornStateRow />
-                    <GuardEquipmentRow />
-                    <StepOffFootRow />
-                </Section>
                 <Section title={t("view3d.settings.keysSection")}>
                     <ShortcutList />
                 </Section>
@@ -393,145 +380,56 @@ function ResolutionRow() {
     );
 }
 
-/** Which hold the brass plays: a test control until per-page horn states exist. */
-function HornStateRow() {
-    // Every carrier in one hold, to check the poses; "Follow cues", the Horn cues decide
-    const state = useView3dSceneStore((s) => s.hornState);
-    const setState = useView3dSceneStore((s) => s.setHornState);
-    return (
-        <PreviewRow
-            name="hornState"
-            value={state}
-            values={HOLD_STATES}
-            onChange={setState}
-            testId="view3d-horn-state-picker"
-        />
-    );
-}
-
-/** One piece in every guard member's hands, to see it; off, each section's own. */
-function GuardEquipmentRow() {
-    const equipment = useView3dSceneStore((s) => s.guardEquipment);
-    const setEquipment = useView3dSceneStore((s) => s.setGuardEquipment);
-    return (
-        <PreviewRow
-            name="guardEquipment"
-            value={equipment}
-            values={GUARD_EQUIPMENT}
-            onChange={setEquipment}
-            testId="view3d-guard-equipment-picker"
-            className="grid! grid-cols-3 [&>*]:justify-start"
-        />
-    );
-}
-
-/**
- * Which foot the band steps off on, always the performer's own; off, the
- * show's saved foot (named in the hint) and the Feet cues decide.
- */
-function StepOffFootRow() {
-    const { t } = useTranslate();
-    const override = useView3dSceneStore((s) => s.stepOffFoot);
-    const setOverride = useView3dSceneStore((s) => s.setStepOffFoot);
-    const showFoot = useShowPerformerDefaults().stepOffFoot;
-    return (
-        <PreviewRow
-            name="stepOffFoot"
-            value={override}
-            values={["left", "right"] as const}
-            onChange={setOverride}
-            testId="view3d-step-off-foot-picker"
-            hint={t("view3d.settings.stepOffFootHint", {
-                foot: t(`view3d.settings.stepOffFootMode.${showFoot}`),
-            })}
-        />
-    );
-}
-
 /**
  * The window's keyboard and mouse controls (ui.md UI-3, UI-4), in display
- * order. Each has `view3d.keys.<name>` for what it does and
- * `view3d.keyNames.<name>` for the key or gesture.
+ * order. Each has `view3d.keys.<name>` for what it does; its keys are a
+ * binding or display keys shown as a `Shortcut` (mouse gestures are words in
+ * the cap), or two of them as a pair (`view3d.keyNames.pair`).
  */
-const SHORTCUTS = [
-    "playPause",
-    "previousNext",
-    "firstLast",
-    "cameras",
-    "fullscreen",
-    "crowd",
-    "escape",
-    "orbit",
-    "pan",
-    "zoom",
-] as const;
+type ShortcutKeys =
+    | { readonly binding: string }
+    | { readonly keys: readonly string[] }
+    | { readonly pair: readonly [first: string, second: string] };
+
+const SHORTCUTS: readonly (readonly [string, ShortcutKeys])[] = [
+    ["playPause", { binding: "Space" }],
+    ["previousNext", { pair: ["Q", "E"] }],
+    ["firstLast", { pair: ["Alt+Q", "Alt+E"] }],
+    ["cameras", { keys: ["1–9"] }],
+    ["fullscreen", { binding: "F" }],
+    ["crowd", { binding: "C" }],
+    ["escape", { binding: "Escape" }],
+    ["orbit", { binding: "drag" }],
+    ["pan", { binding: "Shift+drag" }],
+    ["zoom", { binding: "scroll" }],
+];
+
+function ShortcutKeysCell({ keys }: { keys: ShortcutKeys }) {
+    if (!("pair" in keys)) return <Shortcut {...keys} />;
+    const [first, second] = keys.pair;
+    return (
+        <T
+            keyName="view3d.keyNames.pair"
+            params={{
+                first: () => <Shortcut binding={first} />,
+                second: () => <Shortcut binding={second} />,
+            }}
+        />
+    );
+}
 
 function ShortcutList() {
     const { t } = useTranslate();
     return (
         <dl className="text-sub grid grid-cols-[auto_1fr] items-baseline gap-x-12 gap-y-4">
-            {SHORTCUTS.map((name) => (
+            {SHORTCUTS.map(([name, keys]) => (
                 <div key={name} className="contents">
-                    <dt>
-                        <kbd className="border-stroke rounded-4 text-text/80 border px-4 font-mono whitespace-nowrap">
-                            {t(`view3d.keyNames.${name}`)}
-                        </kbd>
+                    <dt className="flex items-center gap-4 whitespace-nowrap">
+                        <ShortcutKeysCell keys={keys} />
                     </dt>
                     <dd className="text-text/80">{t(`view3d.keys.${name}`)}</dd>
                 </div>
             ))}
         </dl>
-    );
-}
-
-/** "Follow cues", the segmented controls' value for no preview override. */
-const FOLLOW = "follow";
-type Follow = typeof FOLLOW;
-
-/**
- * A preview override's control: "Follow cues" (null, the start) or one of
- * `values`. Window state only, never saved (performer-behavior.md 7.5).
- */
-function PreviewRow<T extends string>({
-    name,
-    value,
-    values,
-    onChange,
-    testId,
-    className,
-    hint,
-}: {
-    /** `view3d.settings.<name>`, `<name>Mode.<value>` and `<name>Hint`. */
-    name: "hornState" | "guardEquipment" | "stepOffFoot";
-    value: T | null;
-    values: readonly T[];
-    onChange: (value: T | null) => void;
-    testId: string;
-    className?: string;
-    /** In place of `<name>Hint`. */
-    hint?: string;
-}) {
-    const { t } = useTranslate();
-    const label = t(`view3d.settings.${name}`);
-    return (
-        <Row label={label} stacked>
-            <Segmented<T | Follow>
-                value={value ?? FOLLOW}
-                options={[
-                    { value: FOLLOW, label: t("view3d.settings.followCues") },
-                    ...values.map((v) => ({
-                        value: v,
-                        label: t(`view3d.settings.${name}Mode.${v}`),
-                    })),
-                ]}
-                onChange={(next) => onChange(next === FOLLOW ? null : next)}
-                label={label}
-                testId={testId}
-                className={className}
-            />
-            <p className="text-sub text-text/60">
-                {hint ?? t(`view3d.settings.${name}Hint`)}
-            </p>
-        </Row>
     );
 }

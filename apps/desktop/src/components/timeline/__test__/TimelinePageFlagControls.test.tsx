@@ -86,7 +86,6 @@ const view = ({
     onDeletePageWithMoves,
     onAddSubsetPage,
     onSetPageSubset,
-    withAdd = true,
 }: {
     positionBeat?: number;
     isPlaying?: boolean;
@@ -95,7 +94,6 @@ const view = ({
     onDeletePageWithMoves?: (pageId: number) => void;
     onAddSubsetPage?: () => void;
     onSetPageSubset?: (pageId: number, subset: boolean) => void;
-    withAdd?: boolean;
 }) => (
     <Timeline
         mode="expanded"
@@ -107,7 +105,6 @@ const view = ({
         playback={{ positionBeat, isPlaying }}
         selection={null}
         onSelectionChange={vi.fn()}
-        addSelectedMarchers={withAdd ? { onAdd: vi.fn() } : undefined}
         onAddPageFlag={onAddPageFlag}
         onDeletePageFlag={onDeletePageFlag}
         onDeletePageWithMoves={onDeletePageWithMoves}
@@ -122,6 +119,13 @@ const show = (props: Parameters<typeof view>[0]) => render(view(props));
 const playhead = () => screen.getByTestId("timeline-playhead");
 const addPageMenu = () => screen.queryByTestId("timeline-add-page-flag-menu");
 
+/** The text a sighted person sees: without the words a screen reader hears for a shortcut */
+const shownText = (el: Element) => {
+    const copy = el.cloneNode(true) as Element;
+    copy.querySelectorAll(".sr-only").forEach((node) => node.remove());
+    return copy.textContent;
+};
+
 describe("Create page at playhead on the paused playhead's right-click menu (UI-9)", () => {
     it("has no **+** beside the playhead: adding a page doesn't act on the range", () => {
         show({ onAddPageFlag: vi.fn(), onAddSubsetPage: vi.fn() });
@@ -135,10 +139,8 @@ describe("Create page at playhead on the paused playhead's right-click menu (UI-
         const names = screen.getAllByTestId("timeline-add-page-name");
         expect(names.map((n) => n.textContent)).toEqual(["3", "2A"]);
         const item = screen.getByTestId("timeline-add-page");
-        // The action's label (its key here: tests don't load en.json), name and shortcut
-        expect(item.textContent).toBe(
-            "actions.timeline.createPageAtPlayhead3F",
-        );
+        // The action's label, name and shortcut
+        expect(shownText(item)).toBe("Create page at playhead3F");
         fireEvent.click(item);
         expect(onAddPageFlag).toHaveBeenCalledTimes(1);
     });
@@ -149,9 +151,7 @@ describe("Create page at playhead on the paused playhead's right-click menu (UI-
         show({ onAddPageFlag, onAddSubsetPage });
         fireEvent.contextMenu(playhead());
         const item = screen.getByTestId("timeline-add-subset-page");
-        expect(item.textContent).toBe(
-            "actions.timeline.createSubsetAtPlayhead2AShift+F",
-        );
+        expect(shownText(item)).toBe("Create subset at playhead2AShift+F");
         fireEvent.click(item);
         expect(onAddSubsetPage).toHaveBeenCalledTimes(1);
         expect(onAddPageFlag).not.toHaveBeenCalled();
@@ -167,10 +167,7 @@ describe("Create page at playhead on the paused playhead's right-click menu (UI-
             const shortcuts = screen.getAllByTestId(
                 "timeline-add-page-shortcut",
             );
-            expect(shortcuts.map((s) => s.textContent)).toEqual([
-                "Alt+N",
-                "Shift+F",
-            ]);
+            expect(shortcuts.map(shownText)).toEqual(["Alt+N", "Shift+F"]);
         } finally {
             useShortcutOverridesStore.setState({ overrides: {} });
         }
@@ -262,16 +259,16 @@ describe("Delete page on a page box (UI-9)", () => {
         ).toBeNull();
     });
 
-    it("is offered without Add selected marchers, which then isn't", () => {
+    it("is offered alone on a page box; a clip with only delete opens nothing", () => {
         const onDeletePageFlag = vi.fn();
-        show({ onDeletePageFlag, withAdd: false });
+        show({ onDeletePageFlag });
         fireEvent.contextMenu(screen.getByRole("button", { name: "Page 2" }));
         expect(screen.getAllByRole("menuitem")).toHaveLength(1);
         fireEvent.click(screen.getByTestId("timeline-range-menu-delete-flag"));
         expect(onDeletePageFlag).toHaveBeenCalledWith(3);
         cleanup();
-        // A clip has nothing to offer without the add
-        show({ onDeletePageFlag, withAdd: false });
+        // A clip has nothing to offer without move commands
+        show({ onDeletePageFlag });
         fireEvent.contextMenu(screen.getByLabelText(/^A1 timeline/));
         expect(screen.queryByTestId("timeline-range-menu")).toBeNull();
     });
@@ -283,7 +280,6 @@ describe("Delete page and its moves on a page box (defined coordinates)", () => 
         show({
             onDeletePageFlag: vi.fn(),
             onDeletePageWithMoves,
-            withAdd: false,
         });
         fireEvent.contextMenu(screen.getByRole("button", { name: "Page 2" }));
         expect(
@@ -431,7 +427,7 @@ describe("the page boxes the clips are matched against", () => {
 describe("The Subset switch on a page box (UI-9)", () => {
     it("flips the right-clicked page, by page id", () => {
         const onSetPageSubset = vi.fn();
-        show({ onSetPageSubset, withAdd: false });
+        show({ onSetPageSubset });
         fireEvent.contextMenu(screen.getByRole("button", { name: "Page 2" }));
         const item = screen.getByTestId("timeline-range-menu-subset");
         expect(item.textContent).toBe("Subset");

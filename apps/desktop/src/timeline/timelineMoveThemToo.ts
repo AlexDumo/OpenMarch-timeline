@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import type { Resolver, XY } from "@openmarch/core";
 import { toast } from "sonner";
 import { db } from "@/global/database/db";
@@ -12,7 +13,6 @@ import {
     type TimelineMoveResult,
 } from "@/db-functions/timelineMoves";
 import type { DbConnection, DbTransaction } from "@/db-functions/types";
-import { keptTransitionIds } from "@/db-functions/timelineKeptMarkers";
 import {
     useTimelineSelectionStore,
     type PageBox,
@@ -30,7 +30,7 @@ import {
     type ShiftTotals,
 } from "@/utilities/moveThemToo";
 import { editedMarcherEnds, type CarrySpan } from "./timelineCarryForward";
-import { toastTimelineError } from "./timelineErrorMessages";
+import { toastDroppedHolds, toastTimelineError } from "./timelineErrorMessages";
 import { toastPassThrough } from "./timelinePassThrough";
 import { offerOnlyThisPage, ownMovers } from "./timelineOnlyThisPage";
 import { boxMembershipEdit } from "@/shapes/placed/boxMembership";
@@ -174,8 +174,7 @@ const flagsOf = (boxes: readonly PageBox[]) =>
 /**
  * After a timeline edit has committed: the later own moves it left behind (`laterOwnMoves`), read
  * from the resolver once the edit has reached it, without shape-backed ones (their slots have no
- * point of their own to shift) and without kept spots (`timeline_kept_assignments`: the designer
- * kept that spot, so it is never offered, and a kept marcher alone doesn't make a split).
+ * point of their own to shift).
  */
 export async function findLaterOwnMoves({
     database = db,
@@ -209,10 +208,7 @@ export async function findLaterOwnMoves({
         db: database,
         transitionIds,
     });
-    const kept = await keptTransitionIds({ db: database, transitionIds });
-    return found.filter(
-        (m) => !shaped.has(m.transitionId) && !kept.has(m.transitionId),
-    );
+    return found.filter((m) => !shaped.has(m.transitionId));
 }
 
 /** A kept marcher's later move: the marcher, its slot and the flag it ends on */
@@ -265,7 +261,13 @@ export async function toastLaterOwnMoves(
                 forget();
                 shiftSlotDestinations({ db, shifts: moves }).catch(
                     (e: unknown) =>
-                        toastTimelineError(e, "Error moving marchers"),
+                        toastTimelineError(
+                            e,
+                            tolgee.t(
+                                "marcherPages.moveThemToo.moveError",
+                                "Error moving marchers",
+                            ),
+                        ),
                 );
             },
         },
@@ -297,7 +299,8 @@ export async function moveMarchersAndOfferFollowUp({
     database = db,
     target,
     moves: requested,
-    clearOwn,
+    clearPage,
+    keepLaterPages,
     setUnmovedFrom,
     afterWrite,
     writesShapes = false,
@@ -306,7 +309,13 @@ export async function moveMarchersAndOfferFollowUp({
     database?: DbConnection;
     target: TimelineEditTarget;
     moves: readonly TimelineMarcherMove[];
-    clearOwn?: boolean;
+    /**
+     * Clear this page: the caller says who was skipped (`setMarchersToNeighborPage`), and nothing
+     * is offered after it, since the menu already chose what the later pages do (#573)
+     */
+    clearPage?: boolean;
+    /** With `clearPage`: the next page keeps where it was (`moveMarchersInTarget`) */
+    keepLaterPages?: boolean;
     /**
      * Where each marcher stands now: when the moves that are written (Basic's locked marchers
      * left out) move any of them, the ones they leave where they are are written as stays
@@ -353,7 +362,8 @@ export async function moveMarchersAndOfferFollowUp({
         db: database,
         target,
         moves,
-        clearOwn,
+        clearPage,
+        keepLaterPages,
         keepUnchanged,
         afterWrite: membership
             ? async (tx, timelineId) => {
@@ -371,6 +381,13 @@ export async function moveMarchersAndOfferFollowUp({
     });
     const mark = editHistoryMark();
     toastLockedMarchers(editable.locked.length, true);
+    // Clear this page's caller says who it skipped, quietly, and it offers nothing after
+    if (clearPage) return result;
+    // A drag back left shape and follow-the-leader members in their move: say who and why (a
+    // warning, since the rest was written)
+    if (result.skipped) toastTimelineError(result.skipped);
+    // Holds from the starting spots on later pages the edit left nothing to grow out of (#619)
+    toastDroppedHolds(result.droppedHolds);
     // The resolver's change re-reads them (`PlacedBoxesOverlay`), except where nobody moves (#455)
     if (writesShapes) invalidatePlacedBoxes();
     if (membership && membership.leaves.length > 0)

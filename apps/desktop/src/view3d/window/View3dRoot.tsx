@@ -1,5 +1,5 @@
 /**
- * Entry for the 3D View window (`?view=3d`, ADR 0002 D-3, design §7).
+ * Entry for the 3D View window (`?view=3d`, ADR 0010 D-3, design §7).
  *
  * `main.tsx` loads this with a dynamic `import()`, so the editor doesn't pay
  * for three.js. The window gets the editor's query client setup, theme,
@@ -23,6 +23,7 @@ import { startView3dSync } from "@/view3d/sync/view3dSyncStore";
 import View3dOverlay from "./overlay/View3dOverlay";
 import { startPrefsSync, useView3dSceneStore } from "./sceneStore";
 import Scene from "./Scene";
+import { useKitShowCredits } from "./useKitShowCredits";
 
 /**
  * What the viewport shows instead of the scene, as a translation key, or null
@@ -99,6 +100,7 @@ export default function View3dRoot() {
 
 function View3dWindow() {
     const { t } = useTranslate();
+    useKitShowCredits(params.showName);
     const title = t("view3d.window.title", { showName: params.showName });
     // Probed once, before the scene creates its own context, and recorded
     // before the scene's first render so it builds at low quality from the

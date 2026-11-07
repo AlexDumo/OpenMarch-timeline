@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslate } from "@tolgee/react";
 import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useIsPreviewMode } from "@/stores/PreviewModeStore";
 import { setLayoutResizing } from "@/global/layoutResize";
+import { useTempoModeStore } from "@/tempo/tempoModeStore";
 import { TimelinePaneStretchContext } from "./timelinePaneStretch";
 import {
     MIN_TIMELINE_HEIGHT,
@@ -20,16 +22,19 @@ import {
  *
  * Basic has one row of page boxes and nothing to give more room, so its pane stays fitted and has
  * no divider (the height Expert saved is kept for when you switch back). So does Preview, which
- * draws Basic's row.
+ * draws Basic's row, and tempo mode, whose lanes are a fixed height.
  *
  * A drag writes the pane's height straight to the DOM, once a frame, and commits it to the store
  * on release: React doesn't render on every pointer move, and the field canvas holds its size
  * until the drag ends (`setLayoutResizing`).
  */
 export function TimelineSplitter({ children }: { children: ReactNode }) {
+    const { t } = useTranslate();
     const basicMode = useIsBasicMode();
     const preview = useIsPreviewMode();
-    const basic = basicMode || preview;
+    // Tempo mode fits the pane to its lanes, so they are never cut off (tempo mode)
+    const tempoMode = useTempoModeStore((s) => s.on);
+    const basic = basicMode || preview || tempoMode;
     const savedHeight = useUiSettingsStore((s) => s.uiSettings.timelineHeight);
     const saved = basic ? null : savedHeight;
     const setTimelineHeight = useUiSettingsStore((s) => s.setTimelineHeight);
@@ -168,7 +173,7 @@ export function TimelineSplitter({ children }: { children: ReactNode }) {
                 <div
                     role="separator"
                     aria-orientation="horizontal"
-                    aria-label="Resize timeline"
+                    aria-label={t("timeline.splitter.label")}
                     aria-valuemin={MIN_TIMELINE_HEIGHT}
                     aria-valuenow={shown}
                     tabIndex={0}

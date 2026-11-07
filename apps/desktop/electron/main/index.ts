@@ -1,14 +1,6 @@
 /* eslint-disable no-console */
 import { MENU_ACTION_CHANNEL } from "../../src/global/menuActions";
-import {
-    app,
-    BrowserWindow,
-    shell,
-    ipcMain,
-    Menu,
-    dialog,
-    MenuItemConstructorOptions,
-} from "electron";
+import { app, BrowserWindow, shell, ipcMain, Menu, dialog } from "electron";
 import Store from "electron-store";
 import * as fs from "fs";
 import { release } from "node:os";
@@ -21,8 +13,10 @@ import {
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import * as DatabaseServices from "../database/database.services";
-import { LIBRARY_LIMITS } from "../../src/view3d/library/protocol";
-import { applicationMenu } from "./application-menu";
+import { VIEW3D_AUTO_OPEN_SETTING } from "../../src/view3d/sync/protocol";
+import { buildApplicationMenu } from "./application-menu";
+import { onMainLanguageChange, setMainLanguage, t } from "./i18n";
+import { textContextMenuTemplate } from "./textContextMenu";
 import { openSettingsWindow } from "./settings-window";
 import { TRAFFIC_LIGHT_POSITION } from "./traffic-lights";
 import { handleWindowOpen } from "./window-open-policy";
@@ -70,22 +64,7 @@ import {
     type OpenShowOptions,
 } from "./openShow";
 import { choosePreviousDotsFile } from "./services/previous-dots-import-service";
-import {
-    SHARP_SELF_TEST_ENV,
-    writeSharpSelfTest,
-} from "./services/sharp-self-test";
-import {
-    LIBRARY_IPC_SELF_TEST_ENV,
-    LIBRARY_IPC_SELF_TEST_FILES_ENV,
-    writeLibraryIpcSelfTest,
-} from "./services/library-ipc-self-test";
 import { closeView3dWindow, initView3dWindow } from "./view3dWindow";
-import {
-    getLibraryStore,
-    initLibraryIpc,
-    watchEditorWindow,
-} from "./library-ipc";
-import { isPdfRendererWindow } from "./artwork-import";
 import {
     initAuthBeforeReady,
     initAuthAfterReady,
@@ -105,6 +84,9 @@ import {
 
 let isQuitting = false;
 const store = new Store();
+// Native dialogs follow the saved app language from the start: on macOS a file can arrive
+// (`open-file`) before the app is ready, and its dialogs would otherwise be in English
+setMainLanguage(store.get("language"));
 
 /** Active new-show draft file in userData/new-show-drafts (not in recent files until finalized). */
 let currentNewShowDraftPath: string | null = null;
@@ -136,6 +118,14 @@ ipcMain.on("settings:set", (event, settings) => {
         store.set(key, value);
     }
     broadcastSettingsChanged(event.sender, settings);
+
+    if (Object.prototype.hasOwnProperty.call(settings, "language")) {
+        setMainLanguage(settings.language);
+    }
+
+    // Basic leaves Play On and Loop out of the Playback menu
+    if (Object.prototype.hasOwnProperty.call(settings, "editorMode"))
+        showApplicationMenu();
 
     if (Object.prototype.hasOwnProperty.call(settings, "automaticUpdates")) {
         const enabled = automaticUpdatesAreEnabled(settings.automaticUpdates);
@@ -226,7 +216,7 @@ const indexHtml = join(process.env.DIST, "index.html");
 // eslint-disable-next-line max-lines-per-function
 async function createWindow(title?: string) {
     win = new BrowserWindow({
-        title: title || "OpenMarch",
+        title: title || "OpenMarch", // i18n-ignore: product name
         icon: join(process.env.VITE_PUBLIC, "favicon.ico"),
         // Fits a portrait tablet (iPad mini is 744 wide; Windows tablets in
         // portrait or split screen are ~768), where the Inspector folds away
@@ -249,7 +239,6 @@ async function createWindow(title?: string) {
         },
     });
     app.commandLine.appendSwitch("enable-features", "AudioServiceOutOfProcess");
-    watchEditorWindow(win);
     // Touch screens (Windows tablets) need nothing here: Chromium's touch
     // events are on whenever a touch screen is present ("touch-events" is
     // "automatic" by default), and Electron keeps pinch-to-zoom of the page
@@ -333,37 +322,12 @@ async function createWindow(title?: string) {
         handleWindowOpen(url, (u) => void shell.openExternal(u)),
     );
 
-    // Context menu with spellcheck suggestions and basic edit actions
-    win.webContents.on("context-menu", (event, params) => {
-        const template: MenuItemConstructorOptions[] = [];
-
-        if (params.misspelledWord && params.dictionarySuggestions.length > 0) {
-            template.push(
-                ...params.dictionarySuggestions.map((suggestion) => ({
-                    label: suggestion,
-                    click: () => {
-                        win?.webContents.replaceMisspelling(suggestion);
-                    },
-                })),
-                { type: "separator" },
-            );
-        }
-
-        if (params.isEditable) {
-            template.push(
-                { role: "undo" },
-                { role: "redo" },
-                { type: "separator" },
-                { role: "cut" },
-                { role: "copy" },
-                { role: "paste" },
-                { type: "separator" },
-                { role: "selectAll" },
-            );
-        } else if (params.selectionText && params.selectionText.trim()) {
-            template.push({ role: "copy" }, { role: "selectAll" });
-        }
-
+    // Context menu with spellcheck suggestions and basic edit actions, built per popup so its
+    // labels follow the app language
+    win.webContents.on("context-menu", (_event, params) => {
+        const template = textContextMenuTemplate(params, (suggestion) =>
+            win?.webContents.replaceMisspelling(suggestion),
+        );
         if (!template.length) return;
 
         const menu = Menu.buildFromTemplate(template);
@@ -462,46 +426,6 @@ async function openRecentFile(filePath: string) {
     return resCode;
 }
 
-/** A new show copies a previous show's field image as its own floor (ADR 0002 D-23). */
-function handleNewShowFloorIpc() {
-    ipcMain.handle(
-        "newShow:setFloorFromImage",
-        async (event, image: unknown) => {
-            if (event.sender !== win?.webContents)
-                throw new Error("Only the editor sets the floor");
-            if (
-                !(image instanceof Uint8Array) ||
-                image.byteLength === 0 ||
-                image.byteLength > LIBRARY_LIMITS.artworkBytes
-            )
-                throw new Error("Not a field image");
-            const [{ setFloorFromImage }, { floorFromFieldImage }] =
-                await Promise.all([
-                    import("../database/convertFieldImage"),
-                    import("./floor/fieldImageFloor"),
-                ]);
-            await setFloorFromImage(
-                DatabaseServices.getOrmConnection() as never,
-                image,
-                floorFromFieldImage,
-            );
-        },
-    );
-    ipcMain.handle(
-        "newShow:setFloorFromVersion",
-        async (event, version: unknown) => {
-            if (event.sender !== win?.webContents)
-                throw new Error("Only the editor sets the floor");
-            const { setFloorFromVersion, parseFloorVersion } =
-                await import("../database/convertFieldImage");
-            await setFloorFromVersion(
-                DatabaseServices.getOrmConnection() as never,
-                parseFloorVersion(version),
-            );
-        },
-    );
-}
-
 function initDatabaseIpcHandlers() {
     ipcMain.handle("database:isReady", DatabaseServices.databaseIsReady);
     ipcMain.handle("database:getPath", () => DatabaseServices.getDbPath());
@@ -542,9 +466,8 @@ function initDatabaseIpcHandlers() {
     );
     ipcMain.handle("newShow:getDraftPath", () => currentNewShowDraftPath);
     ipcMain.handle("newShow:choosePreviousDotsFile", async () =>
-        choosePreviousDotsFile(win),
+        choosePreviousDotsFile(win, showFileDialogFilters()),
     );
-    handleNewShowFloorIpc();
     ipcMain.handle("database:repair", async (_, dbPath: string) => {
         try {
             DatabaseServices.closePersistentConnection();
@@ -559,7 +482,10 @@ function initDatabaseIpcHandlers() {
             )
                 return null;
             throw new Error(
-                `The repaired file was saved at ${newPath} but couldn't be opened (status ${resCode}).`,
+                t("settings.repairDotsFile.reopenFailed", {
+                    path: newPath,
+                    status: resCode,
+                }),
             );
         } catch (error) {
             console.error("Error repairing database:", error);
@@ -598,25 +524,6 @@ function initIpcHandlers() {
 }
 
 void app.whenReady().then(async () => {
-    const sharpSelfTestOut = process.env[SHARP_SELF_TEST_ENV];
-    if (sharpSelfTestOut) {
-        // Packaging check only: run sharp, write the result, open nothing.
-        app.exit(await writeSharpSelfTest(sharpSelfTestOut));
-        return;
-    }
-    const libraryIpcSelfTestOut = process.env[LIBRARY_IPC_SELF_TEST_ENV];
-    if (libraryIpcSelfTestOut) {
-        // Packaging check only: run the import IPC on given files, open nothing.
-        app.exit(
-            await writeLibraryIpcSelfTest(
-                libraryIpcSelfTestOut,
-                join(__dirname, "import-worker.js"),
-                process.env[LIBRARY_IPC_SELF_TEST_FILES_ENV] ?? "",
-            ),
-        );
-        return;
-    }
-
     app.setName("OpenMarch");
     console.log("NODE:", process.versions.node);
 
@@ -626,7 +533,10 @@ void app.whenReady().then(async () => {
         console.log("Not running in codegen mode");
     }
 
-    Menu.setApplicationMenu(applicationMenu);
+    // The menu and native dialogs follow the app language the renderer saves
+    setMainLanguage(store.get("language"));
+    showApplicationMenu();
+    onMainLanguageChange(showApplicationMenu);
 
     const pathToOpen = resolveStartupDatabasePath();
     if (pathToOpen.length > 0) await setActiveDb(pathToOpen);
@@ -645,15 +555,21 @@ void app.whenReady().then(async () => {
         getTheme: () => store.get("theme", "light") as string,
         getLanguage: () => store.get("language", "en") as string,
         getEditorWindow: () => win,
-        getLibraryStore,
-    });
-    initLibraryIpc({
-        getEditorWindow: () => win,
-        getSetting: (key) => store.get(key),
-        setSetting: (key, value) => store.set(key, value),
-        workerPath: join(__dirname, "import-worker.js"),
+        // A Playwright session never asks, so the question doesn't sit over every test
+        getAutoOpen: () =>
+            process.env.PLAYWRIGHT_SESSION
+                ? null
+                : store.get(VIEW3D_AUTO_OPEN_SETTING),
+        // Every other window hears it, so an open Settings window follows the answer
+        setAutoOpen: (autoOpen, sender) => {
+            store.set(VIEW3D_AUTO_OPEN_SETTING, autoOpen);
+            broadcastSettingsChanged(sender, {
+                [VIEW3D_AUTO_OPEN_SETTING]: autoOpen,
+            });
+        },
     });
 
+    // i18n-ignore: the product name and a file path, the same in every language
     await createWindow("OpenMarch - " + store.get("databasePath"));
 
     void startAutomaticUpdates({
@@ -814,9 +730,19 @@ function broadcastSettingsChanged(
     }
 }
 
+/** The application menu, in the current app language. */
+let applicationMenu: Menu | null = null;
+
+function showApplicationMenu() {
+    applicationMenu = buildApplicationMenu({
+        basic: store.get("editorMode") === "basic",
+    });
+    Menu.setApplicationMenu(applicationMenu);
+}
+
 ipcMain.on(`menu:open`, () => {
     if (!isMacOS) {
-        applicationMenu.popup();
+        applicationMenu?.popup();
     }
 });
 
@@ -840,66 +766,13 @@ ipcMain.handle("get-language", () => {
 ipcMain.handle("set-language", (event, language) => {
     store.set("language", language);
     broadcastSettingsChanged(event.sender, { language });
+    setMainLanguage(language);
 });
 
 // file management
 
 ipcMain.handle("closeCurrentFile", () => {
     void closeCurrentFile();
-});
-
-// Plugins
-ipcMain.handle("plugins:list", async () => {
-    const pluginsDir = join(app.getPath("userData"), "plugins");
-    if (!fs.existsSync(pluginsDir)) return [];
-    return fs
-        .readdirSync(pluginsDir)
-        .filter((file) => file.endsWith(".om.js"))
-        .map((file) => join(pluginsDir, file));
-});
-
-ipcMain.handle("plugins:get", async (_, pluginPath) => {
-    return fs.readFileSync(pluginPath, "utf-8");
-});
-
-ipcMain.handle("plugins:install", async (_, pluginUrl) => {
-    const pluginsDir = join(app.getPath("userData"), "plugins");
-    if (!fs.existsSync(pluginsDir)) {
-        fs.mkdirSync(pluginsDir);
-    }
-    let response;
-
-    try {
-        response = await fetch(pluginUrl);
-        if (!response.ok) {
-            return false;
-        }
-    } catch (e) {
-        console.error(e);
-        return false;
-    }
-
-    const pluginCode = await response.text();
-    const pluginName = pluginUrl.split("/").pop();
-    const pluginPath = join(pluginsDir, pluginName);
-
-    fs.writeFileSync(pluginPath, pluginCode, "utf-8");
-    return true;
-});
-
-ipcMain.handle("plugins:uninstall", async (_, fileName) => {
-    const pluginsDir = join(app.getPath("userData"), "plugins");
-    if (!fs.existsSync(pluginsDir)) {
-        fs.mkdirSync(pluginsDir);
-    }
-
-    try {
-        fs.rmSync(join(pluginsDir, fileName));
-        return true;
-    } catch (error) {
-        console.error(error);
-        return false;
-    }
 });
 
 // Log handler - allows renderer to send logs to main process
@@ -936,10 +809,7 @@ ipcMain.handle(
 // Note: second-instance is already handled above with auth callback support
 
 app.on("activate", () => {
-    // Hidden PDF renderer windows (C1.8) are never shown or focused.
-    const allWindows = BrowserWindow.getAllWindows().filter(
-        (w) => !isPdfRendererWindow(w),
-    );
+    const allWindows = BrowserWindow.getAllWindows();
     if (win && !win.isDestroyed()) {
         win.focus();
     } else if (allWindows.length) {
@@ -1025,7 +895,7 @@ async function openDatabaseAtPathWithoutReload(
         }
 
         store.set("databasePath", filePath);
-        win?.setTitle("OpenMarch - " + filePath);
+        win?.setTitle("OpenMarch - " + filePath); // i18n-ignore: product name and path
         conversionQuestion.forget();
         return 200;
     } catch (error) {
@@ -1311,8 +1181,13 @@ export async function newFile() {
         filePath = process.env.PLAYWRIGHT_NEW_FILE_PATH;
     } else {
         const dialogResult = await dialog.showSaveDialog(win, {
-            buttonLabel: "Create New",
-            filters: [{ name: "OpenMarch File", extensions: ["dots"] }],
+            buttonLabel: t("fileDialog.newShow.button"),
+            filters: [
+                {
+                    name: t("fileDialog.filters.openMarchFile"),
+                    extensions: ["dots"],
+                },
+            ],
         });
         if (dialogResult.canceled || !dialogResult.filePath) return;
         filePath = dialogResult.filePath;
@@ -1340,14 +1215,16 @@ export async function saveFile() {
     // Save
     const response = await dialog
         .showSaveDialog(win, {
-            buttonLabel: "Save Copy",
-            filters: [{ name: "OpenMarch File", extensions: ["dots"] }],
+            buttonLabel: t("fileDialog.saveCopy.button"),
+            filters: [
+                {
+                    name: t("fileDialog.filters.openMarchFile"),
+                    extensions: ["dots"],
+                },
+            ],
         })
         .then(async (path) => {
             if (path.canceled || !path.filePath) return 0;
-
-            // Save prunes the show Library (C2.1), so the copy carries only what the show uses
-            await pruneShowLibrary();
 
             // Make a copy into a temp file
             const tempPath = path.filePath + ".tmp";
@@ -1377,6 +1254,12 @@ export async function saveFile() {
     return response;
 }
 
+/** Open-dialog filters for a show file, in the app language. */
+const showFileDialogFilters = (): Electron.FileFilter[] => [
+    { name: t("fileDialog.filters.openMarchFile"), extensions: ["dots"] },
+    { name: t("fileDialog.filters.allFiles"), extensions: ["*"] },
+];
+
 /**
  * Opens a dialog to load a database file path to connect to.
  *
@@ -1390,10 +1273,7 @@ export async function loadDatabaseFile() {
     // If there is no previous path, open a dialog
     dialog
         .showOpenDialog(win, {
-            filters: [
-                { name: "OpenMarch File", extensions: ["dots"] },
-                { name: "All Files", extensions: ["*"] },
-            ],
+            filters: showFileDialogFilters(),
         })
         .then(async (path) => {
             if (path.canceled) return -1;
@@ -1448,21 +1328,6 @@ function requestSvgBeforeClose(win: BrowserWindow): Promise<string> {
 }
 
 /**
- * Prunes the open show's Library (C2.1). Loaded when first used: it runs the renderer's
- * db-functions, which stay out of the startup bundle.
- */
-async function pruneShowLibrary() {
-    try {
-        const { pruneShowLibraryAt } =
-            await import("../database/showLibraryPrune");
-        await pruneShowLibraryAt(DatabaseServices.getDbPath());
-    } catch (error) {
-        // Never stops the close or the copy
-        console.error("Couldn't load the show Library prune", error);
-    }
-}
-
-/**
  * Closes the current database file.
  *
  * @returns 200 for success, -1 for failure
@@ -1498,9 +1363,6 @@ async function closeCurrentFileNow(isAppQuitting: boolean) {
         console.error("Error getting SVG on close:", error);
     }
 
-    // The app autosaves, so closing is when save prunes the show Library (C2.1)
-    await pruneShowLibrary();
-
     // Close the current file
     DatabaseServices.setDbPath("", false);
     // A conversion the quit stopped keeps its file as the one to reopen on the next launch.
@@ -1517,12 +1379,13 @@ async function closeCurrentFileNow(isAppQuitting: boolean) {
 
 // Audio files
 
-const AUDIO_FILE_DIALOG_FILTERS: Electron.FileFilter[] = [
+/** Built when the dialog opens, so the names follow the app language. */
+const audioFileDialogFilters = (): Electron.FileFilter[] => [
     {
-        name: "Audio File",
+        name: t("fileDialog.filters.audioFile"),
         extensions: ["mp3", "wav", "ogg", "m4a", "aac", "webm"],
     },
-    { name: "All Files", extensions: ["*"] },
+    { name: t("fileDialog.filters.allFiles"), extensions: ["*"] },
 ];
 
 function audioInsertError(
@@ -1534,7 +1397,7 @@ function audioInsertError(
 async function pickAudioFilePath(): Promise<string | null> {
     if (!win) return null;
     const result = await dialog.showOpenDialog(win, {
-        filters: AUDIO_FILE_DIALOG_FILTERS,
+        filters: audioFileDialogFilters(),
     });
     if (result.canceled || !result.filePaths[0]) return null;
     return result.filePaths[0];
@@ -1570,9 +1433,7 @@ export async function insertAudioFile(): Promise<
 
     if (!DatabaseServices.databaseIsReady()) {
         console.error("insertAudioFile: Database is not ready");
-        return audioInsertError(
-            "No file is open. Create or open a show first.",
-        );
+        return audioInsertError(t("audio.insert.noFileOpen"));
     }
 
     try {
@@ -1590,9 +1451,7 @@ export async function insertAudioFile(): Promise<
             console.error(
                 "insertAudioFile: Database became unavailable during upload",
             );
-            return audioInsertError(
-                "Database became unavailable. Please try again after ensuring the database file is ready.",
-            );
+            return audioInsertError(t("audio.insert.databaseUnavailable"));
         }
 
         const databaseResponse = await DatabaseServices.insertAudioFile({
@@ -1725,7 +1584,7 @@ async function setActiveDbNow(
                 // No show is open (at launch, or an open that got as far as closing it): ask
                 // over the launch page.
                 store.delete("databasePath");
-                win?.setTitle("OpenMarch");
+                win?.setTitle("OpenMarch"); // i18n-ignore: product name
                 if (token !== undefined) win?.webContents.reload();
             }
             return result.status;
@@ -1749,7 +1608,7 @@ async function setActiveDbNow(
             if (result.status === OPEN_STOPPED_STATUS) {
                 // Convert on open: a dialog already told the person why the file didn't open.
                 // Open nothing.
-                win?.setTitle("OpenMarch");
+                win?.setTitle("OpenMarch"); // i18n-ignore: product name
                 win?.webContents.reload();
             } else {
                 console.error(
@@ -1759,7 +1618,7 @@ async function setActiveDbNow(
                     // The refusal closed the show that was open: go to the launch page, which
                     // explains why the file didn't open.
                     refusalAfterReload = result.status;
-                    win?.setTitle("OpenMarch");
+                    win?.setTitle("OpenMarch"); // i18n-ignore: product name
                     win?.webContents.reload();
                 }
             }
@@ -1770,7 +1629,7 @@ async function setActiveDbNow(
         // navigation doesn't discard it and close the show that just opened.
         await forgetReplacedNewShowDraft(path);
 
-        win?.setTitle("OpenMarch - " + path);
+        win?.setTitle("OpenMarch - " + path); // i18n-ignore: product name and path
         store.set("databasePath", path); // Save current db path
         win?.webContents.reload();
         // Only once the reloaded page has navigated may it query the file. Another open can
@@ -1783,7 +1642,10 @@ async function setActiveDbNow(
         captureException(error);
         store.delete("databasePath"); // Reset database path
         DatabaseServices.setDbPath("", false);
-        dialog.showErrorBox("Error Loading Database", (error as Error).message);
+        dialog.showErrorBox(
+            t("fileDialog.openFailed.title"),
+            (error as Error).message,
+        );
         win?.webContents.reload();
         throw error;
     }

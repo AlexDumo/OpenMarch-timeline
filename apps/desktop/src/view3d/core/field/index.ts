@@ -22,11 +22,12 @@ import {
 } from "./plan";
 import { planTarp } from "./tarpPlan";
 import { planTheme } from "./themePlan";
+import { withFootballEndZones } from "./regulation";
 import { planTurf } from "./turfPlan";
 
 /**
  * Field surface (P2.1, design.md section 4). Framework-free: three.js only
- * (ADR 0002 D-1), in meters with the field at z <= 0 (D-2).
+ * (ADR 0010 D-1), in meters with the field at z <= 0 (D-2).
  *
  * `buildFieldSurface` plans the field from `FieldProperties` with the same
  * semantics as the 2D field's plan (`fieldPlan.ts`), paints the plan into one
@@ -44,6 +45,7 @@ export type {
 } from "./plan";
 export { END_ZONE_STYLES } from "./plan";
 export { paintPlan, textureLayout, textureLongSide } from "./paint";
+export { venueFootprint, withFootballEndZones } from "./regulation";
 export type { TextureLayout } from "./paint";
 
 /** Height of the surface above the kits' ground and floors. */
@@ -62,8 +64,6 @@ export interface FieldSurfaceInput {
     endZoneStyle?: EndZoneStyle;
     /** The show's field background image, if it has one. */
     image?: FieldImage | null;
-    /** The floor's physical size; null or left out places the image by fill or fit. */
-    imageSizeM?: { widthM: number; heightM: number } | null;
     /** `renderer.capabilities.maxTextureSize`; 8192 px textures need >= 8192. */
     maxTextureSize?: number;
     /** `renderer.capabilities.getMaxAnisotropy()`; defaults to 16. */
@@ -96,10 +96,15 @@ export function imageSize(image: FieldImage): ImageSize {
 export function planField(input: FieldSurfaceInput): FieldPlan {
     const image =
         input.image && imageSize(input.image).width > 0
-            ? { ...imageSize(input.image), sizeM: input.imageSizeM ?? null }
+            ? imageSize(input.image)
             : null;
+    // Stadium turf always shows a football field's end zones (see
+    // `withFootballEndZones`); the other styles paint the grid as it is.
     const ctx = createPlanContext({
-        fieldProperties: input.fieldProperties,
+        fieldProperties:
+            input.style === "turf"
+                ? withFootballEndZones(input.fieldProperties)
+                : input.fieldProperties,
         theme: input.theme ?? input.fieldProperties.theme,
         style: input.style,
         params: input.params,

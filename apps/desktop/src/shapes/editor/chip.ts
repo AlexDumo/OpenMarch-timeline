@@ -1,8 +1,13 @@
-import { turnShape } from "../frame/gestures";
+import { shapeTurn, turnShape } from "../frame/gestures";
 import { pivotOf } from "../frame/pivot";
 import { pivotPoint } from "../frame/frame";
 import type { XY } from "../types";
-import type { AnyToolKind, ToolEnv, ToolParam } from "../tool/toolKind";
+import type {
+    AnyToolKind,
+    ToolEnv,
+    ToolGroup,
+    ToolParam,
+} from "../tool/toolKind";
 
 /** One number in the floating chip, worked out from its kind's declaration */
 export interface ChipNumber {
@@ -12,6 +17,9 @@ export interface ChipNumber {
     readonly display: string;
     /** "1 short", or null */
     readonly note: string | null;
+    /** Words just before and after it ({@link ToolParam.words}) */
+    readonly before: string | null;
+    readonly after: string | null;
     /** What − and + would make the shape; null where it can't go that way or has no buttons */
     readonly less: unknown;
     readonly more: unknown;
@@ -27,8 +35,18 @@ export interface ChipNumber {
 export interface ChipLayout {
     readonly values: readonly ChipNumber[];
     readonly intervals: readonly ChipNumber[];
+    /**
+     * The kind's interval groups (#526), shown in place of its intervals; null for a shape with
+     * one interval for everyone
+     */
+    readonly groups: readonly ToolGroup[] | null;
     /** Offer the lock that keeps the spacings in proportion: the kind has one and both show */
     readonly ratioLock: boolean;
+    /**
+     * The kind's interval lock (`ToolKind.lock`), beside its interval or groups: whether it's
+     * locked, or null when it isn't offered
+     */
+    readonly lock: boolean | null;
 }
 
 export function chipLayout(
@@ -36,25 +54,43 @@ export function chipLayout(
     params: unknown,
     n: number,
     env: ToolEnv,
+    /**
+     * The number being dragged, kept while its drag lasts even where the shape no longer shows it:
+     * an Arc's stretch dragged onto a circle, which shows none (#634)
+     */
+    dragged: string | null = null,
 ): ChipLayout {
     const numbers: ChipNumber[] = kind.params
-        .filter((p) => p.primary && (p.shown?.(params, n) ?? true))
+        .filter(
+            (p) =>
+                p.primary &&
+                (p.key === dragged || (p.shown?.(params, n) ?? true)),
+        )
         .map((param) => ({
             param,
             display: param.display(params, n, env.stepPx),
             note: param.note?.(params, n) ?? null,
+            before: param.words?.(params, n)?.before ?? null,
+            after: param.words?.(params, n)?.after ?? null,
             less: param.stepper?.by(params, n, -1, env) ?? null,
             more: param.stepper?.by(params, n, 1, env) ?? null,
             derived: param.derived?.(params, n, env.stepPx) ?? false,
         }));
-    const intervals = numbers.filter((x) => x.param.interval);
+    const groups = kind.groups?.shown(params, n, env.stepPx) ?? null;
+    const intervals = groups ? [] : numbers.filter((x) => x.param.interval);
     return {
         values: numbers.filter((x) => !x.param.interval),
         intervals,
+        groups,
         ratioLock:
             kind.ratioLock === true &&
             (kind.ratioLockFor?.(params, n) ?? true) &&
-            intervals.length > 1,
+            (intervals.length > 1 ||
+                numbers.some((x) => x.param.ratioLockAfter === true)),
+        lock:
+            kind.lock && kind.lock.shown(params, n)
+                ? kind.lock.locked(params, n)
+                : null,
     };
 }
 
@@ -68,12 +104,11 @@ export function quarterTurn(
     n: number,
     env: ToolEnv,
 ): unknown {
-    const { rotation } = kind.frameOf(params, n);
     return turnShape(
         kind,
         params,
         n,
-        rotation + Math.PI / 2,
+        shapeTurn(kind, params, n) + Math.PI / 2,
         pivotOf(params),
         env,
     );

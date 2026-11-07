@@ -1,4 +1,9 @@
 import React, { useState, useCallback } from "react";
+import {
+    tempoSettingsKey,
+    useAudioOffsetSeconds,
+    writeAudioOffset,
+} from "@/tempo/audioOffset";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     workspaceSettingsQueryOptions,
@@ -8,19 +13,23 @@ import { MIN_TEMPO_BPM } from "@/global/classes/Beat";
 import {
     WorkspaceSettings,
     defaultWorkspaceSettings,
-    warnPropMovesWithoutCrewOf,
 } from "@/settings/workspaceSettings";
-import { Button, Switch, UnitInput } from "@openmarch/ui";
+import { Button, Input, UnitInput } from "@openmarch/ui";
 import * as Form from "@radix-ui/react-form";
 import { SidebarModalLauncher } from "./SidebarModal";
 import FormField from "../ui/FormField";
 import { XIcon, SlidersHorizontalIcon } from "@phosphor-icons/react";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import clsx from "clsx";
-import { T, useTolgee } from "@tolgee/react";
+import { T, useTranslate } from "@tolgee/react";
 import { toast } from "sonner";
+import { conToastError } from "@/utilities/utils";
 
 const inputClassname = clsx("col-span-6 self-center");
+
+/** The text fields that describe the show (shown on the 3D View's video boards). */
+const SHOW_INFO_FIELDS = ["projectName", "designer", "client"] as const;
+type ShowInfoField = (typeof SHOW_INFO_FIELDS)[number];
 
 const blurOnEnterFunc = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -38,7 +47,7 @@ export default function WorkspaceSettingsModal({
     label?: string | React.ReactNode;
     buttonClassName?: string;
 }) {
-    const { t } = useTolgee();
+    const { t } = useTranslate();
     return (
         <SidebarModalLauncher
             name={t("sidebar.settings")}
@@ -53,16 +62,21 @@ export default function WorkspaceSettingsModal({
 function WorkspaceSettingsModalContents() {
     const { toggleOpen } = useSidebarModalStore();
     const queryClient = useQueryClient();
-    const { t } = useTolgee();
+    const effectiveOffset = useAudioOffsetSeconds();
+    const { t } = useTranslate();
     const { data: settings, isLoading } = useQuery(
         workspaceSettingsQueryOptions(),
     );
-    const { mutate: updateSettings, isPending } = useMutation(
+    const { mutateAsync: updateSettings, isPending } = useMutation(
         updateWorkspaceSettingsMutationOptions(queryClient),
     );
 
     const [localSettings, setLocalSettings] =
         useState<WorkspaceSettings | null>(null);
+    // Tempo mode: the music offset is the show's (tempo_settings, with undo), not a workspace
+    // setting. The field starts from the offset in effect and Save writes it to the show only
+    // when it was changed (tempo/audioOffset.ts).
+    const [localOffset, setLocalOffset] = useState<number>(effectiveOffset);
     const [inputValues, setInputValues] = useState<{
         defaultTempo: string;
         defaultBeatsPerMeasure: string;
@@ -85,20 +99,25 @@ function WorkspaceSettingsModalContents() {
     React.useEffect(() => {
         if (settings) {
             setLocalSettings(settings);
+            setLocalOffset(effectiveOffset);
             setInputValues({
                 defaultTempo: settings.defaultTempo.toString(),
                 defaultBeatsPerMeasure:
                     settings.defaultBeatsPerMeasure.toString(),
                 defaultNewPageCounts: settings.defaultNewPageCounts.toString(),
-                audioOffsetSeconds: settings.audioOffsetSeconds.toString(),
+                audioOffsetSeconds: effectiveOffset.toString(),
                 pageNumberOffset: settings.pageNumberOffset.toString(),
                 measurementOffset: settings.measurementOffset.toString(),
             });
         }
-    }, [settings]);
+    }, [settings, effectiveOffset]);
 
     const handleFieldChange = useCallback(
         (field: keyof WorkspaceSettings, value: number) => {
+            if (field === "audioOffsetSeconds") {
+                setLocalOffset(value);
+                return;
+            }
             if (!localSettings) return;
 
             setLocalSettings({
@@ -109,18 +128,72 @@ function WorkspaceSettingsModalContents() {
         [localSettings],
     );
 
-    const handleSave = useCallback(() => {
+    const handleTextChange = useCallback(
+        (field: ShowInfoField, value: string) => {
+            if (!localSettings) return;
+            // Blank means unset, so the 3D View falls back (to the file name for the show name)
+            setLocalSettings({
+                ...localSettings,
+                [field]: value.trim() === "" ? undefined : value,
+            });
+        },
+        [localSettings],
+    );
+
+    const settingsChanged =
+        !!localSettings &&
+        JSON.stringify(localSettings) !== JSON.stringify(settings);
+    const offsetChanged = localOffset !== effectiveOffset;
+
+    const handleSave = useCallback(async () => {
         if (!localSettings) return;
-        updateSettings(localSettings, {
-            onSuccess: () => {
-                toast.success(t("workspaceSettings.saved"));
-                toggleOpen();
-            },
-        });
-    }, [localSettings, updateSettings, t, toggleOpen]);
+        try {
+            await Promise.all([
+                settingsChanged ? updateSettings(localSettings) : null,
+                // One undo step in the show; the workspace setting stays as it is (the fallback
+                // for a show that never set its own offset)
+                offsetChanged
+                    ? writeAudioOffset(localOffset).then(() =>
+                          queryClient.invalidateQueries({
+                              queryKey: tempoSettingsKey,
+                          }),
+                      )
+                    : null,
+            ]);
+        } catch (error) {
+            // A failed settings write was already reported by its mutation
+            if (offsetChanged)
+                conToastError(t("workspaceSettings.updateFailed"), error);
+            return;
+        }
+        toast.success(t("workspaceSettings.saved"));
+        toggleOpen();
+    }, [
+        localSettings,
+        settingsChanged,
+        offsetChanged,
+        localOffset,
+        updateSettings,
+        t,
+        toggleOpen,
+        queryClient,
+    ]);
 
     const handleReset = useCallback(() => {
-        setLocalSettings(defaultWorkspaceSettings);
+        // The workspace's own offset (the fallback) is left alone; the show's offset goes back to
+        // the default as an undo step of its own
+        const reset = {
+            ...defaultWorkspaceSettings,
+            // The show's name and credits describe it; they aren't defaults to reset
+            projectName: settings?.projectName,
+            designer: settings?.designer,
+            client: settings?.client,
+            audioOffsetSeconds:
+                settings?.audioOffsetSeconds ??
+                defaultWorkspaceSettings.audioOffsetSeconds,
+        };
+        setLocalSettings(reset);
+        setLocalOffset(defaultWorkspaceSettings.audioOffsetSeconds);
         setInputValues({
             defaultTempo: defaultWorkspaceSettings.defaultTempo.toString(),
             defaultBeatsPerMeasure:
@@ -134,25 +207,38 @@ function WorkspaceSettingsModalContents() {
             measurementOffset:
                 defaultWorkspaceSettings.measurementOffset.toString(),
         });
-        updateSettings(defaultWorkspaceSettings);
-    }, [updateSettings]);
+        updateSettings(reset).catch(() => {
+            // reported by the mutation
+        });
+        if (effectiveOffset !== defaultWorkspaceSettings.audioOffsetSeconds)
+            writeAudioOffset(defaultWorkspaceSettings.audioOffsetSeconds)
+                .then(() =>
+                    queryClient.invalidateQueries({
+                        queryKey: tempoSettingsKey,
+                    }),
+                )
+                .catch((error: unknown) =>
+                    conToastError(t("workspaceSettings.updateFailed"), error),
+                );
+    }, [settings, effectiveOffset, updateSettings, queryClient, t]);
 
     const handleCancel = useCallback(() => {
         if (settings) {
             setLocalSettings(settings);
+            setLocalOffset(effectiveOffset);
             setInputValues({
                 defaultTempo: settings.defaultTempo.toString(),
                 defaultBeatsPerMeasure:
                     settings.defaultBeatsPerMeasure.toString(),
                 defaultNewPageCounts: settings.defaultNewPageCounts.toString(),
-                audioOffsetSeconds: settings.audioOffsetSeconds.toString(),
+                audioOffsetSeconds: effectiveOffset.toString(),
                 pageNumberOffset: settings.pageNumberOffset.toString(),
                 measurementOffset: settings.measurementOffset.toString(),
             });
         }
         // Cancel always works: drop any edits and close
         toggleOpen();
-    }, [settings, toggleOpen]);
+    }, [settings, effectiveOffset, toggleOpen]);
 
     if (isLoading) {
         return (
@@ -228,8 +314,7 @@ function WorkspaceSettingsModalContents() {
         },
     ];
 
-    const hasChanges =
-        JSON.stringify(localSettings) !== JSON.stringify(settings);
+    const hasChanges = settingsChanged || offsetChanged;
 
     return (
         <div className="animate-scale-in text-text flex h-full min-h-0 w-fit flex-col gap-16">
@@ -252,6 +337,30 @@ function WorkspaceSettingsModalContents() {
                     onSubmit={(e) => e.preventDefault()}
                     className="flex flex-col gap-12"
                 >
+                    {SHOW_INFO_FIELDS.map((key) => (
+                        <FormField
+                            key={key}
+                            label={t(`workspaceSettings.showInfo.${key}`)}
+                        >
+                            <Input
+                                className={inputClassname}
+                                value={localSettings[key] ?? ""}
+                                placeholder={
+                                    key === "projectName"
+                                        ? t(
+                                              "workspaceSettings.showInfo.projectNamePlaceholder",
+                                          )
+                                        : t(
+                                              "workspaceSettings.showInfo.optional",
+                                          )
+                                }
+                                onChange={(e) =>
+                                    handleTextChange(key, e.target.value)
+                                }
+                                onKeyDown={blurOnEnter}
+                            />
+                        </FormField>
+                    ))}
                     {fieldConfigs.map(
                         ({
                             key,
@@ -340,38 +449,13 @@ function WorkspaceSettingsModalContents() {
                             );
                         },
                     )}
-                    {/* Show checks (ADR 0002 D-22): a placed prop that moves with nobody on its crew */}
-                    <label
-                        className="text-body flex items-center justify-between gap-12"
-                        htmlFor="workspace-warn-prop-moves-without-crew"
-                    >
-                        <span className="flex flex-col">
-                            <span>
-                                <T keyName="workspaceSettings.warnPropMovesWithoutCrew" />
-                            </span>
-                            <span className="text-sub text-text-subtitle">
-                                <T keyName="workspaceSettings.warnPropMovesWithoutCrewHelp" />
-                            </span>
-                        </span>
-                        <Switch
-                            id="workspace-warn-prop-moves-without-crew"
-                            data-testid="workspace-warn-prop-moves-without-crew"
-                            checked={warnPropMovesWithoutCrewOf(localSettings)}
-                            onCheckedChange={(checked) =>
-                                setLocalSettings({
-                                    ...localSettings,
-                                    warnPropMovesWithoutCrew: checked,
-                                })
-                            }
-                        />
-                    </label>
                 </Form.Root>
             </div>
 
             <div className="flex w-[30rem] max-w-full shrink-0 flex-col gap-8">
                 <div className="touch:gap-8 flex flex-wrap gap-2">
                     <Button
-                        onClick={handleSave}
+                        onClick={() => void handleSave()}
                         disabled={isPending || !hasChanges}
                         size="compact"
                     >

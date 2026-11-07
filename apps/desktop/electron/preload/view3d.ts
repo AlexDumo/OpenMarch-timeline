@@ -1,5 +1,5 @@
 /**
- * Preload for the 3D View window (ADR 0002 D-3). It runs sandboxed, so it may
+ * Preload for the 3D View window (ADR 0010 D-3). It runs sandboxed, so it may
  * import only `electron`, and it exposes only `window.view3d`. Channel names
  * are hard-coded, like the editor's preload.
  */
@@ -7,7 +7,6 @@ import { contextBridge, ipcRenderer } from "electron";
 // Types only: a value import would be split into a chunk shared with the
 // editor's preload, which a sandboxed preload can't `require`.
 import type {
-    View3dCameraProfileSave,
     View3dPayloads,
     View3dPlaybackAction,
     View3dPlaybackRequest,
@@ -15,12 +14,12 @@ import type {
     View3dVenueChangeRequest,
 } from "../../src/view3d/sync/protocol";
 import type { SqlBatchQuery, SqlReadBatchResult } from "../database/sqlProxy";
-import type { CameraProfile } from "../../src/view3d/core/cameraList";
 
 const PUBLISH_CHANNELS: readonly View3dPublishChannel[] = [
     "view3d:clock",
     "view3d:selection",
     "view3d:invalidate",
+    "view3d:hidden-props",
 ];
 
 const isPublishChannel = (channel: unknown): channel is View3dPublishChannel =>
@@ -61,7 +60,7 @@ const VIEW3D_API = {
 
     /**
      * Listens to what the editor publishes: `view3d:clock`,
-     * `view3d:selection` and `view3d:invalidate`. Payloads arrive unchecked.
+     * `view3d:selection`, `view3d:invalidate` and `view3d:hidden-props`. Payloads arrive unchecked.
      *
      * @returns a function that removes the listener.
      */
@@ -102,24 +101,16 @@ const VIEW3D_API = {
         } satisfies View3dVenueChangeRequest),
 
     /**
-     * This computer's camera profiles, kept in the Library (ADR 0002 D-12).
-     * Main validates every call; these are the only Library calls the window
-     * can make.
+     * The "open the 3D View with the show" setting, for the window's question only: `get` is
+     * undefined while never answered, null where the window shouldn't ask.
      */
-    cameraProfiles: {
-        list: () =>
-            ipcRenderer.invoke("view3d:camera-profiles") as Promise<
-                CameraProfile[]
-            >,
-        save: (profile: View3dCameraProfileSave) =>
+    autoOpen: {
+        get: () =>
+            ipcRenderer.invoke("view3d:auto-open-get") as Promise<unknown>,
+        set: (autoOpen: boolean) =>
             ipcRenderer.invoke(
-                "view3d:camera-profile-save",
-                profile,
-            ) as Promise<CameraProfile>,
-        remove: (id: string) =>
-            ipcRenderer.invoke(
-                "view3d:camera-profile-delete",
-                id,
+                "view3d:auto-open-set",
+                autoOpen,
             ) as Promise<void>,
     },
 

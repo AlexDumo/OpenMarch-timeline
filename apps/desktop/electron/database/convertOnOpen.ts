@@ -1,5 +1,5 @@
 /**
- * Converts a page-era show to timelines when it is opened (ADR 0001 §6), once
+ * Converts a page-era show to timelines when it is opened (ADR 0012 §6), once
  * the person has agreed to it. The app runs the backup and the conversion in a
  * worker thread (`convertOnOpenWorker.ts`), so the main process stays
  * responsive; the check runs in the main process.
@@ -213,7 +213,6 @@ function assertNoNewForeignKeyViolations(
  */
 async function convertPageEraTablesInTransaction(
     tx: DbTransaction,
-    db: DatabaseSync,
     onProgress: ConvertOnOpenHooks["onProgress"],
 ): Promise<PageConversionReport | undefined> {
     const pages = await tx
@@ -221,10 +220,6 @@ async function convertPageEraTablesInTransaction(
         .from(schema.pages)
         .get();
     if ((pages?.n ?? 0) === 0) return undefined;
-    // Kept spots go with their assignments; with foreign keys off nothing cascades, so they are
-    // deleted first.
-    if (countTimelineRows(db) > 0)
-        await tx.delete(schema.timeline_kept_assignments).run();
     const converted = await convertPagesToTimelineInTransaction(tx, {
         replace: true,
         onProgress: (pagesDone, pagesTotal) =>
@@ -291,7 +286,6 @@ export async function convertFileOnOpen(
                 await step("drop-undo-triggers");
                 const converted = await convertPageEraTablesInTransaction(
                     tx,
-                    db,
                     hooks.onProgress,
                 );
                 await step("convert");

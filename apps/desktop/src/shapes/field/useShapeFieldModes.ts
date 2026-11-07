@@ -9,7 +9,8 @@ import {
     previewPlacedBox,
     useBoxSelectionStore,
 } from "../placed/boxSelectionStore";
-import { LiveBoxMode } from "../placed/liveBoxMode";
+import { LiveBoxMode, setActiveLiveBox } from "../placed/liveBoxMode";
+import { closeHandleMenu } from "./handleMenu";
 import {
     closeShapeTool,
     useShapeHidden,
@@ -27,7 +28,7 @@ import { resetShapePointer, watchShapeEditorFocus } from "./shapePointer";
  * inside it (`LiveBoxMode`). Also keeps placed boxes in the selection (`useBoxSelection`).
  *
  * The tool is about one moment and one group of marchers. Only Place (Enter) places it (#416):
- * moving around the timeline, playing, Visuals and a new selection leave it open. While it waits
+ * moving around the timeline, playing and a new selection leave it open. While it waits
  * out of sight (`useShapeHidden`) the field doesn't draw it or give it presses, and an armed tool
  * with nothing drawn yet closes once the timeline moves off its moment.
  */
@@ -50,6 +51,10 @@ export function useShapeFieldModes(
         [boxId, queryClient],
     );
     useEffect(() => {
+        setActiveLiveBox(live);
+        return () => setActiveLiveBox(null);
+    }, [live]);
+    useEffect(() => {
         if (box) live?.setBox(box);
         // The box read back replaces a released number drag's preview; a drag still held keeps
         // its own, though an earlier save was read back meanwhile (#515)
@@ -62,6 +67,8 @@ export function useShapeFieldModes(
     useEffect(() => {
         // The pointer was over the last shape, if any; the next cursor check finds the new one
         resetShapePointer();
+        // A handle's menu is for the shape it was opened on (#569)
+        closeHandleMenu();
         editor.setMode(toolOpen ? (hidden ? null : shapeToolMode) : live);
     }, [editor, toolOpen, hidden, live]);
     useEffect(() => () => editor.setMode(null), [editor]);

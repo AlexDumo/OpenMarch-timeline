@@ -9,10 +9,7 @@ import type { ShowSummary } from "@/utilities/webLibrary";
 /** Page to worker. */
 export type ToWorker =
     | { type: "invoke"; id: number; channel: string; args: unknown[] }
-    | { type: "send"; channel: string; args: unknown[] }
-    /** The page's answer to an `ask` */
-    | { type: "answer"; id: number; ok: true; value: unknown }
-    | { type: "answer"; id: number; ok: false; error: string };
+    | { type: "send"; channel: string; args: unknown[] };
 
 /** Worker to page. */
 export type FromWorker =
@@ -25,9 +22,7 @@ export type FromWorker =
           value: unknown;
       }
     | { type: "result"; id: number; ok: false; error: string }
-    | { type: "emit"; channel: string; args: unknown[] }
-    /** Something only the page can do, such as drawing an SVG (`PAGE_CHANNELS`) */
-    | { type: "ask"; id: number; channel: string; args: unknown[] };
+    | { type: "emit"; channel: string; args: unknown[] };
 
 /**
  * Why a tab keeps its show in memory only: another tab has the library, the
@@ -101,23 +96,6 @@ export const WEB_CHANNELS = {
     restoreVersion: "web:restoreVersion",
 } as const;
 
-/** Channels the worker asks the page, which has the DOM the worker lacks. */
-export const PAGE_CHANNELS = {
-    /**
-     * (bytes: Uint8Array, format: "svg" | "pdf", long: number) => RasterizedImage: an SVG, or
-     * a PDF's first page, drawn as a PNG `long` pixels on its long edge. For a field image
-     * that becomes the show's floor (ADR 0002 D-23).
-     */
-    rasterizeImage: "web:rasterizeImage",
-} as const;
-
-export interface RasterizedImage {
-    png: Uint8Array;
-    width: number;
-    height: number;
-    /** Pages in a PDF; 1 for an SVG */
-    pageCount: number;
-}
 export type FlushResult = { safe: boolean; memoryOnly?: true; error?: string };
 
 /** The library as the page sees it. */
@@ -148,3 +126,23 @@ export const WEB_EVENTS = {
     /** (status: SaveStatus): saving the open show started, finished or failed */
     saveStatus: "web:saveStatus",
 } as const;
+
+/**
+ * Errors the worker words for the person. The worker doesn't load Tolgee, so it sends the key as
+ * the error's message, and the page translates it when it arrives (`../renderer/workerErrors.ts`).
+ */
+export const WORKER_ERRORS = {
+    midChange: { messageKey: "web.workerError.midChange" },
+    notSaved: { messageKey: "web.workerError.notSaved" },
+    noLibrary: { messageKey: "web.workerError.noLibrary" },
+    noShow: { messageKey: "web.workerError.noShow" },
+    readOnly: { messageKey: "web.workerError.readOnly" },
+    noFileOpen: { messageKey: "web.workerError.noFileOpen" },
+} as const;
+
+export type WorkerErrorKey =
+    (typeof WORKER_ERRORS)[keyof typeof WORKER_ERRORS]["messageKey"];
+
+/** Whether `message` is one of `WORKER_ERRORS`' keys. */
+export const isWorkerErrorKey = (message: unknown): message is WorkerErrorKey =>
+    Object.values(WORKER_ERRORS).some((e) => e.messageKey === message);

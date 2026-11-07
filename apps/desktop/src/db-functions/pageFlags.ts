@@ -5,8 +5,10 @@ import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { refuse, TimelineWriteError } from "./timelineErrors";
 import {
+    deleteStrayEmptyTimelinesInTransaction,
     planTimelineRipple,
     readPageGrid,
+    readPageTimelinesInTransaction,
     readRippleRows,
     withTimelinePageRipple,
     type GridPage,
@@ -38,7 +40,9 @@ import { ensureCountsInTransaction } from "./endlessCounts";
  * **+** and Delete flag write only page rows, and `last_page_counts` when the last page changes.
  * They never run `withTimelinePageRipple` (P7.4): no timeline, transition or assignment is created,
  * moved or deleted, so motion is unchanged. The exception is **+** in Basic (`splitMoves`), which
- * also splits each marcher's move at the new flag, keeping motion unchanged. Timelines track flags only when a flag moves, so
+ * also splits each marcher's move at the new flag, keeping motion unchanged. Both delete an empty
+ * page timeline the edit leaves off its box (`deleteStrayEmptyTimelinesInTransaction`), which
+ * moves nothing either. Timelines track flags only when a flag moves, so
  * moving one does run it (`movePageFlagInTransaction`). Each is one undoable edit.
  *
  * Beats here are ordinals (resolver beats), the same as timeline rows and `readPageGrid`: page 0
@@ -203,6 +207,7 @@ export async function addPageFlagInTransaction({
     if (plan.kind === "split") {
         const { page } = plan;
         const lastPageCounts = plan.last ? await lastPageCountsIn(tx) : 0;
+        const pageTimelines = await readPageTimelinesInTransaction(tx, grid);
         // Before the page rows change, while the split page's box is still a page's
         const split = splitMoves
             ? await splitMovesAtBeatInTransaction({
@@ -231,6 +236,8 @@ export async function addPageFlagInTransaction({
                 tx,
                 lastPageCounts: page.start + lastPageCounts - beat,
             });
+        // An empty page timeline (everyone split off, #581) now crosses the new flag
+        await deleteStrayEmptyTimelinesInTransaction(tx, pageTimelines);
         return {
             page: created!,
             startBeat: page.start,
@@ -278,7 +285,9 @@ export async function addPageFlag({
  * covers N's too (the inverse of **+**). For the last page there is no page after it: its row is
  * deleted and the page before becomes the last one, ending at its own flag (`last_page_counts`).
  * N's per-page data goes with its row, except its tag appearances, which move to the page after it
- * (`moveTagAppearancesOffPagesInTransaction`). No timeline row is written, so motion is unchanged.
+ * (`moveTagAppearancesOffPagesInTransaction`). No timeline row is written, so motion is unchanged,
+ * except that an empty page timeline left off its box is deleted
+ * (`deleteStrayEmptyTimelinesInTransaction`).
  *
  * Returns the deleted pages.
  */
@@ -295,6 +304,7 @@ export async function deletePageFlagsInTransaction({
     const order = new Map(initial.pages.map((p, i) => [p.id, i]));
     for (const id of ids)
         if (!order.has(id)) refuse(`page ${id} doesn't exist`);
+    const pageTimelines = await readPageTimelinesInTransaction(tx, initial);
     // Latest first, re-reading the grid each time, so each delete sees the pages it leaves
     ids.sort((a, b) => order.get(b)! - order.get(a)!);
 
@@ -340,6 +350,8 @@ export async function deletePageFlagsInTransaction({
 
         if (row) deleted.push(realDatabasePageToDatabasePage(row));
     }
+    // An empty page timeline (everyone split off, #581) is no longer on a box
+    await deleteStrayEmptyTimelinesInTransaction(tx, pageTimelines);
     return deleted;
 }
 
@@ -371,13 +383,23 @@ export async function deletePageFlags({
  * - `open`: nothing, for the last flag past every move: the counts never end
  *   (docs/timeline/endless-counts.md), so its `max` is `Infinity`.
  * - `move`: a timeline in the way. `timelineId` is set when one timeline is to blame: one with an
- *   edge on the flag that the flag would leave behind, or one whose range the page timeline would
- *   take (C-12). `message` is the ripple's own refusal otherwise.
+ *   edge on the flag that the flag would leave behind (`reason` "leftBehind"), or one whose range
+ *   the page timeline would take (C-12, "sharesRange"). Otherwise the ripple refused
+ *   ("inTheWay"). `reason` is what the screen words; `message` is the refusal for logs only,
+ *   in English.
  */
 export type PageFlagMoveBlock =
     | { kind: "flag"; pageId: number }
     | { kind: "open" }
-    | { kind: "move"; timelineId?: number; message: string };
+    | {
+          kind: "move";
+          timelineId?: number;
+          reason: PageFlagMoveBlockReason;
+          message: string;
+      };
+
+/** Why a timeline stops a page flag (`PageFlagMoveBlock`'s `move`). */
+export type PageFlagMoveBlockReason = "leftBehind" | "sharesRange" | "inTheWay";
 
 /** Where page `pageId`'s flag can go: any beat in `[min, max]`, and what stops it at each end. */
 export interface PageFlagMoveLimits {
@@ -431,7 +453,11 @@ export function pageFlagMoveBlock(
         plan = planTimelineRipple(before, after, rows);
     } catch (error) {
         if (error instanceof TimelineWriteError)
-            return { kind: "move", message: error.message };
+            return {
+                kind: "move",
+                reason: "inTheWay",
+                message: error.message,
+            };
         throw error;
     }
     const left = (
@@ -446,6 +472,7 @@ export function pageFlagMoveBlock(
             return {
                 kind: "move",
                 timelineId: l.id,
+                reason: "leftBehind",
                 message: "a move on the flag would be left behind",
             };
     for (const t of rows.transitions)
@@ -453,6 +480,7 @@ export function pageFlagMoveBlock(
             return {
                 kind: "move",
                 timelineId: t.timeline_id,
+                reason: "leftBehind",
                 message: "a move on the flag would be left behind",
             };
     const timelineOf = new Map(
@@ -463,6 +491,7 @@ export function pageFlagMoveBlock(
             return {
                 kind: "move",
                 timelineId: timelineOf.get(a.transition_id),
+                reason: "leftBehind",
                 message: "a move on the flag would be left behind",
             };
     // C-12: one timeline per range. Only a timeline that changed can newly share a range. Moves
@@ -485,6 +514,7 @@ export function pageFlagMoveBlock(
             return {
                 kind: "move",
                 timelineId: other[0],
+                reason: "sharesRange",
                 message: `two moves would share beats [${r[0]}, ${r[1]})`,
             };
     }

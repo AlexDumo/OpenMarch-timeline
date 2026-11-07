@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useId } from "react";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -25,6 +25,7 @@ import { twMerge } from "tailwind-merge";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { animated, useTransition } from "@react-spring/web";
 import { MobileExportSettingsDialog } from "./settings/MobileExportSettings";
+import PageLinesNote from "./PageLinesNote";
 import { useSelectedAudioFile } from "@/context/SelectedAudioFileContext";
 import AudioFile, {
     computePlaceholderAudioDurationFromPages,
@@ -44,15 +45,15 @@ import {
 import {
     prepareBackgroundImageSyncResult,
     buildBackgroundImageFormData,
-    backgroundImagePng,
     type BackgroundImageSyncResult,
 } from "./utilities/backgroundImageSyncOnUpload";
 import {
     getFieldProperties,
     getFieldPropertiesImage,
 } from "@/global/classes/FieldProperties";
-import { T, useTolgee } from "@tolgee/react";
+import { T, useTranslate } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
+import { formatLocale } from "@/utilities/formatLocale";
 
 type UploadStatus = "idle" | "loading" | "error";
 
@@ -72,6 +73,7 @@ export default function MobileExportView({
                     productionId={currentProduction.id}
                     currentProduction={currentProduction}
                 />
+                <PageLinesNote />
                 <RevisionsList
                     revisions={currentProduction.revisions}
                     activeRevisionId={currentProduction.active_revision_id}
@@ -99,12 +101,6 @@ function toDisplayError(fullError: string): string {
     return `${fullError.slice(0, MAX_ERROR_DISPLAY_LENGTH)}…`;
 }
 
-const getOrdinal = (n: number): string => {
-    const s = ["th", "st", "nd", "rd"];
-    const v = n % 100;
-    return n + (s[(v - 20) % 10] || s[v] || s[0]);
-};
-
 const formatRevisionDate = (dateString: string): string => {
     const date = new Date(dateString);
     const now = new Date();
@@ -130,19 +126,15 @@ const formatRevisionDate = (dateString: string): string => {
         return tolgee.t("mobileExport.date.daysAgo", { count: diffDays });
     }
 
-    const month = new Intl.DateTimeFormat(tolgee.getLanguage(), {
-        month: "long",
+    const language = formatLocale();
+    const day = new Intl.DateTimeFormat(language, { dateStyle: "long" }).format(
+        date,
+    );
+    const time = new Intl.DateTimeFormat(language, {
+        timeStyle: "short",
     }).format(date);
-    const day = getOrdinal(date.getDate());
-    const year = date.getFullYear();
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const amOrPm = hours >= 12 ? "PM" : "AM";
-    const displayHours = hours % 12 || 12;
-    const displayMinutes = minutes.toString().padStart(2, "0");
-    const time = `${displayHours}:${displayMinutes}${amOrPm}`;
 
-    return tolgee.t("mobileExport.date.full", { month, day, year, time });
+    return tolgee.t("mobileExport.date.dateTime", { date: day, time });
 };
 
 export const SubmitRevisionForm = ({
@@ -154,7 +146,7 @@ export const SubmitRevisionForm = ({
     productionId: number;
     currentProduction?: Production;
 }) => {
-    const { t } = useTolgee();
+    const { t } = useTranslate();
     const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
     const [uploadError, setUploadError] = useState<string>("");
     const [revisionTitle, setRevisionTitle] = useState<string>(
@@ -241,15 +233,12 @@ export const SubmitRevisionForm = ({
         void (async () => {
             try {
                 const [localImage, fieldProperties] = await Promise.all([
-                    getFieldPropertiesImage("print"),
+                    getFieldPropertiesImage(),
                     getFieldProperties(),
                 ]);
                 if (cancelled) return;
-                // Mobile takes a PNG, made from the floor's original (D-23)
-                const png = await backgroundImagePng(localImage?.bytes ?? null);
-                if (cancelled) return;
                 const result = await prepareBackgroundImageSyncResult(
-                    png,
+                    localImage,
                     currentProduction.background_image_source_checksum ?? null,
                     fieldProperties.imageFillOrFit,
                     currentProduction.background_image_draw_type ?? null,
@@ -546,6 +535,7 @@ export const RevisionsList = ({
     revisions: RevisionPreview[];
     activeRevisionId: number | null;
 }) => {
+    const headingId = useId();
     const sortedRevisions = useMemo(
         () =>
             [...revisions].sort(
@@ -581,7 +571,7 @@ export const RevisionsList = ({
         return (
             <h4
                 className="text-text-subtitle text-body text-center"
-                aria-label="No revisions message"
+                data-testid="no-revisions-message"
             >
                 <T keyName="mobileExport.revisions.emptyMessage" />
             </h4>
@@ -589,8 +579,8 @@ export const RevisionsList = ({
     }
 
     return (
-        <section className="flex flex-col gap-6" aria-label="Revisions list">
-            <h2 className="text-body text-text-subtitle">
+        <section className="flex flex-col gap-6" aria-labelledby={headingId}>
+            <h2 id={headingId} className="text-body text-text-subtitle">
                 <T keyName="mobileExport.revisions.listHeading" />
             </h2>
             <div

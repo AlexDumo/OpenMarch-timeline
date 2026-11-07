@@ -4,6 +4,8 @@ import {
     ArrowsOutLineHorizontalIcon,
     DotsThreeIcon,
     HouseIcon,
+    MagnifyingGlassMinusIcon,
+    MagnifyingGlassPlusIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { animated, useSpring } from "@react-spring/web";
@@ -21,6 +23,9 @@ import {
     TransportPlayButton,
 } from "./TransportButtons";
 import { ShortcutTooltip, TransportTooltipProvider } from "./ShortcutTooltip";
+import Shortcut from "@/components/ui/Shortcut";
+import { T, useTranslate } from "@tolgee/react";
+import { formatBinding } from "@/shortcuts/bindings";
 import {
     isPlainNudgeKey,
     overlayOpen,
@@ -104,14 +109,12 @@ import {
     type TimelineKeyframe,
     type TimelineKeyframeMenu,
 } from "./TimelineKeyframes";
+import { TimelineHeldBars } from "./TimelineHeldBars";
+import type { SelectionHeldBar } from "@/timeline/timelineHeldBars";
 import {
     chainFit,
-    KEEP_DOT_SIZE,
-    KEEP_SHORTCUT,
-    keepDotFit,
     labelPaddingBeside,
     PageKeepChainButton,
-    PageKeepDot,
     type PageKeepChain,
     type PageKeepChains,
 } from "./PageKeepChain";
@@ -135,7 +138,8 @@ import type {
 
 /** Low enough that Fit shows a long show whole (UI-12): 500 beats fit in 500px */
 export const TIMELINE_MIN_PX_PER_BEAT = 1;
-export const TIMELINE_MAX_PX_PER_BEAT = 64;
+/** High enough to place a count line within a few milliseconds (owner, 2026-11-01: zoom in more) */
+export const TIMELINE_MAX_PX_PER_BEAT = 512;
 export const TIMELINE_INITIAL_PAGE_WIDTH = 40;
 
 export interface TimelineSelectionInteraction {
@@ -145,6 +149,8 @@ export interface TimelineSelectionInteraction {
 }
 
 const FIT_ICON = <ArrowsOutLineHorizontalIcon size={16} />;
+const ZOOM_OUT_ICON = <MagnifyingGlassMinusIcon size={16} />;
+const ZOOM_IN_ICON = <MagnifyingGlassPlusIcon size={16} />;
 const HOUSE_ICON = <HouseIcon size={14} aria-hidden="true" />;
 
 /** Below this width the transport folds its secondary controls into "⋯" (Bitwig's rule) */
@@ -156,7 +162,7 @@ const TRANSPORT_TIGHT_PX = 500;
  * The transport (UI-12): the timeline panel's one header row, as animation tools do it (Figma's
  * Motion timeline, Rive, Blender). Previous, Play, Next (UI-17); the caller's pinned accessories
  * and secondary ones (Sound); the clock and the readout,
- * which is also the go-to box (click it or press G or Mod+G, then type a page, "m23" or a rehearsal mark);
+ * which is also the go-to box (click it or press G, then type a page, "m23" or a rehearsal mark);
  * then Fit and the caller's view controls (Compact). The play and page buttons, the accessories
  * and the readout never leave: on a narrow panel the rest folds into "⋯". Shift+click on Previous
  * or Next steps a beat and Alt+click goes to the start or end of the show, as Shift+Q/E and
@@ -173,9 +179,13 @@ export const TimelineTransport = memo(function TimelineTransport({
     playLoops = false,
     onPlayFromPlayhead,
     onPlayOn,
+    playOnly,
     onNavigate,
     onFit,
     fitted = false,
+    onZoom,
+    canZoomIn = true,
+    canZoomOut = true,
     accessories,
     secondary,
     viewControls,
@@ -194,11 +204,17 @@ export const TimelineTransport = memo(function TimelineTransport({
     onPlayFromPlayhead?: () => void;
     /** Alt+click on Play (Alt+Space): plays on from the start flag (Expert, UI-26) */
     onPlayOn?: () => void;
+    /** Tempo mode: Play's one action, as its tooltip names it */
+    playOnly?: string;
     onNavigate?: (direction: TimelineNavigation) => void;
     /** Fit the show in view, or back to the zoom from before fitting */
     onFit?: () => void;
     /** The show is fitted, so Fit goes back */
     fitted?: boolean;
+    /** Zoom out (-1) or in (1) a step; with it, the two buttons show beside Fit (tempo mode) */
+    onZoom?: (direction: 1 | -1) => void;
+    canZoomIn?: boolean;
+    canZoomOut?: boolean;
     /** Controls after Next that never fold */
     accessories?: ReactNode;
     /** Controls after those that fold into "⋯" on a narrow panel, such as Sound */
@@ -210,18 +226,21 @@ export const TimelineTransport = memo(function TimelineTransport({
     /** The go-to box selects a page, as clicking its box does */
     onSelectionChange?: (selection: TimelineSelection) => void;
 }) {
+    const { t } = useTranslate();
     const rowRef = useRef<HTMLDivElement>(null);
     const width = useElementWidth(rowRef);
     const folded = width > 0 && width < TRANSPORT_FOLD_PX;
     const tight = width > 0 && width < TRANSPORT_TIGHT_PX;
     // While playing, the count being marched: the beat the playhead is in lands on the next count,
     // so a loop's first count reads as its own page's count 1, not the previous page's last
-    // (UI-17 follow-up; the paused playhead rests on a landed count)
+    // (UI-17 follow-up; the paused playhead rests on a landed count). The measure's beat is the
+    // one playing, as the music has it (jo: "m2 beat 3" while beat 2 played)
     const readoutText = getPlayheadReadout(
         model,
         isPlaying ? Math.min(positionBeat + 1, model.beatCount) : positionBeat,
+        positionBeat,
     );
-    const mod = isMac() ? "⌘" : "Ctrl";
+    const goToMod = formatBinding("$mod+G", isMac());
     const [goTo, setGoTo] = useState<string | null>(null);
     const [goToFailed, setGoToFailed] = useState(false);
     const canGoTo = onSeek != null || onSelectionChange != null;
@@ -230,7 +249,7 @@ export const TimelineTransport = memo(function TimelineTransport({
         setGoTo("");
         setGoToFailed(false);
     }, [canGoTo]);
-    // G or Mod+G (the timelineGoTo action) opens the go-to box. The dispatcher skips it in a text
+    // G (the timelineGoTo action) opens the go-to box. The dispatcher skips it in a text
     // field or modal layer; an open popover or menu keeps its keys too (its typeahead takes G)
     useActionHandler(
         "timelineGoTo",
@@ -268,9 +287,9 @@ export const TimelineTransport = memo(function TimelineTransport({
             <input
                 autoFocus
                 data-testid="timeline-go-to"
-                aria-label="Go to a page, measure or rehearsal mark"
+                aria-label={t("timeline.goTo.label")}
                 aria-invalid={goToFailed || undefined}
-                placeholder="Page, m23 or C"
+                placeholder={t("timeline.goTo.placeholder")}
                 value={goTo}
                 onChange={(event) => {
                     setGoTo(event.target.value);
@@ -283,7 +302,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                 }}
                 onBlur={() => setGoTo(null)}
                 className={clsx(
-                    "bg-bg-1 text-text rounded-4 h-22 w-[150px] min-w-0 border px-6 font-mono text-[11px] outline-hidden",
+                    "bg-bg-1 text-text rounded-4 text-sub h-22 w-[150px] min-w-0 border px-6 font-mono outline-hidden",
                     goToFailed ? "border-red" : "border-accent",
                 )}
             />
@@ -293,9 +312,15 @@ export const TimelineTransport = memo(function TimelineTransport({
                 data-testid="timeline-readout"
                 disabled={!canGoTo}
                 onClick={openGoTo}
-                aria-label={`${readoutText.spoken}. Go to a page, measure or rehearsal mark`}
-                title={`${readoutText.spoken}. Click or press G or ${mod}+G to go to a page, measure or rehearsal mark`}
-                className="text-text rounded-4 enabled:hover:bg-fg-2 flex h-22 min-w-0 items-baseline gap-8 overflow-hidden px-4 font-mono text-[11px] leading-[22px] whitespace-nowrap"
+                aria-label={t("timeline.goTo.readoutLabel", {
+                    position: readoutText.spoken,
+                })}
+                title={t("timeline.goTo.readoutTooltip", {
+                    position: readoutText.spoken,
+                    key: "G",
+                    modKey: goToMod,
+                })}
+                className="text-text rounded-4 enabled:hover:bg-fg-2 text-sub flex h-22 min-w-0 items-baseline gap-8 overflow-hidden px-4 font-mono leading-[22px] whitespace-nowrap"
             >
                 {/* UI-13: a minimum width, so the transport doesn't shift as the count changes */}
                 <span className="min-w-[15ch] shrink-0">
@@ -310,14 +335,51 @@ export const TimelineTransport = memo(function TimelineTransport({
         );
     const fit = onFit && (
         <TransportButton
-            label="Fit the show"
+            label={t("timeline.fit.label")}
             shortcut="Shift + Z"
-            hint={`Press again to go back. Pinch or ${mod}+scroll to zoom`}
+            hint={
+                <span className="text-text-subtitle text-sub flex items-center gap-4">
+                    <T
+                        keyName="timeline.fit.hint"
+                        params={{
+                            keys: () => <Shortcut binding="Mod+scroll" />,
+                        }}
+                    />
+                </span>
+            }
             pressed={fitted}
             onClick={onFit}
         >
             {FIT_ICON}
         </TransportButton>
+    );
+    const zoomHint = (
+        <span className="text-text-subtitle text-sub flex items-center gap-4">
+            <T
+                keyName="timeline.zoom.hint"
+                params={{ keys: () => <Shortcut binding="Mod+scroll" /> }}
+            />
+        </span>
+    );
+    const zoomButtons = onZoom && (
+        <>
+            <TransportButton
+                label={t("timeline.zoom.out")}
+                hint={zoomHint}
+                testId="timeline-zoom-out"
+                onClick={canZoomOut ? () => onZoom(-1) : undefined}
+            >
+                {ZOOM_OUT_ICON}
+            </TransportButton>
+            <TransportButton
+                label={t("timeline.zoom.in")}
+                hint={zoomHint}
+                testId="timeline-zoom-in"
+                onClick={canZoomIn ? () => onZoom(1) : undefined}
+            >
+                {ZOOM_IN_ICON}
+            </TransportButton>
+        </>
     );
     const divider = (
         <span aria-hidden="true" className="bg-stroke h-16 w-px shrink-0" />
@@ -327,7 +389,7 @@ export const TimelineTransport = memo(function TimelineTransport({
             <div
                 ref={rowRef}
                 role="group"
-                aria-label="Transport"
+                aria-label={t("timeline.transport.label")}
                 data-testid="timeline-transport"
                 className="border-stroke flex h-32 min-w-0 shrink-0 items-center gap-6 border-b px-6"
             >
@@ -342,6 +404,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                         playLoops={playLoops}
                         onPlayFromPlayhead={onPlayFromPlayhead}
                         onPlayOn={onPlayOn}
+                        playOnly={playOnly}
                     />
                     <TransportNavigationButton
                         direction="next"
@@ -368,8 +431,8 @@ export const TimelineTransport = memo(function TimelineTransport({
                             <Popover.Trigger asChild>
                                 <button
                                     type="button"
-                                    aria-label="More controls"
-                                    title="More: sound, the clock, Fit and the view controls"
+                                    aria-label={t("timeline.transport.more")}
+                                    title={t("timeline.transport.moreTooltip")}
                                     className="rounded-4 text-text enabled:hover:bg-fg-2 focus-visible:ring-accent flex size-24 items-center justify-center outline-hidden focus-visible:ring-2"
                                 >
                                     <DotsThreeIcon size={18} weight="bold" />
@@ -380,10 +443,11 @@ export const TimelineTransport = memo(function TimelineTransport({
                                     side="top"
                                     align="end"
                                     sideOffset={6}
-                                    className="border-stroke bg-modal text-text shadow-modal rounded-8 z-50 flex items-center gap-8 border px-8 py-6"
+                                    className="border-stroke bg-modal text-text shadow-modal rounded-6 z-50 flex items-center gap-8 border px-8 py-6"
                                 >
                                     {clock}
                                     {secondary}
+                                    {zoomButtons}
                                     {fit}
                                     {viewControls}
                                 </Popover.Content>
@@ -391,6 +455,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                         </Popover.Root>
                     ) : (
                         <>
+                            {zoomButtons}
                             {fit}
                             {viewControls}
                         </>
@@ -406,6 +471,7 @@ export const TimelineTransport = memo(function TimelineTransport({
  * it, edge to edge, so the controls never take the timeline's width.
  */
 export const TimelineShell = ({
+    header,
     transport,
     children,
     viewportRef,
@@ -413,6 +479,8 @@ export const TimelineShell = ({
     pinnedHeight = 0,
     overlay,
 }: {
+    /** A row over the transport (a band's header: tempo mode's) */
+    header?: ReactNode;
     transport?: ReactNode;
     children: ReactNode;
     viewportRef: RefObject<HTMLDivElement | null>;
@@ -421,36 +489,40 @@ export const TimelineShell = ({
     pinnedHeight?: number;
     /** Drawn over the viewport, where it doesn't scroll (the playhead chip) */
     overlay?: ReactNode;
-}) => (
-    <div
-        className={clsx(
-            "border-stroke bg-fg-1 text-text rounded-6 flex h-full min-h-0 min-w-0 flex-col overflow-visible border font-sans",
-            className,
-        )}
-    >
-        {transport}
-        {/* Its own stacking context: nothing on the timeline (+, the playhead) paints over a menu */}
-        <section className="relative isolate flex min-h-0 min-w-0 flex-1 flex-col px-6 pt-4">
-            <div
-                ref={viewportRef}
-                data-testid="timeline-viewport"
-                // Where focus goes when the clip it was on is deleted (UI-14 review)
-                tabIndex={-1}
-                aria-label="Timeline"
-                // The scrollbar's track is always there, so zooming never changes the height
-                className="focus-visible:ring-accent rounded-4 min-h-0 min-w-0 flex-1 overflow-x-scroll overflow-y-auto outline-hidden focus-visible:ring-2"
-                style={
-                    pinnedHeight > 0
-                        ? { scrollPaddingTop: pinnedHeight }
-                        : undefined
-                }
-            >
-                {children}
-            </div>
-            {overlay}
-        </section>
-    </div>
-);
+}) => {
+    const { t } = useTranslate();
+    return (
+        <div
+            className={clsx(
+                "border-stroke bg-fg-1 text-text rounded-6 flex h-full min-h-0 min-w-0 flex-col overflow-visible border font-sans",
+                className,
+            )}
+        >
+            {header}
+            {transport}
+            {/* Its own stacking context: nothing on the timeline (+, the playhead) paints over a menu */}
+            <section className="relative isolate flex min-h-0 min-w-0 flex-1 flex-col px-6 pt-4">
+                <div
+                    ref={viewportRef}
+                    data-testid="timeline-viewport"
+                    // Where focus goes when the clip it was on is deleted (UI-14 review)
+                    tabIndex={-1}
+                    aria-label={t("timeline.label")}
+                    // The scrollbar's track is always there, so zooming never changes the height
+                    className="focus-visible:ring-accent rounded-4 min-h-0 min-w-0 flex-1 overflow-x-scroll overflow-y-auto outline-hidden focus-visible:ring-2"
+                    style={
+                        pinnedHeight > 0
+                            ? { scrollPaddingTop: pinnedHeight }
+                            : undefined
+                    }
+                >
+                    {children}
+                </div>
+                {overlay}
+            </section>
+        </div>
+    );
+};
 
 /** How far past the viewport's edge, in pixels, a scrub scrolls fastest */
 const SCRUB_EDGE_SCROLL_MAX_PX = 80;
@@ -703,7 +775,7 @@ type RulerScrub = ReturnType<typeof useRulerScrub>;
  * scrolled out of view, so a long page always shows its name. Set heavier than the counts and
  * measure numbers under it, so the box and the weight tell them apart. Hidden when the box is too
  * narrow to read it, when zoomed far out (UI-12). It slides no further left than its box's
- * padding, which ends before a keep chain or dot (`labelPaddingBeside`).
+ * padding, which ends before a keep chain (`labelPaddingBeside`).
  */
 const PageBoxLabel = memo(function PageBoxLabel({
     label,
@@ -749,6 +821,7 @@ export const TimelineRuler = memo(function TimelineRuler({
     positionBeat,
     keyframes,
     keyframeMenu,
+    heldBars,
     keepChains,
     scrubLine,
     pageFlagMove,
@@ -782,6 +855,8 @@ export const TimelineRuler = memo(function TimelineRuler({
     keyframes?: readonly TimelineKeyframe[];
     /** A diamond's right-click Unset actions (#306), by view beat; without it, no menu */
     keyframeMenu?: TimelineKeyframeMenu;
+    /** The selected marchers' Held holds (#472), view beats; none without a selection */
+    heldBars?: readonly SelectionHeldBar[];
     /** The chains on the page boxes (UI-18 keep later pages), by page id */
     keepChains?: PageKeepChains;
 }) {
@@ -796,12 +871,15 @@ export const TimelineRuler = memo(function TimelineRuler({
     useEffect(() => {
         if (!pageFlagMove) setFlagPreview(null);
     }, [pageFlagMove]);
-    // Rehearsal tabs are never thinned; a number gives way to a tab near it (UI-12)
+    // Rehearsal tabs are never thinned; a number gives way to a tab near it (UI-12). A tab's own
+    // measure number goes just right of the tab when there's room before the next number or tab,
+    // so a renumbered measure (C at m. 101) stays readable (tempo mode)
     const visibleMeasures = useMemo(() => {
-        const tabBeats = measures
-            .filter((measure) => measure.rehearsalMark?.trim())
-            .map((measure) => measure.atBeat);
-        return filterMarkersByMinimumSpacing(
+        const tabbed = measures.filter((measure) =>
+            measure.rehearsalMark?.trim(),
+        );
+        const tabBeats = tabbed.map((measure) => measure.atBeat);
+        const plain: MeasureNumberMarker[] = filterMarkersByMinimumSpacing(
             measures.filter(
                 (measure) =>
                     !measure.rehearsalMark?.trim() &&
@@ -813,6 +891,24 @@ export const TimelineRuler = memo(function TimelineRuler({
             ),
             pixelsPerBeat,
         );
+        const lefts = [...plain.map((m) => m.atBeat), ...tabBeats]
+            .map((beat) => beat * pixelsPerBeat)
+            .sort((a, b) => a - b);
+        const beside = tabbed.flatMap((measure) => {
+            const x = measure.atBeat * pixelsPerBeat;
+            // the tab: a 2 px bar, padding and its letters in 10 px mono
+            const tab = Math.max(
+                16,
+                measure.rehearsalMark!.trim().length * 6.5 + 10,
+            );
+            const digits = measure.label.replace(/^m/i, "").length;
+            const end = x + tab + 3 + digits * 6.5 + 4;
+            const next = lefts.find((left) => left > x + 0.5);
+            return next === undefined || next >= end
+                ? [{ ...measure, offsetPx: tab }]
+                : [];
+        });
+        return [...plain, ...beside];
     }, [measures, pixelsPerBeat]);
     const wordsId = useId();
     const scrub = useRulerScrub(
@@ -919,6 +1015,13 @@ export const TimelineRuler = memo(function TimelineRuler({
                     onSelectPage={selectPage}
                 />
             )}
+            {heldBars && (
+                <TimelineHeldBars
+                    bars={heldBars}
+                    pages={pages}
+                    pixelsPerBeat={pixelsPerBeat}
+                />
+            )}
             {keyframes && (
                 <TimelineKeyframes
                     keyframes={keyframes}
@@ -972,6 +1075,7 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
     /** The chains on the page boxes (UI-18 keep later pages), by page id */
     keepChains?: PageKeepChains;
 }) {
+    const { t } = useTranslate();
     const selectedIds = new Set(selectedBoxIds.split("\n"));
     return (
         <TransportTooltipProvider disableHoverableContent>
@@ -991,15 +1095,20 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
                         type="button"
                         data-timeline-interactive="true"
                         data-testid="timeline-initial-page"
-                        aria-label={`Page ${initialPage.label}`}
-                        title={`Home: the start of the show (page ${initialPage.label}'s set)`}
+                        aria-label={t("timeline.page.label", {
+                            pageName: initialPage.label,
+                        })}
+                        title={t("timeline.page.homeTooltip", {
+                            page: initialPage.label,
+                        })}
                         aria-pressed={homeSelected}
                         {...scrub.handlers}
                         onClick={(event) => {
                             if (!scrub.consumeClick(event))
                                 onSelectPage(initialPage);
                         }}
-                        className="border-stroke text-text focus-visible:ring-accent absolute top-0 left-0 flex h-full items-center justify-center rounded-l-[5px] border-r text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
+                        // eslint-disable-next-line no-restricted-syntax -- the inner corner of the rounded-6 page row inside its 1 px border
+                        className="border-stroke text-text focus-visible:ring-accent text-sub absolute top-0 left-0 flex h-full items-center justify-center rounded-l-[5px] border-r outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
                         style={{ width: initialPageWidth }}
                     >
                         {/* UI-13: a house, so home's "0" isn't read as a count or a measure */}
@@ -1051,6 +1160,7 @@ const TimelinePageBox = memo(function TimelinePageBox({
     /** The box's chain for the selected marchers (UI-18 keep later pages) */
     chain?: PageKeepChain;
 }) {
+    const { t } = useTranslate();
     const boxWidth =
         (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat;
     const boxLeft =
@@ -1058,31 +1168,19 @@ const TimelinePageBox = memo(function TimelinePageBox({
     const labelShown = pageLabelFits(page.label, boxWidth);
     const labelChars = labelShown ? page.label.length : 0;
     const fit = chain ? chainFit(boxWidth, labelChars) : null;
-    const dot =
-        chain && !fit && chain.kind !== "follows"
-            ? keepDotFit(boxWidth, labelChars)
-            : null;
-    // The sticky label stops before the chain or dot (`labelPaddingBeside`)
+    // The sticky label stops before the chain (`labelPaddingBeside`)
     const labelPadding = fit
         ? labelPaddingBeside(fit.offset, fit.size)
-        : dot?.clear
-          ? labelPaddingBeside(dot.offset, KEEP_DOT_SIZE)
-          : undefined;
+        : undefined;
     // A chain with no room for its button: its words go on the box, as its tooltip and accessible
-    // description, naming whom the box's menu changes, with (K) where K does the same, as the
-    // chain's button shows it
-    const menuK = !!chain && !fit && !!chain.menuWithK;
+    // description, naming whom the box's menu changes
     const words =
         chain && !fit
             ? { label: chain.menuLabel, hint: chain.menuHint }
             : undefined;
     const box = (
         <ShortcutTooltip
-            label={
-                words && menuK
-                    ? `${words.label} (${KEEP_SHORTCUT})`
-                    : words?.label
-            }
+            label={words?.label}
             hint={words?.hint}
             side="top"
             closeOnPress
@@ -1091,9 +1189,8 @@ const TimelinePageBox = memo(function TimelinePageBox({
                 type="button"
                 data-timeline-interactive="true"
                 {...timelineRangeTargetProps(range, undefined, page.id)}
-                aria-label={`Page ${page.label}`}
+                aria-label={t("timeline.page.label", { pageName: page.label })}
                 aria-describedby={words ? descriptionId : undefined}
-                aria-keyshortcuts={menuK ? KEEP_SHORTCUT : undefined}
                 aria-pressed={selected}
                 {...scrub.handlers}
                 onClick={(event) => {
@@ -1101,7 +1198,7 @@ const TimelinePageBox = memo(function TimelinePageBox({
                     // macOS ctrl+click opens the context menu (UI-9: no selection change)
                     if (!event.ctrlKey) onSelectPage(page, event.shiftKey);
                 }}
-                className="border-stroke text-text focus-visible:ring-accent absolute top-0 flex h-full items-center justify-end border-r px-8 text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
+                className="border-stroke text-text focus-visible:ring-accent text-sub absolute top-0 flex h-full items-center justify-end border-r px-8 outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
                 style={{
                     left: boxLeft,
                     width: boxWidth,
@@ -1113,9 +1210,6 @@ const TimelinePageBox = memo(function TimelinePageBox({
                     <span id={descriptionId} className="sr-only">
                         {words.label}. {words.hint}
                     </span>
-                )}
-                {chain && dot && (
-                    <PageKeepDot kind={chain.kind} left={dot.offset} />
                 )}
             </button>
         </ShortcutTooltip>
@@ -1133,11 +1227,16 @@ const TimelinePageBox = memo(function TimelinePageBox({
                 range={range}
                 left={boxLeft + fit.offset}
                 size={fit.size}
-                always={selected || !!chain.withK}
+                always={selected}
             />
         </>
     );
 });
+
+/** A measure number to draw, `offsetPx` right of its bar line when a rehearsal tab is there */
+type MeasureNumberMarker = TimelineMeasureMarker & {
+    readonly offsetPx?: number;
+};
 
 /**
  * The measure numbers under the page boxes (`TimelineRuler`), or a show without measures' counts
@@ -1149,7 +1248,7 @@ const TimelineRulerNumbers = memo(function TimelineRulerNumbers({
     countsStart,
     pixelsPerBeat,
 }: {
-    visibleMeasures: readonly TimelineMeasureMarker[];
+    visibleMeasures: readonly MeasureNumberMarker[];
     countsTotal: number | null;
     countsStart: number | null;
     pixelsPerBeat: number;
@@ -1163,7 +1262,7 @@ const TimelineRulerNumbers = memo(function TimelineRulerNumbers({
             : [];
     return (
         // UI-12: measure numbers without the "M"; a measure with a rehearsal mark shows the
-        // mark instead (TimelineRehearsalMarkers)
+        // mark (TimelineRehearsalMarkers), with its number after it when there's room
         // Each number starts just right of its bar line, so the line doesn't cross it
         <div
             aria-hidden="true"
@@ -1173,9 +1272,12 @@ const TimelineRulerNumbers = memo(function TimelineRulerNumbers({
             {visibleMeasures.map((measure) => (
                 <span
                     key={measure.id}
-                    className="text-text absolute top-4 text-[10px] leading-none whitespace-nowrap opacity-75"
+                    className="text-text text-micro absolute top-4 leading-none whitespace-nowrap opacity-75"
                     style={{
-                        left: beatToX(measure.atBeat, pixelsPerBeat) + 3,
+                        left:
+                            beatToX(measure.atBeat, pixelsPerBeat) +
+                            3 +
+                            (measure.offsetPx ?? 0),
                     }}
                 >
                     {measure.label.replace(/^m/i, "")}
@@ -1185,7 +1287,7 @@ const TimelineRulerNumbers = memo(function TimelineRulerNumbers({
                 <span
                     key={count}
                     data-testid="timeline-page-count"
-                    className="text-text absolute top-4 -translate-x-full text-[10px] leading-none whitespace-nowrap opacity-75"
+                    className="text-text text-micro absolute top-4 -translate-x-full leading-none whitespace-nowrap opacity-75"
                     style={{
                         left: beatToX(atBeat, pixelsPerBeat) - 2,
                     }}
@@ -1282,7 +1384,7 @@ export function TimelineMoveNameField({
     onDone,
     className,
     style,
-    ariaLabel = "Move name",
+    ariaLabel,
 }: {
     initial: string;
     onDone: (name: string | null, byKey: boolean) => void;
@@ -1290,6 +1392,7 @@ export function TimelineMoveNameField({
     style?: CSSProperties;
     ariaLabel?: string;
 }) {
+    const { t } = useTranslate();
     const ref = useRef<HTMLInputElement>(null);
     const [value, setValue] = useState(initial);
     const done = useRef(false);
@@ -1327,7 +1430,7 @@ export function TimelineMoveNameField({
                 data-testid="timeline-move-name-field"
                 data-timeline-interactive="true"
                 data-timeline-own-keys="true"
-                aria-label={ariaLabel}
+                aria-label={ariaLabel ?? t("timeline.move.nameField")}
                 maxLength={MOVE_NAME_MAX_LENGTH}
                 value={value}
                 onChange={(event) => setValue(event.target.value)}
@@ -1346,7 +1449,7 @@ export function TimelineMoveNameField({
                 onDoubleClick={(event) => event.stopPropagation()}
                 onContextMenu={(event) => event.stopPropagation()}
                 className={clsx(
-                    "bg-bg-1 text-text border-accent rounded-4 border px-4 text-[11px] outline-hidden",
+                    "bg-bg-1 text-text border-accent rounded-4 text-sub border px-4 outline-hidden",
                     className,
                 )}
                 style={style}
@@ -1356,7 +1459,7 @@ export function TimelineMoveNameField({
                     data-testid="timeline-move-name-limit"
                     role="status"
                     className={clsx(
-                        "bg-bg-1 text-text-subtitle rounded-4 border-stroke pointer-events-none border px-4 text-[10px] whitespace-nowrap",
+                        "bg-bg-1 text-text-subtitle rounded-4 border-stroke text-micro pointer-events-none border px-4 whitespace-nowrap",
                         className,
                     )}
                     style={{
@@ -1368,7 +1471,9 @@ export function TimelineMoveNameField({
                                 : undefined,
                     }}
                 >
-                    {MOVE_NAME_MAX_LENGTH} characters at most
+                    {t("timeline.move.nameLimit", {
+                        count: MOVE_NAME_MAX_LENGTH,
+                    })}
                 </span>
             )}
         </>
@@ -1492,6 +1597,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     /** UI-25: dragging the clip down splits the selected marchers off; onto a move, merges */
     peel?: TimelineClipPeel;
 }) {
+    const { t } = useTranslate();
     const range = getTrackRange(track);
     // Where a move drag draws the clip, on the view axis. It's where it's drawn, not an offset
     // from the range, so the moved range arriving can't shift it again, even for the frame before
@@ -1508,23 +1614,30 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     const clipRef = useRef<HTMLButtonElement>(null);
     // More about the clip for screen readers (UI-14 round-2 review): why it is dashed, its keys
     const descriptionId = useId();
+    const keysText = moveCommands
+        ? selected || !onSelect
+            ? t("timeline.clip.keysSelected")
+            : t("timeline.clip.keys")
+        : undefined;
     const description =
-        [
-            track.description,
-            moveCommands
-                ? selected || !onSelect
-                    ? "Enter or F2 to rename, Shift+F10 for options, Delete to delete"
-                    : "Enter to select, F2 to rename, Shift+F10 for options, Delete to delete"
-                : undefined,
-        ]
-            .filter(Boolean)
-            .join(". ") || undefined;
+        track.description && keysText
+            ? t("timeline.clip.descriptionWithKeys", {
+                  description: track.description,
+                  keys: keysText,
+              })
+            : track.description || keysText || undefined;
     const moveMenu = useMemo<TimelineMoveMenuActions | undefined>(
         () =>
             moveCommands && {
                 onEdit: () => moveCommands.onEdit(trackId),
                 onRename: () => onRenameStart?.(trackId),
                 onDelete: () => moveCommands.onDelete(trackId),
+                ...(moveCommands.onSelectMarchers
+                    ? {
+                          onSelectMarchers: () =>
+                              moveCommands.onSelectMarchers!(trackId),
+                      }
+                    : {}),
                 ...(moveCommands.onSplit
                     ? { onSplit: () => moveCommands.onSplit!(trackId) }
                     : {}),
@@ -1554,7 +1667,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     };
     const menuActions = moveMenu && {
         ...moveMenu,
-        // Edit move puts focus on the Move card (UI-14 review), so don't take it back either
+        // Edit move isolates the move; don't take focus back to the clip either
         onEdit: () => {
             keepFocus.current = true;
             moveMenu.onEdit();
@@ -1709,7 +1822,18 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                 ref={clipRef}
                 {...timelineRangeTargetProps(range, track.id)}
                 // UI-14 review: a move is named as one, in counts (`describeMoveClips`)
-                aria-label={`${track.accessibleName ?? `${track.label} timeline, beats ${range.startBeatIndex + 1} through ${range.endBeatIndex}`}${moveMenu && selected ? ", selected" : ""}`}
+                aria-label={(() => {
+                    const name =
+                        track.accessibleName ??
+                        t("timeline.clip.fallbackName", {
+                            label: track.label,
+                            from: range.startBeatIndex + 1,
+                            to: range.endBeatIndex,
+                        });
+                    return moveMenu && selected
+                        ? t("timeline.clip.selectedName", { name })
+                        : name;
+                })()}
                 // A move says "selected" in its name (UI-14 round-2 review: "pressed" read as a
                 // toggle); other clips keep the pressed state
                 aria-pressed={moveMenu ? undefined : selected}
@@ -2001,7 +2125,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     <span
                         data-testid="timeline-clip-label"
                         aria-hidden="true"
-                        className="text-text pointer-events-none absolute top-1/2 left-4 block -translate-y-1/2 truncate text-[10px] leading-[12px] font-medium"
+                        className="text-text text-micro pointer-events-none absolute top-1/2 left-4 block -translate-y-1/2 truncate leading-[12px] font-medium"
                         style={{
                             right:
                                 menuShown && menuInside
@@ -2038,8 +2162,10 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                                 // Space stays Play (UI-14 round-2 review): it doesn't open the menu
                                 onKeyDown={spaceStaysPlay}
                                 onKeyUp={spaceStaysPlay}
-                                aria-label={`${track.label} options`}
-                                title="Move options"
+                                aria-label={t("timeline.clip.optionsLabel", {
+                                    label: track.label,
+                                })}
+                                title={t("timeline.clip.options")}
                                 onPointerDown={(event) =>
                                     event.stopPropagation()
                                 }
@@ -2093,7 +2219,9 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                 <TimelineMoveNameField
                     initial={track.label}
                     onDone={onRenameDone}
-                    ariaLabel={`Rename ${track.label}`}
+                    ariaLabel={t("timeline.clip.renameField", {
+                        label: track.label,
+                    })}
                     className="absolute z-[46]"
                     style={{
                         left,
@@ -2119,10 +2247,16 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     onInteractionChange,
     positionBeat,
     scrubLine,
+    grabHeight,
 }: {
     range: TimelineBeatRange;
     /** Where to draw the start flag when it isn't the range's start (UI-10, after Stop) */
     startFlagBeatIndex?: number;
+    /**
+     * How far down the start flag's line can be grabbed (default: all of it). A focused band
+     * (tempo mode) has its own handles under the ruler, which must win over the flag's line
+     */
+    grabHeight?: number;
     beatCount: number;
     pixelsPerBeat: number;
     height: number;
@@ -2144,6 +2278,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     positionBeat?: number;
     scrubLine?: TimelineLiveValue<number | null>;
 }) {
+    const { t } = useTranslate();
     const [preview, setPreview] = useState(range);
     const tintRef = useRef<HTMLSpanElement>(null);
     const previewRef = useRef(range);
@@ -2335,8 +2470,8 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
 
     const flagTitle = (kind: "start" | "end", beatIndex: number) =>
         kind === "start"
-            ? "Start flag: dragged marchers leave from here. Drag to move it."
-            : `Selection ${kind}: beat boundary ${beatIndex}`;
+            ? t("timeline.startFlag.dragTooltip")
+            : t("timeline.selection.endTooltip", { beat: beatIndex });
     const live = (kind: "start" | "end") =>
         kind === "start" && onLineDrag !== undefined;
     const flagHandlers = (kind: "start" | "end", beatIndex: number) => ({
@@ -2462,7 +2597,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                 <button
                     type="button"
                     data-timeline-interactive="true"
-                    aria-label={`Selection ${kind}`}
+                    aria-label={t("timeline.selection.end")}
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
                     className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize! disabled:cursor-default!"
@@ -2472,7 +2607,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                         className="bg-accent pointer-events-none absolute top-0 left-1/2 w-px"
                         style={{ height }}
                     />
-                    <span className="bg-accent absolute top-0 right-1/2 h-10 w-8 rounded-l-sm" />
+                    <span className="bg-accent rounded-l-4 absolute top-0 right-1/2 h-10 w-8" />
                 </button>
             );
         // UI-10, UI-11: the start flag, where movers leave from. No words: a line and a pennant,
@@ -2482,11 +2617,16 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                 <button
                     type="button"
                     data-timeline-interactive="true"
-                    aria-label={`Start flag, beat ${beatIndex}`}
+                    aria-label={t("timeline.startFlag.label", {
+                        beat: beatIndex,
+                    })}
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
                     className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize! disabled:cursor-default!"
-                    style={{ left: x, height }}
+                    style={{
+                        left: x,
+                        height: Math.min(height, grabHeight ?? height),
+                    }}
                 >
                     {/* UI-20: 2px, from the headroom strip down */}
                     <span
@@ -2579,7 +2719,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
 });
 
 /**
- * The start flag on a read-only timeline (Visuals mode, performer-behavior.md section 7.1): the
+ * The start flag on a read-only timeline (Preview): the
  * same stem and pennant as `TimelineSelectionRange`'s flag, with no handles and no window. Play
  * starts here, so it shows though nothing on that timeline drags it.
  */
@@ -2593,6 +2733,7 @@ export const TimelineStartFlagMark = memo(function TimelineStartFlagMark({
     pixelsPerBeat: number;
     height: number;
 }) {
+    const { t } = useTranslate();
     // Whole pixels, so the stem and the pennant blur on the same pixels
     const x = Math.round(beatToX(beat, pixelsPerBeat));
     return (
@@ -2600,7 +2741,7 @@ export const TimelineStartFlagMark = memo(function TimelineStartFlagMark({
         <div
             data-testid="timeline-start-flag-mark"
             data-beat={beat}
-            title="Start flag: Play starts here"
+            title={t("timeline.startFlag.markTooltip")}
             className={clsx(
                 "pointer-events-none absolute top-0 z-40 w-[2px] -translate-x-1/2",
                 START_INK.bg,
@@ -2629,15 +2770,14 @@ export const TimelineRehearsalMarkers = memo(function TimelineRehearsalMarkers({
     model,
     pixelsPerBeat,
     top,
-    compact = false,
     onSeek,
 }: {
     model: TimelineViewModel;
     pixelsPerBeat: number;
     top: number;
-    compact?: boolean;
     onSeek?: (beat: BeatPosition) => void;
 }) {
+    const { t } = useTranslate();
     return (
         <div className="pointer-events-none absolute inset-0 z-20">
             {model.measures.flatMap((measure) => {
@@ -2649,13 +2789,16 @@ export const TimelineRehearsalMarkers = memo(function TimelineRehearsalMarkers({
                         key={measure.id}
                         type="button"
                         data-timeline-interactive="true"
-                        aria-label={`Rehearsal ${label}, measure ${number}`}
-                        title={`Rehearsal ${label}, measure ${number}`}
+                        aria-label={t("timeline.rehearsalMark", {
+                            mark: label,
+                            measure: number,
+                        })}
+                        title={t("timeline.rehearsalMark", {
+                            mark: label,
+                            measure: number,
+                        })}
                         onClick={() => onSeek?.(measure.atBeat)}
-                        className={clsx(
-                            "border-text-subtitle bg-bg-1 text-text rounded-r-4 pointer-events-auto absolute flex h-16 min-w-16 items-center justify-center border border-l-2 px-3 font-mono leading-none font-semibold",
-                            compact ? "text-[9px]" : "text-[10px]",
-                        )}
+                        className="border-text-subtitle bg-bg-1 text-text rounded-r-4 text-micro pointer-events-auto absolute flex h-16 min-w-16 items-center justify-center border border-l-2 px-3 font-mono leading-none font-semibold"
                         style={{
                             left: beatToX(measure.atBeat, pixelsPerBeat),
                             top,
@@ -2790,6 +2933,7 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
     livePositionBeat,
     pixelsPerBeat,
     height,
+    grabHeight,
     beatCount,
     anchorRef,
     onSeek,
@@ -2808,6 +2952,12 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
     livePositionBeat?: () => number | null;
     pixelsPerBeat: number;
     height: number;
+    /**
+     * How far down the line can be grabbed (px); the line is drawn the full `height` either way.
+     * A focused band (tempo mode) takes the clicks below its top, as a DAW's lanes do: the
+     * playhead is grabbed in the ruler there
+     */
+    grabHeight?: number;
     beatCount: number;
     anchorRef: RefObject<HTMLButtonElement | null>;
     onSeek?: (beat: BeatPosition, options?: TimelineSeekOptions) => void;
@@ -2825,6 +2975,7 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
     /** The new page's names, after the menu's entries */
     addPageNames?: { page: string; subset: string };
 }) {
+    const { t } = useTranslate();
     const keySteps = useArrowKeySteps(onSeek);
     // Whole pixels at rest, like the start flag, so the head and the line land on the same pixels
     const left = Math.round(beatToX(positionBeat, pixelsPerBeat));
@@ -2886,7 +3037,9 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
                 type="button"
                 data-testid="timeline-playhead"
                 data-timeline-scrub="true"
-                aria-label={`Playback position: ${getPlayheadReadout(model, positionBeat).spoken}`}
+                aria-label={t("timeline.playhead.label", {
+                    position: getPlayheadReadout(model, positionBeat).spoken,
+                })}
                 onPointerDown={(event) => event.preventDefault()}
                 onKeyDown={(event) => {
                     const delta =
@@ -2919,7 +3072,7 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
                 }}
                 onBlur={keySteps.end}
                 className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-50 w-12 -translate-x-1/2 cursor-ew-resize! touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
-                style={{ left, height }}
+                style={{ left, height: grabHeight ?? height }}
             >
                 {/* UI-20: a 2px line from the headroom strip down, and a head in the strip, centered on
                 the line, so its tip runs into the line */}

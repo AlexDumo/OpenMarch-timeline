@@ -19,13 +19,14 @@ import { applyAnalyticsConsent } from "@/utilities/analyticsConsent";
 import tolgee from "@/global/singletons/Tolgee";
 import { installClickFocusMarker } from "@/utilities/clickFocus";
 import { initEditorModeStore } from "@/stores/EditorModeStore";
+import { initAnalyticsQuestionStore } from "@/stores/AnalyticsQuestionStore";
 import { startInputModeTracking } from "@/stores/InputModeStore";
 
 installClickFocusMarker();
 
 const isSettingsWindow = window.location.hash === "#settings";
 
-// The 3D View window loads this bundle with `?view=3d` (ADR 0002 D-3). It
+// The 3D View window loads this bundle with `?view=3d` (ADR 0010 D-3). It
 // renders its own root, loaded on demand so the editor doesn't pay for
 // three.js, and skips the editor's analytics and providers.
 const isView3dWindow =
@@ -86,6 +87,8 @@ function mountEditor() {
 
     // Basic or Expert (UI-19): read it and keep it in sync with the Settings window
     initEditorModeStore();
+    // Whether the welcome flow still has to ask about analytics
+    initAnalyticsQuestionStore();
 
     // Listen for language changes from other windows
     window.electron?.onSettingsChanged((change) => {

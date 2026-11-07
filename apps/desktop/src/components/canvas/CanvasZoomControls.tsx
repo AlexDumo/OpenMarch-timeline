@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import clsx from "clsx";
-import { PlusIcon, MinusIcon, PerspectiveIcon } from "@phosphor-icons/react";
+import { PlusIcon, MinusIcon } from "@phosphor-icons/react";
 import { Slider } from "@openmarch/ui";
+import { useTranslate } from "@tolgee/react";
 import { MAX_ZOOM, MIN_ZOOM } from "@/field/editor/view";
 
 /**
@@ -31,6 +32,7 @@ interface CanvasZoomControlsProps {
 export default function CanvasZoomControls({
     canvas,
 }: CanvasZoomControlsProps) {
+    const { t } = useTranslate();
     const [currentZoom, setCurrentZoom] = useState(100); // Represents percentage
     const [rawZoom, setRawZoom] = useState(1); // Raw field zoom, for the slider
 
@@ -154,23 +156,15 @@ export default function CanvasZoomControls({
     const getMaxZoom = () => MAX_ZOOM * 100;
     const getMinZoom = () => MIN_ZOOM * 100;
 
-    // Tooltip for the hamburger icon (placeholder)
-    // const NavigationTooltip = () => (
-    //     <div className="bg-bg-1 pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 transform rounded-md px-3 py-1.5 text-sm whitespace-nowrap opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-    //         Zoom and navigation
-    //         <div className="border-t-bg-1 absolute top-full left-1/2 -translate-x-1/2 transform border-x-4 border-t-4 border-x-transparent" />
-    //     </div>
-    // );
-
     return (
         <div
             className={clsx(
-                "group border-stroke bg-bg-1 pointer-events-auto absolute right-6 bottom-6 z-10 flex w-160 flex-col overflow-hidden rounded-lg border shadow-lg",
+                "group border-stroke bg-bg-1 rounded-8 pointer-events-auto absolute right-6 bottom-6 z-10 flex w-160 flex-col overflow-hidden border shadow-lg",
             )}
         >
             <div className="border-stroke flex items-center border-b px-12 py-2">
                 <Slider
-                    aria-label="Zoom"
+                    aria-label={t("canvas.zoom.group")}
                     data-testid="canvas-zoom-slider"
                     className="h-12 w-full"
                     thumbClassName="size-10"
@@ -183,34 +177,12 @@ export default function CanvasZoomControls({
                 />
             </div>
             <div className="flex items-stretch justify-between">
-                {/* Hamburger Icon (placeholder for future menu) */}
-                {/* <button
-                className="text-text hover:bg-fg-2 flex items-center justify-center p-2 transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Zoom and navigation"
-                disabled={!canvas}
-            >
-                <List size={20} />
-                <NavigationTooltip />
-            </button> */}
-
-                {/* Perspective: a placeholder until the field can tilt again */}
-                <button
-                    type="button"
-                    data-testid="field-perspective"
-                    disabled
-                    aria-label="Perspective"
-                    title="Perspective (coming soon)"
-                    className="border-stroke text-text flex items-center justify-center border-r px-8 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                    <PerspectiveIcon size={16} />
-                </button>
-
                 {/* Zoom Out Button */}
                 <button
                     onClick={handleZoomOut}
                     className="border-stroke text-text flex w-full items-center justify-center p-2 transition-colors duration-150 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!canvas || currentZoom <= getMinZoom()}
-                    title="Zoom Out"
+                    title={t("canvas.zoom.out")}
                 >
                     <MinusIcon size={18} weight="bold" />
                 </button>
@@ -220,7 +192,8 @@ export default function CanvasZoomControls({
                     onClick={handleResetZoomAndCenter}
                     className="border-stroke bg-fg-2 text-text flex h-full w-full items-center justify-center border-r border-l px-3 py-4 font-mono text-sm transition-colors duration-150 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!canvas}
-                    title="Reset Zoom and Center"
+                    title={t("canvas.zoom.resetAndCenter")}
+                    aria-label={t("canvas.zoom.reset", { zoom: currentZoom })}
                 >
                     {currentZoom}%
                 </button>
@@ -230,7 +203,7 @@ export default function CanvasZoomControls({
                     onClick={handleZoomIn}
                     className="border-stroke text-text flex w-full items-center justify-center border-l p-2 transition-colors duration-150 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!canvas || currentZoom >= getMaxZoom()}
-                    title="Zoom In"
+                    title={t("canvas.zoom.in")}
                 >
                     <PlusIcon size={18} weight="bold" />
                 </button>

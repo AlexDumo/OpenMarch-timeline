@@ -1,10 +1,11 @@
 import { BugBeetleIcon } from "@phosphor-icons/react/dist/ssr";
-import { useTolgee } from "@tolgee/react";
+import { useTranslate } from "@tolgee/react";
+import { siteUrl } from "@/global/siteUrl";
 
 export default function BugReport() {
-    const { t } = useTolgee();
+    const { t } = useTranslate();
     const handleClick = () => {
-        const url = "https://openmarch.com/guides/submitting-feedback/";
+        const url = siteUrl("/guides/submitting-feedback/");
         if (window.electron?.openExternal) {
             // recommended way to open external links in the default browser in electron
             void window.electron.openExternal(url);

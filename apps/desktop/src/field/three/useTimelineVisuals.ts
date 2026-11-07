@@ -1,4 +1,3 @@
-import { usePreviewModeStore } from "@/stores/PreviewModeStore";
 import { useEffect, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { FieldProperties } from "@openmarch/core";
@@ -16,7 +15,6 @@ import {
     useTimelineResolverStore,
 } from "@/timeline/timelineStore";
 import { followingAt, marcherSetBeats } from "@/timeline/timelineSetFollowing";
-import { useKeptAssignmentsStore } from "@/timeline/useKeepLaterPages";
 import { useTimelineFocusScene } from "@/timeline/useTimelineFocusScene";
 import { ghostColorFor } from "@/timeline/useTimelineFocusScene";
 import { useTimelinePathSamples } from "@/timeline/useTimelinePathSamples";
@@ -26,12 +24,6 @@ import {
     planPathOverlay,
     type OverlayPlan,
 } from "@/field/timelineOverlays";
-import { useVisualsStore } from "@/stores/VisualsStore";
-import {
-    isVisualsView,
-    useWorkspaceViewStore,
-} from "@/stores/WorkspaceViewStore";
-import { useEditorModeStore } from "@/stores/EditorModeStore";
 import { FieldDimming } from "./fieldDimming";
 import { FieldFollowing } from "./fieldFollowing";
 
@@ -41,7 +33,9 @@ import { FieldFollowing } from "./fieldFollowing";
  * (`useTimelinePathSamples`), an isolated move's focus scene
  * (`useTimelineFocusScene`, which also publishes the isolation plan the
  * playhead driver draws members at), collision markers (`useCollisionStore`),
- * who's dimmed, and who's Following (#300). Plans change on page changes,
+ * who's dimmed, and who's Following (#300). `hiddenIds`, the edited shape's
+ * marchers while it's seen on its own (#558), drop out of all of it: no dot,
+ * label, path or collision mark. Plans change on page changes,
  * edits and setting changes, never per frame; dimming and the Following look
  * go to the layers through {@link FieldDimming} and {@link FieldFollowing},
  * outside React.
@@ -53,12 +47,14 @@ export function useTimelineVisuals({
     pages,
     marcherIds,
     fieldProperties,
+    hiddenIds = null,
 }: {
     isPlaying: boolean;
     selectedPage: Page | null;
     pages: readonly Page[];
     marcherIds: readonly number[] | undefined;
     fieldProperties: FieldProperties | undefined;
+    hiddenIds?: ReadonlySet<number> | null;
 }): {
     paths: OverlayPlan | null;
     focus: OverlayPlan | null;
@@ -95,7 +91,9 @@ export function useTimelineVisuals({
         () =>
             ready && marcherIds && fieldProperties
                 ? planPathOverlay({
-                      marcherIds,
+                      marcherIds: hiddenIds
+                          ? marcherIds.filter((id) => !hiddenIds.has(id))
+                          : marcherIds,
                       nextPaths,
                       nextPathsEnabled,
                       stepSizeWarningsEnabled,
@@ -109,6 +107,7 @@ export function useTimelineVisuals({
             nextPathsEnabled,
             stepSizeWarningsEnabled,
             fieldProperties,
+            hiddenIds,
         ],
     );
 
@@ -130,38 +129,34 @@ export function useTimelineVisuals({
     useEffect(() => {
         setCurrentCollision(selectedPage);
     }, [selectedPage, setCurrentCollision]);
-    const collisions = useMemo(
-        () =>
-            !isPlaying && settings.showCollisions && currentCollisions.length
-                ? planCollisionOverlay(currentCollisions)
-                : null,
-        [isPlaying, settings.showCollisions, currentCollisions],
-    );
+    const collisions = useMemo(() => {
+        const shown = hiddenIds
+            ? currentCollisions.filter(
+                  (c) =>
+                      !hiddenIds.has(c.marcher1Id) &&
+                      !hiddenIds.has(c.marcher2Id),
+              )
+            : currentCollisions;
+        return !isPlaying && settings.showCollisions && shown.length
+            ? planCollisionOverlay(shown)
+            : null;
+    }, [isPlaying, settings.showCollisions, currentCollisions, hiddenIds]);
 
     const dimming = useFieldDimming(ready);
+    useEffect(() => dimming.setHidden(hiddenIds), [dimming, hiddenIds]);
     const following = useFieldFollowing(ready, isPlaying);
     return { paths, focus, collisions, dimming, following, ready };
 }
 
 /**
  * UI-9: while a move is isolated, the marchers outside it are dimmed, once the
- * resolver is ready. In Visuals mode a focused who does the same, ahead of
- * any isolation (performer-behavior.md section 7.1); dimmed marchers stay
- * selectable there, since the selection is a who. Follows the stores outside
- * React; `FieldDimming` ignores updates that keep the same members, such as
+ * resolver is ready. Follows the store outside React; `FieldDimming` ignores updates that keep the same members, such as
  * the window moving inside the move.
  */
 function useFieldDimming(enabled: boolean): FieldDimming {
     const dimming = useMemo(() => new FieldDimming(), []);
     useEffect(() => {
         const update = () => {
-            const focused = isVisualsView()
-                ? useVisualsStore.getState().focusMarcherIds
-                : null;
-            if (focused) {
-                dimming.set(focused);
-                return;
-            }
             const isolated = enabled
                 ? isolatedTimeline(useTimelineSelectionStore.getState())
                 : null;
@@ -176,13 +171,6 @@ function useFieldDimming(enabled: boolean): FieldDimming {
                 )
                     update();
             }),
-            useVisualsStore.subscribe((state, previous) => {
-                if (state.focusMarcherIds !== previous.focusMarcherIds)
-                    update();
-            }),
-            useWorkspaceViewStore.subscribe(update),
-            useEditorModeStore.subscribe(update),
-            usePreviewModeStore.subscribe(update),
         ];
         return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
     }, [dimming, enabled]);
@@ -192,8 +180,7 @@ function useFieldDimming(enabled: boolean): FieldDimming {
 /**
  * #300: while paused or scrubbing, the marchers with no coordinate of their
  * own on the count shown are Following, drawn with a dashed edge; playing, nobody is. Each
- * marcher's Set beats are worked out once per resolver version and kept
- * markers, so a playhead move only looks them up, and `FieldFollowing`
+ * marcher's Set beats are worked out once per resolver version, so a playhead move only looks them up, and `FieldFollowing`
  * redraws only when who's Following changes. Stopping eases the dashes in
  * (#302), unless the system asks for reduced motion. The count is the one the
  * field draws (`fieldBeat`), so a dragged start flag (UI-26) shows its own.
@@ -219,13 +206,12 @@ function useFieldFollowing(ready: boolean, isPlaying: boolean): FieldFollowing {
                 return;
             }
             if (!setBeats) {
-                const kept = useKeptAssignmentsStore.getState().ids;
                 setBeats = new Map(
                     resolver
                         .marcherIds()
                         .map((id) => [
                             id,
-                            marcherSetBeats(resolverSpans(resolver, id), kept),
+                            marcherSetBeats(resolverSpans(resolver, id)),
                         ]),
                 );
             }
@@ -255,9 +241,6 @@ function useFieldFollowing(ready: boolean, isPlaying: boolean): FieldFollowing {
                     state.resolver !== previous.resolver
                 )
                     safely(true);
-            }),
-            useKeptAssignmentsStore.subscribe((state, previous) => {
-                if (state.ids !== previous.ids) safely(true);
             }),
             useTimelineSelectionStore.subscribe((state, previous) => {
                 if (fieldBeat(state) !== fieldBeat(previous)) safely(false);

@@ -58,11 +58,16 @@ describe("SettingsWindow", () => {
             "field",
             "view3d",
             "shortcuts",
-            "plugins",
             "privacy",
             "developer",
             "database",
         ]);
+    });
+
+    it("titles the window in the app language", async () => {
+        renderWindow();
+        await screen.findByRole("navigation");
+        expect(document.title).toBe("Settings");
     });
 
     it("keeps the language in General and the theme in Appearance", async () => {

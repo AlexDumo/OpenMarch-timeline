@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { queryClient } from "@/App";
 import { conToastError } from "@/utilities/utils";
+import tolgee from "@/global/singletons/Tolgee";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import {
     DbConnection,
@@ -20,7 +21,6 @@ import {
 } from "@/db-functions";
 import Marcher, { dbMarcherToMarcher } from "@/global/classes/Marcher";
 import { DEFAULT_STALE_TIME } from "./constants";
-import { invalidateCueQueries } from "./useCues";
 
 const { marchers } = schema;
 
@@ -115,7 +115,11 @@ export const createMarchersMutationOptions = (qc: QueryClient) => {
             });
         },
         onError: (e, variables) => {
-            toastTimelineError(e, `Error creating marchers`, variables);
+            toastTimelineError(
+                e,
+                tolgee.t("marchers.errors.create"),
+                variables,
+            );
         },
     });
 };
@@ -135,7 +139,7 @@ export const updateMarchersMutationOptions = (qc: QueryClient) => {
             });
         },
         onError: (e, variables) => {
-            conToastError(`Error updating marchers`, e, variables);
+            conToastError(tolgee.t("marchers.errors.update"), e, variables);
         },
     });
 };
@@ -152,11 +156,13 @@ export const deleteMarchersMutationOptions = (qc: QueryClient) => {
             void qc.invalidateQueries({
                 queryKey: [KEY_BASE],
             });
-            // The marchers left hand-picked sets, and emptied sets' cues went (ADR 0004 D-2)
-            void invalidateCueQueries(qc);
         },
         onError: (e, variables) => {
-            toastTimelineError(e, `Error deleting marchers`, variables);
+            toastTimelineError(
+                e,
+                tolgee.t("marchers.errors.delete"),
+                variables,
+            );
         },
     });
 };

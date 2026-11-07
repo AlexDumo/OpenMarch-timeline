@@ -1,6 +1,8 @@
 import type { ActionId } from "@/shortcuts/definitions";
+import { arcTool } from "../arc/arcTool";
 import { boxTool } from "../box/boxTool";
 import { circleTool } from "../circle/circleTool";
+import { curveTool, lineTool } from "../line/lineTool";
 import type { AnyToolKind } from "./toolKind";
 
 /** A kind the shape pickers offer, with the action (and so the key) that picks it */
@@ -16,4 +18,7 @@ export interface ShapeToolEntry {
 export const SHAPE_TOOLS: readonly ShapeToolEntry[] = [
     { kind: boxTool, action: "shapeBlock" },
     { kind: circleTool, action: "shapeCircle" },
+    { kind: lineTool, action: "shapeLine" },
+    { kind: curveTool, action: "shapeCurve" },
+    { kind: arcTool, action: "shapeArc" },
 ];

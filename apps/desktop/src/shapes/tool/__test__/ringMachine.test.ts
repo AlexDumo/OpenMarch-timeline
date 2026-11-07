@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { boxTool } from "../../box/boxTool";
 import { rowTool } from "../../__test__/fakeRowKind";
+import { SHAPE_TOOLS } from "../shapeTools";
 import {
     clickRing,
     latchRing,
@@ -11,7 +12,6 @@ import {
     RING_TAP_MS,
     ringSlots,
     slotAt,
-    type RingShape,
 } from "../ringMachine";
 import type { ShapeToolEntry } from "../shapeTools";
 
@@ -20,53 +20,23 @@ const basics: ShapeToolEntry[] = [
     { kind: rowTool, action: "shapeBlock" },
 ];
 
-const star = (id: string): RingShape => ({
-    id,
-    label: id,
-    kind: rowTool,
-});
-
 describe("the favorites ring's slots", () => {
-    it("holds the basic kinds in the tab's order when nothing is starred", () => {
-        expect(ringSlots([], basics).map((s) => s.label)).toEqual([
-            "Box",
-            "Row",
-        ]);
+    it("holds the kinds in the tab's order", () => {
+        expect(ringSlots(basics).map((s) => s.label)).toEqual(["Box", "Row"]);
     });
 
-    it("puts starred shapes first, then fills empty slots with basic kinds", () => {
-        expect(
-            ringSlots([star("Tight box"), star("Wide row")], basics).map(
-                (s) => s.label,
-            ),
-        ).toEqual(["Tight box", "Wide row", "Box", "Row"]);
+    it("holds at most 8", () => {
+        const many = Array.from({ length: 10 }, () => basics[1]!);
+        expect(ringSlots(many)).toHaveLength(8);
     });
 
-    it("holds at most 8, stars winning over basic kinds", () => {
-        const stars = Array.from({ length: 7 }, (_, i) => star(`S${i + 1}`));
-        expect(ringSlots(stars, basics).map((s) => s.label)).toEqual([
-            "S1",
-            "S2",
-            "S3",
-            "S4",
-            "S5",
-            "S6",
-            "S7",
-            "Box",
-        ]);
-        const many = Array.from({ length: 10 }, (_, i) => star(`S${i + 1}`));
-        expect(ringSlots(many, basics)).toHaveLength(8);
-    });
-
-    it("doesn't repeat a basic kind that is starred itself", () => {
-        const starredBox: RingShape = {
-            id: boxTool.shape.id,
-            label: "Box",
-            kind: boxTool,
-        };
-        expect(ringSlots([starredBox], basics).map((s) => s.label)).toEqual([
-            "Box",
-            "Row",
+    it("includes Line and Curve in the ring's slots", () => {
+        expect(ringSlots(SHAPE_TOOLS).map((s) => s.id)).toEqual([
+            "block",
+            "circle",
+            "line",
+            "curve",
+            "arc",
         ]);
     });
 });

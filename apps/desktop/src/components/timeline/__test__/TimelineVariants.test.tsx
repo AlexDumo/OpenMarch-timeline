@@ -37,11 +37,16 @@ const commonProps = {
     pixelsPerBeat: 16,
 };
 
-/** A guide row's words, a space between each piece (marks and keycaps split them) */
+/**
+ * A guide row's words as shown, a space between each piece (marks and keycaps split them),
+ * without the words a screen reader hears for a shortcut
+ */
 const rowWords = (node: Node): string =>
     (node.nodeType === Node.TEXT_NODE
         ? node.textContent!
-        : [...node.childNodes].map(rowWords).join(" ")
+        : node instanceof Element && node.classList.contains("sr-only")
+          ? ""
+          : [...node.childNodes].map(rowWords).join(" ")
     )
         .replace(/\s+/g, " ")
         .trim();
@@ -463,7 +468,6 @@ describe("timeline views", () => {
     });
 
     it("shows the window's counts only when it starts off a page line (UI-13)", () => {
-        const onCreateTrack = vi.fn();
         const { rerender } = render(
             <ExpandedTimeline
                 {...commonProps}
@@ -488,14 +492,10 @@ describe("timeline views", () => {
                     kind: "range",
                     range: { startBeatIndex: 8, endBeatIndex: 24 },
                 }}
-                onCreateTrack={onCreateTrack}
             />,
         );
         expect(
             screen.queryByTestId("timeline-selection-count"),
-        ).not.toBeInTheDocument();
-        expect(
-            screen.queryByRole("button", { name: "Create Track" }),
         ).not.toBeInTheDocument();
 
         rerender(
@@ -511,9 +511,6 @@ describe("timeline views", () => {
         expect(
             screen.getByTestId("timeline-selection-count"),
         ).toHaveTextContent("4 counts");
-        expect(
-            screen.queryByRole("button", { name: "Create Track" }),
-        ).not.toBeInTheDocument();
 
         rerender(
             <ExpandedTimeline
@@ -538,32 +535,8 @@ describe("timeline views", () => {
         ).not.toBeInTheDocument();
     });
 
-    it("shows create track for an explicit range regardless of coverage", () => {
-        const onCreateTrack = vi.fn();
-        render(
-            <ExpandedTimeline
-                {...commonProps}
-                showTransport={false}
-                selection={{
-                    kind: "range",
-                    range: { startBeatIndex: 5, endBeatIndex: 9 },
-                }}
-                selectedTarget={{ id: "marcher-1", type: "marcher" }}
-                onCreateTrack={onCreateTrack}
-            />,
-        );
-        const create = screen.getByRole("button", { name: "Create Track" });
-        fireEvent.click(create);
-        expect(onCreateTrack).toHaveBeenCalledWith({
-            target: { id: "marcher-1", type: "marcher" },
-            range: { startBeatIndex: 5, endBeatIndex: 9 },
-        });
-        expect(screen.getByText("4 counts")).toBeInTheDocument();
-    });
-
-    it("moves the count with the dragged start flag and reveals create on release", () => {
+    it("moves the count with the dragged start flag", () => {
         const onSelectionChange = vi.fn();
-        const onCreateTrack = vi.fn();
         render(
             <ExpandedTimeline
                 {...commonProps}
@@ -572,9 +545,7 @@ describe("timeline views", () => {
                     kind: "range",
                     range: { startBeatIndex: 5, endBeatIndex: 9 },
                 }}
-                selectedTarget={{ id: "marcher-1", type: "marcher" }}
                 onSelectionChange={onSelectionChange}
-                onCreateTrack={onCreateTrack}
             />,
         );
         const start = screen.getByRole("button", { name: /^Start flag/ });
@@ -606,9 +577,6 @@ describe("timeline views", () => {
             transform: "translateX(-100%)",
         });
         expect(actions).toHaveClass("flex-col");
-        expect(
-            screen.queryByRole("button", { name: "Create Track" }),
-        ).not.toBeInTheDocument();
 
         fireEvent(
             start,
@@ -628,17 +596,10 @@ describe("timeline views", () => {
             range: { startBeatIndex: 0, endBeatIndex: 9 },
         });
         expect(actions).toHaveStyle({ left: "150px", transform: "" });
-        const create = screen.getByRole("button", { name: "Create Track" });
         // UI-13: released on page 1's start line, the window's count is the playhead's, so it hides
         expect(
             screen.queryByTestId("timeline-selection-count"),
         ).not.toBeInTheDocument();
-        expect(actions.firstElementChild).toBe(create);
-        fireEvent.click(create);
-        expect(onCreateTrack).toHaveBeenCalledWith({
-            target: { id: "marcher-1", type: "marcher" },
-            range: { startBeatIndex: 0, endBeatIndex: 9 },
-        });
     });
 
     it("has no end handle: the playhead is the window's end (UI-10)", () => {
@@ -1979,8 +1940,8 @@ describe("the transport's go-to box (UI-12)", () => {
         expect(screen.queryByTestId("timeline-go-to")).toBeNull();
     });
 
-    // The timelineGoTo action: G, or Mod+G. The dispatcher builds its keymap for the platform
-    // it finds, so Command+G is tried as a Mac and Control+G off one.
+    // The timelineGoTo action: plain G (⌘G / Ctrl+G is Group since #606). The dispatcher builds
+    // its keymap for the platform it finds.
     const pressG = (modifiers: { ctrlKey?: boolean; metaKey?: boolean }) =>
         act(() => {
             window.dispatchEvent(
@@ -2006,9 +1967,7 @@ describe("the transport's go-to box (UI-12)", () => {
 
     it.each([
         ["G", false, {}],
-        ["Control+G", false, { ctrlKey: true }],
-        ["Command+G on a Mac", true, { metaKey: true }],
-        ["Control+G on a Mac", true, { ctrlKey: true }],
+        ["G on a Mac", true, {}],
     ])("opens with %s", (_name, mac, modifiers) => {
         vi.spyOn(platform, "isMacPlatform").mockReturnValue(mac);
         renderWithShortcuts();
@@ -2019,7 +1978,7 @@ describe("the transport's go-to box (UI-12)", () => {
 
     it("is a timeline action the command palette lists", () => {
         const action = getActionDefinition("timelineGoTo");
-        expect(action.defaultBindings).toEqual(["G", "$mod+G", "Control+G"]);
+        expect(action.defaultBindings).toEqual(["G"]);
         expect(action.hiddenFromPalette).toBeFalsy();
         for (const isMac of [false, true])
             expect(
@@ -2182,7 +2141,9 @@ describe("fitBackZoom (UI-12 review)", () => {
         expect(fitBackZoom(null, 10)).toBe(20);
         expect(fitBackZoom(10.2, 10)).toBe(20);
         expect(fitBackZoom(null, 4)).toBe(16);
-        expect(fitBackZoom(null, 50)).toBe(64);
+        expect(fitBackZoom(null, 50)).toBe(100);
+        // never past the closest zoom
+        expect(fitBackZoom(null, 300)).toBe(512);
     });
 });
 

@@ -3,6 +3,7 @@ import type { KeyboardEvent } from "react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import clsx from "clsx";
 import tolgee from "@/global/singletons/Tolgee";
+import { holdTerms } from "@/timeline/holdTerms";
 import type { SelectionKeyframe } from "@/timeline/timelineSetFollowing";
 import type { TimelinePageMarker } from "./TimelineViewModel";
 import {
@@ -14,8 +15,8 @@ import { ShortcutTooltip, TransportTooltipProvider } from "./ShortcutTooltip";
 import {
     KEEP_MENU_EVENTS,
     TIMELINE_MENU_CONTENT_CLASS,
-    TIMELINE_MENU_ITEM_CLASS,
 } from "./TimelineRangeMenu";
+import { MENU_ITEM_CLASS } from "@/components/ui/popupClasses";
 
 /**
  * A selection keyframe as the timeline draws it, with the selected marchers Set there by name
@@ -149,7 +150,11 @@ const KeyframeDiamond = memo(function KeyframeDiamond({
             type="button"
             data-testid={`timeline-keyframe-${keyframe.beat}-${filled ? "filled" : "hollow"}`}
             data-timeline-interactive="true"
-            aria-label={detail ? `${title}. ${detail}` : title}
+            aria-label={
+                detail
+                    ? tolgee.t("timeline.keyframes.spoken", { title, detail })
+                    : title
+            }
             aria-haspopup={menu ? "menu" : undefined}
             // Under the start flag (z-40) and the playhead (z-50), over the flag grips (z-35)
             className="group/keyframe focus-visible:ring-accent pointer-events-auto absolute z-[36] flex -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
@@ -231,15 +236,19 @@ function KeyframeMenuItems({
     return (
         <>
             <ContextMenu.Item
-                className={TIMELINE_MENU_ITEM_CLASS}
+                className={MENU_ITEM_CLASS}
                 disabled={!canUnset}
                 onSelect={() => menu.onUnset(beat)}
             >
-                {tolgee.t("actions.timeline.unsetHere", "Remove keyframe")}
+                {tolgee.t(
+                    "actions.timeline.unsetHere",
+                    "{removeKeyframe}",
+                    holdTerms(),
+                )}
             </ContextMenu.Item>
             {followingLabel && (
                 <ContextMenu.Item
-                    className={TIMELINE_MENU_ITEM_CLASS}
+                    className={MENU_ITEM_CLASS}
                     onSelect={() => menu.onUnsetAndFollowing(beat)}
                 >
                     {followingLabel}

@@ -31,8 +31,8 @@ clears). Both runs open at the field's own view, so a change to the view
 rules shows up as a difference.
 
 `timeline-render.spec.mts` does the same for the timeline's drawing on a
-converted demo show (#201): pathways, warnings, isolation, kept marks and
-collision markers, plus a baseline with none of them:
+converted demo show (#201): pathways, warnings, isolation and collision
+markers, plus a baseline with none of them:
 
 ```bash
 RENDER_LABEL=before pnpm exec playwright test --project=render timeline-render
@@ -58,8 +58,7 @@ TURF_IMAGE=~/turf.png pnpm exec playwright test --project=render following-look
 
 `video-compare.spec.mts` (#207) exports converted demo shows through the
 export dialog at 1080p and 30 fps: part 1 with every dot shape, outlines, a
-hidden section and hidden labels; part 1 with a fitted field image; and the
-385-marcher Daft Punk show. It only runs with `VIDEO_COMPARE=<folder>`, and
+hidden section and hidden labels; and part 1 with a fitted field image. It only runs with `VIDEO_COMPARE=<folder>`, and
 saves each video to `<folder>/<VIDEO_COMPARE_LABEL>/` (default `after`). Run
 it on two checkouts (a detached worktree for the base, with this harness
 copied in), then pair their frames:
@@ -76,9 +75,11 @@ and `summary.tsv` with each pair's PSNR. It needs ffmpeg.
 
 ## The parity gate's captures (#208)
 
-- `corpus-render.spec.mts`: the Part 1 demo, Daft Punk pt. 2 and the
-  1,925-marcher stress show (`stressShow.mts` writes it to `RENDER_OUT` on
-  first use), at three zooms (the opening fit, 2.5× and 6×, pinched in at
+- `corpus-render.spec.mts`: the Part 1 demo and, with
+  `LARGE_SHOW=<path to .dots>` naming a large timeline show of your own, that
+  show and the stress show cloned from it (`stressShow.mts` writes it to
+  `RENDER_OUT` on first use; five copies of a 385-marcher show make #189's
+  1,925), at three zooms (the opening fit, 2.5× and 6×, pinched in at
   the marchers' center) and four playback times. Run it as above, with
   `corpus-render`.
 - `export-compare.spec.mts`: exports drill charts (full and individual)

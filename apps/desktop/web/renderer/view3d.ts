@@ -26,7 +26,6 @@ import {
 } from "../../src/view3d/sync/protocol";
 import type { View3dApi } from "../../electron/preload/view3d";
 import { storageKey } from "./channel";
-import { localCameraProfiles } from "../../src/view3d/window/localCameraProfiles";
 import {
     emit,
     handleInPage,
@@ -389,8 +388,12 @@ export function installView3dApi() {
         },
         requestVenueChange: (settings) => post({ type: "venue", settings }),
         requestCamerasChange: (cameras) => post({ type: "cameras", cameras }),
-        // No Library on the web: profiles stay in this browser.
-        cameraProfiles: localCameraProfiles,
+        // A browser blocks a window opened without a click: the web editor never opens it by
+        // itself, so the window never asks
+        autoOpen: {
+            get: () => Promise.resolve(null),
+            set: () => Promise.resolve(),
+        },
         requestPlayback: (action, release = false) =>
             post({ type: "playback", action, release }),
         requestPlaybackSpeed: (speed) =>

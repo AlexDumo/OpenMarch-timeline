@@ -1,45 +1,22 @@
-import {
-    cleanup,
-    fireEvent,
-    render,
-    screen,
-    waitFor,
-} from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type Beat from "@/global/classes/Beat";
 import type Page from "@/global/classes/Page";
-import { describeDbTests, schema, type DbConnection } from "@/test/base";
-import { keepFixturesInPageMode } from "@/test/timelineMode";
-import { TimelineWriteError } from "@/db-functions/timelineErrors";
-import { readShowTiming } from "@/timeline/showTiming";
-import { convertPagesToTimeline } from "@/test/convertPages";
-import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import type { HeldMark } from "@/db-functions/timelineHeldMarks";
+import type { PageKeepState } from "@/timeline/timelineKeepLater";
+import { setAsShownMenu } from "@/timeline/timelineSetAsShown";
+import { holdFromPreviousMenu } from "@/timeline/timelineHoldFromPrevious";
 import { Timeline, type TimelineInput } from "../Timeline";
 import type { TimelineSelection } from "../TimelineViewModel";
-import type { TimelineAddMarchersMenu } from "../TimelineRangeMenu";
-import {
-    addSelectedMarchersBlocker,
-    useTimelineCommands,
-} from "../useTimelineCommands";
+import type { TimelinePageMenu } from "../TimelineRangeMenu";
 
 /**
- * The timeline's right-click menu (P8.14, ui.md UI-9 Adding marchers): **Add selected marchers**
- * on a page box, a clip or a dragged range sends that range in spec beats, and opening it never
- * changes the timeline selection.
+ * The timeline's right-click menu (P8.14, ui.md UI-9): page-box entries and holds. Opening it
+ * never changes the timeline selection. A dragged range with no page-box or move entry opens
+ * nothing.
  */
 
-// Only the toast is replaced; the add runs on a real test database (docs/conventions/testing.md)
-vi.mock("@/timeline/timelineErrorMessages", () => ({
-    toastTimelineError: vi.fn(),
-}));
-
-keepFixturesInPageMode("the end-to-end tests convert the show themselves");
-
 afterEach(cleanup);
-beforeEach(() => {
-    vi.mocked(toastTimelineError).mockReset();
-});
 
 /** The zero-length beat 0, then `count` timed beats */
 const appBeats = (count: number): Beat[] =>
@@ -97,7 +74,7 @@ const show = ({
     selection = null,
     onSelectionChange = vi.fn(),
 }: {
-    menu: TimelineAddMarchersMenu;
+    menu: TimelinePageMenu;
     selection?: TimelineSelection;
     onSelectionChange?: (selection: TimelineSelection) => void;
 }) =>
@@ -111,249 +88,177 @@ const show = ({
             showTransport={false}
             selection={selection}
             onSelectionChange={onSelectionChange}
-            addSelectedMarchers={menu}
+            onDeletePageFlag={
+                menu.onDeleteFlag
+                    ? (pageId) => menu.onDeleteFlag?.(pageId)
+                    : undefined
+            }
+            onDeletePageWithMoves={
+                menu.onDeleteWithMoves
+                    ? (pageId) => menu.onDeleteWithMoves?.(pageId)
+                    : undefined
+            }
+            setAsShown={menu.setAsShown}
+            holdFromPrevious={menu.holdFromPrevious}
+            clearPage={menu.clearPage}
         />,
     );
 
-const menuItem = () => screen.queryByRole("menuitem");
-
 describe("the timeline's right-click menu (UI-9)", () => {
-    it("adds to a page box's range, in spec beats, without changing the selection", () => {
-        const onAdd = vi.fn();
+    it("deletes from a page box without changing the selection", () => {
+        const onDeleteFlag = vi.fn();
         const onSelectionChange = vi.fn();
-        show({ menu: { onAdd }, onSelectionChange });
+        show({ menu: { onDeleteFlag }, onSelectionChange });
         fireEvent.contextMenu(screen.getByRole("button", { name: "Page 2" }));
-        const item = menuItem();
-        expect(item?.textContent).toContain("Add selected marchers");
-        fireEvent.click(item!);
-        // Page 2 is beats 9 to 16: from page 1's flag to its own
-        expect(onAdd).toHaveBeenCalledWith({
-            startBeatIndex: 9,
-            endBeatIndex: 17,
-        });
+        fireEvent.click(screen.getByTestId("timeline-range-menu-delete-flag"));
+        expect(onDeleteFlag).toHaveBeenCalledWith(3);
         expect(onSelectionChange).not.toHaveBeenCalled();
     });
 
-    it("adds to a clip's timeline range", () => {
-        const onAdd = vi.fn();
-        show({ menu: { onAdd } });
-        fireEvent.contextMenu(
-            screen.getByRole("button", { name: /A1 timeline/ }),
-        );
-        fireEvent.click(menuItem()!);
-        expect(onAdd).toHaveBeenCalledWith({
-            startBeatIndex: 3,
-            endBeatIndex: 7,
-        });
-    });
-
-    it("a clip from spec beat 0 sends its stored range, not [1, N) from the view axis", () => {
-        // A converted show's one timeline runs over [0, 17); the view axis folds beats 0 and 1
-        const onAdd = vi.fn();
-        render(
-            <Timeline
-                mode="expanded"
-                beats={BEATS}
-                pages={PAGES}
-                measures={[]}
-                timelines={[
-                    {
-                        ...clip,
-                        startBeatIndex: 0,
-                        endBeatIndex: 17,
-                        legs: [
-                            {
-                                id: "leg",
-                                startBeatIndex: 0,
-                                endBeatIndex: 17,
-                                texture: "move",
-                            },
-                        ],
-                        activitySpans: [
-                            {
-                                startBeatIndex: 0,
-                                endBeatIndex: 17,
-                                active: true,
-                            },
-                        ],
-                    },
-                ]}
-                showTransport={false}
-                addSelectedMarchers={{ onAdd }}
-            />,
-        );
-        fireEvent.contextMenu(
-            screen.getByRole("button", { name: /A1 timeline/ }),
-        );
-        fireEvent.click(menuItem()!);
-        expect(onAdd).toHaveBeenCalledWith({
-            startBeatIndex: 0,
-            endBeatIndex: 17,
-        });
-    });
-
-    it("adds to a dragged range when right-clicked inside it, and offers nothing elsewhere", () => {
-        const onAdd = vi.fn();
-        // Spec beats [11, 15), drawn as view beats [10, 14)
+    it("offers nothing on a dragged range, or elsewhere on the surface", () => {
+        const onDeleteFlag = vi.fn();
         show({
-            menu: { onAdd },
+            menu: { onDeleteFlag },
             selection: {
                 kind: "range",
                 range: { startBeatIndex: 11, endBeatIndex: 15 },
             },
         });
         const surface = screen.getByTestId("timeline-pointer-surface");
-        // jsdom lays nothing out: the surface's left edge is 0, so clientX is px from beat 0
         fireEvent.contextMenu(surface, { clientX: 16 * 12 });
-        fireEvent.click(menuItem()!);
-        expect(onAdd).toHaveBeenCalledWith({
-            startBeatIndex: 11,
-            endBeatIndex: 15,
-        });
+        expect(screen.queryByTestId("timeline-range-menu")).toBeNull();
 
         cleanup();
-        show({ menu: { onAdd } });
+        show({ menu: { onDeleteFlag } });
         fireEvent.contextMenu(screen.getByTestId("timeline-pointer-surface"), {
             clientX: 16 * 12,
         });
-        expect(menuItem()).toBeNull();
-    });
-
-    it("is disabled, with the reason, when no marchers are selected", () => {
-        const onAdd = vi.fn();
-        show({
-            menu: {
-                onAdd,
-                disabledReason: addSelectedMarchersBlocker(new Set()),
-            },
-        });
-        fireEvent.contextMenu(screen.getByRole("button", { name: "Page 1" }));
-        const item = menuItem()!;
-        expect(item.getAttribute("aria-disabled")).toBe("true");
-        expect(
-            screen.getByTestId("timeline-range-menu-reason").textContent,
-        ).toMatch(/Select marchers first/);
-        fireEvent.click(item);
-        expect(onAdd).not.toHaveBeenCalled();
+        expect(screen.queryByTestId("timeline-range-menu")).toBeNull();
     });
 });
 
-/** The panel's wiring (`useTimelineCommands`) around the real `Timeline`, on a real database. */
-function Panel({
-    db,
-    beats,
-    pages,
-    timelines,
-    selectedMarcherIds,
-}: {
-    db: DbConnection;
-    beats: Beat[];
-    pages: Page[];
-    timelines: TimelineInput[];
-    selectedMarcherIds: ReadonlySet<number>;
-}) {
-    const commands = useTimelineCommands({
-        database: db,
-        timelines,
-        selectedMarcherIds,
+/**
+ * The hold commands on a page box (holds): each says what it would do for the selection on the
+ * right-clicked page, from the keep states and the Held marks (`holdEntryStates`).
+ */
+describe("the page box menu's hold commands", () => {
+    // The box named "Page 2" is page 3, beats 9 to 17
+    const state = ({
+        follows = [],
+        selected,
+    }: {
+        follows?: number[];
+        selected: number;
+    }): PageKeepState => ({
+        pageId: 3,
+        pageName: "2",
+        box: { start: 9, end: 17 },
+        follows,
+        fromStart: [],
+        from: [],
+        midMove: [],
+        selected,
     });
-    return (
-        <Timeline
-            mode="expanded"
-            beats={beats}
-            pages={pages}
-            measures={[]}
-            timelines={timelines}
-            showTransport={false}
-            addSelectedMarchers={commands.addSelectedMarchers}
-        />
-    );
-}
-
-describeDbTests("the right-click menu on a converted show", (it) => {
-    it("finds a page's stored timeline from its box and its clip, and refuses marchers already in it", async ({
-        db,
-        marchersAndPages,
-    }) => {
-        await convertPagesToTimeline(db);
-        const { beats, pages } = await readShowTiming(db);
-        const ordered = [...pages].sort((a, b) => a.order - b.order);
-        // P9.10: one timeline per page move, the first starting at beat 1
-        const stored = await db
-            .select()
-            .from(schema.timelines)
-            .orderBy(schema.timelines.start_beat)
-            .all();
-        expect(stored).toHaveLength(ordered.length - 1);
-        const first = stored[0]!;
-        expect(first.start_beat).toBe(1);
-        const firstClip: TimelineInput = {
-            ...clip,
-            id: "first",
-            linkId: first.id,
-            startBeatIndex: first.start_beat,
-            endBeatIndex: first.end_beat,
-            legs: [
-                {
-                    id: "leg",
-                    startBeatIndex: first.start_beat,
-                    endBeatIndex: first.end_beat,
-                    texture: "move",
-                },
-            ],
-            activitySpans: [
-                {
-                    startBeatIndex: first.start_beat,
-                    endBeatIndex: first.end_beat,
-                    active: true,
-                },
-            ],
-        };
-        const a = marchersAndPages.expectedMarchers[0]!.id;
+    const mark = (marcherId: number) => ({
+        id: marcherId,
+        marcherId,
+        start: 9,
+        end: 17,
+    });
+    const openMenu = (
+        states: PageKeepState[],
+        marcherIds: number[],
+        marks: HeldMark[],
+    ) => {
+        const runHold = vi.fn(async () => ({ held: [], skipped: [] }));
+        const runDefine = vi.fn();
         render(
-            <Panel
-                db={db}
-                beats={beats}
-                pages={ordered}
-                timelines={[firstClip]}
-                selectedMarcherIds={new Set([a])}
+            <Timeline
+                mode="expanded"
+                beats={BEATS}
+                pages={PAGES}
+                measures={[]}
+                timelines={[]}
+                showTransport={false}
+                selection={null}
+                onSelectionChange={vi.fn()}
+                setAsShown={setAsShownMenu(states, runDefine, marks)}
+                holdFromPrevious={holdFromPreviousMenu(
+                    states,
+                    marcherIds,
+                    undefined,
+                    runHold,
+                    marks,
+                )}
             />,
         );
-        const before = await db
-            .select()
-            .from(schema.timeline_assignments)
-            .all();
+        fireEvent.contextMenu(screen.getByRole("button", { name: "Page 2" }));
+        return {
+            runHold,
+            runDefine,
+            define: screen.getByTestId("timeline-range-menu-set-as-shown"),
+            hold: screen.getByTestId("timeline-range-menu-hold-from-previous"),
+        };
+    };
 
-        // A page box resolves to its stored page timeline; the marcher is already in it
-        fireEvent.contextMenu(
-            screen.getByRole("button", { name: `Page ${ordered[2]!.name}` }),
+    it("all Held: Hold from previous page is checked and does nothing", () => {
+        const { hold, define, runHold, runDefine } = openMenu(
+            [state({ follows: [1, 2], selected: 2 })],
+            [1, 2],
+            [mark(1), mark(2)],
         );
-        fireEvent.click(menuItem()!);
-        await waitFor(() =>
-            expect(toastTimelineError).toHaveBeenCalledTimes(1),
-        );
-        const refusal = vi.mocked(toastTimelineError).mock.calls[0]![0];
-        expect(refusal).toBeInstanceOf(TimelineWriteError);
-        expect((refusal as Error).message).toMatch(/already in this timeline/);
-
-        // The first page's clip (from beat 1, drawn at view 0) finds its own timeline
-        fireEvent.contextMenu(
-            screen.getByRole("button", { name: /A1 timeline/ }),
-        );
-        fireEvent.click(menuItem()!);
-        await waitFor(() =>
-            expect(toastTimelineError).toHaveBeenCalledTimes(2),
-        );
+        expect(hold).toHaveAttribute("role", "menuitemcheckbox");
+        expect(hold).toHaveAttribute("aria-checked", "true");
+        expect(hold).toHaveAttribute("data-disabled");
+        expect(hold).toHaveTextContent(/^Hold from previous page$/);
+        fireEvent.click(hold);
+        expect(runHold).not.toHaveBeenCalled();
+        // Define as shown leaves Held marchers alone: unavailable, saying why, not checked
+        expect(define).not.toHaveAttribute("aria-checked");
+        expect(define).toHaveAttribute("aria-disabled", "true");
         expect(
-            (vi.mocked(toastTimelineError).mock.calls[1]![0] as Error).message,
-        ).toMatch(/already in this timeline/);
-
-        // Nothing was written
-        expect(await db.select().from(schema.timelines).all()).toHaveLength(
-            stored.length,
+            screen.getByTestId("timeline-range-menu-set-as-shown-reason"),
+        ).toHaveTextContent(
+            "Every selected marcher is already defined or held on Page 2, or partway through a move",
         );
-        expect(
-            await db.select().from(schema.timeline_assignments).all(),
-        ).toEqual(before);
+        fireEvent.click(define);
+        expect(runDefine).not.toHaveBeenCalled();
+    });
+
+    it("mixed: both stay on, with no count, and run", () => {
+        // 1 Held, 2 and 3 Not defined, 4 and 5 Defined
+        const { hold, define, runDefine } = openMenu(
+            [state({ follows: [1, 2, 3], selected: 5 })],
+            [1, 2, 3, 4, 5],
+            [mark(1)],
+        );
+        expect(hold).toHaveTextContent(/^Hold from previous page$/);
+        expect(hold).not.toHaveAttribute("aria-disabled");
+        expect(define).toHaveTextContent(/^Define as shown$/);
+        expect(define).not.toHaveAttribute("aria-disabled");
+        fireEvent.click(define);
+        // Only the Not defined ones
+        expect(runDefine).toHaveBeenCalledExactlyOnceWith(
+            { start: 9, end: 17 },
+            [2, 3],
+        );
+    });
+
+    it("all Not defined: both run for everyone, with no count", () => {
+        const { hold, define } = openMenu(
+            [state({ follows: [1, 2], selected: 2 })],
+            [1, 2],
+            [],
+        );
+        expect(hold).toHaveTextContent(/^Hold from previous page$/);
+        expect(define).toHaveTextContent(/^Define as shown$/);
+        expect(hold).not.toHaveAttribute("aria-disabled");
+        expect(define).not.toHaveAttribute("aria-disabled");
+    });
+
+    it("all Defined: Define as shown is checked", () => {
+        const { define } = openMenu([state({ selected: 2 })], [1, 2], []);
+        expect(define).toHaveAttribute("aria-checked", "true");
+        expect(define).toHaveAttribute("data-disabled");
     });
 });

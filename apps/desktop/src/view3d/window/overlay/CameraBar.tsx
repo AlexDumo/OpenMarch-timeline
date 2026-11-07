@@ -1,9 +1,8 @@
 /**
  * The camera controls (ui.md UI-2): one menu button naming the current
  * camera, which lists the show's cameras for this venue (the kit's defaults
- * until the show changes them) with their number keys, then "Save current
- * view" and "Edit cameras…", which open the Cameras panel; then "Pick a
- * seat". Camera movement belongs to the rig (P3.2); this only calls its
+ * until the show changes them) with their number keys, then "Edit cameras…",
+ * which opens the Cameras panel; then "Pick a seat". Camera movement belongs to the rig (P3.2); this only calls its
  * store.
  */
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
@@ -13,26 +12,24 @@ import {
     CaretDownIcon,
     CheckIcon,
     PencilSimpleIcon,
-    PlusIcon,
     VideoCameraIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
+import Shortcut from "@/components/ui/Shortcut";
 import { useCameraStore } from "../camera/cameraStore";
 import { useView3dSceneStore } from "../sceneStore";
 import { Panel, PanelSeparator, ToggleButton } from "./Panel";
 import { useCameraList } from "./useCameraList";
+import { MENU_SEPARATOR_CLASS } from "@/components/ui/popupClasses";
 
 const ITEM_CLASS =
     "rounded-4 text-body data-[highlighted]:bg-text/10 data-[disabled]:text-text/40 flex h-28 cursor-pointer items-center gap-8 px-8 outline-hidden select-none data-[disabled]:cursor-default";
 
 export function CameraBar({
     onEdit,
-    onSaved,
 }: {
     /** Opens the Cameras panel. */
     onEdit: () => void;
-    /** A view was saved as camera `id`; open the panel to name it. */
-    onSaved: (id: string) => void;
 }) {
     const { t } = useTranslate();
     const kit = useView3dSceneStore((s) => s.kit);
@@ -102,28 +99,14 @@ export function CameraBar({
                                         {list.label(camera)}
                                     </span>
                                     {index < 9 && (
-                                        <kbd className="text-sub text-text/60 font-mono">
-                                            {index + 1}
-                                        </kbd>
+                                        <Shortcut keys={[String(index + 1)]} />
                                     )}
                                 </DropdownMenu.Item>
                             );
                         })}
-                        <DropdownMenu.Separator className="bg-stroke mx-4 my-4 h-px" />
-                        <DropdownMenu.Item
-                            disabled={!list.ready || list.full}
-                            onSelect={() => {
-                                const id = list.addCurrentView();
-                                if (id) onSaved(id);
-                            }}
-                            data-testid="view3d-camera-save-view"
-                            className={ITEM_CLASS}
-                        >
-                            <PlusIcon size={14} className="shrink-0" />
-                            <span className="flex-1">
-                                {t("view3d.cameras.saveView")}
-                            </span>
-                        </DropdownMenu.Item>
+                        <DropdownMenu.Separator
+                            className={MENU_SEPARATOR_CLASS}
+                        />
                         <DropdownMenu.Item
                             onSelect={onEdit}
                             data-testid="view3d-camera-edit"

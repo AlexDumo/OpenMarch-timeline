@@ -32,10 +32,12 @@ import type {
     TimelineKeyframe,
     TimelineKeyframeMenu,
 } from "./TimelineKeyframes";
+import type { SelectionHeldBar } from "@/timeline/timelineHeldBars";
 import type {
-    TimelineAddMarchersMenu,
-    TimelineKeepHereMenu,
+    TimelinePageMenu,
     TimelineSetAsShownMenu,
+    TimelinePageCommandMenu,
+    TimelineClearPageMenu,
     TimelineMenuEntry,
     TimelineMenuTarget,
     TimelineMoveCommands,
@@ -51,14 +53,12 @@ import type {
     TimelineBasicPoint,
     TimelineAppendAtPlayhead,
     TimelineBeatRange,
-    TimelineCreateTrackRequest,
     TimelineNavigation,
     TimelinePageFlagMove,
     TimelineRangeChange,
     TimelineRangeCommitResult,
     TimelineSeekOptions,
     TimelineSelection,
-    TimelineTarget,
     TimelineViewportExtent,
     TimelineTrack,
     TimelineTrackTargetType,
@@ -87,6 +87,11 @@ export interface TimelineInput {
     readonly targetId: string | number;
     readonly targetType: TimelineTrackTargetType;
     readonly label: string;
+    /**
+     * `label` is a stand-in ("Timeline 12") for a stored timeline without a name, for logs and
+     * tests; the app words it when it shows it (`describeMoveClips`)
+     */
+    readonly unnamed?: boolean;
     readonly color: string;
     readonly startBeatIndex: number;
     readonly endBeatIndex: number;
@@ -139,6 +144,11 @@ export interface TimelinePlayback {
     readonly onPlayFromPlayhead?: () => void;
     /** Alt+click on Play (Alt+Space): plays on from the start flag (Expert, UI-26) */
     readonly onPlayOn?: () => void;
+    /**
+     * Tempo mode: Play is the only play action, and its tooltip names it like this
+     * ("Play from the playhead", "Loop m. 11–12"): no Shift or Alt variants
+     */
+    readonly playOnly?: string;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
     readonly onNavigate?: (direction: TimelineNavigation) => void;
 }
@@ -155,7 +165,7 @@ const STOPPED_AT_START: TimelinePlayback = {
  */
 export interface TimelineProps {
     /**
-     * A timeline that only navigates (Visuals mode, performer-behavior.md section 7.1): no clips,
+     * A timeline that only navigates (Preview): no clips,
      * no window, no page flag or move edits, no ranges drawn. Page boxes and home still select
      * (`onSelectionChange`, to go to that page), and the ruler and the surface scrub. The editing
      * commands given are ignored
@@ -163,7 +173,7 @@ export interface TimelineProps {
     readonly readOnly?: boolean;
     /** A read-only timeline with no start flag drawn (Preview, which always plays on) */
     readonly hideStartFlag?: boolean;
-    /** Lanes drawn in place of the clip rows, under the waveform (Visuals mode's cue lanes) */
+    /** Lanes drawn in place of the clip rows, under the waveform (tempo mode's lanes) */
     readonly band?: TimelineBand;
     readonly mode: TimelineMode;
     readonly beats: readonly Beat[];
@@ -186,11 +196,11 @@ export interface TimelineProps {
     /** Whether the zoom was fitted to the show; the timeline opens fitted when it was (UI-12) */
     readonly zoomFitted?: boolean;
     readonly onZoomFittedChange?: (fitted: boolean) => void;
+    /** Zoom out and Zoom in buttons beside Fit, for mouse users (tempo mode) */
+    readonly zoomButtons?: boolean;
     readonly selection?: TimelineSelection;
-    readonly selectedTarget?: TimelineTarget | null;
     readonly className?: string;
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
-    readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
     readonly onTimelineRangeCommit?: (
         change: TimelineRangeChange,
     ) => TimelineRangeCommitResult;
@@ -201,10 +211,10 @@ export interface TimelineProps {
     /** A loop end dragged or stepped (UI-17), spec beats */
     readonly onLoopChange?: (loop: TimelineBeatRange) => void;
     /**
-     * The right-click menu's **Add selected marchers** (UI-9, P8.14), for a page box, a clip's
-     * timeline or a dragged range. It gets spec beats; the menu doesn't change the selection.
+     * The right-click menu's page-box entries (UI-9), passed through to the surface. Separate
+     * props (`onDeletePageFlag`, `setAsShown`, …) also fill this menu.
      */
-    readonly addSelectedMarchers?: TimelineAddMarchersMenu;
+    readonly pageMenu?: TimelinePageMenu;
     /**
      * UI-9 **Create page at playhead** on the paused playhead's right-click menu (P8.13's `useAddPageFlag`); omit
      * it where no page can be added (on a flag, at home, past the beats).
@@ -257,6 +267,8 @@ export interface TimelineProps {
     readonly keyframes?: readonly TimelineKeyframe[];
     /** #306: a keyframe diamond's right-click Unset actions, by spec beat; without it, no menu */
     readonly keyframeMenu?: TimelineKeyframeMenu;
+    /** #472: the selected marchers' Held holds, spec beats; none without a selection */
+    readonly heldBars?: readonly SelectionHeldBar[];
     /** The chains on the page boxes (UI-18 keep later pages), by page id; none without a selection */
     readonly keepChains?: PageKeepChains;
     /**
@@ -265,10 +277,12 @@ export interface TimelineProps {
      * (`useClipDrops`)
      */
     readonly pageMoves?: ReadonlySet<string | number>;
-    /** The page box menu's **Keep selected marchers here** and **Let selected marchers follow again** */
-    readonly keepHere?: TimelineKeepHereMenu;
     /** The page box menu's **Set as shown** (holds, fork #466) */
     readonly setAsShown?: TimelineSetAsShownMenu;
+    /** **Hold from previous page** on a page box (holds, fork #472) */
+    readonly holdFromPrevious?: TimelinePageCommandMenu;
+    /** **Clear Page N** on a page box (#573) */
+    readonly clearPage?: TimelineClearPageMenu;
     /** UI-19 Basic: the selected marchers' mid-page positions, spec beats */
     readonly basicPoints?: readonly TimelineBasicPoint[];
     /** UI-19 Basic: **Remove this count's position**, by its spec beat */
@@ -431,8 +445,7 @@ const NO_TIMELINES: readonly TimelineInput[] = [];
 const READ_ONLY_EDITS = {
     readOnly: true,
     selection: undefined,
-    onCreateTrack: undefined,
-    addSelectedMarchers: undefined,
+    pageMenu: undefined,
     moveCommands: undefined,
     onAddPageFlag: undefined,
     onAddSubsetPage: undefined,
@@ -557,7 +570,7 @@ export function Timeline(props: TimelineProps) {
                   })
             : undefined,
     );
-    const { onTimelineRangeCommit, onCreateTrack } = props;
+    const { onTimelineRangeCommit } = props;
     // A clip move keeps its length: send the spec range shifted by the move, so a clip whose start
     // was hidden with beat 0 moves by exactly the beats it was dragged
     const commitRange = useLatestCallback(
@@ -628,31 +641,18 @@ export function Timeline(props: TimelineProps) {
             },
         };
     }, [clipResize, axis, timelines]);
-    const createTrack = useLatestCallback(
-        onCreateTrack
-            ? (request: TimelineCreateTrackRequest) =>
-                  onCreateTrack({
-                      target: request.target,
-                      range: {
-                          startBeatIndex: axis.toSpec(
-                              request.range.startBeatIndex,
-                          ),
-                          endBeatIndex: axis.toSpec(request.range.endBeatIndex),
-                      },
-                  })
-            : undefined,
-    );
     const {
-        addSelectedMarchers,
+        pageMenu,
         onDeletePageFlag,
         onDeletePageWithMoves,
         onSetPageSubset,
         onOpenRange,
-        keepHere,
         setAsShown,
+        holdFromPrevious,
+        clearPage,
         pageMenuExtra,
     } = props;
-    // A clip's stored spec range, else the view range mapped back (as the menu's Add does)
+    // A clip's stored spec range, else the view range mapped back
     const specRangeOf = ({ range, trackId }: TimelineMenuTarget) => {
         const input =
             trackId === undefined
@@ -689,7 +689,7 @@ export function Timeline(props: TimelineProps) {
     // A clip sends its stored spec range: the view axis folds spec beats 0 and 1 together, so a
     // converted show's timeline over [0, N) would come back as [1, N). Page boxes and dragged
     // ranges start on a flag or a timed beat, which `toSpec` maps back exactly.
-    // The right-click menu has an entry for each command given: add, and delete on page boxes
+    // The right-click menu has an entry for each page-box command given
     const deleteFlag = useLatestCallback(
         onDeletePageFlag
             ? (pageId: string | number) => onDeletePageFlag(Number(pageId))
@@ -722,53 +722,43 @@ export function Timeline(props: TimelineProps) {
                 : undefined,
         [setSubset],
     );
-    const addMarchers = useLatestCallback(
-        addSelectedMarchers?.onAdd
-            ? (target: TimelineMenuTarget) =>
-                  addSelectedMarchers.onAdd?.(specRangeOf(target))
-            : undefined,
-    );
     const pageExtra = useLatestCallback(
         pageMenuExtra
             ? (pageId: string | number) => pageMenuExtra(Number(pageId))
             : undefined,
     );
-    const hasMarchersMenu = !!(
+    const hasPageMenu = !!(
         pageMenuExtra ||
-        addSelectedMarchers ||
+        pageMenu ||
         onDeletePageFlag ||
         onDeletePageWithMoves ||
         onSetPageSubset ||
-        keepHere ||
-        setAsShown
+        setAsShown ||
+        holdFromPrevious ||
+        clearPage
     );
-    const disabledReason = addSelectedMarchers?.disabledReason;
-    const addMarchersMenu = useMemo<
-        TimelineAddMarchersMenu<TimelineMenuTarget> | undefined
-    >(
+    const pageBoxMenu = useMemo<TimelinePageMenu | undefined>(
         () =>
-            hasMarchersMenu
+            hasPageMenu
                 ? {
-                      disabledReason,
                       ...(deleteFlag ? { onDeleteFlag: deleteFlag } : {}),
                       ...(deleteWithMoves
                           ? { onDeleteWithMoves: deleteWithMoves }
                           : {}),
-                      ...(keepHere ? { keepHere } : {}),
                       ...(setAsShown ? { setAsShown } : {}),
+                      ...(holdFromPrevious ? { holdFromPrevious } : {}),
+                      ...(clearPage ? { clearPage } : {}),
                       ...(subsetMenu ? { subset: subsetMenu } : {}),
                       ...(pageExtra ? { extraFor: pageExtra } : {}),
-                      onAdd: addMarchers,
                   }
                 : undefined,
         [
-            addMarchers,
             deleteFlag,
             deleteWithMoves,
-            disabledReason,
-            hasMarchersMenu,
-            keepHere,
+            hasPageMenu,
             setAsShown,
+            holdFromPrevious,
+            clearPage,
             subsetMenu,
             pageExtra,
         ],
@@ -802,6 +792,14 @@ export function Timeline(props: TimelineProps) {
             ? (trackId: string | number, name: string) => {
                   const id = storedIdOf(trackId);
                   if (id !== null) moveCommands.onRename(id, name);
+              }
+            : undefined,
+    );
+    const selectMoveMarchers = useLatestCallback(
+        moveCommands?.onSelectMarchers
+            ? (trackId: string | number) => {
+                  const id = storedIdOf(trackId);
+                  if (id !== null) moveCommands.onSelectMarchers!(id);
               }
             : undefined,
     );
@@ -842,6 +840,9 @@ export function Timeline(props: TimelineProps) {
                       onEdit: editMove,
                       onDelete: deleteMove,
                       onRename: renameMove,
+                      ...(selectMoveMarchers
+                          ? { onSelectMarchers: selectMoveMarchers }
+                          : {}),
                       ...(splitMove ? { onSplit: splitMove } : {}),
                       ...(splitMoveReason
                           ? { splitDisabledReason: splitMoveReason }
@@ -854,6 +855,7 @@ export function Timeline(props: TimelineProps) {
             editMove,
             moveDisabledReason,
             renameMove,
+            selectMoveMarchers,
             splitMove,
             splitMoveReason,
             moveExtraFor,
@@ -956,6 +958,17 @@ export function Timeline(props: TimelineProps) {
             })),
         [axis, keyframes],
     );
+    // #472: the selection's Held bars on the view axis
+    const { heldBars } = props;
+    const viewHeldBars = useMemo(
+        () =>
+            heldBars?.map((bar) => ({
+                ...bar,
+                start: axis.toView(bar.start),
+                end: axis.toView(bar.end),
+            })),
+        [axis, heldBars],
+    );
     // #306: their menu acts on spec beats
     const { keyframeMenu } = props;
     const viewKeyframeMenu = useMemo<TimelineKeyframeMenu | undefined>(
@@ -976,20 +989,20 @@ export function Timeline(props: TimelineProps) {
         isPlaying: playback.isPlaying,
         pixelsPerBeat,
         selection,
-        selectedTarget: props.selectedTarget,
         className: props.className,
         onSeek: seekToBeat,
         onPlayingChange: useLatestCallback(playback.onPlayingChange),
         playLoops: playback.playLoops,
         onPlayFromPlayhead: useLatestCallback(playback.onPlayFromPlayhead),
         onPlayOn: useLatestCallback(playback.onPlayOn),
+        playOnly: playback.playOnly,
         onNavigate: useLatestCallback(playback.onNavigate),
         onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
         zoomFitted: props.zoomFitted,
         onZoomFittedChange: useLatestCallback(props.onZoomFittedChange),
+        zoomButtons: props.zoomButtons,
         onSelectionChange: changeSelection,
-        onCreateTrack: createTrack,
-        addSelectedMarchers: addMarchersMenu,
+        pageMenu: pageBoxMenu,
         moveCommands: trackMoveCommands,
         clipPeel: trackPeel,
         onAddPageFlag: useLatestCallback(props.onAddPageFlag),
@@ -1014,6 +1027,7 @@ export function Timeline(props: TimelineProps) {
         transportAccessories: props.transportAccessories,
         keyframes: viewKeyframes,
         keyframeMenu: viewKeyframeMenu,
+        heldBars: viewHeldBars,
         keepChains: props.keepChains,
         pageMoves: props.pageMoves,
         basicPoints: viewBasicPoints,
@@ -1021,7 +1035,7 @@ export function Timeline(props: TimelineProps) {
         expertMarks: props.expertMarks,
     };
 
-    // Read-only (Visuals mode): no window and no edits; page boxes still select, to go to their page
+    // Read-only (Preview): no window and no edits; page boxes still select, to go to their page
     // Its start flag is still drawn, where Play starts from
     const shownProps = readOnly
         ? {
@@ -1047,7 +1061,6 @@ export type {
     TimelineActivitySpan,
     TimelineAppendAtPlayhead,
     TimelineBeatRange,
-    TimelineCreateTrackRequest,
     TimelineSeekGesture,
     TimelineSeekOptions,
     TimelineSelection,

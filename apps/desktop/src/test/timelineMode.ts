@@ -12,7 +12,7 @@ import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates
 import { migrationsFolder } from "./convertPages";
 
 /**
- * Test databases are timeline files, like every file the app opens (ADR 0001 §6).
+ * Test databases are timeline files, like every file the app opens (ADR 0012 §6).
  *
  * A data fixture in `base.tsx` (`marchersAndPages`, `pages`, `marchers`, `beats`) loads a page
  * show into a page-era file (`pageEraBlankPath`), then converts it with the app's own convert on
@@ -52,7 +52,7 @@ export function keepFixturesInPageMode(reason: string): void {
 /** Whether the data fixtures convert their page show (true unless the file opted out). */
 export const timelineFixtureMode = (): boolean => !pageModeFixtures;
 
-/** The timeline data tables (ADR 0001 §3), for a history test's `tablesToCheck`. */
+/** The timeline data tables (ADR 0012 §3), for a history test's `tablesToCheck`. */
 export const timelineHistoryTables = (): Table[] => [
     schema.timelines,
     schema.timeline_shapes,
@@ -101,28 +101,6 @@ export async function pageEraBlankPath(): Promise<string> {
     }
     pageEraBlank = file;
     return file;
-}
-
-/**
- * `marchers` columns the timeline-only migrations add (0024's `type`). App code reads every
- * column of `marchers`, so a page-mode fixture, which tests write timeline rows into and call
- * app functions on, gets them too; `finishTestConversion` then skips adding them again.
- */
-export const LATER_MARCHER_COLUMNS = [
-    {
-        name: "type",
-        sql: `ALTER TABLE \`marchers\` ADD COLUMN \`type\` text DEFAULT 'marcher' NOT NULL CONSTRAINT "marchers_type_check" CHECK(type IN ('marcher', 'item'))`,
-    },
-] as const;
-
-/** Adds {@link LATER_MARCHER_COLUMNS} to the page-era file at `dbPath`. */
-export function addLaterMarcherColumns(dbPath: string): void {
-    const db = new DatabaseSync(dbPath);
-    try {
-        for (const column of LATER_MARCHER_COLUMNS) db.exec(column.sql);
-    } finally {
-        db.close();
-    }
 }
 
 /**

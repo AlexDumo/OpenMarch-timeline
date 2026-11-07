@@ -2,15 +2,13 @@ import { useState, type ReactNode } from "react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import tolgee from "@/global/singletons/Tolgee";
 import type { ActionId } from "@/shortcuts/definitions";
-import { getActionLabel, getActionShortcutLabel } from "@/shortcuts/labels";
-import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
+import { getActionLabel } from "@/shortcuts/labels";
+import Shortcut from "@/components/ui/Shortcut";
 import {
     KEEP_MENU_EVENTS,
     TIMELINE_MENU_CONTENT_CLASS,
 } from "./TimelineRangeMenu";
-
-const ITEM_CLASS =
-    "rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none";
+import { MENU_ITEM_CLASS } from "@/components/ui/popupClasses";
 
 /**
  * The paused playhead's right-click menu (UI-9; replaced the **+** beside the playhead, owner
@@ -93,31 +91,27 @@ function MenuEntry({
     onSelect: () => void;
     name?: string;
 }) {
-    const overrides = useShortcutOverridesStore((s) => s.overrides);
-    const shortcut = getActionShortcutLabel(action, { overrides });
     return (
         <ContextMenu.Item
             data-testid={testId}
             onSelect={onSelect}
-            className={ITEM_CLASS}
+            className={MENU_ITEM_CLASS}
         >
             {getActionLabel(action, translate)}
             {name && (
                 <span
                     data-testid="timeline-add-page-name"
-                    className="text-text-subtitle text-[11px]"
+                    className="text-text-subtitle text-sub"
                 >
                     {name}
                 </span>
             )}
-            {shortcut && (
-                <span
-                    data-testid="timeline-add-page-shortcut"
-                    className="text-text-subtitle ml-auto pl-16 text-[11px]"
-                >
-                    {shortcut}
-                </span>
-            )}
+            <span
+                data-testid="timeline-add-page-shortcut"
+                className="ml-auto pl-16"
+            >
+                <Shortcut action={action} />
+            </span>
         </ContextMenu.Item>
     );
 }

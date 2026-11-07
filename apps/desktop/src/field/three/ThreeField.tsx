@@ -31,6 +31,7 @@ import {
     beatIndexesById,
     itemOutlineChanges,
 } from "@/items/itemOutlineTimeline";
+import { propColorsByMarcher } from "@/items/propColor";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { useTimingObjects } from "@/hooks";
 import { useFieldImage } from "@/view3d/window/useFieldImage";
@@ -56,8 +57,7 @@ import {
 } from "@/field/fieldQuality";
 import { FieldEditor } from "@/field/editor/fieldEditor";
 import { settingsMoveOptions } from "@/field/editor/settingsMoveOptions";
-import { VisualsFieldEditor } from "@/field/editor/visualsFieldEditor";
-import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
+import { ReadOnlyFieldEditor } from "@/field/editor/readOnlyFieldEditor";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { takeFieldPress } from "@/field/takeFieldPress";
 import { setShapeField } from "@/shapes/field/shapeField";
@@ -72,6 +72,7 @@ import {
     PlacedBoxesOverlay,
 } from "@/shapes/placed/PlacedBoxesOverlay";
 import { ShapeEditor } from "@/shapes/editor/ShapeEditorBar";
+import HandleMenu from "@/shapes/editor/HandleMenu";
 import { useShapeEditorStore } from "@/shapes/frame/shapeEditorStore";
 import FavoritesRing from "@/shapes/tool/FavoritesRing";
 import DockedCommandBar from "@/shortcuts/palette/DockedCommandBar";
@@ -111,16 +112,12 @@ import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
+import {
+    drawnSelection,
+    useShapeMarchersHidden,
+} from "@/shapes/field/marchersHidden";
 import { useTimelineVisuals } from "./useTimelineVisuals";
 import { drawnFollowing } from "./fieldFollowing";
-import {
-    KeptMarksOverlay,
-    KeptMarksPlacer,
-    KeptMarkTooltipView,
-    useFieldKeptMarks,
-    useKeptMarkTooltip,
-    type KeptMarkElements,
-} from "./KeptMarks";
 import {
     currentFieldQuality,
     useFieldQuality,
@@ -206,7 +203,7 @@ function ThreeFieldView() {
     const { beats, pages, countGrid } = useTimingObjects()!;
     const preview = useIsPreviewMode();
     const panning = useFieldViewStore((s) => s.panning);
-    const { image: fieldImage, size: fieldImageSize } = useFieldImage();
+    const { image: fieldImage } = useFieldImage();
     // Planned once, for the layer that draws it and the field test API
     const fieldImagePlan = useMemo(
         () =>
@@ -216,11 +213,10 @@ function ThreeFieldView() {
                       fieldImage && {
                           width: fieldImage.width,
                           height: fieldImage.height,
-                          size: fieldImageSize,
                       },
                   )
                 : null,
-        [fieldProperties, fieldImage, fieldImageSize],
+        [fieldProperties, fieldImage],
     );
     const appearanceSteps = useMarcherAppearanceSteps(true);
     const { mutateAsync: moveMarchers } = useMutation(
@@ -312,34 +308,24 @@ function ThreeFieldView() {
         selection.current = selectedIds;
     }, [selectedIds]);
 
-    // #201: the timeline's pathways, isolation scene, collisions, dimming and kept marks
+    // #201: the timeline's pathways, isolation scene, collisions and dimming
     const marcherIds = useMemo(
         () => marcherRows?.map((marcher) => marcher.id),
         [marcherRows],
     );
+    // #558: the edited shape's marchers, while it's seen on its own
+    const hiddenIds = useShapeMarchersHidden();
     const timeline = useTimelineVisuals({
         isPlaying,
         selectedPage,
         pages,
         marcherIds,
         fieldProperties,
+        hiddenIds,
     });
     const { dimming, following } = timeline;
     useShapeFocus(dimming);
-    const keptMarks = useFieldKeptMarks({
-        enabled: timeline.ready,
-        isPlaying,
-        pages,
-        pageId: selectedPage?.id,
-        marcherIds,
-    });
-    const keptMarkElements = useRef<KeptMarkElements>(new Map());
     const root = useRef<HTMLDivElement>(null);
-    const keptMarkTooltip = useKeptMarkTooltip({
-        target: root,
-        marks: keptMarks,
-        marchers,
-    });
 
     // The field test API and the editor read the latest of these, not the render they came from
     const element = useRef<HTMLElement | null>(null);
@@ -385,7 +371,7 @@ function ThreeFieldView() {
 
     const editor = useMemo(
         () =>
-            new VisualsFieldEditor(
+            new ReadOnlyFieldEditor(
                 {
                     selection: {
                         get: () => selection.current,
@@ -411,6 +397,8 @@ function ThreeFieldView() {
                             useTimelineSelectionStore.getState(),
                             id,
                         ),
+                    // #558: the shape's hidden marchers aren't there to press while it's seen alone
+                    marcherHidden: (id) => dimming.isHidden(id),
                     takePress: () => menuShown.current || takeFieldPress(),
                     selectionBoxPadding: () =>
                         selectionBoxPadding(useFieldViewStore.getState().zoom),
@@ -466,20 +454,16 @@ function ThreeFieldView() {
                         useShapeEditorStore.getState().ratioLocked,
                 },
             ),
-        [marchers, items],
+        [marchers, items, dimming],
     );
     useEffect(() => {
         setActiveFieldEditor(editor);
         return () => setActiveFieldEditor(null);
     }, [editor]);
-    // Visuals mode edits cues: the field only selects there (performer-behavior.md 7.1). Preview
-    // edits nothing: the editor hears no presses there at all (`EditorInput`), only navigation
-    const visuals = useIsVisualsView();
+    // Preview edits nothing: the editor hears no presses there at all (`EditorInput`), only
+    // navigation
     const previewing = useIsPreviewMode();
-    useEffect(
-        () => editor.setReadOnly(visuals || previewing),
-        [editor, visuals, previewing],
-    );
+    useEffect(() => editor.setReadOnly(previewing), [editor, previewing]);
     // A rotation typed into the inspector belongs to its selection and page:
     // when either changes before it's saved, it's dropped (#198)
     useEffect(() => editor.selectionChanged(), [editor, selectedIds]);
@@ -635,6 +619,7 @@ function ThreeFieldView() {
                             editor={editor}
                             marchers={marchers}
                             selectedIds={selectedIds}
+                            hiddenIds={hiddenIds}
                         />
                         <PlayheadDriver
                             marchers={marchers}
@@ -694,11 +679,6 @@ function ThreeFieldView() {
                             renderOrder={COLLISIONS_ORDER}
                             atlas={atlases.collision}
                         />
-                        <KeptMarksPlacer
-                            marks={keptMarks}
-                            marchers={marchers}
-                            elements={keptMarkElements}
-                        />
                     </Canvas>
                 )}
                 {fieldProperties && (
@@ -724,10 +704,8 @@ function ThreeFieldView() {
                 <FavoritesRing />
                 {/* A command asking its parameters docks here, over the field's top (#354) */}
                 <DockedCommandBar />
-                <KeptMarksOverlay
-                    marks={keptMarks}
-                    elements={keptMarkElements}
-                />
+                {/* A Line's point and segment menus (#569) */}
+                <HandleMenu />
                 <FieldContextMenu
                     at={menu.at}
                     onClose={menu.close}
@@ -735,7 +713,6 @@ function ThreeFieldView() {
                     timelineMode={timelineMode}
                 />
             </div>
-            <KeptMarkTooltipView tooltip={keptMarkTooltip} />
         </div>
     );
 }
@@ -774,6 +751,7 @@ function useFieldItems(
                     .filter((item) => hiddenPropIds[item.id])
                     .map((item) => item.marcher_id),
             ),
+            colors: propColorsByMarcher(rows),
         });
     }, [items, itemRows, geometry, beats, hiddenPropIds]);
     return useMemo(
@@ -899,10 +877,12 @@ function EditorInput({
     editor,
     marchers,
     selectedIds,
+    hiddenIds,
 }: {
     editor: FieldEditor;
     marchers: FieldMarchers;
     selectedIds: readonly number[];
+    hiddenIds: ReadonlySet<number> | null;
 }) {
     const canvas = useThree((s) => s.gl.domElement);
     const invalidate = useThree((s) => s.invalidate);
@@ -916,10 +896,15 @@ function EditorInput({
     // A drag moves marchers outside the playhead's fills: draw them
     useEffect(() => marchers.subscribe(invalidate), [marchers, invalidate]);
 
+    // A marcher hidden with its shape (#558) hides its selection ring too, so no ring follows the line
+    const ringIds = useMemo(
+        () => drawnSelection(selectedIds, hiddenIds),
+        [selectedIds, hiddenIds],
+    );
     useEffect(() => {
-        marchers.setSelection(selectedIds);
+        marchers.setSelection(ringIds);
         invalidate();
-    }, [marchers, selectedIds, invalidate]);
+    }, [marchers, ringIds, invalidate]);
 
     return null;
 }

@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@openmarch/ui";
 import { T, useTolgee, useTranslate } from "@tolgee/react";
-import NewShowProgressIndicator from "@/components/launchpage/newShow/components/NewShowProgressIndicator";
 import { useEditorModeStore, type EditorMode } from "@/stores/EditorModeStore";
 import { useWelcomeFlowStore } from "@/stores/WelcomeFlowStore";
-import OpenMarchLogo from "@/components/OpenMarchLogo";
+import { useWebWelcomeStore } from "@/stores/WebWelcomeStore";
 import { saveAnalyticsChoice } from "@/utilities/analyticsConsent";
 import { matchAppLanguage } from "@/utilities/languages";
 import { isWebBuild } from "@/utilities/webBuild";
@@ -13,6 +12,9 @@ import {
     canContinueFrom,
     getWelcomeSteps,
     isAnalyticsChoiceMade,
+    isReturningUser,
+    setupSteps,
+    type ReturningUserChoices,
     type WelcomeStepId,
 } from "./welcomeFlowSteps";
 import WelcomeStep from "./steps/WelcomeStep";
@@ -20,6 +22,9 @@ import LanguageStep from "./steps/LanguageStep";
 import ThemeStep from "./steps/ThemeStep";
 import ModeStep from "./steps/ModeStep";
 import AnalyticsStep from "./steps/AnalyticsStep";
+import WhatsNewTour from "./steps/WhatsNewTour";
+import WelcomeFrame from "./WelcomeFrame";
+import { markAnalyticsAnswered } from "@/stores/AnalyticsQuestionStore";
 
 export interface WelcomeFlowProps {
     /**
@@ -31,7 +36,10 @@ export interface WelcomeFlowProps {
     reload?: () => void;
 }
 
-const STEP_TITLE_KEYS: Record<Exclude<WelcomeStepId, "welcome">, string> = {
+const STEP_TITLE_KEYS: Record<
+    Exclude<WelcomeStepId, "welcome" | "whatsNew">,
+    string
+> = {
     language: "welcomeFlow.language.title",
     theme: "welcomeFlow.theme.title",
     mode: "welcomeFlow.mode.title",
@@ -54,12 +62,53 @@ function suggestedLanguage(): string {
     return matchAppLanguage(navigator.languages ?? []) ?? "en";
 }
 
+/** A raw setting; unset (or unreadable) is undefined. */
+async function readSetting(key: string): Promise<unknown> {
+    try {
+        return await window.electron.invoke("settings:get", key);
+    } catch {
+        return undefined;
+    }
+}
+
+const isSaved = (value: unknown) => typeof value === "string" && value !== "";
+
+/**
+ * Whether the person used OpenMarch before, and if so which choices they
+ * already made. Read once, before this flow saves anything.
+ */
+async function readReturningUser(): Promise<ReturningUserChoices | null> {
+    const [optOutAnalytics, databasePath, language, theme, recentFiles] =
+        await Promise.all([
+            readSetting("optOutAnalytics"),
+            readSetting("databasePath"),
+            readSetting("language"),
+            readSetting("theme"),
+            Promise.resolve()
+                .then(() => window.electron.getRecentFiles())
+                .catch(() => []),
+        ]);
+    const returning = isReturningUser(
+        {
+            optOutAnalytics,
+            databasePath,
+            recentFileCount: Array.isArray(recentFiles)
+                ? recentFiles.length
+                : 0,
+        },
+        { isWeb: isWebBuild },
+    );
+    if (!returning) return null;
+    return { languageSaved: isSaved(language), themeSaved: isSaved(theme) };
+}
+
 /**
  * First launch (UI-19): a welcome page, then language, light or dark, Basic or
  * Expert, and the analytics opt-in when it hasn't been answered (never on the
  * web). It fills the launch page until it's finished, then the launch page
  * shows. Language and theme apply and save as they're picked; finishing saves
- * the mode.
+ * the mode. Someone who used OpenMarch before gets "Welcome back" and What's
+ * new, and isn't asked again for a language or theme they chose.
  */
 // eslint-disable-next-line max-lines-per-function
 export default function WelcomeFlow({
@@ -67,7 +116,7 @@ export default function WelcomeFlow({
     reload = () => window.location.reload(),
 }: WelcomeFlowProps) {
     const { t } = useTranslate();
-    const tolgee = useTolgee();
+    const tolgee = useTolgee(["language"]);
     const { theme, setTheme } = useTheme();
     const [language, setLanguage] = useState<LanguageChoice | null>(null);
     // Languages this flow switched to, so their (possibly late) language
@@ -77,8 +126,17 @@ export default function WelcomeFlow({
     const [analyticsChoiceMade, setAnalyticsChoiceMade] = useState<
         boolean | null
     >(null);
+    // undefined while it's read; null for a new person.
+    const [returning, setReturning] = useState<
+        ReturningUserChoices | null | undefined
+    >(undefined);
     const [stepIndex, setStepIndex] = useState(0);
     const [chosenMode, setChosenMode] = useState<EditorMode | null>(null);
+    // A mode was stored when the flow opened: it opened for the analytics
+    // question alone.
+    const [modeChosen] = useState(
+        () => useEditorModeStore.getState().mode !== null,
+    );
 
     useEffect(() => {
         const { setShowing } = useWelcomeFlowStore.getState();
@@ -121,6 +179,16 @@ export default function WelcomeFlow({
 
     useEffect(() => {
         let active = true;
+        void readReturningUser().then((choices) => {
+            if (active) setReturning(choices);
+        });
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        let active = true;
         void Promise.resolve(
             window.electron.invoke("settings:get", "optOutAnalytics"),
         )
@@ -141,18 +209,17 @@ export default function WelcomeFlow({
             getWelcomeSteps({
                 analyticsChoiceMade: analyticsChoiceMade ?? false,
                 isWeb: isWebBuild,
+                returning,
+                modeChosen,
             }),
-        [analyticsChoiceMade],
+        [analyticsChoiceMade, returning, modeChosen],
     );
-    const step = steps[Math.min(stepIndex, steps.length - 1)];
+    const step: WelcomeStepId | undefined =
+        steps[Math.min(stepIndex, steps.length - 1)];
     const isLast = stepIndex >= steps.length - 1;
     // The welcome page isn't counted: the bar and "Step 1 of 4" are the setup.
-    const setupIndex = stepIndex - 1;
-    const setupCount = steps.length - 1;
-    const completed = useMemo(
-        () => new Set(Array.from({ length: setupIndex }, (_, i) => i)),
-        [setupIndex],
-    );
+    const setup = setupSteps(steps);
+    const progress = { steps: setup, index: step ? setup.indexOf(step) : -1 };
 
     const chooseLanguage = (code: string) => {
         setLanguage({ code, source: "picked" });
@@ -162,10 +229,13 @@ export default function WelcomeFlow({
     };
 
     const finish = (analyticsOptOut?: boolean) => {
-        if (!chosenMode) return;
-        setMode(chosenMode);
+        if (!chosenMode && !modeChosen) return;
+        if (chosenMode) setMode(chosenMode);
         const willReload = analyticsOptOut !== undefined;
-        if (willReload) saveAnalyticsChoice(analyticsOptOut);
+        if (willReload) {
+            saveAnalyticsChoice(analyticsOptOut);
+            markAnalyticsAnswered();
+        }
         onFinish({ willReload });
         if (willReload) reload();
     };
@@ -175,9 +245,29 @@ export default function WelcomeFlow({
     const waitingForAnalytics =
         isLast && !isWebBuild && analyticsChoiceMade === null;
     const continueDisabled =
+        !step ||
         !canContinueFrom(step, chosenMode) ||
         (step === "language" && language === null) ||
         waitingForAnalytics;
+
+    // Developer builds only: Expert mode, no further questions. An unanswered
+    // analytics question is answered "no" so the old opt-in modal stays away,
+    // and the web build's welcome modal (waiting for this flow) is closed.
+    // Off the web, it waits for the analytics setting so an earlier answer
+    // isn't overwritten. Language and theme are left as they are.
+    const devSkipDisabled = !isWebBuild && analyticsChoiceMade === null;
+    const devSkip = () => {
+        if (devSkipDisabled) return;
+        setMode("expert");
+        useWebWelcomeStore.getState().setOpen(false);
+        const willReload = !isWebBuild && analyticsChoiceMade !== true;
+        if (willReload) {
+            saveAnalyticsChoice(true);
+            markAnalyticsAnswered();
+        }
+        onFinish({ willReload });
+        if (willReload) reload();
+    };
 
     const next = () => {
         if (continueDisabled) return;
@@ -191,109 +281,109 @@ export default function WelcomeFlow({
         setStepIndex(stepIndex + 1);
     };
 
+    // What's new's Skip and last slide go on; Back on its first slide goes back
+    const afterTour = () => setStepIndex(stepIndex + 1);
+    const back = () => setStepIndex(stepIndex - 1);
+
+    // The first page differs for returning people; show it once that's known.
+    if (returning === undefined || !step)
+        return (
+            <main
+                className="flex min-h-0 flex-1"
+                aria-label={t("welcomeFlow.dialogLabel")}
+                aria-busy
+            />
+        );
+
     if (step === "welcome")
         return (
             <WelcomeStep
                 onStart={next}
+                onDevSkip={devSkip}
+                devSkipDisabled={devSkipDisabled}
                 startLanguage={language?.code ?? suggestedLanguage()}
+                returning={returning !== null}
                 aria-label={t("welcomeFlow.dialogLabel")}
             />
         );
 
+    if (step === "whatsNew")
+        return (
+            <WhatsNewTour
+                onDone={afterTour}
+                onSkip={afterTour}
+                onBack={back}
+                progress={progress}
+                onDevSkip={devSkip}
+                devSkipDisabled={devSkipDisabled}
+            />
+        );
+
     return (
-        <main
-            className="flex min-h-0 flex-1 p-8"
-            aria-label={t("welcomeFlow.dialogLabel")}
-            data-testid="welcome-flow"
-        >
-            <div className="bg-fg-1 border-stroke rounded-6 flex min-h-0 flex-1 flex-col overflow-y-auto border px-24 py-32">
-                <div className="m-auto flex w-full max-w-[46rem] flex-col gap-24">
-                    <div className="flex items-center gap-24">
-                        <OpenMarchLogo
-                            height={28}
-                            className="text-text shrink-0"
-                        />
-                        <NewShowProgressIndicator
-                            currentStepIndex={setupIndex}
-                            steps={steps.slice(1)}
-                            completedSteps={completed}
-                        />
-                    </div>
-                    <div className="flex flex-col items-center gap-4">
-                        <span className="text-sub text-text-subtitle tracking-wide uppercase">
-                            {t("welcomeFlow.step", {
-                                current: setupIndex + 1,
-                                total: setupCount,
-                            })}
-                        </span>
-                        <h1 className="text-h3 text-text text-center font-medium">
-                            <T keyName={STEP_TITLE_KEYS[step]} />
-                        </h1>
-                    </div>
-
-                    <div key={step} className="animate-fade-in">
-                        {step === "language" && (
-                            <LanguageStep
-                                value={language?.code ?? ""}
-                                onChange={chooseLanguage}
-                            />
-                        )}
-                        {step === "theme" && (
-                            <ThemeStep value={theme} onChange={setTheme} />
-                        )}
-                        {step === "mode" && (
-                            <ModeStep
-                                value={chosenMode}
-                                onChange={setChosenMode}
-                            />
-                        )}
-                        {step === "analytics" && <AnalyticsStep />}
-                    </div>
-
-                    <div className="flex w-full justify-between gap-8 pt-8">
+        <WelcomeFrame
+            progress={progress}
+            title={<T keyName={STEP_TITLE_KEYS[step]} />}
+            contentKey={step}
+            onDevSkip={devSkip}
+            devSkipDisabled={devSkipDisabled}
+            back={
+                stepIndex > 0 ? (
+                    <Button
+                        variant="secondary"
+                        onClick={back}
+                        data-testid="welcome-back"
+                    >
+                        <T keyName="welcomeFlow.back" />
+                    </Button>
+                ) : undefined
+            }
+            actions={
+                step === "analytics" ? (
+                    <>
                         <Button
                             variant="secondary"
-                            onClick={() => setStepIndex(stepIndex - 1)}
-                            data-testid="welcome-back"
+                            onClick={() => finish(true)}
+                            data-testid="welcome-analytics-opt-out"
                         >
-                            <T keyName="welcomeFlow.back" />
+                            <T keyName="analyticsOptIn.optOut" />
                         </Button>
-                        <div className="flex gap-8">
-                            {step === "analytics" ? (
-                                <>
-                                    <Button
-                                        variant="secondary"
-                                        onClick={() => finish(true)}
-                                        data-testid="welcome-analytics-opt-out"
-                                    >
-                                        <T keyName="analyticsOptIn.optOut" />
-                                    </Button>
-                                    <Button
-                                        onClick={() => finish(false)}
-                                        data-testid="welcome-analytics-opt-in"
-                                    >
-                                        <T keyName="analyticsOptIn.optIn" />
-                                    </Button>
-                                </>
-                            ) : (
-                                <Button
-                                    onClick={next}
-                                    disabled={continueDisabled}
-                                    data-testid="welcome-continue"
-                                >
-                                    <T
-                                        keyName={
-                                            isLast
-                                                ? "welcomeFlow.finish"
-                                                : "welcomeFlow.continue"
-                                        }
-                                    />
-                                </Button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
+                        <Button
+                            onClick={() => finish(false)}
+                            data-testid="welcome-analytics-opt-in"
+                        >
+                            <T keyName="analyticsOptIn.optIn" />
+                        </Button>
+                    </>
+                ) : (
+                    <Button
+                        onClick={next}
+                        disabled={continueDisabled}
+                        data-testid="welcome-continue"
+                    >
+                        <T
+                            keyName={
+                                isLast
+                                    ? "welcomeFlow.finish"
+                                    : "welcomeFlow.continue"
+                            }
+                        />
+                    </Button>
+                )
+            }
+        >
+            {step === "language" && (
+                <LanguageStep
+                    value={language?.code ?? ""}
+                    onChange={chooseLanguage}
+                />
+            )}
+            {step === "theme" && (
+                <ThemeStep value={theme} onChange={setTheme} />
+            )}
+            {step === "mode" && (
+                <ModeStep value={chosenMode} onChange={setChosenMode} />
+            )}
+            {step === "analytics" && <AnalyticsStep />}
+        </WelcomeFrame>
     );
 }

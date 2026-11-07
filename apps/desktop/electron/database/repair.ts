@@ -9,7 +9,7 @@ import { DrizzleMigrationService } from "./services/DrizzleMigrationService";
 import {
     fileTooNewMessage,
     isSupportedUserVersion,
-    MAX_SUPPORTED_USER_VERSION,
+    decideFileVersion,
     NEW_FILE_USER_VERSION,
     PAGE_MODEL_USER_VERSION,
     readUserVersion,
@@ -54,23 +54,11 @@ const DEPENDENT_TABLE_COPY_ORDER = [
     "timeline_transitions",
     "timeline_slot_destinations",
     "timeline_assignments",
-    // A kept marker after the assignment it marks
-    "timeline_kept_assignments",
-    // Performer cues after the beats, pages, marchers and tags they name (ADR 0004 D-5). No
-    // trigger reads them, so this is for order's sake: a cue after its phrase asset, set
-    // members after their cue.
-    "phrase_assets",
-    "cues",
-    "cue_marchers",
-    "page_performer_settings",
-    // Items after the marchers that back them, Outline changes after their item (ADR 0002 D-10)
+    // Held marks after the marchers they name (no trigger reads them)
+    "timeline_held_marks",
+    // Items after the marchers that back them, Outline changes after their item (ADR 0010 D-10)
     "items",
     "item_geometry",
-    // Placement changes after their item and beat, holders and crew after their change
-    "item_placements",
-    "item_placement_marchers",
-    // Artwork slot assignments after their item and beat
-    "item_artwork_slots",
     // Shape recipes after their moves, then their members (ADR 0006)
     "timeline_shape_recipes",
     "timeline_shape_recipe_marchers",
@@ -288,7 +276,7 @@ export const removeOrphanMarcherPages = (db: DatabaseSync): void => {
     ).run();
 };
 
-/** Tables only a page-era file has: `0020_drop_page_era` drops them when a file is converted. */
+/** Tables only a page-era file has: `0018_drop_page_era` drops them when a file is converted. */
 const PAGE_ERA_TABLES = [
     "marcher_pages",
     "pathways",
@@ -302,7 +290,7 @@ const PAGE_ERA_TABLES = [
  * True when the file being repaired must be repaired as a page-era file (7), so its positions are
  * copied into page-era tables and converted, after the person confirms, when it opens.
  *
- * A timeline file (8, or 9 with a floor) never is. A page-model file (7) always is. Any other version, such as 0 from
+ * A timeline file (8, or a parked floor-model 9) never is. A page-model file (7) always is. Any other version, such as 0 from
  * a damaged header or 1 to 6 from 0.0.9 or earlier, is judged by what the file holds: page-era
  * tables mean its motion is still in the page model.
  */
@@ -352,9 +340,11 @@ export const repairDatabase = async (originalDbPath: string) => {
 
         // Refuse a file from a newer release: its tables may not match this
         // build's schema, and the repaired copy would otherwise be written at
-        // an older version (ADR 0001 §6). The original is never written to.
+        // an older version (ADR 0012 §6). The original is never written to.
         const sourceVersion = readUserVersion(originalDb);
-        if (sourceVersion > MAX_SUPPORTED_USER_VERSION) {
+        if (
+            decideFileVersion(sourceVersion, false).action === "refuse-too-new"
+        ) {
             originalDb.close();
             throw new Error(fileTooNewMessage(sourceVersion));
         }
@@ -380,7 +370,7 @@ export const repairDatabase = async (originalDbPath: string) => {
             copyDataFromOriginalDatabase(originalDb, newDb, sourceDbPath);
 
             // The copy went around the write wrapper, so drop what its triggers logged
-            // (ADR 0001 §5). The app also clears the log whenever it opens a file.
+            // (ADR 0012 §5). The app also clears the log whenever it opens a file.
             newDb.prepare("DELETE FROM timeline_change_log").run();
 
             // Turn foreign keys back on
