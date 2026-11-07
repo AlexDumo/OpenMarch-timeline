@@ -25,6 +25,8 @@ import {
     createSharedMaterials,
     lightingValues,
     setLightIntensity,
+    SIGN_RIBBON,
+    signRibbonTexture,
     type SharedMaterials,
 } from "../environment";
 import type {
@@ -59,9 +61,7 @@ import {
 } from "./arena/geometry";
 import {
     ARENA_BANNERS,
-    ARENA_RIBBON,
     arenaFloorTexture,
-    arenaRibbonTexture,
     bannerAtlasTexture,
     beamFadeTexture,
     SCOREBOARD_ATLAS,
@@ -273,7 +273,7 @@ export const buildArena: KitBuilder = ({ footprint, quality }) => {
 
 /** The shared LED ribbon material; its texture repeats along U. */
 function ribbonMaterial(ctx: Ctx): MeshStandardMaterial {
-    const map = arenaRibbonTexture();
+    const map = signRibbonTexture();
     // Bowl rings run counterclockwise seen from above, so from the floor U
     // runs right to left; mirror it so the text reads (as in pro.ts).
     map.repeat.set(-1, 1);
@@ -294,7 +294,7 @@ function ribbonMaterial(ctx: Ctx): MeshStandardMaterial {
 /**
  * How the ribbon texture runs along a band `height` meters tall: a whole
  * number of tiles round the ring (so there's no seam), each as close to
- * `ARENA_RIBBON.tileHeights` band heights as that allows, with the first ad
+ * `SIGN_RIBBON.tileHeights` band heights as that allows, with the first ad
  * centered on the ring's first straight (it starts at that straight's end,
  * `cx` is its middle). The texture is mirrored (`repeat.x = -1`), so texture
  * U is minus band U.
@@ -309,18 +309,18 @@ function ribbonLayout(
         length += points[i].distanceTo(points[(i + 1) % points.length]);
     const n = Math.max(
         1,
-        Math.round(length / (height * ARENA_RIBBON.tileHeights)),
+        Math.round(length / (height * SIGN_RIBBON.tileHeights)),
     );
     const tile = length / n;
     const toMiddle = Math.abs(cx - points[0].x);
-    return { tile, uOffset: -ARENA_RIBBON.firstAd - toMiddle / tile };
+    return { tile, uOffset: -SIGN_RIBBON.firstAd - toMiddle / tile };
 }
 
 /**
  * A band that shows only the ribbon's quiet stretch (dark with hairlines):
  * one texture column all the way round.
  */
-const QUIET_RIBBON = { tile: 1e6, uOffset: -ARENA_RIBBON.quiet };
+const QUIET_RIBBON = { tile: 1e6, uOffset: -SIGN_RIBBON.quiet };
 
 /** The floor inside the bowl, with the event flooring and boundary tape. */
 function addFloor(ctx: Ctx): void {
