@@ -2,7 +2,12 @@
 
 # User docs plan: 0.2 and after
 
-Status: proposed, waiting for owner approval (2026-11-05). Tracking issue: fork #691.
+Status: approved 2026-11-05 and built in fork #735 (2026-11-06). Tracking issue: fork #691.
+This file records the plan as it was approved. Some details changed while building it: the
+guide uses the Part 1 demo show rather than a new one, and one `<Media>` component replaced
+`<Shot>`, `<Clip>` and `<RefBox>`. Where this plan and the following differ, the following
+win: [the style guide](../conventions/user-docs.md), `apps/website/AGENTS.md` and the
+`user-docs` skill.
 
 The guides on openmarch.com (`apps/website/src/content/docs`, 23 pages) describe the
 v0.1.7 page-based app. Most were last changed in mid-2025. 0.2 changes how drill is
