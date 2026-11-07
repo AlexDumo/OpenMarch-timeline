@@ -106,7 +106,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 - Owner: Trevor (3d/c4-props)
 - Status: in-review
-- PR: AlexDumo/OpenMarch-timeline (branch `3d/c4-props`, opened 2026-11-07)
+- PR: AlexDumo/OpenMarch-timeline#755 (branch `3d/c4-props`, opened 2026-11-07)
 - Parallel: yes
 - Depends on: C4.1, C2.1, C2.3, C2.6
 
