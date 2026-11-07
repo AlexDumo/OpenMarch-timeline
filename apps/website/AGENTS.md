@@ -145,6 +145,27 @@ export default shots;
 - Pick a state that shows the idea calmly: a page in the middle of the show, a few marchers
   selected, no toasts, no hover tooltips unless the tooltip is the point.
 
+### Scheduled refresh
+
+`.github/workflows/docs-media.yaml` records the shots again every week, so pictures that went
+stale without anyone noticing still get caught. It picks the shots whose chapter file, show,
+`covers` (a shot's own optional `covers: ["apps/desktop/src/..."]`, plus the `covers` of the
+pages that show it), labels or shared styles changed since the shot was last recorded; once a
+month it records all of them. It compares each recording with the committed one and keeps only
+the ones that visibly changed (two recordings of the same screen are never quite the same
+pixels), then opens a pull request with them, and an issue for each shot that failed to record,
+naming the pages that show it. The steps run locally too:
+
+```sh
+node scripts/docs-media/refresh.mjs plan                  # which shots it would record, and why
+node scripts/docs-media/refresh.mjs pages <shot-id>       # the pages that show a shot
+DOCS_MEDIA_WORK=/tmp/run scripts/media-kit/in-docker.sh scripts/docs-media/capture.mjs <shot-id>
+scripts/media-kit/in-docker.sh scripts/docs-media/refresh.mjs compare --work /tmp/run --out /tmp/run/out
+```
+
+`compare` puts back the recordings that didn't change and writes before | after | diff
+pictures of the ones that did to `<out>/diffs/`.
+
 ## Generated reference data
 
 `pnpm --dir apps/desktop docs:reference` writes `src/data/generated/`: every shortcut the app's
