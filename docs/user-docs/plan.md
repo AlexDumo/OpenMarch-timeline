@@ -163,25 +163,25 @@ A new `docs/conventions/user-docs.md`, linked from `AGENTS.md`, holds the rules.
 These live in `apps/website/src/components/docs/`. Each one fails the build when its
 input no longer exists, so a renamed label or removed shortcut can't go unnoticed.
 
-| Component | What it does |
-| --- | --- |
-| `<Ui k="…">` | The exact label for an i18n key, read from `en.json` |
-| `<Kbd action="…">` | An action's shortcut on each OS, styled like the app's `Shortcut` cap |
-| `<Shot id="…">`, `<Clip id="…">` | Light and dark media from the shot manifest |
-| `<RefBox>` | The reference box at the top of a panel or tool page: where, shortcut, mode |
-| `<Since v="…">` | Marks things added after 0.2 |
+| Component                        | What it does                                                                |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| `<Ui k="…">`                     | The exact label for an i18n key, read from `en.json`                        |
+| `<Kbd action="…">`               | An action's shortcut on each OS, styled like the app's `Shortcut` cap       |
+| `<Shot id="…">`, `<Clip id="…">` | Light and dark media from the shot manifest                                 |
+| `<RefBox>`                       | The reference box at the top of a panel or tool page: where, shortcut, mode |
+| `<Since v="…">`                  | Marks things added after 0.2                                                |
 
 ## Generated reference
 
 A script, `apps/desktop/scripts/docs-reference/`, reads the app's registries and writes
 JSON to `apps/website/src/data/generated/`:
 
-| Output | Source |
-| --- | --- |
-| `actions.json` | `ACTIONS` in `src/shortcuts/definitions.ts`, formatted with `src/shortcuts/labels.ts` |
-| `menus.json` | `electron/main/application-menu.ts` and `src/global/menuActions.ts` |
-| `settings.json` | `ALL_SETTINGS_SECTIONS` in `src/settings/sections.ts` |
-| `terms.json` | `timeline.terms.*` and the other glossary keys in `en.json` |
+| Output          | Source                                                                                |
+| --------------- | ------------------------------------------------------------------------------------- |
+| `actions.json`  | `ACTIONS` in `src/shortcuts/definitions.ts`, formatted with `src/shortcuts/labels.ts` |
+| `menus.json`    | `electron/main/application-menu.ts` and `src/global/menuActions.ts`                   |
+| `settings.json` | `ALL_SETTINGS_SECTIONS` in `src/settings/sections.ts`                                 |
+| `terms.json`    | `timeline.terms.*` and the other glossary keys in `en.json`                           |
 
 The registries store i18n keys, so every label resolves through `en.json`. The notes in
 `i18n-meta/context.json` are a starting point for written descriptions. CI reruns the
@@ -245,6 +245,7 @@ benchmarks use today (#696).
 
   Drafts always go to the owner for an edit pass. Agents don't publish pages nobody has
   reviewed.
+
 - **One line in `AGENTS.md`.** If your change is user-visible, run the user-docs skill or
   say why the docs don't need to change.
 - **Readable by agents.** Add `starlight-llms-txt`: `llms.txt`, `llms-full.txt` and one set
