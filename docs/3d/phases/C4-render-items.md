@@ -106,17 +106,17 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 - Owner: Trevor (3d/c4-props)
 - Status: in-progress
-- PR: none
+- PR: none yet (branch `3d/c4-props`, merged with `timeline/main` 2026-11-07; awaiting the PR decision)
 - Parallel: yes
 - Depends on: C4.1, C2.1, C2.3, C2.6
 
 **Goal:** props stand in the venue at their real size, and performers stand on platforms.
 
-**Scope:** Outline boxes (or a prop's Library model) from the geometry table at each count; floor = flat, platform = stood on, obstacle = not stood on; Off field not drawn; a performer at the height of the tallest platform under their dot, stepping over about half a count at an edge; stacking makes steps; props and placed items on the tallest platform under their footprint center; Floor props stay on the Base floor; notes for steps over 16 in, performers inside obstacles, and dots leaving a moving platform.
+**Scope:** Outline boxes (or a prop's Library model) from the geometry table at each count; floor = flat, platform = stood on, obstacle = not stood on; a performer at the height of the tallest platform under their dot, stepping over about half a count at an edge; stacking makes steps; props and placed items on the tallest platform under their footprint center; Floor props stay on the Base floor. Notes for steps over 16 in, performers inside obstacles, and dots leaving a moving platform wait for show checks to return (parked 2026-11-03; kept on branch `3d/c4-props-notes`).
 
 **Tickets:** 05, 21, 24, 25.
 
-**Done when:** a performer crossing onto a 24 in platform steps up in about half a count and the note names the count.
+**Done when:** a performer crossing onto a 24 in platform steps up in about half a count (the note naming the count comes back with show checks).
 
 **Checks:** unit tests for the height rule; screenshots; focused `src/view3d` tests; type-check, lint, format, spellcheck.
 
@@ -327,3 +327,21 @@ Nothing yet.
     then). "With nothing between" is read count to count: a step up 16 in and
     another 16 in within one count reads as one 32 in step, and a hop onto
     and off a narrow platform within one count isn't seen.
+- 2026-11-07, C4.5 merged with `timeline/main` (branch `3d/c4-props`).
+  Main had parked prop holding (Placement, holders, crew, put-down) and show
+  notes and Show checks (commit eb87d04a0), and drew props as plain blocks
+  (`PropBlocks.tsx`, a color per prop, hidden props hidden). Props now draw
+  through main's `PropBlocks`; the branch's own `Props.tsx` and
+  `propMeshes.ts` are gone, so an open freehand path is a filled block, not
+  a 10 cm wall. `PropBlocks` stands each block on the platform under it from
+  the same layout the performers stand on (`placePropBlocks`'s `liftOf`).
+  With no Placement, a prop with an Outline always stands (no Off field, no
+  held props); a prop hidden on the field isn't stood on. The layout reads
+  the beat from `ShowPositions.beatAt`, as the blocks and the 2D field do.
+  The platform checks (part 3) left with show notes; they are on branch
+  `3d/c4-props-notes` for when show checks return. Checked in the Electron
+  build (temporary Playwright spec): a stage with a riser on it, a round
+  obstacle and a tarp; five performers step onto the stage, the middle one
+  onto the riser, a sixth walks into the obstacle and through it, and all
+  step back off. The view3d web preview could not be used (it fails on
+  `timeline/main` with "table `timeline_assignments` already exists").
