@@ -34,7 +34,7 @@ nothing in `src/` changes:
 
 | `window.view3d`      | In the app                       | Here (`host.ts`)                                                         |
 | -------------------- | -------------------------------- | ------------------------------------------------------------------------ |
-| `sqlRead`            | Main reads the open show         | sql.js reads the show in memory, after applying any pending migrations   |
+| `sqlRead`            | Main reads the open show         | sql.js reads the show in memory, migrated as the app migrates it on open |
 | `on`, `hello`        | The editor sends clock/selection | The host sends its own clock and selected page                           |
 | `requestPlayback`    | The editor's playback actions    | The same rules: play from the selected page, step pages, stop at the end |
 | `requestVenueChange` | The editor saves it with undo    | Written to the in-memory copy only                                       |
@@ -43,6 +43,11 @@ The host also plays the show's music with Web Audio, applying the show's audio
 offset as the editor does. A build alias in `vite.config.mts` replaces the
 window's `TitleBar` with `WebTitleBar.tsx`: the demo picker, Open .dots, and
 mute. A dropped or opened file is read in the browser and never uploaded.
+
+`migrate.ts` brings a show up to date as the app does on open: a file a fork
+build saved first gets the app's own fork-file repair
+(`electron/database/legacyFork/legacyForkRepair.ts`, ADR 0011), run on sql.js
+through a small `DatabaseSync` adapter, then the pending migrations.
 
 ## Demo shows
 

@@ -10,8 +10,7 @@
  */
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import sqlWasmUrl from "sql.js/dist/sql-wasm.wasm?url";
-import journal from "../electron/database/migrations/meta/_journal.json";
-import { skipsExistingColumn } from "../electron/database/migrations/addColumnGuard";
+import { migrateShow } from "./migrate";
 import {
     VIEW3D_CLOCK_CHANNEL,
     VIEW3D_INVALIDATE_CHANNEL,
@@ -25,11 +24,6 @@ import {
 } from "@/view3d/sync/protocol";
 import { parseVenueSettings } from "@/view3d/core/venueSettings";
 import { showCamerasSchema } from "@/view3d/core/cameraList";
-
-const migrationSql = import.meta.glob<string>(
-    "../electron/database/migrations/*.sql",
-    { query: "?raw", import: "default", eager: true },
-);
 
 /** Same lead time the editor's audio player gives Web Audio. */
 const PLAYBACK_DELAY_S = 0.1;
@@ -46,35 +40,6 @@ type Listener = (payload: unknown) => void;
 let sqlPromise: Promise<SqlJsStatic> | null = null;
 const loadSql = () =>
     (sqlPromise ??= initSqlJs({ locateFile: () => sqlWasmUrl }));
-
-/**
- * Applies the app's migrations the file hasn't had, as the app does when it
- * opens a show (Drizzle compares each journal entry's `when` with the
- * newest `created_at`). Only in memory; the file is never written back.
- */
-function migrate(db: Database) {
-    const result = db.exec("SELECT MAX(created_at) FROM __drizzle_migrations");
-    const last = Number(result[0]?.values[0]?.[0] ?? 0);
-    for (const entry of journal.entries) {
-        if (entry.when <= last) continue;
-        const sql =
-            migrationSql[`../electron/database/migrations/${entry.tag}.sql`];
-        if (!sql) throw new Error(`Missing migration ${entry.tag}`);
-        const columnsOf = (table: string) =>
-            (
-                db.exec(`SELECT name FROM pragma_table_info('${table}')`)[0]
-                    ?.values ?? []
-            ).map((row) => String(row[0]));
-        for (const statement of sql.split("--> statement-breakpoint")) {
-            if (statement.trim() && !skipsExistingColumn(statement, columnsOf))
-                db.run(statement);
-        }
-        db.run(
-            "INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
-            [entry.tag, entry.when],
-        );
-    }
-}
 
 const toBindable = (value: unknown) =>
     value === undefined ? null : typeof value === "boolean" ? +value : value;
@@ -109,7 +74,7 @@ class WebHost {
         const SQL = await loadSql();
         const next = new SQL.Database(bytes);
         try {
-            migrate(next);
+            await migrateShow(next);
         } catch (error) {
             next.close();
             throw error;
