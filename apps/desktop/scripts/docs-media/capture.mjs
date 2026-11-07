@@ -15,8 +15,9 @@
 //   --list               list the shots and exit
 // Output: apps/website/public/docs/media/<chapter>/<id>.<theme>.(webp|mp4), and
 // apps/website/src/data/docs-media.json (sizes and kinds, read by the site's <Shot>).
-// Each run's work folder (log, contact sheet, failures) is scripts/docs-media/runs/<time>/
-// (git-ignored), or DOCS_MEDIA_WORK=<dir>.
+// Each run's work folder (log, contact sheet, failures, and results.json: one entry per shot
+// and theme, with its outcome) is scripts/docs-media/runs/<time>/ (git-ignored), or
+// DOCS_MEDIA_WORK=<dir>.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,16 +32,12 @@ import {
 } from "../media-kit/app.mjs";
 import { contactSheet, encodeClip, toWebp } from "../media-kit/encode.mjs";
 import { writePreload } from "../media-kit/page-setup.mjs";
+import { loadShots, showPath } from "./shot-list.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEBSITE = path.resolve(DESKTOP, "../website");
 const MEDIA = path.join(WEBSITE, "public/docs/media");
 const MANIFEST = path.join(WEBSITE, "src/data/docs-media.json");
-
-/** Shows a shot can open (`shot.show`); anything else is a path from apps/desktop. */
-export const SHOWS = {
-    demo: path.join(DESKTOP, "web/public/demos/part1-demo.dots"),
-};
 
 /** The app window every shot uses, in points. */
 const WINDOW = { width: 1600, height: 1000 };
@@ -66,22 +63,6 @@ function parseArgs(argv) {
         else options.names.push(arg);
     }
     return options;
-}
-
-async function loadShots() {
-    const dir = path.join(HERE, "shots");
-    const all = [];
-    for (const file of fs.readdirSync(dir).sort()) {
-        if (!file.endsWith(".mjs")) continue;
-        const chapter = file.replace(/\.mjs$/, "");
-        const { default: shots } = await import(path.join(dir, file));
-        for (const shot of shots) {
-            if (all.some((s) => s.id === shot.id))
-                throw new Error(`two shots are called "${shot.id}"`);
-            all.push({ chapter, ...shot });
-        }
-    }
-    return all;
 }
 
 /** The box around `locator` (window points), grown by `pad`, kept inside the window. */
@@ -178,14 +159,15 @@ log(
 );
 let failed = 0;
 const clips = [];
+/** One entry per shot and theme, for scripts (refresh.mjs): what was written, or the error. */
+const results = [];
 for (const shot of chosen) {
     const outDir = path.join(MEDIA, shot.chapter);
     fs.mkdirSync(outDir, { recursive: true });
     for (const theme of shot.themes ?? options.themes) {
         if (!options.themes.includes(theme)) continue;
         log(`>> ${shot.chapter}/${shot.id} (${theme})`);
-        const source =
-            SHOWS[shot.show ?? "demo"] ?? path.join(DESKTOP, shot.show);
+        const source = showPath(shot);
         const { app, page } = await launch({
             source,
             work: WORK,
@@ -238,6 +220,12 @@ for (const shot of chosen) {
             };
             frameBox = box;
             const base = path.join(outDir, `${shot.id}.${theme}`);
+            const result = {
+                id: shot.id,
+                chapter: shot.chapter,
+                theme,
+                kind: shot.kind,
+            };
             const target = prepared.target ?? page;
             if (shot.kind === "clip") {
                 const framesDir = path.join(WORK, `${shot.id}-${theme}-frames`);
@@ -278,6 +266,11 @@ for (const shot of chosen) {
                     height: size.height,
                     seconds: Number(seconds.toFixed(2)),
                 };
+                results.push({
+                    ...result,
+                    ok: true,
+                    files: [`${base}.mp4`, `${base}.webp`],
+                });
                 log(
                     `   ${film.frames} frames → ${base}.mp4 (${fs.statSync(`${base}.mp4`).size} bytes)`,
                 );
@@ -294,6 +287,7 @@ for (const shot of chosen) {
                     width: even(width),
                     height: even((width * box.height) / box.width),
                 };
+                results.push({ ...result, ok: true, files: [`${base}.webp`] });
                 log(
                     `   → ${base}.webp (${fs.statSync(`${base}.webp`).size} bytes)`,
                 );
@@ -304,12 +298,25 @@ for (const shot of chosen) {
             const failure = path.join(WORK, `${shot.id}-${theme}-failed.png`);
             await page.screenshot({ path: failure }).catch(() => {});
             log(`   screenshot: ${failure}`);
+            results.push({
+                id: shot.id,
+                chapter: shot.chapter,
+                theme,
+                kind: shot.kind,
+                ok: false,
+                error: String(error.stack ?? error),
+                screenshot: fs.existsSync(failure) ? failure : undefined,
+            });
         } finally {
             await app.close().catch(() => {});
         }
     }
 }
 writeManifest();
+fs.writeFileSync(
+    path.join(WORK, "results.json"),
+    `${JSON.stringify(results, null, 2)}\n`,
+);
 if (clips.length)
     log(
         `Contact sheet: ${contactSheet(clips, path.join(WORK, "contact-sheet.png"))}`,

@@ -27,3 +27,9 @@ snapcraft export-login <credentials-filename>
 Betas are built by `desktop-release.yaml` from `v*-beta.N` tags on `prerelease/<major>.<minor>`, which only ever receives fork `main`. `pr-checks.yaml` and `codeql.yaml` also run for pull requests into `prerelease/**`, because the "Branch Protections" ruleset requires their results there.
 
 The whole process (version numbers, the sync pull request, landing, tagging, publishing as a pre-release, and what to do when something goes wrong) is in [docs/releases/beta.md](../../docs/releases/beta.md). `scripts/release-beta.sh` lands and tags a beta.
+
+## User guide media refresh
+
+`docs-media.yaml` records the user guide's pictures and clips again every Monday, on pushes to `prerelease/**` that touch the app, and by hand (Actions → User guide media refresh → Run workflow, optionally with "all" or a list of shots). It records only the shots whose files changed since each was last recorded, except on the first Monday of the month, when it records all of them. It opens one pull request (`docs/media-refresh/<branch>`) with the pictures that visibly changed, and one issue for each shot that no longer records. How it decides is in `apps/desktop/scripts/docs-media/refresh.mjs`.
+
+It needs the repository setting "Allow GitHub Actions to create and approve pull requests". Pull requests opened with the workflow's own token don't start the PR checks; add a `DOCS_MEDIA_TOKEN` secret (a fine-grained token with contents, pull requests and issues write) to have them run without a manual push.

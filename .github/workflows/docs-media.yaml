@@ -1,0 +1,221 @@
+# cspell:words noreply shellcheck
+name: User guide media refresh
+
+# Records the user guide's pictures and clips again from the app, so they keep up with it.
+# See apps/website/AGENTS.md (Screenshots and clips) and apps/desktop/scripts/docs-media/refresh.mjs.
+# - plan: picks the shots whose code, show, covered app files, labels or shared styles changed
+#   since each was last recorded (or since the last refresh), and splits them into shards.
+#   The first scheduled run of each month, and a manual run with "all", records every shot.
+# - record: each shard builds the app and records its shots in the media Docker image (the same
+#   one agents use), then compares each recording with the committed one, records the ones that
+#   visibly changed a second time, and keeps a change only when both new recordings agree.
+# - publish: one pull request with the changed pictures (docs/media-refresh/<branch>), and one
+#   issue per shot whose setup no longer works, naming the guide pages that show it.
+#
+# Pull requests opened with the workflow's own token don't start other workflows, so the PR's
+# checks only run once someone pushes to it. Add a DOCS_MEDIA_TOKEN secret (a fine-grained token
+# with contents, pull requests and issues write) to have them run straight away. The repository
+# setting "Allow GitHub Actions to create and approve pull requests" must be on either way.
+
+on:
+  schedule:
+    - cron: "0 7 * * 1" # Mondays, 07:00 UTC
+  push:
+    branches: ["prerelease/**"]
+    paths:
+      - "apps/desktop/src/**"
+      - "apps/desktop/i18n/en.json"
+      - "apps/desktop/scripts/docs-media/**"
+      - "packages/ui/src/**"
+  workflow_dispatch:
+    inputs:
+      all:
+        description: Record every shot, not just the ones whose files changed
+        type: boolean
+        default: false
+      shots:
+        description: Only these shots or chapters (space-separated ids); overrides "all"
+        type: string
+        default: ""
+
+concurrency:
+  group: docs-media-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+      count: ${{ steps.plan.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # The last refresh: shots unchanged since then aren't recorded again
+      - name: Find the last successful refresh
+        id: last
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ github.ref_name }}
+        run: |
+          sha=$(gh run list -R "$GITHUB_REPOSITORY" --workflow docs-media.yaml \
+            --branch "$REF" --status success --limit 1 \
+            --json headSha --jq '.[0].headSha // empty' || true)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Pick the shots to record
+        id: plan
+        working-directory: apps/desktop
+        env:
+          ALL: ${{ inputs.all }}
+          SHOTS: ${{ inputs.shots }}
+          SINCE: ${{ steps.last.outputs.sha }}
+          REF: ${{ github.ref_name }}
+          KEEP: origin/docs/media-refresh/${{ github.ref_name }}
+        run: |
+          git fetch origin "docs/media-refresh/$REF:refs/remotes/$KEEP" 2>/dev/null || true
+          args=(--since "$SINCE" --keep "$KEEP")
+          # Every shot on the first Monday of the month, so changes no `covers` names still show up
+          if [ "$ALL" = "true" ] || { [ "$GITHUB_EVENT_NAME" = "schedule" ] && [ "$(date -u +%d)" -le 7 ]; }; then
+            args=(--all)
+          fi
+          if [ -n "$SHOTS" ]; then args=(--only "$SHOTS"); fi
+          node scripts/docs-media/refresh.mjs plan "${args[@]}" --github-output > plan.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs-media-plan
+          path: apps/desktop/plan.json
+
+  record:
+    needs: plan
+    if: needs.plan.outputs.count != '0'
+    runs-on: ubuntu-latest
+    # About 10 minutes to set up, then 1 to 2 minutes a still and 2 to 4 a clip per theme; a shard
+    # is 24 still-equivalents (a clip counts as 3), plus the second recording of whatever changed
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    name: record (${{ matrix.shard.name }})
+    env:
+      # in-docker.sh mounts this folder: every file the recorder or compare reads or writes
+      # outside the repo lives under it (next to the checkout: runner.temp isn't available here)
+      DOCS_MEDIA_WORK: ${{ github.workspace }}/../docs-media-work
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4.1.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install project dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build the app
+        run: |
+          pnpm turbo run build --filter="@openmarch/desktop^..."
+          pnpm --dir apps/desktop build
+
+      - name: Ensure Electron binary is installed
+        run: node node_modules/electron/install.js
+
+      - name: Build the media image
+        run: docker build -q -t openmarch-media apps/desktop/scripts/media-kit
+
+      - name: Record
+        working-directory: apps/desktop
+        env:
+          MEDIA_SLOTS: "1"
+          SHOTS: ${{ matrix.shard.shots }}
+        # A shot that fails is reported by publish; the shard still compares the rest
+        continue-on-error: true
+        run: |
+          # shellcheck disable=SC2086
+          scripts/media-kit/in-docker.sh scripts/docs-media/capture.mjs $SHOTS
+
+      # In the media image too, for the same ffmpeg; OUT is inside the folder it mounts
+      - name: Compare with the committed recordings
+        working-directory: apps/desktop
+        run: |
+          OUT="$DOCS_MEDIA_WORK/out"
+          mkdir -p "$OUT"
+          scripts/media-kit/in-docker.sh scripts/docs-media/refresh.mjs compare --work "$DOCS_MEDIA_WORK" --out "$OUT"
+          cp "$DOCS_MEDIA_WORK/capture.log" "$OUT/"
+
+      # Software drawing and animations don't give the same pixels every run: a change counts
+      # only if a second recording agrees with the first
+      - name: Record the changed shots again and confirm
+        working-directory: apps/desktop
+        env:
+          OUT: ${{ github.workspace }}/../docs-media-work/out
+          SECOND: ${{ github.workspace }}/../docs-media-work/out/second
+        run: |
+          changed=$(node scripts/docs-media/refresh.mjs changed --out "$OUT")
+          if [ -z "$changed" ]; then echo "Nothing changed."; exit 0; fi
+          # shellcheck disable=SC2086
+          DOCS_MEDIA_WORK="$SECOND" scripts/media-kit/in-docker.sh scripts/docs-media/capture.mjs $changed || true
+          scripts/media-kit/in-docker.sh scripts/docs-media/refresh.mjs confirm --work "$SECOND" --out "$OUT"
+          mv "$SECOND/capture.log" "$OUT/capture-second.log"
+          rm -rf "$SECOND"
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: docs-media-${{ matrix.shard.name }}
+          path: ${{ github.workspace }}/../docs-media-work/out/
+          retention-days: 30
+
+  publish:
+    needs: [plan, record]
+    if: ${{ !cancelled() && needs.plan.outputs.count != '0' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.DOCS_MEDIA_TOKEN || github.token }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/artifacts
+
+      - name: Open the pull request and issues
+        working-directory: apps/desktop
+        env:
+          GH_TOKEN: ${{ secrets.DOCS_MEDIA_TOKEN || github.token }}
+          REF: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          node scripts/docs-media/refresh.mjs publish \
+            --artifacts "$RUNNER_TEMP/artifacts" \
+            --plan "$RUNNER_TEMP/artifacts/docs-media-plan/plan.json" \
+            --base "$REF" \
+            --repo "$GITHUB_REPOSITORY" \
+            --run-url "$RUN_URL"
