@@ -150,11 +150,13 @@ export default shots;
 `.github/workflows/docs-media.yaml` records the shots again every week, so pictures that went
 stale without anyone noticing still get caught. It picks the shots whose chapter file, show,
 `covers` (a shot's own optional `covers: ["apps/desktop/src/..."]`, plus the `covers` of the
-pages that show it), labels or shared styles changed since the shot was last recorded; once a
-month it records all of them. It compares each recording with the committed one and keeps only
-the ones that visibly changed (two recordings of the same screen are never quite the same
-pixels), then opens a pull request with them, and an issue for each shot that failed to record,
-naming the pages that show it. The steps run locally too:
+pages that show it), labels or shared styles changed since the shot was last recorded, plus any
+the last refresh couldn't finish; once a month it records all of them. A change to `capture.mjs`,
+`shot-list.mjs`, `media-kit/` or shared styles records every shot, so the first run after this
+workflow lands picks all 80. It compares each recording with the committed one and keeps only the
+ones that visibly changed, recorded twice with both recordings agreeing, then opens a pull request
+with them, and issues naming the pages for the shots that failed to record (one issue for all of
+them when more than five fail). The steps run locally too:
 
 ```sh
 node scripts/docs-media/refresh.mjs plan                  # which shots it would record, and why
@@ -165,6 +167,27 @@ scripts/media-kit/in-docker.sh scripts/docs-media/refresh.mjs compare --work /tm
 
 `compare` puts back the recordings that didn't change and writes before | after | diff
 pictures of the ones that did to `<out>/diffs/`.
+
+Which runs do what:
+
+- **Only `main` publishes**, from the Monday run or a manual run without chosen shots. Pushes to
+  `prerelease/**` and manual runs on other branches only report, in the run summary and
+  artifacts: `prerelease/0.2` only ever holds commits from fork `main`
+  (`docs/releases/beta.md`), so no pull request can go there. It runs only on the fork.
+- **A manual run of chosen shots only reports**, and doesn't count as a refresh. An unknown id
+  fails the run.
+- **The last refresh** is the last scheduled, push or full manual run, green or red. It leaves a
+  `docs-media-state` artifact with its commit and the shots it didn't finish, so a shot that
+  fails, comes back unstable or isn't reached is picked again next time.
+- **The branch** `docs/media-refresh/main` is rebuilt from `main` each time, keeping what its open
+  pull request had for shots this run couldn't record again. If anyone else commits there, the
+  refresh stops replacing it and the run goes red until the pull request is merged or closed and
+  the branch deleted.
+
+The comparison can't see every change. It misses solid changes smaller than about 12 pixels
+square, a short label that changes few pixels on each side of a block edge, and color changes
+averaging under 6 of 255 over 64 × 64 pixels. The monthly full run uses the same comparison, so
+it doesn't catch these either: re-record such a shot by hand when you make that kind of change.
 
 ## Generated reference data
 

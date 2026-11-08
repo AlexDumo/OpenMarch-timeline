@@ -88,7 +88,7 @@ function union(...boxes) {
 const WHOLE = { x: 0, y: 0, ...WINDOW };
 
 /** Merges this run's entries into the manifest, under a lock (runs can overlap). */
-function writeManifest() {
+function writeManifest({ prune = false } = {}) {
     const lock = `${MANIFEST}.lock`;
     fs.mkdirSync(path.dirname(MANIFEST), { recursive: true });
     for (let i = 0; ; i++) {
@@ -106,7 +106,7 @@ function writeManifest() {
             : {};
         const next = { ...current, ...manifest };
         // Shots that no longer exist leave the manifest (their files are reported, not deleted)
-        if (pruneMissing)
+        if (prune && pruneMissing)
             for (const id of Object.keys(next))
                 if (!shots.some((s) => s.id === id)) {
                     log(
@@ -161,6 +161,13 @@ let failed = 0;
 const clips = [];
 /** One entry per shot and theme, for scripts (refresh.mjs): what was written, or the error. */
 const results = [];
+/** Saves what's done so far, so a crash or a time limit doesn't lose the shots already recorded. */
+function saveProgress() {
+    writeManifest();
+    const file = path.join(WORK, "results.json");
+    fs.writeFileSync(`${file}.tmp`, `${JSON.stringify(results, null, 2)}\n`);
+    fs.renameSync(`${file}.tmp`, file);
+}
 for (const shot of chosen) {
     const outDir = path.join(MEDIA, shot.chapter);
     fs.mkdirSync(outDir, { recursive: true });
@@ -168,18 +175,35 @@ for (const shot of chosen) {
         if (!options.themes.includes(theme)) continue;
         log(`>> ${shot.chapter}/${shot.id} (${theme})`);
         const source = showPath(shot);
-        const { app, page } = await launch({
-            source,
-            work: WORK,
-            preload: PRELOAD,
-            window: WINDOW,
-            theme,
-            softwareGl: options.softwareGl,
-            uiSettings: shot.uiSettings,
-            mode: shot.mode ?? "expert",
-            scale: SCALE,
-            log,
-        });
+        let launched;
+        try {
+            launched = await launch({
+                source,
+                work: WORK,
+                preload: PRELOAD,
+                window: WINDOW,
+                theme,
+                softwareGl: options.softwareGl,
+                uiSettings: shot.uiSettings,
+                mode: shot.mode ?? "expert",
+                scale: SCALE,
+                log,
+            });
+        } catch (error) {
+            failed++;
+            log(`!! ${shot.id} (${theme}): ${error.stack ?? error}`);
+            results.push({
+                id: shot.id,
+                chapter: shot.chapter,
+                theme,
+                kind: shot.kind,
+                ok: false,
+                error: String(error.stack ?? error),
+            });
+            saveProgress();
+            continue;
+        }
+        const { app, page } = launched;
         let frameBox = WHOLE;
         const overlay = {
             enable: () =>
@@ -310,13 +334,10 @@ for (const shot of chosen) {
         } finally {
             await app.close().catch(() => {});
         }
+        saveProgress();
     }
 }
-writeManifest();
-fs.writeFileSync(
-    path.join(WORK, "results.json"),
-    `${JSON.stringify(results, null, 2)}\n`,
-);
+writeManifest({ prune: true });
 if (clips.length)
     log(
         `Contact sheet: ${contactSheet(clips, path.join(WORK, "contact-sheet.png"))}`,
