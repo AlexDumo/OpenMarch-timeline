@@ -154,7 +154,7 @@ export async function launch({
     );
     await keepWindowsLive(app);
     await wait(1500);
-    await fitField(page);
+    await fitField(page, log);
     return { app, page, show };
 }
 
@@ -162,12 +162,36 @@ export async function launch({
  * Fits the field to its pane again, as the zoom readout's reset does, and waits for it to
  * land. The app fits the field only while the panels around it are still laying out as the
  * show opens; on a slow machine the timeline can finish sizing after that, and the field
- * keeps the old fit (about 18 points off, #767). The layout has settled by now.
+ * keeps the old fit (about 18 points off, #767). So this waits for the panes to stop resizing
+ * first, because a resize after the fit keeps the field's zoom and top-left instead of fitting.
  */
-async function fitField(page) {
+async function fitField(page, log) {
+    const layout = () =>
+        page
+            .evaluate(() =>
+                JSON.stringify(
+                    [
+                        ...document.querySelectorAll(
+                            'canvas, [data-testid="timeline-pane"]',
+                        ),
+                    ].map((el) => el.getBoundingClientRect()),
+                ),
+            )
+            .catch(() => "");
+    let before = "";
+    for (let same = 0, i = 0; same < 3 && i < 40; i++) {
+        await wait(250);
+        const now = await layout();
+        same = now === before ? same + 1 : 0;
+        before = now;
+    }
     const reset = page.getByRole("button", { name: /reset zoom and center/i });
-    if (!(await reset.isVisible().catch(() => false))) return;
-    await reset.click();
+    try {
+        await reset.click({ timeout: 5000 });
+    } catch (error) {
+        log(`   warning: couldn't fit the field to its pane: ${error.message}`);
+        return;
+    }
     await page.mouse.move(0, 0);
     await page.evaluate(() => document.activeElement?.blur?.());
     let last = "";
@@ -246,7 +270,7 @@ export async function waitUntilSteady(
 
 /**
  * Stops the clock in every open window (the 3D View's too) and lets each draw once, so nothing
- * moves between here and the capture. Time stays stopped until the app closes.
+ * the clock drives moves between here and the capture. Time stays stopped until the app closes.
  */
 export async function freezeClocks(app) {
     const ms = Date.now();

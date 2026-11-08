@@ -188,18 +188,27 @@ for (const shot of chosen) {
         log(`>> ${shot.chapter}/${shot.id} (${theme})`);
         const source =
             SHOWS[shot.show ?? "demo"] ?? path.join(DESKTOP, shot.show);
-        const { app, page } = await launch({
-            source,
-            work: WORK,
-            preload: PRELOAD,
-            window: WINDOW,
-            theme,
-            softwareGl: options.softwareGl,
-            uiSettings: shot.uiSettings,
-            mode: shot.mode ?? "expert",
-            scale: SCALE,
-            log,
-        });
+        // One show that won't open costs that shot, not the rest of the run
+        let launched;
+        try {
+            launched = await launch({
+                source,
+                work: WORK,
+                preload: PRELOAD,
+                window: WINDOW,
+                theme,
+                softwareGl: options.softwareGl,
+                uiSettings: shot.uiSettings,
+                mode: shot.mode ?? "expert",
+                scale: SCALE,
+                log,
+            });
+        } catch (error) {
+            failed++;
+            log(`!! ${shot.id} (${theme}): ${error.stack ?? error}`);
+            continue;
+        }
+        const { app, page } = launched;
         let frameBox = WHOLE;
         const overlay = {
             enable: () =>
