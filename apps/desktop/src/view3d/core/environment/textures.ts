@@ -1,7 +1,7 @@
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace } from "three";
 
 /**
- * Canvas texture helpers. Text drawn into the scene is painted here (ADR 0002
+ * Canvas texture helpers. Text drawn into the scene is painted here (ADR 0010
  * D-1). Painting needs a 2D canvas context, which Vitest's jsdom doesn't have,
  * so tests call `setTexturePainting(false)`: textures are still created, just
  * left blank. A missing context is also tolerated at runtime.
@@ -12,7 +12,12 @@ export function setTexturePainting(enabled: boolean): void {
     paintingEnabled = enabled;
 }
 
-export const TEXTURE_FONT = '"DM Sans", sans-serif';
+/**
+ * Lists the text symbols face (packages/ui text-symbols.css) like the app's stacks. A
+ * canvas doesn't wait for a face to load, so text with ↔ or ↕ would also need
+ * `document.fonts.load` for it first (see fontsLoaded in core/field).
+ */
+export const TEXTURE_FONT = '"DM Sans", "OpenMarch Text Symbols", sans-serif';
 
 /**
  * Creates a canvas of the given size and a texture for it, then calls `paint`

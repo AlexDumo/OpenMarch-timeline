@@ -36,7 +36,13 @@ import {
     moveShapeRecipesInTransaction,
     splitShapeRecipesInTransaction,
 } from "./shapeRecipes";
-import { refuseRouteTransitions, refuseRoutesInMoves } from "./timelineRoutes";
+import {
+    moveNameOf,
+    refuseLanedRows,
+    refuseRoutesInMoves,
+    routeRefusal,
+} from "./timelineRoutes";
+import { lanesOfTransitions } from "./timelineLanes";
 
 /**
  * Splitting a move and merging moves back (docs/timeline/ui.md UI-25, project owner 2026-10-16).
@@ -116,6 +122,23 @@ const timelineWords = async (
 /** A shared transition's path that a slot keeps on its own (shapeless `direct` or `arc`). */
 const canPeelSlot = (style: string): style is "direct" | "arc" =>
     style === "direct" || style === "arc";
+
+/**
+ * AP-H2 (spec v0.10 J.8) for split by marcher: a marcher whose spot walks a drawn path can't be
+ * split off yet (AP-R21's copy is a later step; `refuseLanedRows`, before planning), and holds
+ * that would take one into a move of its own come through here too. A marcher off the path may
+ * leave a move whose other spots walk one: compaction carries their lanes (AP-R15). A transition
+ * that moves whole takes its lanes with it, so one whose vacant spot still has a lane (owner Q1)
+ * would split its path across two moves (I-LN5), and refuses too.
+ */
+const refuseLanesMovingWhole = async (
+    tx: DbTransaction,
+    timelineId: number,
+    whole: readonly number[],
+): Promise<void> => {
+    if ((await lanesOfTransitions(tx, whole)).length > 0)
+        refuse(routeRefusal.notYet(await moveNameOf(tx, timelineId)));
+};
 
 /** Moves transitions to timeline `timelineId`, as they are (same range, C-11). */
 const moveTransitionsTo = async (
@@ -253,7 +276,7 @@ export async function splitRefusal(
  *
  * Every member of a page's own move may be chosen (#581): every transition moves whole, and the
  * page's timeline stays, empty, so the page box still stands for it and the new move is a move
- * (ADR 0001, UI-25 amendment: an edit that empties the page's timeline keeps its row while
+ * (ADR 0012, UI-25 amendment: an edit that empties the page's timeline keeps its row while
  * another shares its range). Nothing moves on the field.
  *
  * Refused (E-ARGS) before anything is written: a missing timeline, no marchers, none of them in
@@ -284,13 +307,11 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
     });
     if (blocker) refuse(blocker);
     const chosen = new Set(marcherIds.filter((id) => members.has(id)));
-    // AP-R6 (spec v0.9 step 1): a marcher with a drawn path can't be split off yet (holds that
-    // would take one into a move of its own come through here too)
-    await refuseRouteTransitions(
+    await refuseLanedRows(
         tx,
         rows
             .filter((r) => chosen.has(r.assignment.marcher_id))
-            .map((r) => r.transition.id),
+            .map((r) => r.assignment),
     );
     const notInMove = [...new Set(marcherIds)]
         .filter((id) => !members.has(id))
@@ -331,6 +352,7 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
         }
         peeled.push(...leaving);
     }
+    await refuseLanesMovingWhole(tx, timelineId, whole);
 
     // Each peeled slot's new one-slot transition, read and checked before anything is written
     const d = schema.timeline_slot_destinations;

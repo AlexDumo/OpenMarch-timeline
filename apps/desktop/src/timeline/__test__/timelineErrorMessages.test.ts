@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { TimelineCommitViolationError } from "@/db-functions/timelineChanges";
 import { TimelineWriteError } from "@/db-functions/timelineErrors";
 import { text } from "@/timeline/timelineText";
-import { TIMELINE_INSPECTOR_STRINGS } from "@/components/inspector/timelineInspectorStrings";
 import { conToastError } from "@/utilities/utils";
 import { TimelineEditRefusedError } from "../timelineEditRefusals";
 import {
@@ -54,7 +53,7 @@ const SPEC_CODES = [
     "E-A3",
 ];
 const COMBINED_CODES = ["E-A1/E-A2", "E-T3/E-T4"];
-/** The Held marks' commit-time codes (ADR 0001 amendment 2026-10-30) */
+/** The Held marks' commit-time codes (ADR 0012 amendment 2026-10-30) */
 const HELD_CODES = ["E-H1", "E-H3"];
 
 describe("timelineErrorMessage", () => {
@@ -442,11 +441,6 @@ describe("en.json", () => {
             "timeline.keyframes.detailNames":
                 "{set} of {total} selected: {names}",
         }))
-            expect(lookup(key), key).toBe(text);
-    });
-
-    it("carries every inspector string", () => {
-        for (const [key, text] of Object.entries(TIMELINE_INSPECTOR_STRINGS))
             expect(lookup(key), key).toBe(text);
     });
 

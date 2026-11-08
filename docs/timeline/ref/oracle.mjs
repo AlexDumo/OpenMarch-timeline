@@ -34,8 +34,11 @@ export function makeOracle(db) {
     const o = origin(sp);
     if (t.style === 'follow_the_leader') return lerp(o, ftlEntry(t.id).target.get(sp.m), p); // R-11
     const dst = destinationsOf(t, db.shapes)[sp.row.slot];
-    if (t.style === 'route')                                                           // R-14: founding walks the route,
-      return kind(sp) === 'founding' ? (t.params?.offset ? groupWalk(o, db.routes[t.route].geometry.points, dst, db.routes[t.route].geometry.from, db.routes[t.route].geometry.to, t.params.offset).at(p) : routeWalk(o, db.routes[t.route].geometry.points, dst, db.routes[t.route].geometry.from, db.routes[t.route].geometry.to).at(p)) : lerp(o, dst, p); // joins and resumes walk straight
+    const lane = Object.values(db.lanes ?? {}).find((l) => l.transition === t.id && l.slot === sp.row.slot);
+    if (lane) {                                                                        // R-14′ (v0.10): lane first, whatever the style
+      const g = db.routes[lane.route].geometry;                                        // founding walks the route,
+      return kind(sp) === 'founding' ? (lane.offset ? groupWalk(o, g.points, dst, g.from, g.to, lane.offset).at(p) : routeWalk(o, g.points, dst, g.from, g.to).at(p)) : lerp(o, dst, p); // joins and resumes walk straight (step 24)
+    }
     return t.style === 'arc' ? arcPoint(o, dst, t.params?.bulge ?? 0, p) : lerp(o, dst, p); // R-8 / R-7
   }
 

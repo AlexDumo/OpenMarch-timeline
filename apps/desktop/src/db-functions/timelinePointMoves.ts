@@ -245,9 +245,9 @@ const planMerge = async (
     second: BasicRow,
 ): Promise<void> => {
     const { marcherId } = first;
-    // AP-R6 (spec v0.9 step 1): a merge doesn't keep a drawn path yet. Basic only edits simple
+    // AP-R6 (spec v0.10 J.8): a merge doesn't keep a drawn path (a lane) yet. Basic only edits simple
     // marchers, whose moves are direct, so this is a backstop
-    if (first.pathStyle === "route" || second.pathStyle === "route")
+    if (first.laned || second.laned)
         refuse(text.t("timeline.refusals.route.cantKeep"));
     const point = await state.positionAt(marcherId, second.end);
     plan.removed.push(first, second);
@@ -450,7 +450,7 @@ const writePlan = async (
 /**
  * A new move over `range` for part of a move (`NewMove.moveOf`). Its range keeps an older
  * timeline, empty if none is stored yet, so the move stays a move (a clip) and the page box there
- * stands for the older one (ADR 0001, UI-25 amendment).
+ * stands for the older one (ADR 0012, UI-25 amendment).
  */
 const movePartTimeline = async (tx: DbTransaction, range: BeatRange) => {
     if (!(await findTimelineByRange(tx, range)))

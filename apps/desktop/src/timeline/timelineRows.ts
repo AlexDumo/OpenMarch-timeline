@@ -1,5 +1,6 @@
 import type {
     AssignmentRow,
+    LaneRow,
     OrderMode,
     PathParams,
     PathStyle,
@@ -19,7 +20,7 @@ import * as schema from "@om-electron/database/migrations/schema";
 import type { DbConnection, DbTransaction } from "@/db-functions/types";
 
 /**
- * The one place that maps timeline storage to the core model's types (ADR 0001 §4, spec §5.1 and
+ * The one place that maps timeline storage to the core model's types (ADR 0012 §4, spec §5.1 and
  * §10.2): database rows for the cold build, and change-log row images for batches.
  *
  * Tables carry a `timeline_` prefix and spec column names (`dest_shape_id`, `slot_index`, ...);
@@ -38,6 +39,7 @@ type AssignmentDbRow = typeof schema.timeline_assignments.$inferSelect;
 type SlotDestinationDbRow =
     typeof schema.timeline_slot_destinations.$inferSelect;
 type RouteDbRow = typeof schema.timeline_routes.$inferSelect;
+type LaneDbRow = typeof schema.timeline_lanes.$inferSelect;
 
 /** A marcher as the resolver reads it. */
 export interface TimelineMarcher {
@@ -86,12 +88,22 @@ export const transitionFromRow = (row: TransitionDbRow): TransitionRow => ({
         row.path_params == null
             ? null
             : (JSON.parse(row.path_params) as PathParams),
-    route: row.route_id,
 });
 
 /** A route (spec v0.9 §5.2): its geometry, parsed. */
 export const routeFromRow = (row: RouteDbRow): RouteRow => ({
     geometry: JSON.parse(row.geometry) as RouteGeometry,
+});
+
+/** A lane (spec v0.10 J.1): its slot, route and start offset (null for an own lane). */
+export const laneFromRow = (row: LaneDbRow): LaneRow => ({
+    transition: row.transition_id,
+    slot: row.slot_index,
+    route: row.route_id,
+    offset:
+        row.offset_x === null || row.offset_y === null
+            ? null
+            : [row.offset_x, row.offset_y],
 });
 
 export const assignmentFromRow = (row: AssignmentDbRow): AssignmentRow => ({
@@ -171,13 +183,6 @@ export const transitionFromImage = (image: RowImage): TransitionRow => {
         style: field<PathStyle>(image, "style", t, isString),
         order: field<OrderMode>(image, "order", t, isString),
         params: params as PathParams | null,
-        route:
-            field<number | null>(
-                image,
-                "route",
-                t,
-                (v) => v === undefined || isNullableNumber(v),
-            ) ?? null,
     };
 };
 
@@ -190,6 +195,23 @@ export const routeFromImage = (image: RowImage): RouteRow => ({
         (v) => typeof v === "object" && v !== null,
     ),
 });
+
+/** A lane from its change-log image `{id, transition, slot, route, offset}` (spec v0.10). */
+export const laneFromImage = (image: RowImage): LaneRow => {
+    const t = "lanes";
+    const offset = field<[number, number] | null>(
+        image,
+        "offset",
+        t,
+        (v) => v === null || isXY(v),
+    );
+    return {
+        transition: field(image, "transition", t, isNumber),
+        slot: field(image, "slot", t, isNumber),
+        route: field(image, "route", t, isNumber),
+        offset: offset === null ? null : [offset[0], offset[1]],
+    };
+};
 
 export const slotDestinationFromImage = (image: RowImage): SlotDestination => {
     const t = "slot_destinations";
@@ -247,7 +269,7 @@ export interface TimelineTables {
     destinations: SlotDestinationIndex;
 }
 
-/** The six reads of a cold build, in the order a snapshot assembles them. */
+/** The seven reads of a cold build, in the order a snapshot assembles them. */
 function timelineTableQueries(db: DbConnection | DbTransaction) {
     return [
         db
@@ -266,6 +288,7 @@ function timelineTableQueries(db: DbConnection | DbTransaction) {
             .orderBy(asc(schema.timeline_assignments.id)),
         db.select().from(schema.timeline_slot_destinations),
         db.select().from(schema.timeline_routes),
+        db.select().from(schema.timeline_lanes),
     ] as const;
 }
 
@@ -280,6 +303,7 @@ function assembleTimelineTables([
     assignments,
     slotDestinations,
     routes,
+    lanes,
 ]: TimelineTableRows): TimelineTables {
     const destinations: SlotDestinationIndex = new Map();
     for (const row of slotDestinations)
@@ -291,8 +315,10 @@ function assembleTimelineTables([
         transitions: {},
         assignments: assignments.map(assignmentFromRow),
         routes: {},
+        lanes: {},
     };
     for (const row of routes) snapshot.routes![row.id] = routeFromRow(row);
+    for (const row of lanes) snapshot.lanes![row.id] = laneFromRow(row);
     for (const row of shapes) snapshot.shapes[row.id] = shapeFromRow(row);
     for (const row of transitions)
         snapshot.transitions[row.id] = withPoints(
@@ -303,7 +329,7 @@ function assembleTimelineTables([
 }
 
 /**
- * Reads the post-commit timeline state for a cold build (ADR 0001 §4), one statement at a time.
+ * Reads the post-commit timeline state for a cold build (ADR 0012 §4), one statement at a time.
  * Call it where no timeline write can commit between its reads, such as inside the write lock or a
  * transaction. Anywhere else (another window, an export), use {@link readTimelineTablesSnapshot}.
  */
@@ -317,6 +343,7 @@ export async function readTimelineTables(
         assignments,
         slotDestinations,
         routes,
+        lanes,
     ] = timelineTableQueries(db);
     return assembleTimelineTables([
         await marchers,
@@ -325,6 +352,7 @@ export async function readTimelineTables(
         await assignments,
         await slotDestinations,
         await routes,
+        await lanes,
     ]);
 }
 

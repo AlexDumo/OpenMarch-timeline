@@ -37,7 +37,7 @@ Set by the project owner on 2026-09-30, until they lift it here:
 - **List every command you ran, with its result**, in the PR and the log.
 
 - **Reviews and merges:** workers never merge their own PRs. The lead session
-  has a reviewer sub-agent review each PR against the spec, ADR 0001, `ui.md`
+  has a reviewer sub-agent review each PR against the spec, ADR 0012, `ui.md`
   and the phase file, re-runs the PR's checks itself, and then merges it on the
   fork. The lead stops for the project owner only when a question can't be
   answered from the spec, the ADR, `ui.md` or the plan; otherwise it decides,
@@ -129,6 +129,9 @@ Throughout:
 
 - Follow the root `AGENTS.md`, the nearest package `AGENTS.md`, and
   `docs/conventions/` for the area you're changing.
+- For any UI, follow `docs/conventions/ui-styling.md`: the theme's radii, font
+  sizes and spacing, the shared popover and menu classes, and `Button`. Compare a
+  screenshot of the new surface with its neighbors before calling it done.
 - The spec (`docs/timeline/spec.md`) wins on the model. The reference code is in
   `docs/timeline/ref/`.
 - Don't edit other packages' lines or other phases' work packages. Use a

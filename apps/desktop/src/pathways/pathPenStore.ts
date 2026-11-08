@@ -558,7 +558,7 @@ export async function removePath(): Promise<void> {
     try {
         const { marcherIds } = await removeRoute({
             db,
-            transitionId: session.target.transitionId,
+            routeId: session.target.routeId,
         });
         clearPath();
         if (session.target.group)

@@ -15,7 +15,7 @@ import {
 } from "../timelineChanges";
 
 /**
- * The spec §6 write wrapper and the change-log listener contract (ADR 0001 §5): P4.1 to P4.3.
+ * The spec §6 write wrapper and the change-log listener contract (ADR 0012 §5): P4.1 to P4.3.
  * The timeline db-functions arrive in P4.4, so these tests write rows with drizzle inside
  * `transactionWithHistory`.
  */
@@ -176,6 +176,7 @@ describeDbTests("timeline change-log wrapper", (it) => {
                     dest: 1,
                     style: "direct",
                     params: null,
+                    route: null,
                     order: "inherit",
                     slots: 2,
                     start: 0,

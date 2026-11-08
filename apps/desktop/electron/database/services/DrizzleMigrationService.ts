@@ -15,24 +15,31 @@ import { DB } from "../db";
 import { DatabaseSync } from "node:sqlite";
 import { skipsExistingColumn } from "../migrations/addColumnGuard";
 import {
+    needsLegacyForkRepair,
+    repairLegacyForkFile,
+    repairLegacyForkFileInTransaction,
+} from "../legacyFork/legacyForkRepair";
+import {
     fileTooNewMessage,
     isSupportedUserVersion,
     MAX_SUPPORTED_USER_VERSION,
     PAGE_MODEL_USER_VERSION,
     readUserVersion,
+    markLaneModelIfLaned,
 } from "../fileVersion";
 
 /**
- * The first migration that only runs on a timeline file (ADR 0001 §6): it drops the page-era
+ * The first migration that only runs on a timeline file (ADR 0012 §6): it drops the page-era
  * tables, which the converter reads. A page-model file (version 7) gets the migrations before it
  * when it opens; it and every later one run inside the conversion transaction
  * (`applyTimelineMigrationsInTransaction`), after the converter has read the page-era tables.
  * New files are timeline files from the start and get all of them.
  */
-export const FIRST_TIMELINE_MIGRATION_TAG = "0020_drop_page_era";
+export const FIRST_TIMELINE_MIGRATION_TAG = "0018_drop_page_era";
 
 /**
- * Timeline-only migrations that change a table the page conversion writes (`timeline_transitions`).
+ * Timeline-only migrations that change a table the page conversion writes (`timeline_transitions`),
+ * or add one the timeline reads beside it (`timeline_lanes`, which the resolver's cold build reads).
  * The converter writes through this build's schema before the timeline-only migrations run, so
  * these also run, unrecorded, after a page-model file's page-era migrations, both on open
  * (`applyPendingMigrations`) and in its conversion (`applyPageMigrationsInTransaction`); the
@@ -40,7 +47,10 @@ export const FIRST_TIMELINE_MIGRATION_TAG = "0020_drop_page_era";
  * Each must be safe to run twice on a file being converted: `IF NOT EXISTS` for new tables, and a
  * table rebuild that copies every row (a converting file has no rows that use what it adds).
  */
-export const CONVERTER_SCHEMA_MIGRATION_TAGS = ["0031_timeline_routes"];
+export const CONVERTER_SCHEMA_MIGRATION_TAGS = [
+    "0019_timeline_routes",
+    "0020_timeline_lanes",
+];
 
 /** The migrations folder, also found from a built `dist-electron/main`. */
 export function resolveMigrationsFolder(migrationsFolder?: string): string {
@@ -74,7 +84,7 @@ const MIGRATIONS_TABLE = "__drizzle_migrations";
 type TaggedMigration = MigrationMeta & { tag: string };
 
 /** The migrations in `folder`, oldest first, with their journal tags. */
-function readTaggedMigrations(folder: string): TaggedMigration[] {
+export function readTaggedMigrations(folder: string): TaggedMigration[] {
     const journal = JSON.parse(
         fs.readFileSync(path.join(folder, "meta", "_journal.json"), "utf8"),
     ) as { entries: { tag: string; when: number }[] };
@@ -204,12 +214,12 @@ export function applyPageMigrationsInTransaction(
         throw new Error(
             "applyPageMigrationsInTransaction needs foreign keys off: a table rebuild would cascade",
         );
-    forgetFork3dVenueMigration(rawDb);
-    const queries = pendingMigrationQueries(
-        rawDb,
-        resolveMigrationsFolder(migrationsFolder),
-        "page",
-    );
+    const folder = resolveMigrationsFolder(migrationsFolder);
+    // A page-era file a fork build opened has some of the fork's migrations (ADR 0011)
+    const migrations = readTaggedMigrations(folder);
+    if (needsLegacyForkRepair(rawDb, migrations))
+        repairLegacyForkFileInTransaction(rawDb, migrations);
+    const queries = pendingMigrationQueries(rawDb, folder, "page");
     dropAllTriggers(rawDb);
     for (const query of queries) runMigrationQuery(rawDb, query);
     for (const query of converterSchemaQueries(
@@ -225,31 +235,6 @@ function converterSchemaQueries(folder: string): string[] {
     return readTaggedMigrations(folder)
         .filter((m) => CONVERTER_SCHEMA_MIGRATION_TAGS.includes(m.tag))
         .flatMap((m) => m.sql);
-}
-
-/**
- * `created_at` of `0017_melted_sage`, the 3D View venue migration of the fork's `3d-async`
- * branch before it merged into the timeline line, where the same table is `0019_gray_brood`.
- * Drizzle only runs migrations dated after a file's newest recorded one, and this one is dated
- * after `0017_powerful_edwin_jarvis`, so a file opened by a `3d-async` build would skip the
- * timeline tables. Fork development files only; no released build ever wrote it.
- */
-export const FORK_3D_VENUE_MIGRATION_MS = 1791099628919;
-
-/**
- * Forgets the fork's old venue migration (see {@link FORK_3D_VENUE_MIGRATION_MS}), so every
- * later migration runs. Its table stays; `0019` creates it only if it is missing.
- */
-export function forgetFork3dVenueMigration(rawDb: DatabaseSync): void {
-    const hasMigrationsTable = rawDb
-        .prepare(
-            "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = '__drizzle_migrations'",
-        )
-        .get();
-    if (!hasMigrationsTable) return;
-    rawDb
-        .prepare("DELETE FROM __drizzle_migrations WHERE created_at = ?")
-        .run(FORK_3D_VENUE_MIGRATION_MS);
 }
 
 /**
@@ -274,9 +259,8 @@ export class DrizzleMigrationService {
      * This uses Drizzle's built-in migration functionality
      *
      * Runs only on files whose `user_version` this build supports (7, the page
-     * model, which is an artifact of the previous migration system, 8, the
-     * timeline model, and 9, the floor model). It never changes the version.
-     * See `../fileVersion.ts`.
+     * model, which is an artifact of the previous migration system, and 8, the
+     * timeline model). It never changes the version. See `../fileVersion.ts`.
      */
     async applyPendingMigrations(migrationsFolder?: string): Promise<void> {
         const userVersion = readUserVersion(this.rawDb);
@@ -300,7 +284,13 @@ export class DrizzleMigrationService {
             // console.log("Dropping history triggers...");
             // await dropAllUndoTriggers(this.db);
 
-            forgetFork3dVenueMigration(this.rawDb);
+            // A file a fork build saved is brought to the collapsed migration first (ADR 0011),
+            // in a transaction of its own; the app backed it up (`hasPendingMigrations`).
+            const migrations = readTaggedMigrations(folder);
+            if (needsLegacyForkRepair(this.rawDb, migrations)) {
+                const report = repairLegacyForkFile(this.rawDb, migrations);
+                console.log("Repaired a file saved by a fork build:", report);
+            }
 
             console.log("Applying pending Drizzle migrations...");
 
@@ -327,6 +317,8 @@ export class DrizzleMigrationService {
             // makes sure the change-log bodies are current without relying on that. It runs after
             // the file-version guard above, so it never writes to a file this build refuses.
             recreateChangeLogTriggers(this.rawDb);
+            // A step-15 file whose paths 0020 moved to lanes is written as 11 (ADR 0015 §9)
+            markLaneModelIfLaned(this.rawDb);
 
             console.log("Drizzle migrations applied successfully.");
         } catch (error) {
@@ -382,7 +374,13 @@ export class DrizzleMigrationService {
             );
 
             // If there are more files than applied migrations, we have pending migrations
-            return fileCount > appliedCount;
+            if (fileCount > appliedCount) return true;
+            // A file a fork build saved records more than there are files, and is repaired: back
+            // it up first (ADR 0011)
+            return needsLegacyForkRepair(
+                this.rawDb,
+                readTaggedMigrations(folder),
+            );
         } catch (error) {
             console.error("Error checking for pending migrations:", error);
             // If we can't read the folder or there's an error, assume no pending migrations

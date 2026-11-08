@@ -23,35 +23,28 @@ export const tablesWithHistory = [
     schema.tags,
     schema.tag_appearances,
     schema.marcher_tags,
-    // The show's 3D View venue (ADR 0002 D-5)
+    // The show's 3D View venue (ADR 0010 D-5)
     schema.view3d_venue,
-    // Timeline data tables (ADR 0001 §3, spec §6.1). `timeline_change_log` is bookkeeping and
+    // Timeline data tables (ADR 0012 §3, spec §6.1). `timeline_change_log` is bookkeeping and
     // gets no history triggers.
     schema.timelines,
     schema.timeline_shapes,
     schema.timeline_transitions,
     schema.timeline_assignments,
     schema.timeline_slot_destinations,
-    // Routes walked by route transitions (spec v0.9, ADR 0010)
+    // Routes, and the lanes that bind slots to them (spec v0.9 and v0.10, ADR 0014 and 0015)
     schema.timeline_routes,
-    // App data beside them: where marchers are Held (ADR 0001 amendment 2026-10-30)
+    schema.timeline_lanes,
+    // App data beside them: where marchers are Held (ADR 0012 amendment 2026-10-30)
     schema.timeline_held_marks,
-    // Performer cues (ADR 0004 D-5)
-    schema.phrase_assets,
-    schema.cues,
-    schema.cue_marchers,
-    schema.page_performer_settings,
-    // Items and their Outline changes (ADR 0002 D-10)
+    // Items and their Outline changes (ADR 0010 D-10)
     schema.items,
     schema.item_geometry,
-    // Where each item is (ADR 0002 D-10), its holders and crew after their change
-    schema.item_placements,
-    schema.item_placement_marchers,
-    // Which Artwork sits on each item slot (ADR 0002 D-10)
-    schema.item_artwork_slots,
     // Shape recipes beside the positions they placed (ADR 0006)
     schema.timeline_shape_recipes,
     schema.timeline_shape_recipe_marchers,
+    // Tempo mode: the music offset tempo edits change
+    schema.tempo_settings,
 ];
 
 /**
@@ -75,7 +68,7 @@ export async function createUndoTriggers(
  */
 export async function createAllUndoTriggers(db: DbConnection | DB) {
     // Only the tables the file has: a page-era file gets the tables the timeline-only migrations
-    // add (the performer cues) when it converts, and the conversion creates their triggers. A
+    // add when it converts, and the conversion creates their triggers. A
     // table that isn't there can't be edited, so it needs no history.
     const rows = await db.all<{ name: string } | [string]>(
         sql`SELECT name FROM sqlite_schema WHERE type = 'table'`,

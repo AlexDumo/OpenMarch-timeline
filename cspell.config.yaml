@@ -1,4 +1,11 @@
 words:
+  - bpms
+  - nyquist
+  - respace
+  - neighbours
+  - respaced
+  - retime
+  - segs
   - allarg
   - cresc
   - dacapo
@@ -38,8 +45,14 @@ words:
   - Huttenlocher
   - swiftshader
   - marktime
+  - Noto
+  - notdef
+  - cmap
+  - subsetter
+  - unicodes
   - stepoff
   - menuitemradio
+  - menuitemcheckbox
   - prefs
   - frameloop
   - powermetrics
@@ -294,6 +307,7 @@ words:
   - Zingali
   - Zustand
   - 日本語
+  - laned
   - lerp
   - lerped
   - slerp
@@ -310,8 +324,8 @@ ignorePaths:
   - docs/timeline/ref/**
   - node_modules/**
   - docs/3d/ref/**
-  # Verbatim license texts (CC0 1.0, GPL-3.0) in the Blender Starter kit
-  - apps/desktop/starter-kit/**/LICENSE
+  # Verbatim SIL Open Font License for the vendored text symbols fonts
+  - packages/ui/src/fonts/OFL.txt
   - "**/view3d/assets/om-pose/**"
   - "**/view3d/assets/instruments/*.json"
   - "**/node_modules/**"

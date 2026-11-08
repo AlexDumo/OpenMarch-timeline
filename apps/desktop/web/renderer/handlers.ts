@@ -5,11 +5,10 @@
  * native open dialogs, downloads in place of "Save As", and links.
  *
  * Electron features with no web equivalent answer the way the app expects
- * when they are unavailable (no recent files, no plugins, signed out), and
+ * when they are unavailable (no recent files, signed out), and
  * window controls do nothing. Everything else goes to the worker.
  */
-import { PAGE_CHANNELS, WEB_CHANNELS, type FlushResult } from "../protocol";
-import { rasterizeImage } from "./rasterize";
+import { WEB_CHANNELS, type FlushResult } from "../protocol";
 import { leaveDecision, leaveQuestion } from "./leave";
 import { workerErrorText } from "./workerErrors";
 import { emit, handleInPage, invokeWorker, listenInPage } from "./ipc";
@@ -405,7 +404,6 @@ export function registerPageHandlers({ isSettingsTab = false } = {}) {
     listenInPage("settings:set", (values: Record<string, unknown>) =>
         setSettings(values),
     );
-    handleInPage(PAGE_CHANNELS.rasterizeImage, rasterizeImage);
     handleInPage("get-theme", () => settings.get("theme") ?? "light");
     handleInPage("set-theme", (theme: string) => setSettings({ theme }));
     handleInPage("get-language", () => settings.get("language") ?? "en");
@@ -456,7 +454,6 @@ export function registerPageHandlers({ isSettingsTab = false } = {}) {
     handleInPage("recent-files:open", (path: string) =>
         isSettingsTab ? 404 : openExampleShow(path),
     );
-    handleInPage("plugins:list", () => []);
     handleInPage("newShow:getPending", () => false);
     handleInPage("newShow:clearPending", () => undefined);
     handleInPage("auth:get-state", () => ({

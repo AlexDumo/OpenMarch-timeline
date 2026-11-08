@@ -18,7 +18,6 @@ import {
     deleteMarcherTagsMutationOptions,
     updateTagsMutationOptions,
     deleteTagsMutationOptions,
-    allCuesQueryOptions,
 } from "@/hooks/queries";
 import { useTranslate } from "@tolgee/react";
 import { DatabaseTag, NewMarcherTagArgs } from "@/db-functions";
@@ -109,15 +108,6 @@ const TagContextMenu = ({ tag }: { tag: DatabaseTag }) => {
         deleteTagsMutationOptions(queryClient),
     );
     const { t } = useTranslate();
-    // Deleting the tag deletes the cues that target it (ADR 0004 D-1)
-    const { data: cues } = useQuery(allCuesQueryOptions());
-    const cuesOnTag = useMemo(
-        () =>
-            (cues ?? []).filter(
-                (c) => c.target.kind === "tag" && c.target.tagId === tag.id,
-            ).length,
-        [cues, tag.id],
-    );
 
     useEffect(() => {
         if (isRenaming && renameInputRef.current) {
@@ -204,7 +194,7 @@ const TagContextMenu = ({ tag }: { tag: DatabaseTag }) => {
             </Popover.Trigger>
             <Popover.Portal>
                 <Popover.Content
-                    className="bg-modal text-text rounded-6 border-stroke shadow-modal z-50 m-6 flex min-w-[200px] flex-col gap-8 border p-16 py-12 backdrop-blur-md outline-none"
+                    className="bg-modal text-text rounded-6 border-stroke shadow-modal backdrop-blur-32 z-50 m-6 flex min-w-[200px] flex-col gap-8 border p-16 py-12 outline-none"
                     sideOffset={8}
                     align="start"
                     onCloseAutoFocus={(e) => {
@@ -253,16 +243,6 @@ const TagContextMenu = ({ tag }: { tag: DatabaseTag }) => {
                                 {t("tags.delete")}
                                 <TrashIcon size={16} />
                             </div>
-                            {cuesOnTag > 0 && (
-                                <p
-                                    className="text-text-subtitle max-w-[220px] text-xs"
-                                    data-testid="tag-delete-cues-line"
-                                >
-                                    {t("tags.deleteRemovesCues", {
-                                        count: cuesOnTag,
-                                    })}
-                                </p>
-                            )}
                         </>
                     )}
                 </Popover.Content>

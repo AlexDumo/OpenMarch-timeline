@@ -26,7 +26,7 @@ import { planTurf } from "./turfPlan";
 
 /**
  * Field surface (P2.1, design.md section 4). Framework-free: three.js only
- * (ADR 0002 D-1), in meters with the field at z <= 0 (D-2).
+ * (ADR 0010 D-1), in meters with the field at z <= 0 (D-2).
  *
  * `buildFieldSurface` plans the field from `FieldProperties` with the same
  * semantics as the 2D field's plan (`fieldPlan.ts`), paints the plan into one
@@ -62,8 +62,6 @@ export interface FieldSurfaceInput {
     endZoneStyle?: EndZoneStyle;
     /** The show's field background image, if it has one. */
     image?: FieldImage | null;
-    /** The floor's physical size; null or left out places the image by fill or fit. */
-    imageSizeM?: { widthM: number; heightM: number } | null;
     /** `renderer.capabilities.maxTextureSize`; 8192 px textures need >= 8192. */
     maxTextureSize?: number;
     /** `renderer.capabilities.getMaxAnisotropy()`; defaults to 16. */
@@ -96,7 +94,7 @@ export function imageSize(image: FieldImage): ImageSize {
 export function planField(input: FieldSurfaceInput): FieldPlan {
     const image =
         input.image && imageSize(input.image).width > 0
-            ? { ...imageSize(input.image), sizeM: input.imageSizeM ?? null }
+            ? imageSize(input.image)
             : null;
     const ctx = createPlanContext({
         fieldProperties: input.fieldProperties,

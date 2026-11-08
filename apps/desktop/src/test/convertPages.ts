@@ -5,7 +5,6 @@ import { migrationQueriesAfter } from "@/../electron/database/services/DrizzleMi
 import { TIMELINE_MODEL_USER_VERSION } from "@/../electron/database/fileVersion";
 import { transactionWithHistory } from "@/db-functions/history";
 import type { DbConnection } from "@/db-functions/types";
-import { LATER_MARCHER_COLUMNS } from "./timelineMode";
 import { triggerStatements } from "@/../electron/database/migrations/triggers";
 import { createAllUndoTriggers } from "@/db-functions/historyTriggers";
 import {
@@ -36,25 +35,8 @@ export async function finishTestConversion(db: DbConnection): Promise<void> {
         last ? Number(last.createdAt) : undefined,
         "timeline",
     );
-    // A page-mode fixture has the `marchers` columns later migrations add already
-    const columns = new Set(
-        (
-            await db
-                .select({ name: sql<string>`name` })
-                .from(sql`pragma_table_info('marchers')`)
-                .all()
-        ).map((c) => c.name),
-    );
-    const addsExisting = (query: string) =>
-        LATER_MARCHER_COLUMNS.some(
-            (c) =>
-                columns.has(c.name) &&
-                query.includes(
-                    `ALTER TABLE \`marchers\` ADD COLUMN \`${c.name}\``,
-                ),
-        );
     // As convert on open does: foreign keys off outside the transaction (inside one SQLite ignores
-    // the pragma), so a migration that rebuilds a parent table (0031) can drop it
+    // the pragma), so a migration that rebuilds a parent table (0019) can drop it
     await db.run(sql`PRAGMA foreign_keys = OFF`);
     try {
         await db.transaction(async (tx) => {
@@ -71,8 +53,7 @@ export async function finishTestConversion(db: DbConnection): Promise<void> {
             for (const s of triggerStatements(new Set(), false).drop)
                 await tx.run(sql.raw(s));
             for (const query of queries)
-                if (query.trim() && !addsExisting(query))
-                    await tx.run(sql.raw(query));
+                if (query.trim()) await tx.run(sql.raw(query));
             const tables = await names(
                 "SELECT name FROM sqlite_schema WHERE type = 'table'",
             );

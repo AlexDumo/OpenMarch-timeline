@@ -7,12 +7,15 @@
  * - The resolver keeps its own assignment row index (by id, by marcher and by
  *   transition), updated only from batch after-images (spec 10.2). Marchers,
  *   shapes and transitions are read by id from the host's post-commit mirror
- *   (ADR 0001 section 4), which the caller keeps equal to the committed state.
+ *   (ADR 0012 section 4), which the caller keeps equal to the committed state.
  * - Local caches (9.2 #1-4, #7): `spans`, `spansByTransition`, `destinations`,
- *   `ftlGeometry`, `routeGeometry`. Cascading caches (9.2 #5-6): `origin`, keyed by
- *   (marcher, span.start), and `ftlEntry`. A route span's cleaned path (R-14) is
- *   not cached, so W-5 holds trivially: it is rebuilt from `origin`,
+ *   `ftlGeometry`, `routeGeometry` (with each route's group schedule, `routeSchedule`
+ *   of spec J.7). Cascading caches (9.2 #5-6): `origin`, keyed by (marcher,
+ *   span.start), and `ftlEntry`. A laned span's own path and a group member's legs
+ *   (R-14′) are not cached, so W-5 holds trivially: they are rebuilt from `origin`,
  *   `routeGeometry` and `destinations` on every evaluation.
+ * - Lanes (v0.10, D-20) are read from the host mirror by id and indexed by (transition,
+ *   slot) and by route, like transitions' destination shapes.
  * - Pull-compile (9.5) and the dirty walk (9.4, W-1 to W-4) use explicit work
  *   stacks, never recursion, because dependency depth equals chain length
  *   (9.3). A node seen again while its dependencies are unresolved is a cycle,
@@ -27,7 +30,10 @@ import {
     lerp,
     makeTrail,
     paramT,
+    groupSchedule,
     walkedPoint,
+    type GroupSchedule,
+    type LaneWalk,
     type RouteWalk,
 } from "./geom";
 import type {
@@ -41,6 +47,7 @@ import type {
     FtlEntryInfo,
     FtlTrail,
     InvalidationReport,
+    LaneRow,
     OrderSource,
     Resolver,
     RowImage,
@@ -160,6 +167,7 @@ function coalesce(batch: ChangeBatch) {
         transitions: new Map<number, NetChange>(),
         assignments: new Map<number, NetChange>(),
         routes: new Map<number, NetChange>(),
+        lanes: new Map<number, NetChange>(),
     };
     const destinations = new Set<number>();
     for (const c of batch.changes) {
@@ -188,6 +196,7 @@ function coalesce(batch: ChangeBatch) {
         transitions: live(byTable.transitions),
         assignments: live(byTable.assignments),
         routes: live(byTable.routes),
+        lanes: live(byTable.lanes),
         destinations,
     };
 }
@@ -216,7 +225,7 @@ function localInputsChanged(before: RowImage, after: RowImage): boolean {
     );
 }
 
-/** Cold build of the cached resolver (ADR 0001 section 4). */
+/** Cold build of the cached resolver (ADR 0012 section 4). */
 // The caches are closure state shared by every query, so they live together.
 // eslint-disable-next-line max-lines-per-function
 export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
@@ -279,22 +288,33 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         }
     };
 
-    // routes (v0.9): route -> the transitions walking it (several for a group path, step 15), and
-    // each transition's route, kept in step with the host
-    const routeWalkers = new Map<number, Set<number>>();
-    const routeOfT = new Map<number, number>();
-    const setRoute = (tid: number, rid: number | null | undefined) => {
-        const old = routeOfT.get(tid);
-        if (old != null) {
-            const w = routeWalkers.get(old);
-            w?.delete(tid);
-            if (w && w.size === 0) routeWalkers.delete(old);
+    // lanes (v0.10, D-20): each lane as indexed, by (transition, slot) and by route (J.7: route ->
+    // lanes -> transitions), kept in step with the host
+    const laneRows = new Map<number, LaneRow>();
+    const laneAt = new Map<string, number>(); // `${transition}|${slot}` -> lane id
+    const routeLanes = new Map<number, Set<number>>();
+    const slotKey = (tid: number, slot: number) => `${tid}|${slot}`;
+    /** Re-indexes lane `id` as `row` (null: gone); returns the transitions it was and is on. */
+    const setLane = (id: number, row: LaneRow | null): number[] => {
+        const touched: number[] = [];
+        const old = laneRows.get(id);
+        if (old) {
+            touched.push(old.transition);
+            const k = slotKey(old.transition, old.slot);
+            if (laneAt.get(k) === id) laneAt.delete(k);
+            const l = routeLanes.get(old.route);
+            l?.delete(id);
+            if (l && l.size === 0) routeLanes.delete(old.route);
+            laneRows.delete(id);
         }
-        if (rid == null) routeOfT.delete(tid);
-        else {
-            routeOfT.set(tid, rid);
-            setOf(routeWalkers, rid).add(tid);
+        if (row) {
+            const copy: LaneRow = { ...row };
+            laneRows.set(id, copy);
+            laneAt.set(slotKey(copy.transition, copy.slot), id);
+            setOf(routeLanes, copy.route).add(id);
+            touched.push(copy.transition);
         }
+        return touched;
     };
 
     // ---- local caches (9.2 #1-4)
@@ -302,7 +322,11 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
     const byT = new Map<number, Set<RSpan>>(); // spansByTransition
     const dests = new Map<number, XY[]>(); // destinations
     const paths = new Map<number, DestPath>(); // ftlGeometry
-    const routeGeo = new Map<number, RouteWalk>(); // routeGeometry (9.2 #7): route -> points, from, to
+    // routeGeometry (9.2 #7): route -> points, from, to; and its group schedule (J.7), on first use
+    const routeGeo = new Map<
+        number,
+        { walk: RouteWalk; schedule: GroupSchedule | null }
+    >();
     // ---- cascading caches (9.2 #5-6)
     const origins = new Map<string, XY>(); // `${m}|${start}` -> xy
     const entries = new Map<number, Entry>(); // FTL transition -> entry
@@ -368,22 +392,26 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         if (!r) routeGeo.delete(rid);
         else
             routeGeo.set(rid, {
-                points: r.geometry.points.map((pt) => ({
-                    at: pt.at,
-                    ...(pt.tension === undefined
-                        ? {}
-                        : { tension: pt.tension }),
-                })),
-                from: r.geometry.from,
-                to: r.geometry.to,
+                walk: {
+                    points: r.geometry.points.map((pt) => ({
+                        at: pt.at,
+                        ...(pt.tension === undefined
+                            ? {}
+                            : { tension: pt.tension }),
+                    })),
+                    from: r.geometry.from,
+                    to: r.geometry.to,
+                },
+                schedule: null,
             });
     }
     for (const t of Object.values(host.transitions)) {
         setDest(t.id, t.dest);
-        setRoute(t.id, t.route);
         computeLocal(t.id);
     }
     for (const rid of Object.keys(host.routes ?? {})) computeRoute(Number(rid));
+    for (const [id, l] of Object.entries(host.lanes ?? {}))
+        setLane(Number(id), l);
 
     // ---- resolution (pull)
     const spansOf = (m: number): RSpan[] => {
@@ -553,24 +581,29 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         const o = origin(s);
         if (t.style === FTL) return lerp(o, entry(t.id).target.get(s.m)!, p); // R-11
         const dst = dests.get(t.id)![s.row.slot]!;
-        // R-7, R-8, R-14 through the one walked-path seam
+        // R-7, R-8, R-14′ (lane first) through the one walked-path seam
         return walkedPoint(
             t,
             o,
             dst,
             p,
-            t.style === "route" ? routeOf(t) : undefined,
+            laneWalk(t.id, s.row.slot),
             founding(s),
         );
     }
-    /** R-14's route for a route transition, from `routeGeometry`. */
-    function routeOf(t: TransitionRow): RouteWalk {
-        const pts = t.route == null ? undefined : routeGeo.get(t.route);
-        if (!pts)
+    /** R-14′: the lane on slot `slot` of `tid` with its route's cached geometry, if any. */
+    function laneWalk(tid: number, slot: number): LaneWalk | undefined {
+        const id = laneAt.get(slotKey(tid, slot));
+        if (id === undefined) return undefined;
+        const lane = laneRows.get(id)!;
+        const geo = routeGeo.get(lane.route);
+        if (!geo)
             throw new Error(
-                `route transition ${t.id} has no route ${String(t.route)} (I-R2)`,
+                `lane ${id} on ${tid}:${slot} has no route ${lane.route} (I-D3)`,
             );
-        return pts;
+        if (lane.offset === null) return { route: geo.walk, offset: null };
+        geo.schedule ??= groupSchedule(geo.walk);
+        return { route: geo.walk, offset: lane.offset, schedule: geo.schedule };
     }
 
     function computeEntry(tid: number) {
@@ -782,12 +815,9 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                 byT.delete(tid);
                 byTR.delete(tid);
                 setDest(tid, null);
-                setRoute(tid, null);
                 continue;
             }
             setDest(tid, T(tid).dest);
-            // T.route_id (9.4): R-14 reads the new route's geometry; seeded below
-            setRoute(tid, T(tid).route);
             if (!tc.before || localInputsChanged(tc.before, tc.after))
                 computeLocal(tid, localRecomputed);
             seedTs.add(tid);
@@ -806,14 +836,20 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                     recomputed.add(tid);
                     seedTs.add(tid);
                 }
-        // Route geometry (9.4, v0.9): recompute, create or drop; seed W-3 for every transition
-        // walking it (a group path has several, step 15). On insert or delete the same edit
-        // changes T.route_id, which seeds above.
+        // Lanes (J.7, v0.10): re-index from the host mirror; seed W-3 for the old and new T
+        for (const id of net.lanes.keys())
+            for (const tid of setLane(id, host.lanes?.[id] ?? null))
+                if (host.transitions[tid]) seedTs.add(tid);
+        // Route geometry (9.4, J.7): recompute, create or drop; seed W-3 for every transition
+        // with a lane on it (route -> lanes -> transitions). On insert or delete the same edit
+        // writes a lane, which seeds above.
         for (const [rid, rc] of net.routes) {
             computeRoute(rid);
             if (!rc.after) continue;
-            for (const tid of routeWalkers.get(rid) ?? [])
+            for (const id of routeLanes.get(rid) ?? []) {
+                const tid = laneRows.get(id)!.transition;
                 if (host.transitions[tid]) seedTs.add(tid);
+            }
         }
         for (const tid of seedTs) seed(tid);
 
@@ -987,6 +1023,16 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         for (const rid of routeGeo.keys())
             if (!host.routes?.[rid])
                 return `stale routeGeometry ${rid}: route deleted`;
+        for (const [id, l] of laneRows) {
+            const h = host.lanes?.[id];
+            if (
+                !h ||
+                h.transition !== l.transition ||
+                h.slot !== l.slot ||
+                h.route !== l.route
+            )
+                return `stale lane ${id}`;
+        }
         for (const l of spans.values())
             for (const s of l) {
                 if (!origins.has(key(s))) continue;
@@ -1051,10 +1097,10 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
     };
 }
 
-/** Cold build of the resolver (ADR 0001 section 4, spec 10.1). */
+/** Cold build of the resolver (ADR 0012 section 4, spec 10.1). */
 export function createResolver(host: TimelineSnapshot): Resolver {
     const r = createCachedResolver(host);
-    // Only the public interface (spec 10.1 plus `spanInfos`, ADR 0001 section 4):
+    // Only the public interface (spec 10.1 plus `spanInfos`, ADR 0012 section 4):
     // the internal caches, introspection and test hooks on the cached resolver
     // stay unreachable at runtime too.
     return {

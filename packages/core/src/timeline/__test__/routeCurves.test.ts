@@ -319,12 +319,12 @@ describe("routes with curves (spec R-14, v0.9 step 2)", () => {
                     dest: null,
                     points: [[16, 0]],
                     slots: 1,
-                    style: "route",
+                    style: "direct",
                     order: "inherit",
                     params: null,
-                    route: 1,
                 },
             },
+            lanes: { 1: { transition: 1, slot: 0, route: 1, offset: null } },
             routes: {
                 1: {
                     geometry: {

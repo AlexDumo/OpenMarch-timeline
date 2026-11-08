@@ -12,10 +12,9 @@ import { useMutation } from "@tanstack/react-query";
 import { conToastError } from "@/utilities/utils";
 import tolgee from "../singletons/Tolgee";
 import { toast } from "sonner";
-import { showCueCarryNotice } from "@/utilities/cueCarryNotice";
 import { deleteMeasuresInTransaction } from "@/db-functions/measures";
 import {
-    deleteBeatsCarryingCuesInTransaction,
+    deleteBeatsCarryingItemChangesInTransaction,
     deletePagesInTransaction,
     keepSecondBeatPageInTransaction,
     transactionWithHistory,
@@ -71,7 +70,14 @@ type BeatWithIndex = Beat & { index: number };
  * @returns A sorted array of `Measure` objects representing the measures in the piece.
  */
 export const fromDatabaseMeasures = (args: {
-    databaseMeasures: DatabaseMeasure[];
+    databaseMeasures: (Omit<
+        DatabaseMeasure,
+        "number_override" | "meter" | "grouping"
+    > & {
+        number_override?: number | null;
+        meter?: string | null;
+        grouping?: string | null;
+    })[];
     allBeats: Beat[];
     measurementNumberOffset?: number;
 }): Measure[] => {
@@ -90,6 +96,10 @@ export const fromDatabaseMeasures = (args: {
     });
     const createdMeasures = sortedDbMeasures.map((measure, i) => {
         const startBeat = beatMap.get(measure.start_beat) ?? tempBeat;
+        // Tempo mode: a number set by hand; the measures after count on from it
+        const override = measure.number_override;
+        if (override !== undefined && override !== null)
+            currentMeasureNumber = override;
         const nextMeasure = sortedDbMeasures[i + 1] || null;
         const nextBeat = nextMeasure
             ? (beatMap.get(nextMeasure.start_beat) ?? tempBeat)
@@ -139,12 +149,10 @@ export const _cascadeDeleteMeasures = async (measures: Measure[]) => {
                             tx,
                             pageIds: pageIdsToDelete,
                         });
-                        const { cues } =
-                            await deleteBeatsCarryingCuesInTransaction({
-                                tx,
-                                beatIds: beatIdsToDelete,
-                            });
-                        return cues;
+                        await deleteBeatsCarryingItemChangesInTransaction({
+                            tx,
+                            beatIds: beatIdsToDelete,
+                        });
                     },
                 }),
             ),
@@ -155,9 +163,8 @@ export const useCascadeDeleteMeasures = () => {
     return useMutation({
         mutationFn: (measuresToDelete: Measure[]) =>
             _cascadeDeleteMeasures(measuresToDelete),
-        onSuccess: async (cues) => {
+        onSuccess: async () => {
             toast.success(tolgee.t("tempoGroup.deletedSuccessfully"));
-            showCueCarryNotice(cues, queryClient);
             await queryClient.invalidateQueries({ queryKey: beatKeys.all() });
             void queryClient.invalidateQueries({ queryKey: pageKeys.all() });
             void queryClient.invalidateQueries({ queryKey: measureKeys.all() });

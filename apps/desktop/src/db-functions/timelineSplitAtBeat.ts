@@ -34,6 +34,11 @@ import {
     writeRouteCutBeforeInTransaction,
     type RouteCut,
 } from "./timelineRoutes";
+import {
+    lanesOfTransitions,
+    slotKey,
+    sweepOrphanRoutesInTransaction,
+} from "./timelineLanes";
 
 /**
  * **Split at playhead** (docs/timeline/ui.md UI-27): one move becomes two that meet at a count,
@@ -259,36 +264,15 @@ export async function splitTimelineAtBeatInTransaction({
             changed.set(marcherId, fromBeat);
     };
 
-    // AP-R7: route transitions are cut along their path; planned (and refused) before any write
-    const routeCuts = new Map<number, RouteCut>();
-    for (const t of transitions) {
-        if (t.route_id === null) continue;
-        // Step 15: a group path isn't cut (its moments come from the whole reference walk)
-        if (t.path_params !== null) refuse(routeRefusal.groupSplit());
-        const own = rows.filter((r) => r.transition_id === t.id);
-        if (own.length > 0)
-            routeCuts.set(
-                t.id,
-                await planRouteCut(tx, { resolver, t, rows: own, beat }),
-            );
-    }
-
-    const plans: TransitionPlan[] = transitions.map((t) => {
-        const own = rows.filter((r) => r.transition_id === t.id);
-        const halves = own
-            .filter((r) => r.start_beat < beat)
-            .map((row) => firstHalfOf(resolver, t, row, beat, noteChange));
-        const extras = Math.max(0, ...halves.map((h) => h.earlier.length));
-        return {
-            t,
-            routeCut: routeCuts.get(t.id),
-            first: halves.map((h) => h.main),
-            earlier: Array.from({ length: extras }, (_, k) =>
-                halves.flatMap((h) => (h.earlier[k] ? [h.earlier[k]] : [])),
-            ),
-            anyAfter: own.some((r) => r.end_beat > beat),
-        };
+    const routeCuts = await planLaneCuts(tx, {
+        resolver,
+        transitions,
+        rows,
+        beat,
     });
+    const plans = transitions.map((t) =>
+        planTransition(resolver, t, rows, beat, routeCuts, noteChange),
+    );
 
     return await mapDbErrors(() =>
         writeSplit({
@@ -304,11 +288,112 @@ export async function splitTimelineAtBeatInTransaction({
     );
 }
 
+/**
+ * AP-R7: each own lane with a row is cut along its path, planned (and refused) before any write,
+ * by slot (`slotKey`). Step 15's refusal stays: a group path isn't cut, since its moments come
+ * from the whole reference walk.
+ */
+async function planLaneCuts(
+    tx: DbTransaction,
+    {
+        resolver,
+        transitions,
+        rows,
+        beat,
+    }: {
+        resolver: Resolver;
+        transitions: readonly DatabaseTimelineTransition[];
+        rows: readonly Row[];
+        beat: number;
+    },
+): Promise<Map<string, RouteCut>> {
+    const routeCuts = new Map<string, RouteCut>();
+    for (const lane of await lanesOfTransitions(
+        tx,
+        transitions.map((t) => t.id),
+    )) {
+        if (lane.offset_x !== null) refuse(routeRefusal.groupSplit());
+        const t = transitions.find((x) => x.id === lane.transition_id)!;
+        const own = rows.filter(
+            (r) => r.transition_id === t.id && r.slot_index === lane.slot_index,
+        );
+        if (own.length > 0)
+            routeCuts.set(
+                slotKey(t.id, lane.slot_index),
+                await planRouteCut(tx, { resolver, t, lane, rows: own, beat }),
+            );
+    }
+    return routeCuts;
+}
+
+/** One transition's first half: its own lanes' cuts, then its other rows (`TransitionPlan`). */
+async function writeFirstHalf(
+    tx: DbTransaction,
+    before: DatabaseTimeline,
+    { t, first, earlier, routeCuts }: TransitionPlan,
+): Promise<void> {
+    // An own lane's row: founding, with no earlier piece (planRouteCut refuses the rest)
+    for (const { cut, first: f } of routeCuts)
+        await writeRouteCutBeforeInTransaction(tx, {
+            cut,
+            beforeTimelineId: before.id,
+            row: f.row,
+            end: f.end,
+            orderMode: t.order_mode as "inherit" | "slot",
+        });
+    for (const halfRows of [first, ...earlier])
+        if (halfRows.length > 0)
+            await writeFirstHalfTransition(tx, { before, t, rows: halfRows });
+}
+
+/** One transition's split plan: its own lanes' cuts, and its other rows' first halves. */
+function planTransition(
+    resolver: Resolver,
+    t: DatabaseTimelineTransition,
+    rows: readonly Row[],
+    beat: number,
+    routeCuts: ReadonlyMap<string, RouteCut>,
+    noteChange: (marcherId: number, fromBeat: number) => void,
+): TransitionPlan {
+    const own = rows.filter((r) => r.transition_id === t.id);
+    const halves = own
+        .filter((r) => r.start_beat < beat)
+        .map((row) => ({
+            row,
+            cut: routeCuts.get(slotKey(row.transition_id, row.slot_index)),
+            half: firstHalfOf(resolver, t, row, beat, noteChange),
+        }));
+    const plain = halves.filter((h) => !h.cut).map((h) => h.half);
+    const extras = Math.max(0, ...plain.map((h) => h.earlier.length));
+    return {
+        t,
+        routeCuts: halves.flatMap((h) =>
+            h.cut
+                ? [
+                      {
+                          cut: h.cut,
+                          first: h.half.main,
+                          continues: h.row.end_beat > beat,
+                      },
+                  ]
+                : [],
+        ),
+        first: plain.map((h) => h.main),
+        earlier: Array.from({ length: extras }, (_, k) =>
+            plain.flatMap((h) => (h.earlier[k] ? [h.earlier[k]] : [])),
+        ),
+        anyAfter: own.some((r) => r.end_beat > beat),
+    };
+}
+
 /** One transition's part of a split: its first-half rows, and whether anyone stays after. */
 interface TransitionPlan {
     t: DatabaseTimelineTransition;
-    /** A route transition's cut (AP-R7); its first half is written from this */
-    routeCut?: RouteCut;
+    /**
+     * The cuts of its own lanes (AP-R7), each with its row's first-half part and whether the row
+     * goes on past the count; their first halves are written from these
+     */
+    routeCuts: { cut: RouteCut; first: FirstHalfRow; continues: boolean }[];
     /** The counterpart's rows */
     first: FirstHalfRow[];
     /** The rows of each extra transition, for pieces cut off by a higher layer */
@@ -368,8 +453,9 @@ async function writeSplit({
 
     // 2b. A route that stays after the beat keeps its id and the corners after it (AP-R7)
     for (const p of plans)
-        if (p.routeCut && p.anyAfter)
-            await writeRouteCutAfterInTransaction(tx, p.routeCut);
+        for (const c of p.routeCuts)
+            if (p.anyAfter && c.continues)
+                await writeRouteCutAfterInTransaction(tx, c.cut);
 
     // 3. The original's transitions now run from the beat; then the timeline that keeps them
     //    (the triggers want a transition inside its timeline, and no stranded row)
@@ -396,25 +482,12 @@ async function writeSplit({
                   endBeat: beat,
                   allowSharedRanges,
               });
-    for (const { t, first, earlier, routeCut } of plans) {
-        if (routeCut) {
-            // One row, founding, with no earlier piece (planRouteCut refuses the rest)
-            const f = first[0]!;
-            await writeRouteCutBeforeInTransaction(tx, {
-                cut: routeCut,
-                beforeTimelineId: before.id,
-                row: f.row,
-                end: f.end,
-                orderMode: t.order_mode as "inherit" | "slot",
-            });
-            continue;
-        }
-        for (const halfRows of [first, ...earlier])
-            await writeFirstHalfTransition(tx, { before, t, rows: halfRows });
-    }
+    for (const plan of plans) await writeFirstHalf(tx, before, plan);
     // Neither half keeps the id: the original, empty now, goes
     if (idStaysWith === "neither")
         await tx.delete(L).where(eq(L.id, timelineId));
+    // AP-H3: an own lane whose row ended by the beat leaves its route behind with nobody on it
+    await sweepOrphanRoutesInTransaction(tx);
 
     return {
         before,

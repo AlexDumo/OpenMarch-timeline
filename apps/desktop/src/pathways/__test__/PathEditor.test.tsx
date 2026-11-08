@@ -67,9 +67,11 @@ describe("the path's floating editor", () => {
         expect(
             screen.getByTestId("path-cancel").getAttribute("aria-label"),
         ).toBe("Cancel");
-        // No outline round each button: the shape bar's buttons have none
+        // No outline round each icon button, as the shape bar's; Finish is the primary pill, as
+        // the shape bar's Place
         for (const b of el.querySelectorAll("button"))
-            expect(b.className).not.toMatch(/\bborder\b/);
+            if (b.dataset.testid !== "path-finish")
+                expect(b.className).not.toMatch(/\bborder\b/);
         // The hint over the field says whose path it is
         expect(screen.getByTestId("path-pen-banner").textContent).toContain(
             "T4",

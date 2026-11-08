@@ -4,7 +4,6 @@ import { create } from "zustand";
 import type {
     Beat,
     Explanation,
-    PutDownItem,
     Resolver,
     SpanInfo,
     XY,
@@ -35,7 +34,7 @@ import {
 } from "./timelineWarm";
 
 /**
- * The resolver store for the open file (docs/timeline/phases/05-rendering.md P5.3, ADR 0001 §4
+ * The resolver store for the open file (docs/timeline/phases/05-rendering.md P5.3, ADR 0012 §4
  * and §5).
  *
  * While started, it cold-builds the resolver from the tables, applies each committed batch from
@@ -94,24 +93,6 @@ let session: Session | null = null;
 let focusBeat = 1;
 
 let warmScheduler: WarmScheduler | null = null;
-
-/**
- * The items and their Placement the resolver puts down (`withPutDowns`, ADR 0002 D-9). Placement
- * isn't in the timeline change log: `useTimelinePutDownFeed` sets it from its queries.
- */
-let putDownItems: readonly PutDownItem[] = [];
-
-/**
- * Replaces the items the resolver puts down, and bumps the version so every view reads their
- * positions again. Kept for the next cold build too.
- */
-export function setTimelinePutDownItems(items: readonly PutDownItem[]): void {
-    putDownItems = items;
-    const host = session?.host;
-    if (!host) return;
-    host.resolver.setPutDownItems(items);
-    bumpVersion();
-}
 
 /** Replaces the idle-warming scheduler (null restores the default), for tests. */
 export function setTimelineWarmSchedulerForTesting(
@@ -214,7 +195,7 @@ function onChange(s: Session, event: TimelineChangeEvent): void {
     try {
         applyTimelineBatch(s.host, event.batch);
     } catch (error) {
-        // The host treats its own failure as a reset (ADR 0001 §5)
+        // The host treats its own failure as a reset (ADR 0012 §5)
         console.error("The timeline resolver failed to apply a batch", error);
         void coldBuild(s);
         return;
@@ -246,7 +227,7 @@ async function runColdBuild(s: Session, build: number): Promise<void> {
         const host = await withTimelineWriteLock(async () => {
             const tables = await readTimelineTables(s.db);
             if (session !== s || build !== s.build) return null;
-            const built = createTimelineHost(tables, putDownItems);
+            const built = createTimelineHost(tables);
             // Installed before the lock is released, so no batch falls between the read and
             // the host that must apply it
             s.host = built;
@@ -342,7 +323,7 @@ export function useExplain(marcherId: number, beat: Beat): Explanation | null {
 
 /**
  * A marcher's resolver spans (spec R-2, R-3), sorted, from the leading hold to the trailing one,
- * from `Resolver.spanInfos` (ADR 0001 §4 amendment): the cached spans only, no positions. For the
+ * from `Resolver.spanInfos` (ADR 0012 §4 amendment): the cached spans only, no positions. For the
  * timeline's view-model adapter (`timelineViewModel.ts`). Empty for a marcher the resolver
  * doesn't have (yet).
  */

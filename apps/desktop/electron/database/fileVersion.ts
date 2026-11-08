@@ -1,42 +1,48 @@
 /**
  * `.dots` file-format version, stored in SQLite's `PRAGMA user_version`.
  *
- * See ADR 0001 §6 (docs/adr/0001-timeline-motion-model.md). The app reads the
+ * See ADR 0012 §6 (docs/adr/0012-timeline-motion-model.md). The app reads the
  * version before it changes anything in a file, and refuses a file written by a
  * newer release instead of rewriting its version and migrating it.
  *
  * - 7: page model. 7 is left over from the pre-Drizzle migration system; every
  *   Drizzle-era file before timelines is at 7. The app converts it to 8 when it
  *   opens it, once the person confirms (`convertOnOpen.ts`).
- * - 8: timeline model.
- * - 9: floor model (ADR 0002 D-23). The show's field image is its floor, an embedded Base floor
- *   Artwork named in the field properties; `field_properties.image` is legacy. A file is
- *   written as 9 when it gets a floor: opening an 8 converts its field image
- *   (`convertFieldImage.ts`), and Upload floor… sets one (`setFieldFloorInTransaction`). A build
- *   that only knows 8 then refuses the file instead of editing a field image nothing reads. A
- *   file without a floor, new or opened, stays at 8, so opening a show to look at it never
- *   changes it.
- * - 10: route model (ADR 0010, pathways step 1). A move can follow a drawn path, stored in
- *   `timeline_routes`. A file is written as 10 when it gets its first route (drawing a path), so
- *   a fork build from before routes refuses it instead of opening a show it would play wrong. A
- *   file without a route stays at the version it had. Later pathways steps don't bump it again.
+ * - 8: timeline model. New files start here.
+ * - 9: a fork-only floor model (the field image as an embedded Base floor), since parked. No
+ *   release wrote it. Such a file opens as the timeline file it is and is written back as 8,
+ *   with its floor's image put back as the field image (`parkedFloor.ts`).
+ * - 10: route model (ADR 0014, pathways steps 1 to 15, fork lab builds only). A move could follow
+ *   a drawn path, stored in `timeline_routes` and walked by one-slot `route` transitions. Such a
+ *   file opens here: migration 0020 moves its paths to lanes, and it is then written as 11.
+ * - 11: lane model (ADR 0015 §9, pathways step 24). A slot walks a route through a lane
+ *   (`timeline_lanes`), so a path no longer moves a marcher out of its move. A build that doesn't
+ *   know lanes would play such a file wrong and edit it wrong (compact, split or recast a laned
+ *   show and leave lanes on the wrong spot), so a file is written as 11 with its first lane (drawing
+ *   a path), or when it opens with lanes (a migrated version-10 file). A file without a lane stays
+ *   at the version it had. ADR 0015 §9: each later step that stores a fact an older build would
+ *   play or edit wrong takes the next number; a number a lab build wrote is never reused.
  */
 import type { DatabaseSync } from "node:sqlite";
+import { recoverParkedFloorInTransaction } from "./parkedFloor";
 
 /** Version of a page-model file. */
 export const PAGE_MODEL_USER_VERSION = 7;
-/** Version of a timeline-model file (what the page conversion writes). */
+/** Version of a timeline-model file (new files, and files the conversion wrote). */
 export const TIMELINE_MODEL_USER_VERSION = 8;
-/** Version of a file whose field image is its floor (written once it has one). */
-export const FLOOR_MODEL_USER_VERSION = 9;
-/** Version of a file that has a route, a drawn path (written with its first one, ADR 0010). */
+
+/** Version of a fork-internal file from the parked floor model. Opened, then written as 8. */
+export const PARKED_FLOOR_USER_VERSION = 9;
+/** Version a fork lab build (pathways steps 1 to 15) wrote with a file's first route (ADR 0014). */
 export const ROUTE_MODEL_USER_VERSION = 10;
+/** Version of a file that has a lane, a drawn path (ADR 0015 §9, pathways step 24). */
+export const LANE_MODEL_USER_VERSION = 11;
 
 /** Oldest version this build opens. Older files must go through 0.0.10 first. */
 export const MIN_SUPPORTED_USER_VERSION = PAGE_MODEL_USER_VERSION;
 /** Newest version this build opens. Anything higher was written by a newer release. */
-export const MAX_SUPPORTED_USER_VERSION = ROUTE_MODEL_USER_VERSION;
-/** Version written into a brand-new file: a timeline show, with no floor yet. */
+export const MAX_SUPPORTED_USER_VERSION = LANE_MODEL_USER_VERSION;
+/** Version written into a brand-new file: a new show is a timeline show. */
 export const NEW_FILE_USER_VERSION = TIMELINE_MODEL_USER_VERSION;
 
 /**
@@ -50,6 +56,8 @@ export type FileVersionDecision =
     | { action: "accept"; version: number }
     /** A new, empty file: set its version to `version` before migrating. */
     | { action: "initialize"; version: number }
+    /** A parked floor-model file (9): write `version` (8) and open it as a timeline file. */
+    | { action: "downgrade"; version: number }
     /** Written by a newer release. Don't write anything to the file. */
     | { action: "refuse-too-new"; version: number }
     /**
@@ -73,6 +81,9 @@ export function decideFileVersion(
     if (!Number.isInteger(userVersion)) {
         throw new Error(`Invalid user_version: ${userVersion}`);
     }
+    if (userVersion === PARKED_FLOOR_USER_VERSION) {
+        return { action: "downgrade", version: TIMELINE_MODEL_USER_VERSION };
+    }
     if (userVersion > MAX_SUPPORTED_USER_VERSION) {
         return { action: "refuse-too-new", version: userVersion };
     }
@@ -85,11 +96,15 @@ export function decideFileVersion(
     return { action: "refuse-too-old", version: userVersion };
 }
 
-/** True when this build can open (and migrate) a file at `userVersion`. */
+/**
+ * True when this build can open (and migrate) a file at `userVersion` as it is. A parked
+ * floor-model file (9) isn't: it is written back as 8 first (`decideFileVersion`).
+ */
 export function isSupportedUserVersion(userVersion: number): boolean {
     return (
         userVersion >= MIN_SUPPORTED_USER_VERSION &&
-        userVersion <= MAX_SUPPORTED_USER_VERSION
+        userVersion <= MAX_SUPPORTED_USER_VERSION &&
+        userVersion !== PARKED_FLOOR_USER_VERSION
     );
 }
 
@@ -103,8 +118,8 @@ export function readUserVersion(db: DatabaseSync): number {
 }
 
 /**
- * Sets the version of a new file when `decideFileVersion` says to, and never
- * otherwise. Returns the decision so callers can act on a refusal.
+ * Sets the version of a new file, or of a parked floor-model file, when `decideFileVersion` says
+ * to, and never otherwise. Returns the decision so callers can act on a refusal.
  */
 export function applyFileVersionDecision(
     db: DatabaseSync,
@@ -113,6 +128,18 @@ export function applyFileVersionDecision(
     const decision = decideFileVersion(readUserVersion(db), isNewFile);
     if (decision.action === "initialize") {
         db.prepare(`PRAGMA user_version = ${decision.version}`).run();
+    } else if (decision.action === "downgrade") {
+        // The floor's image goes back in the same transaction as the version, so a failure
+        // leaves the file at 9 to try again
+        db.exec("BEGIN IMMEDIATE");
+        try {
+            recoverParkedFloorInTransaction(db);
+            db.prepare(`PRAGMA user_version = ${decision.version}`).run();
+            db.exec("COMMIT");
+        } catch (error) {
+            db.exec("ROLLBACK");
+            throw error;
+        }
     }
     return decision;
 }
@@ -120,4 +147,21 @@ export function applyFileVersionDecision(
 /** Message for a file from a newer release. The renderer shows a translated one. */
 export function fileTooNewMessage(userVersion: number): string {
     return `This file was saved by a newer version of OpenMarch (file format ${userVersion}; this version supports up to ${MAX_SUPPORTED_USER_VERSION}). Update OpenMarch to open it.`;
+}
+
+/**
+ * Writes the lane-model version (11) when the file has a lane and an older version: a version-10
+ * file whose paths migration 0020 moved to lanes. Run after the migrations, on every open; a file
+ * without lanes, or already at 11, is left as it is (ADR 0015 §9, QA-FV-L1).
+ */
+export function markLaneModelIfLaned(db: DatabaseSync): void {
+    const hasTable = db
+        .prepare(
+            "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'timeline_lanes'",
+        )
+        .get();
+    if (!hasTable) return;
+    if (!db.prepare("SELECT 1 FROM timeline_lanes LIMIT 1").get()) return;
+    if (readUserVersion(db) < LANE_MODEL_USER_VERSION)
+        db.prepare(`PRAGMA user_version = ${LANE_MODEL_USER_VERSION}`).run();
 }

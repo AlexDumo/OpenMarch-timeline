@@ -21,27 +21,10 @@ export const workspaceSettingsSchema = z.object({
 
     /**
      * When the file was converted to timelines, or created as a timeline file (ISO time; P9.3,
-     * ADR 0001 §6). Written by the main process; kept here so saving the settings keeps it. The
+     * ADR 0012 §6). Written by the main process; kept here so saving the settings keeps it. The
      * conversion worker's host reads it to tell whether a conversion committed.
      */
     timelineConvertedAt: z.string().optional(),
-
-    /**
-     * Show-wide performer defaults the cues fall back to (ADR 0004 D-4). Absent fields mean left
-     * foot and foot on the dot (`performerDefaultsOf`). Not shown in the settings UI yet.
-     */
-    performerDefaults: z
-        .object({
-            stepOffFoot: z.enum(["left", "right"]).optional(),
-            dotMode: z.enum(["foot", "body"]).optional(),
-        })
-        .optional(),
-
-    /**
-     * "Warn when a prop moves without a crew" (ADR 0002 D-10, props-spec section 4). Off when
-     * absent (`warnPropMovesWithoutCrewOf`): a placed prop may move with people outside the show.
-     */
-    warnPropMovesWithoutCrew: z.boolean().optional(),
 });
 
 export type WorkspaceSettings = z.infer<typeof workspaceSettingsSchema>;
@@ -86,26 +69,4 @@ export function serializeWorkspaceSettings(
     settings: WorkspaceSettings,
 ): string {
     return JSON.stringify(settings);
-}
-
-export type PerformerDefaults = {
-    stepOffFoot: "left" | "right";
-    dotMode: "foot" | "body";
-};
-
-/** The show's performer defaults, filled in: left foot and foot on the dot when absent. */
-export function performerDefaultsOf(
-    settings: Pick<WorkspaceSettings, "performerDefaults"> | undefined,
-): PerformerDefaults {
-    return {
-        stepOffFoot: settings?.performerDefaults?.stepOffFoot ?? "left",
-        dotMode: settings?.performerDefaults?.dotMode ?? "foot",
-    };
-}
-
-/** Whether the show warns when a placed prop moves with no crew: off unless turned on. */
-export function warnPropMovesWithoutCrewOf(
-    settings: Pick<WorkspaceSettings, "warnPropMovesWithoutCrew"> | undefined,
-): boolean {
-    return settings?.warnPropMovesWithoutCrew === true;
 }

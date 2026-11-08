@@ -32,6 +32,11 @@ import {
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
+import {
+    MENU_CONTENT_CLASS,
+    MENU_ITEM_CLASS,
+    MENU_SEPARATOR_CLASS,
+} from "@/components/ui/popupClasses";
 
 /**
  * The field's right-click menu (#315). Every entry is a registered action, run
@@ -41,13 +46,8 @@ import { fieldToElement, useFieldViewStore } from "./fieldView";
  *
  * - **Group** or **Ungroup**, first, each shown only while it's available: Group with two or
  *   more marchers selected that aren't one placed shape (#603), Ungroup with one selected whole.
- * - **Remove keyframe** and **Remove keyframe, Pages N–M move back too** (Set
- *   vs Following, #304, #305): timeline mode only, as in the inspector. The
- *   second is shown only while it's offered (some pages follow), with its
- *   handler's label naming the pages.
  * - The commands that set the selection's state on the current page (holds):
- *   **Define as shown** and **Hold from previous page** (timeline mode only),
- *   then **Clear this page**, with **set to next page** after it. Each says what it would do
+ *   **Hold from previous page** (timeline mode only), then **Clear this page**, with **set to next page** after it. Each says what it would do
  *   for the selection on the current page (`holdEntryStates`, through its handler): checked and
  *   unavailable when every selected marcher is already in the state it sets, and with a count,
  *   "Hold from previous page (3 of 5)", when it would change only some of them.
@@ -60,9 +60,7 @@ import { fieldToElement, useFieldViewStore } from "./fieldView";
  */
 const GROUPS: readonly (readonly ActionId[])[] = [
     ["shapeGroup", "shapeUngroup"],
-    ["timelineUnsetHere", "timelineUnsetHereAndFollowing"],
     [
-        "timelineDefineAsShown",
         "timelineHoldFromPrevious",
         "setSelectedMarchersToPreviousPage",
         "setSelectedMarchersToNextPage",
@@ -80,29 +78,14 @@ const GROUPS: readonly (readonly ActionId[])[] = [
 /** The actions the menu offers, in order. */
 export const FIELD_MENU_ACTIONS: readonly ActionId[] = GROUPS.flat();
 
-const UNSET: ReadonlySet<ActionId> = new Set([
-    "timelineUnsetHere",
-    "timelineUnsetHereAndFollowing",
-]);
-
 /** Holds, shown only in timeline mode (unavailable where they can't run) */
-const HOLDS: ReadonlySet<ActionId> = new Set([
-    "timelineDefineAsShown",
-    "timelineHoldFromPrevious",
-]);
+const HOLDS: ReadonlySet<ActionId> = new Set(["timelineHoldFromPrevious"]);
 
 /** The group whose entries can show checked: each keeps room for the check, so the words line up */
-const CHECKABLE: ReadonlySet<ActionId> = new Set(GROUPS[2]);
+const CHECKABLE: ReadonlySet<ActionId> = new Set(GROUPS[1]);
 
-/** The entries' style, as the timeline's menus */
-const ITEM_CLASS =
-    "rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50";
-/** A mode's menu: its entries closer together, and no wider than its words */
-const MODE_ITEM_CLASS = clsx(ITEM_CLASS, "py-4");
-const MODE_CONTENT_CLASS = TIMELINE_MENU_CONTENT_CLASS.replace(
-    "min-w-[180px]",
-    "",
-).replace("gap-4", "gap-0");
+/** A mode's menu: no wider than its words */
+const MODE_CONTENT_CLASS = MENU_CONTENT_CLASS;
 
 /** A mode's entries' icons */
 const MODE_ICONS: Partial<Record<ActionId, Icon>> = {
@@ -138,7 +121,7 @@ export default function FieldContextMenu({
     actions?: readonly ActionId[] | null;
     onClose: () => void;
     selectedCount: number;
-    /** Whether the show's timeline is loaded (Unset and the holds need it). */
+    /** Whether the show's timeline is loaded (the holds need it). */
     timelineMode: boolean;
 }) {
     const { t } = useTranslate();
@@ -159,12 +142,9 @@ export default function FieldContextMenu({
     const shown = (id: ActionId) =>
         id === "shapeGroup" || id === "shapeUngroup"
             ? isActionEnabled(id)
-            : UNSET.has(id)
-              ? timelineMode &&
-                (id === "timelineUnsetHere" || isActionEnabled(id))
-              : HOLDS.has(id)
-                ? timelineMode
-                : true;
+            : HOLDS.has(id)
+              ? timelineMode
+              : true;
     const enabled = (id: ActionId) =>
         isActionEnabled(id) && (id !== "swapMarchers" || selectedCount === 2);
     const groups = actions
@@ -195,7 +175,7 @@ export default function FieldContextMenu({
                     side="bottom"
                     collisionPadding={8}
                     // Focus isn't returned to the anchor, a hidden div: it falls to the page
-                    // body. The field keeps the shortcuts' focus (`focussedComponent`), so its
+                    // body. The shortcuts listen on the window, so the field's
                     // keys still work
                     onCloseAutoFocus={(event) => event.preventDefault()}
                     {...KEEP_MENU_EVENTS}
@@ -208,7 +188,9 @@ export default function FieldContextMenu({
                     {groups.map((group, i) => (
                         <Fragment key={group[0]}>
                             {i > 0 && (
-                                <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                                <DropdownMenu.Separator
+                                    className={MENU_SEPARATOR_CLASS}
+                                />
                             )}
                             {group.map((id) => {
                                 const label =
@@ -232,7 +214,7 @@ export default function FieldContextMenu({
                                             data-testid={`field-menu-${id}`}
                                             checked
                                             disabled
-                                            className={ITEM_CLASS}
+                                            className={MENU_ITEM_CLASS}
                                         >
                                             <span className={CHECK_SLOT_CLASS}>
                                                 <DropdownMenu.ItemIndicator className="flex">
@@ -249,15 +231,12 @@ export default function FieldContextMenu({
                                         data-testid={`field-menu-${id}`}
                                         disabled={!enabled(id)}
                                         onSelect={() => runAction(id)}
-                                        className={
-                                            actions
-                                                ? clsx(
-                                                      MODE_ITEM_CLASS,
-                                                      DESTRUCTIVE.has(id) &&
-                                                          "data-[highlighted]:text-red",
-                                                  )
-                                                : ITEM_CLASS
-                                        }
+                                        className={clsx(
+                                            MENU_ITEM_CLASS,
+                                            actions &&
+                                                DESTRUCTIVE.has(id) &&
+                                                "data-[highlighted]:text-red",
+                                        )}
                                     >
                                         {ModeIcon && (
                                             <ModeIcon

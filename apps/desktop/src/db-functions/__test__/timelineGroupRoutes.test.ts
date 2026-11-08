@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { eq, getTableName } from "drizzle-orm";
+import { and, eq, getTableName } from "drizzle-orm";
 import {
     createResolver,
     groupMemberWalk,
@@ -17,14 +17,15 @@ import { performRedo, performUndo } from "../history";
 import { TimelineWriteError } from "../timelineErrors";
 import { splitTimelineAtBeat } from "../timelineSplitAtBeat";
 import { deleteTimeline } from "../timelineCommands";
-import { deleteTimelineTransitionRowsInTransaction } from "../timelineTransitionsInTransaction";
 import { transactionWithHistory } from "../history";
+import { laneOffset, type DatabaseTimelineLane } from "../timelineLanes";
+import { setTimelineTransitionDestinationInTransaction } from "../timelineTransitionsInTransaction";
+import { removeAssignmentRowsInTransaction } from "../timelineMembership";
 import { drawRoute, readRoutes, removeRoute } from "../timelineRoutes";
 import {
     drawGroupRoute,
     editGroupRoutePoints,
     meanOf,
-    offsetOf,
     ownPath,
     readGroupPaths,
     rejoinGroupPath,
@@ -33,11 +34,12 @@ import {
 keepFixturesInPageMode("its tests convert the show themselves");
 
 /**
- * Group paths, pathways step 15 (spec v0.9 R-14 group schedule, Appendix I.8 and I.9): AP-R8 to
- * AP-R10 and the step 15 changes to AP-R1, AP-R2, AP-R3 and AP-R7, on the converted
- * `marchersAndPages` show (page 2's box is `[9, 17)`, one shapeless direct transition holding
- * every marcher). QA-AP-R7 to QA-AP-R13 and QA-UNDO-R3: each edit is one undo step, redo restores
- * the same ids, a refused edit writes nothing, and the resolver walks the group schedule.
+ * Group paths, pathways steps 15 and 24 (spec v0.10 R-14′, Appendix J.8): AP-R8 to AP-R10 and
+ * their changes to AP-R1, AP-R2, AP-R3, AP-R7 and AP-R15, on the converted `marchersAndPages`
+ * show (page 2's box is `[9, 17)`, one shapeless direct transition holding every marcher).
+ * QA-AP-R7 to QA-AP-R13, QA-AP-L1 and QA-UNDO-R3: each edit is one undo step, redo restores the
+ * same ids, a refused edit writes nothing, the resolver walks the group schedule, and since step
+ * 24 a path is lanes on the members' own slots: no transition or row is written.
  */
 
 const TABLES = [
@@ -47,6 +49,7 @@ const TABLES = [
     schema.timeline_assignments,
     schema.timeline_slot_destinations,
     schema.timeline_routes,
+    schema.timeline_lanes,
 ];
 const dataOf = async (db: DbConnection) => {
     const out: Record<string, unknown[]> = {};
@@ -122,6 +125,39 @@ const routeOf = async (db: DbConnection, routeId: number) =>
             .get())!.geometry,
     ) as RouteGeometry;
 
+/** The lane on marcher `m`'s slot in move `timelineId` (its first row there). */
+const laneOf = async (
+    db: DbConnection,
+    m: number,
+    timelineId: number,
+): Promise<DatabaseTimelineLane | undefined> => {
+    const A = schema.timeline_assignments;
+    const T = schema.timeline_transitions;
+    const L = schema.timeline_lanes;
+    const found = await db
+        .select({ lane: L })
+        .from(A)
+        .innerJoin(T, eq(T.id, A.transition_id))
+        .innerJoin(
+            L,
+            and(
+                eq(L.transition_id, A.transition_id),
+                eq(L.slot_index, A.slot_index),
+            ),
+        )
+        .where(and(eq(A.marcher_id, m), eq(T.timeline_id, timelineId)))
+        .get();
+    return found?.lane;
+};
+const offsetOfMarcher = async (db: DbConnection, m: number, tl: number) => {
+    const lane = await laneOf(db, m, tl);
+    return lane ? laneOffset(lane) : null;
+};
+const transitionRows = (db: DbConnection) =>
+    db.select().from(schema.timeline_transitions).all();
+const assignmentRows = (db: DbConnection) =>
+    db.select().from(schema.timeline_assignments).all();
+
 const transitionOf = async (db: DbConnection, id: number) =>
     (await db
         .select()
@@ -143,6 +179,8 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
         const others = before.marcherIds().slice(4);
         const original = await dataOf(db);
         const points = await groupPoints(db, ids);
+        const transitionsBefore = await transitionRows(db);
+        const rowsBefore = await assignmentRows(db);
 
         const result = await drawGroupRoute({
             db,
@@ -157,11 +195,14 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
             points.map((p) => p.at),
         );
         expect(geometry.points[0]!.tension).toBe(1);
+        // Step 24 (QA-AP-L1): lanes on the members' own slots; no transition or row is written
+        expect(await transitionRows(db)).toEqual(transitionsBefore);
+        expect(await assignmentRows(db)).toEqual(rowsBefore);
         for (const [i, m] of ids.entries()) {
-            const t = await transitionOf(db, result.transitions[m]!);
-            expect(t.path_style).toBe("route");
-            expect(t.route_id).toBe(result.routeId);
-            expect(offsetOf(t.path_params)).toEqual([
+            const lane = (await laneOf(db, m, timeline.id))!;
+            expect(lane.transition_id).toBe(result.transitions[m]);
+            expect(lane.route_id).toBe(result.routeId);
+            expect(laneOffset(lane)).toEqual([
                 starts[i]![0] - geometry.from[0],
                 starts[i]![1] - geometry.from[1],
             ]);
@@ -177,9 +218,7 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
         const after = await resolverOf(db);
         const schedule = groupSchedule(geometry);
         for (const [i, m] of ids.entries()) {
-            const o = offsetOf(
-                (await transitionOf(db, result.transitions[m]!)).path_params,
-            )!;
+            const o = (await offsetOfMarcher(db, m, timeline.id))!;
             const walk = groupMemberWalk(schedule, starts[i]!, ends[i]!, o);
             const W1 = schedule.W.V[1]!;
             expect(
@@ -347,13 +386,7 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
         await expectOneUndoStep(db, before);
 
         const offsets = async (ms: number[]) =>
-            Promise.all(
-                ms.map(
-                    async (m) =>
-                        (await transitionOf(db, first.transitions[m]!))
-                            .path_params,
-                ),
-            );
+            Promise.all(ms.map((m) => offsetOfMarcher(db, m, timeline.id)));
         const kept = await offsets(ids.slice(2));
         const before2 = await dataOf(db);
         const pair = await drawGroupRoute({
@@ -387,8 +420,7 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
         const m = ids[1]!;
         const index = r0.marcherIds().indexOf(m);
         const group = await routeOf(db, drawn.routeId);
-        const t = await transitionOf(db, drawn.transitions[m]!);
-        const o = offsetOf(t.path_params)!;
+        const o = (await offsetOfMarcher(db, m, timeline.id))!;
 
         const before = await dataOf(db);
         const own = await ownPath({
@@ -402,7 +434,11 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
             group.points.map((p) => p.id),
         );
         expect(copy.points[0]!.tension).toBe(group.points[0]!.tension);
-        expect((await transitionOf(db, t.id)).path_params).toBeNull();
+        // An own lane on its slot, in its move as before
+        const ownLane = (await laneOf(db, m, timeline.id))!;
+        expect(ownLane.route_id).toBe(own.routes[m]);
+        expect(laneOffset(ownLane)).toBeNull();
+        expect(ownLane.transition_id).toBe(drawn.transitions[m]);
         // The others are untouched, bit for bit
         const afterOwn = positions(await resolverOf(db), 30);
         afterOwn.forEach((row, i) => {
@@ -420,7 +456,7 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
             routeId: drawn.routeId,
             marcherIds: [m],
         });
-        expect(offsetOf((await transitionOf(db, t.id)).path_params)).toEqual(o);
+        expect(await offsetOfMarcher(db, m, timeline.id)).toEqual(o);
         expect(positions(await resolverOf(db), 30)).toEqual(onGroup);
         expect(await readRoutes(db)).toHaveLength(4);
         await expectOneUndoStep(db, before2);
@@ -450,12 +486,10 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
         });
         const g = await routeOf(db, drawn.routeId);
         const A = r0.positionAt(extra, 9);
-        const t = await transitionOf(db, joined.transitions[extra]!);
-        expect(t.route_id).toBe(drawn.routeId);
-        expect(offsetOf(t.path_params)).toEqual([
-            A[0] - g.from[0],
-            A[1] - g.from[1],
-        ]);
+        const lane = (await laneOf(db, extra, timeline.id))!;
+        expect(lane.transition_id).toBe(joined.transitions[extra]);
+        expect(lane.route_id).toBe(drawn.routeId);
+        expect(laneOffset(lane)).toEqual([A[0] - g.from[0], A[1] - g.from[1]]);
         expect((await resolverOf(db)).positionAt(extra, 17)).toEqual(
             r0.positionAt(extra, 17),
         );
@@ -558,30 +592,40 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
             points: await groupPoints(db, ids),
         });
         const before = await dataOf(db);
-        const removed = await removeRoute({
-            db,
-            transitionId: drawn.transitions[ids[2]!]!,
-        });
+        const removed = await removeRoute({ db, routeId: drawn.routeId });
         expect(removed.marcherIds).toEqual([...ids].sort((a, b) => a - b));
+        // The members never left their move: it is as it was before the path
         for (const m of ids)
             expect(await transitionOf(db, drawn.transitions[m]!)).toMatchObject(
-                {
-                    path_style: "direct",
-                    route_id: null,
-                    path_params: null,
-                },
+                { path_style: "direct", route_id: null, path_params: null },
             );
         expect(await db.select().from(schema.timeline_routes).all()).toEqual(
             [],
         );
+        expect(await db.select().from(schema.timeline_lanes).all()).toEqual([]);
         await expectOneUndoStep(db, before);
         expect((await performUndo(db)).success).toBe(true);
 
+        // Deleting one member (a marcher delete compacts the shared move, AP-R15): the last
+        // slot's marcher moves down into its slot with its lane, and nobody else moves
         const before2 = await dataOf(db);
+        const walking = positions(await resolverOf(db), 30);
+        const order = (await resolverOf(db)).marcherIds();
+        const gone = (await db
+            .select()
+            .from(schema.timeline_assignments)
+            .where(
+                and(
+                    eq(schema.timeline_assignments.marcher_id, ids[0]!),
+                    eq(schema.timeline_assignments.start_beat, 9),
+                ),
+            )
+            .get())!;
         await transactionWithHistory(db, "deleteOne", (tx) =>
-            deleteTimelineTransitionRowsInTransaction({
+            removeAssignmentRowsInTransaction({
                 tx,
-                transitionIds: new Set([drawn.transitions[ids[0]!]!]),
+                removed: [gone],
+                compact: true,
             }),
         );
         expect(await readGroupPaths(db, timeline.id)).toEqual([
@@ -590,6 +634,10 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
                 marcherIds: [...ids.slice(1)].sort((a, b) => a - b),
             },
         ]);
+        const after = positions(await resolverOf(db), 30);
+        order.forEach((m, i) => {
+            if (m !== ids[0]) expect(after[i]).toEqual(walking[i]);
+        });
         await expectOneUndoStep(db, before2);
         expect((await performUndo(db)).success).toBe(true);
 
@@ -614,13 +662,7 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
         });
         const g = await routeOf(db, drawn.routeId);
         const params = async () =>
-            Promise.all(
-                ids.map(
-                    async (m) =>
-                        (await transitionOf(db, drawn.transitions[m]!))
-                            .path_params,
-                ),
-            );
+            Promise.all(ids.map((m) => offsetOfMarcher(db, m, timeline.id)));
         const offsetsBefore = await params();
         const before = await dataOf(db);
         await editGroupRoutePoints({
@@ -642,7 +684,7 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
         const r = await resolverOf(db);
         const schedule = groupSchedule(moved);
         const mid = 9 + 8 * ((schedule.uFirst + schedule.uLast) / 2);
-        const o = offsetOf(offsetsBefore[0]!)!;
+        const o = offsetsBefore[0]!;
         const want = schedule.W.V; // the lanes moved with the point: member 0 passes (10, 8) + o
         expect(want[2]).toEqual([10, 8]);
         expect(Number.isFinite(r.positionAt(ids[0]!, mid)[0])).toBe(true);
@@ -683,9 +725,9 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
             marcherId: ids[0]!,
             points: [{ at: [4, 4] }],
         });
-        const t = await transitionOf(db, drawn.transitions[ids[0]!]!);
-        expect(t.path_params).toBeNull();
-        expect(t.route_id).not.toBe(drawn.routeId);
+        const lane = (await laneOf(db, ids[0]!, timeline.id))!;
+        expect(laneOffset(lane)).toBeNull();
+        expect(lane.route_id).not.toBe(drawn.routeId);
         expect(await readGroupPaths(db, timeline.id)).toEqual([
             {
                 routeId: drawn.routeId,
@@ -693,5 +735,87 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
             },
         ]);
         await expectOneUndoStep(db, before);
+    });
+
+    it("on a shaped move a group path writes only lanes: the move stays a shape, a reshape moves the walkers' end spots, Remove path leaves the shape (QA-AP-L1)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        const timeline = await page2(db);
+        const tr = (
+            await db
+                .select()
+                .from(schema.timeline_transitions)
+                .where(eq(schema.timeline_transitions.timeline_id, timeline.id))
+                .all()
+        )[0]!;
+        const block = (cols: number, spacing: number) =>
+            JSON.stringify({
+                origin: [250, 150],
+                rows: 4,
+                cols,
+                spacing: [spacing, spacing],
+            });
+        const shapeId = await transactionWithHistory(
+            db,
+            "shape",
+            async (tx) => {
+                const shape = (await tx
+                    .insert(schema.timeline_shapes)
+                    .values({
+                        kind: "block",
+                        geometry: block(Math.ceil(tr.slot_count / 4), 22.5),
+                    })
+                    .returning()
+                    .get())!;
+                await setTimelineTransitionDestinationInTransaction({
+                    tx,
+                    transitionId: tr.id,
+                    destination: { kind: "shape", shapeId: shape.id },
+                });
+                return shape.id;
+            },
+        );
+        const ids = (await resolverOf(db)).marcherIds().slice(0, 4);
+        const shaped = positions(await resolverOf(db), 30);
+        const before = await dataOf(db);
+        const drawn = await drawGroupRoute({
+            db,
+            timelineId: timeline.id,
+            marcherIds: ids,
+            points: await groupPoints(db, ids),
+        });
+        expect((await dataOf(db))["timeline_transitions"]).toEqual(
+            before["timeline_transitions"],
+        );
+        expect((await dataOf(db))["timeline_assignments"]).toEqual(
+            before["timeline_assignments"],
+        );
+        expect(
+            (await transitionOf(db, drawn.transitions[ids[0]!]!)).dest_shape_id,
+        ).toBe(shapeId);
+        await expectOneUndoStep(db, before);
+
+        // Reshape the end shape: the path walkers land on their new spots (step 15 froze them)
+        await transactionWithHistory(db, "reshape", (tx) =>
+            tx
+                .update(schema.timeline_shapes)
+                .set({ geometry: block(Math.ceil(tr.slot_count / 4), 30) })
+                .where(eq(schema.timeline_shapes.id, shapeId)),
+        );
+        const reshaped = await resolverOf(db);
+        const index = reshaped.marcherIds().indexOf(ids[3]!);
+        expect(reshaped.positionAt(ids[3]!, 17)).not.toEqual(
+            shaped[index]![68],
+        );
+        const lanes = await db.select().from(schema.timeline_lanes).all();
+        expect(lanes).toHaveLength(4);
+        expect((await performUndo(db)).success).toBe(true);
+
+        // Remove path: the block walks straight into its shape again, bit for bit as before
+        await removeRoute({ db, routeId: drawn.routeId });
+        expect(positions(await resolverOf(db), 30)).toEqual(shaped);
+        expect(await dataOf(db)).toEqual(before);
     });
 });

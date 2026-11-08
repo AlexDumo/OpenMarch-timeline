@@ -1,6 +1,6 @@
 // cspell:ignore NONFOUNDING
 /**
- * Timeline motion model types (ADR 0001, spec section 10.1) plus the input show
+ * Timeline motion model types (ADR 0012, spec section 10.1) plus the input show
  * shape used by the reference suite (`docs/timeline/ref/README.md`).
  *
  * All resolver arithmetic uses Float64 (spec section 10.1).
@@ -82,7 +82,8 @@ export interface ChangeBatch {
             | "transitions"
             | "assignments"
             | "slot_destinations"
-            | "routes";
+            | "routes"
+            | "lanes";
         /** For `slot_destinations`, the transition id */
         rowId: number;
         /** null on insert */
@@ -119,7 +120,7 @@ export interface Resolver {
     explain(marcherId: number, beat: Beat): Explanation;
     /**
      * Every span of a marcher (R-2) with its kind (R-3), sorted from the leading hold to the
-     * trailing one. Not in spec §10.1: added for the timeline UI (ADR 0001 §4 amendment,
+     * trailing one. Not in spec §10.1: added for the timeline UI (ADR 0012 §4 amendment,
      * 2026-09-30). Reads the cached spans only; computes no positions.
      */
     spanInfos(marcherId: number): SpanInfo[];
@@ -142,7 +143,11 @@ export interface Resolver {
 export type ShapeKind = "line" | "freehand" | "box" | "circle" | "block";
 /** Shape kinds that have a parameterized path (everything except `block`). */
 export type PathShapeKind = Exclude<ShapeKind, "block">;
-export type PathStyle = "direct" | "arc" | "follow_the_leader" | "route";
+/**
+ * A transition's path style. v0.10 (ADR 0015) retires `route`: a slot walks a route through a
+ * lane (`LaneRow`), whatever its transition's style.
+ */
+export type PathStyle = "direct" | "arc" | "follow_the_leader";
 export type OrderMode = "inherit" | "slot";
 
 export interface PolylineGeometry {
@@ -181,11 +186,6 @@ export interface PathParams {
     bulge?: number;
     /** Extra trail vertices (follow_the_leader style) */
     waypoints?: XY[];
-    /**
-     * A group path member's offset from the route's reference line, field units (route style,
-     * v0.9 step 15, I-R4). Absent (params null) for one marcher's own path.
-     */
-    offset?: XY;
 }
 
 /** One inner point of a route (spec 5.2, v0.9): a corner, or smooth with a tension (step 2). */
@@ -225,8 +225,21 @@ export interface TransitionRow {
     style: PathStyle;
     order: OrderMode;
     params: PathParams | null;
-    /** The route a `route` transition walks (I-R2); null or absent otherwise */
-    route?: number | null;
+}
+
+/**
+ * A lane (spec v0.10 D-20, Appendix J.1): slot `slot` of transition `transition` walks route
+ * `route`. Whoever occupies the slot at a beat walks it (D-22).
+ */
+export interface LaneRow {
+    transition: number;
+    slot: number;
+    route: number;
+    /**
+     * The start offset `o_s` from the route's `from`: a group path's lane. null for an own lane,
+     * one marcher's own path walked alone (I-LN4).
+     */
+    offset: XY | null;
 }
 
 export interface AssignmentRow {
@@ -247,6 +260,8 @@ export interface TimelineSnapshot {
     assignments: AssignmentRow[];
     /** Routes by id (v0.9, D-19); absent when the show has none */
     routes?: Record<number, RouteRow>;
+    /** Lanes by id (v0.10, D-20); absent when the show has none */
+    lanes?: Record<number, LaneRow>;
 }
 
 /** One piece of a marcher's flattened timeline (R-2). */
