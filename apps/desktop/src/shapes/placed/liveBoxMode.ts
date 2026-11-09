@@ -22,6 +22,10 @@ import {
 } from "../frame/gestures";
 import { toolEnvFor } from "../tool/toolEnv";
 import { pressShapeKeys, type HeldFieldGesture } from "../field/heldGesture";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
 import { commitBox, sameParams } from "./commitBox";
 import {
     clearLiveSelection,
@@ -180,6 +184,14 @@ export const setActiveLiveBox = (mode: LiveBoxMode | null): void => {
 };
 
 /**
+ * The live mode to keep for `box`, though it's a new recipe: the one with a gesture under way on
+ * these marchers at this moment. An earlier save reading back as this page's own copy of the shape
+ * mustn't end a drag that's still held.
+ */
+export const liveBoxHolding = (box: PlacedBox): LiveBoxMode | null =>
+    activeLive?.holds(box) ? activeLive : null;
+
+/**
  * Escape on a selected placed shape with a handle selected (#557): clears that, and says whether
  * there was one, so the same press doesn't also deselect the shape
  */
@@ -207,6 +219,8 @@ export class LiveBoxMode implements FieldMode {
     private held: HeldFieldGesture | null = null;
     /** The shape this mode last saved, until it's read back: the selection outlives only that */
     private saved: unknown = undefined;
+    /** The beat shown when the gesture under way was pressed */
+    private pressedAt: number | null = null;
 
     constructor(
         box: PlacedBox,
@@ -227,6 +241,22 @@ export class LiveBoxMode implements FieldMode {
             this.saved = undefined;
         this.live = reopenLive(this.live, box, saved);
         this.emit();
+    }
+
+    /** Whether a gesture is under way on `box`'s marchers, at the moment it was pressed */
+    holds(box: PlacedBox): boolean {
+        if (!this.live.gesture) return false;
+        if (
+            this.pressedAt !==
+            displayedBeat(useTimelineSelectionStore.getState())
+        )
+            return false;
+        const ids = new Set(box.recipe.members.map((m) => m.marcherId));
+        const { members } = this.live.box.recipe;
+        return (
+            members.length === ids.size &&
+            members.every((m) => ids.has(m.marcherId))
+        );
     }
 
     /** Escape with a handle selected (#557): clears it, and says whether there was one */
@@ -295,6 +325,7 @@ export class LiveBoxMode implements FieldMode {
             isMac,
         );
         this.held = held;
+        this.pressedAt = displayedBeat(useTimelineSelectionStore.getState());
         this.live =
             pressLive(this.live, pointer.field, {
                 ...toolEnvFor(field, held.roles()),
