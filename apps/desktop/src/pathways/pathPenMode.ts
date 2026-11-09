@@ -916,37 +916,7 @@ function buildDrawing(session: PathSession): FieldModeDrawing {
         session,
         shape,
     );
-    const hover = session.phase === "open" ? session.hoverLane : null;
-    const hoverMember = hover ? memberOf(session, hover.marcherId) : undefined;
-    const laneTip =
-        hover && hoverMember && !moving
-            ? {
-                  at: hover.at,
-                  text: [
-                      tolgee.t(
-                          hoverMember.adjust
-                              ? "pathways.lanes.hoverAdjusted"
-                              : "pathways.lanes.hover",
-                          hoverMember.adjust
-                              ? "Spot {spot} · {marcher} · adjusted"
-                              : "Spot {spot} · {marcher}",
-                          {
-                              spot: (hoverMember.slot ?? 0) + 1,
-                              marcher: hoverMember.drill,
-                          },
-                      ),
-                      ...((hover.stacked ?? 1) > 1
-                          ? [
-                                tolgee.t(
-                                    "pathways.lanes.stacked",
-                                    "click for the next of {count}",
-                                    { count: hover.stacked ?? 1 },
-                                ),
-                            ]
-                          : []),
-                  ].join(" · "),
-              }
-            : null;
+    const laneTip = moving ? null : laneTipOf(session);
     return {
         outline,
         openOutline: true,
@@ -967,6 +937,40 @@ function buildDrawing(session: PathSession): FieldModeDrawing {
         ...(tipText && moving ? { tip: { at: moving, text: tipText } } : {}),
         ...(laneTip ? { tip: laneTip } : {}),
     };
+}
+
+/** The note by the pointer over a lane: whose spot it is, and how many lanes lie there */
+function laneTipOf(session: PathSession): FieldModeDrawing["tip"] | null {
+    const hover = session.phase === "open" ? session.hoverLane : null;
+    const hoverMember = hover ? memberOf(session, hover.marcherId) : undefined;
+    return hover && hoverMember
+        ? {
+              at: hover.at,
+              text: [
+                  tolgee.t(
+                      hoverMember.adjust
+                          ? "pathways.lanes.hoverAdjusted"
+                          : "pathways.lanes.hover",
+                      hoverMember.adjust
+                          ? "Spot {spot} · {marcher} · adjusted"
+                          : "Spot {spot} · {marcher}",
+                      {
+                          spot: (hoverMember.slot ?? 0) + 1,
+                          marcher: hoverMember.drill,
+                      },
+                  ),
+                  ...((hover.stacked ?? 1) > 1
+                      ? [
+                            tolgee.t(
+                                "pathways.lanes.stacked",
+                                "click for the next of {count}",
+                                { count: hover.stacked ?? 1 },
+                            ),
+                        ]
+                      : []),
+              ].join(" · "),
+          }
+        : null;
 }
 
 /** How heavy the line is: edited while drawn or open, selected for a path object (AP-O4) */

@@ -12,7 +12,6 @@ import {
     createResolver,
     refitGeometry,
     routeEndsChanged,
-    validateRouteGeometry,
     type Resolver,
     type RouteGeometry,
     type XY,
@@ -22,7 +21,7 @@ import { schema } from "@/global/database/db";
 import { readTimelineTables } from "@/timeline/timelineRows";
 import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
-import { assertValid, mapDbErrors, refuse } from "./timelineErrors";
+import { mapDbErrors, refuse } from "./timelineErrors";
 import {
     destinationOf,
     routeRefusal,
