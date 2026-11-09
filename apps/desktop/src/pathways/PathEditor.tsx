@@ -467,9 +467,8 @@ function PathEditorBar({
     const kindChoice =
         drawing &&
         !session.byRoute &&
-        (session.target.trail !== undefined && session.target.trail !== null
-            ? true
-            : session.target.group !== null && session.target.routeId === null);
+        (!!session.target.trail ||
+            (!!session.target.group && session.target.routeId === null));
     const trail = session.target.trail ?? null;
     return (
         <div
