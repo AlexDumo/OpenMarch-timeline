@@ -260,8 +260,8 @@ export function shapeOf(s: PathSession): PathShape {
     const ends = target.ends;
     const last = target.points.length - 1;
     shape = {
-        from: target.from,
-        to: target.to,
+        from: target.drawnEnds?.from ?? target.from,
+        to: target.drawnEnds?.to ?? target.to,
         points,
         ends: {
             from:

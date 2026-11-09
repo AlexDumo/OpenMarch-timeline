@@ -2095,6 +2095,42 @@ function fakeMode({
 }
 
 describe("FieldEditor modes (#204)", () => {
+    it("keeps a double-click going when the first click's mode hands over to another (a path under a box)", () => {
+        const { editor } = setup({ selected: [1] });
+        const took: string[] = [];
+        const taker = (name: string): FieldMode => ({
+            ...fakeMode({ claims: () => false }).mode,
+            ownsSelectionBox: false,
+            locksSelection: false,
+            takeClick: (_p, double) => {
+                took.push(`${name}:${double ? "double" : "click"}`);
+                return true;
+            },
+        });
+        editor.setMode(taker("box"));
+        click(editor, EMPTY.x, EMPTY.y);
+        editor.setMode(taker("path"));
+        click(editor, EMPTY.x, EMPTY.y);
+        expect(took).toEqual(["box:click", "path:double"]);
+    });
+
+    it("ends a double-click on a change of mode the click wasn't taken for", () => {
+        const { editor } = setup({ selected: [] });
+        const took: boolean[] = [];
+        click(editor, EMPTY.x, EMPTY.y);
+        editor.setMode({
+            ...fakeMode({ claims: () => false }).mode,
+            ownsSelectionBox: false,
+            locksSelection: false,
+            takeClick: (_p, double) => {
+                took.push(double);
+                return true;
+            },
+        });
+        click(editor, EMPTY.x, EMPTY.y);
+        expect(took).toEqual([false]);
+    });
+
     it("lets a mode take clicks on empty field (a path's line), and leaves drags and marquees there to the field", () => {
         const { editor, state } = setup({ selected: [1] });
         const took: string[] = [];

@@ -429,6 +429,36 @@ describe("Paths All per playhead step (review of #737, S1, S2)", () => {
         expect(t.group!.members.map((m) => m.marcherId)).toEqual([10, 11]);
     });
 
+    it("a box moved at the end of a group path: the line's ends follow, the stored ends and lanes don't (AP-R5)", () => {
+        const movedTo = (marcherId: number) =>
+            marcherId === 10 ? [100, 40] : [100, 44];
+        const read = (resolver: typeof stillResolver) =>
+            targetOfRoute(
+                [entry(10, 0, 8, [0, -2]), entry(11, 0, 8, [0, 2])],
+                resolver,
+                new Map(),
+            )!;
+        const moved = read({
+            explain: () => ({ origin: [0, 0] }),
+            positionAt: (m: number) => movedTo(m),
+        } as unknown as typeof stillResolver);
+        expect(moved.drawnEnds!.to).toEqual({ x: 100, y: 42 });
+        expect(moved.to).toEqual(read(stillResolver).to);
+        expect(moved.ends).toEqual(read(stillResolver).ends);
+
+        const object = { ...groupObject(), target: moved };
+        const asDrawn = objectDrawingOf(object)!;
+        const asStored = objectDrawingOf({
+            ...object,
+            target: { ...moved, drawnEnds: undefined },
+        })!;
+        expect(asDrawn.outline!.at(-1)).toEqual({ x: 100, y: 42 });
+        expect(asDrawn.outline!.slice(1, -1)).toEqual(
+            asStored.outline!.slice(1, -1),
+        );
+        expect(asDrawn.lanes).toEqual(asStored.lanes);
+    });
+
     it("filters the routes read once, keeping each route's target while nothing changed", () => {
         const index: PathObjectIndex = {
             routes: new Map([

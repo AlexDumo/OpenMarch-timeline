@@ -43,6 +43,13 @@ export interface PathTarget {
      * (AP-O4). Absent otherwise: then `start` and `end` are the move's.
      */
     span?: { start: number; end: number };
+    /**
+     * Where a saved group path's line is drawn from and to: the middle of its members' starts
+     * and end spots now, so the line stays on a box that has moved (AP-R5). `from` and `to` stay
+     * the stored F and G, which the walk and the curve's end tangents read. Absent for an own
+     * path (`from` and `to` are already its real ends) and for a group path being drawn.
+     */
+    drawnEnds?: { from: XY; to: XY };
 }
 
 /** A member of a group path: where it starts and ends, and its lane's offset from the reference */
@@ -190,9 +197,20 @@ export async function findGroupTarget(
         routeId: group.routeId,
         points: g.points,
         ends: { from: xy(g.from), to: xy(g.to) },
+        drawnEnds: drawnEndsOf(members),
         group: { members, outside },
     };
 }
+
+/** The ends a saved group path's line is drawn between: its members' middles now (AP-R5) */
+const drawnEndsOf = (members: readonly GroupMember[]) => {
+    const middle = (ends: readonly XY[]) =>
+        xy(meanOf(ends.map((p) => [p.x, p.y] as [number, number])));
+    return {
+        from: middle(members.map((m) => m.from)),
+        to: middle(members.map((m) => m.to)),
+    };
+};
 
 /**
  * What the pen draws a new group path for (AP-R8): `marcherIds` (two or more) in their one move
@@ -396,6 +414,7 @@ export function targetOfRoute(
         routeId: first.routeId,
         points: g.points,
         ends: { from: xy(g.from), to: xy(g.to) },
+        drawnEnds: drawnEndsOf(members),
         group: { members, outside: [] },
         span,
     };
