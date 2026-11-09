@@ -193,6 +193,30 @@ describe("the hover note on lanes", () => {
         expect(hover()?.stacked).toBe(2);
     });
 
+    it("names the lane a click just moved to, with the pointer still", () => {
+        open(group(null));
+        const at = {
+            field: { x: 20 * STEP, y: y + 4 * STEP },
+            screen: { x: 20 * STEP * ZOOM, y: (y + 4 * STEP) * ZOOM },
+            button: 0,
+        } as FieldPointer;
+        over(20 * STEP, y + 4 * STEP);
+        const click = () => {
+            pathPenMode.press(at, {
+                isMac: false,
+                onDot: () => false,
+            } as never);
+            pathPenMode.release(at, null);
+            return {
+                picked: usePathPenStore.getState().session?.lane?.marcherId,
+                named: hover()?.marcherId,
+            };
+        };
+        expect(click()).toEqual({ picked: 10, named: 10 });
+        expect(click()).toEqual({ picked: 11, named: 11 });
+        expect(click()).toEqual({ picked: 10, named: 10 });
+    });
+
     it("moves its note along the lane once the pointer has run far enough", () => {
         open(group(null));
         over(20 * STEP, y + 4 * STEP);

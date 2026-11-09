@@ -651,11 +651,12 @@ class PathPenMode implements FieldMode {
             const picked =
                 usePathPenStore.getState().session?.lane?.marcherId ===
                 hold.marcherId;
-            selectLane({
-                marcherId:
-                    picked && hold.stacked > 1 ? hold.next : hold.marcherId,
-                key: hold.index,
-            });
+            const marcherId =
+                picked && hold.stacked > 1 ? hold.next : hold.marcherId;
+            selectLane({ marcherId, key: hold.index });
+            // The pointer hasn't moved, so the note wouldn't otherwise name the lane just picked
+            if (usePathPenStore.getState().session?.hoverLane)
+                setHoverLane({ marcherId, at: hold.at, stacked: hold.stacked });
             return;
         }
         if (hold.refused || !hold.d) {
