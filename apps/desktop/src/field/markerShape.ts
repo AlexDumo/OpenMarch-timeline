@@ -51,8 +51,8 @@ export const triangleHalfHeight = (r: number) =>
 export const crossReach = (r: number) => r * 1.2;
 export const crossLineWidth = (r: number) => r * 0.4;
 
-/** The farthest any marker of radius `r` reaches from its center along an axis. */
-export const markerExtent = (r: number) => r * 1.2;
+/** The farthest any marker of radius `r` reaches from its center along an axis: an X's line ends. */
+export const markerExtent = (r: number) => r * 1.35;
 
 /**
  * An SVG path for a marker of radius `r` centered on `(x, y)`, y down: a closed outline for a

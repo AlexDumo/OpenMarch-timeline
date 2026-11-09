@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+    crossLineWidth,
+    crossReach,
     markerExtent,
     markerPath,
     markerShapeOf,
@@ -23,6 +25,10 @@ describe("markerShape", () => {
         // Every shape stays within the extent the batch's quads cover
         expect(squareHalf(5)).toBeLessThanOrEqual(markerExtent(5));
         expect(triangleHalfHeight(5)).toBeLessThanOrEqual(markerExtent(5));
+        // An X's line ends are square, so their corners pass the end of the line
+        expect(
+            crossReach(5) + (crossLineWidth(5) / 2) * Math.SQRT1_2,
+        ).toBeLessThanOrEqual(markerExtent(5));
     });
 
     it("draws each shape's path around its center", () => {

@@ -179,8 +179,8 @@ void main() {
     vHalfStroke = drawnStroke * 0.5;
     vFill = aFill;
     vStroke = vec4(aStroke.rgb, aStroke.a * (stroke > 0.0 ? min(1.0, stroke / uPixel) : 0.0));
-    // A square, triangle or X reaches past the radius, to 1.2 times it
-    float extent = radius * (aShape > 0.5 ? 1.2 : 1.0) + vHalfStroke + uPixel;
+    // A square or triangle reaches past the radius to 1.2 times it, the corners of an X's line ends to 1.35
+    float extent = radius * (aShape > 2.5 ? 1.35 : aShape > 0.5 ? 1.2 : 1.0) + vHalfStroke + uPixel;
     vLocal.x = (position.x * 2.0 - 1.0) * extent;
     vLocal.y = position.y * extent;
     gl_Position = projectionMatrix * viewMatrix * vec4(aDot.xy + vLocal, 0.0, 1.0);
