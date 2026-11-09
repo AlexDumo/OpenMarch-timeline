@@ -1,6 +1,6 @@
 # OpenMarch Timeline Resolution Model: Specification
 
-**Version:** 0.10: a slot walks a drawn path through a **lane** (ADR 0015, Appendix J). It builds on 0.9, which added routes step by step (Appendix I). 0.8 was revised after four structural reviews, two design changes and one implementation review. Appendices B to E map each review finding to its fix and evidence. Appendix F covers the design change: shapes are optional. Appendix G covers compatibility with the app's undo and redo. Appendix H covers how the app chooses layers. Appendix I covers routes, which v0.9 adds one build step at a time.
+**Version:** 0.10: a slot walks a drawn path through a **lane** (ADR 0015, Appendix J). Plan step 4 adds drawn trails for follow-the-leader (Appendix K: I-T5′, R-9′, R-12′, R-13′). It builds on 0.9, which added routes step by step (Appendix I). 0.8 was revised after four structural reviews, two design changes and one implementation review. Appendices B to E map each review finding to its fix and evidence. Appendix F covers the design change: shapes are optional. Appendix G covers compatibility with the app's undo and redo. Appendix H covers how the app chooses layers. Appendix I covers routes, which v0.9 adds one build step at a time.
 **Date:** 2026-11-06 (v0.10 decided; it is built from plan step 24 on); v0.9 steps 2 and 15 were 2026-11-04; step 1 was 2026-11-03; 0.8 was 2026-09-29
 **Scope:** The data model and resolution engine behind timelines, shapes, transitions and assignments. It does not cover the editor UI.
 
@@ -86,7 +86,7 @@ The design replaces the current model, which stores one coordinate per (marcher,
 | **Join / resume**          | A non-founding span. A **join** is the first span of its assignment. A **resume** is a later span of the same assignment, after a higher layer let go. _v0.10:_ on a lane it enters the path by the entry rule (R-14′ item 8) instead of walking straight. |
 | **Steal**                  | A higher-layer assignment that overrides part of a lower-layer one. The overridden transition keeps running _hypothetically_.                                                                                                                                                                                                                                                                                                                                                              |
 | **Order-sensitive**        | A path style that reads marcher ordering as well as positions. Only `follow_the_leader` is order-sensitive.                                                                                                                                                                                                                                                                                                                                                                                |
-| **Trail**                  | For follow-the-leader: the polyline every member walks along (R-9).                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **Trail** | For follow-the-leader: the line every member walks along (R-9): the line-up through the members' starts, then the waypoints or the **drawn part** (a trail route's points, R-9′, plan step 4), then the destination path. |
 | **FTL**                    | Short for follow-the-leader.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 ---
@@ -223,8 +223,8 @@ CREATE TABLE transitions (
   start_beat     INTEGER NOT NULL CHECK (start_beat BETWEEN 0 AND 2147483647),
   end_beat       INTEGER NOT NULL CHECK (end_beat   BETWEEN 0 AND 2147483647),
   CHECK (end_beat > start_beat),
-  -- I-T5: follow-the-leader follows a path, so it needs a destination shape
-  CHECK (dest_shape_id IS NOT NULL OR path_style <> 'follow_the_leader'),
+  -- I-T5′ (plan step 4): follow-the-leader follows a path, so it needs a destination shape or a trail route
+  CHECK (dest_shape_id IS NOT NULL OR route_id IS NOT NULL OR path_style <> 'follow_the_leader'),
   -- I-T2 (partial, DB-enforced): an arc carries a numeric bulge with |bulge| <= 0.5 (minor arcs only, §8.11)
   CHECK (path_style <> 'arc' OR (coalesce(json_type(path_params, '$.bulge'), '') IN ('integer', 'real')
                                  AND abs(json_extract(path_params, '$.bulge')) <= 0.5)),
@@ -465,7 +465,7 @@ Every number in `geometry` and `path_params` MUST be finite. Every authored poin
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | `direct`            | `NULL`                                                                                                                              | no           |
 | `arc`               | `{"bulge": k}` with \|k\| ≤ ½: minor arcs only (D-15, enforced by a CHECK). k = 0 is a straight line and \|k\| = ½ is a semicircle. | no           |
-| `follow_the_leader` | `{"waypoints": [[x,y], …]}`. May be empty. Absolute coordinates.                                                                    | **yes**      |
+| `follow_the_leader` | `{"waypoints": [[x,y], …]}`. May be empty. Absolute coordinates. Plan step 4: an optional `"reverse": true` (R-12′).                                                                    | **yes**      |
 | `route`             | `NULL` for one marcher's own path, or `{"offset": [dx, dy]}` for a member of a group path (I-R4, v0.9 step 15). The points live in the route (below). _Removed in v0.10:_ no transition has `path_style = 'route'` (I-R2′); a slot walks a route through a lane, whose JSON is in Appendix J.2. | no |
 
 **Route `geometry`** (I-R1, v0.9 steps 1 and 2). Absolute field units (D-5):
@@ -546,7 +546,7 @@ With this wrapper, the resolver never sees a partial edit, and a rejected edit l
 | ~~I-A5~~ → **I-A5′** | One marcher's rows in one transition don't overlap, at any layer. On a `follow_the_leader` transition, at most one row per marcher. | Triggers `asn_marcher_overlap_ins/upd`, `tr_ftl_unique_upd` | `E-A5` |
 | I-A6 | Every range has positive length                                                                                                                                                                                                                             | CHECK `end_beat > start_beat`                                                                                                                                                                                    | constraint |
 | I-D1 | A shape that a transition uses cannot be deleted                                                                                                                                                                                                            | FK `ON DELETE RESTRICT`                                                                                                                                                                                          | constraint |
-| I-T5 | A `follow_the_leader` transition has a shape                                                                                                                                                                                                                | CHECK                                                                                                                                                                                                            | constraint |
+| ~~I-T5~~ → **I-T5′** | A `follow_the_leader` transition has a shape **or a trail route** (`route_id`, plan step 4, Appendix K). With no shape it has individual destinations (I-T6), and its destination path is the line through them (R-13′)                                                                                                                                                                                                                | CHECK                                                                                                                                                                                                            | constraint |
 | I-T6 | A transition has a shape **or** individual destinations, never both. With no shape, it has exactly one destination for each slot `0…slot_count−1`.                                                                                                          | Triggers `sd_ins`, `sd_upd`, `tr_shape_set`, `tr_slots_dest_upd`. Completeness is checked **at commit** through the `commit_violations` view, because a transition and its points are inserted in the same edit. | `E-T6`     |
 | I-D2 | Individual destinations are finite and within `[−10⁶, 10⁶]²`                                                                                                                                                                                                | CHECK                                                                                                                                                                                                            | constraint |
 | I-N1 | Integer columns (beats, slots, layers, ids) hold integers                                                                                                                                                                                                   | `STRICT` tables                                                                                                                                                                                                  | constraint |
@@ -778,7 +778,7 @@ v0.2's centre-and-radius form failed on two finite inputs. It returned NaN for `
 
 ### R-9: FTL entry
 
-Each `follow_the_leader` transition `T` with `n = slot_count` has one derived **entry**. An FTL transition always has a shape (I-T5), because its trail runs along it.
+Each `follow_the_leader` transition `T` with `n = slot_count` has one derived **entry**. An FTL transition has a shape or, since plan step 4, a trail route (I-T5′; R-9′, R-12′ and R-13′ below say what changes then), because its trail runs along it.
 
 1. **Founding set.** `F` = the founding spans in `T`, with `m = |F|`. If `m = 0`, emit `D-FTL-EMPTY` and treat every occupant under R-11.
 2. **Trail order.** Sort `F` by `key` (R-12) in ascending order, breaking ties by marcher id. This assigns `q = 0 … m−1`. `q = 0` is the **tail**, the last follower. `q = m−1` is the **leader**.
@@ -848,6 +848,28 @@ For a transition with `n = slot_count`, slot `i` gets `p_i`:
 - For a circle, it is `center + r·(cos θ, sin θ)` with `θ = θ₀ ± s/r`, and `L = 2πr`.
 
 Curves are never flattened, so FTL arrival and trail adherence are exact at every radius. v0.2 flattened circles into 720 segments, which broke its own 0.01 tolerance above a radius of about 1,050 (Appendix C).
+
+### R-9′, R-12′, R-13′: Drawn trails [Decided, plan step 4; add to R-9, R-12 and R-13]
+
+Written out with their reasons in Appendix K.1. In short, for a `follow_the_leader` transition `T`:
+
+- **R-9′ (the drawn part).** With a trail route `R = T.route_id`, R-9 step 3's `pre` is the
+  line-up `[origin(f₀), …, origin(f_{m−1})]` followed by `W = walk(A, R.points, B)`: R-14's
+  cleaning, tangents, pieces and length, with `A = origin(f_{m−1})` (the leader's start),
+  `B = destPath′(0)` (the entrance) and `R.from`, `R.to` as tangent neighbours. `lineLen` is the
+  line-up's length, `destOffset = lineLen + W.L`, and `trail(d) = walk_x(W, d − lineLen)` for
+  `lineLen ≤ d < destOffset`. `waypoints` are not read (T-15). When `W` keeps no inner point,
+  the trail is R-9's with no waypoints, bit for bit.
+- **R-12′ (Reverse).** With `path_params.reverse = true`, founders are sorted by **descending**
+  key (ties still by ascending marcher id), and the destination path is entered from its far end:
+  `destPath′(s) = destPath(L − s)`. With a shape, member `q` takes sample `m − 1 − q` and the
+  `k`-th other row sample `m + k`, so vacancies stay at the entrance.
+- **R-13′ (no shape).** With `dest_shape_id` NULL, `destPath` is the line through the slots'
+  destinations `p_0 … p_{n−1}` in slot order, each destination a vertex, at arc length `c_i`
+  along it. The order keys are the slot indexes whatever `order_mode` says (T-16). **Every row
+  takes its own slot's destination**: member `q` in slot `k` has `target = p_k` and
+  `endDist[q] = destOffset + c_k` (`destOffset + (L − c_k)` when reversed); every other row of
+  slot `k` has `target = p_k`. A vacant slot is a gap where it is.
 
 ### R-14: Routes [Proposed, v0.9 steps 1, 2 and 15]
 
@@ -1252,6 +1274,8 @@ the app's write checks missed. Each rule raises its diagnostic.
 | T-12 | A follow-the-leader join or resume | R-11; trail lane ignored | none (valid) |
 | T-13 | `path_timing` with no lane | Ignored | none (valid) |
 | T-14 | `path_timing.offset` on a row that has a founding span | Ignored; the lane's offset is used (`D-TIMING`) | I-A7 |
+| T-15 | A follow-the-leader transition with a trail route **and** `waypoints`; or with a `route_id` naming no route | The waypoints are not read; a missing route is no route (R-9) | AP-T1 writes `waypoints: []`; FK (I-D3) |
+| T-16 | A follow-the-leader transition with no shape and `order_mode = 'inherit'`; or with no shape and no trail route | Its order is by slot (R-13′); it resolves as R-9 with the line through its destinations | AP-T1 writes `slot`; CHECK (I-T5′) |
 
 ### 8.9 Diagnostics
 
@@ -3230,3 +3254,116 @@ key's `d` (07 N1).
     that is allowed, but Big steps flags it.
 11. **Keeping an Adjust through Rejoin.** Rejoin after Detach always drops it (Q4). To keep a
     tweak, stay detached, or Adjust again after Rejoin.
+
+---
+
+## Appendix K: Design change: follow a drawn trail (plan step 4)
+
+**Change (plan step 4, ticket #646; built 2026-11-09 on the owner's standing brief, decisions
+below for the owner to confirm):** a line of marchers follows its leader along a **trail drawn
+with the Path pen**, into the end spots the marchers already have. The trail's drawn part is a
+route carried by the follow-the-leader transition (`transitions.route_id`, I-R2′), in place of
+`waypoints`. Adjust on a trail (R-10′, D-27) is step 27 and corner counts are step 6; neither is
+here.
+
+### K.1 Rules
+
+| ID | Rule |
+| --- | --- |
+| **I-T5′** | A `follow_the_leader` transition has a shape **or** a trail route. DB CHECK: `dest_shape_id IS NOT NULL OR route_id IS NOT NULL OR path_style <> 'follow_the_leader'`. Both together are valid: the drawn part then leads into the shape's exact path. |
+| **R-9′** | **The drawn part.** For a follow-the-leader transition `T` with trail route `R` and `m ≥ 1` founders in trail order (R-12, R-12′): the trail is **(1)** the line-up, the polyline through `origin(f₀) … origin(f_{m−1})`, of length `lineLen`; **(2)** the drawn part `W = walk(A, R.points, B)`, which is R-14's cleaning, tangents, pieces and length with `A = origin(f_{m−1})`, `B = destPath′(0)`, and `R.from`, `R.to` as the tangent neighbours of the first and last points; **(3)** the destination path `destPath′`. `destOffset = lineLen + W.L`. `trail(d)` is the line-up's point at `d` for `d < lineLen`; `walk_x(W, d − lineLen)` (R-14's Evaluation entered at a distance) for `lineLen ≤ d < destOffset`; and `destPath′(d − destOffset)` after. Curves are evaluated on their cubic pieces and measured by R-14's 64-sample rule, never flattened into the stored geometry. `startDist[q] = cum[q]` along the line-up, as in R-9. R-10 and R-11 are unchanged. **When `W` keeps no inner point** (`V = [A, B]`, or `L < ε_geom`) the trail is R-9's with `waypoints = []`, bit for bit. With `m = 0` no trail is built (`D-FTL-EMPTY`). |
+| **R-12′** | **Reverse.** `path_params.reverse`, `true` or absent (I-T2; any other value is `E-P1`). When true: founders sort by descending key, ties by ascending marcher id; and the destination is entered from its far end, `destPath′(s) = destPath(L − s)` (else `destPath′ = destPath`). With a shape, member `q` of `m` takes sample `m − 1 − q` and the `k`-th other row takes `m + k` (R-9 gives `n − m + q` and `n − m − 1 − k`), with `endDist[q] = destOffset + (L − t_j · L)` for its sample `j`. Starts and ends still increase with `q`, so P-5 holds. A transition that inherits its order from a reversed one reads its `q`, as R-12 says. |
+| **R-13′** | **No shape.** For a follow-the-leader transition with `dest_shape_id` NULL: `destPath` is the polyline through its slot destinations `p_0 … p_{n−1}` in slot order (open; `L` its length; `c_i` the arc length of vertex `i`; a single slot is a point with `L = 0`). **The order keys are the slot indexes**, whatever `order_mode` says, with order source `slot` and no `D-ORDER-FALLBACK` (T-16). **Every row takes its own slot's destination:** a founder in slot `k` has `target = p_k` and `endDist = destOffset + c_k`, or `destOffset + (L − c_k)` when reversed; a non-founding row of slot `k` has `target = p_k` (R-11 walks straight to it). R-9 step 5's index shifting does not apply: a vacant slot leaves a gap where it is, and nobody else's end moves. Because keys are slots, ends increase with `q` in both directions (P-5). |
+| **T-15, T-16** | In the total-rules table (§8): waypoints beside a trail route are not read, and a missing route is no route; a shapeless follow-the-leader transition orders by slot and resolves even without a trail route (which I-T5′ refuses on write). |
+| **§8.11** | A trail's drawn part is an R-14 walk between bounded points, so its points lie within R-14's bound; the line-up and the line through the destinations are polylines through bounded points. |
+| **§9** | `ftlGeometry[T]` is the shape's path, or the line through `destinations[T]` (recomputed with it). `ftlEntry[T]` also reads `routeGeometry[T.route_id]`. Invalidation: a route's geometry change seeds W-3 for every follow-the-leader transition that carries it (route → transitions, an index kept with the transitions); `T.route_id` and `T.path_params` changes are transition changes, which already seed W-3. |
+| **§10.2** | The transition's change-log image carries `route` (already there since v0.9). |
+
+**Why these and not the draft model's trail** (draft-model §4.1, "the destinations are the
+trail's spots"). The app never stores shapes for end spots: the Shape tool's recipes are app
+data, and every move's destinations are placed points that position edits rewrite by slot
+(`moveMarchersOnPage`). A trail that owned the spots would take the end shape away from every
+tool that edits it. With R-13′ the end spots stay where every other tool keeps them, so **Follow
+never moves anyone's end spot**, a later reshape of the end spots is followed by the trail's end
+line, and Remove trail is a style change. Reverse is a resolver fact (one row) and not a
+re-slotting, so no assignment row is rewritten and "slot `k`'s destination is its occupant's end
+spot" holds in both directions.
+
+### K.2 Storage and file version
+
+- **Migration 0022** rebuilds `timeline_transitions` to change one CHECK (I-T5′), copying every
+  column and id (QA-MIG-T1). Nothing else is added: `route_id` (0019) and the trail clauses of
+  the commit views E-R2, E-R3 and E-LN2 (0020) were already there.
+- `path_params` for `follow_the_leader` is `{"waypoints": [...], "reverse"?: true}` (§5.2).
+- **File version 13** is written with a file's first Follow (`markTrailModelInTransaction`): a
+  build that doesn't know trails would throw on a shapeless follow-the-leader transition, or
+  walk a trail straight. A file without one stays at its version; the number is not lowered when
+  the trail goes. v0.1.7 files open unchanged (they have no follow-the-leader transition).
+
+### K.3 App procedures
+
+Each runs in one write-wrapper transaction: one undo step, and redo restores the same ids.
+Refusals are `E-ARGS` with a plain reason, decided before the first write.
+
+| ID | Procedure |
+| --- | --- |
+| AP-T1 | **Follow.** The chosen marchers (two or more) of one move follow the leader along the drawn points. They are **peeled** from the transitions they are in, as split by marchers peels a slot (AP-R15 compaction for those who stay), into **one new follow-the-leader transition in the same move**: `order_mode = 'slot'`, `path_params = {"waypoints": []}`, a new trail route, `slot_count` the line's size; slot `q` is the `q`-th marcher of the line and its placed destination is that marcher's end spot as it was; each row keeps its counts and layer. **The line's order** (`lineOrder`): from one of the two marchers farthest apart, each next is the nearest not yet taken, so a straight or bent line comes out end to end. **Who leads** (`followOrder`): the end that gives the shorter way from the leader's start to the tail's end spot, where the line is entered. The route's `from` is the leader's start and `to` the tail's end spot. Writes file version 13. **Again:** when the chosen marchers are exactly a follow move's line, only the trail's points are rewritten (AP-T2). **Refused:** fewer than two marchers; a marcher not in the move, taken over at its start, in it for only some of its counts, or with more than one row in it; a marcher with a drawn path ("Remove the path, then choose Follow"); part of a follow move's line, or its line with others; a marcher sharing a move into a stored shape with marchers who stay. |
+| AP-T2 | **Edit the trail's points** (the pen again, a point drag, add, delete, Corner, Smooth): the route's geometry is rewritten through the one route writer, kept ids staying, `from` kept while the first point stays put and `to` while the last does (AP-R1's rule), else the leader's start and the entrance now. |
+| AP-T3 | **Reverse.** Toggles `path_params.reverse`; then sets the route's `from` and `to` to the new leader's start and the new entrance. No row, slot or destination changes; the drawn points stay where they are. Everyone keeps their end spot (R-13′). |
+| AP-T4 | **Remove trail.** The transition becomes `direct`, `path_params` NULL, `route_id` NULL, `order_mode = 'inherit'`, keeping its rows, slots and destinations; then the route is deleted. Everyone walks straight to the same end spot. The file version is not lowered. |
+| AP-T5 | **Edits that can't keep a follow move exact refuse**, naming the move: split at the playhead and every edit that cuts a move at a count ("can't be split yet"); split by marchers, of some of the line or all of it; merge; Remove keyframe's join; the Move card's Straight and Arc ("remove the trail first"). A drawn path or group path on a member was already refused ("follows the leader"). Recasting was already refused for follow-the-leader. |
+| AP-T6 | **A marcher who leaves a follow move** (removed from the move, deleted from the show) **leaves a gap**: the transition is not compacted, so the order and everyone else's slot and end spot stay (R-13′). With nobody left the transition is deleted and the orphan sweep (AP-H3) takes its route. Deleting the move or its timeline deletes the transition and then its route. |
+| AP-T7 | **Edits that stay exact need nothing:** resizing the move and page-flag drags change only the range, and R-10 is by share of the range; moving a member's end spot rewrites its slot's destination, which the end line and (for the tail's) the drawn part's last leg follow; moving the line's start (an upstream edit) moves the line-up and the drawn part's first leg. A takeover at the move's start makes that marcher a joiner, which walks straight to its own spot (R-11); the others' ends don't move. |
+
+**On the field.** Follow is a command (**Shift+L**), a toolbar button beside the Path pen, and,
+while a path is drawn for two or more marchers, one of two buttons on the floating path bar,
+**Together | Follow**, which switches the drawing between a group path and a trail without
+losing its points. The pen works as for a path. While drawing, shown and open, the drawing is
+the drawn part from the leader's start to the entrance, with the line-up and the end line thin
+and faint, a ring on every member, and the **Leader** mark above the leader's start; on a stored
+trail the mark's button reverses (**Reverse leader**, **Alt+L**, also on the open trail's bar and
+in its right-click or long-press menu). A trail shown closed keeps its members' start flag
+positions' paths, which are the trail as walked. Remove path on a trail is named **Remove
+trail**. Big steps on a trail tests each member's own distance and names who has the farthest
+to go.
+
+**Not in this step:** Adjust on a trail and trail lanes (step 27; a lane on a follow-the-leader
+transition is still refused); corner counts and the warning for a corner off a count (step 6);
+ripple through an in-between transition (9); outlines, arcs and snakes, and following along the
+shape the line stands in (10, 11); joining a trail from off it (13); splits and merges that keep
+a trail (17). A trail isn't yet a path object for Paths All (it is selected through its
+marchers, or by a click on its drawn line while shown).
+
+### K.4 New tests
+
+| ID | Setup | Expected |
+| --- | --- | --- |
+| QA-TR-1 | M1 (0,0), M2 (4,0), M3 (8,0) follow the leader over `[0, 16)` into the line (20,10)–(20,22), slot order, trail route with corners (14,0) and (14,10) | `startDist` 0, 4, 8; `endDist` 30, 36, 42. Beat 4: (7.5,0), (12,0), (14,2.5). Beat 8: (14,1), (14,6), (15,10). Beat 12: (14,8.5), (18,10), (20,13.5). Beat 16: (20,10), (20,16), (20,22), bit for bit |
+| QA-TR-2 | QA-TR-1 with no points; with a point on the leader; with a point within `ε_geom` of the entrance | Bit-identical to the same move with no route and `waypoints: []` |
+| QA-TR-3 | One smooth point (14,−4), τ = 1 | The leader is on R-14's cubic pieces at the distance R-10 gives, measured by the 64-sample rule (an independent Catmull–Rom and Bézier in the test); `endDist` is `8 + L` plus the shape's part; the oracle and the resolver agree bit for bit; no jumps |
+| QA-TR-4 | QA-TR-1 with `reverse: true` | Members M3, M2, M1; the drawn part runs from (0,0) to the far end (20,22); `endDist` is `32 + √180` plus 0, 6, 12; every marcher ends on the same spot as without it; `reverse: false` is `E-P1` |
+| QA-TR-5 | A trail route and waypoints `[[100,100]]` | The waypoints are not read (T-15) |
+| QA-TR-6 | M1's row starts at 8 (a join) | M1 walks straight to its target; the founders' drawn part still starts at the leader |
+| QA-TR-7 | No founders, with a trail route | `D-FTL-EMPTY`; finite positions |
+| QA-TR-8 | QA-TR-1 sampled every 1/8 beat | Every member is on the trail, and nobody overtakes (P-5, P-6) |
+| QA-TR-9 | Cached resolver: a corner dragged, a point made smooth, Reverse and back, Remove trail, Follow again, the leader's start moved | Each dirties `ftlEntry[T]` once; cached = fresh bit for bit; closure holds |
+| QA-TR-10 | Random trails: corners and smooth points, either end leading, a line, a circle or placed spots | Resolver = oracle within 10⁻⁹; no jumps |
+| QA-TR-11 | QA-TR-1 with no shape and destinations (20,10), (20,13), (26,21) | `endDist` 30, 33, 43; each ends on its own destination bit for bit, reversed or not; the leader at beat 15 is at (24.6875, 19.25) |
+| QA-TR-12 | One slot; three coincident destinations; no trail route (T-16) | Finite, exact ends |
+| QA-TR-13 | QA-TR-11 with M2's row gone; with M2 joining at 8; with `order_mode = 'inherit'` | The others' ends don't move and the line-up skips M2; M2 walks straight to its own spot; the order source is `slot` |
+| QA-MIG-T1 | A version-12 file with moves, lanes and an Adjust, from before 0022 | Every row and id of transitions, assignments, destinations, lanes and routes kept; `foreign_key_check` clean; version still 12; the change-log trigger is back |
+| QA-FV-T1 | File versions | 13 opens; 14 is refused; a build at 12 refuses 13 |
+| QA-DB-T1 | Follow-the-leader with no shape and no route; with a route; the route taken away | CHECK; accepted; CHECK |
+| QA-AP-T1 | Follow for four marchers of a shared 76-slot move, a smooth point and a corner | One new 4-slot `slot`-order transition in the same move with a trail route; destinations are the marchers' end spots in line order; everyone starts and ends where they did, bit for bit; nobody outside the line moves at any count; the leader passes the corner; no overtaking; file version 13 |
+| QA-AP-T2 | Follow again for the same line; a point edit | The same route and transition; point ids kept; ends unmoved |
+| QA-AP-T3 | Reverse; again | Only `path_params` and the route's ends change; the other end leads; every end spot kept |
+| QA-AP-T4 | Remove trail | `direct`, no params, no route, `inherit`; the route gone; same end spots, straight |
+| QA-AP-T5 | Refusals: one marcher; part of a line; a line plus another; split at the playhead; split by marchers (one, all); merge; Straight; Arc; a drawn path and a group path on members; a marcher with a path | `E-ARGS` with its reason; nothing written; no commit violation |
+| QA-AP-T6 | A middle member removed from the move; then the rest | A gap: order, slot count and the others' ends stay; then the transition and its route go |
+| QA-AP-T7 | The move resized from 8 to 6 counts; the move deleted, undone | The same place at the same share of the move; the route goes with the move and comes back |
+| QA-UNDO-T1 | Each of the above | One undo step restores every row and id; redo restores the same rows |
+
+**Parity.** Shows with no trail resolve bit-identically before and after this step: the golden,
+regression and fuzz suites pass unchanged, and a base-vs-branch script compares every marcher at
+every quarter beat (results in the step's pull request).
+
