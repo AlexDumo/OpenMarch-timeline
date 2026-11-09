@@ -20,7 +20,7 @@ import Kbd from "@/components/docs/Kbd.astro";
 import Ui from "@/components/docs/Ui.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-Coordinate sheets list where each marcher stands on every page, measured from the yard lines and hashes. Drill charts draw the field on every page with every marcher on it. Both are PDFs you can print or send to your marchers and staff. They need the desktop app; the web editor exports only video.
+Coordinate sheets list where each marcher stands on every page, measured from the yard lines and hashes. Drill charts draw the field on every page with every marcher on it. Both are PDFs you can print or send to your marchers and staff. They need the desktop app; the web editor can't make PDFs.
 
 Both show each marcher's position at the end of each page, the set they reach on the page's last count. Where a marcher is partway through a page isn't on them, so if a move ends partway through a page and you want that spot on paper, add a page there (see [Pages](/guides/timeline/pages/)). Props aren't on either.
 
@@ -78,7 +78,7 @@ When the export is done, select the message that appears to open the file or fol
 - <Ui k="exportCoordinates.individualCharts" />: makes a chart PDF for each marcher. Each page shows the whole band with that marcher picked out, a box on where they were on the previous page, a circle on where they go next, the paths between them, and their coordinates. Without it, you get one overview PDF with every marcher on every page and no paths.
 - <Ui k="exportCoordinates.includeNotesAppendix" />: each page's notes are always printed under its chart, cut short if they're long. Turn this on to add pages at the end with the full notes for every page that has notes.
 
-The charts draw your show's field, with its markings and field image, and the grid lines you have turned on for the field in the editor.
+The charts draw your show's field, with its markings and field image, and the <Ui k="settings.field.gridLines" plain /> and <Ui k="settings.field.halfLines" plain /> you have turned on for the field in the editor.
 
 ## Moves past the end of the show
 
