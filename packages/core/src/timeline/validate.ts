@@ -365,6 +365,62 @@ export function validateLaneOffset(offset: unknown): ValidationResult {
 }
 
 // ---------------------------------------------------------------------------
+// Adjust profiles (spec J.2, pathways step 3b)
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate an Adjust profile's shape (spec J.2, part of I-J3): version 1, one key or more, each
+ * with point-id or end anchors, `f` in `[0, 1]` and a bounded finite `d`. Spacing and place (I-J4)
+ * need the route: `adjustRefusal` in `adjust.ts` checks them.
+ */
+export function validateAdjustProfile(profile: unknown): ValidationResult {
+    const { push, result } = collector("E-P1");
+    if (typeof profile !== "object" || profile === null) {
+        push("", "an Adjust profile must be an object {v, keys}");
+        return result();
+    }
+    const { v, keys } = profile as { v?: unknown; keys?: unknown };
+    if (v !== 1) push("v", "an Adjust profile's version must be 1");
+    if (!Array.isArray(keys) || keys.length === 0) {
+        push("keys", "an Adjust profile needs at least one key");
+        return result();
+    }
+    keys.forEach((entry: unknown, i: number) => {
+        const path = `keys[${i}]`;
+        if (typeof entry !== "object" || entry === null) {
+            push(path, "an Adjust key must be an object {a, b, f, d}");
+            return;
+        }
+        const key = entry as Record<string, unknown>;
+        for (const end of ["a", "b"] as const) {
+            const id = key[end];
+            if (
+                typeof id !== "string" ||
+                id.length === 0 ||
+                id.length > MAX_ROUTE_POINT_ID_LENGTH
+            )
+                push(`${path}.${end}`, "an anchor names a point id or an end");
+        }
+        const f = key.f;
+        if (typeof f !== "number" || !Number.isFinite(f) || f < 0 || f > 1)
+            push(`${path}.f`, "an anchor's f must be between 0 and 1");
+        const d = key.d;
+        if (
+            !Array.isArray(d) ||
+            d.length !== 2 ||
+            d.some(
+                (n) =>
+                    typeof n !== "number" ||
+                    !Number.isFinite(n) ||
+                    Math.abs(n) > MAX_ROUTE_OFFSET,
+            )
+        )
+            push(`${path}.d`, "a key's d must be two bounded finite numbers");
+    });
+    return result();
+}
+
+// ---------------------------------------------------------------------------
 // Routes (I-R1, v0.9 step 1)
 // ---------------------------------------------------------------------------
 

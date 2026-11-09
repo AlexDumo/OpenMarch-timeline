@@ -7,8 +7,11 @@
  * parameterization. All arithmetic is Float64 (plain JS numbers).
  */
 import type {
+    AdjustAnchor,
+    AdjustProfile,
     AssignmentRow,
     DestPath,
+    Diagnostic,
     FlatSpan,
     FtlTrail,
     ShapeRow,
@@ -274,6 +277,8 @@ export const ROUTE_CUBIC_SAMPLES = 64;
 
 /** An inner point of a route as R-14 reads it: a corner, or smooth with its tension (step 2). */
 export interface RouteVertex {
+    /** A stored point's id, which anchors name (spec J.2); absent for a bare corner */
+    id?: string;
     at: XY;
     /** Roundness in (0, 2]; absent or 0 is a corner */
     tension?: number;
@@ -575,6 +580,160 @@ export function groupSchedule(route: RouteWalk): GroupSchedule {
 /** `q + o`, one float64 addition per coordinate (R-14 group schedule item 4). */
 export const placed = (q: XY, o: XY): XY => [q[0] + o[0], q[1] + o[1]];
 
+/**
+ * `s_min` (spec Appendix J): the least spacing of Adjust keys, one 8-to-5 step on the default
+ * field. A file-independent constant, so changing a field's step size never fails a saved show.
+ */
+export const S_MIN = 11.25;
+
+/** A profile as R-14′ item 6 evaluates it: keys strictly increasing in place, clamped, tie-merged. */
+export interface ResolvedAdjust {
+    /** The kept keys' places, increasing */
+    xs: number[];
+    /** Their displacements */
+    ds: XY[];
+    /** Each kept key's index in the stored profile */
+    sources: number[];
+    /** How many keys T-3 clamped into `[D_1, D_m]` */
+    clamped: number;
+    /** How many keys T-4 merged away */
+    ties: number;
+    /** How many anchors T-1 or T-2 read as best it could */
+    badAnchors: number;
+}
+
+/** A stored inner point as anchors name it: by id, or none for a point not saved yet. */
+type IdentifiedPoint = { readonly id?: string };
+
+/**
+ * The place of stored point `index`: `D` of the kept point that represents it (R-14), the last
+ * kept at or before it, or 0 when none is (it lay on `F`).
+ */
+function placeOfIndex(W: RoutePath, index: number): number {
+    for (let k = W.V.length - 2; k >= 1; k--)
+        if (W.source[k]! <= index) return W.D[k]!;
+    return 0;
+}
+
+/**
+ * R-14′ item 4: the place of `anchor` on the reference walk `W` of a route with stored `points`.
+ * An id not in the route reads as `from` for `a` and `to` for `b` (T-1); reversed ends are
+ * evaluated as written (T-2). `bad` says either happened (`D-ANCHOR`).
+ */
+export function anchorPlace(
+    W: RoutePath,
+    points: readonly IdentifiedPoint[],
+    anchor: AdjustAnchor,
+): { x: number; bad: boolean } {
+    let bad = false;
+    const placeOf = (id: string, end: "from" | "to"): number => {
+        if (id === end) return end === "from" ? 0 : W.L;
+        const i = points.findIndex((p) => p.id === id);
+        if (i < 0) {
+            bad = true;
+            return end === "from" ? 0 : W.L;
+        }
+        return placeOfIndex(W, i);
+    };
+    const a = placeOf(anchor.a, "from");
+    const b = placeOf(anchor.b, "to");
+    if (a > b) bad = true;
+    return { x: a + clamp01(anchor.f) * (b - a), bad };
+}
+
+/** R-14′ item 6 (i) to (iii): a stored profile on a route's reference walk (T-3, T-4). */
+export function resolveAdjust(
+    schedule: GroupSchedule,
+    points: readonly IdentifiedPoint[],
+    profile: AdjustProfile,
+): ResolvedAdjust {
+    const { W } = schedule;
+    const m = W.V.length - 2;
+    const out: ResolvedAdjust = {
+        xs: [],
+        ds: [],
+        sources: [],
+        clamped: 0,
+        ties: 0,
+        badAnchors: 0,
+    };
+    if (m < 1) return out; // T-11
+    const lo = W.D[1]!;
+    const hi = W.D[m]!;
+    const sorted = profile.keys
+        .map((key, stored) => {
+            const place = anchorPlace(W, points, key);
+            if (place.bad) out.badAnchors++;
+            const x = Math.min(hi, Math.max(lo, place.x));
+            if (x !== place.x) out.clamped++;
+            return { x, d: key.d, stored };
+        })
+        .sort((p, q) => p.x - q.x || p.stored - q.stored);
+    // T-4: consecutive gaps below EPS_GEOM make one cluster (single linkage, 07 N5); the key last
+    // in stored order stands for it
+    for (let i = 0; i < sorted.length; ) {
+        let last = sorted[i]!;
+        let j = i + 1;
+        while (
+            j < sorted.length &&
+            sorted[j]!.x - sorted[j - 1]!.x < EPS_GEOM
+        ) {
+            if (sorted[j]!.stored > last.stored) last = sorted[j]!;
+            j++;
+        }
+        out.ties += j - i - 1;
+        out.xs.push(last.x);
+        out.ds.push(last.d);
+        out.sources.push(last.stored);
+        i = j;
+    }
+    return out;
+}
+
+/** Section 8.9: the diagnostics of one lane's resolved Adjust (T-1 to T-4). */
+export function adjustDiagnostics(
+    adjust: ResolvedAdjust,
+    transitionId: number,
+    slot: number,
+): Diagnostic[] {
+    const out: Diagnostic[] = [];
+    const push = (code: Diagnostic["code"], message: string) =>
+        out.push({
+            code,
+            level: "warning",
+            transitionId,
+            marcherId: null,
+            slot,
+            message,
+        });
+    const where = `the Adjust of slot ${slot} of transition ${transitionId}`;
+    if (adjust.badAnchors > 0)
+        push("D-ANCHOR", `${where} has ${adjust.badAnchors} unusable anchors`);
+    if (adjust.clamped > 0)
+        push(
+            "D-ADJUST-CLAMP",
+            `${where} has ${adjust.clamped} keys outside the shared part`,
+        );
+    if (adjust.ties > 0)
+        push("D-ADJUST-TIE", `${where} has ${adjust.ties} tied keys`);
+    return out;
+}
+
+/** R-14′ item 6 (iv): the profile's displacement at place `x`. */
+export function adjustAt(adjust: ResolvedAdjust, x: number): XY {
+    const { xs, ds } = adjust;
+    const n = xs.length;
+    if (n === 0) return [0, 0];
+    if (x <= xs[0]!) return ds[0]!;
+    if (x >= xs[n - 1]!) return ds[n - 1]!;
+    let i = 0;
+    while (x >= xs[i + 1]!) i++;
+    const f = (x - xs[i]!) / (xs[i + 1]! - xs[i]!);
+    const a = ds[i]!;
+    const b = ds[i + 1]!;
+    return [a[0] + f * (b[0] - a[0]), a[1] + f * (b[1] - a[1])];
+}
+
 function legOf(S: XY, E: XY, c1: XY | null, c2: XY | null): GroupLeg {
     if (!c1 || !c2) {
         const length = dist(S, E);
@@ -614,6 +773,8 @@ export interface GroupMemberWalk {
     /** null when the reference walk kept no inner point (the member walks R-7's line) */
     first: GroupLeg | null;
     last: GroupLeg | null;
+    /** The lane's Adjust, resolved on this schedule; null without one (R-14′ item 6) */
+    adjust: ResolvedAdjust | null;
 }
 
 /**
@@ -626,12 +787,34 @@ export function groupMemberWalk(
     A: XY,
     B: XY,
     offset: XY,
+    adjust: ResolvedAdjust | null = null,
 ): GroupMemberWalk {
     const { W } = schedule;
     const m = W.V.length - 2;
-    if (m < 1) return { schedule, A, B, offset, first: null, last: null };
-    const W1 = placed(W.V[1]!, offset);
-    const Wm = placed(W.V[m]!, offset);
+    if (m < 1)
+        return {
+            schedule,
+            A,
+            B,
+            offset,
+            first: null,
+            last: null,
+            adjust: null,
+        };
+    // R-14′ item 7: `((q + o) + δ)`, the placed points and handles reading δ at D_1 and D_m. With
+    // no Adjust nothing is added, so step 15's walk stays bit-identical (item 9).
+    const at1 = adjust ? adjustAt(adjust, W.D[1]!) : null;
+    const atm = adjust ? adjustAt(adjust, W.D[m]!) : null;
+    const placeFirst = (q: XY): XY => {
+        const p = placed(q, offset);
+        return at1 ? placed(p, at1) : p;
+    };
+    const placeLast = (q: XY): XY => {
+        const p = placed(q, offset);
+        return atm ? placed(p, atm) : p;
+    };
+    const W1 = placeFirst(W.V[1]!);
+    const Wm = placeLast(W.V[m]!);
     const p1 = W.pieces[0]!;
     const pm = W.pieces[m]!;
     // A leg whose ends are within EPS_GEOM is a line, so a member standing on its point doesn't
@@ -644,17 +827,17 @@ export function groupMemberWalk(
                   A,
                   W1,
                   [A[0] + (W1[0] - A[0]) / 3, A[1] + (W1[1] - A[1]) / 3],
-                  placed(p1.c2, offset),
+                  placeFirst(p1.c2),
               )
             : legOf(A, W1, null, null);
     const last =
         W.tension[m]! > 0 && pm.kind === "cubic" && dist(Wm, B) >= EPS_GEOM
-            ? legOf(Wm, B, placed(pm.c1, offset), [
+            ? legOf(Wm, B, placeLast(pm.c1), [
                   B[0] + (Wm[0] - B[0]) / 3,
                   B[1] + (Wm[1] - B[1]) / 3,
               ])
             : legOf(Wm, B, null, null);
-    return { schedule, A, B, offset, first, last };
+    return { schedule, A, B, offset, first, last, adjust };
 }
 
 function legPoint(leg: GroupLeg, f: number): XY {
@@ -666,13 +849,16 @@ function legPoint(leg: GroupLeg, f: number): XY {
 
 /** R-14 group schedule item 6: where the member is at progress `p`. */
 export function groupPoint(walk: GroupMemberWalk, p: number): XY {
-    const { schedule, A, B, offset, first, last } = walk;
+    const { schedule, A, B, offset, first, last, adjust } = walk;
     if (p <= 0) return A;
     if (p >= 1) return B;
     if (!first || !last) return lerp(A, B, p);
     const { uFirst, uLast } = schedule;
     if (p < uFirst) return legPoint(first, p / uFirst);
-    if (p <= uLast) return placed(routePoint(schedule.W, p), offset);
+    if (p <= uLast) {
+        const q = placed(routePoint(schedule.W, p), offset);
+        return adjust ? placed(q, adjustAt(adjust, p * schedule.W.L)) : q;
+    }
     return legPoint(last, (p - uLast) / (1 - uLast));
 }
 
@@ -692,6 +878,8 @@ export interface LaneWalk {
     offset: XY | null;
     /** `groupSchedule(route)`, cached per route; computed here when absent */
     schedule?: GroupSchedule;
+    /** The lane's Adjust on `schedule`, cached per lane (J.7); null or absent for none */
+    adjust?: ResolvedAdjust | null;
 }
 
 /**
@@ -718,13 +906,14 @@ export function walkedPoint(
         if (!founding) return lerp(A, B, p); // joins and resumes walk straight (step 15)
         const { route, offset } = lane;
         if (offset)
-            // a group lane walks the group schedule (R-14 items 1 to 9, step 15)
+            // a group lane walks the group schedule, placed by its offset and Adjust (R-14′)
             return groupPoint(
                 groupMemberWalk(
                     lane.schedule ?? groupSchedule(route),
                     A,
                     B,
                     offset,
+                    lane.adjust ?? null,
                 ),
                 p,
             );

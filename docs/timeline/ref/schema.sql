@@ -184,11 +184,41 @@ CREATE VIEW commit_violations AS
   -- I-LN2 (v0.10): a lane on a follow-the-leader transition is its trail lane
   SELECT 'E-LN2', l.transition_id, 'the lane on slot ' || l.slot_index || ' of a follow-the-leader move is not its trail'
     FROM lanes l JOIN transitions t ON t.id = l.transition_id
-   WHERE t.path_style = 'follow_the_leader' AND (l.offset_x IS NOT NULL OR t.route_id IS NULL OR l.route_id <> t.route_id);
+   WHERE t.path_style = 'follow_the_leader' AND (l.offset_x IS NOT NULL OR t.route_id IS NULL OR l.route_id <> t.route_id)
+  UNION ALL
+  -- I-LN4 (v0.10, plan step 3b): an own lane carries no Adjust
+  SELECT 'E-R4', l.transition_id, 'the own lane on slot ' || l.slot_index || ' has an Adjust'
+    FROM lanes l JOIN transitions t ON t.id = l.transition_id
+   WHERE l.offset_x IS NULL AND l.adjust IS NOT NULL AND t.path_style <> 'follow_the_leader'
+  UNION ALL
+  -- I-J3 (J.3, plan step 3b): an anchor names a point id of its route
+  SELECT 'E-J3', l.transition_id, 'an Adjust on slot ' || l.slot_index || ' names a missing point'
+    FROM lanes l, json_each(l.adjust, '$.keys') k, routes r
+   WHERE r.id = l.route_id
+     AND ( (json_extract(k.value,'$.a') <> 'from' AND NOT EXISTS (SELECT 1 FROM json_each(r.geometry,'$.points') p
+             WHERE json_extract(p.value,'$.id') = json_extract(k.value,'$.a')))
+        OR (json_extract(k.value,'$.b') <> 'to'   AND NOT EXISTS (SELECT 1 FROM json_each(r.geometry,'$.points') p
+             WHERE json_extract(p.value,'$.id') = json_extract(k.value,'$.b'))) )
+  UNION ALL
+  -- I-J5 (J.3, plan step 3b): two keys of a profile on one straight stretch closer than s_min (126.5625 = s_min²), or equal
+  SELECT 'E-J5', l.transition_id, 'two Adjust keys on slot ' || l.slot_index || ' are closer than a step'
+    FROM lanes l, json_each(l.adjust, '$.keys') k1, json_each(l.adjust, '$.keys') k2
+   WHERE k2.key > k1.key
+     AND json_extract(k2.value,'$.a') = json_extract(k1.value,'$.a')
+     AND json_extract(k2.value,'$.b') = json_extract(k1.value,'$.b')
+     AND ( json_extract(k1.value,'$.f') = json_extract(k2.value,'$.f')
+        OR EXISTS (SELECT 1 FROM routes r, json_each(r.geometry,'$.points') pa, json_each(r.geometry,'$.points') pb
+                    WHERE r.id = l.route_id AND pb.key = pa.key + 1
+                      AND json_extract(pa.value,'$.id') = json_extract(k1.value,'$.a')
+                      AND json_extract(pb.value,'$.id') = json_extract(k1.value,'$.b')
+                      AND json_type(pa.value,'$.tension') IS NULL AND json_type(pb.value,'$.tension') IS NULL
+                      AND (json_extract(k1.value,'$.f') - json_extract(k2.value,'$.f')) * (json_extract(k1.value,'$.f') - json_extract(k2.value,'$.f'))
+                          * ( (json_extract(pb.value,'$.at[0]') - json_extract(pa.value,'$.at[0]')) * (json_extract(pb.value,'$.at[0]') - json_extract(pa.value,'$.at[0]'))
+                            + (json_extract(pb.value,'$.at[1]') - json_extract(pa.value,'$.at[1]')) * (json_extract(pb.value,'$.at[1]') - json_extract(pa.value,'$.at[1]')) ) < 126.5625) );
 
 CREATE INDEX idx_tr_route ON transitions(route_id);
 
--- v0.10 (D-20, J.1, plan step 24): a slot walks a route. `adjust` and `group_adjust_id` come with later steps (ADD COLUMN).
+-- v0.10 (D-20, J.1, plan step 24): a slot walks a route. `group_adjust_id` comes with a later step (ADD COLUMN).
 CREATE TABLE lanes (
   id             INTEGER PRIMARY KEY,
   transition_id  INTEGER NOT NULL REFERENCES transitions(id) ON DELETE RESTRICT,
@@ -196,6 +226,7 @@ CREATE TABLE lanes (
   route_id       INTEGER NOT NULL REFERENCES routes(id)      ON DELETE RESTRICT,
   offset_x       REAL CHECK (offset_x IS NULL OR offset_x BETWEEN -2000000 AND 2000000),
   offset_y       REAL CHECK (offset_y IS NULL OR offset_y BETWEEN -2000000 AND 2000000),
+  adjust         TEXT CHECK (adjust IS NULL OR json_valid(adjust)),                    -- this spot's own Adjust (J.2, plan step 3b)
   UNIQUE (transition_id, slot_index),                                  -- I-LN3
   CHECK ((offset_x IS NULL) = (offset_y IS NULL))
 ) STRICT;
@@ -270,7 +301,7 @@ CREATE TRIGGER log_slot_destinations_upd AFTER UPDATE ON slot_destinations BEGIN
 CREATE TRIGGER log_routes_ins AFTER INSERT ON routes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('routes',NEW.id,NULL,json_object('id',NEW.id,'geometry',json(NEW.geometry))); END;
 CREATE TRIGGER log_routes_upd AFTER UPDATE ON routes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('routes',NEW.id,json_object('id',OLD.id,'geometry',json(OLD.geometry)),json_object('id',NEW.id,'geometry',json(NEW.geometry))); END;
 CREATE TRIGGER log_routes_del AFTER DELETE ON routes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('routes',OLD.id,json_object('id',OLD.id,'geometry',json(OLD.geometry)),NULL); END;
-CREATE TRIGGER log_lanes_ins AFTER INSERT ON lanes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('lanes',NEW.id,NULL,json_object('id',NEW.id,'transition',NEW.transition_id,'slot',NEW.slot_index,'route',NEW.route_id,'offset',CASE WHEN NEW.offset_x IS NULL THEN NULL ELSE json_array(NEW.offset_x,NEW.offset_y) END)); END;
-CREATE TRIGGER log_lanes_upd AFTER UPDATE ON lanes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('lanes',NEW.id,json_object('id',OLD.id,'transition',OLD.transition_id,'slot',OLD.slot_index,'route',OLD.route_id,'offset',CASE WHEN OLD.offset_x IS NULL THEN NULL ELSE json_array(OLD.offset_x,OLD.offset_y) END),json_object('id',NEW.id,'transition',NEW.transition_id,'slot',NEW.slot_index,'route',NEW.route_id,'offset',CASE WHEN NEW.offset_x IS NULL THEN NULL ELSE json_array(NEW.offset_x,NEW.offset_y) END)); END;
-CREATE TRIGGER log_lanes_del AFTER DELETE ON lanes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('lanes',OLD.id,json_object('id',OLD.id,'transition',OLD.transition_id,'slot',OLD.slot_index,'route',OLD.route_id,'offset',CASE WHEN OLD.offset_x IS NULL THEN NULL ELSE json_array(OLD.offset_x,OLD.offset_y) END),NULL); END;
+CREATE TRIGGER log_lanes_ins AFTER INSERT ON lanes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('lanes',NEW.id,NULL,json_object('id',NEW.id,'transition',NEW.transition_id,'slot',NEW.slot_index,'route',NEW.route_id,'offset',CASE WHEN NEW.offset_x IS NULL THEN NULL ELSE json_array(NEW.offset_x,NEW.offset_y) END,'adjust',json(NEW.adjust))); END;
+CREATE TRIGGER log_lanes_upd AFTER UPDATE ON lanes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('lanes',NEW.id,json_object('id',OLD.id,'transition',OLD.transition_id,'slot',OLD.slot_index,'route',OLD.route_id,'offset',CASE WHEN OLD.offset_x IS NULL THEN NULL ELSE json_array(OLD.offset_x,OLD.offset_y) END,'adjust',json(OLD.adjust)),json_object('id',NEW.id,'transition',NEW.transition_id,'slot',NEW.slot_index,'route',NEW.route_id,'offset',CASE WHEN NEW.offset_x IS NULL THEN NULL ELSE json_array(NEW.offset_x,NEW.offset_y) END,'adjust',json(NEW.adjust))); END;
+CREATE TRIGGER log_lanes_del AFTER DELETE ON lanes BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('lanes',OLD.id,json_object('id',OLD.id,'transition',OLD.transition_id,'slot',OLD.slot_index,'route',OLD.route_id,'offset',CASE WHEN OLD.offset_x IS NULL THEN NULL ELSE json_array(OLD.offset_x,OLD.offset_y) END,'adjust',json(OLD.adjust)),NULL); END;
 CREATE TRIGGER log_slot_destinations_del AFTER DELETE ON slot_destinations BEGIN INSERT INTO change_log(tbl,row_id,before,after) VALUES ('slot_destinations',OLD.transition_id,json_object('transition',OLD.transition_id,'slot',OLD.slot_index,'x',OLD.x,'y',OLD.y),NULL); END;

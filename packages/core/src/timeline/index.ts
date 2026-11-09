@@ -35,6 +35,9 @@ export type {
     RouteGeometry,
     RouteRow,
     LaneRow,
+    AdjustAnchor,
+    AdjustKey,
+    AdjustProfile,
 } from "./types";
 export type { Oracle } from "./oracle";
 export { createResolver } from "./resolver";
@@ -50,7 +53,11 @@ export {
     groupMemberWalk,
     groupPoint,
     placed,
+    adjustAt,
+    anchorPlace,
+    resolveAdjust,
     EPS_GEOM,
+    S_MIN,
     ROUTE_CUBIC_SAMPLES,
 } from "./geom";
 export type {
@@ -63,7 +70,28 @@ export type {
     GroupSchedule,
     GroupMemberWalk,
     GroupLeg,
+    ResolvedAdjust,
 } from "./geom";
+export {
+    adjustRefusal,
+    anchorOfPlace,
+    limitRouteEdit,
+    placeAdjustKey,
+    pruneZeroKeys,
+    refitGeometry,
+    rehomeProfile,
+    removeAdjustKey,
+    routeEndsChanged,
+    S_MIN_WRITE,
+    laneSamples,
+    laneRigidPart,
+} from "./adjust";
+export type {
+    AdjustRefusal,
+    AdjustPlacement,
+    RehomeResult,
+    LaneSample,
+} from "./adjust";
 export {
     validateShapeGeometry,
     validatePathParams,
@@ -72,6 +100,7 @@ export {
     validateHome,
     validateRouteGeometry,
     validateLaneOffset,
+    validateAdjustProfile,
     normalizeStartAngle,
     MAX_ROUTE_POINT_ID_LENGTH,
     MAX_ROUTE_TENSION,
