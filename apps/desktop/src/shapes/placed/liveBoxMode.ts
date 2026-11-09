@@ -221,6 +221,8 @@ export class LiveBoxMode implements FieldMode {
     private saved: unknown = undefined;
     /** The beat shown when the gesture under way was pressed */
     private pressedAt: number | null = null;
+    /** The box as last read during a gesture, for when the gesture changes nothing */
+    private readDuringGesture: PlacedBox | null = null;
 
     constructor(
         box: PlacedBox,
@@ -234,7 +236,11 @@ export class LiveBoxMode implements FieldMode {
      * selected handle stays only through this mode's own save (#557): an undo or redo clears it.
      */
     setBox(box: PlacedBox): void {
-        if (this.live.gesture) return;
+        if (this.live.gesture) {
+            this.readDuringGesture = box;
+            return;
+        }
+        this.readDuringGesture = null;
         const saved = this.saved;
         // Read again unchanged (the playhead moved), the save may still be on its way
         if (!sameParams(box.params, this.live.box.params))
@@ -369,7 +375,9 @@ export class LiveBoxMode implements FieldMode {
             // The next press goes on from the shape as saved, before the selection hears of it
             const saving = useSavingBoxStore.getState().box;
             if (saving) this.live = openLive(saving, this.live.selected);
+            this.readDuringGesture = null;
         }
+        this.catchUp();
         this.emit();
         if (!out.changed && out.enter) this.enterAt(pointer);
     }
@@ -423,7 +431,13 @@ export class LiveBoxMode implements FieldMode {
     cancel(): void {
         this.endHeld();
         this.live = openLive(this.live.box, this.live.selected);
+        this.catchUp();
         this.emit();
+    }
+
+    /** A gesture that ended without a save takes the box read while it was held */
+    private catchUp(): void {
+        if (this.readDuringGesture) this.setBox(this.readDuringGesture);
     }
 
     leave(): void {

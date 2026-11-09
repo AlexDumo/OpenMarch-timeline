@@ -105,7 +105,8 @@ export function commitBox(
         waits: unsaved > 0 || historyStepsPending(),
     };
     useSavingBoxStore.setState({
-        box: savedAs(box, params, shown),
+        // As it's stored now: a kept drag's box may be from before this page got its own copy
+        box: savedAs(storedBox(box, at.beat), params, shown),
         // Isolation takes the playhead to the edit's end as it writes, so it's shown there too
         beats: at.plan.ok ? [at.beat, at.plan.beat] : [at.beat],
     });
