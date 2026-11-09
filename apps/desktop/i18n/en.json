@@ -177,6 +177,7 @@
             "removeKey": "Remove key",
             "resetSpot": "Reset spot",
             "deselectPoint": "Deselect point",
+            "deselectSpot": "Deselect spot",
             "deselect": "Deselect path",
             "pointCorner": "Corner point",
             "pointSmooth": "Smooth point",
