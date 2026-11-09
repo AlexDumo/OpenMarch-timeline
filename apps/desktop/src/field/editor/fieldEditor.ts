@@ -325,6 +325,10 @@ export type FieldModeDrawing = {
      * along its copy of the path to its end spot
      */
     lanes?: readonly (readonly FieldPoint[])[];
+    /** Which of `lanes` the pointer is on or the designer picked: drawn solid (pathways step 3b) */
+    laneHighlights?: readonly number[];
+    /** An adjusted lane's keys, small round handles while its path is open (pathways step 3b) */
+    adjustHandles?: readonly { at: FieldPoint; selected: boolean }[];
     /**
      * Rings round marchers' starts (pathways step 15): `group` on each member of the group path
      * shown ("Follows the group path"), `own` on a selected marcher in the move that isn't on it
@@ -447,6 +451,8 @@ export type FieldModePress = {
     reachesInside(): boolean;
     /** The editor's `isMac`: on a Mac, $mod is Cmd. */
     readonly isMac: boolean;
+    /** Whether a marcher's dot (or an item) is under the press, so it is the dot's (P-1) */
+    onDot(): boolean;
 };
 
 /** What the editor knows of the pointer when it asks a mode for its cursor. */
@@ -646,6 +652,7 @@ export class FieldEditor {
                 this.reachInside(pointer, this.marcherAt(pointer.field)) !==
                 null,
             isMac: this.options.isMac ?? false,
+            onDot: () => this.marcherAt(pointer.field) !== null,
         };
         if (this.mode?.claims(pointer, modePress)) {
             const last = this.lastClick;

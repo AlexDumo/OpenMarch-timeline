@@ -204,6 +204,8 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
         })),
         rings: (drawing.rings ?? []).map(copy),
         lanes: (drawing.lanes ?? []).length,
+        laneLines: (drawing.lanes ?? []).map((lane) => lane.map(screen)),
+        adjustHandles: (drawing.adjustHandles ?? []).map((h) => screen(h.at)),
         memberRings: (drawing.memberRings ?? []).map((r) => ({
             at: copy(r.at),
             kind: r.kind,

@@ -59,9 +59,10 @@ async function stepFifteenFile(file: string) {
     withDb(file, (db) => {
         db.exec("PRAGMA foreign_keys = OFF");
         db.exec("DROP TABLE timeline_lanes");
-        db.prepare("DELETE FROM __drizzle_migrations WHERE created_at = ?").run(
-            LANES_MIGRATION.when,
-        );
+        // 0021 goes with it: drizzle runs only migrations newer than a file's newest
+        db.prepare(
+            "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
+        ).run(LANES_MIGRATION.when);
         // the commit and change-log triggers go with the table drop; the rows below are raw
         db.exec(`
             DELETE FROM timeline_change_log;

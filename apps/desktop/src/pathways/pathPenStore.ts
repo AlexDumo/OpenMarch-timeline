@@ -2,7 +2,20 @@ import { create } from "zustand";
 import { db } from "@/global/database/db";
 import { toast } from "sonner";
 import { drawRoute, removeRoute } from "@/db-functions/timelineRoutes";
-import { editPathPoints, redrawPath } from "@/db-functions/timelinePathEdits";
+import {
+    editPathPoints,
+    redrawPath,
+    refitPath as refitRoute,
+} from "@/db-functions/timelinePathEdits";
+import {
+    acknowledgeRehomed,
+    adjustLane,
+    removeAdjustKey,
+    resetLaneAdjust,
+    setAdjustKey,
+} from "@/db-functions/timelinePathAdjust";
+import type { RehomeReport } from "@/db-functions/timelineRouteGeometry";
+import type { AdjustProfile } from "@openmarch/core";
 import {
     drawGroupRoute,
     ownPath,
@@ -14,7 +27,7 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import tolgee from "@/global/singletons/Tolgee";
 import type { XY } from "@/shapes/types";
 import { SMOOTH } from "@/shapes/line/lineGeometry";
-import type { PathTarget } from "./pathTarget";
+import type { GroupMember, PathTarget } from "./pathTarget";
 import {
     isSmooth,
     pointKey,
@@ -64,6 +77,18 @@ export interface PathSession {
      * selected path or the open path again, however it was opened.
      */
     readonly byRoute?: boolean;
+    /** The lane picked on the open group path, and which of its keys if one (step 3b, decision C) */
+    readonly lane?: {
+        readonly marcherId: number;
+        readonly key: number | null;
+    } | null;
+    /** The lane under the pointer, highlighted and named (decision C) */
+    readonly hoverLane?: { readonly marcherId: number; readonly at: XY } | null;
+    /** While a lane or key is dragged: the Adjust it would have, drawn live and saved on release */
+    readonly laneEdit?: {
+        readonly marcherId: number;
+        readonly adjust: AdjustProfile | null;
+    } | null;
 }
 
 /**
@@ -401,6 +426,14 @@ export function showPath(
             selected: kept,
             dragging: null,
             object,
+            lane:
+                open && session?.lane && target.group
+                    ? target.group.members.some(
+                          (m) => m.marcherId === session.lane!.marcherId,
+                      )
+                        ? session.lane
+                        : null
+                    : null,
         },
     });
 }
@@ -494,8 +527,48 @@ export function setPointer(pointer: XY | null): void {
 }
 
 export function selectPoint(key: string | null): void {
-    update((s) => (s.selected === key ? s : { ...s, selected: key }));
+    update((s) =>
+        s.selected === key && (key === null || !s.lane)
+            ? s
+            : { ...s, selected: key, lane: key === null ? s.lane : null },
+    );
 }
+
+/** Picks a lane (and maybe one of its keys) on the open group path, or lets it go */
+export function selectLane(
+    lane: { marcherId: number; key: number | null } | null,
+): void {
+    update((s) =>
+        s.lane?.marcherId === lane?.marcherId && s.lane?.key === lane?.key
+            ? s
+            : { ...s, lane, selected: lane ? null : s.selected },
+    );
+}
+
+/** The lane under the pointer, or none */
+export function setHoverLane(
+    hoverLane: { marcherId: number; at: XY } | null,
+): void {
+    const was = usePathPenStore.getState().session?.hoverLane ?? null;
+    if (was?.marcherId === hoverLane?.marcherId && !was === !hoverLane) return;
+    update((s) => ({ ...s, hoverLane }));
+}
+
+/** The Adjust a lane or key drag would write, shown live; null ends the preview */
+export function setLaneEdit(laneEdit: PathSession["laneEdit"] | null): void {
+    update((s) => ({ ...s, laneEdit }));
+}
+
+/** A group member as drawn now: a lane being dragged shows the Adjust it would have */
+export function memberNow(s: PathSession, m: GroupMember): GroupMember {
+    return s.laneEdit?.marcherId === m.marcherId
+        ? { ...m, adjust: s.laneEdit.adjust }
+        : m;
+}
+
+/** The member `marcherId` of the session's group path, or undefined */
+export const memberOf = (s: PathSession, marcherId: number) =>
+    s.target.group?.members.find((m) => m.marcherId === marcherId);
 
 /** The points as a drag has them, shown live and saved on release ({@link commitPoints}) */
 export function dragPoints(points: readonly PathPoint[], index: number): void {
@@ -508,7 +581,10 @@ export function cancelDrag(before: readonly PathPoint[]): void {
 }
 
 /** Writes `points` as the session's path (AP-R1), smooth ones with their roundness. */
-async function save(points: readonly PathPoint[]): Promise<boolean> {
+async function save(
+    points: readonly PathPoint[],
+    drag = false,
+): Promise<boolean> {
     const { session, saving } = usePathPenStore.getState();
     if (!session || saving) return false;
     usePathPenStore.setState({ saving: true });
@@ -522,33 +598,45 @@ async function save(points: readonly PathPoint[]): Promise<boolean> {
         if (session.phase === "open" && target.routeId !== null)
             // Point edits on the open path are path edits, by its route (AP-O8, 07 N3); on a group
             // path they move every lane (AP-R1)
-            await editPathPoints({
-                db,
-                routeId: target.routeId,
-                points: stored,
-            });
+            reportRehome(
+                await editPathPoints({
+                    db,
+                    routeId: target.routeId,
+                    points: stored,
+                    drag,
+                }),
+            );
         else if (session.byRoute && target.routeId !== null)
             // The selected or open path drawn again: a path edit too, keeping its id (AP-O8)
-            await redrawPath({
-                db,
-                routeId: target.routeId,
-                points: stored,
-            });
-        else if (target.group)
-            // The pen with several marchers: a group path (AP-R8)
-            await drawGroupRoute({
+            reportRehome(
+                await redrawPath({
+                    db,
+                    routeId: target.routeId,
+                    points: stored,
+                }),
+            );
+        else if (
+            target.group
+        ) // The pen with several marchers: a group path (AP-R8)
+        {
+            const drawn = await drawGroupRoute({
                 db,
                 timelineId: target.timelineId,
                 marcherIds: target.group.members.map((m) => m.marcherId),
                 points: stored,
             });
-        else
-            await drawRoute({
+            reportRehome(drawn.rehome);
+            reportAdjustsRemoved(drawn.adjustsRemoved);
+        } else {
+            const drawn = await drawRoute({
                 db,
                 timelineId: target.timelineId,
                 marcherId: target.marcherId,
                 points: stored,
             });
+            reportRehome(drawn.rehome);
+            reportAdjustsRemoved(drawn.adjustRemoved ? 1 : 0);
+        }
         return true;
     } catch (error) {
         toastTimelineError(
@@ -596,6 +684,7 @@ export async function commitPoints(
     points: readonly PathPoint[],
     before: readonly PathPoint[],
     selected?: string | null,
+    drag = false,
 ): Promise<void> {
     const { session } = usePathPenStore.getState();
     if (!session || session.phase !== "open") return;
@@ -605,7 +694,7 @@ export async function commitPoints(
         points,
         ...(selected === undefined ? {} : { selected }),
     }));
-    if (await save(points))
+    if (await save(points, drag))
         usePathPenStore.setState((state) => ({ saved: state.saved + 1 }));
     else cancelDrag(before);
 }
@@ -692,6 +781,147 @@ function toastWithUndo(message: string): void {
         unsubscribe();
         toast.dismiss(id);
     });
+}
+
+/**
+ * AP-H1's promise: an Adjust is never moved or dropped silently. Says what a path edit did to the
+ * Adjusts on it, with Undo; nothing when it did nothing.
+ */
+export function reportRehome(report: RehomeReport): void {
+    const parts: string[] = [];
+    if (report.rehomedSpots > 0)
+        parts.push(
+            tolgee.t(
+                "pathways.toasts.rehomed",
+                "Moved the adjustment on {count, plural, one {# spot} other {# spots}} to the nearest points left",
+                { count: report.rehomedSpots },
+            ),
+        );
+    if (report.droppedKeys > 0 && report.clearedSpots === 0)
+        parts.push(
+            tolgee.t(
+                "pathways.toasts.rehomedKeys",
+                "{count, plural, one {# adjustment point} other {# adjustment points}} dropped",
+                { count: report.droppedKeys },
+            ),
+        );
+    if (report.clearedSpots > 0)
+        parts.push(
+            tolgee.t(
+                "pathways.toasts.rehomedCleared",
+                "{count, plural, one {# spot} other {# spots}} lost their adjustment",
+                { count: report.clearedSpots },
+            ),
+        );
+    if (parts.length > 0) toastWithUndo(parts.join(" · "));
+}
+
+/** AP-R8's and AP-R1's toast: a new path took the place of one a spot had an Adjust on */
+function reportAdjustsRemoved(count: number): void {
+    if (count > 0)
+        toastWithUndo(
+            tolgee.t(
+                "pathways.toasts.adjustsRemoved",
+                "{count, plural, one {# adjustment} other {# adjustments}} removed: {count, plural, one {it was} other {they were}} on the old path",
+                { count },
+            ),
+        );
+}
+
+/** Runs one Adjust or Re-fit write: one at a time, the path read again after it */
+async function adjustWrite(
+    fallback: () => string,
+    write: () => Promise<void>,
+): Promise<boolean> {
+    if (usePathPenStore.getState().saving) return false;
+    usePathPenStore.setState({ saving: true });
+    try {
+        await write();
+        usePathPenStore.setState((state) => ({ saved: state.saved + 1 }));
+        return true;
+    } catch (error) {
+        toastTimelineError(error, fallback());
+        return false;
+    } finally {
+        usePathPenStore.setState({ saving: false });
+    }
+}
+
+const adjustFallback = () =>
+    tolgee.t("pathways.errors.adjust", "Couldn't adjust this spot");
+
+/** Reads the lane of a marcher on the session's group path, for an Adjust write */
+const laneArgs = (marcherId: number) => {
+    const { session } = usePathPenStore.getState();
+    const member = session ? memberOf(session, marcherId) : undefined;
+    return member?.laneId === undefined
+        ? null
+        : { db, laneId: member.laneId, marcherId };
+};
+
+/** AP-R11, decision C: the lane of `marcherId` is displaced by `d` at place `x`. One undo step. */
+export async function commitLaneAdjust(
+    marcherId: number,
+    x: number,
+    d: [number, number],
+): Promise<void> {
+    const args = laneArgs(marcherId);
+    if (args)
+        await adjustWrite(adjustFallback, () => adjustLane({ ...args, x, d }));
+    setLaneEdit(null);
+}
+
+/** A key handle dragged: key `index` of the lane takes displacement `d`. One undo step. */
+export async function commitAdjustKey(
+    marcherId: number,
+    index: number,
+    d: [number, number],
+): Promise<void> {
+    const args = laneArgs(marcherId);
+    if (args)
+        await adjustWrite(adjustFallback, () =>
+            setAdjustKey({ ...args, index, d }),
+        );
+    setLaneEdit(null);
+}
+
+/** Removes the key `index` of the lane. One undo step. */
+export async function deleteAdjustKey(
+    marcherId: number,
+    index: number,
+): Promise<void> {
+    const args = laneArgs(marcherId);
+    if (args)
+        await adjustWrite(adjustFallback, () =>
+            removeAdjustKey({ ...args, index }),
+        );
+    selectLane(null);
+}
+
+/** AP-R11's reset: the spot walks the plain lane again. One undo step. */
+export async function resetSpot(marcherId: number): Promise<void> {
+    const args = laneArgs(marcherId);
+    if (args) await adjustWrite(adjustFallback, () => resetLaneAdjust(args));
+    selectLane(null);
+}
+
+/** Re-fit (decision A), by the session's route. One undo step. */
+export async function refitOpenPath(): Promise<void> {
+    const routeId = usePathPenStore.getState().session?.target.routeId ?? null;
+    if (routeId === null) return;
+    await adjustWrite(
+        () => tolgee.t("pathways.errors.refit", "Couldn't re-fit the path"),
+        async () => reportRehome(await refitRoute({ db, routeId })),
+    );
+}
+
+/** Takes the re-homed badge off the session's path. One undo step. */
+export async function acknowledgeOpenPath(): Promise<void> {
+    const routeId = usePathPenStore.getState().session?.target.routeId ?? null;
+    if (routeId === null) return;
+    await adjustWrite(adjustFallback, () =>
+        acknowledgeRehomed({ db, routeId }),
+    );
 }
 
 /**

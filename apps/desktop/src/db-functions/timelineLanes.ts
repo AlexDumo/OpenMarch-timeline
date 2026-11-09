@@ -17,7 +17,10 @@
  */
 import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { XY } from "@openmarch/core";
-import { LANE_MODEL_USER_VERSION } from "@om-electron/database/fileVersion";
+import {
+    ADJUST_MODEL_USER_VERSION,
+    LANE_MODEL_USER_VERSION,
+} from "@om-electron/database/fileVersion";
 import { schema } from "@/global/database/db";
 import type { DbConnection, DbTransaction } from "./types";
 
@@ -171,16 +174,23 @@ export async function sweepOrphanRoutesInTransaction(
     return orphans;
 }
 
-/** Writes the lane-model file version (11) with a file's first lane (ADR 0015 §9). */
-export async function markLaneModelInTransaction(
+/** Raises the file's version to `version`; never lowers it. */
+async function raiseFileVersion(
     tx: DbTransaction,
+    version: number,
 ): Promise<void> {
     const row = await tx
         .select({ version: sql<number>`user_version` })
         .from(sql`pragma_user_version`)
         .get();
-    if ((row?.version ?? 0) < LANE_MODEL_USER_VERSION)
-        await tx.run(
-            sql.raw(`PRAGMA user_version = ${LANE_MODEL_USER_VERSION}`),
-        );
+    if ((row?.version ?? 0) < version)
+        await tx.run(sql.raw(`PRAGMA user_version = ${version}`));
 }
+
+/** Writes the lane-model file version (11) with a file's first lane (ADR 0015 §9). */
+export const markLaneModelInTransaction = (tx: DbTransaction) =>
+    raiseFileVersion(tx, LANE_MODEL_USER_VERSION);
+
+/** Writes the Adjust file version (12) with a file's first Adjust (ADR 0015 §9, step 3b). */
+export const markAdjustModelInTransaction = (tx: DbTransaction) =>
+    raiseFileVersion(tx, ADJUST_MODEL_USER_VERSION);

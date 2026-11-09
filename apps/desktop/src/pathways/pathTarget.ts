@@ -1,5 +1,10 @@
 import { and, desc, eq, gt, inArray, lte } from "drizzle-orm";
-import type { Resolver, RoutePoint } from "@openmarch/core";
+import {
+    routeEndsChanged,
+    type AdjustProfile,
+    type Resolver,
+    type RoutePoint,
+} from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import type { DbConnection } from "@/db-functions/types";
 import { readRoutes, type MoveRoute } from "@/db-functions/timelineRoutes";
@@ -63,6 +68,10 @@ export interface GroupMember {
     from: XY;
     /** Its end spot (R-14's B) */
     to: XY;
+    /** Its lane's row, slot and Adjust (step 3b); absent while a new group path is drawn */
+    laneId?: number;
+    slot?: number;
+    adjust?: AdjustProfile | null;
 }
 
 /** Who walks a group path, and the selected marchers in the move who don't (step 15) */
@@ -169,6 +178,9 @@ export async function findGroupTarget(
             offset: { x: o[0], y: o[1] },
             from: xy(resolver.explain(r.marcherId, r.start).origin),
             to: xy(resolver.positionAt(r.marcherId, r.end)),
+            laneId: r.laneId,
+            slot: r.slot,
+            adjust: r.adjust,
         });
     }
     const outside: GroupTarget["outside"][number][] = [];
@@ -401,6 +413,9 @@ export function targetOfRoute(
             offset: { x: o[0], y: o[1] },
             from: xy(resolver.explain(r.marcherId, r.start).origin),
             to: xy(resolver.positionAt(r.marcherId, r.end)),
+            laneId: r.laneId,
+            slot: r.slot,
+            adjust: r.adjust,
         });
     }
     return {
@@ -418,6 +433,20 @@ export function targetOfRoute(
         group: { members, outside: [] },
         span,
     };
+}
+
+/**
+ * Whether Re-fit has anything to do (decision A, spec J.8): a saved path whose ends now differ from
+ * the stored ones by more than the app's geometry tolerance.
+ */
+export function refitNeeded(target: PathTarget): boolean {
+    if (target.routeId === null || !target.ends) return false;
+    const now = target.drawnEnds ?? { from: target.from, to: target.to };
+    const pair = (p: XY): [number, number] => [p.x, p.y];
+    return routeEndsChanged(
+        { from: pair(target.ends.from), to: pair(target.ends.to) },
+        { from: pair(now.from), to: pair(now.to) },
+    );
 }
 
 /**

@@ -112,7 +112,11 @@ const views = {
      * I-R3′); only a follow-the-leader transition carries a route, as its trail (E-R2, I-R2′),
      * which also keeps step 15's retired `route` style out; an own lane is its route's only lane
      * (E-R4, I-LN4); every lane of a route is in one move (E-R5, I-LN5; one range by C-11); and a
-     * lane on a follow-the-leader transition is its trail lane (E-LN2, I-LN2). Apart from
+     * lane on a follow-the-leader transition is its trail lane (E-LN2, I-LN2). Since step 3b an
+     * own lane carries no Adjust (E-R4), an Adjust's anchors name points of its route (E-J3, I-J3)
+     * and two keys on one straight corner-to-corner stretch are at least a step apart, 126.5625
+     * being `s_min` squared (E-J5, I-J5; I-J4 in full needs `D` on curves, so the write path has
+     * it). Apart from
      * `timeline_commit_violations` for the same reason as `timeline_held_violations`: the write
      * wrapper reads it once the lanes table exists, and a view that names a missing table would
      * break a later table rebuild.
@@ -157,7 +161,48 @@ const views = {
               FROM timeline_lanes l
               JOIN timeline_transitions t ON t.id = l.transition_id
              WHERE t.path_style = 'follow_the_leader'
-               AND (l.offset_x IS NOT NULL OR t.route_id IS NULL OR l.route_id <> t.route_id);
+               AND (l.offset_x IS NOT NULL OR t.route_id IS NULL OR l.route_id <> t.route_id)
+            UNION ALL
+            SELECT 'E-R4' AS code, l.transition_id AS transition_id,
+                   'the own lane on slot ' || l.slot_index || ' has an Adjust' AS detail
+              FROM timeline_lanes l
+              JOIN timeline_transitions t ON t.id = l.transition_id
+             WHERE l.offset_x IS NULL AND l.adjust IS NOT NULL
+               AND t.path_style <> 'follow_the_leader'
+            UNION ALL
+            SELECT 'E-J3' AS code, l.transition_id AS transition_id,
+                   'an Adjust on slot ' || l.slot_index || ' names a missing point' AS detail
+              FROM timeline_lanes l, json_each(l.adjust, '$.keys') k, timeline_routes r
+             WHERE r.id = l.route_id
+               AND ((json_extract(k.value, '$.a') <> 'from' AND NOT EXISTS (
+                        SELECT 1 FROM json_each(r.geometry, '$.points') p
+                         WHERE json_extract(p.value, '$.id') = json_extract(k.value, '$.a')))
+                 OR (json_extract(k.value, '$.b') <> 'to' AND NOT EXISTS (
+                        SELECT 1 FROM json_each(r.geometry, '$.points') p
+                         WHERE json_extract(p.value, '$.id') = json_extract(k.value, '$.b'))))
+            UNION ALL
+            SELECT 'E-J5' AS code, l.transition_id AS transition_id,
+                   'two Adjust keys on slot ' || l.slot_index || ' are closer than a step' AS detail
+              FROM timeline_lanes l, json_each(l.adjust, '$.keys') k1, json_each(l.adjust, '$.keys') k2
+             WHERE k2.key > k1.key
+               AND json_extract(k2.value, '$.a') = json_extract(k1.value, '$.a')
+               AND json_extract(k2.value, '$.b') = json_extract(k1.value, '$.b')
+               AND (json_extract(k1.value, '$.f') = json_extract(k2.value, '$.f')
+                 OR EXISTS (
+                    SELECT 1 FROM timeline_routes r, json_each(r.geometry, '$.points') pa,
+                                  json_each(r.geometry, '$.points') pb
+                     WHERE r.id = l.route_id AND pb.key = pa.key + 1
+                       AND json_extract(pa.value, '$.id') = json_extract(k1.value, '$.a')
+                       AND json_extract(pb.value, '$.id') = json_extract(k1.value, '$.b')
+                       AND json_type(pa.value, '$.tension') IS NULL
+                       AND json_type(pb.value, '$.tension') IS NULL
+                       AND (json_extract(k1.value, '$.f') - json_extract(k2.value, '$.f'))
+                           * (json_extract(k1.value, '$.f') - json_extract(k2.value, '$.f'))
+                           * ((json_extract(pb.value, '$.at[0]') - json_extract(pa.value, '$.at[0]'))
+                              * (json_extract(pb.value, '$.at[0]') - json_extract(pa.value, '$.at[0]'))
+                            + (json_extract(pb.value, '$.at[1]') - json_extract(pa.value, '$.at[1]'))
+                              * (json_extract(pb.value, '$.at[1]') - json_extract(pa.value, '$.at[1]')))
+                           < 126.5625));
     `,
     timeline_held_violations: `
         CREATE VIEW IF NOT EXISTS timeline_held_violations AS
@@ -432,7 +477,8 @@ function timelineChangeLogTriggers(
             image: (r) =>
                 `json_object('id', ${r}.id, 'transition', ${r}.transition_id, 'slot', ${r}.slot_index, ` +
                 `'route', ${r}.route_id, 'offset', CASE WHEN ${r}.offset_x IS NULL THEN NULL ` +
-                `ELSE json_array(${exactReal(`${r}.offset_x`)}, ${exactReal(`${r}.offset_y`)}) END)`,
+                `ELSE json_array(${exactReal(`${r}.offset_x`)}, ${exactReal(`${r}.offset_y`)}) END, ` +
+                `'adjust', json(${r}.adjust))`,
         },
         {
             table: "timeline_assignments",

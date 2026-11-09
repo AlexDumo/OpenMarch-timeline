@@ -8,6 +8,7 @@ import {
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
     CheckIcon,
+    ArrowsOutLineHorizontalIcon,
     PencilSimpleIcon,
     TrashIcon,
     type Icon,
@@ -90,6 +91,7 @@ const MODE_CONTENT_CLASS = MENU_CONTENT_CLASS;
 /** A mode's entries' icons */
 const MODE_ICONS: Partial<Record<ActionId, Icon>> = {
     editPath: PencilSimpleIcon,
+    refitPath: ArrowsOutLineHorizontalIcon,
     removePath: TrashIcon,
 };
 /** Entries that delete something: red where highlighted, as a shape handle's Delete */

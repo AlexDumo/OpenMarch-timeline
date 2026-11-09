@@ -34,11 +34,17 @@ import {
     freshPointId,
     marcherName,
     moveNameOf,
+    refuseSharedSpot,
     routeRefusal,
     samePoint,
     storedPoint,
     type RoutePointInput,
 } from "./timelineRoutes";
+import {
+    NOTHING_REHOMED,
+    writeRouteGeometryInTransaction,
+    type RehomeReport,
+} from "./timelineRouteGeometry";
 import {
     laneOffset,
     laneOn,
@@ -206,20 +212,27 @@ export async function routeGeometryOf(
 
 /**
  * Puts member `m`'s slot on route `routeId` with `offset`: updates the slot's lane, or inserts
- * one. No transition or row is written (AP-R8, AP-R10).
+ * one. No transition or row is written (AP-R8, AP-R10). A lane moved to another route loses its
+ * Adjust, whose anchors named the old one (AP-R8); returns whether it had one.
  */
 async function setLane(
     tx: DbTransaction,
     m: Member,
     routeId: number,
     offset: XY,
-): Promise<void> {
+): Promise<boolean> {
     const L = schema.timeline_lanes;
     const columns = offsetColumns(offset);
+    const leaves = m.lane !== undefined && m.lane.route_id !== routeId;
+    const hadAdjust = leaves && m.lane!.adjust !== null;
     if (m.lane)
         await tx
             .update(L)
-            .set({ route_id: routeId, ...columns })
+            .set({
+                route_id: routeId,
+                ...columns,
+                ...(leaves ? { adjust: null } : {}),
+            })
             .where(eq(L.id, m.lane.id));
     else
         await tx.insert(L).values({
@@ -228,6 +241,7 @@ async function setLane(
             route_id: routeId,
             ...columns,
         });
+    return hadAdjust;
 }
 
 /** Points to store: kept ids stay (refused when not `current`'s), new points get fresh ids. */
@@ -255,6 +269,10 @@ export interface DrawGroupRouteResult {
     routeId: number;
     /** Each member's transition, by marcher id (its own move's, unchanged) */
     transitions: Record<number, number>;
+    /** Drawn again: what it did to the group path's Adjusts (AP-H1) */
+    rehome: RehomeReport;
+    /** A new path: how many spots lost an Adjust anchored on the route they left (AP-R8) */
+    adjustsRemoved: number;
 }
 
 /**
@@ -306,6 +324,11 @@ export async function drawGroupRouteInTransaction({
                 geometry: await routeGeometryOf(tx, rid!),
             };
     }
+    // D-22: a new path is personal; drawing it again from its own walkers is a path edit (07 N3)
+    if (!again) {
+        const inSelection = new Set(members.map((m) => m.marcherId));
+        for (const m of members) await refuseSharedOutside(tx, m, inSelection);
+    }
     const geometry: RouteGeometry = {
         v: 1,
         from: F,
@@ -320,25 +343,59 @@ export async function drawGroupRouteInTransaction({
 
     return await mapDbErrors(async () => {
         if (again) {
-            await tx
-                .update(schema.timeline_routes)
-                .set({ geometry: json })
-                .where(eq(schema.timeline_routes.id, again.routeId));
+            const rehome = await writeRouteGeometryInTransaction(
+                tx,
+                again.routeId,
+                geometry,
+            );
             for (const m of members)
                 await setLane(tx, m, again.routeId, offsets.get(m.marcherId)!);
-            return { routeId: again.routeId, transitions };
+            return {
+                routeId: again.routeId,
+                transitions,
+                rehome,
+                adjustsRemoved: 0,
+            };
         }
         const route = (await tx
             .insert(schema.timeline_routes)
             .values({ geometry: json })
             .returning()
             .get())!;
+        let adjustsRemoved = 0;
         for (const m of members)
-            await setLane(tx, m, route.id, offsets.get(m.marcherId)!);
+            if (await setLane(tx, m, route.id, offsets.get(m.marcherId)!))
+                adjustsRemoved++;
         await sweepOrphanRoutesInTransaction(tx);
         await markLaneModelInTransaction(tx);
-        return { routeId: route.id, transitions };
+        return {
+            routeId: route.id,
+            transitions,
+            rehome: NOTHING_REHOMED,
+            adjustsRemoved,
+        };
     });
+}
+
+/** AP-R8's `SHARED`: refused when the other holder of a member's spot isn't in the selection. */
+async function refuseSharedOutside(
+    tx: DbTransaction,
+    m: Member,
+    inSelection: ReadonlySet<number>,
+): Promise<void> {
+    const A = schema.timeline_assignments;
+    const rows = await tx
+        .select({ marcher: A.marcher_id })
+        .from(A)
+        .where(
+            and(
+                eq(A.transition_id, m.transition.id),
+                eq(A.slot_index, m.row.slot_index),
+            ),
+        )
+        .all();
+    if (rows.some((r) => !inSelection.has(r.marcher)))
+        await refuseSharedSpot(tx, m.transition, m.row.slot_index, m.marcherId);
 }
 
 /** AP-R8 as one undoable edit. */
@@ -370,11 +427,14 @@ export async function editGroupRoutePointsInTransaction({
     tx,
     routeId,
     points,
+    drag = false,
 }: {
     tx: DbTransaction;
     routeId: number;
     points: readonly RoutePointInput[];
-}): Promise<void> {
+    /** A point drag: it stops short rather than crowd Adjust keys (AP-R11) */
+    drag?: boolean;
+}): Promise<RehomeReport> {
     const current = await routeGeometryOf(tx, routeId);
     const walkers = await walkersOf(tx, routeId);
     const lanes = await lanesWithTransitions(tx, routeId);
@@ -424,13 +484,9 @@ export async function editGroupRoutePointsInTransaction({
         if (!keepTo) to = meanOf(ends);
     }
     const geometry: RouteGeometry = { v: 1, from, to, points: routePoints };
-    assertValid(validateRouteGeometry(geometry), "route");
-    await mapDbErrors(async () => {
-        await tx
-            .update(schema.timeline_routes)
-            .set({ geometry: JSON.stringify(geometry) })
-            .where(eq(schema.timeline_routes.id, routeId));
-    });
+    return await mapDbErrors(() =>
+        writeRouteGeometryInTransaction(tx, routeId, geometry, { drag }),
+    );
 }
 
 /** AP-R1 on a group path as one undoable edit. */
@@ -438,9 +494,9 @@ export async function editGroupRoutePoints(args: {
     db: DbConnection;
     routeId: number;
     points: readonly RoutePointInput[];
-}): Promise<void> {
+}): Promise<RehomeReport> {
     const { db, ...rest } = args;
-    await transactionWithHistory(db, "editGroupRoute", (tx) =>
+    return await transactionWithHistory(db, "editGroupRoute", (tx) =>
         editGroupRoutePointsInTransaction({ tx, ...rest }),
     );
 }
@@ -500,6 +556,18 @@ export async function ownPathInTransaction({
                 routeRefusal.notOnGroupPath(await marcherName(tx, marcherId)),
             );
         const { lane } = found;
+        const t = await tx
+            .select()
+            .from(T)
+            .where(eq(T.id, lane.transition_id))
+            .get();
+        await refuseSharedSpot(tx, t!, lane.slot_index, marcherId);
+        // This Own path copies the line alone, and an own lane can't hold an Adjust (I-LN4), so it
+        // would silently undo the tweak. Detach (step 3c) keeps it.
+        if (lane.adjust !== null)
+            refuse(
+                routeRefusal.ownPathAdjusted(await marcherName(tx, marcherId)),
+            );
         const o = laneOffset(lane)!;
         const g = await routeGeometryOf(tx, lane.route_id);
         const add = (q: XY): XY => [q[0] + o[0], q[1] + o[1]];

@@ -422,6 +422,9 @@ function Lasso({
  */
 const LANE_ALPHA = 0.18;
 const LANE_WIDTH = 1;
+/** A lane the pointer is on or that's picked for Adjust (pathways step 3b) */
+const LANE_HIGHLIGHT_ALPHA = 0.85;
+const LANE_HIGHLIGHT_WIDTH = 2;
 /** A drawn path's line (pathways), solid and heavier than a shape's outline: drawn or open, shown */
 const PATH_LINE_WIDTH = { edited: 2.5, shown: 1.75, selected: 2.5 } as const;
 /** A selected path's halo under its line (pathways step 3a), as a selected object's outline reads */
@@ -651,8 +654,17 @@ const ShapeBody = memo(function ShapeBody({
                     key={`lane${i}`}
                     points={lane.map((p) => `${p.x},${p.y}`).join(" ")}
                     fill="none"
-                    stroke={rgbaToString({ ...theme.shape, a: LANE_ALPHA })}
-                    strokeWidth={LANE_WIDTH}
+                    stroke={rgbaToString({
+                        ...theme.shape,
+                        a: drawing.laneHighlights?.includes(i)
+                            ? LANE_HIGHLIGHT_ALPHA
+                            : LANE_ALPHA,
+                    })}
+                    strokeWidth={
+                        drawing.laneHighlights?.includes(i)
+                            ? LANE_HIGHLIGHT_WIDTH
+                            : LANE_WIDTH
+                    }
                     vectorEffect="non-scaling-stroke"
                     data-testid="pathGroupLane"
                 />
@@ -1240,6 +1252,23 @@ function ModeDrawing({
                         />
                     );
                 })()}
+            {drawing.adjustHandles?.map(({ at: point, selected }, i) => {
+                const p = at(point);
+                return (
+                    <circle
+                        key={`adjust${i}`}
+                        cx={p.x}
+                        cy={p.y}
+                        r={ADD_HANDLE_RADIUS}
+                        fill={selected ? shape : "white"}
+                        stroke={shape}
+                        strokeWidth={SHAPE_HANDLE_WIDTH}
+                        style={controls}
+                        data-testid="fieldPathAdjustKey"
+                        data-selected={selected ? "true" : undefined}
+                    />
+                );
+            })}
             {drawing.addHandles?.map((point, i) => {
                 const p = at(point);
                 return (

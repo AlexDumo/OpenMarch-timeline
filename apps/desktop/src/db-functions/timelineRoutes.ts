@@ -25,6 +25,7 @@ import {
     routePath,
     routePoint,
     validateRouteGeometry,
+    type AdjustProfile,
     type RouteGeometry,
     type RoutePoint,
     type XY,
@@ -40,6 +41,11 @@ import { readMoveWords } from "./timelineMoveNames";
 import { sampleShape } from "./timelineMoveHelpers";
 import { createTimelineTransitionsInTransaction } from "./timelineTransitionsInTransaction";
 import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
+import {
+    NOTHING_REHOMED,
+    writeRouteGeometryInTransaction,
+    type RehomeReport,
+} from "./timelineRouteGeometry";
 import {
     firstLanedRow,
     laneOn,
@@ -87,7 +93,53 @@ export const routeRefusal = {
         text.t("timeline.refusals.route.alreadyOnGroupPath"),
     /** AP-R8 (step 15): a group path needs two or more marchers */
     groupTooSmall: () => text.t("timeline.refusals.route.groupTooSmall"),
+    /** D-22: a personal edit while another marcher holds the spot at some count of the move */
+    spotShared: (spot: number, marcher: string, count: number) =>
+        text.t("timeline.refusals.route.spotShared", { spot, marcher, count }),
+    /** AP-R11: a key off the shared part of the path */
+    adjustOutside: () => text.t("timeline.refusals.route.adjustOutside"),
+    /** AP-R11, I-J4: keys closer than a step */
+    adjustTooClose: () => text.t("timeline.refusals.route.adjustTooClose"),
+    /** AP-R11: a shared part shorter than two steps */
+    adjustTooShort: () => text.t("timeline.refusals.route.adjustTooShort"),
+    /** Step 15's Own path can't carry an Adjust; Detach (step 3c) will */
+    ownPathAdjusted: (marcher: string) =>
+        text.t("timeline.refusals.route.ownPathAdjusted", { marcher }),
+    /** Re-fit with the ends where the path already has them */
+    refitNotNeeded: () => text.t("timeline.refusals.route.refitNotNeeded"),
+    /** Re-fit with nobody starting on the path */
+    refitNoFounder: () => text.t("timeline.refusals.route.refitNoFounder"),
 };
+
+/**
+ * D-22 (spec J.8 `SHARED`): refuses a personal edit of slot `slot` of transition `t` for marcher
+ * `marcherId` while another marcher holds that slot at any count of the move, naming the first and
+ * the count it starts on. Path edits never come here (07 N3). Before step 12 the UNIQUE indexes
+ * keep two marchers off one slot, so only tests that drop them reach the refusal (QA-AP-L2).
+ */
+export async function refuseSharedSpot(
+    tx: DbTransaction,
+    t: { id: number; start_beat: number },
+    slot: number,
+    marcherId: number,
+): Promise<void> {
+    const A = schema.timeline_assignments;
+    const rows = await tx
+        .select()
+        .from(A)
+        .where(and(eq(A.transition_id, t.id), eq(A.slot_index, slot)))
+        .orderBy(asc(A.start_beat), asc(A.id))
+        .all();
+    const other = rows.find((r) => r.marcher_id !== marcherId);
+    if (other)
+        refuse(
+            routeRefusal.spotShared(
+                slot + 1,
+                await marcherName(tx, other.marcher_id),
+                other.start_beat - t.start_beat,
+            ),
+        );
+}
 
 /** A marcher's drill number, as refusals name it. */
 export const marcherName = async (tx: DbTransaction, marcherId: number) => {
@@ -193,6 +245,8 @@ export interface MoveRoute {
     end: number;
     /** The lane's start offset (a group path's), or null for an own path */
     offset: XY | null;
+    /** The spot's Adjust, or null (spec J.2) */
+    adjust: AdjustProfile | null;
     geometry: RouteGeometry;
 }
 
@@ -221,6 +275,7 @@ export async function readRoutes(
             marcherId: A.marcher_id,
             offsetX: L.offset_x,
             offsetY: L.offset_y,
+            adjust: L.adjust,
         })
         .from(L)
         .innerJoin(R, eq(R.id, L.route_id))
@@ -239,10 +294,11 @@ export async function readRoutes(
         )
         .orderBy(asc(R.id), asc(A.marcher_id), asc(A.start_beat))
         .all();
-    return rows.map(({ offsetX, offsetY, geometry, ...r }) => ({
+    return rows.map(({ offsetX, offsetY, geometry, adjust, ...r }) => ({
         ...r,
         offset:
             offsetX === null || offsetY === null ? null : [offsetX, offsetY],
+        adjust: adjust === null ? null : (JSON.parse(adjust) as AdjustProfile),
         geometry: JSON.parse(geometry) as RouteGeometry,
     }));
 }
@@ -305,6 +361,10 @@ export interface DrawRouteResult {
     transitionId: number;
     /** The slot whose lane walks the route (the marcher's, in its own move) */
     slot: number;
+    /** What drawing it again did to anchored Adjusts (an own lane has none today) */
+    rehome: RehomeReport;
+    /** Whether the spot's Adjust went: it left a group path for an own one (AP-R1) */
+    adjustRemoved: boolean;
 }
 
 /**
@@ -347,6 +407,7 @@ export async function drawRouteInTransaction({
     const { row, transition } = found;
     if (transition.path_style === "follow_the_leader")
         refuse(routeRefusal.followsTheLeader(await marcherName(tx, marcherId)));
+    await refuseSharedSpot(tx, transition, row.slot_index, marcherId);
 
     // The founding span: read before anything is written
     const resolver = createResolver((await readTimelineTables(tx)).snapshot);
@@ -403,20 +464,23 @@ export async function drawRouteInTransaction({
     };
     assertValid(validateRouteGeometry(geometry), "route");
     const json = JSON.stringify(geometry);
-    const result = (routeId: number): DrawRouteResult => ({
+    const result = (
+        routeId: number,
+        rehome: RehomeReport = NOTHING_REHOMED,
+    ): DrawRouteResult => ({
         routeId,
         transitionId: transition.id,
         slot: row.slot_index,
+        rehome,
+        adjustRemoved: lane?.adjust != null,
     });
 
     return await mapDbErrors(async () => {
-        if (current) {
-            await tx
-                .update(schema.timeline_routes)
-                .set({ geometry: json })
-                .where(eq(schema.timeline_routes.id, current.id));
-            return result(current.id);
-        }
+        if (current)
+            return result(
+                current.id,
+                await writeRouteGeometryInTransaction(tx, current.id, geometry),
+            );
         const route = (await tx
             .insert(schema.timeline_routes)
             .values({ geometry: json })
@@ -424,10 +488,16 @@ export async function drawRouteInTransaction({
             .get())!;
         const L = schema.timeline_lanes;
         if (lane)
-            // Off the group path: its lane walks the new own route, with no offset (I-LN4)
+            // Off the group path: its lane walks the new own route, with no offset and no Adjust,
+            // which was anchored on the group's route (I-LN4, AP-R1)
             await tx
                 .update(L)
-                .set({ route_id: route.id, offset_x: null, offset_y: null })
+                .set({
+                    route_id: route.id,
+                    offset_x: null,
+                    offset_y: null,
+                    adjust: null,
+                })
                 .where(eq(L.id, lane.id));
         else
             await tx.insert(L).values({
@@ -748,9 +818,5 @@ export async function writeRouteCutAfterInTransaction(
     tx: DbTransaction,
     cut: RouteCut,
 ): Promise<void> {
-    assertValid(validateRouteGeometry(cut.after), "route");
-    await tx
-        .update(schema.timeline_routes)
-        .set({ geometry: JSON.stringify(cut.after) })
-        .where(eq(schema.timeline_routes.id, cut.routeId));
+    await writeRouteGeometryInTransaction(tx, cut.routeId, cut.after);
 }
