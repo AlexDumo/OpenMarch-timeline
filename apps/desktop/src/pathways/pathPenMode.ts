@@ -2,6 +2,7 @@ import type {
     FieldCursor,
     FieldMode,
     FieldModeDrawing,
+    FieldModeHover,
     FieldPointer,
 } from "@/field/editor/fieldEditor";
 import { CLICK_SLOP } from "@/field/editor/fieldEditor";
@@ -20,6 +21,7 @@ import { lineCoordinate } from "@/shapes/field/lineCoordinate";
 import { toolEnvFor } from "@/shapes/tool/toolEnv";
 import type { ToolEnv } from "@/shapes/tool/toolKind";
 import type { XY } from "@/shapes/types";
+import type { PathTarget } from "./pathTarget";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     PATH_MENU,
@@ -50,6 +52,10 @@ import {
     cancelDrag,
     commitPoints,
     deletePoint,
+    deselectPathObject,
+    objectsDrawn,
+    pointsOf,
+    selectPathObject,
     dragPoints,
     endNewPoint,
     finishDrawing,
@@ -62,6 +68,7 @@ import {
     shapeOf,
     pathShown,
     usePathPenStore,
+    type PathObject,
     type PathSession,
 } from "./pathPenStore";
 
@@ -94,10 +101,12 @@ export const PATH_FIELD_MENU = ["editPath", "removePath"] as const;
  *   drag went (in tenths, fine for any), its tangent bar shown while dragging. A
  *   double-click, a click on the last point or on the end spot, or Enter finishes; a right-click,
  *   Backspace or undo takes the last point back; Escape cancels.
- * - Closed (the selected marcher's path, shown): the path takes no press, so clicks, drags and
- *   marquees around it are the field's. A double-click on its line opens it (a click there keeps
- *   the selection, so the double-click has a first click); a right-click or long press there opens
- *   the field's menu with Edit path and Remove path.
+ * - Closed (the selected marcher's path, shown) or selected (a path object, step 3a): the path
+ *   takes no press, so drags and marquees around it are the field's, and a dot under the press is
+ *   the dot's (P-1). A click or tap on its line, or on one of Paths All's paths (AP-O2), selects
+ *   that path as an object (AP-O3), and the second click of a double-click opens it; a click on
+ *   empty field lets a selected path go (AP-O4). A right-click or long press on a line selects it
+ *   too and opens the field's menu with Edit path and Remove path.
  * - Open: the path takes only presses on its handles, so the marchers stay selectable. A click on
  *   a point selects it, and a selected smooth point shows its tangent bar, whose ends drag its
  *   roundness; a double-click on a point swaps corner and smooth; a drag moves a point (fine off
@@ -176,6 +185,24 @@ class PathPenMode implements FieldMode {
         // A group path's lanes open it too (step 15)
         const lanes = drawingOf(s)?.lanes ?? [];
         return lanes.some((lane) => onLine(lane, pointer.field, env.hitRadius));
+    }
+
+    /**
+     * The path whose drawn line is under `pointer` (AP-O3): the one shown first, then Paths All's
+     * paths, in route order. Null when none is.
+     */
+    private pathAt(
+        pointer: Pick<FieldPointer, "field">,
+    ): { session: PathSession } | { object: PathObject } | null {
+        const s = this.shownSession;
+        if (s && this.onLine(s, pointer)) return { session: s };
+        const env = envOf();
+        if (!env || s?.phase === "drawing") return null;
+        const { objects } = usePathPenStore.getState();
+        const hit = objectsDrawn(objects, s, false).find((o) =>
+            objectHit(o, pointer.field, env.hitRadius),
+        );
+        return hit ? { object: hit } : null;
     }
 
     claims(pointer: FieldPointer): boolean {
@@ -395,9 +422,15 @@ class PathPenMode implements FieldMode {
         }
     }
 
-    cursorAt(pointer: FieldPointer): FieldCursor | null {
+    cursorAt(
+        pointer: FieldPointer,
+        hover?: FieldModeHover,
+    ): FieldCursor | null {
         const s = this.session;
-        if (!s || s.phase === "closed") return null;
+        // A path's line, shown or one of Paths All's, is something to click (AP-O3); not under a
+        // marcher's dot, which a press there selects instead
+        if (!s || s.phase === "closed")
+            return !hover?.onDot() && this.pathAt(pointer) ? "pointer" : null;
         // Between clicks the next leg follows the pointer with the roles its keys hold, so it
         // lands where a click would, as a Line's does
         if (s.phase === "drawing") {
@@ -462,21 +495,42 @@ class PathPenMode implements FieldMode {
         );
     }
 
-    /** On the path's line (no handle took it): Edit path and Remove path, in the field's menu */
+    /**
+     * On a path's line (no handle took it): that path is selected (AP-O3; the open path stays
+     * open), and the field's menu offers Edit path and Remove path for it
+     */
     fieldMenuAt(pointer: FieldPointer): readonly string[] | null {
-        const s = this.shownSession;
-        if (!s || s.target.routeId === null || !this.onLine(s, pointer))
-            return null;
+        if (!this.pickAt(pointer)) return null;
         return PATH_FIELD_MENU;
     }
 
     /**
-     * A click on the path's line keeps the selection (the field's rule would let the marcher go,
-     * and the path with it); the second click of a double-click opens it. Elsewhere, the field's.
+     * Selects the path under `pointer` as an object (AP-O3), unless it's the open path, which stays
+     * open. False when no path's line is there.
+     */
+    private pickAt(pointer: Pick<FieldPointer, "field">): boolean {
+        const hit = this.pathAt(pointer);
+        if (!hit) return false;
+        if ("object" in hit) {
+            selectPathObject(hit.object.target, hit.object.drill);
+            return true;
+        }
+        const s = hit.session;
+        if (s.target.routeId === null) return false;
+        if (s.phase !== "open") selectPathObject(s.target, s.drill);
+        return true;
+    }
+
+    /**
+     * A click on a path's line selects that path (AP-O3) and the second click of a double-click
+     * opens it (step 1's double-click). A click elsewhere on empty field lets a selected path go
+     * (AP-O4) and is the field's, which lets the marchers go.
      */
     takeClick(pointer: FieldPointer, double: boolean): boolean {
-        const s = this.shownSession;
-        if (!s || !this.onLine(s, pointer)) return false;
+        if (!this.pickAt(pointer)) {
+            deselectPathObject();
+            return false;
+        }
         if (double) openPath();
         return true;
     }
@@ -508,85 +562,86 @@ export function drawingOf(
     session: PathSession | null,
 ): FieldModeDrawing | null {
     if (session === last.session) return last.drawing;
-    let drawing: FieldModeDrawing | null = null;
-    if (session) {
-        const { target, pointer, selected } = session;
-        const drawingNow = session.phase === "drawing";
-        const shape = shapeOf(session);
-        const middle = session.points.map((c) => c.at);
-        // While drawing, the next leg runs to where the next point would land, straight
-        const outline =
-            drawingNow && pointer
-                ? [
-                      ...pathOutline({
-                          ...shape,
-                          to: pointer,
-                          ends: { from: shape.from, to: pointer },
-                      }),
-                      target.to,
-                  ]
-                : pathOutline(shape);
-        // While a press-and-drag shapes the point just placed, its tangent bar
-        const shaping =
-            drawingNow && session.dragging !== null
-                ? ([1, -1] as const).flatMap((side) => {
-                      const at = tangentHandle(shape, session.dragging!, side);
-                      return at
-                          ? [{ at, from: middle[session.dragging!]! }]
-                          : [];
-                  })
-                : [];
-        const handles = drawingNow
-            ? {
-                  handles: middle,
-                  addHandles: [],
-                  selectedHandles: [],
-                  barHandles: shaping,
-              }
-            : session.phase === "closed"
-              ? { handles: [], addHandles: [], selectedHandles: [] }
-              : handleDrawing(
-                    {
-                        handles: (_p, _n, sel) =>
-                            pathHandles(shape, sel ?? null),
-                    },
-                    shape,
-                    1,
-                    selected,
-                );
-        // The point being placed or dragged: guides where it's on a field line, and where it is
-        const moving = drawingNow
-            ? (pointer ??
-              (session.dragging === null ? null : middle[session.dragging]!))
-            : session.dragging === null
-              ? null
-              : (middle[session.dragging] ?? null);
-        const tipText = moving ? drillTerms(moving) : null;
-        const group = target.group;
-        const { lanes, memberRings } = groupParts(session, shape);
-        drawing = {
-            outline,
-            openOutline: true,
-            pathLine: session.phase === "closed" ? "shown" : "edited",
-            stage: drawingNow ? "drawing" : "open",
-            spots: group ? group.members.map((m) => m.to) : [target.to],
-            walks: [],
-            ...handles,
-            rings: group ? group.members.map((m) => m.from) : [target.from],
-            ringIds: group
-                ? group.members.map((m) => m.marcherId)
-                : [target.marcherId],
-            ...(lanes ? { lanes } : {}),
-            ...(memberRings ? { memberRings } : {}),
-            ...guidesFor(moving ? [moving] : [], outline),
-            ...(tipText && moving
-                ? { tip: { at: moving, text: tipText } }
-                : {}),
-        };
-    }
+    const drawing = session ? buildDrawing(session) : null;
     last = { session, drawing };
     return drawing;
 }
+
+/** `drawingOf`'s work, uncached */
+function buildDrawing(session: PathSession): FieldModeDrawing {
+    const { target, pointer, selected } = session;
+    const drawingNow = session.phase === "drawing";
+    const shape = shapeOf(session);
+    const middle = session.points.map((c) => c.at);
+    // While drawing, the next leg runs to where the next point would land, straight
+    const outline =
+        drawingNow && pointer
+            ? [
+                  ...pathOutline({
+                      ...shape,
+                      to: pointer,
+                      ends: { from: shape.from, to: pointer },
+                  }),
+                  target.to,
+              ]
+            : pathOutline(shape);
+    // While a press-and-drag shapes the point just placed, its tangent bar
+    const shaping =
+        drawingNow && session.dragging !== null
+            ? ([1, -1] as const).flatMap((side) => {
+                  const at = tangentHandle(shape, session.dragging!, side);
+                  return at ? [{ at, from: middle[session.dragging!]! }] : [];
+              })
+            : [];
+    const handles = drawingNow
+        ? {
+              handles: middle,
+              addHandles: [],
+              selectedHandles: [],
+              barHandles: shaping,
+          }
+        : session.phase === "closed"
+          ? { handles: [], addHandles: [], selectedHandles: [] }
+          : handleDrawing(
+                {
+                    handles: (_p, _n, sel) => pathHandles(shape, sel ?? null),
+                },
+                shape,
+                1,
+                selected,
+            );
+    // The point being placed or dragged: guides where it's on a field line, and where it is
+    const moving = drawingNow
+        ? (pointer ??
+          (session.dragging === null ? null : middle[session.dragging]!))
+        : session.dragging === null
+          ? null
+          : (middle[session.dragging] ?? null);
+    const tipText = moving ? drillTerms(moving) : null;
+    const group = target.group;
+    const { lanes, memberRings } = groupParts(session, shape);
+    return {
+        outline,
+        openOutline: true,
+        pathLine: pathLineOf(session),
+        stage: drawingNow ? "drawing" : "open",
+        spots: group ? group.members.map((m) => m.to) : [target.to],
+        walks: [],
+        ...handles,
+        rings: group ? group.members.map((m) => m.from) : [target.from],
+        ringIds: group
+            ? group.members.map((m) => m.marcherId)
+            : [target.marcherId],
+        ...(lanes ? { lanes } : {}),
+        ...(memberRings ? { memberRings } : {}),
+        ...guidesFor(moving ? [moving] : [], outline),
+        ...(tipText && moving ? { tip: { at: moving, text: tipText } } : {}),
+    };
+}
+
+/** How heavy the line is: edited while drawn or open, selected for a path object (AP-O4) */
+const pathLineOf = (s: PathSession): FieldModeDrawing["pathLine"] =>
+    s.phase !== "closed" ? "edited" : s.object ? "selected" : "shown";
 
 /**
  * A group path's parts of the drawing (step 15): every member's lane, thin and faint (while
@@ -660,6 +715,43 @@ function guidesFor(
         ...(marks.length > 0 ? { guideMarks: marks } : {}),
         onGuides: on,
     };
+}
+
+const objectDrawings = new WeakMap<PathTarget, FieldModeDrawing | null>();
+
+/**
+ * How Paths All draws a group path object (AP-O7): as the closed path shows it (its reference
+ * line, its members' faint lanes, their ghosts and end spots), without the rings that name who
+ * follows it, which are for a selection. An own path is drawn by the start flag positions as it
+ * was, so it has no drawing of its own (null).
+ */
+export function objectDrawingOf(o: PathObject): FieldModeDrawing | null {
+    if (!o.target.group) return null;
+    let drawing = objectDrawings.get(o.target);
+    if (drawing !== undefined) return drawing;
+    const built = buildDrawing({
+        phase: "closed",
+        target: o.target,
+        drill: o.drill,
+        points: pointsOf(o.target),
+        pointer: null,
+        selected: null,
+        dragging: null,
+        object: false,
+    });
+    drawing = built ? { ...built, memberRings: [] } : null;
+    objectDrawings.set(o.target, drawing);
+    return drawing;
+}
+
+/** Whether `at` is on a path object's drawn line (AP-O3) */
+function objectHit(o: PathObject, at: XY, radius: number): boolean {
+    if (o.walk) return onLine(o.walk(), at, radius);
+    const d = objectDrawingOf(o);
+    if (!d) return false;
+    return [d.outline ?? [], ...(d.lanes ?? [])].some((line) =>
+        onLine(line, at, radius),
+    );
 }
 
 /** The one pen mode the field editor is given while a path is drawn or open. */

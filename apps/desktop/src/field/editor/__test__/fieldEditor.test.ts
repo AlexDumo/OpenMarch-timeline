@@ -508,6 +508,47 @@ describe("FieldEditor right-click menu (#315)", () => {
         ]);
     });
 
+    it("doesn't ask the mode's field menu over a marcher's dot, even on a path's line (pathways AP-O3)", () => {
+        const { editor, ports, state } = setup({ selected: [1] });
+        // A path's line along y = 100, through every dot
+        const fieldMenuAt = vi.fn((p: FieldPointer) =>
+            p.field.y === 100 ? ["editPath", "removePath"] : null,
+        );
+        const cursorAt = vi.fn(
+            (_p: FieldPointer, hover?: { onDot(): boolean }) =>
+                hover?.onDot() ? null : ("pointer" as const),
+        );
+        editor.setMode({
+            ...fakeMode().mode,
+            openMenu: () => false,
+            fieldMenuAt,
+            cursorAt,
+        });
+        // On marcher 2's dot: the marcher's menu, not the path's
+        rightDown(editor, 200, 100);
+        rightUp(editor, 200, 100);
+        expect(fieldMenuAt).not.toHaveBeenCalled();
+        expect(state.selected).toEqual([2]);
+        expect(vi.mocked(ports.openMenu!).mock.calls[0]![1]).toBeUndefined();
+        // A long press there opens nothing (touch's field menu is the mode's only)
+        editor.longPress(at(100, 100));
+        expect(fieldMenuAt).not.toHaveBeenCalled();
+        expect(ports.openMenu).toHaveBeenCalledTimes(1);
+        // Between the dots, the path's
+        rightDown(editor, 250, 100);
+        rightUp(editor, 250, 100);
+        expect(fieldMenuAt).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(ports.openMenu!).mock.calls[1]![1]).toEqual([
+            "editPath",
+            "removePath",
+        ]);
+        // The mode is told when the pointer is over a dot, for its cursor
+        editor.pointerMove(at(300, 100));
+        expect(cursorAt.mock.calls.at(-1)![1]!.onDot()).toBe(true);
+        editor.pointerMove(at(250, 100));
+        expect(cursorAt.mock.calls.at(-1)![1]!.onDot()).toBe(false);
+    });
+
     it("opens the menu for a selected placed box's marchers, keeping the selection", () => {
         const { editor, ports, state } = setup({ selected: [1, 2] });
         editor.setMode(fakeMode().mode);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { allMarchersQueryOptions } from "@/hooks/queries";
@@ -9,9 +9,13 @@ import { performersOnly } from "@/global/classes/Marcher";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
-import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
 import { useStartFlagLevelsInEffect } from "@/stores/StartFlagKeyStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import type { XY } from "@/shapes/types";
 import {
     closeShapeTool,
     useShapeToolStore,
@@ -20,14 +24,22 @@ import {
     findGroupDrawTarget,
     findGroupTarget,
     findPathTarget,
+    findRouteTarget,
     groupMoveAt,
+    pathObjectsAt,
+    readPathObjectIndex,
+    type PathObjectIndex,
+    type PathTarget,
 } from "./pathTarget";
 import {
     setGroupCommands,
+    setPathObjects,
+    type PathObject,
     type RejoinTarget,
     clearPath,
     closePath,
     deletePoint,
+    escapePathObject,
     finishDrawing,
     openPath,
     ownPathFor,
@@ -64,7 +76,8 @@ export function penRefusal(selectedCount: number): string | null {
  * or a selection change, or a move of the playhead off the move. Remove path works open or closed.
  */
 export function usePathPenActions(): void {
-    const selected = useSelectedMarchers()?.selectedMarchers;
+    const selectedContext = useSelectedMarchers();
+    const selected = selectedContext?.selectedMarchers;
     const isPlaying = useIsPlaying()?.isPlaying ?? false;
     const performers = performersOnly(selected ?? []);
     const one = performers.length === 1 ? performers[0]! : null;
@@ -82,8 +95,29 @@ export function usePathPenActions(): void {
     const hasRoute = usePathPenStore(
         (s) => (s.session?.target.routeId ?? null) !== null,
     );
+    const selectedIds = performers.map((m) => m.id).sort((a, b) => a - b);
+    const selectionKey = selectedIds.join(",");
 
+    // The marchers selected when P drew the open path again (AP-O8): the drawing goes when they
+    // change, as a personal drawing does
+    const againFor = useRef("");
     useActionHandler("pathPen", () => {
+        // With a path selected as an object, or a path open however it was opened, P draws that
+        // path again: a path edit by its route, keeping its id, never refused for who holds its
+        // spots (AP-O8, J.8 AP-R1, 07 N3)
+        const now = usePathPenStore.getState().session;
+        if (
+            now &&
+            now.target.routeId !== null &&
+            (now.object || now.phase === "open") &&
+            now.phase !== "drawing" &&
+            !isPlaying
+        ) {
+            if (useShapeToolStore.getState().tool) closeShapeTool();
+            againFor.current = now.object ? "" : selectionKey;
+            startDrawing(now.target, now.drill, now.object, true);
+            return;
+        }
         const refusal = penRefusal(performers.length);
         if (refusal) {
             toast.error(refusal, { id: "path-pen" });
@@ -180,8 +214,6 @@ export function usePathPenActions(): void {
     // The path shown follows the selection, the playhead and each committed edit; a path opened
     // stays open while it's the same marcher's same move
     const asked = useRef(0);
-    const selectedIds = performers.map((m) => m.id).sort((a, b) => a - b);
-    const selectionKey = selectedIds.join(",");
     useEffect(() => {
         const { session } = usePathPenStore.getState();
         const resolver = useTimelineResolverStore.getState().resolver;
@@ -194,11 +226,45 @@ export function usePathPenActions(): void {
             return;
         }
         if (session?.phase === "drawing") {
-            // The marchers drawn for are let go of: the drawing goes
-            const drawnFor = session.target.group
-                ? session.target.group.members.map((m) => m.marcherId)
-                : [session.target.marcherId];
-            if (drawnFor.join(",") !== selectionKey) clearPath();
+            // The marchers drawn for are let go of: the drawing goes. Drawing a selected path
+            // again (AP-O8) has no marcher selected, and goes when one is
+            const drawnFor = session.object
+                ? ""
+                : session.byRoute
+                  ? againFor.current
+                  : (session.target.group
+                        ? session.target.group.members.map((m) => m.marcherId)
+                        : [session.target.marcherId]
+                    ).join(",");
+            if (drawnFor !== selectionKey) clearPath();
+            return;
+        }
+        // A path selected as an object (step 3a, AP-O1, AP-O4): read again by its route while no
+        // marcher is selected; let go of once the playhead leaves its move or the route is gone
+        if (session?.object && selectedIds.length === 0 && ready && resolver) {
+            const ask = ++asked.current;
+            const { routeId } = session.target;
+            // Its transitions' whole reach: a group's members can be in several (AP-R8)
+            const { start, end } = session.target.span ?? session.target;
+            if (
+                routeId === null ||
+                playheadBeat < start - 1e-9 ||
+                playheadBeat > end + 1e-9
+            ) {
+                clear();
+                return;
+            }
+            void findRouteTarget(db, resolver, routeId, drills).then(
+                (target) => {
+                    if (ask !== asked.current) return;
+                    const now = usePathPenStore.getState().session;
+                    if (!now?.object || now.phase === "drawing") return;
+                    // Own path and Rejoin act on selected marchers, and none are
+                    setGroupCommands([], null);
+                    if (target) showPath(target, drillOf(target, drills), true);
+                    else clear();
+                },
+            );
             return;
         }
         if (selectedIds.length === 0 || !ready || !resolver) {
@@ -237,6 +303,8 @@ export function usePathPenActions(): void {
             if (ask !== asked.current) return;
             const now = usePathPenStore.getState();
             if (now.session?.phase === "drawing") return;
+            // A path selected as an object meanwhile (a click on its line) is the selection now
+            if (now.session?.object && now.session !== session) return;
             if (group) {
                 const members = new Set(
                     group.group!.members.map((m) => m.marcherId),
@@ -262,6 +330,169 @@ export function usePathPenActions(): void {
         // The marchers' ids, not their rows: a row read again is the same selection
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectionKey, playheadBeat, version, ready, isPlaying, saved, drills]);
+
+    // A marcher selected (a click on a dot) replaces a selected path at once, before the path for
+    // the marchers is read, so a Delete in between can't remove the old path (AP-O4, AP-O6)
+    const selectedBefore = useRef(selectionKey);
+    useLayoutEffect(() => {
+        const was = selectedBefore.current;
+        selectedBefore.current = selectionKey;
+        const { session } = usePathPenStore.getState();
+        if (
+            was === "" &&
+            selectionKey !== "" &&
+            session?.object &&
+            session.phase !== "drawing"
+        )
+            clearPath();
+    }, [selectionKey]);
+
+    // A path selected as an object is the selection (AP-O3): the marchers selected are let go of
+    const objectSelected = usePathPenStore((s) => s.session?.object ?? false);
+    useEffect(() => {
+        if (objectSelected && (selected?.length ?? 0) > 0)
+            selectedContext?.setSelectedMarchers([]);
+        // Only when a path becomes the selection: a marcher selected afterwards replaces it
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [objectSelected]);
+
+    usePathObjects(drills);
+}
+
+/** How a path target is named: its marcher's drill number, or its group's size */
+const drillOf = (target: PathTarget, drills: ReadonlyMap<number, string>) =>
+    target.group
+        ? `${target.group.members.length}`
+        : (drills.get(target.marcherId) ?? `${target.marcherId}`);
+
+/** How many points an own path object's drawn walk is sampled at, for its click test */
+const WALK_SAMPLES = 96;
+
+/** The start flag window an own path object's walk is drawn in, as Paths All has it now */
+let walkWindow = { from: 0, to: 0 };
+
+/** Each own path's sampled walk, for the window it was sampled in */
+const walks = new WeakMap<
+    PathTarget,
+    { from: number; to: number; walk: readonly XY[] }
+>();
+
+/**
+ * An own path's drawn line (AP-O3): its marcher's walk inside the window, from the start flag (or
+ * the move's start) to the beat shown (or the move's end), sampled the first time it's tested for
+ * this window. A target belongs to one timeline version, so its walk can be kept.
+ */
+function walkOf(target: PathTarget): readonly XY[] {
+    const lo = Math.max(walkWindow.from, target.start);
+    const hi = Math.min(walkWindow.to, target.end);
+    const kept = walks.get(target);
+    if (kept && kept.from === lo && kept.to === hi) return kept.walk;
+    const resolver = useTimelineResolverStore.getState().resolver;
+    const walk: XY[] = [];
+    if (resolver && hi > lo)
+        for (let i = 0; i <= WALK_SAMPLES; i++) {
+            const p = resolver.positionAt(
+                target.marcherId,
+                lo + ((hi - lo) * i) / WALK_SAMPLES,
+            );
+            walk.push({ x: p[0], y: p[1] });
+        }
+    walks.set(target, { from: lo, to: hi, walk });
+    return walk;
+}
+
+/** Each target's object, so the same target gives the same object (and drawing) */
+const objectsByTarget = new WeakMap<PathTarget, PathObject>();
+
+function objectOf(
+    target: PathTarget,
+    drills: ReadonlyMap<number, string>,
+): PathObject {
+    let o = objectsByTarget.get(target);
+    if (!o) {
+        o = {
+            target,
+            drill: drillOf(target, drills),
+            walk: target.group ? null : () => walkOf(target),
+        };
+        objectsByTarget.set(target, o);
+    }
+    return o;
+}
+
+/**
+ * Paths All's path objects (step 3a, AP-O2): with start flag positions drawing every marcher's
+ * path, every path in a move at the playhead is listed, so a click selects it with nothing
+ * selected, and each group path is drawn as its one line with faint lanes (AP-O7). An own path's
+ * line is the start flag positions' path, so its walk inside the window (from the start flag, or
+ * the move's start, to the beat shown, or the move's end) is what a click tests. None otherwise.
+ *
+ * The routes are read once per timeline version; a playhead step only filters them, and a route
+ * keeps its target and object until the next version, so a step that changes no path sets
+ * nothing (review of #737, S2).
+ */
+function usePathObjects(drills: ReadonlyMap<number, string>): void {
+    const level = useStartFlagLevelsInEffect();
+    const inRange = useTimelineSelectionStore(
+        (s) => s.selection.kind === "range",
+    );
+    const isolating = useTimelineSelectionStore((s) => s.isolation !== null);
+    const startHidden = useTimelineSelectionStore((s) => s.startHidden);
+    const fromBeat = useTimelineSelectionStore((s) => s.startBeat);
+    const toBeat = useTimelineSelectionStore(displayedBeat);
+    const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
+    const isPlaying = useIsPlaying()?.isPlaying ?? false;
+    const version = useTimelineResolverStore((s) => s.version);
+    const ready = useTimelineResolverStore((s) => s.status === "ready");
+    const wanted =
+        ready &&
+        !isPlaying &&
+        level.paths === "all" &&
+        level.dots !== "off" &&
+        inRange &&
+        !isolating &&
+        !startHidden &&
+        toBeat > fromBeat;
+    walkWindow = { from: fromBeat, to: toBeat };
+    const asked = useRef(0);
+    const index = useRef<{
+        version: number;
+        resolver: unknown;
+        read: Promise<PathObjectIndex>;
+    } | null>(null);
+    useEffect(() => {
+        const resolver = useTimelineResolverStore.getState().resolver;
+        const ask = ++asked.current;
+        if (!wanted || !resolver) {
+            setPathObjects([]);
+            return;
+        }
+        let cached = index.current;
+        if (
+            !cached ||
+            cached.version !== version ||
+            cached.resolver !== resolver
+        ) {
+            cached = { version, resolver, read: readPathObjectIndex(db) };
+            index.current = cached;
+        }
+        const beat = playheadBeat;
+        cached.read.then(
+            (read) => {
+                if (ask !== asked.current) return;
+                setPathObjects(
+                    pathObjectsAt(read, resolver, beat, drills).map((t) =>
+                        objectOf(t, drills),
+                    ),
+                );
+            },
+            () => {
+                if (index.current === cached) index.current = null;
+                if (ask === asked.current) setPathObjects([]);
+            },
+        );
+    }, [wanted, playheadBeat, version, drills]);
+    useEffect(() => () => setPathObjects([]), []);
 }
 
 /**
@@ -274,15 +505,20 @@ export function usePathPenActions(): void {
  * - Open: Escape clears the selected point, then closes the path (it stays drawn); Backspace
  *   deletes the selected point (its last removes the path). Remove path has no key (the
  *   path's menu and bar have it), open or closed, in `usePathPenActions`.
+ * - A path selected as an object (step 3a): Escape lets it go (open, it goes back to selected
+ *   first, AP-O4); Backspace or Delete removes it, as Remove path does (AP-O6).
  */
 export function PathPenKeys(): null {
     const phase = usePathPenStore((s) => s.session?.phase ?? null);
     const picked = usePathPenStore((s) => s.session?.selected ?? null);
+    const object = usePathPenStore((s) => s.session?.object ?? false);
     const drawing = phase === "drawing";
+    const objectSelected = object && phase === "closed";
     useActionHandler(
         "cancelAlignmentUpdates",
         () => {
             if (!drawing && picked !== null) selectPoint(null);
+            else if (!drawing && escapePathObject()) return;
             else closePath();
         },
         {
@@ -290,7 +526,9 @@ export function PathPenKeys(): null {
                 ? tolgee.t("actions.path.cancel", "Cancel path")
                 : picked !== null
                   ? tolgee.t("actions.path.deselectPoint", "Deselect point")
-                  : tolgee.t("actions.path.close", "Close path"),
+                  : objectSelected
+                    ? tolgee.t("actions.path.deselect", "Deselect path")
+                    : tolgee.t("actions.path.close", "Close path"),
         },
     );
     useActionHandler(
@@ -310,8 +548,9 @@ export function PathPenKeys(): null {
                 if (Number.isInteger(index))
                     void deletePoint(index, { selectNeighbor: true });
             }
-            // The open path with no point selected: the path goes (owner, 2026-11-04), one undo
-            // step. Only once it's open, so a stray key on a closed path removes nothing
+            // The open path with no point selected, or the path selected as an object (owner,
+            // 2026-11-04 and 2026-11-06): the path goes, one undo step. Not on a path only shown
+            // for its marchers, so a stray key there removes nothing
             else void removePath();
         },
         {
@@ -321,7 +560,7 @@ export function PathPenKeys(): null {
                   ? tolgee.t("actions.path.deletePoint", "Delete point")
                   : tolgee.t("actions.path.remove", "Remove path"),
         },
-        drawing || phase === "open",
+        drawing || phase === "open" || objectSelected,
     );
     // While drawing, undo takes points back first, as a Line's points are; with none left it
     // cancels
