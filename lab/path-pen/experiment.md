@@ -9,6 +9,7 @@ variants: []
 questions:
   - "Open a group path and drag one marcher's thin line sideways. Did it bend where you grabbed it and only there? Would you rather have started the bend some other way (for example from the marcher's dot at the playhead)?"
   - "Was it clear what you could grab: the thin lines, the bold line, the small round handles, the dots? Did you ever move the wrong one?"
+  - "Where several marchers' lines sit exactly on top of each other, clicking again goes to the next one, and the note by the pointer says so. Could you get the marcher you wanted?"
   - "Bend a line, then play it. Does the marcher's walk look right, and is the bend the size you meant?"
   - "Bend a line, then drag or delete a corner of the path. Did the bend stay somewhere sensible? When a corner it was attached to went, did the note and message tell you enough?"
   - "Drag a corner toward a bend until it stops. Did the stop make sense, or did it feel stuck?"

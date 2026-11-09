@@ -83,7 +83,11 @@ export interface PathSession {
         readonly key: number | null;
     } | null;
     /** The lane under the pointer, highlighted and named (decision C) */
-    readonly hoverLane?: { readonly marcherId: number; readonly at: XY } | null;
+    readonly hoverLane?: {
+        readonly marcherId: number;
+        readonly at: XY;
+        readonly stacked?: number;
+    } | null;
     /** While a lane or key is dragged: the Adjust it would have, drawn live and saved on release */
     readonly laneEdit?: {
         readonly marcherId: number;
@@ -547,7 +551,7 @@ export function selectLane(
 
 /** The lane under the pointer, or none */
 export function setHoverLane(
-    hoverLane: { marcherId: number; at: XY } | null,
+    hoverLane: { marcherId: number; at: XY; stacked?: number } | null,
 ): void {
     const was = usePathPenStore.getState().session?.hoverLane ?? null;
     if (was?.marcherId === hoverLane?.marcherId && !was === !hoverLane) return;
@@ -866,9 +870,15 @@ export async function commitLaneAdjust(
     d: [number, number],
 ): Promise<void> {
     const args = laneArgs(marcherId);
-    if (args)
-        await adjustWrite(adjustFallback, () => adjustLane({ ...args, x, d }));
-    setLaneEdit(null);
+    // On success the preview stays until the path is read again (`showPath`), so the bend doesn't
+    // flash away for a frame between the save and the read
+    if (
+        !args ||
+        !(await adjustWrite(adjustFallback, () =>
+            adjustLane({ ...args, x, d }),
+        ))
+    )
+        setLaneEdit(null);
 }
 
 /** A key handle dragged: key `index` of the lane takes displacement `d`. One undo step. */
@@ -878,11 +888,13 @@ export async function commitAdjustKey(
     d: [number, number],
 ): Promise<void> {
     const args = laneArgs(marcherId);
-    if (args)
-        await adjustWrite(adjustFallback, () =>
+    if (
+        !args ||
+        !(await adjustWrite(adjustFallback, () =>
             setAdjustKey({ ...args, index, d }),
-        );
-    setLaneEdit(null);
+        ))
+    )
+        setLaneEdit(null);
 }
 
 /** Removes the key `index` of the lane. One undo step. */

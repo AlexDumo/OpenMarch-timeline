@@ -122,6 +122,30 @@ describe("what a press on an open group path takes (decision C)", () => {
         ).toBe(false);
     });
 
+    it("lanes on top of each other: a click on the picked one goes to the next", () => {
+        const target = group();
+        target.group = {
+            ...target.group!,
+            members: target.group!.members.map((m) => ({
+                ...m,
+                offset: { x: 0, y: 4 * STEP },
+            })),
+        };
+        open(target);
+        const on = pointer(20 * STEP, laneY);
+        const click = () => {
+            pathPenMode.press(on, {
+                isMac: false,
+                onDot: () => false,
+            } as never);
+            pathPenMode.release(on, null);
+            return usePathPenStore.getState().session?.lane?.marcherId;
+        };
+        expect(click()).toBe(10);
+        expect(click()).toBe(11);
+        expect(click()).toBe(10);
+    });
+
     it("takes nothing while the path is closed or being only shown", () => {
         showPath(group(), "2");
         expect(

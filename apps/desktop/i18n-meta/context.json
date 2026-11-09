@@ -2876,5 +2876,6 @@
     "pathways.lanes.hover": "Short note by the pointer over a marcher's line on an open group path, saying whose spot it is. A group path is one drawn path that several marchers (performers) of a move walk together, each on its own copy (lane) of it. A spot is one place in the group: whichever marcher holds it walks its lane. An adjustment is a small hand-made bend of one spot's lane; ",
     "pathways.lanes.hoverAdjusted": "The same note for a spot that has an adjustment. A group path is one drawn path that several marchers (performers) of a move walk together, each on its own copy (lane) of it. A spot is one place in the group: whichever marcher holds it walks its lane. An adjustment is a small hand-made bend of one spot's lane; ",
     "pathways.errors.adjust": "Fallback error toast when an adjustment of a spot can't be saved. A group path is one drawn path that several marchers (performers) of a move walk together, each on its own copy (lane) of it. A spot is one place in the group: whichever marcher holds it walks its lane. An adjustment is a small hand-made bend of one spot's lane; ",
-    "pathways.errors.refit": "Fallback error toast when Re-fit (moving a drawn path's ends to its marchers) fails."
+    "pathways.errors.refit": "Fallback error toast when Re-fit (moving a drawn path's ends to its marchers) fails.",
+    "pathways.lanes.stacked": "Added to the note by the pointer when several marchers' lines lie exactly on top of each other there: another click picks the next of them. {count} is how many lines."
 }

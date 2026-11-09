@@ -159,7 +159,13 @@ interface LaneHold {
     refused: boolean;
     /** The displacement the drag asks for now, once it moved */
     d: [number, number] | null;
+    /** How many lanes lie under the press, and which comes after this one */
+    stacked: number;
+    next: number;
 }
+
+/** Lanes this close together (field units) are one on top of the other under a press */
+const LANE_STACK_TOLERANCE = 0.25;
 
 const refusalKeys = {
     tooShort: "timeline.refusals.route.adjustTooShort",
@@ -314,30 +320,42 @@ class PathPenMode implements FieldMode {
                             base: memberOf(s, marcherId)?.adjust ?? null,
                             refused: false,
                             d: null,
+                            stacked: 1,
+                            next: marcherId,
                         },
                     };
             }
         if (bestKey) return bestKey.hold;
         if (onPath(shapeOf(s), pointer.field, env)) return null;
-        let best: { d: number; hold: LaneHold } | null = null;
-        for (const { marcherId, walk } of walks) {
+        // Lanes of one row of a block lie on top of each other along a leg that runs with the
+        // row: every lane this near is under the press. The one picked keeps it; a click on it
+        // goes to the next (`releaseLane`), as a click cycles through stacked layers in a drawing
+        // app
+        const hits = walks.flatMap(({ marcherId, walk }) => {
             const hit = laneHitOf(walk, pointer.field, env.hitRadius);
-            if (!hit || (best && hit.distance >= best.d)) continue;
-            best = {
-                d: hit.distance,
-                hold: {
-                    marcherId,
-                    index: null,
-                    x: hit.x,
-                    at: hit.at,
-                    plain: hit.x === null ? null : lanePlain(walk, hit.x),
-                    base: memberOf(s, marcherId)?.adjust ?? null,
-                    refused: false,
-                    d: null,
-                },
-            };
-        }
-        return best?.hold ?? null;
+            return hit ? [{ marcherId, walk, hit }] : [];
+        });
+        if (hits.length === 0) return null;
+        const nearest = Math.min(...hits.map((h) => h.hit.distance));
+        const stacked = hits.filter(
+            (h) => h.hit.distance <= nearest + LANE_STACK_TOLERANCE,
+        );
+        const on =
+            stacked.find((h) => h.marcherId === s.lane?.marcherId) ??
+            stacked[0]!;
+        const after = stacked[(stacked.indexOf(on) + 1) % stacked.length]!;
+        return {
+            marcherId: on.marcherId,
+            index: null,
+            x: on.hit.x,
+            at: on.hit.at,
+            plain: on.hit.x === null ? null : lanePlain(on.walk, on.hit.x),
+            base: memberOf(s, on.marcherId)?.adjust ?? null,
+            refused: false,
+            d: null,
+            stacked: stacked.length,
+            next: after.marcherId,
+        };
     }
 
     claims(pointer: FieldPointer, press: FieldModePress): boolean {
@@ -608,7 +626,15 @@ class PathPenMode implements FieldMode {
     /** A lane or key let go: saved once it moved (one undo step), otherwise a click that picks it */
     private releaseLane(p: NonNullable<PathPenMode["held"]>, hold: LaneHold) {
         if (!p.moved) {
-            selectLane({ marcherId: hold.marcherId, key: hold.index });
+            // Already picked, with others under it: the click goes to the next one down
+            const picked =
+                usePathPenStore.getState().session?.lane?.marcherId ===
+                hold.marcherId;
+            selectLane({
+                marcherId:
+                    picked && hold.stacked > 1 ? hold.next : hold.marcherId,
+                key: hold.index,
+            });
             return;
         }
         if (hold.refused || !hold.d) {
@@ -896,18 +922,29 @@ function buildDrawing(session: PathSession): FieldModeDrawing {
         hover && hoverMember && !moving
             ? {
                   at: hover.at,
-                  text: tolgee.t(
-                      hoverMember.adjust
-                          ? "pathways.lanes.hoverAdjusted"
-                          : "pathways.lanes.hover",
-                      hoverMember.adjust
-                          ? "Spot {spot} · {marcher} · adjusted"
-                          : "Spot {spot} · {marcher}",
-                      {
-                          spot: (hoverMember.slot ?? 0) + 1,
-                          marcher: hoverMember.drill,
-                      },
-                  ),
+                  text: [
+                      tolgee.t(
+                          hoverMember.adjust
+                              ? "pathways.lanes.hoverAdjusted"
+                              : "pathways.lanes.hover",
+                          hoverMember.adjust
+                              ? "Spot {spot} · {marcher} · adjusted"
+                              : "Spot {spot} · {marcher}",
+                          {
+                              spot: (hoverMember.slot ?? 0) + 1,
+                              marcher: hoverMember.drill,
+                          },
+                      ),
+                      ...((hover.stacked ?? 1) > 1
+                          ? [
+                                tolgee.t(
+                                    "pathways.lanes.stacked",
+                                    "click for the next of {count}",
+                                    { count: hover.stacked ?? 1 },
+                                ),
+                            ]
+                          : []),
+                  ].join(" · "),
               }
             : null;
     return {

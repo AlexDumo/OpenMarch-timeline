@@ -3810,7 +3810,8 @@
         },
         "lanes": {
             "hover": "Spot {spot} · {marcher}",
-            "hoverAdjusted": "Spot {spot} · {marcher} · adjusted"
+            "hoverAdjusted": "Spot {spot} · {marcher} · adjusted",
+            "stacked": "click for the next of {count}"
         }
     }
 }
