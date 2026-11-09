@@ -1,5 +1,5 @@
 /**
- * Drawable walked paths (spec R-15, Appendix K: QA-WP-1 to QA-WP-12; pathways step 18).
+ * Drawable walked paths (spec §8.12 R-15, §12.11 QA-WP-1 to QA-WP-12; pathways step 18).
  *
  * Every row samples the drawable path and the resolver's `positionAt` at the same beats and
  * asks for agreement within `WALKED_SAMPLE_TOLERANCE`.

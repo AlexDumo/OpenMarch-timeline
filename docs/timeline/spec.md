@@ -1326,6 +1326,34 @@ Homes start with `|P| ≤ β ≤ γ`. A route span leaves the bound as it is, si
 
 **Checked by** P-13, at every probe of every property-checked show, including 30 adversarial arc chains. Re-enabling major arcs (mutation M7) violates it.
 
+### 8.12 R-15: Drawable walked paths [added with pathways step 18]
+
+Other apps and the exports need the path a marcher walks as something they can draw, beside its coordinates at a time (plan step 18, P-2, C-4). R-15 defines that path. It is **derived**: it reads the resolver and the tables the resolver was built from, stores nothing, and never changes a position. Its code is `walkedPath` in `packages/core/src/timeline/walkedPath.ts`.
+
+For marcher `m` and beats `[from, to]`, the **drawable walked path** is a list of segments in beat order. Each segment has the beats `start < end` at which the marcher is at its `from` and `to` points, the transition it belongs to, and one of four kinds: `line`, `arc` (centre, radius, start angle and a signed sweep of at most half a turn), `cubic` (two control points) or `polyline` (points, each with its beat).
+
+1. **Spans.** Each span of `m` (R-2) that is not a hold and overlaps `[from, to]` gives the segments of its walk between `max(from, s.start)` and `min(to, s.end)`. A segment that the range cuts is cut exactly where the marcher is at that beat: a line and an arc at that point, a cubic split at the parameter R-14's evaluation uses for that distance. A span that a higher layer cuts short stops at `s.end`, where the marcher leaves it (R-5's progress still runs to `T.end`).
+2. **Which walk.** The same dispatch as the resolver's (R-6 to R-11, R-14′), with origin `O = origin(s)` and destination `B`:
+    - **Direct (R-7), and every join or resume of a laned slot or of a follow-the-leader transition (R-11):** one line `O → B`.
+    - **Arc (R-8):** item 3.
+    - **Own lane, founding (R-14):** one segment per piece of the cleaned path: a line for a line piece, a cubic with the piece's controls `C1`, `C2` for a cubic piece. Segment `j` covers progress `D_j / L` to `D_{j+1} / L`. A path with no inner point kept is one line.
+    - **Group lane, founding (R-14 group schedule, R-14′):** item 4.
+    - **Follow the leader, founding (R-10):** the marcher's stretch of the trail from `startDist[q]` to `endDist[q]`: a line per trail leg (origins, waypoints, then a polyline destination path's sides), and for a circle destination, arcs about its centre. Legs of zero length give nothing.
+3. **Arcs.** R-8's arc from `O` to `B` with bulge `k` is the circle through `O`, `B` and the apex `M + k·c·n` (chord midpoint `M`, chord `c`, `n` the +90° normal): radius `(h² + s²) / (2|s|)` with `h = c/2`, `s = k·c`, sweep `4·atan(2|k|)` toward the apex, walked at constant angular speed. With `c < ε_geom` or `|k| < 1e-7` it is a line (the two differ by less than `1e-7·c`).
+4. **Group lanes.** The first leg and the last leg (group schedule item 5) are each one line or one cubic over progress `[0, u_first]` and `[u_last, 1]`. Between them, each reference piece `j` (`1 ≤ j < m`) is that piece moved by the lane's offset `o`: a line or a cubic with every point and control `+ o`, over progress `D_j / L` to `D_{j+1} / L`.
+5. **Adjust.** With an Adjust profile (R-14′ item 6), each reference piece between the moments is split at the profile's keys that fall strictly inside it. On each part the displacement `δ` is linear in the place `x`, so:
+    - a part of a **line** piece is a line from `W(x_a) + o + δ(x_a)` to `W(x_b) + o + δ(x_b)`, exact;
+    - a part of a **cubic** piece on which `δ` is constant (before the first key, after the last, or between two equal keys) is the sub-cubic moved by `o + δ`, exact;
+    - a part of a cubic piece on which `δ` changes has no exact line, arc or cubic form. It is a **`polyline`**: points on the walk, each with its beat, refined until the walk at the middle beat of every pair of neighbors is within `tol / 4` of the middle of the line between them (at least 8 parts, at most 12 halvings).
+      The legs already carry `δ(D_1)` and `δ(D_m)` (R-14′ item 7) and stay one line or cubic each.
+6. **Standing still draws nothing.** A hold has no segment. A line shorter than `ε_geom` (a move that goes nowhere) has none. So the path of a marcher that never moves in the range is empty, and beats between segments are beats it stands where the last segment ended.
+7. **Agreement with the resolver.** `walkedPathPointAt(path, b)` is where the path puts the marcher at beat `b`: on a line by linear interpolation, on an arc by angle, on a cubic at constant speed along its own 64-sample length table (R-14's measure, so a whole piece is evaluated exactly as R-14 does), on a polyline between its two points by beat. For every `b` in `[from, to]` it is within **`tol = 0.05`** field units (`WALKED_SAMPLE_TOLERANCE`, under half a percent of an 8-to-5 step) of `positionAt(m, b)`. Lines, arcs and whole cubic pieces agree to rounding; `tol` covers cut cubics and polylines.
+8. **SVG.** `walkedPathToSvg` writes the path as SVG path data in the resolver's coordinates (x right, y down): `M` to the first point, then `L x y` for a line, `A r r 0 0 f x y` for an arc (large-arc flag always 0 because no arc is over half a turn; sweep flag `f = 1` when the sweep is positive), `C c1 c2 to` for a cubic, and one `L` per point of a polyline. Numbers are rounded to 3 decimals by default. An empty path is the empty string.
+9. **Polyline form.** `walkedPathToPolylines(path, tolerance)` gives the same path as points for apps that draw no curves: arcs and cubics are divided so no line is more than `tolerance` (default `tol`) from the segment it replaces; polyline segments keep their own points.
+10. **Exports.** An individual drill chart draws, for the path from the previous page and the path to the next, the drawable walked path between the two pages' end beats, and puts the midpoint mark where the marcher is at the middle beat. When that path is one straight run from the first position to the second (only lines, every corner on the chord, none walked backward; a hold on the way counts as straight) the chart draws the straight line and its geometric midpoint exactly as before, so a show with no curves and no turns inside a page exports the same bytes. Coordinate sheets don't draw paths and are unchanged. The video export draws no paths: it samples `positionsAt` per frame, so it already shows the walked path.
+
+**Not in R-15 yet:** handoffs, pins, the entry rule and trail lanes (R-14′ items 3, 5 and 8, R-10′) are not in the resolver yet; when a step adds one to the resolver's walk it adds the matching segments here, and QA-WP's agreement rows fail until it does. `walkedPath` rebuilds a follow-the-leader trail from `explain`, so a change to R-9's trail must be mirrored in it.
+
 ---
 
 ## 9. Derived state and caching [Proposed, refining Decided D-3/D-8]
@@ -1636,6 +1664,8 @@ Keyframe data (timestamps plus coordinates, with linear interpolation between th
 - extra keyframes along arc and FTL spans so that chord error stays within tolerance.
 
 It MUST NOT be read back into the editor as state (D-2).
+
+The **drawable walked path** (R-15, §8.12) is the second export form: exact lines, arcs and cubics per marcher with a beat on every end, for apps that draw the path rather than play it. It follows the same rule: produced from the resolver, never read back.
 
 ---
 
@@ -2015,6 +2045,27 @@ Results at the time of writing, using each script's default seeds:
   - Fuzzed and property-checked shows are small: at most 7 marchers, about 10 transitions and 25 assignments. Their coordinates, radii, bulges and beats do reach the bounds. The adversarial arc chains are 60 arcs long, and QA-REG-5 runs 1,000.
   - P-8 and P-10 have no dedicated automated assertion.
   - Seeds are fixed for reproducibility. Other seeds may find other bugs.
+
+### 12.11 Drawable walked paths (QA-WP) [pathways step 18]
+
+Every row builds a show, takes `walkedPath` for a marcher and samples `walkedPathPointAt` and `positionAt` at the same 401 beats across the range. "Agrees" means the largest gap is within the bound given. Core rows are in `packages/core/src/timeline/__test__/walkedPath.test.ts`; rows 13 and 14 are in the desktop's `exporting` tests.
+
+| ID | Setup | Expected |
+| --- | --- | --- |
+| QA-WP-1 | A direct move | One line with the move's beats; `d` is `M 0 0 L 100 50`; agrees to `1e-9` |
+| QA-WP-2 | An arc move, bulges `±0.5`, `0.2`, `−0.05`, `0.001` and `0` | One arc with the exact ends (a line for `0`); the sweep flag draws the side walked; agrees to `1e-6` |
+| QA-WP-3 | An own path with two corners | A line per leg, beats split by length; agrees to `1e-9` |
+| QA-WP-4 | An own path with smooth points and a corner | Cubics, then a line; agrees to `1e-9` |
+| QA-WP-5 | Two marchers on a group path, corners and smooth | Legs and shared pieces as lines or cubics; the member's shared piece is the leader's moved by the offset, on the same beats; agrees to `1e-9` |
+| QA-WP-6 | The same with an Adjust of two keys | On corners: only lines, split at the keys, agrees to `1e-9`. On curves: exact cubics where the Adjust is constant, polylines where it changes; agrees within `tol` |
+| QA-WP-7 | Follow the leader with a waypoint, onto a line and onto a circle | Lines; arcs of at most half a turn on the circle; agrees to `1e-6` |
+| QA-WP-8 | Two moves with a hold between; a range inside the hold; a move that goes nowhere | No segment for the hold; empty path, empty `d`, no polylines, no point |
+| QA-WP-9 | Ranges cutting into lines, arcs, cubics and polylines | The first segment starts at `from`, the last ends at `to`; agrees within `tol` |
+| QA-WP-10 | A higher-layer move joined part-way, with a lane, over an arc move | Arc to the cut, one straight line for the join, arc for the resume; `walkedPathOfMove` gives one move's beats only |
+| QA-WP-11 | The polyline form at tolerances `0.05` and `1` | Every resolver position within the tolerance (plus `tol`) of the polyline; fewer points at the looser one |
+| QA-WP-12 | A show with only direct moves | Only lines |
+| QA-WP-13 | The v0.1.7 `realistic` show, converted as on open; individual charts with and without walked paths, and across the builds before and after step 18 | Byte-identical; no `<path>` element |
+| QA-WP-14 | The same show with one move made an arc and a group path drawn for three marchers | Their charts draw `A` and `C` path data into and out of those pages; a chart no curve touches is unchanged |
 
 ---
 
