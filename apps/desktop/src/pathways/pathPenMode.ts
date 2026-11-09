@@ -118,11 +118,20 @@ const MENU_KIND = { menu: PATH_MENU };
 /** What the field's menu offers on a path: open it, or take it away (one undo step) */
 export const PATH_FIELD_MENU = ["editPath", "removePath"] as const;
 
+/** The field's menu on a trail (pathways step 4): open it, turn the line around, or take it away */
+export const TRAIL_FIELD_MENU = [
+    "editPath",
+    "reverseTrail",
+    "removePath",
+] as const;
+
 /** The field's menu on `target`'s line: Re-fit joins it only when the ends have moved (decision A) */
 export const pathFieldMenu = (target: PathTarget): readonly string[] =>
-    refitNeeded(target)
-        ? ["editPath", "refitPath", "removePath"]
-        : PATH_FIELD_MENU;
+    target.trail
+        ? TRAIL_FIELD_MENU
+        : refitNeeded(target)
+          ? ["editPath", "refitPath", "removePath"]
+          : PATH_FIELD_MENU;
 
 /** An open group path's lanes as they walk now, cached per session state (decision C) */
 let walksMemo: {
@@ -970,20 +979,30 @@ function buildDrawing(session: PathSession): FieldModeDrawing {
     const tipText = moving ? drillTerms(moving) : null;
     const group = target.group;
     const { lanes, memberRings, laneHighlights, lanePicked, adjustHandles } =
-        groupParts(session, shape);
+        target.trail ? trailParts(target.trail) : groupParts(session, shape);
     const laneTip = moving ? null : laneTipOf(session);
     return {
         outline,
         openOutline: true,
         pathLine: pathLineOf(session),
         stage: drawingNow ? "drawing" : "open",
-        spots: group ? group.members.map((m) => m.to) : [target.to],
+        spots: target.trail
+            ? target.trail.members.map((m) => m.to)
+            : group
+              ? group.members.map((m) => m.to)
+              : [target.to],
         walks: [],
         ...handles,
-        rings: group ? group.members.map((m) => m.from) : [target.from],
-        ringIds: group
-            ? group.members.map((m) => m.marcherId)
-            : [target.marcherId],
+        rings: target.trail
+            ? target.trail.members.map((m) => m.from)
+            : group
+              ? group.members.map((m) => m.from)
+              : [target.from],
+        ringIds: target.trail
+            ? target.trail.members.map((m) => m.marcherId)
+            : group
+              ? group.members.map((m) => m.marcherId)
+              : [target.marcherId],
         ...(lanes ? { lanes } : {}),
         ...(laneHighlights ? { laneHighlights } : {}),
         ...(lanePicked !== undefined ? { lanePicked } : {}),
@@ -1046,6 +1065,35 @@ const pathLineOf = (s: PathSession): FieldModeDrawing["pathLine"] => {
     if (s.phase === "closed") return s.object ? "selected" : "shown";
     return laneInFocus(s) !== null ? "context" : "edited";
 };
+
+/**
+ * A trail's parts of the drawing (pathways step 4): the line-up through the line's starts, tail
+ * to leader, and the line through its end spots, from the entrance to the leader's, both thin
+ * and faint as a group path's lanes are (the pen's line is the drawn part between them); and a
+ * ring on each member, the leader's saying so.
+ */
+function trailParts(
+    trail: NonNullable<PathTarget["trail"]>,
+): Pick<
+    FieldModeDrawing,
+    "lanes" | "memberRings" | "laneHighlights" | "lanePicked" | "adjustHandles"
+> {
+    const lineUp = trail.members.map((m) => m.from);
+    // The line is entered at the tail's end spot and runs on to the leader's
+    const endLine = trail.members.map((m) => m.to);
+    return {
+        lanes: [lineUp, endLine].filter((line) => line.length > 1),
+        memberRings: trail.members.map((m) => ({
+            at: m.from,
+            marcherId: m.marcherId,
+            kind: m.marcherId === trail.leaderId ? "own" : "group",
+            label:
+                m.marcherId === trail.leaderId
+                    ? tolgee.t("pathways.rings.leader", "Leads the line")
+                    : tolgee.t("pathways.rings.follower", "Follows the leader"),
+        })),
+    };
+}
 
 /**
  * A group path's parts of the drawing (step 15): every member's lane, thin and faint (while

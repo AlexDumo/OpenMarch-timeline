@@ -185,7 +185,11 @@
             "refit": "Re-fit path",
             "adjustRemoveKey": "Remove adjustment point",
             "adjustResetSpot": "Reset this spot",
-            "adjustAcknowledge": "Keep re-homed adjustments"
+            "adjustAcknowledge": "Keep re-homed adjustments",
+            "follow": "Follow",
+            "followKeywords": "follow leader trail line snake file ftl reverse path",
+            "reverse": "Reverse leader",
+            "removeTrail": "Remove trail"
         }
     },
     "analyticsOptIn": {
@@ -2713,6 +2717,17 @@
                 "ownPathAdjusted": "{marcher}'s spot has an adjustment, which Own path can't keep. Reset this spot first",
                 "refitNotNeeded": "The path already fits where its marchers stand",
                 "refitNoFounder": "Nobody starts on this path, so it has no ends to re-fit to"
+            },
+            "trail": {
+                "tooFew": "Follow is for two or more marchers",
+                "partWay": "{marcher} is in this move for only some of its counts, so it can't follow a trail here",
+                "hasPath": "{marcher} walks a drawn path in this move. Remove the path, then choose Follow",
+                "alreadyFollows": "{marcher} already follows a trail in this move. Select that whole line, and nobody else, to draw its trail again",
+                "sharedShape": "{move} takes these marchers into a shape they share with marchers who aren't selected, so they can't follow a trail on their own",
+                "notYet": "{move} follows a drawn trail, which this edit can't keep yet. Remove the trail first",
+                "split": "{move} follows a drawn trail, which can't be split yet. Remove the trail first, or split before choosing Follow",
+                "removeTrailFirst": "{move} follows a drawn trail: remove the trail first",
+                "noTrail": "This trail is gone"
             }
         }
     },
@@ -3764,7 +3779,12 @@
             "laneOf": "Spot {spot} · {marcher}",
             "rehomedBadge": "Adjustment re-homed",
             "rehomedTip": "A point an adjustment was attached to changed, so the adjustment moved to the nearest points left. Check it still does what you meant.",
-            "legAdjusted": "spot {spot}, counts {from} to {to} (adjusted)"
+            "legAdjusted": "spot {spot}, counts {from} to {to} (adjusted)",
+            "bigStepsTipTrail": "{marcher} has the farthest to go: {inches} in a step. Each marcher walks its own way along the trail at a steady speed. Lengthen the move, or shorten the trail.",
+            "pathKind": "How the marchers take the path",
+            "togetherTip": "Together: the group slides along the path and keeps its shape",
+            "together": "Together",
+            "followTip": "Follow: the line follows its leader along the trail into its end spots"
         },
         "menu": {
             "pointType": "Corner type",
@@ -3782,38 +3802,51 @@
             "save": "Couldn't save the path",
             "remove": "Couldn't remove the path",
             "adjust": "Couldn't adjust this spot",
-            "refit": "Couldn't re-fit the path"
+            "refit": "Couldn't re-fit the path",
+            "reverse": "Couldn't reverse the trail"
         },
         "refusals": {
             "noMove": "{marcher} has no move at the playhead to draw a path on",
             "playing": "Stop playback to draw a path",
             "selectOne": "Select a marcher to draw a path for",
-            "twoMoves": "These marchers are in different moves at the playhead: select marchers of one move to draw a group path"
+            "twoMoves": "These marchers are in different moves at the playhead: select marchers of one move to draw a group path",
+            "followTwo": "Select the marchers of a line (two or more) to follow a trail",
+            "followTwoMoves": "These marchers are in different moves at the playhead: select marchers of one move to follow a trail"
         },
         "banner": {
             "drawingPoints": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel",
             "drawingPointsClick": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
-            "groupDrawing": "Group path for {count} marchers: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
+            "groupDrawing": "Group path for {count} marchers: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
+            "trailDrawing": "Trail for {count} marchers, {marcher} leading: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
         },
         "toolbar": {
-            "path": "Path"
+            "path": "Path",
+            "followTip": "Follow: draw a trail, and the selected line follows its leader along it into its end spots"
         },
         "toasts": {
             "removedGroup": "Removed the path for {count, plural, one {# marcher} other {# marchers}}",
             "rehomed": "Moved the adjustment on {count, plural, one {# spot} other {# spots}} to the nearest points left",
             "rehomedKeys": "{count, plural, one {# adjustment point} other {# adjustment points}} dropped",
             "rehomedCleared": "{count, plural, one {# spot} other {# spots}} lost their adjustment",
-            "adjustsRemoved": "{count, plural, one {# adjustment} other {# adjustments}} removed: {count, plural, one {it was} other {they were}} on the old path"
+            "adjustsRemoved": "{count, plural, one {# adjustment} other {# adjustments}} removed: {count, plural, one {it was} other {they were}} on the old path",
+            "removedTrail": "Removed the trail: {count, plural, one {# marcher walks} other {# marchers walk}} straight to the same end spots",
+            "reversed": "{marcher} leads now"
         },
         "rings": {
             "group": "Follows the group path",
             "own": "Own path",
-            "offGroup": "Not on the group path"
+            "offGroup": "Not on the group path",
+            "leader": "Leads the line",
+            "follower": "Follows the leader"
         },
         "lanes": {
             "hover": "Spot {spot} · {marcher}",
             "hoverAdjusted": "Spot {spot} · {marcher} · adjusted",
             "stacked": "click for the next of {count}"
+        },
+        "trail": {
+            "leader": "Leader · {marcher}",
+            "reverseTip": "Make the other end of the line lead. Everyone keeps their end spot."
         }
     }
 }

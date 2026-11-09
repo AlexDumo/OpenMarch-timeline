@@ -1,4 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
+import { refuseTrailRows, refuseTrailsInMoves } from "./timelineTrails";
 import { schema } from "@/global/database/db";
 import { moveLabels, pageTimelineIds } from "@/timeline/timelineViewModel";
 import { DbConnection, DbTransaction } from "./types";
@@ -313,6 +314,13 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
             .filter((r) => chosen.has(r.assignment.marcher_id))
             .map((r) => r.assignment),
     );
+    // AP-T5 (pathways step 4): a follow move's line isn't split off yet
+    await refuseTrailRows(
+        tx,
+        rows
+            .filter((r) => chosen.has(r.assignment.marcher_id))
+            .map((r) => r.assignment),
+    );
     const notInMove = [...new Set(marcherIds)]
         .filter((id) => !members.has(id))
         .sort((a, b) => a - b);
@@ -512,6 +520,8 @@ export const mergeMovesInTransaction = async ({
     if (!target) refuse(`timeline ${targetId} does not exist`);
     // AP-R6 (spec v0.9 step 1): merging doesn't keep a drawn path yet
     await refuseRoutesInMoves(tx, [sourceId, targetId]);
+    // AP-T5 (pathways step 4): nor a follow move's trail
+    await refuseTrailsInMoves(tx, [sourceId, targetId]);
     const { nameOf, pageTimelineIds } = await timelineWords(tx);
     if (pageTimelineIds.has(sourceId))
         refuse(

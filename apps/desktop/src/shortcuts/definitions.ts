@@ -851,6 +851,27 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // Pathways step 4 (spec Appendix K): Follow draws a trail for the selected line with the Path
+    // pen, and the line follows it, leader first, into its end spots (AP-T1). Shift+L as in
+    // "leader", beside the Line's L. Reverse makes the other end lead (AP-T3), on the leader's
+    // mark, the path bar, the trail's menu and Alt+L
+    followTrail: {
+        labelKey: "actions.path.follow",
+        keywordsKey: "actions.path.followKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: ["Shift+L"],
+        ignoreRepeat: true,
+    },
+    reverseTrail: {
+        labelKey: "actions.path.reverse",
+        keywordsKey: "actions.path.followKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: ["Alt+L"],
+        ignoreRepeat: true,
+    },
+
     // Pathways step 2: the selected point of an open path made a corner, or smooth, as a Line's
     // Corner | Smooth (the point's menu, a double-click, the path's floating editor). No keys,
     // as a Line's corner type has none
