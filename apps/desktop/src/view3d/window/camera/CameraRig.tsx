@@ -11,12 +11,12 @@
  *   upward arc, or jumps under reduced motion;
  * - tells `useCameraStore().currentPose()` where the view is, for saving
  *   cameras;
- * - orbits on drag (a flung drag coasts to a stop), grab-pans on
- *   right-drag or Shift+drag (the ground point under the pointer stays
- *   under it), and zooms toward the cursor on the wheel (eased) or a pinch;
- *   on a trackpad a two-finger scroll orbits, Shift or Option + scroll pans,
- *   and a pinch zooms; double-click moves the orbit center to the clicked spot;
- *   never below the ground; any of these clears the active camera;
+ * - moves on drag and scroll as the viewer's control scheme says
+ *   (`controlScheme.ts`): orbits (a flung drag coasts to a stop), grab-pans
+ *   (the ground point under the pointer stays under it), zooms toward the
+ *   cursor on the wheel (eased) or a pinch; double-click moves the orbit
+ *   center to the clicked spot; never below the ground; any of these clears
+ *   the active camera;
  * - in pick-a-seat mode, raycasts the kit's `pickTargets`, snaps to the
  *   nearest seat row and flies to a seated eye looking at the focus; Esc
  *   cancels;
@@ -39,7 +39,8 @@ import type { CameraSeat, KitResult } from "@/view3d/core/types";
 import { CROWD_CLEAR_RADIUS, useView3dSceneStore } from "../sceneStore";
 import { useCameraStore } from "./cameraStore";
 import { RigController } from "./rigController";
-import { classifyWheel, groundHit, wheelPixels } from "./inputMath";
+import { groundHit, wheelPixels } from "./inputMath";
+import { dragAction, wheelAction } from "./controlScheme";
 import { requestDraw } from "../drawWake";
 import { pickAlong } from "../scenePick";
 import {
@@ -249,6 +250,7 @@ export default function CameraRig() {
             if (store.activeCameraId !== null) store._setActive(null);
         };
         const focus = () => useView3dSceneStore.getState().focus;
+        const scheme = () => useView3dSceneStore.getState().controlScheme;
 
         /** The ground point under a client position, from the camera's current pose. */
         const groundAt = (
@@ -317,7 +319,7 @@ export default function CameraRig() {
             rig.stopMotion();
             orbiting = false;
             grab =
-                e.shiftKey || (e.buttons & 2) !== 0
+                dragAction(scheme(), e) === "pan"
                     ? groundAt(e.clientX, e.clientY)
                     : null;
             if (pointers.size === 2) {
@@ -342,13 +344,16 @@ export default function CameraRig() {
                 changed = pinch > 0 && d > 0 && rig.zoomRatio(pinch / d);
                 pinch = d;
                 changed = rig.pan(dx * 0.5, dy * 0.5, focus()) || changed;
-            } else if (e.shiftKey || (e.buttons & 2) !== 0) {
+            } else if (dragAction(scheme(), e) === "pan") {
                 const now = grab ? groundAt(e.clientX, e.clientY) : null;
                 changed =
                     grab && now
                         ? rig.grabPan(grab, now, focus())
                         : rig.pan(dx, dy, focus());
             } else {
+                // The orbit moves the ground, so a pan resumed in this press
+                // can't grab the point it held before.
+                grab = null;
                 changed = rig.orbitDrag(dx, dy, performance.now());
                 orbiting = orbiting || changed;
             }
@@ -387,22 +392,20 @@ export default function CameraRig() {
         };
         const onWheel = (e: WheelEvent) => {
             e.preventDefault();
-            const kind = classifyWheel(
-                e as WheelEvent & { wheelDeltaY?: number },
-            );
+            const action = wheelAction(scheme(), e);
             let changed: boolean;
-            if (kind === "pinch") {
+            if (action === "pinch") {
                 changed = rig.zoomRatioAt(
                     Math.exp(e.deltaY * PINCH_ZOOM),
                     zoomPointAt(e.clientX, e.clientY),
                 );
-            } else if (kind === "trackpad") {
+            } else if (action !== "zoom") {
                 // natural scrolling: moving the fingers right gives a negative
                 // deltaX; orbit and pan as if the fingers dragged the scene
                 const dx = -wheelPixels(e.deltaX, e.deltaMode);
                 const dy = -wheelPixels(e.deltaY, e.deltaMode);
                 changed =
-                    e.shiftKey || e.altKey
+                    action === "pan"
                         ? rig.pan(dx, dy, focus())
                         : rig.orbit(dx, dy);
             } else {

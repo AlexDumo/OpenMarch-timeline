@@ -13,10 +13,15 @@ import {
     loadResolution,
     saveResolution,
 } from "@/view3d/window/renderPrefs";
+import {
+    CONTROL_SCHEMES,
+    loadControlScheme,
+    saveControlScheme,
+} from "@/view3d/window/camera/controlScheme";
 
 /**
- * How the 3D View draws on this computer: its quality and resolution, here only (the 3D window's
- * own panel offers them just in the web preview, which has no Settings window). Each choice is saved in local
+ * How the 3D View draws and moves on this computer. Quality and resolution are here only (the 3D window's
+ * own panel offers them just in the web preview, which has no Settings window); the controls are in that panel too. Each choice is saved in local
  * storage, which the 3D window shares and listens to, so an open 3D View
  * follows a change at once. These modules are plain TypeScript: nothing here
  * loads three.js.
@@ -24,9 +29,32 @@ import {
 export default function View3dSettings() {
     const [quality, setQuality] = useState(() => loadQualityMode());
     const [resolution, setResolution] = useState(() => loadResolution());
+    const [controls, setControls] = useState(() => loadControlScheme());
 
     return (
         <SettingsPanel>
+            <SettingRow
+                label={<T keyName="settings.view3d.controls" />}
+                htmlFor="view3d-controls"
+                stacked
+                description={
+                    <T
+                        keyName={`settings.view3d.controls.${controls}.description`}
+                    />
+                }
+            >
+                <Choices
+                    id="view3d-controls"
+                    value={controls}
+                    options={CONTROL_SCHEMES}
+                    keyPrefix="settings.view3d.controls"
+                    onChange={(scheme) => {
+                        saveControlScheme(scheme);
+                        setControls(scheme);
+                    }}
+                />
+            </SettingRow>
+
             <SettingRow
                 label={<T keyName="settings.view3d.quality" />}
                 htmlFor="view3d-quality"
