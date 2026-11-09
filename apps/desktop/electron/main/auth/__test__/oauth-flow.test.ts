@@ -14,6 +14,7 @@ vi.mock("../../../../src/global/auth/constants", async (importOriginal) => ({
 describe("revokeRefreshToken", () => {
     afterEach(() => {
         vi.unstubAllGlobals();
+        vi.restoreAllMocks();
     });
 
     it("asks Clerk's revocation endpoint to revoke the refresh token", async () => {
@@ -22,7 +23,7 @@ describe("revokeRefreshToken", () => {
         );
         vi.stubGlobal("fetch", fetchMock);
 
-        await expect(revokeRefreshToken("refresh-1")).resolves.toBe(true);
+        await revokeRefreshToken("refresh-1");
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
         const [url, init] = fetchMock.mock.calls[0] as unknown as [
@@ -39,21 +40,37 @@ describe("revokeRefreshToken", () => {
         });
     });
 
-    it("reports false, without throwing, when Clerk turns it down", async () => {
+    it("logs Clerk's answer, without throwing, when Clerk turns it down", async () => {
         vi.stubGlobal(
             "fetch",
-            vi.fn(async () => new Response("{}", { status: 400 })),
+            vi.fn(
+                async () =>
+                    new Response('{"error":"invalid_client"}', { status: 401 }),
+            ),
         );
-        await expect(revokeRefreshToken("refresh-1")).resolves.toBe(false);
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        await expect(revokeRefreshToken("refresh-1")).resolves.toBeUndefined();
+
+        expect(warn).toHaveBeenCalledWith(
+            expect.any(String),
+            401,
+            '{"error":"invalid_client"}',
+        );
     });
 
-    it("reports false, without throwing, when offline", async () => {
+    it("logs, without throwing, when offline", async () => {
+        const failure = new TypeError("fetch failed");
         vi.stubGlobal(
             "fetch",
             vi.fn(async () => {
-                throw new TypeError("fetch failed");
+                throw failure;
             }),
         );
-        await expect(revokeRefreshToken("refresh-1")).resolves.toBe(false);
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        await expect(revokeRefreshToken("refresh-1")).resolves.toBeUndefined();
+
+        expect(warn).toHaveBeenCalledWith(expect.any(String), failure);
     });
 });

@@ -242,9 +242,6 @@ export async function refreshAccessToken(
     };
 }
 
-/** How long sign-out waits on Clerk before giving up on revoking. */
-const REVOKE_TIMEOUT_MS = 10 * 1000;
-
 /**
  * Tells Clerk to revoke the refresh token, so a copy of it (from a backup of
  * the app's storage, say) can't keep getting new tokens after sign-out.
@@ -252,12 +249,8 @@ const REVOKE_TIMEOUT_MS = 10 * 1000;
  * client ID. Best effort: offline, the token stays valid at Clerk until it
  * expires, and sign-out on this computer goes ahead either way.
  * Quitting the app straight after sign-out can drop the request too.
- * @returns Whether Clerk accepted the request (it answers 200 for a token it
- *   doesn't know as well, per RFC 7009).
  */
-export async function revokeRefreshToken(
-    refreshToken: string,
-): Promise<boolean> {
+export async function revokeRefreshToken(refreshToken: string): Promise<void> {
     try {
         const config = getClerkConfig();
         const response = await fetchWithTimeout(
@@ -273,18 +266,16 @@ export async function revokeRefreshToken(
                     token_type_hint: "refresh_token",
                 }),
             },
-            REVOKE_TIMEOUT_MS,
+            OAUTH_TOKEN_REQUEST_TIMEOUT_MS,
         );
         if (!response.ok) {
             console.warn(
                 "[Auth] Clerk didn't revoke the refresh token:",
                 response.status,
+                await response.text(),
             );
-            return false;
         }
-        return true;
     } catch (error) {
         console.warn("[Auth] Couldn't revoke the refresh token:", error);
-        return false;
     }
 }

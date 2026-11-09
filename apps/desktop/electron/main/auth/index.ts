@@ -33,6 +33,7 @@ import {
     getValidAccessToken,
     setTokenRefreshCallback,
     setSignedOutCallback,
+    setTokensDiscardedCallback,
 } from "./token-manager";
 import type { AuthState, AuthError, AuthTokens } from "./types";
 
@@ -166,6 +167,9 @@ export function initAuthAfterReady(
     // Set up token refresh callback
     setTokenRefreshCallback(handleTokenRefresh);
     setSignedOutCallback(handleSignedOut);
+    setTokensDiscardedCallback(
+        (tokens) => void revokeRefreshToken(tokens.refreshToken),
+    );
 
     // Set up protocol listeners for OAuth callbacks
     setupProtocolListeners(getWindow, handleAuthCallback);
