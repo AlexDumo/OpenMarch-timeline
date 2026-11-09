@@ -150,36 +150,38 @@ export function ftlDestPath(
 }
 
 /**
- * How a follow-the-leader entry reads its destination (R-9 steps 4 and 5, R-12′): the path as
- * the trail walks it, each member's and each other row's point, and a point's distance along
- * the walked path. With `reverse` the path is entered from its far end, so the vacancies stay at
- * the entrance and a full line keeps every member on its own slot's point.
+ * How a follow-the-leader entry reads its destination (R-9 steps 4 and 5, R-12′, R-13′): the
+ * path as the trail walks it, each member's and each other row's point, and a point's distance
+ * along the walked path.
+ *
+ * - With a shape, member `q` of `m` takes sample `n-m+q` and the `k`-th other row `n-m-1-k`
+ *   (R-9). With `reverse` the path is entered from its far end, so they take `m-1-q` and `m+k`:
+ *   the vacancies stay at the entrance.
+ * - With no shape (R-13′), every row takes its own slot's destination, whoever else is there.
  */
 export function ftlDestination(path: DestPath, n: number, reverse: boolean) {
     const stop = (j: number): number =>
         path.stops
             ? (path.stops[j] ?? path.L)
             : paramT(path.closed, j, n) * path.L;
-    if (!reverse)
-        return {
-            walked: path,
-            /** The point of member `q` of `m` */
-            member: (q: number, m: number) => n - m + q,
-            /** The point of the `k`-th other row */
-            other: (k: number, m: number) => n - m - 1 - k,
-            /** Point `j`'s distance along the walked path */
-            along: stop,
-        };
-    const walked: DestPath = {
-        closed: path.closed,
-        L: path.L,
-        at: (s) => path.at(path.L - s),
-    };
+    const own = path.stops !== undefined;
+    const walked: DestPath = reverse
+        ? {
+              closed: path.closed,
+              L: path.L,
+              at: (s) => path.at(path.L - s),
+          }
+        : path;
     return {
         walked,
-        member: (q: number, m: number) => m - 1 - q,
-        other: (k: number, m: number) => m + k,
-        along: (j: number) => path.L - stop(j),
+        /** The point of member `q` of `m`, who is in slot `slot` */
+        member: (q: number, m: number, slot: number) =>
+            own ? slot : reverse ? m - 1 - q : n - m + q,
+        /** The point of the `k`-th other row, which is on slot `slot` */
+        other: (k: number, m: number, slot: number) =>
+            own ? slot : reverse ? m + k : n - m - 1 - k,
+        /** Point `j`'s distance along the walked path */
+        along: (j: number) => (reverse ? path.L - stop(j) : stop(j)),
     };
 }
 

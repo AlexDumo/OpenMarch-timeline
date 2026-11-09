@@ -202,7 +202,8 @@ export function createOracle(db: TimelineSnapshot): Oracle {
             .filter((s): s is OracleSpan => s !== undefined);
         let keyed: Array<[number, OracleSpan]> | null = null;
         let source: OrderSource = { kind: "slot", fallback: false };
-        if (t.order === "inherit" && founding.length) {
+        // R-13′: with no shape the order is the slots', whatever `order_mode` says
+        if (t.order === "inherit" && t.dest != null && founding.length) {
             const prevs = founding.map(prevNonHold);
             const U = prevs[0]?.row!.transition;
             if (
@@ -243,18 +244,21 @@ export function createOracle(db: TimelineSnapshot): Oracle {
             dest.walked,
             t.route == null ? null : db.routes?.[t.route]?.geometry,
         );
+        const pointOf = keyed.map(([, s], q) => dest.member(q, m, s.row!.slot));
         const startDist = origins.map((_, q) => trail.cum[q]!);
         const endDist = origins.map(
-            (_, q) => trail.destOffset + dest.along(dest.member(q, m)),
+            (_, q) => trail.destOffset + dest.along(pointOf[q]!),
         );
         const pts = destinationsOf(t, db.shapes);
         const target = new Map<number, XY>(
-            members.map((mm, q) => [mm, pts[dest.member(q, m)]!]),
+            members.map((mm, q) => [mm, pts[pointOf[q]!]!]),
         );
         db.assignments
             .filter((r) => r.transition === tid && !target.has(r.marcher))
             .sort((a, b) => a.slot - b.slot || a.marcher - b.marcher)
-            .forEach((r, k) => target.set(r.marcher, pts[dest.other(k, m)]!));
+            .forEach((r, k) =>
+                target.set(r.marcher, pts[dest.other(k, m, r.slot)]!),
+            );
         return { members, source, trail, startDist, endDist, target };
     }
 

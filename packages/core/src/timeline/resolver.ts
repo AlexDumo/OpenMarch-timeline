@@ -480,7 +480,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         const t = T(tid);
         const F = [...idx(tid)].filter(founding);
         const d: Node[] = F.map((s): Node => ["o", s]);
-        if (t.order === "inherit" && F.length) {
+        if (t.order === "inherit" && t.dest != null && F.length) {
             const prevs = F.map(prevNonHold);
             const U = prevs[0]?.row?.transition;
             if (
@@ -654,7 +654,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         const F = [...idx(tid)].filter(founding);
         let keyed: Array<[number, RSpan]> | null = null;
         let source: OrderSource = { kind: "slot", fallback: false };
-        if (t.order === "inherit" && F.length) {
+        if (t.order === "inherit" && t.dest != null && F.length) {
             const prevs = F.map(prevNonHold);
             const U = prevs[0]?.row?.transition;
             if (
@@ -694,14 +694,18 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             t.route == null ? null : routeGeo.get(t.route)?.walk,
         );
         const pts = dests.get(tid)!;
+        // each member's point: R-9's sample, or its own slot's destination (R-13′)
+        const pointOf = keyed.map(([, s], q) => dest.member(q, m, s.row!.slot));
         const target = new Map<number, XY>(
-            members.map((mm, q) => [mm, pts[dest.member(q, m)]!]),
+            members.map((mm, q) => [mm, pts[pointOf[q]!]!]),
         );
         // non-members, from the per-transition row index: never a full scan (9.6)
         rowsOfTransition(tid)
             .filter((r) => !target.has(r.marcher))
             .sort((a, b) => a.slot - b.slot || a.marcher - b.marcher)
-            .forEach((r, k) => target.set(r.marcher, pts[dest.other(k, m)]!));
+            .forEach((r, k) =>
+                target.set(r.marcher, pts[dest.other(k, m, r.slot)]!),
+            );
         entries.set(tid, {
             members,
             source,
@@ -709,7 +713,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             qOf: new Map(members.map((mm, q) => [mm, q])),
             startDist: os.map((_, q) => trail.cum[q]!),
             endDist: os.map(
-                (_, q) => trail.destOffset + dest.along(dest.member(q, m)),
+                (_, q) => trail.destOffset + dest.along(pointOf[q]!),
             ),
             target,
         });

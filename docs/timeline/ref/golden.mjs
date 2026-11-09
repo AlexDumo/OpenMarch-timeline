@@ -275,6 +275,9 @@ const report = (name, bad) => { bad.length ? fail++ : pass++; console.log(`${bad
   const spots = { dest: null, points: [[20, 10], [20, 13], [26, 21]] };
   check('QA-TR-11', tshow(C2, spots), [[1, 16, 20, 10], [2, 16, 20, 13], [3, 16, 26, 21], [3, 15, 24.6875, 19.25], [1, 8, 14, 1]], entryIs(1, [1, 2, 3], 'slot', [30, 33, 43]));
   check('QA-TR-11 reversed', tshow(C2, { ...spots, params: { waypoints: [], reverse: true } }), [[1, 16, 20, 10], [2, 16, 20, 13], [3, 16, 26, 21]], entryIs(1, [3, 2, 1], 'slot'));
+  // QA-TR-13 (R-13′): M2 gone, its spot left empty. The others still end on their own spots, and the line-up skips M2.
+  { const gap = tshow(C2, spots); gap.assignments = gap.assignments.filter((r) => r.marcher !== 2);
+    check('QA-TR-13 a vacant spot', gap, [[1, 16, 20, 10], [3, 16, 26, 21], [1, 8, 14, 1]], entryIs(1, [1, 3], 'slot', [30, 43])); }
   check('QA-TR-12 one slot', { ...tshow(C2, { dest: null, points: [[20, 10]], slots: 1 }), marchers: [{ id: 3, home: [8, 0] }], assignments: [row(3, 1, 0, 0, 16)] }, [[3, 8, 14, 5], [3, 16, 20, 10]]);
   const same = (p, q) => p[0] === q[0] && p[1] === q[1];
   const report = (name, bad) => { bad.length ? fail++ : pass++; console.log(`${bad.length ? 'FAIL' : 'PASS'}  ${name}${bad.length ? '\n   ' + bad.slice(0, 6).join('\n   ') : ''}`); };

@@ -63,7 +63,7 @@ export function makeResolver(db, { rules = 'v0.2+' } = {}) {
   }
   function depsOfEntry(tid) {                                          // exactly what computeEntry reads
     const t = T(tid), F = [...idx(tid)].filter(founding), d = F.map((s) => ['o', s]);
-    if (t.order === 'inherit' && F.length) {
+    if (t.order === 'inherit' && t.dest != null && F.length) {
       const prevs = F.map(prevNonHold), U = prevs[0]?.row.transition;
       if (prevs.every((p) => p && p.row.transition === U) && isFtl(T(U)) && prevs.every((p) => founding(p))) d.push(['e', U]);
     }
@@ -124,7 +124,7 @@ export function makeResolver(db, { rules = 'v0.2+' } = {}) {
     const t = T(tid);
     const F = [...idx(tid)].filter(founding);
     let keyed = null, source = { kind: 'slot', fallback: false };
-    if (t.order === 'inherit' && F.length) {
+    if (t.order === 'inherit' && t.dest != null && F.length) {
       const prevs = F.map(prevNonHold);
       const U = prevs[0]?.row.transition;
       if (prevs.every((p) => p && p.row.transition === U)) {
@@ -143,13 +143,14 @@ export function makeResolver(db, { rules = 'v0.2+' } = {}) {
     const n = t.slots, m = members.length, pts = dests.get(tid);
     const dest = ftlDest(paths.get(tid), pts, n, sign < 0), path = dest.walked;    // R-13′, R-12′ (step 4)
     const trail = tr ? makeRouteTrail(os, tr, path) : makeTrail(os, t.params?.waypoints ?? [], path);
+    const pointOf = keyed.map(([, sp], q) => dest.member(q, m, sp.row.slot));      // R-9's sample, or the row's own slot (R-13′)
     const e = { members, source, trail, qOf: new Map(members.map((mm, q) => [mm, q])),
       startDist: os.map((_, q) => trail.cum[q]),
-      endDist: os.map((_, q) => trail.destOffset + dest.along(dest.member(q, m))),
-      target: new Map(members.map((mm, q) => [mm, pts[dest.member(q, m)]])) };
+      endDist: os.map((_, q) => trail.destOffset + dest.along(pointOf[q])),
+      target: new Map(members.map((mm, q) => [mm, pts[pointOf[q]]])) };
     rowsOfTransition(tid).filter((r) => !e.target.has(r.marcher))                  // per-transition index, no full scan
       .sort((a, b) => a.slot - b.slot || a.marcher - b.marcher)
-      .forEach((r, k) => e.target.set(r.marcher, pts[dest.other(k, m)]));
+      .forEach((r, k) => e.target.set(r.marcher, pts[dest.other(k, m, r.slot)]));
     entries.set(tid, e); C.ftlEntriesComputed++;
   }
   function positionAt(m, b) {

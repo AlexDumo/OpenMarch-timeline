@@ -49,7 +49,7 @@ export function makeOracle(db) {
     const t = T(tid);
     const founding = db.marchers.map((mm) => spans(mm.id).find((s) => s.row && s.row.transition === tid && s.start === t.start)).filter(Boolean);
     let keyed = null, source = { kind: 'slot', fallback: false };
-    if (t.order === 'inherit' && founding.length) {
+    if (t.order === 'inherit' && t.dest != null && founding.length) {              // R-13′: with no shape the order is the slots'
       const prevs = founding.map(prevNonHold);
       const U = prevs[0]?.row.transition;
       if (prevs.every((p) => p && p.row.transition === U)) {
@@ -71,11 +71,12 @@ export function makeOracle(db) {
     const tr = t.route == null ? null : db.routes?.[t.route]?.geometry;                 // R-9′ (step 4): a trail route's drawn part; waypoints not read (T-15)
     const trail = tr ? makeRouteTrail(origins, tr, path) : makeTrail(origins, wps, path);
     const startDist = origins.map((_, q) => trail.cum[q]);
-    const endDist = origins.map((_, q) => trail.destOffset + dest.along(dest.member(q, m)));
-    const target = new Map(members.map((mm, q) => [mm, pts[dest.member(q, m)]]));
+    const pointOf = keyed.map(([, sp], q) => dest.member(q, m, sp.row.slot));           // R-9's sample, or the row's own slot (R-13′)
+    const endDist = origins.map((_, q) => trail.destOffset + dest.along(pointOf[q]));
+    const target = new Map(members.map((mm, q) => [mm, pts[pointOf[q]]]));
     db.assignments.filter((r) => r.transition === tid && !target.has(r.marcher))
       .sort((a, b) => a.slot - b.slot || a.marcher - b.marcher)
-      .forEach((r, k) => target.set(r.marcher, pts[dest.other(k, m)]));
+      .forEach((r, k) => target.set(r.marcher, pts[dest.other(k, m, r.slot)]));
     return { members, source, trail, startDist, endDist, target };
   }
 

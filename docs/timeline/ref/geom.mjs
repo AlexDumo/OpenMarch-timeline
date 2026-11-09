@@ -167,21 +167,21 @@ export function routeWalk(A, pts, B, F = A, G = B) {
 }
 
 /**
- * R-13′ and R-12′ (pathways step 4): how a follow-the-leader entry reads its destination. With no shape the path is the
- * line through the slots' destinations `pts` (slot order), each a stop at its own length along it; with a shape the
- * stops are R-13's samples. With `reverse` the path is entered from its far end: member q of m takes point m-1-q and
- * the k-th other row m+k, where the plain rule gives n-m+q and n-m-1-k. Returns the path as walked, the two index
- * rules and each point's distance along the walked path.
+ * R-13′ and R-12′ (pathways step 4): how a follow-the-leader entry reads its destination. With a shape the stops are
+ * R-13's samples: member q of m takes sample n-m+q and the k-th other row n-m-1-k, or, with `reverse` (the path entered
+ * from its far end), m-1-q and m+k. With no shape the path is the line through the slots' destinations `pts` (slot order),
+ * each a stop at its own length along it, and every row takes its own slot's point. Returns the path as walked, the two
+ * index rules and each point's distance along the walked path.
  */
 export function ftlDest(shapePath, pts, n, reverse) {
-  let base = shapePath, stop;
+  let base = shapePath, stop, own = false;
   if (!base) { const line = pts.length ? pts : [[0, 0]]; let acc = 0; const at = [0];
     for (let i = 1; i < line.length; i++) { acc += dist(line[i - 1], line[i]); at.push(acc); }
-    base = { closed: false, L: acc, at: (s) => pointAtDist(line, at, s) }; stop = (j) => at[j] ?? acc; }
+    base = { closed: false, L: acc, at: (s) => pointAtDist(line, at, s) }; stop = (j) => at[j] ?? acc; own = true; }
   else stop = (j) => paramT(base.closed, j, n) * base.L;
-  if (!reverse) return { walked: base, L: base.L, member: (q, m) => n - m + q, other: (k, m) => n - m - 1 - k, along: stop };
+  if (!reverse) return { walked: base, L: base.L, member: (q, m, slot) => (own ? slot : n - m + q), other: (k, m, slot) => (own ? slot : n - m - 1 - k), along: stop };
   return { walked: { closed: base.closed, L: base.L, at: (s) => base.at(base.L - s) }, L: base.L,
-    member: (q, m) => m - 1 - q, other: (k, m) => m + k, along: (j) => base.L - stop(j) };
+    member: (q, m, slot) => (own ? slot : m - 1 - q), other: (k, m, slot) => (own ? slot : m + k), along: (j) => base.L - stop(j) };
 }
 
 /**

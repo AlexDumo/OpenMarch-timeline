@@ -596,4 +596,32 @@ describe("follow a drawn trail (spec R-9′, pathways step 4)", () => {
                         );
                 }
     });
+
+    it("QA-TR-13: with no shape every row ends on its own slot's spot, whoever is missing or joins late (R-13′)", () => {
+        // M2 gone: its spot stays empty, the line-up skips it, nobody else's end moves
+        const gap = spotsShow();
+        gap.assignments = gap.assignments.filter((r) => r.marcher !== 2);
+        for (const [name, r] of both(gap)) {
+            expect(r.ftlEntry(1).members, name).toEqual([1, 3]);
+            expect(r.ftlEntry(1).endDist).toEqual([30, 43]);
+            expect(same(r.positionAt(1, 16), SPOTS[0]!)).toBe(true);
+            expect(same(r.positionAt(3, 16), SPOTS[2]!)).toBe(true);
+        }
+        // M2 joins at count 8: it walks straight to its own spot, and the others are unmoved
+        const late = spotsShow();
+        late.assignments[1] = { ...late.assignments[1]!, start: 8 };
+        for (const [name, r] of both(late)) {
+            expect(same(r.positionAt(2, 16), SPOTS[1]!), name).toBe(true);
+            expect(near(r.positionAt(2, 12), [12, 6.5])).toBe(true);
+            expect(same(r.positionAt(1, 16), SPOTS[0]!)).toBe(true);
+            expect(same(r.positionAt(3, 16), SPOTS[2]!)).toBe(true);
+        }
+        // `inherit` is not read with no shape: the order is the slots'
+        const inherit = spotsShow({ order: "inherit" });
+        for (const [, r] of both(inherit))
+            expect(r.ftlEntry(1).orderSource).toEqual({
+                kind: "slot",
+                fallback: false,
+            });
+    });
 });
