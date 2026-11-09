@@ -39,9 +39,7 @@ export function useMarcherShapeOf(
         [marchers, theme, version],
     );
     // Keyed by what the shapes are, not which fill found them
-    const key = shapes
-        ? [...shapes].map(([id, s]) => `${id}${s[0]}`).join()
-        : "";
+    const key = shapes ? [...shapes].map(([id, s]) => `${id}:${s}`).join() : "";
     const latest = useMemo(() => shapes, [key]); // eslint-disable-line react-hooks/exhaustive-deps
     return useCallback(
         (marcherId: number) => latest?.get(marcherId) ?? "circle",
