@@ -2,6 +2,7 @@ import type { PivotKey } from "../frame/frame";
 import type { QueryClient } from "@tanstack/react-query";
 import type {
     FieldMode,
+    FieldModeHover,
     FieldModePress,
     FieldPointer,
 } from "@/field/editor/fieldEditor";
@@ -211,6 +212,14 @@ export class LiveBoxMode implements FieldMode {
     constructor(
         box: PlacedBox,
         private readonly queryClient: QueryClient,
+        /**
+         * What's drawn under the box and clickable outside it (the group path its members walk,
+         * pathways AP-O3): it's asked what the box doesn't claim. Inside the box stays the box's.
+         */
+        private readonly under?: Pick<
+            FieldMode,
+            "takeClick" | "fieldMenuAt" | "cursorAt"
+        >,
     ) {
         this.live = openLive(box);
     }
@@ -389,6 +398,17 @@ export class LiveBoxMode implements FieldMode {
         return { params: this.live.params, n: this.live.box.spots };
     }
 
+    /** A click outside the box may be on what's drawn under it */
+    takeClick(pointer: FieldPointer, double: boolean): boolean {
+        return this.under?.takeClick?.(pointer, double) ?? false;
+    }
+
+    /** A right-click outside the box may be on what's drawn under it; inside it's the box's */
+    fieldMenuAt(pointer: FieldPointer): readonly string[] | null {
+        if (this.pressed(pointer) !== null) return null;
+        return this.under?.fieldMenuAt?.(pointer) ?? null;
+    }
+
     cancel(): void {
         this.endHeld();
         this.live = openLive(this.live.box, this.live.selected);
@@ -399,7 +419,7 @@ export class LiveBoxMode implements FieldMode {
         setShapePointerOver(false);
     }
 
-    cursorAt(pointer: FieldPointer) {
+    cursorAt(pointer: FieldPointer, hover?: FieldModeHover) {
         const field = currentShapeField();
         if (!field) return null;
         const { kind } = this.live.box;
@@ -421,7 +441,7 @@ export class LiveBoxMode implements FieldMode {
                   target,
                   this.live.selected,
               )
-            : null;
+            : (this.under?.cursorAt(pointer, hover) ?? null);
     }
 
     drawing() {

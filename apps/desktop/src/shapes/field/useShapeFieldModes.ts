@@ -69,7 +69,7 @@ export function useShapeFieldModes(
     // One live mode per box, told when the box is saved or read again
     const boxId = box?.recipe.id ?? null;
     const live = useMemo(
-        () => (box ? new LiveBoxMode(box, queryClient) : null),
+        () => (box ? new LiveBoxMode(box, queryClient, pathPenMode) : null),
         // A new mode only for another box
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [boxId, queryClient],

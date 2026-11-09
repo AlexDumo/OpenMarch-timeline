@@ -148,6 +148,36 @@ describe("the selected box's field mode and reach inside", () => {
 
     beforeEach(() => vi.mocked(commitBox).mockClear());
 
+    it("gives what it doesn't claim to the path drawn under it; inside the box stays the box's", () => {
+        const under = {
+            takeClick: vi.fn(() => true),
+            fieldMenuAt: vi.fn(() => ["pathEdit"]),
+            cursorAt: vi.fn(() => "pointer" as const),
+        };
+        const withPath = new LiveBoxMode(box, new QueryClient(), under);
+        const outside = pointer({ x: member.x + 400, y: member.y + 400 });
+        expect(withPath.claims(outside, editorSays(false))).toBe(false);
+        expect(withPath.takeClick(outside, false)).toBe(true);
+        expect(under.takeClick).toHaveBeenCalledWith(outside, false);
+        expect(withPath.fieldMenuAt(outside)).toEqual(["pathEdit"]);
+        expect(withPath.cursorAt(outside)).toBe("pointer");
+
+        under.fieldMenuAt.mockClear();
+        under.cursorAt.mockClear();
+        const inside = pointer(member);
+        expect(withPath.claims(inside, editorSays(false))).toBe(true);
+        expect(withPath.fieldMenuAt(inside)).toBeNull();
+        expect(under.fieldMenuAt).not.toHaveBeenCalled();
+        withPath.cursorAt(inside);
+        expect(under.cursorAt).not.toHaveBeenCalled();
+    });
+
+    it("without anything under it, takes no click and offers no menu", () => {
+        const outside = pointer({ x: member.x + 400, y: member.y + 400 });
+        expect(mode().takeClick(outside, false)).toBe(false);
+        expect(mode().fieldMenuAt(outside)).toBeNull();
+    });
+
     it("claims a press on a member that doesn't reach inside: the drag moves the box", () => {
         expect(mode().claims(pointer(member), editorSays(false))).toBe(true);
     });

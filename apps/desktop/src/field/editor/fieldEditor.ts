@@ -261,6 +261,8 @@ type LastClick = {
     screen: FieldPoint;
     hit: number | null;
     mode?: boolean;
+    /** A mode's `takeClick` took it: a change of mode that follows doesn't end the double-click */
+    taken?: boolean;
 };
 
 export type FieldCursor =
@@ -810,8 +812,13 @@ export class FieldEditor {
                   hit: press.hit,
               };
         // A mode may take a click on empty field (a double-click on a marcher's path opens it)
-        if (press.hit === null && this.mode?.takeClick?.(pointer, press.double))
+        if (
+            press.hit === null &&
+            this.mode?.takeClick?.(pointer, press.double)
+        ) {
+            if (this.lastClick) this.lastClick.taken = true;
             return;
+        }
         this.click(press, pointer.shift || press.add === true);
         if (press.double && press.hit !== null)
             this.ports.doubleClickMarcher?.(press.hit);
@@ -926,7 +933,9 @@ export class FieldEditor {
         if (mode) {
             this.cancelGesture();
             this.press = null;
-            this.lastClick = null;
+            // A click a mode took can change the mode (a path clicked under a selected box goes
+            // from the box's mode to the path's); the next click can still be its double-click
+            if (!this.lastClick?.taken) this.lastClick = null;
             this.unsubscribeMode = mode.subscribe(() => this.emit());
         }
         this.emit();
