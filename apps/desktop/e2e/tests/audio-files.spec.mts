@@ -99,7 +99,8 @@ function silentWav(path: string) {
     const wav = Buffer.alloc(44 + samples * 2);
     wav.write("RIFF", 0);
     wav.writeUInt32LE(36 + samples * 2, 4);
-    wav.write("WAVEfmt ", 8);
+    wav.write("WAVE", 8);
+    wav.write("fmt ", 12);
     wav.writeUInt32LE(16, 16);
     wav.writeUInt16LE(1, 20);
     wav.writeUInt16LE(1, 22);
