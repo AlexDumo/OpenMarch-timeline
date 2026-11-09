@@ -10,6 +10,7 @@ questions:
   - "With nothing selected and Paths set to All, click a group path's line. Was it easy to hit, and was it clear that the path (not its marchers) was selected?"
   - "Select a path, then press Delete, then Undo. Did the path come back exactly as it was? Did Delete ever remove something you didn't mean it to?"
   - "Single click selects a path, double-click opens it for editing, Escape steps back out. Did that feel natural, or did you expect something else (for example the marchers staying selected)?"
+  - "Move the box at the end of a group path. Does the line's end follow the box, with the corners you placed staying where they were?"
   - "With Paths set to All, can you tell group paths and single-marcher paths apart, and does the field look calm enough with several paths drawn?"
 ---
 
@@ -32,6 +33,8 @@ of its own**, as a shape is in a drawing app.
   click it. A single marcher's path is drawn as before.
 - **Right-click or long-press** a path's line selects it and offers **Edit path**
   and **Remove path**. On a tablet, tap selects and double-tap opens.
+- **Move the box at either end of a group path** and the line's end follows it. The
+  corners you placed stay where they are; stretching them to fit is Re-fit, in 3b.
 - Dragging a dot still moves that dot, never the path.
 - **P on a selected or open path** draws that path again, and it stays the same
   path: a group path opened through one of its marchers is drawn again as the
