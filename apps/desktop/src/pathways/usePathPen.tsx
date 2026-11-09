@@ -576,11 +576,13 @@ export function PathPenKeys(): null {
         {
             label: drawing
                 ? tolgee.t("actions.path.cancel", "Cancel path")
-                : picked !== null
-                  ? tolgee.t("actions.path.deselectPoint", "Deselect point")
-                  : objectSelected
-                    ? tolgee.t("actions.path.deselect", "Deselect path")
-                    : tolgee.t("actions.path.close", "Close path"),
+                : pickedLane !== null
+                  ? tolgee.t("actions.path.deselectSpot", "Deselect spot")
+                  : picked !== null
+                    ? tolgee.t("actions.path.deselectPoint", "Deselect point")
+                    : objectSelected
+                      ? tolgee.t("actions.path.deselect", "Deselect path")
+                      : tolgee.t("actions.path.close", "Close path"),
         },
     );
     useActionHandler(

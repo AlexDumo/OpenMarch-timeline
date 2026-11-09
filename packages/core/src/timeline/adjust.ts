@@ -337,7 +337,8 @@ export function rehomeProfile(
     return {
         profile: keys ? { v: 1, keys, rehomed: true } : null,
         changed: true,
-        dropped: keys ? dropped : profile.keys.length,
+        // Counted on what is stored: pruning can take a zero key the scan kept
+        dropped: profile.keys.length - (keys?.length ?? 0),
     };
 }
 
@@ -430,7 +431,10 @@ export function limitRouteEdit(
     const fits = (g: RouteGeometry) => {
         const s = scheduleOfGeometry(g);
         return profiles.every(
-            (p, i) => smallestGap(placesOf(s, g.points, p.keys)) >= floors[i]!,
+            // Within rounding: a gap written at exactly the floor reads a hair under it
+            (p, i) =>
+                smallestGap(placesOf(s, g.points, p.keys)) >=
+                floors[i]! - EPS_GEOM,
         );
     };
     if (fits(next)) return free;
