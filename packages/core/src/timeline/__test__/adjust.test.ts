@@ -610,15 +610,89 @@ describe("AP-H1 re-home (QA-AP-L3)", () => {
         expect(out).toEqual({ profile: null, changed: true, dropped: 1 });
     });
 
-    it("a profile left with only zero keys is cleared", () => {
+    it("a zero key squeezed against a displacing key steps back a step; the displacing key stays", () => {
         const p = profile(
-            key("p", "q", 0.5, [0, 0]),
-            key("m", "q", 0.03, [0, 10]),
+            key("p", "q", 0.5, [0, 0]), // x = 200, survives
+            key("m", "q", 0.03, [0, 10]), // x = 203, re-homed within s_min of it
+        );
+        const g = without(three, "m");
+        const out = rehomeProfile(three, g, p);
+        expect(out.dropped).toBe(0);
+        expect(out.profile?.rehomed).toBe(true);
+        const keys = out.profile!.keys;
+        expect(keys.map((k) => k.d)).toEqual([
+            [0, 0],
+            [0, 10],
+        ]);
+        expect(placeOf(g, keys[1]!)).toBeCloseTo(203, 6);
+        expect(
+            placeOf(g, keys[1]!) - placeOf(g, keys[0]!),
+        ).toBeGreaterThanOrEqual(S_MIN);
+        expect(placeOf(g, keys[1]!) - placeOf(g, keys[0]!)).toBeCloseTo(
+            S_MIN,
+            4,
+        );
+    });
+
+    it("a bend squeezed hard keeps its peak, its ends a step either side", () => {
+        const bend = profile(
+            key("p", "m", 0.5, [0, 0]), // 150
+            key("m", "q", 0, [0, 30]), // 200
+            key("m", "q", 0.5, [0, 0]), // 250
+        );
+        // p to q squeezed from 200 long to 30: the keys land 7.5 apart
+        const squeezed: RouteGeometry = {
+            ...three,
+            points: [
+                { id: "p", at: [100, 0] },
+                { id: "m", at: [115, 0] },
+                { id: "q", at: [130, 0] },
+            ],
+        };
+        const out = rehomeProfile(three, squeezed, bend);
+        expect(out.dropped).toBe(0);
+        const keys = out.profile!.keys;
+        expect(keys.map((k) => k.d)).toEqual([
+            [0, 0],
+            [0, 30],
+            [0, 0],
+        ]);
+        const xs = keys.map((k) => placeOf(squeezed, k));
+        expect(xs[1]).toBeCloseTo(115, 6);
+        expect(xs[1]! - xs[0]!).toBeCloseTo(S_MIN, 4);
+        expect(xs[2]! - xs[1]!).toBeCloseTo(S_MIN, 4);
+        expect(validateAdjustProfile(out.profile!).ok).toBe(true);
+    });
+
+    it("with no room for an end a step away, the end goes and the peak stays", () => {
+        const bend = profile(
+            key("p", "m", 0.5, [0, 0]),
+            key("m", "q", 0, [0, 30]),
+            key("m", "q", 0.5, [0, 0]),
+        );
+        // The rigid part is 12 long: a step either side of the peak falls outside it
+        const tight: RouteGeometry = {
+            ...three,
+            points: [
+                { id: "p", at: [100, 0] },
+                { id: "m", at: [106, 0] },
+                { id: "q", at: [112, 0] },
+            ],
+        };
+        const out = rehomeProfile(three, tight, bend);
+        expect(out.dropped).toBe(2);
+        expect(out.profile?.keys).toEqual([bend.keys[1]]);
+        expect(out.profile?.rehomed).toBe(true);
+    });
+
+    it("zero keys squeezed with no displacing key among them clear the profile", () => {
+        const p = profile(
+            key("p", "m", 0.5, [0, 0]),
+            key("m", "q", 0.5, [0, 0]),
         );
         const out = rehomeProfile(three, without(three, "m"), p);
         expect(out.profile).toBeNull();
         expect(out.changed).toBe(true);
-        expect(out.dropped).toBe(2);
     });
 });
 

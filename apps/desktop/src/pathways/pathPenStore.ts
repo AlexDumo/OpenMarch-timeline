@@ -939,10 +939,14 @@ export async function deleteAdjustKey(
     index: number,
 ): Promise<void> {
     const args = laneArgs(marcherId);
-    if (args)
-        await adjustWrite(adjustFallback, () =>
+    // Nothing went (a save in flight, or a refusal): the key stays picked
+    if (
+        !args ||
+        !(await adjustWrite(adjustFallback, () =>
             removeAdjustKey({ ...args, index }),
-        );
+        ))
+    )
+        return;
     // The lane stays picked with its key gone, so the next Delete can't fall through to Remove
     // path or wipe the lane's other keys
     update((s) =>

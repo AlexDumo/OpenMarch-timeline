@@ -234,10 +234,12 @@ export interface RehomeResult {
  *
  * An anchor naming a point that survives is left alone. One naming a gone point moves to the
  * nearest surviving points around its old place, by fraction. Then, on the new geometry, keys are
- * clamped into the rigid part and scanned in place order keeping the first: a key closer than
- * `s_min` to the last kept drops whichever of the two moved in this edit, and if both or neither
- * did, the earlier in stored order. A key moved when its anchor was rewritten or its place changed
- * (decision B: a stretch changes distances with no anchor renamed). With no rigid part left the
+ * clamped into the rigid part. Displacing keys are scanned in place order keeping the first: one
+ * closer than `s_min` to the last kept drops whichever of the two moved in this edit, and if both
+ * or neither did, the earlier in stored order. A key moved when its anchor was rewritten or its
+ * place changed (decision B: a stretch changes distances with no anchor renamed). A zero key never
+ * costs a displacing key its place: squeezed against one, it steps back to `s_min` from it on its
+ * own side, or goes when there is no room, so a bend keeps its peak. With no rigid part left the
  * whole profile goes, and the caller says so.
  *
  * Not here on purpose: handoff ramps (step 25), pins and holds (step 5), linked Adjusts (step 26).
@@ -279,10 +281,13 @@ export function rehomeProfile(
     });
     type Entry = (typeof entries)[number];
 
-    const kept: Entry[] = [];
-    for (const entry of [...entries].sort(
+    const displaces = (e: Entry) => e.key.d[0] !== 0 || e.key.d[1] !== 0;
+    const inOrder = [...entries].sort(
         (p, q) => p.x - q.x || p.stored - q.stored,
-    )) {
+    );
+    // Displacing keys first, among themselves: they are what the designer made
+    const kept: Entry[] = [];
+    for (const entry of inOrder.filter(displaces)) {
         const last = kept[kept.length - 1];
         if (!last || entry.x - last.x >= S_MIN) {
             kept.push(entry);
@@ -294,6 +299,37 @@ export function rehomeProfile(
                 : entry.stored < last.stored;
         if (!dropEntry) kept[kept.length - 1] = entry;
     }
+    // Then the zero keys, which only say where a bend ends: one squeezed against a displacing
+    // key steps back to a step from it, on its own side, so the bend keeps its peak and its end.
+    // With no room there (the rigid part's end, or another key) it goes, and the profile runs
+    // on from the peak as it would with no end key.
+    const clearOf = (x: number, but?: Entry) =>
+        kept.every((k) => k === but || Math.abs(k.x - x) >= S_MIN);
+    for (const entry of inOrder.filter((e) => !displaces(e))) {
+        if (clearOf(entry.x)) {
+            kept.push(entry);
+            continue;
+        }
+        const near = kept
+            .filter((k) => displaces(k) && Math.abs(k.x - entry.x) < S_MIN)
+            .sort(
+                (p, q) => Math.abs(p.x - entry.x) - Math.abs(q.x - entry.x),
+            )[0];
+        if (!near) continue;
+        const before =
+            entry.x < near.x ||
+            (entry.x === near.x && entry.stored < near.stored);
+        const x = before ? near.x - S_MIN_WRITE : near.x + S_MIN_WRITE;
+        if (x < lo || x > hi || !clearOf(x, near)) continue;
+        kept.push({
+            ...entry,
+            x,
+            key: { ...anchorOfPlace(after, next.points, x), d: entry.key.d },
+            rewritten: true,
+            moved: true,
+        });
+    }
+    kept.sort((p, q) => p.x - q.x || p.stored - q.stored);
     const dropped = entries.length - kept.length;
     const changed = dropped > 0 || kept.some((e) => e.rewritten);
     if (!changed) return { profile, changed: false, dropped: 0 };
@@ -301,7 +337,8 @@ export function rehomeProfile(
     return {
         profile: keys ? { v: 1, keys, rehomed: true } : null,
         changed: true,
-        dropped: keys ? dropped : profile.keys.length,
+        // Counted on what is stored: pruning can take a zero key the scan kept
+        dropped: profile.keys.length - (keys?.length ?? 0),
     };
 }
 
@@ -394,7 +431,10 @@ export function limitRouteEdit(
     const fits = (g: RouteGeometry) => {
         const s = scheduleOfGeometry(g);
         return profiles.every(
-            (p, i) => smallestGap(placesOf(s, g.points, p.keys)) >= floors[i]!,
+            // Within rounding: a gap written at exactly the floor reads a hair under it
+            (p, i) =>
+                smallestGap(placesOf(s, g.points, p.keys)) >=
+                floors[i]! - EPS_GEOM,
         );
     };
     if (fits(next)) return free;
