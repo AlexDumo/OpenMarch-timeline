@@ -422,11 +422,31 @@ function Lasso({
  */
 const LANE_ALPHA = 0.18;
 const LANE_WIDTH = 1;
-/** A lane the pointer is on or that's picked for Adjust (pathways step 3b) */
-const LANE_HIGHLIGHT_ALPHA = 0.85;
-const LANE_HIGHLIGHT_WIDTH = 2;
+/** A lane the pointer is on (pathways step 3b): stands out from the faint ones, less than a picked one */
+const LANE_HIGHLIGHT_ALPHA = 0.5;
+const LANE_HIGHLIGHT_WIDTH = 1.5;
 /** A drawn path's line (pathways), solid and heavier than a shape's outline: drawn or open, shown */
-const PATH_LINE_WIDTH = { edited: 2.5, shown: 1.75, selected: 2.5 } as const;
+const PATH_LINE_WIDTH = {
+    edited: 2.5,
+    shown: 1.75,
+    selected: 2.5,
+    context: 1.25,
+} as const;
+/** How far the group path's line goes to grey behind the lane being worked on (0 to 1), and its alpha */
+const PATH_CONTEXT_GREY = 0.75;
+const PATH_CONTEXT_ALPHA = 0.7;
+/** `color` taken toward its own grey, so the muted line suits any field theme */
+function contextLineColor(color: FieldTheme["shape"]): string {
+    const grey = 0.3 * color.r + 0.59 * color.g + 0.11 * color.b;
+    const toGrey = (c: number) =>
+        Math.round(c + (grey - c) * PATH_CONTEXT_GREY);
+    return rgbaToString({
+        r: toGrey(color.r),
+        g: toGrey(color.g),
+        b: toGrey(color.b),
+        a: PATH_CONTEXT_ALPHA,
+    });
+}
 /** A selected path's halo under its line (pathways step 3a), as a selected object's outline reads */
 const PATH_HALO_WIDTH = 7;
 const PATH_HALO_ALPHA = 0.3;
@@ -695,7 +715,9 @@ const ShapeBody = memo(function ShapeBody({
                         stroke={
                             drawing.pathLine === "selected"
                                 ? SELECTION_COLOR
-                                : shape
+                                : drawing.pathLine === "context"
+                                  ? contextLineColor(theme.shape)
+                                  : shape
                         }
                         strokeWidth={
                             drawing.pathLine
@@ -726,6 +748,22 @@ const ShapeBody = memo(function ShapeBody({
                         vectorEffect="non-scaling-stroke"
                     />
                 ))}
+            {/* Over the muted group line: the one heavy line while a lane is worked on */}
+            {drawing.lanePicked !== undefined &&
+                drawing.lanes?.[drawing.lanePicked] && (
+                    <polyline
+                        points={drawing.lanes[drawing.lanePicked]!.map(
+                            (p) => `${p.x},${p.y}`,
+                        ).join(" ")}
+                        fill="none"
+                        stroke={shape}
+                        strokeWidth={PATH_LINE_WIDTH.edited}
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                        data-testid="pathPickedLane"
+                    />
+                )}
             <StartMarks
                 drawing={drawing}
                 theme={theme}

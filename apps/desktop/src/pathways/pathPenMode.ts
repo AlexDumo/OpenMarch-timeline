@@ -275,7 +275,8 @@ class PathPenMode implements FieldMode {
 
     private handleAt(s: PathSession, pointer: Pick<FieldPointer, "field">) {
         const env = envOf();
-        return env
+        // With a lane in focus the group path's handles aren't drawn, so nothing can grab them
+        return env && laneInFocus(s) === null
             ? pathHandleAt(shapeOf(s), pointer.field, env, s.selected)
             : null;
     }
@@ -311,7 +312,8 @@ class PathPenMode implements FieldMode {
     /**
      * The Adjust key or lane under `pointer` on the open group path (decision C), or null. The
      * path's own handles and its bold line win where they overlap; a dot is the dot's. Keys before
-     * lines, and of the lines the nearest.
+     * lines, and of the lines the nearest. With a lane in focus that lane is the heavy one, so it
+     * wins over the muted group line, which still wins over the other lanes.
      */
     private laneAt(
         s: PathSession,
@@ -346,12 +348,15 @@ class PathPenMode implements FieldMode {
                     };
             }
         if (bestKey) return bestKey.hold;
-        if (onPath(shapeOf(s), pointer.field, env)) return null;
+        const focus = laneInFocus(s);
+        const onGroupLine = onPath(shapeOf(s), pointer.field, env);
+        if (onGroupLine && focus === null) return null;
         // Lanes of one row of a block lie on top of each other along a leg that runs with the
         // row: every lane this near is under the press. The one picked keeps it; a click on it
         // goes to the next (`releaseLane`), as a click cycles through stacked layers in a drawing
         // app
         const hits = walks.flatMap(({ marcherId, walk }) => {
+            if (onGroupLine && marcherId !== focus) return [];
             const hit = laneHitOf(walk, pointer.field, env.hitRadius);
             return hit ? [{ marcherId, walk, hit }] : [];
         });
@@ -663,6 +668,8 @@ class PathPenMode implements FieldMode {
             setLaneEdit(null);
             return;
         }
+        // What was just bent is what's being worked on, as a drag selects in a drawing app
+        selectLane({ marcherId: hold.marcherId, key: hold.index });
         if (hold.index !== null)
             void commitAdjustKey(hold.marcherId, hold.index, hold.d);
         else void commitLaneAdjust(hold.marcherId, hold.x!, hold.d);
@@ -739,7 +746,15 @@ class PathPenMode implements FieldMode {
                   }
                 : null,
         );
-        return lane ? (lane.index !== null ? "move" : "grab") : null;
+        if (lane) return lane.index !== null ? "move" : "grab";
+        // The muted group line: a click on it lets the lane go
+        const env = envOf();
+        return !hover?.onDot() &&
+            env &&
+            laneInFocus(s) !== null &&
+            onPath(shapeOf(s), pointer.field, env)
+            ? "pointer"
+            : null;
     }
 
     leave(): void {
@@ -847,12 +862,24 @@ class PathPenMode implements FieldMode {
     /**
      * A click on a path's line selects that path (AP-O3) and the second click of a double-click
      * opens it (step 1's double-click). A click elsewhere on empty field lets a selected path go
-     * (AP-O4) and is the field's, which lets the marchers go.
+     * (AP-O4) and is the field's, which lets the marchers go. With a lane picked, a click on the
+     * muted group line lets the lane go, and the group path's handles are back (AP-R11).
      */
     takeClick(pointer: FieldPointer, double: boolean): boolean {
         if (!this.pickAt(pointer)) {
             deselectPathObject();
             return false;
+        }
+        const s = this.session;
+        const env = envOf();
+        if (
+            s?.phase === "open" &&
+            s.lane &&
+            env &&
+            onPath(shapeOf(s), pointer.field, env)
+        ) {
+            selectLane(null);
+            return true;
         }
         if (double) openPath();
         return true;
@@ -923,7 +950,7 @@ function buildDrawing(session: PathSession): FieldModeDrawing {
               selectedHandles: [],
               barHandles: shaping,
           }
-        : session.phase === "closed"
+        : session.phase === "closed" || laneInFocus(session) !== null
           ? { handles: [], addHandles: [], selectedHandles: [] }
           : handleDrawing(
                 {
@@ -942,10 +969,8 @@ function buildDrawing(session: PathSession): FieldModeDrawing {
           : (middle[session.dragging] ?? null);
     const tipText = moving ? drillTerms(moving) : null;
     const group = target.group;
-    const { lanes, memberRings, laneHighlights, adjustHandles } = groupParts(
-        session,
-        shape,
-    );
+    const { lanes, memberRings, laneHighlights, lanePicked, adjustHandles } =
+        groupParts(session, shape);
     const laneTip = moving ? null : laneTipOf(session);
     return {
         outline,
@@ -961,6 +986,7 @@ function buildDrawing(session: PathSession): FieldModeDrawing {
             : [target.marcherId],
         ...(lanes ? { lanes } : {}),
         ...(laneHighlights ? { laneHighlights } : {}),
+        ...(lanePicked !== undefined ? { lanePicked } : {}),
         ...(adjustHandles ? { adjustHandles } : {}),
         ...(memberRings ? { memberRings } : {}),
         ...guidesFor(moving ? [moving] : [], outline),
@@ -1003,9 +1029,23 @@ function laneTipOf(session: PathSession): FieldModeDrawing["tip"] | null {
         : null;
 }
 
-/** How heavy the line is: edited while drawn or open, selected for a path object (AP-O4) */
-const pathLineOf = (s: PathSession): FieldModeDrawing["pathLine"] =>
-    s.phase !== "closed" ? "edited" : s.object ? "selected" : "shown";
+/**
+ * The spot whose lane is being worked on, picked or in mid-drag. While there is one, that lane is
+ * the only heavy line and the group path is context: thin, grey and without handles (AP-R11).
+ */
+function laneInFocus(s: PathSession): number | null {
+    if (s.phase !== "open") return null;
+    return s.laneEdit?.marcherId ?? s.lane?.marcherId ?? null;
+}
+
+/**
+ * How heavy the line is: edited while drawn or open, context behind a lane in focus, selected for
+ * a path object (AP-O4)
+ */
+const pathLineOf = (s: PathSession): FieldModeDrawing["pathLine"] => {
+    if (s.phase === "closed") return s.object ? "selected" : "shown";
+    return laneInFocus(s) !== null ? "context" : "edited";
+};
 
 /**
  * A group path's parts of the drawing (step 15): every member's lane, thin and faint (while
@@ -1016,7 +1056,7 @@ function groupParts(
     shape: PathShape,
 ): Pick<
     FieldModeDrawing,
-    "lanes" | "memberRings" | "laneHighlights" | "adjustHandles"
+    "lanes" | "memberRings" | "laneHighlights" | "lanePicked" | "adjustHandles"
 > {
     const group = session.target.group;
     if (!group) return {};
@@ -1036,17 +1076,15 @@ function groupParts(
     }));
     const open = session.phase === "open";
     const picked = open ? session.lane : null;
-    const lit = new Set(
-        [
-            picked?.marcherId,
-            open ? session.hoverLane?.marcherId : undefined,
-        ].filter((id) => id !== undefined),
-    );
+    const focus = laneInFocus(session);
+    const hovered = open ? session.hoverLane?.marcherId : undefined;
+    const pickedIndex = walks.findIndex((w) => w.marcherId === focus);
     return {
         lanes: walks.map(({ walk }) => laneOutline(walk)),
         laneHighlights: walks.flatMap(({ marcherId }, i) =>
-            lit.has(marcherId) ? [i] : [],
+            marcherId === hovered && marcherId !== focus ? [i] : [],
         ),
+        ...(pickedIndex >= 0 ? { lanePicked: pickedIndex } : {}),
         adjustHandles: open
             ? walks.flatMap(({ marcherId, walk }) =>
                   adjustHandlesOf(walk).map((h) => ({
