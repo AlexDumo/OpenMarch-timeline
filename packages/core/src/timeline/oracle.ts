@@ -15,13 +15,13 @@ import {
     adjustDiagnostics,
     classifySpan,
     clamp01,
-    destPath,
+    ftlDestPath,
+    ftlDestination,
     destinationsOf,
     flatten,
     groupSchedule,
     lerp,
     makeTrail,
-    paramT,
     resolveAdjust,
     walkedPoint,
     type LaneWalk,
@@ -225,29 +225,36 @@ export function createOracle(db: TimelineSnapshot): Oracle {
             if (!keyed) source = { kind: "slot", fallback: true };
         }
         if (!keyed) keyed = founding.map((s) => [s.row!.slot, s]);
-        keyed.sort((a, b) => a[0] - b[0] || a[1].m - b[1].m);
+        // R-12′: `reverse` turns the order around
+        const sign = t.params?.reverse === true ? -1 : 1;
+        keyed.sort((a, b) => sign * (a[0] - b[0]) || a[1].m - b[1].m);
         const members = keyed.map(([, s]) => s.m);
         const origins = keyed.map(([, s]) => origin(s));
-        const shape = db.shapes[t.dest!];
-        if (!shape) throw new Error(`transition ${tid} has no shape`);
-        const path = destPath(shape);
-        const wps = t.params?.waypoints ?? [];
-        const trail = makeTrail(origins, wps, path);
+        // R-13′: with no shape, the line through the slots' destinations; R-12′: Reverse enters
+        // it from its far end
         const n = t.slots;
         const m = members.length;
+        const dest = ftlDestination(ftlDestPath(t, db.shapes), n, sign < 0);
+        const wps = t.params?.waypoints ?? [];
+        // R-9′: a trail route's drawn part in place of the waypoints
+        const trail = makeTrail(
+            origins,
+            wps,
+            dest.walked,
+            t.route == null ? null : db.routes?.[t.route]?.geometry,
+        );
         const startDist = origins.map((_, q) => trail.cum[q]!);
         const endDist = origins.map(
-            (_, q) =>
-                trail.destOffset + paramT(path.closed, n - m + q, n) * path.L,
+            (_, q) => trail.destOffset + dest.along(dest.member(q, m)),
         );
         const pts = destinationsOf(t, db.shapes);
         const target = new Map<number, XY>(
-            members.map((mm, q) => [mm, pts[n - m + q]!]),
+            members.map((mm, q) => [mm, pts[dest.member(q, m)]!]),
         );
         db.assignments
             .filter((r) => r.transition === tid && !target.has(r.marcher))
             .sort((a, b) => a.slot - b.slot || a.marcher - b.marcher)
-            .forEach((r, k) => target.set(r.marcher, pts[n - m - 1 - k]!));
+            .forEach((r, k) => target.set(r.marcher, pts[dest.other(k, m)]!));
         return { members, source, trail, startDist, endDist, target };
     }
 

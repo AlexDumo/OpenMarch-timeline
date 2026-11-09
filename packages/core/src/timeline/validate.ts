@@ -294,8 +294,11 @@ export function validatePathParams(
                 push("", "follow_the_leader path_params must be {waypoints}");
                 break;
             }
-            noExtraKeys(params, ["waypoints"], push);
+            // `reverse` (R-12′, pathways step 4): true, or absent
+            noExtraKeys(params, ["waypoints", "reverse"], push);
             pointList(params.waypoints, "waypoints", push);
+            if (params.reverse !== undefined && params.reverse !== true)
+                push("reverse", "reverse must be true or absent");
             break;
         }
         default:

@@ -167,6 +167,53 @@ export function routeWalk(A, pts, B, F = A, G = B) {
 }
 
 /**
+ * R-13′ and R-12′ (pathways step 4): how a follow-the-leader entry reads its destination. With no shape the path is the
+ * line through the slots' destinations `pts` (slot order), each a stop at its own length along it; with a shape the
+ * stops are R-13's samples. With `reverse` the path is entered from its far end: member q of m takes point m-1-q and
+ * the k-th other row m+k, where the plain rule gives n-m+q and n-m-1-k. Returns the path as walked, the two index
+ * rules and each point's distance along the walked path.
+ */
+export function ftlDest(shapePath, pts, n, reverse) {
+  let base = shapePath, stop;
+  if (!base) { const line = pts.length ? pts : [[0, 0]]; let acc = 0; const at = [0];
+    for (let i = 1; i < line.length; i++) { acc += dist(line[i - 1], line[i]); at.push(acc); }
+    base = { closed: false, L: acc, at: (s) => pointAtDist(line, at, s) }; stop = (j) => at[j] ?? acc; }
+  else stop = (j) => paramT(base.closed, j, n) * base.L;
+  if (!reverse) return { walked: base, L: base.L, member: (q, m) => n - m + q, other: (k, m) => n - m - 1 - k, along: stop };
+  return { walked: { closed: base.closed, L: base.L, at: (s) => base.at(base.L - s) }, L: base.L,
+    member: (q, m) => m - 1 - q, other: (k, m) => m + k, along: (j) => base.L - stop(j) };
+}
+
+/**
+ * R-9′ (pathways step 4): a follow-the-leader trail with a trail route. The line-up runs through the member origins
+ * (tail first); the drawn part is R-14's walk from the leader's origin through the route's points to the destination's
+ * start, entered by distance; then the EXACT destination path. With no point kept it is R-9 with no waypoints, bit for
+ * bit (QA-TR-2). Written from the spec with this file's own routeWalk and linear scans.
+ */
+export function makeRouteTrail(origins, route, path) {
+  if (!origins.length) return makeTrail(origins, [], path);
+  const W = routeWalk(origins[origins.length - 1], route.points, path.at(0), route.from, route.to);
+  if (W.V.length === 2 || W.L < EPS_GEOM) return makeTrail(origins, [], path);
+  const cum = cumOf(origins), lineLen = cum[cum.length - 1], destOffset = lineLen + W.L, K = 64;
+  const bez = (P0, c1, c2, P3, t) => { const u = 1 - t, k0 = u * u * u, k1 = 3 * u * u * t, k2 = 3 * u * t * t, k3 = t * t * t;
+    return [k0 * P0[0] + k1 * c1[0] + k2 * c2[0] + k3 * P3[0], k0 * P0[1] + k1 * c1[1] + k2 * c2[1] + k3 * P3[1]]; };
+  const drawn = (d) => {                                        // walk_x(W, d): R-14's Evaluation entered at distance d
+    if (d <= 0) return W.V[0];
+    if (d >= W.L) return W.V[W.V.length - 1];
+    let j = 0;
+    while (j < W.V.length - 2 && !(d < W.D[j + 1])) j++;
+    const x = d - W.D[j], pc = W.pieces[j];
+    if (!pc) return lerp(W.V[j], W.V[j + 1], x / (W.D[j + 1] - W.D[j]));
+    let i = 1;
+    while (i <= K && !(x < pc.e[i])) i++;
+    if (i > K) return W.V[j + 1];
+    return bez(W.V[j], pc.c1, pc.c2, W.V[j + 1], (i - 1 + (x - pc.e[i - 1]) / (pc.e[i] - pc.e[i - 1])) / K);
+  };
+  return { cum, destOffset, lineLen, W,
+    at: (d) => (d < lineLen ? pointAtDist(origins, cum, d) : d < destOffset ? drawn(d - lineLen) : path.at(d - destOffset)) };
+}
+
+/**
  * R-14 group schedule (v0.9 step 15): a group path member's walk. `W` is the reference walk from F to G (routeWalk,
  * this file's own code); every member passes its placed copy of W's first and last kept inner points at the moments
  * W reaches them at its steady speed (uFirst, uLast), walks W placed by its offset between them, and walks its own

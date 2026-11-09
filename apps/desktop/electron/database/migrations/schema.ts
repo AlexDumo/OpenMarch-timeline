@@ -447,8 +447,8 @@ export const timeline_transitions = sqliteTable(
         /** JSON path parameters, by path_style (spec §5.2) */
         path_params: text(),
         /**
-         * NULL. Reserved for a follow-the-leader trail (v0.10, I-R2′, a later step); a slot walks
-         * a route through a lane instead
+         * A follow-the-leader transition's trail route (I-R2′, R-9′, pathways step 4), else NULL;
+         * a slot walks a route through a lane instead
          */
         route_id: integer().references(() => timeline_routes.id, {
             onDelete: "restrict",
@@ -483,10 +483,11 @@ export const timeline_transitions = sqliteTable(
             sql`slot_count BETWEEN 1 AND 10000`,
         ),
         ...beatRangeChecks("timeline_transitions"),
-        // I-T5: follow-the-leader follows a path, so it needs a destination shape
+        // I-T5′ (pathways step 4): follow-the-leader follows a path, so it needs a destination
+        // shape or a trail route (then the line through its slots' destinations, R-13′)
         check(
             "timeline_transitions_ftl_shape_check",
-            sql`dest_shape_id IS NOT NULL OR path_style <> 'follow_the_leader'`,
+            sql`dest_shape_id IS NOT NULL OR route_id IS NOT NULL OR path_style <> 'follow_the_leader'`,
         ),
         // I-T2 (partial): an arc carries a numeric bulge with |bulge| <= 0.5 (minor arcs only)
         check(

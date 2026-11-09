@@ -251,5 +251,50 @@ const report = (name, bad) => { bad.length ? fail++ : pass++; console.log(`${bad
   if (!same(makeOracle(tie).positionAt(2, 8), [100, 35])) bad5.push('T-4: the last stored key of the cluster stands');
   report('QA-RT-L5', bad5); }
 
+// QA-TR (pathways step 4, R-9′ and R-12′): three marchers on a line at (0,0), (4,0), (8,0) follow the leader over
+// [0, 16) into the line (20,10) to (20,22), along a trail route with corners at (14,0) and (14,10). Line-up 8, drawn
+// part 22, so destOffset 30 and the ends are 30, 36, 42: M1 walks 1.875 a beat, M2 2, M3 (the leader) 2.125.
+{ const tshow = (points, extra = {}, route = true) => ({
+    marchers: [{ id: 1, home: [0, 0] }, { id: 2, home: [4, 0] }, { id: 3, home: [8, 0] }],
+    shapes: { 1: { kind: 'line', geometry: { points: [[20, 10], [20, 22]] } } },
+    transitions: { 1: { id: 1, start: 0, end: 16, dest: 1, slots: 3, style: 'follow_the_leader', order: 'slot', params: { waypoints: [] }, ...(route ? { route: 1 } : {}), ...extra } },
+    routes: route ? { 1: { geometry: { v: 1, from: [8, 0], to: [20, 10], points } } } : {},
+    assignments: [row(1, 1, 0, 0, 16), row(2, 1, 1, 0, 16), row(3, 1, 2, 0, 16)],
+  });
+  const C2 = [{ id: 'a', at: [14, 0] }, { id: 'b', at: [14, 10] }];
+  check('QA-TR-1', tshow(C2), [[1, 4, 7.5, 0], [2, 4, 12, 0], [3, 4, 14, 2.5], [1, 8, 14, 1], [2, 8, 14, 6], [3, 8, 15, 10],
+    [1, 12, 14, 8.5], [2, 12, 18, 10], [3, 12, 20, 13.5], [1, 16, 20, 10], [2, 16, 20, 16], [3, 16, 20, 22]],
+    entryIs(1, [1, 2, 3], 'slot', [30, 36, 42]));
+  // QA-TR-4 (R-12′): Reverse. M1 leads, the far end (20,22) is the entrance, and everyone ends on their own spot. The
+  // drawn part is 14 + 10 + √180 from (0,0), so the ends are 8 + 24 + √180 plus 0, 6 and 12.
+  const far = Math.hypot(6, 12);
+  check('QA-TR-4', tshow(C2, { params: { waypoints: [], reverse: true } }), [[1, 16, 20, 10], [2, 16, 20, 16], [3, 16, 20, 22], [3, 2, 8 - (32 + far) / 8, 0], [1, 1, (36 + far) / 16, 0]],
+    entryIs(1, [3, 2, 1], 'slot', [32 + far, 38 + far, 44 + far]));
+  // QA-TR-11 (R-13′): no shape. The line runs through the three end spots, 0, 3 and 13 along it, so the ends are 30, 33
+  // and 43, and each member lands on its own spot whichever end leads.
+  const spots = { dest: null, points: [[20, 10], [20, 13], [26, 21]] };
+  check('QA-TR-11', tshow(C2, spots), [[1, 16, 20, 10], [2, 16, 20, 13], [3, 16, 26, 21], [3, 15, 24.6875, 19.25], [1, 8, 14, 1]], entryIs(1, [1, 2, 3], 'slot', [30, 33, 43]));
+  check('QA-TR-11 reversed', tshow(C2, { ...spots, params: { waypoints: [], reverse: true } }), [[1, 16, 20, 10], [2, 16, 20, 13], [3, 16, 26, 21]], entryIs(1, [3, 2, 1], 'slot'));
+  check('QA-TR-12 one slot', { ...tshow(C2, { dest: null, points: [[20, 10]], slots: 1 }), marchers: [{ id: 3, home: [8, 0] }], assignments: [row(3, 1, 0, 0, 16)] }, [[3, 8, 14, 5], [3, 16, 20, 10]]);
+  const same = (p, q) => p[0] === q[0] && p[1] === q[1];
+  const report = (name, bad) => { bad.length ? fail++ : pass++; console.log(`${bad.length ? 'FAIL' : 'PASS'}  ${name}${bad.length ? '\n   ' + bad.slice(0, 6).join('\n   ') : ''}`); };
+  const bits = (name, a, b) => { const bad = [];
+    for (const [x, y] of [[makeOracle(a), makeOracle(b)], [makeResolver(a), makeResolver(b)], [makeOracle(a), makeResolver(a)]])
+      for (let t = -1; t <= 17; t += 0.3125) for (const m of [1, 2, 3]) if (!same(x.positionAt(m, t), y.positionAt(m, t))) bad.push(`M${m}@${t}`);
+    report(name, bad); };
+  bits('QA-TR-2 no points', tshow([]), tshow([], {}, false));
+  bits('QA-TR-2 a point on the entrance', tshow([{ id: 'a', at: [20, 10 + 1e-10] }]), tshow([], {}, false));
+  bits('QA-TR-5 waypoints not read (T-15)', tshow(C2, { params: { waypoints: [[100, 100]] } }), tshow(C2));
+  // QA-TR-3: one smooth point; the cached resolver and the oracle agree bit for bit, the leader is below the chord
+  // on the curve, and nobody jumps
+  const sm = tshow([{ id: 'q', at: [14, -4], tension: 1 }]), o = makeOracle(sm), r = makeResolver(sm), bad = [];
+  for (const m of [1, 2, 3]) { let prev = o.positionAt(m, 0);
+    for (let t = 0; t <= 16; t += 1 / 64) { const p = o.positionAt(m, t), q = r.positionAt(m, t);
+      if (!same(p, q)) bad.push(`M${m}@${t} oracle ${p} resolver ${q}`);
+      if (Math.hypot(p[0] - prev[0], p[1] - prev[1]) > 0.1) bad.push(`M${m} jumps at ${t}`);
+      prev = p; } }
+  if (!(o.positionAt(3, 4)[1] < 0)) bad.push('the leader is not on the curve');
+  report('QA-TR-3', bad); }
+
 console.log(`${pass} of ${pass + fail} golden fixtures pass (oracle and cached resolver)`);
 if (fail) process.exitCode = 1;

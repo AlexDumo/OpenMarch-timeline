@@ -125,6 +125,11 @@ export const rollBackRoutesSchema = (db: DatabaseSync) => {
     }
     sql = sql
         .replace("'follow_the_leader', 'route')", "'follow_the_leader')")
+        // 0022 (trails) let a trail route stand in for the shape: back to 0017's I-T5
+        .replace(
+            "CHECK(dest_shape_id IS NOT NULL OR route_id IS NOT NULL OR path_style",
+            "CHECK(dest_shape_id IS NOT NULL OR path_style",
+        )
         // SQLite stores a renamed table's name in double quotes; 0017 wrote it in backticks
         .replace(
             /CREATE TABLE [`"]timeline_transitions[`"]/,
@@ -223,6 +228,10 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
             DROP TRIGGER IF EXISTS timeline_lanes_dt;
             ALTER TABLE timeline_lanes DROP COLUMN adjust;
         `),
+    // Trails, pathways step 4: only a CHECK on `timeline_transitions` changed (I-T5′). The schema
+    // is left as it is, as for 0019: re-running 0022 rebuilds the table and copies every row.
+    // 0022's own test restores the older CHECK itself.
+    22: () => {},
 };
 
 /**

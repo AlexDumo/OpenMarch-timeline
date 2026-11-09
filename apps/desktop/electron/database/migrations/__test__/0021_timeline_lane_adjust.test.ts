@@ -60,9 +60,11 @@ async function fileBefore0021(file: string) {
             DROP TRIGGER IF EXISTS timeline_log_lanes_del;
         `);
         db.exec("ALTER TABLE timeline_lanes DROP COLUMN adjust");
-        db.prepare("DELETE FROM __drizzle_migrations WHERE created_at = ?").run(
-            ADJUST_MIGRATION.when,
-        );
+        // 0021 and every later migration: drizzle applies only what is newer than the last one
+        // recorded. 0022 (trails) rebuilds `timeline_transitions` and is safe to run again
+        db.prepare(
+            "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
+        ).run(ADJUST_MIGRATION.when);
         db.exec(`
             PRAGMA foreign_keys = OFF;
             INSERT INTO marchers (id, section, drill_prefix, drill_order, home_x, home_y) VALUES (1, 'Brass', 'B', 1, 0, 0);
@@ -158,6 +160,6 @@ describe(`Migration ${ADJUST_MIGRATION.tag}`, () => {
             LANE_MODEL_USER_VERSION,
         );
         expect(decideFileVersion(12, false).action).toBe("accept");
-        expect(decideFileVersion(13, false).action).toBe("refuse-too-new");
+        expect(decideFileVersion(14, false).action).toBe("refuse-too-new");
     });
 });
