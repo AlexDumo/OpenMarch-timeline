@@ -238,7 +238,7 @@ Re-fit, Paths Off / Selected / All, collisions along the path, and "No collision
 
 **Path edits.** AP-R1 and AP-R8 "again" from the open path are path edits (07 N3).
 
-**Re-fit** rewrites a route's `from`/`to`/points and its lanes' offsets, then runs AP-H1.
+**Re-fit** rewrites a route's `from`/`to`/points and its lanes' offsets, then runs AP-H1. It stretches the corners between the two ends' changes (spec AP-R22, decision A); with equal changes that is the translation the model-c reports describe.
 
 **PR #683.** This lifts step 15's "a hand edit to one lane is step 3" (I.7, "Not in step 15")
 as Adjust, not as a breakout.
@@ -336,3 +336,4 @@ Filled in as we go: one row per step, the owner's verdict, and what changed beca
 | ADR 0015 | this   | —        | Accepted | Model C (lanes on slots) decided 2026-11-05, accepted 2026-11-06; docs only: ADR 0015, spec v0.10, steps 24–27 and B0 added                                                                                                                                                                                                                                                           |
 | 24       | (this) | path-pen | Built    | Lanes storage (migration 0020, file version 11). Built as the row says, except: split by marchers, merge, Remove keyframe's join, casting and Basic refuse or skip laned marchers (AP-R21 copy, AP-R16 offsets and 07 N10 skip-per-route come later); a step-15 lab file opens and migrates instead of being refused. Parity with step 15: base-vs-branch script, identical positions |
 | 3a       | (this) | path-pen | Built    | Paths as objects (spec I.10, AP-O1 to AP-O8): click or tap selects a path, Paths All draws group paths as one line, Delete removes a selected path, point edits and "again" by route. No storage. Collisions moved out (off app-wide); kept items audited, already there                                                                                                              |
+| 3b       | (this) | path-pen | Built    | Adjust and Re-fit (spec J.8 AP-R11, AP-R22, AP-H1; J.1 "Step 3b, as built"). Migration 0021, file version 12. The owner's decisions A (Re-fit stretches), B (a key whose place changed counts as moved) and C (the Adjust gesture grabs the lane, not the playhead) are in the spec. Own path refuses an adjusted spot until Detach (3c). Parity and timings in the PR                |
