@@ -13,6 +13,7 @@ import {
 import type { HoldState } from "@/view3d/core/instruments/holds";
 import type { LoadedBody } from "../marchers/marcherAssets";
 import {
+    ClipSet,
     useMarcherBodies,
     type MarcherAssets,
 } from "../marchers/useMarcherBodies";
@@ -46,6 +47,7 @@ async function assets(): Promise<MarcherAssets> {
         ) as Manifest,
         clips,
         classes: new Set([1 as const]),
+        key: "1|",
     };
 }
 
@@ -95,5 +97,62 @@ describe("useMarcherBodies", () => {
         ]);
         expect(textureDispose).toHaveBeenCalledTimes(1);
         expect(bodiesDispose).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("ClipSet", () => {
+    const crab = async () => {
+        const manifest = JSON.parse(
+            fs.readFileSync(path.join(root, "crab/manifest.json"), "utf8"),
+        ) as Manifest;
+        const clips = (await gltf("crab/clips-h100.glb")).animations;
+        return { set: new ClipSet(clips, manifest), clips };
+    };
+    const track = (clip: AnimationClip, name: string) =>
+        clip.tracks.find((t) => t.name === name)!;
+
+    it("makes crab right's loop from crab left's: mirrored, a count on", async () => {
+        const { set, clips } = await crab();
+        expect(clips.some((c) => c.name === "crabR090_8to5")).toBe(false);
+        const right = set.get("crabR090_8to5")!;
+        const left = set.get("crabL090_8to5")!;
+        expect(right.duration).toBe(left.duration);
+        // the right thigh at the start is the left thigh a count on, reflected
+        const r = track(right, "DEF-thighR.quaternion").values;
+        const l = track(left, "DEF-thighL.quaternion").values;
+        const half = ((l.length / 4 - 1) / 2) * 4;
+        expect(r[0]).toBeCloseTo(l[half], 6);
+        expect(r[1]).toBeCloseTo(-l[half + 1], 6);
+        expect(r[2]).toBeCloseTo(-l[half + 2], 6);
+        expect(r[3]).toBeCloseTo(l[half + 3], 6);
+    });
+
+    it("makes crab right's halts from the other halt, in time", async () => {
+        const { set } = await crab();
+        const halt = set.get("halt_crabR090_8to5")!;
+        const source = set.get("halt2_crabL090_8to5")!;
+        const r = track(halt, "DEF-thighR.quaternion").values;
+        const l = track(source, "DEF-thighL.quaternion").values;
+        expect(r[0]).toBeCloseTo(l[0], 6);
+        expect(r[1]).toBeCloseTo(-l[1], 6);
+    });
+
+    it("keeps what it made, serves stored clips as they are, and has nothing else", async () => {
+        const { set, clips } = await crab();
+        expect(set.get("crabR090_8to5")).toBe(set.get("crabR090_8to5"));
+        const stored = clips.find((c) => c.name === "stepoff_crabR090_8to5")!;
+        expect(set.get(stored.name)).toBe(stored);
+        expect(set.get("crabR999_8to5")).toBeUndefined();
+    });
+
+    it("has every clip the crab manifest lists", async () => {
+        const { set } = await crab();
+        const manifest = JSON.parse(
+            fs.readFileSync(path.join(root, "crab/manifest.json"), "utf8"),
+        ) as { clips: { name: string; height: number }[] };
+        const missing = manifest.clips
+            .filter((c) => c.height === 1)
+            .filter((c) => !set.get(c.name));
+        expect(missing).toEqual([]);
     });
 });

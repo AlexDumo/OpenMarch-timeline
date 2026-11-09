@@ -50,12 +50,42 @@ export function mirrorClip(
     return new THREE.AnimationClip(name, clip.duration, tracks);
 }
 
-/** The clip whose mirror plays as `name`: slides and built turns swap sides. */
+/**
+ * A two-count loop started a count later: every keyed track turned half way
+ * round. Tracks that hold one value (two keys) are left alone.
+ */
+export function shiftLoop(
+    clip: THREE.AnimationClip,
+    name: string,
+): THREE.AnimationClip {
+    const tracks = clip.tracks.map((t) => {
+        const keys = t.times.length;
+        const size = t.getValueSize();
+        const n = keys - 1; // the last key repeats the first
+        if (keys <= 2 || n % 2 !== 0) return t.clone();
+        const values = new Float32Array(t.values.length);
+        for (let i = 0; i < keys; i++) {
+            const from = ((i + n / 2) % n) * size;
+            for (let k = 0; k < size; k++)
+                values[i * size + k] = t.values[from + k];
+        }
+        const track = t.clone();
+        track.values = values;
+        return track;
+    });
+    return new THREE.AnimationClip(name, clip.duration, tracks);
+}
+
+/** The clip whose mirror plays as `name`: slides, crabs and built turns swap sides. */
 export function mirrorName(name: string): string {
     return name
         .replace(
             /slide([LR])/g,
             (_, s: string) => `slide${s === "L" ? "R" : "L"}`,
+        )
+        .replace(
+            /crab([LR])/g,
+            (_, s: string) => `crab${s === "L" ? "R" : "L"}`,
         )
         .replace(/_([LR])45/g, (_, s: string) => `_${s === "L" ? "R" : "L"}45`);
 }

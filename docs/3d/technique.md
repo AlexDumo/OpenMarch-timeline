@@ -151,6 +151,42 @@ backward march, and so on).
   (flip the feet). Outside the 25 yard lines this matters most.
 - The upper body always faces the audience; only the legs turn.
 
+## The crab step
+
+Percussion crabs instead of sliding (owner, 2026-11-09): the battery and the pit
+(`isPercussionSection`). A slide turns the hips, which skews a carried drum; a
+crab keeps the hips and shoulders square to the facing at every travel angle.
+
+- **Hips never turn**, at any angle. The legs carry the direction, so each angle
+  has its own clips: every 15 degrees from 30 to 150, and 10, 20, 160 and 170.
+  The planner plays the nearest (`crabDirection`). Straight forward and back are
+  the plain march.
+- **The crossing.** The feet cross, the thighs don't: sideways the crossing
+  foot lands at most 16 cm past the other, so the legs cross below the knee and
+  the open step makes up the distance (up to 70 cm between the feet). The
+  crossing foot lands in front up to sideways and behind on a back diagonal.
+  Toward straight forward or back the two steps even out into a walk, hips
+  still square.
+- **Level body.** One hip height for every size and angle, 88.5 cm against
+  90.2 cm at attention, so the step-off barely sinks and the head never bobs.
+- **The feet** run on two straight rails along the travel, one each side of it
+  and 14 cm apart sideways, with no swinging around, so the feet never share a
+  line at any angle. Sideways, the lead leg steps out 30 degrees back from
+  straight sideways, which leaves the other leg room to cross. The rear foot's toes pass
+  close behind the front foot's heel. Heels are off the ground but close to it.
+- **Big steps go airborne.** Past what the legs reach at that hip height the
+  marcher leaves the ground for part of each count, like a jazz run, with the
+  same relative leg motion. No step is too big: the step-size warning covers it.
+- **Crab right off the left foot** crosses on count 1, with a prep step: on the
+  count before, the right foot goes back and out of the way, then the left
+  crosses in front to land on count 1.
+- **Hands and drums** are the holds below, which replace the arms on every
+  marching clip, crab included. Crab clips skip the platform lift: they're on
+  the platforms already.
+
+The clips come from om-pose (`docs/crab.md` there) and ship in their own files
+per height class, loaded only for a show with percussion.
+
 ## Brass holds
 
 - **Horns up means the bell faces front** (2026-10-09). Shows always play horns

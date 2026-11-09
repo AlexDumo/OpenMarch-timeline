@@ -24,6 +24,24 @@ const manifest = JSON.parse(
         "utf8",
     ),
 ) as Manifest;
+const clipList = (m: Manifest) => (Array.isArray(m) ? m : m.clips);
+/** The winds' manifest and the crab pack, as a show with percussion loads them. */
+const withCrab: Manifest = {
+    clips: [
+        ...clipList(manifest),
+        ...clipList(
+            JSON.parse(
+                fs.readFileSync(
+                    path.resolve(
+                        __dirname,
+                        "../../../assets/om-pose/crab/manifest.json",
+                    ),
+                    "utf8",
+                ),
+            ) as Manifest,
+        ),
+    ],
+};
 
 /** 8-to-5: 22.5 in per count. */
 const STEP = 0.5715;
@@ -1141,5 +1159,106 @@ describe("facing", () => {
             }),
         );
         expect(clipPerCount(plan)[1]).toBe("back8to5");
+    });
+});
+
+describe("the crab step", () => {
+    const crab = (counts: Count[]): PlanInput => ({
+        ...input(counts),
+        manifest: withCrab,
+        crab: true,
+    });
+    const names = (p: MarcherPlan) => p.events.map((e) => e.clip);
+
+    it("steps off, crabs and halts on its own clips, sideways", () => {
+        const plan = planMarcher(
+            crab([
+                ...repeat(8, [STEP, 0] as Count),
+                ...repeat(2, "hold" as Count),
+            ]),
+        );
+        expect(names(plan)[0]).toBe("stepoff_crabL090_8to5");
+        expect(names(plan)).toContain("crabL090_8to5");
+        expect(names(plan)).toContain("halt2_crabL090_8to5");
+    });
+
+    it("travels right on the right's clips", () => {
+        const plan = planMarcher(crab([...repeat(4, [-STEP, 0] as Count)]));
+        expect(names(plan)[0]).toBe("stepoff_crabR090_8to5");
+        expect(names(plan)).toContain("crabR090_8to5");
+    });
+
+    it("never turns the legs, on any diagonal", () => {
+        const d = STEP * Math.SQRT1_2;
+        const plan = planMarcher(crab(repeat(6, [d, d] as Count)));
+        expect(names(plan)[0]).toBe("stepoff_crabL045_8to5");
+        for (const e of plan.events)
+            expect(
+                typeof e.legYaw === "number"
+                    ? e.legYaw
+                    : Math.max(...e.legYaw.slice(0, 2).map(Math.abs)),
+            ).toBeCloseTo(0, 9);
+    });
+
+    it("blends between its sizes", () => {
+        const plan = planMarcher(crab(repeat(6, [0.61, 0] as Count)));
+        const loop = plan.events.find((e) => e.kind === "loop")!;
+        expect(loop.clip).toBe("crabL090_8to5");
+        expect(loop.clip2).toBe("crabL090_7to5");
+    });
+
+    it("marches straight forward and back with square hips", () => {
+        const plan = planMarcher(crab(repeat(4, [0, STEP] as Count)));
+        expect(names(plan)[0]).toMatch(/^stepoff_8to5/);
+    });
+
+    it("fades into a new direction", () => {
+        const plan = planMarcher(
+            crab([
+                ...repeat(4, [STEP, 0] as Count),
+                ...repeat(4, [-STEP, 0] as Count),
+            ]),
+        );
+        const fade = plan.events.find((e) => e.kind === "crossfade")!;
+        expect(fade.clip).toBe("crabL090_8to5");
+        expect(fade.clip2).toBe("crabR090_8to5");
+    });
+
+    it("lands on the dot", () => {
+        const counts = [
+            ...repeat(8, [STEP, 0] as Count),
+            ...repeat(2, "hold" as Count),
+        ];
+        const i = crab(counts);
+        const plan = planMarcher(i);
+        const out = { x: 0, z: 0 };
+        const k = counts.length;
+        bodyAt(
+            withCrab,
+            plan,
+            plan.events.length - 1,
+            k,
+            i.positions[k * 2],
+            i.positions[k * 2 + 1],
+            out,
+        );
+        expect(out.x).toBeCloseTo(i.positions[k * 2], 2);
+        expect(out.z).toBeCloseTo(i.positions[k * 2 + 1], 2);
+    });
+
+    it("isn't for a marcher who isn't percussion", () => {
+        const plan = planMarcher({
+            ...crab(repeat(4, [STEP, 0] as Count)),
+            crab: false,
+        });
+        expect(names(plan).some((n) => n.includes("crab"))).toBe(false);
+    });
+
+    it("slides when the crab clips aren't loaded", () => {
+        const plan = planMarcher({
+            ...crab(repeat(4, [STEP, 0] as Count)),
+            manifest,
+        });
+        expect(names(plan).some((n) => n.includes("crab"))).toBe(false);
     });
 });

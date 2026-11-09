@@ -45,6 +45,7 @@ import {
     uniformPresetOf,
 } from "@/view3d/core/marchers/uniformPresets";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
+import { isPercussionSection } from "@/view3d/core/marchers/crab";
 import { marcherHeading } from "@/view3d/core/marchers/facing";
 import {
     buildCountClock,
@@ -193,7 +194,20 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
         [marcherLooks],
     );
-    const marcherAssets = useMarcherAssets(heightClasses);
+    // Percussion travels in a crab step; only then do its clips load.
+    const crabs = useMemo(
+        () =>
+            looksKey
+                ? (JSON.parse(looksKey) as [number, string, unknown][]).map(
+                      ([, section]) => isPercussionSection(section),
+                  )
+                : null,
+        [looksKey],
+    );
+    const marcherAssets = useMarcherAssets(
+        heightClasses,
+        crabs?.includes(true) ?? false,
+    );
     // The count clock and every marcher's clip plan for the whole show.
     const { beats } = useTimingObjects();
     const clock = useMemo(() => buildCountClock(beats), [beats]);
@@ -273,6 +287,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             cues,
             previousPlans.current,
             null,
+            crabs,
         );
         previousPlans.current = planned;
         // eslint-disable-next-line no-console -- planning time is a cost to watch at 2,000 marchers
@@ -282,7 +297,15 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 `${clock.counts} counts in ${planned.planMs.toFixed(0)} ms`,
         );
         return planned;
-    }, [marcherAssets, marcherLooks, slots, clock, fieldProperties, cues]);
+    }, [
+        marcherAssets,
+        marcherLooks,
+        slots,
+        clock,
+        fieldProperties,
+        cues,
+        crabs,
+    ]);
     const clipNames = useMemo(() => {
         const names = plannedClips(
             (showPlans?.plans ?? []).filter((p) => p !== null),

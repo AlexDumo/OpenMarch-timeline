@@ -72,6 +72,7 @@ import {
     type TurnedPair,
 } from "../../render/step-blend.js";
 import { classSuffix, type HeightClass } from "./looks";
+import { crabDirection } from "./crab";
 import { isSlide, travelDirection, type SlideSense } from "./facing";
 
 /** Less travel than this in a count is a rest (meters). */
@@ -153,6 +154,11 @@ export interface PlanInput {
      * in the UI yet.
      */
     dotMode?: DotMode | readonly DotMode[];
+    /**
+     * Travels in a crab step (`crab.ts`): percussion. Plays as usual when
+     * the manifest has no crab clips.
+     */
+    crab?: boolean;
 }
 
 /** What a marcher's dot marks: the landing foot's ankle, or the body's center. */
@@ -234,6 +240,18 @@ type State =
 
 const clipsOf = (m: Manifest): ManifestClip[] =>
     Array.isArray(m) ? m : m.clips;
+
+const crabCache = new WeakMap<object, boolean>();
+/** Whether the manifest has the crab clips (they load only for shows with percussion). */
+function hasCrabClips(manifest: Manifest): boolean {
+    const key = manifest as object;
+    let has = crabCache.get(key);
+    if (has === undefined) {
+        has = clipsOf(manifest).some((c) => c.gait === "crab");
+        crabCache.set(key, has);
+    }
+    return has;
+}
 
 const namesCache = new WeakMap<object, Set<string>>();
 function clipNames(manifest: Manifest): Set<string> {
@@ -460,6 +478,7 @@ function stepStates(input: PlanInput, steps: Steps): State[] {
     const { manifest, heightClass } = input;
     const { pos: positions, bpm, heading, feet, n: K } = steps;
     const senses = slideSenses(steps);
+    const crab = input.crab === true && hasCrabClips(manifest);
     const out: State[] = [];
     for (let k = 0; k < K; k++) {
         const dx = positions[(k + 1) * 2] - positions[k * 2];
@@ -473,7 +492,9 @@ function stepStates(input: PlanInput, steps: Steps): State[] {
             continue;
         }
         // bent leg and high step play straight leg for now
-        const dir = travelDirection(dx, dz, heading[k], senses[k]);
+        const dir = crab
+            ? crabDirection(dx, dz, heading[k])
+            : travelDirection(dx, dz, heading[k], senses[k]);
         const family = dir.family as Family;
         const pick = snapPick(
             pickBlend(manifest, family, d, {

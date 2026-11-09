@@ -62,6 +62,7 @@ export interface ShowPlans {
         ids: readonly number[];
         cues: CompiledCues | null;
         dotModes: readonly DotMode[] | null;
+        crabs: readonly boolean[] | null;
     };
 }
 
@@ -203,6 +204,8 @@ export function planShow(
     previous: ShowPlans | null = null,
     /** What each count's dot marks (`dotModesPerCount`); null is foot on the dot. */
     dotModes: readonly DotMode[] | null = null,
+    /** Per marcher: travels in a crab step (`core/marchers/crab.ts`). */
+    crabs: readonly boolean[] | null = null,
 ): ShowPlans {
     const t0 = performance.now();
     const sampled = sampleDrill(ids, positions, clock, fieldProperties);
@@ -226,6 +229,7 @@ export function planShow(
             reuseAll &&
             j !== undefined &&
             prev!.heightClasses[j] === h &&
+            (prev!.crabs?.[j] ?? false) === (crabs?.[i] ?? false) &&
             sameArray(prev!.positions[j], positions) &&
             previous!.plans[j]
         )
@@ -248,6 +252,7 @@ export function planShow(
             turnSpan: fromCues?.turnSpan,
             feet: fromCues?.feet,
             dotMode: dotModes ?? undefined,
+            crab: crabs?.[i] ?? false,
             positions,
             bpm: clock.bpm,
         });
@@ -263,6 +268,7 @@ export function planShow(
             ids,
             cues,
             dotModes,
+            crabs,
         },
     };
 }

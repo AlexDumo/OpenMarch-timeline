@@ -180,3 +180,15 @@ describe("prep landings on the platform", () => {
         expect(prepBase("8to5")).toBe("8to5");
     });
 });
+
+describe("the crab step", () => {
+    it.each([
+        "crabL090_8to5",
+        "halt_crabR045_6to5-h095",
+        "halt2_crabL090_8to5",
+        "stepoff_crabR090_4to5",
+        "crabL090_8to5~prep1",
+    ])("doesn't go up on the platform again: %s", (name) => {
+        expect(platformWeight(name)).toBeNull();
+    });
+});
