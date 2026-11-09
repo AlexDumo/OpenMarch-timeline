@@ -94,13 +94,21 @@ export function exportWalkedPaths(
             to > from &&
             known.has(marcherId)
         ) {
-            const path = walkedPath(host, resolver, marcherId, from, to);
-            if (!isStraightWalk(path)) {
-                const mid = walkedPathPointAt(path, (from + to) / 2)!;
-                walk = {
-                    d: walkedPathToSvg(path),
-                    mid: { x: mid[0], y: mid[1] },
-                };
+            try {
+                const path = walkedPath(host, resolver, marcherId, from, to);
+                if (!isStraightWalk(path)) {
+                    const mid = walkedPathPointAt(path, (from + to) / 2)!;
+                    walk = {
+                        d: walkedPathToSvg(path),
+                        mid: { x: mid[0], y: mid[1] },
+                    };
+                }
+            } catch (error) {
+                // The chart still exports, with the straight line it drew before
+                console.error(
+                    `Couldn't work out the walked path of marcher ${marcherId}`,
+                    error,
+                );
             }
         }
         cache.set(key, walk);
