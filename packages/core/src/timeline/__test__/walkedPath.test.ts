@@ -1,5 +1,5 @@
 /**
- * Drawable walked paths (spec §8.12 R-15, §12.11 QA-WP-1 to QA-WP-12; pathways step 18).
+ * Drawable walked paths (spec §8.12 R-20, §12.11 QA-WP-1 to QA-WP-12; pathways step 18).
  *
  * Every row samples the drawable path and the resolver's `positionAt` at the same beats and
  * asks for agreement within `WALKED_SAMPLE_TOLERANCE`.
@@ -18,6 +18,7 @@ import type {
 } from "../types";
 import {
     WALKED_SAMPLE_TOLERANCE,
+    createWalkedPaths,
     walkedPath,
     walkedPathOfMove,
     walkedPathPointAt,
@@ -122,7 +123,7 @@ const paths = (
 
 const kinds = (path: WalkedPath) => path.segments.map((s) => s.kind);
 
-describe("drawable walked paths (R-15)", () => {
+describe("drawable walked paths (R-20)", () => {
     it("QA-WP-1: a direct move is one line", () => {
         const t = move(1, 0, 8, [[100, 50]]);
         const host = show([[0, 0]], [t], [row(1, t)]);
@@ -141,7 +142,7 @@ describe("drawable walked paths (R-15)", () => {
         expect(gap).toBeLessThan(1e-9);
     });
 
-    it("QA-WP-2: an arc move is one circular arc with exact ends", () => {
+    it("QA-WP-2: an arc move is circular arcs of at most a quarter turn, with exact ends", () => {
         for (const bulge of [0.5, -0.5, 0.2, -0.05, 0.001]) {
             const t = move(1, 0, 8, [[120, 40]], {
                 style: "arc",
@@ -149,13 +150,21 @@ describe("drawable walked paths (R-15)", () => {
             });
             const host = show([[10, 10]], [t], [row(1, t)]);
             const { path, gap } = paths(host, 1, 0, 8);
-            expect(kinds(path)).toEqual(["arc"]);
-            const arc = path.segments[0]!;
-            expect(arc.from).toEqual([10, 10]);
-            expect(arc.to).toEqual([120, 40]);
+            // over a quarter turn (a bulge past about 0.207) it comes as two arcs
+            expect(kinds(path)).toEqual(
+                Math.abs(bulge) > 0.21 ? ["arc", "arc"] : ["arc"],
+            );
+            for (const arc of path.segments) {
+                if (arc.kind !== "arc") throw new Error("not an arc");
+                expect(Math.abs(arc.sweep)).toBeLessThanOrEqual(
+                    Math.PI / 2 + 1e-9,
+                );
+            }
+            expect(path.segments[0]!.from).toEqual([10, 10]);
+            expect(path.segments.at(-1)!.to).toEqual([120, 40]);
             expect(gap).toBeLessThan(1e-6);
             expect(walkedPathToSvg(path)).toMatch(
-                /^M 10 10 A [\d.]+ [\d.]+ 0 0 [01] 120 40$/,
+                /^M 10 10 (A [\d.]+ [\d.]+ 0 0 [01] [-\d.]+ [-\d.]+ )?A [\d.]+ [\d.]+ 0 0 [01] 120 40$/,
             );
         }
         // a bulge of 0 is the line
@@ -182,8 +191,12 @@ describe("drawable walked paths (R-15)", () => {
         const arc = path.segments[0]!;
         if (arc.kind !== "arc") throw new Error("not an arc");
         // start angle PI (west of the centre), ending east through +y: the angle shrinks
-        expect(arc.sweep).toBeCloseTo(-Math.PI, 9);
-        expect(walkedPathToSvg(path)).toBe("M 0 0 A 50 50 0 0 0 100 0");
+        // in two quarter turns, so the written arcs keep their centre when rounded
+        expect(kinds(path)).toEqual(["arc", "arc"]);
+        expect(arc.sweep).toBeCloseTo(-Math.PI / 2, 9);
+        expect(walkedPathToSvg(path)).toBe(
+            "M 0 0 A 50 50 0 0 0 50 50 A 50 50 0 0 0 100 0",
+        );
     });
 
     it("QA-WP-3: an own path with corners is a line per leg, timed by length", () => {
@@ -403,7 +416,7 @@ describe("drawable walked paths (R-15)", () => {
             for (const s of path.segments)
                 if (s.kind === "arc")
                     expect(Math.abs(s.sweep)).toBeLessThanOrEqual(
-                        Math.PI + 1e-9,
+                        Math.PI / 2 + 1e-9,
                     );
             expect(gap).toBeLessThan(1e-6);
         }
@@ -466,7 +479,7 @@ describe("drawable walked paths (R-15)", () => {
         });
         const arcShow = show([[10, 10]], [t], [row(1, t)]);
         const cut = paths(arcShow, 1, 2.5, 6);
-        expect(kinds(cut.path)).toEqual(["arc"]);
+        expect(new Set(kinds(cut.path))).toEqual(new Set(["arc"]));
         expect(cut.gap).toBeLessThan(1e-6);
     });
 
@@ -493,8 +506,9 @@ describe("drawable walked paths (R-15)", () => {
         );
         const { path, gap, resolver } = paths(host, 1, 0, 16);
         // the arc to beat 8, straight through the higher move, then the resume's arc
-        expect(kinds(path)).toEqual(["arc", "line", "arc"]);
-        expect(path.segments.map((s) => s.transitionId)).toEqual([1, 2, 1]);
+        // (the resume's arc is over a quarter turn, so it comes as two)
+        expect(kinds(path)).toEqual(["arc", "line", "arc", "arc"]);
+        expect(path.segments.map((s) => s.transitionId)).toEqual([1, 2, 1, 1]);
         expect(gap).toBeLessThan(1e-6);
         // one move alone: only its own beats
         const only = walkedPathOfMove(host, resolver, 1, 2);
@@ -573,5 +587,124 @@ describe("drawable walked paths (R-15)", () => {
         expect(walkedPathToSvg(paths(host, 1, 0, 8).path)).toBe(
             "M 0 0 L 100 0",
         );
+    });
+
+    it("QA-WP-16: a cut curve keeps the whole curve's timing, at field scale", () => {
+        // an own path of smooth points across the field, uneven so its speed along t varies
+        const t = move(1, 0, 16, [[1700, 300]]);
+        const host = show([[40, 1500]], [t], [row(1, t)], {
+            routes: {
+                1: route(
+                    [40, 1500],
+                    [1700, 300],
+                    [
+                        { id: "a", at: [200, 200], tension: 1 },
+                        { id: "b", at: [300, 900], tension: 2 },
+                        { id: "c", at: [1600, 1700], tension: 0.3 },
+                    ],
+                ),
+            },
+            lanes: { 1: { transition: 1, slot: 0, route: 1, offset: null } },
+        });
+        for (const [a, b] of [
+            [0, 16],
+            [1.3, 2.9],
+            [3.77, 11.2],
+            [6.01, 6.5],
+            [15.2, 15.9],
+        ] as const) {
+            const { path, gap } = paths(host, 1, a, b);
+            expect(new Set(kinds(path))).toEqual(new Set(["cubic"]));
+            // exact to rounding: the cut reads the whole curve's length table (R-20 item 7)
+            expect(gap).toBeLessThan(1e-6);
+            const first = path.segments[0]!;
+            if (first.kind !== "cubic") throw new Error("not a cubic");
+            expect(first.measured === undefined).toBe(a === 0);
+        }
+    });
+
+    it("QA-WP-17: a half turn is written as two arcs that keep their centre when rounded", () => {
+        // the review's case: radius 929.52868 rounds up to 929.529, a hair over half the chord
+        const t = move(1, 1, 6, [[168.89, 1494.396]], {
+            style: "arc",
+            params: { bulge: 0.5 },
+        });
+        const host = show([[1322.949, 36.918]], [t], [row(1, t)]);
+        const { path, resolver } = paths(host, 1, 1, 6);
+        const d = walkedPathToSvg(path);
+        const arcs = [
+            ...d.matchAll(/A ([\d.]+) [\d.]+ 0 0 [01] ([-\d.]+) ([-\d.]+)/g),
+        ].map((m) => m.slice(1).map(Number));
+        expect(arcs.length).toBe(2);
+        // the first arc ends where the marcher is halfway, on the circle the resolver walks
+        const mid = resolver.positionAt(1, 3.5);
+        expect(d2([arcs[0]![1]!, arcs[0]![2]!], mid)).toBeLessThan(1e-3);
+        let from: XY = [1322.949, 36.918];
+        for (const [r, x, y] of arcs) {
+            // the chord is far below the diameter, so the centre can't run off (QA-WP-15 parses
+            // the arcs back by the W3C conversion)
+            expect(d2(from, [x!, y!]) / 2).toBeLessThan(0.75 * r!);
+            from = [x!, y!];
+        }
+    });
+
+    it("QA-WP-18: an arc too flat to draw is a line that still joins what comes next", () => {
+        const low = move(1, 0, 16, [[1500, 0]], {
+            style: "arc",
+            params: { bulge: 0.99e-7 },
+        });
+        const high = move(2, 6, 12, [[700, 400]]);
+        const host = show(
+            [[0, 0]],
+            [low, high],
+            [row(1, low), row(1, high, 0, { layer: 1, start: 8 })],
+        );
+        // `paths` checks every segment starts within 1e-6 of where the last ended
+        const { path, gap } = paths(host, 1, 0, 16);
+        expect(kinds(path)).toEqual(["line", "line", "line"]);
+        expect(walkedPathToSvg(path).match(/M/g)!.length).toBe(1);
+        expect(gap).toBeLessThan(1e-3);
+    });
+
+    it("a coordinate that is not a number is an error, never a 0 in the SVG", () => {
+        const t = move(1, 0, 8, [[100, 50]]);
+        const { path } = paths(show([[0, 0]], [t], [row(1, t)]), 1, 0, 8);
+        const broken = {
+            ...path,
+            segments: [{ ...path.segments[0]!, to: [NaN, 50] as XY }],
+        };
+        expect(() => walkedPathToSvg(broken)).toThrow(/not a number/);
+    });
+
+    it("QA-WP-19: a batch works a follow-the-leader trail out once for all its marchers", () => {
+        const host = ftlShow({
+            kind: "circle",
+            geometry: {
+                center: [200, 100],
+                radius: 40,
+                start_angle: Math.PI,
+                clockwise: true,
+            },
+        });
+        const resolver = createResolver(host);
+        let entries = 0;
+        let positions = 0;
+        const counted = {
+            spanInfos: resolver.spanInfos,
+            ftlEntry: (id: number) => (entries++, resolver.ftlEntry(id)),
+            positionAt: (m: number, b: number) => (
+                positions++,
+                resolver.positionAt(m, b)
+            ),
+        };
+        const batch = createWalkedPaths(host, counted);
+        for (let round = 0; round < 4; round++)
+            for (const m of [1, 2, 3])
+                expect(batch.path(m, round * 4, round * 4 + 4)).toEqual(
+                    walkedPath(host, resolver, m, round * 4, round * 4 + 4),
+                );
+        expect(entries).toBe(1);
+        // the trail's three origins once, and each call's own origin: no members x calls
+        expect(positions).toBe(3 + 12);
     });
 });

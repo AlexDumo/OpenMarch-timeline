@@ -56,7 +56,7 @@ export interface DrillChartPath {
     next?: { x: number; y: number };
     /**
      * The path walked from `previous` to `current` when it isn't the straight line between them
-     * (spec R-15 item 10): SVG path data and where the marcher is at the middle beat
+     * (spec R-20 item 10): SVG path data and where the marcher is at the middle beat
      */
     previousWalk?: DrillChartWalk;
     /** The same from `current` to `next` */

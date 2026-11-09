@@ -1,7 +1,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { afterEach, expect } from "vitest";
+import { afterEach, beforeEach, expect, vi, type MockInstance } from "vitest";
 import { eq } from "drizzle-orm";
 import {
     betterSqliteTestWithProxy,
@@ -25,10 +25,11 @@ import { readExportPositions } from "../utils/exportPagePositions";
 import { generateDrillChartExportSVGs } from "../utils/svg-generator";
 
 /**
- * Individual drill charts draw walked paths (pathways step 18, spec R-15 item 10) without
+ * Individual drill charts draw walked paths (pathways step 18, spec R-20 item 10) without
  * changing a show that has none: the v0.1.7 `realistic` show, converted as the app does on open,
  * exports the same bytes with and without walked paths (QA-WP-13), and a curve drawn on it
- * exports as a curve (QA-WP-14).
+ * exports as a curve (QA-WP-14). Both fail if anything is logged with `console.error`, which is
+ * how a walked path that could not be worked out shows.
  *
  * `OPENMARCH_EXPORT_DUMP=<directory>` also writes every chart there (`plain/` for the show as
  * converted, `curved/` after an arc and a group path are added), for a before and after check
@@ -121,7 +122,22 @@ function dump(folder: string, SVGs: string[][]) {
     );
 }
 
-afterEach(() => stopTimelineResolver());
+// A walked path that can't be worked out is logged and its chart keeps the straight line, so a
+// path that failed for every marcher would still export the same bytes as before. Any
+// `console.error` fails these tests.
+let errors: MockInstance<typeof console.error>;
+beforeEach(() => {
+    errors = vi.spyOn(console, "error");
+});
+afterEach(() => {
+    const logged = errors.mock.calls
+        .map((call) => call.map(String).join(" "))
+        // the one error the open path logs here: it closes a database that was never set
+        .filter((line) => !line.startsWith("setDbPath: File does not exist"));
+    errors.mockRestore();
+    stopTimelineResolver();
+    expect(logged).toEqual([]);
+});
 
 const it = betterSqliteTestWithProxy.extend<{ show: string }>({
     show: async ({ task }, use) => {

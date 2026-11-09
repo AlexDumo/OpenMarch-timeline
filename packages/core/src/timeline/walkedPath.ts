@@ -1,5 +1,5 @@
 /**
- * Drawable walked paths (spec R-15, pathways step 18): the path a marcher actually walks over a
+ * Drawable walked paths (spec R-20, pathways step 18): the path a marcher actually walks over a
  * beat range, as exact drawable segments (lines, circular arcs and cubic Bézier curves) for exports and
  * other apps. It reads a resolver and the snapshot the resolver was built from; it never changes
  * a position, and `walkedPathPointAt` agrees with `positionAt` within
@@ -9,6 +9,7 @@ import {
     EPS_GEOM,
     ROUTE_CUBIC_SAMPLES,
     adjustAt,
+    arcPoint,
     cubicPoint,
     cumOf,
     destinationsOf,
@@ -22,11 +23,14 @@ import {
     routePiecePoint,
     type GroupLeg,
     type GroupMemberWalk,
+    type GroupSchedule,
+    type ResolvedAdjust,
     type RoutePath,
     type RouteWalk,
 } from "./geom";
 import type {
     Beat,
+    FtlEntryInfo,
     LaneRow,
     Resolver,
     ShapeRow,
@@ -37,13 +41,13 @@ import type {
 } from "./types";
 
 /**
- * R-15 item 7: how far `walkedPathPointAt` may be from `positionAt` at the same beat, and how far
+ * R-20 item 7: how far `walkedPathPointAt` may be from `positionAt` at the same beat, and how far
  * a `polyline` segment may be from the walk it stands for, in field units (the resolver's
  * coordinates). 0.05 is under half a percent of an 8-to-5 step on the default field (11.25).
  */
 export const WALKED_SAMPLE_TOLERANCE = 0.05;
 
-/** R-15 item 3: an arc style whose bulge is smaller than this draws as a line. */
+/** R-20 item 3: an arc style whose bulge is smaller than this draws as a line. */
 export const WALKED_MIN_BULGE = 1e-7;
 
 interface WalkedSegmentBase {
@@ -65,7 +69,8 @@ export interface WalkedLine extends WalkedSegmentBase {
 /**
  * A circular arc, walked at constant speed: the point at fraction `f` of its beats is
  * `center + radius * (cos(a), sin(a))` with `a = startAngle + sweep * f`. `sweep` is signed and at
- * most half a turn in size; longer arcs come as several segments.
+ * most a quarter turn in size; longer arcs come as several segments. (A quarter turn, not a half:
+ * an SVG arc of exactly half a turn loses its centre when its radius is rounded.)
  */
 export interface WalkedArc extends WalkedSegmentBase {
     kind: "arc";
@@ -73,19 +78,30 @@ export interface WalkedArc extends WalkedSegmentBase {
     radius: number;
     /** Radians */
     startAngle: number;
-    /** Radians, signed, `|sweep| <= PI` */
+    /** Radians, signed, `|sweep| <= PI / 2` */
     sweep: number;
 }
 
-/** A cubic Bézier from `from` to `to` with controls `c1` and `c2`, walked at constant speed along its length. */
+/**
+ * A cubic Bézier from `from` to `to` with controls `c1` and `c2`, walked at constant speed along
+ * its length as R-14 measures it: on the 64 chords of the whole curve the resolver walks.
+ */
 export interface WalkedCubic extends WalkedSegmentBase {
     kind: "cubic";
     c1: XY;
     c2: XY;
+    /**
+     * Set when the segment is a cut of a longer curve (by the beat range, a higher layer or an
+     * Adjust key): the whole curve's cumulative chord lengths (R-14's 65-entry table) and the
+     * distances along it where this segment starts and ends. The marcher's place at a beat is
+     * read from this table, as the resolver reads it, so a cut curve keeps the whole curve's
+     * timing. Absent for a whole curve, which is measured on its own 64 chords.
+     */
+    measured?: { lengths: readonly number[]; from: number; to: number };
 }
 
 /**
- * A walk with no exact line, arc or cubic form (R-15 item 5: a curved piece of a group path
+ * A walk with no exact line, arc or cubic form (R-20 item 5: a curved piece of a group path
  * under a changing Adjust), as points within {@link WALKED_SAMPLE_TOLERANCE} of it. `beats[i]` is
  * when the marcher is at `points[i]`; it moves in a straight line between them.
  */
@@ -101,7 +117,7 @@ export type WalkedSegment =
     | WalkedCubic
     | WalkedPolyline;
 
-/** One marcher's walked path over `[from, to]`: its segments in beat order (R-15). */
+/** One marcher's walked path over `[from, to]`: its segments in beat order (R-20). */
 export interface WalkedPath {
     marcherId: number;
     from: Beat;
@@ -122,7 +138,14 @@ type Shape =
           startAngle: number;
           sweep: number;
       }
-    | { kind: "cubic"; from: XY; to: XY; c1: XY; c2: XY }
+    | {
+          kind: "cubic";
+          from: XY;
+          to: XY;
+          c1: XY;
+          c2: XY;
+          measured?: { lengths: readonly number[]; from: number; to: number };
+      }
     /** `us` are the points' fractions of the piece's progress range */
     | { kind: "polyline"; from: XY; to: XY; points: XY[]; us: number[] };
 
@@ -151,7 +174,11 @@ const onCircle = (center: XY, radius: number, a: number): XY => [
     center[1] + radius * Math.sin(a),
 ];
 
-/** Arc pieces of at most half a turn each; `A` and `B` are the exact ends when known. */
+/**
+ * Arc pieces of at most a quarter turn each. `exact(f)` is the resolver's own point at fraction
+ * `f` of the whole arc, when it has one: segment ends are read from it, so a cut arc joins what
+ * comes next where the resolver puts the marcher.
+ */
 function arcPieces(
     pa: number,
     pb: number,
@@ -159,29 +186,25 @@ function arcPieces(
     radius: number,
     startAngle: number,
     sweep: number,
-    A?: XY,
-    B?: XY,
+    exact?: (f: number) => XY,
 ): Piece[] {
-    const n = Math.max(1, Math.ceil(Math.abs(sweep) / Math.PI - 1e-12));
+    const n = Math.max(1, Math.ceil(Math.abs(sweep) / (Math.PI / 2) - 1e-12));
     const out: Piece[] = [];
     for (let i = 0; i < n; i++) {
         const a0 = startAngle + (sweep * i) / n;
         const part = sweep / n;
-        const first = i === 0;
         const last = i === n - 1;
+        const end = (u: number): XY =>
+            exact
+                ? exact(u >= 1 && last ? 1 : (i + u) / n)
+                : onCircle(center, radius, a0 + part * u);
         out.push({
             pa: pa + ((pb - pa) * i) / n,
             pb: last ? pb : pa + ((pb - pa) * (i + 1)) / n,
             cut: (u0, u1) => ({
                 kind: "arc",
-                from:
-                    first && A && u0 <= 0
-                        ? A
-                        : onCircle(center, radius, a0 + part * u0),
-                to:
-                    last && B && u1 >= 1
-                        ? B
-                        : onCircle(center, radius, a0 + part * u1),
+                from: end(u0),
+                to: end(u1),
                 center,
                 radius,
                 startAngle: a0 + part * u0,
@@ -269,26 +292,50 @@ function cubicPiece(
                 x0 <= 0 ? 0 : cubicParamAt(e, x0),
                 x1 >= total ? 1 : cubicParamAt(e, x1),
             );
-            return {
+            const shape: Shape = {
                 kind: "cubic",
                 from: shift(part.from),
                 c1: shift(part.c1),
                 c2: shift(part.c2),
                 to: shift(part.to),
             };
+            // a cut keeps the whole curve's table, so its timing is the resolver's (R-20 item 7)
+            if (x0 > 0 || x1 < total)
+                shape.measured = {
+                    lengths: e,
+                    from: Math.max(0, x0),
+                    to: Math.min(total, x1),
+                };
+            return shape;
         },
     };
 }
 
-/** A walk known only point by point: sampled until it is within the tolerance (R-15 item 5). */
-function sampledPiece(pa: number, pb: number, at: (u: number) => XY): Piece {
+/**
+ * A walk known only point by point, as a polyline (R-20 item 5). `knots` are the fractions of the
+ * piece between which `at` is a cubic polynomial (here: the 64 chords R-14 measures the curve on,
+ * with the Adjust linear between its keys). Every knot inside a cut is a point, and between two
+ * knots the points are halved until the bound below is within half the tolerance.
+ *
+ * The bound: a cubic polynomial `P` over one line of the polyline has Bézier controls `b1`, `b2`
+ * (found from `P` at 1/3 and 2/3). `P(s) - lerp(A, B, s)` is then the cubic with controls
+ * `0, d1, d2, 0`, `d1 = b1 - lerp(A, B, 1/3)`, `d2 = b2 - lerp(A, B, 2/3)`, so it is never longer
+ * than `3s(1 - s) * max(|d1|, |d2|) <= 0.75 * max(|d1|, |d2|)`. That is the distance between
+ * where the walk is and where the polyline says it is at the same beat, at every beat.
+ */
+function sampledPiece(
+    pa: number,
+    pb: number,
+    at: (u: number) => XY,
+    knots: readonly number[],
+): Piece {
     return {
         pa,
         pb,
         cut: (u0, u1) => {
             const points: XY[] = [];
             const us: number[] = [];
-            const limit = WALKED_SAMPLE_TOLERANCE / 4;
+            const limit = WALKED_SAMPLE_TOLERANCE / 2;
             const refine = (
                 ua: number,
                 A: XY,
@@ -296,9 +343,25 @@ function sampledPiece(pa: number, pb: number, at: (u: number) => XY): Piece {
                 B: XY,
                 depth: number,
             ) => {
-                const um = (ua + ub) / 2;
-                const M = at(um);
-                if (depth < 12 && dist(M, lerp(A, B, 0.5)) > limit) {
+                const h = ub - ua;
+                const P1 = at(ua + h / 3);
+                const P2 = at(ua + (2 * h) / 3);
+                let off = 0;
+                for (const [w0, w1, w2, w3, f] of [
+                    [-5, 18, -9, 2, 1 / 3],
+                    [2, -9, 18, -5, 2 / 3],
+                ] as const) {
+                    const dx =
+                        (w0 * A[0] + w1 * P1[0] + w2 * P2[0] + w3 * B[0]) / 6 -
+                        (A[0] + (B[0] - A[0]) * f);
+                    const dy =
+                        (w0 * A[1] + w1 * P1[1] + w2 * P2[1] + w3 * B[1]) / 6 -
+                        (A[1] + (B[1] - A[1]) * f);
+                    off = Math.max(off, Math.hypot(dx, dy));
+                }
+                if (depth < 24 && 0.75 * off > limit) {
+                    const um = ua + h / 2;
+                    const M = at(um);
                     refine(ua, A, um, M, depth + 1);
                     refine(um, M, ub, B, depth + 1);
                     return;
@@ -309,14 +372,12 @@ function sampledPiece(pa: number, pb: number, at: (u: number) => XY): Piece {
             const first = at(u0);
             points.push(first);
             us.push(0);
-            // a few even parts first, so a symmetric bend can't pass the midpoint test
-            const PARTS = 8;
+            let ua = u0;
             let prev = first;
-            for (let i = 1; i <= PARTS; i++) {
-                const ua = u0 + ((u1 - u0) * (i - 1)) / PARTS;
-                const ub = i === PARTS ? u1 : u0 + ((u1 - u0) * i) / PARTS;
+            for (const ub of [...knots.filter((k) => k > u0 && k < u1), u1]) {
                 const B = at(ub);
                 refine(ua, prev, ub, B, 0);
+                ua = ub;
                 prev = B;
             }
             us[us.length - 1] = 1;
@@ -331,13 +392,26 @@ function sampledPiece(pa: number, pb: number, at: (u: number) => XY): Piece {
     };
 }
 
-/** R-8's arc from `A` to `B` with bulge `k`, as pieces over progress [0, 1] (R-15 item 3). */
+/** R-8's arc from `A` to `B` with bulge `k`, as pieces over progress [0, 1] (R-20 item 3). */
 function bulgePieces(A: XY, B: XY, k: number): Piece[] {
     const dx = B[0] - A[0];
     const dy = B[1] - A[1];
     const c = Math.hypot(dx, dy);
-    if (c < EPS_GEOM || Math.abs(k) < WALKED_MIN_BULGE)
-        return [linePiece(0, 1, A, B)];
+    if (c < EPS_GEOM) return [linePiece(0, 1, A, B)];
+    const exact = (p: number) => arcPoint(A, B, k, p);
+    if (Math.abs(k) < WALKED_MIN_BULGE)
+        // drawn as a line, but cut where the resolver's arc is, so what comes next joins it
+        return [
+            {
+                pa: 0,
+                pb: 1,
+                cut: (u0, u1) => ({
+                    kind: "line",
+                    from: exact(u0),
+                    to: exact(u1),
+                }),
+            },
+        ];
     const h = c / 2;
     const s = k * c; // signed sagitta, toward the +90 degree side
     const radius = (h * h + s * s) / (2 * Math.abs(s));
@@ -356,7 +430,7 @@ function bulgePieces(A: XY, B: XY, k: number): Piece[] {
     const py = (A[1] + B[1]) / 2 + ny * s - center[1];
     const dir = ax * py - ay * px >= 0 ? 1 : -1;
     const sweep = dir * 4 * Math.atan(2 * Math.abs(k));
-    return arcPieces(0, 1, center, radius, startAngle, sweep, A, B);
+    return arcPieces(0, 1, center, radius, startAngle, sweep, exact);
 }
 
 /** A group member's leg (R-14 group schedule item 5) over progress `[pa, pb]`. */
@@ -370,7 +444,7 @@ function legPiece(pa: number, pb: number, leg: GroupLeg): Piece {
     return cubicPiece(pa, pb, S, piece.c1, piece.c2, E, piece.e);
 }
 
-/** A group lane's walk (R-14 group schedule, R-14′ Adjust) as pieces (R-15 items 4 and 5). */
+/** A group lane's walk (R-14 group schedule, R-14′ Adjust) as pieces (R-20 items 4 and 5). */
 function groupPieces(walk: GroupMemberWalk): Piece[] {
     const { schedule, A, B, offset, first, last, adjust } = walk;
     if (!first || !last) return [linePiece(0, 1, A, B)];
@@ -431,10 +505,16 @@ function groupPieces(walk: GroupMemberWalk): Piece[] {
                 );
             } else {
                 out.push(
-                    sampledPiece(pa, pb, (u) => {
-                        const x = xa + (xb - xa) * u;
-                        return place(pointAt(x), adjustAt(keys!, x));
-                    }),
+                    sampledPiece(
+                        pa,
+                        pb,
+                        (u) => {
+                            const x = xa + (xb - xa) * u;
+                            return place(pointAt(x), adjustAt(keys!, x));
+                        },
+                        // where R-14's chords of this curve begin, as fractions of the part
+                        piece.e.map((e) => (xLo + e - xa) / (xb - xa)),
+                    ),
                 );
             }
         }
@@ -506,211 +586,311 @@ function polylinePieces(
     return out;
 }
 
-const lanesBySlot = new WeakMap<object, Map<string, LaneRow>>();
-function laneOf(
+/** What a walked path is read from: the resolver's spans, positions and follow-the-leader order. */
+export type WalkResolver = Pick<
+    Resolver,
+    "spanInfos" | "positionAt" | "ftlEntry"
+>;
+
+/** A follow-the-leader transition's order and targets, indexed by marcher (R-9). */
+interface FtlOrder {
+    entry: FtlEntryInfo;
+    qOf: Map<number, number>;
+    targets: Map<number, XY>;
+}
+
+/** R-9's trail as drawable legs: the polyline before the destination path, then the path. */
+interface FtlTrail {
+    pre: XY[];
+    cum: number[];
+    destOffset: number;
+    /** The destination path's corners and their cumulative lengths; null for a circle */
+    corners: XY[] | null;
+    cornerCum: number[] | null;
+    shape: ShapeRow;
+}
+
+/**
+ * The walked paths of one snapshot and its resolver (R-20), for asking about many marchers and
+ * ranges in a row, as an export does. What every marcher of a move shares (a follow-the-leader
+ * trail, a group path's schedule, the destinations) is worked out once and kept, so a path costs
+ * what its own segments cost.
+ *
+ * It holds what it read: make a new one after the snapshot or the resolver changes.
+ */
+export interface WalkedPaths {
+    /** {@link walkedPath} */
+    path(marcherId: number, from: Beat, to: Beat): WalkedPath;
+    /** {@link walkedPathOfMove} */
+    ofMove(marcherId: number, transitionId: number): WalkedPath;
+}
+
+/** See {@link WalkedPaths}. `host` is the snapshot `resolver` was built from. */
+export function createWalkedPaths(
     host: TimelineSnapshot,
-    transition: number,
-    slot: number,
-): LaneRow | undefined {
-    if (!host.lanes) return undefined;
-    let index = lanesBySlot.get(host.lanes);
-    if (!index) {
-        index = new Map(
+    resolver: WalkResolver,
+): WalkedPaths {
+    const spans = new Map<number, SpanInfo[]>();
+    const spots = new Map<number, XY[]>();
+    const orders = new Map<number, FtlOrder>();
+    const trails = new Map<number, FtlTrail>();
+    const schedules = new Map<number, GroupSchedule>();
+    const adjusts = new Map<LaneRow, ResolvedAdjust>();
+    let lanes: Map<string, LaneRow> | null = null;
+
+    const spansOf = (marcherId: number): SpanInfo[] => {
+        let list = spans.get(marcherId);
+        if (!list) spans.set(marcherId, (list = resolver.spanInfos(marcherId)));
+        return list;
+    };
+    const spotsOf = (t: TransitionRow): XY[] => {
+        let pts = spots.get(t.id);
+        if (!pts) spots.set(t.id, (pts = destinationsOf(t, host.shapes)));
+        return pts;
+    };
+    const laneOf = (transition: number, slot: number): LaneRow | undefined => {
+        if (!host.lanes) return undefined;
+        lanes ??= new Map(
             Object.values(host.lanes).map((lane) => [
                 `${lane.transition}:${lane.slot}`,
                 lane,
             ]),
         );
-        lanesBySlot.set(host.lanes, index);
-    }
-    return index.get(`${transition}:${slot}`);
-}
-
-type WalkResolver = Pick<Resolver, "spanInfos" | "explain">;
-
-/** A founding follow-the-leader span (R-10): the marcher's stretch of the trail. */
-function ftlPieces(
-    host: TimelineSnapshot,
-    resolver: WalkResolver,
-    t: TransitionRow,
-    ftl: NonNullable<ReturnType<Resolver["explain"]>["ftl"]>,
-): Piece[] {
-    const q = ftl.q!;
-    const { entry } = ftl;
-    const d0 = entry.startDist[q]!;
-    const d1 = entry.endDist[q]!;
-    if (!(d1 - d0 >= EPS_GEOM)) return [];
-    const shape = t.dest == null ? undefined : host.shapes[t.dest];
-    if (!shape)
-        throw new Error(
-            `follow-the-leader transition ${t.id} has no destination path`,
-        );
-    const corners = destCorners(shape);
-    const pathStart: XY = corners
-        ? corners[0]!
-        : shape.kind === "circle"
-          ? onCircle(
-                shape.geometry.center,
-                shape.geometry.radius,
-                shape.geometry.start_angle,
-            )
-          : [0, 0];
-    // R-9's trail: the members' origins (tail first), the waypoints, then the destination path
-    const pre: XY[] = [
-        ...entry.members.map((id) => resolver.explain(id, t.start).origin),
-        ...(t.params?.waypoints ?? []),
-        pathStart,
-    ];
-    const cum = cumOf(pre);
-    const destOffset = cum[cum.length - 1]!;
-    const progressOf = (d: number) => (d - d0) / (d1 - d0);
-    const out = polylinePieces(
-        pre,
-        cum,
-        d0,
-        Math.min(d1, destOffset),
-        progressOf,
-    );
-    if (d1 <= destOffset) return out;
-    const s0 = Math.max(0, d0 - destOffset);
-    const s1 = d1 - destOffset;
-    if (corners) {
-        out.push(
-            ...polylinePieces(corners, cumOf(corners), s0, s1, (s) =>
-                progressOf(s + destOffset),
-            ),
-        );
-    } else if (shape.kind === "circle") {
-        const g = shape.geometry;
-        const dir = g.clockwise ? -1 : 1;
-        out.push(
-            ...arcPieces(
-                progressOf(s0 + destOffset),
-                1,
-                g.center,
-                g.radius,
-                g.start_angle + dir * (s0 / g.radius),
-                dir * ((s1 - s0) / g.radius),
-            ),
-        );
-    }
-    return out;
-}
-
-/** The pieces of one span's walk over progress [0, 1] (the resolver's `evalSpan`, R-15 item 2). */
-function spanPieces(
-    host: TimelineSnapshot,
-    resolver: WalkResolver,
-    span: SpanInfo,
-    t: TransitionRow,
-): Piece[] {
-    const explained = resolver.explain(span.marcherId, span.start);
-    const A = explained.origin;
-    const founding = span.kind === "founding";
-    if (t.style === "follow_the_leader") {
-        const ftl = explained.ftl;
-        if (!ftl) return [];
-        if (founding && ftl.q !== null)
-            return ftlPieces(host, resolver, t, ftl);
-        // R-11: a join or resume walks straight to its target
-        const target = ftl.entry.targets.find(
-            ([id]) => id === span.marcherId,
-        )?.[1];
-        return target ? [linePiece(0, 1, A, target)] : [];
-    }
-    const B = destinationsOf(t, host.shapes)[span.slot!]!;
-    const lane = laneOf(host, t.id, span.slot!);
-    if (lane) {
-        if (!founding) return [linePiece(0, 1, A, B)];
-        const geometry = host.routes?.[lane.route]?.geometry;
-        if (!geometry)
-            throw new Error(
-                `lane on ${t.id}:${lane.slot} has no route ${lane.route} (I-D3)`,
+        return lanes.get(`${transition}:${slot}`);
+    };
+    const scheduleOf = (routeId: number, route: RouteWalk): GroupSchedule => {
+        let schedule = schedules.get(routeId);
+        if (!schedule)
+            schedules.set(routeId, (schedule = groupSchedule(route)));
+        return schedule;
+    };
+    const adjustOf = (
+        lane: LaneRow,
+        schedule: GroupSchedule,
+        route: RouteWalk,
+    ): ResolvedAdjust | null => {
+        if (!lane.adjust) return null;
+        let resolved = adjusts.get(lane);
+        if (!resolved)
+            adjusts.set(
+                lane,
+                (resolved = resolveAdjust(schedule, route.points, lane.adjust)),
             );
-        const route: RouteWalk = geometry;
-        if (lane.offset) {
-            const schedule = groupSchedule(route);
-            return groupPieces(
-                groupMemberWalk(
-                    schedule,
-                    A,
-                    B,
-                    lane.offset,
-                    lane.adjust
-                        ? resolveAdjust(schedule, route.points, lane.adjust)
-                        : null,
+        return resolved;
+    };
+    const orderOf = (t: TransitionRow): FtlOrder => {
+        let order = orders.get(t.id);
+        if (!order) {
+            const entry = resolver.ftlEntry(t.id);
+            order = {
+                entry,
+                qOf: new Map(entry.members.map((id, q) => [id, q])),
+                targets: new Map(entry.targets),
+            };
+            orders.set(t.id, order);
+        }
+        return order;
+    };
+    const trailOf = (t: TransitionRow, entry: FtlEntryInfo): FtlTrail => {
+        let trail = trails.get(t.id);
+        if (trail) return trail;
+        const shape = t.dest == null ? undefined : host.shapes[t.dest];
+        if (!shape)
+            throw new Error(
+                `follow-the-leader transition ${t.id} has no destination path`,
+            );
+        const corners = destCorners(shape);
+        const pathStart: XY = corners
+            ? corners[0]!
+            : shape.kind === "circle"
+              ? onCircle(
+                    shape.geometry.center,
+                    shape.geometry.radius,
+                    shape.geometry.start_angle,
+                )
+              : [0, 0];
+        // R-9's trail: the members' origins (tail first), the waypoints, then the destination
+        // path. A founding span's origin is where the resolver has its marcher as the move starts.
+        const pre: XY[] = [
+            ...entry.members.map((id) => resolver.positionAt(id, t.start)),
+            ...(t.params?.waypoints ?? []),
+            pathStart,
+        ];
+        const cum = cumOf(pre);
+        trail = {
+            pre,
+            cum,
+            destOffset: cum[cum.length - 1]!,
+            corners,
+            cornerCum: corners ? cumOf(corners) : null,
+            shape,
+        };
+        trails.set(t.id, trail);
+        return trail;
+    };
+
+    /** A founding follow-the-leader span (R-10): the marcher's stretch of the trail. */
+    function ftlPieces(t: TransitionRow, order: FtlOrder, q: number): Piece[] {
+        const { entry } = order;
+        const d0 = entry.startDist[q]!;
+        const d1 = entry.endDist[q]!;
+        if (!(d1 - d0 >= EPS_GEOM)) return [];
+        const { pre, cum, destOffset, corners, cornerCum, shape } = trailOf(
+            t,
+            entry,
+        );
+        const progressOf = (d: number) => (d - d0) / (d1 - d0);
+        const out = polylinePieces(
+            pre,
+            cum,
+            d0,
+            Math.min(d1, destOffset),
+            progressOf,
+        );
+        if (d1 <= destOffset) return out;
+        const s0 = Math.max(0, d0 - destOffset);
+        const s1 = d1 - destOffset;
+        if (corners) {
+            out.push(
+                ...polylinePieces(corners, cornerCum!, s0, s1, (s) =>
+                    progressOf(s + destOffset),
+                ),
+            );
+        } else if (shape.kind === "circle") {
+            const g = shape.geometry;
+            const dir = g.clockwise ? -1 : 1;
+            out.push(
+                ...arcPieces(
+                    progressOf(s0 + destOffset),
+                    1,
+                    g.center,
+                    g.radius,
+                    g.start_angle + dir * (s0 / g.radius),
+                    dir * ((s1 - s0) / g.radius),
                 ),
             );
         }
-        if (route.points.length === 0) return [linePiece(0, 1, A, B)];
-        return routePieces(routePath(A, route.points, B, route));
+        return out;
     }
-    if (t.style === "arc") return bulgePieces(A, B, t.params?.bulge ?? 0);
-    return [linePiece(0, 1, A, B)];
-}
 
-function collect(
-    host: TimelineSnapshot,
-    resolver: WalkResolver,
-    marcherId: number,
-    from: Beat,
-    to: Beat,
-    onlyTransition: number | null,
-): WalkedPath {
-    const segments: WalkedSegment[] = [];
-    for (const span of resolver.spanInfos(marcherId)) {
-        if (span.transitionId === null || span.kind === "hold") continue;
-        if (onlyTransition !== null && span.transitionId !== onlyTransition)
-            continue;
-        const b0 = Math.max(from, span.start);
-        const b1 = Math.min(to, span.end);
-        if (!(b1 > b0)) continue;
-        const t = host.transitions[span.transitionId];
-        if (!t) continue;
-        // R-5: progress runs from the span's start to its transition's end
-        const length = t.end - span.start;
-        if (!(length > 0)) continue;
-        const p0 = (b0 - span.start) / length;
-        const p1 = Math.min(1, (b1 - span.start) / length);
-        const beatOf = (p: number) => span.start + p * length;
-        for (const piece of spanPieces(host, resolver, span, t)) {
-            const lo = Math.max(p0, piece.pa);
-            const hi = Math.min(p1, piece.pb);
-            if (!(hi > lo) || !(piece.pb > piece.pa)) continue;
-            const width = piece.pb - piece.pa;
-            const shape = piece.cut(
-                lo <= piece.pa ? 0 : (lo - piece.pa) / width,
-                hi >= piece.pb ? 1 : (hi - piece.pa) / width,
-            );
-            // R-15 item 6: standing still draws nothing
-            if (shape.kind === "line" && dist(shape.from, shape.to) < EPS_GEOM)
-                continue;
-            const base = {
-                start: beatOf(lo),
-                end: beatOf(hi),
-                transitionId: t.id,
-            };
-            if (shape.kind === "polyline") {
-                const { us, ...rest } = shape;
-                segments.push({
-                    ...base,
-                    ...rest,
-                    beats: us.map(
-                        (u) => base.start + u * (base.end - base.start),
-                    ),
-                });
-            } else segments.push({ ...base, ...shape });
+    /** The pieces of one span's walk over progress [0, 1] (the resolver's `evalSpan`, R-20 item 2). */
+    function spanPieces(span: SpanInfo, t: TransitionRow): Piece[] {
+        // R-4: a span starts where the resolver has its marcher at the span's first beat
+        const A = resolver.positionAt(span.marcherId, span.start);
+        const founding = span.kind === "founding";
+        if (t.style === "follow_the_leader") {
+            const order = orderOf(t);
+            const q = founding ? order.qOf.get(span.marcherId) : undefined;
+            if (q !== undefined) return ftlPieces(t, order, q);
+            // R-11: a join or resume walks straight to its target
+            const target = order.targets.get(span.marcherId);
+            return target ? [linePiece(0, 1, A, target)] : [];
         }
+        const B = spotsOf(t)[span.slot!]!;
+        const lane = laneOf(t.id, span.slot!);
+        if (lane) {
+            if (!founding) return [linePiece(0, 1, A, B)];
+            const geometry = host.routes?.[lane.route]?.geometry;
+            if (!geometry)
+                throw new Error(
+                    `lane on ${t.id}:${lane.slot} has no route ${lane.route} (I-D3)`,
+                );
+            const route: RouteWalk = geometry;
+            if (lane.offset) {
+                const schedule = scheduleOf(lane.route, route);
+                return groupPieces(
+                    groupMemberWalk(
+                        schedule,
+                        A,
+                        B,
+                        lane.offset,
+                        adjustOf(lane, schedule, route),
+                    ),
+                );
+            }
+            if (route.points.length === 0) return [linePiece(0, 1, A, B)];
+            return routePieces(routePath(A, route.points, B, route));
+        }
+        if (t.style === "arc") return bulgePieces(A, B, t.params?.bulge ?? 0);
+        return [linePiece(0, 1, A, B)];
     }
-    return { marcherId, from, to, segments };
+
+    function collect(
+        marcherId: number,
+        from: Beat,
+        to: Beat,
+        onlyTransition: number | null,
+    ): WalkedPath {
+        const segments: WalkedSegment[] = [];
+        for (const span of spansOf(marcherId)) {
+            if (span.transitionId === null || span.kind === "hold") continue;
+            if (onlyTransition !== null && span.transitionId !== onlyTransition)
+                continue;
+            const b0 = Math.max(from, span.start);
+            const b1 = Math.min(to, span.end);
+            if (!(b1 > b0)) continue;
+            const t = host.transitions[span.transitionId];
+            if (!t) continue;
+            // R-5: progress runs from the span's start to its transition's end
+            const length = t.end - span.start;
+            if (!(length > 0)) continue;
+            const p0 = (b0 - span.start) / length;
+            const p1 = Math.min(1, (b1 - span.start) / length);
+            const beatOf = (p: number) => span.start + p * length;
+            for (const piece of spanPieces(span, t)) {
+                const lo = Math.max(p0, piece.pa);
+                const hi = Math.min(p1, piece.pb);
+                if (!(hi > lo) || !(piece.pb > piece.pa)) continue;
+                const width = piece.pb - piece.pa;
+                const shape = piece.cut(
+                    lo <= piece.pa ? 0 : (lo - piece.pa) / width,
+                    hi >= piece.pb ? 1 : (hi - piece.pa) / width,
+                );
+                // R-20 item 6: standing still draws nothing
+                if (
+                    shape.kind === "line" &&
+                    dist(shape.from, shape.to) < EPS_GEOM
+                )
+                    continue;
+                const base = {
+                    start: beatOf(lo),
+                    end: beatOf(hi),
+                    transitionId: t.id,
+                };
+                if (shape.kind === "polyline") {
+                    const { us, ...rest } = shape;
+                    segments.push({
+                        ...base,
+                        ...rest,
+                        beats: us.map(
+                            (u) => base.start + u * (base.end - base.start),
+                        ),
+                    });
+                } else segments.push({ ...base, ...shape });
+            }
+        }
+        return { marcherId, from, to, segments };
+    }
+
+    return {
+        path: (marcherId, from, to) => collect(marcherId, from, to, null),
+        ofMove(marcherId, transitionId) {
+            const t = host.transitions[transitionId];
+            if (!t) return { marcherId, from: 0, to: 0, segments: [] };
+            return collect(marcherId, t.start, t.end, transitionId);
+        },
+    };
 }
 
 /**
- * R-15: the path `marcherId` walks from beat `from` to beat `to`, as drawable segments in beat
+ * R-20: the path `marcherId` walks from beat `from` to beat `to`, as drawable segments in beat
  * order. `host` is the snapshot `resolver` was built from (or is kept in step with).
  *
  * Times a marcher stands still (holds, and moves that go nowhere) have no segment, so the path
  * is empty when it never moves in the range. Consecutive segments join end to start.
+ *
+ * For many paths of one snapshot use {@link createWalkedPaths}: this works out a move's shared
+ * parts (such as a follow-the-leader trail) afresh on every call.
  */
 export function walkedPath(
     host: TimelineSnapshot,
@@ -719,11 +899,11 @@ export function walkedPath(
     from: Beat,
     to: Beat,
 ): WalkedPath {
-    return collect(host, resolver, marcherId, from, to, null);
+    return createWalkedPaths(host, resolver).path(marcherId, from, to);
 }
 
 /**
- * R-15: the path `marcherId` walks in one move (transition), over all the beats it is in it.
+ * R-20: the path `marcherId` walks in one move (transition), over all the beats it is in it.
  * Empty when the marcher is not in the move.
  */
 export function walkedPathOfMove(
@@ -732,9 +912,7 @@ export function walkedPathOfMove(
     marcherId: number,
     transitionId: number,
 ): WalkedPath {
-    const t = host.transitions[transitionId];
-    if (!t) return { marcherId, from: 0, to: 0, segments: [] };
-    return collect(host, resolver, marcherId, t.start, t.end, transitionId);
+    return createWalkedPaths(host, resolver).ofMove(marcherId, transitionId);
 }
 
 const cubicTables = new WeakMap<WalkedCubic, number[]>();
@@ -773,9 +951,27 @@ function segmentPoint(seg: WalkedSegment, f: number): XY {
                 seg.startAngle + seg.sweep * f,
             );
         case "cubic": {
-            const e = cubicTable(seg);
-            const t = cubicParamAt(e, f * e[e.length - 1]!);
-            return cubicPoint(seg.from, seg.c1, seg.c2, seg.to, t);
+            const cut = seg.measured;
+            if (!cut) {
+                const e = cubicTable(seg);
+                const t = cubicParamAt(e, f * e[e.length - 1]!);
+                return cubicPoint(seg.from, seg.c1, seg.c2, seg.to, t);
+            }
+            // the whole curve's parameter at this distance, as R-14 finds it, then this cut's
+            const t0 = cubicParamAt(cut.lengths, cut.from);
+            const t1 = cubicParamAt(cut.lengths, cut.to);
+            if (!(t1 > t0)) return lerp(seg.from, seg.to, f);
+            const t = cubicParamAt(
+                cut.lengths,
+                cut.from + f * (cut.to - cut.from),
+            );
+            return cubicPoint(
+                seg.from,
+                seg.c1,
+                seg.c2,
+                seg.to,
+                Math.max(0, Math.min(1, (t - t0) / (t1 - t0))),
+            );
         }
         case "polyline": {
             const beat = seg.start + f * (seg.end - seg.start);
@@ -795,7 +991,7 @@ function segmentPoint(seg: WalkedSegment, f: number): XY {
 }
 
 /**
- * R-15 item 7: where the path's marcher is at `beat`, within {@link WALKED_SAMPLE_TOLERANCE} of
+ * R-20 item 7: where the path's marcher is at `beat`, within {@link WALKED_SAMPLE_TOLERANCE} of
  * the resolver's `positionAt` for beats in `[path.from, path.to]`. Between segments the marcher
  * stands where the last one ended (before the first, where it starts). null for an empty path:
  * the marcher stands still, and the path doesn't say where.
@@ -823,7 +1019,7 @@ export interface WalkedSvgOptions {
 }
 
 /**
- * R-15 item 8: the path as an SVG path `d` string, in the resolver's coordinates (x right, y
+ * R-20 item 8: the path as an SVG path `d` string, in the resolver's coordinates (x right, y
  * down, as SVG's): `M` to the start, then `L`, `A` or `C` per segment (a polyline segment is a
  * run of `L`). A new `M` starts wherever a segment doesn't begin where the last ended. Empty for
  * an empty path.
@@ -833,7 +1029,13 @@ export function walkedPathToSvg(
     options: WalkedSvgOptions = {},
 ): string {
     const scale = 10 ** (options.precision ?? 3);
-    const n = (v: number) => String(Math.round(v * scale) / scale || 0);
+    const n = (v: number) => {
+        if (!Number.isFinite(v))
+            throw new Error(
+                `walked path of marcher ${path.marcherId} has a coordinate that is not a number`,
+            );
+        return String(Math.round(v * scale) / scale);
+    };
     const pt = (p: XY) => `${n(p[0])} ${n(p[1])}`;
     const out: string[] = [];
     let at: XY | null = null;
@@ -863,7 +1065,7 @@ export function walkedPathToSvg(
 }
 
 /**
- * R-15 item 9: the path as polylines, for apps that draw no curves: every point is on the walked
+ * R-20 item 9: the path as polylines, for apps that draw no curves: every point is on the walked
  * path (or on a polyline segment's own points), and the lines between them stay within
  * `tolerance` of it. One polyline per connected run; usually one.
  */

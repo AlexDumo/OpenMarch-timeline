@@ -61,7 +61,7 @@ export const generateDrillChartExportSVGs = async (args: {
     /** Positions by page, sampled from the resolver at each page's end beat (P7.7) */
     marcherPagesMap: Pick<PagePositionMap, "marcherPagesByPage">;
     /**
-     * The walked paths between pages (spec R-15 item 10), from the same snapshot as the
+     * The walked paths between pages (spec R-20 item 10), from the same snapshot as the
      * positions. Individual charts draw them in place of the straight line; without them, or
      * for a straight walk, the line is drawn as before.
      */

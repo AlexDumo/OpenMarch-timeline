@@ -1,4 +1,12 @@
-import { describe, expect, it } from "vitest";
+import {
+    afterEach,
+    beforeEach,
+    describe,
+    expect,
+    it,
+    vi,
+    type MockInstance,
+} from "vitest";
 import {
     createResolver,
     type TimelineSnapshot,
@@ -9,7 +17,7 @@ import { exportWalkedPaths } from "../exportWalkedPaths";
 import { pathSvg } from "../drillChartSvg";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 
-/** The walked paths a drill chart draws between pages (spec R-15 item 10, QA-WP-13 and QA-WP-14). */
+/** The walked paths a drill chart draws between pages (spec R-20 item 10, QA-WP-13 and QA-WP-14). */
 
 const move = (
     id: number,
@@ -53,7 +61,44 @@ const pages = [
 const walksOf = (host: TimelineSnapshot) =>
     exportWalkedPaths({ host, resolver: createResolver(host) }, pages);
 
+// A path that can't be worked out is logged and left as the straight line: no test here may log
+// an error unless it says so.
+let errors: MockInstance<typeof console.error>;
+beforeEach(() => {
+    errors = vi.spyOn(console, "error");
+});
+afterEach(() => {
+    const logged = errors.mock.calls.map((call) => call.map(String).join(" "));
+    errors.mockRestore();
+    expect(logged).toEqual([]);
+});
+
 describe("exportWalkedPaths", () => {
+    it("logs an error and keeps the straight line when a path can't be worked out", () => {
+        const host = show([
+            move(1, 1, 8, [40, 0], { style: "arc", params: { bulge: 0.2 } }),
+        ]);
+        const resolver = createResolver(host);
+        errors.mockImplementation(() => {});
+        const walks = exportWalkedPaths(
+            {
+                host,
+                resolver: {
+                    spanInfos: resolver.spanInfos,
+                    ftlEntry: resolver.ftlEntry,
+                    positionAt: () => {
+                        throw new Error("no position");
+                    },
+                },
+            },
+            pages,
+        );
+        expect(walks(1, 10, 11)).toBeUndefined();
+        expect(errors).toHaveBeenCalledTimes(1);
+        expect(String(errors.mock.calls[0]![0])).toContain("marcher 1");
+        errors.mockClear();
+    });
+
     it("has nothing for a straight walk, a hold, or a straight walk with a stop on the way", () => {
         const walks = walksOf(
             show([
@@ -81,7 +126,8 @@ describe("exportWalkedPaths", () => {
             ]),
         );
         const walk = walks(1, 10, 11)!;
-        expect(walk.d).toBe("M 0 0 A 50 50 0 0 0 100 0");
+        // a half turn, in two quarter turns
+        expect(walk.d).toBe("M 0 0 A 50 50 0 0 0 50 50 A 50 50 0 0 0 100 0");
         expect(walk.mid.x).toBeCloseTo(50, 9);
         expect(walk.mid.y).toBeCloseTo(50, 9);
         // asked again: the same object

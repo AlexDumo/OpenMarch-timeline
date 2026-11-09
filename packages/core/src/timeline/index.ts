@@ -115,6 +115,7 @@ export type {
 } from "./validate";
 
 export {
+    createWalkedPaths,
     walkedPath,
     walkedPathOfMove,
     walkedPathPointAt,
@@ -131,6 +132,8 @@ export type {
     WalkedCubic,
     WalkedPolyline,
     WalkedSvgOptions,
+    WalkedPaths,
+    WalkResolver,
 } from "./walkedPath";
 
 /** The uncached reference oracle (spec section 8), for tests and debug checks only. */

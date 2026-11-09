@@ -33,7 +33,7 @@ export interface TimelinePageSnapshot {
      */
     walks?: {
         host: TimelineSnapshot;
-        resolver: Pick<Resolver, "spanInfos" | "explain">;
+        resolver: Pick<Resolver, "spanInfos" | "positionAt" | "ftlEntry">;
     };
 }
 

@@ -1,15 +1,15 @@
 import {
-    walkedPath,
+    createWalkedPaths,
     walkedPathPointAt,
     walkedPathToSvg,
-    type Resolver,
     type TimelineSnapshot,
     type WalkedPath,
+    type WalkResolver,
 } from "@openmarch/core";
 import { pageEndBeat } from "@/timeline/pageEndBeat";
 
 /**
- * The walked paths a drill chart draws between pages (pathways step 18, spec R-15 item 10): the
+ * The walked paths a drill chart draws between pages (pathways step 18, spec R-20 item 10): the
  * path a marcher actually walks from one page's end beat to another's, from the core's drawable
  * walked path. A walk that is one straight run has no entry, so the chart draws the straight
  * line it always has, and a show with no curves, bends or stops on the way exports the same
@@ -37,7 +37,7 @@ export type ExportWalkedPaths = (
 /** What the walked paths are read from: a resolver and the tables it was built from. */
 export interface ExportWalkSource {
     host: TimelineSnapshot;
-    resolver: Pick<Resolver, "spanInfos" | "explain">;
+    resolver: WalkResolver;
 }
 
 /** How far a walk may stray from the straight line and still be drawn as it, in field pixels. */
@@ -81,6 +81,8 @@ export function exportWalkedPaths(
 ): ExportWalkedPaths {
     const endBeats = new Map(pages.map((page) => [page.id, pageEndBeat(page)]));
     const known = new Set(host.marchers.map((marcher) => marcher.id));
+    // one batch for the whole export: what a move's marchers share is worked out once
+    const walked = createWalkedPaths(host, resolver);
     const cache = new Map<string, ExportWalk | undefined>();
     return (marcherId, fromPageId, toPageId) => {
         const key = `${marcherId}:${fromPageId}:${toPageId}`;
@@ -95,7 +97,7 @@ export function exportWalkedPaths(
             known.has(marcherId)
         ) {
             try {
-                const path = walkedPath(host, resolver, marcherId, from, to);
+                const path = walked.path(marcherId, from, to);
                 if (!isStraightWalk(path)) {
                     const mid = walkedPathPointAt(path, (from + to) / 2)!;
                     walk = {
