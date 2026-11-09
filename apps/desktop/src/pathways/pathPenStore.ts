@@ -81,6 +81,8 @@ export interface PathSession {
     readonly lane?: {
         readonly marcherId: number;
         readonly key: number | null;
+        /** The picked key just went (removed, or undone away): Delete waits for a new pick */
+        readonly keyGone?: boolean;
     } | null;
     /** The lane under the pointer, highlighted and named (decision C) */
     readonly hoverLane?: {
@@ -396,6 +398,34 @@ export function deselectPathObject(): boolean {
  * Shows `target`'s stored path on the field, closed, or refreshes it after a save or a move of the
  * playhead. A path already open for the same move stays open, keeping its selected point.
  */
+/**
+ * The picked lane on the path as read again. A stored key index shifts when a key is added before
+ * it, so the picked key is followed by its anchor; a drag changes only its displacement.
+ */
+function laneAfterRead(
+    session: PathSession,
+    target: PathTarget,
+): PathSession["lane"] {
+    const lane = session.lane;
+    if (!lane || !target.group) return null;
+    const member = target.group.members.find(
+        (m) => m.marcherId === lane.marcherId,
+    );
+    if (!member) return null;
+    if (lane.key === null) return lane;
+    const was = session.target.group?.members.find(
+        (m) => m.marcherId === lane.marcherId,
+    )?.adjust?.keys[lane.key];
+    const key = was
+        ? (member.adjust?.keys.findIndex(
+              (k) => k.a === was.a && k.b === was.b && k.f === was.f,
+          ) ?? -1)
+        : -1;
+    return key >= 0
+        ? { marcherId: lane.marcherId, key }
+        : { marcherId: lane.marcherId, key: null, keyGone: true };
+}
+
 export function showPath(
     target: PathTarget,
     drill: string,
@@ -430,14 +460,7 @@ export function showPath(
             selected: kept,
             dragging: null,
             object,
-            lane:
-                open && session?.lane && target.group
-                    ? target.group.members.some(
-                          (m) => m.marcherId === session.lane!.marcherId,
-                      )
-                        ? session.lane
-                        : null
-                    : null,
+            lane: open && session ? laneAfterRead(session, target) : null,
         },
     });
 }
@@ -543,18 +566,31 @@ export function selectLane(
     lane: { marcherId: number; key: number | null } | null,
 ): void {
     update((s) =>
-        s.lane?.marcherId === lane?.marcherId && s.lane?.key === lane?.key
+        s.lane?.marcherId === lane?.marcherId &&
+        s.lane?.key === lane?.key &&
+        !s.lane?.keyGone
             ? s
             : { ...s, lane, selected: lane ? null : s.selected },
     );
 }
+
+/** How far the pointer runs along a lane (field px) before its note moves to follow it */
+const HOVER_TIP_FOLLOW = 24;
 
 /** The lane under the pointer, or none */
 export function setHoverLane(
     hoverLane: { marcherId: number; at: XY; stacked?: number } | null,
 ): void {
     const was = usePathPenStore.getState().session?.hoverLane ?? null;
-    if (was?.marcherId === hoverLane?.marcherId && !was === !hoverLane) return;
+    if (
+        was?.marcherId === hoverLane?.marcherId &&
+        was?.stacked === hoverLane?.stacked &&
+        (!was ||
+            !hoverLane ||
+            Math.hypot(was.at.x - hoverLane.at.x, was.at.y - hoverLane.at.y) <
+                HOVER_TIP_FOLLOW)
+    )
+        return;
     update((s) => ({ ...s, hoverLane }));
 }
 
@@ -907,14 +943,38 @@ export async function deleteAdjustKey(
         await adjustWrite(adjustFallback, () =>
             removeAdjustKey({ ...args, index }),
         );
-    selectLane(null);
+    // The lane stays picked with its key gone, so the next Delete can't fall through to Remove
+    // path or wipe the lane's other keys
+    update((s) =>
+        s.lane?.marcherId === marcherId
+            ? { ...s, lane: { marcherId, key: null, keyGone: true } }
+            : s,
+    );
 }
 
 /** AP-R11's reset: the spot walks the plain lane again. One undo step. */
 export async function resetSpot(marcherId: number): Promise<void> {
+    const { session } = usePathPenStore.getState();
+    // A plain lane has nothing to reset: no write, so no undo step that changes nothing
+    if (!session || !memberOf(session, marcherId)?.adjust) return;
     const args = laneArgs(marcherId);
     if (args) await adjustWrite(adjustFallback, () => resetLaneAdjust(args));
-    selectLane(null);
+    update((s) =>
+        s.lane?.marcherId === marcherId
+            ? { ...s, lane: { marcherId, key: null } }
+            : s,
+    );
+}
+
+/**
+ * Delete with a lane picked: its picked key goes, or the spot resets. Never the path, and nothing
+ * when the picked key has just gone.
+ */
+export async function deleteOnLane(
+    lane: NonNullable<PathSession["lane"]>,
+): Promise<void> {
+    if (lane.key !== null) await deleteAdjustKey(lane.marcherId, lane.key);
+    else if (!lane.keyGone) await resetSpot(lane.marcherId);
 }
 
 /** Re-fit (decision A), by the session's route. One undo step. */

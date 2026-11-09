@@ -125,22 +125,42 @@ export const pathFieldMenu = (target: PathTarget): readonly string[] =>
         : PATH_FIELD_MENU;
 
 /** An open group path's lanes as they walk now, cached per session state (decision C) */
-const walksOfSession = new WeakMap<
-    PathSession,
-    { marcherId: number; walk: GroupMemberWalk }[]
->();
+let walksMemo: {
+    target: PathSession["target"];
+    points: PathSession["points"];
+    laneEdit: PathSession["laneEdit"];
+    walks: { marcherId: number; walk: GroupMemberWalk }[];
+} | null = null;
 function laneWalks(s: PathSession) {
-    let walks = walksOfSession.get(s);
-    if (!walks) {
-        const shape = shapeOf(s);
-        const schedule = scheduleOf(shape);
-        walks = (s.target.group?.members ?? []).map((m) => ({
-            marcherId: m.marcherId,
-            walk: memberWalkOf(schedule, memberNow(s, m), shape.points),
-        }));
-        walksOfSession.set(s, walks);
-    }
+    // By what they're built from, not the session object: a hover makes a new session each time
+    if (
+        walksMemo?.target === s.target &&
+        walksMemo.points === s.points &&
+        walksMemo.laneEdit === s.laneEdit
+    )
+        return walksMemo.walks;
+    const shape = shapeOf(s);
+    const schedule = scheduleOf(shape);
+    const walks = (s.target.group?.members ?? []).map((m) => ({
+        marcherId: m.marcherId,
+        walk: memberWalkOf(schedule, memberNow(s, m), shape.points),
+    }));
+    walksMemo = {
+        target: s.target,
+        points: s.points,
+        laneEdit: s.laneEdit,
+        walks,
+    };
     return walks;
+}
+
+/**
+ * A lane's Adjust as drawn now, which the handles' key numbers refer to: between a save and the
+ * read that follows, that's still the preview
+ */
+function adjustNow(s: PathSession, marcherId: number) {
+    const member = memberOf(s, marcherId);
+    return member ? (memberNow(s, member).adjust ?? null) : null;
 }
 
 /** A press on a lane or an Adjust key, while it's held (decision C) */
@@ -317,7 +337,7 @@ class PathPenMode implements FieldMode {
                             x: h.x,
                             at: h.at,
                             plain: lanePlain(walk, h.x),
-                            base: memberOf(s, marcherId)?.adjust ?? null,
+                            base: adjustNow(s, marcherId),
                             refused: false,
                             d: null,
                             stacked: 1,
@@ -350,7 +370,7 @@ class PathPenMode implements FieldMode {
             x: on.hit.x,
             at: on.hit.at,
             plain: on.hit.x === null ? null : lanePlain(on.walk, on.hit.x),
-            base: memberOf(s, on.marcherId)?.adjust ?? null,
+            base: adjustNow(s, on.marcherId),
             refused: false,
             d: null,
             stacked: stacked.length,
@@ -482,6 +502,7 @@ class PathPenMode implements FieldMode {
             env,
         );
         const d: [number, number] = [to.x - hold.plain.x, to.y - hold.plain.y];
+        if (hold.index !== null && !hold.base) return;
         hold.d = d;
         if (hold.index !== null) {
             const keys = pruneZeroKeys(
@@ -708,7 +729,15 @@ class PathPenMode implements FieldMode {
             return asCursor(handle.cursor);
         }
         const lane = hover?.onDot() ? null : this.laneAt(s, pointer);
-        setHoverLane(lane ? { marcherId: lane.marcherId, at: lane.at } : null);
+        setHoverLane(
+            lane
+                ? {
+                      marcherId: lane.marcherId,
+                      at: lane.at,
+                      stacked: lane.stacked,
+                  }
+                : null,
+        );
         return lane ? (lane.index !== null ? "move" : "grab") : null;
     }
 

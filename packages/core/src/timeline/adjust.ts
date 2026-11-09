@@ -164,7 +164,7 @@ export function placeAdjustKey({
     let nearest = -1;
     places.forEach((p, i) => {
         if (
-            Math.abs(p - place) < S_MIN &&
+            Math.abs(p - place) < S_MIN_WRITE &&
             (nearest < 0 ||
                 Math.abs(p - place) < Math.abs(places[nearest]! - place))
         )

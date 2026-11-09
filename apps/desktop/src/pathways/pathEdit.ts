@@ -14,6 +14,7 @@ import {
     type AdjustProfile,
     type GroupLeg,
     type GroupMemberWalk,
+    type LaneSample,
     type GroupSchedule,
     type RouteGeometry,
     type RoutePath,
@@ -872,7 +873,7 @@ export function laneHitOf(
             distance,
         };
     };
-    const samples = laneSamples(walk);
+    const samples = samplesOf(walk);
     for (let i = 1; i < samples.length; i++)
         consider(
             xy(samples[i - 1]!.at),
@@ -887,6 +888,18 @@ export function laneHitOf(
             consider(line[i - 1]!, line[i]!, null, null);
     }
     return best;
+}
+
+const laneSampleCache = new WeakMap<GroupMemberWalk, LaneSample[]>();
+
+/** A lane's samples, once per walk: a hover tests every lane on each pointer move */
+function samplesOf(walk: GroupMemberWalk): LaneSample[] {
+    let samples = laneSampleCache.get(walk);
+    if (!samples) {
+        samples = laneSamples(walk);
+        laneSampleCache.set(walk, samples);
+    }
+    return samples;
 }
 
 /** The route `shape` would store, for the rules that read point ids */

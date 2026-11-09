@@ -35,9 +35,10 @@ import {
 import {
     acknowledgeOpenPath,
     deleteAdjustKey,
+    deleteOnLane,
+    resetSpot,
     memberOf,
     refitOpenPath,
-    resetSpot,
     selectLane,
     setGroupCommands,
     setPathObjects,
@@ -595,9 +596,7 @@ export function PathPenKeys(): null {
         () => {
             if (drawing) removeLastPoint();
             // A picked lane takes the key: its Adjust key goes, or the spot resets, never the path
-            else if (pickedLane?.key != null)
-                void deleteAdjustKey(pickedLane.marcherId, pickedLane.key);
-            else if (pickedLane) void resetSpot(pickedLane.marcherId);
+            else if (pickedLane) void deleteOnLane(pickedLane);
             else if (picked !== null) {
                 const index = Number(picked.slice(1));
                 if (Number.isInteger(index))
@@ -611,9 +610,13 @@ export function PathPenKeys(): null {
         {
             label: drawing
                 ? tolgee.t("actions.path.removeLastPoint", "Remove last point")
-                : picked !== null
-                  ? tolgee.t("actions.path.deletePoint", "Delete point")
-                  : tolgee.t("actions.path.remove", "Remove path"),
+                : pickedLane?.key != null
+                  ? tolgee.t("actions.path.removeKey", "Remove key")
+                  : pickedLane
+                    ? tolgee.t("actions.path.resetSpot", "Reset spot")
+                    : picked !== null
+                      ? tolgee.t("actions.path.deletePoint", "Delete point")
+                      : tolgee.t("actions.path.remove", "Remove path"),
         },
         drawing || phase === "open" || objectSelected,
     );

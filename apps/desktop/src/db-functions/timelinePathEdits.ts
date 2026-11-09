@@ -266,7 +266,8 @@ export async function refitPathInTransaction({
             B: [end[0], end[1]],
         });
     }
-    if (members.length === 0) refuse(routeRefusal.refitNoFounder());
+    if (!members.some((m) => founds(resolver, m.w)))
+        refuse(routeRefusal.refitNoFounder());
     const from = meanOf(members.map((m) => m.A));
     const to = meanOf(members.map((m) => m.B));
     if (!routeEndsChanged(current, { from, to }))

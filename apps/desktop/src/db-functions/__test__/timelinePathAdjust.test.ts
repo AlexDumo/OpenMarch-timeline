@@ -321,14 +321,28 @@ describeDbTests("Adjust and Re-fit", (it) => {
 
     it("every route geometry writer goes through the one helper", () => {
         const dir = path.resolve(__dirname, "..");
+        const writes = (source: string) => {
+            const aliases = [
+                ...source.matchAll(
+                    /(?:const|let)\s+(\w+)\s*=\s*schema\.timeline_routes\b/g,
+                ),
+            ].map((m) => m[1]!);
+            return (
+                /update\(\s*schema\.timeline_routes\s*\)/.test(source) ||
+                /UPDATE\s+"?timeline_routes\b/i.test(source) ||
+                aliases.some((a) =>
+                    new RegExp(`update\\(\\s*${a}\\s*\\)`).test(source),
+                )
+            );
+        };
+        expect(writes("const R = schema.timeline_routes; tx.update(R)")).toBe(
+            true,
+        );
         const writers = fs
             .readdirSync(dir)
             .filter((f) => f.endsWith(".ts"))
-            .filter((f) =>
-                /update\(\s*schema\.timeline_routes\s*\)/.test(
-                    fs.readFileSync(path.join(dir, f), "utf8"),
-                ),
-            );
+            .filter((f) => f !== "timelineRouteGeometry.ts")
+            .filter((f) => writes(fs.readFileSync(path.join(dir, f), "utf8")));
         expect(writers).toEqual([]);
         expect(
             fs.readFileSync(path.join(dir, "timelineRouteGeometry.ts"), "utf8"),

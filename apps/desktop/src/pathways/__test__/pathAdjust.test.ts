@@ -155,6 +155,8 @@ describe("what a press on an open group path takes (decision C)", () => {
 
     it("a drag writes nothing on the session until release and previews the bulge", () => {
         open();
+        const plainLane = drawingOf(usePathPenStore.getState().session)
+            ?.lanes?.[1];
         const held = pointer(20 * STEP, laneY);
         pathPenMode.press(held, { isMac: false, onDot: () => false } as never);
         pathPenMode.move(pointer(20 * STEP, laneY + 5 * STEP));
@@ -163,9 +165,7 @@ describe("what a press on an open group path takes (decision C)", () => {
         expect(edit?.adjust?.keys.length).toBe(3);
         expect(
             drawingOf(usePathPenStore.getState().session)?.lanes?.[1],
-        ).not.toEqual(
-            drawingOf(usePathPenStore.getState().session)?.lanes?.[0],
-        );
+        ).not.toEqual(plainLane);
         pathPenMode.cancel();
         expect(usePathPenStore.getState().session?.laneEdit).toBeNull();
     });
