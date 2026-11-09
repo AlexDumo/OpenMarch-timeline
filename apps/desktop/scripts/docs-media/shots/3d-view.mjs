@@ -280,15 +280,15 @@ const shots = [
             const view = this.view;
             await overlayIn(view, box);
             const c = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-            await view.mouse.move(c.x - 160, c.y + 40);
+            await view.mouse.move(c.x - 160, c.y + 130);
             await film.hold(0.4);
             // Orbit: Shift+drag sideways
             await view.keyboard.down("Shift");
             await film.hold(0.3);
             await film.drag(
                 view,
-                { x: c.x - 160, y: c.y + 40 },
-                { x: c.x + 120, y: c.y + 20 },
+                { x: c.x - 160, y: c.y + 130 },
+                { x: c.x + 120, y: c.y + 110 },
                 1.4,
             );
             await view.keyboard.up("Shift");
@@ -296,8 +296,8 @@ const shots = [
             // Pan: drag
             await film.drag(
                 view,
-                { x: c.x + 120, y: c.y + 20 },
-                { x: c.x - 40, y: c.y - 20 },
+                { x: c.x + 120, y: c.y + 110 },
+                { x: c.x - 40, y: c.y + 90 },
                 1.0,
             );
             await film.hold(0.6);

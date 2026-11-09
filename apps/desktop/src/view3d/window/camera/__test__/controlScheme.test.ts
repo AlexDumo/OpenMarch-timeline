@@ -15,6 +15,7 @@ const press = (over = {}) => ({
     shiftKey: false,
     ctrlKey: false,
     altKey: false,
+    metaKey: false,
     ...over,
 });
 const wheel = (over = {}) => ({
@@ -57,6 +58,7 @@ describe("dragging in map", () => {
     it.each([
         ["Ctrl", { ctrlKey: true }],
         ["Alt or Option", { altKey: true }],
+        ["Cmd", { metaKey: true }],
         ["Shift", { shiftKey: true }],
         ["the right button", { buttons: 2 }],
     ])("orbits with %s", (_name, over) => {

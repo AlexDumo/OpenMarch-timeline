@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { T } from "@tolgee/react";
 import SettingRow from "@/settings/SettingRow";
 import SettingsPanel from "@/settings/SettingsPanel";
@@ -14,6 +14,7 @@ import {
     saveResolution,
 } from "@/view3d/window/renderPrefs";
 import {
+    CONTROL_SCHEME_STORAGE_KEY,
     CONTROL_SCHEMES,
     loadControlScheme,
     saveControlScheme,
@@ -30,6 +31,16 @@ export default function View3dSettings() {
     const [quality, setQuality] = useState(() => loadQualityMode());
     const [resolution, setResolution] = useState(() => loadResolution());
     const [controls, setControls] = useState(() => loadControlScheme());
+
+    // The 3D window's own panel can change the controls while this is open.
+    useEffect(() => {
+        const onStorage = (event: StorageEvent) => {
+            if (event.key === null || event.key === CONTROL_SCHEME_STORAGE_KEY)
+                setControls(loadControlScheme());
+        };
+        window.addEventListener("storage", onStorage);
+        return () => window.removeEventListener("storage", onStorage);
+    }, []);
 
     return (
         <SettingsPanel>

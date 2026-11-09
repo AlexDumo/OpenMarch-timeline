@@ -54,10 +54,11 @@ export interface DragLike {
     shiftKey: boolean;
     ctrlKey: boolean;
     altKey: boolean;
+    metaKey: boolean;
 }
 
 /**
- * What a one-pointer drag does. Ctrl and Alt (Option) always orbit. Touch and
+ * What a one-pointer drag does. Ctrl, Alt (Option) and Cmd always orbit. Touch and
  * pen always orbit too, because they have no modifier or second button to
  * reach it with; two fingers pan and pinch whatever the scheme.
  */
@@ -66,7 +67,7 @@ export function dragAction(
     press: DragLike,
 ): "orbit" | "pan" {
     if (press.pointerType !== "mouse") return "orbit";
-    if (press.ctrlKey || press.altKey) return "orbit";
+    if (press.ctrlKey || press.altKey || press.metaKey) return "orbit";
     const secondary = press.shiftKey || (press.buttons & 2) !== 0;
     if (scheme === "map") return secondary ? "orbit" : "pan";
     return secondary ? "pan" : "orbit";
