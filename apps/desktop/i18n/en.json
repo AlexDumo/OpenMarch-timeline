@@ -175,6 +175,7 @@
             "removeLastPoint": "Remove last point",
             "deletePoint": "Delete point",
             "deselectPoint": "Deselect point",
+            "deselect": "Deselect path",
             "pointCorner": "Corner point",
             "pointSmooth": "Smooth point",
             "ownPath": "Own path",

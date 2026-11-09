@@ -189,6 +189,12 @@ export default function FieldOverlay({
         () => (under && hideMarchers ? shapeAlone(under) : under),
         [under, hideMarchers],
     );
+    // Group paths Paths All draws as objects at the playhead (pathways step 3a)
+    const objects = useFieldUnderlayStore((s) => s.objects);
+    const pathObjects = useMemo(
+        () => (hideMarchers ? objects.map((d) => shapeAlone(d)) : objects),
+        [objects, hideMarchers],
+    );
 
     return (
         <>
@@ -208,6 +214,15 @@ export default function FieldOverlay({
                     />
                 )}
                 {area?.kind === "lasso" && <Lasso lasso={area} theme={theme} />}
+                {pathObjects.map((drawing, i) => (
+                    <ModeDrawing
+                        key={i}
+                        drawing={drawing}
+                        theme={theme}
+                        marchers={marchers}
+                        testId="fieldPathObject"
+                    />
+                ))}
                 {pathUnder && pathUnder !== modeDrawing && (
                     <ModeDrawing
                         drawing={pathUnder}
@@ -408,7 +423,10 @@ function Lasso({
 const LANE_ALPHA = 0.18;
 const LANE_WIDTH = 1;
 /** A drawn path's line (pathways), solid and heavier than a shape's outline: drawn or open, shown */
-const PATH_LINE_WIDTH = { edited: 2.5, shown: 1.75 } as const;
+const PATH_LINE_WIDTH = { edited: 2.5, shown: 1.75, selected: 2.5 } as const;
+/** A selected path's halo under its line (pathways step 3a), as a selected object's outline reads */
+const PATH_HALO_WIDTH = 7;
+const PATH_HALO_ALPHA = 0.3;
 /**
  * Rings round a group's members (blue) and selected marchers off it (orange), pathways step 15, in
  * each marcher's shape (`ringShapeOf`)
@@ -639,6 +657,21 @@ const ShapeBody = memo(function ShapeBody({
                     data-testid="pathGroupLane"
                 />
             ))}
+            {drawing.outline && drawing.pathLine === "selected" && (
+                <polyline
+                    points={drawing.outline
+                        .map((p) => `${p.x},${p.y}`)
+                        .join(" ")}
+                    fill="none"
+                    stroke={SELECTION_COLOR}
+                    strokeOpacity={PATH_HALO_ALPHA}
+                    strokeWidth={PATH_HALO_WIDTH}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                    data-testid="pathSelectedHalo"
+                />
+            )}
             {drawing.outline &&
                 (drawing.openOutline ? (
                     // A line has no inside to fill (#524)
@@ -647,7 +680,11 @@ const ShapeBody = memo(function ShapeBody({
                             .map((p) => `${p.x},${p.y}`)
                             .join(" ")}
                         fill="none"
-                        stroke={shape}
+                        stroke={
+                            drawing.pathLine === "selected"
+                                ? SELECTION_COLOR
+                                : shape
+                        }
                         strokeWidth={
                             drawing.pathLine
                                 ? PATH_LINE_WIDTH[drawing.pathLine]
@@ -662,6 +699,7 @@ const ShapeBody = memo(function ShapeBody({
                         strokeLinecap="round"
                         vectorEffect="non-scaling-stroke"
                         data-testid={drawing.pathLine ? "pathLine" : undefined}
+                        data-path-line={drawing.pathLine}
                     />
                 ) : (
                     <polygon

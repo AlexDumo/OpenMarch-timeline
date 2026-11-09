@@ -2,9 +2,9 @@ import { create } from "zustand";
 import { db } from "@/global/database/db";
 import { toast } from "sonner";
 import { drawRoute, removeRoute } from "@/db-functions/timelineRoutes";
+import { editPathPoints, redrawPath } from "@/db-functions/timelinePathEdits";
 import {
     drawGroupRoute,
-    editGroupRoutePoints,
     ownPath,
     rejoinGroupPath,
 } from "@/db-functions/timelineGroupRoutes";
@@ -51,6 +51,32 @@ export interface PathSession {
      * saved), or null. While drawing, the point a press-and-drag is making smooth.
      */
     readonly dragging: number | null;
+    /**
+     * The path is selected as an object (step 3a, spec I.10 AP-O3): picked by a click on its line,
+     * not shown because its marchers are selected. Then the marcher selection is empty, the path
+     * is read again by its route (`findRouteTarget`), it is drawn selected whatever the paths level,
+     * Delete removes it (AP-O6), and Escape lets it go (from open, back to selected first).
+     */
+    readonly object: boolean;
+    /**
+     * While drawing: the path drawn again by its route id (AP-O8, J.8 AP-R1, 07 N3), a path edit
+     * that keeps the id and is never refused for who holds its spots. Set when P draws the
+     * selected path or the open path again, however it was opened.
+     */
+    readonly byRoute?: boolean;
+}
+
+/**
+ * A path Paths **All** draws in a move at the playhead (step 3a, AP-O2, AP-O7), which a click
+ * selects with nothing selected. `walk` gives an own path's drawn line, its marcher's walk inside
+ * the start flag window (the start flag positions' path, which is what's drawn for it), sampled
+ * only when a click or the pointer tests it; null for a group path, drawn as its reference line
+ * and faint lanes.
+ */
+export interface PathObject {
+    readonly target: PathTarget;
+    readonly drill: string;
+    readonly walk: (() => readonly XY[]) | null;
 }
 
 interface PathPenState {
@@ -77,6 +103,8 @@ interface PathPenState {
     ownable: readonly number[];
     /** Whom Rejoin puts on which group path, or null when it isn't offered (step 15) */
     rejoin: RejoinTarget | null;
+    /** The paths Paths All draws as objects at the playhead, or none (step 3a, AP-O2) */
+    objects: readonly PathObject[];
 }
 
 /** Rejoin's target (AP-R10): the group path in a move, and the selected marchers off it */
@@ -100,12 +128,42 @@ export function setGroupCommands(
     usePathPenStore.setState({ ownable, rejoin });
 }
 
-/** Whether the session's path is drawn on the field now */
+/** Whether the session's path is drawn on the field now: a selected path always is (AP-O4) */
 export const pathShown = (
     session: PathSession | null,
     hidden: boolean,
 ): session is PathSession =>
-    session !== null && (session.phase !== "closed" || !hidden);
+    session !== null &&
+    (session.phase !== "closed" || session.object || !hidden);
+
+/**
+ * Sets the paths Paths All draws as objects. The same objects (by identity: a route's object is
+ * kept while its target is) keep the list as it was, so a playhead step that changes no path sets
+ * nothing and nothing is drawn again.
+ */
+export function setPathObjects(objects: readonly PathObject[]): void {
+    const now = usePathPenStore.getState().objects;
+    if (now.length === objects.length && now.every((o, i) => o === objects[i]))
+        return;
+    usePathPenStore.setState({ objects });
+}
+
+/**
+ * The group path objects drawn now (AP-O7): every one but the session's own path, and none while
+ * the pen draws or an open shape has the field
+ */
+export const objectsDrawn = (
+    objects: readonly PathObject[],
+    session: PathSession | null,
+    shapeOpen: boolean,
+): readonly PathObject[] =>
+    shapeOpen || session?.phase === "drawing"
+        ? []
+        : objects.filter(
+              (o) =>
+                  o.target.routeId === null ||
+                  o.target.routeId !== session?.target.routeId,
+          );
 
 /**
  * The marchers whose path the pen draws now (the one marcher, or every member of the group path),
@@ -122,12 +180,21 @@ export const pathMarcherIds = (
      * still is, as the field's underlay (`useShapeFieldModes`)
      */
     closedUnder: boolean,
-): readonly number[] =>
-    !pathShown(session, hidden) || (session.phase === "closed" && closedUnder)
-        ? []
-        : session.target.group
-          ? session.target.group.members.map((m) => m.marcherId)
-          : [session.target.marcherId];
+    /** Paths All's group path objects (step 3a): their members give way to the line and lanes */
+    objects: readonly PathObject[] = [],
+): readonly number[] => {
+    const own =
+        !pathShown(session, hidden) ||
+        (session.phase === "closed" && closedUnder)
+            ? []
+            : session.target.group
+              ? session.target.group.members.map((m) => m.marcherId)
+              : [session.target.marcherId];
+    const drawn = objectsDrawn(objects, session, closedUnder).flatMap((o) =>
+        o.target.group ? o.target.group.members.map((m) => m.marcherId) : [],
+    );
+    return drawn.length === 0 ? own : [...new Set([...own, ...drawn])];
+};
 
 /** Hides or shows the closed path, as start flag positions' paths level in effect says */
 export function setPathHidden(hidden: boolean): void {
@@ -137,6 +204,7 @@ export function setPathHidden(hidden: boolean): void {
 
 export const usePathPenStore = create<PathPenState>(() => ({
     hidden: false,
+    objects: [],
     openNext: null,
     ownable: [],
     rejoin: null,
@@ -159,7 +227,11 @@ export const pathKey = (
         ? `${t.timelineId}:g${t.routeId ?? "new"}`
         : `${t.timelineId}:${t.transitionId}:${t.marcherId}`;
 
-const pointsOf = (target: PathTarget): PathPoint[] =>
+/** The same path object: the same route (AP-O1), whoever walks it now */
+const sameRoute = (a: PathTarget, b: PathTarget) =>
+    a.routeId !== null && a.routeId === b.routeId;
+
+export const pointsOf = (target: PathTarget): PathPoint[] =>
     target.points.map((p) => ({
         id: p.id,
         at: { x: p.at[0], y: p.at[1] },
@@ -211,8 +283,17 @@ const update = (fn: (s: PathSession) => PathSession) => {
     if (session) usePathPenStore.setState({ session: fn(session) });
 };
 
-/** Starts drawing a new path for `target` (the old one stays until Enter replaces it). */
-export function startDrawing(target: PathTarget, drill: string): void {
+/**
+ * Starts drawing a new path for `target` (the old one stays until Enter replaces it). `object`:
+ * drawing the selected path again, which stays the selection. `byRoute`: drawing the selected or
+ * the open path again, a path edit by its route (AP-O8); always so for the selected path.
+ */
+export function startDrawing(
+    target: PathTarget,
+    drill: string,
+    object = false,
+    byRoute = object,
+): void {
     usePathPenStore.setState({
         session: {
             phase: "drawing",
@@ -222,25 +303,88 @@ export function startDrawing(target: PathTarget, drill: string): void {
             pointer: null,
             selected: null,
             dragging: null,
+            object,
+            byRoute,
         },
     });
+}
+
+/**
+ * Selects the path `target` as an object (a click, a tap or a right-click on its line, AP-O3):
+ * drawn selected, closed. The marcher selection is let go of by `usePathPenActions`. Already
+ * selected or open, it stays as it is.
+ */
+export function selectPathObject(target: PathTarget, drill: string): void {
+    const { session } = usePathPenStore.getState();
+    if (
+        session?.object &&
+        session.phase !== "drawing" &&
+        sameRoute(session.target, target)
+    )
+        return;
+    usePathPenStore.setState({
+        session: {
+            phase: "closed",
+            target,
+            drill,
+            points: pointsOf(target),
+            pointer: null,
+            selected: null,
+            dragging: null,
+            object: true,
+        },
+    });
+}
+
+/**
+ * Escape on a selected path (AP-O4): an open one goes back to selected, as leaving a vector's
+ * edit mode does; a selected one is let go of. False when no path object is selected.
+ */
+export function escapePathObject(): boolean {
+    const { session } = usePathPenStore.getState();
+    if (!session?.object || session.phase === "drawing") return false;
+    if (session.phase === "open")
+        usePathPenStore.setState({
+            session: {
+                ...session,
+                phase: "closed",
+                selected: null,
+                dragging: null,
+            },
+        });
+    else clearPath();
+    return true;
+}
+
+/** Lets go of a selected path object (a click on empty field, AP-O4); false when there's none. */
+export function deselectPathObject(): boolean {
+    if (!usePathPenStore.getState().session?.object) return false;
+    clearPath();
+    return true;
 }
 
 /**
  * Shows `target`'s stored path on the field, closed, or refreshes it after a save or a move of the
  * playhead. A path already open for the same move stays open, keeping its selected point.
  */
-export function showPath(target: PathTarget, drill: string): void {
+export function showPath(
+    target: PathTarget,
+    drill: string,
+    object = false,
+): void {
     const { session } = usePathPenStore.getState();
     const points = pointsOf(target);
     const { openNext } = usePathPenStore.getState();
     const next =
         openNext !== null && !target.group && target.marcherId === openNext;
     if (next) usePathPenStore.setState({ openNext: null });
-    const open =
-        next ||
-        (session?.phase === "open" &&
-            pathKey(session.target) === pathKey(target));
+    // A path object is the same path while it's the same route (AP-O1)
+    const same =
+        session !== null &&
+        (object
+            ? session.object && sameRoute(session.target, target)
+            : !session.object && pathKey(session.target) === pathKey(target));
+    const open = next || (session?.phase === "open" && same);
     const kept =
         open && session && session.selected !== null
             ? Number(session.selected.slice(1)) < points.length
@@ -256,6 +400,7 @@ export function showPath(target: PathTarget, drill: string): void {
             pointer: null,
             selected: kept,
             dragging: null,
+            object,
         },
     });
 }
@@ -374,9 +519,17 @@ async function save(points: readonly PathPoint[]): Promise<boolean> {
     }));
     const { target } = session;
     try {
-        if (target.group && session.phase === "open" && target.routeId !== null)
-            // Point edits on the open group path move every lane (AP-R1, step 15)
-            await editGroupRoutePoints({
+        if (session.phase === "open" && target.routeId !== null)
+            // Point edits on the open path are path edits, by its route (AP-O8, 07 N3); on a group
+            // path they move every lane (AP-R1)
+            await editPathPoints({
+                db,
+                routeId: target.routeId,
+                points: stored,
+            });
+        else if (session.byRoute && target.routeId !== null)
+            // The selected or open path drawn again: a path edit too, keeping its id (AP-O8)
+            await redrawPath({
                 db,
                 routeId: target.routeId,
                 points: stored,
