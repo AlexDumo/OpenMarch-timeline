@@ -19,6 +19,7 @@ import { useMarcherNameOf } from "@/timeline/useKeepLaterPages";
 import { TolgeeProvider } from "@tolgee/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { screen } from "@testing-library/react";
+import { allMarchersQueryOptions } from "@/hooks/queries";
 import FieldContextMenu from "@/field/three/FieldContextMenu";
 import { useHeldMarksStore } from "@/timeline/useHeldMarks";
 import { isActionChecked, isActionEnabled, runAction } from "../../registry";
@@ -233,13 +234,16 @@ function FieldMenuHarness() {
     );
 }
 
-function openFieldMenu(ids: number[]) {
+function openFieldMenu(ids: number[], performers?: { id: number }[]) {
     mocks.selectedMarchers = ids.map((id) => ({
         id,
         drill_number: `T${id}`,
     }));
+    const client = new QueryClient();
+    if (performers)
+        client.setQueryData(allMarchersQueryOptions().queryKey, performers);
     render(
-        <QueryClientProvider client={new QueryClient()}>
+        <QueryClientProvider client={client}>
             <TolgeeProvider tolgee={tolgee} fallback="Loading...">
                 <FieldMenuHarness />
             </TolgeeProvider>
@@ -253,6 +257,28 @@ const heldOnPage3 = (marcherId: number) => ({
     marcherId,
     start: 9,
     end: 17,
+});
+
+describe("the batch-edit actions wait for what they'd write to", () => {
+    it("for everyone, only once the performers have loaded, so props aren't taken in", () => {
+        openFieldMenu([]);
+        expect(isActionEnabled("setAllMarchersToPreviousPage")).toBe(false);
+        expect(isActionEnabled("setAllMarchersToNextPage")).toBe(false);
+        cleanup();
+        openFieldMenu([], [{ id: 1 }, { id: 2 }]);
+        expect(isActionEnabled("setAllMarchersToPreviousPage")).toBe(true);
+        expect(isActionEnabled("setAllMarchersToNextPage")).toBe(true);
+    });
+
+    it("not while playing, when the selected page is behind the playhead", () => {
+        mocks.isPlaying = true;
+        openFieldMenu([1], [{ id: 1 }, { id: 2 }]);
+        expect(isActionEnabled("setAllMarchersToPreviousPage")).toBe(false);
+        expect(isActionEnabled("setSelectedMarchersToPreviousPage")).toBe(
+            false,
+        );
+        expect(isActionEnabled("setSelectedMarchersToNextPage")).toBe(false);
+    });
 });
 
 describe("the field menu shows the selection's state on the current page", () => {

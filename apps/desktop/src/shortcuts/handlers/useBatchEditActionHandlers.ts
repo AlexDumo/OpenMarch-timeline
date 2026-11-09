@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useTimingObjects } from "@/hooks";
 import { allMarchersQueryOptions } from "@/hooks/queries";
 import type {
@@ -34,8 +35,12 @@ export function useBatchEditActionHandlers() {
     // "All" means the performers: props and equipment stay put
     const { data: performers } = useQuery(allMarchersQueryOptions());
     const neighborPage = useNeighborPageCommand();
-    const enabled = ready && !!pages && pages.length > 0;
+    // While playing the selected page stays behind the playhead, so these would write to the wrong one
+    const isPlaying = useIsPlaying()?.isPlaying ?? false;
+    const enabled = ready && !!pages && pages.length > 0 && !isPlaying;
     const hasSelection = enabled && selectedMarchers.length > 0;
+    // Until the performers load, "all" would take in props and equipment too
+    const hasPerformers = enabled && performers !== undefined;
     const idsKey = selectedMarchers.map((m) => m.id).join(",");
     const marcherIds = useMemo(
         () => (idsKey === "" ? [] : idsKey.split(",").map(Number)),
@@ -61,7 +66,7 @@ export function useBatchEditActionHandlers() {
 
     useClearPageActionHandlers({
         run: (scope, followBack) => run("previous", scope, followBack),
-        enabled,
+        enabled: hasPerformers,
         hasSelection,
         selectedPage,
         selectedIds: marcherIds,
@@ -69,7 +74,7 @@ export function useBatchEditActionHandlers() {
         clearEntry,
     });
     useActionHandler("setAllMarchersToNextPage", () => run("next", "all"), {
-        enabled,
+        enabled: hasPerformers,
     });
     useActionHandler(
         "setSelectedMarchersToNextPage",

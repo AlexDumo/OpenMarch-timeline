@@ -47,6 +47,8 @@ function open({
     timelineMode = true,
     onClose = vi.fn(),
     pageName = undefined as string | undefined,
+    previousPageId = 1 as number | null,
+    nextPageId = 3 as number | null,
 } = {}) {
     render(
         <TolgeeProvider tolgee={tolgee} fallback="Loading...">
@@ -54,7 +56,11 @@ function open({
                 at={{ x: 120, y: 80 }}
                 onClose={onClose}
                 selectedCount={selectedCount}
-                pageName={pageName}
+                page={
+                    pageName === undefined
+                        ? undefined
+                        : { name: pageName, previousPageId, nextPageId }
+                }
                 timelineMode={timelineMode}
             />
         </TolgeeProvider>,
@@ -279,6 +285,25 @@ describe("FieldContextMenu", () => {
         );
         fireEvent.click(item("setAllMarchersToPreviousPage")!);
         expect(clear).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves Clear off the first page and Copy off the last, as the page box menu does", () => {
+        for (const id of FIELD_MENU_ACTIONS) handle(id);
+        open({ selectedCount: 2, pageName: "1", previousPageId: null });
+        expect(item("setSelectedMarchersToPreviousPage")).toBeNull();
+        expect(
+            item("setSelectedMarchersToPreviousPageAndFollowing"),
+        ).toBeNull();
+        expect(item("timelineDefineAsShown")).not.toBeNull();
+        expect(item("setSelectedMarchersToNextPage")).not.toBeNull();
+        cleanup();
+        open({ selectedCount: 0, pageName: "1", previousPageId: null });
+        expect(item("setAllMarchersToPreviousPage")).toBeNull();
+        expect(screen.queryByTestId("field-menu-page-heading")).toBeNull();
+        cleanup();
+        open({ selectedCount: 2, pageName: "9", nextPageId: null });
+        expect(item("setSelectedMarchersToNextPage")).toBeNull();
+        expect(item("setSelectedMarchersToPreviousPage")).not.toBeNull();
     });
 
     it("says why a page command is unavailable, as the page box menu does", () => {

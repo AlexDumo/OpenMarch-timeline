@@ -208,6 +208,19 @@ export const toTimelineSelection = (
  * a page box or clip isolates its stored timeline (docs/timeline/research/ownership/09-isolation.md).
  * A clip is a move: its menu, its ⋯ button and Delete edit, rename and delete it (UI-14).
  */
+/** Keeps `target` on the current page, so the panel doesn't re-render each time the page changes */
+function CurrentPageIdRef({
+    target,
+}: {
+    target: { current: number | undefined };
+}) {
+    const id = useSelectedPage()?.selectedPage?.id;
+    useEffect(() => {
+        target.current = id;
+    }, [id, target]);
+    return null;
+}
+
 export default function TimelineModePanel() {
     const { beats, pages, measures, countGrid } = useTimingObjects()!;
     // UI-19: Basic is this timeline with its page boxes holding the music, and none of the
@@ -316,7 +329,7 @@ export default function TimelineModePanel() {
         [pages, selectedIdList, performers, entriesOn],
     );
     // The page box menu's group of page commands: the same one the field's menu shows
-    const currentPageId = useSelectedPage()?.selectedPage?.id;
+    const currentPageId = useRef<number | undefined>(undefined);
     const neighborPage = useNeighborPageCommand();
     const pageGroup = useMemo<TimelinePageGroupMenu>(() => {
         const pageOf = (pageId: string | number) =>
@@ -329,7 +342,10 @@ export default function TimelineModePanel() {
                     ? pageMarcherHeading(selectedIdList.length, page.name)
                     : undefined;
             },
-            isCurrent: (pageId) => String(pageId) === String(currentPageId),
+            isCurrent: (pageId) =>
+                String(pageId) === String(currentPageId.current),
+            hasNextPage: (pageId) =>
+                (pageOf(pageId)?.nextPageId ?? null) !== null,
             ...(selectedIdList.length > 0
                 ? {
                       copyFromNext: (pageId: string | number) => {
@@ -345,7 +361,7 @@ export default function TimelineModePanel() {
                   }
                 : {}),
         };
-    }, [pages, selectedIdList, currentPageId, neighborPage]);
+    }, [pages, selectedIdList, neighborPage]);
     const { tracks: timelines, current: tracksCurrent } =
         useTimelineTracksState({
             database: db,
@@ -590,6 +606,7 @@ export default function TimelineModePanel() {
                 };
             }}
         >
+            <CurrentPageIdRef target={currentPageId} />
             <TimelineWaveformProvider waveform={waveform ?? NO_WAVEFORM}>
                 <PlayingTimeline
                     mode={basic ? "basic" : compact ? "collapsed" : "expanded"}

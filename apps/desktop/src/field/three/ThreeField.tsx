@@ -715,7 +715,7 @@ function ThreeFieldView() {
                     at={menu.at}
                     onClose={menu.close}
                     selectedCount={selectedIds.length}
-                    pageName={selectedPage?.name}
+                    page={selectedPage ?? undefined}
                     timelineMode={timelineMode}
                 />
             </div>

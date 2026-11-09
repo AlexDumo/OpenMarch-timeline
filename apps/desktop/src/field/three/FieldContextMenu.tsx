@@ -50,7 +50,8 @@ import {
  * - The commands for the selection on the current page, under a heading that says so
  *   ("4 selected on Page 5"): the same group as the page box menu (`PageMarcherMenuGroup`).
  *   Define as shown and Hold from previous page need timeline mode. With nothing selected the
- *   group is Clear for every performer, in red and worded "Clear everyone from Page N".
+ *   group is Clear for every performer, red when highlighted and worded "Clear everyone from
+ *   Page N".
  * - Arranging the selection: align and distribute, and Swap (two marchers).
  * - **Select all**, which right-clicking empty field reaches for.
  */
@@ -88,15 +89,19 @@ export default function FieldContextMenu({
     at,
     onClose,
     selectedCount,
-    pageName,
+    page,
     timelineMode,
 }: {
     /** Where it opens, in CSS pixels in the field's element; null while closed. */
     at: { x: number; y: number } | null;
     onClose: () => void;
     selectedCount: number;
-    /** The current page's name, for the page commands' heading */
-    pageName?: string;
+    /** The current page: the page commands' heading, and which of them it has */
+    page?: {
+        readonly name: string;
+        readonly previousPageId: number | null;
+        readonly nextPageId: number | null;
+    };
     /** Whether the show's timeline is loaded (the holds need it). */
     timelineMode: boolean;
 }) {
@@ -131,6 +136,13 @@ export default function FieldContextMenu({
             if (
                 !timelineMode &&
                 (command === "defineAsShown" || command === "holdFromPrevious")
+            )
+                return [];
+            // As on a page box: the first page has nothing to clear back to, the last nothing to copy
+            if (
+                (page?.previousPageId === null &&
+                    (command === "clear" || command === "clearFollowBack")) ||
+                (page?.nextPageId === null && command === "copyFromNext")
             )
                 return [];
             // Only where later pages would move back, and there's something to clear
@@ -183,11 +195,11 @@ export default function FieldContextMenu({
                       content: (
                           <PageMarcherMenuGroup
                               heading={
-                                  pageName === undefined
+                                  page === undefined
                                       ? undefined
                                       : pageMarcherHeading(
                                             selectedCount,
-                                            pageName,
+                                            page.name,
                                         )
                               }
                               headingTestId="field-menu-page-heading"

@@ -582,6 +582,8 @@ export interface TimelinePageGroupMenu {
     readonly selectedCount: number;
     readonly headingFor: (pageId: string | number) => string | undefined;
     readonly isCurrent: (pageId: string | number) => boolean;
+    /** The last page has nothing to copy from, so no such entry */
+    readonly hasNextPage: (pageId: string | number) => boolean;
     /** Runs the command on the page; without it, the group has no such entry */
     readonly copyFromNext?: (pageId: string | number) => void;
 }
@@ -665,7 +667,7 @@ function pageBoxEntries(
             });
     }
     const copyFromNext = group?.copyFromNext;
-    if (copyFromNext)
+    if (copyFromNext && group?.hasNextPage(pageId))
         entries.push({
             command: "copyFromNext",
             testId: "timeline-range-menu-copy-from-next",

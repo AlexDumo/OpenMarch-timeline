@@ -275,7 +275,7 @@ export function pageMarcherHeading(
     return selectedCount > 0
         ? translate(
               "timeline.pageMarchers.selectedOnPage",
-              "{count} selected on Page {page}",
+              "{count, plural, one {# selected on Page {page}} other {# selected on Page {page}}}",
               { count: selectedCount, page },
           )
         : translate(

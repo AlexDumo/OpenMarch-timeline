@@ -2696,7 +2696,7 @@
             "tooFarPastEnd": "that is {count, plural, one {# count} other {# counts}} past the end; one edit stores at most {max}"
         },
         "pageMarchers": {
-            "selectedOnPage": "{count} selected on Page {page}",
+            "selectedOnPage": "{count, plural, one {# selected on Page {page}} other {# selected on Page {page}}}",
             "allOnPage": "All performers on Page {page}"
         }
     },

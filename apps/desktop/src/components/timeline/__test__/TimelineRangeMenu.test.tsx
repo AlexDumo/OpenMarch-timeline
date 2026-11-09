@@ -259,6 +259,7 @@ describe("the page box menu's hold commands", () => {
     it("the page group says who and where, and shows a shortcut only for the current page", () => {
         const states = [state({ follows: [1, 2], selected: 2 })];
         const copyFromNext = vi.fn();
+        let hasNext = true;
         const openOn = (isCurrent: boolean) =>
             render(
                 <Timeline
@@ -281,6 +282,7 @@ describe("the page box menu's hold commands", () => {
                         selectedCount: 2,
                         headingFor: () => "2 selected on Page 2",
                         isCurrent: () => isCurrent,
+                        hasNextPage: () => hasNext,
                         copyFromNext,
                     }}
                 />,
@@ -305,6 +307,12 @@ describe("the page box menu's hold commands", () => {
         expect(openMenuOn(true)).toHaveTextContent(
             /^Hold from previous page.+/,
         );
+        cleanup();
+        hasNext = false;
+        openMenuOn(false);
+        expect(
+            screen.queryByTestId("timeline-range-menu-copy-from-next"),
+        ).toBeNull();
     });
 
     it("all Defined: Define as shown is checked", () => {
