@@ -138,11 +138,12 @@ export default function FieldContextMenu({
                 (command === "defineAsShown" || command === "holdFromPrevious")
             )
                 return [];
-            // As on a page box: the first page has nothing to clear back to, the last nothing to copy
+            // As on a page box: the first page has no page before it to hold from or clear back to,
+            // the last none after it to copy from
             if (
-                (page?.previousPageId === null &&
-                    (command === "clear" || command === "clearFollowBack")) ||
-                (page?.nextPageId === null && command === "copyFromNext")
+                command === "copyFromNext"
+                    ? page?.nextPageId === null
+                    : page?.previousPageId === null
             )
                 return [];
             // Only where later pages would move back, and there's something to clear

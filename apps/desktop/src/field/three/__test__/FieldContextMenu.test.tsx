@@ -287,14 +287,15 @@ describe("FieldContextMenu", () => {
         expect(clear).toHaveBeenCalledTimes(1);
     });
 
-    it("leaves Clear off the first page and Copy off the last, as the page box menu does", () => {
+    it("leaves Define, Hold and Clear off the first page and Copy off the last, as the page box menu does", () => {
         for (const id of FIELD_MENU_ACTIONS) handle(id);
         open({ selectedCount: 2, pageName: "1", previousPageId: null });
         expect(item("setSelectedMarchersToPreviousPage")).toBeNull();
         expect(
             item("setSelectedMarchersToPreviousPageAndFollowing"),
         ).toBeNull();
-        expect(item("timelineDefineAsShown")).not.toBeNull();
+        expect(item("timelineDefineAsShown")).toBeNull();
+        expect(item("timelineHoldFromPrevious")).toBeNull();
         expect(item("setSelectedMarchersToNextPage")).not.toBeNull();
         cleanup();
         open({ selectedCount: 0, pageName: "1", previousPageId: null });

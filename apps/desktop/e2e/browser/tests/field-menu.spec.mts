@@ -181,7 +181,7 @@ test("right-clicking a selected marcher or empty field keeps the selection; Clea
         /^2 selected on Page \S+$/,
     );
     await expect(
-        menu(page).getByRole("menuitem", { name: /move back too/ }),
+        menu(page).getByRole("menuitem", { name: /moves? back too/ }),
     ).toHaveCount(1);
     await clearEntry(page).click();
     await expect
