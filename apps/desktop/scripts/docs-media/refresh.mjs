@@ -91,7 +91,8 @@ const MAX_SHARDS = 14;
  * Blocks sit on a fixed grid, so a small solid change across their edges slips under BLOCK, and
  * a shift of 24 or less passes the pixel rule. Two more checks catch those:
  * - PATCH: more than this share of any patchSize × patchSize square differs, wherever it sits
- *   (a new icon). On repeat recordings the densest square was 0.29.
+ *   (a new icon, a reworded label). On repeat recordings the densest square was 0.29, and the
+ *   confirm pass drops whatever two new recordings disagree on.
  * - TONE: the average color of a toneSize × toneSize square moved by more than this in any
  *   channel (a recolored panel). On repeat recordings the most was 1.6, of 255.
  * Icons under about 12 pixels and tone changes under 6 are still missed: see apps/website/AGENTS.md.
@@ -100,7 +101,7 @@ export const THRESHOLD = {
     block: 0.15,
     spread: 0.002,
     blockSize: 32,
-    patch: 0.8,
+    patch: 0.35,
     patchSize: 12,
     tone: 6,
     toneSize: 64,

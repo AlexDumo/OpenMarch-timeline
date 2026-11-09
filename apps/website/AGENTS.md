@@ -192,8 +192,9 @@ Which runs do what:
   the branch deleted.
 
 The comparison can't see every change. It misses solid changes smaller than about 12 pixels
-square, a short label that changes few pixels on each side of a block edge, and color changes
-averaging under 6 of 255 over 64 × 64 pixels. The monthly full run uses the same comparison, so
+square, short labels reworded in pictures 1280 or 1600 pixels wide (a four-letter word at 12–13
+pixels went unnoticed every time, and a 12-character label about half the time at 1600), and color
+changes averaging under 6 of 255 over 64 × 64 pixels. The monthly full run uses the same comparison, so
 it doesn't catch these either: re-record such a shot by hand when you make that kind of change.
 
 ## Generated reference data

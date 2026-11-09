@@ -93,7 +93,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/state"
           run=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=docs-media-state&per_page=100" \
-            --jq '[.artifacts[] | select(.expired == false and .workflow_run.head_branch == env.REF)]
+            --jq '[.artifacts[] | select(.expired == false and .workflow_run.head_branch == env.REF and .workflow_run.head_repository_id == .workflow_run.repository_id)]
                   | sort_by(.created_at) | last | .workflow_run.id // empty' || true)
           if [ -n "$run" ]; then
             gh run download "$run" -R "$GITHUB_REPOSITORY" -n docs-media-state -D "$RUNNER_TEMP/state" || true
@@ -145,13 +145,18 @@ jobs:
       matrix:
         shard: ${{ fromJSON(needs.plan.outputs.shards) }}
     name: record (${{ matrix.shard.name }})
-    env:
-      # in-docker.sh mounts this folder: every file the recorder or compare reads or writes
-      # outside the repo lives under it (next to the checkout: runner.temp isn't available here)
-      DOCS_MEDIA_WORK: ${{ github.workspace }}/../docs-media-work
-      OUT: ${{ github.workspace }}/../docs-media-work/out
-      SECOND: ${{ github.workspace }}/../docs-media-work/second
     steps:
+      # in-docker.sh mounts this folder: every file the recorder or compare reads or writes
+      # outside the repo lives under it. Not next to the checkout: upload-artifact refuses a
+      # path with ".." in it.
+      - name: Set the work folders
+        run: |
+          {
+            echo "DOCS_MEDIA_WORK=$RUNNER_TEMP/docs-media-work"
+            echo "OUT=$RUNNER_TEMP/docs-media-work/out"
+            echo "SECOND=$RUNNER_TEMP/docs-media-work/second"
+          } >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
 
       - name: Setup pnpm
@@ -228,7 +233,7 @@ jobs:
         if: ${{ !cancelled() }}
         with:
           name: docs-media-${{ matrix.shard.name }}
-          path: ${{ github.workspace }}/../docs-media-work/out/
+          path: ${{ runner.temp }}/docs-media-work/out/
           retention-days: 30
 
   # Runs that can't publish: no write access at all
