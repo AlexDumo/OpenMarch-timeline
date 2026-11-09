@@ -69,7 +69,9 @@ On the field, a marcher with no position of its own on the playhead's page is dr
 <Ui k="timeline.terms.defineAsShown" /> makes Not defined marchers Defined where they stand now, so later changes to earlier pages no longer move them on this page. Held marchers stay Held.
 
 1. Select the marchers.
-2. Right-click the page's box and select <Ui k="timeline.terms.defineAsShown" />, or select the link mark in the page's box.
+2. Right-click the field or the page's box and select <Ui k="timeline.terms.defineAsShown" />, or select the link mark in the page's box.
+
+The commands on this page are in the same group in both right-click menus. The field's menu works on the page at the playhead, and a page box's menu works on that page. The group's heading says who and which page, for example "4 selected on Page 5".
 
 Dragging a Not defined marcher on a page also makes it Defined, at the spot you drag it to.
 
@@ -78,7 +80,7 @@ Dragging a Not defined marcher on a page also makes it Defined, at the spot you 
 <Ui k="timeline.terms.holdFromPrevious" /> keeps marchers on this page exactly where they are on the page before.
 
 1. Go to the page and select the marchers.
-2. Right-click the page's box and select <Ui k="timeline.terms.holdFromPrevious" />, or press <Kbd action="timelineHoldFromPrevious" />.
+2. Right-click the field or the page's box and select <Ui k="timeline.terms.holdFromPrevious" />, or press <Kbd action="timelineHoldFromPrevious" />.
 
 A marcher that had its own move on the page loses it and stays still for the page. A message says who is now Held, and lists anyone who couldn't be, with the reason: for example a marcher with no position of its own on the page before, or one in the middle of a move that crosses the page's start.
 
@@ -92,13 +94,13 @@ A marcher that had its own move on the page loses it and stays still for the pag
 <Ui k="timeline.terms.clearThisPage" /> takes the marchers' positions off the page, so they're Not defined there again and stand where the page before left them.
 
 1. Select the marchers. To clear the page for everyone, select nobody.
-2. Right-click the page's box and select <Ui k="actions.batchEdit.clearPage" values={{ page: 3 }} /> (with the page's number, and "(all marchers)" after it when nobody is selected), or press <Kbd action="setSelectedMarchersToPreviousPage" /> for the selected marchers or <Kbd action="setAllMarchersToPreviousPage" /> for everyone.
+2. Right-click the field or the page's box and select <Ui k="actions.batchEdit.clearPage" values={{ page: 3 }} /> (with the page's number), or <Ui k="actions.batchEdit.clearEveryone" values={{ page: 3 }} /> when nobody is selected. You can also press <Kbd action="setSelectedMarchersToPreviousPage" /> for the selected marchers or <Kbd action="setAllMarchersToPreviousPage" /> for everyone.
 
 The pages after it keep the marchers where they were. Where a later page showed the cleared position, the menu also offers an item such as "Clear Page 3, Page 4 moves back too", which lets those later pages go back with it.
 
 <Media
   id="timeline-page-menu"
-  alt="The right-click menu of Page 4's box with three trumpet marchers selected: Split 3 selected into new move, Define as shown (greyed out, because they're already Defined), Hold from previous page, Clear Page 4, Subset, Delete page, and Delete page and its moves."
+  alt="The right-click menu of Page 4's box with three trumpet marchers selected: Split 3 selected into new move, a group headed 3 selected on Page 4 with Define as shown (checked and greyed out, because they're already Defined), Hold from previous page, Clear Page 4 and Copy positions from next page, then Subset, Delete page, and Delete page and its moves."
 />
 
 ## Remove keyframe

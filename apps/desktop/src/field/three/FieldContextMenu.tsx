@@ -4,20 +4,28 @@ import {
     useEffect,
     useState,
     useSyncExternalStore,
+    type ReactNode,
 } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { CheckIcon } from "@phosphor-icons/react";
 import { useTranslate } from "@tolgee/react";
 import {
     KEEP_MENU_EVENTS,
+    PAGE_MARCHER_ACTIONS,
+    PAGE_MARCHER_COMMANDS,
+    PageMarcherMenuGroup,
     TIMELINE_MENU_CONTENT_CLASS,
+    TimelineMenuClose,
+    type PageMarcherEntry,
 } from "@/components/timeline/TimelineRangeMenu";
+import { pageMarcherHeading } from "@/timeline/timelineClearPage";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
 import type { ActionId } from "@/shortcuts/definitions";
 import { getActionLabel } from "@/shortcuts/labels";
 import Shortcut from "@/components/ui/Shortcut";
 import {
     actionLabelNow,
+    actionMenuLabelNow,
+    actionUnavailableReason,
     isActionChecked,
     isActionEnabled,
     runAction,
@@ -39,21 +47,15 @@ import {
  *
  * - **Group** or **Ungroup**, first, each shown only while it's available: Group with two or
  *   more marchers selected that aren't one placed shape (#603), Ungroup with one selected whole.
- * - The commands that set the selection's state on the current page (holds):
- *   **Hold from previous page** (timeline mode only), then **Clear this page**, with **set to next page** after it. Each says what it would do
- *   for the selection on the current page (`holdEntryStates`, through its handler): checked and
- *   unavailable when every selected marcher is already in the state it sets, and with a count,
- *   "Hold from previous page (3 of 5)", when it would change only some of them.
+ * - The commands for the selection on the current page, under a heading that says so
+ *   ("4 selected on Page 5"): the same group as the page box menu (`PageMarcherMenuGroup`).
+ *   Define as shown and Hold from previous page need timeline mode. With nothing selected the
+ *   group is Clear for every performer, in red and worded "Clear everyone from Page N".
  * - Arranging the selection: align and distribute, and Swap (two marchers).
  * - **Select all**, which right-clicking empty field reaches for.
  */
-const GROUPS: readonly (readonly ActionId[])[] = [
-    ["shapeGroup", "shapeUngroup"],
-    [
-        "timelineHoldFromPrevious",
-        "setSelectedMarchersToPreviousPage",
-        "setSelectedMarchersToNextPage",
-    ],
+const SHAPE_GROUP: readonly ActionId[] = ["shapeGroup", "shapeUngroup"];
+const ACTION_GROUPS: readonly (readonly ActionId[])[] = [
     [
         "alignHorizontally",
         "alignVertically",
@@ -64,23 +66,19 @@ const GROUPS: readonly (readonly ActionId[])[] = [
     ["selectAllMarchers"],
 ];
 
-/** The actions the menu offers, in order. */
-export const FIELD_MENU_ACTIONS: readonly ActionId[] = GROUPS.flat();
+/** The actions the menu offers. */
+export const FIELD_MENU_ACTIONS: readonly ActionId[] = [
+    ...SHAPE_GROUP,
+    ...Object.values(PAGE_MARCHER_ACTIONS.selected),
+    ...Object.values(PAGE_MARCHER_ACTIONS.all),
+    ...ACTION_GROUPS.flat(),
+];
 
-/** Holds, shown only in timeline mode (unavailable where they can't run) */
-const HOLDS: ReadonlySet<ActionId> = new Set(["timelineHoldFromPrevious"]);
-
-/** The group whose entries can show checked: each keeps room for the check, so the words line up */
-const CHECKABLE: ReadonlySet<ActionId> = new Set(GROUPS[1]);
-
-/** The room for a check in front of a checkable entry's words */
-const CHECK_SLOT_CLASS = "flex w-[14px] shrink-0 justify-center";
-
-/** Each action's enabled state and live label, as one string, so a change re-renders. */
+/** Each action's state and live words, as one string, so a change re-renders. */
 const handlerSnapshot = () =>
     FIELD_MENU_ACTIONS.map(
         (id) =>
-            `${isActionEnabled(id) ? 1 : 0}${isActionChecked(id) ? 1 : 0}${actionLabelNow(id) ?? ""}`,
+            `${isActionEnabled(id) ? 1 : 0}${isActionChecked(id) ? 1 : 0}${actionMenuLabelNow(id) ?? ""}|${actionUnavailableReason(id) ?? ""}|${actionLabelNow(id) ?? ""}`,
     ).join("\n");
 
 /** Closed, the menu shows nothing, so it reads no handler (a label may run a check) */
@@ -90,12 +88,15 @@ export default function FieldContextMenu({
     at,
     onClose,
     selectedCount,
+    pageName,
     timelineMode,
 }: {
     /** Where it opens, in CSS pixels in the field's element; null while closed. */
     at: { x: number; y: number } | null;
     onClose: () => void;
     selectedCount: number;
+    /** The current page's name, for the page commands' heading */
+    pageName?: string;
     /** Whether the show's timeline is loaded (the holds need it). */
     timelineMode: boolean;
 }) {
@@ -114,17 +115,93 @@ export default function FieldContextMenu({
     }, [open]);
     if (!at) return null;
 
-    const shown = (id: ActionId) =>
-        id === "shapeGroup" || id === "shapeUngroup"
-            ? isActionEnabled(id)
-            : HOLDS.has(id)
-              ? timelineMode
-              : true;
+    const labelOf = (id: ActionId) =>
+        actionMenuLabelNow(id) ??
+        getActionLabel(id, (key, params) => t(key, params as never));
     const enabled = (id: ActionId) =>
         isActionEnabled(id) && (id !== "swapMarchers" || selectedCount === 2);
-    const groups = GROUPS.map((group) => group.filter(shown)).filter(
-        (group) => group.length > 0,
+
+    const pageActions =
+        PAGE_MARCHER_ACTIONS[selectedCount > 0 ? "selected" : "all"];
+    const pageEntries = PAGE_MARCHER_COMMANDS.flatMap(
+        (command): PageMarcherEntry[] => {
+            const id = pageActions[command];
+            if (!id) return [];
+            const on = isActionEnabled(id);
+            if (
+                !timelineMode &&
+                (command === "defineAsShown" || command === "holdFromPrevious")
+            )
+                return [];
+            // Only where later pages would move back, and there's something to clear
+            if (
+                command === "clearFollowBack" &&
+                (!on || isActionChecked(pageActions.clear!))
+            )
+                return [];
+            const reason = on ? null : actionUnavailableReason(id);
+            return [
+                {
+                    command,
+                    testId: `field-menu-${id}`,
+                    label: labelOf(id),
+                    checked: isActionChecked(id),
+                    reason,
+                    disabled: !on && reason === null,
+                    shortcut: id,
+                    everyone: selectedCount === 0,
+                    onSelect: () => runAction(id),
+                },
+            ];
+        },
     );
+
+    const actionGroup = (group: readonly ActionId[]) =>
+        group.map((id) => (
+            <DropdownMenu.Item
+                key={id}
+                data-testid={`field-menu-${id}`}
+                disabled={!enabled(id)}
+                onSelect={() => runAction(id)}
+                className={MENU_ITEM_CLASS}
+            >
+                {labelOf(id)}
+                <span className="ml-auto pl-16">
+                    <Shortcut action={id} />
+                </span>
+            </DropdownMenu.Item>
+        ));
+    const shapes = SHAPE_GROUP.filter((id) => isActionEnabled(id));
+    const sections: { key: string; content: ReactNode }[] = [
+        ...(shapes.length > 0
+            ? [{ key: "shapes", content: actionGroup(shapes) }]
+            : []),
+        ...(pageEntries.length > 0
+            ? [
+                  {
+                      key: "page",
+                      content: (
+                          <PageMarcherMenuGroup
+                              heading={
+                                  pageName === undefined
+                                      ? undefined
+                                      : pageMarcherHeading(
+                                            selectedCount,
+                                            pageName,
+                                        )
+                              }
+                              headingTestId="field-menu-page-heading"
+                              entries={pageEntries}
+                          />
+                      ),
+                  },
+              ]
+            : []),
+        ...ACTION_GROUPS.map((group) => ({
+            key: group[0]!,
+            content: actionGroup(group),
+        })),
+    ];
 
     return (
         <DropdownMenu.Root
@@ -154,62 +231,18 @@ export default function FieldContextMenu({
                     {...KEEP_MENU_EVENTS}
                     className={TIMELINE_MENU_CONTENT_CLASS}
                 >
-                    {groups.map((group, i) => (
-                        <Fragment key={group[0]}>
-                            {i > 0 && (
-                                <DropdownMenu.Separator
-                                    className={MENU_SEPARATOR_CLASS}
-                                />
-                            )}
-                            {group.map((id) => {
-                                const label =
-                                    actionLabelNow(id) ??
-                                    getActionLabel(id, (key, params) =>
-                                        t(key, params as never),
-                                    );
-                                const shortcut = (
-                                    <span className="ml-auto pl-16">
-                                        <Shortcut action={id} />
-                                    </span>
-                                );
-                                if (isActionChecked(id))
-                                    return (
-                                        <DropdownMenu.CheckboxItem
-                                            key={id}
-                                            data-testid={`field-menu-${id}`}
-                                            checked
-                                            disabled
-                                            className={MENU_ITEM_CLASS}
-                                        >
-                                            <span className={CHECK_SLOT_CLASS}>
-                                                <DropdownMenu.ItemIndicator className="flex">
-                                                    <CheckIcon size={14} />
-                                                </DropdownMenu.ItemIndicator>
-                                            </span>
-                                            {label}
-                                            {shortcut}
-                                        </DropdownMenu.CheckboxItem>
-                                    );
-                                return (
-                                    <DropdownMenu.Item
-                                        key={id}
-                                        data-testid={`field-menu-${id}`}
-                                        disabled={!enabled(id)}
-                                        onSelect={() => runAction(id)}
-                                        className={MENU_ITEM_CLASS}
-                                    >
-                                        {CHECKABLE.has(id) && (
-                                            <span
-                                                className={CHECK_SLOT_CLASS}
-                                            />
-                                        )}
-                                        {label}
-                                        {shortcut}
-                                    </DropdownMenu.Item>
-                                );
-                            })}
-                        </Fragment>
-                    ))}
+                    <TimelineMenuClose.Provider value={onClose}>
+                        {sections.map(({ key, content }, i) => (
+                            <Fragment key={key}>
+                                {i > 0 && (
+                                    <DropdownMenu.Separator
+                                        className={MENU_SEPARATOR_CLASS}
+                                    />
+                                )}
+                                {content}
+                            </Fragment>
+                        ))}
+                    </TimelineMenuClose.Provider>
                 </DropdownMenu.Content>
             </DropdownMenu.Portal>
         </DropdownMenu.Root>

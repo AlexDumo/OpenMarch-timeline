@@ -34,11 +34,12 @@ import { keepFixturesInPageMode } from "@/test/timelineMode";
 import { setAsShownOnPage } from "@/db-functions/timelineSetAsShown";
 import {
     clearFollowingPages,
+    clearEveryoneFollowingLabel,
+    clearEveryoneLabel,
     clearPageFollowBackReader,
     clearPageFollowingLabel,
     clearPageLabel,
     clearPageMenu,
-    clearPageScopedLabel,
     clearPageSkipsNow,
 } from "../timelineClearPage";
 import { holdFromPreviousPage } from "@/db-functions/timelineHoldFromPrevious";
@@ -1105,15 +1106,13 @@ describeDbTests(
                 performerIds: [1, 2, 3, 4],
                 run,
             });
+            // Nothing selected: the entries say it's everyone
             expect(all.labelsFor(page.id)?.clear).toBe(
-                clearPageScopedLabel(clearPageLabel(page.name), "all"),
+                clearEveryoneLabel(page.name),
             );
             // Marcher 2 has nothing of its own on Page 3, so only Marcher 1 makes the item show
             expect(all.labelsFor(page.id)?.followBack).toBe(
-                clearPageScopedLabel(
-                    clearPageFollowingLabel(page.name, later),
-                    "all",
-                ),
+                clearEveryoneFollowingLabel(page.name, later),
             );
             all.onClear(page.id, false);
             expect(run).toHaveBeenLastCalledWith({

@@ -30,6 +30,10 @@ export interface ActionHandler {
      * state it sets): menus show it checked. Such an action is disabled too
      */
     checked?: () => boolean;
+    /** The label in a menu whose heading already says who and where; `label` otherwise */
+    menuLabel?: () => string | undefined;
+    /** Why the action can't run now, for a menu to say; nothing when there's no reason to give */
+    unavailableReason?: () => string | null | undefined;
 }
 
 const handlers = new Map<ActionId, ActionHandler[]>();
@@ -70,6 +74,16 @@ export function isActionEnabled(id: ActionId): boolean {
 /** The label the action's handler gives right now (`useActionHandler`'s `label`), if any */
 export function actionLabelNow(id: ActionId): string | undefined {
     return top(id)?.label?.();
+}
+
+/** The label for a menu whose heading says who and where (`useActionHandler`'s `menuLabel`) */
+export function actionMenuLabelNow(id: ActionId): string | undefined {
+    return top(id)?.menuLabel?.() ?? actionLabelNow(id);
+}
+
+/** Why the action can't run now (`useActionHandler`'s `unavailableReason`), or null */
+export function actionUnavailableReason(id: ActionId): string | null {
+    return top(id)?.unavailableReason?.() ?? null;
 }
 
 /** Whether the action's handler says it is already done (`useActionHandler`'s `checked`) */

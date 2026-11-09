@@ -91,7 +91,13 @@ import { useKeyframeUnsetMenu } from "@/timeline/timelineUnset";
 import { useMarcherNameOf } from "@/timeline/useKeepLaterPages";
 import { usePageKeepChains } from "./PageKeepChain";
 import { useHoldCommands } from "@/timeline/useHoldCommands";
-import { clearPageMenu } from "@/timeline/timelineClearPage";
+import {
+    clearPageMenu,
+    pageMarcherHeading,
+} from "@/timeline/timelineClearPage";
+import { useNeighborPageCommand } from "@/timeline/useNeighborPageCommand";
+import { useSelectedPage } from "@/context/SelectedPageContext";
+import type { TimelinePageGroupMenu } from "./TimelineRangeMenu";
 import { describeMoveClips } from "./moveClipText";
 import { useClearLeftoverMoveSelection } from "./useMoveMemberSelection";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
@@ -309,6 +315,37 @@ export default function TimelineModePanel() {
             }),
         [pages, selectedIdList, performers, entriesOn],
     );
+    // The page box menu's group of page commands: the same one the field's menu shows
+    const currentPageId = useSelectedPage()?.selectedPage?.id;
+    const neighborPage = useNeighborPageCommand();
+    const pageGroup = useMemo<TimelinePageGroupMenu>(() => {
+        const pageOf = (pageId: string | number) =>
+            pages.find((p) => String(p.id) === String(pageId));
+        return {
+            selectedCount: selectedIdList.length,
+            headingFor: (pageId) => {
+                const page = pageOf(pageId);
+                return page
+                    ? pageMarcherHeading(selectedIdList.length, page.name)
+                    : undefined;
+            },
+            isCurrent: (pageId) => String(pageId) === String(currentPageId),
+            ...(selectedIdList.length > 0
+                ? {
+                      copyFromNext: (pageId: string | number) => {
+                          const page = pageOf(pageId);
+                          if (page)
+                              neighborPage({
+                                  direction: "next",
+                                  scope: "selected",
+                                  selectedPage: page,
+                                  selectedMarcherIds: selectedIdList,
+                              });
+                      },
+                  }
+                : {}),
+        };
+    }, [pages, selectedIdList, currentPageId, neighborPage]);
     const { tracks: timelines, current: tracksCurrent } =
         useTimelineTracksState({
             database: db,
@@ -591,6 +628,7 @@ export default function TimelineModePanel() {
                     setAsShown={setAsShown}
                     holdFromPrevious={holdFromPrevious}
                     clearPage={clearPage}
+                    pageGroup={pageGroup}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={
                         basic ? undefined : commands.commitTimelineRange

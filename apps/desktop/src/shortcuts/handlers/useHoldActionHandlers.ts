@@ -45,6 +45,8 @@ export function useHoldActionHandlers() {
         {
             enabled: !isPlaying && canRunOn(defineAsShown, pageId),
             ...holdActionOptions(entries?.defineAsShown),
+            unavailableReason: () =>
+                pageId === undefined ? null : defineAsShown.reasonFor(pageId),
         },
     );
     useActionHandler(
@@ -55,6 +57,10 @@ export function useHoldActionHandlers() {
         {
             enabled: !isPlaying && canRunOn(holdFromPrevious, pageId),
             ...holdActionOptions(entries?.holdFromPrevious),
+            unavailableReason: () =>
+                pageId === undefined
+                    ? null
+                    : holdFromPrevious.reasonFor(pageId),
         },
     );
 }

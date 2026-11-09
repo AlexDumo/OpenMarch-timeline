@@ -267,10 +267,10 @@ describe("the field menu shows the selection's state on the current page", () =>
         expect(isActionEnabled("timelineHoldFromPrevious")).toBe(false);
         expect(isActionChecked("timelineHoldFromPrevious")).toBe(true);
         expect(runAction("timelineHoldFromPrevious")).toBe(false);
-        // Define as shown (not in the field menu, still an action) skips Held marchers: off, not checked
-        expect(
-            screen.queryByTestId("field-menu-timelineDefineAsShown"),
-        ).toBeNull();
+        // Define as shown skips Held marchers: off, saying why, not checked
+        const define = entry("timelineDefineAsShown");
+        expect(define).toHaveAttribute("aria-disabled", "true");
+        expect(define).not.toHaveAttribute("aria-checked");
         expect(isActionEnabled("timelineDefineAsShown")).toBe(false);
         expect(isActionChecked("timelineDefineAsShown")).toBe(false);
         // Clear this page would take the hold away
@@ -290,7 +290,7 @@ describe("the field menu shows the selection's state on the current page", () =>
         );
         // #573: it names the page
         expect(entry("setSelectedMarchersToPreviousPage")).toHaveTextContent(
-            /^Clear Page 3 \(selected\)/,
+            /^Clear Page 3/,
         );
         expect(isActionEnabled("setSelectedMarchersToPreviousPage")).toBe(true);
     });
@@ -315,7 +315,7 @@ describe("the field menu shows the selection's state on the current page", () =>
             expect(clear).toHaveAttribute("aria-checked", "true");
             expect(clear).toHaveAttribute("data-disabled");
             // Ticked, it still names the page (#573)
-            expect(clear).toHaveTextContent(/^Clear Page 3 \(selected\)/);
+            expect(clear).toHaveTextContent(/^Clear Page 3/);
             expect(isActionEnabled("setSelectedMarchersToPreviousPage")).toBe(
                 false,
             );

@@ -18,7 +18,15 @@ function handle(
         enabled = true,
         label,
         checked = false,
-    }: { enabled?: boolean; label?: string; checked?: boolean } = {},
+        menuLabel,
+        reason,
+    }: {
+        enabled?: boolean;
+        label?: string;
+        checked?: boolean;
+        menuLabel?: string;
+        reason?: string;
+    } = {},
 ) {
     const run = vi.fn();
     handlers.push(
@@ -27,6 +35,8 @@ function handle(
             isEnabled: () => enabled,
             label: () => label,
             checked: () => checked,
+            menuLabel: () => menuLabel,
+            unavailableReason: () => reason,
         }),
     );
     return run;
@@ -36,6 +46,7 @@ function open({
     selectedCount = 1,
     timelineMode = true,
     onClose = vi.fn(),
+    pageName = undefined as string | undefined,
 } = {}) {
     render(
         <TolgeeProvider tolgee={tolgee} fallback="Loading...">
@@ -43,6 +54,7 @@ function open({
                 at={{ x: 120, y: 80 }}
                 onClose={onClose}
                 selectedCount={selectedCount}
+                pageName={pageName}
                 timelineMode={timelineMode}
             />
         </TolgeeProvider>,
@@ -125,7 +137,9 @@ describe("FieldContextMenu", () => {
         open();
         const content = screen.getByTestId("field-menu");
         const groups: string[][] = [[]];
-        for (const el of Array.from(content.children)) {
+        for (const el of Array.from(
+            content.querySelectorAll('[role="separator"], [data-testid]'),
+        )) {
             if (el.getAttribute("role") === "separator") groups.push([]);
             else
                 groups[groups.length - 1]!.push(
@@ -134,8 +148,10 @@ describe("FieldContextMenu", () => {
         }
         expect(groups).toEqual([
             [
+                "timelineDefineAsShown",
                 "timelineHoldFromPrevious",
                 "setSelectedMarchersToPreviousPage",
+                "setSelectedMarchersToPreviousPageAndFollowing",
                 "setSelectedMarchersToNextPage",
             ],
             [
@@ -147,6 +163,9 @@ describe("FieldContextMenu", () => {
             ],
             ["selectAllMarchers"],
         ]);
+        expect(item("timelineDefineAsShown")).toHaveTextContent(
+            "Define as shown",
+        );
         expect(item("timelineHoldFromPrevious")).toHaveTextContent(
             "Hold from previous page",
         );
@@ -155,17 +174,14 @@ describe("FieldContextMenu", () => {
         );
     });
 
-    it("runs the hold command through the actions layer, and greys it out where it can't run", () => {
-        const blocked = handle("timelineHoldFromPrevious", { enabled: false });
-        open();
-        fireEvent.click(item("timelineHoldFromPrevious")!);
-        expect(blocked).not.toHaveBeenCalled();
-        expect(item("timelineHoldFromPrevious")).toHaveAttribute(
-            "data-disabled",
-        );
-        cleanup();
-        handlers.splice(0).forEach((off) => off());
+    it("runs the hold commands through the actions layer, and greys them out where they can't run", () => {
         const hold = handle("timelineHoldFromPrevious");
+        const define = handle("timelineDefineAsShown", { enabled: false });
+        open();
+        fireEvent.click(item("timelineDefineAsShown")!);
+        expect(define).not.toHaveBeenCalled();
+        expect(item("timelineDefineAsShown")).toHaveAttribute("data-disabled");
+        cleanup();
         open();
         expect(item("timelineHoldFromPrevious")).not.toHaveAttribute(
             "data-disabled",
@@ -180,6 +196,7 @@ describe("FieldContextMenu", () => {
             enabled: false,
             checked: true,
         });
+        handle("timelineDefineAsShown", { enabled: false });
         handle("setSelectedMarchersToPreviousPage");
         open();
         const entry = item("timelineHoldFromPrevious")!;
@@ -189,6 +206,10 @@ describe("FieldContextMenu", () => {
         expect(entry).toHaveTextContent(/^Hold from previous page/);
         fireEvent.click(entry);
         expect(hold).not.toHaveBeenCalled();
+        expect(item("timelineDefineAsShown")).toHaveAttribute("data-disabled");
+        expect(item("timelineDefineAsShown")).not.toHaveAttribute(
+            "aria-checked",
+        );
         expect(item("setSelectedMarchersToPreviousPage")).not.toHaveAttribute(
             "data-disabled",
         );
@@ -212,12 +233,84 @@ describe("FieldContextMenu", () => {
         expect(hold).toHaveBeenCalledTimes(1);
     });
 
-    it("leaves the hold command out outside timeline mode, but keeps Clear this page", () => {
+    it("leaves the hold commands out outside timeline mode, but keeps Clear this page", () => {
         handle("timelineHoldFromPrevious");
+        handle("timelineDefineAsShown");
         handle("setSelectedMarchersToPreviousPage");
         open({ timelineMode: false });
         expect(item("timelineHoldFromPrevious")).toBeNull();
+        expect(item("timelineDefineAsShown")).toBeNull();
         expect(item("setSelectedMarchersToPreviousPage")).not.toBeNull();
+    });
+
+    it("heads the page commands with who and where, and uses their menu labels", () => {
+        handle("setSelectedMarchersToPreviousPage", {
+            label: "Clear Page 5 (selected)",
+            menuLabel: "Clear Page 5",
+        });
+        open({ selectedCount: 4, pageName: "5" });
+        expect(screen.getByTestId("field-menu-page-heading")).toHaveTextContent(
+            "4 selected on Page 5",
+        );
+        expect(item("setSelectedMarchersToPreviousPage")).toHaveTextContent(
+            /^Clear Page 5(?! \(selected\))/,
+        );
+        expect(item("setSelectedMarchersToPreviousPage")).not.toHaveClass(
+            "data-[highlighted]:text-red",
+        );
+    });
+
+    it("with nothing selected, offers only Clear, for every performer", () => {
+        for (const id of FIELD_MENU_ACTIONS) handle(id);
+        const clear = handle("setAllMarchersToPreviousPage");
+        open({ selectedCount: 0, pageName: "5" });
+        expect(screen.getByTestId("field-menu-page-heading")).toHaveTextContent(
+            "All performers on Page 5",
+        );
+        expect(item("timelineDefineAsShown")).toBeNull();
+        expect(item("timelineHoldFromPrevious")).toBeNull();
+        expect(item("setSelectedMarchersToPreviousPage")).toBeNull();
+        expect(item("setSelectedMarchersToNextPage")).toBeNull();
+        expect(item("setAllMarchersToPreviousPage")).toHaveClass(
+            "data-[highlighted]:text-red",
+        );
+        expect(item("setAllMarchersToPreviousPage")).not.toHaveClass(
+            "text-red",
+        );
+        fireEvent.click(item("setAllMarchersToPreviousPage")!);
+        expect(clear).toHaveBeenCalledTimes(1);
+    });
+
+    it("says why a page command is unavailable, as the page box menu does", () => {
+        const define = handle("timelineDefineAsShown", {
+            enabled: false,
+            reason: "Every selected marcher is already defined",
+        });
+        open();
+        const entry = item("timelineDefineAsShown")!;
+        expect(entry).toHaveAttribute("aria-disabled", "true");
+        expect(
+            screen.getByTestId("field-menu-timelineDefineAsShown-reason"),
+        ).toHaveTextContent("Every selected marcher is already defined");
+        fireEvent.click(entry);
+        expect(define).not.toHaveBeenCalled();
+    });
+
+    it("offers the follow-back Clear only where later pages would move back and there's something to clear", () => {
+        const id = "setSelectedMarchersToPreviousPageAndFollowing";
+        handle(id, { enabled: false });
+        handle("setSelectedMarchersToPreviousPage");
+        open();
+        expect(item(id)).toBeNull();
+        cleanup();
+        handlers.splice(0).forEach((off) => off());
+        handle(id);
+        handle("setSelectedMarchersToPreviousPage", {
+            enabled: false,
+            checked: true,
+        });
+        open();
+        expect(item(id)).toBeNull();
     });
 
     it("offers Swap only with two marchers selected", () => {

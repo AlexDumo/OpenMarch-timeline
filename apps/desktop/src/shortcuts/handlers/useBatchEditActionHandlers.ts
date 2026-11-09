@@ -1,34 +1,26 @@
 import { useMemo } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { useTranslate } from "@tolgee/react";
+import { useQuery } from "@tanstack/react-query";
 import { useTimingObjects } from "@/hooks";
-import {
-    allMarchersQueryOptions,
-    moveMarchersToNeighborPageMutationOptions,
-} from "@/hooks/queries";
-import {
-    setMarchersToNeighborPage,
-    type NeighborPageDirection,
-    type NeighborPageScope,
+import { allMarchersQueryOptions } from "@/hooks/queries";
+import type {
+    NeighborPageDirection,
+    NeighborPageScope,
 } from "@/utilities/setMarchersToNeighborPage";
 import {
+    clearEveryoneFollowingLabel,
+    clearEveryoneLabel,
     clearPageFollowBackReader,
     clearPageLabel,
     clearPageScopedLabel,
+    copyFromNextPageLabel,
     useClearPagePage,
 } from "@/timeline/timelineClearPage";
+import { holdTerm } from "@/timeline/holdTerms";
 import { holdActionOptions, useHoldCommands } from "@/timeline/useHoldCommands";
+import { useNeighborPageCommand } from "@/timeline/useNeighborPageCommand";
 import type { HoldEntryState } from "@/timeline/holdMenuState";
 import { useActionHandler } from "../useActionHandler";
 import { useEditorReadiness } from "./useEditorReadiness";
-
-/** Clear this page's partial result is a quiet message, not a warning (#573) */
-const clearPageNotify = {
-    success: (message: string) => toast.success(message),
-    error: (message: string) => toast.error(message),
-    note: (message: string) => toast.message(message),
-};
 
 /**
  * "Set all or selected marchers to the previous or next page" (`setMarchersToNeighborPage`, P7.6).
@@ -37,15 +29,11 @@ const clearPageNotify = {
  * the first page it still runs and says there's no previous page.
  */
 export function useBatchEditActionHandlers() {
-    const { t } = useTranslate();
     const { selectedPage, ready, selectedMarchers } = useEditorReadiness();
     const { pages } = useTimingObjects()!;
     // "All" means the performers: props and equipment stay put
     const { data: performers } = useQuery(allMarchersQueryOptions());
-    // Writes over the selected page's box (P7.6)
-    const { mutateAsync: moveMarchersToNeighborPageAsync } = useMutation(
-        moveMarchersToNeighborPageMutationOptions(),
-    );
+    const neighborPage = useNeighborPageCommand();
     const enabled = ready && !!pages && pages.length > 0;
     const hasSelection = enabled && selectedMarchers.length > 0;
     const idsKey = selectedMarchers.map((m) => m.id).join(",");
@@ -62,17 +50,13 @@ export function useBatchEditActionHandlers() {
         scope: NeighborPageScope,
         followBack = false,
     ) =>
-        void setMarchersToNeighborPage({
+        neighborPage({
             direction,
             scope,
             selectedPage: selectedPage!,
-            pages,
             selectedMarcherIds: selectedMarchers.map((m) => m.id),
             followBack,
             performerIds: performers?.map((m) => m.id),
-            writeTimeline: moveMarchersToNeighborPageAsync,
-            notify: clearPageNotify,
-            t: (key, params) => t(key, params),
         });
 
     useClearPageActionHandlers({
@@ -90,8 +74,34 @@ export function useBatchEditActionHandlers() {
     useActionHandler(
         "setSelectedMarchersToNextPage",
         () => run("next", "selected"),
-        { enabled: hasSelection },
+        {
+            enabled: hasSelection,
+            menuLabel: () => copyFromNextPageLabel(),
+        },
     );
+}
+
+/** The field menu's words for Clear: its heading says who for a selection, the entry for everyone */
+function useClearMenuLabels(
+    selectedPage: { readonly name: string } | null,
+    clearPage: ReturnType<typeof useClearPagePage>,
+    performerIds: readonly number[],
+) {
+    const read = useMemo(
+        () => clearPageFollowBackReader(undefined, clearEveryoneFollowingLabel),
+        [],
+    );
+    return {
+        clearSelected: () =>
+            clearPage
+                ? clearPageLabel(clearPage.name)
+                : holdTerm("clearThisPage"),
+        clearEveryone: () =>
+            selectedPage
+                ? clearEveryoneLabel(selectedPage.name)
+                : holdTerm("clearThisPage"),
+        everyoneFollowBack: () => read(clearPage, performerIds) ?? undefined,
+    };
 }
 
 /**
@@ -131,11 +141,13 @@ function useClearPageActionHandlers({
             ? clearPageScopedLabel(clearPageLabel(clearPage.name), scope)
             : undefined;
     const readFollowBack = useMemo(() => clearPageFollowBackReader(), []);
+    const menu = useClearMenuLabels(selectedPage, clearPage, performerIds);
     const all = () => readFollowBack(clearPage, performerIds);
     const selected = () => readFollowBack(clearPage, selectedIds);
     useActionHandler("setAllMarchersToPreviousPage", () => run("all", false), {
         enabled,
         label: () => plain("all"),
+        menuLabel: menu.clearEveryone,
     });
     useActionHandler(
         "setSelectedMarchersToPreviousPage",
@@ -146,6 +158,7 @@ function useClearPageActionHandlers({
                 (clearEntry === undefined || clearEntry.changes > 0),
             ...holdActionOptions(clearEntry),
             label: () => plain("selected"),
+            menuLabel: menu.clearSelected,
         },
     );
     useActionHandler(
@@ -159,6 +172,7 @@ function useClearPageActionHandlers({
                     ? clearPageScopedLabel(followBack, "all")
                     : undefined;
             },
+            menuLabel: menu.everyoneFollowBack,
         },
     );
     useActionHandler(
@@ -172,6 +186,7 @@ function useClearPageActionHandlers({
                     ? clearPageScopedLabel(followBack, "selected")
                     : undefined;
             },
+            menuLabel: () => selected() ?? undefined,
         },
     );
 }

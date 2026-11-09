@@ -38,6 +38,7 @@ import type {
     TimelineSetAsShownMenu,
     TimelinePageCommandMenu,
     TimelineClearPageMenu,
+    TimelinePageGroupMenu,
     TimelineMenuEntry,
     TimelineMenuTarget,
     TimelineMoveCommands,
@@ -283,6 +284,8 @@ export interface TimelineProps {
     readonly holdFromPrevious?: TimelinePageCommandMenu;
     /** **Clear Page N** on a page box (#573) */
     readonly clearPage?: TimelineClearPageMenu;
+    /** The page box menu's group of page commands: its heading, shortcuts and copy entry */
+    readonly pageGroup?: TimelinePageGroupMenu;
     /** UI-19 Basic: the selected marchers' mid-page positions, spec beats */
     readonly basicPoints?: readonly TimelineBasicPoint[];
     /** UI-19 Basic: **Remove this count's position**, by its spec beat */
@@ -650,6 +653,7 @@ export function Timeline(props: TimelineProps) {
         setAsShown,
         holdFromPrevious,
         clearPage,
+        pageGroup,
         pageMenuExtra,
     } = props;
     // A clip's stored spec range, else the view range mapped back
@@ -748,6 +752,7 @@ export function Timeline(props: TimelineProps) {
                       ...(setAsShown ? { setAsShown } : {}),
                       ...(holdFromPrevious ? { holdFromPrevious } : {}),
                       ...(clearPage ? { clearPage } : {}),
+                      ...(pageGroup ? { pageGroup } : {}),
                       ...(subsetMenu ? { subset: subsetMenu } : {}),
                       ...(pageExtra ? { extraFor: pageExtra } : {}),
                   }
@@ -759,6 +764,7 @@ export function Timeline(props: TimelineProps) {
             setAsShown,
             holdFromPrevious,
             clearPage,
+            pageGroup,
             subsetMenu,
             pageExtra,
         ],

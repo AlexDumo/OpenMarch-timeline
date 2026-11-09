@@ -100,6 +100,8 @@ The <Ui k="toolbar.alignment.placeSelectedMarchers" /> menu at the bottom of the
 - <Ui k="toolbar.alignment.toNextPagePositions" /> copies the marchers' positions from the next page onto this one (<Kbd action="setSelectedMarchersToNextPage" /> for the selected marchers, <Kbd action="setAllMarchersToNextPage" /> for all).
 - <Ui k="toolbar.alignment.toPreviousPagePositions" /> in the inspector, and <Ui k="actions.batchEdit.clearPage" values={{ page: "N" }} /> in the toolbar menu, run <Ui k="timeline.terms.clearThisPage" />: the marchers stay where the previous page left them, and the page no longer has positions of its own for them. [Defined, Held and Not defined](/guides/timeline/defined-held-not-defined/) explains what that means for later pages. Later pages keep where they were; when some of them showed this page's positions, the toolbar menu also offers a second item ending in "move back too", which lets those pages move back with it.
 
+With marchers selected, the field's right-click menu and a page box's menu also have <Ui k="actions.batchEdit.copyFromNextPage" />. The field's menu copies onto the page at the playhead, and a page box's menu copies onto that page.
+
 <Steps>
 
 1. Go to the page you want to change.
