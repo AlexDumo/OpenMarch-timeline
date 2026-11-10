@@ -184,21 +184,25 @@ crab keeps the hips and shoulders square to the facing at every travel angle.
   "Crabbing with direction changes"). Crab left into crab right or back,
   with the travel turning more than 90 degrees, plays three counts in place
   of a fade:
-  - the old move's last count stops the weight over the left foot, which
-    goes flat, and the right foot carries on to touch down without weight:
-    in the old step and path out of crab right, in line directly in front of
-    the left foot (behind it on a back diagonal) out of crab left;
+  - the old move's last count stops the weight on the left foot, which
+    goes flat, and the right foot carries on a full step in the old step and
+    path, to touch down without weight on the move's last dot (out of crab
+    left it crosses in front of the left foot). The handbook has crab left's
+    touch in line in front of the left foot; the owner chose the full step
+    for both (2026-11-10), so every move reaches its last dot. Where the
+    right leg can't reach that far with the body over the left foot, the
+    body stops partway toward it;
   - on the new move's first count nothing moves;
   - on its second the right foot lifts on the "and" and lands on the count in
-    the new step and path, crossing in front of the left foot into crab
-    left.
+    the new step and path, swinging round in front of the left foot when it
+    has to pass it.
 
   When the old move ends on the other foot (an odd number of counts) it's the
   same, mirrored: the weight stops over the right foot. Gentler turns, and a
-  new direction that lasts a single count, still fade. The body stays over
-  the standing foot through the stop and the still count, so it falls behind
-  its dot there and makes it up from the go on; in a straight reversal the
-  dot comes back toward it, so it's hardly behind at all.
+  new direction that lasts a single count, still fade. The touching foot
+  ends the old move on its last dot; the body, over or near the standing
+  foot, is behind it through the still count and makes that up from the go
+  on.
 
 - **Hands and drums** are the holds below, which replace the arms on every
   marching clip, crab included. Crab clips skip the platform lift: they're on
