@@ -1506,12 +1506,34 @@ const TABLE: Record<HoldFamily, () => Record<HoldState, Hold>> = {
         up: elbowsToward(withMouth(BASS_CLARINET.up), undefined, [0.3, -1, 0]),
     }),
     sax: () => ({ ...SAX, up: saxForward(withMouth(SAX.up)) }),
-    // battery: elbows at the sides, a little forward, not winged (photos, 2026-11-10)
-    snare: () => tucked(SNARE, [-0.35, -1, 0.45]),
-    tenors: () => tucked(TENORS, [-0.45, -1, 0.4]),
+    // battery (drum corps photos, 2026-11-10): the upper arms hang close to
+    // the ribs, 10 to 20 degrees off vertical, the forearms reach forward
+    snare: () =>
+        battery(
+            SNARE,
+            [-0.135, 1.085, 0.26],
+            [0.34, -0.04, 0.9],
+            [-0.1, -1, 0.25],
+            [0, 1.0, 0.45],
+        ),
+    tenors: () =>
+        battery(
+            TENORS,
+            [-0.19, 1.09, 0.24],
+            [0.12, -0.12, 0.95],
+            [-0.15, -1, 0.3],
+        ),
     // the hands at the lower ribs, mallets steep, the drum high (photos, 2026-11-10)
-    bass: () => tucked(BASS, [-0.25, -1, 0.15]),
-    cymbals: () => tucked(CYMBALS, [-0.4, -1, 0.3]),
+    bass: () => battery(BASS, [-0.255, 1.13, 0.27], undefined, [-0.3, -1, 0.2]),
+    // the plates at the chest, hands 0.26 m apart, elbows only a little out
+    cymbals: () =>
+        battery(
+            CYMBALS,
+            [-0.13, 1.23, 0.3],
+            undefined,
+            [-0.5, -1, 0.1],
+            [0, 1.23, 0.3],
+        ),
     flag: () => ({ ...FLAG, up: FLAG_PRESENT }),
     swingFlag: fixed(SWING),
     doubleSwingFlag: fixed(DOUBLE_SWING),
@@ -1553,16 +1575,31 @@ const FLAG_PRESENT: Hold = {
     },
 };
 
-/** Every state of a battery family with its elbows toward `right` and its mirror. */
-function tucked(
+/**
+ * A battery family's hold in every state (it plays the same in each): the
+ * right wrist at `wrist` with its fingers along `fingers` (unchanged when
+ * absent), the elbow solved toward `out`, the left arm the mirror image,
+ * and the instrument at `origin` when given.
+ */
+function battery(
     r: Record<HoldState, Hold>,
-    right: Vec3,
+    wrist: Vec3,
+    fingers: Vec3 | undefined,
+    out: Vec3,
+    origin?: Vec3,
 ): Record<HoldState, Hold> {
-    const left: Vec3 = [-right[0], right[1], right[2]];
+    const mirror = (v: Vec3): Vec3 => [-v[0], v[1], v[2]];
+    const f = unit(fingers ?? r.up.right.fingers);
+    const up: Hold = {
+        ...r.up,
+        right: armTo("right", wrist, f, out),
+        left: armTo("left", mirror(wrist), mirror(f), mirror(out)),
+        instrument: origin ? { ...r.up.instrument, origin } : r.up.instrument,
+    };
     return {
-        up: elbowsToward(r.up, right, left),
-        carry: elbowsToward(r.carry, right, left),
-        trail: elbowsToward(r.trail, right, left),
+        up,
+        carry: { ...up, state: "carry" },
+        trail: { ...up, state: "trail" },
     };
 }
 

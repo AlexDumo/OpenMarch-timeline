@@ -356,8 +356,14 @@ describe("woodwind and battery holds", () => {
                 expect(arm.wrist[1]).toBeLessThan(1.12);
             }
             // the sticks angle in from each side
-            expect(h.right.fingers[0]).toBeGreaterThan(0.4);
-            expect(h.left.fingers[0]).toBeLessThan(-0.4);
+            expect(h.right.fingers[0]).toBeGreaterThan(0.1);
+            expect(h.left.fingers[0]).toBeLessThan(-0.1);
+            // the upper arms hang close to the ribs, not winged (drum corps photos)
+            for (const [arm, sx] of [
+                [h.right, -0.185],
+                [h.left, 0.185],
+            ] as const)
+                expect(Math.abs(arm.elbow[0] - sx)).toBeLessThan(0.06);
         }
     });
 
