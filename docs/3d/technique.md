@@ -140,10 +140,11 @@ stop-and-go.
   stride in the new direction.
 - **Nothing crosses in a reversal** (owner, 2026-11-10). Forward into
   backward or back, the feet are already a stride apart at the end of the
-  old move, the count-1 foot on count 1's dot. That foot stays where it is:
-  forward into backward it's re-placed (a small lift, back onto its
-  platform); backward into forward it goes from toe down to toe up. The
-  placed foot stays planted and the body only shifts its weight. A reversal
+  old move, the count-1 foot on count 1's dot. That foot stays where it is
+  and re-articulates at the ankle, not the knee: forward into backward it
+  flexes on its ball back onto the platform; backward into forward it rocks
+  onto the heel, toe up. The placed foot stays planted and the body only
+  shifts its weight. A reversal
   that also turns the hips (135 degrees) pivots each foot as a change
   instead.
 - **The planted foot never slides.** Each count is an om-pose one-count clip
