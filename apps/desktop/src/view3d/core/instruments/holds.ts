@@ -227,17 +227,26 @@ export function playingLips(head: Hold["head"] = HEAD_UP): Vec3 {
     return onTurnedHead(head, LIPS);
 }
 
-function atLips(rim: Vec3, head: Hold["head"] = HEAD_UP): Hold["instrument"] {
+function atLips(
+    rim: Vec3,
+    head: Hold["head"] = HEAD_UP,
+    /** Degrees the bell turns toward the performer's left (negative: right), about the vertical. */
+    yawDeg = 0,
+): Hold["instrument"] {
     const lips = playingLips(head);
-    const f = frameOf({
-        origin: [0, 0, 0],
-        bellAxis: BELL_UP,
-        capsAxis: CAPS_UP,
-    });
+    const a = (yawDeg * Math.PI) / 180;
+    const turn = (v: Vec3): Vec3 => [
+        v[0] * Math.cos(a) + v[2] * Math.sin(a),
+        v[1],
+        -v[0] * Math.sin(a) + v[2] * Math.cos(a),
+    ];
+    const bellAxis = yawDeg ? turn(BELL_UP) : BELL_UP;
+    const capsAxis = yawDeg ? turn(CAPS_UP) : CAPS_UP;
+    const f = frameOf({ origin: [0, 0, 0], bellAxis, capsAxis });
     return {
         origin: round3(sub(lips, dirToBody(f, rim))),
-        bellAxis: BELL_UP,
-        capsAxis: CAPS_UP,
+        bellAxis,
+        capsAxis,
     };
 }
 
@@ -431,10 +440,15 @@ const TROMBONE: Record<HoldState, Hold> = {
  * the rim at the lips, the right hand on the slide brace and the left on
  * the bell section's brace by the mouthpiece, where `TROMBONE.up` has them.
  */
+/** How far the trombone turns, bell toward the right, so its back clears the head. */
+const TROMBONE_YAW_DEG = 0;
 function tromboneUp(family: "trombone" | "bassTrombone"): Hold {
     const id = family === "trombone" ? "trombone" : "bassTrombone";
     return {
-        ...reframed(TROMBONE.up, atLips(brassHorn(id, "low").rim)),
+        ...reframed(
+            TROMBONE.up,
+            atLips(brassHorn(id, "low").rim, HEAD_UP, TROMBONE_YAW_DEG),
+        ),
         family,
     };
 }
@@ -1660,8 +1674,8 @@ const STRAIGHT_BRASS: ReadonlySet<HoldFamily> = new Set<HoldFamily>([
 /** Elbow directions for holds with straight wrists that need their own; others keep theirs. */
 const STRAIGHT_OUT: Partial<Record<HoldFamily, { right?: Vec3; left?: Vec3 }>> =
     {
-        // a stronger triangle: the elbow down and forward of the chest
-        contra: { right: [0.1, -1, 0.7] },
+        // the right elbow forward of the chest, level with the left one (owner, 2026-11-10)
+        contra: { right: [-0.2, -0.2, 1] },
         // in front of the chest, clear of the body tube
         sousaphone: { left: [-0.15, -0.4, 1.4] },
     };

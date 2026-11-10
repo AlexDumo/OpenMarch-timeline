@@ -197,6 +197,11 @@ describe("holds", () => {
         },
     );
 
+    it("contra up: the two elbows level with each other", () => {
+        const h = hold("contra", "up");
+        expect(Math.abs(h.right.elbow[1] - h.left.elbow[1])).toBeLessThan(0.02);
+    });
+
     it("sousaphone up: the left arm reaches the mouthpiece clear of the tubing", () => {
         // the arm as capsules: upper arm 0.05 m thick, forearm 0.042, the
         // forearm's last 15% left out where the hand holds the leadpipe
