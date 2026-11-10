@@ -38,6 +38,10 @@ interface HandlerOptions {
      * false.
      */
     checked?: boolean;
+    /** The label in a menu whose heading says who and where. Read when the menu renders */
+    menuLabel?: () => string | undefined;
+    /** Why the action can't run now, for a menu to say. Read when the menu renders */
+    unavailableReason?: () => string | null | undefined;
 }
 
 export function useActionHandler(
@@ -74,11 +78,13 @@ export function useActionHandlerGroup(
     const labelRef = useRef(options.label);
     const checkedRef = useRef(options.checked ?? false);
     const hasRelease = options.onRelease !== undefined;
+    const menuRef = useRef(options);
     useLayoutEffect(() => {
         runRef.current = run;
         ignoreRepeatRef.current = options.ignoreRepeat ?? false;
         pressRef.current = options.onPress;
         releaseRef.current = options.onRelease;
+        menuRef.current = options;
     });
     // A function is read when asked, so a new one each render tells nobody
     useLayoutEffect(() => {
@@ -131,6 +137,8 @@ export function useActionHandlerGroup(
                     return typeof label === "function" ? label() : label;
                 },
                 checked: () => checkedRef.current,
+                menuLabel: () => menuRef.current.menuLabel?.(),
+                unavailableReason: () => menuRef.current.unavailableReason?.(),
             }),
         );
         return () => unregister.forEach((off) => off());

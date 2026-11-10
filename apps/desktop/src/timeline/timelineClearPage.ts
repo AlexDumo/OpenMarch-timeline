@@ -206,6 +206,33 @@ export function clearPageFollowingLabel(
     );
 }
 
+/** "Clear everyone from Page 3": the menus' entry when nothing is selected */
+export function clearEveryoneLabel(
+    page: string,
+    translate: Translate = tolgeeTranslate,
+): string {
+    return translate(
+        "actions.batchEdit.clearEveryone",
+        "Clear everyone from Page {page}",
+        { page },
+    );
+}
+
+/** "Clear everyone from Page 3, Pages 4–6 move back too" */
+export function clearEveryoneFollowingLabel(
+    page: string,
+    following: readonly string[],
+    translate: Translate = tolgeeTranslate,
+): string {
+    const first = following[0] ?? "";
+    const last = following[following.length - 1] ?? first;
+    return translate(
+        "actions.batchEdit.clearEveryoneAndLater",
+        "{count, plural, =1 {Clear everyone from Page {page}, Page {first} moves back too} other {Clear everyone from Page {page}, Pages {first}–{last} move back too}}",
+        { page, first, last, count: first === last ? 1 : following.length },
+    );
+}
+
 /** A menu label for the command palette, saying who it acts on: "Clear Page 3 (selected)". */
 export function clearPageScopedLabel(
     label: string,
@@ -225,6 +252,39 @@ export function clearPageScopedLabel(
           });
 }
 
+/** "Copy positions from next page": the menus' entry, whose heading says who */
+export function copyFromNextPageLabel(
+    translate: Translate = tolgeeTranslate,
+): string {
+    return translate(
+        "actions.batchEdit.copyFromNextPage",
+        "Copy positions from next page",
+        {},
+    );
+}
+
+/**
+ * What the menus' group of page commands acts on: "4 selected on Page 5", or "All performers on
+ * Page 5" with nothing selected.
+ */
+export function pageMarcherHeading(
+    selectedCount: number,
+    page: string,
+    translate: Translate = tolgeeTranslate,
+): string {
+    return selectedCount > 0
+        ? translate(
+              "timeline.pageMarchers.selectedOnPage",
+              "{count, plural, one {# selected on Page {page}} other {# selected on Page {page}}}",
+              { count: selectedCount, page },
+          )
+        : translate(
+              "timeline.pageMarchers.allOnPage",
+              "All performers on Page {page}",
+              { page },
+          );
+}
+
 /** The two items' labels for one page and some marchers. */
 export interface ClearPageLabels {
     /** "Clear Page 3" */
@@ -241,10 +301,12 @@ export interface ClearPageLabels {
 export function clearPageLabelsNow(
     page: ClearPagePage | null,
     marcherIds: readonly number[],
+    everyone = false,
 ): ClearPageLabels | null {
     if (!page) return null;
     return clearPageLabels({
         page,
+        everyone,
         marcherIds,
         resolver: useTimelineResolverStore.getState().resolver,
         boxes: useTimelineSelectionStore.getState().pageBoxes,
@@ -262,6 +324,7 @@ export function clearPageLabelsNow(
  */
 export function clearPageFollowBackReader(
     check: typeof clearFollowingPages = clearFollowingPages,
+    followingLabel: typeof clearPageFollowingLabel = clearPageFollowingLabel,
 ): (
     page: ClearPagePage | null,
     marcherIds: readonly number[],
@@ -295,9 +358,7 @@ export function clearPageFollowBackReader(
             box: page.box,
             skips,
         });
-        const label = following
-            ? clearPageFollowingLabel(page.name, following)
-            : null;
+        const label = following ? followingLabel(page.name, following) : null;
         // One entry per marcher list in use (all and selected); an old list goes
         cache.delete(marcherIds);
         cache.set(marcherIds, { key, label });
@@ -308,20 +369,23 @@ export function clearPageFollowBackReader(
 
 function clearPageLabels({
     page,
+    everyone = false,
     ...check
 }: {
     page: ClearPagePage;
+    everyone?: boolean;
     marcherIds: readonly number[];
     resolver: Resolver | null;
     boxes: readonly PageBox[];
     skips: ClearPageSkips;
 }): ClearPageLabels {
     const following = clearFollowingPages({ ...check, box: page.box });
+    const [clear, moveBack] = everyone
+        ? [clearEveryoneLabel, clearEveryoneFollowingLabel]
+        : [clearPageLabel, clearPageFollowingLabel];
     return {
-        clear: clearPageLabel(page.name),
-        followBack: following
-            ? clearPageFollowingLabel(page.name, following)
-            : null,
+        clear: clear(page.name),
+        followBack: following ? moveBack(page.name, following) : null,
     };
 }
 
@@ -403,8 +467,8 @@ export function useClearPagePage(
 
 /**
  * The page box menu's **Clear Page N** entries (#573), next to Define as shown and Hold from previous
- * page: for the selected marchers, or every performer when none is selected (then the label says
- * so). The labels are read when the menu opens, from the resolver as it is then. Each runs the
+ * page: for the selected marchers, or every performer when none is selected ("Clear everyone
+ * from Page 3"). The labels are read when the menu opens, from the resolver as it is then. Each runs the
  * same command as the Alignment tab and inspector items, on the right-clicked page.
  *
  * @param run the command, for tests; defaults to `clearPageOn`
@@ -442,12 +506,11 @@ export function clearPageMenu({
                     box: { start: first.index, end: pageEndBeat(page) },
                 },
                 marcherIds,
+                scope === "all",
             )!;
-            const say = (label: string) =>
-                scope === "all" ? clearPageScopedLabel(label, "all") : label;
             return {
-                clear: say(labels.clear),
-                followBack: labels.followBack ? say(labels.followBack) : null,
+                clear: labels.clear,
+                followBack: labels.followBack,
                 checked:
                     scope === "selected" &&
                     (entryOn?.(pageId)?.checked ?? false),

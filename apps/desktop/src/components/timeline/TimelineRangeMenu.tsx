@@ -10,6 +10,7 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { TooltipClassName } from "@openmarch/ui";
 import {
+    CopyIcon,
     CursorTextIcon,
     DiamondIcon,
     EraserIcon,
@@ -26,15 +27,16 @@ import {
 } from "@phosphor-icons/react";
 import tolgee from "@/global/singletons/Tolgee";
 import { holdTerms } from "@/timeline/holdTerms";
-import {
-    type HoldCommand,
-    type HoldEntryState,
-} from "@/timeline/holdMenuState";
+import { copyFromNextPageLabel } from "@/timeline/timelineClearPage";
+import type { ActionId } from "@/shortcuts/definitions";
+import Shortcut from "@/components/ui/Shortcut";
+import { type HoldEntryState } from "@/timeline/holdMenuState";
 import { useTranslate } from "@tolgee/react";
 import type { TimelineBeatRange } from "./TimelineViewModel";
 import {
     MENU_CONTENT_CLASS,
     MENU_ITEM_CLASS,
+    MENU_LABEL_CLASS,
     MENU_SEPARATOR_CLASS,
 } from "@/components/ui/popupClasses";
 
@@ -168,55 +170,146 @@ export function MenuItemWithReason({
     );
 }
 
+/** The commands for some marchers on one page, in both menus' order */
+export const PAGE_MARCHER_COMMANDS = [
+    "defineAsShown",
+    "holdFromPrevious",
+    "clear",
+    "clearFollowBack",
+    "copyFromNext",
+] as const;
+export type PageMarcherCommand = (typeof PAGE_MARCHER_COMMANDS)[number];
+
 /**
- * A hold command's page box entry (holds), by its name. When every selected
- * marcher is already in the state it sets, it's checked and does nothing (a disabled checkbox
- * entry with a check in place of its icon); otherwise it's unavailable with its reason, or runs.
+ * The action behind each command on the current page, by who it acts on. With nothing selected,
+ * only Clear applies: to every performer.
  */
-function HoldCommandItem({
-    command,
-    testId,
-    menu,
-    pageId,
-    reason,
-    icon,
-    name,
-}: {
-    command: HoldCommand;
-    testId: string;
-    menu: TimelinePageCommandMenu;
-    pageId: string | number;
-    reason: string | null;
-    icon: ReactNode;
-    /** The entry's name */
-    name: string;
-}) {
-    const entry = menu.entryOn?.(pageId);
-    const label = name;
-    if (entry?.checked)
+export const PAGE_MARCHER_ACTIONS: Record<
+    "selected" | "all",
+    Partial<Record<PageMarcherCommand, ActionId>>
+> = {
+    selected: {
+        defineAsShown: "timelineDefineAsShown",
+        holdFromPrevious: "timelineHoldFromPrevious",
+        clear: "setSelectedMarchersToPreviousPage",
+        clearFollowBack: "setSelectedMarchersToPreviousPageAndFollowing",
+        copyFromNext: "setSelectedMarchersToNextPage",
+    },
+    all: {
+        clear: "setAllMarchersToPreviousPage",
+        clearFollowBack: "setAllMarchersToPreviousPageAndFollowing",
+    },
+};
+
+const PAGE_MARCHER_ICONS: Record<PageMarcherCommand, ReactNode> = {
+    defineAsShown: <DiamondIcon size={14} />,
+    holdFromPrevious: <PauseIcon size={14} />,
+    clear: <EraserIcon size={14} />,
+    clearFollowBack: <EraserIcon size={14} />,
+    copyFromNext: <CopyIcon size={14} />,
+};
+
+/** One entry of `PageMarcherMenuGroup` */
+export interface PageMarcherEntry {
+    readonly command: PageMarcherCommand;
+    readonly testId: string;
+    readonly label: string;
+    /** Every marcher is already in the state it sets: ticked and off */
+    readonly checked: boolean;
+    /** Why it's unavailable, behind a **?**; null when it runs or there's no reason to give */
+    readonly reason: string | null;
+    /** Unavailable with no reason to give */
+    readonly disabled: boolean;
+    /** Shown only where the shortcut would act on this same page */
+    readonly shortcut?: ActionId;
+    /** Acts on every performer, not a selection: red, as the menu's deletes are */
+    readonly everyone?: boolean;
+    readonly onSelect: () => void;
+}
+
+function PageMarcherItem({ entry }: { entry: PageMarcherEntry }) {
+    const { testId, label, reason, shortcut } = entry;
+    const keys = shortcut && (
+        <span className="ml-auto pl-16">
+            <Shortcut action={shortcut} />
+        </span>
+    );
+    const icon = PAGE_MARCHER_ICONS[entry.command];
+    const className = entry.everyone
+        ? `${MENU_ITEM_CLASS} data-[highlighted]:text-red`
+        : MENU_ITEM_CLASS;
+    if (entry.checked)
         return (
             <DropdownMenu.CheckboxItem
                 data-testid={testId}
                 checked
                 disabled
-                className={MENU_ITEM_CLASS}
+                className={className}
             >
                 <DropdownMenu.ItemIndicator className="flex">
                     <CheckIcon size={14} />
                 </DropdownMenu.ItemIndicator>
                 {label}
+                {keys}
             </DropdownMenu.CheckboxItem>
+        );
+    if (entry.disabled)
+        return (
+            <DropdownMenu.Item
+                data-testid={testId}
+                disabled
+                className={className}
+            >
+                {icon}
+                {label}
+                {keys}
+            </DropdownMenu.Item>
         );
     return (
         <MenuItemWithReason
             testId={testId}
             reason={reason}
             reasonTestId={`${testId}-reason`}
-            onSelect={() => menu.onSet(pageId)}
+            onSelect={entry.onSelect}
+            className={className}
         >
             {icon}
             {label}
+            {reason === null && keys}
         </MenuItemWithReason>
+    );
+}
+
+/**
+ * The commands for some marchers on one page, the same group in the page box menu and the
+ * field's menu. Its heading says who and where ("4 selected on Page 5"), since the page box menu
+ * acts on the page right-clicked and the field's on the current one.
+ */
+export function PageMarcherMenuGroup({
+    heading,
+    headingTestId,
+    entries,
+}: {
+    heading?: string;
+    headingTestId: string;
+    entries: readonly PageMarcherEntry[];
+}) {
+    const headingId = useId();
+    return (
+        <DropdownMenu.Group aria-labelledby={heading ? headingId : undefined}>
+            {heading && (
+                <DropdownMenu.Label
+                    id={headingId}
+                    data-testid={headingTestId}
+                    className={MENU_LABEL_CLASS}
+                >
+                    {heading}
+                </DropdownMenu.Label>
+            )}
+            {entries.map((entry) => (
+                <PageMarcherItem key={entry.command} entry={entry} />
+            ))}
+        </DropdownMenu.Group>
     );
 }
 
@@ -432,6 +525,8 @@ export interface TimelinePageMenu {
      * pages would (#573). Without it, the menu has no such entries.
      */
     readonly clearPage?: TimelineClearPageMenu;
+    /** The group of page commands' heading, shortcuts and Copy positions from next page */
+    readonly pageGroup?: TimelinePageGroupMenu;
     /**
      * **Subset** on a page box (UI-9): a switch that shows whether the page is a subset, and
      * flips it. Without it, the menu has no such entry.
@@ -477,6 +572,113 @@ export interface TimelineClearPageMenu {
           }
         | undefined;
     readonly onClear: (pageId: string | number, followBack: boolean) => void;
+}
+
+/**
+ * What the page box menu's group of page commands needs beyond the commands: the words of its
+ * heading, whether a page is the one the shortcuts act on, and Copy positions from next page.
+ */
+export interface TimelinePageGroupMenu {
+    readonly selectedCount: number;
+    readonly headingFor: (pageId: string | number) => string | undefined;
+    readonly isCurrent: (pageId: string | number) => boolean;
+    /** The last page has nothing to copy from, so no such entry */
+    readonly hasNextPage: (pageId: string | number) => boolean;
+    /** Runs the command on the page; without it, the group has no such entry */
+    readonly copyFromNext?: (pageId: string | number) => void;
+}
+
+/** The page box's entries of `PageMarcherMenuGroup`, for the page right-clicked. */
+function pageBoxEntries(
+    menu: TimelinePageMenu,
+    pageId: string | number,
+): PageMarcherEntry[] {
+    const group = menu.pageGroup;
+    const actions =
+        PAGE_MARCHER_ACTIONS[group?.selectedCount === 0 ? "all" : "selected"];
+    const shortcut = (command: PageMarcherCommand) =>
+        group?.isCurrent(pageId) ? actions[command] : undefined;
+    const entries: PageMarcherEntry[] = [];
+    const hold = (
+        command: "defineAsShown" | "holdFromPrevious",
+        testId: string,
+        commands: TimelinePageCommandMenu | undefined,
+        label: string,
+    ) => {
+        const reason = commands?.reasonFor(pageId);
+        if (!commands || reason === undefined) return;
+        entries.push({
+            command,
+            testId,
+            label,
+            checked: commands.entryOn?.(pageId)?.checked ?? false,
+            reason,
+            disabled: false,
+            shortcut: shortcut(command),
+            onSelect: () => commands.onSet(pageId),
+        });
+    };
+    hold(
+        "defineAsShown",
+        "timeline-range-menu-set-as-shown",
+        menu.setAsShown,
+        tolgee.t(
+            "timeline.rangeMenu.setAsShown",
+            "{defineAsShown}",
+            holdTerms(),
+        ),
+    );
+    hold(
+        "holdFromPrevious",
+        "timeline-range-menu-hold-from-previous",
+        menu.holdFromPrevious,
+        tolgee.t(
+            "timeline.rangeMenu.holdFromPrevious",
+            "{holdFromPrevious}",
+            holdTerms(),
+        ),
+    );
+    const clear = menu.clearPage;
+    const labels = clear?.labelsFor(pageId);
+    if (clear && labels) {
+        const checked = labels.checked ?? false;
+        entries.push({
+            command: "clear",
+            testId: "timeline-range-menu-clear-page",
+            label: labels.clear,
+            checked,
+            reason: null,
+            disabled: false,
+            shortcut: shortcut("clear"),
+            everyone: group?.selectedCount === 0,
+            onSelect: () => clear.onClear(pageId, false),
+        });
+        if (!checked && labels.followBack !== null)
+            entries.push({
+                command: "clearFollowBack",
+                testId: "timeline-range-menu-clear-page-follow-back",
+                label: labels.followBack,
+                checked: false,
+                reason: null,
+                disabled: false,
+                shortcut: shortcut("clearFollowBack"),
+                everyone: group?.selectedCount === 0,
+                onSelect: () => clear.onClear(pageId, true),
+            });
+    }
+    const copyFromNext = group?.copyFromNext;
+    if (copyFromNext && group?.hasNextPage(pageId))
+        entries.push({
+            command: "copyFromNext",
+            testId: "timeline-range-menu-copy-from-next",
+            label: copyFromNextPageLabel(),
+            checked: false,
+            reason: null,
+            disabled: false,
+            shortcut: shortcut("copyFromNext"),
+            onSelect: () => copyFromNext(pageId),
+        });
+    return entries;
 }
 
 /**
@@ -587,18 +789,10 @@ export function useTimelineRangeMenu({
         setOpen({ target, x: event.clientX, y: event.clientY });
     };
     const moves = open ? movesOf(open.target) : null;
-    const setAsShownReason =
-        open && menu?.setAsShown && open.target.pageId !== undefined
-            ? menu.setAsShown.reasonFor(open.target.pageId)
-            : undefined;
-    const holdReason =
-        open && menu?.holdFromPrevious && open.target.pageId !== undefined
-            ? menu.holdFromPrevious.reasonFor(open.target.pageId)
-            : undefined;
-    const clearLabels =
-        open && menu?.clearPage && open.target.pageId !== undefined
-            ? menu.clearPage.labelsFor(open.target.pageId)
-            : undefined;
+    const pageEntries =
+        open && menu && open.target.pageId !== undefined
+            ? pageBoxEntries(menu, open.target.pageId)
+            : [];
     const pageExtra =
         open && menu?.extraFor && open.target.pageId !== undefined
             ? menu.extraFor(open.target.pageId)
@@ -637,95 +831,15 @@ export function useTimelineRangeMenu({
                                 />
                             </>
                         )}
-                        {setAsShownReason !== undefined && (
+                        {pageEntries.length > 0 && (
                             <>
-                                <HoldCommandItem
-                                    command="defineAsShown"
-                                    testId="timeline-range-menu-set-as-shown"
-                                    menu={menu!.setAsShown!}
-                                    pageId={open.target.pageId!}
-                                    reason={setAsShownReason}
-                                    icon={<DiamondIcon size={14} />}
-                                    name={tolgee.t(
-                                        "timeline.rangeMenu.setAsShown",
-                                        "{defineAsShown}",
-                                        holdTerms(),
+                                <PageMarcherMenuGroup
+                                    heading={menu?.pageGroup?.headingFor(
+                                        open.target.pageId!,
                                     )}
+                                    headingTestId="timeline-range-menu-page-heading"
+                                    entries={pageEntries}
                                 />
-                                {holdReason === undefined && (
-                                    <DropdownMenu.Separator
-                                        className={MENU_SEPARATOR_CLASS}
-                                    />
-                                )}
-                            </>
-                        )}
-                        {holdReason !== undefined && (
-                            <>
-                                <HoldCommandItem
-                                    command="holdFromPrevious"
-                                    testId="timeline-range-menu-hold-from-previous"
-                                    menu={menu!.holdFromPrevious!}
-                                    pageId={open.target.pageId!}
-                                    reason={holdReason}
-                                    icon={<PauseIcon size={14} />}
-                                    name={tolgee.t(
-                                        "timeline.rangeMenu.holdFromPrevious",
-                                        "{holdFromPrevious}",
-                                        holdTerms(),
-                                    )}
-                                />
-                                {clearLabels === undefined && (
-                                    <DropdownMenu.Separator
-                                        className={MENU_SEPARATOR_CLASS}
-                                    />
-                                )}
-                            </>
-                        )}
-                        {clearLabels !== undefined && (
-                            <>
-                                {clearLabels.checked ? (
-                                    <DropdownMenu.CheckboxItem
-                                        data-testid="timeline-range-menu-clear-page"
-                                        checked
-                                        disabled
-                                        className={MENU_ITEM_CLASS}
-                                    >
-                                        <DropdownMenu.ItemIndicator className="flex">
-                                            <CheckIcon size={14} />
-                                        </DropdownMenu.ItemIndicator>
-                                        {clearLabels.clear}
-                                    </DropdownMenu.CheckboxItem>
-                                ) : (
-                                    <DropdownMenu.Item
-                                        data-testid="timeline-range-menu-clear-page"
-                                        className={MENU_ITEM_CLASS}
-                                        onSelect={() =>
-                                            menu?.clearPage?.onClear(
-                                                open.target.pageId!,
-                                                false,
-                                            )
-                                        }
-                                    >
-                                        <EraserIcon size={14} />
-                                        {clearLabels.clear}
-                                    </DropdownMenu.Item>
-                                )}
-                                {!clearLabels.checked &&
-                                    clearLabels.followBack !== null && (
-                                        <DropdownMenu.Item
-                                            data-testid="timeline-range-menu-clear-page-follow-back"
-                                            className={MENU_ITEM_CLASS}
-                                            onSelect={() =>
-                                                menu?.clearPage?.onClear(
-                                                    open.target.pageId!,
-                                                    true,
-                                                )
-                                            }
-                                        >
-                                            <EraserIcon size={14} />
-                                            {clearLabels.followBack}
-                                        </DropdownMenu.Item>
-                                    )}
                                 <DropdownMenu.Separator
                                     className={MENU_SEPARATOR_CLASS}
                                 />

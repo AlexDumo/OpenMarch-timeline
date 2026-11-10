@@ -256,6 +256,65 @@ describe("the page box menu's hold commands", () => {
         expect(define).not.toHaveAttribute("aria-disabled");
     });
 
+    it("the page group says who and where, and shows a shortcut only for the current page", () => {
+        const states = [state({ follows: [1, 2], selected: 2 })];
+        const copyFromNext = vi.fn();
+        let hasNext = true;
+        const openOn = (isCurrent: boolean) =>
+            render(
+                <Timeline
+                    mode="expanded"
+                    beats={BEATS}
+                    pages={PAGES}
+                    measures={[]}
+                    timelines={[]}
+                    showTransport={false}
+                    selection={null}
+                    onSelectionChange={vi.fn()}
+                    holdFromPrevious={holdFromPreviousMenu(
+                        states,
+                        [1, 2],
+                        undefined,
+                        vi.fn(async () => ({ held: [], skipped: [] })),
+                        [],
+                    )}
+                    pageGroup={{
+                        selectedCount: 2,
+                        headingFor: () => "2 selected on Page 2",
+                        isCurrent: () => isCurrent,
+                        hasNextPage: () => hasNext,
+                        copyFromNext,
+                    }}
+                />,
+            );
+        const openMenuOn = (isCurrent: boolean) => {
+            openOn(isCurrent);
+            fireEvent.contextMenu(
+                screen.getByRole("button", { name: "Page 2" }),
+            );
+            return screen.getByTestId("timeline-range-menu-hold-from-previous");
+        };
+        const hold = openMenuOn(false);
+        expect(
+            screen.getByTestId("timeline-range-menu-page-heading"),
+        ).toHaveTextContent("2 selected on Page 2");
+        expect(hold).toHaveTextContent(/^Hold from previous page$/);
+        fireEvent.click(
+            screen.getByTestId("timeline-range-menu-copy-from-next"),
+        );
+        expect(copyFromNext).toHaveBeenCalledExactlyOnceWith("3");
+        cleanup();
+        expect(openMenuOn(true)).toHaveTextContent(
+            /^Hold from previous page.+/,
+        );
+        cleanup();
+        hasNext = false;
+        openMenuOn(false);
+        expect(
+            screen.queryByTestId("timeline-range-menu-copy-from-next"),
+        ).toBeNull();
+    });
+
     it("all Defined: Define as shown is checked", () => {
         const { define } = openMenu([state({ selected: 2 })], [1, 2], []);
         expect(define).toHaveAttribute("aria-checked", "true");

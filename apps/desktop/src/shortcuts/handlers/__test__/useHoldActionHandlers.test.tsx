@@ -19,6 +19,7 @@ import { useMarcherNameOf } from "@/timeline/useKeepLaterPages";
 import { TolgeeProvider } from "@tolgee/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { screen } from "@testing-library/react";
+import { allMarchersQueryOptions } from "@/hooks/queries";
 import FieldContextMenu from "@/field/three/FieldContextMenu";
 import { useHeldMarksStore } from "@/timeline/useHeldMarks";
 import { isActionChecked, isActionEnabled, runAction } from "../../registry";
@@ -233,13 +234,16 @@ function FieldMenuHarness() {
     );
 }
 
-function openFieldMenu(ids: number[]) {
+function openFieldMenu(ids: number[], performers?: { id: number }[]) {
     mocks.selectedMarchers = ids.map((id) => ({
         id,
         drill_number: `T${id}`,
     }));
+    const client = new QueryClient();
+    if (performers)
+        client.setQueryData(allMarchersQueryOptions().queryKey, performers);
     render(
-        <QueryClientProvider client={new QueryClient()}>
+        <QueryClientProvider client={client}>
             <TolgeeProvider tolgee={tolgee} fallback="Loading...">
                 <FieldMenuHarness />
             </TolgeeProvider>
@@ -255,6 +259,28 @@ const heldOnPage3 = (marcherId: number) => ({
     end: 17,
 });
 
+describe("the batch-edit actions wait for what they'd write to", () => {
+    it("for everyone, only once the performers have loaded, so props aren't taken in", () => {
+        openFieldMenu([]);
+        expect(isActionEnabled("setAllMarchersToPreviousPage")).toBe(false);
+        expect(isActionEnabled("setAllMarchersToNextPage")).toBe(false);
+        cleanup();
+        openFieldMenu([], [{ id: 1 }, { id: 2 }]);
+        expect(isActionEnabled("setAllMarchersToPreviousPage")).toBe(true);
+        expect(isActionEnabled("setAllMarchersToNextPage")).toBe(true);
+    });
+
+    it("not while playing, when the selected page is behind the playhead", () => {
+        mocks.isPlaying = true;
+        openFieldMenu([1], [{ id: 1 }, { id: 2 }]);
+        expect(isActionEnabled("setAllMarchersToPreviousPage")).toBe(false);
+        expect(isActionEnabled("setSelectedMarchersToPreviousPage")).toBe(
+            false,
+        );
+        expect(isActionEnabled("setSelectedMarchersToNextPage")).toBe(false);
+    });
+});
+
 describe("the field menu shows the selection's state on the current page", () => {
     it("all Held: Hold from previous page is checked, and off for the palette and H too", () => {
         // Marcher 1 has no move on page 3; its mark makes it Held there
@@ -267,10 +293,10 @@ describe("the field menu shows the selection's state on the current page", () =>
         expect(isActionEnabled("timelineHoldFromPrevious")).toBe(false);
         expect(isActionChecked("timelineHoldFromPrevious")).toBe(true);
         expect(runAction("timelineHoldFromPrevious")).toBe(false);
-        // Define as shown (not in the field menu, still an action) skips Held marchers: off, not checked
-        expect(
-            screen.queryByTestId("field-menu-timelineDefineAsShown"),
-        ).toBeNull();
+        // Define as shown skips Held marchers: off, saying why, not checked
+        const define = entry("timelineDefineAsShown");
+        expect(define).toHaveAttribute("aria-disabled", "true");
+        expect(define).not.toHaveAttribute("aria-checked");
         expect(isActionEnabled("timelineDefineAsShown")).toBe(false);
         expect(isActionChecked("timelineDefineAsShown")).toBe(false);
         // Clear this page would take the hold away
@@ -290,7 +316,7 @@ describe("the field menu shows the selection's state on the current page", () =>
         );
         // #573: it names the page
         expect(entry("setSelectedMarchersToPreviousPage")).toHaveTextContent(
-            /^Clear Page 3 \(selected\)/,
+            /^Clear Page 3/,
         );
         expect(isActionEnabled("setSelectedMarchersToPreviousPage")).toBe(true);
     });
@@ -315,7 +341,7 @@ describe("the field menu shows the selection's state on the current page", () =>
             expect(clear).toHaveAttribute("aria-checked", "true");
             expect(clear).toHaveAttribute("data-disabled");
             // Ticked, it still names the page (#573)
-            expect(clear).toHaveTextContent(/^Clear Page 3 \(selected\)/);
+            expect(clear).toHaveTextContent(/^Clear Page 3/);
             expect(isActionEnabled("setSelectedMarchersToPreviousPage")).toBe(
                 false,
             );

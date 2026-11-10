@@ -40,7 +40,10 @@
             "setSelectedToNext": "Copy positions from next page (selected)",
             "setSelectedToNextSuccess": "{count, plural, one {Successfully set # marcher's coordinates on page {currentPage} to the coordinates of the next page {nextPage}} other {Successfully set # marchers' coordinates on page {currentPage} to the coordinates of the next page {nextPage}}}",
             "setAllToPreviousDone": "{count, plural, one {Successfully set # marcher's coordinates on page {currentPage} to the coordinates of the previous page {previousPage}} other {Successfully set all # marchers' coordinates on page {currentPage} to the coordinates of the previous page {previousPage}}}",
-            "setSelectedToPreviousDone": "{count, plural, one {Successfully set # marcher's coordinates on page {currentPage} to the coordinates of the previous page {previousPage}} other {Successfully set # marchers' coordinates on page {currentPage} to the coordinates of the previous page {previousPage}}}"
+            "setSelectedToPreviousDone": "{count, plural, one {Successfully set # marcher's coordinates on page {currentPage} to the coordinates of the previous page {previousPage}} other {Successfully set # marchers' coordinates on page {currentPage} to the coordinates of the previous page {previousPage}}}",
+            "copyFromNextPage": "Copy positions from next page",
+            "clearEveryone": "Clear everyone from Page {page}",
+            "clearEveryoneAndLater": "{count, plural, =1 {Clear everyone from Page {page}, Page {first} moves back too} other {Clear everyone from Page {page}, Pages {first}–{last} move back too}}"
         },
         "edit": {
             "noRedoAvailable": "No action to redo",
@@ -2696,6 +2699,10 @@
                 "wholePage": "Keep works on a whole page, not {counts}"
             },
             "tooFarPastEnd": "that is {count, plural, one {# count} other {# counts}} past the end; one edit stores at most {max}"
+        },
+        "pageMarchers": {
+            "selectedOnPage": "{count, plural, one {# selected on Page {page}} other {# selected on Page {page}}}",
+            "allOnPage": "All performers on Page {page}"
         }
     },
     "titlebar": {

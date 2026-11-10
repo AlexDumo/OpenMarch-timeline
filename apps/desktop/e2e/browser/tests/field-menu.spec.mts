@@ -94,9 +94,9 @@ const entry = (page: Page, name: string) =>
         ),
     });
 
-/** Clear this page for the selection, named for the page ("Clear Page 2 (selected)") */
+/** Clear this page, named for the page ("Clear Page 2"), not its "move back too" sibling */
 const clearEntry = (page: Page) =>
-    menu(page).getByRole("menuitem", { name: /^Clear Page \S+ \(selected\)/ });
+    menu(page).getByRole("menuitem", { name: /^Clear Page [^\s,]+( |$)/ });
 
 /** Where field point (x, y) is on screen, from where T1 is drawn and the zoom. */
 async function screenAt(page: Page, x: number, y: number) {
@@ -176,10 +176,13 @@ test("right-clicking a selected marcher or empty field keeps the selection; Clea
     await page.mouse.click(empty.x, empty.y, { button: "right" });
     await expect(menu(page)).toBeVisible();
     expect(await selectedDrillNumbers(page)).toEqual(["T1", "T2"]);
-    // The follow-back variant lives in the Alignment tab, the page menu and the palette
+    // The same group as the page menu: the heading says who, the follow-back variant is here too
+    await expect(menu(page).getByTestId("field-menu-page-heading")).toHaveText(
+        /^2 selected on Page \S+$/,
+    );
     await expect(
-        menu(page).getByRole("menuitem", { name: /move back too/ }),
-    ).toHaveCount(0);
+        menu(page).getByRole("menuitem", { name: /moves? back too/ }),
+    ).toHaveCount(1);
     await clearEntry(page).click();
     await expect
         .poll(() => spots(show, 2))
@@ -204,7 +207,7 @@ test("offers Clear this page, not Remove keyframe, and Clear is unavailable wher
     // T3 holds over page 2: it has nothing to clear, so the entry shows checked and unavailable
     await rightClickMarcher(page, "T3");
     const cleared = menu(page).getByRole("menuitemcheckbox", {
-        name: /^Clear Page \S+ \(selected\)/,
+        name: /^Clear Page [^\s,]+( |$)/,
     });
     await expect(cleared).toHaveAttribute("aria-checked", "true");
     await expect(cleared).toHaveAttribute("data-disabled", "");
