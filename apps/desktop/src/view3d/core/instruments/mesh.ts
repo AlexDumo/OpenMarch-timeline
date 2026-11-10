@@ -19,8 +19,11 @@ export interface Piece {
     indices: number[];
     /** Optional linear RGB per vertex (3 numbers each), from `colorPieces`. */
     colors?: number[];
-    /** The bone this piece rides, when not the model's default. */
-    bone?: "handR" | "handL" | "spine002";
+    /**
+     * The bone this piece rides, when not the model's default. A `head`
+     * piece is given in the body's frame at bind, not the instrument's.
+     */
+    bone?: "handR" | "handL" | "spine002" | "head";
 }
 
 /** Part ids for instruments: the metal in the look's finish, chrome, and black hardware. */

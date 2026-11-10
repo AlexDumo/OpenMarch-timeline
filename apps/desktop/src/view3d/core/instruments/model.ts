@@ -43,7 +43,7 @@ export interface ModelOptions {
 }
 
 /** The bones instrument pieces ride: the hands, or the chest for a carrier. */
-export type InstrumentBone = "handR" | "handL" | "spine002";
+export type InstrumentBone = "handR" | "handL" | "spine002" | "head";
 
 export type Detail = "high" | "low";
 

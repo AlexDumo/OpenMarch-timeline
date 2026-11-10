@@ -276,6 +276,8 @@ export function sectionUniform(
         colors: { ...base.colors },
         options: {
             ...base.options,
+            // sousaphone players wear a beret, drawn with the horn, not the shako
+            hat: carry?.model === "sousaphone" ? false : base.options.hat,
             hatType: "shako",
             instrument: "none",
             carry,

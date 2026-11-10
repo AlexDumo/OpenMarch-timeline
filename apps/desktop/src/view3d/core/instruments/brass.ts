@@ -22,6 +22,7 @@ import {
     PART_WOOD,
 } from "./mesh";
 import type { BrassModelId, Detail, InstrumentModel } from "./model";
+import { beret } from "./beret";
 import { sousaphone } from "./sousaphone";
 import { tromboneHorn } from "./trombones";
 import { trumpet } from "./trumpet";
@@ -101,7 +102,10 @@ export function brassModel(
     return {
         id,
         pieces: colorPieces(
-            horn.pieces,
+            // sousaphone players wear a beret, not the shako (owner, 2026-11-10)
+            id === "sousaphone"
+                ? [...horn.pieces, ...beret(detail)]
+                : horn.pieces,
             (part) => BRASS_COLORS[part] ?? BRASS_COLORS[PART_METAL],
         ),
         leftGrip: horn.leftGrip,

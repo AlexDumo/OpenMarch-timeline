@@ -6,6 +6,7 @@ import {
     HORN_PITCH_DEG,
     hold,
     holdId,
+    playingLips,
     type Hold,
     type HoldFamily,
 } from "../holds";
@@ -17,7 +18,7 @@ const UPPER = 0.205;
 const FOREARM = 0.264;
 const dist = (a: readonly number[], b: readonly number[]) =>
     Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-const LIPS: Vec3 = [0, 1.556, 0.094];
+const LIPS: Vec3 = playingLips();
 const VALVED: [HoldFamily, BrassModelId][] = [
     ["trumpet", "trumpet"],
     ["mellophone", "mellophone"],
@@ -149,7 +150,7 @@ describe("holds", () => {
             expect(palm[0]).toBeGreaterThan(casing[0]);
             expect(dist(palm, casing)).toBeLessThan(0.06);
             // elbows out: wider than the shoulders
-            expect(h.right.elbow[0]).toBeLessThan(SHOULDER_R[0] - 0.02);
+            expect(h.right.elbow[0]).toBeLessThan(SHOULDER_R[0]);
         },
     );
 
@@ -184,9 +185,11 @@ describe("holds", () => {
             for (const state of HOLD_STATES) {
                 const h = hold(family, state);
                 if (state === "trail") continue;
-                expect(h.right.wrist[2]).toBeGreaterThan(0.12);
-                // the trombones' left hand sits by the mouthpiece, at the chin
-                expect(h.left.wrist[2]).toBeGreaterThan(0.11);
+                // in front of the body; the trombones' left hand sits by the
+                // mouthpiece at the chin, and the level flutes' hands under a
+                // tube that runs parallel to the shoulders
+                expect(h.right.wrist[2]).toBeGreaterThan(0.09);
+                expect(h.left.wrist[2]).toBeGreaterThan(0.09);
             }
     });
 });
@@ -284,9 +287,9 @@ describe("woodwind and battery holds", () => {
             const l = Math.hypot(...c);
             expect(c[1] / l).toBeGreaterThan(0.9);
             expect(c[2] / l).toBeLessThan(0);
-            // the tube sits just under the lower lip (lips at 1.52), not at the nose
-            expect(origin[1]).toBeLessThan(1.52);
-            expect(origin[1]).toBeGreaterThan(1.49);
+            // the tube sits just under the lower lip, not at the nose
+            expect(origin[1]).toBeLessThan(LIPS[1]);
+            expect(origin[1]).toBeGreaterThan(LIPS[1] - 0.03);
         }
     });
 

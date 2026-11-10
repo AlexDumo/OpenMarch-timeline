@@ -56,6 +56,59 @@ export interface Hold {
     right: ArmTargets;
     left: ArmTargets;
     instrument: { origin: Vec3; bellAxis: Vec3; capsAxis: Vec3 };
+    /**
+     * The head's turn about its joint, degrees: `pitch` up (chin raised),
+     * `roll` toward the performer's left shoulder. Absent: {@link HEAD_UP}.
+     */
+    head?: { pitch: number; roll: number };
+}
+
+/** Every performer plays with the head up 15 degrees (owner, 2026-11-10). */
+export const HEAD_UP = { pitch: 15, roll: 0 } as const;
+/** The head's joint (DEF-spine006) at bind, class 1.00: the head turns about it. */
+const HEAD_JOINT: Vec3 = [0, 1.565, -0.005];
+
+/**
+ * The head's turn as a world-space quaternion [x, y, z, w]: the roll about
+ * the forward axis, then the pitch about the left one (a positive pitch
+ * lifts the face, which is a negative turn about +X).
+ */
+export function headQuaternion(
+    head: Hold["head"] = HEAD_UP,
+): [number, number, number, number] {
+    const { pitch, roll } = head;
+    const p = (-pitch * Math.PI) / 360;
+    const r = (-roll * Math.PI) / 360;
+    // q = qPitch(about X) * qRoll(about Z)
+    const [px, pw] = [Math.sin(p), Math.cos(p)];
+    const [rz, rw] = [Math.sin(r), Math.cos(r)];
+    return [px * rw, -px * rz, pw * rz, pw * rw];
+}
+
+/** A point of the head at bind, where the hold's head turn carries it. */
+export function onTurnedHead(head: Hold["head"], p: Vec3): Vec3 {
+    const [x, y, z, w] = headQuaternion(head);
+    const v: Vec3 = [
+        p[0] - HEAD_JOINT[0],
+        p[1] - HEAD_JOINT[1],
+        p[2] - HEAD_JOINT[2],
+    ];
+    // v + 2w(q×v) + 2q×(q×v)
+    const c1: Vec3 = [
+        y * v[2] - z * v[1],
+        z * v[0] - x * v[2],
+        x * v[1] - y * v[0],
+    ];
+    const c2: Vec3 = [
+        y * c1[2] - z * c1[1],
+        z * c1[0] - x * c1[2],
+        x * c1[1] - y * c1[0],
+    ];
+    return [
+        HEAD_JOINT[0] + v[0] + 2 * (w * c1[0] + c2[0]),
+        HEAD_JOINT[1] + v[1] + 2 * (w * c1[1] + c2[1]),
+        HEAD_JOINT[2] + v[2] + 2 * (w * c1[2] + c2[2]),
+    ];
 }
 
 export const holdId = (family: HoldFamily, state: HoldState) =>
@@ -85,8 +138,12 @@ const SHOULDER_L: Vec3 = [0.185, 1.397, -0.005];
 const SHOULDER_R: Vec3 = [-0.185, 1.397, -0.005];
 const UPPER_ARM = 0.205;
 const FOREARM = 0.264;
-/** Where the mouthpiece's rim meets the lips. */
-const LIPS: Vec3 = [0, 1.556, 0.094];
+/**
+ * Where the mouthpiece's rim meets the lips, with the head at bind (read
+ * off a close-up of the face; owner, 2026-11-10: the first guess, 3 cm
+ * lower, put the rim on the chin). A hold turns it with the head.
+ */
+const LIPS: Vec3 = [0, 1.588, 0.088];
 /** How far the hand's middle (where it grips) and its knuckles lie from the wrist. */
 const PALM = 0.075;
 const KNUCKLES = 0.1;
@@ -155,14 +212,20 @@ const BELL_UP: Vec3 = [0, Math.sin(PITCH), Math.cos(PITCH)];
 const CAPS_UP: Vec3 = [0, Math.cos(PITCH), -Math.sin(PITCH)];
 
 /** The placement that puts `rim` (in the instrument frame) at the lips, pitched up. */
-function atLips(rim: Vec3): Hold["instrument"] {
+/** Where the lips are with the head turned as `head` says. */
+export function playingLips(head: Hold["head"] = HEAD_UP): Vec3 {
+    return onTurnedHead(head, LIPS);
+}
+
+function atLips(rim: Vec3, head: Hold["head"] = HEAD_UP): Hold["instrument"] {
+    const lips = playingLips(head);
     const f = frameOf({
         origin: [0, 0, 0],
         bellAxis: BELL_UP,
         capsAxis: CAPS_UP,
     });
     return {
-        origin: round3(sub(LIPS, dirToBody(f, rim))),
+        origin: round3(sub(lips, dirToBody(f, rim))),
         bellAxis: BELL_UP,
         capsAxis: CAPS_UP,
     };
@@ -1233,6 +1296,26 @@ const LEVEL_FLUTE = (old: Hold): Hold =>
         capsAxis: [0, 1, -0.25],
     });
 
+/**
+ * Where the woodwinds' `up` holds first put the mouth (at the chin, as it
+ * turned out): the flutes' lip plate just under (0, 1.52, 0.094), the reed
+ * instruments' mouthpiece tip at (0, 1.52, 0.13), which left it 4 cm in
+ * front of the face. Each hold moves by as much as that point is from where
+ * it belongs once the head turns up: the flutes' under the lips, the reeds'
+ * tip a centimeter inside them.
+ */
+const FLUTE_MOUTH: Vec3 = [0, 1.52, 0.094];
+const REED_MOUTH: Vec3 = [0, 1.52, 0.13];
+const REED_INTO_LIPS = 0.01;
+const withMouth = (old: Hold, reed = true): Hold => {
+    const lips = playingLips(old.head ?? HEAD_UP);
+    const d = reed
+        ? sub(add(lips, [0, 0, -REED_INTO_LIPS]), REED_MOUTH)
+        : sub(lips, FLUTE_MOUTH);
+    const o = old.instrument.origin;
+    return reframed(old, { ...old.instrument, origin: round3(add(o, d)) });
+};
+
 /** A valved horn's holds: its own `up`, the shared carry and trail. */
 const valved =
     (family: HoldFamily, id: BrassModelId): (() => Record<HoldState, Hold>) =>
@@ -1261,11 +1344,14 @@ const TABLE: Record<HoldFamily, () => Record<HoldState, Hold>> = {
     }),
     contra: contraHolds,
     sousaphone: fixed(SOUSAPHONE),
-    flute: () => ({ ...FLUTE, up: LEVEL_FLUTE(FLUTE.up) }),
-    piccolo: () => ({ ...PICCOLO, up: LEVEL_FLUTE(PICCOLO.up) }),
-    clarinet: fixed(CLARINET),
-    bassClarinet: fixed(BASS_CLARINET),
-    sax: fixed(SAX),
+    flute: () => ({ ...FLUTE, up: withMouth(LEVEL_FLUTE(FLUTE.up), false) }),
+    piccolo: () => ({
+        ...PICCOLO,
+        up: withMouth(LEVEL_FLUTE(PICCOLO.up), false),
+    }),
+    clarinet: () => ({ ...CLARINET, up: withMouth(CLARINET.up) }),
+    bassClarinet: () => ({ ...BASS_CLARINET, up: withMouth(BASS_CLARINET.up) }),
+    sax: () => ({ ...SAX, up: withMouth(SAX.up) }),
     snare: fixed(SNARE),
     tenors: fixed(TENORS),
     bass: fixed(BASS),

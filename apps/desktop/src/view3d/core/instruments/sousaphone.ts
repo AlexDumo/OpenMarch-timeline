@@ -86,11 +86,12 @@ const SOUSAPHONE = {
         ferrules: [0.2, 0.46, 0.72, 0.93],
     },
     // the neck: on from the hoop's end, up behind the left shoulder and
-    // forward into the bell
+    // forward into the bell. Its players wear a beret, not a plumed shako
+    // (owner, 2026-11-10), so the bell rides just over the beret.
     neck: {
         rise: 0.2,
-        top: [0.15, 2.22, -0.26] as Vec3,
-        tail: [0.15, 2.22, -0.12] as Vec3,
+        top: [0.15, 2.13, -0.26] as Vec3,
+        tail: [0.15, 2.13, -0.12] as Vec3,
         bends: [0.22, 0.14] as [number, number],
         radii: [
             [0, 0.064],
@@ -100,8 +101,9 @@ const SOUSAPHONE = {
     // the bell from its collar: a wide throat off the neck that opens into
     // an almost flat pancake, 26 in across
     bell: { length: 0.41, throat: 0.075, rim: 0.33, gamma: 0.8 },
-    // the mouthpiece at the lips, pointing forward and a little down
-    lips: [0, 1.55, 0.13] as Vec3,
+    // the mouthpiece at the lips with the head up 15 degrees (`HEAD_UP`
+    // and `LIPS` in holds.ts), pointing forward and a little down
+    lips: [0, 1.611, 0.079] as Vec3,
     mouthpiece: { size: 1.55, dir: [0, -0.17, 0.985] as Vec3 },
     lead: {
         radius: 0.009,

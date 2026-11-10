@@ -43,7 +43,7 @@ const browser = await chromium.launch({
 const errors = [];
 try {
     const page = await browser.newPage({
-        viewport: { width: 2640, height: 440 },
+        viewport: { width: 3080, height: 440 },
     });
     page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
     page.on("pageerror", (e) => errors.push(e.message));
@@ -80,7 +80,7 @@ try {
             console.log(`${state} ${name}`);
         }
         const sheet = await browser.newPage({
-            viewport: { width: 2640, height: 400 },
+            viewport: { width: 3080, height: 400 },
         });
         const head = views
             .map((v) => `<div style="flex:1;text-align:center">${v}</div>`)

@@ -94,6 +94,7 @@ const BONE_NAMES: Record<InstrumentBone, string> = {
     handR: "DEF-handR",
     handL: "DEF-handL",
     spine002: "DEF-spine002",
+    head: "DEF-spine006",
 };
 
 const linear = (hex: number) => new THREE.Color(hex); // Color converts sRGB hex to linear
@@ -111,7 +112,8 @@ export interface InstrumentFrame {
  * right hand times the hold's grip (`gripMatrix`), baked into every Horn
  * row, so they stay in the instrument's own frame and follow any hold or
  * transition the channel plays; left-hand pieces move with the hold's left
- * hand; chest pieces stay at bind.
+ * hand; chest pieces stay at bind; head pieces (a beret), built in the
+ * body's frame at bind, ride the head as the hold turns it.
  */
 export function instrumentFrames(
     skeleton: THREE.Skeleton,
@@ -134,6 +136,12 @@ export function instrumentFrames(
         if (index < 0)
             throw new Error(`instrumentGeometry: no ${BONE_NAMES[bone]} bone`);
         const bind = skeleton.boneInverses[index].clone().invert();
+        if (bone === "head") {
+            // head pieces are built in the body's frame at bind already
+            f = { index, toBind: new THREE.Matrix4() };
+            frames.set(bone, f);
+            return f;
+        }
         const posed = bone === "handL" ? pose.handL : bind;
         const toBind = bind
             .clone()

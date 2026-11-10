@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { hold, type HoldFamily, type HoldState } from "../holds";
+import { hold, playingLips, type HoldFamily, type HoldState } from "../holds";
 import { bounds, PART_METAL, type Vec3 } from "../mesh";
 import type { WoodwindModelId } from "../model";
 import { SAX_BODY_TURN, saxTurned } from "../saxophones";
@@ -85,7 +85,9 @@ function bellRim(id: SaxId): Vec3 {
 // the torso, front at z 0.12 (holds.ts landmarks), between hips and shoulders
 const inTorso = (w: Vec3) =>
     Math.abs(w[0]) < 0.17 && w[1] > 0.85 && w[1] < 1.35 && w[2] < 0.12;
-const LIPS: Vec3 = [0, 1.52, 0.13];
+// the mouthpiece's tip a centimeter inside the lips, the head up (`withMouth` in holds.ts)
+const MOUTH: Vec3 = playingLips();
+const LIPS: Vec3 = [MOUTH[0], MOUTH[1], MOUTH[2] - 0.01];
 
 describe("sax placement under the sax hold", () => {
     for (const id of SAXES)

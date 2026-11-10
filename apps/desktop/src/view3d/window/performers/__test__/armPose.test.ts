@@ -79,7 +79,8 @@ describe("poseArms", () => {
             const sk = await skeleton();
             const h = hold("trumpet", state);
             const pose = poseArms(sk, h);
-            expect(pose.local.size).toBe(8);
+            // the eight arm bones, the neck and the head
+            expect(pose.local.size).toBe(10);
             const elbowR = posedHead(sk, pose, "DEF-forearmR");
             const wristR = posedHead(sk, pose, "DEF-handR");
             expect(

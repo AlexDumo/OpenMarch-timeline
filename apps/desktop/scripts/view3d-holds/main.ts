@@ -26,7 +26,7 @@ import {
     PART_SILK,
     PART_WOOD,
 } from "@/view3d/core/instruments/mesh";
-import { PART as BODY_PART } from "@/view3d/core/marchers/looks";
+import { partVisible, sectionUniform } from "@/view3d/core/marchers/looks";
 import { poseArms } from "@/view3d/window/performers/marchers/armPose";
 
 export interface Entry {
@@ -72,6 +72,7 @@ export const VIEWS = [
     "front-right",
     "front-left",
     "front, horn see-through",
+    "head close-up, right side",
 ];
 const TILE = 440;
 
@@ -106,6 +107,32 @@ const PART_COLORS: Record<number, number> = {
 };
 
 let body: THREE.SkinnedMesh;
+let fullIndex: number[] = [];
+
+/**
+ * The body's triangles as the window draws the section's look
+ * (`partVisible`): no placeholder instruments, aussie hat or cape, and the
+ * shako only when the look wears one.
+ */
+function showParts(entry: Entry) {
+    const look = sectionUniform(entry.name);
+    const options = {
+        ...look.options,
+        carry: entry.carry,
+        hat: entry.carry.model === "sousaphone" ? false : look.options.hat,
+    };
+    const part = body.geometry.getAttribute("_part");
+    const keep: number[] = [];
+    for (let t = 0; t < fullIndex.length; t += 3)
+        if (
+            partVisible(
+                { ...look, options },
+                Math.round(part.getX(fullIndex[t])),
+            )
+        )
+            keep.push(fullIndex[t], fullIndex[t + 1], fullIndex[t + 2]);
+    body.geometry.setIndex(keep);
+}
 let instrument: THREE.Mesh | null = null;
 
 async function loadBody() {
@@ -132,19 +159,7 @@ async function loadBody() {
         col.set([c.r, c.g, c.b], i * 3);
     }
     g.setAttribute("color", new THREE.BufferAttribute(col, 3));
-    // as the window draws a band look: no placeholder instruments, aussie hat or cape
-    const hidden = new Set<number>([
-        ...BODY_PART.instruments,
-        ...BODY_PART.aussie,
-        BODY_PART.cape,
-    ]);
-    const part = g.getAttribute("_part");
-    const index = g.index!;
-    const keep: number[] = [];
-    for (let t = 0; t < index.count; t += 3)
-        if (!hidden.has(Math.round(part.getX(index.getX(t)))))
-            keep.push(index.getX(t), index.getX(t + 1), index.getX(t + 2));
-    g.setIndex(keep);
+    fullIndex = Array.from(g.index!.array);
     body.material = new THREE.MeshStandardMaterial({
         vertexColors: true,
         roughness: 0.8,
@@ -164,6 +179,7 @@ function placement(h: ReturnType<typeof hold>): THREE.Matrix4 {
 }
 
 function show(entry: Entry, state: HoldState) {
+    showParts(entry);
     const h = hold(entry.carry.family, state);
     const pose = poseArms(body.skeleton, h);
     // every bone at bind first (from the inverse bind matrices), then the arms
@@ -200,7 +216,19 @@ function show(entry: Entry, state: HoldState) {
     const nrm: number[] = [];
     const col: number[] = [];
     const idx: number[] = [];
+    // instrument pieces by the hold's placement; head pieces (a beret),
+    // built in the body's frame at bind, by the posed head
+    const place = placement(h);
+    const headIndex = body.skeleton.bones.findIndex(
+        (b) => b.name === "DEF-spine006",
+    );
+    const onHead = body.skeleton.bones[headIndex].matrixWorld
+        .clone()
+        .multiply(body.skeleton.boneInverses[headIndex]);
+    const v = new THREE.Vector3();
     for (const p of model.pieces) {
+        const m = p.bone === "head" ? onHead : place;
+        const nm = new THREE.Matrix3().getNormalMatrix(m);
         const first = pos.length / 3;
         const base = new THREE.Color(
             p.part === PART_METAL && silver
@@ -208,8 +236,10 @@ function show(entry: Entry, state: HoldState) {
                 : (PART_COLORS[p.part] ?? 0x888888),
         );
         for (let i = 0; i < p.positions.length; i += 3) {
-            pos.push(p.positions[i], p.positions[i + 1], p.positions[i + 2]);
-            nrm.push(p.normals[i], p.normals[i + 1], p.normals[i + 2]);
+            v.fromArray(p.positions, i).applyMatrix4(m);
+            pos.push(v.x, v.y, v.z);
+            v.fromArray(p.normals, i).applyMatrix3(nm).normalize();
+            nrm.push(v.x, v.y, v.z);
             if (p.colors && p.part !== PART_METAL)
                 col.push(p.colors[i], p.colors[i + 1], p.colors[i + 2]);
             else col.push(base.r, base.g, base.b);
@@ -221,7 +251,6 @@ function show(entry: Entry, state: HoldState) {
     g.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
     g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
     g.setIndex(idx);
-    g.applyMatrix4(placement(h));
     instrument = new THREE.Mesh(
         g,
         new THREE.MeshStandardMaterial({
@@ -258,24 +287,22 @@ function show(entry: Entry, state: HoldState) {
             new THREE.Vector3(0, 1, 0),
         ],
         [new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0)],
+        [new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0)],
     ];
     const mat = instrument.material as THREE.MeshStandardMaterial;
+    const head = new THREE.Vector3(0, 1.6, 0.08);
     dirs.forEach(([dir, up], i) => {
-        const cam = new THREE.OrthographicCamera(
-            -half,
-            half,
-            half,
-            -half,
-            0.01,
-            20,
-        );
-        cam.position.copy(center).addScaledVector(dir, 6);
+        const close = i === dirs.length - 1;
+        const h = close ? 0.22 : half;
+        const at = close ? head : center;
+        const cam = new THREE.OrthographicCamera(-h, h, h, -h, 0.01, 20);
+        cam.position.copy(at).addScaledVector(dir, 6);
         cam.up.copy(up);
-        cam.lookAt(center);
+        cam.lookAt(at);
         renderer.setViewport(i * TILE, 0, TILE, TILE);
         renderer.setScissor(i * TILE, 0, TILE, TILE);
         renderer.setClearColor(i % 2 ? 0x2b3440 : 0x323c4a);
-        const seeThrough = i === dirs.length - 1;
+        const seeThrough = i === dirs.length - 2;
         mat.transparent = seeThrough;
         mat.opacity = seeThrough ? 0.3 : 1;
         mat.depthWrite = !seeThrough;
