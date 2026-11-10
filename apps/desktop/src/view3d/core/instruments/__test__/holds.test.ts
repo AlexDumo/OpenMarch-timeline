@@ -171,6 +171,32 @@ describe("holds", () => {
         expect(Math.abs(h.left.wrist[0] - 0.2)).toBeLessThan(0.08);
     });
 
+    it.each([
+        "trumpet",
+        "mellophone",
+        "baritone",
+        "euphonium",
+        "trombone",
+        "bassTrombone",
+        "contra",
+        "sousaphone",
+    ] as const)(
+        "%s up: each hand carries straight on from the forearm, no break at the wrist",
+        (family) => {
+            // owner, 2026-11-10: a straight line from the top of the hand to the elbow
+            const h = hold(family, "up");
+            for (const arm of [h.left, h.right]) {
+                const fore = arm.wrist.map((w, i) => w - arm.elbow[i]);
+                const cos =
+                    fore.reduce((s, v, i) => s + v * arm.fingers[i], 0) /
+                    Math.hypot(...fore);
+                expect(
+                    (Math.acos(Math.min(1, cos)) * 180) / Math.PI,
+                ).toBeLessThan(8);
+            }
+        },
+    );
+
     it("sousaphone up: the left arm reaches the mouthpiece clear of the tubing", () => {
         // the arm as capsules: upper arm 0.05 m thick, forearm 0.042, the
         // forearm's last 15% left out where the hand holds the leadpipe

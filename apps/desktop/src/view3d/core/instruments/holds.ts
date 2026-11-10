@@ -1603,6 +1603,70 @@ const TABLE: Record<HoldFamily, () => Record<HoldState, Hold>> = {
 const built = new Map<HoldFamily, Record<HoldState, Hold>>();
 
 /**
+ * An arm whose hand carries straight on from the forearm (owner,
+ * 2026-11-10: a straight line from the top of the hand to the elbow, no
+ * break at the wrist), with the knuckles kept at `knuckles`: the hand
+ * points along the forearm, the wrist sits a hand's length back from the
+ * knuckles, and the elbow is solved again toward `out`, until they agree.
+ */
+function straightArm(
+    side: "left" | "right",
+    knuckles: Vec3,
+    out: Vec3,
+    start: Vec3,
+): ArmTargets {
+    const shoulder = side === "left" ? SHOULDER_L : SHOULDER_R;
+    let fingers = unit(start);
+    let wrist = sub(knuckles, mul(fingers, KNUCKLES));
+    let elbow = elbowFor(shoulder, wrist, out);
+    for (let i = 0; i < 12; i++) {
+        fingers = unit(sub(wrist, elbow));
+        wrist = sub(knuckles, mul(fingers, KNUCKLES));
+        elbow = elbowFor(shoulder, wrist, out);
+    }
+    return { elbow, wrist: round3(wrist), fingers: unit(sub(wrist, elbow)) };
+}
+
+/** `h` with both wrists straight, each hand's knuckles where they were (`straightArm`). */
+function straightWrists(h: Hold, out?: { right?: Vec3; left?: Vec3 }): Hold {
+    const arm = (side: "left" | "right", a: ArmTargets, o?: Vec3) => {
+        const shoulder = side === "left" ? SHOULDER_L : SHOULDER_R;
+        const knuckles = add(a.wrist, mul(a.fingers, KNUCKLES));
+        return straightArm(
+            side,
+            knuckles,
+            o ?? sub(a.elbow, shoulder),
+            a.fingers,
+        );
+    };
+    return {
+        ...h,
+        right: arm("right", h.right, out?.right),
+        left: arm("left", h.left, out?.left),
+    };
+}
+
+/** The brass families whose `up` is played with straight wrists. */
+const STRAIGHT_BRASS: ReadonlySet<HoldFamily> = new Set<HoldFamily>([
+    "trumpet",
+    "mellophone",
+    "baritone",
+    "euphonium",
+    "trombone",
+    "bassTrombone",
+    "contra",
+    "sousaphone",
+]);
+/** Elbow directions for holds with straight wrists that need their own; others keep theirs. */
+const STRAIGHT_OUT: Partial<Record<HoldFamily, { right?: Vec3; left?: Vec3 }>> =
+    {
+        // a stronger triangle: the elbow down and forward of the chest
+        contra: { right: [0.1, -1, 0.7] },
+        // in front of the chest, clear of the body tube
+        sousaphone: { left: [-0.15, -0.4, 1.4] },
+    };
+
+/**
  * The 6 ft flag presented (Star Line and other guard instruction pages, parade
  * photos, 2026-11-10): the left hand covers the butt at the belly button,
  * the right hand grips the pole 0.6 m up it at about nose height, and the
@@ -1667,6 +1731,16 @@ export function hold(family: HoldFamily, state: HoldState): Hold {
     let r = built.get(family);
     if (!r) {
         r = TABLE[family]();
+        if (STRAIGHT_BRASS.has(family)) {
+            const up = straightWrists(r.up, STRAIGHT_OUT[family]);
+            // the worn horns play the same hold in every state
+            const worn = family === "contra" || family === "sousaphone";
+            r = {
+                up,
+                carry: worn ? { ...up, state: "carry" } : r.carry,
+                trail: worn ? { ...up, state: "trail" } : r.trail,
+            };
+        }
         built.set(family, r);
     }
     return r[state];
