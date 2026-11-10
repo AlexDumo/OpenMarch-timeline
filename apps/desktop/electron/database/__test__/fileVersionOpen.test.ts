@@ -117,9 +117,9 @@ describe("opening files by format version", () => {
         expect(userVersionOf(filePath)).toBe(8);
     });
 
-    it("refuses a file at 12 and leaves its bytes unchanged", async () => {
-        const filePath = path.join(tempDir, "show-12.dots");
-        await createShowFile(filePath, 12);
+    it("refuses a file at 13 and leaves its bytes unchanged", async () => {
+        const filePath = path.join(tempDir, "show-13.dots");
+        await createShowFile(filePath, 13);
         const hashBefore = sha256(filePath);
         const mtimeBefore = fs.statSync(filePath).mtimeMs;
         const filesBefore = siblings(filePath);
@@ -129,7 +129,7 @@ describe("opening files by format version", () => {
         expect(sha256(filePath)).toBe(hashBefore);
         expect(fs.statSync(filePath).mtimeMs).toBe(mtimeBefore);
         expect(siblings(filePath)).toEqual(filesBefore);
-        expect(userVersionOf(filePath)).toBe(12);
+        expect(userVersionOf(filePath)).toBe(13);
     });
 
     it("refuses a much newer file too", async () => {
@@ -184,10 +184,10 @@ describe("opening files by format version", () => {
             },
         );
 
-        it("refuses a file at 12 with a message to update, without migrating", async () => {
-            const db = new DatabaseSync(path.join(tempDir, "m-12.dots"));
+        it("refuses a file at 13 with a message to update, without migrating", async () => {
+            const db = new DatabaseSync(path.join(tempDir, "m-13.dots"));
             try {
-                db.prepare("PRAGMA user_version = 12").run();
+                db.prepare("PRAGMA user_version = 13").run();
                 const migrator = new DrizzleMigrationService(getOrm(db), db);
                 await expect(
                     migrator.applyPendingMigrations(migrationsFolder),
@@ -198,7 +198,7 @@ describe("opening files by format version", () => {
                     )
                     .all();
                 expect(tables).toEqual([]);
-                expect(readUserVersion(db)).toBe(12);
+                expect(readUserVersion(db)).toBe(13);
             } finally {
                 db.close();
             }

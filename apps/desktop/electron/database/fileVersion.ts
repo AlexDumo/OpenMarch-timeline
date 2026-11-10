@@ -22,6 +22,10 @@
  *   a path), or when it opens with lanes (a migrated version-10 file). A file without a lane stays
  *   at the version it had. ADR 0015 §9: each later step that stores a fact an older build would
  *   play or edit wrong takes the next number; a number a lab build wrote is never reused.
+ * - 12: Adjust (pathways step 3b, spec J.1 and J.2): a lane has its own displacement profile. A
+ *   build that doesn't know it would walk that spot on the plain lane, so a file is written as 12
+ *   with its first Adjust. A file without one stays at the version it had. The number is not
+ *   lowered when an Adjust is reset or undone, as 11 isn't when the last path goes.
  */
 import type { DatabaseSync } from "node:sqlite";
 import { recoverParkedFloorInTransaction } from "./parkedFloor";
@@ -38,10 +42,13 @@ export const ROUTE_MODEL_USER_VERSION = 10;
 /** Version of a file that has a lane, a drawn path (ADR 0015 §9, pathways step 24). */
 export const LANE_MODEL_USER_VERSION = 11;
 
+/** Version of a file with an Adjust on a lane (ADR 0015 §9, pathways step 3b). */
+export const ADJUST_MODEL_USER_VERSION = 12;
+
 /** Oldest version this build opens. Older files must go through 0.0.10 first. */
 export const MIN_SUPPORTED_USER_VERSION = PAGE_MODEL_USER_VERSION;
 /** Newest version this build opens. Anything higher was written by a newer release. */
-export const MAX_SUPPORTED_USER_VERSION = LANE_MODEL_USER_VERSION;
+export const MAX_SUPPORTED_USER_VERSION = ADJUST_MODEL_USER_VERSION;
 /** Version written into a brand-new file: a new show is a timeline show. */
 export const NEW_FILE_USER_VERSION = TIMELINE_MODEL_USER_VERSION;
 

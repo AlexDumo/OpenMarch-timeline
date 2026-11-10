@@ -27,11 +27,19 @@ import {
     findRouteTarget,
     groupMoveAt,
     pathObjectsAt,
+    refitNeeded,
     readPathObjectIndex,
     type PathObjectIndex,
     type PathTarget,
 } from "./pathTarget";
 import {
+    acknowledgeOpenPath,
+    deleteAdjustKey,
+    deleteOnLane,
+    resetSpot,
+    memberOf,
+    refitOpenPath,
+    selectLane,
     setGroupCommands,
     setPathObjects,
     type PathObject,
@@ -200,6 +208,48 @@ export function usePathPenActions(): void {
     // Remove path (AP-R2), open or closed, not while a new one is drawn
     useActionHandler("removePath", () => void removePath(), {
         enabled: hasRoute && phase !== "drawing",
+    });
+    // Re-fit (decision A), open or closed, only when the ends have moved
+    const canRefit = usePathPenStore(
+        (s) =>
+            s.session !== null &&
+            s.session.phase !== "drawing" &&
+            refitNeeded(s.session.target),
+    );
+    useActionHandler("refitPath", () => void refitOpenPath(), {
+        enabled: canRefit,
+    });
+    // Adjust's named actions, on the lane or key picked on the open group path (decision C)
+    const lane = usePathPenStore((s) =>
+        s.session?.phase === "open" ? (s.session.lane ?? null) : null,
+    );
+    const laneAdjusted = usePathPenStore((s) =>
+        s.session?.phase === "open" && s.session.lane
+            ? !!memberOf(s.session, s.session.lane.marcherId)?.adjust
+            : false,
+    );
+    const rehomedOpen = usePathPenStore(
+        (s) =>
+            s.session?.target.group?.members.some((m) => m.adjust?.rehomed) ??
+            false,
+    );
+    useActionHandler(
+        "adjustRemoveKey",
+        () => {
+            if (lane && lane.key !== null)
+                void deleteAdjustKey(lane.marcherId, lane.key);
+        },
+        { enabled: lane !== null && lane.key !== null },
+    );
+    useActionHandler(
+        "adjustResetSpot",
+        () => {
+            if (lane) void resetSpot(lane.marcherId);
+        },
+        { enabled: laneAdjusted },
+    );
+    useActionHandler("adjustAcknowledge", () => void acknowledgeOpenPath(), {
+        enabled: rehomedOpen,
     });
     // Own path and Rejoin (step 15), enabled whenever a group path is shown, closed too
     const ownIds = usePathPenStore((s) => s.ownable);
@@ -512,23 +562,27 @@ export function PathPenKeys(): null {
     const phase = usePathPenStore((s) => s.session?.phase ?? null);
     const picked = usePathPenStore((s) => s.session?.selected ?? null);
     const object = usePathPenStore((s) => s.session?.object ?? false);
+    const pickedLane = usePathPenStore((s) => s.session?.lane ?? null);
     const drawing = phase === "drawing";
     const objectSelected = object && phase === "closed";
     useActionHandler(
         "cancelAlignmentUpdates",
         () => {
-            if (!drawing && picked !== null) selectPoint(null);
+            if (!drawing && pickedLane !== null) selectLane(null);
+            else if (!drawing && picked !== null) selectPoint(null);
             else if (!drawing && escapePathObject()) return;
             else closePath();
         },
         {
             label: drawing
                 ? tolgee.t("actions.path.cancel", "Cancel path")
-                : picked !== null
-                  ? tolgee.t("actions.path.deselectPoint", "Deselect point")
-                  : objectSelected
-                    ? tolgee.t("actions.path.deselect", "Deselect path")
-                    : tolgee.t("actions.path.close", "Close path"),
+                : pickedLane !== null
+                  ? tolgee.t("actions.path.deselectSpot", "Deselect spot")
+                  : picked !== null
+                    ? tolgee.t("actions.path.deselectPoint", "Deselect point")
+                    : objectSelected
+                      ? tolgee.t("actions.path.deselect", "Deselect path")
+                      : tolgee.t("actions.path.close", "Close path"),
         },
     );
     useActionHandler(
@@ -543,6 +597,8 @@ export function PathPenKeys(): null {
         "shapeRemoveLastPoint",
         () => {
             if (drawing) removeLastPoint();
+            // A picked lane takes the key: its Adjust key goes, or the spot resets, never the path
+            else if (pickedLane) void deleteOnLane(pickedLane);
             else if (picked !== null) {
                 const index = Number(picked.slice(1));
                 if (Number.isInteger(index))
@@ -556,9 +612,13 @@ export function PathPenKeys(): null {
         {
             label: drawing
                 ? tolgee.t("actions.path.removeLastPoint", "Remove last point")
-                : picked !== null
-                  ? tolgee.t("actions.path.deletePoint", "Delete point")
-                  : tolgee.t("actions.path.remove", "Remove path"),
+                : pickedLane?.key != null
+                  ? tolgee.t("actions.path.removeKey", "Remove key")
+                  : pickedLane
+                    ? tolgee.t("actions.path.resetSpot", "Reset spot")
+                    : picked !== null
+                      ? tolgee.t("actions.path.deletePoint", "Delete point")
+                      : tolgee.t("actions.path.remove", "Remove path"),
         },
         drawing || phase === "open" || objectSelected,
     );

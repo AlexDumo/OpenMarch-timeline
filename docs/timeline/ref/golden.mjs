@@ -228,5 +228,28 @@ const report = (name, bad) => { bad.length ? fail++ : pass++; console.log(`${bad
     if (p[0] !== q[0] || p[1] !== q[1] || p[0] !== r[0] || p[1] !== r[1]) { bad.push(`M${m}@${t}: ${p} vs ${q} / ${r}`); break; } }
   report('QA-RT-L1', bad); }
 
+{ // QA-RT-L2, QA-RT-L5 (v0.10, plan step 3b): an Adjust on one spot, R-14′ item 6 with T-3 and T-4
+  const G = { v: 1, from: [0, 0], to: [200, 0], points: [{ id: 'p', at: [50, 0] }, { id: 'q', at: [150, 0] }] };
+  const adjShow = (adjust) => ({ marchers: [{ id: 1, home: [0, -5] }, { id: 2, home: [0, 5] }], shapes: {},
+    transitions: { 1: { id: 1, start: 0, end: 16, dest: null, points: [[200, -5], [200, 5]], slots: 2, style: 'direct', order: 'slot', params: null } },
+    assignments: [{ id: 1, marcher: 1, transition: 1, slot: 0, start: 0, end: 16, layer: 0 }, { id: 2, marcher: 2, transition: 1, slot: 1, start: 0, end: 16, layer: 0 }],
+    routes: { 1: { geometry: G } },
+    lanes: { 1: { transition: 1, slot: 0, route: 1, offset: [0, -5] }, 2: { transition: 1, slot: 1, route: 1, offset: [0, 5], adjust } } });
+  const same = (p, q) => p[0] === q[0] && p[1] === q[1];
+  const K = (a, b, f, d) => ({ a, b, f, d });
+  const bad = [];
+  const db = adjShow({ v: 1, keys: [K('p', 'q', 0.25, [0, 0]), K('p', 'q', 0.5, [0, 20]), K('p', 'q', 0.75, [0, 0])] });
+  const a = makeOracle(db), c = makeResolver(db);
+  for (const [b, want] of [[8, [100, 25]], [6, [75, 5]], [7, [87.5, 15]], [4, [50, 5]]]) if (!same(a.positionAt(2, b), want)) bad.push(`@${b}: ${a.positionAt(2, b)}`);
+  for (let t = 0; t <= 16; t += 0.125) for (const m of [1, 2]) if (!same(a.positionAt(m, t), c.positionAt(m, t))) bad.push(`M${m}@${t}`);
+  if (!same(a.positionAt(1, 8), [100, -5])) bad.push('the other lane moved');
+  report('QA-RT-L2', bad);
+  const bad5 = [];
+  const clamp = adjShow({ v: 1, keys: [K('from', 'p', 0.5, [0, 20])] });              // T-3: a key on the first leg sits on D_1
+  if (!same(makeOracle(clamp).positionAt(2, 4), [50, 25])) bad5.push('T-3');
+  const tie = adjShow({ v: 1, keys: [K('p', 'q', 0.5, [0, 10]), K('p', 'q', 0.5, [0, 20]), K('p', 'q', 0.5 + 1e-14, [0, 30]), K('p', 'q', 0.8, [0, 0])] });
+  if (!same(makeOracle(tie).positionAt(2, 8), [100, 35])) bad5.push('T-4: the last stored key of the cluster stands');
+  report('QA-RT-L5', bad5); }
+
 console.log(`${pass} of ${pass + fail} golden fixtures pass (oracle and cached resolver)`);
 if (fail) process.exitCode = 1;

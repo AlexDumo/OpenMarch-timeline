@@ -55,7 +55,7 @@ All randomness is seeded (mulberry32), so every run reproduces exactly.
   transitions: { [id]: { id, start, end, dest, slots, style, order, params } },
   assignments: [{ id, marcher, transition, slot, start, end, layer }],
   routes:      { [id]: { geometry: { v, from, to, points } } },          // v0.9, optional
-  lanes:       { [id]: { transition, slot, route, offset } }             // v0.10, optional; offset null = own lane
+  lanes:       { [id]: { transition, slot, route, offset, adjust? } }    // v0.10, optional; offset null = own lane; adjust = J.2 profile
 }
 ```
 

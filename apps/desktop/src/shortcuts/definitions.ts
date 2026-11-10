@@ -796,6 +796,42 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // Pathways step 3b: Re-fit stretches the path onto where its marchers stand now; the rest act on
+    // the lane or key picked on the open group path. No keys of their own: the path's bar, its
+    // menus and the palette
+    refitPath: {
+        labelKey: "actions.path.refit",
+        keywordsKey: "actions.path.keywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    adjustRemoveKey: {
+        labelKey: "actions.path.adjustRemoveKey",
+        keywordsKey: "actions.path.keywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    adjustResetSpot: {
+        labelKey: "actions.path.adjustResetSpot",
+        keywordsKey: "actions.path.keywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    adjustAcknowledge: {
+        labelKey: "actions.path.adjustAcknowledge",
+        keywordsKey: "actions.path.keywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+
     // Pathways step 15: a group path's members break off with a copy of their lane (Own path,
     // AP-R9) or follow it (Rejoin, AP-R10). On the floating path bar and in the palette; no keys
     ownPath: {

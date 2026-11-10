@@ -2,7 +2,9 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { T } from "@tolgee/react";
 import {
+    ArrowCounterClockwiseIcon,
     ArrowsMergeIcon,
+    ArrowsOutLineHorizontalIcon,
     ArrowsSplitIcon,
     BackspaceIcon,
     LineSegmentsIcon,
@@ -28,7 +30,14 @@ import {
     IconButton,
 } from "@/shapes/editor/EditorBarParts";
 import type { XY } from "@/shapes/types";
-import { shapeOf, usePathPenStore, type PathSession } from "./pathPenStore";
+import { refitNeeded } from "./pathTarget";
+import {
+    memberNow,
+    memberOf,
+    shapeOf,
+    usePathPenStore,
+    type PathSession,
+} from "./pathPenStore";
 import {
     curveOf,
     groupLegDistances,
@@ -75,10 +84,16 @@ export interface BigSteps {
     inches: number;
     /** Which leg of a group path is worst; null for one marcher's own path */
     where: LegWhere | null;
+    /** The worst leg itself, for its words */
+    worst?: BigSteps["legs"][number];
     legs: {
         where: LegWhere;
         drill: string | null;
         steps: string;
+        /** An adjusted stretch (J.6): its spot and the counts it runs over */
+        spot?: number;
+        from?: number;
+        to?: number;
     }[];
 }
 
@@ -95,11 +110,15 @@ function groupBigSteps(
     const group = target.group!;
     const counts = target.end - target.start;
     const schedule = scheduleOf(shapeOf(session));
+    const points = shapeOf(session).points;
     const walks = group.members.map((m) => ({
         marcherId: m.marcherId,
-        walk: memberWalkOf(schedule, m),
+        walk: memberWalkOf(schedule, memberNow(session, m), points),
     }));
     const drill = new Map(group.members.map((m) => [m.marcherId, m.drill]));
+    const slots = new Map(group.members.map((m) => [m.marcherId, m.slot ?? 0]));
+    const L = schedule.W.L;
+    const tenth = (v: number) => Math.round(v * 10) / 10;
     const threshold = fieldProperties.stepSizeWarningThresholdInches;
     const big: (BigSteps["legs"][number] & { inches: number })[] = [];
     for (const leg of groupLegDistances(schedule, walks)) {
@@ -120,6 +139,13 @@ function groupBigSteps(
                     : (drill.get(leg.marcherId) ?? null),
             steps: size.displayString(),
             inches: size.inchesPerStep,
+            ...(leg.x0 === undefined || leg.x1 === undefined
+                ? {}
+                : {
+                      spot: (slots.get(leg.marcherId ?? -1) ?? 0) + 1,
+                      from: tenth((leg.x0 / L) * counts),
+                      to: tenth((leg.x1 / L) * counts),
+                  }),
         });
     }
     if (big.length === 0) return null;
@@ -128,19 +154,30 @@ function groupBigSteps(
         steps: worst.steps,
         inches: Math.round(worst.inches),
         where: worst.where,
-        legs: big.map(({ where, drill, steps }) => ({ where, drill, steps })),
+        worst,
+        legs: big.map(({ inches: _inches, ...leg }) => leg),
     };
 }
 
 /** How Big steps names a leg of a group path */
-const legWords = (where: LegWhere) =>
-    where === "onto"
+const legWords = (
+    leg: Pick<BigSteps["legs"][number], "where" | "spot" | "from" | "to">,
+) => {
+    const { where } = leg;
+    if (where === "adjusted")
+        return tolgee.t(
+            "pathways.editor.legAdjusted",
+            "spot {spot}, counts {from} to {to} (adjusted)",
+            { spot: leg.spot ?? 0, from: leg.from ?? 0, to: leg.to ?? 0 },
+        );
+    return where === "onto"
         ? tolgee.t("pathways.editor.legOnto", "onto the path")
         : where === "off"
           ? tolgee.t("pathways.editor.legOff", "off the path")
           : where === "straight"
             ? tolgee.t("pathways.editor.legStraight", "straight to the spot")
             : tolgee.t("pathways.editor.legAlong", "along the path");
+};
 
 /**
  * The path pen's hint and floating editor (pathways steps 1 and 2). While drawing, a hint over the field
@@ -267,6 +304,16 @@ function PathEditorBar({
     const ownable = usePathPenStore((s) => s.ownable);
     const rejoin = usePathPenStore((s) => s.rejoin);
     const groupControls = !drawing && (ownable.length > 0 || rejoin !== null);
+    // Re-fit shows only when the ends have moved, as Own path shows only when it can act (decision A)
+    const refit = !drawing && refitNeeded(session.target);
+    // The lane picked on the open group path (decision C), and any Adjust the app moved
+    const laneMember =
+        !drawing && session.lane
+            ? memberOf(session, session.lane.marcherId)
+            : undefined;
+    const rehomed =
+        !drawing &&
+        (session.target.group?.members.some((m) => m.adjust?.rehomed) ?? false);
     // An open path is always a stored one, so the bar always holds a control
     const controls = drawing || stored;
     return (
@@ -297,8 +344,10 @@ function PathEditorBar({
                                       legs: big.legs
                                           .map((l) =>
                                               l.drill === null
-                                                  ? `${legWords(l.where)} (${l.steps})`
-                                                  : `${l.drill} ${legWords(l.where)} (${l.steps})`,
+                                                  ? `${legWords(l)} (${l.steps})`
+                                                  : l.where === "adjusted"
+                                                    ? `${legWords(l)} (${l.steps})`
+                                                    : `${l.drill} ${legWords(l)} (${l.steps})`,
                                           )
                                           .join(", "),
                                   },
@@ -321,7 +370,7 @@ function PathEditorBar({
                                   "Big steps · {steps} {where}",
                                   {
                                       steps: big.steps,
-                                      where: legWords(big.where),
+                                      where: legWords(big.worst!),
                                   },
                               )}
                     </span>
@@ -439,6 +488,101 @@ function PathEditorBar({
                                 )}
                             </span>
                             {stored && <Divider />}
+                        </>
+                    )}
+                    {rehomed && (
+                        <>
+                            <Tip
+                                label={tolgee.t(
+                                    "pathways.editor.rehomedTip",
+                                    "A point an adjustment was attached to changed, so the adjustment moved to the nearest points left. Check it still does what you meant.",
+                                )}
+                            >
+                                <button
+                                    type="button"
+                                    className="text-yellow flex items-center gap-4 px-4"
+                                    onClick={() =>
+                                        runAction("adjustAcknowledge")
+                                    }
+                                    data-testid="path-rehomed-badge"
+                                >
+                                    <WarningIcon
+                                        size={14}
+                                        weight="bold"
+                                        aria-hidden
+                                    />
+                                    {tolgee.t(
+                                        "pathways.editor.rehomedBadge",
+                                        "Adjustment re-homed",
+                                    )}
+                                </button>
+                            </Tip>
+                            <Divider />
+                        </>
+                    )}
+                    {laneMember && (
+                        <>
+                            <span
+                                className="flex items-center gap-2 px-4"
+                                data-testid="path-lane-picked"
+                            >
+                                {tolgee.t(
+                                    "pathways.editor.laneOf",
+                                    "Spot {spot} · {marcher}",
+                                    {
+                                        spot: (laneMember.slot ?? 0) + 1,
+                                        marcher: laneMember.drill,
+                                    },
+                                )}
+                                {session.lane?.key !== null && (
+                                    <IconButton
+                                        label={tolgee.t(
+                                            "actions.path.adjustRemoveKey",
+                                            "Remove adjustment point",
+                                        )}
+                                        action="adjustRemoveKey"
+                                        onClick={() =>
+                                            runAction("adjustRemoveKey")
+                                        }
+                                        testId="path-adjust-remove-key"
+                                    >
+                                        <BackspaceIcon size={14} />
+                                    </IconButton>
+                                )}
+                                {laneMember.adjust && (
+                                    <IconButton
+                                        label={tolgee.t(
+                                            "actions.path.adjustResetSpot",
+                                            "Reset this spot",
+                                        )}
+                                        action="adjustResetSpot"
+                                        onClick={() =>
+                                            runAction("adjustResetSpot")
+                                        }
+                                        testId="path-adjust-reset"
+                                    >
+                                        <ArrowCounterClockwiseIcon size={14} />
+                                    </IconButton>
+                                )}
+                            </span>
+                            <Divider />
+                        </>
+                    )}
+                    {refit && (
+                        <>
+                            <IconButton
+                                label={tolgee.t(
+                                    "pathways.editor.refitTip",
+                                    "Move this path's ends to where its marchers stand now and stretch its corners to match",
+                                )}
+                                action="refitPath"
+                                onClick={() => runAction("refitPath")}
+                                testId="path-refit"
+                            >
+                                <ArrowsOutLineHorizontalIcon size={14} />
+                                {tolgee.t("actions.path.refit", "Re-fit path")}
+                            </IconButton>
+                            <Divider />
                         </>
                     )}
                     {stored && (

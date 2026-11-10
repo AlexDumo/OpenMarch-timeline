@@ -12,14 +12,17 @@
  * as `createTimelineOracleForTesting`.
  */
 import {
+    adjustDiagnostics,
     classifySpan,
     clamp01,
     destPath,
     destinationsOf,
     flatten,
+    groupSchedule,
     lerp,
     makeTrail,
     paramT,
+    resolveAdjust,
     walkedPoint,
     type LaneWalk,
 } from "./geom";
@@ -151,7 +154,19 @@ export function createOracle(db: TimelineSnapshot): Oracle {
             if (l.transition !== tid || l.slot !== slot) continue;
             const r = db.routes?.[l.route];
             if (!r) throw new Error(`lane on ${tid}:${slot} has no route`);
-            return { route: r.geometry, offset: l.offset };
+            return {
+                route: r.geometry,
+                offset: l.offset,
+                ...(l.offset && l.adjust
+                    ? {
+                          adjust: resolveAdjust(
+                              groupSchedule(r.geometry),
+                              r.geometry.points,
+                              l.adjust,
+                          ),
+                      }
+                    : {}),
+            };
         }
         return undefined;
     }
@@ -266,6 +281,12 @@ export function createOracle(db: TimelineSnapshot): Oracle {
                         slot: k,
                         message: `Slot ${k} of transition ${t.id} has no assignment`,
                     });
+            if (t.style !== "follow_the_leader")
+                for (let k = 0; k < t.slots; k++) {
+                    const w = laneAt(t.id, k);
+                    if (w?.adjust)
+                        out.push(...adjustDiagnostics(w.adjust, t.id, k));
+                }
             if (t.style === "follow_the_leader") {
                 const founders = db.marchers.filter((mm) =>
                     spans(mm.id).some(

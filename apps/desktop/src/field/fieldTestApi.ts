@@ -199,6 +199,10 @@ export type FieldTestShapeOverlay = {
     rings: { x: number; y: number }[];
     /** How many group path lanes are drawn (pathways step 15) */
     lanes: number;
+    /** Each lane as drawn, on screen (pathways step 3b) */
+    laneLines: { x: number; y: number }[][];
+    /** Adjust keys' handles, on screen */
+    adjustHandles: { x: number; y: number }[];
     /** The rings round a group's members and selected marchers off it (pathways step 15) */
     memberRings: {
         at: { x: number; y: number };

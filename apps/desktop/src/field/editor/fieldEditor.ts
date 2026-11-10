@@ -298,9 +298,10 @@ export type FieldModeDrawing = {
      * The outline is a drawn path (pathways): drawn solid and heavier than a shape's outline, so it
      * reads over a group's faint lanes; heaviest while drawn or open (`edited`), a little lighter
      * while only shown (`shown`, closed); `selected` while the path is selected as an object
-     * (pathways step 3a), drawn in the selection color with a halo
+     * (pathways step 3a), drawn in the selection color with a halo; `context` thin and grey behind
+     * the one lane being worked on (pathways step 3b)
      */
-    pathLine?: "shown" | "edited" | "selected";
+    pathLine?: "shown" | "edited" | "selected" | "context";
     /**
      * Circles the shape is drawn on, quiet solid lines under it: an Arc's whole circle (#634)
      */
@@ -325,6 +326,12 @@ export type FieldModeDrawing = {
      * along its copy of the path to its end spot
      */
     lanes?: readonly (readonly FieldPoint[])[];
+    /** Which of `lanes` the pointer is on: tinted, lighter than a picked lane (pathways step 3b) */
+    laneHighlights?: readonly number[];
+    /** Which of `lanes` is being worked on: the only heavy line, over the path's (pathways step 3b) */
+    lanePicked?: number;
+    /** An adjusted lane's keys, small round handles while its path is open (pathways step 3b) */
+    adjustHandles?: readonly { at: FieldPoint; selected: boolean }[];
     /**
      * Rings round marchers' starts (pathways step 15): `group` on each member of the group path
      * shown ("Follows the group path"), `own` on a selected marcher in the move that isn't on it
@@ -447,6 +454,8 @@ export type FieldModePress = {
     reachesInside(): boolean;
     /** The editor's `isMac`: on a Mac, $mod is Cmd. */
     readonly isMac: boolean;
+    /** Whether a marcher's dot (or an item) is under the press, so it is the dot's (P-1) */
+    onDot(): boolean;
 };
 
 /** What the editor knows of the pointer when it asks a mode for its cursor. */
@@ -646,6 +655,7 @@ export class FieldEditor {
                 this.reachInside(pointer, this.marcherAt(pointer.field)) !==
                 null,
             isMac: this.options.isMac ?? false,
+            onDot: () => this.marcherAt(pointer.field) !== null,
         };
         if (this.mode?.claims(pointer, modePress)) {
             const last = this.lastClick;

@@ -2,6 +2,7 @@ import { desc, sql } from "drizzle-orm";
 import path from "path";
 import { schema } from "@/../electron/database/db";
 import { migrationQueriesAfter } from "@/../electron/database/services/DrizzleMigrationService";
+import { addedColumn } from "@/../electron/database/migrations/addColumnGuard";
 import { TIMELINE_MODEL_USER_VERSION } from "@/../electron/database/fileVersion";
 import { transactionWithHistory } from "@/db-functions/history";
 import type { DbConnection } from "@/db-functions/types";
@@ -52,8 +53,20 @@ export async function finishTestConversion(db: DbConnection): Promise<void> {
                 );
             for (const s of triggerStatements(new Set(), false).drop)
                 await tx.run(sql.raw(s));
-            for (const query of queries)
-                if (query.trim()) await tx.run(sql.raw(query));
+            // As the migration service runs them: 0021's ADD COLUMN already ran before the
+            // conversion (`CONVERTER_SCHEMA_MIGRATION_TAGS`)
+            for (const query of queries) {
+                if (!query.trim()) continue;
+                const added = addedColumn(query);
+                const has =
+                    added !== null &&
+                    (
+                        await names(
+                            `SELECT name FROM pragma_table_info('${added.table}')`,
+                        )
+                    ).has(added.column);
+                if (!has) await tx.run(sql.raw(query));
+            }
             const tables = await names(
                 "SELECT name FROM sqlite_schema WHERE type = 'table'",
             );

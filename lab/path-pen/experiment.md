@@ -2,69 +2,61 @@
 # The lab reads this file when this branch's test build is published.
 # Keep `id` stable: feedback is filed under it.
 id: path-pen
-title: "Paths you can click (pathways, step 3a)"
-summary: "Step 3a of pathways: a drawn path is now something you can select on the field, like a shape in a drawing app. Click a path's line to select it, even with no marchers selected; press Delete to remove it. With Paths set to All, a group path shows as one line."
+title: "Bend one marcher's line, and Re-fit (pathways, step 3b)"
+summary: "Step 3b of pathways: on an open group path you can grab one marcher's line and bend it, and the bend stays with that spot through reshapes. If the block has moved, Re-fit stretches the path back onto it."
 status: open
 variants: []
 questions:
-  - "With nothing selected and Paths set to All, click a group path's line. Was it easy to hit, and was it clear that the path (not its marchers) was selected?"
-  - "Select a path, then press Delete, then Undo. Did the path come back exactly as it was? Did Delete ever remove something you didn't mean it to?"
-  - "Single click selects a path, double-click opens it for editing, Escape steps back out. Did that feel natural, or did you expect something else (for example the marchers staying selected)?"
-  - "Move the box at the end of a group path. Does the line's end follow the box, with the corners you placed staying where they were?"
-  - "With a placed box selected (a single click on it), click its path's line outside the box, then double-click it. Did that select and open the path the way you expected?"
-  - "With Paths set to All, can you tell group paths and single-marcher paths apart, and does the field look calm enough with several paths drawn?"
+  - "Open a group path and drag one marcher's thin line sideways. Did it bend where you grabbed it and only there? Would you rather have started the bend some other way (for example from the marcher's dot at the playhead)?"
+  - "Was it clear what you could grab: the thin lines, the bold line, the small round handles, the dots? Did you ever move the wrong one?"
+  - "Where several marchers' lines sit exactly on top of each other, clicking again goes to the next one, and the note by the pointer says so. Could you get the marcher you wanted?"
+  - "Bend a line, then play it. Does the marcher's walk look right, and is the bend the size you meant?"
+  - "Bend a line, then drag or delete a corner of the path. Did the bend stay somewhere sensible? When a corner it was attached to went, did the note and message tell you enough?"
+  - "Drag a corner toward a bend until it stops. Did the stop make sense, or did it feel stuck?"
+  - "Move the box at one end of a group path so Re-fit appears, then use it. Did the corners go where you expected? Should Re-fit be offered automatically, or is on demand right?"
+  - "Right-click a round handle or a bent line, or long-press on a tablet. Is everything you wanted there, and are 'Remove adjustment point' and 'Reset this spot' the right words?"
 ---
-
-Until now a path could only be reached through its marchers: you selected the
-marchers, and their path showed. In this build a path is **a thing on the field
-of its own**, as a shape is in a drawing app.
 
 **What's new**
 
-- **Click a path's line to select it**, even when nothing is selected. A
-  selected path turns blue with a soft glow. The marchers you had selected are let
-  go of: you have either marchers or a path selected, not both.
-- **Double-click it to open it** for editing, as before. **Escape** steps back
-  out: from editing to selected, then to nothing. A click on empty field also lets
-  it go.
-- **Delete or Backspace removes a selected path**, the same as Remove path in its
-  menu. **Undo** brings it back.
-- **Paths set to All** (the start flag's Paths setting, or holding **N**): a group
-  path is drawn as **its one line**, with its marchers' own lines faint, so you can
-  click it. A single marcher's path is drawn as before.
-- **Right-click or long-press** a path's line selects it and offers **Edit path**
-  and **Remove path**. On a tablet, tap selects and double-tap opens.
-- **Move the box at either end of a group path** and the line's end follows it. The
-  corners you placed stay where they are; stretching them to fit is Re-fit, in 3b.
-- **With a placed box selected**, click its path's line outside the box to select the
-  path, or double-click to open it. Inside the box, presses stay the box's.
-- Dragging a dot still moves that dot, never the path.
-- **P on a selected or open path** draws that path again, and it stays the same
-  path: a group path opened through one of its marchers is drawn again as the
-  group's path, not as that marcher's own.
+- **Bend one marcher's line.** Double-click a group path to open it. Each marcher's
+  own line is the thin one beside the bold path. Hover one and it lights up and says
+  whose spot it is. **Drag it** and it bends where you grabbed it, and only around
+  there. Click once to pick a line without bending it.
+- **Round handles** mark each bend while the path is open. Drag one to change the
+  bend. Right-click or long-press it for **Remove adjustment point** and **Reset this
+  spot**; both are also on the path's bar once a line or handle is picked.
+- **A bend belongs to the spot and follows the path.** Reshape or resize, and it rides
+  along. If a corner it was attached to goes, the bend moves to the nearest corners
+  left, a message says so, and the bar shows **Adjustment re-homed** until you click it.
+- **Corners stop short** rather than push two bends closer than one step together.
+- **Big steps** now names a bend too steep to march, with its spot and counts.
+- **Re-fit.** "Ends follow, corners stay" still holds when you move a box. If the ends
+  have moved, **Re-fit path** appears on the bar and in the path's right-click menu:
+  it moves the ends to where the marchers stand and stretches the corners to match.
+- Undo takes back any of these in one step.
 
 **Try it**
 
-1. Open a show with a few paths (draw some with **P**: one marcher, and a block of
-   several). Set Paths to **All**.
-2. Click empty field so nothing is selected. Click a group path's line. Then click
-   a single marcher's path.
-3. With a path selected, press **Delete**. Then **Undo**.
-4. Double-click a path, drag a point, press **Escape** twice.
-5. Select a marcher whose path shows, and click its path's line.
+1. Select a block, press **P**, draw a group path with a few corners, press **Enter**.
+2. Double-click the path. Drag one thin line sideways. Press **Space** to play it.
+3. Drag a corner next to the bend. Delete a corner the bend sits between.
+4. Move the block at the end of the move. Open the path and press **Re-fit path**.
+5. Try the same with a finger or pencil on a tablet.
 
 **Good to know**
 
-- Files are unchanged from step 24 (still version 11).
-- Paths are clickable for the move at the playhead.
+- Files saved with a bend are version 12; older builds of this test will refuse them.
+- A bend can only be on the part of the path every marcher shares. On the lone stretch
+  from a marcher's start to the first corner, or from the last corner to its end spot,
+  it says so instead.
 
 **Not in this step, on purpose**
 
-- **Adjust** (nudging one marcher's line within a group path) and **Re-fit**:
-  step 3b.
-- **Detach and Rejoin** (a group member taking a copy of the path and coming
-  back): step 3c. Own path and Rejoin from step 15 still work as before.
-- **Collisions along a path**: collision checking is switched off in the app for
-  now, so this waits.
-- A marquee (drag on empty field) that selects nothing keeps the selected path;
-  only a click on empty field lets it go.
+- **Detach and Rejoin** are step 3c. The message on a very short path mentions Detach,
+  which isn't there yet, and **Own path** refuses a bent spot until it is: reset the spot
+  first.
+- **Bending several marchers together** is a later step (26), and so is follow the leader.
+- **Counts on corners (midsets)** are step 5, and spacing handoffs step 25.
+- Two marchers sharing a spot over a move isn't possible yet, so the refusal for it can't
+  be seen here.

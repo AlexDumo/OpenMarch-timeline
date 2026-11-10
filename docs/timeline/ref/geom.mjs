@@ -148,7 +148,7 @@ export function routeWalk(A, pts, B, F = A, G = B) {
   }
   const L = D[D.length - 1];
   return {
-    V, D, L, pieces, tau,
+    V, D, L, pieces, tau, src,
     at(p) {
       if (p <= 0) return A;
       if (p >= 1) return B;
@@ -172,9 +172,51 @@ export function routeWalk(A, pts, B, F = A, G = B) {
  * W reaches them at its steady speed (uFirst, uLast), walks W placed by its offset between them, and walks its own
  * first leg (A onto W_1 + o) and last leg (W_m + o to B) at steady speed each. Written from the spec, not the app.
  */
-export function groupWalk(A, pts, B, F, G, o) {
+// R-14′ items 4 and 6 (v0.10, plan step 3b): a profile's effective keys on the reference walk W. Written from the spec on
+// its own: T-1 and T-2 for anchors, T-3 clamps into [D_1, D_m], T-4 is a single-linkage scan keeping the last stored key per
+// cluster. Returns the keys [{ x, d }] and how many of each total rule fired.
+export function laneProfile(W, pts, profile) {
+  const m = W.V.length - 2, out = { keys: [], clamped: 0, ties: 0, anchors: 0 };
+  if (m < 1 || !profile) return out;                                                   // T-11
+  const index = new Map(pts.map((q, i) => [q.id, i]));
+  const placeOfId = (id, end) => {
+    if (id === end) return end === 'from' ? 0 : W.L;
+    if (!index.has(id)) { out.anchors++; return end === 'from' ? 0 : W.L; }            // T-1
+    for (let k = m; k >= 1; k--) if (W.src[k] <= index.get(id)) return W.D[k];
+    return 0;                                                                          // it lay on F
+  };
+  const keyed = profile.keys.map((key, n) => {
+    const a = placeOfId(key.a, 'from'), b = placeOfId(key.b, 'to');
+    if (a > b) out.anchors++;                                                          // T-2
+    const raw = a + clamp01(key.f) * (b - a), x = Math.min(W.D[m], Math.max(W.D[1], raw));
+    if (x !== raw) out.clamped++;
+    return { x, d: key.d, n };
+  });
+  keyed.sort((p, q) => p.x - q.x || p.n - q.n);
+  let cluster = [];
+  const flush = () => { if (cluster.length) { out.ties += cluster.length - 1; const pick = cluster.reduce((p, q) => (q.n > p.n ? q : p)); out.keys.push({ x: pick.x, d: pick.d }); cluster = []; } };
+  keyed.forEach((k, i) => { if (i > 0 && k.x - keyed[i - 1].x >= EPS_GEOM) flush(); cluster.push(k); });
+  flush();
+  return out;
+}
+
+/** R-14′ item 6 (iv): the profile's displacement at place x. */
+export function profileAt(keys, x) {
+  if (!keys.length) return [0, 0];
+  if (x <= keys[0].x) return keys[0].d;
+  if (x >= keys[keys.length - 1].x) return keys[keys.length - 1].d;
+  let j = 0;
+  while (!(x < keys[j + 1].x)) j++;
+  const f = (x - keys[j].x) / (keys[j + 1].x - keys[j].x), p = keys[j].d, q = keys[j + 1].d;
+  return [p[0] + f * (q[0] - p[0]), p[1] + f * (q[1] - p[1])];
+}
+
+export function groupWalk(A, pts, B, F, G, o, adjust = null) {
   const W = routeWalk(F, pts, G, F, G), m = W.V.length - 2;
+  const keys = laneProfile(W, pts, adjust).keys;
   const add = (q) => [q[0] + o[0], q[1] + o[1]];
+  // R-14′ item 7: ((q + o) + δ); nothing is added without a profile, so step 15's walk is bit-identical (item 9)
+  const placedAt = (q, x) => { const p = add(q); if (!keys.length) return p; const d = profileAt(keys, x); return [p[0] + d[0], p[1] + d[1]]; };
   if (m < 1) return { W, uFirst: NaN, uLast: NaN, first: null, last: null, at: (p) => (p <= 0 ? A : p >= 1 ? B : lerp(A, B, p)) };
   const uFirst = W.D[1] / W.L, uLast = W.D[m] / W.L;
   const K = 64;
@@ -195,22 +237,22 @@ export function groupWalk(A, pts, B, F, G, o) {
       return bez(S, c1, c2, E, (i - 1 + (x - e[i - 1]) / (e[i] - e[i - 1])) / K);
     } };
   };
-  const W1 = add(W.V[1]), Wm = add(W.V[m]);
+  const W1 = placedAt(W.V[1], W.D[1]), Wm = placedAt(W.V[m], W.D[m]);
   const p0 = W.pieces[0], pm = W.pieces[m];
   // The piece next to W_1 (W_m) is a cubic exactly when some end of it is smooth; the leg reads W_1's own handle
   // only when W_1 itself is smooth (its `in`, the reference piece's second control), else it is a line (a corner).
   // A leg whose ends are within EPS_GEOM is a line, so a member standing on its point doesn't loop out to a handle
   const near = (p, q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < EPS_GEOM;
   const smooth1 = W.tau[1] > 0 && !near(A, W1), smoothM = W.tau[m] > 0 && !near(Wm, B);
-  const first = smooth1 ? leg(A, W1, [A[0] + (W1[0] - A[0]) / 3, A[1] + (W1[1] - A[1]) / 3], add(p0.c2)) : leg(A, W1, null, null);
-  const last = smoothM ? leg(Wm, B, add(pm.c1), [B[0] + (Wm[0] - B[0]) / 3, B[1] + (Wm[1] - B[1]) / 3]) : leg(Wm, B, null, null);
+  const first = smooth1 ? leg(A, W1, [A[0] + (W1[0] - A[0]) / 3, A[1] + (W1[1] - A[1]) / 3], placedAt(p0.c2, W.D[1])) : leg(A, W1, null, null);
+  const last = smoothM ? leg(Wm, B, placedAt(pm.c1, W.D[m]), [B[0] + (Wm[0] - B[0]) / 3, B[1] + (Wm[1] - B[1]) / 3]) : leg(Wm, B, null, null);
   return {
     W, uFirst, uLast, first, last,
     at(p) {
       if (p <= 0) return A;
       if (p >= 1) return B;
       if (p < uFirst) return first.at(p / uFirst);
-      if (p <= uLast) return add(W.at(p));
+      if (p <= uLast) return placedAt(W.at(p), p * W.L);
       return last.at((p - uLast) / (1 - uLast));
     },
   };

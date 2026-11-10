@@ -1,5 +1,6 @@
 import type {
     AssignmentRow,
+    AdjustProfile,
     LaneRow,
     OrderMode,
     PathParams,
@@ -104,6 +105,8 @@ export const laneFromRow = (row: LaneDbRow): LaneRow => ({
         row.offset_x === null || row.offset_y === null
             ? null
             : [row.offset_x, row.offset_y],
+    adjust:
+        row.adjust === null ? null : (JSON.parse(row.adjust) as AdjustProfile),
 });
 
 export const assignmentFromRow = (row: AssignmentDbRow): AssignmentRow => ({
@@ -196,7 +199,7 @@ export const routeFromImage = (image: RowImage): RouteRow => ({
     ),
 });
 
-/** A lane from its change-log image `{id, transition, slot, route, offset}` (spec v0.10). */
+/** A lane from its change-log image `{id, transition, slot, route, offset, adjust}` (spec v0.10). */
 export const laneFromImage = (image: RowImage): LaneRow => {
     const t = "lanes";
     const offset = field<[number, number] | null>(
@@ -210,6 +213,7 @@ export const laneFromImage = (image: RowImage): LaneRow => {
         slot: field(image, "slot", t, isNumber),
         route: field(image, "route", t, isNumber),
         offset: offset === null ? null : [offset[0], offset[1]],
+        adjust: (image.adjust ?? null) as AdjustProfile | null,
     };
 };
 

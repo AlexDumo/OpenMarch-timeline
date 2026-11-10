@@ -1,14 +1,22 @@
 import {
+    adjustAt,
     cubicPoint,
     groupMemberWalk,
     groupSchedule,
+    laneSamples,
+    limitRouteEdit,
+    resolveAdjust,
     routePath,
     routePiecePoint,
+    routePoint,
     routePolyline,
     ROUTE_CUBIC_SAMPLES,
+    type AdjustProfile,
     type GroupLeg,
     type GroupMemberWalk,
+    type LaneSample,
     type GroupSchedule,
+    type RouteGeometry,
     type RoutePath,
 } from "@openmarch/core";
 import tolgee from "@/global/singletons/Tolgee";
@@ -647,6 +655,36 @@ function legMenu(shape: PathShape, leg: number): ToolMenuSection[] {
     ];
 }
 
+/** The menu of an Adjust key, or of an adjusted lane elsewhere on its line */
+function adjustMenu(onKey: boolean): ToolMenuSection[] {
+    return [
+        {
+            items: [
+                ...(onKey
+                    ? [
+                          {
+                              value: "removeKey",
+                              label: tolgee.t(
+                                  "actions.path.adjustRemoveKey",
+                                  "Remove adjustment point",
+                              ),
+                          },
+                      ]
+                    : []),
+                {
+                    value: "resetSpot",
+                    label: tolgee.t(
+                        "actions.path.adjustResetSpot",
+                        "Reset this spot",
+                    ),
+                    icon: "trash" as const,
+                    destructive: true,
+                },
+            ],
+        },
+    ];
+}
+
 /**
  * A path's right-click menus, as a Line's point and segment menus (#569): a point's Corner |
  * Smooth, its Roundness (which selects it, showing its tangent bar) and Delete point; a leg's Add
@@ -656,12 +694,17 @@ function legMenu(shape: PathShape, leg: number): ToolMenuSection[] {
  */
 export const PATH_MENU: ToolHandleMenu<PathShape> = {
     sections(shape, _n, key) {
+        const adjustKey = adjustKeyOf(key);
+        if (adjustKey) return adjustMenu(true);
+        if (laneOfKey(key) !== null) return adjustMenu(false);
         const index = pointOf(shape, key);
         if (index >= 0) return pointMenu(shape, index);
         const leg = legOf(shape, key);
         return leg >= 0 ? legMenu(shape, leg) : null;
     },
     pick(shape, _n, key, value) {
+        // Adjust's entries are the app's to run (`PathPenMode.openMenu`)
+        if (adjustKeyOf(key) || laneOfKey(key) !== null) return null;
         const with_ = (points: readonly PathPoint[]) => ({ ...shape, points });
         const leg = legOf(shape, key);
         if (leg >= 0) {
@@ -727,17 +770,176 @@ export function scheduleOf(shape: PathShape): GroupSchedule {
     });
 }
 
-/** One member's walk on the group path `shape`: its own legs onto and off its lane */
+/** One member's walk on the group path `shape`: its own legs onto and off its lane, with its Adjust */
 export const memberWalkOf = (
     schedule: GroupSchedule,
-    member: { from: XY; to: XY; offset: XY },
+    member: {
+        from: XY;
+        to: XY;
+        offset: XY;
+        adjust?: AdjustProfile | null;
+    },
+    points: readonly { id?: string }[] = [],
 ): GroupMemberWalk =>
     groupMemberWalk(
         schedule,
         tuple(member.from),
         tuple(member.to),
         tuple(member.offset),
+        member.adjust ? resolveAdjust(schedule, points, member.adjust) : null,
     );
+
+/** An Adjust key's handle key: `a<marcher>:<index in the stored profile>` */
+export const adjustKey = (marcherId: number, index: number) =>
+    `a${marcherId}:${index}`;
+const ADJUST_KEY = /^a(\d+):(\d+)$/;
+export function adjustKeyOf(
+    key: string | null,
+): { marcherId: number; index: number } | null {
+    const m = key ? ADJUST_KEY.exec(key) : null;
+    return m ? { marcherId: Number(m[1]), index: Number(m[2]) } : null;
+}
+/** A lane's menu key: `l<marcher>` */
+export const laneKey = (marcherId: number) => `l${marcherId}`;
+export function laneOfKey(key: string | null): number | null {
+    const m = key ? /^l(\d+)$/.exec(key) : null;
+    return m ? Number(m[1]) : null;
+}
+
+/** A lane's Adjust keys as handles, in place order: its stored index, place and where it's drawn */
+export function adjustHandlesOf(
+    walk: GroupMemberWalk,
+): { index: number; x: number; at: XY }[] {
+    const { adjust, schedule, offset } = walk;
+    if (!adjust) return [];
+    return adjust.xs.map((x, i) => {
+        const q = routePoint(schedule.W, x / schedule.W.L);
+        const d = adjust.ds[i]!;
+        return {
+            index: adjust.sources[i]!,
+            x,
+            at: { x: q[0] + offset[0] + d[0], y: q[1] + offset[1] + d[1] },
+        };
+    });
+}
+
+/** The lane's reference place at `x`, before its Adjust: `walk(x) + o` */
+export function lanePlain(walk: GroupMemberWalk, x: number): XY {
+    const q = routePoint(walk.schedule.W, x / walk.schedule.W.L);
+    return { x: q[0] + walk.offset[0], y: q[1] + walk.offset[1] };
+}
+
+/** The lane's displacement at `x` now */
+export function laneDelta(walk: GroupMemberWalk, x: number): XY {
+    if (!walk.adjust) return { x: 0, y: 0 };
+    const d = adjustAt(walk.adjust, x);
+    return { x: d[0], y: d[1] };
+}
+
+/** Where a press landed on a lane: its rigid part at place `x`, or a leg (`x` null). */
+export interface LaneHit {
+    x: number | null;
+    at: XY;
+    distance: number;
+}
+
+/**
+ * The point of `walk`'s lane nearest `at` within `radius`, or null (decision C): on its rigid part
+ * the place there, measured along the reference walk, and on a leg no place.
+ */
+export function laneHitOf(
+    walk: GroupMemberWalk,
+    at: XY,
+    radius: number,
+): LaneHit | null {
+    let best: LaneHit | null = null;
+    const consider = (a: XY, b: XY, x0: number | null, x1: number | null) => {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const l2 = dx * dx + dy * dy;
+        const t =
+            l2 === 0
+                ? 0
+                : Math.max(
+                      0,
+                      Math.min(1, ((at.x - a.x) * dx + (at.y - a.y) * dy) / l2),
+                  );
+        const point = { x: a.x + dx * t, y: a.y + dy * t };
+        const distance = Math.hypot(at.x - point.x, at.y - point.y);
+        if (distance > radius || (best && distance >= best.distance)) return;
+        best = {
+            x: x0 === null || x1 === null ? null : x0 + (x1 - x0) * t,
+            at: point,
+            distance,
+        };
+    };
+    const samples = samplesOf(walk);
+    for (let i = 1; i < samples.length; i++)
+        consider(
+            xy(samples[i - 1]!.at),
+            xy(samples[i]!.at),
+            samples[i - 1]!.x,
+            samples[i]!.x,
+        );
+    for (const leg of [walk.first, walk.last]) {
+        if (!leg) continue;
+        const line = legLine(leg);
+        for (let i = 1; i < line.length; i++)
+            consider(line[i - 1]!, line[i]!, null, null);
+    }
+    return best;
+}
+
+const laneSampleCache = new WeakMap<GroupMemberWalk, LaneSample[]>();
+
+/** A lane's samples, once per walk: a hover tests every lane on each pointer move */
+function samplesOf(walk: GroupMemberWalk): LaneSample[] {
+    let samples = laneSampleCache.get(walk);
+    if (!samples) {
+        samples = laneSamples(walk);
+        laneSampleCache.set(walk, samples);
+    }
+    return samples;
+}
+
+/** The route `shape` would store, for the rules that read point ids */
+const geometryOf = (shape: PathShape): RouteGeometry => ({
+    v: 1,
+    from: tuple(shape.ends?.from ?? shape.from),
+    to: tuple(shape.ends?.to ?? shape.to),
+    points: shape.points.map((p) => ({
+        id: p.id ?? "",
+        at: tuple(p.at),
+        ...((p.tension ?? 0) > 0 ? { tension: p.tension } : {}),
+    })),
+});
+
+/**
+ * AP-R11's point drag on the field: `points` dragged from `base` go only as far as keeps every
+ * profile's keys at least a step apart, the same rule the save applies.
+ */
+export function limitDrag(
+    base: PathShape,
+    points: readonly PathPoint[],
+    profiles: readonly AdjustProfile[],
+): readonly PathPoint[] {
+    if (profiles.length === 0) return points;
+    const { geometry, stopped } = limitRouteEdit(
+        geometryOf(base),
+        geometryOf({ ...base, points }),
+        profiles,
+    );
+    if (!stopped) return points;
+    return points.map((p, i) => {
+        const q = geometry.points[i]!;
+        const { tension: _t, ...rest } = p;
+        return {
+            ...rest,
+            at: xy(q.at),
+            ...(q.tension === undefined ? {} : { tension: q.tension }),
+        };
+    });
+}
 
 const legLine = (leg: GroupLeg): XY[] => {
     const [S, E] = [leg.path.V[0]!, leg.path.V[1]!];
@@ -757,34 +959,11 @@ const legLine = (leg: GroupLeg): XY[] => {
  * reference walk between its first and last points, and its last leg (R-14 group schedule)
  */
 export function laneOutline(walk: GroupMemberWalk): XY[] {
-    const { schedule, first, last, offset } = walk;
+    const { first, last } = walk;
     if (!first || !last) return [xy(walk.A), xy(walk.B)];
-    const W = schedule.W;
-    const m = W.V.length - 2;
-    const middle: XY[] = [];
-    const place = (q: readonly [number, number]): XY => ({
-        x: q[0] + offset[0],
-        y: q[1] + offset[1],
-    });
-    for (let j = 1; j < m; j++) {
-        const piece = W.pieces[j]!;
-        const P0 = W.V[j]!;
-        const P3 = W.V[j + 1]!;
-        if (piece.kind === "cubic")
-            for (let i = 1; i < ROUTE_CUBIC_SAMPLES; i++)
-                middle.push(
-                    place(
-                        cubicPoint(
-                            P0,
-                            piece.c1,
-                            piece.c2,
-                            P3,
-                            i / ROUTE_CUBIC_SAMPLES,
-                        ),
-                    ),
-                );
-        middle.push(place(P3));
-    }
+    const middle = laneSamples(walk)
+        .slice(1)
+        .map((s) => xy(s.at));
     return [...legLine(first), ...middle, ...legLine(last).slice(1)];
 }
 
@@ -796,23 +975,24 @@ export function laneOutline(walk: GroupMemberWalk): XY[] {
  * over the whole move at that leg's speed, to test against the move's counts.
  */
 /** A leg of a group path: onto it, along it, off it, or straight to the spot when it has no point */
-export type LegWhere = "onto" | "along" | "off" | "straight";
+export type LegWhere = "onto" | "along" | "off" | "straight" | "adjusted";
+
+/** One stretch of a walked leg (`x0`, `x1` set only for an adjusted stretch, J.6) */
+export interface LegDistance {
+    where: LegWhere;
+    marcherId: number | null;
+    distance: number;
+    x0?: number;
+    x1?: number;
+}
 
 export function groupLegDistances(
     schedule: GroupSchedule,
     walks: readonly { marcherId: number; walk: GroupMemberWalk }[],
-): {
-    where: LegWhere;
-    marcherId: number | null;
-    distance: number;
-}[] {
+): LegDistance[] {
     const W = schedule.W;
     const m = W.V.length - 2;
-    const out: {
-        where: LegWhere;
-        marcherId: number | null;
-        distance: number;
-    }[] = [];
+    const out: LegDistance[] = [];
     // No point on the path: each member walks straight to its spot, no path to be along
     if (m < 1) {
         for (const { marcherId, walk } of walks) {
@@ -841,6 +1021,50 @@ export function groupLegDistances(
                 distance: rest > 0 ? (last * L) / rest : Infinity,
             });
         }
+        out.push(...adjustedStretches(marcherId, walk));
+    }
+    return out;
+}
+
+/**
+ * Big steps on an adjusted lane (spec J.6): the rigid part split at every kept point and key place.
+ * A stretch whose displacement changes is walked at its own speed, so it is judged by its own
+ * travel, expressed as the distance a steady walker would cover over the whole move at that speed.
+ * The rest walk at the reference's speed, which "along" already judges.
+ */
+function adjustedStretches(
+    marcherId: number,
+    walk: GroupMemberWalk,
+): LegDistance[] {
+    const { adjust, schedule } = walk;
+    if (!adjust || adjust.xs.length === 0) return [];
+    const { W } = schedule;
+    const m = W.V.length - 2;
+    const breaks = [...new Set([...W.D.slice(1, m + 1), ...adjust.xs])].sort(
+        (a, b) => a - b,
+    );
+    const samples = laneSamples(walk);
+    const out: LegDistance[] = [];
+    for (let i = 1; i < breaks.length; i++) {
+        const x0 = breaks[i - 1]!;
+        const x1 = breaks[i]!;
+        const a = adjustAt(adjust, x0);
+        const b = adjustAt(adjust, x1);
+        if (a[0] === b[0] && a[1] === b[1]) continue;
+        let travel = 0;
+        for (let k = 1; k < samples.length; k++) {
+            const s0 = samples[k - 1]!;
+            const s1 = samples[k]!;
+            if (s0.x >= x0 && s1.x <= x1)
+                travel += Math.hypot(s1.at[0] - s0.at[0], s1.at[1] - s0.at[1]);
+        }
+        out.push({
+            where: "adjusted",
+            marcherId,
+            distance: (travel * W.L) / (x1 - x0),
+            x0,
+            x1,
+        });
     }
     return out;
 }

@@ -10,7 +10,8 @@
  */
 import {
     createResolver,
-    validateRouteGeometry,
+    refitGeometry,
+    routeEndsChanged,
     type Resolver,
     type RouteGeometry,
     type XY,
@@ -20,9 +21,10 @@ import { schema } from "@/global/database/db";
 import { readTimelineTables } from "@/timeline/timelineRows";
 import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
-import { assertValid, mapDbErrors, refuse } from "./timelineErrors";
+import { mapDbErrors, refuse } from "./timelineErrors";
 import {
     destinationOf,
+    routeRefusal,
     samePoint,
     type RoutePointInput,
 } from "./timelineRoutes";
@@ -36,6 +38,10 @@ import {
     type Walker,
 } from "./timelineGroupRoutes";
 import { isGroupLane, lanesOfRoute } from "./timelineLanes";
+import {
+    writeRouteGeometryInTransaction,
+    type RehomeReport,
+} from "./timelineRouteGeometry";
 
 /** Whether walker `w`'s row founds its span at its transition's start (R-14's A is real). */
 const founds = (resolver: Resolver, w: Walker): boolean =>
@@ -76,7 +82,8 @@ async function editOwnRoutePointsInTransaction(
     tx: DbTransaction,
     routeId: number,
     points: readonly RoutePointInput[],
-): Promise<void> {
+    drag = false,
+): Promise<RehomeReport> {
     const current = await routeGeometryOf(tx, routeId);
     const lanes = await lanesOfRoute(tx, routeId);
     if (lanes.length !== 1 || isGroupLane(lanes[0]!))
@@ -106,13 +113,9 @@ async function editOwnRoutePointsInTransaction(
         to = await destinationOf(tx, transition, lane.slot_index);
     }
     const geometry: RouteGeometry = { v: 1, from, to, points: routePoints };
-    assertValid(validateRouteGeometry(geometry), "route");
-    await mapDbErrors(async () => {
-        await tx
-            .update(schema.timeline_routes)
-            .set({ geometry: JSON.stringify(geometry) })
-            .where(eq(schema.timeline_routes.id, routeId));
-    });
+    return await mapDbErrors(() =>
+        writeRouteGeometryInTransaction(tx, routeId, geometry, { drag }),
+    );
 }
 
 /**
@@ -124,14 +127,22 @@ export async function editPathPointsInTransaction({
     tx,
     routeId,
     points,
+    drag = false,
 }: {
     tx: DbTransaction;
     routeId: number;
     points: readonly RoutePointInput[];
-}): Promise<void> {
+    /** A point drag: it stops short rather than crowd Adjust keys (AP-R11) */
+    drag?: boolean;
+}): Promise<RehomeReport> {
     if (await isGroupRoute(tx, routeId))
-        await editGroupRoutePointsInTransaction({ tx, routeId, points });
-    else await editOwnRoutePointsInTransaction(tx, routeId, points);
+        return await editGroupRoutePointsInTransaction({
+            tx,
+            routeId,
+            points,
+            drag,
+        });
+    return await editOwnRoutePointsInTransaction(tx, routeId, points, drag);
 }
 
 /** AP-O8's point edit as one undoable edit. */
@@ -139,9 +150,10 @@ export async function editPathPoints(args: {
     db: DbConnection;
     routeId: number;
     points: readonly RoutePointInput[];
-}): Promise<void> {
+    drag?: boolean;
+}): Promise<RehomeReport> {
     const { db, ...rest } = args;
-    await transactionWithHistory(db, "editPathPoints", (tx) =>
+    return await transactionWithHistory(db, "editPathPoints", (tx) =>
         editPathPointsInTransaction({ tx, ...rest }),
     );
 }
@@ -165,14 +177,12 @@ export async function redrawPathInTransaction({
     tx: DbTransaction;
     routeId: number;
     points: readonly RoutePointInput[];
-}): Promise<void> {
+}): Promise<RehomeReport> {
     const fresh = points.map(({ at, tension }) =>
         tension === undefined ? { at } : { at, tension },
     );
-    if (!(await isGroupRoute(tx, routeId))) {
-        await editOwnRoutePointsInTransaction(tx, routeId, fresh);
-        return;
-    }
+    if (!(await isGroupRoute(tx, routeId)))
+        return await editOwnRoutePointsInTransaction(tx, routeId, fresh);
     const resolver = createResolver((await readTimelineTables(tx)).snapshot);
     const seenLanes = new Set<number>();
     const founders: { w: Walker; A: XY; B: XY }[] = [];
@@ -195,17 +205,18 @@ export async function redrawPathInTransaction({
         to: G,
         points: pointsToStore(fresh, null),
     };
-    assertValid(validateRouteGeometry(geometry), "route");
-    await mapDbErrors(async () => {
-        await tx
-            .update(schema.timeline_routes)
-            .set({ geometry: JSON.stringify(geometry) })
-            .where(eq(schema.timeline_routes.id, routeId));
+    return await mapDbErrors(async () => {
+        const report = await writeRouteGeometryInTransaction(
+            tx,
+            routeId,
+            geometry,
+        );
         for (const { w, A } of founders)
             await tx
                 .update(schema.timeline_lanes)
                 .set(offsetColumns([A[0] - F[0], A[1] - F[1]]))
                 .where(eq(schema.timeline_lanes.id, w.lane.id));
+        return report;
     });
 }
 
@@ -214,9 +225,82 @@ export async function redrawPath(args: {
     db: DbConnection;
     routeId: number;
     points: readonly RoutePointInput[];
-}): Promise<void> {
+}): Promise<RehomeReport> {
     const { db, ...rest } = args;
-    await transactionWithHistory(db, "redrawPath", (tx) =>
+    return await transactionWithHistory(db, "redrawPath", (tx) =>
         redrawPathInTransaction({ tx, ...rest }),
+    );
+}
+
+/**
+ * Re-fit (decision A, spec J.8): the path takes its ends from where its marchers stand now (their
+ * middles on a group path, as the line is drawn, AP-R5; the real ends on an own path) and its inner
+ * points stretch to follow, each by its along-path fraction. Point ids never change. Each group
+ * lane's offset is rewritten against the new `from`, so every spot still starts where its marcher
+ * stands; a lane whose spot has no founding occupant keeps its offset, as AP-O8's redraw does. Then
+ * AP-H1 runs. Refused when the ends are already where the path has them.
+ */
+export async function refitPathInTransaction({
+    tx,
+    routeId,
+}: {
+    tx: DbTransaction;
+    routeId: number;
+}): Promise<RehomeReport> {
+    const current = await routeGeometryOf(tx, routeId);
+    const lanes = await lanesOfRoute(tx, routeId);
+    if (lanes.length === 0) refuse(`route ${routeId} has no lane`);
+    const resolver = createResolver((await readTimelineTables(tx)).snapshot);
+    const seen = new Set<number>();
+    const members: { w: Walker; A: XY; B: XY }[] = [];
+    for (const w of await walkersOf(tx, routeId)) {
+        if (seen.has(w.row.marcher_id)) continue;
+        seen.add(w.row.marcher_id);
+        const end = resolver.positionAt(
+            w.row.marcher_id,
+            w.transition.end_beat,
+        );
+        members.push({
+            w,
+            A: originOf(resolver, w),
+            B: [end[0], end[1]],
+        });
+    }
+    if (!members.some((m) => founds(resolver, m.w)))
+        refuse(routeRefusal.refitNoFounder());
+    const from = meanOf(members.map((m) => m.A));
+    const to = meanOf(members.map((m) => m.B));
+    if (!routeEndsChanged(current, { from, to }))
+        refuse(routeRefusal.refitNotNeeded());
+    const geometry = refitGeometry(current, from, to);
+    return await mapDbErrors(async () => {
+        const report = await writeRouteGeometryInTransaction(
+            tx,
+            routeId,
+            geometry,
+        );
+        if (lanes.some(isGroupLane)) {
+            const done = new Set<number>();
+            for (const { w, A } of members) {
+                if (done.has(w.lane.id) || !founds(resolver, w)) continue;
+                done.add(w.lane.id);
+                await tx
+                    .update(schema.timeline_lanes)
+                    .set(offsetColumns([A[0] - from[0], A[1] - from[1]]))
+                    .where(eq(schema.timeline_lanes.id, w.lane.id));
+            }
+        }
+        return report;
+    });
+}
+
+/** Re-fit as one undoable edit. */
+export async function refitPath(args: {
+    db: DbConnection;
+    routeId: number;
+}): Promise<RehomeReport> {
+    const { db, ...rest } = args;
+    return await transactionWithHistory(db, "refitPath", (tx) =>
+        refitPathInTransaction({ tx, ...rest }),
     );
 }

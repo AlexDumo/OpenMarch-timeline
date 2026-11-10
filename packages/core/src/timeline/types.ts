@@ -49,7 +49,10 @@ export type DiagnosticCode =
     | "D-REBASE"
     | "D-FTL-NONFOUNDING"
     | "D-FTL-EMPTY"
-    | "D-ORDER-FALLBACK";
+    | "D-ORDER-FALLBACK"
+    | "D-ANCHOR"
+    | "D-ADJUST-CLAMP"
+    | "D-ADJUST-TIE";
 
 export interface Diagnostic {
     code: DiagnosticCode;
@@ -240,6 +243,31 @@ export interface LaneRow {
      * one marcher's own path walked alone (I-LN4).
      */
     offset: XY | null;
+    /** This spot's own Adjust profile (spec J.2, pathways step 3b); absent or null for none */
+    adjust?: AdjustProfile | null;
+}
+
+/**
+ * A place on a route (spec J.2): the fraction `f` of the way from point `a` (a point id, or
+ * `"from"`) to point `b` (a point id, or `"to"`). Stable when the move is resized or reshaped (D-21).
+ */
+export interface AdjustAnchor {
+    a: string;
+    b: string;
+    f: number;
+}
+
+/** One key of an Adjust profile: the displacement `d` at its place. */
+export interface AdjustKey extends AdjustAnchor {
+    d: XY;
+}
+
+/** An Adjust profile (spec J.2): linear between its keys, constant beyond them. */
+export interface AdjustProfile {
+    v: 1;
+    keys: AdjustKey[];
+    /** UI badge only (AP-H1): the last edit of the route re-homed or dropped a key here */
+    rehomed?: true;
 }
 
 export interface AssignmentRow {

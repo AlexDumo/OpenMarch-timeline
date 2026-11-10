@@ -30,10 +30,13 @@ import {
     lerp,
     makeTrail,
     paramT,
+    adjustDiagnostics,
     groupSchedule,
+    resolveAdjust,
     walkedPoint,
     type GroupSchedule,
     type LaneWalk,
+    type ResolvedAdjust,
     type RouteWalk,
 } from "./geom";
 import type {
@@ -293,10 +296,14 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
     const laneRows = new Map<number, LaneRow>();
     const laneAt = new Map<string, number>(); // `${transition}|${slot}` -> lane id
     const routeLanes = new Map<number, Set<number>>();
+    // profile[R, P] (J.7): each adjusted lane's resolved keys, on first use; dropped when the lane
+    // or its route changes
+    const laneAdjust = new Map<number, ResolvedAdjust>();
     const slotKey = (tid: number, slot: number) => `${tid}|${slot}`;
     /** Re-indexes lane `id` as `row` (null: gone); returns the transitions it was and is on. */
     const setLane = (id: number, row: LaneRow | null): number[] => {
         const touched: number[] = [];
+        laneAdjust.delete(id);
         const old = laneRows.get(id);
         if (old) {
             touched.push(old.transition);
@@ -394,6 +401,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             routeGeo.set(rid, {
                 walk: {
                     points: r.geometry.points.map((pt) => ({
+                        id: pt.id,
                         at: pt.at,
                         ...(pt.tension === undefined
                             ? {}
@@ -603,7 +611,29 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             );
         if (lane.offset === null) return { route: geo.walk, offset: null };
         geo.schedule ??= groupSchedule(geo.walk);
-        return { route: geo.walk, offset: lane.offset, schedule: geo.schedule };
+        return {
+            route: geo.walk,
+            offset: lane.offset,
+            schedule: geo.schedule,
+            adjust: resolvedAdjust(id, lane),
+        };
+    }
+
+    /** R-14′ item 6: lane `id`'s profile on its route's schedule, cached (J.7); null without one */
+    function resolvedAdjust(id: number, lane: LaneRow): ResolvedAdjust | null {
+        if (!lane.adjust) return null;
+        let resolved = laneAdjust.get(id);
+        if (!resolved) {
+            const geo = routeGeo.get(lane.route)!;
+            geo.schedule ??= groupSchedule(geo.walk);
+            resolved = resolveAdjust(
+                geo.schedule,
+                geo.walk.points,
+                lane.adjust,
+            );
+            laneAdjust.set(id, resolved);
+        }
+        return resolved;
     }
 
     function computeEntry(tid: number) {
@@ -845,6 +875,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         // writes a lane, which seeds above.
         for (const [rid, rc] of net.routes) {
             computeRoute(rid);
+            for (const id of routeLanes.get(rid) ?? []) laneAdjust.delete(id);
             if (!rc.after) continue;
             for (const id of routeLanes.get(rid) ?? []) {
                 const tid = laneRows.get(id)!.transition;
@@ -900,7 +931,21 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                     slot: k,
                     message: `Slot ${k} of transition ${t.id} has no assignment`,
                 });
-        if (t.style !== FTL) return;
+        if (t.style !== FTL) {
+            for (let k = 0; k < t.slots; k++) {
+                const id = laneAt.get(slotKey(t.id, k));
+                const lane = id === undefined ? undefined : laneRows.get(id)!;
+                if (lane?.offset && lane.adjust)
+                    out.push(
+                        ...adjustDiagnostics(
+                            resolvedAdjust(id!, lane)!,
+                            t.id,
+                            k,
+                        ),
+                    );
+            }
+            return;
+        }
         let hasFounder = false;
         for (const s of idx(t.id))
             if (founding(s)) {
@@ -1029,7 +1074,9 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                 !h ||
                 h.transition !== l.transition ||
                 h.slot !== l.slot ||
-                h.route !== l.route
+                h.route !== l.route ||
+                JSON.stringify(h.adjust ?? null) !==
+                    JSON.stringify(l.adjust ?? null)
             )
                 return `stale lane ${id}`;
         }

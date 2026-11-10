@@ -269,7 +269,7 @@ check("DB-41", "change log records destination edits, including cascades", db41)
 # QA-DB-L1 to L3 (v0.10, plan step 24): lanes bind a slot to a route (J.1, J.3)
 ROUTE = "INSERT INTO routes VALUES (1, '{\"v\":1,\"from\":[0,0],\"to\":[16,0],\"points\":[]}')"
 M2 = "INSERT INTO assignments(marcher_id,transition_id,slot_index,start_beat,end_beat) VALUES (2,1,1,0,16)"
-LANE = lambda lid, tid, slot, off="1,0", route=1: f"INSERT INTO lanes VALUES ({lid},{tid},{slot},{route},{off.split(',')[0] if off else 'NULL'},{off.split(',')[1] if off else 'NULL'})"
+LANE = lambda lid, tid, slot, off="1,0", route=1, adjust=None: f"INSERT INTO lanes VALUES ({lid},{tid},{slot},{route},{off.split(',')[0] if off else 'NULL'},{off.split(',')[1] if off else 'NULL'},{chr(39) + adjust + chr(39) if adjust else 'NULL'})"
 def dbl(tid, desc, stmts, want):
     def run():
         r = outcome(stmts)[1]
@@ -288,6 +288,18 @@ dbl("DB-L3d", "a group path on a shaped two-slot move, a lane per slot, is accep
 dbl("DB-L3e", "an emptied spot keeps its lane while another lane has an occupant (Q1)", [ROUTE, LANE(1, 1, 0, "-1,0"), LANE(2, 1, 1, "1,0")], None)
 dbl("DB-L3f", "a route a lane walks can't be deleted (FK RESTRICT)", [ROUTE, LANE(1, 1, 0, None), "DELETE FROM routes WHERE id=1"], "FOREIGN KEY")
 dbl("DB-L3g", "a transition with a lane can't be deleted before its lane (FK RESTRICT)", [ROUTE, LANE(1, 1, 0, None), "DELETE FROM assignments WHERE transition_id=1", "DELETE FROM transitions WHERE id=1"], "FOREIGN KEY")
+
+# QA-DB-L2, L5, L11 (v0.10, plan step 3b): an Adjust's commit views. On the route below p..q is a straight corner stretch 90 long, so Δf = 0.125 is exactly one step
+AROUTE = "INSERT INTO routes VALUES (1, '{\"v\":1,\"from\":[0,0],\"to\":[300,0],\"points\":[{\"id\":\"p\",\"at\":[100,0]},{\"id\":\"q\",\"at\":[190,0]}]}')"
+CURVE = AROUTE.replace('{\"id\":\"q\",\"at\":[190,0]}', '{\"id\":\"q\",\"at\":[190,0],\"tension\":1}')
+K = lambda *fs: '{"v":1,"keys":[' + ",".join('{"a":"p","b":"q","f":%s,"d":[0,5]}' % f for f in fs) + ']}'
+dbl("DB-L2d", "an own lane with an Adjust is refused (I-LN4)", [AROUTE, LANE(1, 1, 0, None, 1, K(0.5))], "E-R4")
+dbl("DB-L5a", "an anchor naming a missing id is refused (I-J3)", [AROUTE, LANE(1, 1, 0, "1,0", 1, '{"v":1,"keys":[{"a":"gone","b":"q","f":0.5,"d":[0,5]}]}')], "E-J3")
+dbl("DB-L5b", "from and to are always known anchors (I-J3)", [AROUTE, LANE(1, 1, 0, "1,0", 1, '{"v":1,"keys":[{"a":"from","b":"to","f":0.5,"d":[0,5]}]}')], None)
+dbl("DB-L11a", "two keys 0.9 of a step apart on a straight stretch are refused (I-J5)", [AROUTE, LANE(1, 1, 0, "1,0", 1, K(0.25, 0.25 + 0.125 * 0.9))], "E-J5")
+dbl("DB-L11b", "the same pair exactly one step apart is accepted", [AROUTE, LANE(1, 1, 0, "1,0", 1, K(0.25, 0.375))], None)
+dbl("DB-L11c", "the same pair on a smooth stretch is left to the write path", [CURVE, LANE(1, 1, 0, "1,0", 1, K(0.25, 0.25 + 0.125 * 0.9))], None)
+dbl("DB-L11d", "two keys with equal (a, b, f) are refused wherever they lie", [CURVE, LANE(1, 1, 0, "1,0", 1, K(0.4, 0.4))], "E-J5")
 
 for r in results: print(" | ".join(r))
 n_pass = sum(r[1] == "PASS" for r in results)

@@ -1,0 +1,336 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AdjustProfile } from "@openmarch/core";
+import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
+import type { FieldPointer } from "@/field/editor/fieldEditor";
+import type { PathTarget } from "../pathTarget";
+
+// The store is already loaded by the test setup, so it's loaded again with its writes stubbed
+vi.resetModules();
+const removeAdjustKey = vi.fn(async () => undefined);
+const resetLaneAdjust = vi.fn(async () => undefined);
+vi.doMock("@/db-functions/timelinePathAdjust", async (importOriginal) => ({
+    ...(await importOriginal<
+        typeof import("@/db-functions/timelinePathAdjust")
+    >()),
+    removeAdjustKey,
+    resetLaneAdjust,
+}));
+const {
+    clearPath,
+    deleteOnLane,
+    openPath,
+    selectLane,
+    setHoverLane,
+    showPath,
+    usePathPenStore,
+} = await import("../pathPenStore");
+const { drawingOf, pathPenMode } = await import("../pathPenMode");
+const { setShapeField } = await import("@/shapes/field/shapeField");
+
+/**
+ * What stays picked on a lane through a Delete and a read of the path (review of #781): Delete
+ * never falls through to Remove path, a picked key is followed by its anchor, and a plain lane
+ * writes nothing. Members 10 and 11; `dy` apart 0 stacks their lanes.
+ */
+const fieldProperties =
+    FieldPropertiesTemplates.COLLEGE_FOOTBALL_FIELD_NO_END_ZONES;
+const STEP = fieldProperties.pixelsPerStep;
+const y = 20 * STEP;
+
+const profile = (
+    ...keys: [string, string, number, number][]
+): AdjustProfile => ({
+    v: 1,
+    keys: keys.map(([a, b, f, d]) => ({ a, b, f, d: [0, d] })),
+});
+
+const group = (adjust: AdjustProfile | null, dy = 4 * STEP): PathTarget => ({
+    timelineId: 1,
+    transitionId: 8,
+    marcherId: 10,
+    start: 0,
+    end: 16,
+    from: { x: 0, y },
+    to: { x: 40 * STEP, y },
+    routeId: 9,
+    points: [
+        { id: "p", at: [10 * STEP, y] },
+        { id: "q", at: [30 * STEP, y] },
+    ],
+    ends: { from: { x: 0, y }, to: { x: 40 * STEP, y } },
+    group: {
+        members: [10, 11].map((m, i) => ({
+            marcherId: m,
+            transitionId: 8,
+            drill: `B${i + 1}`,
+            offset: { x: 0, y: dy },
+            from: { x: 0, y: y + dy },
+            to: { x: 40 * STEP, y: y + dy },
+            laneId: m,
+            slot: i,
+            adjust: m === 11 ? adjust : null,
+        })),
+        outside: [],
+    },
+});
+
+const lane = () => usePathPenStore.getState().session?.lane;
+const open = (target: PathTarget) => {
+    showPath(target, "2");
+    openPath();
+};
+const bulge = profile(
+    ["p", "q", 0.2, 0],
+    ["p", "q", 0.5, 30],
+    ["p", "q", 0.8, 0],
+);
+
+describe("a picked lane through Delete and a read of the path", () => {
+    beforeEach(() => {
+        removeAdjustKey.mockClear();
+        resetLaneAdjust.mockClear();
+    });
+    afterEach(() => clearPath());
+
+    it("follows the picked key when a key is added before it", () => {
+        open(group(bulge));
+        selectLane({ marcherId: 11, key: 1 });
+        showPath(
+            group(
+                profile(
+                    ["from", "p", 0.5, 12],
+                    ["p", "q", 0.2, 0],
+                    ["p", "q", 0.5, 30],
+                    ["p", "q", 0.8, 0],
+                ),
+            ),
+            "2",
+        );
+        expect(lane()).toEqual({ marcherId: 11, key: 2 });
+    });
+
+    it("keeps the picked key when a drag changes only how far it displaces", () => {
+        open(group(bulge));
+        selectLane({ marcherId: 11, key: 1 });
+        showPath(
+            group(
+                profile(
+                    ["p", "q", 0.2, 0],
+                    ["p", "q", 0.5, 50],
+                    ["p", "q", 0.8, 0],
+                ),
+            ),
+            "2",
+        );
+        expect(lane()).toEqual({ marcherId: 11, key: 1 });
+    });
+
+    it("lets the key go, and keeps the lane, when an undo takes it away", () => {
+        open(group(bulge));
+        selectLane({ marcherId: 11, key: 1 });
+        showPath(group(null), "2");
+        expect(lane()).toEqual({ marcherId: 11, key: null, keyGone: true });
+    });
+
+    it("a second Delete after a key goes writes nothing, and the lane stays picked", async () => {
+        open(group(bulge));
+        selectLane({ marcherId: 11, key: 1 });
+        await deleteOnLane(lane()!);
+        expect(removeAdjustKey).toHaveBeenCalledTimes(1);
+        expect(lane()).toEqual({ marcherId: 11, key: null, keyGone: true });
+        await deleteOnLane(lane()!);
+        expect(removeAdjustKey).toHaveBeenCalledTimes(1);
+        expect(resetLaneAdjust).not.toHaveBeenCalled();
+        expect(lane()).toEqual({ marcherId: 11, key: null, keyGone: true });
+    });
+
+    it("picking the lane again after a key went lets Delete reset it", async () => {
+        open(group(bulge));
+        selectLane({ marcherId: 11, key: 1 });
+        await deleteOnLane(lane()!);
+        selectLane({ marcherId: 11, key: null });
+        expect(lane()?.keyGone).toBeUndefined();
+        await deleteOnLane(lane()!);
+        expect(resetLaneAdjust).toHaveBeenCalledTimes(1);
+    });
+
+    it("Delete on a plain lane writes nothing", async () => {
+        open(group(null));
+        selectLane({ marcherId: 10, key: null });
+        await deleteOnLane(lane()!);
+        expect(resetLaneAdjust).not.toHaveBeenCalled();
+        expect(lane()).toEqual({ marcherId: 10, key: null });
+    });
+});
+
+describe("the hover note on lanes", () => {
+    const ZOOM = 2;
+    beforeEach(() =>
+        setShapeField({
+            fieldProperties: () => fieldProperties,
+            zoom: () => ZOOM,
+            marchers: () => [],
+            drawn: () => new Map(),
+        }),
+    );
+    afterEach(() => {
+        clearPath();
+        setShapeField(null);
+    });
+    const over = (x: number, ly: number) =>
+        pathPenMode.cursorAt(
+            {
+                field: { x, y: ly },
+                screen: { x: x * ZOOM, y: ly * ZOOM },
+                button: 0,
+            } as FieldPointer,
+            { reachesInside: () => false, isMac: false, onDot: () => false },
+        );
+    const hover = () => usePathPenStore.getState().session?.hoverLane;
+
+    it("counts lanes lying on top of each other", () => {
+        open(group(null));
+        over(20 * STEP, y + 4 * STEP);
+        expect(hover()?.stacked).toBe(2);
+    });
+
+    it("names the lane a click just moved to, with the pointer still", () => {
+        open(group(null));
+        const at = {
+            field: { x: 20 * STEP, y: y + 4 * STEP },
+            screen: { x: 20 * STEP * ZOOM, y: (y + 4 * STEP) * ZOOM },
+            button: 0,
+        } as FieldPointer;
+        over(20 * STEP, y + 4 * STEP);
+        const click = () => {
+            pathPenMode.press(at, {
+                isMac: false,
+                onDot: () => false,
+            } as never);
+            pathPenMode.release(at, null);
+            return {
+                picked: usePathPenStore.getState().session?.lane?.marcherId,
+                named: hover()?.marcherId,
+            };
+        };
+        expect(click()).toEqual({ picked: 10, named: 10 });
+        expect(click()).toEqual({ picked: 11, named: 11 });
+        expect(click()).toEqual({ picked: 10, named: 10 });
+    });
+
+    it("moves its note along the lane once the pointer has run far enough", () => {
+        open(group(null));
+        over(20 * STEP, y + 4 * STEP);
+        const first = hover()!.at;
+        over(20 * STEP + 2, y + 4 * STEP);
+        expect(hover()!.at).toBe(first);
+        over(26 * STEP, y + 4 * STEP);
+        expect(hover()!.at.x).toBeCloseTo(26 * STEP);
+    });
+});
+
+describe("one line reads as selected while a lane is worked on (AP-R11)", () => {
+    const ZOOM = 2;
+    beforeEach(() =>
+        setShapeField({
+            fieldProperties: () => fieldProperties,
+            zoom: () => ZOOM,
+            marchers: () => [],
+            drawn: () => new Map(),
+        }),
+    );
+    afterEach(() => {
+        clearPath();
+        setShapeField(null);
+    });
+    const at = (x: number, ly: number) =>
+        ({
+            field: { x, y: ly },
+            screen: { x: x * ZOOM, y: ly * ZOOM },
+            button: 0,
+        }) as FieldPointer;
+    const press = { isMac: false, onDot: () => false } as never;
+    const drawn = () => drawingOf(usePathPenStore.getState().session)!;
+    const laneY = y + 4 * STEP;
+
+    it("draws the group path as context, without handles, behind the picked lane", () => {
+        open(group(null));
+        expect(drawn().pathLine).toBe("edited");
+        expect(drawn().handles?.length).toBeGreaterThan(0);
+        selectLane({ marcherId: 11, key: null });
+        expect(drawn().pathLine).toBe("context");
+        expect(drawn().handles).toEqual([]);
+        expect(drawn().addHandles).toEqual([]);
+        expect(drawn().lanePicked).toBe(1);
+        expect(drawn().laneHighlights).toEqual([]);
+    });
+
+    it("tints only a hovered lane that isn't the picked one", () => {
+        open(group(null, 8 * STEP));
+        selectLane({ marcherId: 10, key: null });
+        setHoverLane({ marcherId: 11, at: { x: 0, y: 0 } });
+        expect(drawn().laneHighlights).toEqual([1]);
+        setHoverLane({ marcherId: 10, at: { x: 0, y: 0 } });
+        expect(drawn().laneHighlights).toEqual([]);
+    });
+
+    it("can't grab a group point while a lane is picked", () => {
+        open(group(null));
+        const point = at(10 * STEP, y);
+        expect(pathPenMode.claims(point, press)).toBe(true);
+        selectLane({ marcherId: 11, key: null });
+        expect(pathPenMode.claims(point, press)).toBe(false);
+    });
+
+    it("a click on the muted line lets the lane go and brings the handles back", () => {
+        open(group(null));
+        selectLane({ marcherId: 11, key: null });
+        expect(pathPenMode.takeClick(at(20 * STEP, y), false)).toBe(true);
+        expect(lane()).toBeNull();
+        expect(drawn().pathLine).toBe("edited");
+        expect(drawn().handles?.length).toBeGreaterThan(0);
+    });
+
+    it("the muted line wins over a lane that isn't picked", () => {
+        const target = group(null);
+        const [onLine, off] = target.group!.members;
+        target.group = {
+            ...target.group!,
+            members: [
+                {
+                    ...onLine!,
+                    offset: { x: 0, y: 0 },
+                    from: { x: 0, y },
+                    to: { x: 40 * STEP, y },
+                },
+                off!,
+            ],
+        };
+        open(target);
+        selectLane({ marcherId: 11, key: null });
+        expect(pathPenMode.claims(at(20 * STEP, y), press)).toBe(false);
+        expect(pathPenMode.claims(at(20 * STEP, laneY), press)).toBe(true);
+    });
+
+    it("the picked lane wins over the muted line where they lie together", () => {
+        open(group(null, 0));
+        selectLane({ marcherId: 11, key: null });
+        const on = at(20 * STEP, y);
+        expect(pathPenMode.claims(on, press)).toBe(true);
+        pathPenMode.press(on, press);
+        pathPenMode.release(on, null);
+        expect(lane()).toEqual({ marcherId: 11, key: null });
+    });
+
+    it("mutes the group path as soon as an unpicked lane is dragged, and the drag picks it", () => {
+        open(group(null));
+        const on = at(20 * STEP, laneY);
+        pathPenMode.press(on, press);
+        pathPenMode.move(at(20 * STEP, laneY + 3 * STEP));
+        expect(drawn().pathLine).toBe("context");
+        expect(lane()).toBeNull();
+        pathPenMode.release(at(20 * STEP, laneY + 3 * STEP), null);
+        expect(lane()?.marcherId).toBe(10);
+        expect(drawn().pathLine).toBe("context");
+    });
+});

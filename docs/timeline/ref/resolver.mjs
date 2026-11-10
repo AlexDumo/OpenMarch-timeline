@@ -111,7 +111,7 @@ export function makeResolver(db, { rules = 'v0.2+' } = {}) {
     if (isFtl(t)) return lerp(o, entry(t.id).target.get(s.m), p);
     const dst = dests.get(t.id)[s.row.slot];
     const lane = laneAt(t.id, s.row.slot);                                // R-14′ (v0.10): lane first
-    if (lane) { const g = routeGeo(lane.route); return founding(s) ? (lane.offset ? groupWalk(o, g.points, dst, g.from, g.to, lane.offset).at(p) : routeWalk(o, g.points, dst, g.from, g.to).at(p)) : lerp(o, dst, p); }
+    if (lane) { const g = routeGeo(lane.route); return founding(s) ? (lane.offset ? groupWalk(o, g.points, dst, g.from, g.to, lane.offset, lane.adjust ?? null).at(p) : routeWalk(o, g.points, dst, g.from, g.to).at(p)) : lerp(o, dst, p); }
     return t.style === 'arc' ? arcPoint(o, dst, t.params?.bulge ?? 0, p) : lerp(o, dst, p);
   }
   function prevNonHold(s) { const l = spans.get(s.m); for (let j = s.k - 1; j >= 0; j--) if (l[j].row) return l[j]; return null; } // ≤ 2 steps: holds never abut

@@ -516,7 +516,8 @@ export const timeline_transitions = sqliteTable(
  * never moves a marcher out of its move. `offset_x`/`offset_y` are the start offset `o_s` from the
  * route's `from`: a group path's lane; both NULL for an own lane (one marcher's own path, walked
  * alone, I-LN4). At most one lane per slot (I-LN3); the slot is one of the transition's (I-LN1,
- * triggers). `adjust` and `group_adjust_id` come with later steps, as `ADD COLUMN`.
+ * triggers). `adjust` is this spot's own Adjust profile as JSON (spec J.2, plan step 3b).
+ * `group_adjust_id` comes with step 26, as `ADD COLUMN`.
  */
 export const timeline_lanes = sqliteTable(
     "timeline_lanes",
@@ -533,6 +534,7 @@ export const timeline_lanes = sqliteTable(
             .references(() => timeline_routes.id, { onDelete: "restrict" }),
         offset_x: real(),
         offset_y: real(),
+        adjust: text(),
     },
     (table) => [
         integerTypeCheck("timeline_lanes", "transition_id"),
@@ -550,6 +552,10 @@ export const timeline_lanes = sqliteTable(
         check(
             "timeline_lanes_offset_check",
             sql`(offset_x IS NULL) = (offset_y IS NULL)`,
+        ),
+        check(
+            "timeline_lanes_adjust_check",
+            sql`adjust IS NULL OR json_valid(adjust)`,
         ),
         unique("timeline_lanes_transition_slot_unique").on(
             table.transition_id,

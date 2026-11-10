@@ -1,11 +1,20 @@
 import type {
     FieldCursor,
+    FieldModePress,
     FieldMode,
     FieldModeDrawing,
     FieldModeHover,
     FieldPointer,
 } from "@/field/editor/fieldEditor";
 import { CLICK_SLOP } from "@/field/editor/fieldEditor";
+import {
+    placeAdjustKey,
+    pruneZeroKeys,
+    type AdjustProfile,
+    type GroupMemberWalk,
+} from "@openmarch/core";
+import { landPoint } from "@/shapes/line/lineGeometry";
+import { toast } from "sonner";
 import { rolesOf, type Roles } from "@/input/modifierRoles";
 import type { HonoredRoles } from "@/input/gestureChipStore";
 import { currentShapeField } from "@/shapes/field/shapeField";
@@ -21,10 +30,18 @@ import { lineCoordinate } from "@/shapes/field/lineCoordinate";
 import { toolEnvFor } from "@/shapes/tool/toolEnv";
 import type { ToolEnv } from "@/shapes/tool/toolKind";
 import type { XY } from "@/shapes/types";
-import type { PathTarget } from "./pathTarget";
+import { refitNeeded, type PathTarget } from "./pathTarget";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     PATH_MENU,
+    adjustHandlesOf,
+    adjustKey,
+    adjustKeyOf,
+    laneHitOf,
+    laneKey,
+    lanePlain,
+    splitLeg,
+    limitDrag,
     laneOutline,
     memberWalkOf,
     scheduleOf,
@@ -50,7 +67,16 @@ import {
 import {
     addPoint,
     cancelDrag,
+    commitAdjustKey,
+    commitLaneAdjust,
     commitPoints,
+    deleteAdjustKey,
+    memberNow,
+    memberOf,
+    resetSpot,
+    selectLane,
+    setHoverLane,
+    setLaneEdit,
     deletePoint,
     deselectPathObject,
     objectsDrawn,
@@ -91,6 +117,81 @@ const MENU_KIND = { menu: PATH_MENU };
 
 /** What the field's menu offers on a path: open it, or take it away (one undo step) */
 export const PATH_FIELD_MENU = ["editPath", "removePath"] as const;
+
+/** The field's menu on `target`'s line: Re-fit joins it only when the ends have moved (decision A) */
+export const pathFieldMenu = (target: PathTarget): readonly string[] =>
+    refitNeeded(target)
+        ? ["editPath", "refitPath", "removePath"]
+        : PATH_FIELD_MENU;
+
+/** An open group path's lanes as they walk now, cached per session state (decision C) */
+let walksMemo: {
+    target: PathSession["target"];
+    points: PathSession["points"];
+    laneEdit: PathSession["laneEdit"];
+    walks: { marcherId: number; walk: GroupMemberWalk }[];
+} | null = null;
+function laneWalks(s: PathSession) {
+    // By what they're built from, not the session object: a hover makes a new session each time
+    if (
+        walksMemo?.target === s.target &&
+        walksMemo.points === s.points &&
+        walksMemo.laneEdit === s.laneEdit
+    )
+        return walksMemo.walks;
+    const shape = shapeOf(s);
+    const schedule = scheduleOf(shape);
+    const walks = (s.target.group?.members ?? []).map((m) => ({
+        marcherId: m.marcherId,
+        walk: memberWalkOf(schedule, memberNow(s, m), shape.points),
+    }));
+    walksMemo = {
+        target: s.target,
+        points: s.points,
+        laneEdit: s.laneEdit,
+        walks,
+    };
+    return walks;
+}
+
+/**
+ * A lane's Adjust as drawn now, which the handles' key numbers refer to: between a save and the
+ * read that follows, that's still the preview
+ */
+function adjustNow(s: PathSession, marcherId: number) {
+    const member = memberOf(s, marcherId);
+    return member ? (memberNow(s, member).adjust ?? null) : null;
+}
+
+/** A press on a lane or an Adjust key, while it's held (decision C) */
+interface LaneHold {
+    marcherId: number;
+    /** The key held; null for a press on the lane's line */
+    index: number | null;
+    /** The place held, or null on a leg */
+    x: number | null;
+    /** Where the lane was under the press */
+    at: XY;
+    /** Where it runs with no Adjust, at `x` */
+    plain: XY | null;
+    base: AdjustProfile | null;
+    /** A refusal was said: this drag writes nothing */
+    refused: boolean;
+    /** The displacement the drag asks for now, once it moved */
+    d: [number, number] | null;
+    /** How many lanes lie under the press, and which comes after this one */
+    stacked: number;
+    next: number;
+}
+
+/** Lanes this close together (field units) are one on top of the other under a press */
+const LANE_STACK_TOLERANCE = 0.25;
+
+const refusalKeys = {
+    tooShort: "timeline.refusals.route.adjustTooShort",
+    outside: "timeline.refusals.route.adjustOutside",
+    tooClose: "timeline.refusals.route.adjustTooClose",
+} as const;
 
 /**
  * The path pen on the field (pathways steps 1 and 2), working as the shape tool's Line does:
@@ -135,6 +236,8 @@ class PathPenMode implements FieldMode {
         /** Where the pointer is, for the chip */
         screen: XY;
         keys: HeldGesture<FieldPointer>;
+        /** A press on an adjustable lane or one of its keys, not on the path's own handles */
+        lane: LaneHold | null;
     } | null = null;
     private listeners = new Set<() => void>();
 
@@ -172,7 +275,8 @@ class PathPenMode implements FieldMode {
 
     private handleAt(s: PathSession, pointer: Pick<FieldPointer, "field">) {
         const env = envOf();
-        return env
+        // With a lane in focus the group path's handles aren't drawn, so nothing can grab them
+        return env && laneInFocus(s) === null
             ? pathHandleAt(shapeOf(s), pointer.field, env, s.selected)
             : null;
     }
@@ -205,12 +309,87 @@ class PathPenMode implements FieldMode {
         return hit ? { object: hit } : null;
     }
 
-    claims(pointer: FieldPointer): boolean {
+    /**
+     * The Adjust key or lane under `pointer` on the open group path (decision C), or null. The
+     * path's own handles and its bold line win where they overlap; a dot is the dot's. Keys before
+     * lines, and of the lines the nearest. With a lane in focus that lane is the heavy one, so it
+     * wins over the muted group line, which still wins over the other lanes.
+     */
+    private laneAt(
+        s: PathSession,
+        pointer: Pick<FieldPointer, "field">,
+    ): LaneHold | null {
+        const env = envOf();
+        if (s.phase !== "open" || !s.target.group || !env) return null;
+        if (this.handleAt(s, pointer)) return null;
+        const walks = laneWalks(s);
+        let bestKey: { d: number; hold: LaneHold } | null = null;
+        for (const { marcherId, walk } of walks)
+            for (const h of adjustHandlesOf(walk)) {
+                const d = Math.hypot(
+                    h.at.x - pointer.field.x,
+                    h.at.y - pointer.field.y,
+                );
+                if (d <= env.hitRadius && (!bestKey || d < bestKey.d))
+                    bestKey = {
+                        d,
+                        hold: {
+                            marcherId,
+                            index: h.index,
+                            x: h.x,
+                            at: h.at,
+                            plain: lanePlain(walk, h.x),
+                            base: adjustNow(s, marcherId),
+                            refused: false,
+                            d: null,
+                            stacked: 1,
+                            next: marcherId,
+                        },
+                    };
+            }
+        if (bestKey) return bestKey.hold;
+        const focus = laneInFocus(s);
+        const onGroupLine = onPath(shapeOf(s), pointer.field, env);
+        if (onGroupLine && focus === null) return null;
+        // Lanes of one row of a block lie on top of each other along a leg that runs with the
+        // row: every lane this near is under the press. The one picked keeps it; a click on it
+        // goes to the next (`releaseLane`), as a click cycles through stacked layers in a drawing
+        // app
+        const hits = walks.flatMap(({ marcherId, walk }) => {
+            if (onGroupLine && marcherId !== focus) return [];
+            const hit = laneHitOf(walk, pointer.field, env.hitRadius);
+            return hit ? [{ marcherId, walk, hit }] : [];
+        });
+        if (hits.length === 0) return null;
+        const nearest = Math.min(...hits.map((h) => h.hit.distance));
+        const stacked = hits.filter(
+            (h) => h.hit.distance <= nearest + LANE_STACK_TOLERANCE,
+        );
+        const on =
+            stacked.find((h) => h.marcherId === s.lane?.marcherId) ??
+            stacked[0]!;
+        const after = stacked[(stacked.indexOf(on) + 1) % stacked.length]!;
+        return {
+            marcherId: on.marcherId,
+            index: null,
+            x: on.hit.x,
+            at: on.hit.at,
+            plain: on.hit.x === null ? null : lanePlain(on.walk, on.hit.x),
+            base: adjustNow(s, on.marcherId),
+            refused: false,
+            d: null,
+            stacked: stacked.length,
+            next: after.marcherId,
+        };
+    }
+
+    claims(pointer: FieldPointer, press: FieldModePress): boolean {
         const s = this.session;
         if (!s || pointer.button !== 0 || s.phase === "closed") return false;
         if (s.phase === "drawing") return true;
         if (usePathPenStore.getState().saving) return false;
-        return this.handleAt(s, pointer) !== null;
+        if (this.handleAt(s, pointer) !== null) return true;
+        return !press.onDot() && this.laneAt(s, pointer) !== null;
     }
 
     press(pointer: FieldPointer, { isMac }: { isMac: boolean }): void {
@@ -222,6 +401,7 @@ class PathPenMode implements FieldMode {
             s.phase === "open"
                 ? (this.handleAt(s, pointer)?.key ?? null)
                 : null;
+        const lane = key === null ? this.laneAt(s, pointer) : null;
         const keys = holdGesture<FieldPointer>(
             pointer,
             (at, roles) => this.follow(at, roles),
@@ -247,6 +427,7 @@ class PathPenMode implements FieldMode {
                     ? landCorner(base, pointer.field, env)
                     : null,
             keys,
+            lane,
         };
         if (s.phase === "drawing") this.preview(pointer, keys.roles());
     }
@@ -274,15 +455,91 @@ class PathPenMode implements FieldMode {
             else this.preview(pointer, roles);
             return;
         }
+        if (p.lane) {
+            this.followLane(p, p.lane, pointer, roles, s);
+            return;
+        }
         if (p.key === null) return;
         const env = envOf(roles);
         if (!env) return;
         const point = pointOf(p.base, p.key);
         const tangent = tangentOf(p.base, p.key);
-        dragPoints(
-            dragPathHandle(p.base, p.key, pointer.field, env),
-            point >= 0 ? point : tangent ? tangent.index : legOf(p.base, p.key),
+        const leg = legOf(p.base, p.key);
+        // A point drag stops short rather than bring Adjust keys closer than a step (AP-R11)
+        const profiles = (s.target.group?.members ?? []).flatMap((m) =>
+            m.adjust ? [m.adjust] : [],
         );
+        const from =
+            leg >= 0 ? { ...p.base, points: splitLeg(p.base, leg) } : p.base;
+        dragPoints(
+            limitDrag(
+                from,
+                dragPathHandle(p.base, p.key, pointer.field, env),
+                profiles,
+            ),
+            point >= 0 ? point : tangent ? tangent.index : leg,
+        );
+    }
+
+    /** A lane or key being dragged: the displacement where it was grabbed follows the pointer */
+    private followLane(
+        p: NonNullable<PathPenMode["held"]>,
+        hold: LaneHold,
+        pointer: FieldPointer,
+        roles: Roles,
+        s: PathSession,
+    ) {
+        if (!p.moved || hold.refused) return;
+        const env = envOf(roles);
+        if (!env) return;
+        if (hold.x === null || hold.plain === null) {
+            this.refuseLane(hold, "outside");
+            return;
+        }
+        const shape = shapeOf(s);
+        const schedule = scheduleOf(shape);
+        // The grabbed place follows the pointer and lands as a point does (fine off the grid)
+        const to = landPoint(
+            {
+                x: hold.at.x + pointer.field.x - p.start.field.x,
+                y: hold.at.y + pointer.field.y - p.start.field.y,
+            },
+            env,
+        );
+        const d: [number, number] = [to.x - hold.plain.x, to.y - hold.plain.y];
+        if (hold.index !== null && !hold.base) return;
+        hold.d = d;
+        if (hold.index !== null) {
+            const keys = pruneZeroKeys(
+                hold.base!.keys.map((k, i) =>
+                    i === hold.index ? { ...k, d } : k,
+                ),
+            );
+            setLaneEdit({
+                marcherId: hold.marcherId,
+                adjust: keys ? { v: 1, keys } : null,
+            });
+            return;
+        }
+        const placed = placeAdjustKey({
+            schedule,
+            points: shape.points,
+            profile: hold.base,
+            x: hold.x,
+            d,
+        });
+        if (!placed.ok) {
+            this.refuseLane(hold, placed.reason);
+            return;
+        }
+        setLaneEdit({ marcherId: hold.marcherId, adjust: placed.profile });
+    }
+
+    private refuseLane(hold: LaneHold, reason: keyof typeof refusalKeys) {
+        hold.refused = true;
+        hold.d = null;
+        setLaneEdit(null);
+        toast.error(tolgee.t(refusalKeys[reason]), { id: "path-adjust" });
     }
 
     /**
@@ -346,6 +603,10 @@ class PathPenMode implements FieldMode {
             this.releaseDrawing(s, pointer, click, roles);
             return;
         }
+        if (p.lane) {
+            this.releaseLane(p, p.lane);
+            return;
+        }
         if (p.key === null) return;
         if (p.moved) {
             // Moved past the slop with nothing dragged (no field yet): nothing to save
@@ -361,7 +622,13 @@ class PathPenMode implements FieldMode {
             const keep =
                 (point >= 0 && p.key === s.selected) ||
                 tangentOf(p.base, p.key) !== null;
-            void commitPoints(now, p.before, keep ? s.selected : null);
+            // Only a point or a tangent bar's end is a drag that stops short (AP-R11)
+            void commitPoints(
+                now,
+                p.before,
+                keep ? s.selected : null,
+                point >= 0 || tangentOf(p.base, p.key) !== null,
+            );
             return;
         }
         const point = pointOf(p.base, p.key);
@@ -380,6 +647,32 @@ class PathPenMode implements FieldMode {
             return;
         }
         if (point >= 0) selectPoint(p.key);
+    }
+
+    /** A lane or key let go: saved once it moved (one undo step), otherwise a click that picks it */
+    private releaseLane(p: NonNullable<PathPenMode["held"]>, hold: LaneHold) {
+        if (!p.moved) {
+            // Already picked, with others under it: the click goes to the next one down
+            const picked =
+                usePathPenStore.getState().session?.lane?.marcherId ===
+                hold.marcherId;
+            const marcherId =
+                picked && hold.stacked > 1 ? hold.next : hold.marcherId;
+            selectLane({ marcherId, key: hold.index });
+            // The pointer hasn't moved, so the note wouldn't otherwise name the lane just picked
+            if (usePathPenStore.getState().session?.hoverLane)
+                setHoverLane({ marcherId, at: hold.at, stacked: hold.stacked });
+            return;
+        }
+        if (hold.refused || !hold.d) {
+            setLaneEdit(null);
+            return;
+        }
+        // What was just bent is what's being worked on, as a drag selects in a drawing app
+        selectLane({ marcherId: hold.marcherId, key: hold.index });
+        if (hold.index !== null)
+            void commitAdjustKey(hold.marcherId, hold.index, hold.d);
+        else void commitLaneAdjust(hold.marcherId, hold.x!, hold.d);
     }
 
     private releaseDrawing(
@@ -414,6 +707,7 @@ class PathPenMode implements FieldMode {
     cancel(): void {
         const p = this.held;
         this.endHeld();
+        if (p?.lane) setLaneEdit(null);
         if (!p?.moved) return;
         if (this.session?.phase === "open") cancelDrag(p.before);
         // A lost press-and-drag while drawing takes back the point it was placing
@@ -438,11 +732,34 @@ class PathPenMode implements FieldMode {
             return "crosshair";
         }
         const handle = this.handleAt(s, pointer);
-        return handle ? asCursor(handle.cursor) : null;
+        if (handle) {
+            setHoverLane(null);
+            return asCursor(handle.cursor);
+        }
+        const lane = hover?.onDot() ? null : this.laneAt(s, pointer);
+        setHoverLane(
+            lane
+                ? {
+                      marcherId: lane.marcherId,
+                      at: lane.at,
+                      stacked: lane.stacked,
+                  }
+                : null,
+        );
+        if (lane) return lane.index !== null ? "move" : "grab";
+        // The muted group line: a click on it lets the lane go
+        const env = envOf();
+        return !hover?.onDot() &&
+            env &&
+            laneInFocus(s) !== null &&
+            onPath(shapeOf(s), pointer.field, env)
+            ? "pointer"
+            : null;
     }
 
     leave(): void {
         if (this.session?.phase === "drawing") setPointer(null);
+        else if (this.session?.hoverLane) setHoverLane(null);
     }
 
     /**
@@ -455,15 +772,35 @@ class PathPenMode implements FieldMode {
         if (!s || s.phase === "closed") return false;
         if (s.phase === "drawing") return removeLastPoint();
         const handle = this.handleAt(s, pointer);
+        const lane = handle ? null : this.laneAt(s, pointer);
+        // An Adjust key's menu, or an adjusted lane's; a plain lane has the field's
+        const adjusted =
+            lane && memberOf(s, lane.marcherId)?.adjust
+                ? lane.index !== null
+                    ? adjustKey(lane.marcherId, lane.index)
+                    : laneKey(lane.marcherId)
+                : null;
+        if (adjusted && lane)
+            selectLane({ marcherId: lane.marcherId, key: lane.index });
+        const menuKey = handle?.key ?? adjusted;
         return openHandleMenu(
             MENU_KIND,
             shapeOf(s),
             1,
-            handle ? { type: "handle", key: handle.key } : null,
+            menuKey ? { type: "handle", key: menuKey } : null,
             pointer.screen,
             (key, value) => {
                 const now = usePathPenStore.getState().session;
                 if (!now || now.phase !== "open") return null;
+                const onKey = adjustKeyOf(key);
+                if (value === "removeKey" && onKey) {
+                    void deleteAdjustKey(onKey.marcherId, onKey.index);
+                    return null;
+                }
+                if (value === "resetSpot" && lane) {
+                    void resetSpot(lane.marcherId);
+                    return null;
+                }
                 const shape = shapeOf(now);
                 const point = pointOf(shape, key);
                 // Deleting the last point removes the path (AP-R2)
@@ -501,7 +838,8 @@ class PathPenMode implements FieldMode {
      */
     fieldMenuAt(pointer: FieldPointer): readonly string[] | null {
         if (!this.pickAt(pointer)) return null;
-        return PATH_FIELD_MENU;
+        const target = usePathPenStore.getState().session?.target;
+        return target ? pathFieldMenu(target) : PATH_FIELD_MENU;
     }
 
     /**
@@ -524,12 +862,24 @@ class PathPenMode implements FieldMode {
     /**
      * A click on a path's line selects that path (AP-O3) and the second click of a double-click
      * opens it (step 1's double-click). A click elsewhere on empty field lets a selected path go
-     * (AP-O4) and is the field's, which lets the marchers go.
+     * (AP-O4) and is the field's, which lets the marchers go. With a lane picked, a click on the
+     * muted group line lets the lane go, and the group path's handles are back (AP-R11).
      */
     takeClick(pointer: FieldPointer, double: boolean): boolean {
         if (!this.pickAt(pointer)) {
             deselectPathObject();
             return false;
+        }
+        const s = this.session;
+        const env = envOf();
+        if (
+            s?.phase === "open" &&
+            s.lane &&
+            env &&
+            onPath(shapeOf(s), pointer.field, env)
+        ) {
+            selectLane(null);
+            return true;
         }
         if (double) openPath();
         return true;
@@ -600,7 +950,7 @@ function buildDrawing(session: PathSession): FieldModeDrawing {
               selectedHandles: [],
               barHandles: shaping,
           }
-        : session.phase === "closed"
+        : session.phase === "closed" || laneInFocus(session) !== null
           ? { handles: [], addHandles: [], selectedHandles: [] }
           : handleDrawing(
                 {
@@ -619,7 +969,9 @@ function buildDrawing(session: PathSession): FieldModeDrawing {
           : (middle[session.dragging] ?? null);
     const tipText = moving ? drillTerms(moving) : null;
     const group = target.group;
-    const { lanes, memberRings } = groupParts(session, shape);
+    const { lanes, memberRings, laneHighlights, lanePicked, adjustHandles } =
+        groupParts(session, shape);
+    const laneTip = moving ? null : laneTipOf(session);
     return {
         outline,
         openOutline: true,
@@ -633,15 +985,67 @@ function buildDrawing(session: PathSession): FieldModeDrawing {
             ? group.members.map((m) => m.marcherId)
             : [target.marcherId],
         ...(lanes ? { lanes } : {}),
+        ...(laneHighlights ? { laneHighlights } : {}),
+        ...(lanePicked !== undefined ? { lanePicked } : {}),
+        ...(adjustHandles ? { adjustHandles } : {}),
         ...(memberRings ? { memberRings } : {}),
         ...guidesFor(moving ? [moving] : [], outline),
         ...(tipText && moving ? { tip: { at: moving, text: tipText } } : {}),
+        ...(laneTip ? { tip: laneTip } : {}),
     };
 }
 
-/** How heavy the line is: edited while drawn or open, selected for a path object (AP-O4) */
-const pathLineOf = (s: PathSession): FieldModeDrawing["pathLine"] =>
-    s.phase !== "closed" ? "edited" : s.object ? "selected" : "shown";
+/** The note by the pointer over a lane: whose spot it is, and how many lanes lie there */
+function laneTipOf(session: PathSession): FieldModeDrawing["tip"] | null {
+    const hover = session.phase === "open" ? session.hoverLane : null;
+    const hoverMember = hover ? memberOf(session, hover.marcherId) : undefined;
+    return hover && hoverMember
+        ? {
+              at: hover.at,
+              text: [
+                  tolgee.t(
+                      hoverMember.adjust
+                          ? "pathways.lanes.hoverAdjusted"
+                          : "pathways.lanes.hover",
+                      hoverMember.adjust
+                          ? "Spot {spot} · {marcher} · adjusted"
+                          : "Spot {spot} · {marcher}",
+                      {
+                          spot: (hoverMember.slot ?? 0) + 1,
+                          marcher: hoverMember.drill,
+                      },
+                  ),
+                  ...((hover.stacked ?? 1) > 1
+                      ? [
+                            tolgee.t(
+                                "pathways.lanes.stacked",
+                                "click for the next of {count}",
+                                { count: hover.stacked ?? 1 },
+                            ),
+                        ]
+                      : []),
+              ].join(" · "),
+          }
+        : null;
+}
+
+/**
+ * The spot whose lane is being worked on, picked or in mid-drag. While there is one, that lane is
+ * the only heavy line and the group path is context: thin, grey and without handles (AP-R11).
+ */
+function laneInFocus(s: PathSession): number | null {
+    if (s.phase !== "open") return null;
+    return s.laneEdit?.marcherId ?? s.lane?.marcherId ?? null;
+}
+
+/**
+ * How heavy the line is: edited while drawn or open, context behind a lane in focus, selected for
+ * a path object (AP-O4)
+ */
+const pathLineOf = (s: PathSession): FieldModeDrawing["pathLine"] => {
+    if (s.phase === "closed") return s.object ? "selected" : "shown";
+    return laneInFocus(s) !== null ? "context" : "edited";
+};
 
 /**
  * A group path's parts of the drawing (step 15): every member's lane, thin and faint (while
@@ -650,7 +1054,10 @@ const pathLineOf = (s: PathSession): FieldModeDrawing["pathLine"] =>
 function groupParts(
     session: PathSession,
     shape: PathShape,
-): Pick<FieldModeDrawing, "lanes" | "memberRings"> {
+): Pick<
+    FieldModeDrawing,
+    "lanes" | "memberRings" | "laneHighlights" | "lanePicked" | "adjustHandles"
+> {
     const group = session.target.group;
     if (!group) return {};
     const { pointer } = session;
@@ -663,8 +1070,31 @@ function groupParts(
               }
             : shape;
     const schedule = scheduleOf(laneShape);
+    const walks = group.members.map((m) => ({
+        marcherId: m.marcherId,
+        walk: memberWalkOf(schedule, memberNow(session, m), laneShape.points),
+    }));
+    const open = session.phase === "open";
+    const picked = open ? session.lane : null;
+    const focus = laneInFocus(session);
+    const hovered = open ? session.hoverLane?.marcherId : undefined;
+    const pickedIndex = walks.findIndex((w) => w.marcherId === focus);
     return {
-        lanes: group.members.map((m) => laneOutline(memberWalkOf(schedule, m))),
+        lanes: walks.map(({ walk }) => laneOutline(walk)),
+        laneHighlights: walks.flatMap(({ marcherId }, i) =>
+            marcherId === hovered && marcherId !== focus ? [i] : [],
+        ),
+        ...(pickedIndex >= 0 ? { lanePicked: pickedIndex } : {}),
+        adjustHandles: open
+            ? walks.flatMap(({ marcherId, walk }) =>
+                  adjustHandlesOf(walk).map((h) => ({
+                      at: h.at,
+                      selected:
+                          picked?.marcherId === marcherId &&
+                          picked.key === h.index,
+                  })),
+              )
+            : [],
         memberRings: [
             ...group.members.map((m) => ({
                 at: m.from,

@@ -212,6 +212,17 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
     // Lanes, pathways step 24 (ADR 0015): a new table, dropped (its indexes and triggers go with
     // it). Re-running 0020 is safe (IF NOT EXISTS; it runs twice in a conversion too).
     20: (db) => db.exec("DROP TABLE IF EXISTS timeline_lanes"),
+    // Adjust, pathways step 3b: the column goes, once what reads it is off the table
+    21: (db) =>
+        db.exec(`
+            DROP VIEW IF EXISTS timeline_route_violations;
+            DROP TRIGGER IF EXISTS timeline_log_lanes_ins;
+            DROP TRIGGER IF EXISTS timeline_log_lanes_upd;
+            DROP TRIGGER IF EXISTS timeline_log_lanes_del;
+            DROP TRIGGER IF EXISTS timeline_lanes_ut;
+            DROP TRIGGER IF EXISTS timeline_lanes_dt;
+            ALTER TABLE timeline_lanes DROP COLUMN adjust;
+        `),
 };
 
 /**

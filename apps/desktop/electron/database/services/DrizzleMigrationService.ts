@@ -50,6 +50,7 @@ export const FIRST_TIMELINE_MIGRATION_TAG = "0018_drop_page_era";
 export const CONVERTER_SCHEMA_MIGRATION_TAGS = [
     "0019_timeline_routes",
     "0020_timeline_lanes",
+    "0021_timeline_lane_adjust",
 ];
 
 /** The migrations folder, also found from a built `dist-electron/main`. */
