@@ -4,26 +4,33 @@
  * storage (ADR 0010 D-5), like `renderPrefs.ts`. Plain TypeScript: the
  * Settings window imports it, so nothing here may load three.js.
  *
- * - `map` (default): drag pans, and scroll zooms.
+ * - `orbit` (default): drag orbits, right-drag pans, and scroll zooms.
+ * - `map`: drag pans, right-drag orbits, and scroll zooms.
  * - `trackpad`: scroll orbits, and a pinch zooms.
  *
  * The scheme is chosen rather than detected because a browser can't reliably
  * tell a mouse wheel from a two-finger scroll.
  */
 
-export type ControlScheme = "map" | "trackpad";
+export type ControlScheme = "orbit" | "map" | "trackpad";
 
-export const CONTROL_SCHEMES: readonly ControlScheme[] = ["map", "trackpad"];
+export const CONTROL_SCHEMES: readonly ControlScheme[] = [
+    "orbit",
+    "map",
+    "trackpad",
+];
+
+export const DEFAULT_CONTROL_SCHEME: ControlScheme = "orbit";
 
 export const CONTROL_SCHEME_STORAGE_KEY = "view3d.controls";
 
 export function parseControlScheme(value: unknown): ControlScheme {
     return CONTROL_SCHEMES.includes(value as ControlScheme)
         ? (value as ControlScheme)
-        : "map";
+        : DEFAULT_CONTROL_SCHEME;
 }
 
-/** The saved choice, or `map` when there is none or storage is unavailable. */
+/** The saved choice, or the default when there is none or storage is unavailable. */
 export function loadControlScheme(storage?: Storage): ControlScheme {
     try {
         return parseControlScheme(
@@ -32,7 +39,7 @@ export function loadControlScheme(storage?: Storage): ControlScheme {
             ),
         );
     } catch {
-        return "map";
+        return DEFAULT_CONTROL_SCHEME;
     }
 }
 
@@ -92,5 +99,5 @@ export function wheelAction(
 ): WheelAction {
     if (wheel.ctrlKey) return "pinch";
     if (wheel.shiftKey || wheel.altKey) return "pan";
-    return scheme === "map" ? "zoom" : "orbit";
+    return scheme === "trackpad" ? "orbit" : "zoom";
 }

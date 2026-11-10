@@ -34,8 +34,8 @@ function memoryStorage(): Storage {
 }
 
 describe("the saved control scheme", () => {
-    it("is map until someone chooses otherwise", () => {
-        expect(loadControlScheme(memoryStorage())).toBe("map");
+    it("is orbit until someone chooses otherwise", () => {
+        expect(loadControlScheme(memoryStorage())).toBe("orbit");
     });
 
     it("remembers the choice", () => {
@@ -45,8 +45,31 @@ describe("the saved control scheme", () => {
         expect(loadControlScheme(storage)).toBe("trackpad");
     });
 
-    it("falls back to map for a value it doesn't know", () => {
-        expect(parseControlScheme("standard")).toBe("map");
+    it("keeps an earlier choice of map", () => {
+        const storage = memoryStorage();
+        saveControlScheme("map", storage);
+        expect(loadControlScheme(storage)).toBe("map");
+    });
+
+    it("falls back to orbit for a value it doesn't know", () => {
+        expect(parseControlScheme("standard")).toBe("orbit");
+    });
+});
+
+describe("dragging in orbit", () => {
+    it("orbits on a plain drag", () => {
+        expect(dragAction("orbit", press())).toBe("orbit");
+    });
+
+    it("pans with the right button or Shift", () => {
+        expect(dragAction("orbit", press({ buttons: 2 }))).toBe("pan");
+        expect(dragAction("orbit", press({ shiftKey: true }))).toBe("pan");
+    });
+
+    it("orbits with Ctrl, even when a Mac reports Ctrl-click as the right button", () => {
+        expect(dragAction("orbit", press({ ctrlKey: true, buttons: 2 }))).toBe(
+            "orbit",
+        );
     });
 });
 
@@ -86,8 +109,9 @@ describe("dragging in trackpad", () => {
 
 describe("touch and pen", () => {
     it.each(["touch", "pen"])(
-        "orbit with %s in either scheme",
+        "orbit with %s in every scheme",
         (pointerType) => {
+            expect(dragAction("orbit", press({ pointerType }))).toBe("orbit");
             expect(dragAction("map", press({ pointerType }))).toBe("orbit");
             expect(dragAction("trackpad", press({ pointerType }))).toBe(
                 "orbit",
@@ -97,7 +121,8 @@ describe("touch and pen", () => {
 });
 
 describe("scrolling", () => {
-    it("zooms in map and orbits in trackpad", () => {
+    it("zooms in orbit and map, and orbits in trackpad", () => {
+        expect(wheelAction("orbit", wheel())).toBe("zoom");
         expect(wheelAction("map", wheel())).toBe("zoom");
         expect(wheelAction("trackpad", wheel())).toBe("orbit");
     });

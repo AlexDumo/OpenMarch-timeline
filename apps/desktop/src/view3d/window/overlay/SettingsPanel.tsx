@@ -422,6 +422,11 @@ type ShortcutRows = readonly (readonly [string, ShortcutKeys])[];
 
 /** The rows that follow the viewer's control scheme. */
 const MOVE_SHORTCUTS: Record<ControlScheme, ShortcutRows> = {
+    orbit: [
+        ["orbit", { binding: "drag" }],
+        ["pan", { binding: "Shift+drag" }],
+        ["zoom", { binding: "scroll" }],
+    ],
     map: [
         ["panPlain", { binding: "drag" }],
         ["orbitOrRight", { binding: "Alt+drag" }],
