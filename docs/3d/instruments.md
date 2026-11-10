@@ -318,9 +318,11 @@ points and where the elbows go.
   turned 18 toward the mouthpiece (`CONTRA_HEAD`).
 - **sousaphone (owner, 2026-11-10).** Its players wear a beret, not the
   shako and plume: a black beret pulled down toward the right, built with
-  the horn and riding the head bone (`beret.ts`). The bell is 9 cm lower
-  than with the plume. Its lower rim sits just over the beret, as photos
-  show.
+  the horn and riding the head bone (`beret.ts`). The bell rides low over
+  the beret, its axis at 1.96 m: its center about 0.34 m above the eyes,
+  its lower rim across the brow from the front, and its rim plane about
+  0.18 m in front of the nose (side-on photos, 2026-11-10). The left hand
+  holds the mouthpiece in place at the lips.
 - **Woodwind hands (wrist study, 2026-11-10).** A stiff mitt reads as a hand
   only when it carries straight on from the forearm. So every woodwind hand
   bends at most 30 degrees at the wrist, toward where the fingers would
