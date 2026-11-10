@@ -464,11 +464,14 @@ function contraHolds(): Record<HoldState, Hold> {
         },
         // the valves stand in front of the face at the forehead: the right
         // palm lies against the casings' right side and the fingers go up
-        // onto the pistons (owner, 2026-11-10), the elbow out and raised
+        // onto the pistons (owner, 2026-11-10). The valves are only 0.37 m
+        // from the right shoulder, so the arm makes its triangle with the
+        // elbow dropped forward in front of the chest, the upper arm a
+        // little below level and the forearm rising steeply to the valves.
         {
             palmOnCasing: [0, 0, 0],
             fingers: [0.2, 0.95, 0.15],
-            out: [-1, 0.3, 0.3],
+            out: [0, -0.6, 1],
         },
         CONTRA_HEAD,
     );
