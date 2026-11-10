@@ -139,6 +139,8 @@ describe("scrolling", () => {
     });
 });
 
+// Checks each card's camera moves, not its input names: a browser can't tell a
+// mouse wheel from a two-finger scroll, so "scroll" and "swipe" are the same event.
 describe("the gestures the Controls picker shows", () => {
     const mouse = { drag: 1, rightDrag: 2 } as const;
     const wheels = {

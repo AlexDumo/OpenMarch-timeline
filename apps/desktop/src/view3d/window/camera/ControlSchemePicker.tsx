@@ -1,3 +1,4 @@
+import { useId } from "react";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import { useTranslate } from "@tolgee/react";
 import {
@@ -43,6 +44,7 @@ export default function ControlSchemePicker({
     testId?: string;
 }) {
     const { t } = useTranslate();
+    const idBase = useId();
     return (
         <div className="@container w-full max-w-640">
             <ToggleGroup.Root
@@ -62,17 +64,29 @@ export default function ControlSchemePicker({
                         key={scheme}
                         value={scheme}
                         data-value={scheme}
+                        // Named by the title alone, so a screen reader doesn't
+                        // read every gesture on each arrow press; the list
+                        // describes it.
+                        aria-labelledby={`${idBase}-${scheme}-name`}
+                        aria-describedby={`${idBase}-${scheme}-gestures`}
                         className={clsx(
                             "rounded-6 text-text flex min-w-0 flex-col gap-6 border p-8 text-left outline-hidden duration-150 ease-out",
                             "border-stroke bg-fg-2 hover:border-text/30",
-                            "data-[state=on]:border-accent data-[state=on]:bg-accent/10 data-[state=on]:hover:border-accent",
+                            // bg-fg-2 is a gradient image, which would hide the tint
+                            "data-[state=on]:border-accent data-[state=on]:bg-accent/10 data-[state=on]:hover:border-accent data-[state=on]:bg-none",
                             "focus-visible:ring-accent focus-visible:ring-2",
                         )}
                     >
-                        <span className="text-body font-medium">
+                        <span
+                            id={`${idBase}-${scheme}-name`}
+                            className="text-body font-medium"
+                        >
                             {t(`settings.view3d.controls.${scheme}`)}
                         </span>
-                        <ul className="text-sub flex flex-col gap-4">
+                        <span
+                            id={`${idBase}-${scheme}-gestures`}
+                            className="text-sub flex flex-col gap-4"
+                        >
                             {SCHEME_GESTURES[scheme].map(({ input, move }) => {
                                 const InputIcon = INPUT_ICONS[input];
                                 const inputName = t(
@@ -82,7 +96,7 @@ export default function ControlSchemePicker({
                                     `settings.view3d.controls.move.${move}`,
                                 );
                                 return (
-                                    <li
+                                    <span
                                         key={input}
                                         className="flex items-center gap-6"
                                     >
@@ -91,16 +105,16 @@ export default function ControlSchemePicker({
                                             className="text-text-subtitle shrink-0"
                                             aria-hidden
                                         />
-                                        <span className="text-text-subtitle min-w-0 flex-1 truncate">
+                                        <span className="text-text-subtitle min-w-0 flex-1 break-words">
                                             {inputName}
                                         </span>
                                         <span className="shrink-0">
                                             {moveName}
                                         </span>
-                                    </li>
+                                    </span>
                                 );
                             })}
-                        </ul>
+                        </span>
                     </ToggleGroup.Item>
                 ))}
             </ToggleGroup.Root>
