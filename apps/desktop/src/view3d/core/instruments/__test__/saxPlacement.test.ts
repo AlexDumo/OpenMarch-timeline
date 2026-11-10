@@ -188,8 +188,8 @@ describe("the sax held in front", () => {
                 WOODWIND_DIMENSIONS[id].length - sh.bowWidth / 2 - sh.rBow;
             const bow = point([0, yb, bowZ]);
             expect(Math.abs(bow[0])).toBeLessThan(0.05);
-            // in front of the stomach, not out at arm's length
-            expect(bow[2]).toBeLessThan(0.35);
+            // in front of the stomach, kicked forward 12 degrees, not out at arm's length
+            expect(bow[2]).toBeLessThan(0.45);
         });
 
         it(`${id}: the hands wrap the stacks from the sides, left hand upper, right hand lower`, () => {

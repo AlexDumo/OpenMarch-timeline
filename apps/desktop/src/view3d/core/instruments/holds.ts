@@ -58,9 +58,10 @@ export interface Hold {
     instrument: { origin: Vec3; bellAxis: Vec3; capsAxis: Vec3 };
     /**
      * The head's turn about its joint, degrees: `pitch` up (chin raised),
-     * `roll` toward the performer's left shoulder. Absent: {@link HEAD_UP}.
+     * `roll` toward the performer's left shoulder, `yaw` turned toward the
+     * performer's left. Absent: {@link HEAD_UP}.
      */
-    head?: { pitch: number; roll: number };
+    head?: { pitch: number; roll: number; yaw?: number };
 }
 
 /** Every performer plays with the head up 15 degrees (owner, 2026-11-10). */
@@ -76,13 +77,22 @@ const HEAD_JOINT: Vec3 = [0, 1.565, -0.005];
 export function headQuaternion(
     head: Hold["head"] = HEAD_UP,
 ): [number, number, number, number] {
-    const { pitch, roll } = head;
+    const { pitch, roll, yaw = 0 } = head;
     const p = (-pitch * Math.PI) / 360;
     const r = (-roll * Math.PI) / 360;
-    // q = qPitch(about X) * qRoll(about Z)
+    const t = (yaw * Math.PI) / 360;
+    // q = qYaw(about Y) * qPitch(about X) * qRoll(about Z)
     const [px, pw] = [Math.sin(p), Math.cos(p)];
     const [rz, rw] = [Math.sin(r), Math.cos(r)];
-    return [px * rw, -px * rz, pw * rz, pw * rw];
+    const pr = [px * rw, -px * rz, pw * rz, pw * rw];
+    const [ty, tw] = [Math.sin(t), Math.cos(t)];
+    // (0, ty, 0, tw) * pr
+    return [
+        tw * pr[0] + ty * pr[2],
+        tw * pr[1] + ty * pr[3],
+        tw * pr[2] - ty * pr[0],
+        tw * pr[3] - ty * pr[1],
+    ];
 }
 
 /** A point of the head at bind, where the hold's head turn carries it. */
@@ -251,10 +261,12 @@ function valvedUp(
     /** Where the left hand's middle goes and where its fingers point, in the instrument frame, when not on the casings. */
     leftHand?: { palm: Vec3; fingers: Vec3 },
     /** Where the right knuckles go from the middle button and where the fingers point, when not from the right side. */
-    rightHand?: { knuckles: Vec3; fingers: Vec3 },
+    rightHand?: { knuckles: Vec3; fingers: Vec3; out: Vec3 },
+    /** The head's turn, when not just up. */
+    head?: Hold["head"],
 ): Hold {
     const horn = brassHorn(id, "low");
-    const instrument = atLips(horn.rim);
+    const instrument = atLips(horn.rim, head);
     const f = frameOf(instrument);
     const buttons = horn.valves.map((v) => v.button);
     // right: the knuckles just right of the buttons and a little below
@@ -280,9 +292,15 @@ function valvedUp(
     return {
         family,
         state: "up",
-        right: armTo("right", rightWrist, rightFingers, [-1, 0.05, 0.25]),
+        right: armTo(
+            "right",
+            rightWrist,
+            rightFingers,
+            rightHand?.out ?? [-1, 0.05, 0.25],
+        ),
         left: armTo("left", leftWrist, leftFingers, [1, -0.1, 0.2]),
         instrument,
+        ...(head ? { head } : {}),
     };
 }
 
@@ -405,11 +423,18 @@ function tromboneUp(family: "trombone" | "bassTrombone"): Hold {
 /**
  * The contra up (owner, 2026-11-10): pitched 15 degrees above level with
  * the rim at the lips, the right hand over the valves like the other
- * horns, and the left hand round the front bow, the tube that comes down
+ * horns but coming across from above, and the left hand round the front bow, the tube that comes down
  * the front of the loops on the horn's left side (x 0.05, z 0.064 in
  * `contra.ts`). The loops lie back over the left shoulder. Carry and trail
  * are the same hold: the contra stays on the shoulder.
  */
+/**
+ * A contra player's head (photos, 2026-11-10): up like everyone's, leaned
+ * toward the right shoulder, away from the horn, and turned a little left
+ * toward the mouthpiece.
+ */
+const CONTRA_HEAD = { pitch: 15, roll: -12, yaw: 18 };
+
 function contraHolds(): Record<HoldState, Hold> {
     const up = valvedUp(
         "contra",
@@ -418,9 +443,15 @@ function contraHolds(): Record<HoldState, Hold> {
             palm: [0.05 + 0.03, -0.075, 0.07],
             fingers: [-0.35, 0.8, 0.35],
         },
-        // the valves stand beside the face, so the right hand comes from in
-        // front of them, the fingers back and across onto the buttons
-        { knuckles: [-0.01, -0.01, 0.045], fingers: [0.45, 0.05, -0.9] },
+        // the valves stand in front of the face at the forehead: the right
+        // hand comes across from the right, fingers across and down onto
+        // the pistons, the elbow up toward shoulder height (photos, 2026-11-10)
+        {
+            knuckles: [-0.03, 0.025, 0],
+            fingers: [0.75, -0.5, 0.2],
+            out: [-1, 0.5, 0.4],
+        },
+        CONTRA_HEAD,
     );
     return {
         up,
@@ -952,13 +983,13 @@ const BASS: Record<HoldState, Hold> = {
         // the drum high on the carrier; upper arms down, forearms forward at the hips, the hands beside the heads below the center, mallets angled up and forward
         right: {
             elbow: [-0.238, 1.199, 0.006],
-            wrist: [-0.25, 1.06, 0.23],
-            fingers: unit([0, 0.3, 0.95]),
+            wrist: [-0.25, 1.12, 0.23],
+            fingers: unit([0, 0.6, 0.8]),
         },
         left: {
             elbow: [0.238, 1.199, 0.006],
-            wrist: [0.25, 1.06, 0.23],
-            fingers: unit([0, 0.3, 0.95]),
+            wrist: [0.25, 1.12, 0.23],
+            fingers: unit([0, 0.6, 0.8]),
         },
         instrument: {
             origin: [0, 1.0, 0.34],
@@ -972,13 +1003,13 @@ const BASS: Record<HoldState, Hold> = {
         // the drum high on the carrier; upper arms down, forearms forward at the hips, the hands beside the heads below the center, mallets angled up and forward
         right: {
             elbow: [-0.238, 1.199, 0.006],
-            wrist: [-0.25, 1.06, 0.23],
-            fingers: unit([0, 0.3, 0.95]),
+            wrist: [-0.25, 1.12, 0.23],
+            fingers: unit([0, 0.6, 0.8]),
         },
         left: {
             elbow: [0.238, 1.199, 0.006],
-            wrist: [0.25, 1.06, 0.23],
-            fingers: unit([0, 0.3, 0.95]),
+            wrist: [0.25, 1.12, 0.23],
+            fingers: unit([0, 0.6, 0.8]),
         },
         instrument: {
             origin: [0, 1.0, 0.34],
@@ -992,13 +1023,13 @@ const BASS: Record<HoldState, Hold> = {
         // the drum high on the carrier; upper arms down, forearms forward at the hips, the hands beside the heads below the center, mallets angled up and forward
         right: {
             elbow: [-0.238, 1.199, 0.006],
-            wrist: [-0.25, 1.06, 0.23],
-            fingers: unit([0, 0.3, 0.95]),
+            wrist: [-0.25, 1.12, 0.23],
+            fingers: unit([0, 0.6, 0.8]),
         },
         left: {
             elbow: [0.238, 1.199, 0.006],
-            wrist: [0.25, 1.06, 0.23],
-            fingers: unit([0, 0.3, 0.95]),
+            wrist: [0.25, 1.12, 0.23],
+            fingers: unit([0, 0.6, 0.8]),
         },
         instrument: {
             origin: [0, 1.0, 0.34],
@@ -1297,6 +1328,87 @@ const LEVEL_FLUTE = (old: Hold): Hold =>
     });
 
 /**
+ * `h` with its elbows solved again toward `right` and `left` (body
+ * directions), the wrists and fingers kept: elbows tucked in where the
+ * photos have them (2026-11-10).
+ */
+const elbowsToward = (h: Hold, right?: Vec3, left?: Vec3): Hold => ({
+    ...h,
+    right: right
+        ? armTo("right", h.right.wrist, h.right.fingers, right)
+        : h.right,
+    left: left ? armTo("left", h.left.wrist, h.left.fingers, left) : h.left,
+});
+
+/**
+ * Flutes and piccolos up (photos, 2026-11-10): each wrist just under and
+ * behind the tube where it held it, the fingers draped over the top
+ * pointing forward rather than up; the left elbow low and out to the
+ * left with the forearm rising to the hand, the right elbow down at the side.
+ */
+function drapedFlute(h: Hold): Hold {
+    const o = h.instrument.origin;
+    const axis = unit(h.instrument.bellAxis);
+    const onTube = (w: Vec3): Vec3 => add(o, mul(axis, dot(sub(w, o), axis)));
+    const hand = (side: "left" | "right", a: ArmTargets, out: Vec3) => {
+        const fingers: Vec3 = unit([side === "left" ? -0.1 : 0.05, 0.5, 0.85]);
+        const wrist = add(onTube(a.wrist), [0, -0.05, -0.06]);
+        return armTo(side, wrist, fingers, out);
+    };
+    return {
+        ...h,
+        right: hand("right", h.right, [-0.5, -1, 0.1]),
+        left: hand("left", h.left, [0.7, -0.7, 0.2]),
+    };
+}
+
+/**
+ * The clarinet (and soprano sax) up (photos and The Instrumentalist,
+ * 2026-11-10): 37 degrees out from vertical rather than 28, the bell well
+ * in front at the belt; the upper arms near the body, the elbows down and
+ * in, the left forearm rising to the upper joint.
+ */
+const CLARINET_ANGLE_DEG = 37;
+function clarinetOut(h: Hold): Hold {
+    const a = (CLARINET_ANGLE_DEG * Math.PI) / 180;
+    const moved = reframed(h, {
+        origin: h.instrument.origin,
+        bellAxis: [0, -Math.cos(a), Math.sin(a)],
+        capsAxis: [0, Math.sin(a), Math.cos(a)],
+    });
+    return elbowsToward(moved, [-0.45, -1, -0.15], [0.45, -1, -0.15]);
+}
+
+/**
+ * The saxes up (photos, 2026-11-10): the bottom kicked forward 12 degrees,
+ * the left hand up on the upper stack at the chest, 0.11 m higher along
+ * the body tube than before, the right on the lower stack; elbows relaxed
+ * near the body.
+ */
+const SAX_KICK_DEG = 12;
+const SAX_LEFT_UP = 0.11;
+function saxForward(h: Hold): Hold {
+    const k = (SAX_KICK_DEG * Math.PI) / 180;
+    const down = unit(h.instrument.bellAxis);
+    const bell: Vec3 = unit([
+        down[0],
+        down[1] * Math.cos(k),
+        -down[1] * Math.sin(k),
+    ]);
+    const moved = reframed(h, {
+        origin: h.instrument.origin,
+        bellAxis: bell,
+        capsAxis: [0, Math.sin(k), Math.cos(k)],
+    });
+    const leftWrist = sub(moved.left.wrist, mul(bell, SAX_LEFT_UP));
+    return elbowsToward(
+        { ...moved, left: { ...moved.left, wrist: round3(leftWrist) } },
+        [-0.6, -1, -0.3],
+        [0.6, -1, 0],
+    );
+}
+
+/**
  * Where the woodwinds' `up` holds first put the mouth (at the chin, as it
  * turned out): the flutes' lip plate just under (0, 1.52, 0.094), the reed
  * instruments' mouthpiece tip at (0, 1.52, 0.13), which left it 4 cm in
@@ -1344,25 +1456,80 @@ const TABLE: Record<HoldFamily, () => Record<HoldState, Hold>> = {
     }),
     contra: contraHolds,
     sousaphone: fixed(SOUSAPHONE),
-    flute: () => ({ ...FLUTE, up: withMouth(LEVEL_FLUTE(FLUTE.up), false) }),
+    flute: () => ({
+        ...FLUTE,
+        up: drapedFlute(withMouth(LEVEL_FLUTE(FLUTE.up), false)),
+    }),
     piccolo: () => ({
         ...PICCOLO,
-        up: withMouth(LEVEL_FLUTE(PICCOLO.up), false),
+        up: drapedFlute(withMouth(LEVEL_FLUTE(PICCOLO.up), false)),
     }),
-    clarinet: () => ({ ...CLARINET, up: withMouth(CLARINET.up) }),
-    bassClarinet: () => ({ ...BASS_CLARINET, up: withMouth(BASS_CLARINET.up) }),
-    sax: () => ({ ...SAX, up: withMouth(SAX.up) }),
-    snare: fixed(SNARE),
-    tenors: fixed(TENORS),
-    bass: fixed(BASS),
-    cymbals: fixed(CYMBALS),
-    flag: fixed(FLAG),
+    clarinet: () => ({ ...CLARINET, up: clarinetOut(withMouth(CLARINET.up)) }),
+    bassClarinet: () => ({
+        ...BASS_CLARINET,
+        // the left elbow tucked in at the side (photo, 2026-11-10)
+        up: elbowsToward(withMouth(BASS_CLARINET.up), undefined, [0.3, -1, 0]),
+    }),
+    sax: () => ({ ...SAX, up: saxForward(withMouth(SAX.up)) }),
+    // battery: elbows at the sides, a little forward, not winged (photos, 2026-11-10)
+    snare: () => tucked(SNARE, [-0.35, -1, 0.45]),
+    tenors: () => tucked(TENORS, [-0.45, -1, 0.4]),
+    // the hands at the lower ribs, mallets steep, the drum high (photos, 2026-11-10)
+    bass: () => tucked(BASS, [-0.25, -1, 0.15]),
+    cymbals: () => tucked(CYMBALS, [-0.4, -1, 0.3]),
+    flag: () => ({ ...FLAG, up: FLAG_PRESENT }),
     swingFlag: fixed(SWING),
     doubleSwingFlag: fixed(DOUBLE_SWING),
     rifle: fixed(RIFLE),
     sabre: fixed(SABRE),
 };
 const built = new Map<HoldFamily, Record<HoldState, Hold>>();
+
+/**
+ * The 6 ft flag presented (Star Line and other guard instruction pages, parade
+ * photos, 2026-11-10): the left hand covers the butt at the belly button,
+ * the right hand grips the pole 0.6 m up it at about nose height, and the
+ * pole leans 25 degrees forward and out to the performer's right, the
+ * silk above and ahead of the head.
+ */
+const FLAG_BUTT: Vec3 = [0.0, 1.05, 0.2];
+const FLAG_POLE: Vec3 = unit([-0.25, 0.9, 0.3]);
+/** The flag's right-hand grip, up the pole from the butt (guard.ts: the butt is 0.6 below it). */
+const FLAG_GRIP: Vec3 = add(FLAG_BUTT, mul(FLAG_POLE, 0.6));
+const FLAG_PRESENT: Hold = {
+    family: "flag",
+    state: "up",
+    right: armTo(
+        "right",
+        sub(FLAG_GRIP, mul(FLAG_POLE, 0.07)),
+        FLAG_POLE,
+        [-1, -0.3, 0.2],
+    ),
+    left: armTo(
+        "left",
+        sub(FLAG_BUTT, mul(FLAG_POLE, 0.05)),
+        FLAG_POLE,
+        [1, -0.6, 0],
+    ),
+    instrument: {
+        origin: round3(FLAG_GRIP),
+        bellAxis: FLAG_POLE,
+        capsAxis: [0, 0, 1],
+    },
+};
+
+/** Every state of a battery family with its elbows toward `right` and its mirror. */
+function tucked(
+    r: Record<HoldState, Hold>,
+    right: Vec3,
+): Record<HoldState, Hold> {
+    const left: Vec3 = [-right[0], right[1], right[2]];
+    return {
+        up: elbowsToward(r.up, right, left),
+        carry: elbowsToward(r.carry, right, left),
+        trail: elbowsToward(r.trail, right, left),
+    };
+}
 
 export function hold(family: HoldFamily, state: HoldState): Hold {
     let r = built.get(family);

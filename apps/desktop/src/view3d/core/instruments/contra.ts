@@ -59,8 +59,12 @@ const RINGS: Record<Detail, Record<Weight, [sides: number, bend: number]>> = {
 };
 
 const SPEC = {
-    /** The mouthpiece rim's center; it faces the performer, the cup opens along +Z. */
-    rim: [-0.1, -0.03, 0.025] as Vec3,
+    /**
+     * The mouthpiece rim's center; it faces the performer, the cup opens
+     * along +Z. It sits 0.12 m behind the valves, so they stand in front
+     * of the face, as photos of players show (2026-11-10).
+     */
+    rim: [-0.1, -0.03, -0.12] as Vec3,
     /** The leadpipe: forward from the receiver, around the main tuning slide's crook, back into the third valve. */
     lead: {
         crookZ: 0.19,

@@ -121,7 +121,9 @@ describe("holds", () => {
                 6,
             );
             const horn = brassHorn(id, "low");
-            expect(dist(inBody(h, horn.rim), LIPS)).toBeLessThan(0.002);
+            expect(dist(inBody(h, horn.rim), playingLips(h.head))).toBeLessThan(
+                0.002,
+            );
         },
     );
 
@@ -186,8 +188,17 @@ describe("holds", () => {
                 const h = hold(family, state);
                 if (state === "trail") continue;
                 // in front of the body; the trombones' left hand sits by the
-                // mouthpiece at the chin, and the level flutes' hands under a
-                // tube that runs parallel to the shoulders
+                // mouthpiece at the chin. The level flutes' hands sit just
+                // behind a tube that runs out past the right of the head, so
+                // they are only checked to be clear of the head's width.
+                if (
+                    state === "up" &&
+                    (family === "flute" || family === "piccolo")
+                ) {
+                    expect(h.right.wrist[0]).toBeLessThan(-0.15);
+                    expect(h.left.wrist[0]).toBeLessThan(-0.1);
+                    continue;
+                }
                 expect(h.right.wrist[2]).toBeGreaterThan(0.09);
                 expect(h.left.wrist[2]).toBeGreaterThan(0.09);
             }
@@ -233,24 +244,28 @@ describe("woodwind and battery holds", () => {
     };
 
     it.each(["up"] as const)(
-        "flute %s: both hands under the tube, fingers wrapping up and over it",
+        "flute %s: both wrists just under and behind the tube, fingers draped over it",
         (state) => {
             const h = hold("flute", state);
             const left = along("flute", state, 0.2);
             const right = along("flute", state, 0.42);
-            // the hands can't curl, so the wrists sit a hand's length below
-            // and the fingertips just reach over the top of the tube
+            // the hands can't curl: each wrist sits just under and behind
+            // the tube and the fingers drape over the top, pointing forward
             expect(dist(h.left.wrist, left)).toBeLessThan(0.14);
             expect(dist(h.right.wrist, right)).toBeLessThan(0.14);
-            expect(h.left.wrist[1]).toBeLessThan(left[1] - 0.09);
-            expect(h.right.wrist[1]).toBeLessThan(right[1] - 0.09);
-            for (const arm of [h.left, h.right])
-                expect(arm.fingers[1]).toBeGreaterThan(0.6);
+            expect(h.left.wrist[1]).toBeLessThan(left[1] - 0.03);
+            expect(h.right.wrist[1]).toBeLessThan(right[1] - 0.03);
+            for (const arm of [h.left, h.right]) {
+                expect(arm.fingers[1]).toBeGreaterThan(0.3);
+                expect(arm.fingers[2]).toBeGreaterThan(0.7);
+            }
+            // the left elbow below the hand, the forearm rising to it
+            expect(h.left.elbow[1]).toBeLessThan(h.left.wrist[1]);
         },
     );
 
     it.each(["up"] as const)(
-        "piccolo %s: both hands under the short tube, fingers up and over",
+        "piccolo %s: both hands under the short tube, fingers draped over",
         (state) => {
             const h = hold("piccolo", state);
             expect(
@@ -260,7 +275,7 @@ describe("woodwind and battery holds", () => {
                 dist(h.right.wrist, along("piccolo", state, 0.24)),
             ).toBeLessThan(0.14);
             for (const arm of [h.left, h.right])
-                expect(arm.fingers[1]).toBeGreaterThan(0.6);
+                expect(arm.fingers[2]).toBeGreaterThan(0.7);
         },
     );
 
@@ -320,13 +335,14 @@ describe("woodwind and battery holds", () => {
         expect(hold("bass", "up").instrument.bellAxis[0]).not.toBe(0); // the heads face sideways
     });
 
-    it("bass drummers hold the mallets at the hips beside the heads, forearms forward", () => {
+    it("bass drummers hold the mallets at the lower ribs beside the heads, mallets steep", () => {
         const h = hold("bass", "up");
         for (const arm of [h.right, h.left]) {
             expect(arm.wrist[1]).toBeLessThan(1.15);
             expect(Math.abs(arm.wrist[0])).toBeGreaterThan(0.2);
             expect(arm.wrist[2]).toBeGreaterThan(0.18);
-            expect(arm.fingers[2]).toBeGreaterThan(0.8);
+            expect(arm.fingers[2]).toBeGreaterThan(0.7);
+            expect(arm.fingers[1]).toBeGreaterThan(0.4);
         }
     });
 

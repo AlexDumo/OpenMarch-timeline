@@ -282,6 +282,13 @@ level** (for the flutes, clarinets and soprano sax, the first key; see the
 woodwind bullets). The states differ by where the bell
 points and where the elbows go.
 
+- **Every hold, the head (owner, 2026-11-10).** The head is up 15 degrees
+  (`HEAD_UP`), and a hold may lean or turn it as well. The neck and head ride
+  the Horn/Equipment channel with the arms, so the hold sets them. Lips
+  are at (0, 1.588, 0.088) with the head at bind (`LIPS`), and the hold's
+  head turn carries them. Brass rims sit at the turned lips. The reed
+  woodwinds' mouthpiece tips sit 1 cm inside them, and the flutes' lip
+  plates sit just under them.
 - **brass, horns up (owner, 2026-11-10).** Trumpet, mellophone, baritone
   and euphonium: the horn 15 degrees above level, bell forward, the
   mouthpiece's rim at the lips. The right hand comes over the valves from the
@@ -300,14 +307,25 @@ points and where the elbows go.
 - **trombone, horns up (owner, 2026-11-10).** 15 degrees above level with
   the rim at the lips; the right hand on the slide at first position, the
   left on the bell section by the mouthpiece.
-- **contra, horns up and carry (owner, 2026-11-10).** 15 degrees above
-  level with the rim at the lips. The loop lies back over the left
-  shoulder, its plane outside the head. The right hand is on the valves:
-  they stand beside the face, so it comes from in front of them, the
-  fingers back and across onto the buttons. The left hand holds the front
-  bow, the tube coming down the front of the loops on the horn's left side.
+- **contra, horns up and carry (owner, 2026-11-10; photos).** 15 degrees
+  above level with the rim at the lips. The rim sits 0.12 m behind the
+  valves, so they stand in front of the face at forehead height. The loop
+  lies back over the left shoulder, its plane outside the head. The right
+  hand comes across from the right, fingers across and down onto the
+  pistons, the elbow up toward shoulder height. The left hand holds the
+  front bow, the tube coming down the front of the loops on the horn's left
+  side. The head is up 15 degrees, leaned 12 toward the right shoulder and
+  turned 18 toward the mouthpiece (`CONTRA_HEAD`).
+- **sousaphone (owner, 2026-11-10).** Its players wear a beret, not the
+  shako and plume: a black beret pulled down toward the right, built with
+  the horn and riding the head bone (`beret.ts`). The bell is 9 cm lower
+  than with the plume. Its lower rim sits just over the beret, as photos
+  show.
 - **flute.** Level and parallel to the shoulders, running straight out to
-  the player's right from the lips (owner, 2026-11-10). Both hands sit under the tube, wrists
+  the player's right from the lips (owner, 2026-11-10). Up (photos,
+  2026-11-10): each wrist just under and behind the tube, the fingers
+  draped over it pointing forward. The left elbow is low and out to the
+  left, the forearm rising to the hand. Before that change, both hands sit under the tube, wrists
   0.12 m below it so the stiff hands' fingertips just reach over the top
   onto the keys: the left hand 0.2 m
   along by the face, its forearm across the chest and the elbow in front;
@@ -324,7 +342,9 @@ points and where the elbows go.
   both hands brought in to the short body: the left 0.12 m along, the right 0.24 m. Carry: as the flute, the
   first key 0.101 m along at eye level, the hands at 0.14 and 0.24 m.
   Trail: as the flute, held 0.18 m along.
-- **clarinet.** Down the center line, angled 28 degrees out. The hands wrap
+- **clarinet.** Down the center line, angled 37 degrees out (photos and The
+  Instrumentalist, 2026-11-10; it was 28), with the elbows down and in near
+  the body. The hands wrap
   the joints from the sides, fingers across the front onto the holes: left
   hand on the upper joint, right hand on the lower, elbows a little out.
   The soprano sax shares this hold. Carry (owner, 2026-10-09): as the
@@ -340,7 +360,9 @@ points and where the elbows go.
   carry the crook and bell sit low at the right side, at trail the keys
   face the ground so the crook and bell hang below the tube behind the
   leg.
-- **sax.** On the strap in front of the body, as front-on photos of marching
+- **sax.** Up (photos, 2026-11-10): the bottom kicked forward 12 degrees
+  and the left hand up on the upper stack at the chest, 0.11 m higher than
+  before, the elbows relaxed near the body. On the strap in front of the body, as front-on photos of marching
   saxes show: the neck runs straight back to the mouth, reed underneath,
   and the body hangs straight down, parallel to the player, to the bow at
   the stomach (lower for the tenor and bari). The body is turned 65 degrees
@@ -355,20 +377,31 @@ points and where the elbows go.
   back through the right fist, the mouthpiece forward, turned about the body
   tube so the bow and bell still hang below it, clear of the leg; the arms
   are the brass trail's.
-- **snare, tenors.** Drum at waist height on the carrier, its shell clear
+- **snare, tenors.** Elbows at the sides, a little forward, not winged
+  (photos, 2026-11-10). Drum at waist height on the carrier, its shell clear
   of the belly plate. Matched grip: the hands just behind the back rim
   (wider on the tenors), palms down, forearms forward and level, elbows
   relaxed at the sides. Each stick runs through the hand a third of the way
   up (the butt behind the fist) and angles in from each side: on the snare
   the tips meet near the center a little above the head without crossing;
   on the tenors each hand reaches over the shots to drum 1 or drum 2.
-- **bass.** Drum sideways on the carrier, carried high. Upper arms down,
+- **bass.** Drum sideways on the carrier, carried high: its center about the
+  shoulders, the biggest drums' tops at the top of the head (no higher than
+  1.85 m). The hands are at the lower ribs (1.12 m) with steep mallets
+  (photos, 2026-11-10). Upper arms down,
   forearms forward at the hips, the hands beside the heads below the
   center, the mallets angled up and forward to each head's center for
   every size from 18 to 32 in.
-- **cymbals.** Pair held at chest height, plates vertical.
-- **flag.** Up (present): the pole vertical in front of the body, right
-  hand at the chest, left hand low on the pole, the silk overhead toward
+- **cymbals.** Pair held at chest height, plates vertical, elbows closer to
+  the body (photos, 2026-11-10). Photos show two other positions, low at the
+  sides while marching and a diagonal "gumption" to play. Which one to use
+  is the owner's call.
+- **flag.** Up (present; instruction pages and parade photos, 2026-11-10):
+  the left hand covers the butt at the belly button, and the right hand
+  grips the pole 0.6 m up it at about nose height. The pole leans 25
+  degrees forward and out to the right (`FLAG_PRESENT`). Before that
+  change: the pole vertical in front of the body, right hand at the chest,
+  left hand low on the pole, the silk overhead toward
   the performer's right (instrument +X under this hold; seen from the
   audience it flies to the camera's left). Carry and trail: the pole
   vertical at the right side, left arm down. Which side a guard presents
