@@ -5,6 +5,7 @@ import path from "node:path";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { mirrorClip, mirrorName, shiftLoop } from "../marchers/mirrorClip";
+import { restoreStillPose } from "@/view3d/window/performers/marchers/stillPose";
 
 async function load() {
     const b = fs.readFileSync(
@@ -24,7 +25,7 @@ async function load() {
         c.buffer.slice(c.byteOffset, c.byteOffset + c.byteLength),
         "",
     );
-    return { scene: body.scene, clips: clips.animations };
+    return { scene: body.scene, clips: restoreStillPose(clips.animations) };
 }
 
 /** World position of a bone after posing `scene` with `clip` at `t`. */

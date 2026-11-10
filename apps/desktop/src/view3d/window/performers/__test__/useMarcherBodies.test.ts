@@ -18,6 +18,7 @@ import {
     type MarcherAssets,
 } from "../marchers/useMarcherBodies";
 import { holdRowName } from "../marchers/hornRows";
+import { restoreStillPose } from "@/view3d/window/performers/marchers/stillPose";
 
 const root = path.resolve(__dirname, "../../../assets/om-pose");
 
@@ -36,7 +37,9 @@ async function assets(): Promise<MarcherAssets> {
         if ((o as SkinnedMesh).isSkinnedMesh) mesh = o as SkinnedMesh;
     });
     const clips = new Map<string, AnimationClip>();
-    for (const c of (await gltf("clips/clips-h100.glb")).animations)
+    for (const c of restoreStillPose(
+        (await gltf("clips/clips-h100.glb")).animations,
+    ))
         clips.set(c.name, c);
     return {
         bodies: new Map([
@@ -105,7 +108,9 @@ describe("ClipSet", () => {
         const manifest = JSON.parse(
             fs.readFileSync(path.join(root, "crab/manifest.json"), "utf8"),
         ) as Manifest;
-        const clips = (await gltf("crab/clips-h100.glb")).animations;
+        const clips = restoreStillPose(
+            (await gltf("crab/clips-h100.glb")).animations,
+        );
         return { set: new ClipSet(clips, manifest), clips };
     };
     const track = (clip: AnimationClip, name: string) =>

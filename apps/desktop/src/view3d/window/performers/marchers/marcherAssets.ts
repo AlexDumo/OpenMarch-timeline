@@ -18,6 +18,7 @@ import {
     type BodyType,
     type HeightClass,
 } from "@/view3d/core/marchers/looks";
+import { restoreStillPose } from "./stillPose";
 
 const bodyUrls = import.meta.glob<string>(
     "../../../assets/om-pose/bodies/*.glb",
@@ -84,7 +85,7 @@ export function loadCrabClips(h: HeightClass): Promise<AnimationClip[]> {
     if (!p) {
         p = new GLTFLoader()
             .loadAsync(urlFor(crabClipUrls, `clips-${classTag(h)}.glb`))
-            .then((gltf) => gltf.animations);
+            .then((gltf) => restoreStillPose(gltf.animations));
         crabPromises.set(h, p);
     }
     return p;
@@ -110,13 +111,13 @@ export function loadBodies(): Promise<Map<BodyType, LoadedBody>> {
     return bodiesPromise;
 }
 
-/** Every clip of one height class (one packed GLB, about 5.9 MB). */
+/** Every clip of one height class (one packed GLB, about 2 MB). */
 export function loadClassClips(h: HeightClass): Promise<AnimationClip[]> {
     let p = classPromises.get(h);
     if (!p) {
         p = new GLTFLoader()
             .loadAsync(urlFor(clipUrls, `clips-${classTag(h)}.glb`))
-            .then((gltf) => gltf.animations);
+            .then((gltf) => restoreStillPose(gltf.animations));
         classPromises.set(h, p);
     }
     return p;

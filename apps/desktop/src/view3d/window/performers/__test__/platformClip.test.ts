@@ -12,6 +12,7 @@ import {
     prepBase,
 } from "../marchers/platformClip";
 import { prepName } from "@/view3d/core/marchers/planner";
+import { restoreStillPose } from "@/view3d/window/performers/marchers/stillPose";
 
 async function parse(file: string) {
     const b = fs.readFileSync(
@@ -39,7 +40,7 @@ function load() {
         });
         return {
             scene: body.scene,
-            clips: clips.animations,
+            clips: restoreStillPose(clips.animations),
             skeleton: mesh!.skeleton,
         };
     })();
