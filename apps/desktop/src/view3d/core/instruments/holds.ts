@@ -1362,46 +1362,105 @@ const LEVEL_FLUTE = (old: Hold): Hold =>
         capsAxis: [0, 1, -0.25],
     });
 
-/**
- * `h` with its elbows solved again toward `right` and `left` (body
- * directions), the wrists and fingers kept: elbows tucked in where the
- * photos have them (2026-11-10).
- */
-const elbowsToward = (h: Hold, right?: Vec3, left?: Vec3): Hold => ({
-    ...h,
-    right: right
-        ? armTo("right", h.right.wrist, h.right.fingers, right)
-        : h.right,
-    left: left ? armTo("left", h.left.wrist, h.left.fingers, left) : h.left,
-});
+/** One arm's targets as the wrist study gives them: wrist, fingers, and the elbow it solved. */
+type ArmPlan = { wrist: Vec3; fingers: Vec3; elbow: Vec3 };
 
 /**
- * Flutes and piccolos up (photos, 2026-11-10): each wrist just under and
- * behind the tube where it held it, the fingers draped over the top
- * pointing forward rather than up; the left elbow low and out to the
- * left with the forearm rising to the hand, the right elbow down at the side.
+ * `h` with both hands set from a plan (woodwind wrist study, 2026-11-10):
+ * a stiff mitt reads right when it carries straight on from the forearm,
+ * bent only 10 to 25 degrees toward where the fingers would curl, with the
+ * tube across the knuckles, as in photos of players. Each elbow is solved
+ * again toward the point the study found, so the arm stays its length.
  */
-function drapedFlute(h: Hold): Hold {
-    const o = h.instrument.origin;
-    const axis = unit(h.instrument.bellAxis);
-    const onTube = (w: Vec3): Vec3 => add(o, mul(axis, dot(sub(w, o), axis)));
-    const hand = (side: "left" | "right", a: ArmTargets, out: Vec3) => {
-        const fingers: Vec3 = unit([side === "left" ? -0.1 : 0.05, 0.5, 0.85]);
-        const wrist = add(onTube(a.wrist), [0, -0.05, -0.06]);
-        return armTo(side, wrist, fingers, out);
-    };
-    return {
-        ...h,
-        right: hand("right", h.right, [-0.5, -1, 0.1]),
-        left: hand("left", h.left, [0.7, -0.7, 0.2]),
-    };
+function withHands(h: Hold, right: ArmPlan, left: ArmPlan): Hold {
+    const arm = (side: "left" | "right", a: ArmPlan) =>
+        armTo(
+            side,
+            a.wrist,
+            a.fingers,
+            sub(a.elbow, side === "left" ? SHOULDER_L : SHOULDER_R),
+        );
+    return { ...h, right: arm("right", right), left: arm("left", left) };
 }
+
+/**
+ * The woodwind hands up, from the wrist study (photos, 2026-11-10). The
+ * flutes' right forearm rises nearly straight from an elbow at the side,
+ * the left crosses the chest from an elbow low in front; the clarinets'
+ * and saxes' elbows hang at the sides and the forearms come forward and in.
+ */
+const WOODWIND_HANDS: Record<
+    "flute" | "piccolo" | "clarinet" | "bassClarinet" | "sax",
+    { right: ArmPlan; left: ArmPlan }
+> = {
+    piccolo: {
+        left: {
+            wrist: [-0.058, 1.509, 0.102],
+            fingers: [-0.52, 0.82, 0.25],
+            elbow: [0.086, 1.292, 0.14],
+        },
+        right: {
+            wrist: [-0.252, 1.5, 0.087],
+            fingers: [0.12, 0.91, 0.4],
+            elbow: [-0.306, 1.243, 0.058],
+        },
+    },
+    flute: {
+        left: {
+            wrist: [-0.141, 1.514, 0.102],
+            fingers: [-0.59, 0.77, 0.25],
+            elbow: [0.04, 1.323, 0.12],
+        },
+        right: {
+            wrist: [-0.415, 1.501, 0.087],
+            fingers: [-0.15, 0.9, 0.4],
+            elbow: [-0.326, 1.256, 0.043],
+        },
+    },
+    clarinet: {
+        left: {
+            wrist: [0.069, 1.391, 0.145],
+            fingers: [-0.45, 0.55, 0.7],
+            elbow: [0.209, 1.197, 0.033],
+        },
+        right: {
+            wrist: [-0.069, 1.269, 0.246],
+            fingers: [0.45, 0.15, 0.88],
+            elbow: [-0.206, 1.196, 0.032],
+        },
+    },
+    bassClarinet: {
+        left: {
+            wrist: [0.084, 1.278, 0.2],
+            fingers: [-0.65, 0.4, 0.65],
+            elbow: [0.24, 1.2, 0.002],
+        },
+        right: {
+            wrist: [-0.072, 1.075, 0.24],
+            fingers: [0.5, -0.45, 0.74],
+            elbow: [-0.191, 1.197, 0.038],
+        },
+    },
+    sax: {
+        left: {
+            wrist: [0.063, 1.354, 0.252],
+            fingers: [-0.55, 0.45, 0.7],
+            elbow: [0.21, 1.214, 0.084],
+        },
+        right: {
+            wrist: [-0.051, 1.201, 0.271],
+            fingers: [0.55, 0.12, 0.83],
+            elbow: [-0.194, 1.2, 0.049],
+        },
+    },
+};
+const playedBy = (family: keyof typeof WOODWIND_HANDS, h: Hold): Hold =>
+    withHands(h, WOODWIND_HANDS[family].right, WOODWIND_HANDS[family].left);
 
 /**
  * The clarinet (and soprano sax) up (photos and The Instrumentalist,
  * 2026-11-10): 37 degrees out from vertical rather than 28, the bell well
- * in front at the belt; the upper arms near the body, the elbows down and
- * in, the left forearm rising to the upper joint.
+ * in front at the belt. The hands come from `WOODWIND_HANDS`.
  */
 const CLARINET_ANGLE_DEG = 37;
 function clarinetOut(h: Hold): Hold {
@@ -1411,17 +1470,15 @@ function clarinetOut(h: Hold): Hold {
         bellAxis: [0, -Math.cos(a), Math.sin(a)],
         capsAxis: [0, Math.sin(a), Math.cos(a)],
     });
-    return elbowsToward(moved, [-0.45, -1, -0.15], [0.45, -1, -0.15]);
+    return moved;
 }
 
 /**
- * The saxes up (photos, 2026-11-10): the bottom kicked forward 12 degrees,
- * the left hand up on the upper stack at the chest, 0.11 m higher along
- * the body tube than before, the right on the lower stack; elbows relaxed
- * near the body.
+ * The saxes up (photos, 2026-11-10): the bottom kicked forward 12 degrees.
+ * The hands come from `WOODWIND_HANDS`: the left up on the upper stack at
+ * the chest, the right on the lower stack, elbows relaxed near the body.
  */
 const SAX_KICK_DEG = 12;
-const SAX_LEFT_UP = 0.11;
 function saxForward(h: Hold): Hold {
     const k = (SAX_KICK_DEG * Math.PI) / 180;
     const down = unit(h.instrument.bellAxis);
@@ -1435,12 +1492,7 @@ function saxForward(h: Hold): Hold {
         bellAxis: bell,
         capsAxis: [0, Math.sin(k), Math.cos(k)],
     });
-    const leftWrist = sub(moved.left.wrist, mul(bell, SAX_LEFT_UP));
-    return elbowsToward(
-        { ...moved, left: { ...moved.left, wrist: round3(leftWrist) } },
-        [-0.6, -1, -0.3],
-        [0.6, -1, 0],
-    );
+    return moved;
 }
 
 /**
@@ -1493,19 +1545,21 @@ const TABLE: Record<HoldFamily, () => Record<HoldState, Hold>> = {
     sousaphone: fixed(SOUSAPHONE),
     flute: () => ({
         ...FLUTE,
-        up: drapedFlute(withMouth(LEVEL_FLUTE(FLUTE.up), false)),
+        up: playedBy("flute", withMouth(LEVEL_FLUTE(FLUTE.up), false)),
     }),
     piccolo: () => ({
         ...PICCOLO,
-        up: drapedFlute(withMouth(LEVEL_FLUTE(PICCOLO.up), false)),
+        up: playedBy("piccolo", withMouth(LEVEL_FLUTE(PICCOLO.up), false)),
     }),
-    clarinet: () => ({ ...CLARINET, up: clarinetOut(withMouth(CLARINET.up)) }),
+    clarinet: () => ({
+        ...CLARINET,
+        up: playedBy("clarinet", clarinetOut(withMouth(CLARINET.up))),
+    }),
     bassClarinet: () => ({
         ...BASS_CLARINET,
-        // the left elbow tucked in at the side (photo, 2026-11-10)
-        up: elbowsToward(withMouth(BASS_CLARINET.up), undefined, [0.3, -1, 0]),
+        up: playedBy("bassClarinet", withMouth(BASS_CLARINET.up)),
     }),
-    sax: () => ({ ...SAX, up: saxForward(withMouth(SAX.up)) }),
+    sax: () => ({ ...SAX, up: playedBy("sax", saxForward(withMouth(SAX.up))) }),
     // battery (drum corps photos, 2026-11-10): the upper arms hang close to
     // the ribs, 10 to 20 degrees off vertical, the forearms reach forward
     snare: () =>

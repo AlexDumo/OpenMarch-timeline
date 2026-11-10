@@ -196,7 +196,7 @@ describe("holds", () => {
                     (family === "flute" || family === "piccolo")
                 ) {
                     expect(h.right.wrist[0]).toBeLessThan(-0.15);
-                    expect(h.left.wrist[0]).toBeLessThan(-0.1);
+                    expect(h.left.wrist[2]).toBeGreaterThan(0.08);
                     continue;
                 }
                 expect(h.right.wrist[2]).toBeGreaterThan(0.09);
@@ -244,28 +244,26 @@ describe("woodwind and battery holds", () => {
     };
 
     it.each(["up"] as const)(
-        "flute %s: both wrists just under and behind the tube, fingers draped over it",
+        "flute %s: both wrists under the tube, the tube across the knuckles",
         (state) => {
             const h = hold("flute", state);
             const left = along("flute", state, 0.2);
             const right = along("flute", state, 0.42);
-            // the hands can't curl: each wrist sits just under and behind
-            // the tube and the fingers drape over the top, pointing forward
+            // the hands can't curl: each wrist sits under the tube and the
+            // tube lies across the knuckles, 0.1 m up the fingers
             expect(dist(h.left.wrist, left)).toBeLessThan(0.14);
             expect(dist(h.right.wrist, right)).toBeLessThan(0.14);
             expect(h.left.wrist[1]).toBeLessThan(left[1] - 0.03);
             expect(h.right.wrist[1]).toBeLessThan(right[1] - 0.03);
-            for (const arm of [h.left, h.right]) {
-                expect(arm.fingers[1]).toBeGreaterThan(0.3);
-                expect(arm.fingers[2]).toBeGreaterThan(0.7);
-            }
+            for (const arm of [h.left, h.right])
+                expect(arm.fingers[1]).toBeGreaterThan(0.6);
             // the left elbow below the hand, the forearm rising to it
             expect(h.left.elbow[1]).toBeLessThan(h.left.wrist[1]);
         },
     );
 
     it.each(["up"] as const)(
-        "piccolo %s: both hands under the short tube, fingers draped over",
+        "piccolo %s: both hands under the short tube, fingers up and over",
         (state) => {
             const h = hold("piccolo", state);
             expect(
@@ -275,7 +273,23 @@ describe("woodwind and battery holds", () => {
                 dist(h.right.wrist, along("piccolo", state, 0.24)),
             ).toBeLessThan(0.14);
             for (const arm of [h.left, h.right])
-                expect(arm.fingers[2]).toBeGreaterThan(0.7);
+                expect(arm.fingers[1]).toBeGreaterThan(0.6);
+        },
+    );
+
+    it.each(["flute", "piccolo", "clarinet", "bassClarinet", "sax"] as const)(
+        "%s up: each hand carries straight on from the forearm, bent 30 degrees at most",
+        (family) => {
+            // a stiff mitt reads as a hand only with a nearly straight wrist
+            // (woodwind wrist study, 2026-11-10)
+            const h = hold(family, "up");
+            for (const arm of [h.left, h.right]) {
+                const fore = arm.wrist.map((w, i) => w - arm.elbow[i]);
+                const l = Math.hypot(...fore);
+                const cos =
+                    fore.reduce((s, v, i) => s + v * arm.fingers[i], 0) / l;
+                expect((Math.acos(cos) * 180) / Math.PI).toBeLessThan(30);
+            }
         },
     );
 
@@ -284,15 +298,16 @@ describe("woodwind and battery holds", () => {
         (state) => {
             const h = hold("clarinet", state);
             expect(
-                dist(h.left.wrist, along("clarinet", state, 0.2)),
+                dist(h.left.wrist, along("clarinet", state, 0.22)),
             ).toBeLessThan(0.1);
             expect(
                 dist(h.right.wrist, along("clarinet", state, 0.4)),
             ).toBeLessThan(0.1);
             expect(h.left.wrist[0]).toBeGreaterThan(0.04);
             expect(h.right.wrist[0]).toBeLessThan(-0.04);
-            expect(h.left.fingers[0]).toBeLessThan(-0.5);
-            expect(h.right.fingers[0]).toBeGreaterThan(0.5);
+            // the hands come in from the sides toward the tube
+            expect(h.left.fingers[0]).toBeLessThan(-0.3);
+            expect(h.right.fingers[0]).toBeGreaterThan(0.3);
         },
     );
 

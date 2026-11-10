@@ -321,6 +321,20 @@ points and where the elbows go.
   the horn and riding the head bone (`beret.ts`). The bell is 9 cm lower
   than with the plume. Its lower rim sits just over the beret, as photos
   show.
+- **Woodwind hands (wrist study, 2026-11-10).** A stiff mitt reads as a hand
+  only when it carries straight on from the forearm. So every woodwind hand
+  bends at most 30 degrees at the wrist, toward where the fingers would
+  curl, and the tube lies across the knuckles, 0.1 m up the fingers. The
+  targets are in `WOODWIND_HANDS`. The flutes' right forearm rises nearly
+  straight from an elbow at the side, and the left crosses the chest from
+  an elbow low in front. The clarinets' and saxes' elbows hang at the sides,
+  and their forearms come forward and in. These supersede the hand
+  positions in the bullets below.
+- **Percussion arms (drum corps photos, 2026-11-10).** The upper arms hang
+  10 to 20 degrees off vertical against the ribs and the forearms reach
+  forward. The snare rides 0.45 m out on its carrier, the tenor hands sit
+  about shoulder width apart, and the cymbal plates are held at the chest
+  0.26 m apart.
 - **flute.** Level and parallel to the shoulders, running straight out to
   the player's right from the lips (owner, 2026-11-10). Up (photos,
   2026-11-10): each wrist just under and behind the tube, the fingers
