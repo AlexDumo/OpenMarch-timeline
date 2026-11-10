@@ -76,6 +76,28 @@ export function shiftLoop(
     return new THREE.AnimationClip(name, clip.duration, tracks);
 }
 
+/**
+ * A clip's last pose held for the clip's whole length: the still count of a
+ * crab stop-and-go holds where its stop ended (`still_of` in the manifest).
+ */
+export function stillClip(
+    clip: THREE.AnimationClip,
+    name: string,
+): THREE.AnimationClip {
+    const tracks = clip.tracks.map((t) => {
+        const size = t.getValueSize();
+        const last = t.values.slice(t.values.length - size);
+        const track = t.clone();
+        track.times = Float32Array.from([0, clip.duration]);
+        const values = new Float32Array(size * 2);
+        values.set(last, 0);
+        values.set(last, size);
+        track.values = values;
+        return track;
+    });
+    return new THREE.AnimationClip(name, clip.duration, tracks);
+}
+
 /** The clip whose mirror plays as `name`: slides, crabs and built turns swap sides. */
 export function mirrorName(name: string): string {
     return name

@@ -1,6 +1,6 @@
 {
     "source": "https://github.com/OpenMarch/om-pose",
-    "commit": "3f80f3a433e9447c27ade7ed34ce068a64abc6f7",
+    "commit": "5f1035074f3fa1458484a5737815e13761b64787",
     "from": {
         "bodies": "assets/body-v4u/*.glb",
         "clips": "out/body/animations/*.glb, packed one GLB per height class",
@@ -34,24 +34,24 @@
             "sha256": "9e22540b726d208e3234f66e16896d259354412dd5031a362bba5f1b00f776a6"
         },
         "crab/clips-h090.glb": {
-            "bytes": 7794900,
-            "sha256": "68f9e8a52fef283601a6dad35e8845622976834d5927438df62e2f1b98a6b772"
+            "bytes": 13704256,
+            "sha256": "15366b1573029c0134022fb488ee5ddd4b284a4dd5b3694de2fc9f4f315192a7"
         },
         "crab/clips-h095.glb": {
-            "bytes": 7799212,
-            "sha256": "c8db01c275e504819ac67e07547215c7f4526522ea0353ed1be36f2ea8cf73ee"
+            "bytes": 13709584,
+            "sha256": "a94df569ac5ca13572c30c582c8e002aa898b54ba186dacab804ba48ade92c74"
         },
         "crab/clips-h100.glb": {
-            "bytes": 7798444,
-            "sha256": "b84aa70e85149c49052c8405b605e5e78565534fed4da0dfe5d00717b118f253"
+            "bytes": 13708188,
+            "sha256": "220bba1b6e82a011cef58eb537aed6eba86fe0f893b82f140285a8cdaed8e5c5"
         },
         "crab/clips-h105.glb": {
-            "bytes": 7801912,
-            "sha256": "0d7ebf773b28ddb175564bbd56a367369502559d6eeed89eb9e52b18e5058437"
+            "bytes": 13715808,
+            "sha256": "29049d6fd045f1879fa2386497475ad22ef6c3e13124358c9bf1981f17bd9018"
         },
         "crab/clips-h110.glb": {
-            "bytes": 7800308,
-            "sha256": "b9cc8d77170b45edfefaa453053d4e70c189935a698d886196c8c01931c556d1"
+            "bytes": 13713104,
+            "sha256": "869ef6c712c7cdfe386bc9c80fd4a1347e2364178738b8059b7b07d314be1898"
         },
         "bodies/feminine-average.glb": {
             "bytes": 249144,
@@ -86,8 +86,8 @@
             "sha256": "fdc3d2a5a121520173495b7370e56eb2a09235db0e3baec0e4a30e155a5cba94"
         },
         "crab/manifest.json": {
-            "bytes": 3382103,
-            "sha256": "6e965eab14df0f9993df685b342c1ab73425753be619bf704c3235523c675e2e"
+            "bytes": 7523971,
+            "sha256": "c39ea60ba92918ac7b6412721d4eb0f6c981c3ffd2473a5365d34071e29e24d2"
         }
     }
 }

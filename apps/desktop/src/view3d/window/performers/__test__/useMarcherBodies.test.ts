@@ -137,6 +137,31 @@ describe("ClipSet", () => {
         expect(r[1]).toBeCloseTo(-l[1], 6);
     });
 
+    it("holds a stop's last pose for a stop-and-go's still count", async () => {
+        const { set } = await crab();
+        const stop = set.get("stop_crabL090_8to5")!;
+        const hold = set.get("hold_crabL090_8to5")!;
+        expect(hold.duration).toBe(stop.duration);
+        const s = track(stop, "DEF-thighL.quaternion").values;
+        const h = track(hold, "DEF-thighL.quaternion").values;
+        expect(Array.from(h)).toEqual([
+            ...Array.from(s.slice(-4)),
+            ...Array.from(s.slice(-4)),
+        ]);
+    });
+
+    it("makes the weight-on-the-right stop from the other side's, mirrored", async () => {
+        const { set } = await crab();
+        const stop2 = set.get("stop2_crabL090_8to5")!;
+        const source = set.get("stop_crabR090_8to5")!;
+        const r = track(stop2, "DEF-thighR.quaternion").values;
+        const l = track(source, "DEF-thighL.quaternion").values;
+        expect(r[0]).toBeCloseTo(l[0], 6);
+        expect(r[1]).toBeCloseTo(-l[1], 6);
+        // and its still count holds that
+        expect(set.get("hold2_crabL090_8to5")).toBeDefined();
+    });
+
     it("keeps what it made, serves stored clips as they are, and has nothing else", async () => {
         const { set, clips } = await crab();
         expect(set.get("crabR090_8to5")).toBe(set.get("crabR090_8to5"));

@@ -180,6 +180,26 @@ crab keeps the hips and shoulders square to the facing at every travel angle.
 - **Crab right off the left foot** crosses on count 1, with a prep step: on the
   count before, the right foot goes back and out of the way, then the left
   crosses in front to land on count 1.
+- **Direction changes are stop-and-gos** (the 2017 Bluecoats handbook,
+  "Crabbing with direction changes"). Crab left into crab right or back,
+  with the travel turning more than 90 degrees, plays three counts in place
+  of a fade:
+  - the old move's last count stops the weight over the left foot, which
+    goes flat, and the right foot carries on to touch down without weight:
+    in the old step and path out of crab right, in line directly in front of
+    the left foot (behind it on a back diagonal) out of crab left;
+  - on the new move's first count nothing moves;
+  - on its second the right foot lifts on the "and" and lands on the count in
+    the new step and path, crossing in front of the left foot into crab
+    left.
+
+  When the old move ends on the other foot (an odd number of counts) it's the
+  same, mirrored: the weight stops over the right foot. Gentler turns, and a
+  new direction that lasts a single count, still fade. The body stays over
+  the standing foot through the stop and the still count, so it falls behind
+  its dot there and makes it up from the go on; in a straight reversal the
+  dot comes back toward it, so it's hardly behind at all.
+
 - **Hands and drums** are the holds below, which replace the arms on every
   marching clip, crab included. Crab clips skip the platform lift: they're on
   the platforms already.

@@ -31,15 +31,17 @@ import {
     type StepOffFoot,
 } from "./marcherBodies";
 import { hornRowSpec } from "./hornRows";
-import { mirrorClip, shiftLoop } from "./mirrorClip";
+import { mirrorClip, shiftLoop, stillClip } from "./mirrorClip";
 
 /**
- * Clips by name, with the ones a manifest marks `mirror_of` made the first
- * time they're asked for: crab right's loops and halts are crab left's
- * mirrored, the loops a count on (`shift`), so they ship once.
+ * Clips by name, with the ones a manifest marks `mirror_of` or `still_of`
+ * made the first time they're asked for: crab right's loops and halts are
+ * crab left's mirrored, the loops a count on (`shift`), so they ship once,
+ * and a stop-and-go's still count holds its stop's last pose.
  */
 export class ClipSet extends Map<string, AnimationClip> {
     private readonly mirrors = new Map<string, { of: string; shift: number }>();
+    private readonly stills = new Map<string, string>();
 
     constructor(clips: Iterable<AnimationClip>, manifest: Manifest | null) {
         super();
@@ -55,11 +57,21 @@ export class ClipSet extends Map<string, AnimationClip> {
                     of: e.mirror_of,
                     shift: typeof e.shift === "number" ? e.shift : 0,
                 });
+            else if (typeof e.still_of === "string")
+                this.stills.set(e.name, e.still_of);
     }
 
     override get(name: string): AnimationClip | undefined {
         const have = super.get(name);
         if (have) return have;
+        const still = this.stills.get(name);
+        if (still !== undefined) {
+            const source = this.get(still);
+            if (!source) return undefined;
+            const clip = stillClip(source, name);
+            this.set(name, clip);
+            return clip;
+        }
         const mirror = this.mirrors.get(name);
         const source = mirror && super.get(mirror.of);
         if (!mirror || !source) return undefined;

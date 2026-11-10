@@ -37,6 +37,15 @@
  *   into count 1 instead of snapping on the downbeat. When the last count
  *   can't host it (a step-off, or another change), the fade covers the first
  *   count alone;
+ * - crab left to crab right or back, the travel turning more than
+ *   STOP_GO_TURN: a stop-and-go (docs/3d/technique.md, "The crab step"),
+ *   not a fade. The old move's last count is `stop_<old>` (the weight
+ *   stops over one foot and the other touches down), the new move's first
+ *   is `hold_<old>` (nothing moves) and its second `go_<new>`, which hands
+ *   over from the hold while the free foot is in the air (`handoff`) and
+ *   lands it in the new step and path. `stop2_`, `hold2_` and `go2_` are
+ *   the same with the weight on the other foot, when the old move's last
+ *   count starts at loop time 1;
  * - step to rest: `halt_<move>` when the loop is at time 0, `halt2_<move>`
  *   when it is at 0.5 s (to mark time: `change_<move>__marktime` when it
  *   exists, or a crossfade).
@@ -59,6 +68,7 @@
  */
 
 import {
+    isCrabFamily,
     pickBlend,
     turnedClips,
     turnEase,
@@ -89,6 +99,17 @@ export const TURN_EPS = (1 * Math.PI) / 180;
  * just ease to the new direction (radians).
  */
 export const SHARP_TURN = (10 * Math.PI) / 180;
+/**
+ * Crab left into crab right (or back) with the travel turning more than
+ * this is a stop-and-go; smaller turns fade (radians).
+ */
+export const STOP_GO_TURN = (90 * Math.PI) / 180;
+/**
+ * A go hands over from the still pose over this part of its count: after
+ * the free foot lifts and before the body sets off (om-pose `GO_LIFT`,
+ * `GO_BODY`).
+ */
+export const GO_HANDOFF: readonly [number, number] = [0.3, 0.45];
 /** A halt's residual leg turn starts this far into its count: after the foot has closed. */
 export const HALT_TURN_START = 0.8;
 /** Between rests, a landing correction anchor at least this often (counts). */
@@ -200,6 +221,12 @@ export interface PlanEvent {
     prep: number | null;
     /** Transitions: the pair whose root travel places the body. */
     root: TurnedPair | ClipPair | null;
+    /**
+     * A stop-and-go's go: `clip` is the still pose it starts from and
+     * `clip2` the go, blended from 0 to 1 over the fade window like a
+     * crossfade; the go's root travel places the body.
+     */
+    handoff: boolean;
     /**
      * Transitions: drill position at `count` plus the offset then (the body
      * is base + root(u)). Loops and rests: the offset (body - drill).
@@ -529,6 +556,8 @@ interface Draft {
     continued?: boolean;
     /** See `PlanEvent.prep`. */
     prep?: number | null;
+    /** See `PlanEvent.handoff`. */
+    handoff?: boolean;
 }
 
 /** A single clip's root travel as a pair (for change and mark time clips). */
@@ -581,6 +610,10 @@ export function planMarcher(input: PlanInput): MarcherPlan {
     let prevYaw = 0;
     let prevRate = steps.rate[0] ?? 1;
     let foot: Foot = "left"; // the current move's step-off foot
+    // a stop-and-go's go, played on the step after its still count
+    let pendingGo = null as { from: string; to: string } | null;
+    // the first step (the stop) of each stop-and-go
+    const stopGos: number[] = [];
     for (let k = 0; k < K; k++) {
         const s = states[k];
         const rate = steps.rate[k];
@@ -635,6 +668,87 @@ export function planMarcher(input: PlanInput): MarcherPlan {
                           1,
                       ],
                   };
+        const transitionAt = (pair: ClipPair, at: number): Draft => ({
+            kind: "transition",
+            clip: pair.a,
+            clip2: null,
+            weight: 0,
+            legYaw: 0,
+            phaseStart: T[at],
+            rate,
+            foot: moveFoot,
+            root: pair,
+        });
+        /**
+         * Crab left into crab right or back, turning sharply, after a plain
+         * loop of the old move and with the new move running at least two
+         * steps: the old move's last step becomes the stop, this one the
+         * still count, and the next the go. Null when it doesn't fit.
+         */
+        const stopAndGo = (
+            from: State,
+            to: State,
+        ): { draft: Draft; go: { from: string; to: string } } | null => {
+            if (from.type !== "move" || to.type !== "move") return null;
+            const a = from.family;
+            const b = to.family;
+            if (!isCrabFamily(a) || !isCrabFamily(b) || a[4] === b[4])
+                return null;
+            const turn = Math.acos(
+                Math.max(
+                    -1,
+                    Math.min(
+                        1,
+                        (from.dx * to.dx + from.dz * to.dz) / (from.d * to.d),
+                    ),
+                ),
+            );
+            if (turn <= STOP_GO_TURN) return null;
+            const last = drafts[k - 1];
+            const next = states[k + 1];
+            if (
+                k === 0 ||
+                !last ||
+                last.kind !== "loop" ||
+                last.continued ||
+                last.rate !== rate ||
+                next?.type !== "move" ||
+                next.family !== b ||
+                steps.rate[k + 1] !== rate
+            )
+                return null;
+            // the old move's last step started at loop time p ^ 1
+            const two = (p ^ 1) === 1 ? "2" : "";
+            const old = nearestBase(from.pick);
+            const stop = `stop${two}_${old}`;
+            const hold = `hold${two}_${old}`;
+            const go = `go${two}_${nearestBase(to.pick)}`;
+            if (!has(stop) || !has(hold) || !has(go)) return null;
+            drafts[k - 1] = transitionAt(soloPair(manifest, stop + sfx), k - 1);
+            // the stop moves the body by its own travel, not the drill's
+            const [rx, rz] = rootAt(
+                manifest,
+                soloPair(manifest, stop + sfx),
+                1,
+            );
+            const cos = Math.cos(steps.heading[k - 1]);
+            const sin = Math.sin(steps.heading[k - 1]);
+            ox[k] =
+                ox[k - 1] +
+                rx * cos +
+                rz * sin -
+                (positions[k * 2] - positions[(k - 1) * 2]);
+            oz[k] =
+                oz[k - 1] -
+                rx * sin +
+                rz * cos -
+                (positions[k * 2 + 1] - positions[(k - 1) * 2 + 1]);
+            stopGos.push(k - 1);
+            return {
+                draft: transitionAt(soloPair(manifest, hold + sfx), k),
+                go: { from: hold + sfx, to: go + sfx },
+            };
+        };
         const transition = (pair: TurnedPair | ClipPair): Draft => {
             const turned: TurnedPair | ClipPair =
                 "legYaw" in pair ? lateTurn(pair) : pair;
@@ -706,7 +820,20 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             return fade;
         };
 
-        if (s.type === "move") {
+        if (pendingGo && s.type === "move") {
+            const go = soloPair(manifest, pendingGo.to);
+            draft = {
+                ...transitionAt(go, k),
+                clip: pendingGo.from,
+                clip2: pendingGo.to,
+                handoff: true,
+                fadeStart: T[k] + GO_HANDOFF[0] * dur,
+                fadeEnd: T[k] + GO_HANDOFF[1] * dur,
+            };
+            pendingGo = null;
+            prevYaw = s.dir.legYaw;
+            parity ^= 1;
+        } else if (s.type === "move") {
             if (prev.type === "attention") {
                 draft = transition(
                     turnedClips(manifest, s.pick, s.dir, "stepoff"),
@@ -730,10 +857,13 @@ export function planMarcher(input: PlanInput): MarcherPlan {
                     );
                 } else {
                     // from mark time, the hand-made change clip when it exists
-                    draft =
-                        (prev.type === "marktime" && unturned(s)
+                    const fromMarkTime =
+                        prev.type === "marktime" && unturned(s)
                             ? change("marktime", baseOf(s))
-                            : null) ?? crossfade(prev, s);
+                            : null;
+                    const stopGo = fromMarkTime ? null : stopAndGo(prev, s);
+                    if (stopGo) pendingGo = stopGo.go;
+                    draft = fromMarkTime ?? stopGo?.draft ?? crossfade(prev, s);
                 }
                 prevYaw = s.dir.legYaw;
                 parity ^= 1;
@@ -838,6 +968,14 @@ export function planMarcher(input: PlanInput): MarcherPlan {
     for (let k = 0; k <= K; k++) {
         cx[k] = ox[k] - tx[k];
         cz[k] = oz[k] - tz[k];
+    }
+    // A stop-and-go's stop and still count keep the correction they start
+    // with, so the standing foot stays put: the go and the counts after
+    // it make up the difference.
+    for (const k of stopGos) {
+        anchor[k] = anchor[k + 1] = anchor[k + 2] = 1;
+        cx[k + 1] = cx[k + 2] = cx[k];
+        cz[k + 1] = cz[k + 2] = cz[k];
     }
     let last = 0;
     for (let b = 1; b <= K; b++) {
@@ -953,6 +1091,7 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             phaseStart: d.phaseStart,
             root: d.root,
             prep: d.prep ?? null,
+            handoff: d.handoff ?? false,
             fadeStart: d.fadeStart ?? T[k],
             fadeEnd: d.fadeEnd ?? T[k + 1],
             baseX: isTransition ? positions[k * 2] + ox[k] : ox[k],
