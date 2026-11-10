@@ -25,6 +25,7 @@ import { getActionLabel, getActionShortcutKeys } from "../labels";
 import {
     actionLabelNow,
     hasActionHandler,
+    actionDisabledReason,
     isActionEnabled,
     runAction,
 } from "../registry";
@@ -114,7 +115,7 @@ export function getActionPaletteItems(
                 // Preview turns every edit off: say so
                 disabledReason: isActionOffInWorkspace(id)
                     ? t("commandPalette.offInPreview")
-                    : undefined,
+                    : actionDisabledReason(id),
                 suggestedRank: SUGGESTED_ACTIONS.includes(id)
                     ? SUGGESTED_ACTIONS.indexOf(id)
                     : undefined,

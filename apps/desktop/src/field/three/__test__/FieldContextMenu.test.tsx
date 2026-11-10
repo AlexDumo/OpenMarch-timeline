@@ -18,7 +18,13 @@ function handle(
         enabled = true,
         label,
         checked = false,
-    }: { enabled?: boolean; label?: string; checked?: boolean } = {},
+        reason,
+    }: {
+        enabled?: boolean;
+        label?: string;
+        checked?: boolean;
+        reason?: string;
+    } = {},
 ) {
     const run = vi.fn();
     handlers.push(
@@ -27,6 +33,7 @@ function handle(
             isEnabled: () => enabled,
             label: () => label,
             checked: () => checked,
+            disabledReason: () => reason,
         }),
     );
     return run;
@@ -157,6 +164,7 @@ describe("FieldContextMenu", () => {
                 "setSelectedMarchersToPreviousPage",
                 "setSelectedMarchersToNextPage",
             ],
+            ["splitSelectedIntoNewMove", "timelineSplitMoveAtPlayhead"],
             [
                 "alignHorizontally",
                 "alignVertically",
@@ -172,6 +180,29 @@ describe("FieldContextMenu", () => {
         expect(item("setSelectedMarchersToPreviousPage")).toHaveTextContent(
             "Clear this page (selected)",
         );
+    });
+
+    it("shows a split it can't run greyed out with its reason, before it's tried, and hides splits outside timeline mode", () => {
+        const split = handle("timelineSplitMoveAtPlayhead", {
+            enabled: false,
+            reason: "Can't split at a count while a line follows a trail. Remove the trail first.",
+        });
+        handle("splitSelectedIntoNewMove");
+        open();
+        const entry = item("timelineSplitMoveAtPlayhead")!;
+        expect(entry).toHaveAttribute("aria-disabled", "true");
+        fireEvent.click(entry);
+        expect(split).not.toHaveBeenCalled();
+        expect(screen.getAllByText(/follows a trail/).length).toBeGreaterThan(
+            0,
+        );
+        expect(item("splitSelectedIntoNewMove")).not.toHaveAttribute(
+            "aria-disabled",
+        );
+        cleanup();
+        open({ timelineMode: false });
+        expect(item("timelineSplitMoveAtPlayhead")).toBeNull();
+        expect(item("splitSelectedIntoNewMove")).toBeNull();
     });
 
     it("runs the hold command through the actions layer, and greys it out where it can't run", () => {

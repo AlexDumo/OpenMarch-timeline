@@ -391,6 +391,10 @@ export default function TimelineModePanel() {
     // UI-27: ⌘K's Split at playhead acts on the move the playhead is inside (Expert only: Basic
     // has no moves to split, its + splits the page's moves at a new flag). Greyed out while
     // playing, as the menus' entry is
+    const splitTargetHasTrail = useTimelineSelectionStore((s) => {
+        const target = moveAtPlayhead(s);
+        return typeof target !== "string" && target.trail === true;
+    });
     useActionHandler(
         "timelineSplitMoveAtPlayhead",
         () => {
@@ -401,7 +405,22 @@ export default function TimelineModePanel() {
             }
             void moves.splitMoveAtPlayhead(target.id, isPlaying);
         },
-        { enabled: !basic && !isPlaying },
+        {
+            // A move whose line follows a trail can't be cut at a count yet (AP-T5): shown
+            // unavailable, with why, before it's tried
+            enabled: !basic && !isPlaying && !splitTargetHasTrail,
+            disabledReason: () => {
+                const state = useTimelineSelectionStore.getState();
+                const target = moveAtPlayhead(state);
+                return typeof target === "string"
+                    ? undefined
+                    : (splitMoveBlocker(
+                          target,
+                          state.playheadBeat,
+                          isPlaying,
+                      ) ?? undefined);
+            },
+        },
     );
     const clipResize = useTimelineClipResize({ database: db, timelines });
     const queryClient = useQueryClient();

@@ -2281,6 +2281,7 @@
             "noneAtPlayhead": "No move crosses the playhead. Put the playhead inside a move to split it.",
             "severalAt": "Several moves cross {where}. Right-click the one to split.",
             "severalAtPlayhead": "Several moves cross the playhead. Right-click the one to split.",
+            "trail": "Can't split at a count while a line follows a trail. Remove the trail first.",
             "withNote": "{message} · {note}"
         },
         "page": {
@@ -2726,7 +2727,7 @@
                 "alreadyFollows": "{marcher} already follows a trail in this move. Select that whole line, and nobody else, to draw its trail again",
                 "sharedShape": "{move} takes these marchers into a shape they share with marchers who aren't selected, so they can't follow a trail on their own",
                 "notYet": "{move} follows a drawn trail, which this edit can't keep yet. Remove the trail first",
-                "split": "{move} follows a drawn trail, which can't be split yet. Remove the trail first, or split before choosing Follow",
+                "split": "{move} can't be split at a count while a line follows a trail. Remove the trail first, or split before choosing Follow",
                 "removeTrailFirst": "{move} follows a drawn trail: remove the trail first",
                 "noTrail": "This trail is gone"
             }
