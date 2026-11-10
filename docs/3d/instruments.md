@@ -275,33 +275,39 @@ Bake rows scale with holds, so §8 measures the budget first.
 
 The holds, from the owner's reference photos (kept outside the repo) and
 notes. Two rules hold across every state: **the hands never leave their
-playing grip** (right hand on the valve caps, left hand behind the valves;
+playing grip** (right hand over the valve buttons, left hand on the valve
+casings;
 woodwind hands on their stacks), and at carry **the mouthpiece sits at eye
 level** (for the flutes, clarinets and soprano sax, the first key; see the
 woodwind bullets). The states differ by where the bell
 points and where the elbows go.
 
-- **brass, horns up.** The bell is front: forward at face height, horizontal. Upper arms
-  out to the sides near horizontal, forearms up and in: a triangle slightly
-  wider than equilateral from shoulder to shoulder to the hands. Baritone
-  and euphonium: the same with the bell above eye line.
+- **brass, horns up (owner, 2026-11-10).** Trumpet, mellophone, baritone
+  and euphonium: the horn 15 degrees above level, bell forward, the
+  mouthpiece's rim at the lips. The right hand comes over the valves from the
+  performer's right, its knuckles beside the buttons and the fingers across
+  them; the left hand holds the valve casings from the horn's left side.
+  Each horn's hold is built from its own geometry (`valvedUp` in
+  `holds.ts`: the rim and each valve's casing and button), so a rebuilt
+  horn keeps its hands on its valves. Elbows out, each solved from the
+  arm's bone lengths.
 - **brass, carry (set and down are the same hold; owner, 2026-10-08).**
   Instrument vertical in front of the torso, mouthpiece at eye level, bell
   toward the ground, elbows in.
 - **brass, trail.** Instrument in the right hand only, bell backward, valve
   block perpendicular to the ground, arm straight down the side. Left arm
   straight down, closed fist, thumb on top, along the leg.
-- **trombone, horns up.** As brass with the left hand at the bell brace and
-  the right hand on the slide at first position.
-- **contra, horns up and carry.** The loop lies along the left shoulder,
-  its plane outside the head and its bottom tube resting on the shoulder,
-  bell forward and a little above the head. The valves sit at chin height
-  in front, left of center; the right hand reaches across to them and the
-  left supports the bottom tube at the front. (Placed by reasoning from the
-  instrument's layout, 2026-10-08; the owner checks it against a photo of a
-  player.)
-- **flute.** Horizontal to the player's right, lips at the head joint,
-  angled a little forward and down. Both hands sit under the tube, wrists
+- **trombone, horns up (owner, 2026-11-10).** 15 degrees above level with
+  the rim at the lips; the right hand on the slide at first position, the
+  left on the bell section by the mouthpiece.
+- **contra, horns up and carry (owner, 2026-11-10).** 15 degrees above
+  level with the rim at the lips. The loop lies back over the left
+  shoulder, its plane outside the head. The right hand is on the valves:
+  they stand beside the face, so it comes from in front of them, the
+  fingers back and across onto the buttons. The left hand holds the front
+  bow, the tube coming down the front of the loops on the horn's left side.
+- **flute.** Level and parallel to the shoulders, running straight out to
+  the player's right from the lips (owner, 2026-11-10). Both hands sit under the tube, wrists
   0.12 m below it so the stiff hands' fingertips just reach over the top
   onto the keys: the left hand 0.2 m
   along by the face, its forearm across the chest and the elbow in front;
@@ -314,8 +320,8 @@ points and where the elbows go.
   left wrist 0.25 m along and the right 0.43 m, each a hand's length out and
   below, elbows out. Trail: vertical in the right fist at the side, head
   joint to the ground, held 0.5 m along; the arms are the brass trail's.
-- **piccolo.** The flute's line with both hands brought in to the short
-  body: the left 0.12 m along, the right 0.24 m. Carry: as the flute, the
+- **piccolo.** The flute's line, level and parallel to the shoulders, with
+  both hands brought in to the short body: the left 0.12 m along, the right 0.24 m. Carry: as the flute, the
   first key 0.101 m along at eye level, the hands at 0.14 and 0.24 m.
   Trail: as the flute, held 0.18 m along.
 - **clarinet.** Down the center line, angled 28 degrees out. The hands wrap

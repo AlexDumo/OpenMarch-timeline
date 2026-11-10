@@ -762,6 +762,7 @@ export function tromboneHorn(
         pieces,
         // between the fixed slide brace and the bell brace
         leftGrip: [w * 0.45, 0.02, rimZ + hold - 0.022],
+        valves: k.casings,
         rim,
         tubing: { main, valves: [loop, 0, 0] },
     };

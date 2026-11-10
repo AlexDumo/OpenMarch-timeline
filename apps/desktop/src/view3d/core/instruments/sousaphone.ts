@@ -26,7 +26,13 @@ import {
     type Corner,
     type Horn,
 } from "./hornKit";
-import { frameAt, transformPiece, type Piece, type Vec3 } from "./mesh";
+import {
+    applyMat4,
+    frameAt,
+    transformPiece,
+    type Piece,
+    type Vec3,
+} from "./mesh";
 import type { Detail } from "./model";
 
 const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -462,6 +468,15 @@ export function sousaphone(detail: Detail): Horn {
     return {
         pieces: pieces.map(move),
         leftGrip: sub(grip, origin),
+        valves: k.casings.map((c) => {
+            const at = (p: Vec3) => sub(applyMat4(blockFrame, p), origin);
+            return {
+                bottom: at(c.bottom),
+                top: at(c.top),
+                button: at(c.button),
+                r: c.r,
+            };
+        }),
         rim: sub(h.lips, origin),
         tubing: { main, valves: valveLoops },
     };

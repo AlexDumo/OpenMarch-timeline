@@ -6,19 +6,19 @@ describe("section to instrument", () => {
     it("maps the brass sections", () => {
         expect(carryForSection("Trumpet")).toEqual({
             model: "trumpet",
-            family: "brass",
+            family: "trumpet",
         });
         expect(carryForSection("Mellophone")).toEqual({
             model: "mellophone",
-            family: "brass",
+            family: "mellophone",
         });
         expect(carryForSection("Baritone")).toEqual({
             model: "baritone",
-            family: "brass",
+            family: "baritone",
         });
         expect(carryForSection("Euphonium")).toEqual({
             model: "euphonium",
-            family: "brass",
+            family: "euphonium",
         });
         expect(carryForSection("Trombone")).toEqual({
             model: "trombone",
@@ -26,7 +26,7 @@ describe("section to instrument", () => {
         });
         expect(carryForSection("Bass Trombone")).toEqual({
             model: "bassTrombone",
-            family: "trombone",
+            family: "bassTrombone",
         });
         expect(carryForSection("Tuba")).toEqual({
             model: "contra",
@@ -95,7 +95,7 @@ describe("section to instrument", () => {
     it("is case and whitespace insensitive", () => {
         expect(carryForSection("  trumpet ")).toEqual({
             model: "trumpet",
-            family: "brass",
+            family: "trumpet",
         });
     });
 

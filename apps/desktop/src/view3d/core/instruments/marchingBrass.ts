@@ -372,6 +372,7 @@ export function ovalHorn(h: OvalHorn, detail: Detail): Horn {
 
     return {
         pieces,
+        valves: k.casings,
         leftGrip: [
             v.x + 0.028,
             v.bottom * 0.5 + axisY,

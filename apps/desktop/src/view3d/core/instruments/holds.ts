@@ -13,13 +13,19 @@
  * y 1.52, eye line y 1.62. Upper arm 0.205 m, forearm 0.264 m.
  * Pure: no three.js.
  */
+import { brassHorn } from "./brass";
 import type { Vec3 } from "./mesh";
+import type { BrassModelId } from "./model";
 
 export type HoldState = "up" | "carry" | "trail";
 export const HOLD_STATES: readonly HoldState[] = ["up", "carry", "trail"];
 export type HoldFamily =
-    | "brass"
+    | "trumpet"
+    | "mellophone"
+    | "baritone"
+    | "euphonium"
     | "trombone"
+    | "bassTrombone"
     | "contra"
     | "sousaphone"
     | "flute"
@@ -59,30 +65,197 @@ const unit = (v: Vec3): Vec3 => {
     const l = Math.hypot(v[0], v[1], v[2]) || 1;
     return [v[0] / l, v[1] / l, v[2] / l];
 };
+const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const mul = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
+const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a: Vec3, b: Vec3): Vec3 => [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+];
+const round3 = (v: Vec3): Vec3 => [
+    Math.round(v[0] * 1000) / 1000,
+    Math.round(v[1] * 1000) / 1000,
+    Math.round(v[2] * 1000) / 1000,
+];
 
-/** The brass triangle: elbows out, forearms up and in, hands at the valves. */
-const BRASS: Record<HoldState, Hold> = {
-    up: {
-        family: "brass",
+/** The arm's joints at bind (class 1.00) and its bone lengths. */
+const SHOULDER_L: Vec3 = [0.185, 1.397, -0.005];
+const SHOULDER_R: Vec3 = [-0.185, 1.397, -0.005];
+const UPPER_ARM = 0.205;
+const FOREARM = 0.264;
+/** Where the mouthpiece's rim meets the lips. */
+const LIPS: Vec3 = [0, 1.556, 0.094];
+/** How far the hand's middle (where it grips) and its knuckles lie from the wrist. */
+const PALM = 0.075;
+const KNUCKLES = 0.1;
+
+/**
+ * The elbow for a wrist target: the point the upper arm's length from the
+ * shoulder and the forearm's from the wrist, on the side `out` points to.
+ * A wrist out of reach gets the elbow on the straight line to it.
+ */
+function elbowFor(shoulder: Vec3, wrist: Vec3, out: Vec3): Vec3 {
+    const sw = sub(wrist, shoulder);
+    const d = Math.hypot(...sw);
+    const n = mul(sw, 1 / d);
+    if (d >= UPPER_ARM + FOREARM - 1e-6)
+        return round3(add(shoulder, mul(n, UPPER_ARM)));
+    const a = (UPPER_ARM ** 2 - FOREARM ** 2 + d * d) / (2 * d);
+    const h = Math.sqrt(Math.max(0, UPPER_ARM ** 2 - a * a));
+    const o = unit(sub(out, mul(n, dot(out, n))));
+    return round3(add(add(shoulder, mul(n, a)), mul(o, h)));
+}
+
+/** An arm reaching to `wrist` with the fingers along `fingers`, the elbow toward `out`. */
+function armTo(
+    side: "left" | "right",
+    wrist: Vec3,
+    fingers: Vec3,
+    out: Vec3,
+): ArmTargets {
+    const shoulder = side === "left" ? SHOULDER_L : SHOULDER_R;
+    return {
+        elbow: elbowFor(shoulder, wrist, out),
+        wrist: round3(wrist),
+        fingers: unit(fingers),
+    };
+}
+
+/** A hold's instrument placement as a frame: origin and the axes x, y (caps), z (bell). */
+interface Frame {
+    o: Vec3;
+    x: Vec3;
+    y: Vec3;
+    z: Vec3;
+}
+function frameOf(inst: Hold["instrument"]): Frame {
+    const z = unit(inst.bellAxis);
+    const y = unit(sub(inst.capsAxis, mul(z, dot(inst.capsAxis, z))));
+    return { o: inst.origin, x: cross(y, z), y, z };
+}
+/** A point in the instrument's frame, in the body's. */
+const toBody = (f: Frame, p: Vec3): Vec3 =>
+    add(add(add(f.o, mul(f.x, p[0])), mul(f.y, p[1])), mul(f.z, p[2]));
+/** A direction in the instrument's frame, in the body's. */
+const dirToBody = (f: Frame, d: Vec3): Vec3 =>
+    add(add(mul(f.x, d[0]), mul(f.y, d[1])), mul(f.z, d[2]));
+/** A body point in the instrument's frame. */
+const toInstrument = (f: Frame, p: Vec3): Vec3 => {
+    const d = sub(p, f.o);
+    return [dot(d, f.x), dot(d, f.y), dot(d, f.z)];
+};
+
+/** Horns up are played 15 degrees above level (owner, 2026-11-10). */
+export const HORN_PITCH_DEG = 15;
+const PITCH = (HORN_PITCH_DEG * Math.PI) / 180;
+/** The bell's way when a horn is up: forward, raised by the pitch. */
+const BELL_UP: Vec3 = [0, Math.sin(PITCH), Math.cos(PITCH)];
+const CAPS_UP: Vec3 = [0, Math.cos(PITCH), -Math.sin(PITCH)];
+
+/** The placement that puts `rim` (in the instrument frame) at the lips, pitched up. */
+function atLips(rim: Vec3): Hold["instrument"] {
+    const f = frameOf({
+        origin: [0, 0, 0],
+        bellAxis: BELL_UP,
+        capsAxis: CAPS_UP,
+    });
+    return {
+        origin: round3(sub(LIPS, dirToBody(f, rim))),
+        bellAxis: BELL_UP,
+        capsAxis: CAPS_UP,
+    };
+}
+
+const mean = (ps: Vec3[]): Vec3 =>
+    mul(
+        ps.reduce((a, p) => add(a, p), [0, 0, 0] as Vec3),
+        1 / ps.length,
+    );
+
+/**
+ * A valved horn up (owner, 2026-11-10): pitched 15 degrees above level
+ * with the mouthpiece's rim at the lips. The right hand comes over the
+ * valves from the performer's right, its fingertips on the buttons; the
+ * left hand wraps the valve casings from the left side, its palm against
+ * them halfway down, the fingers round the front. Built from the horn's
+ * own valves, so each horn's hands land on its own block.
+ */
+function valvedUp(
+    family: HoldFamily,
+    id: BrassModelId,
+    /** Where the left hand's middle goes and where its fingers point, in the instrument frame, when not on the casings. */
+    leftHand?: { palm: Vec3; fingers: Vec3 },
+    /** Where the right knuckles go from the middle button and where the fingers point, when not from the right side. */
+    rightHand?: { knuckles: Vec3; fingers: Vec3 },
+): Hold {
+    const horn = brassHorn(id, "low");
+    const instrument = atLips(horn.rim);
+    const f = frameOf(instrument);
+    const buttons = horn.valves.map((v) => v.button);
+    // right: the knuckles just right of the buttons and a little below
+    // their tops, the (stiff) fingers lying across them toward the left
+    const knuckles = add(
+        mean(buttons),
+        rightHand?.knuckles ?? [-0.02, -0.012, 0],
+    );
+    const rightFingers = dirToBody(
+        f,
+        unit(rightHand?.fingers ?? [0.95, 0.12, 0.12]),
+    );
+    const rightWrist = sub(toBody(f, knuckles), mul(rightFingers, KNUCKLES));
+    // left: palm on the casings' left side, halfway down; fingers round the front
+    const casing = horn.valves[1];
+    const mid = mul(add(casing.top, casing.bottom), 0.5);
+    const palm = leftHand?.palm ?? add(mid, [casing.r + 0.022, -0.01, -0.005]);
+    const leftFingers = dirToBody(
+        f,
+        unit(leftHand?.fingers ?? [-0.35, 0.35, 0.87]),
+    );
+    const leftWrist = sub(toBody(f, palm), mul(leftFingers, PALM));
+    return {
+        family,
         state: "up",
-        right: {
-            elbow: [-0.278, 1.438, 0.173],
-            wrist: [-0.06, 1.56, 0.26],
-            fingers: unit([0.3, 0.2, 0.1]),
-        },
-        left: {
-            elbow: [0.292, 1.419, 0.169],
-            wrist: [0.05, 1.52, 0.2],
-            fingers: unit([-0.3, 0.3, 0.15]),
-        },
-        instrument: {
-            origin: [-0.02, 1.56, 0.3],
-            bellAxis: [0, 0, 1],
-            capsAxis: [0, 1, 0],
-        },
-    },
+        right: armTo("right", rightWrist, rightFingers, [-1, 0.05, 0.25]),
+        left: armTo("left", leftWrist, leftFingers, [1, -0.1, 0.2]),
+        instrument,
+    };
+}
+
+/**
+ * `old` moved with its instrument to `instrument`: each wrist and its
+ * fingers keep their place on the instrument, and the elbows are solved
+ * again for the new wrists, out the way they pointed before.
+ */
+function reframed(old: Hold, instrument: Hold["instrument"]): Hold {
+    const from = frameOf(old.instrument);
+    const to = frameOf(instrument);
+    const move = (side: "left" | "right", a: ArmTargets): ArmTargets => {
+        const shoulder = side === "left" ? SHOULDER_L : SHOULDER_R;
+        const wrist = toBody(to, toInstrument(from, a.wrist));
+        const fingers = dirToBody(
+            to,
+            toInstrument({ ...from, o: [0, 0, 0] }, a.fingers),
+        );
+        return armTo(side, wrist, fingers, sub(a.elbow, shoulder));
+    };
+    return {
+        ...old,
+        right: move("right", old.right),
+        left: move("left", old.left),
+        instrument,
+    };
+}
+
+/**
+ * The valved horns' carry and trail, shared by the trumpet, mellophone,
+ * baritone, euphonium and trombones. Each horn's `up` is its own
+ * (`valvedUp`, `tromboneUp`).
+ */
+const BRASS: Record<"carry" | "trail", Hold> = {
     carry: {
-        family: "brass",
+        family: "trumpet",
         state: "carry",
         // vertical in front of the torso, bell to the ground, mouthpiece at eye level
         right: {
@@ -102,7 +275,7 @@ const BRASS: Record<HoldState, Hold> = {
         },
     },
     trail: {
-        family: "brass",
+        family: "trumpet",
         state: "trail",
         // right arm straight down the side, bell back; left fist at the leg
         right: {
@@ -154,36 +327,44 @@ const TROMBONE: Record<HoldState, Hold> = {
 };
 
 /**
- * Contra: the loop lies along the left shoulder behind the bell, its plane
- * outside the head (x 0.17 against a head half-width of about 0.1), the
- * bottom tube resting on the shoulder. The valves sit at chin height in
- * front, left of center: the right hand reaches across to them, the left
- * supports the bottom tube at the front.
+ * Trombones up (owner, 2026-11-10): pitched 15 degrees above level with
+ * the rim at the lips, the right hand on the slide brace and the left on
+ * the bell section's brace by the mouthpiece, where `TROMBONE.up` has them.
  */
-const CONTRA_UP: Hold = {
-    family: "contra",
-    state: "up",
-    right: {
-        elbow: [-0.119, 1.513, 0.151],
-        wrist: [0.13, 1.6, 0.14],
-        fingers: unit([0.3, 0.1, 0.0]),
-    },
-    left: {
-        elbow: [0.334, 1.258, -0.026],
-        wrist: [0.26, 1.44, 0.15],
-        fingers: unit([-0.2, 0.3, 0.3]),
-    },
-    instrument: {
-        origin: [0.15, 1.6, 0.12],
-        bellAxis: [0, 0, 1],
-        capsAxis: [0, 1, 0],
-    },
-};
-const CONTRA: Record<HoldState, Hold> = {
-    up: CONTRA_UP,
-    carry: { ...CONTRA_UP, state: "carry" },
-    trail: { ...CONTRA_UP, state: "trail" },
-};
+function tromboneUp(family: "trombone" | "bassTrombone"): Hold {
+    const id = family === "trombone" ? "trombone" : "bassTrombone";
+    return {
+        ...reframed(TROMBONE.up, atLips(brassHorn(id, "low").rim)),
+        family,
+    };
+}
+
+/**
+ * The contra up (owner, 2026-11-10): pitched 15 degrees above level with
+ * the rim at the lips, the right hand over the valves like the other
+ * horns, and the left hand round the front bow, the tube that comes down
+ * the front of the loops on the horn's left side (x 0.05, z 0.064 in
+ * `contra.ts`). The loops lie back over the left shoulder. Carry and trail
+ * are the same hold: the contra stays on the shoulder.
+ */
+function contraHolds(): Record<HoldState, Hold> {
+    const up = valvedUp(
+        "contra",
+        "contra",
+        {
+            palm: [0.05 + 0.03, -0.075, 0.07],
+            fingers: [-0.35, 0.8, 0.35],
+        },
+        // the valves stand beside the face, so the right hand comes from in
+        // front of them, the fingers back and across onto the buttons
+        { knuckles: [-0.01, -0.01, 0.045], fingers: [0.45, 0.05, -0.9] },
+    );
+    return {
+        up,
+        carry: { ...up, state: "carry" },
+        trail: { ...up, state: "trail" },
+    };
+}
 
 /**
  * Sousaphone: the hoop hangs like a sash from the left shoulder to the right
@@ -1040,27 +1221,68 @@ const SABRE: Record<HoldState, Hold> = {
     },
 };
 
-const TABLE: Record<HoldFamily, Record<HoldState, Hold>> = {
-    brass: BRASS,
-    trombone: TROMBONE,
-    contra: CONTRA,
-    sousaphone: SOUSAPHONE,
-    flute: FLUTE,
-    piccolo: PICCOLO,
-    clarinet: CLARINET,
-    bassClarinet: BASS_CLARINET,
-    sax: SAX,
-    snare: SNARE,
-    tenors: TENORS,
-    bass: BASS,
-    cymbals: CYMBALS,
-    flag: FLAG,
-    swingFlag: SWING,
-    doubleSwingFlag: DOUBLE_SWING,
-    rifle: RIFLE,
-    sabre: SABRE,
+/**
+ * Flutes and piccolos up (owner, 2026-11-10): level, and parallel to the
+ * shoulders, running straight out to the performer's right from the lips.
+ * The hands keep their places along the tube.
+ */
+const LEVEL_FLUTE = (old: Hold): Hold =>
+    reframed(old, {
+        origin: old.instrument.origin,
+        bellAxis: [-1, 0, 0],
+        capsAxis: [0, 1, -0.25],
+    });
+
+/** A valved horn's holds: its own `up`, the shared carry and trail. */
+const valved =
+    (family: HoldFamily, id: BrassModelId): (() => Record<HoldState, Hold>) =>
+    () => ({
+        up: valvedUp(family, id),
+        carry: { ...BRASS.carry, family },
+        trail: { ...BRASS.trail, family },
+    });
+
+const fixed =
+    (r: Record<HoldState, Hold>): (() => Record<HoldState, Hold>) =>
+    () =>
+        r;
+
+/** Each family's holds, built on first use: the horns' come from their geometry. */
+const TABLE: Record<HoldFamily, () => Record<HoldState, Hold>> = {
+    trumpet: valved("trumpet", "trumpet"),
+    mellophone: valved("mellophone", "mellophone"),
+    baritone: valved("baritone", "baritone"),
+    euphonium: valved("euphonium", "euphonium"),
+    trombone: () => ({ ...TROMBONE, up: tromboneUp("trombone") }),
+    bassTrombone: () => ({
+        up: tromboneUp("bassTrombone"),
+        carry: { ...BRASS.carry, family: "bassTrombone" },
+        trail: { ...BRASS.trail, family: "bassTrombone" },
+    }),
+    contra: contraHolds,
+    sousaphone: fixed(SOUSAPHONE),
+    flute: () => ({ ...FLUTE, up: LEVEL_FLUTE(FLUTE.up) }),
+    piccolo: () => ({ ...PICCOLO, up: LEVEL_FLUTE(PICCOLO.up) }),
+    clarinet: fixed(CLARINET),
+    bassClarinet: fixed(BASS_CLARINET),
+    sax: fixed(SAX),
+    snare: fixed(SNARE),
+    tenors: fixed(TENORS),
+    bass: fixed(BASS),
+    cymbals: fixed(CYMBALS),
+    flag: fixed(FLAG),
+    swingFlag: fixed(SWING),
+    doubleSwingFlag: fixed(DOUBLE_SWING),
+    rifle: fixed(RIFLE),
+    sabre: fixed(SABRE),
 };
+const built = new Map<HoldFamily, Record<HoldState, Hold>>();
 
 export function hold(family: HoldFamily, state: HoldState): Hold {
-    return TABLE[family][state];
+    let r = built.get(family);
+    if (!r) {
+        r = TABLE[family]();
+        built.set(family, r);
+    }
+    return r[state];
 }

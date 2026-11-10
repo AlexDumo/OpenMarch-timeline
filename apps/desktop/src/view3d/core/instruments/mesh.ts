@@ -195,6 +195,15 @@ export function cylinder(
     return tube([from, to], radius, segments, part);
 }
 
+/** A point moved by `m` (column-major, as `transformPiece` reads it). */
+export function applyMat4(m: Mat4, [x, y, z]: Vec3): Vec3 {
+    return [
+        m[0] * x + m[4] * y + m[8] * z + m[12],
+        m[1] * x + m[5] * y + m[9] * z + m[13],
+        m[2] * x + m[6] * y + m[10] * z + m[14],
+    ];
+}
+
 export function transformPiece(p: Piece, m: Mat4): Piece {
     const out: Piece = {
         part: p.part,

@@ -21,12 +21,12 @@ export interface Carry {
 }
 
 const SECTIONS: Record<string, Carry> = {
-    trumpet: { model: "trumpet", family: "brass" },
-    mellophone: { model: "mellophone", family: "brass" },
-    baritone: { model: "baritone", family: "brass" },
-    euphonium: { model: "euphonium", family: "brass" },
+    trumpet: { model: "trumpet", family: "trumpet" },
+    mellophone: { model: "mellophone", family: "mellophone" },
+    baritone: { model: "baritone", family: "baritone" },
+    euphonium: { model: "euphonium", family: "euphonium" },
     trombone: { model: "trombone", family: "trombone" },
-    "bass trombone": { model: "bassTrombone", family: "trombone" },
+    "bass trombone": { model: "bassTrombone", family: "bassTrombone" },
     tuba: { model: "contra", family: "contra" },
     piccolo: { model: "piccolo", family: "piccolo" },
     flute: { model: "flute", family: "flute" },
@@ -63,8 +63,12 @@ export function isTuba(section: string): boolean {
 }
 
 const BRASS_FAMILIES: ReadonlySet<HoldFamily> = new Set<HoldFamily>([
-    "brass",
+    "trumpet",
+    "mellophone",
+    "baritone",
+    "euphonium",
     "trombone",
+    "bassTrombone",
     "contra",
     "sousaphone",
 ]);

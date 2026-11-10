@@ -123,7 +123,10 @@ describe("section uniforms", () => {
 
     it("puts the section's carry, gold lacquer and the hold in the look", () => {
         const u = sectionUniform("Trumpet");
-        expect(u.options.carry).toEqual({ model: "trumpet", family: "brass" });
+        expect(u.options.carry).toEqual({
+            model: "trumpet",
+            family: "trumpet",
+        });
         expect(u.options.finish).toBe("brass");
         expect(u.options.hold).toBe("up");
         expect(u.options.instrument).toBe("none");
@@ -161,7 +164,7 @@ describe("section uniforms", () => {
         });
         expect(pick("Euphonium", { tuba: "sousaphone" }).carry).toEqual({
             model: "euphonium",
-            family: "brass",
+            family: "euphonium",
         });
         // a look's key tells the two finishes and the two horns apart
         const key = (winds: Parameters<typeof sectionUniform>[7]) =>
@@ -205,7 +208,7 @@ describe("section uniforms", () => {
         });
         expect(pick("Trumpet", "sabre")).toEqual({
             model: "trumpet",
-            family: "brass",
+            family: "trumpet",
         });
     });
 

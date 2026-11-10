@@ -394,6 +394,7 @@ export function trumpet(detail: Detail): Horn {
     return {
         pieces,
         leftGrip: t.leftGrip,
+        valves: k.casings,
         rim: t.rim,
         tubing: { main, valves: loops },
     };

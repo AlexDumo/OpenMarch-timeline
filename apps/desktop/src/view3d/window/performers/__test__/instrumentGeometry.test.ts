@@ -50,7 +50,7 @@ async function body() {
 describe("instrumentGeometry", () => {
     it("weights every vertex to the prop bone and keeps the parts", async () => {
         const mesh = await body();
-        const h = hold("brass", "up");
+        const h = hold("trumpet", "up");
         const g = instrumentGeometry(
             mesh.skeleton,
             poseArms(mesh.skeleton, h),
@@ -75,7 +75,7 @@ describe("instrumentGeometry", () => {
 
     it("lands on the hold's placement once skinned with the prop bone: the posed hand times the grip", async () => {
         const mesh = await body();
-        const h = hold("brass", "up");
+        const h = hold("trumpet", "up");
         const pose = poseArms(mesh.skeleton, h);
         const g = instrumentGeometry(
             mesh.skeleton,
@@ -176,7 +176,7 @@ describe("pieces on other bones", () => {
 describe("instrument color and material", () => {
     it("carries per-vertex linear colors from the model", async () => {
         const mesh = await body();
-        const h = hold("brass", "up");
+        const h = hold("trumpet", "up");
         const g = instrumentGeometry(
             mesh.skeleton,
             poseArms(mesh.skeleton, h),
@@ -190,7 +190,7 @@ describe("instrument color and material", () => {
 
     it("recolors the metal for a silver finish", async () => {
         const mesh = await body();
-        const h = hold("brass", "up");
+        const h = hold("trumpet", "up");
         const gold = instrumentGeometry(
             mesh.skeleton,
             poseArms(mesh.skeleton, h),
@@ -256,7 +256,7 @@ describe("instrument color and material", () => {
         });
 
         const mesh = await body();
-        const h = hold("brass", "up");
+        const h = hold("trumpet", "up");
         const g = instrumentGeometry(
             mesh.skeleton,
             poseArms(mesh.skeleton, h),

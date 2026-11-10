@@ -569,6 +569,7 @@ export function contra(detail: Detail): Horn {
     return {
         pieces,
         leftGrip: [A, o.bottom, -0.3],
+        valves: k.casings,
         rim,
         tubing: { main, valves: loops },
     };

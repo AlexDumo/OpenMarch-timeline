@@ -152,12 +152,25 @@ export const VALVE_SLIDE_RATIO: Record<1 | 2 | 3, number> = {
 };
 
 /**
+ * One piston valve as built: its casing's axis from the bottom cap to the
+ * top cap, the casing's radius, and the center of its finger button.
+ */
+export interface ValveCasing {
+    bottom: Vec3;
+    top: Vec3;
+    button: Vec3;
+    r: number;
+}
+
+/**
  * What a horn builder returns: its pieces, where the hands and lips go,
  * and the tubing it is made of, so a test can hold it to its pitch.
  */
 export interface Horn {
     pieces: Piece[];
     leftGrip: Vec3;
+    /** The piston valves, first to third: where the hands find them. */
+    valves: ValveCasing[];
     /** The mouthpiece rim's center. */
     rim: Vec3;
     /**
@@ -277,6 +290,8 @@ export function flareProfile(
 /** The parts of a horn, built at one detail level. */
 export function hornKit(detail: Detail) {
     const s = HORN_SEGMENTS[detail];
+    /** Every valve `valves` has built, in the order it built them. */
+    const casings: ValveCasing[] = [];
     /** A lathe built about +Y, stood at `origin` with +Y turned to `axis`. */
     const stand = (piece: Piece, origin: Vec3, axis: Vec3): Piece =>
         transformPiece(
@@ -420,6 +435,12 @@ export function hornKit(detail: Detail) {
         const out: Piece[] = [];
         for (const [x, z] of at) {
             const o: Vec3 = [x, 0, z];
+            casings.push({
+                bottom: [x, bottom, z],
+                top: [x, top, z],
+                button: [x, top + stem + 0.0045, z],
+                r,
+            });
             out.push(
                 sleeve([x, bottom, z], [x, top, z], r),
                 // top cap: a knurled collar with a domed lid
@@ -605,6 +626,7 @@ export function hornKit(detail: Detail) {
 
     return {
         segments: s,
+        casings,
         pipe,
         sleeve,
         ferrule,

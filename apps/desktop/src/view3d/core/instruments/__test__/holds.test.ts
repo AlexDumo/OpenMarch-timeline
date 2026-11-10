@@ -1,15 +1,61 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { HOLD_STATES, hold, holdId, type HoldFamily } from "../holds";
+import { brassHorn } from "../brass";
+import {
+    HOLD_STATES,
+    HORN_PITCH_DEG,
+    hold,
+    holdId,
+    type Hold,
+    type HoldFamily,
+} from "../holds";
+import type { Vec3 } from "../mesh";
+import type { BrassModelId } from "../model";
 
 const SHOULDER_R = [-0.185, 1.397, -0.005] as const;
 const UPPER = 0.205;
 const FOREARM = 0.264;
 const dist = (a: readonly number[], b: readonly number[]) =>
     Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+const LIPS: Vec3 = [0, 1.556, 0.094];
+const VALVED: [HoldFamily, BrassModelId][] = [
+    ["trumpet", "trumpet"],
+    ["mellophone", "mellophone"],
+    ["baritone", "baritone"],
+    ["euphonium", "euphonium"],
+    ["contra", "contra"],
+];
+const HORNS: [HoldFamily, BrassModelId][] = [
+    ...VALVED,
+    ["trombone", "trombone"],
+    ["bassTrombone", "bassTrombone"],
+];
+/** A point in a hold's instrument frame, in the body's. */
+function inBody(h: Hold, p: Vec3): Vec3 {
+    const n = (v: readonly number[]) => {
+        const l = Math.hypot(...v);
+        return v.map((x) => x / l);
+    };
+    const z = n(h.instrument.bellAxis);
+    const c = h.instrument.capsAxis;
+    const cz = c[0] * z[0] + c[1] * z[1] + c[2] * z[2];
+    const y = n(c.map((v, i) => v - z[i] * cz));
+    const x = [
+        y[1] * z[2] - y[2] * z[1],
+        y[2] * z[0] - y[0] * z[2],
+        y[0] * z[1] - y[1] * z[0],
+    ];
+    return [0, 1, 2].map(
+        (i) => h.instrument.origin[i] + x[i] * p[0] + y[i] * p[1] + z[i] * p[2],
+    ) as Vec3;
+}
 const FAMILIES: HoldFamily[] = [
-    "brass",
+    "trumpet",
+    "mellophone",
+    "baritone",
+    "euphonium",
     "trombone",
+    "bassTrombone",
     "contra",
     "sousaphone",
     "flute",
@@ -34,7 +80,7 @@ const GUARD: HoldFamily[] = [
 describe("holds", () => {
     it("lists the four states with up first", () => {
         expect(HOLD_STATES).toEqual(["up", "carry", "trail"]);
-        expect(holdId("brass", "up")).toBe("brass:up");
+        expect(holdId("trumpet", "up")).toBe("trumpet:up");
     });
 
     it.each([...FAMILIES, ...GUARD])(
@@ -63,40 +109,74 @@ describe("holds", () => {
         },
     );
 
-    it("brass up: bell forward at face height, mouthpiece at the mouth", () => {
-        const h = hold("brass", "up");
-        expect(h.instrument.bellAxis).toEqual([0, 0, 1]);
-        // the mouthpiece (behind the grip, level with it) reaches the lips
-        expect(h.instrument.origin[1]).toBeGreaterThan(1.5);
-        expect(h.instrument.origin[1]).toBeLessThan(1.62);
-        // elbows out: wider than the shoulders
-        expect(h.right.elbow[0]).toBeLessThan(SHOULDER_R[0] - 0.08);
-    });
+    it.each(HORNS)(
+        "%s up: 15 degrees above level, the rim at the lips",
+        (family, id) => {
+            const h = hold(family, "up");
+            const bell = h.instrument.bellAxis;
+            expect(bell[0]).toBeCloseTo(0, 6);
+            expect((Math.atan2(bell[1], bell[2]) * 180) / Math.PI).toBeCloseTo(
+                HORN_PITCH_DEG,
+                6,
+            );
+            const horn = brassHorn(id, "low");
+            expect(dist(inBody(h, horn.rim), LIPS)).toBeLessThan(0.002);
+        },
+    );
+
+    it.each(VALVED.filter(([f]) => f !== "contra"))(
+        "%s up: right hand over the valves, left hand on the casings' left side",
+        (family, id) => {
+            const h = hold(family, "up");
+            const horn = brassHorn(id, "low");
+            const buttons = horn.valves.map((v) => inBody(h, v.button));
+            const middle = buttons[1];
+            // the right knuckles (0.1 m down the fingers) sit beside the buttons
+            const knuckles = h.right.wrist.map(
+                (w, i) => w + h.right.fingers[i] * 0.1,
+            );
+            expect(dist(knuckles, middle)).toBeLessThan(0.04);
+            // the left palm (0.075 m down the fingers) is left of the casings, near them
+            const palm = h.left.wrist.map(
+                (w, i) => w + h.left.fingers[i] * 0.075,
+            );
+            const c = horn.valves[1];
+            const casing = inBody(h, [
+                (c.top[0] + c.bottom[0]) / 2,
+                (c.top[1] + c.bottom[1]) / 2,
+                (c.top[2] + c.bottom[2]) / 2,
+            ]);
+            expect(palm[0]).toBeGreaterThan(casing[0]);
+            expect(dist(palm, casing)).toBeLessThan(0.06);
+            // elbows out: wider than the shoulders
+            expect(h.right.elbow[0]).toBeLessThan(SHOULDER_R[0] - 0.02);
+        },
+    );
 
     it("brass carry: mouthpiece at eye level, bell to the ground", () => {
-        const h = hold("brass", "carry");
+        const h = hold("trumpet", "carry");
         expect(h.instrument.bellAxis).toEqual([0, -1, 0]);
         // the mouthpiece sits about 0.17 above the grip: eye level
         expect(h.instrument.origin[1]).toBeGreaterThan(1.45);
     });
 
     it("brass trail: right arm down the side, bell backward, left arm straight", () => {
-        const h = hold("brass", "trail");
+        const h = hold("trumpet", "trail");
         expect(h.instrument.bellAxis).toEqual([0, 0, -1]);
         expect(h.right.wrist[1]).toBeLessThan(1.0);
         expect(h.left.wrist[1]).toBeLessThan(1.0);
         expect(Math.abs(h.left.wrist[0] - 0.2)).toBeLessThan(0.08);
     });
 
-    it("contra up: bell forward, valves high in front of the face", () => {
+    it("contra up: valves high in front of the face, the left hand on the front bow", () => {
         const h = hold("contra", "up");
-        expect(h.instrument.bellAxis).toEqual([0, 0, 1]);
         expect(h.instrument.origin[1]).toBeGreaterThan(1.5);
         expect(h.instrument.origin[1]).toBeLessThan(1.7);
-        expect(h.instrument.origin[2]).toBeGreaterThan(0.1);
-        expect(h.instrument.origin[2]).toBeLessThan(0.3);
-        // the loop plane lies over the left shoulder, clear of the head (half-width 0.1 plus the tube)
-        expect(h.instrument.origin[0]).toBeGreaterThanOrEqual(0.14);
+        // the loop plane (0.05 left of the valves) lies over the left shoulder, clear of the head
+        expect(h.instrument.origin[0] + 0.05).toBeGreaterThanOrEqual(0.14);
+        // the left hand on the horn's left side, the right reaching across to the valves
+        expect(h.left.wrist[0]).toBeGreaterThan(h.instrument.origin[0]);
+        expect(h.right.wrist[0]).toBeLessThan(h.instrument.origin[0]);
     });
 
     it("keeps the wrists in front of the chest in every hold", () => {
@@ -105,12 +185,20 @@ describe("holds", () => {
                 const h = hold(family, state);
                 if (state === "trail") continue;
                 expect(h.right.wrist[2]).toBeGreaterThan(0.12);
-                expect(h.left.wrist[2]).toBeGreaterThan(0.12);
+                // the trombones' left hand sits by the mouthpiece, at the chin
+                expect(h.left.wrist[2]).toBeGreaterThan(0.11);
             }
     });
 });
 
 describe("woodwind and battery holds", () => {
+    it.each(["flute", "piccolo"] as const)(
+        "%s up: level and parallel to the shoulders",
+        (family) => {
+            expect(hold(family, "up").instrument.bellAxis).toEqual([-1, 0, 0]);
+        },
+    );
+
     it("flute: to the player's right at the lips, keys up", () => {
         const h = hold("flute", "up");
         expect(h.instrument.bellAxis[0]).toBeLessThan(-0.8); // the tube runs to the right
@@ -417,7 +505,7 @@ describe("woodwind carry and trail", () => {
         "%s trail: the arms of the brass trail, the instrument in the right hand",
         (family) => {
             const h = hold(family, "trail");
-            const brass = hold("brass", "trail");
+            const brass = hold("trumpet", "trail");
             expect(h.left).toEqual(brass.left);
             expect(h.right).toEqual(brass.right);
             expect(h.left.fingers).toEqual([0, -1, 0]);
