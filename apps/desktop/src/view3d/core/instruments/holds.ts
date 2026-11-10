@@ -234,8 +234,10 @@ function atLips(
     yawDeg = 0,
     /** Degrees the horn rolls about its own axis, its left side down. */
     rollDeg = 0,
+    /** How far the mouthpiece sits left of the lips' center, meters. */
+    offCenter = 0,
 ): Hold["instrument"] {
-    const lips = playingLips(head);
+    const lips = add(playingLips(head), [offCenter, 0, 0]);
     const a = (yawDeg * Math.PI) / 180;
     const r = (rollDeg * Math.PI) / 180;
     const turn = (v: Vec3): Vec3 => [
@@ -450,23 +452,27 @@ const TROMBONE: Record<HoldState, Hold> = {
  * the bell section's brace by the mouthpiece, where `TROMBONE.up` has them.
  */
 /**
- * Trombones are rolled about their own axis, the mouthpiece's tube on top
- * and the left side down, so the bell section runs beside the left cheek
- * and jaw rather than over the face (photos of players, 2026-11-10).
+ * Trombones are rolled a little about their own axis, the mouthpiece's
+ * tube on top and the left side down, so the bell section runs beside the
+ * left temple rather than through the head. Marching players roll it far
+ * less than concert players (drum corps photos, 2026-11-10).
  */
-const TROMBONE_ROLL_DEG = 30;
-/** And turned 5 degrees, the bell a little right, so the tuning slide swings back past the left ear. */
-const TROMBONE_YAW_DEG = -5;
+const TROMBONE_ROLL_DEG = 18;
+/** And turned 8 degrees, the bell a little right, so the tuning slide swings back past the left ear. */
+const TROMBONE_YAW_DEG = -8;
+/** And the mouthpiece a little left of the lips' center, as many players set it. */
+const TROMBONE_OFF_CENTER = 0.012;
 /**
- * The left hand under the mouthpiece (photos, 2026-11-10): the fingers
- * round the slide brace, the index finger up toward the mouthpiece's
- * shank, the forearm nearly vertical from an elbow low and close to the
- * left front of the ribs.
+ * The left arm makes the marching triangle (owner, 2026-11-10; Blue Devils
+ * 2016 photos): the elbow level with the shoulder, out to the side and a
+ * little forward, the forearm rising across in front of the chin to the
+ * grip by the mouthpiece, the wrist straight. Concert players hang this
+ * elbow low; marching players don't.
  */
 const TROMBONE_LEFT = {
-    wrist: [0.07, 1.47, 0.12] as Vec3,
+    wrist: [0.114, 1.521, 0.144] as Vec3,
     palm: [0.04, 1.56, 0.15] as Vec3,
-    elbow: [0.17, 1.22, 0.06] as Vec3,
+    elbow: [0.346, 1.397, 0.123] as Vec3,
 };
 function tromboneUp(family: "trombone" | "bassTrombone"): Hold {
     const id = family === "trombone" ? "trombone" : "bassTrombone";
@@ -477,6 +483,7 @@ function tromboneUp(family: "trombone" | "bassTrombone"): Hold {
             HEAD_UP,
             TROMBONE_YAW_DEG,
             TROMBONE_ROLL_DEG,
+            TROMBONE_OFF_CENTER,
         ),
     );
     const { wrist, palm, elbow } = TROMBONE_LEFT;
@@ -1715,6 +1722,12 @@ const STRAIGHT_OUT: Partial<Record<HoldFamily, { right?: Vec3; left?: Vec3 }>> =
     {
         // the right elbow forward of the chest, level with the left one (owner, 2026-11-10)
         contra: { right: [-0.2, -0.2, 1] },
+        // the left elbow up at the shoulder, the right a little lower at the chest
+        trombone: { left: [0.161, 0, 0.128], right: [-0.03, -0.006, 0.203] },
+        bassTrombone: {
+            left: [0.161, 0, 0.128],
+            right: [-0.03, -0.006, 0.203],
+        },
         // in front of the chest, clear of the body tube
         sousaphone: { left: [-0.15, -0.4, 1.4] },
     };

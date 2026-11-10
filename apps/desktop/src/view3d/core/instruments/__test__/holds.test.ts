@@ -121,8 +121,11 @@ describe("holds", () => {
                 (Math.asin(bell[1] / Math.hypot(...bell)) * 180) / Math.PI,
             ).toBeCloseTo(HORN_PITCH_DEG, 6);
             const horn = brassHorn(id, "low");
+            // trombonists set the mouthpiece a little left of center
+            const off =
+                family === "trombone" || family === "bassTrombone" ? 0.012 : 0;
             expect(dist(inBody(h, horn.rim), playingLips(h.head))).toBeLessThan(
-                0.002,
+                off + 0.002,
             );
         },
     );
