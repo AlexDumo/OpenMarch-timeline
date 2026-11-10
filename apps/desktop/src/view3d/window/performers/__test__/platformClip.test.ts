@@ -12,6 +12,7 @@ import {
     prepBase,
 } from "../marchers/platformClip";
 import { prepName } from "@/view3d/core/marchers/planner";
+import { restoreStillPose } from "@/view3d/window/performers/marchers/stillPose";
 
 async function parse(file: string) {
     const b = fs.readFileSync(
@@ -39,7 +40,7 @@ function load() {
         });
         return {
             scene: body.scene,
-            clips: clips.animations,
+            clips: restoreStillPose(clips.animations),
             skeleton: mesh!.skeleton,
         };
     })();
@@ -178,5 +179,17 @@ describe("prep landings on the platform", () => {
             "slideL8to5-h095",
         );
         expect(prepBase("8to5")).toBe("8to5");
+    });
+});
+
+describe("the crab step", () => {
+    it.each([
+        "crabL090_8to5",
+        "halt_crabR045_6to5-h095",
+        "halt2_crabL090_8to5",
+        "stepoff_crabR090_4to5",
+        "crabL090_8to5~prep1",
+    ])("doesn't go up on the platform again: %s", (name) => {
+        expect(platformWeight(name)).toBeNull();
     });
 });
