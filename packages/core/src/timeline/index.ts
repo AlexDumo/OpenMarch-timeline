@@ -114,6 +114,28 @@ export type {
     ValidationCode,
 } from "./validate";
 
+export {
+    createWalkedPaths,
+    walkedPath,
+    walkedPathOfMove,
+    walkedPathPointAt,
+    walkedPathToSvg,
+    walkedPathToPolylines,
+    WALKED_SAMPLE_TOLERANCE,
+    WALKED_MIN_BULGE,
+} from "./walkedPath";
+export type {
+    WalkedPath,
+    WalkedSegment,
+    WalkedLine,
+    WalkedArc,
+    WalkedCubic,
+    WalkedPolyline,
+    WalkedSvgOptions,
+    WalkedPaths,
+    WalkResolver,
+} from "./walkedPath";
+
 /** The uncached reference oracle (spec section 8), for tests and debug checks only. */
 export function createTimelineOracleForTesting(host: TimelineSnapshot): Oracle {
     return createOracle(host);
