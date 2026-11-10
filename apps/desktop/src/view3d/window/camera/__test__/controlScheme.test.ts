@@ -5,6 +5,7 @@ import {
     dragAction,
     loadControlScheme,
     parseControlScheme,
+    SCHEME_GESTURES,
     saveControlScheme,
     wheelAction,
 } from "../controlScheme";
@@ -136,4 +137,32 @@ describe("scrolling", () => {
         expect(wheelAction("map", wheel({ shiftKey: true }))).toBe("pan");
         expect(wheelAction("trackpad", wheel({ altKey: true }))).toBe("pan");
     });
+});
+
+describe("the gestures the Controls picker shows", () => {
+    const mouse = { drag: 1, rightDrag: 2 } as const;
+    const wheels = {
+        scroll: wheel(),
+        swipe: wheel(),
+        pinch: wheel({ ctrlKey: true }),
+    } as const;
+    const does = { pinch: "zoom", zoom: "zoom", orbit: "orbit", pan: "pan" };
+
+    it.each(["orbit", "map", "trackpad"] as const)(
+        "match what %s does",
+        (scheme) => {
+            for (const { input, move } of SCHEME_GESTURES[scheme]) {
+                const got =
+                    input === "drag" || input === "rightDrag"
+                        ? dragAction(scheme, press({ buttons: mouse[input] }))
+                        : does[wheelAction(scheme, wheels[input])];
+                expect(got, `${scheme} ${input}`).toBe(move);
+            }
+            expect(SCHEME_GESTURES[scheme].map((g) => g.move).sort()).toEqual([
+                "orbit",
+                "pan",
+                "zoom",
+            ]);
+        },
+    );
 });

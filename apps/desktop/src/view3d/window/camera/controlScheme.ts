@@ -54,6 +54,39 @@ export function saveControlScheme(scheme: ControlScheme, storage?: Storage) {
     }
 }
 
+/** An input the Controls picker draws as an icon. */
+export type GestureInput = "drag" | "rightDrag" | "scroll" | "swipe" | "pinch";
+
+/** What a gesture does to the camera. */
+export type CameraMove = "orbit" | "pan" | "zoom";
+
+/**
+ * The three main gestures of each scheme, for the Controls picker: one each
+ * for orbit, pan and zoom. Modifier keys and touch are left out; the key
+ * list in the 3D View's View settings shows those. Keep in step with
+ * `dragAction` and `wheelAction` (the test checks it).
+ */
+export const SCHEME_GESTURES: Record<
+    ControlScheme,
+    readonly { readonly input: GestureInput; readonly move: CameraMove }[]
+> = {
+    orbit: [
+        { input: "drag", move: "orbit" },
+        { input: "rightDrag", move: "pan" },
+        { input: "scroll", move: "zoom" },
+    ],
+    map: [
+        { input: "drag", move: "pan" },
+        { input: "rightDrag", move: "orbit" },
+        { input: "scroll", move: "zoom" },
+    ],
+    trackpad: [
+        { input: "swipe", move: "orbit" },
+        { input: "rightDrag", move: "pan" },
+        { input: "pinch", move: "zoom" },
+    ],
+};
+
 /** The pointer fields `dragAction` reads (a `PointerEvent` satisfies it). */
 export interface DragLike {
     pointerType: string;
