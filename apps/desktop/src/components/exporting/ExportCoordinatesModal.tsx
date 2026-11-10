@@ -824,6 +824,7 @@ function DrillChartExport() {
                 marchers,
                 sortedPages: pages,
                 marcherPagesMap: positions,
+                walkedPaths: positions.walkedPaths,
                 sectionAppearances: sectionAppearances,
                 marcherAppearancesByPageId,
                 backgroundImage,
