@@ -27,10 +27,12 @@ describe("Toaster", () => {
     it("sits 12px from the window's bottom-right corner, 320px wide, on any window width", async () => {
         render(<Toaster />);
         act(() => {
-            toast.info("Page 3 is no longer a keyframe");
+            toast.info("Now walks straight through the end of Page 3");
         });
         const li = (
-            await screen.findByText("Page 3 is no longer a keyframe")
+            await screen.findByText(
+                "Now walks straight through the end of Page 3",
+            )
         ).closest("[data-sonner-toast]") as HTMLElement;
         const list = li.closest("[data-sonner-toaster]") as HTMLElement;
         expect(list.dataset.yPosition).toBe("bottom");
@@ -84,15 +86,15 @@ describe("Toaster", () => {
     it("with one button, keeps it beside the text on one row", async () => {
         render(<Toaster />);
         act(() => {
-            toast.info("Page 3 is no longer a keyframe", {
+            toast.info("Now walks straight through the end of Page 3", {
                 action: {
-                    label: "Keep Page 3 as a keyframe",
+                    label: "Stop at the end of Page 3",
                     onClick: () => {},
                 },
             });
         });
         const button = await screen.findByRole("button", {
-            name: "Keep Page 3 as a keyframe",
+            name: "Stop at the end of Page 3",
         });
         const { li, content } = toastOf(button);
         expect(li.querySelector("[data-cancel]")).toBeNull();
