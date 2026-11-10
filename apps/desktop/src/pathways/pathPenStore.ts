@@ -688,15 +688,16 @@ async function save(
     }));
     const { target } = session;
     try {
-        if (target.trail && session.phase === "open" && target.routeId !== null)
-            // Point edits on an open trail (AP-T2)
+        if (target.trail && target.routeId !== null)
+            // Point edits on an open trail, or the trail drawn again (AP-T2): by its route, so a
+            // member taken over at the move's start doesn't stop it
             await editTrailPoints({
                 db,
                 routeId: target.routeId,
                 points: stored,
             });
         else if (target.trail)
-            // Follow: the line gets its trail, or its trail drawn again (AP-T1)
+            // Follow: the line gets its trail (AP-T1)
             await followTrail({
                 db,
                 timelineId: target.timelineId,

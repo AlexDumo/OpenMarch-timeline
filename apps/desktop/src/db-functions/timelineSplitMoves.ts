@@ -1,5 +1,4 @@
 import { eq, inArray } from "drizzle-orm";
-import { refuseTrailRows, refuseTrailsInMoves } from "./timelineTrails";
 import { schema } from "@/global/database/db";
 import { moveLabels, pageTimelineIds } from "@/timeline/timelineViewModel";
 import { DbConnection, DbTransaction } from "./types";
@@ -63,9 +62,14 @@ import { lanesOfTransitions } from "./timelineLanes";
  *   with its slot's destination and the same path, and the old transition is compacted, so it
  *   makes no vacant slot. Each slot's path only depends on its own origin and destination, so the
  *   motion is the same.
- * - A shared transition into a shape, a follow-the-leader one, or one whose marchers are in an
- *   inheriting follow-the-leader transition (R-12 reads slot order) can't be split that way:
- *   refused, naming the marchers it would take with it.
+ * - A follow move's line (a follow-the-leader transition with a trail, pathways step 4, AP-T6):
+ *   the marchers split off leave the trail as a removed marcher does. Their slots are left as gaps
+ *   (no compaction), so the others' order, slots and end spots stay; each leaving marcher gets a
+ *   one-slot `direct` transition to its own end spot, the ordinary walk. The whole line chosen
+ *   moves whole, trail and all.
+ * - A shared transition into a shape, a follow-the-leader one without a trail, or one whose
+ *   marchers are in an inheriting follow-the-leader transition (R-12 reads slot order) can't be
+ *   split that way: refused, naming the marchers it would take with it.
  */
 
 /** "T1, T2 and T3", or "T1, T2, T3 and 4 more", in marcher id order. */
@@ -123,6 +127,14 @@ const timelineWords = async (
 /** A shared transition's path that a slot keeps on its own (shapeless `direct` or `arc`). */
 const canPeelSlot = (style: string): style is "direct" | "arc" =>
     style === "direct" || style === "arc";
+
+/** A follow move's line: a follow-the-leader transition with a trail (pathways step 4). */
+const isTrail = (transition: {
+    path_style: string;
+    route_id: number | null;
+}): boolean =>
+    transition.path_style === "follow_the_leader" &&
+    transition.route_id !== null;
 
 /**
  * AP-H2 (spec v0.10 J.8) for split by marcher: a marcher whose spot walks a drawn path can't be
@@ -255,7 +267,7 @@ export async function splitRefusal(
         const reason =
             tr.dest_shape_id !== null && !storedShapesSwitched
                 ? "shape"
-                : tr.path_style === "follow_the_leader" ||
+                : (tr.path_style === "follow_the_leader" && !isTrail(tr)) ||
                     list.some((r) => ftl.has(r.assignment.marcher_id))
                   ? "followTheLeader"
                   : null;
@@ -283,7 +295,8 @@ export async function splitRefusal(
  * Refused (E-ARGS) before anything is written: a missing timeline, no marchers, none of them in
  * the move, every member of a move that isn't a page's chosen (that would only rename it), and a
  * marcher whose transition is shared with a marcher who stays and can't be split slot by slot
- * (into a shape, follow the leader, or in an inheriting follow-the-leader order).
+ * (into a shape, follow the leader without a trail, or in an inheriting follow-the-leader
+ * order). Marchers split off a follow move's line leave its trail with a gap (AP-T6).
  */
 // eslint-disable-next-line max-lines-per-function
 export const splitMarchersIntoNewMoveInTransaction = async ({
@@ -309,13 +322,6 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
     if (blocker) refuse(blocker);
     const chosen = new Set(marcherIds.filter((id) => members.has(id)));
     await refuseLanedRows(
-        tx,
-        rows
-            .filter((r) => chosen.has(r.assignment.marcher_id))
-            .map((r) => r.assignment),
-    );
-    // AP-T5 (pathways step 4): a follow move's line isn't split off yet
-    await refuseTrailRows(
         tx,
         rows
             .filter((r) => chosen.has(r.assignment.marcher_id))
@@ -382,6 +388,15 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
             refuse(
                 `transition ${transition.id} has no destination for slot ${assignment.slot_index}`,
             );
+        // AP-T6: leaving a trail, the marcher walks straight to its own end spot
+        if (isTrail(transition))
+            return {
+                slotCount: 1,
+                destination: { kind: "individual" as const, points: [point] },
+                pathStyle: "direct" as const,
+                pathParams: null,
+                orderMode: "inherit" as const,
+            };
         const pathStyle = transition.path_style;
         if (!canPeelSlot(pathStyle))
             refuse(
@@ -412,7 +427,8 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
     });
     await moveTransitionsTo(tx, whole, timeline!.id);
     if (peeled.length > 0) {
-        // Old rows go first, so the new ones don't overlap them at the same layer (I-A3)
+        // Old rows go first, so the new ones don't overlap them at the same layer (I-A3). A
+        // trail's line is left with gaps, not compacted (AP-T6)
         await removeAssignmentRowsInTransaction({
             tx,
             removed: peeled.map((r) => r.assignment),
@@ -504,6 +520,7 @@ export const mergeFits = (
  * fitting, a marcher who joins or leaves the source partway at a count outside the target's, or
  * whose fitted row would overlap another of its moves on the same layer (E-A3).
  */
+// eslint-disable-next-line max-lines-per-function
 export const mergeMovesInTransaction = async ({
     tx,
     sourceId,
@@ -518,10 +535,9 @@ export const mergeMovesInTransaction = async ({
     if (!source) refuse(`timeline ${sourceId} does not exist`);
     const target = await readTimeline(tx, targetId);
     if (!target) refuse(`timeline ${targetId} does not exist`);
-    // AP-R6 (spec v0.9 step 1): merging doesn't keep a drawn path yet
+    // AP-R6 (spec v0.9 step 1): merging doesn't keep a drawn path yet. A follow move's trail
+    // comes over whole with its transition (AP-T5), as a resize keeps it (AP-T7)
     await refuseRoutesInMoves(tx, [sourceId, targetId]);
-    // AP-T5 (pathways step 4): nor a follow move's trail
-    await refuseTrailsInMoves(tx, [sourceId, targetId]);
     const { nameOf, pageTimelineIds } = await timelineWords(tx);
     if (pageTimelineIds.has(sourceId))
         refuse(

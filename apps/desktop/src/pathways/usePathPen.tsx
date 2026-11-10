@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { translateTimelineText } from "@/timeline/translateTimelineText";
 import { allMarchersQueryOptions } from "@/hooks/queries";
 import { readGroupPaths } from "@/db-functions/timelineGroupRoutes";
 import tolgee from "@/global/singletons/Tolgee";
@@ -259,6 +260,13 @@ export function usePathPenActions(): void {
         const ids = performers.map((m) => m.id);
         void findTrailDrawTarget(db, resolver, ids, drills, beat).then(
             (target) => {
+                if ("kind" in target && target.kind === "refused") {
+                    // Said before drawing starts, so no drawing is lost (AP-T1)
+                    toast.error(translateTimelineText(target.reason), {
+                        id: "path-pen",
+                    });
+                    return;
+                }
                 if ("kind" in target) {
                     const who = performers.find(
                         (m) =>

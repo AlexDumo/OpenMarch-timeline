@@ -25,10 +25,19 @@ import {
 } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { readTimelineTables } from "@/timeline/timelineRows";
-import { text, type TimelineTextArg } from "@/timeline/timelineText";
+import {
+    text,
+    type TimelineText,
+    type TimelineTextArg,
+} from "@/timeline/timelineText";
 import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
-import { assertValid, mapDbErrors, refuse } from "./timelineErrors";
+import {
+    assertValid,
+    mapDbErrors,
+    refuse,
+    TimelineWriteError,
+} from "./timelineErrors";
 import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
 import { writeRouteGeometryInTransaction } from "./timelineRouteGeometry";
 import {
@@ -352,37 +361,29 @@ function trailGeometry(
     return geometry;
 }
 
+/** What Follow will do for a choice of marchers (`planFollow`), decided before any write. */
+type FollowPlan =
+    | {
+          kind: "redraw";
+          routeId: number;
+          transitionId: number;
+          /** The line, tail first */
+          line: number[];
+      }
+    | { kind: "new"; chosen: MemberRow[]; starts: XY[]; ends: XY[] };
+
 /**
- * AP-T1 (spec Appendix K): marchers `marcherIds` of move `timelineId` follow the leader along
- * `points` (the trail's drawn part, in walking order; none for a straight way in).
- *
- * When they are exactly the line of a follow move, its trail is drawn again (AP-T2). Otherwise
- * they leave the transitions they are in (as split by marchers peels them: the others stay as
- * they are, AP-R15) for one new follow-the-leader transition in the same move:
- *
- * - its slots are the line in order (`followOrder`), the leader last;
- * - each slot's placed destination is that marcher's end spot now, so nobody's end moves (R-13′);
- * - `order_mode` is `slot`, and its trail route holds `points` (R-9′);
- * - each marcher's row keeps its counts and layer.
- *
- * Refused (`E-ARGS`, nothing written): fewer than two marchers; a marcher not in the move, taken
- * over at its start, or in it for only part of its counts; a marcher with a drawn path (Remove
- * path first); some of a follow move's line, or its line with others; a marcher who shares a
- * move into a stored shape with marchers who stay. Invalid points are `E-R1`.
+ * AP-T1's reads and refusals, with nothing written: the trail drawn again when `marcherIds` are a
+ * follow move's line (every marcher of it who founds the move, and none outside it, so a member
+ * taken over at the start doesn't stop a redraw), else the new line's rows, starts and ends.
+ * Refuses (`E-ARGS`) as `followTrailInTransaction` says.
  */
-// One procedure, read then written in the order the spec gives (AP-T1)
 // eslint-disable-next-line max-lines-per-function
-export async function followTrailInTransaction({
-    tx,
-    timelineId,
-    marcherIds,
-    points,
-}: {
-    tx: DbTransaction;
-    timelineId: number;
-    marcherIds: readonly number[];
-    points: readonly RoutePointInput[];
-}): Promise<FollowTrailResult> {
+async function planFollow(
+    tx: DbTransaction,
+    timelineId: number,
+    marcherIds: readonly number[],
+): Promise<FollowPlan> {
     const ids = [...new Set(marcherIds)].sort((a, b) => a - b);
     if (ids.length < 2) refuse(trailRefusal.tooFew());
     const rows = await memberRows(tx, timelineId);
@@ -400,8 +401,9 @@ export async function followTrailInTransaction({
             refuse(trailRefusal.partWay(await marcherName(tx, id)));
         chosen.push(row);
     }
+    const resolver = createResolver((await readTimelineTables(tx)).snapshot);
 
-    // The line of a follow move, whole: its trail drawn again
+    // The line of a follow move: its trail drawn again
     const trails = new Set(
         chosen
             .filter(
@@ -414,25 +416,25 @@ export async function followTrailInTransaction({
     if (trails.size === 1) {
         const [transitionId] = [...trails];
         const line = rows.filter((r) => r.transition.id === transitionId);
+        const founders = resolver.ftlEntry(transitionId!).members;
+        const chosenIds = new Set(chosen.map((r) => r.assignment.marcher_id));
         if (
             chosen.every((r) => r.transition.id === transitionId) &&
-            line.length === chosen.length
+            (line.length === chosen.length ||
+                (founders.length > 0 &&
+                    founders.every((m) => chosenIds.has(m))))
         ) {
-            const routeId = chosen[0]!.transition.route_id!;
-            await editTrailPointsInTransaction({ tx, routeId, points });
             const order = [...line].sort(
                 (a, b) => a.assignment.slot_index - b.assignment.slot_index,
             );
             const tailFirst = isReversed(chosen[0]!.transition)
                 ? order.reverse()
                 : order;
-            const line_ = tailFirst.map((r) => r.assignment.marcher_id);
             return {
-                routeId,
+                kind: "redraw",
+                routeId: chosen[0]!.transition.route_id!,
                 transitionId: transitionId!,
-                marcherIds: line_,
-                leaderId: line_.at(-1)!,
-                redrawn: true,
+                line: tailFirst.map((r) => r.assignment.marcher_id),
             };
         }
     }
@@ -469,8 +471,7 @@ export async function followTrailInTransaction({
         );
     }
 
-    // Where everyone starts and ends: read before anything is written
-    const resolver = createResolver((await readTimelineTables(tx)).snapshot);
+    // Where everyone starts and ends
     const starts: XY[] = [];
     const ends: XY[] = [];
     for (const r of chosen) {
@@ -494,6 +495,75 @@ export async function followTrailInTransaction({
         );
         ends.push([to[0], to[1]]);
     }
+    return { kind: "new", chosen, starts, ends };
+}
+
+/**
+ * Why Follow would refuse `marcherIds` of move `timelineId` (AP-T1), or null when it wouldn't:
+ * the pen asks before drawing starts, so nobody draws a trail that can't be kept. Writes nothing.
+ */
+export async function followTrailRefusal(
+    tx: DbTransaction,
+    timelineId: number,
+    marcherIds: readonly number[],
+): Promise<TimelineText | null> {
+    try {
+        await planFollow(tx, timelineId, marcherIds);
+        return null;
+    } catch (error) {
+        if (error instanceof TimelineWriteError && error.text)
+            return error.text;
+        throw error;
+    }
+}
+
+/**
+ * AP-T1 (spec Appendix K): marchers `marcherIds` of move `timelineId` follow the leader along
+ * `points` (the trail's drawn part, in walking order; none for a straight way in).
+ *
+ * When they are a follow move's line (`planFollow`), its trail is drawn again (AP-T2). Otherwise
+ * they leave the transitions they are in (as split by marchers peels them: the others stay as
+ * they are, AP-R15) for one new follow-the-leader transition in the same move:
+ *
+ * - its slots are the line in order (`followOrder`), the leader last;
+ * - each slot's placed destination is that marcher's end spot now, so nobody's end moves (R-13′);
+ * - `order_mode` is `slot`, and its trail route holds `points` (R-9′);
+ * - each marcher's row keeps its counts and layer.
+ *
+ * Refused (`E-ARGS`, nothing written): fewer than two marchers; a marcher not in the move, taken
+ * over at its start, or in it for only part of its counts; a marcher with a drawn path (Remove
+ * path first); some of a follow move's line, or its line with others; a marcher who shares a
+ * move into a stored shape with marchers who stay. Invalid points are `E-R1`.
+ */
+// One procedure, read then written in the order the spec gives (AP-T1)
+// eslint-disable-next-line max-lines-per-function
+export async function followTrailInTransaction({
+    tx,
+    timelineId,
+    marcherIds,
+    points,
+}: {
+    tx: DbTransaction;
+    timelineId: number;
+    marcherIds: readonly number[];
+    points: readonly RoutePointInput[];
+}): Promise<FollowTrailResult> {
+    const plan = await planFollow(tx, timelineId, marcherIds);
+    if (plan.kind === "redraw") {
+        await editTrailPointsInTransaction({
+            tx,
+            routeId: plan.routeId,
+            points,
+        });
+        return {
+            routeId: plan.routeId,
+            transitionId: plan.transitionId,
+            marcherIds: plan.line,
+            leaderId: plan.line.at(-1)!,
+            redrawn: true,
+        };
+    }
+    const { chosen, starts, ends } = plan;
     const order = followOrder(starts, ends);
     const leader = order[order.length - 1]!;
     const geometry = trailGeometry(points, null, {

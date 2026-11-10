@@ -12,10 +12,12 @@ import { meanOf, readGroupPaths } from "@/db-functions/timelineGroupRoutes";
 import { laneOn } from "@/db-functions/timelineLanes";
 import {
     followOrder,
+    followTrailRefusal,
     readTrails,
     type MoveTrail,
 } from "@/db-functions/timelineTrails";
 import type { XY } from "@/shapes/types";
+import type { TimelineText } from "@/timeline/timelineText";
 
 /**
  * Who a path is drawn for and between which spots (pathways step 1, spec v0.9 R-14): one marcher's
@@ -327,9 +329,17 @@ function targetOfTrail(
     entrance: XY | null,
 ): PathTarget | null {
     const entry = resolver.ftlEntry(trail.transitionId);
-    if (entry.members.length === 0) return null;
+    // With nobody founding the move (each taken over at its start) the trail still shows, by
+    // its line's slots, so it can be reversed or removed
+    const line =
+        entry.members.length > 0
+            ? entry.members
+            : trail.reverse
+              ? [...trail.marcherIds].reverse()
+              : [...trail.marcherIds];
+    if (line.length === 0) return null;
     const ends = new Map(entry.targets);
-    const members = entry.members.map((m) => ({
+    const members = line.map((m) => ({
         marcherId: m,
         drill: drills.get(m) ?? `${m}`,
         from: xy(resolver.explain(m, trail.start).origin),
@@ -418,6 +428,9 @@ export async function findTrailRouteTarget(
     );
 }
 
+/** Follow refused for the chosen marchers (AP-T1), said before drawing starts */
+export type FollowRefused = { kind: "refused"; reason: TimelineText };
+
 /**
  * What Follow draws a trail for (AP-T1): `marcherIds` (two or more) in their one move at `beat`,
  * in the order Follow will give them (`followOrder`), from the leader's start to the tail's end
@@ -429,10 +442,15 @@ export async function findTrailDrawTarget(
     marcherIds: readonly number[],
     drills: ReadonlyMap<number, string>,
     beat: number,
-): Promise<PathTarget | GroupMove> {
+): Promise<PathTarget | GroupMove | FollowRefused> {
     const move = await groupMoveAt(db, marcherIds, beat);
     if (move.kind !== "move") return move;
     const ids = [...new Set(marcherIds)].sort((a, b) => a - b);
+    // Asked before drawing starts, so a trail that can't be kept is never drawn
+    const refusal = await db.transaction((tx) =>
+        followTrailRefusal(tx, move.timelineId, ids),
+    );
+    if (refusal) return { kind: "refused", reason: refusal };
     const existing = (await readTrails(db, move.timelineId)).find(
         (t) =>
             t.marcherIds.length === ids.length &&

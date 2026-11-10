@@ -7,11 +7,12 @@ import {
     type XY,
 } from "@openmarch/core";
 import { refusalText } from "@/test/refusalText";
+import { translateTimelineText } from "@/timeline/translateTimelineText";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
 import { convertPagesToTimeline } from "@/test/convertPages";
 import { readTimelineTables } from "@/timeline/timelineRows";
-import { performRedo, performUndo } from "../history";
+import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { TimelineWriteError } from "../timelineErrors";
 import { splitTimelineAtBeat } from "../timelineSplitAtBeat";
 import { mergeMoves, splitMarchersIntoNewMove } from "../timelineSplitMoves";
@@ -20,10 +21,15 @@ import { removeMarchersFromTimeline } from "../timelineMembership";
 import { resizeTimeline } from "../timelineResize";
 import { drawRoute } from "../timelineRoutes";
 import { drawGroupRoute } from "../timelineGroupRoutes";
+import { createTimelinesInTransaction } from "../timelines";
+import { createTimelineTransitionsInTransaction } from "../timelineTransitionsInTransaction";
+import { createTimelineAssignmentsInTransaction } from "../timelineAssignments";
+import { findTrailRouteTarget } from "@/pathways/pathTarget";
 import {
     editTrailPoints,
     followOrder,
     followTrail,
+    followTrailRefusal,
     lineOrder,
     readTrails,
     removeTrail,
@@ -119,6 +125,52 @@ const versionOf = async (db: DbConnection) =>
             .from(sql`pragma_user_version`)
             .get()
     )?.version;
+
+/** Marcher `marcherId` taken over by a one-marcher move over `[start, end)`, on layer 1. */
+const overlay = (
+    db: DbConnection,
+    marcherId: number,
+    start: number,
+    end: number,
+    point: XY,
+) =>
+    transactionWithHistory(db, "overlay", async (tx) => {
+        const [t] = await createTimelinesInTransaction({
+            tx,
+            newTimelines: [{ startBeat: start, endBeat: end }],
+            allowSharedRanges: true,
+        });
+        const [made] = await createTimelineTransitionsInTransaction({
+            tx,
+            newTransitions: [
+                {
+                    timelineId: t!.id,
+                    slotCount: 1,
+                    destination: { kind: "individual", points: [point] },
+                },
+            ],
+        });
+        await createTimelineAssignmentsInTransaction({
+            tx,
+            newAssignments: [
+                {
+                    marcherId,
+                    transitionId: made!.id,
+                    slotIndex: 0,
+                    startBeat: start,
+                    endBeat: end,
+                    layer: 1,
+                },
+            ],
+        });
+        return t!;
+    });
+
+/** Where `id` is on a straight walk from `from` to `to` at `share` of the way */
+const along = (from: XY, to: XY, share: number): XY => [
+    from[0] + (to[0] - from[0]) * share,
+    from[1] + (to[1] - from[1]) * share,
+];
 
 /** The first four marchers follow a trail with a smooth point and a corner over page 2. */
 async function follow(db: DbConnection) {
@@ -423,7 +475,7 @@ describeDbTests("Follow a drawn trail (AP-T1 to AP-T6)", (it) => {
         ).catch(() => undefined);
     });
 
-    it("refusals write nothing: too few, part of a line, a marcher with a path, split, split by marchers, merge, Straight and Arc, a drawn path on a member (QA-AP-T5)", async ({
+    it("refusals write nothing: too few, part of a line, a marcher with a path, split at a count, Straight and Arc, a drawn path on a member (QA-AP-T5)", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -467,37 +519,7 @@ describeDbTests("Follow a drawn trail (AP-T1 to AP-T6)", (it) => {
         await expectRefused(
             db,
             () => splitTimelineAtBeat({ db, timelineId: tl, beat: 13 }),
-            /follows a drawn trail, which can't be split yet/,
-        );
-        await expectRefused(
-            db,
-            () =>
-                splitMarchersIntoNewMove({
-                    db,
-                    timelineId: tl,
-                    marcherIds: [a!],
-                }),
-            /follow|trail/,
-        );
-        await expectRefused(
-            db,
-            () =>
-                splitMarchersIntoNewMove({
-                    db,
-                    timelineId: tl,
-                    marcherIds: [...f.ids],
-                }),
-            /follows a drawn trail, which this edit can't keep yet/,
-        );
-        const page3 = (await db
-            .select()
-            .from(schema.timelines)
-            .where(eq(schema.timelines.start_beat, 17))
-            .get())!;
-        await expectRefused(
-            db,
-            () => mergeMoves({ db, sourceId: page3.id, targetId: tl }),
-            /follows a drawn trail, which this edit can't keep yet/,
+            /can't be split at a count while a line follows a trail/,
         );
         await expectRefused(
             db,
@@ -634,5 +656,177 @@ describeDbTests("Follow a drawn trail (AP-T1 to AP-T6)", (it) => {
         expect(await violations(db)).toEqual([]);
         expect((await performUndo(db)).success).toBe(true);
         expect(await readTrails(db)).toHaveLength(1);
+    });
+
+    it("split by marchers: those split off leave the trail with a gap and walk straight to their own end spots; the others keep their order and end spots; one undo step (QA-AP-T5, QA-AP-T6)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const f = await follow(db);
+        const line = f.result.marcherIds;
+        for (const leaving of [[line[1]!], [line[0]!, line.at(-1)!]]) {
+            const before = await dataOf(db);
+            const split = await splitMarchersIntoNewMove({
+                db,
+                timelineId: f.timeline.id,
+                marcherIds: leaving,
+            });
+            expect(split.marcherIds).toEqual(
+                [...leaving].sort((a, b) => a - b),
+            );
+            const r = await resolverOf(db);
+            const stay = line.filter((m) => !leaving.includes(m));
+            // The line keeps its order and its slots: a gap, not compacted
+            expect(r.ftlEntry(f.result.transitionId).members).toEqual(stay);
+            const transition = (await db
+                .select()
+                .from(schema.timeline_transitions)
+                .where(
+                    eq(schema.timeline_transitions.id, f.result.transitionId),
+                )
+                .get())!;
+            expect(transition.slot_count).toBe(4);
+            expect(transition.route_id).toBe(f.result.routeId);
+            for (const m of stay)
+                expect(r.positionAt(m, 17)).toEqual(f.ends[f.ids.indexOf(m)]);
+            // Each one split off walks straight from its start to its own end spot
+            for (const m of leaving) {
+                const i = f.ids.indexOf(m);
+                expect(r.positionAt(m, 17)).toEqual(f.ends[i]);
+                for (const share of [0.25, 0.5, 0.75]) {
+                    const at = r.positionAt(m, 9 + 8 * share) as XY;
+                    expect(
+                        dist(at, along(f.starts[i]!, f.ends[i]!, share)),
+                    ).toBeLessThan(1e-9);
+                }
+                const row = (await db
+                    .select({ t: schema.timeline_transitions })
+                    .from(schema.timeline_assignments)
+                    .innerJoin(
+                        schema.timeline_transitions,
+                        eq(
+                            schema.timeline_transitions.id,
+                            schema.timeline_assignments.transition_id,
+                        ),
+                    )
+                    .where(eq(schema.timeline_assignments.marcher_id, m))
+                    .all()
+                    .then((rows) =>
+                        rows.find((x) => x.t.timeline_id === split.timeline.id),
+                    ))!;
+                expect(row.t.path_style).toBe("direct");
+                expect(row.t.route_id).toBeNull();
+            }
+            // Nobody outside the line moves at any count
+            expect(walk(r, f.others)).toEqual(f.othersBefore);
+            expect(await violations(db)).toEqual([]);
+            await expectOneUndoStep(db, before);
+            expect((await performUndo(db)).success).toBe(true);
+            expect(await dataOf(db)).toEqual(before);
+        }
+    });
+
+    it("split the whole line off: its transition moves whole, trail and all, so nobody moves; merged back into its old move it is unchanged too (QA-AP-T5)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const f = await follow(db);
+        const everyone = [...f.ids, ...f.others];
+        const followed = walk(await resolverOf(db), everyone);
+        const before = await dataOf(db);
+        const split = await splitMarchersIntoNewMove({
+            db,
+            timelineId: f.timeline.id,
+            marcherIds: f.ids,
+        });
+        expect(walk(await resolverOf(db), everyone)).toEqual(followed);
+        const trails = await readTrails(db);
+        expect(trails).toHaveLength(1);
+        expect(trails[0]!.timelineId).toBe(split.timeline.id);
+        expect(trails[0]!.transitionId).toBe(f.result.transitionId);
+        expect(trails[0]!.routeId).toBe(f.result.routeId);
+        await expectOneUndoStep(db, before);
+
+        // Into their old move: the trail comes back whole with its transition
+        const splitData = await dataOf(db);
+        await mergeMoves({
+            db,
+            sourceId: split.timeline.id,
+            targetId: f.timeline.id,
+        });
+        expect(walk(await resolverOf(db), everyone)).toEqual(followed);
+        expect((await readTrails(db))[0]!.timelineId).toBe(f.timeline.id);
+        expect(await violations(db)).toEqual([]);
+        await expectOneUndoStep(db, splitData);
+    });
+
+    it("Follow says why it would refuse before anything is drawn, and draws the trail again when a member is taken over at the move's start (review)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const f = await follow(db);
+        const tl = f.timeline.id;
+        const ask = (ids: readonly number[]) =>
+            db.transaction((tx) => followTrailRefusal(tx, tl, ids));
+        expect(await ask(f.ids)).toBeNull();
+        const said = async (ids: readonly number[]) => {
+            const why = await ask(ids);
+            return why ? translateTimelineText(why) : null;
+        };
+        expect(await said([f.others[0]!])).toMatch(/two or more marchers/);
+        expect(await said([f.result.marcherIds[0]!, f.others[0]!])).toMatch(
+            /already follows a trail/,
+        );
+
+        // The middle of the line taken over at the start: a joiner, not a founder
+        const joiner = f.result.marcherIds[1]!;
+        await overlay(db, joiner, 9, 10, [7, 7]);
+        const founders = f.result.marcherIds.filter((m) => m !== joiner);
+        expect(
+            (await resolverOf(db)).ftlEntry(f.result.transitionId).members,
+        ).toEqual(founders);
+        for (const ids of [founders, f.result.marcherIds]) {
+            expect(await ask(ids)).toBeNull();
+            const again = await followTrail({
+                db,
+                timelineId: tl,
+                marcherIds: ids,
+                points: [{ at: [30, 30] }],
+            });
+            expect(again.redrawn).toBe(true);
+            expect(again.routeId).toBe(f.result.routeId);
+            expect(
+                (await routeOf(db, f.result.routeId)).points.map((p) => p.at),
+            ).toEqual([[30, 30]]);
+        }
+        expect(await violations(db)).toEqual([]);
+    });
+
+    it("a trail nobody founds (each taken over at the start) can still be shown, reversed and removed (review)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const f = await follow(db);
+        for (const m of f.result.marcherIds)
+            await overlay(db, m, 9, 10, [7, 7]);
+        const r = await resolverOf(db);
+        expect(r.ftlEntry(f.result.transitionId).members).toEqual([]);
+        const target = await findTrailRouteTarget(
+            db,
+            r,
+            f.result.routeId,
+            new Map(),
+        );
+        expect(target).not.toBeNull();
+        expect(target!.trail!.members.map((m) => m.marcherId)).toEqual(
+            f.result.marcherIds,
+        );
+        const before = await dataOf(db);
+        await reverseTrail({ db, routeId: f.result.routeId });
+        expect((await readTrails(db))[0]!.reverse).toBe(true);
+        await expectOneUndoStep(db, before);
+        await removeTrail({ db, routeId: f.result.routeId });
+        expect(await readTrails(db)).toEqual([]);
+        expect(await violations(db)).toEqual([]);
     });
 });
