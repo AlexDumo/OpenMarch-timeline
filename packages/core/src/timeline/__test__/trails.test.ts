@@ -20,6 +20,13 @@ import type {
 } from "../types";
 import { validatePathParams } from "../validate";
 import { mulberry32 } from "./showGenerators";
+// @ts-expect-error: the spec's reference implementation is plain JavaScript
+import { makeOracle } from "../../../../../docs/timeline/ref/oracle.mjs";
+
+/** The spec's own reference oracle (`docs/timeline/ref`), written apart from this package */
+const refOracle = makeOracle as (db: TimelineSnapshot) => {
+    positionAt(m: number, b: number): XY;
+};
 
 const clone = <T>(x: T): T => structuredClone(x);
 const near = (a: XY, b: XY, eps = 1e-9) =>
@@ -529,6 +536,114 @@ describe("follow a drawn trail (spec R-9′, pathways step 4)", () => {
             }
         }
     }, 30_000);
+
+    it("QA-TR-14: random trails: the resolver agrees with the spec's own reference oracle in ref/, written apart from this package (review)", () => {
+        for (let seed = 1; seed <= 40; seed++) {
+            const R = mulberry32(1000 + seed);
+            const n = 1 + Math.floor(R() * 4);
+            const points: RoutePoint[] = Array.from({ length: n }, (_, i) => ({
+                id: `p${i}`,
+                at: [Math.round(R() * 40) - 10, Math.round(R() * 40) - 10],
+                ...(R() < 0.5 ? { tension: 0.25 + R() * 1.75 } : {}),
+            }));
+            const db = trailShow(points, {
+                params:
+                    R() < 0.5
+                        ? { waypoints: [], reverse: true }
+                        : { waypoints: [] },
+            });
+            const shape = R();
+            if (shape < 0.4) {
+                const t = db.transitions[1]!;
+                t.dest = null;
+                t.points = [
+                    [20, 10],
+                    [22, 13],
+                    [20, 22],
+                ];
+            } else if (shape < 0.7) {
+                // a vacant slot, into the shape
+                db.transitions[1]!.slots = 4;
+            }
+            // Sometimes a gap in the line, or a join partway
+            const gap = R();
+            if (gap < 0.25)
+                db.assignments = db.assignments.filter((r) => r.marcher !== 2);
+            else if (gap < 0.5)
+                db.assignments[1] = { ...db.assignments[1]!, start: 6 };
+            const res = createCachedResolver(clone(db));
+            const ref = refOracle(clone(db));
+            for (const m of [1, 2, 3])
+                for (let b = 0; b <= 16; b += 1 / 8) {
+                    const x = res.positionAt(m, b);
+                    const y = ref.positionAt(m, b);
+                    expect(
+                        near(x, y, 1e-9),
+                        `seed ${seed}: M${m}@${b} resolver ${x} ref ${y}`,
+                    ).toBe(true);
+                }
+        }
+    }, 30_000);
+
+    it("QA-TR-15: Reverse into a shape with a vacant slot, worked by hand (R-12′)", () => {
+        // QA-TR-1's line, trail and end line, with four slots for three marchers: the samples are
+        // (20,10), (20,14), (20,18) and (20,22). Reversed, M1 leads from (0,0); the line-up runs
+        // (8,0), (4,0), (0,0), so startDist is 0, 4, 8 for M3, M2, M1; the drawn part is 14 + 10
+        // + √180 to the far end (20,22), the entrance, so destOffset = 32 + √180. Member q of
+        // m = 3 takes sample 2 − q, entered from the far end: M3 sample 2 (4 in), M2 sample 1
+        // (8 in), M1 sample 0 (12 in). The entrance's own spot, sample 3, is left vacant.
+        const db = trailShow(TWO_CORNERS, {
+            slots: 4,
+            params: { waypoints: [], reverse: true },
+        });
+        const r180 = Math.sqrt(180);
+        const destOffset = 32 + r180;
+        for (const [name, r] of [
+            ...both(db),
+            ["ref", refOracle(clone(db))] as const,
+        ]) {
+            if ("ftlEntry" in r) {
+                const e = r.ftlEntry(1);
+                expect(e.members, name).toEqual([3, 2, 1]);
+                expect(e.startDist, name).toEqual([0, 4, 8]);
+                e.endDist.forEach((d, q) =>
+                    expect(
+                        Math.abs(d - (destOffset + [4, 8, 12][q]!)),
+                        name,
+                    ).toBeLessThan(1e-9),
+                );
+            }
+            const ends: XY[] = [
+                [20, 10],
+                [20, 14],
+                [20, 18],
+            ];
+            ends.forEach((xy, i) =>
+                expect(near(r.positionAt(i + 1, 16), xy), name).toBe(true),
+            );
+            // Nobody ends on the vacant entrance spot
+            for (const m of [1, 2, 3])
+                expect(near(r.positionAt(m, 16), [20, 22]), name).toBe(false);
+            // M1 halfway: d = 8 + (destOffset + 12 − 8) / 2, on the drawn part's last leg,
+            // (14,10) to (20,22), u past its start
+            const d = 8 + (destOffset + 4) / 2;
+            const u = d - 8 - 24;
+            expect(
+                near(r.positionAt(1, 8), [
+                    14 + (6 * u) / r180,
+                    10 + (12 * u) / r180,
+                ]),
+                `${name}: ${r.positionAt(1, 8)}`,
+            ).toBe(true);
+            // M3, the tail, at a quarter: d = (destOffset + 4) / 4, past the line-up (8) on the
+            // first corner's leg from (0,0)
+            const d3 = (destOffset + 4) / 4;
+            expect(
+                near(r.positionAt(3, 4), [d3 - 8, 0]),
+                `${name}: ${r.positionAt(3, 4)}`,
+            ).toBe(true);
+        }
+    });
 
     const SPOTS: XY[] = [
         [20, 10],
