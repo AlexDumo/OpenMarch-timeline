@@ -1,12 +1,14 @@
+// cspell:ignore tonemap
 /**
  * An environment map for reflective surfaces (docs/3d/instruments.md §4,
- * fidelity.md "sky-baked environment lighting"): the lighting preset's sky
- * gradient over a turf-colored ground, with what makes polished metal read
- * as metal: something dark to reflect (the stands round the horizon),
- * something far brighter than the sky (the sun, the light towers, a gym's
- * ceiling panels), and soft bright shapes between (clouds). Rendered to a
- * PMREM. Brass, silver and anything glossy reflects it. The scene builder is pure three and
- * testable; `createEnvironmentMap` needs a renderer.
+ * fidelity.md "sky-baked environment lighting"): the lighting preset's
+ * procedural sky over its ground (turf outdoors, a room's floor indoors),
+ * with what makes polished metal read as metal: something dark to reflect
+ * (the stands round the horizon), something far brighter than the sky (the
+ * sun, the light towers, a gym's ceiling panels), and soft bright shapes
+ * between (clouds). Rendered to a PMREM. Brass, silver and anything glossy
+ * reflects it. The scene builder is pure three and testable;
+ * `createEnvironmentMap` needs a renderer.
  */
 import {
     BackSide,
@@ -26,23 +28,28 @@ import {
 } from "three";
 import type { LightingPreset } from "../types";
 import { lightingValues } from "./lighting";
+import {
+    applySkyPreset,
+    createSkyUniforms,
+    SKY_VERTEX,
+    skyFragmentShader,
+} from "./skyShader";
 
-/** Turf as the ground sees it from the field: a mid green. */
-const GROUND = 0x3f6b2e;
-
-/** The sky gradient shader, as `sky.ts` draws it, on a small sphere. */
-function skyMaterial(top: number, bottom: number): ShaderMaterial {
+/** The procedural sky (`skyShader.ts`), untouched by tone mapping, on a small sphere. */
+function skyMaterial(preset: LightingPreset): ShaderMaterial {
+    const uniforms = createSkyUniforms();
+    applySkyPreset(uniforms, preset);
     return new ShaderMaterial({
         side: BackSide,
         depthWrite: false,
-        uniforms: {
-            top: { value: new Color(top) },
-            bottom: { value: new Color(bottom) },
-        },
-        vertexShader:
-            "varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-        fragmentShader:
-            "uniform vec3 top; uniform vec3 bottom; varying vec3 vP; void main(){ float h = clamp(vP.y * 1.5 + 0.06, 0.0, 1.0); gl_FragColor = vec4(mix(bottom, top, pow(h, 0.65)), 1.0); }",
+        uniforms,
+        vertexShader: SKY_VERTEX,
+        fragmentShader: skyFragmentShader({
+            octaves: 3,
+            cloudLighting: false,
+            tonemap: false,
+            landBand: false,
+        }),
     });
 }
 
@@ -60,15 +67,14 @@ const glow = (color: number, scale: number) =>
 export function environmentScene(preset: LightingPreset): Scene {
     const v = lightingValues(preset);
     const scene = new Scene();
-    const sky = new Mesh(
-        new SphereGeometry(50, 32, 16),
-        skyMaterial(v.skyTop, v.skyBottom),
-    );
+    const sky = new Mesh(new SphereGeometry(50, 32, 16), skyMaterial(preset));
     sky.name = "env-sky";
     const ground = new Mesh(
         new CircleGeometry(60, 32),
         new MeshBasicMaterial({
-            color: new Color(GROUND).multiplyScalar(v.hemisphere.intensity),
+            color: new Color(v.envGround).multiplyScalar(
+                v.hemisphere.intensity,
+            ),
         }),
     );
     ground.name = "env-ground";
@@ -90,7 +96,8 @@ export function environmentScene(preset: LightingPreset): Scene {
     stands.position.y = -1.6 + 3.5;
     scene.add(stands);
 
-    if (v.sun.intensity > 0) {
+    const moonlit = v.sky.moon > 0; // at night the sun slot holds the moon
+    if (v.sun.intensity > 0 && !moonlit) {
         // the sun: small and many times brighter than the sky
         const sun = new Mesh(
             new SphereGeometry(2.2, 16, 8),
@@ -144,7 +151,7 @@ export function environmentScene(preset: LightingPreset): Scene {
         v.kit.showSpotIntensity * 3;
     if (
         overhead > 0 &&
-        (!v.skyVisible || !v.kit.roofOpen || v.sun.intensity === 0)
+        (!v.skyVisible || !v.kit.roofOpen || v.sun.intensity === 0 || moonlit)
     ) {
         // a hall's ceiling panels, a dome's light bars, a show's spots
         for (const x of [-12, 0, 12])
