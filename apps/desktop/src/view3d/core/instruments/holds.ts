@@ -21,6 +21,7 @@ export type HoldFamily =
     | "brass"
     | "trombone"
     | "contra"
+    | "sousaphone"
     | "flute"
     | "piccolo"
     | "clarinet"
@@ -122,23 +123,28 @@ const BRASS: Record<HoldState, Hold> = {
     },
 };
 
-/** Trombone: right hand on the slide brace, left at the bell brace; only `up` differs. */
+/**
+ * Trombone: right hand on the moving slide brace, left at the bell brace;
+ * only `up` differs. The mouthpiece tube is the slide's right-hand one and
+ * its rim sits 0.135 m behind the brace, so the brace is held left of
+ * center and close in for the rim to meet the lips.
+ */
 const TROMBONE: Record<HoldState, Hold> = {
     up: {
         family: "trombone",
         state: "up",
         right: {
-            elbow: [-0.21, 1.448, 0.192],
-            wrist: [-0.04, 1.56, 0.36],
+            elbow: [-0.238, 1.429, 0.195],
+            wrist: [-0.01, 1.555, 0.235],
             fingers: unit([0.3, 0.1, 0.2]),
         },
         left: {
-            elbow: [0.289, 1.441, 0.166],
-            wrist: [0.06, 1.56, 0.22],
+            elbow: [0.347, 1.401, 0.126],
+            wrist: [0.13, 1.55, 0.15],
             fingers: unit([-0.3, 0.2, 0.1]),
         },
         instrument: {
-            origin: [-0.02, 1.56, 0.38],
+            origin: [0.043, 1.56, 0.265],
             bellAxis: [0, 0, 1],
             capsAxis: [0, 1, 0],
         },
@@ -180,6 +186,38 @@ const CONTRA: Record<HoldState, Hold> = {
 };
 
 /**
+ * Sousaphone: the hoop hangs like a sash from the left shoulder to the right
+ * hip, the bell over the head on a neck behind the left shoulder. The
+ * valves sit inside the hoop's lower front, caps toward the right hand; the
+ * left hand holds the body tube where it comes down the front. One hold for
+ * every state, like the contra: it is worn, not lowered.
+ */
+const SOUSAPHONE_UP: Hold = {
+    family: "sousaphone",
+    state: "up",
+    right: {
+        elbow: [-0.293, 1.234, 0.061],
+        wrist: [-0.17, 1.19, 0.29],
+        fingers: unit([0.9, 0.4, 0.16]),
+    },
+    left: {
+        elbow: [0.303, 1.244, 0.069],
+        wrist: [0.235, 1.294, 0.319],
+        fingers: unit([-0.6, 0.55, 0.55]),
+    },
+    instrument: {
+        origin: [-0.0733, 1.2128, 0.3069],
+        bellAxis: [0, 0, 1],
+        capsAxis: [0, 1, 0],
+    },
+};
+const SOUSAPHONE: Record<HoldState, Hold> = {
+    up: SOUSAPHONE_UP,
+    carry: { ...SOUSAPHONE_UP, state: "carry" },
+    trail: { ...SOUSAPHONE_UP, state: "trail" },
+};
+
+/**
  * Woodwinds at trail (owner, 2026-10-09): the brass trail's arms. The right
  * arm hangs straight down the side with the instrument in its fist, 0.07 m
  * down the fingers from the wrist at (−0.27, 0.88, 0.03); the left arm hangs
@@ -209,21 +247,22 @@ const FLUTE: Record<HoldState, Hold> = {
     up: {
         family: "flute",
         state: "up",
-        // horizontal to the right, lips at the head joint, keys toward the front
+        // horizontal to the right, the lip plate under the lower lip, keys and
+        // embouchure hole up (they are in line on a flute), tipped a little back
         right: {
             elbow: [-0.297, 1.225, 0.003],
-            wrist: [-0.4, 1.38, 0.19],
+            wrist: [-0.4, 1.332, 0.212],
             fingers: unit([0.05, 0.9, 0.42]),
         },
         left: {
             elbow: [0.067, 1.352, 0.157],
-            wrist: [-0.19, 1.41, 0.15],
+            wrist: [-0.19, 1.362, 0.172],
             fingers: unit([-0.1, 0.9, 0.42]),
         },
         instrument: {
-            origin: [0, 1.56, 0.12],
+            origin: [0, 1.512, 0.142],
             bellAxis: [-0.968, -0.151, 0.202],
-            capsAxis: [0.2, 0.031, 0.979],
+            capsAxis: [0, 1, -0.25],
         },
     },
     carry: {
@@ -273,18 +312,18 @@ const PICCOLO: Record<HoldState, Hold> = {
         // the flute's line, hands close together
         right: {
             elbow: [-0.275, 1.214, -0.027],
-            wrist: [-0.23, 1.4, 0.155],
+            wrist: [-0.23, 1.352, 0.177],
             fingers: unit([0.05, 0.9, 0.42]),
         },
         left: {
             elbow: [0.133, 1.332, 0.183],
-            wrist: [-0.11, 1.42, 0.13],
+            wrist: [-0.11, 1.372, 0.152],
             fingers: unit([-0.1, 0.9, 0.42]),
         },
         instrument: {
-            origin: [0, 1.56, 0.12],
+            origin: [0, 1.512, 0.142],
             bellAxis: [-0.968, -0.151, 0.202],
-            capsAxis: [0.2, 0.031, 0.979],
+            capsAxis: [0, 1, -0.25],
         },
     },
     carry: {
@@ -388,28 +427,27 @@ const CLARINET: Record<HoldState, Hold> = {
 
 /**
  * Saxes hang from the neck strap in front of the body: the neck brings the
- * body out in front of the mouth, the body runs straight down to the bow
- * at the stomach, the keys face forward and the bell sits on the player's
- * left of the body tube, its flare opening forward and up. The hands wrap
- * the body from the sides, fingers across the front: left hand on the
- * upper stack, right hand on the lower, elbows out.
+ * body out in front of the mouth and the body runs straight down to the bow
+ * at the stomach, parallel to the performer. The model turns its body
+ * under the neck as a sax is played (`SAX_BODY_TURN` in saxophones.ts): the
+ * bell stands in front of the body tube, a little to the player's left,
+ * opening forward and up, and the pearls face the player's front-right.
+ * The hands wrap the body from the sides, fingers across the front: left
+ * hand on the upper stack, right hand on the lower, elbows out.
  *
- * Carry (owner, 2026-10-09): vertical just in front of the body, turned a
- * quarter about the vertical from the playing hold. The model keeps its
- * bell on its +X = +Y × +Z, so with +Z down the keys (+Y) face the
- * performer's right and the bell comes out in front of the body tube; the
- * other quarter turn would push it into the chest. The mouthpiece sits at
- * eye level, 0.11 m left of center so the body tube (that far toward the
- * keys from it) hangs on the center line, 0.21 m out. The hands stay where
- * they play, left on the upper stack from the left side, right on the lower
- * stack from the right, fingers in across the tube.
+ * Carry (owner, 2026-10-09; turned 2026-11-09 with the model): vertical
+ * just in front of the body exactly as it is played, raised so the
+ * mouthpiece sits at eye level: the body tube on the center line 0.24 m
+ * out, the bell in front of it. The hands stay where they play, left on
+ * the upper stack from the left side, right on the lower stack from the
+ * right, fingers in across the tube.
  *
  * Trail: level at the right side, front to back like the brass trail, the
  * fist round the body tube 0.37 m along with the mouthpiece in front. The
- * mouthpiece sits 0.11 m in from the fist, so the alto's and bari's body
- * tubes run through it; the tenor's longer neck puts its tube 0.07 m out. The
- * keys face out, so the bow and bell hang below the tube (+X down), the
- * flare leaning out, away from the leg.
+ * alto's and bari's body tubes run through the fist; the tenor's longer
+ * neck puts its tube 0.07 m out. The frame is turned about the body tube by
+ * the model's body turn, so the bow and bell hang below the tube and the
+ * keys face out and down, away from the leg.
  */
 const SAX: Record<HoldState, Hold> = {
     up: {
@@ -435,7 +473,7 @@ const SAX: Record<HoldState, Hold> = {
     carry: {
         family: "sax",
         state: "carry",
-        // vertical, keys to the right, bell in front; mouthpiece at eye level
+        // vertical as it is played, bell in front; mouthpiece at eye level
         right: {
             elbow: [-0.309, 1.243, 0.049],
             wrist: [-0.15, 1.12, 0.22],
@@ -447,9 +485,9 @@ const SAX: Record<HoldState, Hold> = {
             fingers: unit([-0.963, 0.168, 0.209]),
         },
         instrument: {
-            origin: [0.11, 1.62, 0.21],
+            origin: [0, 1.62, 0.13],
             bellAxis: [0, -1, 0],
-            capsAxis: [-1, 0, 0],
+            capsAxis: [0, 0, 1],
         },
     },
     trail: {
@@ -459,9 +497,9 @@ const SAX: Record<HoldState, Hold> = {
         right: TRAIL_RIGHT,
         left: TRAIL_LEFT,
         instrument: {
-            origin: [-0.16, 0.88, 0.4],
+            origin: [-0.222, 0.978, 0.4],
             bellAxis: [0, 0, -1],
-            capsAxis: [-1, 0, 0],
+            capsAxis: [-0.423, -0.906, 0],
         },
     },
 };
@@ -1006,6 +1044,7 @@ const TABLE: Record<HoldFamily, Record<HoldState, Hold>> = {
     brass: BRASS,
     trombone: TROMBONE,
     contra: CONTRA,
+    sousaphone: SOUSAPHONE,
     flute: FLUTE,
     piccolo: PICCOLO,
     clarinet: CLARINET,

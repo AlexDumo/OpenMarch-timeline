@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { carryForSection } from "../catalog";
+import { carryForSection, finishFor, isTuba, tubaCarry } from "../catalog";
 
 describe("section to instrument", () => {
     it("maps the brass sections", () => {
@@ -102,5 +102,40 @@ describe("section to instrument", () => {
     it("carries nothing for every other section", () => {
         for (const s of ["Marimba", "Drum Major", "", "Cornet", "Other"])
             expect(carryForSection(s)).toBeNull();
+    });
+});
+
+describe("the show's choices for its winds", () => {
+    it("gives the tubas, and only the tubas, the chosen horn", () => {
+        expect(isTuba("Tuba")).toBe(true);
+        expect(isTuba(" tuba ")).toBe(true);
+        expect(isTuba("Euphonium")).toBe(false);
+        expect(isTuba("Unknown")).toBe(false);
+        expect(tubaCarry("contra")).toEqual({
+            model: "contra",
+            family: "contra",
+        });
+        expect(tubaCarry("sousaphone")).toEqual({
+            model: "sousaphone",
+            family: "sousaphone",
+        });
+    });
+
+    it("plates the brass line and leaves the woodwinds as they are made", () => {
+        for (const section of ["Trumpet", "Mellophone", "Trombone", "Tuba"]) {
+            expect(finishFor(carryForSection(section), "silver")).toBe(
+                "silver",
+            );
+            expect(finishFor(carryForSection(section), "brass")).toBe("brass");
+        }
+        expect(finishFor(tubaCarry("sousaphone"), "silver")).toBe("silver");
+        // flutes and piccolos are silver, saxophones lacquer, whatever the brass wear
+        for (const brass of ["brass", "silver"] as const) {
+            expect(finishFor(carryForSection("Flute"), brass)).toBe("silver");
+            expect(finishFor(carryForSection("Piccolo"), brass)).toBe("silver");
+            expect(finishFor(carryForSection("Alto Sax"), brass)).toBe("brass");
+            expect(finishFor(carryForSection("Snare"), brass)).toBe("brass");
+        }
+        expect(finishFor(null, "silver")).toBe("brass");
     });
 });

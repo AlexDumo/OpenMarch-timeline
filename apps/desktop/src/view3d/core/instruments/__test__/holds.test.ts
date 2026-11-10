@@ -11,6 +11,7 @@ const FAMILIES: HoldFamily[] = [
     "brass",
     "trombone",
     "contra",
+    "sousaphone",
     "flute",
     "piccolo",
     "clarinet",
@@ -110,7 +111,7 @@ describe("holds", () => {
 });
 
 describe("woodwind and battery holds", () => {
-    it("flute: to the player's right at the lips, keys forward", () => {
+    it("flute: to the player's right at the lips, keys up", () => {
         const h = hold("flute", "up");
         expect(h.instrument.bellAxis[0]).toBeLessThan(-0.8); // the tube runs to the right
         expect(h.instrument.origin[1]).toBeGreaterThan(1.5);
@@ -189,10 +190,16 @@ describe("woodwind and battery holds", () => {
         },
     );
 
-    it("flute: the lip plate (−Y) faces back at the lips, level", () => {
-        const c = hold("flute", "up").instrument.capsAxis;
-        expect(c[2]).toBeGreaterThan(0.95);
-        expect(Math.abs(c[1])).toBeLessThan(0.1);
+    it("flute: the lip plate and the keys (+Y, in line) face up, tipped a little back to the lips", () => {
+        for (const family of ["flute", "piccolo"] as const) {
+            const { capsAxis: c, origin } = hold(family, "up").instrument;
+            const l = Math.hypot(...c);
+            expect(c[1] / l).toBeGreaterThan(0.9);
+            expect(c[2] / l).toBeLessThan(0);
+            // the tube sits just under the lower lip (lips at 1.52), not at the nose
+            expect(origin[1]).toBeLessThan(1.52);
+            expect(origin[1]).toBeGreaterThan(1.49);
+        }
     });
 
     it("clarinet: down the center line, angled out", () => {
@@ -367,23 +374,30 @@ describe("woodwind carry and trail", () => {
         },
     );
 
-    it.each(BENT)(
-        "%s carry: vertical, turned 90 degrees so the bell offset (+X) points forward",
-        (family) => {
-            const { origin, bellAxis, capsAxis } = hold(
-                family,
-                "carry",
-            ).instrument;
-            expect(bellAxis[1]).toBeLessThan(-0.99);
-            // the keys face the performer's right, a quarter turn from the playing hold's front
-            expect(capsAxis[0]).toBeLessThan(-0.99);
-            // X = Y × Z: the instrument's +X, where the sax keeps its bell, is the body's front
-            expect(cross(capsAxis, bellAxis)[2]).toBeGreaterThan(0.99);
-            // the mouthpiece about eye level
-            expect(Math.abs(origin[1] - EYE)).toBeLessThan(0.03);
-            expect(origin[2]).toBeGreaterThan(0.17);
-        },
-    );
+    it("bassClarinet carry: vertical, turned 90 degrees so the crook and bell sit at the right side", () => {
+        const { origin, bellAxis, capsAxis } = hold(
+            "bassClarinet",
+            "carry",
+        ).instrument;
+        expect(bellAxis[1]).toBeLessThan(-0.99);
+        // the keys face the performer's right, a quarter turn from the playing hold's front
+        expect(capsAxis[0]).toBeLessThan(-0.99);
+        expect(cross(capsAxis, bellAxis)[2]).toBeGreaterThan(0.99);
+        // the mouthpiece about eye level
+        expect(Math.abs(origin[1] - EYE)).toBeLessThan(0.03);
+        expect(origin[2]).toBeGreaterThan(0.17);
+    });
+
+    it("sax carry: vertical as it is played, the model's own body turn putting the bell in front", () => {
+        const { origin, bellAxis, capsAxis } = hold("sax", "carry").instrument;
+        expect(bellAxis[1]).toBeLessThan(-0.99);
+        // the neck runs straight back toward the face, as in the playing hold
+        expect(capsAxis[2]).toBeGreaterThan(0.99);
+        expect(Math.abs(origin[0])).toBeLessThan(0.01);
+        // the mouthpiece about eye level, clear of the face
+        expect(Math.abs(origin[1] - EYE)).toBeLessThan(0.03);
+        expect(origin[2]).toBeGreaterThan(0.12);
+    });
 
     it.each(BENT)(
         "%s carry: the hands stay where they play, left hand high, right hand low",

@@ -13,7 +13,8 @@ export type BrassModelId =
     | "euphonium"
     | "trombone"
     | "bassTrombone"
-    | "contra";
+    | "contra"
+    | "sousaphone";
 export type WoodwindModelId =
     | "piccolo"
     | "flute"

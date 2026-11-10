@@ -2891,7 +2891,9 @@
             "graphicsHint": "Not saved in the show, so it can differ on each computer.",
             "keysSection": "Keyboard and mouse",
             "uniforms": "Band uniform",
-            "guardUniforms": "Guard uniform"
+            "guardUniforms": "Guard uniform",
+            "brassFinish": "Brass finish",
+            "tuba": "Tubas"
         },
         "keys": {
             "playPause": "Play or pause",
@@ -2910,6 +2912,14 @@
         },
         "keyNames": {
             "pair": "<first></first> / <second></second>"
+        },
+        "brassFinish": {
+            "brass": "Lacquer",
+            "silver": "Silver"
+        },
+        "tuba": {
+            "contra": "Marching tuba",
+            "sousaphone": "Sousaphone"
         },
         "uniformPreset": {
             "fade": "Ultraviolet Fade",
