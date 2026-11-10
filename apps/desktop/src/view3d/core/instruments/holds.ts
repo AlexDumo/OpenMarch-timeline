@@ -261,7 +261,13 @@ function valvedUp(
     /** Where the left hand's middle goes and where its fingers point, in the instrument frame, when not on the casings. */
     leftHand?: { palm: Vec3; fingers: Vec3 },
     /** Where the right knuckles go from the middle button and where the fingers point, when not from the right side. */
-    rightHand?: { knuckles: Vec3; fingers: Vec3; out: Vec3 },
+    rightHand?: {
+        knuckles?: Vec3;
+        /** The palm's middle against the casings' right side, offset from its middle, in place of `knuckles`. */
+        palmOnCasing?: Vec3;
+        fingers: Vec3;
+        out: Vec3;
+    },
     /** The head's turn, when not just up. */
     head?: Hold["head"],
 ): Hold {
@@ -271,18 +277,31 @@ function valvedUp(
     const buttons = horn.valves.map((v) => v.button);
     // right: the knuckles just right of the buttons and a little below
     // their tops, the (stiff) fingers lying across them toward the left
-    const knuckles = add(
-        mean(buttons),
-        rightHand?.knuckles ?? [-0.02, -0.012, 0],
-    );
+    const casing = horn.valves[1];
+    const mid = mul(add(casing.top, casing.bottom), 0.5);
     const rightFingers = dirToBody(
         f,
         unit(rightHand?.fingers ?? [0.95, 0.12, 0.12]),
     );
-    const rightWrist = sub(toBody(f, knuckles), mul(rightFingers, KNUCKLES));
+    const rightWrist = rightHand?.palmOnCasing
+        ? sub(
+              toBody(
+                  f,
+                  add(
+                      mid,
+                      add([-(casing.r + 0.022), 0, 0], rightHand.palmOnCasing),
+                  ),
+              ),
+              mul(rightFingers, PALM),
+          )
+        : sub(
+              toBody(
+                  f,
+                  add(mean(buttons), rightHand?.knuckles ?? [-0.02, -0.012, 0]),
+              ),
+              mul(rightFingers, KNUCKLES),
+          );
     // left: palm on the casings' left side, halfway down; fingers round the front
-    const casing = horn.valves[1];
-    const mid = mul(add(casing.top, casing.bottom), 0.5);
     const palm = leftHand?.palm ?? add(mid, [casing.r + 0.022, -0.01, -0.005]);
     const leftFingers = dirToBody(
         f,
@@ -444,12 +463,12 @@ function contraHolds(): Record<HoldState, Hold> {
             fingers: [-0.35, 0.8, 0.35],
         },
         // the valves stand in front of the face at the forehead: the right
-        // hand comes across from the right, fingers across and down onto
-        // the pistons, the elbow up toward shoulder height (photos, 2026-11-10)
+        // palm lies against the casings' right side and the fingers go up
+        // onto the pistons (owner, 2026-11-10), the elbow out and raised
         {
-            knuckles: [-0.03, 0.025, 0],
-            fingers: [0.75, -0.5, 0.2],
-            out: [-1, 0.5, 0.4],
+            palmOnCasing: [0, 0, 0],
+            fingers: [0.2, 0.95, 0.15],
+            out: [-1, 0.3, 0.3],
         },
         CONTRA_HEAD,
     );
@@ -486,10 +505,26 @@ const SOUSAPHONE_UP: Hold = {
         capsAxis: [0, 1, 0],
     },
 };
+/**
+ * The sousaphone's left hand holds the mouthpiece in place at the lips
+ * (owner, 2026-11-10): the palm on the left of the leadpipe just past the
+ * mouthpiece, the fingers round it toward the right and forward.
+ */
+const SOUSAPHONE_LEFT_PALM: Vec3 = [0.035, 1.585, 0.15];
+const SOUSAPHONE_LEFT_FINGERS: Vec3 = unit([-0.75, 0.25, 0.6]);
+const SOUSAPHONE_PLAYING: Hold = {
+    ...SOUSAPHONE_UP,
+    left: armTo(
+        "left",
+        sub(SOUSAPHONE_LEFT_PALM, mul(SOUSAPHONE_LEFT_FINGERS, PALM)),
+        SOUSAPHONE_LEFT_FINGERS,
+        [1, -0.6, 0.3],
+    ),
+};
 const SOUSAPHONE: Record<HoldState, Hold> = {
-    up: SOUSAPHONE_UP,
-    carry: { ...SOUSAPHONE_UP, state: "carry" },
-    trail: { ...SOUSAPHONE_UP, state: "trail" },
+    up: SOUSAPHONE_PLAYING,
+    carry: { ...SOUSAPHONE_PLAYING, state: "carry" },
+    trail: { ...SOUSAPHONE_PLAYING, state: "trail" },
 };
 
 /**
