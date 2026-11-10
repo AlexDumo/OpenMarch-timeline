@@ -232,16 +232,25 @@ function atLips(
     head: Hold["head"] = HEAD_UP,
     /** Degrees the bell turns toward the performer's left (negative: right), about the vertical. */
     yawDeg = 0,
+    /** Degrees the horn rolls about its own axis, its left side down. */
+    rollDeg = 0,
 ): Hold["instrument"] {
     const lips = playingLips(head);
     const a = (yawDeg * Math.PI) / 180;
+    const r = (rollDeg * Math.PI) / 180;
     const turn = (v: Vec3): Vec3 => [
         v[0] * Math.cos(a) + v[2] * Math.sin(a),
         v[1],
         -v[0] * Math.sin(a) + v[2] * Math.cos(a),
     ];
+    // the caps rolled toward the left, then pitched up with the bell
+    const capsRolled: Vec3 = [
+        Math.sin(r),
+        Math.cos(r) * Math.cos(PITCH),
+        -Math.cos(r) * Math.sin(PITCH),
+    ];
     const bellAxis = yawDeg ? turn(BELL_UP) : BELL_UP;
-    const capsAxis = yawDeg ? turn(CAPS_UP) : CAPS_UP;
+    const capsAxis = turn(rollDeg ? capsRolled : CAPS_UP);
     const f = frameOf({ origin: [0, 0, 0], bellAxis, capsAxis });
     return {
         origin: round3(sub(lips, dirToBody(f, rim))),
@@ -440,14 +449,44 @@ const TROMBONE: Record<HoldState, Hold> = {
  * the rim at the lips, the right hand on the slide brace and the left on
  * the bell section's brace by the mouthpiece, where `TROMBONE.up` has them.
  */
-/** How far the trombone turns, bell toward the right, so its back clears the head. */
-const TROMBONE_YAW_DEG = 0;
+/**
+ * Trombones are rolled about their own axis, the mouthpiece's tube on top
+ * and the left side down, so the bell section runs beside the left cheek
+ * and jaw rather than over the face (photos of players, 2026-11-10).
+ */
+const TROMBONE_ROLL_DEG = 30;
+/** And turned 5 degrees, the bell a little right, so the tuning slide swings back past the left ear. */
+const TROMBONE_YAW_DEG = -5;
+/**
+ * The left hand under the mouthpiece (photos, 2026-11-10): the fingers
+ * round the slide brace, the index finger up toward the mouthpiece's
+ * shank, the forearm nearly vertical from an elbow low and close to the
+ * left front of the ribs.
+ */
+const TROMBONE_LEFT = {
+    wrist: [0.07, 1.47, 0.12] as Vec3,
+    palm: [0.04, 1.56, 0.15] as Vec3,
+    elbow: [0.17, 1.22, 0.06] as Vec3,
+};
 function tromboneUp(family: "trombone" | "bassTrombone"): Hold {
     const id = family === "trombone" ? "trombone" : "bassTrombone";
+    const h = reframed(
+        TROMBONE.up,
+        atLips(
+            brassHorn(id, "low").rim,
+            HEAD_UP,
+            TROMBONE_YAW_DEG,
+            TROMBONE_ROLL_DEG,
+        ),
+    );
+    const { wrist, palm, elbow } = TROMBONE_LEFT;
     return {
-        ...reframed(
-            TROMBONE.up,
-            atLips(brassHorn(id, "low").rim, HEAD_UP, TROMBONE_YAW_DEG),
+        ...h,
+        left: armTo(
+            "left",
+            wrist,
+            unit(sub(palm, wrist)),
+            sub(elbow, SHOULDER_L),
         ),
         family,
     };

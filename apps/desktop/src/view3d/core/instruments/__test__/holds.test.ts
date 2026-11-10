@@ -4,6 +4,7 @@ import { brassHorn } from "../brass";
 import {
     HOLD_STATES,
     HORN_PITCH_DEG,
+    headQuaternion,
     hold,
     holdId,
     playingLips,
@@ -115,11 +116,10 @@ describe("holds", () => {
         (family, id) => {
             const h = hold(family, "up");
             const bell = h.instrument.bellAxis;
-            expect(bell[0]).toBeCloseTo(0, 6);
-            expect((Math.atan2(bell[1], bell[2]) * 180) / Math.PI).toBeCloseTo(
-                HORN_PITCH_DEG,
-                6,
-            );
+            // 15 degrees above level, whatever its turn (the trombones turn 5)
+            expect(
+                (Math.asin(bell[1] / Math.hypot(...bell)) * 180) / Math.PI,
+            ).toBeCloseTo(HORN_PITCH_DEG, 6);
             const horn = brassHorn(id, "low");
             expect(dist(inBody(h, horn.rim), playingLips(h.head))).toBeLessThan(
                 0.002,
@@ -194,6 +194,57 @@ describe("holds", () => {
                     (Math.acos(Math.min(1, cos)) * 180) / Math.PI,
                 ).toBeLessThan(8);
             }
+        },
+    );
+
+    it.each(["trombone", "bassTrombone"] as const)(
+        "%s up: the horn passes beside the head, not through it",
+        (family) => {
+            // the head as an ellipsoid at bind (half-widths 0.094, 0.13,
+            // 0.09 about (0, 1.67, 0.005)), turned with the hold's head; the
+            // mouthpiece at the lips is allowed in
+            const h = hold(family, "up");
+            const [x, y, z, w] = headQuaternion(h.head);
+            const toHeadAtBind = (v: Vec3): Vec3 => {
+                // rotate by the inverse quaternion (-x, -y, -z, w)
+                const q = [-x, -y, -z];
+                const c1: Vec3 = [
+                    q[1] * v[2] - q[2] * v[1],
+                    q[2] * v[0] - q[0] * v[2],
+                    q[0] * v[1] - q[1] * v[0],
+                ];
+                const c2: Vec3 = [
+                    q[1] * c1[2] - q[2] * c1[1],
+                    q[2] * c1[0] - q[0] * c1[2],
+                    q[0] * c1[1] - q[1] * c1[0],
+                ];
+                return [0, 1, 2].map(
+                    (i) => v[i] + 2 * (w * c1[i] + c2[i]),
+                ) as Vec3;
+            };
+            const pivot: Vec3 = [0, 1.565, -0.005];
+            const lips = playingLips(h.head);
+            let inside = 0;
+            for (const piece of brassHorn(family, "low").pieces)
+                for (let i = 0; i < piece.positions.length; i += 3) {
+                    const p = inBody(h, [
+                        piece.positions[i],
+                        piece.positions[i + 1],
+                        piece.positions[i + 2],
+                    ]);
+                    if (dist(p, lips) < 0.04) continue;
+                    const r = toHeadAtBind([
+                        p[0] - pivot[0],
+                        p[1] - pivot[1],
+                        p[2] - pivot[2],
+                    ]);
+                    const e =
+                        (r[0] / 0.094) ** 2 +
+                        ((r[1] + pivot[1] - 1.67) / 0.13) ** 2 +
+                        ((r[2] + pivot[2] - 0.005) / 0.09) ** 2;
+                    if (e < 1) inside++;
+                }
+            expect(inside).toBe(0);
         },
     );
 
