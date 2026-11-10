@@ -518,7 +518,10 @@ const SOUSAPHONE_PLAYING: Hold = {
         "left",
         sub(SOUSAPHONE_LEFT_PALM, mul(SOUSAPHONE_LEFT_FINGERS, PALM)),
         SOUSAPHONE_LEFT_FINGERS,
-        [1, -0.6, 0.3],
+        // the elbow low and forward in front of the left chest, so the
+        // forearm rises to the mouthpiece clear of the body tube coming down
+        // from the left shoulder (owner, 2026-11-10: it clipped through)
+        [-0.15, -0.4, 1],
     ),
 };
 const SOUSAPHONE: Record<HoldState, Hold> = {

@@ -171,6 +171,46 @@ describe("holds", () => {
         expect(Math.abs(h.left.wrist[0] - 0.2)).toBeLessThan(0.08);
     });
 
+    it("sousaphone up: the left arm reaches the mouthpiece clear of the tubing", () => {
+        // the arm as capsules: upper arm 0.05 m thick, forearm 0.042, the
+        // forearm's last 15% left out where the hand holds the leadpipe
+        const h = hold("sousaphone", "up");
+        const shoulder: Vec3 = [-SHOULDER_R[0], SHOULDER_R[1], SHOULDER_R[2]];
+        const { elbow, wrist } = h.left;
+        const near = elbow.map((e, i) => e + (wrist[i] - e) * 0.85) as Vec3;
+        const segDist = (p: Vec3, a: Vec3, b: Vec3) => {
+            const ab = b.map((v, i) => v - a[i]);
+            const t = Math.max(
+                0,
+                Math.min(
+                    1,
+                    ab.reduce((s, v, i) => s + v * (p[i] - a[i]), 0) /
+                        ab.reduce((s, v) => s + v * v, 0),
+                ),
+            );
+            return dist(
+                p,
+                a.map((v, i) => v + ab[i] * t),
+            );
+        };
+        let upper = Infinity;
+        let fore = Infinity;
+        for (const piece of brassHorn("sousaphone", "low").pieces)
+            for (let i = 0; i < piece.positions.length; i += 3) {
+                const p = inBody(h, [
+                    piece.positions[i],
+                    piece.positions[i + 1],
+                    piece.positions[i + 2],
+                ]);
+                upper = Math.min(upper, segDist(p, shoulder, elbow) - 0.05);
+                fore = Math.min(fore, segDist(p, elbow, near) - 0.042);
+            }
+        expect(upper).toBeGreaterThan(0);
+        expect(fore).toBeGreaterThan(0);
+        // and the elbow stays in front of the chest (front at z 0.12)
+        expect(elbow[2]).toBeGreaterThan(0.16);
+    });
+
     it("contra up: valves high in front of the face, the left hand on the front bow", () => {
         const h = hold("contra", "up");
         expect(h.instrument.origin[1]).toBeGreaterThan(1.5);
