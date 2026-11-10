@@ -137,7 +137,15 @@ stop-and-go.
   foot placed; a move ending on the left foot is the same, mirrored).
 - **Bigger turns: a re-step.** The old move's last count places the platform
   (its prep landing), and count 1 re-articulates the step at the new move's
-  stride in the new direction; backward into forward lands heel first.
+  stride in the new direction.
+- **Nothing crosses in a reversal** (owner, 2026-11-10). Forward into
+  backward or back, the feet are already a stride apart at the end of the
+  old move, the count-1 foot on count 1's dot. That foot stays where it is:
+  forward into backward it's re-placed (a small lift, back onto its
+  platform); backward into forward it goes from toe down to toe up. The
+  placed foot stays planted and the body only shifts its weight. A reversal
+  that also turns the hips (135 degrees) pivots each foot as a change
+  instead.
 - **The planted foot never slides.** Each count is an om-pose one-count clip
   built on its change-of-move foot model (`ompose.turns`, om-pose
   `docs/turns.md`): `place_`, `cut_` and `restep_`, between the 8-to-5
