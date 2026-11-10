@@ -31,14 +31,23 @@ const server = await createServer({
     logLevel: "error",
 });
 await server.listen();
+// Render on the GPU (ANGLE over Vulkan); GPU=0 forces SwiftShader, for debugging only.
+const gpu = process.env.GPU !== "0";
 const browser = await chromium.launch({
-    args: [
-        "--no-sandbox",
-        "--use-gl=angle",
-        "--use-angle=swiftshader",
-        "--enable-unsafe-swiftshader",
-        "--ignore-gpu-blocklist",
-    ],
+    args: gpu
+        ? [
+              "--no-sandbox",
+              "--ignore-gpu-blocklist",
+              "--use-gl=angle",
+              "--use-angle=vulkan",
+              "--enable-features=Vulkan",
+          ]
+        : [
+              "--no-sandbox",
+              "--use-gl=angle",
+              "--use-angle=swiftshader",
+              "--enable-unsafe-swiftshader",
+          ],
 });
 const errors = [];
 try {
@@ -55,6 +64,16 @@ try {
         .catch(() => {
             throw new Error(`gallery did not start: ${errors.join(" | ")}`);
         });
+    const renderer = await page.evaluate(() => {
+        const gl = document.createElement("canvas").getContext("webgl2");
+        const ext = gl?.getExtension("WEBGL_debug_renderer_info");
+        return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : "unknown";
+    });
+    console.log(`note: rendering: ${renderer}`);
+    if (gpu && !/nvidia/i.test(renderer))
+        throw new Error(
+            `expected the NVIDIA GPU, got "${renderer}" (GPU=0 forces software rendering)`,
+        );
     const { entries, views } = await page.evaluate(() => ({
         entries: window.holds.entries,
         views: window.holds.views,

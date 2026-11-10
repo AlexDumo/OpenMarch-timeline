@@ -17,4 +17,5 @@ front again with the instrument see-through, so a big bell can't hide the hands.
 
 Output: `<out>/<state>/<nn>-<section>.png`, and a labelled contact sheet `<out>/<state>-sheet.png`.
 
-Rendering is SwiftShader (CPU), so it shows looks, not frame rates.
+It renders on the GPU (ANGLE over Vulkan), prints the WebGL renderer as `note: rendering: ...`, and
+stops if that isn't the NVIDIA GPU. `GPU=0` forces SwiftShader, for debugging only.
