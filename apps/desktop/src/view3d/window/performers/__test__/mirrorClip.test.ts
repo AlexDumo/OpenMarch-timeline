@@ -92,6 +92,9 @@ describe("mirrorName", () => {
         expect(mirrorName("slideL8to5")).toBe("slideR8to5");
         expect(mirrorName("stepoff_slideR12to5")).toBe("stepoff_slideL12to5");
         expect(mirrorName("halt2_back8to5_L45")).toBe("halt2_back8to5_R45");
+        expect(mirrorName("place2_8to5_L45__back8to5_R90")).toBe(
+            "place2_8to5_R45__back8to5_L90",
+        );
         expect(mirrorName("change_8to5__slideL8to5")).toBe(
             "change_8to5__slideR8to5",
         );
