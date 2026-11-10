@@ -5,7 +5,7 @@ import {
     HandSwipeRightIcon,
     MouseLeftClickIcon,
     MouseRightClickIcon,
-    MouseScrollIcon,
+    MouseMiddleClickIcon,
     type Icon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
@@ -19,7 +19,7 @@ import {
 const INPUT_ICONS: Record<GestureInput, Icon> = {
     drag: MouseLeftClickIcon,
     rightDrag: MouseRightClickIcon,
-    scroll: MouseScrollIcon,
+    scroll: MouseMiddleClickIcon,
     swipe: HandSwipeRightIcon,
     pinch: ArrowsOutSimpleIcon,
 };
