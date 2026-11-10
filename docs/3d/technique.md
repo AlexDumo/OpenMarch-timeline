@@ -127,8 +127,9 @@ stop-and-go.
 - **Turns of 90 degrees or less: placement, then cut the corner.** The last
   count of the old move is a placement: the foot lands on its platform,
   pointing halfway from the old direction to the new. Count 1 cuts the
-  corner: the other leg goes the short way into the new path and lands with
-  its toe on the new angle.
+  corner: the back leg goes up its own line to the planted foot, then out
+  into the new path (the a, b, c triangle below), and lands with its toe on
+  the new angle.
 - **The handbook's angles.** Halfway is the quick rule; the Figure 8 blocks
   place on the right 45 instead of the left 45 out of a backward march into
   the left slide or the backward slide right, out of the left slide into
@@ -163,20 +164,23 @@ stop-and-go.
 
 ## Direction changes: the a, b, c triangle
 
-The owner's picture (2026-10-09): going from straight forward into a right
-slide, the leg could travel to the foot (side **a**) and then out to the side
-(side **b**). A real marcher takes the short side, **c**: the leg travels
-smoothly along the direct path from the last count of one move to the first
-count of the next. The same holds for every change (forward right slide into a
-backward march, and so on).
+The owner's picture: going forward into a left slide, the back leg starts
+behind the performer and ends, on count 1, to the left of them. Take the
+right triangle whose sides are the old line (side **a**, up to the planted
+foot) and the way out to the side (side **b**); **c** is the hypotenuse
+between them.
 
+- **The back leg traces a and b, not c** (owner, 2026-11-10; this replaces
+  the 2026-10-09 note that it takes the short side c). It doesn't leave its
+  straight line before it goes to the next step: up its own line until it is
+  level with the planted foot, then out to the new step, the corner rounded
+  rather than a perfect triangle. On the placement count it comes straight
+  through on the old line and only the foot turns, as it lands.
 - A change must not snap on the downbeat. For the winds at 8-to-5 it is the
-  handbook's placement and cut (above): count 8 places, count 1 takes the
-  short side into the new path. Elsewhere it is centered on the count
-  boundary: the old move blends into the new from the middle of count 8 to
-  the middle of count 1 of the next page, while the legs ease from the old
-  travel direction to the new (`crossfade` in `planner.ts`).
-- A turn larger than `SHARP_TURN` (20 degrees) between counts is a change of
+  handbook's placement and cut (above). Elsewhere it is still a crossfade
+  centered on the count boundary (`crossfade` in `planner.ts`), which takes
+  the short side: those sizes don't follow this rule yet.
+- A turn larger than `SHARP_TURN` (10 degrees) between counts is a change of
   move; smaller drifts ease the legs over half a loop.
 
 ## Slides
