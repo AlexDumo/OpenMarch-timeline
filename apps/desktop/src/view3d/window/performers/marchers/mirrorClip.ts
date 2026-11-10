@@ -98,7 +98,10 @@ export function stillClip(
     return new THREE.AnimationClip(name, clip.duration, tracks);
 }
 
-/** The clip whose mirror plays as `name`: slides, crabs and built turns swap sides. */
+/**
+ * The clip whose mirror plays as `name`: slides, crabs and built turns
+ * swap sides (both moves of a direction change, `place_8to5__slideL8to5`).
+ */
 export function mirrorName(name: string): string {
     return name
         .replace(
@@ -109,5 +112,8 @@ export function mirrorName(name: string): string {
             /crab([LR])/g,
             (_, s: string) => `crab${s === "L" ? "R" : "L"}`,
         )
-        .replace(/_([LR])45/g, (_, s: string) => `_${s === "L" ? "R" : "L"}45`);
+        .replace(
+            /_([LR])(45|90)/g,
+            (_, s: string, d: string) => `_${s === "L" ? "R" : "L"}${d}`,
+        );
 }

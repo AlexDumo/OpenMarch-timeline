@@ -100,17 +100,64 @@ the 3D View shows the difference.
   the paths differ by under 10 degrees. Examples: forward 8, then a backward
   slide right 8: the prep is 45 degrees to the left; forward 8, then a forward
   slide right 8: the prep is 45 degrees to the right.
-- Code: a change of move is a crossfade centered on the boundary
+- Code: for the winds at 8-to-5 a change of direction plays the handbook's
+  clips (next section). Every other change of move (a size change, or a
+  direction change at another size) is a crossfade centered on the boundary
   (`core/marchers/planner.ts`), so at the prep landing the gaits are blended
-  50-50 and the residual leg turn is halfway: the slide's 90 degree leg turn
-  shows as 45. Turns of 10 degrees or more (`SHARP_TURN`) are changes of move;
-  smaller drifts just ease. The crossfade's `prep` field names the loop time of
-  the prep landing, and those rows bake with the platform lift peaked there
-  (`prepName` rows, `platformClip.ts`): up over the 0.6 count before the
-  landing, down flat over the half count after it.
+  50-50 and the residual leg turn is halfway. Turns of 10 degrees or more
+  (`SHARP_TURN`) are changes of move; smaller drifts just ease. The
+  crossfade's `prep` field names the loop time of the prep landing, and those
+  rows bake with the platform lift peaked there (`prepName` rows,
+  `platformClip.ts`): up over the 0.6 count before the landing, down flat
+  over the half count after it.
 - Not yet: a prep step when the move before the change was only a step-off
   (the fade then covers one count), and hand-made change clips (mark time
   into a move) keep their own feet.
+
+## Wind direction changes (the Bluecoats handbook)
+
+The owner found the winds' fades a glaring issue next to the crab's
+stop-and-go (2026-11-10): the planted foot slid as the legs turned about the
+body, and a reversal blended a forward step into a backward one, so the feet
+shuffled for a count. Wind players now change direction as the 2017
+Bluecoats visual handbook teaches ("Direction Changes", pp. 38-42; owner,
+2026-11-10). The percussion keeps the crab's stop-and-go; the winds never
+stop-and-go.
+
+- **Turns of 90 degrees or less: placement, then cut the corner.** The last
+  count of the old move is a placement: the foot lands on its platform,
+  pointing halfway from the old direction to the new. Count 1 cuts the
+  corner: the back leg goes up its own line to the planted foot, then out
+  into the new path (the a, b, c triangle below), and lands with its toe on
+  the new angle.
+- **The handbook's angles.** Halfway is the quick rule; the Figure 8 blocks
+  place on the right 45 instead of the left 45 out of a backward march into
+  the left slide or the backward slide right, out of the left slide into
+  forward, and out of the backward slide right into backward (with the right
+  foot placed; a move ending on the left foot is the same, mirrored).
+- **Bigger turns: a re-step.** The old move's last count places the platform
+  (its prep landing), and count 1 re-articulates the step at the new move's
+  stride in the new direction.
+- **Nothing crosses in a reversal** (owner, 2026-11-10). Forward into
+  backward or back, the feet are already a stride apart at the end of the
+  old move, the count-1 foot on count 1's dot. That foot stays where it is
+  and re-articulates at the ankle, not the knee: forward into backward it
+  flexes on its ball back onto the platform; backward into forward it rocks
+  onto the heel, toe up. The placed foot stays planted and the body only
+  shifts its weight. A reversal
+  that also turns the hips (135 degrees) pivots each foot as a change
+  instead.
+- **The planted foot never slides.** Each count is an om-pose one-count clip
+  built on its change-of-move foot model (`ompose.turns`, om-pose
+  `docs/turns.md`): `place_`, `cut_` and `restep_`, between the 8-to-5
+  forward and backward marches with the legs turned 0, 45 or 90 degrees
+  either way. The planner plays the nearest pair (`turnMove`) and turns what
+  is left at runtime while the moving foot is in the air, about the standing
+  foot (`turn_window`, `turn_pivot`). The placement rises onto the platform
+  over its last 0.6 count; the cut and re-step come down over their first
+  half (`platformClip.ts`).
+- Not yet: other sizes still fade, and so does a change right after a
+  step-off or another change (the placement needs the old move's loop).
 
 ## The halt (the close)
 
@@ -126,18 +173,23 @@ the 3D View shows the difference.
 
 ## Direction changes: the a, b, c triangle
 
-The owner's picture (2026-10-09): going from straight forward into a right
-slide, the leg could travel to the foot (side **a**) and then out to the side
-(side **b**). A real marcher takes the short side, **c**: the leg travels
-smoothly along the direct path from the last count of one move to the first
-count of the next. The same holds for every change (forward right slide into a
-backward march, and so on).
+The owner's picture: going forward into a left slide, the back leg starts
+behind the performer and ends, on count 1, to the left of them. Take the
+right triangle whose sides are the old line (side **a**, up to the planted
+foot) and the way out to the side (side **b**); **c** is the hypotenuse
+between them.
 
-- A change must not snap on the downbeat. It is centered on the count
-  boundary: the old move blends into the new from the middle of count 8 to the
-  middle of count 1 of the next page, while the legs ease from the old travel
-  direction to the new (`crossfade` in `planner.ts`).
-- A turn larger than `SHARP_TURN` (20 degrees) between counts is a change of
+- **The back leg traces a and b, not c** (owner, 2026-11-10; this replaces
+  the 2026-10-09 note that it takes the short side c). It doesn't leave its
+  straight line before it goes to the next step: up its own line until it is
+  level with the planted foot, then out to the new step, the corner rounded
+  rather than a perfect triangle. On the placement count it comes straight
+  through on the old line and only the foot turns, as it lands.
+- A change must not snap on the downbeat. For the winds at 8-to-5 it is the
+  handbook's placement and cut (above). Elsewhere it is still a crossfade
+  centered on the count boundary (`crossfade` in `planner.ts`), which takes
+  the short side: those sizes don't follow this rule yet.
+- A turn larger than `SHARP_TURN` (10 degrees) between counts is a change of
   move; smaller drifts ease the legs over half a loop.
 
 ## Slides

@@ -37,6 +37,16 @@
  *   into count 1 instead of snapping on the downbeat. When the last count
  *   can't host it (a step-off, or another change), the fade covers the first
  *   count alone;
+ * - a wind player's change of direction at 8-to-5 (docs/3d/technique.md,
+ *   "Wind direction changes", the Bluecoats handbook): a travel turn of
+ *   90 degrees or less makes the old move's last count `place_<a>__<b>`
+ *   (the placement, on the platform) and the new move's first
+ *   `cut_<a>__<b>` (cutting the corner); a bigger one keeps the old move's
+ *   last loop step, landing on the platform (its prep row), and re-steps
+ *   with `restep_<a>__<b>`. `2` after the kind when the clip starts at loop
+ *   time 1. The moves are a grid (`turnMove`); what the grid leaves of the
+ *   leg turn turns at runtime over the clip's `turn_window`. Off the grid
+ *   (other sizes), a crossfade;
  * - crab left to crab right or back, the travel turning more than
  *   STOP_GO_TURN: a stop-and-go (docs/3d/technique.md, "The crab step"),
  *   not a fade. The old move's last count is `stop_<old>` (the weight
@@ -116,6 +126,73 @@ export const HALT_TURN_START = 0.8;
 export const MAX_ANCHOR_SPAN = 16;
 /** A change in the foot-on-dot target bigger than this (meters) pins the boundaries around it. */
 export const TARGET_EPS = 0.01;
+
+/** Degrees to radians. */
+const DEG = Math.PI / 180;
+/**
+ * A wind player's travel turn up to this is a placement and cut the
+ * corner; past it, a re-step (radians).
+ */
+export const PLACE_TURN = (90 * Math.PI) / 180;
+
+/**
+ * A wind move on the grid of built direction changes (om-pose
+ * `turns.py`): an 8-to-5 forward or backward march with the legs turned
+ * 0, 45 or 90 degrees either way, by the app's name for it, and what the
+ * runtime turns on top (radians).
+ */
+interface TurnMove {
+    name: string;
+    gait: "F" | "B";
+    /** The built turn, degrees, + toward the performer's left. */
+    yaw: number;
+    residual: number;
+}
+
+const TURN_YAWS = [-90, -45, 0, 45, 90];
+
+/** A move's place on the direction change grid, or null off it (another size, a crab). */
+export function turnMove(st: {
+    family: Family;
+    dir: Direction;
+    pick: Pick;
+}): TurnMove | null {
+    const base = nearestBase(st.pick);
+    const legs = st.dir.legYaw / DEG;
+    let gait: "F" | "B";
+    let deg: number;
+    if (st.family === "forward" && base === "8to5") {
+        gait = "F";
+        deg = legs;
+    } else if (st.family === "slideL" && base === "slideL8to5") {
+        gait = "F";
+        deg = 90 + legs;
+    } else if (st.family === "slideR" && base === "slideR8to5") {
+        gait = "F";
+        deg = -90 + legs;
+    } else if (st.family === "backward" && base === "back8to5") {
+        gait = "B";
+        deg = legs;
+    } else return null;
+    let yaw = TURN_YAWS[0];
+    for (const y of TURN_YAWS)
+        if (Math.abs(y - deg) < Math.abs(yaw - deg)) yaw = y;
+    const side = yaw > 0 ? "L" : "R";
+    const name =
+        gait === "F" && Math.abs(yaw) === 90
+            ? `slide${side}8to5`
+            : `${gait === "F" ? "8to5" : "back8to5"}${yaw === 0 ? "" : `_${side}${Math.abs(yaw)}`}`;
+    const residual = (deg - yaw) * DEG;
+    return {
+        name,
+        gait,
+        yaw,
+        residual: Math.abs(residual) <= 1e-9 ? 0 : residual,
+    };
+}
+
+/** Which way a grid move travels, degrees from straight forward (+ to the left). */
+const turnTravel = (m: TurnMove) => (m.gait === "F" ? m.yaw : m.yaw + 180);
 
 /** How often the feet step: once a count, every two counts, twice a count. */
 export type Pace = "single" | "half" | "double";
@@ -820,6 +897,109 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             return fade;
         };
 
+        /**
+         * A transition clip turned at runtime by what the grid of built
+         * turns leaves over: `y0` at its start to `y1` at its end, eased
+         * over the clip's `turn_window` about its `turn_pivot`.
+         */
+        const turnedAt = (
+            name: string,
+            y0: number,
+            y1: number,
+            at: number,
+        ): Draft => {
+            const c = clipByName(manifest, name + sfx);
+            const window = c.turn_window ?? [0, 1];
+            const root: TurnedPair = {
+                a: name + sfx,
+                b: null,
+                weight: 0,
+                clipA: c,
+                clipB: c,
+                built: 0,
+                // nonzero whenever the legs turn, so turnRoot turns the travel
+                residual: Math.max(Math.abs(y0), Math.abs(y1)),
+                window,
+                pivot: c.turn_pivot ?? [0, 0],
+                kind: "turn",
+                legYaw: [y0, y1, window[0], window[1]],
+            };
+            return {
+                kind: "transition",
+                clip: name + sfx,
+                clip2: null,
+                weight: 0,
+                legYaw: root.legYaw,
+                phaseStart: T[at],
+                rate,
+                foot: moveFoot,
+                root,
+            };
+        };
+        /**
+         * A wind player's change of direction (docs/3d/technique.md,
+         * "Direction changes"), after a plain loop of the old move at the
+         * same pace. A travel turn of 90 degrees or less: the old move's
+         * last step becomes the placement (`place_`) and this one cuts the
+         * corner (`cut_`). A bigger one: the old move's last step lands on
+         * the platform (its prep row) and this one re-steps (`restep_`).
+         * Null when it doesn't fit or the clips aren't there.
+         */
+        const windTurn = (from: State, to: State): Draft | null => {
+            if (from.type !== "move" || to.type !== "move") return null;
+            if (isCrabFamily(from.family) || isCrabFamily(to.family))
+                return null;
+            const a = turnMove(from);
+            const b = turnMove(to);
+            if (!a || !b || a.name === b.name) return null;
+            const turn = Math.abs(
+                angleDelta(turnTravel(a) * DEG, turnTravel(b) * DEG),
+            );
+            if (turn < 1e-6) return null;
+            const last = drafts[k - 1];
+            if (
+                k === 0 ||
+                !last ||
+                last.kind !== "loop" ||
+                last.continued ||
+                last.rate !== rate
+            )
+                return null;
+            const pair = `${a.name}__${b.name}`;
+            if (turn > PLACE_TURN + 1e-6) {
+                const restep = `restep${p === 1 ? "2" : ""}_${pair}`;
+                if (!has(restep)) return null;
+                // count 8 places the platform: the loop's landing at boundary k
+                drafts[k - 1] = {
+                    ...last,
+                    prep: mod2((T[k] - last.phaseStart) * rate),
+                };
+                return turnedAt(restep, a.residual, b.residual, k);
+            }
+            // the old move's last step started at loop time p ^ 1
+            const place = `place${(p ^ 1) === 1 ? "2" : ""}_${pair}`;
+            const cut = `cut${p === 1 ? "2" : ""}_${pair}`;
+            if (!has(place) || !has(cut)) return null;
+            const mid = (a.residual + b.residual) / 2;
+            const placed = turnedAt(place, a.residual, mid, k - 1);
+            drafts[k - 1] = placed;
+            // the placement moves the body by its own travel, not the drill's
+            const [rx, rz] = rootAt(manifest, placed.root!, 1);
+            const cos = Math.cos(steps.heading[k - 1]);
+            const sin = Math.sin(steps.heading[k - 1]);
+            ox[k] =
+                ox[k - 1] +
+                rx * cos +
+                rz * sin -
+                (positions[k * 2] - positions[(k - 1) * 2]);
+            oz[k] =
+                oz[k - 1] -
+                rx * sin +
+                rz * cos -
+                (positions[k * 2 + 1] - positions[(k - 1) * 2 + 1]);
+            return turnedAt(cut, mid, b.residual, k);
+        };
+
         if (pendingGo && s.type === "move") {
             const go = soloPair(manifest, pendingGo.to);
             draft = {
@@ -863,7 +1043,11 @@ export function planMarcher(input: PlanInput): MarcherPlan {
                             : null;
                     const stopGo = fromMarkTime ? null : stopAndGo(prev, s);
                     if (stopGo) pendingGo = stopGo.go;
-                    draft = fromMarkTime ?? stopGo?.draft ?? crossfade(prev, s);
+                    draft =
+                        fromMarkTime ??
+                        stopGo?.draft ??
+                        windTurn(prev, s) ??
+                        crossfade(prev, s);
                 }
                 prevYaw = s.dir.legYaw;
                 parity ^= 1;
@@ -1061,6 +1245,7 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             lastEvent.clip2 === d.clip2 &&
             lastEvent.rate === d.rate &&
             lastEvent.foot === d.foot &&
+            lastEvent.prep === (d.prep ?? null) &&
             Math.abs(lastEvent.heading - heading) < 1e-9 &&
             Math.abs(lastEvent.weight - d.weight) < 1e-6 &&
             typeof lastEvent.legYaw === "number" &&

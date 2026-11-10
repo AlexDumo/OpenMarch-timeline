@@ -9,6 +9,7 @@ import {
     GO_HANDOFF,
     eventRows,
     headingAt,
+    mirrorRow,
     prepName,
     planMarcher,
     plannedClips,
@@ -44,6 +45,17 @@ const withCrab: Manifest = {
     ],
 };
 
+/**
+ * The winds' manifest without the direction change clips: the fade every
+ * other size still plays.
+ */
+const fadeOnly: Manifest = {
+    clips: clipList(manifest).filter((c) => c.gait !== "turn"),
+};
+
+/** `a mod 2` in [0, 2). */
+const mod2 = (a: number) => ((a % 2) + 2) % 2;
+
 /** 8-to-5: 22.5 in per count. */
 const STEP = 0.5715;
 
@@ -59,7 +71,10 @@ function input(
         feet,
         heading = 0,
         dotMode,
+        m = manifest,
     }: {
+        /** The clips to plan with. */
+        m?: Manifest;
         bpm?: number;
         h?: HeightClass;
         /** Start x: 0 is the 50 yard line. */
@@ -85,7 +100,7 @@ function input(
         positions[(k + 1) * 2 + 1] = z;
     });
     return {
-        manifest,
+        manifest: m,
         heightClass: h,
         heading:
             typeof heading === "number" ? heading : Float64Array.from(heading),
@@ -345,7 +360,7 @@ describe("slides and the 50", () => {
                     ...repeat<Count>(4, [-STEP, 0]),
                     "hold",
                 ],
-                { x0: 10 },
+                { x0: 10, m: fadeOnly },
             ),
         );
         const clips = clipPerCount(plan);
@@ -420,7 +435,7 @@ describe("moves back to back", () => {
                     ...repeat<Count>(8, [STEP, 0]),
                     "hold",
                 ],
-                { x0: -10 },
+                { x0: -10, m: fadeOnly },
             ),
         );
         const fade = plan.events[eventIndexAt(plan, 7.5)];
@@ -560,11 +575,14 @@ describe("moves back to back", () => {
         const s = STEP / Math.SQRT2;
         // forward and left 45°, then forward and right 45°: same loop, 90° of leg turn
         const plan = planMarcher(
-            input([
-                ...repeat<Count>(4, [s, s]),
-                ...repeat<Count>(4, [-s, s]),
-                "hold",
-            ]),
+            input(
+                [
+                    ...repeat<Count>(4, [s, s]),
+                    ...repeat<Count>(4, [-s, s]),
+                    "hold",
+                ],
+                { m: fadeOnly },
+            ),
         );
         const fade = plan.events[eventIndexAt(plan, 3.5)];
         expect(fade.kind).toBe("crossfade");
@@ -828,7 +846,7 @@ describe("body center (an option for later)", () => {
     });
 });
 
-describe("prep steps at the end of a move", () => {
+describe("prep steps at the end of a move (sizes without direction change clips)", () => {
     /** 8 counts forward toward the audience, then 8 counts of `next`, then holds. */
     const plan2 = (next: Count) => {
         const inp = input(
@@ -838,7 +856,7 @@ describe("prep steps at the end of a move", () => {
                 ...repeat<Count>(8, next),
                 ...repeat(4, "hold" as const),
             ],
-            { x0: -10 },
+            { x0: -10, m: fadeOnly },
         );
         return { inp, plan: planMarcher(inp) };
     };
@@ -1323,5 +1341,94 @@ describe("the crab step", () => {
             manifest,
         });
         expect(names(plan).some((n) => n.includes("crab"))).toBe(false);
+    });
+});
+
+describe("wind direction changes (the Bluecoats handbook)", () => {
+    /** 2 holds, 8 counts forward toward the audience, 8 of `next`, 4 holds; from x0. */
+    const plan2 = (next: Count, x0 = -10, first: Count = [0, STEP]) => {
+        const inp = input(
+            [
+                ...repeat(2, "hold" as const),
+                ...repeat<Count>(8, first),
+                ...repeat<Count>(8, next),
+                ...repeat(4, "hold" as const),
+            ],
+            { x0 },
+        );
+        return { inp, plan: planMarcher(inp) };
+    };
+    const clipOf = (name: string) =>
+        clipList(manifest).find((c) => c.name === name)!;
+
+    it("places count 8 on the left 45 and cuts the corner on count 1, forward into a left slide", () => {
+        const { plan } = plan2([STEP, 0]);
+        const clips = clipPerCount(plan);
+        expect(clips[9]).toBe("place_8to5__slideL8to5");
+        expect(clips[10]).toBe("cut2_8to5__slideL8to5");
+        expect(clips[11]).toBe("slideL8to5");
+        expect(clipOf("place_8to5__slideL8to5").place_deg).toBe(45);
+        expect(plan.events.some((e) => e.kind === "crossfade")).toBe(false);
+    });
+
+    it("places on the right 45 out of a backward march into the left slide, as the Figure 8 block says", () => {
+        const { plan } = plan2([STEP, 0], -10, [0, -STEP]);
+        const clips = clipPerCount(plan);
+        expect(clips[9]).toBe("place_back8to5__slideL8to5");
+        expect(clipOf("place_back8to5__slideL8to5").place_deg).toBe(-45);
+    });
+
+    it("re-steps a reversal: the last landing on the platform, count 1 into the new direction", () => {
+        const { plan } = plan2([0, -STEP]);
+        const clips = clipPerCount(plan);
+        expect(clips[9]).toBe("8to5");
+        const last = plan.events[eventIndexAt(plan, 9.5)];
+        expect(last.prep).toBe(mod2(10 - last.phaseStart));
+        expect(clips[10]).toBe("restep2_8to5__back8to5");
+        expect(clips[11]).toBe("back8to5");
+        expect(plannedClips([plan]).has(prepName("8to5", last.prep!))).toBe(
+            true,
+        );
+    });
+
+    it("plays a turn between the built ones as the nearest, turning the rest", () => {
+        const a = (30 * Math.PI) / 180;
+        const { plan } = plan2([STEP * Math.sin(a), STEP * Math.cos(a)]);
+        const place = plan.events[eventIndexAt(plan, 9.5)];
+        expect(place.clip).toBe("place_8to5__8to5_L45");
+        const cut = plan.events[eventIndexAt(plan, 10.5)];
+        const [, y1] = cut.legYaw as [number, number, number, number];
+        expect((y1 * 180) / Math.PI).toBeCloseTo(-15, 6);
+    });
+
+    it("ends on the dot", () => {
+        for (const next of [
+            [STEP, 0],
+            [0, -STEP],
+        ] as Count[]) {
+            const { plan, inp } = plan2(next);
+            const end = body(plan, inp, 21);
+            expect(end.x).toBeCloseTo(end.drillX, 9);
+            expect(end.z).toBeCloseTo(end.drillZ, 9);
+        }
+    });
+
+    it("still fades at sizes without direction change clips", () => {
+        const { plan } = plan2([0.762, 0], -10, [0, 0.762]);
+        expect(plan.events.some((e) => e.kind === "crossfade")).toBe(true);
+    });
+
+    it("plays the mirrored rows off the right foot", () => {
+        const inp = input(
+            [
+                ...repeat(2, "hold" as const),
+                ...repeat<Count>(8, [0, STEP]),
+                ...repeat<Count>(8, [STEP, 0]),
+                ...repeat(4, "hold" as const),
+            ],
+            { x0: -10, feet: { stepOffFoot: "right" } },
+        );
+        const rows = plannedClips([planMarcher(inp)]);
+        expect(rows.has(mirrorRow("place_8to5__slideL8to5"))).toBe(true);
     });
 });
