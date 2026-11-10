@@ -68,22 +68,22 @@ describe("Toaster", () => {
     it("keeps an action's label on one line, with a focus ring", async () => {
         render(<Toaster />);
         act(() => {
-            toast.info("Pages 3–4 are no longer keyframes", {
+            toast.info("Now walks straight through the ends of Pages 3–4", {
                 action: {
-                    label: "Keep Pages 3–4 as keyframes",
+                    label: "Stop at the ends of Pages 3–4",
                     onClick: () => {},
                 },
             });
         });
         const button = await screen.findByRole("button", {
-            name: "Keep Pages 3–4 as keyframes",
+            name: "Stop at the ends of Pages 3–4",
         });
         expect(button.className).toMatch(/\bwhitespace-nowrap\b/);
         expect(button.className).toMatch(/\bshrink-0\b/);
         expect(button.className).toMatch(/focus-visible:ring/);
     });
 
-    it("with one button, keeps it beside the text while the text keeps 180 px, else under it at the right (#805)", async () => {
+    it("with one button, keeps it beside the text while the text keeps 120 px, else under it at the right (#805)", async () => {
         render(<Toaster />);
         act(() => {
             toast.info("Now walks straight through the end of Page 3", {
@@ -98,10 +98,10 @@ describe("Toaster", () => {
         });
         const { li, content } = toastOf(button);
         expect(li.querySelector("[data-cancel]")).toBeNull();
-        // The text never gets narrower than 180 px: a label too long to fit beside it wraps
+        // The text never gets narrower than 120 px: a label too long to fit beside it wraps
         expect(li.className).toMatch(/(^| )flex-wrap( |$)/);
         expect(content.className).toMatch(/(^| )flex-1( |$)/);
-        expect(content.className).toMatch(/(^| )basis-\[180px\]( |$)/);
+        expect(content.className).toMatch(/(^| )basis-\[120px\]( |$)/);
         // Only when it is the one button: with a cancel, the cancel pushes both right
         expect(button.className).toContain(
             "[[data-sonner-toast]:not(:has([data-cancel]))_&]:ml-auto",

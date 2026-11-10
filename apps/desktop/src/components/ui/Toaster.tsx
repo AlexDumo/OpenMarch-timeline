@@ -154,8 +154,8 @@ export default function Toaster() {
                     // it; it grows into the rest), or the whole width without one. Sonner
                     // renders the cancel as `[data-cancel]`
                     content:
-                        "min-w-0 flex-1 basis-[180px] [[data-sonner-toast]:has([data-cancel])_&]:basis-[calc(100%-32px)] [[data-sonner-toast]:has([data-cancel]):not(:has([data-icon]))_&]:basis-full",
-                    // The action keeps to one line: beside the text while the text keeps 180 px, so a
+                        "min-w-0 flex-1 basis-[120px] [[data-sonner-toast]:has([data-cancel])_&]:basis-[calc(100%-32px)] [[data-sonner-toast]:has([data-cancel]):not(:has([data-icon]))_&]:basis-full",
+                    // The action keeps to one line: beside the text while the text keeps 120 px (room for "Release notes" or "Switch to Expert"), so a
                     // long message never squeezes its label into a column; otherwise under it, at the right
                     actionButton:
                         "[[data-sonner-toast]:not(:has([data-cancel]))_&]:ml-auto shrink-0 self-center whitespace-nowrap rounded-6 px-6 py-2 text-body text-accent hover:underline focus-visible:outline-none focus-visible:ring focus-visible:ring-accent",
