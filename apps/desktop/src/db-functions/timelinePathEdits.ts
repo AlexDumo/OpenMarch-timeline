@@ -39,6 +39,7 @@ import {
 } from "./timelineGroupRoutes";
 import { isGroupLane, lanesOfRoute } from "./timelineLanes";
 import {
+    lastLegBulge,
     writeRouteGeometryInTransaction,
     type RehomeReport,
 } from "./timelineRouteGeometry";
@@ -83,6 +84,7 @@ async function editOwnRoutePointsInTransaction(
     routeId: number,
     points: readonly RoutePointInput[],
     drag = false,
+    toBulge?: number | null,
 ): Promise<RehomeReport> {
     const current = await routeGeometryOf(tx, routeId);
     const lanes = await lanesOfRoute(tx, routeId);
@@ -112,7 +114,13 @@ async function editOwnRoutePointsInTransaction(
         if (!transition) refuse(`transition ${lane.transition_id} is gone`);
         to = await destinationOf(tx, transition, lane.slot_index);
     }
-    const geometry: RouteGeometry = { v: 1, from, to, points: routePoints };
+    const geometry: RouteGeometry = {
+        v: 1,
+        from,
+        to,
+        ...lastLegBulge(current, toBulge),
+        points: routePoints,
+    };
     return await mapDbErrors(() =>
         writeRouteGeometryInTransaction(tx, routeId, geometry, { drag }),
     );
@@ -128,12 +136,18 @@ export async function editPathPointsInTransaction({
     routeId,
     points,
     drag = false,
+    toBulge,
 }: {
     tx: DbTransaction;
     routeId: number;
     points: readonly RoutePointInput[];
     /** A point drag: it stops short rather than crowd Adjust keys (AP-R11) */
     drag?: boolean;
+    /**
+     * The last leg's bulge (R-14″, AP-T11): a number sets it, null makes the leg straight,
+     * undefined keeps it. Each point's own `bulge` sets the leg arriving at it.
+     */
+    toBulge?: number | null;
 }): Promise<RehomeReport> {
     if (await isGroupRoute(tx, routeId))
         return await editGroupRoutePointsInTransaction({
@@ -141,16 +155,24 @@ export async function editPathPointsInTransaction({
             routeId,
             points,
             drag,
+            toBulge,
         });
-    return await editOwnRoutePointsInTransaction(tx, routeId, points, drag);
+    return await editOwnRoutePointsInTransaction(
+        tx,
+        routeId,
+        points,
+        drag,
+        toBulge,
+    );
 }
 
-/** AP-O8's point edit as one undoable edit. */
+/** AP-O8's point edit as one undoable edit (AP-T11's arc legs too). */
 export async function editPathPoints(args: {
     db: DbConnection;
     routeId: number;
     points: readonly RoutePointInput[];
     drag?: boolean;
+    toBulge?: number | null;
 }): Promise<RehomeReport> {
     const { db, ...rest } = args;
     return await transactionWithHistory(db, "editPathPoints", (tx) =>

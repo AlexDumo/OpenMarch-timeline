@@ -39,7 +39,11 @@ import {
     TimelineWriteError,
 } from "./timelineErrors";
 import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
-import { writeRouteGeometryInTransaction } from "./timelineRouteGeometry";
+import {
+    lastLegBulge,
+    markArcsInTransaction,
+    writeRouteGeometryInTransaction,
+} from "./timelineRouteGeometry";
 import {
     firstLanedRow,
     markTrailModelInTransaction,
@@ -344,6 +348,7 @@ function trailGeometry(
     points: readonly RoutePointInput[],
     current: RouteGeometry | null,
     ends: { from: XY; to: XY },
+    toBulge?: number | null,
 ): RouteGeometry {
     const routePoints = pointsToStore(points, current);
     const keepFrom =
@@ -355,6 +360,7 @@ function trailGeometry(
         v: 1,
         from: keepFrom ? current.from : ends.from,
         to: keepTo ? current.to : ends.to,
+        ...lastLegBulge(current, toBulge),
         points: routePoints,
     };
     assertValid(validateRouteGeometry(geometry), "route");
@@ -585,6 +591,7 @@ export async function followTrailInTransaction({
             .values({ geometry: JSON.stringify(geometry) })
             .returning()
             .get())!;
+        await markArcsInTransaction(tx, geometry);
         const transition = (await tx
             .insert(schema.timeline_transitions)
             .values({
@@ -656,10 +663,13 @@ export async function editTrailPointsInTransaction({
     tx,
     routeId,
     points,
+    toBulge,
 }: {
     tx: DbTransaction;
     routeId: number;
     points: readonly RoutePointInput[];
+    /** The last leg's bulge (R-14″, AP-T11): a number sets it, null clears it, undefined keeps it */
+    toBulge?: number | null;
 }): Promise<void> {
     const transition = await trailTransition(tx, routeId);
     const row = await tx
@@ -673,7 +683,7 @@ export async function editTrailPointsInTransaction({
         from: current.from,
         to: current.to,
     };
-    const geometry = trailGeometry(points, current, ends);
+    const geometry = trailGeometry(points, current, ends, toBulge);
     await mapDbErrors(() =>
         writeRouteGeometryInTransaction(tx, routeId, geometry),
     );
@@ -684,6 +694,7 @@ export async function editTrailPoints(args: {
     db: DbConnection;
     routeId: number;
     points: readonly RoutePointInput[];
+    toBulge?: number | null;
 }): Promise<void> {
     const { db, ...rest } = args;
     await transactionWithHistory(db, "editTrailPoints", (tx) =>

@@ -47,6 +47,7 @@ export {
     routePiecePoint,
     routePolyline,
     arcLength,
+    arcPoint,
     ROUTE_ARC_SAMPLES,
     smoothHandles,
     cubicPoint,

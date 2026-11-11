@@ -25,6 +25,7 @@ import {
     routePath,
     routePoint,
     validateRouteGeometry,
+    type RoutePath,
     type AdjustProfile,
     type RouteGeometry,
     type RoutePoint,
@@ -42,6 +43,7 @@ import { sampleShape } from "./timelineMoveHelpers";
 import { createTimelineTransitionsInTransaction } from "./timelineTransitionsInTransaction";
 import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
 import {
+    markArcsInTransaction,
     NOTHING_REHOMED,
     writeRouteGeometryInTransaction,
     type RehomeReport,
@@ -315,17 +317,25 @@ export interface RoutePointInput {
     id?: string;
     at: XY;
     tension?: number;
+    /** The leg arriving at this point is an arc with this bulge (R-14″, step 10a) */
+    bulge?: number;
 }
 
-/** A stored point as R-14 reads it: a corner has no `tension` key (spec 5.2). */
+/**
+ * A stored point as R-14 reads it: a corner has no `tension` key, and a point whose arriving leg
+ * isn't an arc no `bulge` key (spec 5.2, R-14″).
+ */
 export const storedPoint = (
     id: string,
     at: XY,
     tension?: number,
-): RoutePoint =>
-    tension !== undefined && tension > 0
-        ? { id, at: [at[0], at[1]], tension }
-        : { id, at: [at[0], at[1]] };
+    bulge?: number,
+): RoutePoint => ({
+    id,
+    at: [at[0], at[1]],
+    ...(tension !== undefined && tension > 0 ? { tension } : {}),
+    ...(bulge !== undefined && bulge !== 0 ? { bulge } : {}),
+});
 
 /** Whether two points are the same point in the same place, bit for bit */
 export const samePoint = (
@@ -446,7 +456,7 @@ export async function drawRouteInTransaction({
     const routePoints: RoutePoint[] = points.map((p) => {
         const id = p.id ?? freshPointId(taken);
         taken.add(id);
-        return storedPoint(id, p.at, p.tension);
+        return storedPoint(id, p.at, p.tension, p.bulge);
     });
     // Step 2 (AP-R1): an edit keeps `from` while the first point stays put, and `to` while the
     // last does, so a point edited bends only the pieces near it; otherwise the real ends
@@ -486,6 +496,7 @@ export async function drawRouteInTransaction({
             .values({ geometry: json })
             .returning()
             .get())!;
+        await markArcsInTransaction(tx, geometry);
         const L = schema.timeline_lanes;
         if (lane)
             // Off the group path: its lane walks the new own route, with no offset and no Adjust,
@@ -722,35 +733,116 @@ export async function planRouteCut(
     const inner = path.source
         .map((src, k) => ({ src, k }))
         .filter(({ src }) => src >= 0);
-    const pointAt = (src: number): RoutePoint => {
-        const p = geometry.points[src]!;
-        return storedPoint(p.id, p.at, p.tension);
-    };
-    const xy = (p: XY): XY => [p[0], p[1]];
     return {
         transitionId: t.id,
         slot: lane.slot_index,
         routeId: route.id,
         C,
-        // Step 2 (AP-R7): the half before keeps the route's `from`, the route from the count
-        // keeps its `to`, so the tangents near the ends stay as they were
+        ...cutHalves(
+            geometry,
+            path,
+            d,
+            C,
+            inner.filter(({ k }) => far(k)),
+        ),
+    };
+}
+
+/**
+ * AP-R7's two halves of `geometry` cut at distance `d` (at `C`) along its walked `path`: the
+ * kept inner points (`inner`, none within `EPS_GEOM` of `C`) split by place, ids kept. Step 2: the
+ * half before keeps the route's `from`, the route from the count keeps its `to`, so the tangents
+ * near the ends stay as they were. R-14″: an arc leg cut at `C` leaves each half on the same
+ * circle, so each part's bulge is worked out from its share of the sweep; a leg next to the cut,
+ * whose end is within `EPS_GEOM` of `C`, keeps its own.
+ */
+function cutHalves(
+    geometry: RouteGeometry,
+    path: RoutePath,
+    d: number,
+    C: XY,
+    inner: readonly { src: number; k: number }[],
+): Pick<RouteCut, "before" | "after"> {
+    const xy = (p: XY): XY => [p[0], p[1]];
+    const beforeKept = inner.filter(({ k }) => path.D[k]! < d);
+    const afterKept = inner.filter(({ k }) => path.D[k]! > d);
+    const arcs = cutArcs(path, d, beforeKept.at(-1)?.k ?? 0, afterKept[0]?.k);
+    const pointAt = (src: number, bulge?: number | null): RoutePoint => {
+        const p = geometry.points[src]!;
+        return storedPoint(
+            p.id,
+            p.at,
+            p.tension,
+            bulge === undefined ? p.bulge : (bulge ?? undefined),
+        );
+    };
+    // With no point after the cut, its first leg is the last: `toBulge` is the cut arc's part
+    const afterTo =
+        afterKept.length > 0
+            ? geometry.toBulge
+            : arcs.after === undefined
+              ? geometry.toBulge
+              : (arcs.after ?? undefined);
+    return {
         before: {
             v: 1,
             from: xy(geometry.from),
             to: xy(C),
-            points: inner
-                .filter(({ k }) => path.D[k]! < d && far(k))
-                .map(({ src }) => pointAt(src)),
+            ...(arcs.before ? { toBulge: arcs.before } : {}),
+            points: beforeKept.map(({ src }) => pointAt(src)),
         },
         after: {
             v: 1,
             from: xy(C),
             to: xy(geometry.to),
-            points: inner
-                .filter(({ k }) => path.D[k]! > d && far(k))
-                .map(({ src }) => pointAt(src)),
+            ...(afterTo ? { toBulge: afterTo } : {}),
+            points: afterKept.map(({ src }, i) =>
+                pointAt(src, i === 0 ? arcs.after : undefined),
+            ),
         },
     };
+}
+
+/**
+ * R-14″ for AP-R7: the bulges of the two legs that meet at the cut. `kb` is the last vertex of
+ * `path` kept before the cut, `ka` the first kept after it (undefined: `B`). The before half's
+ * last leg runs from `V[kb]` to `C`, the after half's first leg from `C` to `V[ka]`. When such a
+ * leg is part of one arc piece its bulge is that part's (the same circle, its share of the sweep);
+ * when it stands for a whole arc piece whose end was dropped near `C`, that piece's bulge. `after`
+ * is undefined to keep the stored bulge, null for none.
+ */
+function cutArcs(
+    path: RoutePath,
+    d: number,
+    kb: number,
+    ka: number | undefined,
+): { before?: number; after?: number | null } {
+    const { D, pieces } = path;
+    // the piece holding the cut, as R-14 finds it
+    let j = 0;
+    while (j < pieces.length - 1 && !(d < D[j + 1]!)) j++;
+    const piece = pieces[j]!;
+    const share = (from: number, to: number) => {
+        if (piece.kind !== "arc") return undefined;
+        const phi = 2 * Math.atan(2 * piece.k);
+        const k = Math.tan((phi * (to - from)) / 2) / 2;
+        return k === 0 ? undefined : k;
+    };
+    const f = Math.min(1, Math.max(0, (d - D[j]!) / (D[j + 1]! - D[j]!)));
+    const arcOf = (i: number) => {
+        const p = pieces[i];
+        return p?.kind === "arc" ? p.k : undefined;
+    };
+    const before =
+        kb === j ? share(0, f) : kb === j - 1 ? arcOf(j - 1) : undefined;
+    const end = ka ?? path.V.length - 1;
+    const after =
+        end === j + 1
+            ? (share(f, 1) ?? null)
+            : end === j + 2
+              ? undefined // its own leg, as stored
+              : null;
+    return { before, after };
 }
 
 /**
@@ -780,6 +872,7 @@ export async function writeRouteCutBeforeInTransaction(
         .values({ geometry: JSON.stringify(cut.before) })
         .returning()
         .get())!;
+    await markArcsInTransaction(tx, cut.before);
     const [created] = await createTimelineTransitionsInTransaction({
         tx,
         newTransitions: [
