@@ -89,7 +89,10 @@ export const FieldPropertiesSchema = z.object({
     sideDescriptions: SideDescriptionsSchema.optional(),
     halfLineXInterval: z.float64().default(0),
     halfLineYInterval: z.float64().default(0),
-    stepSizeInches: z.float64().default(22.5),
+    // A step has a length: 0 would make a field with no size
+    stepSizeInches: z.float64().positive().default(22.5),
+    // Optional: files from before the threshold existed get the default. 0 turns it off.
+    stepSizeWarningThresholdInches: z.float64().min(0).optional(),
     measurementSystem: z.enum(["imperial", "metric"]).default("imperial"),
     topLabelsVisible: z.boolean().default(true),
     bottomLabelsVisible: z.boolean().default(true),
