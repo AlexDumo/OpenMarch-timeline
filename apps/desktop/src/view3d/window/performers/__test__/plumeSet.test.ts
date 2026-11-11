@@ -14,7 +14,12 @@ import {
 import type { Composer } from "@/view3d/render/composer";
 import type { LoadedBody } from "../marchers/marcherAssets";
 import { MarcherBodies, bakeForBodies } from "../marchers/marcherBodies";
-import { PlumeSet, plumeMaterial, plumeSocket } from "../marchers/plumeSet";
+import {
+    PlumeSet,
+    keepCanvasOpaque,
+    plumeMaterial,
+    plumeSocket,
+} from "../marchers/plumeSet";
 
 const root = path.resolve(__dirname, "../../../assets/om-pose");
 
@@ -119,6 +124,27 @@ describe("plumes in the band", () => {
         set.dispose();
     });
 
+    it("puts each plume on its own wearer's head when some slots wear none", async () => {
+        const set = await band(
+            ["Color Guard", "Trumpet", "Color Guard", "Tuba"],
+            "high",
+        );
+        const [plumes] = plumesOf(set);
+        const slot = plumes.geometry.getAttribute("aSlot");
+        expect(plumes.count).toBe(2);
+        expect([slot.getX(0), slot.getX(1)]).toEqual([1, 3]);
+        set.writeFrame(
+            Float32Array.from([0, 0, 5, 6, 0, 0, 7, 8]),
+            new Float32Array(4),
+            Uint8Array.from([1, 1, 1, 1]),
+            0,
+        );
+        const m = plumes.instanceMatrix.array;
+        expect([m[12], m[14]]).toEqual([5, 6]);
+        expect([m[28], m[30]]).toEqual([7, 8]);
+        set.dispose();
+    });
+
     it("gives no plume to a look without a shako", async () => {
         const set = await band(["Color Guard"], "high");
         expect(plumesOf(set).length).toBe(0);
@@ -150,6 +176,25 @@ describe("plumes in the band", () => {
         low.dispose();
     });
 
+    it("scales each plume with its marcher's height class", () => {
+        const material = new THREE.MeshStandardMaterial();
+        const set = new PlumeSet(
+            [{ slot: 0, socket: { x: 0, y: 1.9, z: 0, bone: 14 }, color: 0 }],
+            "low",
+            material,
+        );
+        set.writeFrame(
+            Float32Array.from([0, 0]),
+            new Float32Array(1),
+            Uint8Array.from([1]),
+            Float32Array.from([1.05]),
+        );
+        const m = set.mesh.instanceMatrix.array;
+        expect(Math.hypot(m[0], m[1], m[2])).toBeCloseTo(1.05, 5);
+        set.dispose();
+        material.dispose();
+    });
+
     it("hides the plume of a marcher who isn't placed", () => {
         const socket = { x: 0, y: 1.9, z: 0, bone: 14 };
         const material = new THREE.MeshStandardMaterial();
@@ -174,6 +219,43 @@ describe("plumes in the band", () => {
         expect(Array.from(m.slice(16, 28)).every((v) => v === 0)).toBe(true);
         set.dispose();
         material.dispose();
+    });
+});
+
+describe("an opaque canvas", () => {
+    it("draws the feathers without writing alpha, then turns alpha back on", () => {
+        const calls: boolean[][] = [];
+        const renderer = {
+            getContext: () => ({
+                colorMask: (...m: boolean[]) => calls.push(m),
+            }),
+        } as unknown as THREE.WebGLRenderer;
+        const mesh = new THREE.Mesh();
+        keepCanvasOpaque(mesh);
+        const args = [
+            renderer,
+            new THREE.Scene(),
+            new THREE.PerspectiveCamera(),
+            mesh.geometry,
+            mesh.material as THREE.Material,
+            null,
+        ] as const;
+        mesh.onBeforeRender(...args);
+        mesh.onAfterRender(...args);
+        expect(calls).toEqual([
+            [true, true, true, false],
+            [true, true, true, true],
+        ]);
+    });
+
+    it("is only needed for the feather cards", async () => {
+        const high = await band(["Trumpet"], "high");
+        const low = await band(["Trumpet"], "low");
+        const noop = new THREE.Object3D().onBeforeRender;
+        expect(plumesOf(high)[0].onBeforeRender).not.toBe(noop);
+        expect(plumesOf(low)[0].onBeforeRender).toBe(noop);
+        high.dispose();
+        low.dispose();
     });
 });
 
@@ -209,6 +291,19 @@ describe("plume material", () => {
             expect(shader.fragmentShader).toContain(
                 "normal = normalize(vNormal);",
             );
+            // every patch landed: a chunk three renamed would leave its
+            // replace doing nothing, and the plume black or unlit
+            for (const injected of [
+                "vPlumeColor = aColor * aShade;",
+                "transformed = (bakeSkin * vec4(transformed + aSocket.xyz, 1.0)).xyz;",
+                "objectNormal = (bakeSkin * vec4(objectNormal, 0.0)).xyz;",
+            ])
+                expect(shader.vertexShader).toContain(injected);
+            for (const injected of [
+                "diffuseColor.a = mix(diffuseColor.a, featherAlpha, onCard);",
+                "reflectedLight.directDiffuse *= 1.0 + glow;",
+            ])
+                expect(shader.fragmentShader).toContain(injected);
             expect(m.customProgramCacheKey()).toBe(`view3d-plume-${tier}`);
             m.dispose();
         }

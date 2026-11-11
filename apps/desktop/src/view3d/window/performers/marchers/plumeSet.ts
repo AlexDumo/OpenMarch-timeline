@@ -1,4 +1,4 @@
-// cspell:words glsl skinbase skinnormal emissivemap fract XYZW
+// cspell:words skinbase skinnormal fract XYZW
 /**
  * The shakos' feather plumes, drawn apart from the bodies: one instanced
  * mesh for the whole band, so the plume is one draw call however many
@@ -199,13 +199,15 @@ export function plumeMaterial(
                 "#include <color_fragment>",
                 `#include <color_fragment>
   vec3 plumeColor = vPlumeColor * mix(0.9, 1.0, smoothstep(0.0, 0.3, vHeight));
-  if (vCard > 0.5) {
-    diffuseColor.a = clamp(0.5 + featherDistance(vCardUv, vSeed) * 6.0, 0.0, 1.0);
-    plumeColor *= 0.86 + 0.24 * plumeHash(vSeed + 6.0); // feather to feather
-    plumeColor *= mix(0.72, 1.0, smoothstep(0.0, 0.5, vCardUv.y)); // tucked under the one above
-    plumeColor *= 1.0 - 0.05 * (1.0 - smoothstep(0.0, 0.05, abs(vCardUv.x))); // the shaft
-  }
-  diffuseColor.rgb *= plumeColor;`,
+  // the feather is worked out for every fragment and mixed in on cards, not
+  // branched on: its fwidth needs uniform control flow
+  float onCard = step(0.5, vCard);
+  float featherAlpha = clamp(0.5 + featherDistance(vCardUv, vSeed) * 6.0, 0.0, 1.0);
+  float featherShade = (0.86 + 0.24 * plumeHash(vSeed + 6.0)) // feather to feather
+    * mix(0.72, 1.0, smoothstep(0.0, 0.5, vCardUv.y)) // tucked under the one above
+    * (1.0 - 0.05 * (1.0 - smoothstep(0.0, 0.05, abs(vCardUv.x)))); // the shaft
+  diffuseColor.a = mix(diffuseColor.a, featherAlpha, onCard);
+  diffuseColor.rgb *= plumeColor * mix(1.0, featherShade, onCard);`,
             )
             // the normals point out of the plume as a whole: keep them on
             // both faces of a card instead of flipping them for the back
@@ -213,18 +215,36 @@ export function plumeMaterial(
                 "#include <normal_fragment_begin>",
                 "#include <normal_fragment_begin>\n  normal = normalize(vNormal);",
             )
-            // a soft rim, and light through the thin feathers
+            // a soft rim, and light through the thin feathers: both scale
+            // the light the plume gets, so it darkens with the scene at night
             .replace(
-                "#include <emissivemap_fragment>",
-                `#include <emissivemap_fragment>
+                "#include <lights_fragment_end>",
+                `#include <lights_fragment_end>
   {
     float rim = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0);
-    totalEmissiveRadiance += diffuseColor.rgb * (rim * 0.2 + vCard * 0.22 * smoothstep(0.2, 0.9, vCardUv.y));
+    float glow = rim * 0.2 + vCard * 0.22 * smoothstep(0.2, 0.9, vCardUv.y);
+    reflectedLight.directDiffuse *= 1.0 + glow;
+    reflectedLight.indirectDiffuse *= 1.0 + glow;
   }`,
             );
     };
     material.customProgramCacheKey = () => `view3d-plume-${tier}`;
     return material;
+}
+
+/**
+ * Draws `mesh` without writing alpha. With alpha-to-coverage three leaves
+ * the feather's fractional alpha in the output (it doesn't define OPAQUE),
+ * and the canvas has an alpha channel, so a feather's edge would let the
+ * page show through. Three sets the color mask from the material after this
+ * hook, but its cache already says "all on", so it leaves the mask alone;
+ * turning alpha back on after the draw matches its cache again.
+ */
+export function keepCanvasOpaque(mesh: THREE.Object3D): void {
+    mesh.onBeforeRender = (renderer) =>
+        renderer.getContext().colorMask(true, true, true, false);
+    mesh.onAfterRender = (renderer) =>
+        renderer.getContext().colorMask(true, true, true, true);
 }
 
 /** One plume: the slot that wears it, where it stands and its color. */
@@ -274,6 +294,8 @@ export class PlumeSet {
         this.mesh.frustumCulled = false;
         this.mesh.castShadow = false;
         this.mesh.receiveShadow = false;
+        if ((material as THREE.MeshStandardMaterial).alphaToCoverage)
+            keepCanvasOpaque(this.mesh);
     }
 
     /** How many plumes the set draws. */
