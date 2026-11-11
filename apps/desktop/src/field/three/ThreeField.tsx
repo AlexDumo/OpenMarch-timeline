@@ -113,6 +113,7 @@ import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
+import { ModeMarchers } from "./ModeMarchers";
 import {
     drawnSelection,
     useShapeMarchersHidden,
@@ -629,6 +630,7 @@ function ThreeFieldView() {
                             selectedIds={selectedIds}
                             hiddenIds={hiddenIds}
                         />
+                        <ModeMarchers editor={editor} marchers={marchers} />
                         <PlayheadDriver
                             marchers={marchers}
                             isPlaying={isPlaying}

@@ -34,6 +34,7 @@ import { refitNeeded, type PathTarget } from "./pathTarget";
 import {
     followEnds,
     followHit,
+    followMarchersOf,
     followPlanOf,
     grabEnd,
     keepsEndSpots,
@@ -1105,7 +1106,21 @@ function followDrawing(session: PathSession): FieldModeDrawing {
         }),
         ...guidesFor(moving ? [moving] : [], outline ?? []),
         ...(tipText && moving ? { tip: { at: moving, text: tipText } } : {}),
+        ...realMarchers(session, starts, line),
     };
+}
+
+/**
+ * Step 4c (DL-16, DL-17): the line's real marchers where they will stand, or walking with
+ * ▶ Preview, and their starts as the shape tool's ghosts (#417); nothing before a point is placed
+ */
+function realMarchers(
+    session: PathSession,
+    starts: readonly XY[],
+    line: readonly number[],
+): Pick<FieldModeDrawing, "marchersAt" | "rings" | "ringIds"> {
+    const marchersAt = followMarchersOf(session);
+    return marchersAt ? { marchersAt, rings: starts, ringIds: line } : {};
 }
 
 /** `drawingOf`'s work, uncached */

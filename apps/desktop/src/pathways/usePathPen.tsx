@@ -17,7 +17,12 @@ import {
 import { useStartFlagLevelsInEffect } from "@/stores/StartFlagKeyStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import type { XY } from "@/shapes/types";
-import { cancelFollowDrawing } from "./followDrag";
+import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
+import {
+    cancelFollowDrawing,
+    followMarchersOf,
+    setFollowPreview,
+} from "./followDrag";
 import { isTrailLineAt, openFollowTool } from "./followTool";
 import {
     closeShapeTool,
@@ -323,6 +328,19 @@ export function usePathPenActions(): void {
     // Off for a dragged-out line (owner, 2026-11-10): it ends along its trail
     const trailAlong = usePathPenStore(
         (s) => s.session?.target.trail?.along === true,
+    );
+    // ▶ Preview (step 4c, DL-17): while a trail is dragged out From trail, with something drawn,
+    // and the system allows motion
+    const canPreview = usePathPenStore(
+        (s) => followMarchersOf(s.session) !== null,
+    );
+    useActionHandler(
+        "followPreview",
+        () => {
+            const follow = usePathPenStore.getState().session?.follow;
+            if (follow) setFollowPreview(!follow.preview);
+        },
+        { enabled: canPreview && !prefersReducedMotion() },
     );
     useActionHandler("reverseTrail", () => void reverseShownTrail(), {
         enabled: trailShown && phase !== "drawing" && !trailAlong,

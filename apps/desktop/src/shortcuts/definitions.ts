@@ -863,6 +863,16 @@ const STATIC_ACTIONS = {
         defaultBindings: ["Shift+L"],
         ignoreRepeat: true,
     },
+    // Pathways step 4c (DL-17): ▶ Preview on the Follow tool's bar loops the line's walk. No key:
+    // the bar's button and the palette
+    followPreview: {
+        labelKey: "actions.path.followPreview",
+        keywordsKey: "actions.path.followKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
     reverseTrail: {
         labelKey: "actions.path.reverse",
         keywordsKey: "actions.path.followKeywords",
