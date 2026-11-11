@@ -40,6 +40,8 @@ import {
     EVEN_STEP,
     evenLimitOf,
     followPlanOf,
+    followSpacingOf,
+    keepsEndSpots,
     setFollowEnds,
     setFollowSpacing,
 } from "./followDrag";
@@ -130,8 +132,12 @@ function trailBigSteps(
     const { target } = session;
     const trail = target.trail!;
     const counts = target.end - target.start;
-    // A trail dragged out (step 4b): each walks the way to where it stops (R-13″)
-    const plan = session.follow ? followPlanOf(session) : null;
+    // A trail dragged out (step 4b): each walks the way to where it stops (R-13″). With Keep
+    // end spots it is step 4's trail into the spots they have, read as step 4 reads it (AP-T9)
+    const plan =
+        session.follow && !keepsEndSpots(session.follow)
+            ? followPlanOf(session)
+            : null;
     const distances = plan
         ? plan.ends.map((e, q) => e - plan.startDist[q]!)
         : trailDistances(trail.members, curveOf(shapeOf(session)).L);
@@ -865,16 +871,17 @@ function FollowControls({ session }: { session: PathSession }) {
     const follow = session.follow!;
     const plan = followPlanOf(session);
     const limit = evenLimitOf(plan);
-    const even = follow.spacing.kind === "even" ? follow.spacing.steps : null;
+    // The spacing in use: Even held to its limit, Keep spacing while the limit is under one step
+    const spacing = followSpacingOf(session);
+    const even = spacing.kind === "even" ? spacing.steps : null;
+    const evenOff = limit !== null && limit < EVEN_STEP;
     const fromTrail = follow.ends === "trail";
     const setEven = (steps: number) =>
         setFollowSpacing({
             kind: "even",
             steps: Math.max(
                 EVEN_STEP,
-                limit === null
-                    ? steps
-                    : Math.min(steps, Math.max(limit, EVEN_STEP)),
+                limit === null ? steps : Math.min(steps, limit),
             ),
         });
     return (
@@ -905,10 +912,18 @@ function FollowControls({ session }: { session: PathSession }) {
                             )}
                         </IconButton>
                         <IconButton
-                            label={tolgee.t(
-                                "pathways.editor.evenTip",
-                                "Even: every marcher ends the same number of steps from the next",
-                            )}
+                            label={
+                                evenOff
+                                    ? tolgee.t(
+                                          "pathways.editor.evenOff",
+                                          "Even: the trail is too short for even steps, or someone would walk backward. Draw it longer",
+                                      )
+                                    : tolgee.t(
+                                          "pathways.editor.evenTip",
+                                          "Even: every marcher ends the same number of steps from the next",
+                                      )
+                            }
+                            disabled={evenOff}
                             pressed={even !== null}
                             onClick={() =>
                                 setEven(
@@ -975,7 +990,7 @@ function FollowControls({ session }: { session: PathSession }) {
                     <Divider />
                 </>
             )}
-            {follow.keepOffered && (
+            {follow.keep && (
                 <>
                     <span
                         className="flex items-center gap-2"

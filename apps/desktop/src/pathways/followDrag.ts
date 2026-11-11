@@ -13,7 +13,24 @@ import {
 } from "@/db-functions/timelineTrailDrag";
 import type { XY } from "@/shapes/types";
 import type { PathTarget } from "./pathTarget";
-import { usePathPenStore, type PathSession } from "./pathPenStore";
+import {
+    storedPoints,
+    usePathPenStore,
+    type PathSession,
+} from "./pathPenStore";
+
+/**
+ * Keep end spots (AP-T9): step 4's Follow onto the spots the line has, in the move every member
+ * is in at the playhead (step 4's target rule)
+ */
+export interface FollowKeep {
+    readonly timelineId: number;
+    /** The move's start and end beats */
+    readonly start: number;
+    readonly end: number;
+    /** Each member's end spot in that move, by id */
+    readonly spots: ReadonlyMap<number, XY>;
+}
 
 /** The Follow tool's drag in progress (a session's `follow`) */
 export interface FollowDrag {
@@ -30,8 +47,8 @@ export interface FollowDrag {
     readonly spacing: TrailSpacing;
     /** From trail (AP-T8) or Keep end spots (AP-T1), AP-T9 */
     readonly ends: "trail" | "keep";
-    /** Whether Keep end spots is offered: every member has spots in the window's move */
-    readonly keepOffered: boolean;
+    /** Keep end spots, offered when every member is in one move at the playhead; else null */
+    readonly keep: FollowKeep | null;
     /** One step, in field units */
     readonly step: number;
 }
@@ -53,31 +70,60 @@ export const followEnds = (follow: FollowDrag): number[] =>
         ? [follow.order[0]!, follow.order[follow.order.length - 1]!]
         : [...follow.order];
 
-const plans = new WeakMap<PathSession, TrailDragPlan | null>();
+const plans = new WeakMap<
+    PathSession,
+    { plan: TrailDragPlan; spacing: TrailSpacing } | null
+>();
 
-/**
- * AP-T8's Ends for the session as drawn so far: the way, each member's end on it and its spot.
- * Null before an end is grabbed. What the preview draws is what the write stores.
- */
-export function followPlanOf(s: PathSession): TrailDragPlan | null {
+/** AP-T8's plan and the spacing it uses, worked out once per session state */
+function followPlanned(
+    s: PathSession,
+): { plan: TrailDragPlan; spacing: TrailSpacing } | null {
     if (plans.has(s)) return plans.get(s)!;
     const f = s.follow;
-    let plan: TrailDragPlan | null = null;
+    let planned: { plan: TrailDragPlan; spacing: TrailSpacing } | null = null;
     if (f && f.grabbed !== null) {
         const starts = trailLine(f).map((id): [number, number] => {
             const p = f.starts.get(id)!;
             return [p.x, p.y];
         });
-        plan = planTrailDrag(
-            starts,
-            s.points.map((p) => ({ at: [p.at.x, p.at.y] as [number, number] })),
-            f.spacing,
-            f.step,
-        );
+        // The points as written, smooth ones with their roundness, so the preview is the write
+        const points = storedPoints(s.points);
+        let plan = planTrailDrag(starts, points, f.spacing, f.step);
+        // Even never goes past its limit (it shrinks as points are removed): held at the limit,
+        // and Keep spacing while the limit is under Even's finest step
+        let spacing = f.spacing;
+        const limit = evenLimitOf(plan);
+        if (
+            spacing.kind === "even" &&
+            limit !== null &&
+            spacing.steps > limit
+        ) {
+            spacing =
+                limit < EVEN_STEP
+                    ? { kind: "keep" }
+                    : { kind: "even", steps: limit };
+            plan = planTrailDrag(starts, points, spacing, f.step);
+        }
+        planned = { plan, spacing };
     }
-    plans.set(s, plan);
-    return plan;
+    plans.set(s, planned);
+    return planned;
 }
+
+/**
+ * AP-T8's Ends for the session as drawn so far: the way, each member's end on it and its spot.
+ * Null before an end is grabbed. What the preview draws is what the write stores.
+ */
+export const followPlanOf = (s: PathSession): TrailDragPlan | null =>
+    followPlanned(s)?.plan ?? null;
+
+/**
+ * The spacing the drawing uses and writes: the chosen one, with Even held to its limit now
+ * (`followPlanOf`'s)
+ */
+export const followSpacingOf = (s: PathSession): TrailSpacing =>
+    followPlanned(s)?.spacing ?? s.follow?.spacing ?? { kind: "keep" };
 
 /**
  * The selected marcher whose start is under `at` (within `radius`): an end of the line, or one in
@@ -98,28 +144,43 @@ export function followHit(
     return { id: best.id, end: followEnds(follow).includes(best.id) };
 }
 
-/** The target as drawn once `follow` is grabbed: its line in trail order, the leader last */
+/** Whether the session is Follow onto the spots the line has (AP-T9's Keep end spots) */
+export const keepsEndSpots = (follow: FollowDrag): boolean =>
+    follow.ends === "keep" && follow.keep !== null;
+
+/**
+ * The target as drawn once `follow` is grabbed: its line in trail order, the leader last. With
+ * Keep end spots it is step 4's trail: over the kept move, each member to its end spot there, the
+ * trail running on into the tail's.
+ */
 export function followTarget(
     target: PathTarget,
     follow: FollowDrag,
     drills: ReadonlyMap<number, string>,
 ): PathTarget {
     const line = trailLine(follow);
+    const keep = keepsEndSpots(follow) ? follow.keep : null;
     const members = line.map((id) => ({
         marcherId: id,
         drill: drills.get(id) ?? `${id}`,
         from: follow.starts.get(id)!,
-        to: follow.starts.get(id)!,
+        to: keep?.spots.get(id) ?? follow.starts.get(id)!,
     }));
     const leader = members.at(-1)!;
     return {
         ...target,
         marcherId: leader.marcherId,
+        start: keep?.start ?? follow.window.start,
+        end: keep?.end ?? follow.window.end,
         from: leader.from,
-        to: leader.from,
+        to: keep ? members[0]!.to : leader.from,
         trail: { members, leaderId: leader.marcherId, reverse: false },
     };
 }
+
+/** The drill numbers the session's target names, by id */
+const drillsOf = (s: PathSession): Map<number, string> =>
+    new Map((s.target.trail?.members ?? []).map((m) => [m.marcherId, m.drill]));
 
 const updateFollow = (
     fn: (s: PathSession, f: FollowDrag) => PathSession,
@@ -134,13 +195,10 @@ export function grabEnd(id: number): void {
     updateFollow((s, f) => {
         if (!followEnds(f).includes(id)) return s;
         const follow = { ...f, grabbed: id };
-        const drills = new Map(
-            (s.target.trail?.members ?? []).map((m) => [m.marcherId, m.drill]),
-        );
         return {
             ...s,
             follow,
-            target: followTarget(s.target, follow, drills),
+            target: followTarget(s.target, follow, drillsOf(s)),
             points: [],
             pointer: null,
             dragging: null,
@@ -175,11 +233,18 @@ export function setFollowSpacing(spacing: TrailSpacing): void {
 
 /** The path bar's Ends (DL-8, AP-T9): From trail, or Keep end spots */
 export function setFollowEnds(ends: "trail" | "keep"): void {
-    updateFollow((s, f) =>
-        f.keepOffered || ends === "trail"
-            ? { ...s, follow: { ...f, ends } }
-            : s,
-    );
+    updateFollow((s, f) => {
+        if (ends === "keep" && !f.keep) return s;
+        const follow = { ...f, ends };
+        return {
+            ...s,
+            follow,
+            target:
+                f.grabbed === null
+                    ? s.target
+                    : followTarget(s.target, follow, drillsOf(s)),
+        };
+    });
 }
 
 /** Even's limit in the finest steps offered: the largest N that keeps everyone walking forward */

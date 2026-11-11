@@ -10,7 +10,10 @@ import { performRedo, performUndo } from "../history";
 import { TimelineWriteError } from "../timelineErrors";
 import { moveMarchersInTarget } from "../timelineMoves";
 import { drawRoute } from "../timelineRoutes";
-import { editTrailPoints, reverseTrail } from "../timelineTrails";
+import { editTrailPoints, followTrail, reverseTrail } from "../timelineTrails";
+import { followPlanOf, type FollowDrag } from "@/pathways/followDrag";
+import { followKeepAt, isTrailLineAt } from "@/pathways/followTool";
+import { storedPoints, type PathSession } from "@/pathways/pathPenStore";
 import {
     dragTrail,
     followSource,
@@ -542,5 +545,106 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
         expect(
             await db.all(sql`SELECT * FROM timeline_route_violations`),
         ).toEqual([]);
+    });
+
+    it("a smooth point: the Follow tool's preview is what's written and how they walk (QA-DL-1)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { starts, step } = await line(db);
+        const ids = [1, 2, 3, 4, 5, 6];
+        const leader = starts.get(6)!;
+        const xy = (p: XY) => ({ x: p[0], y: p[1] });
+        const follow: FollowDrag = {
+            window: WINDOW,
+            ids,
+            order: ids,
+            starts: new Map(ids.map((m) => [m, xy(starts.get(m)!)])),
+            grabbed: 6,
+            spacing: { kind: "keep" },
+            ends: "trail",
+            keep: null,
+            step,
+        };
+        // A smooth point at the corner, as the pen's press-drag places it
+        const session = {
+            follow,
+            points: [
+                { at: xy([leader[0] + 10 * step, leader[1]]), tension: 0.5 },
+                { at: xy([leader[0] + 10 * step, leader[1] - 10 * step]) },
+            ],
+        } as unknown as PathSession;
+        const plan = followPlanOf(session)!;
+        const points = storedPoints(session.points);
+        expect(points[0]!.tension).toBe(0.5);
+        const result = await dragTrail({ db, window: WINDOW, marcherIds: ids, leaderId: 6, points, spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+        // The spots written are the ones the preview showed
+        expect(await spotsOf(db, result.transitionId)).toEqual(plan.spots);
+        // and the walk is the preview's at every quarter beat
+        const after = await resolverOf(db);
+        for (let i = 0; i <= 32; i++) {
+            const b = 9 + i / 4;
+            const preview = trailDragPreview(plan, (b - 9) / 8);
+            ids.forEach((m, q) =>
+                expect(
+                    near(after.positionAt(m, b), preview[q]!, 1e-6),
+                    `M${m}@${b}`,
+                ).toBe(true),
+            );
+        }
+    });
+
+    it("AP-T9: Keep end spots follows into the move at the playhead (step 4's rule), not only one over exactly the window; Even's limit isn't asked", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { starts, step, before } = await line(db);
+        const ids = [1, 2, 3, 4];
+        // The playhead at 12: the edit window is [9, 12), inside page 2's move [9, 17)
+        const window = { start: 9, end: 12 };
+        const keep = (await followKeepAt(db, before, ids, 12))!;
+        const page2 = (await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.start_beat, 9))
+            .get())!;
+        expect(keep).toMatchObject({ timelineId: page2.id, start: 9, end: 17 });
+        expect([...keep.spots.values()]).toEqual(
+            ids.map((m) => {
+                const [x, y] = before.positionAt(m, 17);
+                return { x, y };
+            }),
+        );
+        const tail = starts.get(1)!;
+        const points = [{ at: [tail[0] - 5 * step, tail[1] + 5 * step] as XY }];
+        const drag = (keepMove?: number) =>
+            dragTrail({ db, window, marcherIds: ids, leaderId: 1, points, spacing: { kind: "even", steps: 100 }, step, ends: "keep", keepMove }); // prettier-ignore
+        // With no move over exactly the window and none given, refused as before
+        await expectRefused(db, () => drag(), /one move with spots/);
+        const result = await drag(keep.timelineId);
+        expect(result.marcherIds).toEqual([4, 3, 2, 1]);
+        expect(await spotsOf(db, result.transitionId)).toEqual(
+            [4, 3, 2, 1].map((m) => before.positionAt(m, 17)),
+        );
+        // No move at the playhead for them all: not offered
+        expect(await followKeepAt(db, before, ids, 400)).toBeNull();
+    });
+
+    it("isTrailLineAt: exactly a trail's line, every member and nobody else", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { starts } = await line(db);
+        const page2 = (await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.start_beat, 9))
+            .get())!;
+        const lead = starts.get(3)!;
+        await followTrail({ db, timelineId: page2.id, marcherIds: [1, 2, 3], points: [{ at: [lead[0] + 40, lead[1] + 40] }] }); // prettier-ignore
+        expect(await isTrailLineAt(db, [3, 1, 2], 12)).toBe(true);
+        expect(await isTrailLineAt(db, [1, 2], 12)).toBe(false);
+        expect(await isTrailLineAt(db, [1, 2, 3, 4], 12)).toBe(false);
+        expect(await isTrailLineAt(db, [1, 2, 3], 30)).toBe(false);
     });
 });

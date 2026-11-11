@@ -2735,6 +2735,7 @@
                 "tooShort": "Draw a longer trail",
                 "evenTooWide": "Even spacing can be at most {limit} steps here, or someone would walk backward",
                 "noSpots": "Keep end spots needs every marcher in one move with spots there",
+                "notOneMove": "{marcher} can't join the rest of the line in one move here, so nothing was changed",
                 "noWindow": "Move the playhead past the start flag to drag out a trail"
             }
         }
@@ -3798,6 +3799,7 @@
             "keepSpacingTip": "Keep spacing: each marcher keeps its distance to the next along the way",
             "even": "Even",
             "evenTip": "Even: every marcher ends the same number of steps from the next",
+            "evenOff": "Even: the trail is too short for even steps, or someone would walk backward. Draw it longer",
             "evenCloser": "Closer together",
             "evenFarther": "Farther apart",
             "evenSteps": "{steps} steps",

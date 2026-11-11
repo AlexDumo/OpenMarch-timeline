@@ -36,6 +36,7 @@ import {
     followHit,
     followPlanOf,
     grabEnd,
+    keepsEndSpots,
     trailLine,
 } from "./followDrag";
 import tolgee from "@/global/singletons/Tolgee";
@@ -1008,18 +1009,30 @@ function followDrawing(session: PathSession): FieldModeDrawing {
     const grabbed = follow.grabbed !== null;
     const starts = line.map((id) => follow.starts.get(id)!);
     const shape = shapeOf(session);
-    const plan = followPlanOf(session);
-    const spots = plan ? plan.spots.map(([x, y]) => ({ x, y })) : [];
-    const outline = grabbed
-        ? session.pointer
-            ? pathOutline({
-                  ...shape,
-                  points: [...session.points, { at: session.pointer }],
-                  to: session.pointer,
-                  ends: { from: shape.from, to: session.pointer },
-              })
-            : pathOutline(shape)
-        : null;
+    // Keep end spots (AP-T9): the spots the line has, step 4's trail running on into the tail's;
+    // From trail (AP-T8): where the line stops, as written
+    const keep = grabbed && keepsEndSpots(follow);
+    const plan = keep ? null : followPlanOf(session);
+    const spots = keep
+        ? session.target.trail!.members.map((m) => m.to)
+        : plan
+          ? plan.spots.map(([x, y]) => ({ x, y }))
+          : [];
+    // The next leg to the pointer: From trail ends there; Keep end spots runs on to the tail's spot
+    const drawn = session.pointer
+        ? { ...shape, points: [...session.points, { at: session.pointer }] }
+        : shape;
+    const outline = !grabbed
+        ? null
+        : pathOutline(
+              keep || !session.pointer
+                  ? drawn
+                  : {
+                        ...drawn,
+                        to: session.pointer,
+                        ends: { from: shape.from, to: session.pointer },
+                    },
+          );
     const moving = grabbed ? session.pointer : null;
     const tipText = moving ? drillTerms(moving) : null;
     const leaderLabel = tolgee.t("pathways.rings.leader", "Leads the line");

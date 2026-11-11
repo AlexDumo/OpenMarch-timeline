@@ -9,18 +9,19 @@ import {
     followSource,
     trailDragRefusalFor,
     trailDragRefusal,
-    windowMoveOf,
     type TrailWindow,
 } from "@/db-functions/timelineTrailDrag";
+import { readTrails } from "@/db-functions/timelineTrails";
+import type { DbConnection } from "@/db-functions/types";
 import { isBasicMode } from "@/stores/EditorModeStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { basicPageBox } from "@/timeline/timelineCoordinateWrites";
 import { translateTimelineText } from "@/timeline/translateTimelineText";
 import { currentShapeField } from "@/shapes/field/shapeField";
 import type { XY } from "@/shapes/types";
-import type { PathTarget } from "./pathTarget";
+import { groupMoveAt, type PathTarget } from "./pathTarget";
 import { usePathPenStore } from "./pathPenStore";
-import type { FollowDrag } from "./followDrag";
+import type { FollowDrag, FollowKeep } from "./followDrag";
 
 /**
  * The window a trail is dragged in now (DL-2): the edit window `[start flag, playhead)`, in Basic
@@ -38,13 +39,60 @@ export function followWindowNow(): TrailWindow | null {
 }
 
 /**
+ * Whether `ids` are exactly the line of a trail in their one move at `beat`: every member of it
+ * and nobody else. Follow (Shift+L) then draws that trail again (step 4, AP-T1 and AP-T2's
+ * "Again") instead of opening the Follow tool's drag.
+ */
+export async function isTrailLineAt(
+    database: DbConnection,
+    ids: readonly number[],
+    beat: number,
+): Promise<boolean> {
+    const move = await groupMoveAt(database, ids, beat);
+    if (move.kind !== "move") return false;
+    const chosen = new Set(ids);
+    return (await readTrails(database, move.timelineId)).some(
+        (t) =>
+            t.marcherIds.length === chosen.size &&
+            t.marcherIds.every((m) => chosen.has(m)),
+    );
+}
+
+/**
+ * Keep end spots (AP-T9) by step 4's target rule: the one move every one of `ids` is in at `beat`
+ * (the playhead), with each member's end spot there. Null when there's none.
+ */
+export async function followKeepAt(
+    database: DbConnection,
+    resolver: Pick<Resolver, "positionAt">,
+    ids: readonly number[],
+    beat: number,
+): Promise<FollowKeep | null> {
+    const move = await groupMoveAt(database, ids, beat);
+    if (move.kind !== "move") return null;
+    return {
+        timelineId: move.timelineId,
+        start: move.start,
+        end: move.end,
+        spots: new Map(
+            ids.map((m): [number, XY] => {
+                const [x, y] = resolver.positionAt(m, move.end);
+                return [m, { x, y }];
+            }),
+        ),
+    };
+}
+
+/**
  * Opens the Follow tool on the selected marchers `ids`: their ends pulse, ready to drag a trail
- * out of one. Resolves to why not (translated), or null when it opened.
+ * out of one. `beat` is the playhead, whose move Keep end spots follows into. Resolves to why not
+ * (translated), or null when it opened.
  */
 export async function openFollowTool(
     resolver: Pick<Resolver, "positionAt">,
     ids: readonly number[],
     drills: ReadonlyMap<number, string>,
+    beat: number,
 ): Promise<string | null> {
     const window = followWindowNow();
     if (!window) return translateTimelineText(trailDragRefusal.noWindow());
@@ -63,7 +111,7 @@ export async function openFollowTool(
         trailDragRefusalFor(tx, window, sorted, order.at(-1)!, "trail"),
     );
     if (refusal) return translateTimelineText(refusal);
-    const keepOffered = (await windowMoveOf(db, window, sorted)) !== null;
+    const keep = await followKeepAt(db, resolver, sorted, beat);
     const at = new Map<number, XY>(
         sorted.map((m, i) => [m, { x: starts[i]![0], y: starts[i]![1] }]),
     );
@@ -75,7 +123,7 @@ export async function openFollowTool(
         grabbed: null,
         spacing: { kind: "keep" },
         ends: "trail",
-        keepOffered,
+        keep,
         step: field.fieldProperties.pixelsPerStep,
     };
     const members = order.map((m) => ({

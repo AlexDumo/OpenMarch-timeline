@@ -1,7 +1,11 @@
 import { create } from "zustand";
 import { db } from "@/global/database/db";
 import { toast } from "sonner";
-import { drawRoute, removeRoute } from "@/db-functions/timelineRoutes";
+import {
+    drawRoute,
+    removeRoute,
+    type RoutePointInput,
+} from "@/db-functions/timelineRoutes";
 import {
     editTrailPoints,
     followTrail,
@@ -35,7 +39,7 @@ import type { XY } from "@/shapes/types";
 import { SMOOTH } from "@/shapes/line/lineGeometry";
 import type { GroupMember, PathTarget } from "./pathTarget";
 import { dragTrail } from "@/db-functions/timelineTrailDrag";
-import type { FollowDrag } from "./followDrag";
+import { followSpacingOf, type FollowDrag } from "./followDrag";
 import {
     isSmooth,
     pointKey,
@@ -314,9 +318,13 @@ export function shapeOf(s: PathSession): PathShape {
     let shape = shapes.get(s);
     if (shape) return shape;
     const { target, points } = s;
-    // A dragged-out trail ends at its own last point: there are no end spots to enter (R-13″)
+    // A dragged-out trail ends at its own last point: there are no end spots to enter (R-13″).
+    // With Keep end spots it runs on into the tail's end spot, as step 4's trail does (AP-T9)
     if (s.follow) {
-        const to = points.at(-1)?.at ?? target.from;
+        const to =
+            s.follow.ends === "keep" && s.follow.grabbed !== null
+                ? target.to
+                : (points.at(-1)?.at ?? target.from);
         shape = {
             from: target.from,
             to,
@@ -692,6 +700,14 @@ export function cancelDrag(before: readonly PathPoint[]): void {
     update((s) => ({ ...s, dragging: null, points: before }));
 }
 
+/** The points as they are written, smooth ones with their roundness (a preview reads the same) */
+export const storedPoints = (points: readonly PathPoint[]): RoutePointInput[] =>
+    points.map((c) => ({
+        ...(c.id === undefined ? {} : { id: c.id }),
+        at: [c.at.x, c.at.y] as [number, number],
+        ...((c.tension ?? 0) > 0 ? { tension: c.tension } : {}),
+    }));
+
 /** Writes `points` as the session's path (AP-R1), smooth ones with their roundness. */
 async function save(
     points: readonly PathPoint[],
@@ -700,11 +716,7 @@ async function save(
     const { session, saving } = usePathPenStore.getState();
     if (!session || saving) return false;
     usePathPenStore.setState({ saving: true });
-    const stored = points.map((c) => ({
-        ...(c.id === undefined ? {} : { id: c.id }),
-        at: [c.at.x, c.at.y] as [number, number],
-        ...((c.tension ?? 0) > 0 ? { tension: c.tension } : {}),
-    }));
+    const stored = storedPoints(points);
     const { target } = session;
     const { follow } = session;
     try {
@@ -716,9 +728,10 @@ async function save(
                 marcherIds: follow.ids,
                 leaderId: follow.grabbed,
                 points: stored,
-                spacing: follow.spacing,
+                spacing: followSpacingOf(session),
                 step: follow.step,
                 ends: follow.ends,
+                keepMove: follow.keep?.timelineId ?? null,
             });
         else if (target.trail && target.routeId !== null)
             // Point edits on an open trail, or the trail drawn again (AP-T2): by its route, so a

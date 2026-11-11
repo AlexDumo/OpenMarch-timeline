@@ -16,12 +16,15 @@ import {
     evenLimitOf,
     followHit,
     followPlanOf,
+    followSpacingOf,
     setFollowEnds,
     setFollowSpacing,
     trailLine,
     type FollowDrag,
+    type FollowKeep,
 } from "../followDrag";
-import { bigSteps } from "../PathEditor";
+import { bigSteps, trailDistances } from "../PathEditor";
+import { curveOf } from "../pathEdit";
 
 /**
  * The Follow tool on the field (pathways step 4b, spec Appendix L): the selected line's ends
@@ -51,23 +54,33 @@ const at = (x: number, y: number): FieldPointer => ({
     meta: false,
 });
 
-function open(keepOffered = false) {
+/** Keep end spots' move (AP-T9): [9, 17), everyone 20 steps right of where they start */
+const KEEP: FollowKeep = {
+    timelineId: 7,
+    start: 9,
+    end: 17,
+    spots: new Map(
+        [...starts].map(([id, p]) => [id, { x: p.x + 20 * STEP, y: p.y }]),
+    ),
+};
+
+function open(keep: FollowKeep | null = null, from = starts) {
     const follow: FollowDrag = {
         window: { start: 9, end: 17 },
         ids: [1, 2, 3, 4, 5],
         order: [1, 2, 3, 4, 5],
-        starts,
+        starts: from,
         grabbed: null,
         spacing: { kind: "keep" },
         ends: "trail",
-        keepOffered,
+        keep,
         step: STEP,
     };
     const members = follow.order.map((id) => ({
         marcherId: id,
         drill: `T${id}`,
-        from: starts.get(id)!,
-        to: starts.get(id)!,
+        from: from.get(id)!,
+        to: from.get(id)!,
     }));
     const target: PathTarget = {
         timelineId: -1,
@@ -75,8 +88,8 @@ function open(keepOffered = false) {
         marcherId: 5,
         start: 9,
         end: 17,
-        from: starts.get(5)!,
-        to: starts.get(5)!,
+        from: from.get(5)!,
+        to: from.get(5)!,
         routeId: null,
         points: [],
         ends: null,
@@ -209,12 +222,116 @@ describe("the Follow tool (pathways step 4b)", () => {
     });
 
     it("Ends: Keep end spots only when offered", () => {
-        open(false);
+        open(null);
         setFollowEnds("keep");
         expect(session().follow!.ends).toBe("trail");
-        open(true);
+        open(KEEP);
         setFollowEnds("keep");
         expect(session().follow!.ends).toBe("keep");
+    });
+
+    it("a smooth point: the spots shown are the ones written, its roundness included", () => {
+        open();
+        const right = starts.get(5)!;
+        drag(right, { x: right.x + 10 * STEP, y: right.y });
+        // a second leg, then the first point made smooth, as the pen's drag does
+        pathPenMode.press(at(right.x + 10 * STEP, right.y - 10 * STEP), press);
+        pathPenMode.release(at(right.x + 10 * STEP, right.y - 10 * STEP), null);
+        usePathPenStore.setState({
+            session: {
+                ...session(),
+                points: session().points.map((p, i) =>
+                    i === 0 ? { ...p, tension: 0.5 } : p,
+                ),
+            },
+        });
+        const s = session();
+        const line = [1, 2, 3, 4, 5].map((id): [number, number] => [starts.get(id)!.x, starts.get(id)!.y]); // prettier-ignore
+        const written = s.points.map((p) => ({
+            at: [p.at.x, p.at.y] as [number, number],
+            ...((p.tension ?? 0) > 0 ? { tension: p.tension } : {}),
+        }));
+        expect(written[0]!.tension).toBe(0.5);
+        const want = planTrailDrag(line, written, { kind: "keep" }, STEP);
+        const plan = followPlanOf(s)!;
+        expect(plan.spots).toEqual(want.spots);
+        expect(plan.ends).toEqual(want.ends);
+        expect(drawingOf(s)!.spots).toEqual(want.spots.map(([x, y]) => ({ x, y }))); // prettier-ignore
+        // and not the corners' way: the smooth point changes where they stop
+        const corners = planTrailDrag(line, written.map((p) => ({ at: p.at })), { kind: "keep" }, STEP); // prettier-ignore
+        expect(
+            corners.spots.some(
+                (p, q) =>
+                    Math.hypot(p[0] - want.spots[q]![0], p[1] - want.spots[q]![1]) > 1e-3, // prettier-ignore
+            ),
+        ).toBe(true);
+    });
+
+    it("Keep end spots: the spots they have show, the trail runs on into the tail's, and Big steps is step 4's (AP-T9)", () => {
+        open(KEEP);
+        const right = starts.get(5)!;
+        drag(right, { x: right.x + 4 * STEP, y: right.y - 6 * STEP });
+        // From trail: where the line stops; a short trail, no Big steps
+        expect(bigSteps(session(), fieldProperties)).toBeNull();
+        setFollowEnds("keep");
+        const s = session();
+        const d = drawingOf(s)!;
+        const kept = [5, 4, 3, 2, 1].map((id) => KEEP.spots.get(id)!).reverse(); // prettier-ignore
+        // tail first, as the line is drawn
+        expect(d.spots).toEqual(trailLine(s.follow!).map((id) => KEEP.spots.get(id)!)); // prettier-ignore
+        expect(d.spots).toEqual(kept);
+        expect(d.lanes!.at(-1)).toEqual(kept);
+        // The trail runs on into the tail's end spot, as step 4's does
+        const tail = KEEP.spots.get(1)!;
+        expect(shapeOf(s).to).toEqual(tail);
+        expect(d.outline!.at(-1)!.x).toBeCloseTo(tail.x, 6);
+        expect(d.outline!.at(-1)!.y).toBeCloseTo(tail.y, 6);
+        // Big steps as step 4 reads it: each walks the line-up, the trail and the end line
+        const distances = trailDistances(s.target.trail!.members, curveOf(shapeOf(s)).L); // prettier-ignore
+        expect(distances.every((x) => x > 20 * STEP)).toBe(true);
+        expect(bigSteps(s, fieldProperties)).not.toBeNull();
+        // Back to From trail: AP-T8's spots again
+        setFollowEnds("trail");
+        expect(drawingOf(session())!.spots).toEqual(
+            followPlanOf(session())!.spots.map(([x, y]) => ({ x, y })),
+        );
+    });
+
+    it("Even stays within its limit as points are removed, and is Keep spacing while the limit is under half a step", () => {
+        open();
+        const right = starts.get(5)!;
+        drag(right, { x: right.x + 10 * STEP, y: right.y });
+        // (8 + 10) steps over 4 gaps: up to 4.5
+        expect(evenLimitOf(followPlanOf(session()))).toBe(4.5);
+        setFollowSpacing({ kind: "even", steps: 4 });
+        expect(followSpacingOf(session())).toEqual({ kind: "even", steps: 4 });
+        // the trail gone: (8 + 0) / 4 = 2, so Even is held at 2
+        usePathPenStore.setState({ session: { ...session(), points: [] } });
+        expect(evenLimitOf(followPlanOf(session()))).toBe(2);
+        expect(followSpacingOf(session())).toEqual({ kind: "even", steps: 2 });
+        const plan = followPlanOf(session())!;
+        expect(plan.forward).toBe(true);
+        // A line a third of a step apart: no Even at all
+        const tight = new Map(
+            [1, 2, 3, 4, 5].map((id, i) => [
+                id,
+                { x: X0 + (i * STEP) / 3, y: Y0 },
+            ]),
+        );
+        open(null, tight);
+        const end = tight.get(5)!;
+        drag(end, { x: end.x + 4 * STEP, y: end.y });
+        // a trail a tenth of a step long, off the grid the pen lands on
+        usePathPenStore.setState({
+            session: {
+                ...session(),
+                points: [{ at: { x: end.x + 0.1 * STEP, y: end.y } }],
+            },
+        });
+        const limit = evenLimitOf(followPlanOf(session()))!;
+        expect(limit).toBeLessThan(0.5);
+        setFollowSpacing({ kind: "even", steps: 2 });
+        expect(followSpacingOf(session())).toEqual({ kind: "keep" });
     });
 
     it("Escape cancels the drawing and the ends pulse again; then it leaves the tool", () => {
