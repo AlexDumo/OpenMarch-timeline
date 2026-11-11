@@ -17,6 +17,8 @@ import {
 import { useStartFlagLevelsInEffect } from "@/stores/StartFlagKeyStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import type { XY } from "@/shapes/types";
+import { cancelFollowDrawing } from "./followDrag";
+import { openFollowTool } from "./followTool";
 import {
     closeShapeTool,
     useShapeToolStore,
@@ -258,6 +260,23 @@ export function usePathPenActions(): void {
         if (!resolver) return;
         const beat = useTimelineSelectionStore.getState().playheadBeat;
         const ids = performers.map((m) => m.id);
+        // The Follow tool (step 4b): its ends pulse until one is pressed and a trail dragged
+        // out of it. While a group path is drawn for the same marchers, Together | Follow on the
+        // path bar still turns that drawing into a trail into the spots they have (step 4)
+        const now2 = usePathPenStore.getState().session;
+        if (
+            !(
+                now2?.phase === "drawing" &&
+                now2.target.group &&
+                now2.target.routeId === null
+            )
+        ) {
+            void openFollowTool(resolver, ids, drills).then((refusal) => {
+                if (refusal) toast.error(refusal, { id: "path-pen" });
+                else if (useShapeToolStore.getState().tool) closeShapeTool();
+            });
+            return;
+        }
         void findTrailDrawTarget(db, resolver, ids, drills, beat).then(
             (target) => {
                 if ("kind" in target && target.kind === "refused") {
@@ -702,6 +721,8 @@ export function PathPenKeys(): null {
             if (!drawing && pickedLane !== null) selectLane(null);
             else if (!drawing && picked !== null) selectPoint(null);
             else if (!drawing && escapePathObject()) return;
+            // The Follow tool (step 4b): Escape cancels the trail drawn, then leaves the tool
+            else if (drawing && cancelFollowDrawing()) return;
             else closePath();
         },
         {

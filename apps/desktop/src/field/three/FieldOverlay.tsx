@@ -785,6 +785,8 @@ const ShapeBody = memo(function ShapeBody({
                     vectorEffect="non-scaling-stroke"
                     data-testid="pathMemberRing"
                     data-kind={ring.kind}
+                    data-pulse={ring.pulse || undefined}
+                    className={ring.pulse ? "animate-pulse" : undefined}
                     aria-label={ring.label}
                 >
                     <title>{ring.label}</title>

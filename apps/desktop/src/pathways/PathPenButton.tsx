@@ -58,7 +58,7 @@ export function PathPenButton({ performers }: { performers: number }) {
                           )}`
                         : tolgee.t(
                               "pathways.toolbar.followTip",
-                              "Follow: draw a trail, and the selected line follows its leader along it into its end spots",
+                              "Follow: drag a trail out of an end of the selected line, and where the line stops becomes its next spots",
                           )
                 }
                 action={performers < 2 ? undefined : "followTrail"}

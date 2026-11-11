@@ -31,6 +31,13 @@ import { toolEnvFor } from "@/shapes/tool/toolEnv";
 import type { ToolEnv } from "@/shapes/tool/toolKind";
 import type { XY } from "@/shapes/types";
 import { refitNeeded, type PathTarget } from "./pathTarget";
+import {
+    followEnds,
+    followHit,
+    followPlanOf,
+    grabEnd,
+    trailLine,
+} from "./followDrag";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     PATH_MENU,
@@ -247,6 +254,8 @@ class PathPenMode implements FieldMode {
         keys: HeldGesture<FieldPointer>;
         /** A press on an adjustable lane or one of its keys, not on the path's own handles */
         lane: LaneHold | null;
+        /** The Follow tool (step 4b): the press on an end that draws the trail's first leg */
+        firstLeg?: boolean;
     } | null = null;
     private listeners = new Set<() => void>();
 
@@ -405,6 +414,40 @@ class PathPenMode implements FieldMode {
         const s = this.session;
         if (!s) return;
         this.endHeld();
+        // The Follow tool, its ends pulsing: a press on an end grabs it and drags out the first
+        // leg; a marcher in the middle of the line, or the empty field, takes no press (DL-4)
+        if (s.phase === "drawing" && s.follow && s.follow.grabbed === null) {
+            const env = envOf();
+            const hit = env
+                ? followHit(s.follow, pointer.field, env.hitRadius)
+                : null;
+            if (!hit?.end) return;
+            grabEnd(hit.id);
+            const grabbed = this.session!;
+            const keys = holdGesture<FieldPointer>(
+                pointer,
+                (at, roles) => this.follow(at, roles),
+                [],
+                isMac,
+                {
+                    honored: honored(shapeOf(grabbed), null),
+                    screen: () => this.held?.screen ?? pointer.screen,
+                },
+            );
+            this.held = {
+                start: pointer,
+                screen: pointer.screen,
+                key: null,
+                base: shapeOf(grabbed),
+                before: [],
+                moved: false,
+                landed: null,
+                keys,
+                lane: null,
+                firstLeg: true,
+            };
+            return;
+        }
         const base = shapeOf(s);
         const key =
             s.phase === "open"
@@ -451,6 +494,8 @@ class PathPenMode implements FieldMode {
         const s = this.session;
         const env = envOf(roles);
         if (!s || s.phase !== "drawing" || !env) return;
+        // The Follow tool's ends still pulse: nothing is drawn yet
+        if (s.follow && s.follow.grabbed === null) return;
         setPointer(landCorner(shapeOf(s), pointer.field, env));
     }
 
@@ -460,7 +505,8 @@ class PathPenMode implements FieldMode {
         const s = this.session;
         if (!p || !s) return;
         if (s.phase === "drawing") {
-            if (p.moved && p.landed) this.shapeNew(p, pointer, roles);
+            if (p.firstLeg) this.preview(pointer, roles);
+            else if (p.moved && p.landed) this.shapeNew(p, pointer, roles);
             else this.preview(pointer, roles);
             return;
         }
@@ -599,6 +645,17 @@ class PathPenMode implements FieldMode {
         const s = this.session;
         if (!p || !s) return;
         if (s.phase === "drawing") {
+            // The first leg dragged out of an end (step 4b): its end is the trail's first point;
+            // a click on the end only grabs it, and clicks go on from there
+            if (p.firstLeg) {
+                const env = envOf(roles);
+                if (p.moved && env) {
+                    const at = landCorner(shapeOf(s), pointer.field, env);
+                    addPoint(at);
+                    setPointer(at);
+                }
+                return;
+            }
             // A press-and-drag placed its smooth point as it went
             if (p.moved && s.dragging !== null) {
                 endNewPoint();
@@ -737,6 +794,14 @@ class PathPenMode implements FieldMode {
         // Between clicks the next leg follows the pointer with the roles its keys hold, so it
         // lands where a click would, as a Line's does
         if (s.phase === "drawing") {
+            // The Follow tool's ends pulse: the hand over an end, nothing elsewhere (DL-4)
+            if (s.follow && s.follow.grabbed === null) {
+                const env = envOf();
+                const hit = env
+                    ? followHit(s.follow, pointer.field, env.hitRadius)
+                    : null;
+                return hit?.end ? "grab" : "default";
+            }
             this.preview(pointer, rolesOf(pointer, "shape"));
             return "crosshair";
         }
@@ -926,8 +991,87 @@ export function drawingOf(
     return drawing;
 }
 
+/**
+ * The Follow tool's drawing (step 4b): before an end is pressed, a ring on every member with the
+ * two ends' pulsing; then the trail from the leader's start through the points to where the next
+ * would land, the line-up thin, and where the line stops (the end spots, `P(e_q)`, as written)
+ * with the line through them, the end shape's preview.
+ */
+function followDrawing(session: PathSession): FieldModeDrawing {
+    const follow = session.follow!;
+    const ends = followEnds(follow);
+    const line = trailLine(follow);
+    const grabbed = follow.grabbed !== null;
+    const starts = line.map((id) => follow.starts.get(id)!);
+    const shape = shapeOf(session);
+    const plan = followPlanOf(session);
+    const spots = plan ? plan.spots.map(([x, y]) => ({ x, y })) : [];
+    const outline = grabbed
+        ? session.pointer
+            ? pathOutline({
+                  ...shape,
+                  points: [...session.points, { at: session.pointer }],
+                  to: session.pointer,
+                  ends: { from: shape.from, to: session.pointer },
+              })
+            : pathOutline(shape)
+        : null;
+    const moving = grabbed ? session.pointer : null;
+    const tipText = moving ? drillTerms(moving) : null;
+    const leaderLabel = tolgee.t("pathways.rings.leader", "Leads the line");
+    return {
+        outline,
+        openOutline: true,
+        pathLine: "edited",
+        stage: "drawing",
+        spots: session.points.length > 0 ? spots : [],
+        walks: [],
+        handles: session.points.map((c) => c.at),
+        addHandles: [],
+        selectedHandles: [],
+        rings: [],
+        lanes: [starts, ...(session.points.length > 0 ? [spots] : [])].filter(
+            (l) => l.length > 1,
+        ),
+        memberRings: line.map((id) => {
+            const end = ends.includes(id);
+            return {
+                at: follow.starts.get(id)!,
+                marcherId: id,
+                kind: grabbed
+                    ? id === follow.grabbed
+                        ? "own"
+                        : "group"
+                    : end
+                      ? "own"
+                      : "group",
+                label: grabbed
+                    ? id === follow.grabbed
+                        ? leaderLabel
+                        : tolgee.t(
+                              "pathways.rings.follower",
+                              "Follows the leader",
+                          )
+                    : end
+                      ? tolgee.t(
+                            "pathways.rings.dragEnd",
+                            "Drag a trail out of this end",
+                        )
+                      : tolgee.t(
+                            "pathways.rings.follower",
+                            "Follows the leader",
+                        ),
+                ...(!grabbed && end ? { pulse: true } : {}),
+            };
+        }),
+        ...guidesFor(moving ? [moving] : [], outline ?? []),
+        ...(tipText && moving ? { tip: { at: moving, text: tipText } } : {}),
+    };
+}
+
 /** `drawingOf`'s work, uncached */
 function buildDrawing(session: PathSession): FieldModeDrawing {
+    if (session.follow) return followDrawing(session);
     const { target, pointer, selected } = session;
     const drawingNow = session.phase === "drawing";
     const shape = shapeOf(session);

@@ -343,6 +343,8 @@ export type FieldModeDrawing = {
         marcherId: number;
         kind: "group" | "own";
         label: string;
+        /** Pulses, asking to be pressed: the Follow tool's ends (pathways step 4b) */
+        pulse?: boolean;
     }[];
     /**
      * Spots the shape leaves empty on purpose, drawn as dashed rings: an odd-count outline's gap
