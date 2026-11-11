@@ -26,6 +26,11 @@
  *   build that doesn't know it would walk that spot on the plain lane, so a file is written as 12
  *   with its first Adjust. A file without one stays at the version it had. The number is not
  *   lowered when an Adjust is reset or undone, as 11 isn't when the last path goes.
+ * - 13: trails (pathways step 4, spec Appendix K): a follow-the-leader move follows a drawn trail
+ *   (`timeline_transitions.route_id`), may have no destination shape (I-T5′, R-13′) and may be
+ *   reversed (`path_params.reverse`, R-12′). A build that doesn't know trails would fail to resolve
+ *   such a move, or walk it straight, so a file is written as 13 with its first Follow. A file
+ *   without one stays at the version it had, and the number is not lowered when the trail goes.
  */
 import type { DatabaseSync } from "node:sqlite";
 import { recoverParkedFloorInTransaction } from "./parkedFloor";
@@ -45,10 +50,13 @@ export const LANE_MODEL_USER_VERSION = 11;
 /** Version of a file with an Adjust on a lane (ADR 0015 §9, pathways step 3b). */
 export const ADJUST_MODEL_USER_VERSION = 12;
 
+/** Version of a file with a follow-the-leader trail (pathways step 4, spec Appendix K). */
+export const TRAIL_MODEL_USER_VERSION = 13;
+
 /** Oldest version this build opens. Older files must go through 0.0.10 first. */
 export const MIN_SUPPORTED_USER_VERSION = PAGE_MODEL_USER_VERSION;
 /** Newest version this build opens. Anything higher was written by a newer release. */
-export const MAX_SUPPORTED_USER_VERSION = ADJUST_MODEL_USER_VERSION;
+export const MAX_SUPPORTED_USER_VERSION = TRAIL_MODEL_USER_VERSION;
 /** Version written into a brand-new file: a new show is a timeline show. */
 export const NEW_FILE_USER_VERSION = TIMELINE_MODEL_USER_VERSION;
 

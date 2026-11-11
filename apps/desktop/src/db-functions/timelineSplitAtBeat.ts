@@ -1,4 +1,5 @@
 import { asc, eq, inArray } from "drizzle-orm";
+import { refuseTrailRows } from "./timelineTrails";
 import {
     createResolver,
     type PathParams,
@@ -264,6 +265,12 @@ export async function splitTimelineAtBeatInTransaction({
             changed.set(marcherId, fromBeat);
     };
 
+    // AP-T5 (pathways step 4): a follow move isn't cut yet; each half would need its own trail
+    await refuseTrailRows(
+        tx,
+        transitions.map((t) => ({ transition_id: t.id })),
+        "split",
+    );
     const routeCuts = await planLaneCuts(tx, {
         resolver,
         transitions,

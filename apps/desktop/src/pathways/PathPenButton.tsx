@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { PenNibIcon } from "@phosphor-icons/react";
+import { PathIcon, PenNibIcon } from "@phosphor-icons/react";
 import tolgee from "@/global/singletons/Tolgee";
 import ActionButton from "@/shortcuts/ActionButton";
 import { Tip } from "@/components/ui/Tip";
@@ -15,7 +15,14 @@ const BUTTON =
  * selected it's greyed and its tooltip says why; with several it draws a group path (step 15).
  */
 export function PathPenButton({ performers }: { performers: number }) {
-    const drawing = usePathPenStore((s) => s.session?.phase === "drawing");
+    // Lit for the kind being drawn: a path, or a trail (Follow, pathways step 4)
+    const drawing = usePathPenStore(
+        (s) => s.session?.phase === "drawing" && !s.session.target.trail,
+    );
+    const following = usePathPenStore(
+        (s) => s.session?.phase === "drawing" && !!s.session.target.trail,
+    );
+    const followLabel = tolgee.t("actions.path.follow", "Follow");
     const refusal = penRefusal(performers);
     const label = tolgee.t("actions.path.pen", "Path pen");
     return (
@@ -39,6 +46,38 @@ export function PathPenButton({ performers }: { performers: number }) {
                     >
                         <PenNibIcon size={22} />
                         {tolgee.t("pathways.toolbar.path", "Path")}
+                    </ActionButton>
+                </span>
+            </Tip>
+            <Tip
+                label={
+                    performers < 2
+                        ? `${followLabel}: ${tolgee.t(
+                              "pathways.refusals.followTwo",
+                              "Select the marchers of a line (two or more) to follow a trail",
+                          )}`
+                        : tolgee.t(
+                              "pathways.toolbar.followTip",
+                              "Follow: draw a trail, and the selected line follows its leader along it into its end spots",
+                          )
+                }
+                action={performers < 2 ? undefined : "followTrail"}
+            >
+                <span>
+                    <ActionButton
+                        action="followTrail"
+                        tooltip=""
+                        disabled={performers < 2}
+                        aria-pressed={following}
+                        aria-label={followLabel}
+                        data-testid="toolbar-follow-trail"
+                        className={clsx(
+                            BUTTON,
+                            following ? "text-accent" : "text-text",
+                        )}
+                    >
+                        <PathIcon size={22} />
+                        {followLabel}
                     </ActionButton>
                 </span>
             </Tip>

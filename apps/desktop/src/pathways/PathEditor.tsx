@@ -3,12 +3,16 @@ import clsx from "clsx";
 import { T } from "@tolgee/react";
 import {
     ArrowCounterClockwiseIcon,
+    ArrowsLeftRightIcon,
     ArrowsMergeIcon,
     ArrowsOutLineHorizontalIcon,
     ArrowsSplitIcon,
     BackspaceIcon,
+    FlagPennantIcon,
     LineSegmentsIcon,
+    PathIcon,
     TrashIcon,
+    UsersThreeIcon,
     WarningIcon,
     WaveSineIcon,
     XIcon,
@@ -61,6 +65,7 @@ export function bigSteps(
 ): BigSteps | null {
     const { target } = session;
     const counts = target.end - target.start;
+    if (target.trail) return trailBigSteps(session, fieldProperties);
     if (target.group) return groupBigSteps(session, fieldProperties);
     const size = StepSize.fromDistance({
         marcher_id: target.marcherId,
@@ -78,6 +83,73 @@ export function bigSteps(
     };
 }
 
+/**
+ * How far each member of a trail's line walks (R-9′, R-10): the rest of the line-up from where it
+ * stands, the drawn part, then the end line as far as its own spot. Tail first, as the members.
+ */
+export function trailDistances(
+    members: readonly { from: XY; to: XY }[],
+    drawnLength: number,
+): number[] {
+    const along = (points: readonly XY[]) => {
+        const cum = [0];
+        for (let i = 1; i < points.length; i++)
+            cum.push(
+                cum[i - 1]! +
+                    Math.hypot(
+                        points[i]!.x - points[i - 1]!.x,
+                        points[i]!.y - points[i - 1]!.y,
+                    ),
+            );
+        return cum;
+    };
+    const lineUp = along(members.map((m) => m.from));
+    const endLine = along(members.map((m) => m.to));
+    const lineLength = lineUp.at(-1) ?? 0;
+    return members.map(
+        (_, q) => lineLength - lineUp[q]! + drawnLength + endLine[q]!,
+    );
+}
+
+/**
+ * Big steps on a trail (pathways step 4): each member walks its own distance at its own steady
+ * speed (R-10), so each is tested as a straight move is, and the worst is named.
+ */
+function trailBigSteps(
+    session: PathSession,
+    fieldProperties: FieldProperties,
+): BigSteps | null {
+    const { target } = session;
+    const trail = target.trail!;
+    const counts = target.end - target.start;
+    const distances = trailDistances(
+        trail.members,
+        curveOf(shapeOf(session)).L,
+    );
+    const threshold = fieldProperties.stepSizeWarningThresholdInches;
+    let worst: { size: StepSize; drill: string } | null = null;
+    trail.members.forEach((m, q) => {
+        const size = StepSize.fromDistance({
+            marcher_id: m.marcherId,
+            distance: distances[q]!,
+            counts,
+            fieldProperties,
+        });
+        if (!size.exceedsThreshold(threshold)) return;
+        if (!worst || size.inchesPerStep > worst.size.inchesPerStep)
+            worst = { size, drill: m.drill };
+    });
+    if (!worst) return null;
+    const { size, drill } = worst as { size: StepSize; drill: string };
+    return {
+        steps: size.displayString(),
+        inches: Math.round(size.inchesPerStep),
+        where: null,
+        legs: [],
+        marcher: drill,
+    };
+}
+
 /** Big steps' verdict: the worst big leg, and every big leg (a group path's, step 15) */
 export interface BigSteps {
     steps: string;
@@ -86,6 +158,8 @@ export interface BigSteps {
     where: LegWhere | null;
     /** The worst leg itself, for its words */
     worst?: BigSteps["legs"][number];
+    /** On a trail (step 4): whose steps are the biggest */
+    marcher?: string;
     legs: {
         where: LegWhere;
         drill: string | null;
@@ -193,11 +267,24 @@ export function PathEditor({
     fieldProperties: FieldProperties;
 }) {
     const session = usePathPenStore((s) => s.session);
-    // A path only shown (closed) has no editor: a double-click or its menu opens it
-    if (!session || session.phase === "closed") return null;
+    const hidden = usePathPenStore((s) => s.hidden);
+    if (!session) return null;
+    // A path only shown (closed) has no editor: a double-click or its menu opens it. A trail
+    // keeps its leader's mark, which says who leads and turns the line around (step 4)
+    if (session.phase === "closed")
+        return session.target.trail && (!hidden || session.object) ? (
+            <RichTips>
+                <TrailLeaderMark session={session} />
+            </RichTips>
+        ) : null;
     return (
         <>
             {session.phase === "drawing" && <PathPenBanner session={session} />}
+            {session.target.trail && (
+                <RichTips>
+                    <TrailLeaderMark session={session} />
+                </RichTips>
+            )}
             <RichTips>
                 <PathEditorBar
                     session={session}
@@ -205,6 +292,54 @@ export function PathEditor({
                 />
             </RichTips>
         </>
+    );
+}
+
+/**
+ * The leader's mark (pathways step 4): a chip by where the leader starts, naming who leads. On a
+ * stored trail its button turns the line around (Reverse, one undo step), also the way for a
+ * finger or a pencil. It sits above the leader's dot and takes no room in the path bar.
+ */
+function TrailLeaderMark({ session }: { session: PathSession }) {
+    const view = useFieldViewStore();
+    const trail = session.target.trail!;
+    const leader = trail.members.at(-1)!;
+    const at = fieldToElement(view, leader.from.x, leader.from.y);
+    const stored =
+        session.target.routeId !== null && session.phase !== "drawing";
+    return (
+        <div
+            className="rounded-6 border-stroke bg-modal text-sub text-text shadow-modal absolute z-10 flex -translate-x-1/2 items-center gap-4 border py-2 pr-2 pl-6 whitespace-nowrap"
+            style={{ left: at.x, top: at.y - 40 }}
+            data-testid="trail-leader"
+            data-leader={leader.marcherId}
+            onPointerDown={(e) => e.stopPropagation()}
+        >
+            <FlagPennantIcon
+                size={12}
+                weight="fill"
+                className="text-accent"
+                aria-hidden
+            />
+            <span className={stored ? undefined : "pr-4"}>
+                {tolgee.t("pathways.trail.leader", "Leader · {marcher}", {
+                    marcher: leader.drill,
+                })}
+            </span>
+            {stored && (
+                <IconButton
+                    label={tolgee.t(
+                        "pathways.trail.reverseTip",
+                        "Make the other end of the line lead. Everyone keeps their end spot.",
+                    )}
+                    action="reverseTrail"
+                    onClick={() => runAction("reverseTrail")}
+                    testId="trail-reverse"
+                >
+                    <ArrowsLeftRightIcon size={14} />
+                </IconButton>
+            )}
+        </div>
     );
 }
 
@@ -219,7 +354,18 @@ function PathPenBanner({ session }: { session: PathSession }) {
             data-testid="path-pen-banner"
         >
             {/* With the key unbound, only the right-click is said */}
-            {session.target.group ? (
+            {session.target.trail ? (
+                <T
+                    keyName="pathways.banner.trailDrawing"
+                    defaultValue="Trail for {count} marchers, {marcher} leading: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
+                    params={{
+                        count: session.target.trail.members.length,
+                        marcher:
+                            session.target.trail.members.at(-1)?.drill ?? "",
+                        esc,
+                    }}
+                />
+            ) : session.target.group ? (
                 <T
                     keyName="pathways.banner.groupDrawing"
                     defaultValue="Group path for {count} marchers: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
@@ -316,6 +462,14 @@ function PathEditorBar({
         (session.target.group?.members.some((m) => m.adjust?.rehomed) ?? false);
     // An open path is always a stored one, so the bar always holds a control
     const controls = drawing || stored;
+    // While a new path is drawn for two or more marchers: Together (a group path) or Follow (a
+    // trail), switched without losing the points placed (pathways step 4)
+    const kindChoice =
+        drawing &&
+        !session.byRoute &&
+        (!!session.target.trail ||
+            (!!session.target.group && session.target.routeId === null));
+    const trail = session.target.trail ?? null;
     return (
         <div
             ref={ref}
@@ -331,27 +485,36 @@ function PathEditorBar({
             {big && (
                 <Tip
                     label={
-                        big.where === null
+                        big.marcher !== undefined
                             ? tolgee.t(
-                                  "pathways.editor.bigStepsTipPoints",
-                                  "{inches} in a step, all along the path. Lengthen the move, or move or take out points to shorten the path.",
-                                  { inches: big.inches },
-                              )
-                            : tolgee.t(
-                                  "pathways.editor.bigStepsTipLegs",
-                                  "Big steps on {legs}. Every marcher passes each point of the path at the same moment, so only the legs onto and off the path change speed. Lengthen the move, or move points to even out the legs.",
+                                  "pathways.editor.bigStepsTipTrail",
+                                  "{marcher} has the farthest to go: {inches} in a step. Each marcher walks its own way along the trail at a steady speed. Lengthen the move, or shorten the trail.",
                                   {
-                                      legs: big.legs
-                                          .map((l) =>
-                                              l.drill === null
-                                                  ? `${legWords(l)} (${l.steps})`
-                                                  : l.where === "adjusted"
-                                                    ? `${legWords(l)} (${l.steps})`
-                                                    : `${l.drill} ${legWords(l)} (${l.steps})`,
-                                          )
-                                          .join(", "),
+                                      marcher: big.marcher,
+                                      inches: big.inches,
                                   },
                               )
+                            : big.where === null
+                              ? tolgee.t(
+                                    "pathways.editor.bigStepsTipPoints",
+                                    "{inches} in a step, all along the path. Lengthen the move, or move or take out points to shorten the path.",
+                                    { inches: big.inches },
+                                )
+                              : tolgee.t(
+                                    "pathways.editor.bigStepsTipLegs",
+                                    "Big steps on {legs}. Every marcher passes each point of the path at the same moment, so only the legs onto and off the path change speed. Lengthen the move, or move points to even out the legs.",
+                                    {
+                                        legs: big.legs
+                                            .map((l) =>
+                                                l.drill === null
+                                                    ? `${legWords(l)} (${l.steps})`
+                                                    : l.where === "adjusted"
+                                                      ? `${legWords(l)} (${l.steps})`
+                                                      : `${l.drill} ${legWords(l)} (${l.steps})`,
+                                            )
+                                            .join(", "),
+                                    },
+                                )
                     }
                 >
                     <span
@@ -379,6 +542,49 @@ function PathEditorBar({
             {big && controls && <Divider />}
             {drawing ? (
                 <>
+                    {kindChoice && (
+                        <>
+                            <span
+                                className="flex items-center gap-2"
+                                role="group"
+                                aria-label={tolgee.t(
+                                    "pathways.editor.pathKind",
+                                    "How the marchers take the path",
+                                )}
+                            >
+                                <IconButton
+                                    label={tolgee.t(
+                                        "pathways.editor.togetherTip",
+                                        "Together: the group slides along the path and keeps its shape",
+                                    )}
+                                    action="pathPen"
+                                    pressed={!session.target.trail}
+                                    onClick={() => runAction("pathPen")}
+                                    testId="path-kind-together"
+                                >
+                                    <UsersThreeIcon size={14} />
+                                    {tolgee.t(
+                                        "pathways.editor.together",
+                                        "Together",
+                                    )}
+                                </IconButton>
+                                <IconButton
+                                    label={tolgee.t(
+                                        "pathways.editor.followTip",
+                                        "Follow: the line follows its leader along the trail into its end spots",
+                                    )}
+                                    action="followTrail"
+                                    pressed={!!session.target.trail}
+                                    onClick={() => runAction("followTrail")}
+                                    testId="path-kind-follow"
+                                >
+                                    <PathIcon size={14} />
+                                    {tolgee.t("actions.path.follow", "Follow")}
+                                </IconButton>
+                            </span>
+                            <Divider />
+                        </>
+                    )}
                     <span className="flex items-center gap-2">
                         <IconButton
                             label={tolgee.t(
@@ -585,12 +791,39 @@ function PathEditorBar({
                             <Divider />
                         </>
                     )}
+                    {stored && trail && (
+                        <>
+                            <IconButton
+                                label={tolgee.t(
+                                    "pathways.trail.reverseTip",
+                                    "Make the other end of the line lead. Everyone keeps their end spot.",
+                                )}
+                                action="reverseTrail"
+                                onClick={() => runAction("reverseTrail")}
+                                testId="path-reverse"
+                            >
+                                <ArrowsLeftRightIcon size={14} />
+                                {tolgee.t(
+                                    "actions.path.reverse",
+                                    "Reverse leader",
+                                )}
+                            </IconButton>
+                            <Divider />
+                        </>
+                    )}
                     {stored && (
                         <IconButton
-                            label={tolgee.t(
-                                "actions.path.remove",
-                                "Remove path",
-                            )}
+                            label={
+                                trail
+                                    ? tolgee.t(
+                                          "actions.path.removeTrail",
+                                          "Remove trail",
+                                      )
+                                    : tolgee.t(
+                                          "actions.path.remove",
+                                          "Remove path",
+                                      )
+                            }
                             action="removePath"
                             onClick={() => runAction("removePath")}
                             testId="path-remove"

@@ -20,6 +20,7 @@ import type { XY } from "@openmarch/core";
 import {
     ADJUST_MODEL_USER_VERSION,
     LANE_MODEL_USER_VERSION,
+    TRAIL_MODEL_USER_VERSION,
 } from "@om-electron/database/fileVersion";
 import { schema } from "@/global/database/db";
 import type { DbConnection, DbTransaction } from "./types";
@@ -194,3 +195,7 @@ export const markLaneModelInTransaction = (tx: DbTransaction) =>
 /** Writes the Adjust file version (12) with a file's first Adjust (ADR 0015 §9, step 3b). */
 export const markAdjustModelInTransaction = (tx: DbTransaction) =>
     raiseFileVersion(tx, ADJUST_MODEL_USER_VERSION);
+
+/** Writes the trail file version (13) with a file's first Follow (pathways step 4, Appendix K). */
+export const markTrailModelInTransaction = (tx: DbTransaction) =>
+    raiseFileVersion(tx, TRAIL_MODEL_USER_VERSION);

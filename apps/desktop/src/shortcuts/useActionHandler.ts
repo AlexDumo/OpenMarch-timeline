@@ -38,6 +38,11 @@ interface HandlerOptions {
      * false.
      */
     checked?: boolean;
+    /**
+     * Why the action is unavailable, shown on its disabled entry in menus and the palette. A
+     * function is read only when asked. Translated by the caller. Default: none.
+     */
+    disabledReason?: string | (() => string | undefined);
 }
 
 export function useActionHandler(
@@ -57,6 +62,8 @@ export function useActionHandler(
     );
 }
 
+// One registration, its options kept in refs
+// eslint-disable-next-line max-lines-per-function
 export function useActionHandlerGroup(
     ids: readonly ActionId[],
     run: (id: ActionId, args: ActionArgs | undefined) => void,
@@ -73,12 +80,14 @@ export function useActionHandlerGroup(
     const releaseRef = useRef(options.onRelease);
     const labelRef = useRef(options.label);
     const checkedRef = useRef(options.checked ?? false);
+    const reasonRef = useRef(options.disabledReason);
     const hasRelease = options.onRelease !== undefined;
     useLayoutEffect(() => {
         runRef.current = run;
         ignoreRepeatRef.current = options.ignoreRepeat ?? false;
         pressRef.current = options.onPress;
         releaseRef.current = options.onRelease;
+        reasonRef.current = options.disabledReason;
     });
     // A function is read when asked, so a new one each render tells nobody
     useLayoutEffect(() => {
@@ -131,6 +140,10 @@ export function useActionHandlerGroup(
                     return typeof label === "function" ? label() : label;
                 },
                 checked: () => checkedRef.current,
+                disabledReason: () => {
+                    const reason = reasonRef.current;
+                    return typeof reason === "function" ? reason() : reason;
+                },
             }),
         );
         return () => unregister.forEach((off) => off());

@@ -189,6 +189,12 @@ export interface PathParams {
     bulge?: number;
     /** Extra trail vertices (follow_the_leader style) */
     waypoints?: XY[];
+    /**
+     * Follow-the-leader only (R-12′, pathways step 4): the trail order is reversed, so the other
+     * end of the line leads, and the destination is entered from its far end. Absent for R-12's
+     * order.
+     */
+    reverse?: boolean;
 }
 
 /** One inner point of a route (spec 5.2, v0.9): a corner, or smooth with a tension (step 2). */
@@ -228,6 +234,11 @@ export interface TransitionRow {
     style: PathStyle;
     order: OrderMode;
     params: PathParams | null;
+    /**
+     * A follow-the-leader transition's trail route (I-R2′, R-9′, pathways step 4): the drawn
+     * part of its trail. Absent or null for none; not read on any other style.
+     */
+    route?: number | null;
 }
 
 /**
@@ -308,10 +319,22 @@ export interface DestPath {
     L: number;
     /** Point at arc length s, clamped to [0, L] */
     at(s: number): XY;
+    /**
+     * R-13′ (pathways step 4): for a follow-the-leader transition with no shape, the arc length
+     * of each slot's destination along the line through them. Absent for a shape, whose samples
+     * are at `paramT`.
+     */
+    stops?: number[];
 }
 
 export interface FtlTrail {
+    /** Cumulative length at each vertex of the trail's polyline part; `cum[q]` is `startDist[q]` */
     cum: number[];
     destOffset: number;
     at(d: number): XY;
+    /**
+     * R-9′ (pathways step 4): the drawn part, when the transition has a trail route with a kept
+     * point. It starts at trail distance `start` (the leader's origin) and runs to `destOffset`.
+     */
+    drawn?: { start: number; path: import("./geom").RoutePath };
 }

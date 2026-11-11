@@ -8,6 +8,7 @@ import {
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
     CheckIcon,
+    ArrowsLeftRightIcon,
     ArrowsOutLineHorizontalIcon,
     PencilSimpleIcon,
     TrashIcon,
@@ -17,6 +18,7 @@ import clsx from "clsx";
 import { useTranslate } from "@tolgee/react";
 import {
     KEEP_MENU_EVENTS,
+    MenuItemWithReason,
     TIMELINE_MENU_CONTENT_CLASS,
 } from "@/components/timeline/TimelineRangeMenu";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
@@ -24,7 +26,9 @@ import type { ActionId } from "@/shortcuts/definitions";
 import { getActionLabel } from "@/shortcuts/labels";
 import Shortcut from "@/components/ui/Shortcut";
 import {
+    actionDisabledReason,
     actionLabelNow,
+    hasActionHandler,
     isActionChecked,
     isActionEnabled,
     runAction,
@@ -52,6 +56,9 @@ import {
  *   for the selection on the current page (`holdEntryStates`, through its handler): checked and
  *   unavailable when every selected marcher is already in the state it sets, and with a count,
  *   "Hold from previous page (3 of 5)", when it would change only some of them.
+ * - Splitting moves (timeline mode, not Basic): **Split selected marchers into a new move** and
+ *   **Split the move at the playhead**. An entry that can't run says why beside it (a split at
+ *   a count refused while a line follows a trail), before anyone tries it.
  * - Arranging the selection: align and distribute, and Swap (two marchers).
  * - **Select all**, which right-clicking empty field reaches for.
  *
@@ -66,6 +73,7 @@ const GROUPS: readonly (readonly ActionId[])[] = [
         "setSelectedMarchersToPreviousPage",
         "setSelectedMarchersToNextPage",
     ],
+    ["splitSelectedIntoNewMove", "timelineSplitMoveAtPlayhead"],
     [
         "alignHorizontally",
         "alignVertically",
@@ -82,6 +90,16 @@ export const FIELD_MENU_ACTIONS: readonly ActionId[] = GROUPS.flat();
 /** Holds, shown only in timeline mode (unavailable where they can't run) */
 const HOLDS: ReadonlySet<ActionId> = new Set(["timelineHoldFromPrevious"]);
 
+/**
+ * Splitting moves (UI-25, UI-27), shown only in timeline mode and only where they're offered at
+ * all (not in Basic). Unavailable, each says why beside it, as the timeline's menus do, so a
+ * refusal (a line that follows a trail, pathways step 4) is read before it's tried
+ */
+const MOVES: ReadonlySet<ActionId> = new Set([
+    "splitSelectedIntoNewMove",
+    "timelineSplitMoveAtPlayhead",
+]);
+
 /** The group whose entries can show checked: each keeps room for the check, so the words line up */
 const CHECKABLE: ReadonlySet<ActionId> = new Set(GROUPS[1]);
 
@@ -92,6 +110,7 @@ const MODE_CONTENT_CLASS = MENU_CONTENT_CLASS;
 const MODE_ICONS: Partial<Record<ActionId, Icon>> = {
     editPath: PencilSimpleIcon,
     refitPath: ArrowsOutLineHorizontalIcon,
+    reverseTrail: ArrowsLeftRightIcon,
     removePath: TrashIcon,
 };
 /** Entries that delete something: red where highlighted, as a shape handle's Delete */
@@ -100,11 +119,11 @@ const DESTRUCTIVE: ReadonlySet<ActionId> = new Set(["removePath"]);
 /** The room for a check in front of a checkable entry's words */
 const CHECK_SLOT_CLASS = "flex w-[14px] shrink-0 justify-center";
 
-/** Each action's enabled state and live label, as one string, so a change re-renders. */
+/** Each action's enabled state, live label and reason, as one string, so a change re-renders. */
 const handlerSnapshot = () =>
     FIELD_MENU_ACTIONS.map(
         (id) =>
-            `${isActionEnabled(id) ? 1 : 0}${isActionChecked(id) ? 1 : 0}${actionLabelNow(id) ?? ""}`,
+            `${isActionEnabled(id) ? 1 : 0}${isActionChecked(id) ? 1 : 0}${actionLabelNow(id) ?? ""}|${actionDisabledReason(id) ?? ""}`,
     ).join("\n");
 
 /** Closed, the menu shows nothing, so it reads no handler (a label may run a check) */
@@ -146,7 +165,9 @@ export default function FieldContextMenu({
             ? isActionEnabled(id)
             : HOLDS.has(id)
               ? timelineMode
-              : true;
+              : MOVES.has(id)
+                ? timelineMode && hasActionHandler(id)
+                : true;
     const enabled = (id: ActionId) =>
         isActionEnabled(id) && (id !== "swapMarchers" || selectedCount === 2);
     const groups = actions
@@ -226,6 +247,28 @@ export default function FieldContextMenu({
                                             {label}
                                             {shortcut}
                                         </DropdownMenu.CheckboxItem>
+                                    );
+                                const reason = enabled(id)
+                                    ? null
+                                    : (actionDisabledReason(id) ?? null);
+                                if (reason !== null)
+                                    // Unavailable with a reason: dimmed, the reason behind a
+                                    // ?, shown on hover, focus or a press (the timeline's menus)
+                                    return (
+                                        <MenuItemWithReason
+                                            key={id}
+                                            testId={`field-menu-${id}`}
+                                            reason={reason}
+                                            reasonTestId={`field-menu-${id}-reason`}
+                                            onSelect={() => runAction(id)}
+                                        >
+                                            {CHECKABLE.has(id) && (
+                                                <span
+                                                    className={CHECK_SLOT_CLASS}
+                                                />
+                                            )}
+                                            {label}
+                                        </MenuItemWithReason>
                                     );
                                 return (
                                     <DropdownMenu.Item

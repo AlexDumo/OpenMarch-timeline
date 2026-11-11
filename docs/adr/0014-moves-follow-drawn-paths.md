@@ -114,3 +114,19 @@ a broken file. Each step's spec text lists which edits it supports.
   existing message.
 - **Edits:** each step's tests show every existing edit on a move with a route either works
   or is refused with a reason.
+
+## Amendment: follow a drawn trail (plan step 4, 2026-11-09)
+
+Built on the owner's standing brief; the choices below are recorded for the owner to confirm, and
+the rules are in spec Appendix K.
+
+- **A follow-the-leader move may have a trail route in place of a destination shape** (I-T5′).
+  The route is only the drawn part, from the leader's start to the end spot the line is entered
+  at. The end spots stay the move's placed destinations, where every other tool edits them, so
+  choosing Follow never moves anyone's end spot (R-13′). The draft model's trail, which owned its
+  spots, was not taken: the app stores no shapes for end spots.
+- **Storage:** migration 0022 rebuilds `timeline_transitions` to change that one CHECK, as 0019
+  did; `path_params.reverse` says the other end leads (R-12′). File version 13 is written with a
+  file's first Follow, by §3's rule.
+- **Refused until their steps:** splits, merge and Remove keyframe's join on a follow move, and
+  Straight or Arc on it (Remove trail first).

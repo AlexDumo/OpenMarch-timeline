@@ -122,6 +122,69 @@ export function destPath(shape: ShapeRow): DestPath {
     };
 }
 
+/**
+ * R-13′ (pathways step 4): the destination path of a follow-the-leader transition with no shape,
+ * the line through its slots' destinations in slot order. Each slot's destination is a vertex,
+ * at `stops[i]` along it.
+ */
+export function pointsPath(points: readonly XY[]): DestPath {
+    const pts = points.length ? points : [[0, 0] as XY];
+    const cum = cumOf(pts);
+    return {
+        closed: false,
+        L: cum[cum.length - 1]!,
+        at: (s) => pointAtDistance(pts, cum, s),
+        stops: cum,
+    };
+}
+
+/** R-9, R-13′: a follow-the-leader transition's destination path, from its shape or its points. */
+export function ftlDestPath(
+    t: Pick<TransitionRow, "dest" | "points" | "slots">,
+    shapes: Record<number, ShapeRow>,
+): DestPath {
+    if (t.dest == null) return pointsPath(destinationsOf(t, shapes));
+    const shape = shapes[t.dest];
+    if (!shape) throw new Error(`shape ${t.dest} not found`);
+    return destPath(shape);
+}
+
+/**
+ * How a follow-the-leader entry reads its destination (R-9 steps 4 and 5, R-12′, R-13′): the
+ * path as the trail walks it, each member's and each other row's point, and a point's distance
+ * along the walked path.
+ *
+ * - With a shape, member `q` of `m` takes sample `n-m+q` and the `k`-th other row `n-m-1-k`
+ *   (R-9). With `reverse` the path is entered from its far end, so they take `m-1-q` and `m+k`:
+ *   the vacancies stay at the entrance.
+ * - With no shape (R-13′), every row takes its own slot's destination, whoever else is there.
+ */
+export function ftlDestination(path: DestPath, n: number, reverse: boolean) {
+    const stop = (j: number): number =>
+        path.stops
+            ? (path.stops[j] ?? path.L)
+            : paramT(path.closed, j, n) * path.L;
+    const own = path.stops !== undefined;
+    const walked: DestPath = reverse
+        ? {
+              closed: path.closed,
+              L: path.L,
+              at: (s) => path.at(path.L - s),
+          }
+        : path;
+    return {
+        walked,
+        /** The point of member `q` of `m`, who is in slot `slot` */
+        member: (q: number, m: number, slot: number) =>
+            own ? slot : reverse ? m - 1 - q : n - m + q,
+        /** The point of the `k`-th other row, which is on slot `slot` */
+        other: (k: number, m: number, slot: number) =>
+            own ? slot : reverse ? m + k : n - m - 1 - k,
+        /** Point `j`'s distance along the walked path */
+        along: (j: number) => (reverse ? path.L - stop(j) : stop(j)),
+    };
+}
+
 /** Parameter of sample `i` of `n` on a path: closed paths wrap, open paths span [0, 1]. */
 export const paramT = (closed: boolean, i: number, n: number): number =>
     closed ? i / n : n === 1 ? 0 : i / (n - 1);
@@ -253,12 +316,46 @@ export function classifySpan<R extends { id: number; transition: number }>(
  * R-9 steps 3-4: an FTL trail = polyline through member origins and
  * waypoints to the destination's start, followed by the EXACT destination
  * path.
+ *
+ * R-9′ (pathways step 4): with a trail route, the line-up through the member origins is
+ * followed by the route's drawn part, R-14's walk from the leader's origin through the route's
+ * points to the destination's start (curves exact, as R-14 measures them), then the destination
+ * path. `waypoints` are not read then. A route with no point kept is R-9 with no waypoints, bit
+ * for bit (QA-TR-2).
  */
 export function makeTrail(
     origins: readonly XY[],
     waypoints: readonly XY[],
     path: DestPath,
+    route?: RouteWalk | null,
 ): FtlTrail {
+    if (route && origins.length > 0) {
+        const entrance = path.at(0);
+        const W = routePath(
+            origins[origins.length - 1]!,
+            route.points,
+            entrance,
+            route,
+        );
+        if (W.V.length > 2 && W.L >= EPS_GEOM) {
+            const lineUp = [...origins];
+            const cum = cumOf(lineUp);
+            const lineLen = cum[cum.length - 1]!;
+            const destOffset = lineLen + W.L;
+            return {
+                cum,
+                destOffset,
+                drawn: { start: lineLen, path: W },
+                at: (d) =>
+                    d < lineLen
+                        ? pointAtDistance(lineUp, cum, d)
+                        : d < destOffset
+                          ? routePointAtDistance(W, d - lineLen)
+                          : path.at(d - destOffset),
+            };
+        }
+        waypoints = [];
+    }
     const pre: XY[] = [...origins, ...waypoints, path.at(0)];
     const cum = cumOf(pre);
     const destOffset = cum[cum.length - 1]!;
@@ -513,6 +610,25 @@ export function routePoint(path: RoutePath, p: number): XY {
     if (p >= 1) return B;
     if (V.length === 2 || L < EPS_GEOM) return lerp(A, B, p);
     const d = p * L;
+    // smallest j with d < D[j+1]; the last piece when rounding finds none
+    let lo = 0;
+    let hi = V.length - 2;
+    while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (d < D[mid + 1]!) hi = mid;
+        else lo = mid + 1;
+    }
+    return routePiecePoint(path, lo, d - D[lo]!);
+}
+
+/**
+ * R-14's Evaluation entered at distance `d` along a cleaned path with at least one kept inner
+ * point (`walk_x`, R-14′): `V[0]` at `d <= 0`, the last vertex at `d >= L`.
+ */
+export function routePointAtDistance(path: RoutePath, d: number): XY {
+    const { V, D, L } = path;
+    if (d <= 0) return V[0]!;
+    if (d >= L) return V[V.length - 1]!;
     // smallest j with d < D[j+1]; the last piece when rounding finds none
     let lo = 0;
     let hi = V.length - 2;

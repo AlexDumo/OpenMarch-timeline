@@ -24,7 +24,8 @@
  */
 import {
     clamp01,
-    destPath,
+    ftlDestPath,
+    ftlDestination,
     destinationsOf,
     flatten,
     lerp,
@@ -291,6 +292,20 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         }
     };
 
+    // trail routes (R-9′, pathways step 4): follow-the-leader transitions by the route they
+    // carry, kept in step with the host (route -> transitions, for route edits)
+    const byTrail = new Map<number, Set<number>>();
+    const trailOf = new Map<number, number>();
+    const setTrail = (tid: number, route: number | null | undefined) => {
+        const old = trailOf.get(tid);
+        if (old !== undefined) byTrail.get(old)?.delete(tid);
+        if (route == null) trailOf.delete(tid);
+        else {
+            trailOf.set(tid, route);
+            setOf(byTrail, route).add(tid);
+        }
+    };
+
     // lanes (v0.10, D-20): each lane as indexed, by (transition, slot) and by route (J.7: route ->
     // lanes -> transitions), kept in step with the host
     const laneRows = new Map<number, LaneRow>();
@@ -377,12 +392,8 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         C.destinationsComputed++;
         report?.destinations.push(tid);
         if (isFtl(t)) {
-            const shape = t.dest == null ? undefined : host.shapes[t.dest];
-            if (!shape)
-                throw new Error(
-                    `follow-the-leader transition ${tid} has no shape (I-T5)`,
-                );
-            paths.set(tid, destPath(shape));
+            // R-13′: with no shape, the line through its slots' destinations
+            paths.set(tid, ftlDestPath(t, host.shapes));
             C.ftlGeometryComputed++;
             report?.ftlGeometry.push(tid);
         } else paths.delete(tid);
@@ -415,6 +426,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
     }
     for (const t of Object.values(host.transitions)) {
         setDest(t.id, t.dest);
+        setTrail(t.id, t.route);
         computeLocal(t.id);
     }
     for (const rid of Object.keys(host.routes ?? {})) computeRoute(Number(rid));
@@ -468,7 +480,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         const t = T(tid);
         const F = [...idx(tid)].filter(founding);
         const d: Node[] = F.map((s): Node => ["o", s]);
-        if (t.order === "inherit" && F.length) {
+        if (t.order === "inherit" && t.dest != null && F.length) {
             const prevs = F.map(prevNonHold);
             const U = prevs[0]?.row?.transition;
             if (
@@ -642,7 +654,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         const F = [...idx(tid)].filter(founding);
         let keyed: Array<[number, RSpan]> | null = null;
         let source: OrderSource = { kind: "slot", fallback: false };
-        if (t.order === "inherit" && F.length) {
+        if (t.order === "inherit" && t.dest != null && F.length) {
             const prevs = F.map(prevNonHold);
             const U = prevs[0]?.row?.transition;
             if (
@@ -660,7 +672,9 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             if (!keyed) source = { kind: "slot", fallback: true };
         }
         if (!keyed) keyed = F.map((s) => [s.row!.slot, s]);
-        keyed.sort((a, b) => a[0] - b[0] || a[1].m - b[1].m);
+        // R-12′: `reverse` turns the order around, so the other end leads
+        const sign = t.params?.reverse === true ? -1 : 1;
+        keyed.sort((a, b) => sign * (a[0] - b[0]) || a[1].m - b[1].m);
         const members = keyed.map(([, s]) => s.m);
         const os = keyed.map(([, s]) => origin(s));
         const path = paths.get(tid);
@@ -668,18 +682,30 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             throw new Error(
                 `follow-the-leader transition ${tid} has no destination path`,
             );
-        const trail = makeTrail(os, t.params?.waypoints ?? [], path);
         const n = t.slots;
         const m = members.length;
+        const dest = ftlDestination(path, n, sign < 0);
+        // R-9′: the trail route's drawn part, from the cached route geometry (T-15: none when
+        // the route is missing)
+        const trail = makeTrail(
+            os,
+            t.params?.waypoints ?? [],
+            dest.walked,
+            t.route == null ? null : routeGeo.get(t.route)?.walk,
+        );
         const pts = dests.get(tid)!;
+        // each member's point: R-9's sample, or its own slot's destination (R-13′)
+        const pointOf = keyed.map(([, s], q) => dest.member(q, m, s.row!.slot));
         const target = new Map<number, XY>(
-            members.map((mm, q) => [mm, pts[n - m + q]!]),
+            members.map((mm, q) => [mm, pts[pointOf[q]!]!]),
         );
         // non-members, from the per-transition row index: never a full scan (9.6)
         rowsOfTransition(tid)
             .filter((r) => !target.has(r.marcher))
             .sort((a, b) => a.slot - b.slot || a.marcher - b.marcher)
-            .forEach((r, k) => target.set(r.marcher, pts[n - m - 1 - k]!));
+            .forEach((r, k) =>
+                target.set(r.marcher, pts[dest.other(k, m, r.slot)]!),
+            );
         entries.set(tid, {
             members,
             source,
@@ -687,9 +713,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             qOf: new Map(members.map((mm, q) => [mm, q])),
             startDist: os.map((_, q) => trail.cum[q]!),
             endDist: os.map(
-                (_, q) =>
-                    trail.destOffset +
-                    paramT(path.closed, n - m + q, n) * path.L,
+                (_, q) => trail.destOffset + dest.along(pointOf[q]!),
             ),
             target,
         });
@@ -845,9 +869,11 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                 byT.delete(tid);
                 byTR.delete(tid);
                 setDest(tid, null);
+                setTrail(tid, null);
                 continue;
             }
             setDest(tid, T(tid).dest);
+            setTrail(tid, T(tid).route);
             if (!tc.before || localInputsChanged(tc.before, tc.after))
                 computeLocal(tid, localRecomputed);
             seedTs.add(tid);
@@ -876,6 +902,10 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         for (const [rid, rc] of net.routes) {
             computeRoute(rid);
             for (const id of routeLanes.get(rid) ?? []) laneAdjust.delete(id);
+            // a trail route (R-9′): its follow-the-leader transitions, whether it was edited,
+            // created or dropped
+            for (const tid of byTrail.get(rid) ?? [])
+                if (host.transitions[tid]) seedTs.add(tid);
             if (!rc.after) continue;
             for (const id of routeLanes.get(rid) ?? []) {
                 const tid = laneRows.get(id)!.transition;
@@ -1068,6 +1098,12 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         for (const rid of routeGeo.keys())
             if (!host.routes?.[rid])
                 return `stale routeGeometry ${rid}: route deleted`;
+        for (const [tid, rid] of trailOf)
+            if ((tMaybe(tid)?.route ?? null) !== rid)
+                return `stale trail index for transition ${tid}`;
+        for (const t of Object.values(host.transitions))
+            if (t.route != null && trailOf.get(t.id) !== t.route)
+                return `transition ${t.id}'s trail route is not indexed`;
         for (const [id, l] of laneRows) {
             const h = host.lanes?.[id];
             if (

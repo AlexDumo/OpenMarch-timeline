@@ -76,6 +76,7 @@ import {
     useTimelineCommands,
     moveAtPlayhead,
     splitMoveBlocker,
+    splitAtPlayheadBlocker,
 } from "./useTimelineCommands";
 import { useTimelineClipResize } from "./useTimelineClipResize";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
@@ -391,17 +392,35 @@ export default function TimelineModePanel() {
     // UI-27: ⌘K's Split at playhead acts on the move the playhead is inside (Expert only: Basic
     // has no moves to split, its + splits the page's moves at a new flag). Greyed out while
     // playing, as the menus' entry is
+    // One check for whether it's available and why not, the same one the action runs, so the
+    // palette and the field menu never offer a split that would only refuse
+    const splitBlocker = useTimelineSelectionStore((s) =>
+        splitAtPlayheadBlocker(s, isPlaying),
+    );
     useActionHandler(
         "timelineSplitMoveAtPlayhead",
         () => {
-            const target = moveAtPlayhead(useTimelineSelectionStore.getState());
-            if (typeof target === "string") {
-                toast.error(target, { id: "timeline-split-move" });
+            const state = useTimelineSelectionStore.getState();
+            const target = moveAtPlayhead(state);
+            const blocker = splitAtPlayheadBlocker(state, isPlaying);
+            if (typeof target === "string" || blocker !== null) {
+                toast.error(blocker ?? String(target), {
+                    id: "timeline-split-move",
+                });
                 return;
             }
             void moves.splitMoveAtPlayhead(target.id, isPlaying);
         },
-        { enabled: !basic && !isPlaying },
+        {
+            enabled: splitBlocker === null,
+            disabledReason: () =>
+                splitAtPlayheadBlocker(
+                    useTimelineSelectionStore.getState(),
+                    isPlaying,
+                ) ?? undefined,
+        },
+        // Basic has no moves to split (its + splits the page's moves at a new flag): not offered
+        !basic,
     );
     const clipResize = useTimelineClipResize({ database: db, timelines });
     const queryClient = useQueryClient();

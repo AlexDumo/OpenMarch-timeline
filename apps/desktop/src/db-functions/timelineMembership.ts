@@ -546,12 +546,20 @@ export const removeAssignmentRowsInTransaction = async ({
             .from(a)
             .where(eq(a.transition_id, transitionId))
             .all();
-        if ((tr.slot_count === 1 || deleteEmptied) && remaining.length === 0) {
+        // AP-T6 (pathways step 4): a follow move's line keeps its order and everyone's own end
+        // spot (R-13′), so a marcher who leaves it leaves a gap; with nobody left it goes
+        const trail =
+            tr.path_style === "follow_the_leader" && tr.route_id !== null;
+        if (
+            (tr.slot_count === 1 || deleteEmptied || trail) &&
+            remaining.length === 0
+        ) {
             emptied.add(transitionId);
             continue;
         }
         if (
             !compact ||
+            trail ||
             tr.dest_shape_id !== null ||
             remaining.some((r) => ftlMarchers.has(r.marcher_id))
         ) {

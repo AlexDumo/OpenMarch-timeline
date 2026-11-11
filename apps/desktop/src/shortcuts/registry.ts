@@ -30,6 +30,12 @@ export interface ActionHandler {
      * state it sets): menus show it checked. Such an action is disabled too
      */
     checked?: () => boolean;
+    /**
+     * Why the action can't run right now, for menus and the palette to show on its disabled
+     * entry before anyone tries it (a split refused while a line follows a trail). Undefined
+     * when it can run, or when there's nothing useful to say
+     */
+    disabledReason?: () => string | undefined;
 }
 
 const handlers = new Map<ActionId, ActionHandler[]>();
@@ -75,6 +81,12 @@ export function actionLabelNow(id: ActionId): string | undefined {
 /** Whether the action's handler says it is already done (`useActionHandler`'s `checked`) */
 export function isActionChecked(id: ActionId): boolean {
     return top(id)?.checked?.() ?? false;
+}
+
+/** Why the action is unavailable, when its handler says (`useActionHandler`'s `disabledReason`) */
+export function actionDisabledReason(id: ActionId): string | undefined {
+    if (isActionEnabled(id)) return undefined;
+    return top(id)?.disabledReason?.();
 }
 
 /** Whether the action's handler skips key repeats right now (`useActionHandler`'s `ignoreRepeat`) */

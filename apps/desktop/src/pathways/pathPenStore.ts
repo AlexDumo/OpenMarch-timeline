@@ -3,6 +3,12 @@ import { db } from "@/global/database/db";
 import { toast } from "sonner";
 import { drawRoute, removeRoute } from "@/db-functions/timelineRoutes";
 import {
+    editTrailPoints,
+    followTrail,
+    removeTrail,
+    reverseTrail,
+} from "@/db-functions/timelineTrails";
+import {
     editPathPoints,
     redrawPath,
     refitPath as refitRoute,
@@ -218,9 +224,15 @@ export const pathMarcherIds = (
         !pathShown(session, hidden) ||
         (session.phase === "closed" && closedUnder)
             ? []
-            : session.target.group
-              ? session.target.group.members.map((m) => m.marcherId)
-              : [session.target.marcherId];
+            : session.target.trail
+              ? // A trail shown closed keeps every member's walked path (its start flag
+                // positions' path is the trail as walked); drawn or open, they give way
+                session.phase === "closed"
+                  ? []
+                  : session.target.trail.members.map((m) => m.marcherId)
+              : session.target.group
+                ? session.target.group.members.map((m) => m.marcherId)
+                : [session.target.marcherId];
     const drawn = objectsDrawn(objects, session, closedUnder).flatMap((o) =>
         o.target.group ? o.target.group.members.map((m) => m.marcherId) : [],
     );
@@ -251,12 +263,19 @@ export const usePathPenStore = create<PathPenState>(() => ({
 export const pathKey = (
     t: Pick<
         PathTarget,
-        "timelineId" | "transitionId" | "marcherId" | "group" | "routeId"
+        | "timelineId"
+        | "transitionId"
+        | "marcherId"
+        | "group"
+        | "routeId"
+        | "trail"
     >,
 ) =>
-    t.group
-        ? `${t.timelineId}:g${t.routeId ?? "new"}`
-        : `${t.timelineId}:${t.transitionId}:${t.marcherId}`;
+    t.trail
+        ? `${t.timelineId}:t${t.routeId ?? "new"}`
+        : t.group
+          ? `${t.timelineId}:g${t.routeId ?? "new"}`
+          : `${t.timelineId}:${t.transitionId}:${t.marcherId}`;
 
 /** The same path object: the same route (AP-O1), whoever walks it now */
 const sameRoute = (a: PathTarget, b: PathTarget) =>
@@ -338,6 +357,40 @@ export function startDrawing(
             byRoute,
         },
     });
+}
+
+/**
+ * While drawing for the same marchers, the drawing becomes `target`'s kind (a trail, or a group
+ * path) and keeps the points placed so far (pathways step 4: Together | Follow on the path bar).
+ * False when nothing is being drawn for them, so the caller starts a new drawing.
+ */
+export function switchDrawing(target: PathTarget, drill: string): boolean {
+    const { session } = usePathPenStore.getState();
+    if (!session || session.phase !== "drawing" || session.byRoute)
+        return false;
+    const ids = (t: PathTarget) =>
+        (t.trail
+            ? t.trail.members.map((m) => m.marcherId)
+            : t.group
+              ? t.group.members.map((m) => m.marcherId)
+              : [t.marcherId]
+        )
+            .sort((a, b) => a - b)
+            .join(",");
+    if (ids(session.target) !== ids(target)) return false;
+    usePathPenStore.setState({
+        session: {
+            ...session,
+            target,
+            drill,
+            // A new point's id is given on save; a stored trail's or path's ids aren't these
+            points: session.points.map(({ at, tension }) => ({
+                at,
+                ...(tension === undefined ? {} : { tension }),
+            })),
+        },
+    });
+    return true;
 }
 
 /**
@@ -635,7 +688,23 @@ async function save(
     }));
     const { target } = session;
     try {
-        if (session.phase === "open" && target.routeId !== null)
+        if (target.trail && target.routeId !== null)
+            // Point edits on an open trail, or the trail drawn again (AP-T2): by its route, so a
+            // member taken over at the move's start doesn't stop it
+            await editTrailPoints({
+                db,
+                routeId: target.routeId,
+                points: stored,
+            });
+        else if (target.trail)
+            // Follow: the line gets its trail (AP-T1)
+            await followTrail({
+                db,
+                timelineId: target.timelineId,
+                marcherIds: target.trail.members.map((m) => m.marcherId),
+                points: stored,
+            });
+        else if (session.phase === "open" && target.routeId !== null)
             // Point edits on the open path are path edits, by its route (AP-O8, 07 N3); on a group
             // path they move every lane (AP-R1)
             reportRehome(
@@ -1015,6 +1084,22 @@ export async function removePath(): Promise<void> {
         return;
     usePathPenStore.setState({ saving: true });
     try {
+        if (session.target.trail) {
+            // Remove trail (AP-T4): the line walks straight to the same end spots
+            const gone = await removeTrail({
+                db,
+                routeId: session.target.routeId,
+            });
+            clearPath();
+            toastWithUndo(
+                tolgee.t(
+                    "pathways.toasts.removedTrail",
+                    "Removed the trail: {count, plural, one {# marcher walks} other {# marchers walk}} straight to the same end spots",
+                    { count: gone.marcherIds.length },
+                ),
+            );
+            return;
+        }
         const { marcherIds } = await removeRoute({
             db,
             routeId: session.target.routeId,
@@ -1032,6 +1117,45 @@ export async function removePath(): Promise<void> {
         toastTimelineError(
             error,
             tolgee.t("pathways.errors.remove", "Couldn't remove the path"),
+        );
+    } finally {
+        usePathPenStore.setState({ saving: false });
+    }
+}
+
+/**
+ * Reverse (AP-T3, pathways step 4): the other end of the shown trail's line leads, one undo step.
+ * Everyone keeps their end spot; the trail is read again and stays as it was shown (open or not).
+ */
+export async function reverseShownTrail(): Promise<void> {
+    const { session, saving } = usePathPenStore.getState();
+    if (
+        !session?.target.trail ||
+        session.phase === "drawing" ||
+        saving ||
+        session.target.routeId === null
+    )
+        return;
+    usePathPenStore.setState({ saving: true });
+    try {
+        const { leaderId } = await reverseTrail({
+            db,
+            routeId: session.target.routeId,
+        });
+        const leader = session.target.trail.members.find(
+            (m) => m.marcherId === leaderId,
+        );
+        usePathPenStore.setState((state) => ({ saved: state.saved + 1 }));
+        if (leader)
+            toastWithUndo(
+                tolgee.t("pathways.toasts.reversed", "{marcher} leads now", {
+                    marcher: leader.drill,
+                }),
+            );
+    } catch (error) {
+        toastTimelineError(
+            error,
+            tolgee.t("pathways.errors.reverse", "Couldn't reverse the trail"),
         );
     } finally {
         usePathPenStore.setState({ saving: false });

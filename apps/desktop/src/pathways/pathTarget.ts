@@ -10,7 +10,14 @@ import type { DbConnection } from "@/db-functions/types";
 import { readRoutes, type MoveRoute } from "@/db-functions/timelineRoutes";
 import { meanOf, readGroupPaths } from "@/db-functions/timelineGroupRoutes";
 import { laneOn } from "@/db-functions/timelineLanes";
+import {
+    followOrder,
+    followTrailRefusal,
+    readTrails,
+    type MoveTrail,
+} from "@/db-functions/timelineTrails";
 import type { XY } from "@/shapes/types";
+import type { TimelineText } from "@/timeline/timelineText";
 
 /**
  * Who a path is drawn for and between which spots (pathways step 1, spec v0.9 R-14): one marcher's
@@ -55,6 +62,29 @@ export interface PathTarget {
      * path (`from` and `to` are already its real ends) and for a group path being drawn.
      */
     drawnEnds?: { from: XY; to: XY };
+    /**
+     * A follow-the-leader trail (pathways step 4, spec Appendix K), or absent. Then the target's
+     * `from` is where the leader starts, `to` the end spot the line is entered at, `routeId` the
+     * trail's route (null while a new trail is drawn) and `points` its drawn points; `marcherId`
+     * and `transitionId` are the leader's.
+     */
+    trail?: TrailTarget | null;
+}
+
+/** The line that follows a trail: who, in what order, and where each starts and ends */
+export interface TrailTarget {
+    /** The line, tail first; the leader is the last */
+    members: readonly {
+        marcherId: number;
+        drill: string;
+        /** Where it starts (the line-up runs through these) */
+        from: XY;
+        /** Its end spot (the line runs on through these, from the entrance to the leader's) */
+        to: XY;
+    }[];
+    leaderId: number;
+    /** Whether the other end leads (R-12′); false while a new trail is drawn */
+    reverse: boolean;
 }
 
 /** A member of a group path: where it starts and ends, and its lane's offset from the reference */
@@ -291,6 +321,181 @@ export async function findGroupDrawTarget(
     };
 }
 
+/** A trail read from the show as the target the pen shows, its line in the order it walks now */
+function targetOfTrail(
+    trail: MoveTrail,
+    resolver: Pick<Resolver, "explain" | "positionAt" | "ftlEntry">,
+    drills: ReadonlyMap<number, string>,
+    entrance: XY | null,
+): PathTarget | null {
+    const entry = resolver.ftlEntry(trail.transitionId);
+    // With nobody founding the move (each taken over at its start) the trail still shows, by
+    // its line's slots, so it can be reversed or removed
+    const line =
+        entry.members.length > 0
+            ? entry.members
+            : trail.reverse
+              ? [...trail.marcherIds].reverse()
+              : [...trail.marcherIds];
+    if (line.length === 0) return null;
+    const ends = new Map(entry.targets);
+    const members = line.map((m) => ({
+        marcherId: m,
+        drill: drills.get(m) ?? `${m}`,
+        from: xy(resolver.explain(m, trail.start).origin),
+        to: xy(ends.get(m) ?? resolver.positionAt(m, trail.end)),
+    }));
+    const leader = members.at(-1)!;
+    return {
+        timelineId: trail.timelineId,
+        transitionId: trail.transitionId,
+        marcherId: leader.marcherId,
+        start: trail.start,
+        end: trail.end,
+        from: leader.from,
+        to: entrance ?? members[0]!.to,
+        routeId: trail.routeId,
+        points: trail.geometry.points,
+        ends: { from: xy(trail.geometry.from), to: xy(trail.geometry.to) },
+        group: null,
+        trail: {
+            members,
+            leaderId: leader.marcherId,
+            reverse: trail.reverse,
+        },
+    };
+}
+
+/** The end spot a trail's line is entered at: its first slot's, or its last when reversed */
+async function trailEntrance(
+    db: DbConnection,
+    trail: MoveTrail,
+): Promise<XY | null> {
+    const D = schema.timeline_slot_destinations;
+    const spots = await db
+        .select()
+        .from(D)
+        .where(eq(D.transition_id, trail.transitionId))
+        .orderBy(D.slot_index)
+        .all();
+    const spot = trail.reverse ? spots.at(-1) : spots[0];
+    return spot ? { x: spot.x, y: spot.y } : null;
+}
+
+/**
+ * The trail to show for the selected `marcherIds` at `beat` (pathways step 4): when they are all
+ * in one move and every one of them is in the same follow move's line. Null otherwise.
+ */
+export async function findTrailTarget(
+    db: DbConnection,
+    resolver: Pick<Resolver, "explain" | "positionAt" | "ftlEntry">,
+    marcherIds: readonly number[],
+    drills: ReadonlyMap<number, string>,
+    beat: number,
+): Promise<PathTarget | null> {
+    const move = await groupMoveAt(db, marcherIds, beat);
+    if (move.kind !== "move") return null;
+    const trails = (await readTrails(db, move.timelineId)).filter((t) =>
+        marcherIds.every((m) => t.marcherIds.includes(m)),
+    );
+    if (trails.length !== 1) return null;
+    const trail = trails[0]!;
+    return targetOfTrail(
+        trail,
+        resolver,
+        drills,
+        await trailEntrance(db, trail),
+    );
+}
+
+/**
+ * The trail `routeId` as a target, read by its route (a trail selected as a path object, AP-O1).
+ * Null when it is gone (removed, or undone).
+ */
+export async function findTrailRouteTarget(
+    db: DbConnection,
+    resolver: Pick<Resolver, "explain" | "positionAt" | "ftlEntry">,
+    routeId: number,
+    drills: ReadonlyMap<number, string>,
+): Promise<PathTarget | null> {
+    const trail = (await readTrails(db)).find((t) => t.routeId === routeId);
+    if (!trail) return null;
+    return targetOfTrail(
+        trail,
+        resolver,
+        drills,
+        await trailEntrance(db, trail),
+    );
+}
+
+/** Follow refused for the chosen marchers (AP-T1), said before drawing starts */
+export type FollowRefused = { kind: "refused"; reason: TimelineText };
+
+/**
+ * What Follow draws a trail for (AP-T1): `marcherIds` (two or more) in their one move at `beat`,
+ * in the order Follow will give them (`followOrder`), from the leader's start to the tail's end
+ * spot. When they are exactly a follow move's line, it is that trail, drawn again. Or why not.
+ */
+export async function findTrailDrawTarget(
+    db: DbConnection,
+    resolver: Pick<Resolver, "explain" | "positionAt" | "ftlEntry">,
+    marcherIds: readonly number[],
+    drills: ReadonlyMap<number, string>,
+    beat: number,
+): Promise<PathTarget | GroupMove | FollowRefused> {
+    const move = await groupMoveAt(db, marcherIds, beat);
+    if (move.kind !== "move") return move;
+    const ids = [...new Set(marcherIds)].sort((a, b) => a - b);
+    // Asked before drawing starts, so a trail that can't be kept is never drawn
+    const refusal = await db.transaction((tx) =>
+        followTrailRefusal(tx, move.timelineId, ids),
+    );
+    if (refusal) return { kind: "refused", reason: refusal };
+    const existing = (await readTrails(db, move.timelineId)).find(
+        (t) =>
+            t.marcherIds.length === ids.length &&
+            ids.every((m) => t.marcherIds.includes(m)),
+    );
+    if (existing) {
+        const target = targetOfTrail(
+            existing,
+            resolver,
+            drills,
+            await trailEntrance(db, existing),
+        );
+        if (target) return target;
+    }
+    const starts = ids.map(
+        (m) => resolver.explain(m, move.start).origin as [number, number],
+    );
+    const ends = ids.map(
+        (m) => resolver.positionAt(m, move.end) as [number, number],
+    );
+    const order = followOrder(starts, ends);
+    const members = order.map((i) => ({
+        marcherId: ids[i]!,
+        drill: drills.get(ids[i]!) ?? `${ids[i]}`,
+        from: xy(starts[i]!),
+        to: xy(ends[i]!),
+    }));
+    const leader = members.at(-1)!;
+    const at = (await moveAt(db, leader.marcherId, beat))!;
+    return {
+        timelineId: move.timelineId,
+        transitionId: at.transition.id,
+        marcherId: leader.marcherId,
+        start: move.start,
+        end: move.end,
+        from: leader.from,
+        to: members[0]!.to,
+        routeId: null,
+        points: [],
+        ends: null,
+        group: null,
+        trail: { members, leaderId: leader.marcherId, reverse: false },
+    };
+}
+
 /**
  * The move of `marcherId` at `beat` that a path is drawn on: the row that holds the beat, the one
  * arriving there when the beat is on its end (a page flag shows where the page arrives), the top
@@ -440,6 +645,8 @@ export function targetOfRoute(
  * the stored ones by more than the app's geometry tolerance.
  */
 export function refitNeeded(target: PathTarget): boolean {
+    // A trail's drawn part always runs from the leader to the entrance as they are now (R-9′)
+    if (target.trail) return false;
     if (target.routeId === null || !target.ends) return false;
     const now = target.drawnEnds ?? { from: target.from, to: target.to };
     const pair = (p: XY): [number, number] => [p.x, p.y];

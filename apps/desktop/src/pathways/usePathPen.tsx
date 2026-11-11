@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { translateTimelineText } from "@/timeline/translateTimelineText";
 import { allMarchersQueryOptions } from "@/hooks/queries";
 import { readGroupPaths } from "@/db-functions/timelineGroupRoutes";
 import tolgee from "@/global/singletons/Tolgee";
@@ -25,6 +26,9 @@ import {
     findGroupTarget,
     findPathTarget,
     findRouteTarget,
+    findTrailDrawTarget,
+    findTrailRouteTarget,
+    findTrailTarget,
     groupMoveAt,
     pathObjectsAt,
     refitNeeded,
@@ -54,6 +58,8 @@ import {
     rejoinFor,
     removeLastPoint,
     removePath,
+    reverseShownTrail,
+    switchDrawing,
     selectPoint,
     setPathHidden,
     setPointSmooth,
@@ -103,6 +109,10 @@ export function usePathPenActions(): void {
     const hasRoute = usePathPenStore(
         (s) => (s.session?.target.routeId ?? null) !== null,
     );
+    // A stored trail is shown (pathways step 4): Reverse and Remove trail act on it
+    const trailShown = usePathPenStore(
+        (s) => !!s.session?.target.trail && s.session.target.routeId !== null,
+    );
     const selectedIds = performers.map((m) => m.id).sort((a, b) => a - b);
     const selectionKey = selectedIds.join(",");
 
@@ -126,11 +136,25 @@ export function usePathPenActions(): void {
             startDrawing(now.target, now.drill, now.object, true);
             return;
         }
+        // The line's trail shown (pathways step 4): P draws the trail again, as Follow does
+        if (
+            now?.target.trail &&
+            now.target.routeId !== null &&
+            now.phase !== "drawing" &&
+            !isPlaying
+        ) {
+            if (useShapeToolStore.getState().tool) closeShapeTool();
+            againFor.current = selectionKey;
+            startDrawing(now.target, now.drill, false, true);
+            return;
+        }
         const refusal = penRefusal(performers.length);
         if (refusal) {
             toast.error(refusal, { id: "path-pen" });
             return;
         }
+        // Already drawing this kind of path: P changes nothing
+        if (now?.phase === "drawing" && !now.target.trail) return;
         if (isPlaying) {
             toast.error(
                 tolgee.t(
@@ -171,7 +195,9 @@ export function usePathPenActions(): void {
                         return;
                     }
                     if (useShapeToolStore.getState().tool) closeShapeTool();
-                    startDrawing(target, `${ids.length}`);
+                    // From a trail being drawn (Together on the path bar): the same points
+                    if (!switchDrawing(target, `${ids.length}`))
+                        startDrawing(target, `${ids.length}`);
                 },
             );
             return;
@@ -194,6 +220,84 @@ export function usePathPenActions(): void {
         });
     });
 
+    // Follow (pathways step 4, AP-T1): the pen draws a trail for the selected line. With the
+    // line's trail shown, it is drawn again; while a group path is being drawn for the same
+    // marchers, the drawing becomes a trail and keeps its points
+    useActionHandler("followTrail", () => {
+        const now = usePathPenStore.getState().session;
+        if (now?.phase === "drawing" && now.target.trail) return;
+        // The line's trail shown: drawn again, whoever of the line is selected
+        if (
+            now?.target.trail &&
+            now.target.routeId !== null &&
+            now.phase !== "drawing" &&
+            !isPlaying
+        ) {
+            if (useShapeToolStore.getState().tool) closeShapeTool();
+            againFor.current = selectionKey;
+            startDrawing(now.target, now.drill, now.object, true);
+            return;
+        }
+        const refusal =
+            performers.length < 2
+                ? tolgee.t(
+                      "pathways.refusals.followTwo",
+                      "Select the marchers of a line (two or more) to follow a trail",
+                  )
+                : isPlaying
+                  ? tolgee.t(
+                        "pathways.refusals.playing",
+                        "Stop playback to draw a path",
+                    )
+                  : null;
+        if (refusal) {
+            toast.error(refusal, { id: "path-pen" });
+            return;
+        }
+        const resolver = useTimelineResolverStore.getState().resolver;
+        if (!resolver) return;
+        const beat = useTimelineSelectionStore.getState().playheadBeat;
+        const ids = performers.map((m) => m.id);
+        void findTrailDrawTarget(db, resolver, ids, drills, beat).then(
+            (target) => {
+                if ("kind" in target && target.kind === "refused") {
+                    // Said before drawing starts, so no drawing is lost (AP-T1)
+                    toast.error(translateTimelineText(target.reason), {
+                        id: "path-pen",
+                    });
+                    return;
+                }
+                if ("kind" in target) {
+                    const who = performers.find(
+                        (m) =>
+                            target.kind === "noMove" &&
+                            m.id === target.marcherId,
+                    );
+                    toast.error(
+                        target.kind === "noMove"
+                            ? tolgee.t(
+                                  "pathways.refusals.noMove",
+                                  "{marcher} has no move at the playhead to draw a path on",
+                                  { marcher: who?.drill_number ?? "" },
+                              )
+                            : tolgee.t(
+                                  "pathways.refusals.followTwoMoves",
+                                  "These marchers are in different moves at the playhead: select marchers of one move to follow a trail",
+                              ),
+                        { id: "path-pen" },
+                    );
+                    return;
+                }
+                if (useShapeToolStore.getState().tool) closeShapeTool();
+                if (!switchDrawing(target, `${ids.length}`))
+                    startDrawing(target, `${ids.length}`);
+            },
+        );
+    });
+    useActionHandler("reverseTrail", () => void reverseShownTrail(), {
+        enabled: trailShown && phase !== "drawing",
+    });
+
     // The closed path shows by start flag positions' paths level in effect, as the straight paths
     // do: the setting, and N held or tapped (owner, 2026-11-04). The marcher is selected, so
     // Selected and All both show it. Edit path still opens a hidden one
@@ -208,6 +312,10 @@ export function usePathPenActions(): void {
     // Remove path (AP-R2), open or closed, not while a new one is drawn
     useActionHandler("removePath", () => void removePath(), {
         enabled: hasRoute && phase !== "drawing",
+        // On a trail it is named for what goes (pathways step 4, AP-T4)
+        label: trailShown
+            ? tolgee.t("actions.path.removeTrail", "Remove trail")
+            : undefined,
     });
     // Re-fit (decision A), open or closed, only when the ends have moved
     const canRefit = usePathPenStore(
@@ -282,9 +390,13 @@ export function usePathPenActions(): void {
                 ? ""
                 : session.byRoute
                   ? againFor.current
-                  : (session.target.group
-                        ? session.target.group.members.map((m) => m.marcherId)
-                        : [session.target.marcherId]
+                  : (session.target.trail
+                        ? session.target.trail.members
+                              .map((m) => m.marcherId)
+                              .sort((a, b) => a - b)
+                        : session.target.group
+                          ? session.target.group.members.map((m) => m.marcherId)
+                          : [session.target.marcherId]
                     ).join(",");
             if (drawnFor !== selectionKey) clearPath();
             return;
@@ -304,17 +416,17 @@ export function usePathPenActions(): void {
                 clear();
                 return;
             }
-            void findRouteTarget(db, resolver, routeId, drills).then(
-                (target) => {
-                    if (ask !== asked.current) return;
-                    const now = usePathPenStore.getState().session;
-                    if (!now?.object || now.phase === "drawing") return;
-                    // Own path and Rejoin act on selected marchers, and none are
-                    setGroupCommands([], null);
-                    if (target) showPath(target, drillOf(target, drills), true);
-                    else clear();
-                },
-            );
+            void (
+                session.target.trail ? findTrailRouteTarget : findRouteTarget
+            )(db, resolver, routeId, drills).then((target) => {
+                if (ask !== asked.current) return;
+                const now = usePathPenStore.getState().session;
+                if (!now?.object || now.phase === "drawing") return;
+                // Own path and Rejoin act on selected marchers, and none are
+                setGroupCommands([], null);
+                if (target) showPath(target, drillOf(target, drills), true);
+                else clear();
+            });
             return;
         }
         if (selectedIds.length === 0 || !ready || !resolver) {
@@ -324,6 +436,23 @@ export function usePathPenActions(): void {
         const ask = ++asked.current;
         const beat = playheadBeat;
         void (async () => {
+            // A trail when the selected marchers are all in one follow move's line (step 4)
+            const trail = await findTrailTarget(
+                db,
+                resolver,
+                selectedIds,
+                drills,
+                beat,
+            );
+            if (trail) {
+                if (ask !== asked.current) return;
+                const now = usePathPenStore.getState();
+                if (now.session?.phase === "drawing") return;
+                if (now.session?.object && now.session !== session) return;
+                setGroupCommands([], null);
+                showPath(trail, `${trail.trail!.members.length}`);
+                return;
+            }
             // A group path when any selected marcher walks one (step 15), else one marcher's own
             const group = await findGroupTarget(
                 db,
@@ -411,9 +540,11 @@ export function usePathPenActions(): void {
 
 /** How a path target is named: its marcher's drill number, or its group's size */
 const drillOf = (target: PathTarget, drills: ReadonlyMap<number, string>) =>
-    target.group
-        ? `${target.group.members.length}`
-        : (drills.get(target.marcherId) ?? `${target.marcherId}`);
+    target.trail
+        ? `${target.trail.members.length}`
+        : target.group
+          ? `${target.group.members.length}`
+          : (drills.get(target.marcherId) ?? `${target.marcherId}`);
 
 /** How many points an own path object's drawn walk is sampled at, for its click test */
 const WALK_SAMPLES = 96;

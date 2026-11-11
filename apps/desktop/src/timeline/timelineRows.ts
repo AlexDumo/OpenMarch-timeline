@@ -89,6 +89,8 @@ export const transitionFromRow = (row: TransitionDbRow): TransitionRow => ({
         row.path_params == null
             ? null
             : (JSON.parse(row.path_params) as PathParams),
+    // A follow-the-leader transition's trail route (R-9′, pathways step 4)
+    route: row.route_id,
 });
 
 /** A route (spec v0.9 §5.2): its geometry, parsed. */
@@ -186,6 +188,7 @@ export const transitionFromImage = (image: RowImage): TransitionRow => {
         style: field<PathStyle>(image, "style", t, isString),
         order: field<OrderMode>(image, "order", t, isString),
         params: params as PathParams | null,
+        route: typeof image["route"] === "number" ? image["route"] : null,
     };
 };
 

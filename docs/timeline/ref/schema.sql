@@ -49,8 +49,8 @@ CREATE TABLE transitions (
   start_beat     INTEGER NOT NULL CHECK (start_beat BETWEEN 0 AND 2147483647),
   end_beat       INTEGER NOT NULL CHECK (end_beat   BETWEEN 0 AND 2147483647),
   CHECK (end_beat > start_beat),
-  -- I-T5: follow-the-leader follows a path, so it needs a destination shape
-  CHECK (dest_shape_id IS NOT NULL OR path_style <> 'follow_the_leader'),
+  -- I-T5′ (plan step 4): follow-the-leader follows a path, so it needs a destination shape or a trail route
+  CHECK (dest_shape_id IS NOT NULL OR route_id IS NOT NULL OR path_style <> 'follow_the_leader'),
   -- I-T2 (partial, DB-enforced): an arc carries a numeric bulge with |bulge| <= 0.5 (minor arcs only, §8.11)
   CHECK (path_style <> 'arc' OR (coalesce(json_type(path_params, '$.bulge'), '') IN ('integer', 'real')
                                  AND abs(json_extract(path_params, '$.bulge')) <= 0.5))
