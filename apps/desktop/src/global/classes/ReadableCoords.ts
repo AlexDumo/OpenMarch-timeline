@@ -20,7 +20,7 @@ export enum Y_DESCRIPTION {
  *
  * An axis with no reference checkpoint (a custom field can turn them all off) falls back to the
  * closest of all its checkpoints, so the position still gets a description. An axis with no
- * checkpoints at all is described from 0 steps (the center or the front) with no name.
+ * checkpoints at all is described from 0 steps, named "center line" or "front edge".
  */
 export function findClosestCheckpoint(
     stepsFromCenterFront: number,
@@ -46,8 +46,15 @@ export function findClosestCheckpoint(
     return (
         closest ?? {
             id: -1,
-            name: "",
-            terseName: "",
+            // Named for where it is, so the readout doesn't end in a blank
+            name:
+                axis === "x"
+                    ? tolgee.t("coordinates.noCheckpoint.centerLine")
+                    : tolgee.t("coordinates.noCheckpoint.frontEdge"),
+            terseName:
+                axis === "x"
+                    ? tolgee.t("coordinates.noCheckpoint.centerLineShort")
+                    : tolgee.t("coordinates.noCheckpoint.frontEdgeShort"),
             axis,
             stepsFromCenterFront: 0,
             useAsReference: true,

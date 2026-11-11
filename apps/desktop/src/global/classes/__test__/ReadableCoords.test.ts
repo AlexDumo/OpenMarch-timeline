@@ -320,6 +320,10 @@ describe("ReadableCoords", () => {
 });
 
 describe("findClosestCheckpoint", () => {
+    beforeAll(async () => {
+        await tolgee.run();
+    });
+
     const line = (
         id: number,
         steps: number,
@@ -359,6 +363,30 @@ describe("findClosestCheckpoint", () => {
         const closest = findClosestCheckpoint(3, [], "y");
         expect(closest.stepsFromCenterFront).toBe(0);
         expect(closest.axis).toBe("y");
+    });
+
+    it("names the fallback for where it is, so readouts don't end in a blank", () => {
+        const college =
+            FieldPropertiesTemplates.COLLEGE_FOOTBALL_FIELD_NO_END_ZONES;
+        const noCheckpoints = new FieldProperties({
+            ...college,
+            xCheckpoints: [],
+            yCheckpoints: [],
+        });
+        ReadableCoords.setFieldProperties(noCheckpoints);
+        const { centerFrontPoint, pixelsPerStep } = noCheckpoints;
+        const coords = new ReadableCoords({
+            x: centerFrontPoint.xPixels - 2 * pixelsPerStep,
+            y: centerFrontPoint.yPixels - 4 * pixelsPerStep,
+        });
+        expect(coords.toVerboseStringX({ includeStepsString: true })).toMatch(
+            /2 steps outside center line$/,
+        );
+        expect(coords.toTerseStringX()).toMatch(/2 OUT CL$/);
+        expect(coords.toVerboseStringY({ includeStepsString: true })).toBe(
+            "4 steps behind front edge",
+        );
+        expect(coords.toTerseStringY()).toBe("4 BE FE");
     });
 
     it("gives coordinates on a field with no Y reference instead of throwing", () => {
