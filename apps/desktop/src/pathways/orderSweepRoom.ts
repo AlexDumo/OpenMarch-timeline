@@ -5,8 +5,12 @@
  * behind them.
  */
 import tolgee from "@/global/singletons/Tolgee";
-import { discardShapeTool } from "@/shapes/tool/shapeLeave";
+import {
+    discardShapeTool,
+    restoreDiscardedShape,
+} from "@/shapes/tool/shapeLeave";
 import { useShapeToolStore } from "@/shapes/tool/shapeToolStore";
+import { cancelOrderSweep } from "./marcherOrderStore";
 import { closePath, usePathPenStore } from "./pathPenStore";
 
 /**
@@ -35,4 +39,15 @@ export function makeRoomForOrderSweep(): boolean {
     const { session } = usePathPenStore.getState();
     if (session && session.phase !== "closed") closePath();
     return true;
+}
+
+/**
+ * Undo or redo while Set order is on: it cancels Set order and undoes nothing in the show. Set
+ * order writes nothing until it's kept, so the show's last edit isn't what the person sees as the
+ * last step. Undo brings back a shape tool that opening Set order discarded (`makeRoomForOrderSweep`),
+ * as undo right after Escape does; otherwise the next undo works as usual.
+ */
+export function undoInOrderSweep(redo = false): void {
+    cancelOrderSweep();
+    if (!redo) restoreDiscardedShape();
 }

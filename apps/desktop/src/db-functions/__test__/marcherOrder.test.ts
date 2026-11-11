@@ -1,4 +1,6 @@
-import { afterEach, expect } from "vitest";
+import { and, asc, desc, eq, inArray, lte } from "drizzle-orm";
+import { afterEach, describe, expect, it } from "vitest";
+import { schema } from "@/global/database/db";
 import { DbConnection, describeDbTests } from "@/test/base";
 import { readShowTiming } from "@/timeline/showTiming";
 import {
@@ -17,14 +19,13 @@ import { readTimelineEndBeats } from "@/db-functions/timelines";
 import { boxesAt } from "@/shapes/placed/placedBox";
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { mergeMoves, splitMarchersIntoNewMove } from "../timelineSplitMoves";
+import { createBeats, type NewBeatArgs } from "../beat";
+import { deleteTimeline } from "../timelineCommands";
+import { orderMarkPlace } from "../timelineRipple";
 import { rememberedOrderAt } from "../rememberedOrder";
 import { dragTrail, followOrderAt } from "../timelineTrailDrag";
 import { reverseTrail } from "../timelineTrails";
-import {
-    clearMarcherOrder,
-    orderMoveAt,
-    setMarcherOrder,
-} from "../marcherOrder";
+import { clearMarcherOrder, setMarcherOrder } from "../marcherOrder";
 
 /**
  * A line's order set by hand (pathways step 4g, DL-26..DL-29, QA-DL-26..QA-DL-33): stored as an
@@ -33,6 +34,7 @@ import {
 
 afterEach(() => stopTimelineResolver());
 
+const BEAT: NewBeatArgs = { duration: 0.5, include_in_measure: true };
 const PAGE2 = { kind: "range", start: 9, end: 17 } as const;
 const resolver = () => useTimelineResolverStore.getState().resolver!;
 
@@ -62,6 +64,45 @@ const inARow = async (db: DbConnection, along: readonly number[]) => {
         })),
     });
     await timelineResolverSettled();
+};
+
+/**
+ * The move that holds `marcherIds`' positions at `beat`: the latest ending by then that holds any
+ * of them (the first of those ending together), else the latest ending by then; null for the homes
+ */
+const orderMoveAt = async (
+    db: DbConnection,
+    beat: number,
+    marcherIds: readonly number[],
+): Promise<number | null> => {
+    const T = schema.timelines;
+    const A = schema.timeline_assignments;
+    const TR = schema.timeline_transitions;
+    if (marcherIds.length > 0) {
+        const holding = await db
+            .selectDistinct({ id: T.id, end: T.end_beat })
+            .from(T)
+            .innerJoin(TR, eq(TR.timeline_id, T.id))
+            .innerJoin(A, eq(A.transition_id, TR.id))
+            .where(
+                and(
+                    lte(T.end_beat, beat),
+                    inArray(A.marcher_id, [...marcherIds]),
+                ),
+            )
+            .orderBy(desc(T.end_beat), asc(T.id))
+            .limit(1)
+            .get();
+        if (holding) return holding.id;
+    }
+    const last = await db
+        .select({ id: T.id })
+        .from(T)
+        .where(lte(T.end_beat, beat))
+        .orderBy(desc(T.end_beat), asc(T.id))
+        .limit(1)
+        .get();
+    return last?.id ?? null;
 };
 
 const positions = (ids: readonly number[], beat: number) =>
@@ -269,16 +310,17 @@ describeDbTests("A line's order set by hand", (it) => {
         expect(await rememberedOrderAt(db, ids, PAGE2.end)).toEqual(ids);
         expect(await rememberedOrderAt(db, ids, 21)).toEqual(ids);
         expect(await rememberedOrderAt(db, ids, 25)).toBeNull();
-        // Both marks kept, in page 2's move, each at its own beat
+        // Both marks kept, in no move, each at its own beat
         expect(
             (await marks()).map((m) => [
                 m.kind,
                 m.timelineId,
+                (m.params as { beat?: number }).beat,
                 m.members.length,
             ]),
         ).toEqual([
-            ["order", pageMove, 4],
-            ["orderClear", pageMove, 4],
+            ["order", null, PAGE2.end, 4],
+            ["orderClear", null, 25, 4],
         ]);
 
         // An order set on page 3 after: page 2 still keeps its own
@@ -371,7 +413,7 @@ describeDbTests("A line's order set by hand", (it) => {
         const mark = (await readAllShapeRecipes(db)).find(
             (r) => r.kind === "order",
         )!;
-        expect(mark.timelineId).toBe(page3);
+        expect(mark.timelineId).toBeNull();
         expect((mark.params as { beat?: number }).beat).toBe(23);
         expect(await rememberedOrderAt(db, [a, b], 23)).toEqual([b, a]);
     });
@@ -451,22 +493,6 @@ describeDbTests("A line's order set by hand", (it) => {
             order: order.map((id) => ids.indexOf(id)),
             leaderFirst: true,
         });
-    });
-
-    it("the order is made in the move ending at the displayed beat, or the last one before it", async ({
-        db,
-        marchersAndPages: _,
-    }) => {
-        const ids = await show(db);
-        await inARow(db, ids);
-        const move = await orderMoveAt(db, PAGE2.end, ids);
-        expect(move).not.toBeNull();
-        const ends = await readTimelineEndBeats(db, [move!]);
-        expect(ends.get(move!)).toBe(PAGE2.end);
-        // Mid-page: the last move ended before it
-        expect(await orderMoveAt(db, PAGE2.end + 3, ids)).toBe(move);
-        // Before any move ends: the homes
-        expect(await orderMoveAt(db, 0, ids)).toBeNull();
     });
 
     it("redo brings back Set, Reverse and Clear in turn", async ({
@@ -609,37 +635,112 @@ describeDbTests("A line's order set by hand", (it) => {
         expect(await rememberedOrderAt(db, [a, c, d], 25)).toEqual([a, c, d]);
     });
 
-    it("an order mark lives in the latest move that holds its marchers, or the latest move when none does", async ({
+    it("an order set on page 3, where the line stands still, survives deleting page 2's move, through undo and redo", async ({
         db,
         marchersAndPages: _,
     }) => {
         const ids = await show(db);
         await inARow(db, ids);
+        // Standing still on page 3, their positions are in page 2's move
         const pageMove = (await orderMoveAt(db, PAGE2.end, ids))!;
-        // Page 3's move holds someone else only
-        const other = resolver()
-            .marcherIds()
-            .find((m) => !ids.includes(m))!;
-        await moveMarchersInTarget({
-            db,
-            target: { kind: "range", start: 17, end: 25 },
-            moves: [{ marcherId: other, x: 10, y: 10 }],
-        });
-        await timelineResolverSettled();
-        const page3 = (await orderMoveAt(db, 25, [other]))!;
-        expect(page3).not.toBe(pageMove);
-        expect((await readTimelineEndBeats(db, [page3])).get(page3)).toBe(25);
-        // Their mark at page 3's end sits with their positions, in page 2's move
         expect(await orderMoveAt(db, 25, ids)).toBe(pageMove);
-        await setMarcherOrder(db, { beat: 25, order: [...ids].reverse() });
+        const page3 = [ids[2]!, ids[0]!, ids[3]!, ids[1]!];
+        await setMarcherOrder(db, { beat: 25, order: page3 });
         const mark = (await readAllShapeRecipes(db)).find(
             (r) => r.kind === "order",
         )!;
-        expect(mark.timelineId).toBe(pageMove);
-        expect(await rememberedOrderAt(db, ids, 25)).toEqual(
-            [...ids].reverse(),
+        expect(mark.timelineId).toBeNull();
+
+        // Moved back: page 2's move goes
+        await deleteTimeline({ db, timelineId: pageMove });
+        await timelineResolverSettled();
+        expect((await readTimelineEndBeats(db, [pageMove])).has(pageMove)).toBe(
+            false,
         );
-        // Nobody of theirs in any move: the latest move
-        expect(await orderMoveAt(db, 25, [])).toBe(page3);
+        expect(await rememberedOrderAt(db, ids, 25)).toEqual(page3);
+
+        expect((await performUndo(db)).success).toBe(true);
+        await timelineResolverSettled();
+        expect((await readTimelineEndBeats(db, [pageMove])).get(pageMove)).toBe(
+            PAGE2.end,
+        );
+        expect(await rememberedOrderAt(db, ids, 25)).toEqual(page3);
+
+        expect((await performRedo(db)).success).toBe(true);
+        await timelineResolverSettled();
+        expect(await rememberedOrderAt(db, ids, 25)).toEqual(page3);
+        expect(await rememberedOrderAt(db, ids, PAGE2.end)).toBeNull();
+    });
+
+    it("beats inserted on page 2 move an order set on page 3 with page 3's flag, through undo and redo", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await inARow(db, ids);
+        const page3 = [ids[2]!, ids[0]!, ids[3]!, ids[1]!];
+        await setMarcherOrder(db, { beat: 25, order: page3 });
+        // Two beats inside page 2: page 3 now ends at 27
+        await createBeats({
+            db,
+            newBeats: [BEAT, BEAT],
+            startingPosition: 12,
+        });
+        await timelineResolverSettled();
+        expect(await rememberedOrderAt(db, ids, 25)).toBeNull();
+        expect(await rememberedOrderAt(db, ids, 27)).toEqual(page3);
+
+        expect((await performUndo(db)).success).toBe(true);
+        expect(await rememberedOrderAt(db, ids, 25)).toEqual(page3);
+        expect((await performRedo(db)).success).toBe(true);
+        expect(await rememberedOrderAt(db, ids, 25)).toBeNull();
+        expect(await rememberedOrderAt(db, ids, 27)).toEqual(page3);
+    });
+});
+
+describe("orderMarkPlace: an order mark's own beat after a page or beat edit", () => {
+    /** Page 0 is beat 0; pages 1–4 of 8 counts; beat ids are 100 + the ordinal */
+    const PAGES = [
+        { id: 1, start: 0, end: 1 },
+        { id: 2, start: 1, end: 9 },
+        { id: 3, start: 9, end: 17 },
+        { id: 4, start: 17, end: 25 },
+        { id: 5, start: 25, end: 33 },
+    ];
+    const grid = (beatIds: number[], pages = PAGES) => ({ beatIds, pages });
+    const BEATS = Array.from({ length: 33 }, (_, i) => 100 + i);
+
+    it("follows its page flag, or its count, when beats go in before it", () => {
+        // Two beats after beat 12, inside page 3 [9, 17)
+        const after = grid(
+            [...BEATS.slice(0, 13), 900, 901, ...BEATS.slice(13)],
+            [
+                PAGES[0]!,
+                PAGES[1]!,
+                { id: 3, start: 9, end: 19 },
+                { id: 4, start: 19, end: 27 },
+                { id: 5, start: 27, end: 35 },
+            ],
+        );
+        const place = orderMarkPlace(grid(BEATS), after);
+        expect(place(25)).toBe(27);
+        expect(place(17)).toBe(19);
+        expect(place(33)).toBe(35);
+        expect(place(9)).toBe(9);
+        expect(place(5)).toBe(5);
+    });
+
+    it("goes with a page that's deleted, inside it or on its end flag", () => {
+        // Page 4 [17, 25) and its beats deleted
+        const after = grid(
+            [...BEATS.slice(0, 17), ...BEATS.slice(25)],
+            [PAGES[0]!, PAGES[1]!, PAGES[2]!, { id: 5, start: 17, end: 25 }],
+        );
+        const place = orderMarkPlace(grid(BEATS), after);
+        expect(place(25)).toBeNull();
+        expect(place(21)).toBeNull();
+        // On its start flag: said about the page before, which stays
+        expect(place(17)).toBe(17);
+        expect(place(33)).toBe(25);
     });
 });

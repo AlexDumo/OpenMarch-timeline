@@ -74,6 +74,41 @@ export type LabelStyle = {
 const DEFAULT_STYLE: LabelStyle = { form: "fixed", scale: 1, beside: false };
 
 /**
+ * The size Auto draws the labels at, for where `marchers` stand: the style's size shrunk until no
+ * two labels touch
+ */
+export function autoLabelSizeOf(
+    style: LabelStyle,
+    marchers: Pick<FieldMarchers, "ids" | "positions" | "hidden">,
+    labels: ReadonlyMap<number, string>,
+    atlas: GlyphAtlas,
+): number {
+    const fixed = labelSizeOf(style);
+    const { ids, positions, hidden } = marchers;
+    const widths = ids.map((id) => atlas.measure(labels.get(id) ?? ""));
+    return (
+        fixed *
+        autoLabelScale((scale) => {
+            const em = fixed * scale;
+            const boxes: LabelBox[] = [];
+            for (let i = 0; i < ids.length; i++) {
+                if (hidden[i]) continue;
+                boxes.push(
+                    labelBoxAt(
+                        positions[i * 2],
+                        positions[i * 2 + 1],
+                        widths[i],
+                        em,
+                        style.beside,
+                    ),
+                );
+            }
+            return boxes;
+        })
+    );
+}
+
+/**
  * Every marcher's label (drill number) in one instanced draw of SDF glyphs,
  * in the theme's label color. A marcher whose
  * appearance hides its label has no glyphs. The text is laid out again only
@@ -235,28 +270,7 @@ export default function LabelsLayer({
             labels !== last.labels ||
             style !== last.style;
         if (!moved || (holdAutoSize && style === last.style)) return before;
-        const { ids, positions, hidden } = marchers;
-        const widths = ids.map((id) => atlas.measure(labels.get(id) ?? ""));
-        return (
-            fixed *
-            autoLabelScale((scale) => {
-                const em = fixed * scale;
-                const boxes: LabelBox[] = [];
-                for (let i = 0; i < ids.length; i++) {
-                    if (hidden[i]) continue;
-                    boxes.push(
-                        labelBoxAt(
-                            positions[i * 2],
-                            positions[i * 2 + 1],
-                            widths[i],
-                            em,
-                            style.beside,
-                        ),
-                    );
-                }
-                return boxes;
-            })
-        );
+        return autoLabelSizeOf(style, marchers, labels, atlas);
     }
 
     return <primitive object={text.mesh} />;

@@ -320,6 +320,12 @@ describe("the leader's ring and its label", () => {
         expect(points.some((p) => p.y > 110)).toBe(true);
     });
 
+    it("is whole when a label would leave none of it", () => {
+        // A label over the whole ring: the leader still shows
+        const over: Box = { minX: 0, minY: 0, maxX: 200, maxY: 200 };
+        expect(ringArcs(center, r, reach, [over])).toBeNull();
+    });
+
     it("keeps clear of a label beside the dot too", () => {
         const beside: Box = { minX: 110, minY: 93, maxX: 150, maxY: 107 };
         const points = along(ringArcs(center, r, reach, [beside])!);

@@ -588,8 +588,8 @@ const RING_STEPS = 96;
 
 /**
  * The leader's ring round `at`, `r` across, as SVG arcs that leave out where it (its stroke
- * reaching `reach` each side) would cover a box in `boxes` (a name label): null when nothing's
- * left out, "" when nothing's left
+ * reaching `reach` each side) would cover a box in `boxes` (a name label): null, the whole ring,
+ * when nothing's left out, or when leaving them out would leave nothing (the leader still shows)
  */
 export function ringArcs(
     at: XY,
@@ -641,7 +641,7 @@ export function ringArcs(
             start = null;
         }
     }
-    return arcs.join(" ");
+    return arcs.length > 0 ? arcs.join(" ") : null;
 }
 
 /** A band along `samples`, `a` half-wide at the first and `b` at the last, as SVG polygon points */

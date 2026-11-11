@@ -47,6 +47,7 @@ import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { dotSizes, ringReach } from "@/field/three/selectionRing";
 import {
     labelBoxAt,
+    autoLabelSizeOf,
     labelSizeOf,
     type LabelStyle,
 } from "@/field/three/layers/LabelsLayer";
@@ -105,8 +106,6 @@ const ARROW_HALF = 4.5;
 const ARROW_GAP = 1.5;
 /** How far at most a leg's end is cut back to stop short of its marcher's name label, in gaps */
 const LABEL_TRIM_GAPS = 2;
-/** Labels smaller than this on screen, in CSS px per em, aren't drawn (`labelFadeFrom`) */
-const LABEL_HIDDEN_PX = 4;
 /** Position numbers' size, and their gap from what they sit beside, in screen pixels */
 const NUMBER_PX = 11;
 const NUMBER_GAP = 2;
@@ -220,6 +219,11 @@ export interface OrderLabels {
     readonly style: LabelStyle;
     /** The labels' font, to measure them */
     readonly atlas: GlyphAtlas;
+    /**
+     * Labels smaller than this on screen, in CSS px per em, aren't drawn: the field quality's
+     * `labelFadeFrom`
+     */
+    readonly fadeFrom: number;
 }
 
 /** One leg of a line as drawn: the points along it, trimmed clear of its marchers */
@@ -504,18 +508,39 @@ export default function MarcherOrderOverlay({
     // zoom, then moved by the pan), so panning only moves what's drawn (the SVG group below) and
     // works nothing out again
     const zoom = view.zoom;
+    // On screen, the same array until someone moves or the zoom changes, so the overlap checks'
+    // grid (kept per array) is reused through a sweep
+    const everyone = useMemo(
+        () => everyoneAt.map((p) => ({ x: p.x * zoom, y: p.y * zoom })),
+        [everyoneAt, zoom],
+    );
+    // The size the labels are drawn at: Auto's for where everyone stands, else the style's
+    const labelSize = useMemo(
+        () =>
+            !showing || !labels
+                ? 0
+                : labels.style.form === "auto"
+                  ? autoLabelSizeOf(
+                        labels.style,
+                        marchers,
+                        labels.text,
+                        labels.atlas,
+                    )
+                  : labelSizeOf(labels.style),
+        // `version` is where everyone stands
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [showing, labels, marchers, version],
+    );
     const drawn = useMemo((): DrawnLine[] => {
         const onScreen = (p: XY): XY => ({ x: p.x * zoom, y: p.y * zoom });
-        const everyone = everyoneAt.map(onScreen);
         // A marcher's label's ink on screen, when labels are drawn and big enough to read
-        const labelSize = labels ? labelSizeOf(labels.style) : 0;
         const labelBox = (id: number, p: XY): Box | null => {
             const text = labels?.text.get(id);
             if (
                 !labels ||
                 !text ||
                 labels.style.form === "off" ||
-                labelSize * zoom < LABEL_HIDDEN_PX
+                labelSize * zoom <= labels.fadeFrom
             )
                 return null;
             const box = labelBoxAt(
@@ -596,8 +621,9 @@ export default function MarcherOrderOverlay({
         sizes,
         labelSide,
         alt,
-        everyoneAt,
+        everyone,
         labels,
+        labelSize,
     ]);
 
     const prefix = useId().replace(/:/g, "");

@@ -304,9 +304,15 @@ function ThreeFieldView() {
     );
 
     // The labels as drawn, for the order line to keep clear of
+    const labelFadeFrom = quality.settings.labelFadeFrom;
     const orderLabels = useMemo(
-        () => ({ text: labels, style: labelStyle, atlas: atlases.label }),
-        [labels, labelStyle, atlases],
+        () => ({
+            text: labels,
+            style: labelStyle,
+            atlas: atlases.label,
+            fadeFrom: labelFadeFrom,
+        }),
+        [labels, labelStyle, atlases, labelFadeFrom],
     );
 
     const selectedIds = useMemo(

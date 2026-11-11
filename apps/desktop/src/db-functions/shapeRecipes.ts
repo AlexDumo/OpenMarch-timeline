@@ -8,7 +8,11 @@ import type { DbConnection, DbTransaction } from "./types";
  * override is where it stands less where its recipe put it (`x`, `y`).
  *
  * A recipe belongs to a move (`timelineId`), or to the homes (`null`), and lists only marchers
- * whose positions are in that move. A marcher is in at most one recipe at a beat: saving a recipe
+ * whose positions are in that move. An order mark (pathways step 4g, `ORDER_MARK_KINDS`) is no
+ * shape: it keeps its own beat (`orderMarkBeat`), and one made since review 3 is stored in no move
+ * (`null` too), so deleting the move its marchers stand still in never takes it. Every reader that
+ * takes `null` for the homes' shapes skips the marks (`shapeRecipesOnly`, or a kind no shape tool
+ * reads). A marcher is in at most one recipe at a beat: saving a recipe
  * takes its marchers out of the other recipes of every move ending at the beat it's placed at
  * (its move's end: a move split off a page's shares it, UI-25), not of a move that only passes
  * over it (an Expert move on another layer), and deletes any recipe left with no one.
@@ -439,6 +443,40 @@ export async function dropOrderMarksInTransaction(
         )
         .run();
     await deleteEmptyRecipes(tx);
+}
+
+/**
+ * Moves the order marks (pathways step 4g) that keep their own beat (`orderMarkBeat`) after a
+ * page or beat edit (the page ripple): `place` gives a mark's new beat from its old one, or null
+ * when the page it was set on is gone, which deletes it. A mark without a beat of its own is read
+ * at its move's end, which the ripple moves already.
+ */
+export async function rippleOrderMarksInTransaction(
+    tx: DbTransaction,
+    place: (beat: number) => number | null,
+): Promise<void> {
+    if (!(await hasShapeRecipes(tx))) return;
+    const marks = await tx
+        .select({ id: recipes.id, params: recipes.params })
+        .from(recipes)
+        .where(inArray(recipes.kind, [...ORDER_MARK_KINDS]))
+        .all();
+    const gone: number[] = [];
+    for (const mark of marks) {
+        const params = JSON.parse(mark.params) as object | null;
+        const beat = orderMarkBeat(params);
+        if (beat === undefined) continue;
+        const next = place(beat);
+        if (next === null) gone.push(mark.id);
+        else if (!sameBeat(next, beat))
+            await tx
+                .update(recipes)
+                .set({ params: JSON.stringify({ ...params, beat: next }) })
+                .where(eq(recipes.id, mark.id))
+                .run();
+    }
+    if (gone.length > 0)
+        await tx.delete(recipes).where(inArray(recipes.id, gone)).run();
 }
 
 /**

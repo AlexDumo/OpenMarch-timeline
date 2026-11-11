@@ -32,7 +32,11 @@ import {
     reverseOrder,
 } from "./marcherOrderCommands";
 import type { XY } from "./orderSweep";
-import { makeRoomForOrderSweep, orderSweepBlocked } from "./orderSweepRoom";
+import {
+    makeRoomForOrderSweep,
+    orderSweepBlocked,
+    undoInOrderSweep,
+} from "./orderSweepRoom";
 import { usePathPenStore } from "./pathPenStore";
 
 /** Where each of `ids` stands at `beat` as the field edits it, skipping any the resolver lacks */
@@ -169,7 +173,8 @@ export function useMarcherOrderActions(): void {
 
 /**
  * The keys Set order takes while it's on, over everything else: Enter keeps what's picked (the
- * rest after, in the order they had), Escape cancels
+ * rest after, in the order they had), Escape cancels, and so do undo and redo, undo bringing back
+ * a shape tool opening it discarded
  */
 export function OrderSweepKeys(): null {
     const queryClient = useQueryClient();
@@ -179,5 +184,8 @@ export function OrderSweepKeys(): null {
     useActionHandler("applyShape", () => void keepOrderSweep(queryClient), {
         label: tolgee.t("pathways.order.done", "Keep this order"),
     });
+    // Undo and redo cancel it rather than undo a show edit behind it (`undoInOrderSweep`)
+    useActionHandler("performUndo", () => undoInOrderSweep());
+    useActionHandler("performRedo", () => undoInOrderSweep(true));
     return null;
 }

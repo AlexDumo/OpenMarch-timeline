@@ -16,7 +16,16 @@ import {
 } from "@/shapes/tool/shapeToolStore";
 import { restoreDiscardedShape } from "@/shapes/tool/shapeLeave";
 import { clearPath, usePathPenStore, type PathSession } from "../pathPenStore";
-import { makeRoomForOrderSweep, orderSweepBlocked } from "../orderSweepRoom";
+import {
+    makeRoomForOrderSweep,
+    orderSweepBlocked,
+    undoInOrderSweep,
+} from "../orderSweepRoom";
+import {
+    cancelOrderSweep,
+    openOrderSweep,
+    useMarcherOrderStore,
+} from "../marcherOrderStore";
 
 /**
  * Set order opens over nothing that hides it (pathways step 4g): an open shape tool is discarded
@@ -62,7 +71,17 @@ const penAt = (phase: PathSession["phase"], points = 0) =>
         } as unknown as PathSession,
     });
 
+/** Set order open on the three */
+const openSweep = () =>
+    openOrderSweep({
+        ids: marchers.map((m) => m.id),
+        at: new Map(marchers.map((m) => [m.id, m.at])),
+        beat: 8,
+        before: null,
+    });
+
 afterEach(() => {
+    cancelOrderSweep();
     closeShapeTool();
     useShapeToolStore.setState({ discarded: null });
     clearPath();
@@ -99,5 +118,36 @@ describe("making room for Set order", () => {
         expect(usePathPenStore.getState().session?.phase).toBe("closed");
         clearPath();
         expect(makeRoomForOrderSweep()).toBe(true);
+    });
+});
+
+describe("undo and redo while Set order is on", () => {
+    it("undo cancels it and brings back the shape tool it discarded", () => {
+        openShapeTool(drawnBox(), null, null);
+        const drawn = useShapeToolStore.getState().tool;
+        expect(makeRoomForOrderSweep()).toBe(true);
+        openSweep();
+        undoInOrderSweep();
+        expect(useMarcherOrderStore.getState().sweep).toBeNull();
+        expect(useShapeToolStore.getState().tool).toBe(drawn);
+        expect(useShapeToolStore.getState().discarded).toBeNull();
+    });
+
+    it("with no shape discarded, undo only cancels it", () => {
+        expect(makeRoomForOrderSweep()).toBe(true);
+        openSweep();
+        undoInOrderSweep();
+        expect(useMarcherOrderStore.getState().sweep).toBeNull();
+        expect(useShapeToolStore.getState().tool).toBeNull();
+    });
+
+    it("redo cancels it and keeps the discarded shape for an undo after", () => {
+        openShapeTool(drawnBox(), null, null);
+        expect(makeRoomForOrderSweep()).toBe(true);
+        openSweep();
+        undoInOrderSweep(true);
+        expect(useMarcherOrderStore.getState().sweep).toBeNull();
+        expect(useShapeToolStore.getState().tool).toBeNull();
+        expect(restoreDiscardedShape()).toBe(true);
     });
 });
