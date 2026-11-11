@@ -1,4 +1,4 @@
-// cspell:ignore sagitta
+// cspell:ignore sagitta arcroutes
 /**
  * Arc legs, pathways step 10a (spec Appendix L, R-14″, §8.11): QA-AR-1 to QA-AR-3 on own paths,
  * group paths and trails, the validator's rules, the drawable walked path (R-20) and the ref/
@@ -32,6 +32,9 @@ import {
 } from "../index";
 import { arcPoint } from "../geom";
 import { mulberry32 } from "./showGenerators";
+import { walkedPathShow } from "./walkedPathShows";
+// @ts-expect-error: the ref/ suite's route generator is plain JavaScript
+import * as arcRoutes from "../../../../../docs/timeline/ref/arcroutes.mjs";
 
 const refOracle = makeOracle as (db: TimelineSnapshot) => {
     positionAt(m: number, b: number): XY;
@@ -439,6 +442,81 @@ describe("QA-AR-3: Adjust and Re-fit on an arc leg", () => {
         expect(fitted.toBulge).toBe(-0.1);
         expect(validateRouteGeometry(fitted).ok).toBe(true);
     });
+});
+
+describe("random shows with arc legs: app = ref/ oracle", () => {
+    const gen = arcRoutes as {
+        randArcRoute(R: () => number, o: object): RouteGeometry;
+        toggleLeg(R: () => number, g: RouteGeometry): RouteGeometry;
+        landOn(R: () => number, g: RouteGeometry, at: XY): RouteGeometry | null;
+        hasArc(g: RouteGeometry): boolean;
+    };
+    it("own and group paths (offsets, Adjust) and trails, with bulges at the limits, toBulge and points landing on an end", () => {
+        // QA-WP-15's random shows (own paths, group paths with Adjust, smooth points, coincident points, layers), with
+        // arc legs laid over their routes by ref/arcroutes.mjs (keeping R-14″: no smooth point beside an arc) and
+        // follow-the-leader moves given trail routes with arc legs
+        const S = 1500;
+        let shows = 0;
+        let arcRoutes = 0;
+        let probes = 0;
+        for (let seed = 1; seed <= 160; seed++) {
+            const show = walkedPathShow(seed, S);
+            const R = mulberry32(seed * 31 + 7);
+            const pt = (): XY => [
+                Math.round(R() * S * 1e3) / 1e3,
+                Math.round(R() * S * 1e3) / 1e3,
+            ];
+            const routes = (show.routes ??= {});
+            for (const r of Object.values(routes)) {
+                let g = r.geometry;
+                for (let i = Math.floor(R() * 4); i > 0; i--)
+                    g = gen.toggleLeg(R, g);
+                if (R() < 0.2)
+                    g = gen.landOn(R, g, R() < 0.5 ? g.from : g.to) ?? g;
+                r.geometry = g;
+            }
+            let next = Math.max(0, ...Object.keys(routes).map(Number)) + 1;
+            for (const t of Object.values(show.transitions))
+                if (t.style === "follow_the_leader" && R() < 0.6) {
+                    routes[next] = {
+                        geometry: gen.randArcRoute(R, {
+                            pt,
+                            n: Math.floor(R() * 5),
+                            scale: S,
+                        }),
+                    };
+                    t.route = next++;
+                }
+            for (const r of Object.values(routes)) {
+                expect(validateRouteGeometry(r.geometry).ok).toBe(true);
+                if (gen.hasArc(r.geometry)) arcRoutes++;
+            }
+            let res;
+            try {
+                res = createResolver(show);
+            } catch {
+                continue; // QA-WP-15's generator builds some shows the resolver refuses
+            }
+            shows++;
+            const ref = refOracle(show);
+            const end = Math.max(
+                ...Object.values(show.transitions).map((t) => t.end),
+            );
+            for (const m of show.marchers)
+                for (let b = 0; b <= end + 1; b += 0.25) {
+                    probes++;
+                    const p = res.positionAt(m.id, b);
+                    const q = ref.positionAt(m.id, b);
+                    expect(
+                        d(p, q),
+                        `seed ${seed} M${m.id}@${b}: app ${p} ref ${q}`,
+                    ).toBeLessThan(1e-6);
+                }
+        }
+        expect(shows).toBeGreaterThan(100);
+        expect(arcRoutes).toBeGreaterThan(300);
+        expect(probes).toBeGreaterThan(50000);
+    }, 60_000); // about 2 s alone; the default 5 s is too tight when the whole suite runs on a loaded machine
 });
 
 describe("parity and §8.11", () => {
