@@ -16,7 +16,7 @@ import {
 // The blank show's field is the high school football field (no end zones): X lines every 8 steps
 // from -80 to 80, so S1 45 is -8 and S2 40 is 16.
 
-// Each scenario is a long session of drags, undos and saves: three times the usual time
+// Each scenario is a long session of drags, undo steps and saves: three times the usual time
 test.slow();
 
 type Line = FieldTestFieldEdit["lines"][number];
@@ -126,8 +126,12 @@ test("enter the mode, drag a mirrored line out of the ruler, undo, and leave wit
     expect(await savedXSteps(show)).not.toContain(12);
 
     // Escape drops the pick first, then leaves
-    await line(page, "x", 8).then((l) => page.mouse.click(l.screen.x, l.screen.y));
-    await expect.poll(async () => (await line(page, "x", 8)).selected).toBe(true);
+    await line(page, "x", 8).then((l) =>
+        page.mouse.click(l.screen.x, l.screen.y),
+    );
+    await expect
+        .poll(async () => (await line(page, "x", 8)).selected)
+        .toBe(true);
     await page.keyboard.press("Escape");
     await expect
         .poll(async () => (await editState(page)).lines.some((l) => l.selected))
@@ -173,7 +177,10 @@ test("box-select, keep every other and delete the ten 5-yard lines, as one undo 
         )
         .toBe(19);
 
-    await page.getByTestId("field-edit-bar").getByRole("button", { name: /Every other/ }).click();
+    await page
+        .getByTestId("field-edit-bar")
+        .getByRole("button", { name: /Every other/ })
+        .click();
     await expect
         .poll(async () =>
             (await editState(page)).lines
@@ -184,9 +191,9 @@ test("box-select, keep every other and delete the ten 5-yard lines, as one undo 
 
     await page.keyboard.press("Delete");
     await waitForIdle(page);
-    await expect.poll(() => savedXSteps(show)).toEqual([
-        -80, -64, -48, -32, -16, 0, 16, 32, 48, 64, 80,
-    ]);
+    await expect
+        .poll(() => savedXSteps(show))
+        .toEqual([-80, -64, -48, -32, -16, 0, 16, 32, 48, 64, 80]);
 
     await page.keyboard.press("ControlOrMeta+z");
     await expect.poll(() => savedXSteps(show)).toEqual(before);
@@ -237,9 +244,9 @@ test("drag a line, type its exact position, and drag it back into the ruler to d
         {
             steps: 12,
             beforeRelease: async () =>
-                expect(
-                    page.getByTestId("field-edit-readout"),
-                ).toContainText("delete"),
+                expect(page.getByTestId("field-edit-readout")).toContainText(
+                    "delete",
+                ),
         },
     );
     await waitForIdle(page);

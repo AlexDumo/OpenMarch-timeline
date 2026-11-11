@@ -134,7 +134,9 @@ const shots = [
             const row = page.locator("[data-field-line-row]").nth(2);
             await row.hover();
             await wait(500);
-            return { box: await around(page.getByTestId("field-inspector"), 6) };
+            return {
+                box: await around(page.getByTestId("field-inspector"), 6),
+            };
         },
     },
     {
@@ -145,7 +147,9 @@ const shots = [
             await wait(3000);
             await editField(page, wait);
             const inspector = page.getByTestId("field-inspector");
-            await inspector.getByRole("button", { name: "Template and files" }).click();
+            await inspector
+                .getByRole("button", { name: "Template and files" })
+                .click();
             await wait(400);
             await page.getByTestId("field-template-select").click();
             await page

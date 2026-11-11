@@ -117,7 +117,9 @@ test("Field inspector sections are visible", async ({ electronApp }) => {
     await expect(inspector.getByText("X · side to side")).toBeVisible();
     await expect(inspector.getByText("Y · front to back")).toBeVisible();
     await expect(inspector.getByText("Draw as hashes")).toBeVisible();
-    await expect(inspector.getByText("Step Size", { exact: true })).toBeVisible();
+    await expect(
+        inspector.getByText("Step Size", { exact: true }),
+    ).toBeVisible();
     await expect(inspector.getByText("Measurement System")).toBeVisible();
     for (const [section, inside] of [
         ["Template and files", "Field Template"],
