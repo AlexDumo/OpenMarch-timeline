@@ -3526,5 +3526,28 @@ press. Escape cancels the drawing, then leaves the tool.
 | QA-AR-3    | Adjust a lane on an arc leg; Re-fit                                                                                   | The key's `s` stays on the arc; Re-fit keeps the bulge                                                                                                                                                                        |
 | QA-UNDO-DL | Each of the above                                                                                                     | One undo step restores every row; redo restores the same ids                                                                                                                                                                  |
 
+**Built (step 4b, 2026-11-10).** Settled in the build, for the owner to confirm:
+
+- **`W` with ends along the way** runs from the leader's start through the route's points to its
+  last point (`B` = the last point, `to` = that point); with no point, or no length, `P` is the
+  line-up. Waypoints are not read with `"along"`. With a shape, `ends` is not read (R-9′).
+- **The projection** is exact on lines; a cubic piece is projected onto its 64 measured chords,
+  the distance read from the same table. Ties go to the larger distance by exact comparison. The
+  increasing rule is applied first, then `e_q ← max(e_q, startDist[q])`; a member so held walks
+  straight from its start to its spot.
+- **The source fit** is a line (principal axis), the Arc kind's circle fit, or a chain of near
+  neighbours (corners or smooth), each within a quarter of the usual spacing; the arc and the
+  chain must not skip a marcher or have a step over 2.5 times the usual. The current Line and
+  Curve tools draw first and have no fit from marchers, so "the written spots open as a line in
+  the shape tools" (Open for the build) is not done.
+- **The write** adds the page (when the end flag is past the last page), writes the spots with
+  the canvas's range writer (which makes or joins the move over the window, replacing spots),
+  then AP-T1 peels the line in trail order. Keep end spots is AP-T1 in the same trail order (the
+  grabbed end leads), not `followOrder`'s.
+- **QA-DL-5** as written (a 2-step trail on a line of 8 at 2 steps) puts seven on the old line;
+  the test uses a 6-step trail, which gives five and three.
+- **`walkedPath`** had no trail support (steps 4 and 18 were built side by side); it now draws
+  shapeless, routed, reversed and along-the-way trails, and QA-WP-15's shows include them.
+
 **Parity.** Shows with no `ends` and no `bulge` resolve bit-identically before and after both
 steps (golden, regression and fuzz suites unchanged, plus the base-vs-branch quarter-beat script).
