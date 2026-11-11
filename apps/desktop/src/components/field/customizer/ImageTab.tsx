@@ -23,6 +23,7 @@ import { fieldLengthText } from "./fieldSizeText";
 import FormField, { StaticFormField } from "../../ui/FormField";
 import { inputClassname } from "./utils";
 import clsx from "clsx";
+import { toast } from "sonner";
 import { useState, useEffect, useMemo, useCallback } from "react";
 
 interface ImageTabProps {
@@ -225,8 +226,21 @@ export function ImageTab({
                             type="button"
                             size="compact"
                             onClick={async () => {
-                                // One undo step: the image is part of the field's history
-                                await deleteFieldPropertiesImage();
+                                try {
+                                    // One undo step: the image is part of the field's history
+                                    await deleteFieldPropertiesImage();
+                                } catch (error) {
+                                    console.error(
+                                        "Couldn't remove the field image",
+                                        error,
+                                    );
+                                    toast.error(
+                                        t(
+                                            "fieldProperties.errors.removeImageFailed",
+                                        ),
+                                    );
+                                    return;
+                                }
                                 await refreshImage();
                             }}
                         >

@@ -14,35 +14,56 @@ import {
 } from "@openmarch/ui";
 import { T, useTranslate } from "@tolgee/react";
 import clsx from "clsx";
+import { toast } from "sonner";
 import FormField from "@/components/ui/FormField";
 import { inputClassname } from "./utils";
 import { useCommitInput, type CommitInputProps } from "./useCommitInput";
 import {
     filterSignedNumber,
     filterUnsignedNumber,
+    formatNumber,
     parseNumber,
     parseStepSize,
 } from "./fieldEditorValues";
 
 interface GeneralTabProps {
     currentFieldProperties: FieldProperties;
-    updateFieldProperties: (props: FieldProperties) => void;
+    /** Saves the field. A rejected promise puts the edited input back and shows an error. */
+    updateFieldProperties: (props: FieldProperties) => void | Promise<unknown>;
 }
 
 const errorInputClassname = clsx(inputClassname, "border-red");
 
-/** A number, or nothing for an empty input. */
-const parseOptionalNumber = (text: string) => {
-    if (text.trim() === "") return { value: undefined };
+/** A number, or null when the text isn't one. */
+const parseRequiredNumber = (text: string) => {
     const value = parseNumber(text);
     return value === undefined ? null : { value };
 };
 
+/** A number, or nothing for an empty input. */
+const parseOptionalNumber = (text: string) =>
+    text.trim() === "" ? { value: undefined } : parseRequiredNumber(text);
+
+/** An optional number as an input shows it: empty for nothing. */
+const formatOptionalNumber = (value: number | undefined) =>
+    value === undefined ? "" : formatNumber(value);
+
 /** Any text. */
 const parseText = (text: string) => ({ value: text });
+const formatText = (text: string) => text;
 
-/** The props a text input takes from `useCommitInput`. */
-const inputProps = ({ valid: _valid, ...props }: CommitInputProps) => props;
+/**
+ * The props a text input takes from `useCommitInput`, with the red border for an invalid value.
+ * `className` goes on a plain input; a `UnitInput` takes it as `containerClassName`.
+ */
+const inputProps = ({ valid, ...props }: CommitInputProps) => ({
+    ...props,
+    className: valid ? inputClassname : errorInputClassname,
+});
+const unitInputProps = (commitInput: CommitInputProps) => {
+    const { className, ...props } = inputProps(commitInput);
+    return { ...props, containerClassName: className };
+};
 
 export function GeneralTab({
     currentFieldProperties,
@@ -55,18 +76,25 @@ export function GeneralTab({
         imperial ? units : FieldProperties.centimetersToInches(units);
     const save = (changes: Partial<FieldProperties>) =>
         updateFieldProperties(new FieldProperties({ ...field, ...changes }));
+    /** Saves a switch or select. It follows the stored field, so a failed save only shows an error. */
+    const toggle = (changes: Partial<FieldProperties>) => {
+        Promise.resolve(save(changes)).catch((error: unknown) => {
+            console.error("Couldn't save the field", error);
+            toast.error(t("fieldProperties.errors.saveFailed"));
+        });
+    };
 
     // Every input follows the stored field (undo, import, another window) and saves only a
     // changed, valid value; see useCommitInput
     const name = useCommitInput({
-        stored: field.name,
         current: field.name,
+        format: formatText,
         parse: parseText,
         commit: (value) => save({ name: value }),
     });
     const stepSize = useCommitInput({
-        stored: String(field.stepSizeInUnits),
         current: field.stepSizeInUnits,
+        format: formatNumber,
         // A step has a length: 0 would make a field with no size
         parse: (text) => {
             const value = parseStepSize(text);
@@ -76,34 +104,35 @@ export function GeneralTab({
         filter: filterUnsignedNumber,
     });
     const threshold = useCommitInput({
-        stored: String(field.stepSizeWarningThresholdInUnits),
         current: field.stepSizeWarningThresholdInUnits,
+        format: formatNumber,
         // 0 turns the warning off
-        parse: (text) => {
-            const value = parseNumber(text);
-            return value === undefined ? null : { value };
-        },
+        parse: parseRequiredNumber,
         commit: (value) =>
             save({ stepSizeWarningThresholdInches: toInches(value) }),
         filter: filterUnsignedNumber,
     });
     const halfLineX = useCommitInput({
-        stored: String(field.halfLineXInterval ?? ""),
-        current: field.halfLineXInterval,
-        parse: parseOptionalNumber,
+        current: field.halfLineXInterval ?? 0,
+        format: formatNumber,
+        // The field stores no interval as 0 (no half lines), so an empty input means 0
+        parse: (text) =>
+            text.trim() === "" ? { value: 0 } : parseRequiredNumber(text),
         commit: (value) => save({ halfLineXInterval: value }),
         filter: filterUnsignedNumber,
     });
     const halfLineY = useCommitInput({
-        stored: String(field.halfLineYInterval ?? ""),
-        current: field.halfLineYInterval,
-        parse: parseOptionalNumber,
+        current: field.halfLineYInterval ?? 0,
+        format: formatNumber,
+        // The field stores no interval as 0 (no half lines), so an empty input means 0
+        parse: (text) =>
+            text.trim() === "" ? { value: 0 } : parseRequiredNumber(text),
         commit: (value) => save({ halfLineYInterval: value }),
         filter: filterUnsignedNumber,
     });
     const sideInput = (key: keyof SideDescriptions) => ({
-        stored: field.sideDescriptions[key],
         current: field.sideDescriptions[key],
+        format: formatText,
         parse: parseText,
         commit: (value: string) =>
             save({
@@ -115,8 +144,8 @@ export function GeneralTab({
     const verboseRight = useCommitInput(sideInput("verboseRight"));
     const terseRight = useCommitInput(sideInput("terseRight"));
     const yardNumberInput = (key: keyof YardNumberCoordinates) => ({
-        stored: String(field.yardNumberCoordinates[key] ?? ""),
         current: field.yardNumberCoordinates[key],
+        format: formatOptionalNumber,
         parse: parseOptionalNumber,
         commit: (value: number | undefined) =>
             save({
@@ -155,12 +184,7 @@ export function GeneralTab({
                     label={t("fieldProperties.labels.fieldName")}
                     tooltip={t("fieldProperties.tooltips.fieldName")}
                 >
-                    <Input
-                        type="text"
-                        className={inputClassname}
-                        {...inputProps(name)}
-                        required
-                    />
+                    <Input type="text" {...inputProps(name)} required />
                 </FormField>
                 <FormField
                     label={t("fieldProperties.labels.stepSize")}
@@ -170,14 +194,8 @@ export function GeneralTab({
                         type="text"
                         inputMode="numeric"
                         pattern="[0-9]*\.?[0-9]*"
-                        containerClassName={
-                            stepSize.valid
-                                ? inputClassname
-                                : errorInputClassname
-                        }
-                        aria-invalid={!stepSize.valid}
                         unit={unit}
-                        {...inputProps(stepSize)}
+                        {...unitInputProps(stepSize)}
                         required
                     />
                 </FormField>
@@ -209,9 +227,8 @@ export function GeneralTab({
                         type="text"
                         inputMode="numeric"
                         pattern="[0-9]*\.?[0-9]*"
-                        containerClassName={inputClassname}
                         unit={unit}
-                        {...inputProps(threshold)}
+                        {...unitInputProps(threshold)}
                         required
                     />
                 </FormField>
@@ -221,7 +238,9 @@ export function GeneralTab({
                 >
                     <Select
                         onValueChange={(e) =>
-                            save({ measurementSystem: e as MeasurementSystem })
+                            toggle({
+                                measurementSystem: e as MeasurementSystem,
+                            })
                         }
                         value={field.measurementSystem}
                     >
@@ -252,7 +271,6 @@ export function GeneralTab({
                         type="text"
                         inputMode="numeric"
                         pattern="[0-9]*\.?[0-9]*"
-                        className={inputClassname}
                         {...inputProps(halfLineX)}
                     />
                 </FormField>
@@ -264,7 +282,6 @@ export function GeneralTab({
                         type="text"
                         inputMode="numeric"
                         pattern="[0-9]*\.?[0-9]*"
-                        className={inputClassname}
                         {...inputProps(halfLineY)}
                     />
                 </FormField>
@@ -278,46 +295,26 @@ export function GeneralTab({
                     label={t("fieldProperties.labels.directorsLeft")}
                     tooltip={t("fieldProperties.tooltips.directorsLeft")}
                 >
-                    <Input
-                        type="text"
-                        className={inputClassname}
-                        {...inputProps(verboseLeft)}
-                        required
-                    />
+                    <Input type="text" {...inputProps(verboseLeft)} required />
                 </FormField>
                 <FormField
                     label={t("fieldProperties.labels.leftAbbreviation")}
                     tooltip={t("fieldProperties.tooltips.leftAbbreviation")}
                 >
-                    <Input
-                        type="text"
-                        className={inputClassname}
-                        {...inputProps(terseLeft)}
-                        required
-                    />
+                    <Input type="text" {...inputProps(terseLeft)} required />
                 </FormField>
 
                 <FormField
                     label={t("fieldProperties.labels.directorsRight")}
                     tooltip={t("fieldProperties.tooltips.directorsRight")}
                 >
-                    <Input
-                        type="text"
-                        className={inputClassname}
-                        {...inputProps(verboseRight)}
-                        required
-                    />
+                    <Input type="text" {...inputProps(verboseRight)} required />
                 </FormField>
                 <FormField
                     label={t("fieldProperties.labels.rightAbbreviation")}
                     tooltip={t("fieldProperties.tooltips.rightAbbreviation")}
                 >
-                    <Input
-                        type="text"
-                        className={inputClassname}
-                        {...inputProps(terseRight)}
-                        required
-                    />
+                    <Input type="text" {...inputProps(terseRight)} required />
                 </FormField>
             </div>
             {/* The yard number placement isn't editable yet; the inputs show the stored values */}
@@ -337,7 +334,6 @@ export function GeneralTab({
                         type="text"
                         inputMode="numeric"
                         pattern="-?[0-9]*\.?[0-9]*"
-                        className={inputClassname}
                         {...inputProps(homeOutside)}
                         disabled
                     />
@@ -354,7 +350,6 @@ export function GeneralTab({
                         type="text"
                         inputMode="numeric"
                         pattern="-?[0-9]*\.?[0-9]*"
-                        className={inputClassname}
                         {...inputProps(homeInside)}
                         disabled
                     />
@@ -371,7 +366,6 @@ export function GeneralTab({
                         type="text"
                         inputMode="numeric"
                         pattern="-?[0-9]*\.?[0-9]*"
-                        className={inputClassname}
                         {...inputProps(awayInside)}
                         disabled
                     />
@@ -388,7 +382,6 @@ export function GeneralTab({
                         type="text"
                         inputMode="numeric"
                         pattern="-?[0-9]*\.?[0-9]*"
-                        className={inputClassname}
                         {...inputProps(awayOutside)}
                         disabled
                     />
@@ -405,13 +398,9 @@ export function GeneralTab({
                             checked={currentFieldProperties.leftLabelsVisible}
                             onClick={(e) => {
                                 e.preventDefault();
-                                updateFieldProperties(
-                                    new FieldProperties({
-                                        ...currentFieldProperties,
-                                        leftLabelsVisible:
-                                            !currentFieldProperties.leftLabelsVisible,
-                                    }),
-                                );
+                                toggle({
+                                    leftLabelsVisible: !field.leftLabelsVisible,
+                                });
                             }}
                         />
                     </FormField>
@@ -421,13 +410,10 @@ export function GeneralTab({
                             checked={currentFieldProperties.rightLabelsVisible}
                             onClick={(e) => {
                                 e.preventDefault();
-                                updateFieldProperties(
-                                    new FieldProperties({
-                                        ...currentFieldProperties,
-                                        rightLabelsVisible:
-                                            !currentFieldProperties.rightLabelsVisible,
-                                    }),
-                                );
+                                toggle({
+                                    rightLabelsVisible:
+                                        !field.rightLabelsVisible,
+                                });
                             }}
                         />
                     </FormField>
@@ -437,13 +423,10 @@ export function GeneralTab({
                             checked={currentFieldProperties.bottomLabelsVisible}
                             onClick={(e) => {
                                 e.preventDefault();
-                                updateFieldProperties(
-                                    new FieldProperties({
-                                        ...currentFieldProperties,
-                                        bottomLabelsVisible:
-                                            !currentFieldProperties.bottomLabelsVisible,
-                                    }),
-                                );
+                                toggle({
+                                    bottomLabelsVisible:
+                                        !field.bottomLabelsVisible,
+                                });
                             }}
                         />
                     </FormField>
@@ -453,13 +436,9 @@ export function GeneralTab({
                             checked={currentFieldProperties.topLabelsVisible}
                             onClick={(e) => {
                                 e.preventDefault();
-                                updateFieldProperties(
-                                    new FieldProperties({
-                                        ...currentFieldProperties,
-                                        topLabelsVisible:
-                                            !currentFieldProperties.topLabelsVisible,
-                                    }),
-                                );
+                                toggle({
+                                    topLabelsVisible: !field.topLabelsVisible,
+                                });
                             }}
                         />
                     </FormField>

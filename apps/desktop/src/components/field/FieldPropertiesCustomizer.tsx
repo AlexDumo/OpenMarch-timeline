@@ -24,9 +24,8 @@ export default function FieldPropertiesCustomizer() {
     const { t } = useTranslate();
     const queryClient = useQueryClient();
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
-    const { mutate: updateFieldProperties } = useMutation(
-        updateFieldPropertiesMutationOptions(queryClient),
-    );
+    const { mutate: updateFieldProperties, mutateAsync: saveFieldProperties } =
+        useMutation(updateFieldPropertiesMutationOptions(queryClient));
     const [currentFieldProperties, setCurrentFieldProperties] =
         useState<FieldProperties>(fieldProperties ?? defaultFieldProperties);
 
@@ -272,7 +271,8 @@ export default function FieldPropertiesCustomizer() {
 
                 <GeneralTab
                     currentFieldProperties={currentFieldProperties}
-                    updateFieldProperties={updateFieldProperties}
+                    // Awaited, so an input whose save fails goes back and says so
+                    updateFieldProperties={saveFieldProperties}
                 />
 
                 <CheckpointsTab

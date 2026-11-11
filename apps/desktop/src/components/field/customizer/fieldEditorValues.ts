@@ -13,12 +13,26 @@ export function sortedCheckpoints(
     );
 }
 
-/** A typed number, or undefined when the text isn't one. */
+/** A plain decimal number: an optional minus, digits and at most one decimal point. */
+const DECIMAL = /^-?(\d+\.?\d*|\.\d+)$/;
+
+/**
+ * A typed number, or undefined when the text isn't one. Only plain decimals count, so text
+ * such as "1.2.3" is refused rather than read as 1.2.
+ */
 export function parseNumber(text: string): number | undefined {
     const trimmed = text.trim();
-    if (trimmed === "") return undefined;
-    const parsed = parseFloat(trimmed);
+    if (!DECIMAL.test(trimmed)) return undefined;
+    const parsed = Number(trimmed);
     return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/**
+ * A number as an input shows it: rounded to 4 decimal places, which drops float noise such as
+ * the 57.150000000000006 cm that 22.5 inches converts to.
+ */
+export function formatNumber(value: number): string {
+    return String(Math.round(value * 10_000) / 10_000);
 }
 
 /** A typed step size: a number greater than 0, or undefined. */
@@ -27,19 +41,28 @@ export function parseStepSize(text: string): number | undefined {
     return parsed !== undefined && parsed > 0 ? parsed : undefined;
 }
 
-/** Keeps only digits and one run of decimal points, for unsigned number inputs. */
-export function filterUnsignedNumber(text: string): string {
-    return text.replace(/[^\d.]/g, "").replace(/\.+/g, ".");
+/**
+ * Keeps only digits and decimal points, for unsigned number inputs. Returns null, refusing the
+ * keystroke, when the text would have a second decimal point ("1.2.3").
+ */
+export function filterUnsignedNumber(text: string): string | null {
+    const cleaned = text.replace(/[^\d.]/g, "");
+    return oneDecimalPoint(cleaned) ? cleaned : null;
 }
 
-/** Keeps digits, decimal points and a leading minus, for signed number inputs. */
-export function filterSignedNumber(text: string): string {
-    return text
+/**
+ * Keeps digits, decimal points and a leading minus, for signed number inputs. Returns null,
+ * refusing the keystroke, when the text would have a second decimal point.
+ */
+export function filterSignedNumber(text: string): string | null {
+    const cleaned = text
         .replace(/[^\d.-]/g, "")
-        .replace(/\.+/g, ".")
         .replace(/--+/g, "-")
         .replace(/(.+)-/g, "$1");
+    return oneDecimalPoint(cleaned) ? cleaned : null;
 }
+
+const oneDecimalPoint = (text: string) => text.split(".").length <= 2;
 
 /** Whether a picked color is a full RGBA color, as a field file stores it. */
 export function isRgbaColor(color: unknown): color is RgbaColor {

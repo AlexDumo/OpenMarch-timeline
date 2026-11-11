@@ -4,7 +4,9 @@ import type { Checkpoint } from "@openmarch/core";
 import {
     filterSignedNumber,
     filterUnsignedNumber,
+    formatNumber,
     isRgbaColor,
+    parseNumber,
     parseStepSize,
     sameColor,
     sortedCheckpoints,
@@ -50,12 +52,43 @@ describe("parseStepSize", () => {
 });
 
 describe("number filters", () => {
-    it("keeps digits and one decimal point", () => {
-        expect(filterUnsignedNumber("2a2..5-")).toBe("22.5");
+    it("drops anything but digits and a decimal point", () => {
+        expect(filterUnsignedNumber("2a2.5-")).toBe("22.5");
+    });
+
+    it("refuses a second decimal point", () => {
+        expect(filterUnsignedNumber("1.2.3")).toBeNull();
+        expect(filterUnsignedNumber("22..5")).toBeNull();
+        expect(filterSignedNumber("-1.2.3")).toBeNull();
     });
 
     it("keeps a leading minus only", () => {
         expect(filterSignedNumber("--4-.5")).toBe("-4.5");
+    });
+});
+
+describe("parseNumber", () => {
+    it("reads plain decimals", () => {
+        expect(parseNumber("57.15")).toBe(57.15);
+        expect(parseNumber("-8")).toBe(-8);
+        expect(parseNumber(".5")).toBe(0.5);
+        expect(parseNumber("1.")).toBe(1);
+    });
+
+    it("refuses text that isn't one plain decimal", () => {
+        expect(parseNumber("1.2.3")).toBeUndefined();
+        expect(parseNumber("12abc")).toBeUndefined();
+        expect(parseNumber("1e3")).toBeUndefined();
+        expect(parseNumber("-")).toBeUndefined();
+        expect(parseNumber("")).toBeUndefined();
+    });
+});
+
+describe("formatNumber", () => {
+    it("drops float noise from unit conversions", () => {
+        expect(formatNumber(22.5 * 2.54)).toBe("57.15");
+        expect(formatNumber(22.5)).toBe("22.5");
+        expect(formatNumber(-8)).toBe("-8");
     });
 });
 

@@ -575,7 +575,9 @@
             "invalidJson": "Invalid JSON file.\n\nPlease ensure the file contains valid JSON syntax.",
             "invalidFile": "Invalid field properties file.\n\n{details}\n\nPlease ensure the file contains all required fields with correct values.",
             "fieldsHaveErrors": "The following fields have errors:\n{issues}",
-            "unknownValidation": "Unknown validation error"
+            "unknownValidation": "Unknown validation error",
+            "saveFailed": "Couldn't save that change. The field is unchanged.",
+            "removeImageFailed": "Couldn't remove the background image."
         },
         "fieldTemplate": {
             "custom": "Custom",
@@ -3455,6 +3457,12 @@
             "onX": "On {checkpoint}",
             "onY": "On {checkpoint}",
             "outside": "{steps, plural, =0 {OUT {checkpoint}} other {# OUT {checkpoint}}}"
+        },
+        "noCheckpoint": {
+            "centerLine": "center line",
+            "centerLineShort": "CL",
+            "frontEdge": "front edge",
+            "frontEdgeShort": "FE"
         }
     },
     "activities": {

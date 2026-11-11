@@ -6,8 +6,12 @@ import { Input, Button, Switch } from "@openmarch/ui";
 import { T, useTranslate } from "@tolgee/react";
 import FormField from "../../ui/FormField";
 import { inputClassname } from "./utils";
-import { useCommitInput } from "./useCommitInput";
-import { filterSignedNumber, parseNumber } from "./fieldEditorValues";
+import { useCommitInput, type CommitInputProps } from "./useCommitInput";
+import {
+    filterSignedNumber,
+    formatNumber,
+    parseNumber,
+} from "./fieldEditorValues";
 
 interface CheckpointEditorProps {
     checkpoint: Checkpoint;
@@ -40,8 +44,8 @@ export function CheckpointEditor({
     // Each input follows the stored checkpoint (undo, import, another window) and saves only a
     // changed, valid value
     const steps = useCommitInput({
-        stored: String(checkpoint.stepsFromCenterFront),
         current: checkpoint.stepsFromCenterFront,
+        format: formatNumber,
         parse: (text) => {
             const value = parseNumber(text);
             return value === undefined ? null : { value };
@@ -52,25 +56,30 @@ export function CheckpointEditor({
     const nonEmpty = (text: string) =>
         text.trim() === "" ? null : { value: text.trim() };
     const name = useCommitInput({
-        stored: checkpoint.name,
         current: checkpoint.name,
+        format: (text) => text,
         parse: nonEmpty,
         commit: (value) => save("name", value),
     });
     const terseName = useCommitInput({
-        stored: checkpoint.terseName,
         current: checkpoint.terseName,
+        format: (text) => text,
         parse: nonEmpty,
         commit: (value) => save("terseName", value),
     });
     const fieldLabel = useCommitInput({
-        stored: checkpoint.fieldLabel ?? "",
         current: checkpoint.fieldLabel,
+        format: (text) => text ?? "",
         parse: (text) => ({ value: text.length === 0 ? undefined : text }),
         commit: (value) => save("fieldLabel", value),
     });
 
     const errorInputClassname = `${inputClassname} border-red`;
+    /** An input's props from `useCommitInput`, with the red border for an invalid value. */
+    const inputProps = ({ valid, ...props }: CommitInputProps) => ({
+        ...props,
+        className: valid ? inputClassname : errorInputClassname,
+    });
 
     return (
         <RadixCollapsible.Root
@@ -114,15 +123,7 @@ export function CheckpointEditor({
                             type="text"
                             inputMode="numeric"
                             pattern="-?[0-9]*\.?[0-9]*"
-                            className={
-                                steps.valid
-                                    ? inputClassname
-                                    : errorInputClassname
-                            }
-                            value={steps.value}
-                            onChange={steps.onChange}
-                            onBlur={steps.onBlur}
-                            onKeyDown={steps.onKeyDown}
+                            {...inputProps(steps)}
                             required
                             maxLength={10}
                         />
@@ -135,15 +136,7 @@ export function CheckpointEditor({
                     >
                         <Input
                             type="text"
-                            className={
-                                name.valid
-                                    ? inputClassname
-                                    : errorInputClassname
-                            }
-                            value={name.value}
-                            onChange={name.onChange}
-                            onBlur={name.onBlur}
-                            onKeyDown={name.onKeyDown}
+                            {...inputProps(name)}
                             required
                             maxLength={40}
                         />
@@ -156,15 +149,7 @@ export function CheckpointEditor({
                     >
                         <Input
                             type="text"
-                            className={
-                                terseName.valid
-                                    ? inputClassname
-                                    : errorInputClassname
-                            }
-                            value={terseName.value}
-                            onChange={terseName.onChange}
-                            onBlur={terseName.onBlur}
-                            onKeyDown={terseName.onKeyDown}
+                            {...inputProps(terseName)}
                             required
                         />
                     </FormField>
@@ -175,14 +160,7 @@ export function CheckpointEditor({
                                 "fieldProperties.checkpoint.fieldLabelTooltip",
                             )}
                         >
-                            <Input
-                                type="text"
-                                className={inputClassname}
-                                value={fieldLabel.value}
-                                onChange={fieldLabel.onChange}
-                                onBlur={fieldLabel.onBlur}
-                                onKeyDown={fieldLabel.onKeyDown}
-                            />
+                            <Input type="text" {...inputProps(fieldLabel)} />
                         </FormField>
                     )}
                     <FormField
