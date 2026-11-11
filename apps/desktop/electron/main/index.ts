@@ -631,6 +631,10 @@ async function closeShowForRestart() {
     if (reopen) store.set("databasePath", reopen);
     // The windows close without asking again
     isQuitting = true;
+    // The new copy can start before this one finishes quitting (Linux starts the new AppImage
+    // straight away, and quitting waits for a conversion worker to stop). Holding the lock,
+    // this copy would make it exit as a second instance, and the app wouldn't come back.
+    app.releaseSingleInstanceLock();
 }
 
 ipcMain.handle(UPDATE_IPC_CHANNELS.getState, () => updates?.getState() ?? null);
