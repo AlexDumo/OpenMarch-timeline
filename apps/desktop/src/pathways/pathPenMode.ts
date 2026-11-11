@@ -986,7 +986,11 @@ export function drawingOf(
     session: PathSession | null,
 ): FieldModeDrawing | null {
     if (session === last.session) return last.drawing;
-    const drawing = session ? buildDrawing(session) : null;
+    const drawing = session
+        ? session.follow
+            ? followDrawing(session)
+            : buildDrawing(session)
+        : null;
     last = { session, drawing };
     return drawing;
 }
@@ -1071,7 +1075,6 @@ function followDrawing(session: PathSession): FieldModeDrawing {
 
 /** `drawingOf`'s work, uncached */
 function buildDrawing(session: PathSession): FieldModeDrawing {
-    if (session.follow) return followDrawing(session);
     const { target, pointer, selected } = session;
     const drawingNow = session.phase === "drawing";
     const shape = shapeOf(session);
