@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { FieldProperties } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { parseFieldFile } from "../FieldIoButtons.utils";
+import { parseStoredFieldProperties } from "../fieldPropertiesSchema";
 
 /** A field as Export Field writes it: the stored JSON. */
 const exported = (field: FieldProperties) => JSON.stringify(field);
@@ -77,5 +78,44 @@ describe(".fieldots import and export", () => {
 
     it("refuses text that isn't JSON", () => {
         expect(parseFieldFile("not json").ok).toBe(false);
+    });
+});
+
+describe("parseStoredFieldProperties (a show's stored field, as the mobile export reads it)", () => {
+    const stored = JSON.parse(exported(template));
+
+    it("reads a stored step size of 0 or less as the default step size", () => {
+        for (const stepSizeInches of [0, -2]) {
+            const field = new FieldProperties(
+                parseStoredFieldProperties({ ...stored, stepSizeInches }),
+            );
+            expect(field.stepSizeInches).toBe(22.5);
+            expect(field.pixelsPerStep).toBeGreaterThan(0);
+        }
+    });
+
+    it("reads a stored negative threshold as the default threshold", () => {
+        const field = new FieldProperties(
+            parseStoredFieldProperties({
+                ...stored,
+                stepSizeWarningThresholdInches: -1,
+            }),
+        );
+        expect(field.stepSizeWarningThresholdInches).toBe(
+            FieldProperties.DEFAULT_STEP_SIZE_WARNING_THRESHOLD_INCHES,
+        );
+    });
+
+    it("keeps valid stored values as they are", () => {
+        const field = new FieldProperties({
+            ...template,
+            stepSizeInches: 30,
+            stepSizeWarningThresholdInches: 0,
+        });
+        expect(
+            new FieldProperties(
+                parseStoredFieldProperties(JSON.parse(exported(field))),
+            ),
+        ).toEqual(field);
     });
 });

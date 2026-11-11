@@ -110,3 +110,30 @@ export const FieldPropertiesSchema = z.object({
  * Type inference from the schema
  */
 export type ValidatedFieldProperties = z.infer<typeof FieldPropertiesSchema>;
+
+/**
+ * Parses field properties a show has already stored (its `field_properties` row), such as for
+ * the mobile export.
+ *
+ * Older shows could store values the schema now refuses for new files: a step size of 0 or less
+ * (the step size input took 0 before it was checked) or a negative warning threshold. Those
+ * values are dropped so the defaults apply, instead of failing the whole export. A step size of 0
+ * never worked anyway: every position in steps would divide by it.
+ */
+export function parseStoredFieldProperties(data: unknown) {
+    if (data === null || typeof data !== "object") {
+        return FieldPropertiesSchema.parse(data);
+    }
+    const stored = { ...(data as Record<string, unknown>) };
+    const { stepSizeInches, stepSizeWarningThresholdInches } = stored;
+    if (typeof stepSizeInches === "number" && !(stepSizeInches > 0)) {
+        delete stored.stepSizeInches;
+    }
+    if (
+        typeof stepSizeWarningThresholdInches === "number" &&
+        !(stepSizeWarningThresholdInches >= 0)
+    ) {
+        delete stored.stepSizeWarningThresholdInches;
+    }
+    return FieldPropertiesSchema.parse(stored);
+}
