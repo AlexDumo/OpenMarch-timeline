@@ -42,6 +42,12 @@ export interface FtlEntryInfo {
     startDist: number[];
     endDist: number[];
     targets: Array<[marcherId: number, xy: XY]>;
+    /**
+     * R-13″ (pathways step 4b): set when the members' ends are along the way. `endDist[q]` is
+     * then `e_q`; the member walks the way to it, then straight from `turn[q]` (`P(e_q)`) to its
+     * target over the last `straight[q]` of its walk.
+     */
+    along?: { turn: XY[]; straight: number[] };
 }
 
 export type DiagnosticCode =
@@ -195,6 +201,12 @@ export interface PathParams {
      * order.
      */
     reverse?: boolean;
+    /**
+     * Follow-the-leader with no shape only (R-13″, pathways step 4b): `"along"` ends each member
+     * on the way (line-up, then the trail's drawn part) at its spot's projection, then straight
+     * to the spot. Absent for R-13′.
+     */
+    ends?: "along";
 }
 
 /** One inner point of a route (spec 5.2, v0.9): a corner, or smooth with a tension (step 2). */
@@ -344,4 +356,9 @@ export interface FtlTrail {
      * point. It starts at trail distance `start` (the leader's origin) and runs to `destOffset`.
      */
     drawn?: { start: number; path: import("./geom").RoutePath };
+    /**
+     * R-13″ (pathways step 4b): on a way with its ends along it, the line-up's vertices (the
+     * member origins, tail first). `destOffset` is then the way's whole length.
+     */
+    lineUp?: XY[];
 }

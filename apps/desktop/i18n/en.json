@@ -2731,7 +2731,15 @@
                 "notYet": "{move} follows a drawn trail, which this edit can't keep yet. Remove the trail first",
                 "split": "{move} can't be split at a count while a line follows a trail. Remove the trail first, or split before choosing Follow",
                 "removeTrailFirst": "{move} follows a drawn trail: remove the trail first",
-                "noTrail": "This trail is gone"
+                "noTrail": "This trail is gone",
+                "notFitted": "Select marchers standing in a line, curve or arc to drag out a trail",
+                "notAnEnd": "Drag the trail out of an end of the line",
+                "tooShort": "Draw a longer trail",
+                "evenTooWide": "Even spacing can be at most {limit} steps here, or someone would walk backward",
+                "noSpots": "Keep end spots needs every marcher in one move with spots there",
+                "notOneMove": "{marcher} can't join the rest of the line in one move here, so nothing was changed",
+                "noWindow": "Move the playhead past the start flag to drag out a trail",
+                "reverseAlong": "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead."
             }
         }
     },
@@ -3788,7 +3796,22 @@
             "pathKind": "How the marchers take the path",
             "togetherTip": "Together: the group slides along the path and keeps its shape",
             "together": "Together",
-            "followTip": "Follow: the line follows its leader along the trail into its end spots"
+            "followTip": "Follow: the line follows its leader along the trail into its end spots",
+            "spacing": "Spacing",
+            "keepSpacing": "Keep spacing",
+            "keepSpacingTip": "Keep spacing: each marcher keeps its distance to the next along the way",
+            "even": "Even",
+            "evenTip": "Even: every marcher ends the same number of steps from the next",
+            "evenOff": "Even: the trail is too short for even steps, or someone would walk backward. Draw it longer",
+            "evenCloser": "Closer together",
+            "evenFarther": "Farther apart",
+            "evenSteps": "{steps} steps",
+            "evenLimit": "up to {limit}",
+            "ends": "Ends",
+            "endsFromTrail": "From trail",
+            "endsFromTrailTip": "From trail: the line stops along the trail, and those become its end spots",
+            "endsKeep": "Keep end spots",
+            "endsKeepTip": "Keep end spots: the line follows the trail into the end spots it already has"
         },
         "menu": {
             "pointType": "Corner type",
@@ -3824,11 +3847,12 @@
             "drawingPoints": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel",
             "drawingPointsClick": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
             "groupDrawing": "Group path for {count} marchers: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
-            "trailDrawing": "Trail for {count} marchers, {marcher} leading: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
+            "trailDrawing": "Trail for {count} marchers, {marcher} leading: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
+            "followGrab": "Follow: drag a trail out of either end of the line · <esc></esc> to leave"
         },
         "toolbar": {
             "path": "Path",
-            "followTip": "Follow: draw a trail, and the selected line follows its leader along it into its end spots"
+            "followTip": "Follow: drag a trail out of an end of the selected line, and where the line stops becomes its next spots"
         },
         "toasts": {
             "removedGroup": "Removed the path for {count, plural, one {# marcher} other {# marchers}}",
@@ -3844,7 +3868,8 @@
             "own": "Own path",
             "offGroup": "Not on the group path",
             "leader": "Leads the line",
-            "follower": "Follows the leader"
+            "follower": "Follows the leader",
+            "dragEnd": "Drag a trail out of this end"
         },
         "lanes": {
             "hover": "Spot {spot} · {marcher}",

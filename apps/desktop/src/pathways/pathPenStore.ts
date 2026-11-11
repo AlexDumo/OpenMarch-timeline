@@ -1,7 +1,11 @@
 import { create } from "zustand";
 import { db } from "@/global/database/db";
 import { toast } from "sonner";
-import { drawRoute, removeRoute } from "@/db-functions/timelineRoutes";
+import {
+    drawRoute,
+    removeRoute,
+    type RoutePointInput,
+} from "@/db-functions/timelineRoutes";
 import {
     editTrailPoints,
     followTrail,
@@ -34,6 +38,8 @@ import tolgee from "@/global/singletons/Tolgee";
 import type { XY } from "@/shapes/types";
 import { SMOOTH } from "@/shapes/line/lineGeometry";
 import type { GroupMember, PathTarget } from "./pathTarget";
+import { dragTrail } from "@/db-functions/timelineTrailDrag";
+import { followSpacingOf, type FollowDrag } from "./followDrag";
 import {
     besideArc,
     besideArcReason,
@@ -106,6 +112,11 @@ export interface PathSession {
         readonly marcherId: number;
         readonly adjust: AdjustProfile | null;
     } | null;
+    /**
+     * The Follow tool's drag (pathways step 4b, AP-T8): a trail dragged out of an end of the
+     * selected line, its spots written where the line stops. Absent for every other drawing.
+     */
+    readonly follow?: FollowDrag | null;
 }
 
 /**
@@ -317,6 +328,22 @@ export function shapeOf(s: PathSession): PathShape {
     let shape = shapes.get(s);
     if (shape) return shape;
     const { target, points } = s;
+    // A dragged-out trail ends at its own last point: there are no end spots to enter (R-13″).
+    // With Keep end spots it runs on into the tail's end spot, as step 4's trail does (AP-T9)
+    if (s.follow) {
+        const to =
+            s.follow.ends === "keep" && s.follow.grabbed !== null
+                ? target.to
+                : (points.at(-1)?.at ?? target.from);
+        shape = {
+            from: target.from,
+            to,
+            points,
+            ends: { from: target.from, to },
+        };
+        shapes.set(s, shape);
+        return shape;
+    }
     const ends = target.ends;
     const last = target.points.length - 1;
     shape = {
@@ -711,13 +738,17 @@ export function cancelDrag(
     );
 }
 
-/** A point as the write path takes it: its id when stored, roundness and arc bulge when it has them */
-const storedInput = (c: PathPoint) => ({
-    ...(c.id === undefined ? {} : { id: c.id }),
-    at: [c.at.x, c.at.y] as [number, number],
-    ...((c.tension ?? 0) > 0 ? { tension: c.tension } : {}),
-    ...(c.bulge ? { bulge: c.bulge } : {}),
-});
+/**
+ * The points as they are written: a point's id when stored, roundness and arc bulge when it has
+ * them (a preview reads the same)
+ */
+export const storedPoints = (points: readonly PathPoint[]): RoutePointInput[] =>
+    points.map((c) => ({
+        ...(c.id === undefined ? {} : { id: c.id }),
+        at: [c.at.x, c.at.y] as [number, number],
+        ...((c.tension ?? 0) > 0 ? { tension: c.tension } : {}),
+        ...(c.bulge ? { bulge: c.bulge } : {}),
+    }));
 
 /** Writes `points` as the session's path (AP-R1), smooth ones with their roundness. */
 async function save(
@@ -727,12 +758,26 @@ async function save(
     const { session, saving } = usePathPenStore.getState();
     if (!session || saving) return false;
     usePathPenStore.setState({ saving: true });
-    const stored = points.map(storedInput);
+    const stored = storedPoints(points);
     // The last leg's bulge goes with a point edit of the open path (R-14″); a drawing has none
     const toBulge = session.phase === "open" ? (session.toBulge ?? null) : null;
     const { target } = session;
+    const { follow } = session;
     try {
-        if (target.trail && target.routeId !== null)
+        if (follow && follow.grabbed !== null)
+            // The Follow tool's drag (AP-T8), or onto the spots they have (AP-T9)
+            await dragTrail({
+                db,
+                window: follow.window,
+                marcherIds: follow.ids,
+                leaderId: follow.grabbed,
+                points: stored,
+                spacing: followSpacingOf(session),
+                step: follow.step,
+                ends: follow.ends,
+                keepMove: follow.keep?.timelineId ?? null,
+            });
+        else if (target.trail && target.routeId !== null)
             // Point edits on an open trail, or the trail drawn again (AP-T2): by its route, so a
             // member taken over at the move's start doesn't stop it
             await editTrailPoints({
@@ -817,6 +862,14 @@ export async function finishDrawing(): Promise<void> {
         return;
     }
     const ok = await save(session.points);
+    // A trail dragged out (step 4b): the stored trail is read again and shown as any trail is
+    if (ok && session.follow) {
+        usePathPenStore.setState((state) => ({
+            session: null,
+            saved: state.saved + 1,
+        }));
+        return;
+    }
     if (ok)
         usePathPenStore.setState((state) => ({
             session: {

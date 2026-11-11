@@ -2,7 +2,7 @@
 // db shape: { marchers:[{id,home:[x,y]}], shapes:{id:{kind,geometry}},
 //             transitions:{id:{id,start,end,dest,slots,style,order,params}},
 //             assignments:[{id,marcher,transition,slot,start,end,layer}] }
-import { lerp, clamp01, destPath, paramT, destinationsOf, arcPoint, flatten, makeTrail, makeRouteTrail, ftlDest, routeWalk, groupWalk } from './geom.mjs';
+import { lerp, clamp01, destPath, paramT, destinationsOf, arcPoint, flatten, makeTrail, makeRouteTrail, makeAlongWay, alongWayEnds, alongWayAt, ftlDest, routeWalk, groupWalk } from './geom.mjs';
 
 export function makeOracle(db) {
   const T = (id) => db.transitions[id];
@@ -28,6 +28,7 @@ export function makeOracle(db) {
       const e = ftlEntry(t.id), q = e.members.indexOf(sp.m), p = clamp01((b - t.start) / (t.end - t.start));
       if (p <= 0) return origin(sp);                                                   // endpoints exact (§8.10)
       if (p >= 1) return e.target.get(sp.m);
+      if (e.ends) return alongWayAt(e.trail, e.startDist[q], e.endDist[q], e.ends.turn[q], e.ends.straight[q], e.target.get(sp.m), p);   // R-13″
       return e.trail.at(e.startDist[q] + (e.endDist[q] - e.startDist[q]) * p);
     }
     const p = clamp01((b - sp.start) / (t.end - sp.start));                            // R-5
@@ -69,15 +70,17 @@ export function makeOracle(db) {
     const dest = ftlDest(t.dest == null ? null : destPath(db.shapes[t.dest]), pts, n, sign < 0);   // R-13′, R-12′ (step 4)
     const path = dest.walked, wps = t.params?.waypoints ?? [];
     const tr = t.route == null ? null : db.routes?.[t.route]?.geometry;                 // R-9′ (step 4): a trail route's drawn part; waypoints not read (T-15)
-    const trail = tr ? makeRouteTrail(origins, tr, path) : makeTrail(origins, wps, path);
+    const along = t.dest == null && t.params?.ends === 'along';                         // R-13″ (step 4b): ends along the way
+    const trail = along ? makeAlongWay(origins, tr) : tr ? makeRouteTrail(origins, tr, path) : makeTrail(origins, wps, path);
     const startDist = origins.map((_, q) => trail.cum[q]);
     const pointOf = keyed.map(([, sp], q) => dest.member(q, m, sp.row.slot));           // R-9's sample, or the row's own slot (R-13′)
-    const endDist = origins.map((_, q) => trail.destOffset + dest.along(pointOf[q]));
+    const ends = along ? alongWayEnds(trail, pointOf.map((j) => pts[j]), startDist) : null;
+    const endDist = ends ? ends.endDist : origins.map((_, q) => trail.destOffset + dest.along(pointOf[q]));
     const target = new Map(members.map((mm, q) => [mm, pts[pointOf[q]]]));
     db.assignments.filter((r) => r.transition === tid && !target.has(r.marcher))
       .sort((a, b) => a.slot - b.slot || a.marcher - b.marcher)
       .forEach((r, k) => target.set(r.marcher, pts[dest.other(k, m, r.slot)]));
-    return { members, source, trail, startDist, endDist, target };
+    return { members, source, trail, startDist, endDist, target, ends };
   }
 
   return {

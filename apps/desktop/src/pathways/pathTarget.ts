@@ -92,6 +92,11 @@ export interface TrailTarget {
     leaderId: number;
     /** Whether the other end leads (R-12′); false while a new trail is drawn */
     reverse: boolean;
+    /**
+     * Whether the line ends along the way (R-13″, dragged out, step 4b): Reverse is off then
+     * (owner, 2026-11-10: drag the trail out of the other end instead)
+     */
+    along?: boolean;
 }
 
 /** A member of a group path: where it starts and ends, and its lane's offset from the reference */
@@ -372,6 +377,7 @@ function targetOfTrail(
             members,
             leaderId: leader.marcherId,
             reverse: trail.reverse,
+            along: trail.along,
         },
     };
 }

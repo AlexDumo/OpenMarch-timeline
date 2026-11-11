@@ -17,6 +17,8 @@ import {
 import { useStartFlagLevelsInEffect } from "@/stores/StartFlagKeyStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import type { XY } from "@/shapes/types";
+import { cancelFollowDrawing } from "./followDrag";
+import { isTrailLineAt, openFollowTool } from "./followTool";
 import {
     closeShapeTool,
     useShapeToolStore,
@@ -258,44 +260,78 @@ export function usePathPenActions(): void {
         if (!resolver) return;
         const beat = useTimelineSelectionStore.getState().playheadBeat;
         const ids = performers.map((m) => m.id);
-        void findTrailDrawTarget(db, resolver, ids, drills, beat).then(
-            (target) => {
-                if ("kind" in target && target.kind === "refused") {
-                    // Said before drawing starts, so no drawing is lost (AP-T1)
-                    toast.error(translateTimelineText(target.reason), {
-                        id: "path-pen",
-                    });
-                    return;
-                }
-                if ("kind" in target) {
-                    const who = performers.find(
-                        (m) =>
-                            target.kind === "noMove" &&
-                            m.id === target.marcherId,
-                    );
-                    toast.error(
-                        target.kind === "noMove"
-                            ? tolgee.t(
-                                  "pathways.refusals.noMove",
-                                  "{marcher} has no move at the playhead to draw a path on",
-                                  { marcher: who?.drill_number ?? "" },
-                              )
-                            : tolgee.t(
-                                  "pathways.refusals.followTwoMoves",
-                                  "These marchers are in different moves at the playhead: select marchers of one move to follow a trail",
-                              ),
-                        { id: "path-pen" },
-                    );
-                    return;
-                }
-                if (useShapeToolStore.getState().tool) closeShapeTool();
-                if (!switchDrawing(target, `${ids.length}`))
-                    startDrawing(target, `${ids.length}`);
-            },
-        );
+        // The Follow tool (step 4b): its ends pulse until one is pressed and a trail dragged
+        // out of it. Step 4's Follow still draws a trail when the selection is exactly a
+        // trail's line (drawn again, AP-T1 and AP-T2's "Again"), or while a group path is drawn
+        // for the same marchers (Together | Follow on the path bar keeps its points)
+        const now2 = usePathPenStore.getState().session;
+        const groupDrawing =
+            now2?.phase === "drawing" &&
+            !!now2.target.group &&
+            now2.target.routeId === null;
+        void (async () => {
+            if (!groupDrawing && !(await isTrailLineAt(db, ids, beat))) {
+                const refused = await openFollowTool(
+                    resolver,
+                    ids,
+                    drills,
+                    beat,
+                );
+                if (refused) toast.error(refused, { id: "path-pen" });
+                else if (useShapeToolStore.getState().tool) closeShapeTool();
+                return;
+            }
+            const target = await findTrailDrawTarget(
+                db,
+                resolver,
+                ids,
+                drills,
+                beat,
+            );
+            if ("kind" in target && target.kind === "refused") {
+                // Said before drawing starts, so no drawing is lost (AP-T1)
+                toast.error(translateTimelineText(target.reason), {
+                    id: "path-pen",
+                });
+                return;
+            }
+            if ("kind" in target) {
+                const who = performers.find(
+                    (m) =>
+                        target.kind === "noMove" && m.id === target.marcherId,
+                );
+                toast.error(
+                    target.kind === "noMove"
+                        ? tolgee.t(
+                              "pathways.refusals.noMove",
+                              "{marcher} has no move at the playhead to draw a path on",
+                              { marcher: who?.drill_number ?? "" },
+                          )
+                        : tolgee.t(
+                              "pathways.refusals.followTwoMoves",
+                              "These marchers are in different moves at the playhead: select marchers of one move to follow a trail",
+                          ),
+                    { id: "path-pen" },
+                );
+                return;
+            }
+            if (useShapeToolStore.getState().tool) closeShapeTool();
+            if (!switchDrawing(target, `${ids.length}`))
+                startDrawing(target, `${ids.length}`);
+        })();
     });
+    // Off for a dragged-out line (owner, 2026-11-10): it ends along its trail
+    const trailAlong = usePathPenStore(
+        (s) => s.session?.target.trail?.along === true,
+    );
     useActionHandler("reverseTrail", () => void reverseShownTrail(), {
-        enabled: trailShown && phase !== "drawing",
+        enabled: trailShown && phase !== "drawing" && !trailAlong,
+        disabledReason: trailAlong
+            ? tolgee.t(
+                  "timeline.refusals.trail.reverseAlong",
+                  "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead.",
+              )
+            : undefined,
     });
 
     // The closed path shows by start flag positions' paths level in effect, as the straight paths
@@ -702,6 +738,8 @@ export function PathPenKeys(): null {
             if (!drawing && pickedLane !== null) selectLane(null);
             else if (!drawing && picked !== null) selectPoint(null);
             else if (!drawing && escapePathObject()) return;
+            // The Follow tool (step 4b): Escape cancels the trail drawn, then leaves the tool
+            else if (drawing && cancelFollowDrawing()) return;
             else closePath();
         },
         {

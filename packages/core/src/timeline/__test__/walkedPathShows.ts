@@ -3,7 +3,8 @@
  * Random shows for the walked-path property test (R-20, QA-WP-15): every path style the resolver
  * walks, at field scale. `walkedPathShow(seed, S)` is deterministic per seed; coordinates run
  * from 0 to `S`. Arc moves (with bulges at and around the limits), follow the leader onto lines,
- * boxes and circles with waypoints, own paths with corners and smooth points of many tensions,
+ * boxes and circles with waypoints, trails (no shape, a
+ * trail route, Reverse, ends along the way), own paths with corners and smooth points of many tensions,
  * group paths with offsets and Adjust profiles, coincident points, higher layers and partial
  * rows (so joins, resumes and cut spans).
  *
@@ -162,6 +163,39 @@ export function walkedPathShow(seed: number, S: number): TimelineSnapshot {
         if (style !== "follow_the_leader" && R() < 0.4) {
             t.dest = null;
             t.points = Array.from({ length: slots }, () => pt());
+        }
+        if (style === "follow_the_leader") {
+            // Trails (pathways steps 4 and 4b) from their own stream, so the draws above stay
+            // what they were: Reverse, no shape (R-13′), a trail route (R-9′), ends along the
+            // way (R-13″)
+            const T2 = mulberry32(seed * 104729 + id);
+            const c2 = () => Math.round(T2() * S * 1e3) / 1e3;
+            if (T2() < 0.3) t.params.reverse = true;
+            if (T2() < 0.4) {
+                t.dest = null;
+                t.points = Array.from(
+                    { length: slots },
+                    (): XY => [c2(), c2()],
+                );
+                if (T2() < 0.6) t.params.ends = "along";
+            }
+            if (T2() < 0.5) {
+                const n = Math.floor(T2() * 5);
+                const points = Array.from({ length: n }, (_, i) => ({
+                    id: `t${i}`,
+                    at: [c2(), c2()] as XY,
+                    ...(T2() < 0.4 ? { tension: 0.2 + T2() * 1.8 } : {}),
+                }));
+                routes[routeId] = {
+                    geometry: {
+                        v: 1,
+                        from: [c2(), c2()],
+                        to: [c2(), c2()],
+                        points,
+                    },
+                };
+                t.route = routeId++;
+            }
         }
         transitions[id] = t;
         if (style !== "follow_the_leader" && R() < 0.6) {

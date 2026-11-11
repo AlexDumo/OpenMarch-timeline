@@ -36,6 +36,16 @@ import {
 import type { XY } from "@/shapes/types";
 import { refitNeeded } from "./pathTarget";
 import {
+    EVEN_FIRST,
+    EVEN_STEP,
+    evenLimitOf,
+    followPlanOf,
+    followSpacingOf,
+    keepsEndSpots,
+    setFollowEnds,
+    setFollowSpacing,
+} from "./followDrag";
+import {
     memberNow,
     memberOf,
     shapeOf,
@@ -61,6 +71,22 @@ import {
  * straight moves are (`StepSize`, the field's step-size warning). Null when the steps aren't big,
  * or with the warning off.
  */
+/**
+ * Reverse leader's tooltip, or why it's off: a dragged-out line ends along its trail, so the
+ * other end can't lead (owner, 2026-11-10)
+ */
+function reverseLabel(along: boolean | undefined): string {
+    return along
+        ? tolgee.t(
+              "timeline.refusals.trail.reverseAlong",
+              "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead.",
+          )
+        : tolgee.t(
+              "pathways.trail.reverseTip",
+              "Make the other end of the line lead. Everyone keeps their end spot.",
+          );
+}
+
 export function bigSteps(
     session: PathSession,
     fieldProperties: FieldProperties,
@@ -124,10 +150,15 @@ function trailBigSteps(
     const { target } = session;
     const trail = target.trail!;
     const counts = target.end - target.start;
-    const distances = trailDistances(
-        trail.members,
-        curveOf(shapeOf(session)).L,
-    );
+    // A trail dragged out (step 4b): each walks the way to where it stops (R-13″). With Keep
+    // end spots it is step 4's trail into the spots they have, read as step 4 reads it (AP-T9)
+    const plan =
+        session.follow && !keepsEndSpots(session.follow)
+            ? followPlanOf(session)
+            : null;
+    const distances = plan
+        ? plan.ends.map((e, q) => e - plan.startDist[q]!)
+        : trailDistances(trail.members, curveOf(shapeOf(session)).L);
     const threshold = fieldProperties.stepSizeWarningThresholdInches;
     let worst: { size: StepSize; drill: string } | null = null;
     trail.members.forEach((m, q) => {
@@ -282,7 +313,7 @@ export function PathEditor({
     return (
         <>
             {session.phase === "drawing" && <PathPenBanner session={session} />}
-            {session.target.trail && (
+            {session.target.trail && session.follow?.grabbed !== null && (
                 <RichTips>
                     <TrailLeaderMark session={session} />
                 </RichTips>
@@ -330,10 +361,8 @@ function TrailLeaderMark({ session }: { session: PathSession }) {
             </span>
             {stored && (
                 <IconButton
-                    label={tolgee.t(
-                        "pathways.trail.reverseTip",
-                        "Make the other end of the line lead. Everyone keeps their end spot.",
-                    )}
+                    label={reverseLabel(trail.along)}
+                    disabled={trail.along}
                     action="reverseTrail"
                     onClick={() => runAction("reverseTrail")}
                     testId="trail-reverse"
@@ -356,7 +385,13 @@ function PathPenBanner({ session }: { session: PathSession }) {
             data-testid="path-pen-banner"
         >
             {/* With the key unbound, only the right-click is said */}
-            {session.target.trail ? (
+            {session.follow && session.follow.grabbed === null ? (
+                <T
+                    keyName="pathways.banner.followGrab"
+                    defaultValue="Follow: drag a trail out of either end of the line · <esc></esc> to leave"
+                    params={{ esc }}
+                />
+            ) : session.target.trail ? (
                 <T
                     keyName="pathways.banner.trailDrawing"
                     defaultValue="Trail for {count} marchers, {marcher} leading: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
@@ -471,6 +506,7 @@ function PathEditorBar({
     const kindChoice =
         drawing &&
         !session.byRoute &&
+        !session.follow &&
         (!!session.target.trail ||
             (!!session.target.group && session.target.routeId === null));
     const trail = session.target.trail ?? null;
@@ -588,6 +624,9 @@ function PathEditorBar({
                             </span>
                             <Divider />
                         </>
+                    )}
+                    {session.follow && session.follow.grabbed !== null && (
+                        <FollowControls session={session} />
                     )}
                     <span className="flex items-center gap-2">
                         <IconButton
@@ -803,10 +842,8 @@ function PathEditorBar({
                     {stored && trail && (
                         <>
                             <IconButton
-                                label={tolgee.t(
-                                    "pathways.trail.reverseTip",
-                                    "Make the other end of the line lead. Everyone keeps their end spot.",
-                                )}
+                                label={reverseLabel(trail.along)}
+                                disabled={trail.along}
                                 action="reverseTrail"
                                 onClick={() => runAction("reverseTrail")}
                                 testId="path-reverse"
@@ -843,5 +880,177 @@ function PathEditorBar({
                 </>
             )}
         </div>
+    );
+}
+
+/**
+ * The Follow tool's choices on the path bar (pathways step 4b): Spacing, Keep spacing or Even N
+ * steps, Even held to the largest N that keeps everyone walking forward (DL-7, AP-T8); and, when
+ * the line already has end spots here, Ends: From trail or Keep end spots (DL-8, AP-T9).
+ */
+function FollowControls({ session }: { session: PathSession }) {
+    const follow = session.follow!;
+    const plan = followPlanOf(session);
+    const limit = evenLimitOf(plan);
+    // The spacing in use: Even held to its limit, Keep spacing while the limit is under one step
+    const spacing = followSpacingOf(session);
+    const even = spacing.kind === "even" ? spacing.steps : null;
+    const evenOff = limit !== null && limit < EVEN_STEP;
+    const fromTrail = follow.ends === "trail";
+    const setEven = (steps: number) =>
+        setFollowSpacing({
+            kind: "even",
+            steps: Math.max(
+                EVEN_STEP,
+                limit === null ? steps : Math.min(steps, limit),
+            ),
+        });
+    return (
+        <>
+            {fromTrail && (
+                <>
+                    <span
+                        className="flex items-center gap-2"
+                        role="group"
+                        aria-label={tolgee.t(
+                            "pathways.editor.spacing",
+                            "Spacing",
+                        )}
+                        data-testid="follow-spacing"
+                    >
+                        <IconButton
+                            label={tolgee.t(
+                                "pathways.editor.keepSpacingTip",
+                                "Keep spacing: each marcher keeps its distance to the next along the way",
+                            )}
+                            pressed={even === null}
+                            onClick={() => setFollowSpacing({ kind: "keep" })}
+                            testId="follow-keep-spacing"
+                        >
+                            {tolgee.t(
+                                "pathways.editor.keepSpacing",
+                                "Keep spacing",
+                            )}
+                        </IconButton>
+                        <IconButton
+                            label={
+                                evenOff
+                                    ? tolgee.t(
+                                          "pathways.editor.evenOff",
+                                          "Even: the trail is too short for even steps, or someone would walk backward. Draw it longer",
+                                      )
+                                    : tolgee.t(
+                                          "pathways.editor.evenTip",
+                                          "Even: every marcher ends the same number of steps from the next",
+                                      )
+                            }
+                            disabled={evenOff}
+                            pressed={even !== null}
+                            onClick={() =>
+                                setEven(
+                                    even ??
+                                        Math.min(
+                                            EVEN_FIRST,
+                                            limit ?? EVEN_FIRST,
+                                        ),
+                                )
+                            }
+                            testId="follow-even"
+                        >
+                            {tolgee.t("pathways.editor.even", "Even")}
+                        </IconButton>
+                        {even !== null && (
+                            <>
+                                <IconButton
+                                    label={tolgee.t(
+                                        "pathways.editor.evenCloser",
+                                        "Closer together",
+                                    )}
+                                    disabled={even <= EVEN_STEP}
+                                    onClick={() => setEven(even - EVEN_STEP)}
+                                    testId="follow-even-less"
+                                >
+                                    −
+                                </IconButton>
+                                <span data-testid="follow-even-steps">
+                                    {tolgee.t(
+                                        "pathways.editor.evenSteps",
+                                        "{steps} steps",
+                                        { steps: even },
+                                    )}
+                                </span>
+                                <IconButton
+                                    label={tolgee.t(
+                                        "pathways.editor.evenFarther",
+                                        "Farther apart",
+                                    )}
+                                    disabled={
+                                        limit !== null &&
+                                        even + EVEN_STEP > limit
+                                    }
+                                    onClick={() => setEven(even + EVEN_STEP)}
+                                    testId="follow-even-more"
+                                >
+                                    +
+                                </IconButton>
+                                {limit !== null && (
+                                    <span
+                                        className="text-text-subtitle"
+                                        data-testid="follow-even-limit"
+                                    >
+                                        {tolgee.t(
+                                            "pathways.editor.evenLimit",
+                                            "up to {limit}",
+                                            { limit },
+                                        )}
+                                    </span>
+                                )}
+                            </>
+                        )}
+                    </span>
+                    <Divider />
+                </>
+            )}
+            {follow.keep && (
+                <>
+                    <span
+                        className="flex items-center gap-2"
+                        role="group"
+                        aria-label={tolgee.t("pathways.editor.ends", "Ends")}
+                        data-testid="follow-ends"
+                    >
+                        <IconButton
+                            label={tolgee.t(
+                                "pathways.editor.endsFromTrailTip",
+                                "From trail: the line stops along the trail, and those become its end spots",
+                            )}
+                            pressed={fromTrail}
+                            onClick={() => setFollowEnds("trail")}
+                            testId="follow-ends-trail"
+                        >
+                            {tolgee.t(
+                                "pathways.editor.endsFromTrail",
+                                "From trail",
+                            )}
+                        </IconButton>
+                        <IconButton
+                            label={tolgee.t(
+                                "pathways.editor.endsKeepTip",
+                                "Keep end spots: the line follows the trail into the end spots it already has",
+                            )}
+                            pressed={!fromTrail}
+                            onClick={() => setFollowEnds("keep")}
+                            testId="follow-ends-keep"
+                        >
+                            {tolgee.t(
+                                "pathways.editor.endsKeep",
+                                "Keep end spots",
+                            )}
+                        </IconButton>
+                    </span>
+                    <Divider />
+                </>
+            )}
+        </>
     );
 }

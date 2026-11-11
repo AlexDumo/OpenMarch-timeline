@@ -319,10 +319,13 @@ export function validatePathParams(
                 break;
             }
             // `reverse` (R-12′, pathways step 4): true, or absent
-            noExtraKeys(params, ["waypoints", "reverse"], push);
+            // `ends` (R-13″, pathways step 4b): "along", or absent
+            noExtraKeys(params, ["waypoints", "reverse", "ends"], push);
             pointList(params.waypoints, "waypoints", push);
             if (params.reverse !== undefined && params.reverse !== true)
                 push("reverse", "reverse must be true or absent");
+            if (params.ends !== undefined && params.ends !== "along")
+                push("ends", 'ends must be "along" or absent');
             break;
         }
         default:

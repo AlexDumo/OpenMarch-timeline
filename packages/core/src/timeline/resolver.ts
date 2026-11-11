@@ -30,6 +30,9 @@ import {
     flatten,
     lerp,
     makeTrail,
+    makeAlongTrail,
+    alongEnds,
+    alongPoint,
     paramT,
     adjustDiagnostics,
     groupSchedule,
@@ -83,6 +86,8 @@ interface Entry {
     startDist: number[];
     endDist: number[];
     target: Map<number, XY>;
+    /** R-13″: set when the ends are along the way */
+    along?: { turn: XY[]; straight: number[] };
 }
 
 /** A node of the dependency graph (9.3): an origin or an FTL entry. */
@@ -597,6 +602,17 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             const p = clamp01((b - t.start) / (t.end - t.start));
             if (p <= 0) return origin(s); // endpoints exact (8.10)
             if (p >= 1) return e.target.get(s.m)!;
+            if (e.along)
+                // R-13″: along the way to its end, then straight to its spot
+                return alongPoint(
+                    e.trail,
+                    e.startDist[q]!,
+                    e.endDist[q]!,
+                    e.along.turn[q]!,
+                    e.along.straight[q]!,
+                    e.target.get(s.m)!,
+                    p,
+                );
             return e.trail.at(
                 e.startDist[q]! + (e.endDist[q]! - e.startDist[q]!) * p,
             );
@@ -691,18 +707,26 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         const dest = ftlDestination(path, n, sign < 0);
         // R-9′: the trail route's drawn part, from the cached route geometry (T-15: none when
         // the route is missing)
-        const trail = makeTrail(
-            os,
-            t.params?.waypoints ?? [],
-            dest.walked,
-            t.route == null ? null : routeGeo.get(t.route)?.walk,
-        );
+        const route = t.route == null ? null : routeGeo.get(t.route)?.walk;
+        // R-13″: with its ends along the way, there is no destination path
+        const along = t.dest == null && t.params?.ends === "along";
+        const trail = along
+            ? makeAlongTrail(os, route)
+            : makeTrail(os, t.params?.waypoints ?? [], dest.walked, route);
         const pts = dests.get(tid)!;
         // each member's point: R-9's sample, or its own slot's destination (R-13′)
         const pointOf = keyed.map(([, s], q) => dest.member(q, m, s.row!.slot));
         const target = new Map<number, XY>(
             members.map((mm, q) => [mm, pts[pointOf[q]!]!]),
         );
+        const startDist = os.map((_, q) => trail.cum[q]!);
+        const ends = along
+            ? alongEnds(
+                  trail,
+                  pointOf.map((j) => pts[j]!),
+                  startDist,
+              )
+            : null;
         // non-members, from the per-transition row index: never a full scan (9.6)
         rowsOfTransition(tid)
             .filter((r) => !target.has(r.marcher))
@@ -715,11 +739,14 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             source,
             trail,
             qOf: new Map(members.map((mm, q) => [mm, q])),
-            startDist: os.map((_, q) => trail.cum[q]!),
-            endDist: os.map(
-                (_, q) => trail.destOffset + dest.along(pointOf[q]!),
-            ),
+            startDist,
+            endDist:
+                ends?.endDist ??
+                os.map((_, q) => trail.destOffset + dest.along(pointOf[q]!)),
             target,
+            ...(ends
+                ? { along: { turn: ends.turn, straight: ends.straight } }
+                : {}),
         });
         C.ftlEntriesComputed++;
     }
@@ -944,6 +971,14 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         startDist: [...e.startDist],
         endDist: [...e.endDist],
         targets: [...e.target.entries()],
+        ...(e.along
+            ? {
+                  along: {
+                      turn: [...e.along.turn],
+                      straight: [...e.along.straight],
+                  },
+              }
+            : {}),
     });
     function ftlEntryOf(tid: number): Entry {
         const t = T(tid);

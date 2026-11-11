@@ -38,6 +38,7 @@ export type {
     AdjustAnchor,
     AdjustKey,
     AdjustProfile,
+    FtlTrail,
 } from "./types";
 export type { Oracle } from "./oracle";
 export { createResolver } from "./resolver";
@@ -55,6 +56,9 @@ export {
     groupSchedule,
     groupMemberWalk,
     groupPoint,
+    makeAlongTrail,
+    alongEnds,
+    alongPoint,
     placed,
     adjustAt,
     anchorPlace,
