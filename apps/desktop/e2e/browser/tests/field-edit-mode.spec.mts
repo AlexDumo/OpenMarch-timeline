@@ -250,3 +250,51 @@ test("drag a line, type its exact position, and drag it back into the ruler to d
     await page.getByTestId("field-edit-done").click();
     await expect.poll(() => fieldEdit(page)).toBeNull();
 });
+
+test("the inspector holds the field's settings: a new width moves the outer lines, one undo step", async ({
+    show,
+}) => {
+    const { page } = show;
+    await enterFromSidebar(page);
+    const inspector = page.getByTestId("field-inspector");
+    for (const [section, inside] of [
+        ["Template and files", "Field Template"],
+        ["Name and sides", "Side Descriptions"],
+        ["Markings and labels", "Yard numbers"],
+        ["Background image", "Show Background Image"],
+        ["Colors", "Marchers and paths"],
+    ] as const) {
+        await inspector.getByRole("button", { name: section }).click();
+        await expect(inspector.getByText(inside)).toBeVisible();
+    }
+
+    // Width: the goal lines move out to ±88, the lines inside stay (owner, #824)
+    const before = await savedXSteps(show);
+    await page.getByTestId("field-width").fill("176");
+    await page.getByTestId("field-width").press("Enter");
+    await expect
+        .poll(() => savedXSteps(show))
+        .toEqual([-88, ...before.slice(1, -1), 88]);
+    await expect(page.getByTestId("field-size")).toContainText("176 ×");
+
+    // The yard numbers' placement can be typed (B9)
+    const yard = page.getByTestId("field-yard-homeStepsFromFrontToOutside");
+    await yard.fill("12");
+    await yard.press("Enter");
+    await expect
+        .poll(async () => {
+            const [row] = await show.query<{ json_data: string }>(
+                "SELECT json_data FROM field_properties",
+            );
+            return JSON.parse(row!.json_data).yardNumberCoordinates
+                .homeStepsFromFrontToOutside;
+        })
+        .toBe(12);
+
+    // Each is its own undo step, and the inputs follow the undo (B1)
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(yard).not.toHaveValue("12");
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => savedXSteps(show)).toEqual(before);
+    await expect(page.getByTestId("field-width")).toHaveValue("160");
+});

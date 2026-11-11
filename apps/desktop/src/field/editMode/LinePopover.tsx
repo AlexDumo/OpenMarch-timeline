@@ -31,7 +31,7 @@ import { useApplyFieldEdits } from "./useApplyFieldEdits";
 import { useDraft } from "./useDraft";
 import { Numpad } from "./Numpad";
 
-const POPOVER_WIDTH = 300;
+const POPOVER_WIDTH = 320;
 
 /**
  * A line's exact values (#824): double-click or Enter on a line (a tap on a picked line with a
@@ -124,10 +124,12 @@ export function LinePopover({
         8,
         bounds.width - POPOVER_WIDTH - 8,
     );
+    // The number pad makes it taller; it scrolls when the field is shorter still
+    const height = isTouch ? 680 : 420;
     const top = clamp(
         isX ? Math.max(rect.top, 0) + 40 : at + 16,
         30,
-        bounds.height - 420,
+        Math.max(8, bounds.height - height - 8),
     );
     const flipLeft = isX && at + 16 + POPOVER_WIDTH > bounds.width - 8;
 
@@ -154,6 +156,8 @@ export function LinePopover({
                 width: POPOVER_WIDTH,
                 left: flipLeft ? Math.max(8, at - 16 - POPOVER_WIDTH) : left,
                 top,
+                maxHeight: bounds.height - top - 8,
+                overflowY: "auto",
             }}
             onPointerDown={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
@@ -205,6 +209,8 @@ export function LinePopover({
                             ]}
                             selected={side}
                             setSelected={(v) => setSide(v as "left" | "right")}
+                            className="shrink-0 flex-nowrap"
+                            itemClassName="text-sub px-8"
                         />
                     )}
                     <Input
@@ -213,14 +219,14 @@ export function LinePopover({
                         data-testid="field-line-position"
                         inputMode={isTouch ? "none" : "decimal"}
                         className={clsx(
-                            "w-96 tabular-nums",
+                            "w-80 shrink-0 tabular-nums",
                             typed === null && "border-red",
                         )}
                         value={position}
                         onChange={(e) => setPosition(e.target.value)}
                         aria-invalid={typed === null}
                     />
-                    <span className="text-text">
+                    <span className="text-text min-w-0 leading-tight">
                         {t(
                             isX
                                 ? "fieldEditMode.popover.stepsFromCenter"

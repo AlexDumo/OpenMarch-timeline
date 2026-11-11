@@ -19,6 +19,17 @@ import {
 import { fieldEditMode } from "./fieldEditModeStore";
 import { findLine, lineLabel, type FieldLineRef } from "./lines";
 
+const MENU_ACTIONS: readonly ActionId[] = [
+    "fieldEditEditLine",
+    "fieldEditToggleVisible",
+    "fieldEditToggleReference",
+    "fieldEditResetNames",
+    "fieldEditEveryOther",
+    "fieldEditSelectAllXLines",
+    "fieldEditSelectAllYLines",
+    "fieldEditDeleteLines",
+];
+
 /**
  * A line's menu (#824): right-click, or a long press with a finger (no hover, right-click or
  * modifier needed). Each entry runs the mode's action on the selection, which the press picked,
@@ -36,9 +47,10 @@ export function LineMenu({
     const { t } = useTranslate();
     const ref = useRef<HTMLDivElement>(null);
     const checkpoint = findLine(fp, line);
-    // Re-read whether each entry can run when the handlers change
+    // Re-read whether each entry can run when the handlers change (the press that opened the
+    // menu also picked the line, after this first render)
     useSyncExternalStore(subscribeToActionHandlers, () =>
-        isActionEnabled("fieldEditEveryOther"),
+        MENU_ACTIONS.map((id) => (isActionEnabled(id) ? 1 : 0)).join(""),
     );
     useEffect(() => {
         const close = (event: PointerEvent) => {

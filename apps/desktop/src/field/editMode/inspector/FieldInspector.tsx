@@ -262,10 +262,11 @@ function useTranslateWithLanguage() {
     return { t, i18n: tolgee.getLanguage() };
 }
 
+/** Text of `min` to `max` characters (a template's own name is 41: fields get more room) */
 const text =
-    (min = 1) =>
+    (min = 1, max = 40) =>
     (value: string) =>
-        value.trim().length >= min && value.trim().length <= 40
+        value.trim().length >= min && value.trim().length <= max
             ? { value: value.trim() }
             : null;
 
@@ -295,7 +296,7 @@ function NamesSection({ fp }: { fp: FieldProperties }) {
                 hint={t("fieldEditMode.names.fieldNameHint")}
                 stored={fp.name}
                 current={fp.name}
-                parse={text()}
+                parse={text(1, 120)}
                 onCommit={(name) => set({ name })}
                 testId="field-name"
             />
@@ -599,6 +600,7 @@ function ColorsSection({ fp }: { fp: FieldProperties }) {
     const color = (key: ColorKey, label: string) => (
         <ColorPicker
             key={key}
+            doNotUseForm
             label={label}
             initialColor={theme[key]}
             defaultColor={DEFAULT_FIELD_THEME[key]}
@@ -611,6 +613,7 @@ function ColorsSection({ fp }: { fp: FieldProperties }) {
     const marcher = (key: MarcherColorKey, label: string) => (
         <ColorPicker
             key={key}
+            doNotUseForm
             label={label}
             initialColor={theme.defaultMarcher[key]}
             defaultColor={DEFAULT_FIELD_THEME.defaultMarcher[key]}

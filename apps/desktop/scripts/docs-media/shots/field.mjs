@@ -25,14 +25,37 @@ async function openPanel(page, wait, contentId) {
     await wait(600);
 }
 
-/** Opens the Field panel and turns on Customize, so the tabs show. */
-async function customize(page, wait) {
-    await openPanel(page, wait, "field");
-    // The demo's field is already custom; a template field has a Customize button
-    const button = page.getByRole("button", { name: "Customize" });
-    if (await button.isVisible().catch(() => false)) await button.click();
-    await page.getByRole("tab", { name: "General" }).waitFor();
-    await wait(500);
+/** Puts the canvas into the Edit field mode (#824) from the sidebar, and waits for it */
+async function editField(page, wait) {
+    await tidy(page);
+    await page.locator("#sidebar-launcher-field").click();
+    await page.getByTestId("field-edit-bar").waitFor();
+    await page.waitForFunction(() => window.fieldTest?.fieldEdit?.() != null);
+    await wait(800);
+}
+
+/** The mode's lines (window.fieldTest.fieldEdit()), X side 1 to side 2 then Y front to back */
+const fieldLines = (page) =>
+    page.evaluate(() => window.fieldTest.fieldEdit().lines);
+
+/** Two neighboring X lines on side 2, the second and third out from the center */
+async function sideTwoPair(page) {
+    const xs = (await fieldLines(page))
+        .filter((l) => l.axis === "x" && l.steps > 0)
+        .sort((a, b) => a.steps - b.steps);
+    return [xs[1], xs[2]];
+}
+
+/** The field's pane: the bar above it, the rulers and the field */
+async function fieldPane(page) {
+    const bar = await page.getByTestId("field-edit-bar").boundingBox();
+    const field = await page.locator("canvas").first().boundingBox();
+    return {
+        x: field.x - 4,
+        y: bar.y - 4,
+        width: field.width + 8,
+        height: field.y + field.height + 4 - (bar.y - 4),
+    };
 }
 
 /** Pages forward from the first for the step size warning picture */
@@ -42,80 +65,96 @@ const STEP_WARNING_INCHES = "9";
 
 const shots = [
     {
-        id: "field-panel",
+        id: "field-edit-mode",
         kind: "still",
+        // The whole window in the Edit field mode: its bar, the rulers, the dimmed drill and the
+        // inspector's list of lines
+        async setup({ page, wait }) {
+            await wait(3000);
+            await editField(page, wait);
+            const [line] = await sideTwoPair(page);
+            await page.mouse.click(line.screen.x, line.screen.y);
+            await page.mouse.move(800, 990);
+            await wait(600);
+            return { box: { x: 0, y: 0, width: 1600, height: 1000 } };
+        },
+    },
+    {
+        id: "field-ruler-drag",
+        kind: "clip",
+        // A line dragged out of the top ruler between two yard lines; its twin comes with it
+        async setup({ page, wait }) {
+            await wait(3000);
+            await editField(page, wait);
+            await page.mouse.move(800, 990);
+            await wait(400);
+            return { box: await fieldPane(page) };
+        },
+        async perform({ page, film, overlay }) {
+            await overlay.enable();
+            const [a, b] = await sideTwoPair(page);
+            const from = { x: (a.tab.x + b.tab.x) / 2 + 2, y: a.tab.y };
+            await page.mouse.move(from.x, from.y + 200);
+            await film.moveTo(page, { x: from.x, y: from.y + 200 }, from, 0.6);
+            await film.hold(0.3);
+            await film.drag(page, from, { x: from.x, y: a.screen.y }, 1.6);
+            await film.hold(1.2);
+        },
+    },
+    {
+        id: "field-line-popover",
+        kind: "still",
+        // A line's exact values, opened with a double-click
+        async setup({ page, wait }) {
+            await wait(3000);
+            await editField(page, wait);
+            const [line] = await sideTwoPair(page);
+            await page.mouse.dblclick(line.screen.x, line.screen.y);
+            const popover = page.getByTestId("field-line-popover");
+            await popover.waitFor();
+            await wait(500);
+            const p = await popover.boundingBox();
+            return {
+                box: {
+                    x: line.screen.x - 60,
+                    y: p.y - 16,
+                    width: p.x + p.width + 16 - (line.screen.x - 60),
+                    height: p.height + 32,
+                },
+            };
+        },
+    },
+    {
+        id: "field-inspector",
+        kind: "still",
+        // The inspector in the mode: the list of lines, with a + between rows
         async setup({ page, wait, around }) {
             await wait(3000);
-            await openPanel(page, wait, "field");
-            return { box: await around(panel(page), 6) };
+            await editField(page, wait);
+            const row = page.locator("[data-field-line-row]").nth(2);
+            await row.hover();
+            await wait(500);
+            return { box: await around(page.getByTestId("field-inspector"), 6) };
         },
     },
     {
         id: "field-template",
         kind: "still",
-        // A template picked from the list, before Apply Field Type
-        async setup({ page, wait, around, union }) {
-            await wait(3000);
-            await openPanel(page, wait, "field");
-            await panel(page).getByRole("combobox").first().click();
-            await page
-                .getByRole("option", {
-                    name: "Indoor 50x70 - 24-inch steps",
-                })
-                .click();
-            await wait(600);
-            const apply = page.getByRole("button", {
-                name: "Apply Field Type",
-            });
-            await apply.waitFor();
-            const heading = panel(page).getByText("Customization", {
-                exact: true,
-            });
-            const warning = panel(page).getByText(/Marchers will not move/);
-            const p = await panel(page).boundingBox();
-            const top = await heading.boundingBox();
-            const bottom = await warning.boundingBox();
-            return {
-                box: {
-                    x: p.x,
-                    y: top.y - 12,
-                    width: p.width,
-                    height: bottom.y + bottom.height + 16 - (top.y - 12),
-                },
-            };
-        },
-    },
-    {
-        id: "field-checkpoints",
-        kind: "still",
+        // Another template picked: the sheet says what changes before it switches
         async setup({ page, wait, around }) {
             await wait(3000);
-            await customize(page, wait);
-            await page.getByRole("tab", { name: "Checkpoints" }).click();
+            await editField(page, wait);
+            const inspector = page.getByTestId("field-inspector");
+            await inspector.getByRole("button", { name: "Template and files" }).click();
             await wait(400);
-            await panel(page)
-                .getByRole("tab", { name: "Checkpoints" })
-                .evaluate((el) => el.scrollIntoView({ block: "start" }));
-            await wait(400);
-            // Open the first checkpoint's editor
-            await panel(page)
-                .getByText("0 yard line", { exact: true })
-                .first()
+            await page.getByTestId("field-template-select").click();
+            await page
+                .getByRole("option", { name: "Indoor 50x70 - 24-inch steps" })
                 .click();
+            const dialog = page.getByRole("alertdialog");
+            await dialog.waitFor();
             await wait(600);
-            const p = await panel(page).boundingBox();
-            const tabs = await panel(page)
-                .getByRole("tab", { name: "Checkpoints" })
-                .boundingBox();
-            return {
-                box: {
-                    x: p.x,
-                    y: tabs.y - 12,
-                    width: p.width,
-                    height:
-                        Math.min(p.y + p.height, tabs.y + 600) - (tabs.y - 12),
-                },
-            };
+            return { box: await around(dialog, 8) };
         },
     },
     {
@@ -126,16 +165,13 @@ const shots = [
         // The threshold lowered to 8 to 5 (22.5 in), so this page's long moves show in red
         async setup({ page, wait }) {
             await wait(3000);
-            await customize(page, wait);
-            const input = panel(page)
-                .getByText(/^Step Size Warning Threshold/)
-                .locator("xpath=ancestor::*[.//input][1]")
-                .locator("input");
+            await editField(page, wait);
+            const input = page.getByTestId("field-step-warning");
             await input.fill(STEP_WARNING_INCHES);
             await input.press("Enter");
             await wait(600);
-            await page.getByRole("button", { name: "Close panel" }).click();
-            await wait(400);
+            await page.getByTestId("field-edit-done").click();
+            await wait(600);
             for (let i = 0; i < STEP_WARNING_PAGES; i++) {
                 await page.keyboard.press("KeyE");
                 await wait(500);
