@@ -38,11 +38,7 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { runAction } from "@/shortcuts/registry";
 import { readShortcutContext } from "@/shortcuts/context";
 import type { FieldMarchers } from "@/field/three/fieldMarchers";
-import {
-    fieldToElement,
-    useFieldViewStore,
-    type FieldView,
-} from "@/field/three/fieldView";
+import { useFieldViewStore, type FieldView } from "@/field/three/fieldView";
 import { ordersInForce } from "@/db-functions/rememberedOrder";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { dotSizes, ringReach } from "@/field/three/selectionRing";
@@ -388,8 +384,12 @@ export default function MarcherOrderOverlay({
             ),
         [view.zoom],
     );
+    // Worked out on screen but with the pan left out (the field scaled by the
+    // zoom, then moved by the pan), so panning only moves what's drawn (the SVG group below) and
+    // works nothing out again
+    const zoom = view.zoom;
     const drawn = useMemo((): DrawnLine[] => {
-        const onScreen = (p: XY) => fieldToElement(view, p.x, p.y);
+        const onScreen = (p: XY): XY => ({ x: p.x * zoom, y: p.y * zoom });
         if (sweep) {
             const points = sweep.picked.flatMap((id) => {
                 const p = sweep.at.get(id);
@@ -435,7 +435,7 @@ export default function MarcherOrderOverlay({
                 labelSide,
             });
         });
-    }, [sweep, lines, linesAt, view, sizes, labelSide, alt]);
+    }, [sweep, lines, linesAt, zoom, sizes, labelSide, alt]);
 
     const prefix = useId().replace(/:/g, "");
     if (!showing) return null;
@@ -448,29 +448,31 @@ export default function MarcherOrderOverlay({
                 data-lines={drawn.length}
                 data-guessed={drawn.some((l) => l.guessed) || undefined}
             >
-                {drawn.map((line, i) => (
-                    <OrderLine key={i} id={`${prefix}-${i}`} line={line} />
-                ))}
-                {drawn.flatMap((line, l) =>
-                    line.numbers.map((n, i) => (
-                        <text
-                            key={`${l}-${i}`}
-                            x={n.at.x}
-                            y={n.at.y}
-                            textAnchor="middle"
-                            dominantBaseline="central"
-                            fontSize={NUMBER_PX}
-                            fontWeight={700}
-                            fill={orderColorAt(n.fraction)}
-                            stroke={ORDER_HALO_COLOR}
-                            strokeWidth={3}
-                            paintOrder="stroke"
-                            data-testid="marcherOrderNumber"
-                        >
-                            {n.text}
-                        </text>
-                    )),
-                )}
+                <g transform={`translate(${view.panX} ${view.panY})`}>
+                    {drawn.map((line, i) => (
+                        <OrderLine key={i} id={`${prefix}-${i}`} line={line} />
+                    ))}
+                    {drawn.flatMap((line, l) =>
+                        line.numbers.map((n, i) => (
+                            <text
+                                key={`${l}-${i}`}
+                                x={n.at.x}
+                                y={n.at.y}
+                                textAnchor="middle"
+                                dominantBaseline="central"
+                                fontSize={NUMBER_PX}
+                                fontWeight={700}
+                                fill={orderColorAt(n.fraction)}
+                                stroke={ORDER_HALO_COLOR}
+                                strokeWidth={3}
+                                paintOrder="stroke"
+                                data-testid="marcherOrderNumber"
+                            >
+                                {n.text}
+                            </text>
+                        )),
+                    )}
+                </g>
             </svg>
             {sweep && (
                 <OrderSweepBar

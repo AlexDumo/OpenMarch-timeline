@@ -1,5 +1,6 @@
 /**
- * The order line's drawing rules (pathways step 4g, DL-30), pure and in screen pixels: how wide it
+ * The order line's drawing rules (pathways step 4g, DL-30), pure and in screen pixels (any origin:
+ * the overlay works them out with the field's pan left out, and moves them by it): how wide it
  * is at a zoom, the gap it leaves round each marcher so dots and selection rings show through, the
  * gentle arc a leg that runs back over the line takes, and the side each position number sits on.
  */
@@ -114,7 +115,7 @@ function nearestOnSegment(p: XY, a: XY, b: XY): { t: number; d: number } {
  * a point just past the end of a leg in line with it isn't on it
  */
 function distanceToLegInside(p: XY, leg: OrderLeg): number {
-    const samples = legSamples(leg);
+    const samples = samplesOf(leg);
     const last = samples.length - 2;
     let best = Infinity;
     for (let i = 0; i <= last; i++) {
@@ -130,6 +131,56 @@ const OVERLAP_SAMPLES = [0.1, 0.3, 0.5, 0.7, 0.9];
 /** How many of those must lie on earlier legs for the leg to run back over them */
 const OVERLAP_HITS = 2;
 
+/** A leg's samples (`legSamples`), worked out once per leg: legs are never changed */
+const legSampleCache = new WeakMap<OrderLeg, XY[]>();
+const samplesOf = (leg: OrderLeg): XY[] => {
+    let samples = legSampleCache.get(leg);
+    if (!samples) {
+        samples = legSamples(leg);
+        legSampleCache.set(leg, samples);
+    }
+    return samples;
+};
+
+/** A box round a leg: its ends and its control point, which a quadratic arc stays inside */
+interface Bounds {
+    readonly minX: number;
+    readonly minY: number;
+    readonly maxX: number;
+    readonly maxY: number;
+}
+const boundsCache = new WeakMap<OrderLeg, Bounds>();
+function boundsOf(leg: OrderLeg): Bounds {
+    let bounds = boundsCache.get(leg);
+    if (!bounds) {
+        const xs = [leg.from.x, leg.to.x];
+        const ys = [leg.from.y, leg.to.y];
+        if (leg.control) {
+            xs.push(leg.control.x);
+            ys.push(leg.control.y);
+        }
+        bounds = {
+            minX: Math.min(...xs),
+            minY: Math.min(...ys),
+            maxX: Math.max(...xs),
+            maxY: Math.max(...ys),
+        };
+        boundsCache.set(leg, bounds);
+    }
+    return bounds;
+}
+
+/** Whether `p` is further than `tolerance` outside the box round `leg`, so it can't be on it */
+const outside = (p: XY, leg: OrderLeg, tolerance: number) => {
+    const b = boundsOf(leg);
+    return (
+        p.x < b.minX - tolerance ||
+        p.x > b.maxX + tolerance ||
+        p.y < b.minY - tolerance ||
+        p.y > b.maxY + tolerance
+    );
+};
+
 /** Whether `leg` runs back over any of `earlier`, within `tolerance` */
 export function overlapsEarlier(
     leg: OrderLeg,
@@ -140,7 +191,14 @@ export function overlapsEarlier(
     let hits = 0;
     for (const t of OVERLAP_SAMPLES) {
         const p = legPoint(leg, t);
-        if (earlier.some((e) => distanceToLegInside(p, e) <= tolerance)) hits++;
+        if (
+            earlier.some(
+                (e) =>
+                    !outside(p, e, tolerance) &&
+                    distanceToLegInside(p, e) <= tolerance,
+            )
+        )
+            hits++;
         if (hits >= OVERLAP_HITS) return true;
     }
     return false;
