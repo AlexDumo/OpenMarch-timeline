@@ -2,6 +2,7 @@ import { expect } from "vitest";
 import { eq, getTableName, sql } from "drizzle-orm";
 import { createResolver, type Resolver, type XY } from "@openmarch/core";
 import { refusalText } from "@/test/refusalText";
+import { translateTimelineText } from "@/timeline/translateTimelineText";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
 import { convertPagesToTimeline } from "@/test/convertPages";
@@ -14,8 +15,10 @@ import { editTrailPoints, followTrail, reverseTrail } from "../timelineTrails";
 import { followPlanOf, type FollowDrag } from "@/pathways/followDrag";
 import { followKeepAt, isTrailLineAt } from "@/pathways/followTool";
 import { storedPoints, type PathSession } from "@/pathways/pathPenStore";
+import { rememberedOrderAt } from "../rememberedOrder";
 import {
     dragTrail,
+    followOrderAt,
     followSource,
     planTrailDrag,
     trailDragPreview,
@@ -730,5 +733,66 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
         expect(await isTrailLineAt(db, [1, 2], 12)).toBe(false);
         expect(await isTrailLineAt(db, [1, 2, 3, 4], 12)).toBe(false);
         expect(await isTrailLineAt(db, [1, 2, 3], 30)).toBe(false);
+    });
+
+    it("QA-DL-19 (step 4f): staggered rows left by a zigzag trail keep its order: the ends to pull are its first and last", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { starts, step } = await line(db);
+        const ids = [1, 2, 3, 4, 5, 6, 7];
+        // A zigzag out of M7, two steps a leg: with Keep spacing everyone ends on a corner, the
+        // odd ones in a front row of four and the even ones in a back row of three (the owner's
+        // report). The rows are deep enough that each marcher's nearest is beside them in their
+        // own row, so a guess chains them into a U
+        const lead = starts.get(7)!;
+        const dx = 0.7 * step;
+        const dy = Math.sqrt(4 - 0.7 ** 2) * step;
+        const points = Array.from({ length: 6 }, (_, i) => ({
+            at: [lead[0] + (i + 1) * dx, lead[1] + ((i + 1) % 2) * dy] as XY,
+        }));
+        await dragTrail({ db, window: WINDOW, marcherIds: ids, leaderId: 7, points, spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+        const after = await resolverOf(db);
+        const rows = ids.map((m) => after.positionAt(m, 17) as XY);
+        expect(near(rows[0]!, lead)).toBe(true);
+        expect(near(rows[1]!, [lead[0] + dx, lead[1] + dy])).toBe(true);
+        expect(near(rows[6]!, [lead[0] + 6 * dx, lead[1]])).toBe(true);
+        // What a guess makes of them: a U, its two ends side by side at one end of the rows
+        const guess = followSource(rows)!.order.map((i) => ids[i]!);
+        expect(guess).toEqual([1, 3, 5, 7, 6, 4, 2]);
+
+        // On the next page the trail's order is remembered instead
+        const shuffled = [5, 2, 7, 1, 4, 3, 6];
+        const at = shuffled.map((m) => after.positionAt(m, 17) as XY);
+        const order = await followOrderAt(db, shuffled, 17, at);
+        const line17 = order!.map((i) => shuffled[i]!);
+        expect(line17).toEqual(line17[0] === 1 ? ids : [...ids].reverse());
+        // Every other marcher keeps the line's order
+        expect(await rememberedOrderAt(db, [7, 1, 5, 3], 17)).toEqual([1, 3, 5, 7]); // prettier-ignore
+
+        // The write reads the same order: M7 and M1 are the ends, M2 isn't
+        const next = { start: 17, end: 25 };
+        const refusal = (leaderId: number) =>
+            db.transaction((tx) => trailDragRefusalFor(tx, next, shuffled, leaderId, "trail")); // prettier-ignore
+        expect(await refusal(7)).toBeNull();
+        expect(await refusal(1)).toBeNull();
+        expect(translateTimelineText((await refusal(2))!)).toMatch(/end of the line/); // prettier-ignore
+        const last = rows[6]!;
+        const result = await dragTrail({ db, window: next, marcherIds: shuffled, leaderId: 7, points: [{ at: [last[0] + 20 * step, last[1]] }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+        expect(result.marcherIds).toEqual(ids);
+    });
+
+    it("step 4f: with no form remembered, the order is guessed from where they stand", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { starts } = await line(db);
+        const ids = [3, 1, 2, 4];
+        const at = ids.map((m) => starts.get(m)!);
+        expect(await rememberedOrderAt(db, ids, 9)).toBeNull();
+        expect(await followOrderAt(db, ids, 9, at)).toEqual(
+            followSource(at)!.order,
+        );
+        expect((await followOrderAt(db, ids, 9, at))!.map((i) => ids[i])).toEqual([1, 2, 3, 4]); // prettier-ignore
     });
 });
