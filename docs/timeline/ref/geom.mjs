@@ -122,9 +122,10 @@ export function arcLen(P0, P3, k) {
 export function routeWalk(A, pts, B, F = A, G = B, toBulge = undefined) {
   const V = [A], tau = [0], src = [-1];
   pts.forEach((q, i) => { if (dist(V[V.length - 1], q.at) >= EPS_GEOM) { V.push(q.at); tau.push(q.tension > 0 ? q.tension : 0); src.push(i); } });
-  while (V.length > 1 && dist(V[V.length - 1], B) < EPS_GEOM) { V.pop(); tau.pop(); src.pop(); }
+  let intoB;   // R-14″: inner points dropped at B hand the leg into B the bulge of the first of them
+  while (V.length > 1 && dist(V[V.length - 1], B) < EPS_GEOM) { V.pop(); tau.pop(); intoB = src.pop(); }
   V.push(B); tau.push(0); src.push(-1);
-  const bulgeOf = (j) => { const k = j + 1 === V.length - 1 ? toBulge : pts[src[j + 1]].bulge; return typeof k === 'number' && Number.isFinite(k) && k !== 0 ? k : null; };
+  const bulgeOf = (j) => { const k = j + 1 === V.length - 1 ? (intoB === undefined ? toBulge : pts[intoB].bulge) : pts[src[j + 1]].bulge; return typeof k === 'number' && Number.isFinite(k) && k !== 0 ? k : null; };
   const m = V.length - 2;
   // Tangent neighbours from the route alone: N = [F, P'..., G]; rep[i] is P_i's representative's index in N
   const N = [F], rep = [];

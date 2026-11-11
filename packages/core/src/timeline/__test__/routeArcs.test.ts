@@ -94,6 +94,32 @@ function expectAgree(host: TimelineSnapshot, marchers: number[], tol = 1e-9) {
     return r;
 }
 
+describe("R-14″: an arc leg whose point lands on B (PR #816 review)", () => {
+    it("keeps its bulge when cleaning drops the point, so a nudge of 1e-8 doesn't change the walk", () => {
+        const route = (y: number): RouteGeometry => ({
+            v: 1,
+            from: [0, 0],
+            to: [8, 0],
+            points: [
+                { id: "a", at: [4, 4] },
+                { id: "b", at: [8, y], bulge: 0.5 },
+            ],
+        });
+        const on = routePath([0, 0], route(1e-10).points, [8, 0], route(1e-10));
+        const near = routePath([0, 0], route(1e-8).points, [8, 0], route(1e-8));
+        // On B: the point goes, and its half circle is the leg into B
+        expect(on.pieces.map((p) => p.kind)).toEqual(["line", "arc"]);
+        expect(near.pieces.map((p) => p.kind)).toEqual(["line", "arc", "line"]);
+        expect(on.L).toBeCloseTo(near.L, 6);
+        expect(on.L).toBeCloseTo(
+            Math.hypot(4, 4) + (Math.PI * Math.hypot(4, 4)) / 2,
+            9,
+        );
+        // The ref/ oracle agrees
+        expectAgree(ownShow(route(1e-10), [8, 0]), [1]);
+    });
+});
+
 describe("QA-AR-1: a leg with bulge 1/4 and chord 8", () => {
     const geometry: RouteGeometry = {
         v: 1,

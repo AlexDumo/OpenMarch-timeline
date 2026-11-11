@@ -546,10 +546,13 @@ export function routePath(
             source.push(i);
         }
     });
-    // Inner points within EPS_GEOM of B go (never A, which is V[0])
+    // Inner points within EPS_GEOM of B go (never A, which is V[0]). R-14″: the leg into B is
+    // then the leg that arrived at the first of them, so it keeps that point's bulge (the
+    // route's `toBulge` was a leg of no length)
+    let intoB: number | undefined;
     while (V.length > 1 && dist(V[V.length - 1]!, B) < EPS_GEOM) {
         V.pop();
-        source.pop();
+        intoB = source.pop();
     }
     V.push(B);
     source.push(-1);
@@ -589,7 +592,9 @@ export function routePath(
         // R-14″: the leg's bulge is its arriving point's, or the route's `toBulge` for the leg into B
         const k =
             j + 1 === V.length - 1
-                ? ends?.toBulge
+                ? intoB === undefined
+                    ? ends?.toBulge
+                    : innerBulge(inner[intoB]!)
                 : innerBulge(inner[source[j + 1]!]!);
         if (isBulge(k)) {
             pieces.push({ kind: "arc", k });
