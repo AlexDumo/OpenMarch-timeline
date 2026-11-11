@@ -41,6 +41,8 @@ import {
     type RoutePointInput,
 } from "./timelineRoutes";
 import {
+    lastLegBulge,
+    markArcsInTransaction,
     NOTHING_REHOMED,
     writeRouteGeometryInTransaction,
     type RehomeReport,
@@ -257,7 +259,7 @@ export function pointsToStore(
     return points.map((p) => {
         const id = p.id ?? freshPointId(taken);
         taken.add(id);
-        return storedPoint(id, p.at, p.tension);
+        return storedPoint(id, p.at, p.tension, p.bulge);
     });
 }
 
@@ -362,6 +364,7 @@ export async function drawGroupRouteInTransaction({
             .values({ geometry: json })
             .returning()
             .get())!;
+        await markArcsInTransaction(tx, geometry);
         let adjustsRemoved = 0;
         for (const m of members)
             if (await setLane(tx, m, route.id, offsets.get(m.marcherId)!))
@@ -428,12 +431,15 @@ export async function editGroupRoutePointsInTransaction({
     routeId,
     points,
     drag = false,
+    toBulge,
 }: {
     tx: DbTransaction;
     routeId: number;
     points: readonly RoutePointInput[];
     /** A point drag: it stops short rather than crowd Adjust keys (AP-R11) */
     drag?: boolean;
+    /** The last leg's bulge (R-14″): a number sets it, null clears it, undefined keeps it */
+    toBulge?: number | null;
 }): Promise<RehomeReport> {
     const current = await routeGeometryOf(tx, routeId);
     const walkers = await walkersOf(tx, routeId);
@@ -483,7 +489,13 @@ export async function editGroupRoutePointsInTransaction({
         if (!keepFrom && starts.length > 0) from = meanOf(starts);
         if (!keepTo) to = meanOf(ends);
     }
-    const geometry: RouteGeometry = { v: 1, from, to, points: routePoints };
+    const geometry: RouteGeometry = {
+        v: 1,
+        from,
+        to,
+        ...lastLegBulge(current, toBulge),
+        points: routePoints,
+    };
     return await mapDbErrors(() =>
         writeRouteGeometryInTransaction(tx, routeId, geometry, { drag }),
     );
@@ -575,8 +587,9 @@ export async function ownPathInTransaction({
             v: 1,
             from: add(g.from),
             to: add(g.to),
+            ...(g.toBulge === undefined ? {} : { toBulge: g.toBulge }),
             points: g.points.map((p) =>
-                storedPoint(p.id, add(p.at), p.tension),
+                storedPoint(p.id, add(p.at), p.tension, p.bulge),
             ),
         };
         assertValid(validateRouteGeometry(geometry), "route");
@@ -590,6 +603,7 @@ export async function ownPathInTransaction({
                 .values({ geometry: JSON.stringify(geometry) })
                 .returning()
                 .get())!;
+            await markArcsInTransaction(tx, geometry);
             await tx
                 .update(L)
                 .set({ route_id: route.id, offset_x: null, offset_y: null })

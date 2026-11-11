@@ -32,6 +32,15 @@ muts = {
  'M6 joiner targets ordered by row id instead of (slot, marcher)': ('oracle.mjs',
    ".sort((a, b) => a.slot - b.slot || a.marcher - b.marcher)",
    ".sort((a, b) => a.id - b.id)"),
+ 'M10 arc leg measured with half its angle (R-14″)': ('geom.mjs',
+   "* 4 * Math.atan(2 * Math.abs(k));",
+   "* 2 * Math.atan(2 * Math.abs(k));"),
+ 'M11 leg into B reads toBulge when its point was dropped on B (the #816 review bug)': ('geom.mjs',
+   "(intoB === undefined ? toBulge : pts[intoB].bulge)",
+   "toBulge"),
+ 'M12 a group member\'s own first leg straight, not the route\'s arc (R-14″)': ('geom.mjs',
+   "const first = p0 && 'arc' in p0 ? arcLeg(A, W1, p0.arc) :",
+   "const first = false ? arcLeg(A, W1, p0.arc) :"),
 }
 for name, (f, old, new) in muts.items():
     d = os.path.join(tmp, 'mut'); shutil.rmtree(d, ignore_errors=True); shutil.copytree(base, d)

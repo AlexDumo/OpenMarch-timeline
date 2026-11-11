@@ -21,6 +21,7 @@ import {
     ADJUST_MODEL_USER_VERSION,
     LANE_MODEL_USER_VERSION,
     TRAIL_MODEL_USER_VERSION,
+    ARC_MODEL_USER_VERSION,
 } from "@om-electron/database/fileVersion";
 import { schema } from "@/global/database/db";
 import type { DbConnection, DbTransaction } from "./types";
@@ -199,3 +200,7 @@ export const markAdjustModelInTransaction = (tx: DbTransaction) =>
 /** Writes the trail file version (13) with a file's first Follow (pathways step 4, Appendix K). */
 export const markTrailModelInTransaction = (tx: DbTransaction) =>
     raiseFileVersion(tx, TRAIL_MODEL_USER_VERSION);
+
+/** Writes the arc file version (14) with a file's first arc leg (pathways step 10a, Appendix L). */
+export const markArcModelInTransaction = (tx: DbTransaction) =>
+    raiseFileVersion(tx, ARC_MODEL_USER_VERSION);

@@ -109,13 +109,23 @@ export function makeTrail(origins, waypoints, path) {
 /**
  * R-14 (v0.9 steps 1 and 2): the walked path of a founding route span, from A through the route's inner points to B.
  * Written independently of the app's geometry (linear scans, its own Catmull–Rom and Bézier code), so the two
- * check each other. `pts` are the route's points ({at, tension?}); `F`, `G` its from and to (tangent neighbours).
+ * check each other. `pts` are the route's points ({at, tension?, bulge?}); `F`, `G` its from and to (tangent neighbours);
+ * `toBulge` the last leg's bulge. R-14″ (step 10a): a leg whose arriving point (or `toBulge`, for the leg into B) has a
+ * bulge is R-8's arc, measured exactly as r·θ from the centre form (r = (h² + s²)/(2|s|), θ = 4·atan(2|k|)), not sampled.
  */
-export function routeWalk(A, pts, B, F = A, G = B) {
+export function arcLen(P0, P3, k) {
+  const c = dist(P0, P3);
+  if (c < EPS_GEOM || Math.abs(2 * Math.atan(2 * k)) < 1e-12) return c;      // R-8's straight cases
+  const h = c / 2, s = k * c;
+  return ((h * h + s * s) / (2 * Math.abs(s))) * 4 * Math.atan(2 * Math.abs(k));
+}
+export function routeWalk(A, pts, B, F = A, G = B, toBulge = undefined) {
   const V = [A], tau = [0], src = [-1];
   pts.forEach((q, i) => { if (dist(V[V.length - 1], q.at) >= EPS_GEOM) { V.push(q.at); tau.push(q.tension > 0 ? q.tension : 0); src.push(i); } });
-  while (V.length > 1 && dist(V[V.length - 1], B) < EPS_GEOM) { V.pop(); tau.pop(); src.pop(); }
+  let intoB;   // R-14″: inner points dropped at B hand the leg into B the bulge of the first of them
+  while (V.length > 1 && dist(V[V.length - 1], B) < EPS_GEOM) { V.pop(); tau.pop(); intoB = src.pop(); }
   V.push(B); tau.push(0); src.push(-1);
+  const bulgeOf = (j) => { const k = j + 1 === V.length - 1 ? (intoB === undefined ? toBulge : pts[intoB].bulge) : pts[src[j + 1]].bulge; return typeof k === 'number' && Number.isFinite(k) && k !== 0 ? k : null; };
   const m = V.length - 2;
   // Tangent neighbours from the route alone: N = [F, P'..., G]; rep[i] is P_i's representative's index in N
   const N = [F], rep = [];
@@ -137,7 +147,8 @@ export function routeWalk(A, pts, B, F = A, G = B) {
     return [k0 * P0[0] + k1 * c1[0] + k2 * c2[0] + k3 * P3[0], k0 * P0[1] + k1 * c1[1] + k2 * c2[1] + k3 * P3[1]]; };
   const pieces = [], D = [0];
   for (let j = 0; j <= m; j++) {
-    const P0 = V[j], P3 = V[j + 1], h0 = handle(j), h3 = handle(j + 1);
+    const P0 = V[j], P3 = V[j + 1], h0 = handle(j), h3 = handle(j + 1), k = bulgeOf(j);
+    if (k !== null) { pieces.push({ arc: k }); D.push(D[j] + arcLen(P0, P3, k)); continue; }
     if (!h0 && !h3) { pieces.push(null); D.push(D[j] + Math.hypot(P3[0] - P0[0], P3[1] - P0[1])); continue; }
     const c1 = j === 0 ? [P0[0] + (P3[0] - P0[0]) / 3, P0[1] + (P3[1] - P0[1]) / 3] : h0 ? h0.out : P0;
     const c2 = j === m ? [P3[0] + (P0[0] - P3[0]) / 3, P3[1] + (P0[1] - P3[1]) / 3] : h3 ? h3.in : P3;
@@ -152,12 +163,14 @@ export function routeWalk(A, pts, B, F = A, G = B) {
     at(p) {
       if (p <= 0) return A;
       if (p >= 1) return B;
+      if (V.length === 2 && pieces[0]) return arcPoint(A, B, pieces[0].arc, p);   // one arc leg is R-8's arc itself
       if (V.length === 2 || L < EPS_GEOM) return lerp(A, B, p);   // [A, B] is R-7, bit for bit (QA-RT-2)
       const d = p * L;
       let j = 0;
       while (j < V.length - 2 && !(d < D[j + 1])) j++;
       const x = d - D[j], pc = pieces[j];
       if (!pc) return lerp(V[j], V[j + 1], x / (D[j + 1] - D[j]));
+      if ('arc' in pc) return arcPoint(V[j], V[j + 1], pc.arc, x / (D[j + 1] - D[j]));
       let i = 1;
       while (i <= K && !(x < pc.e[i])) i++;
       if (i > K) return V[j + 1];
@@ -192,8 +205,8 @@ export function ftlDest(shapePath, pts, n, reverse) {
  */
 export function makeRouteTrail(origins, route, path) {
   if (!origins.length) return makeTrail(origins, [], path);
-  const W = routeWalk(origins[origins.length - 1], route.points, path.at(0), route.from, route.to);
-  if (W.V.length === 2 || W.L < EPS_GEOM) return makeTrail(origins, [], path);
+  const W = routeWalk(origins[origins.length - 1], route.points, path.at(0), route.from, route.to, route.toBulge);
+  if ((W.V.length === 2 && !W.pieces[0]) || W.L < EPS_GEOM) return makeTrail(origins, [], path);
   const cum = cumOf(origins), lineLen = cum[cum.length - 1], destOffset = lineLen + W.L, K = 64;
   const bez = (P0, c1, c2, P3, t) => { const u = 1 - t, k0 = u * u * u, k1 = 3 * u * u * t, k2 = 3 * u * t * t, k3 = t * t * t;
     return [k0 * P0[0] + k1 * c1[0] + k2 * c2[0] + k3 * P3[0], k0 * P0[1] + k1 * c1[1] + k2 * c2[1] + k3 * P3[1]]; };
@@ -204,6 +217,7 @@ export function makeRouteTrail(origins, route, path) {
     while (j < W.V.length - 2 && !(d < W.D[j + 1])) j++;
     const x = d - W.D[j], pc = W.pieces[j];
     if (!pc) return lerp(W.V[j], W.V[j + 1], x / (W.D[j + 1] - W.D[j]));
+    if ('arc' in pc) return arcPoint(W.V[j], W.V[j + 1], pc.arc, x / (W.D[j + 1] - W.D[j]));
     let i = 1;
     while (i <= K && !(x < pc.e[i])) i++;
     if (i > K) return W.V[j + 1];
@@ -329,18 +343,20 @@ export function profileAt(keys, x) {
   return [p[0] + f * (q[0] - p[0]), p[1] + f * (q[1] - p[1])];
 }
 
-export function groupWalk(A, pts, B, F, G, o, adjust = null) {
-  const W = routeWalk(F, pts, G, F, G), m = W.V.length - 2;
+export function groupWalk(A, pts, B, F, G, o, adjust = null, toBulge = undefined) {
+  const W = routeWalk(F, pts, G, F, G, toBulge), m = W.V.length - 2;
   const keys = laneProfile(W, pts, adjust).keys;
   const add = (q) => [q[0] + o[0], q[1] + o[1]];
   // R-14′ item 7: ((q + o) + δ); nothing is added without a profile, so step 15's walk is bit-identical (item 9)
   const placedAt = (q, x) => { const p = add(q); if (!keys.length) return p; const d = profileAt(keys, x); return [p[0] + d[0], p[1] + d[1]]; };
-  if (m < 1) return { W, uFirst: NaN, uLast: NaN, first: null, last: null, at: (p) => (p <= 0 ? A : p >= 1 ? B : lerp(A, B, p)) };
+  if (m < 1) return { W, uFirst: NaN, uLast: NaN, first: null, last: null, at: (p) => (p <= 0 ? A : p >= 1 ? B : W.pieces[0] ? arcPoint(A, B, W.pieces[0].arc, p) : lerp(A, B, p)) };
   const uFirst = W.D[1] / W.L, uLast = W.D[m] / W.L;
   const K = 64;
   const bez = (P0, c1, c2, P3, t) => { const u = 1 - t, k0 = u * u * u, k1 = 3 * u * u * t, k2 = 3 * u * t * t, k3 = t * t * t;
     return [k0 * P0[0] + k1 * c1[0] + k2 * c2[0] + k3 * P3[0], k0 * P0[1] + k1 * c1[1] + k2 * c2[1] + k3 * P3[1]]; };
   // A leg: a line, or a cubic measured on K samples as R-14's Length
+  // R-14″: a route's arc leg stays R-8's arc (its bulge) on each member's own leg
+  const arcLeg = (S, E, k) => ({ S, E, len: arcLen(S, E, k), at: (f) => arcPoint(S, E, k, f) });
   const leg = (S, E, c1, c2) => {
     if (!c1) return { S, E, len: Math.hypot(E[0] - S[0], E[1] - S[1]), at: (f) => lerp(S, E, f) };
     const e = [0];
@@ -362,8 +378,8 @@ export function groupWalk(A, pts, B, F, G, o, adjust = null) {
   // A leg whose ends are within EPS_GEOM is a line, so a member standing on its point doesn't loop out to a handle
   const near = (p, q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < EPS_GEOM;
   const smooth1 = W.tau[1] > 0 && !near(A, W1), smoothM = W.tau[m] > 0 && !near(Wm, B);
-  const first = smooth1 ? leg(A, W1, [A[0] + (W1[0] - A[0]) / 3, A[1] + (W1[1] - A[1]) / 3], placedAt(p0.c2, W.D[1])) : leg(A, W1, null, null);
-  const last = smoothM ? leg(Wm, B, placedAt(pm.c1, W.D[m]), [B[0] + (Wm[0] - B[0]) / 3, B[1] + (Wm[1] - B[1]) / 3]) : leg(Wm, B, null, null);
+  const first = p0 && 'arc' in p0 ? arcLeg(A, W1, p0.arc) : smooth1 ? leg(A, W1, [A[0] + (W1[0] - A[0]) / 3, A[1] + (W1[1] - A[1]) / 3], placedAt(p0.c2, W.D[1])) : leg(A, W1, null, null);
+  const last = pm && 'arc' in pm ? arcLeg(Wm, B, pm.arc) : smoothM ? leg(Wm, B, placedAt(pm.c1, W.D[m]), [B[0] + (Wm[0] - B[0]) / 3, B[1] + (Wm[1] - B[1]) / 3]) : leg(Wm, B, null, null);
   return {
     W, uFirst, uLast, first, last,
     at(p) {

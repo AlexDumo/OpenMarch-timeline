@@ -68,7 +68,7 @@ describe("a path's handles", () => {
 
     it("a click mid-leg adds a corner there, between its neighbors, keeping the others' ids", () => {
         const added = clickPathHandle(path, midpointKey(1))!;
-        expect(added.map((c) => [c.id, c.at])).toEqual([
+        expect(added.points.map((c) => [c.id, c.at])).toEqual([
             ["a", { x: 0, y: 50 }],
             [undefined, { x: 50, y: 50 }],
             ["b", { x: 100, y: 50 }],
@@ -102,23 +102,33 @@ describe("placing a corner while drawing", () => {
 describe("dragging", () => {
     it("a corner lands on half steps, and anywhere with fine", () => {
         const to = { x: 12.3, y: 61.7 };
-        expect(dragPathHandle(path, "p0", to, env)[0]).toEqual({
+        expect(dragPathHandle(path, "p0", to, env).points[0]).toEqual({
             id: "a",
             at: { x: 10, y: 60 },
         });
-        expect(dragPathHandle(path, "p0", to, fine)[0]!.at).toEqual(to);
+        expect(dragPathHandle(path, "p0", to, fine).points[0]!.at).toEqual(to);
     });
 
     it("a corner keeps its direction from the point before with constrain, only its distance changing", () => {
         // Corner b sits right of corner a: constrain keeps it on that line
-        const moved = dragPathHandle(path, "p1", { x: 72, y: 66 }, constrain);
+        const moved = dragPathHandle(
+            path,
+            "p1",
+            { x: 72, y: 66 },
+            constrain,
+        ).points;
         expect(moved[1]!.at.y).toBeCloseTo(50);
         expect(moved[1]!.at.x).toBeCloseTo(70);
         expect(pathHonors(path, "p1")).toEqual({ constrain: "keepDirection" });
     });
 
     it("a midpoint adds a corner and drags it, reading neither constrain nor from center", () => {
-        const moved = dragPathHandle(path, "m1", { x: 52, y: 81 }, constrain);
+        const moved = dragPathHandle(
+            path,
+            "m1",
+            { x: 52, y: 81 },
+            constrain,
+        ).points;
         expect(moved).toHaveLength(3);
         expect(moved[1]).toEqual({ at: { x: 50, y: 80 } });
         expect(pathHonors(path, "m1")).toEqual({});
@@ -126,13 +136,13 @@ describe("dragging", () => {
 });
 
 describe("the menus", () => {
-    it("a point's: Corner | Smooth (Roundness when smooth) and Delete point; a leg's: Add point here and Straight | Curved", () => {
+    it("a point's: Corner | Smooth (Roundness when smooth) and Delete point; a leg's: Add point here and Straight | Curved | Arc", () => {
         const values = (key: string, shape = path) =>
             PATH_MENU.sections(shape, 1, key)?.flatMap((s) =>
                 s.items.map((i) => i.value),
             );
         expect(values("p0")).toEqual(["corner", "smooth", "delete"]);
-        expect(values("m0")).toEqual(["add", "straight", "curved"]);
+        expect(values("m0")).toEqual(["add", "straight", "curved", "arc"]);
         const smooth = PATH_MENU.pick(path, 1, "p0", "smooth", env)!;
         expect(smooth.params.points[0]!.tension).toBe(1);
         expect(smooth.selected).toBe("p0");
