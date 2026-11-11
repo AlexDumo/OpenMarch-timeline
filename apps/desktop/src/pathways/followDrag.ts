@@ -57,6 +57,11 @@ export interface FollowDrag {
      * Off (absent) by default: they stand at their end spots.
      */
     readonly preview?: boolean;
+    /**
+     * The middle marcher of the line under the pointer while the ends wait to be grabbed (step
+     * 4d): it takes no press, and the note by it says to grab an end. Absent or null elsewhere.
+     */
+    readonly hover?: number | null;
 }
 
 /** Even's steps: the finest choice, and the first offered */
@@ -76,46 +81,117 @@ export const followEnds = (follow: FollowDrag): number[] =>
         ? [follow.order[0]!, follow.order[follow.order.length - 1]!]
         : [...follow.order];
 
-const plans = new WeakMap<
-    PathSession,
-    { plan: TrailDragPlan; spacing: TrailSpacing } | null
->();
+type Planned = { plan: TrailDragPlan; spacing: TrailSpacing } | null;
 
-/** AP-T8's plan and the spacing it uses, worked out once per session state */
-function followPlanned(
-    s: PathSession,
-): { plan: TrailDragPlan; spacing: TrailSpacing } | null {
+/** AP-T8's plan and the spacing it uses for the line `f` and `points` (stored, as written) */
+function planFollow(
+    f: FollowDrag,
+    points: ReturnType<typeof storedPoints>,
+): { plan: TrailDragPlan; spacing: TrailSpacing } {
+    const starts = trailLine(f).map((id): [number, number] => {
+        const p = f.starts.get(id)!;
+        return [p.x, p.y];
+    });
+    let plan = planTrailDrag(starts, points, f.spacing, f.step);
+    // Even never goes past its limit (it shrinks as points are removed): held at the limit,
+    // and Keep spacing while the limit is under Even's finest step
+    let spacing = f.spacing;
+    const limit = evenLimitOf(plan);
+    if (spacing.kind === "even" && limit !== null && spacing.steps > limit) {
+        spacing =
+            limit < EVEN_STEP
+                ? { kind: "keep" }
+                : { kind: "even", steps: limit };
+        plan = planTrailDrag(starts, points, spacing, f.step);
+    }
+    return { plan, spacing };
+}
+
+const plans = new WeakMap<PathSession, Planned>();
+
+/** AP-T8's plan and the spacing it uses for the points placed, worked out once per session state */
+function followPlanned(s: PathSession): Planned {
     if (plans.has(s)) return plans.get(s)!;
     const f = s.follow;
-    let planned: { plan: TrailDragPlan; spacing: TrailSpacing } | null = null;
-    if (f && f.grabbed !== null) {
-        const starts = trailLine(f).map((id): [number, number] => {
-            const p = f.starts.get(id)!;
-            return [p.x, p.y];
-        });
-        // The points as written, smooth ones with their roundness, so the preview is the write
-        const points = storedPoints(s.points);
-        let plan = planTrailDrag(starts, points, f.spacing, f.step);
-        // Even never goes past its limit (it shrinks as points are removed): held at the limit,
-        // and Keep spacing while the limit is under Even's finest step
-        let spacing = f.spacing;
-        const limit = evenLimitOf(plan);
-        if (
-            spacing.kind === "even" &&
-            limit !== null &&
-            spacing.steps > limit
-        ) {
-            spacing =
-                limit < EVEN_STEP
-                    ? { kind: "keep" }
-                    : { kind: "even", steps: limit };
-            plan = planTrailDrag(starts, points, spacing, f.step);
-        }
-        planned = { plan, spacing };
-    }
+    // The points as written, smooth ones with their roundness, so the preview is the write
+    const planned =
+        f && f.grabbed !== null ? planFollow(f, storedPoints(s.points)) : null;
     plans.set(s, planned);
     return planned;
 }
+
+/**
+ * The drawing's plan (step 4d): the points placed and, while drawing, the pointer's landed spot
+ * as one more, so the line follows the pointer before the click. Kept apart from the write's
+ * (`followPlanned`): finishing writes what's placed. One entry, keyed by what the plan reads, so
+ * a session that changes something else (▶ Preview, a hover) doesn't plan again.
+ */
+let drawnCache: {
+    starts: FollowDrag["starts"];
+    order: FollowDrag["order"];
+    grabbed: number | null;
+    spacing: TrailSpacing;
+    step: number;
+    points: PathSession["points"];
+    x: number;
+    y: number;
+    planned: Planned;
+} | null = null;
+
+function followDrawnPlanned(s: PathSession): Planned {
+    const f = s.follow;
+    const p = s.pointer;
+    const last = s.points.at(-1)?.at;
+    if (
+        !f ||
+        f.grabbed === null ||
+        s.phase !== "drawing" ||
+        !p ||
+        (last && last.x === p.x && last.y === p.y)
+    )
+        return followPlanned(s);
+    const c = drawnCache;
+    if (
+        c &&
+        c.starts === f.starts &&
+        c.order === f.order &&
+        c.grabbed === f.grabbed &&
+        sameSpacing(c.spacing, f.spacing) &&
+        c.step === f.step &&
+        c.points === s.points &&
+        c.x === p.x &&
+        c.y === p.y
+    )
+        return c.planned;
+    const planned = planFollow(f, [
+        ...storedPoints(s.points),
+        { at: [p.x, p.y] },
+    ]);
+    drawnCache = {
+        starts: f.starts,
+        order: f.order,
+        grabbed: f.grabbed,
+        spacing: f.spacing,
+        step: f.step,
+        points: s.points,
+        x: p.x,
+        y: p.y,
+        planned,
+    };
+    return planned;
+}
+
+const sameSpacing = (a: TrailSpacing, b: TrailSpacing) =>
+    a.kind === b.kind &&
+    (a.kind !== "even" || (b.kind === "even" && a.steps === b.steps));
+
+/**
+ * What the drawing shows while a trail is drawn (step 4d): `followPlanOf` with the pointer's
+ * landed spot as a provisional last point, so the end spots and the marchers follow the pointer.
+ * Without a pointer (or with it on the last point placed) it is `followPlanOf`'s own.
+ */
+export const followDrawnPlanOf = (s: PathSession): TrailDragPlan | null =>
+    followDrawnPlanned(s)?.plan ?? null;
 
 /**
  * AP-T8's Ends for the session as drawn so far: the way, each member's end on it and its spot.
@@ -200,7 +276,7 @@ const updateFollow = (
 export function grabEnd(id: number): void {
     updateFollow((s, f) => {
         if (!followEnds(f).includes(id)) return s;
-        const follow = { ...f, grabbed: id };
+        const follow = { ...f, grabbed: id, hover: null };
         return {
             ...s,
             follow,
@@ -230,6 +306,15 @@ export function cancelFollowDrawing(): boolean {
         },
     });
     return true;
+}
+
+/** The middle marcher under the pointer before an end is grabbed (step 4d), or null */
+export function setFollowHover(id: number | null): void {
+    updateFollow((s, f) =>
+        (f.hover ?? null) === id || (f.grabbed !== null && id !== null)
+            ? s
+            : { ...s, follow: { ...f, hover: id } },
+    );
 }
 
 /** The path bar's Spacing (DL-7): Keep spacing, or Even N steps */
@@ -300,15 +385,14 @@ export interface FollowMarchers {
 
 /**
  * The line's marchers at their end spots while a trail is drawn (DL-16): the spots AP-T8 writes,
- * with ▶ Preview's walk when it's on. Null before a point is placed, and with Keep end spots,
- * whose marchers already stand on theirs.
+ * with the pointer as the next point while drawing (step 4d), and ▶ Preview's walk when it's on.
+ * Null until there's a trail (`followHasTrail`), and with Keep end spots, whose marchers already stand on theirs.
  */
 export function followMarchersOf(s: PathSession | null): FollowMarchers | null {
     if (!s) return null;
     const f = s.follow;
-    if (!f || f.grabbed === null || s.points.length === 0) return null;
-    if (keepsEndSpots(f)) return null;
-    const plan = followPlanOf(s);
+    if (!f || !followHasTrail(s) || keepsEndSpots(f)) return null;
+    const plan = followDrawnPlanOf(s);
     if (!plan) return null;
     const ids = trailLine(f);
     const spots = plan.spots.map(([x, y]) => ({ x, y }));
@@ -318,4 +402,16 @@ export function followMarchersOf(s: PathSession | null): FollowMarchers | null {
         spots,
         walk: (p) => trailDragPreview(plan, p).map(([x, y]) => ({ x, y })),
     };
+}
+
+/**
+ * Whether the drawing has a trail to show yet (step 4d): a point placed, or the pointer out on
+ * the field while an end is grabbed
+ */
+export function followHasTrail(s: PathSession): boolean {
+    return (
+        !!s.follow &&
+        s.follow.grabbed !== null &&
+        (s.points.length > 0 || s.pointer !== null)
+    );
 }

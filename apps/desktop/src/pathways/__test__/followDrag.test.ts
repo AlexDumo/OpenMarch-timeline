@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+import { FieldDimming } from "@/field/three/fieldDimming";
+import { useShapeFocus } from "@/shapes/field/useShapeFocus";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import type { FieldPointer } from "@/field/editor/fieldEditor";
 import { setShapeField } from "@/shapes/field/shapeField";
@@ -9,6 +12,7 @@ import {
 import { drawingOf, pathPenMode } from "../pathPenMode";
 import {
     clearPath,
+    setPointer,
     shapeOf,
     usePathPenStore,
     type PathSession,
@@ -17,6 +21,7 @@ import type { PathTarget } from "../pathTarget";
 import {
     cancelFollowDrawing,
     evenLimitOf,
+    followDrawnPlanOf,
     followHit,
     followMarchersOf,
     followPlanOf,
@@ -32,6 +37,7 @@ import {
 } from "../followDrag";
 import { bigSteps, trailDistances } from "../PathEditor";
 import { curveOf } from "../pathEdit";
+import { useFollowFocus } from "../useFollowFocus";
 
 /**
  * The Follow tool on the field (pathways step 4b, spec Appendix L): the selected line's ends
@@ -231,8 +237,13 @@ describe("the Follow tool (pathways step 4b)", () => {
     it("step 4c (DL-16, DL-17, QA-DL-15): the real marchers stand at the spots written, their starts as ghosts; ▶ Preview walks them as they will walk", () => {
         open();
         const right = starts.get(5)!;
-        // Nothing drawn yet: the marchers stay where the show has them
-        expect(drawingOf(session())!.marchersAt).toBeUndefined();
+        // Nothing drawn yet: the line is drawn once, its real marchers at the start flag (step 4d)
+        const before = drawingOf(session())!;
+        expect(before.marchersAt).toEqual({
+            ids: [1, 2, 3, 4, 5],
+            spots: [1, 2, 3, 4, 5].map((id) => starts.get(id)),
+        });
+        expect(before.rings).toEqual([]);
         drag(right, { x: right.x + 10 * STEP, y: right.y });
         pathPenMode.move(at(right.x + 10 * STEP, right.y - 6 * STEP));
         pathPenMode.press(at(right.x + 10 * STEP, right.y - 6 * STEP), press);
@@ -413,5 +424,145 @@ describe("the Follow tool (pathways step 4b)", () => {
         });
         expect(followHit(f, { x: X0 + 4 * STEP, y: Y0 }, 4)).toEqual({ id: 3, end: false }); // prettier-ignore
         expect(followHit(f, { x: X0, y: Y0 + 5 * STEP }, 4)).toBeNull();
+    });
+});
+
+describe("the Follow tool, step 4d", () => {
+    const line = [1, 2, 3, 4, 5].map((id): [number, number] => [starts.get(id)!.x, starts.get(id)!.y]); // prettier-ignore
+    /** The plan for the line led by 5 through `points` */
+    const planThrough = (points: { x: number; y: number }[]) =>
+        planTrailDrag(line, points.map((p) => ({ at: [p.x, p.y] as [number, number] })), { kind: "keep" }, STEP); // prettier-ignore
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it("pull arrows on the two ends, pointing out along the line, until an end is grabbed", () => {
+        open();
+        const arrows = drawingOf(session())!.pullArrows!;
+        expect(arrows).toEqual([
+            { at: starts.get(1), dir: { x: -1, y: 0 } },
+            { at: starts.get(5), dir: { x: 1, y: 0 } },
+        ]);
+        // A bent end points along its own last stretch, not the line's overall way
+        const bent = new Map(starts);
+        bent.set(5, { x: X0 + 6 * STEP, y: Y0 + 2 * STEP });
+        open(null, bent);
+        const [, right] = drawingOf(session())!.pullArrows!;
+        expect(right!.dir.x).toBe(0);
+        expect(right!.dir.y).toBeCloseTo(1, 9);
+        open();
+        drag(starts.get(5)!, { x: X0 + 18 * STEP, y: Y0 });
+        expect(drawingOf(session())!.pullArrows).toBeUndefined();
+    });
+
+    it("over a middle marcher, a note says to drag from an end; over an end, none", () => {
+        open();
+        const middle = starts.get(3)!;
+        expect(pathPenMode.cursorAt(at(middle.x, middle.y))).toBe("default");
+        expect(drawingOf(session())!.tip).toEqual({
+            at: middle,
+            text: "Drag from an end of the line",
+        });
+        expect(pathPenMode.cursorAt(at(X0, Y0))).toBe("grab");
+        expect(drawingOf(session())!.tip).toBeUndefined();
+        pathPenMode.cursorAt(at(middle.x, middle.y));
+        pathPenMode.leave();
+        expect(drawingOf(session())!.tip).toBeUndefined();
+    });
+
+    it("while drawing, the marchers and end spots follow the pointer; the write is what's placed", () => {
+        open();
+        const right = starts.get(5)!;
+        drag(right, { x: right.x + 10 * STEP, y: right.y });
+        const placed = session().points.map((p) => p.at);
+        const pointer = { x: right.x + 10 * STEP, y: right.y - 8 * STEP };
+        setPointer(pointer);
+        const s = session();
+        const drawn = planThrough([...placed, pointer]);
+        const written = planThrough(placed);
+        expect(followDrawnPlanOf(s)!.spots).toEqual(drawn.spots);
+        expect(followPlanOf(s)!.spots).toEqual(written.spots);
+        expect(drawn.spots).not.toEqual(written.spots);
+        const d = drawingOf(s)!;
+        expect(d.spots).toEqual(drawn.spots.map(([x, y]) => ({ x, y })));
+        expect(d.marchersAt!.spots).toEqual(d.spots);
+        expect(d.lanes!.at(-1)).toEqual(d.spots);
+        // ▶ Preview walks the drawing's way
+        setFollowPreview(true);
+        expect(followMarchersOf(session())!.walk!(1)).toEqual(
+            trailDragPreview(drawn, 1).map(([x, y]) => ({ x, y })),
+        );
+        // A session that changes nothing the plan reads doesn't plan again
+        const plan = followDrawnPlanOf(session());
+        setFollowPreview(false);
+        expect(followDrawnPlanOf(session())).toBe(plan);
+        // The pointer on the last point placed, or off the field: the drawing is the write
+        setPointer(null);
+        expect(followDrawnPlanOf(session())).toBe(followPlanOf(session()));
+        setPointer(placed.at(-1)!);
+        expect(followDrawnPlanOf(session())).toBe(followPlanOf(session()));
+    });
+
+    it("live during the first press-and-drag out of an end, once a frame", () => {
+        vi.useFakeTimers();
+        open();
+        const right = starts.get(5)!;
+        pathPenMode.press(at(right.x, right.y), press);
+        pathPenMode.move(at(right.x + 3 * STEP, right.y));
+        pathPenMode.move(at(right.x + 5 * STEP, right.y - 4 * STEP));
+        // Not yet: the moves wait for the frame, and the last one wins
+        expect(session().pointer).toBeNull();
+        vi.advanceTimersToNextFrame();
+        const pointer = session().pointer!;
+        expect(Math.abs(pointer.x - (right.x + 5 * STEP))).toBeLessThan(STEP);
+        expect(session().points).toEqual([]);
+        expect(followMarchersOf(session())!.spots).toEqual(
+            planThrough([pointer]).spots.map(([x, y]) => ({ x, y })),
+        );
+        expect(followPlanOf(session())!.spots).toEqual(planThrough([]).spots);
+        // The release places the first point where it is, whatever the frame had
+        pathPenMode.move(at(right.x + 9 * STEP, right.y - 9 * STEP));
+        pathPenMode.release(at(right.x + 9 * STEP, right.y - 9 * STEP), null);
+        vi.advanceTimersToNextFrame();
+        expect(session().points).toHaveLength(1);
+        expect(session().pointer).toEqual(session().points[0]!.at);
+        // Escape before a waiting frame: the frame doesn't bring the pointer back
+        pathPenMode.move(at(right.x + 2 * STEP, right.y));
+        cancelFollowDrawing();
+        vi.advanceTimersToNextFrame();
+        expect(session().pointer).toBeNull();
+    });
+
+    it("a click on an end grabs it; moving and clicking places the first point", () => {
+        open();
+        const left = starts.get(1)!;
+        pathPenMode.press(at(left.x, left.y), press);
+        pathPenMode.release(at(left.x, left.y), { double: false, ownFirst: false }); // prettier-ignore
+        expect(session().follow!.grabbed).toBe(1);
+        expect(session().points).toEqual([]);
+        const to = at(left.x - 8 * STEP, left.y);
+        pathPenMode.move(to);
+        pathPenMode.press(to, press);
+        pathPenMode.release(to, { double: false, ownFirst: false });
+        expect(session().points).toHaveLength(1);
+        expect(session().points[0]!.at.x).toBeCloseTo(left.x - 8 * STEP, 6);
+    });
+
+    it("everyone but the line fades while the tool is open, and comes back when it closes", () => {
+        const dimming = new FieldDimming();
+        renderHook(() => useShapeFocus(dimming, useFollowFocus()));
+        expect(dimming.isDimmed(9)).toBe(false);
+        act(() => open());
+        expect(dimming.isDimmed(9)).toBe(true);
+        expect(dimming.isDimmed(3)).toBe(false);
+        // The line's own marchers stay drawn: the tool puts them where they're shown
+        expect(dimming.opacityOf(3)).toBe(1);
+        // Drawing doesn't set the fade again
+        const version = dimming.version;
+        act(() => setPointer({ x: X0, y: Y0 + 4 * STEP }));
+        expect(dimming.version).toBe(version);
+        act(() => clearPath());
+        expect(dimming.isDimmed(9)).toBe(false);
     });
 });

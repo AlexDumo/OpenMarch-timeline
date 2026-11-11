@@ -34,11 +34,14 @@ import { refitNeeded, type PathTarget } from "./pathTarget";
 import {
     followEnds,
     followHit,
+    followDrawnPlanOf,
+    followHasTrail,
     followMarchersOf,
-    followPlanOf,
     grabEnd,
+    setFollowHover,
     keepsEndSpots,
     trailLine,
+    type FollowDrag,
 } from "./followDrag";
 import tolgee from "@/global/singletons/Tolgee";
 import {
@@ -501,7 +504,47 @@ class PathPenMode implements FieldMode {
         if (!s || s.phase !== "drawing" || !env) return;
         // The Follow tool's ends still pulse: nothing is drawn yet
         if (s.follow && s.follow.grabbed === null) return;
-        setPointer(landCorner(shapeOf(s), pointer.field, env));
+        const at = landCorner(shapeOf(s), pointer.field, env);
+        // The Follow tool plans the line to the pointer (step 4d): once a frame at most
+        if (s.follow) this.pointerSoon(at);
+        else this.pointerNow(at);
+    }
+
+    /** The pointer the Follow tool's next frame plans to, and that frame (step 4d) */
+    private pendingPointer: XY | null = null;
+    private pointerFrame: number | null = null;
+
+    /**
+     * Sets the drawing's pointer on the next animation frame, the latest of the moves before it:
+     * the Follow tool plans the whole line to it, which for a big line costs a few milliseconds
+     */
+    private pointerSoon(at: XY) {
+        if (typeof requestAnimationFrame !== "function") {
+            this.pointerNow(at);
+            return;
+        }
+        this.pendingPointer = at;
+        this.pointerFrame ??= requestAnimationFrame(() => {
+            this.pointerFrame = null;
+            const next = this.pendingPointer;
+            this.pendingPointer = null;
+            const s = this.session;
+            // Only while still drawing out a grabbed end: a cancel or finish in between wins
+            if (next && s?.phase === "drawing" && s.follow?.grabbed != null)
+                setPointer(next);
+        });
+    }
+
+    /** Sets the drawing's pointer now, dropping one waiting for the next frame */
+    private pointerNow(at: XY | null) {
+        this.dropPendingPointer();
+        setPointer(at);
+    }
+
+    private dropPendingPointer() {
+        if (this.pointerFrame !== null) cancelAnimationFrame(this.pointerFrame);
+        this.pointerFrame = null;
+        this.pendingPointer = null;
     }
 
     /** The pointer at `pointer` with `roles`: the drag, or the preview, as they are now */
@@ -628,7 +671,7 @@ class PathPenMode implements FieldMode {
             points: [...p.base.points, { at: p.landed }],
         };
         shapeNewPoint(dragNewPoint(placed, pointer.field, env));
-        setPointer(null);
+        this.pointerNow(null);
     }
 
     move(pointer: FieldPointer): void {
@@ -656,6 +699,8 @@ class PathPenMode implements FieldMode {
         const p = this.held;
         const roles = p?.keys.roles();
         this.endHeld();
+        // What the release does is read from where it is, not a move waiting for its frame
+        this.dropPendingPointer();
         const s = this.session;
         if (!p || !s) return;
         if (s.phase === "drawing") {
@@ -666,7 +711,7 @@ class PathPenMode implements FieldMode {
                 if (p.moved && env) {
                     const at = landCorner(shapeOf(s), pointer.field, env);
                     addPoint(at);
-                    setPointer(at);
+                    this.pointerNow(at);
                 }
                 return;
             }
@@ -790,12 +835,13 @@ class PathPenMode implements FieldMode {
             return;
         }
         addPoint(at);
-        setPointer(at);
+        this.pointerNow(at);
     }
 
     cancel(): void {
         const p = this.held;
         this.endHeld();
+        this.dropPendingPointer();
         if (p?.lane) setLaneEdit(null);
         if (!p?.moved) return;
         if (this.session?.phase === "open")
@@ -824,6 +870,8 @@ class PathPenMode implements FieldMode {
                 const hit = env
                     ? followHit(s.follow, pointer.field, env.hitRadius)
                     : null;
+                // A middle marcher takes no press: the note by it says to grab an end
+                setFollowHover(hit && !hit.end ? hit.id : null);
                 return hit?.end ? "grab" : "default";
             }
             this.preview(pointer, rolesOf(pointer, "shape"));
@@ -856,8 +904,10 @@ class PathPenMode implements FieldMode {
     }
 
     leave(): void {
-        if (this.session?.phase === "drawing") setPointer(null);
-        else if (this.session?.hoverLane) setHoverLane(null);
+        if (this.session?.phase === "drawing") {
+            this.pointerNow(null);
+            setFollowHover(null);
+        } else if (this.session?.hoverLane) setHoverLane(null);
     }
 
     /**
@@ -1035,7 +1085,9 @@ function followDrawing(session: PathSession): FieldModeDrawing {
     // Keep end spots (AP-T9): the spots the line has, step 4's trail running on into the tail's;
     // From trail (AP-T8): where the line stops, as written
     const keep = grabbed && keepsEndSpots(follow);
-    const plan = keep ? null : followPlanOf(session);
+    // With the pointer as the next point while drawing (step 4d); the write is what's placed
+    const plan = keep ? null : followDrawnPlanOf(session);
+    const trail = followHasTrail(session);
     const spots = keep
         ? session.target.trail!.members.map((m) => m.to)
         : plan
@@ -1064,15 +1116,13 @@ function followDrawing(session: PathSession): FieldModeDrawing {
         openOutline: true,
         pathLine: "edited",
         stage: "drawing",
-        spots: session.points.length > 0 ? spots : [],
+        spots: trail ? spots : [],
         walks: [],
         handles: session.points.map((c) => c.at),
         addHandles: [],
         selectedHandles: [],
         rings: [],
-        lanes: [starts, ...(session.points.length > 0 ? [spots] : [])].filter(
-            (l) => l.length > 1,
-        ),
+        lanes: [starts, ...(trail ? [spots] : [])].filter((l) => l.length > 1),
         memberRings: line.map((id) => {
             const end = ends.includes(id);
             return {
@@ -1104,23 +1154,72 @@ function followDrawing(session: PathSession): FieldModeDrawing {
                 ...(!grabbed && end ? { pulse: true } : {}),
             };
         }),
+        ...(grabbed ? {} : { pullArrows: pullArrowsOf(follow) }),
         ...guidesFor(moving ? [moving] : [], outline ?? []),
         ...(tipText && moving ? { tip: { at: moving, text: tipText } } : {}),
-        ...realMarchers(session, starts, line),
+        ...grabEndTip(follow),
+        ...realMarchers(session, starts, line, keep ? spots : null),
+    };
+}
+
+/** Over a middle marcher before an end is grabbed (step 4d): the note to drag from an end */
+function grabEndTip(follow: FollowDrag): Pick<FieldModeDrawing, "tip"> {
+    if (follow.grabbed !== null || follow.hover == null) return {};
+    return {
+        tip: {
+            at: follow.starts.get(follow.hover)!,
+            text: tolgee.t(
+                "pathways.rings.grabEnd",
+                "Drag from an end of the line",
+            ),
+        },
     };
 }
 
 /**
+ * Step 4d's grab cue: on each end of the line, chevrons pointing out along the line's own way
+ * there, from the marcher next to it to the end. None for a line of one, which has no way.
+ */
+function pullArrowsOf(
+    follow: FollowDrag,
+): NonNullable<FieldModeDrawing["pullArrows"]> {
+    const { order, starts } = follow;
+    if (order.length < 2) return [];
+    return (
+        [
+            [order[0]!, order[1]!],
+            [order.at(-1)!, order.at(-2)!],
+        ] as const
+    ).flatMap(([end, next]) => {
+        const at = starts.get(end)!;
+        const from = starts.get(next)!;
+        const d = Math.hypot(at.x - from.x, at.y - from.y);
+        if (!(d > 0)) return [];
+        return [
+            {
+                at,
+                dir: { x: (at.x - from.x) / d, y: (at.y - from.y) / d },
+            },
+        ];
+    });
+}
+
+/**
  * Step 4c (DL-16, DL-17): the line's real marchers where they will stand, or walking with
- * ▶ Preview, and their starts as the shape tool's ghosts (#417); nothing before a point is placed
+ * ▶ Preview, and their starts as the shape tool's ghosts (#417). Until there's a trail they stand
+ * at the start flag, where the rings are (step 4d): the line is drawn once, where it's grabbed.
+ * With Keep end spots they stand on the spots they have (`kept`).
  */
 function realMarchers(
     session: PathSession,
     starts: readonly XY[],
     line: readonly number[],
+    kept: readonly XY[] | null,
 ): Pick<FieldModeDrawing, "marchersAt" | "rings" | "ringIds"> {
-    const marchersAt = followMarchersOf(session);
-    return marchersAt ? { marchersAt, rings: starts, ringIds: line } : {};
+    const marchersAt =
+        followMarchersOf(session) ?? (kept ? { ids: line, spots: kept } : null);
+    if (marchersAt) return { marchersAt, rings: starts, ringIds: line };
+    return { marchersAt: { ids: line, spots: starts } };
 }
 
 /** `drawingOf`'s work, uncached */

@@ -36,6 +36,7 @@ import {
 } from "@/shapes/field/groupDrawing";
 import HeldRolesChip, { HeldRolesChipBelowTip } from "./HeldRolesChip";
 import { useFieldUnderlayStore } from "@/field/editor/fieldUnderlayStore";
+import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -458,6 +459,16 @@ const GROUP_RING = "rgb(59, 130, 246)";
 const OWN_RING = "rgb(249, 115, 22)";
 const MEMBER_RING_SCALE = 1.9;
 const MEMBER_RING_WIDTH = 2;
+/** The Follow tool's pull arrows (pathways step 4d), in dot radii, and their loop in seconds */
+const PULL_ARROW = {
+    /** From the end's center to the first chevron */
+    first: 3,
+    /** Between chevrons, and how far each slides in one loop */
+    gap: 1.2,
+    /** Half a chevron's height, and its depth */
+    half: 0.7,
+    period: 1.1,
+} as const;
 
 /** How see-through a start ghost is (#417; the owner picked ghosts over rings in the lab) */
 const GHOST_OPACITY = 0.35;
@@ -586,6 +597,70 @@ export const controlsStyle = (
               opacity: calm ? CALM_CONTROLS_OPACITY : 1,
               transition: "opacity 150ms ease-out",
           };
+
+/**
+ * The Follow tool's grab cue on one end of the line (pathways step 4d): three chevrons pointing
+ * out along the line's way, each sliding outward from the end and fading in and out, a third of
+ * a loop apart, so they read as a steady pull, evenly spaced. SVG's own animation runs it: no React render or field
+ * frame per step. With the system's reduced motion on, they stand still, fading outward.
+ */
+const PullArrows = memo(function PullArrows({
+    at,
+    dir,
+    unit,
+}: {
+    at: { x: number; y: number };
+    dir: { x: number; y: number };
+    /** A dot's radius in field units */
+    unit: number;
+}) {
+    const still = prefersReducedMotion();
+    const angle = (Math.atan2(dir.y, dir.x) * 180) / Math.PI;
+    const { first, gap, half, period } = PULL_ARROW;
+    const h = half * unit;
+    return (
+        <g
+            transform={`translate(${at.x} ${at.y}) rotate(${angle})`}
+            data-testid="followPullArrows"
+            data-still={still || undefined}
+            pointerEvents="none"
+        >
+            {[0, 1, 2].map((k) => (
+                <g key={k} opacity={still ? 1 - k * 0.3 : 0}>
+                    <polyline
+                        points={`${-h},${-h} 0,0 ${-h},${h}`}
+                        transform={`translate(${(first + (still ? k * gap : 0)) * unit} 0)`}
+                        fill="none"
+                        stroke={OWN_RING}
+                        strokeWidth={MEMBER_RING_WIDTH}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        vectorEffect="non-scaling-stroke"
+                    />
+                    {!still && (
+                        <>
+                            <animateTransform
+                                attributeName="transform"
+                                type="translate"
+                                values={`0 0;${3 * gap * unit} 0`}
+                                dur={`${period}s`}
+                                begin={`${(-k * period) / 3}s`}
+                                repeatCount="indefinite"
+                            />
+                            <animate
+                                attributeName="opacity"
+                                values="0;1;0"
+                                dur={`${period}s`}
+                                begin={`${(-k * period) / 3}s`}
+                                repeatCount="indefinite"
+                            />
+                        </>
+                    )}
+                </g>
+            ))}
+        </g>
+    );
+});
 
 /**
  * The shape's outline, where its marchers start, their walks and its spots, in field units
@@ -786,11 +861,24 @@ const ShapeBody = memo(function ShapeBody({
                     data-testid="pathMemberRing"
                     data-kind={ring.kind}
                     data-pulse={ring.pulse || undefined}
-                    className={ring.pulse ? "animate-pulse" : undefined}
+                    // The pull arrows carry the motion (step 4d); the ring stays still beside them
+                    className={
+                        ring.pulse && !drawing.pullArrows?.length
+                            ? "animate-pulse"
+                            : undefined
+                    }
                     aria-label={ring.label}
                 >
                     <title>{ring.label}</title>
                 </MarkerSvg>
+            ))}
+            {drawing.pullArrows?.map((arrow, i) => (
+                <PullArrows
+                    key={`pull${i}`}
+                    at={arrow.at}
+                    dir={arrow.dir}
+                    unit={DOT_RADIUS * scale}
+                />
             ))}
             {drawing.walks.map(({ from: a, to: b }, i) => {
                 return (

@@ -332,7 +332,8 @@ export function usePathPenActions(): void {
     // ▶ Preview (step 4c, DL-17): while a trail is dragged out From trail, with something drawn,
     // and the system allows motion
     const canPreview = usePathPenStore(
-        (s) => followMarchersOf(s.session) !== null,
+        (s) =>
+            !!s.session?.points.length && followMarchersOf(s.session) !== null,
     );
     useActionHandler(
         "followPreview",
