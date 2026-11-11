@@ -524,13 +524,20 @@ class PathPenMode implements FieldMode {
             return;
         }
         this.pendingPointer = at;
+        // The drawing it was asked for: a frame landing on another one (a new grab) does nothing
+        const follow = this.session?.follow ?? null;
         this.pointerFrame ??= requestAnimationFrame(() => {
             this.pointerFrame = null;
             const next = this.pendingPointer;
             this.pendingPointer = null;
             const s = this.session;
             // Only while still drawing out a grabbed end: a cancel or finish in between wins
-            if (next && s?.phase === "drawing" && s.follow?.grabbed != null)
+            if (
+                next &&
+                s?.phase === "drawing" &&
+                s.follow === follow &&
+                s.follow?.grabbed != null
+            )
                 setPointer(next);
         });
     }

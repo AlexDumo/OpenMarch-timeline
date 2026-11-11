@@ -558,10 +558,11 @@ describe("the Follow tool, step 4d", () => {
         expect(dimming.isDimmed(3)).toBe(false);
         // The line's own marchers stay drawn: the tool puts them where they're shown
         expect(dimming.opacityOf(3)).toBe(1);
-        // Drawing doesn't set the fade again
-        const version = dimming.version;
+        // Drawing doesn't set the fade again: the line keeps its identity as the pointer moves
+        const setFocus = vi.spyOn(dimming, "setFocus");
         act(() => setPointer({ x: X0, y: Y0 + 4 * STEP }));
-        expect(dimming.version).toBe(version);
+        expect(setFocus).not.toHaveBeenCalled();
+        setFocus.mockRestore();
         act(() => clearPath());
         expect(dimming.isDimmed(9)).toBe(false);
     });
