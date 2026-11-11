@@ -1,4 +1,5 @@
 import type { Checkpoint, FieldProperties } from "@openmarch/core";
+import type { CheckpointNamer } from "./naming";
 
 /**
  * Field edits (#823): every change to the field's properties (checkpoints and settings) is a
@@ -60,9 +61,22 @@ export type FieldEditIssueCode =
     /** Warning: mirror only applies to the X axis */
     | "mirror-ignored"
     /** Warning: a series skipped positions that already have a checkpoint */
-    | "skipped-existing";
+    | "skipped-existing"
+    /** Warning: with mirror on, a twin wasn't added or moved because its spot already has a line */
+    | "mirror-twin-skipped"
+    /** Warning: a series left out positions past the field's outermost lines on its axis */
+    | "outside-field"
+    /**
+     * The edit changes the field's size or center (`diff.geometry`): a warning, or an error when
+     * the caller refuses that (`allowGeometryChange: false`, as the palette does)
+     */
+    | "field-resized";
 
-/** One changed value. `key` is dotted for nested settings: "theme.background", "sideDescriptions.terseLeft" */
+/**
+ * One changed value. `key` is dotted for nested settings: "theme.background",
+ * "sideDescriptions.terseLeft". A value that isn't there (no field label, a removed yard-number
+ * value) is `null`, never `undefined`, so the change survives JSON.
+ */
 export interface FieldValueChange {
     readonly key: string;
     readonly from: unknown;
@@ -78,11 +92,17 @@ export interface CheckpointMove {
     readonly to: number;
 }
 
+/** Names as the edits' args call them: `shortName` is the stored checkpoint's `terseName` */
+export interface CheckpointNames {
+    readonly name: string;
+    readonly shortName: string;
+}
+
 export interface CheckpointRename {
     readonly axis: FieldAxis;
     readonly id: number;
-    readonly from: { readonly name: string; readonly terseName: string };
-    readonly to: { readonly name: string; readonly terseName: string };
+    readonly from: CheckpointNames;
+    readonly to: CheckpointNames;
 }
 
 /** visible, useAsReference or fieldLabel changed */
@@ -119,6 +139,7 @@ export interface FieldEditDiff {
     /** True when the edit would change nothing (applying it writes nothing) */
     readonly empty: boolean;
     readonly checkpoints: {
+        /** Whole checkpoints, as stored (so the short name is `terseName` here) */
         readonly added: readonly Checkpoint[];
         readonly removed: readonly Checkpoint[];
         readonly moved: readonly CheckpointMove[];
@@ -158,7 +179,10 @@ export interface FieldEditResult {
  * Args. Every one is plain data.
  * -------------------------------------------------------------------------------------------- */
 
-/** Patch for updateCheckpoints. `shortName` is the checkpoint's `terseName`. */
+/**
+ * Patch for updateCheckpoints. `shortName` is the checkpoint's `terseName`. Names are trimmed
+ * before they're stored.
+ */
 export interface CheckpointPatch {
     readonly name?: string;
     readonly shortName?: string;
@@ -175,8 +199,8 @@ export interface AddCheckpointArgs {
      * `between`) it goes halfway into the largest gap, nearest the center among equal gaps.
      */
     readonly steps?: number;
-    /** Two checkpoint ids on `axis`: it goes halfway between them */
-    readonly between?: readonly [number, number];
+    /** Two checkpoints on `axis`: it goes halfway between them */
+    readonly between?: readonly [CheckpointRef, CheckpointRef];
     /** Default: named from its position ("47.5 yard line") */
     readonly name?: string;
     /** Default: named from its position ("47.5") */
@@ -187,7 +211,10 @@ export interface AddCheckpointArgs {
     readonly visible?: boolean;
     /** Default true */
     readonly useAsReference?: boolean;
-    /** X only: also add the twin at -steps (skipped when one is there), side names swapped */
+    /**
+     * X only: also add the twin at -steps, side names swapped. When that spot already has a line
+     * the twin is skipped, with a `mirror-twin-skipped` warning.
+     */
     readonly mirror?: boolean;
 }
 
@@ -200,6 +227,13 @@ export interface AddCheckpointSeriesArgs {
     readonly to: number;
     /** X only: also add each one's twin at -steps */
     readonly mirror?: boolean;
+    /**
+     * Default false: a dense series of lines shouldn't rewrite the coordinates written against
+     * the field's main lines. Pass true to make them references.
+     */
+    readonly useAsReference?: boolean;
+    /** Default true */
+    readonly visible?: boolean;
 }
 
 export interface RemoveCheckpointsArgs {
@@ -223,8 +257,9 @@ export interface MoveCheckpointsArgs {
     readonly snap?: number;
     /**
      * Default true: a checkpoint whose names are still the automatic ones for where it was is
-     * renamed for where it goes ("45 yard line" → "42.5 yard line"). Typed names and field labels
-     * never change.
+     * renamed for where it goes ("45 yard line" → "42.5 yard line"), and its field label follows
+     * when it was the automatic one too (set on a labelled yard line, cleared elsewhere). Typed
+     * names and typed labels never change.
      */
     readonly followNames?: boolean;
 }
@@ -292,8 +327,25 @@ export type TemplateKeep = "none" | "look" | "lines";
 export interface ApplyTemplateArgs {
     /** A key of FieldPropertiesTemplates, e.g. "COLLEGE_FOOTBALL_FIELD_NO_END_ZONES" */
     readonly template: string;
-    /** Default "look" */
+    /**
+     * Default "look". The customizer's Apply Field Type today replaces everything, which is
+     * "none": a caller standing in for that switch passes `keep: "none"` explicitly.
+     */
     readonly keep?: TemplateKeep;
+}
+
+/**
+ * What an edit run needs besides the field and its args. Plain functions, not data: a caller
+ * sets them once (the app's translations), and agents leave them out.
+ */
+export interface FieldEditOptions {
+    /** How automatic checkpoint names are worded. Default English (`ENGLISH_CHECKPOINT_NAMER`) */
+    readonly namer?: CheckpointNamer;
+    /**
+     * Default true. False refuses any edit that changes the field's size or center, with a
+     * `field-resized` error (the palette's actions never resize the field).
+     */
+    readonly allowGeometryChange?: boolean;
 }
 
 /** Every edit by name, with its args */

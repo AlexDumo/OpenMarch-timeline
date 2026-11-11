@@ -39,8 +39,8 @@ function expectWellFormed(before: FieldProperties, result: FieldEditResult) {
         expect(result.diff.checkpoints.added).toEqual([]);
         expect(result.diff.settings).toEqual([]);
     }
-    // JSON-serializable
-    expect(JSON.parse(JSON.stringify(result.diff))).toEqual(result.diff);
+    // JSON-serializable, with no undefined anywhere (toStrictEqual sees it; JSON drops it)
+    expect(JSON.parse(JSON.stringify(result.diff))).toStrictEqual(result.diff);
 }
 
 function run<T>(
@@ -146,7 +146,7 @@ describe("addCheckpoint", () => {
         const b = byName(college, "40 yard line", -16);
         const { diff } = run(college, addCheckpoint, {
             axis: "x",
-            between: [a.id, b.id],
+            between: [ref(a), ref(b)],
         });
         expect(diff.checkpoints.added[0]).toMatchObject({
             stepsFromCenterFront: -12,
@@ -173,15 +173,33 @@ describe("addCheckpoint", () => {
         ).toEqual(["invalid-args"]);
         expect(
             codes(
-                run(college, addCheckpoint, { axis: "x", between: [0, 999] }),
+                run(college, addCheckpoint, {
+                    axis: "x",
+                    between: [
+                        { axis: "x", id: 0 },
+                        { axis: "x", id: 999 },
+                    ],
+                }),
             ),
         ).toEqual(["not-found"]);
+        // Bare ids, or refs on the other axis, aren't refs
+        expect(
+            codes(
+                run(college, addCheckpoint, {
+                    axis: "x",
+                    between: [0, 1] as never,
+                }),
+            ),
+        ).toEqual(["invalid-args"]);
     });
 
     it("warns that a one-sided outer line makes X asymmetric", () => {
         const { diff } = run(college, addCheckpoint, { axis: "x", steps: 90 });
         expect(diff.ok).toBe(true);
-        expect(diff.warnings.map((w) => w.code)).toEqual(["asymmetric-x"]);
+        expect(diff.warnings.map((w) => w.code)).toEqual([
+            "asymmetric-x",
+            "field-resized",
+        ]);
         expect(diff.geometry.sizeChanged).toBe(true);
         expect(diff.geometry.centerChanged).toBe(true);
         expect(diff.geometry.after.maxXSteps).toBe(90);
@@ -193,7 +211,7 @@ describe("addCheckpoint", () => {
             steps: 90,
             mirror: true,
         });
-        expect(diff.warnings).toEqual([]);
+        expect(diff.warnings.map((w) => w.code)).toEqual(["field-resized"]);
         expect(diff.geometry.after.minXSteps).toBe(-90);
         expect(checkFieldInvariants(next)).toEqual([]);
     });
@@ -235,17 +253,7 @@ describe("addCheckpointSeries", () => {
         ).toEqual([-10, -8, -6, -4, -2]);
     });
 
-    it("refuses Y in front, a zero interval and huge series", () => {
-        expect(
-            codes(
-                run(college, addCheckpointSeries, {
-                    axis: "y",
-                    every: 1,
-                    from: 0,
-                    to: 3,
-                }),
-            ),
-        ).toEqual(["y-in-front"]);
+    it("refuses a zero interval and huge series", () => {
         expect(
             codes(
                 run(college, addCheckpointSeries, {
@@ -417,7 +425,10 @@ describe("moveCheckpoints", () => {
             to: 84,
         });
         expect(diff.ok).toBe(true);
-        expect(diff.warnings.map((w) => w.code)).toEqual(["asymmetric-x"]);
+        expect(diff.warnings.map((w) => w.code)).toEqual([
+            "asymmetric-x",
+            "field-resized",
+        ]);
     });
 });
 
@@ -430,7 +441,7 @@ describe("updateCheckpoints", () => {
             mirror: true,
         });
         expect(
-            diff.checkpoints.renamed.map((r) => r.to.terseName).sort(),
+            diff.checkpoints.renamed.map((r) => r.to.shortName).sort(),
         ).toEqual(["S1 45", "S2 45"]);
         expect(diff.checkpoints.changed).toHaveLength(2);
         expect(xAt(next, 8)[0]).toMatchObject({
@@ -448,7 +459,7 @@ describe("updateCheckpoints", () => {
         });
         expect(xAt(next, -16)[0]!.fieldLabel).toBeUndefined();
         expect(diff.checkpoints.changed[0]!.changes).toEqual([
-            { key: "fieldLabel", from: "40", to: undefined },
+            { key: "fieldLabel", from: "40", to: null },
         ]);
     });
 

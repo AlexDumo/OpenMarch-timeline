@@ -16,8 +16,11 @@ import type {
  */
 export const FIELD_STEP_RESOLUTION = 0.01;
 
-/** Positions closer than this are the same position */
-export const POSITION_EPSILON = 1e-6;
+/**
+ * Positions closer than this are the same position: half the resolution, so two positions that
+ * snap to the same hundredth (26.666667 and 26.67) are one spot, and a float tail never splits one
+ */
+export const POSITION_EPSILON = FIELD_STEP_RESOLUTION / 2;
 
 /** A field needs at least this many checkpoints on each axis (ReadableCoords needs one) */
 export const MIN_CHECKPOINTS_PER_AXIS = 2;
@@ -123,6 +126,14 @@ export function sortCheckpoints(checkpoints: Checkpoint[]): Checkpoint[] {
     );
 }
 
+/**
+ * The id a new checkpoint on an axis gets: one above the highest id on it.
+ *
+ * Deleting the line with the highest id and then adding one reuses that id. Allocating above the
+ * highest id ever used would need a counter stored in the file, which the format doesn't have
+ * (and #823 changes no format). So an id names a line only while it exists: a caller holding
+ * refs across edits (a preview, an agent) re-reads them from the latest diff or field.
+ */
 export function nextCheckpointId(checkpoints: readonly Checkpoint[]): number {
     return checkpoints.reduce((max, c) => (c.id > max ? c.id : max), -1) + 1;
 }
@@ -147,14 +158,19 @@ export function mirrorTwin(
         samePosition(checkpoint.stepsFromCenterFront, 0)
     )
         return undefined;
-    return checkpoints.find(
-        (c) =>
-            c.id !== checkpoint.id &&
-            samePosition(
-                c.stepsFromCenterFront,
-                -checkpoint.stepsFromCenterFront,
-            ),
-    );
+    // Several candidates only in a file with stacked lines: the nearest, then the lowest id
+    const off = (c: Checkpoint) =>
+        Math.abs(c.stepsFromCenterFront + checkpoint.stepsFromCenterFront);
+    return checkpoints
+        .filter(
+            (c) =>
+                c.id !== checkpoint.id &&
+                samePosition(
+                    c.stepsFromCenterFront,
+                    -checkpoint.stepsFromCenterFront,
+                ),
+        )
+        .sort((a, b) => off(a) - off(b) || a.id - b.id)[0];
 }
 
 /** Swaps the side descriptions in a name ("S1 45" ↔ "S2 45", "Side 1" ↔ "Side 2") */
@@ -237,12 +253,7 @@ export function checkFieldInvariants(
                 message: `The ${axis.toUpperCase()} axis needs at least ${MIN_CHECKPOINTS_PER_AXIS} checkpoints`,
             });
         const byId = new Map<number, Checkpoint[]>();
-        const byPosition = new Map<string, Checkpoint[]>();
-        for (const c of cs) {
-            byId.set(c.id, [...(byId.get(c.id) ?? []), c]);
-            const key = positionKey(c.stepsFromCenterFront);
-            byPosition.set(key, [...(byPosition.get(key) ?? []), c]);
-        }
+        for (const c of cs) byId.set(c.id, [...(byId.get(c.id) ?? []), c]);
         for (const [id, same] of byId)
             if (same.length > 1)
                 issues.push({
@@ -251,13 +262,13 @@ export function checkFieldInvariants(
                     checkpoints: same.map((c) => ({ axis, id: c.id })),
                     message: `Two ${axis.toUpperCase()} checkpoints share the id ${id}`,
                 });
-        for (const same of byPosition.values())
+        for (const same of groupByPosition(cs))
             if (same.length > 1)
                 issues.push({
                     code: "duplicate-position",
                     axis,
                     checkpoints: same.map((c) => ({ axis, id: c.id })),
-                    message: `There is already a ${axis.toUpperCase()} checkpoint at ${same[0]!.stepsFromCenterFront} steps`,
+                    message: `There is already a ${axis.toUpperCase()} checkpoint at ${snapSteps(same[0]!.stepsFromCenterFront)} steps`,
                 });
     }
     const inFront = fp.yCheckpoints.filter(
@@ -290,13 +301,61 @@ export function checkFieldInvariants(
     return issues;
 }
 
-export function positionKey(steps: number): string {
-    return snapSteps(steps, POSITION_EPSILON).toFixed(6);
+/**
+ * Checkpoints grouped by spot: sorted by position (then id), each group the run of checkpoints
+ * within POSITION_EPSILON of its first. Deterministic for any input order.
+ */
+export function groupByPosition(
+    checkpoints: readonly Checkpoint[],
+): Checkpoint[][] {
+    const sorted = [...checkpoints].sort(
+        (a, b) =>
+            a.stepsFromCenterFront - b.stepsFromCenterFront || a.id - b.id,
+    );
+    const groups: Checkpoint[][] = [];
+    for (const c of sorted) {
+        const group = groups[groups.length - 1];
+        if (
+            group &&
+            samePosition(group[0]!.stepsFromCenterFront, c.stepsFromCenterFront)
+        )
+            group.push(c);
+        else groups.push([c]);
+    }
+    return groups;
 }
 
-/** A stable identity for an issue, to tell a new violation from one the field already had */
-export function issueKey(issue: FieldEditIssue): string {
+/** Whether every checkpoint `issue` names was named together by one of `before` (same code and axis) */
+function withinEarlierGroup(
+    issue: FieldEditIssue,
+    before: readonly FieldEditIssue[],
+): boolean {
+    const ids = (issue.checkpoints ?? []).map((r) => r.id);
+    return before.some((old) => {
+        if (old.code !== issue.code || old.axis !== issue.axis) return false;
+        const pool = (old.checkpoints ?? []).map((r) => r.id);
+        // Each id used once: a group may shrink, never grow
+        return ids.every((id) => {
+            const at = pool.indexOf(id);
+            if (at < 0) return false;
+            pool.splice(at, 1);
+            return true;
+        });
+    });
+}
+
+/**
+ * Whether `issue` (found after an edit) is one the field already had. Stacked lines and shared
+ * ids are the same violation only while their group is a subset of a group that was there: a
+ * third line moved onto two stacked lines is new, removing one of three isn't.
+ */
+export function isExistingIssue(
+    issue: FieldEditIssue,
+    before: readonly FieldEditIssue[],
+): boolean {
     if (issue.code === "duplicate-position" || issue.code === "duplicate-id")
-        return `${issue.code}:${issue.axis}:${issue.message}`;
-    return `${issue.code}:${issue.axis ?? ""}`;
+        return withinEarlierGroup(issue, before);
+    return before.some(
+        (old) => old.code === issue.code && old.axis === issue.axis,
+    );
 }

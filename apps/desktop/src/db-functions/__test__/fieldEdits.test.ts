@@ -129,4 +129,53 @@ describeDbTests("fieldEdits", (it) => {
             JSON.stringify(await getFieldPropertiesInTransaction({ tx: db })),
         ).toBe(JSON.stringify(before));
     });
+
+    it("a refusal found inside the transaction rolls back and resolves refused (a race)", async ({
+        db,
+    }) => {
+        // Leave 3 Y lines, then delete two of them at once: both dry runs see 3 and pass, the
+        // second write finds 2 and is refused
+        const start = await getFieldPropertiesInTransaction({ tx: db });
+        const extra = start.yCheckpoints.slice(3);
+        if (extra.length > 0)
+            await applyFieldEdit({
+                db,
+                edit: {
+                    edit: "removeCheckpoints",
+                    args: {
+                        ids: extra.map((c) => ({
+                            axis: "y" as const,
+                            id: c.id,
+                        })),
+                    },
+                },
+            });
+        const before = await getFieldPropertiesInTransaction({ tx: db });
+        expect(before.yCheckpoints).toHaveLength(3);
+        const groupBefore = await getCurrentUndoGroup(db);
+        const remove = (id: number) =>
+            applyFieldEdit({
+                db,
+                edit: {
+                    edit: "removeCheckpoints",
+                    args: { ids: [{ axis: "y", id }] },
+                },
+            });
+        const [first, second] = await Promise.all([
+            remove(before.yCheckpoints[0]!.id),
+            remove(before.yCheckpoints[1]!.id),
+        ]);
+        expect(first.diff.ok).toBe(true);
+        expect(second.diff.ok).toBe(false);
+        expect(second.diff.errors[0]!.code).toBe("min-checkpoints");
+
+        const after = await getFieldPropertiesInTransaction({ tx: db });
+        expect(after.yCheckpoints).toHaveLength(2);
+        // One undo step, for the delete that landed
+        expect(await getCurrentUndoGroup(db)).toBe(groupBefore + 1);
+        await performUndo(db);
+        expect(
+            JSON.stringify(await getFieldPropertiesInTransaction({ tx: db })),
+        ).toBe(JSON.stringify(before));
+    });
 });
