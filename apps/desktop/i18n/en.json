@@ -3905,6 +3905,7 @@
             "noneToClear": "Nothing to clear: the order of these marchers is already guessed",
             "refusePlaying": "Stop playback to set the order",
             "refuseTwo": "Select the marchers of a line (two or more)",
+            "refuseDrawing": "Finish or cancel the path first",
             "cancel": "Cancel Set order",
             "done": "Keep this order",
             "doneButton": "Done",

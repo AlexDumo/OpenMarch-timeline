@@ -320,11 +320,14 @@ export default function MarcherOrderOverlay({
     const labelSide: LabelSide = useUiSettingsStore((s) =>
         s.uiSettings.marcherLabelPosition === "beside" ? "beside" : "above",
     );
+    // Set order on has the field, so it shows over either (opening it closes them)
     const showing =
         !isPlaying &&
-        !followOpen &&
-        !shapeOpen &&
-        (sweep !== null || (setting !== "off" && (always || ids.length >= 2)));
+        (sweep !== null ||
+            (!followOpen &&
+                !shapeOpen &&
+                setting !== "off" &&
+                (always || ids.length >= 2)));
 
     // The forms, read while anything shows the order: the selection's, or everyone's for Always
     const key = ids.join(",");

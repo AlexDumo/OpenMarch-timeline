@@ -32,6 +32,8 @@ import {
     reverseOrder,
 } from "./marcherOrderCommands";
 import type { XY } from "./orderSweep";
+import { makeRoomForOrderSweep, orderSweepBlocked } from "./orderSweepRoom";
+import { usePathPenStore } from "./pathPenStore";
 
 /** Where each of `ids` stands at `beat` as the field edits it, skipping any the resolver lacks */
 function positionsAt(ids: readonly number[], beat: number): Map<number, XY> {
@@ -84,6 +86,14 @@ export function useMarcherOrderActions(): void {
         enabled: refusal === null,
         disabledReason: refusal || undefined,
     };
+    // A path being drawn would be thrown away: Set order waits for it (Shift+O still closes it)
+    const sweeping = useMarcherOrderStore((s) => s.sweep !== null);
+    const blocked = usePathPenStore((s) => orderSweepBlocked(s.session));
+    const sweepRefusal = sweeping ? null : (refusal ?? blocked);
+    const sweepOptions = {
+        enabled: sweepRefusal === null,
+        disabledReason: sweepRefusal || undefined,
+    };
 
     /** Goes up whenever an open Set order would be out of date: an opening read then lands nowhere */
     const generation = useRef(0);
@@ -127,6 +137,8 @@ export function useMarcherOrderActions(): void {
                 const remembered = await rememberedOrderAt(db, ids, beat);
                 // The selection, the beat or the show changed while it read: it's out of date
                 if (opened !== generation.current) return;
+                // A shape tool or the pen open meanwhile would hide it: they close first
+                if (!makeRoomForOrderSweep()) return;
                 openOrderSweep({
                     ids,
                     at,
@@ -139,7 +151,7 @@ export function useMarcherOrderActions(): void {
                 });
             })();
         },
-        options,
+        sweepOptions,
     );
 
     useActionHandler(
