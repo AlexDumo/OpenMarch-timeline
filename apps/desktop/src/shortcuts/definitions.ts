@@ -882,6 +882,43 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // Pathways step 4g: a line's order on the field. Show order cycles the field display bar's
+    // setting (off and while selected; Always is picked on the bar). Set order sweeps the
+    // selected marchers in order. O is the Circle's, so Alt+O shows and Shift+O sets. Reverse and
+    // Clear have no key: the toolbar, the field's menu and the palette
+    toggleMarcherOrder: {
+        labelKey: "actions.path.showOrder",
+        keywordsKey: "actions.path.orderKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: ["Alt+O"],
+        ignoreRepeat: true,
+    },
+    setMarcherOrder: {
+        labelKey: "actions.path.setOrder",
+        keywordsKey: "actions.path.orderKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: ["Shift+O"],
+        ignoreRepeat: true,
+    },
+    reverseMarcherOrder: {
+        labelKey: "actions.path.reverseOrder",
+        keywordsKey: "actions.path.orderKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    clearMarcherOrder: {
+        labelKey: "actions.path.clearOrder",
+        keywordsKey: "actions.path.orderKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+
     // Pathways step 2: the selected point of an open path made a corner, or smooth, as a Line's
     // Corner | Smooth (the point's menu, a double-click, the path's floating editor). No keys,
     // as a Line's corner type has none

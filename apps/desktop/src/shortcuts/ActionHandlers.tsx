@@ -20,6 +20,11 @@ import { useUnsetActionHandlers } from "./handlers/useUnsetActionHandlers";
 import { useHoldActionHandlers } from "./handlers/useHoldActionHandlers";
 import { PathPenKeys, usePathPenActions } from "@/pathways/usePathPen";
 import { usePathPenStore } from "@/pathways/pathPenStore";
+import {
+    OrderSweepKeys,
+    useMarcherOrderActions,
+} from "@/pathways/useMarcherOrder";
+import { useMarcherOrderStore } from "@/pathways/marcherOrderStore";
 
 /** Handlers available before a show is open (launch page). */
 export function FileActionHandlers() {
@@ -42,6 +47,7 @@ export function EditorActionHandlers() {
     useHoldActionHandlers();
     useTimelineActionEffects();
     usePathPenActions();
+    useMarcherOrderActions();
     // Mounted after the handlers above, so the open shape tool's keys are on top, and a selected
     // placed box's below them
     // An open shape waiting out of sight (#416) takes no keys: Escape, undo and the arrows act on
@@ -59,6 +65,9 @@ export function EditorActionHandlers() {
             s.session !== null &&
             (s.session.phase !== "closed" || s.session.object),
     );
+    // Set order (pathways step 4g) takes Enter and Escape over everything while it's on
+    const sweeping = useMarcherOrderStore((s) => s.sweep !== null);
+    if (sweeping) return <OrderSweepKeys />;
     if (pathOpen) return <PathPenKeys />;
     if (shapeToolOpen && !shapeHidden) return <ShapeToolKeys />;
     return (

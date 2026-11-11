@@ -1,0 +1,155 @@
+/**
+ * The line order's commands (pathways step 4g): Show order (Alt+O), Set order (Shift+O), Reverse
+ * and Clear order, each a registered action, so the toolbar, the field's menu, the palette and the
+ * keys run the same thing. While Set order is on, Enter keeps what's picked and Escape cancels.
+ */
+import { useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import tolgee from "@/global/singletons/Tolgee";
+import { db } from "@/global/database/db";
+import { rememberedOrderAt } from "@/db-functions/rememberedOrder";
+import { performersOnly } from "@/global/classes/Marcher";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
+import { useIsPlaying } from "@/context/IsPlayingContext";
+import { useActionHandler } from "@/shortcuts/useActionHandler";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import { editingPositionAt } from "@/timeline/timelineIsolationPlan";
+import {
+    cancelOrderSweep,
+    openOrderSweep,
+    shownOrderOf,
+    useMarcherOrderStore,
+} from "./marcherOrderStore";
+import {
+    clearOrder,
+    keepOrderSweep,
+    reverseOrder,
+} from "./marcherOrderCommands";
+import type { XY } from "./orderSweep";
+
+/** Where each of `ids` stands at `beat` as the field edits it, skipping any the resolver lacks */
+function positionsAt(ids: readonly number[], beat: number): Map<number, XY> {
+    const resolver = useTimelineResolverStore.getState().resolver;
+    const at = new Map<number, XY>();
+    if (!resolver) return at;
+    for (const id of ids) {
+        try {
+            const [x, y] = editingPositionAt(resolver, id, beat);
+            at.set(id, { x, y });
+        } catch {
+            // Not in the show at this beat
+        }
+    }
+    return at;
+}
+
+/** Why the order commands can't run for `count` selected performers, or null when they can */
+export function orderRefusal(count: number, playing: boolean): string | null {
+    if (playing)
+        return tolgee.t(
+            "pathways.order.refusePlaying",
+            "Stop playback to set the order",
+        );
+    if (count < 2)
+        return tolgee.t(
+            "pathways.order.refuseTwo",
+            "Select the marchers of a line (two or more)",
+        );
+    return null;
+}
+
+/** The order's commands, mounted with the editor's other handlers */
+export function useMarcherOrderActions(): void {
+    const queryClient = useQueryClient();
+    const selected = useSelectedMarchers()?.selectedMarchers;
+    const isPlaying = useIsPlaying()?.isPlaying ?? false;
+    const ready = useTimelineResolverStore((s) => s.status === "ready");
+    const ids = useMemo(
+        () =>
+            performersOnly(selected ?? [])
+                .map((m) => m.id)
+                .sort((a, b) => a - b),
+        [selected],
+    );
+    const key = ids.join(",");
+    const beat = useTimelineSelectionStore(displayedBeat);
+    const refusal = ready ? orderRefusal(ids.length, isPlaying) : "";
+    const options = {
+        enabled: refusal === null,
+        disabledReason: refusal || undefined,
+    };
+
+    // Set order is about one selection at one beat: another, or playing, leaves it
+    useEffect(() => {
+        cancelOrderSweep();
+    }, [key, beat, isPlaying]);
+    useEffect(() => () => void cancelOrderSweep(), []);
+
+    useActionHandler("toggleMarcherOrder", () => {
+        const { uiSettings, setUiSettings } = useUiSettingsStore.getState();
+        const now = uiSettings.marcherOrder ?? "selected";
+        setUiSettings({
+            ...uiSettings,
+            marcherOrder: now === "off" ? "selected" : "off",
+        });
+    });
+
+    useActionHandler(
+        "setMarcherOrder",
+        () => {
+            if (useMarcherOrderStore.getState().sweep) {
+                cancelOrderSweep();
+                return;
+            }
+            void (async () => {
+                const at = positionsAt(ids, beat);
+                if (at.size < 2) return;
+                // The order shown now, which the skipped keep
+                const remembered = await rememberedOrderAt(db, ids, beat);
+                openOrderSweep({
+                    ids,
+                    at,
+                    beat,
+                    before:
+                        remembered && remembered.length === ids.length
+                            ? remembered
+                            : (shownOrderOf(null, ids, beat, at)?.order ??
+                              null),
+                });
+            })();
+        },
+        options,
+    );
+
+    useActionHandler(
+        "reverseMarcherOrder",
+        () => void reverseOrder(ids, beat, positionsAt(ids, beat), queryClient),
+        options,
+    );
+
+    useActionHandler(
+        "clearMarcherOrder",
+        () => void clearOrder(ids, beat, queryClient),
+        options,
+    );
+}
+
+/**
+ * The keys Set order takes while it's on, over everything else: Enter keeps what's picked (the
+ * rest after, in the order they had), Escape cancels
+ */
+export function OrderSweepKeys(): null {
+    const queryClient = useQueryClient();
+    useActionHandler("cancelAlignmentUpdates", () => cancelOrderSweep(), {
+        label: tolgee.t("pathways.order.cancel", "Cancel Set order"),
+    });
+    useActionHandler("applyShape", () => void keepOrderSweep(queryClient), {
+        label: tolgee.t("pathways.order.done", "Keep this order"),
+    });
+    return null;
+}

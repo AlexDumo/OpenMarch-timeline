@@ -79,6 +79,8 @@ import FavoritesRing from "@/shapes/tool/FavoritesRing";
 import DockedCommandBar from "@/shortcuts/palette/DockedCommandBar";
 import { useShapeFocus } from "@/shapes/field/useShapeFocus";
 import { useFollowFocus } from "@/pathways/useFollowFocus";
+import { useOrderSweepFocus } from "@/pathways/marcherOrderStore";
+import MarcherOrderOverlay from "@/pathways/MarcherOrderOverlay";
 import { useFieldItemWrites } from "@/field/fieldItemWrites";
 import {
     snapToRounding,
@@ -331,7 +333,10 @@ function ThreeFieldView() {
         shapeOf,
     });
     const { dimming, following } = timeline;
-    useShapeFocus(dimming, useFollowFocus());
+    // The Follow tool's line, or Set order's (pathways step 4g): everyone else fades
+    const followFocus = useFollowFocus();
+    const sweepFocus = useOrderSweepFocus();
+    useShapeFocus(dimming, followFocus ?? sweepFocus);
     const root = useRef<HTMLDivElement>(null);
 
     // The field test API and the editor read the latest of these, not the render they came from
@@ -708,6 +713,8 @@ function ThreeFieldView() {
                         theme={fieldProperties.theme}
                     />
                 )}
+                {/* A line's order, and Set order's sweep (pathways step 4g) */}
+                {fieldProperties && <MarcherOrderOverlay marchers={marchers} />}
                 {fieldProperties && (
                     <ShapeEditor stepPx={fieldProperties.pixelsPerStep} />
                 )}

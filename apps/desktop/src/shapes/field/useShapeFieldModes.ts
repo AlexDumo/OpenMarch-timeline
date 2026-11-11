@@ -27,6 +27,9 @@ import {
     objectDrawingOf,
     pathPenMode,
 } from "@/pathways/pathPenMode";
+import { useMarcherOrderStore } from "@/pathways/marcherOrderStore";
+import { OrderSweepMode } from "@/pathways/orderSweepMode";
+import { keepOrderSweep } from "@/pathways/marcherOrderCommands";
 import {
     setFieldObjects,
     setFieldUnderlay,
@@ -88,21 +91,25 @@ export function useShapeFieldModes(
     // the editor and with it a drag's release (review of #516)
     useEffect(() => () => previewPlacedBox(null), [live, toolOpen]);
 
+    const order = useOrderSweepMode(isPlaying);
+
     useEffect(() => {
         // The pointer was over the last shape, if any; the next cursor check finds the new one
         resetShapePointer();
         // A handle's menu is for the shape it was opened on (#569)
         closeHandleMenu();
         editor.setMode(
-            pathOpen && !isPlaying
-                ? pathPenMode
-                : toolOpen
-                  ? hidden
-                      ? null
-                      : shapeToolMode
-                  : (live ?? (pathShown && !isPlaying ? pathPenMode : null)),
+            order
+                ? order
+                : pathOpen && !isPlaying
+                  ? pathPenMode
+                  : toolOpen
+                    ? hidden
+                        ? null
+                        : shapeToolMode
+                    : (live ?? (pathShown && !isPlaying ? pathPenMode : null)),
         );
-    }, [editor, toolOpen, hidden, live, pathOpen, pathShown, isPlaying]);
+    }, [editor, toolOpen, hidden, live, pathOpen, pathShown, isPlaying, order]);
     useEffect(() => () => editor.setMode(null), [editor]);
     // A selected box takes the presses, but its members' closed group path is still drawn, under
     // it: the group's line and faint lanes, as when the box isn't selected (owner on #683)
@@ -134,6 +141,20 @@ export function useShapeFieldModes(
     useEffect(() => watchShapeEditorFocus(), []);
 
     useShapeWaits(isPlaying, toolOpen);
+}
+
+/**
+ * Set order's mode while it's on and nothing plays (pathways step 4g): it takes every press, over
+ * everything else
+ */
+function useOrderSweepMode(isPlaying: boolean): OrderSweepMode | null {
+    const queryClient = useQueryClient();
+    const sweeping = useMarcherOrderStore((s) => s.sweep !== null);
+    const mode = useMemo(
+        () => new OrderSweepMode(() => void keepOrderSweep(queryClient)),
+        [queryClient],
+    );
+    return sweeping && !isPlaying ? mode : null;
 }
 
 function useShapeWaits(isPlaying: boolean, open: boolean): void {
