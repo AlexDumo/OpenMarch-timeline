@@ -1325,6 +1325,42 @@
                     ]
                 },
                 {
+                    "label": "Go to the next part of Edit field",
+                    "other": [
+                        {
+                            "keys": [
+                                "F6"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "F6"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Go to the previous part of Edit field",
+                    "other": [
+                        {
+                            "keys": [
+                                "Shift",
+                                "F6"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⇧",
+                                "F6"
+                            ]
+                        }
+                    ]
+                },
+                {
                     "label": "Move lines back",
                     "other": [
                         {
@@ -1342,7 +1378,7 @@
                     ]
                 },
                 {
-                    "label": "Move lines back (¼ step, no snap)",
+                    "label": "Move lines back (half step)",
                     "other": [
                         {
                             "keys": [
@@ -1378,7 +1414,7 @@
                     ]
                 },
                 {
-                    "label": "Move lines forward (¼ step, no snap)",
+                    "label": "Move lines forward (half step)",
                     "other": [
                         {
                             "keys": [
@@ -1414,7 +1450,7 @@
                     ]
                 },
                 {
-                    "label": "Move lines left (¼ step, no snap)",
+                    "label": "Move lines left (half step)",
                     "other": [
                         {
                             "keys": [
@@ -1450,7 +1486,7 @@
                     ]
                 },
                 {
-                    "label": "Move lines right (¼ step, no snap)",
+                    "label": "Move lines right (half step)",
                     "other": [
                         {
                             "keys": [
@@ -2930,6 +2966,42 @@
                     ]
                 },
                 {
+                    "label": "Go to the next part of Edit field",
+                    "other": [
+                        {
+                            "keys": [
+                                "F6"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "F6"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Go to the previous part of Edit field",
+                    "other": [
+                        {
+                            "keys": [
+                                "Shift",
+                                "F6"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⇧",
+                                "F6"
+                            ]
+                        }
+                    ]
+                },
+                {
                     "label": "Move lines back",
                     "other": [
                         {
@@ -2947,7 +3019,7 @@
                     ]
                 },
                 {
-                    "label": "Move lines back (¼ step, no snap)",
+                    "label": "Move lines back (half step)",
                     "other": [
                         {
                             "keys": [
@@ -2983,7 +3055,7 @@
                     ]
                 },
                 {
-                    "label": "Move lines forward (¼ step, no snap)",
+                    "label": "Move lines forward (half step)",
                     "other": [
                         {
                             "keys": [
@@ -3019,7 +3091,7 @@
                     ]
                 },
                 {
-                    "label": "Move lines left (¼ step, no snap)",
+                    "label": "Move lines left (half step)",
                     "other": [
                         {
                             "keys": [
@@ -3055,7 +3127,7 @@
                     ]
                 },
                 {
-                    "label": "Move lines right (¼ step, no snap)",
+                    "label": "Move lines right (half step)",
                     "other": [
                         {
                             "keys": [

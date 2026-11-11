@@ -140,6 +140,20 @@ const shots = [
         },
     },
     {
+        id: "field-keys-help",
+        kind: "still",
+        // The bar's keyboard help: Tab walks the lines, F6 moves between the parts, the keys
+        async setup({ page, wait, around }) {
+            await wait(3000);
+            await editField(page, wait);
+            await page.getByTestId("field-edit-keys").click();
+            const help = page.getByTestId("field-edit-keys-help");
+            await help.waitFor();
+            await wait(500);
+            return { box: await around(help, 8) };
+        },
+    },
+    {
         id: "field-template",
         kind: "still",
         // Another template picked: the sheet says what changes before it switches

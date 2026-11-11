@@ -18,9 +18,15 @@ covers:
   - action:fieldEditToggleVisible
   - action:fieldEditToggleReference
   - action:fieldEditEveryOther
+  - action:fieldEditNextLine
+  - action:fieldEditNextPane
+  - action:fieldEditPreviousPane
+  - action:fieldEditImportImage
+  - action:fieldEditRemoveImage
   - i18n:fieldEditMode
   - i18n:fieldProperties
   - i18n:field.general
+  - i18n:actions.field
 sidebar:
   order: 1
 ---
@@ -77,12 +83,14 @@ To delete every 5-yard line on a football field, drag a box from inside one goal
 
 ### Move, hide and delete lines
 
-- Drag a line, or its ruler tab, to move it. With several picked on the same axis, they move together. Picked lines also move a step at a time with the arrow keys, half a step with <Kbd keys="Shift" />.
+- Drag a line, or slide its tab along the ruler, to move it. With several picked on the same axis, they move together. Picked lines also move a step at a time with the arrow keys, half a step with <Kbd keys="Shift" />. Press <Kbd keys="Escape" /> during a drag to let go without changing anything.
 - Press <Kbd action="fieldEditToggleVisible" /> or select <Ui k="fieldEditMode.bar.hideShow" /> to hide or show the picked lines. A hidden line isn't drawn but can still be used for coordinates; in this mode it shows as a faint dashed line so you can find it.
 - Press <Kbd action="fieldEditToggleReference" /> or select <Ui k="fieldEditMode.bar.reference" /> to choose whether coordinates are measured from them. Turn it off for lines you want to see but not count from, such as the real hash next to the grid hash.
-- Drag lines back into their ruler, press <Kbd action="fieldEditDeleteLines" />, or select <Ui k="fieldEditMode.bar.delete" /> to delete them. A field needs at least two lines each way.
+- Drag lines back into their ruler, press <Kbd action="fieldEditDeleteLines" />, or select <Ui k="fieldEditMode.bar.delete" /> to delete them. A drag that starts on a ruler tab deletes only once it has left the ruler and come back. A field needs at least two lines each way.
 
-Right-click a line, or touch and hold it, for a menu with all of these.
+Right-click a line, or touch and hold it, for a menu with all of these. In the menu, the arrow keys move between its entries, <Kbd keys="Enter" /> runs one and <Kbd keys="Escape" /> closes it.
+
+If the outermost X lines end up different distances from the center, a red note above the X lines in the inspector says so until you move one of them back: the field is drawn centered between them.
 
 ### Exact values
 
@@ -100,7 +108,21 @@ Double-click a line, or pick it and press <Kbd action="fieldEditEditLine" />, to
 - <Ui k="fieldEditMode.popover.yardNumber" />: the number painted on the field at an X line.
 - <Ui k="fieldEditMode.popover.visible" /> and <Ui k="fieldEditMode.popover.reference" />, as above.
 
-Press <Kbd keys="Enter" /> or select <Ui k="fieldEditMode.popover.done" /> to save the position and names together. In the touch layout the popover has a number pad.
+Nothing changes until you press <Kbd keys="Enter" /> or select <Ui k="fieldEditMode.popover.done" />, which saves everything in the popover together, as one step to undo. Press <Kbd keys="Escape" /> or close it to leave the line as it was. In the touch layout the popover has a number pad.
+
+### Use the keyboard
+
+When you start, the field has the keyboard: <Kbd action="fieldEditNextLine" /> and <Kbd action="fieldEditPreviousLine" /> pick lines, and the keys above act on them. Press <Kbd action="fieldEditNextPane" /> to move to the bar, again for the inspector, and again to come back to the field (<Kbd action="fieldEditPreviousPane" /> goes the other way). In the bar and the inspector, <Kbd keys="Tab" /> moves between their controls. The keyboard button in the bar lists the mode's keys.
+
+<Media
+  id="field-keys-help"
+  alt="The keyboard help from the Edit field bar: Tab picks the next line while the field has the keyboard and F6 moves between the field, the bar and the inspector, then the mode's keys, each with its shortcut."
+  maxWidth={360}
+/>
+
+### On a tablet
+
+In the touch layout the rulers and the strip along each line are a finger wide (44 pixels), and desktop keeps its thin ones. Touch and hold a line for its menu, tap a picked line for its values, and turn on <Ui k="fieldEditMode.bar.selectMany" /> in the bar to pick several lines with taps.
 
 ## Settings in the inspector
 
@@ -124,6 +146,8 @@ The inspector has the rest of the field's settings, in sections you open and clo
 ### Template and files
 
 Choose another template from <Ui k="fieldProperties.fieldTemplate.label" />. A sheet says how the lines and the size change before anything happens. <Ui k="fieldEditMode.template.keepLook" /> is on: the template's lines and sizes come in, and your colors, labels, image settings and side names stay. Select <Ui k="fieldEditMode.template.apply" /> to switch.
+
+To undo your changes to the lines and go back to the template the field is based on, select the reset button under the template list (it names the template), then <Ui k="fieldEditMode.template.resetApply" /> in the sheet. Turn off <Ui k="fieldEditMode.template.keepLook" /> there to reset the look too.
 
 <Media
   id="field-template"
@@ -164,7 +188,7 @@ Put a picture under the field, such as a floor tarp design or a photo of your fi
 
 </Steps>
 
-Turn off <Ui k="fieldProperties.labels.showBackgroundImage" /> to hide the image, or select <Ui k="fieldEditMode.image.remove" /> to take it out of the show. The field's and the image's width-to-height ratios are shown, to help you line them up.
+Importing an image also turns <Ui k="fieldProperties.labels.showBackgroundImage" /> on, in the same step to undo. Turn it off to hide the image, or select <Ui k="fieldEditMode.image.remove" /> to take it out of the show. Both are in the command palette too, as <Ui k="actions.field.importImage" /> and <Ui k="actions.field.removeImage" />. The field's and the image's width-to-height ratios are shown, to help you line them up.
 
 ### Colors
 

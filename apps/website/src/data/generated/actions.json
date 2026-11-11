@@ -1704,6 +1704,54 @@
             }
         ]
     },
+    "fieldEditNextPane": {
+        "label": "Go to the next part of Edit field",
+        "category": "field",
+        "bindings": [
+            {
+                "mac": {
+                    "keys": [
+                        "F6"
+                    ]
+                },
+                "other": {
+                    "keys": [
+                        "F6"
+                    ]
+                }
+            }
+        ]
+    },
+    "fieldEditPreviousPane": {
+        "label": "Go to the previous part of Edit field",
+        "category": "field",
+        "bindings": [
+            {
+                "mac": {
+                    "keys": [
+                        "⇧",
+                        "F6"
+                    ]
+                },
+                "other": {
+                    "keys": [
+                        "Shift",
+                        "F6"
+                    ]
+                }
+            }
+        ]
+    },
+    "fieldEditImportImage": {
+        "label": "Import field background image…",
+        "category": "field",
+        "bindings": []
+    },
+    "fieldEditRemoveImage": {
+        "label": "Remove field background image",
+        "category": "field",
+        "bindings": []
+    },
     "fieldEditSelectAllLines": {
         "label": "Select all lines",
         "category": "field",
@@ -2596,7 +2644,7 @@
         ]
     },
     "fieldEditNudgeUpFine": {
-        "label": "Move lines back (¼ step, no snap)",
+        "label": "Move lines back (half step)",
         "category": "field",
         "bindings": [
             {
@@ -2634,7 +2682,7 @@
         ]
     },
     "fieldEditNudgeDownFine": {
-        "label": "Move lines forward (¼ step, no snap)",
+        "label": "Move lines forward (half step)",
         "category": "field",
         "bindings": [
             {
@@ -2672,7 +2720,7 @@
         ]
     },
     "fieldEditNudgeLeftFine": {
-        "label": "Move lines left (¼ step, no snap)",
+        "label": "Move lines left (half step)",
         "category": "field",
         "bindings": [
             {
@@ -2710,7 +2758,7 @@
         ]
     },
     "fieldEditNudgeRightFine": {
-        "label": "Move lines right (¼ step, no snap)",
+        "label": "Move lines right (half step)",
         "category": "field",
         "bindings": [
             {
