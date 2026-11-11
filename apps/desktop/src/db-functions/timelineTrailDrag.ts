@@ -53,6 +53,9 @@ export const trailDragRefusal = {
         text.t("timeline.refusals.trail.evenTooWide", { limit }),
     /** AP-T9: Keep end spots, with members who have no spots in the window's move */
     noSpots: () => text.t("timeline.refusals.trail.noSpots"),
+    /** AP-T8: a member's new spot couldn't be written into the one move over the window */
+    notOneMove: (marcher: string) =>
+        text.t("timeline.refusals.trail.notOneMove", { marcher }),
     /** The edit window is at home, or not a range */
     noWindow: () => text.t("timeline.refusals.trail.noWindow"),
 };
@@ -336,19 +339,16 @@ export interface TrailWindow {
     end: number;
 }
 
-/**
- * The move over exactly `window` that holds every one of `marcherIds` (their spots there, AP-T9),
- * or null. Ends: Keep end spots is offered only with one.
- */
-export async function windowMoveOf(
+/** Which move over exactly `window` each of `marcherIds` is in, row by row */
+async function windowRows(
     db: DbConnection | DbTransaction,
     window: TrailWindow,
     marcherIds: readonly number[],
-): Promise<number | null> {
+): Promise<{ timelineId: number; marcherId: number }[]> {
     const T = schema.timeline_transitions;
     const A = schema.timeline_assignments;
     const L = schema.timelines;
-    const rows = await db
+    return await db
         .select({ timelineId: T.timeline_id, marcherId: A.marcher_id })
         .from(A)
         .innerJoin(T, eq(T.id, A.transition_id))
@@ -361,10 +361,41 @@ export async function windowMoveOf(
             ),
         )
         .all();
+}
+
+/**
+ * The move over exactly `window` that holds every one of `marcherIds` (their spots there, AP-T9),
+ * or null. Ends: Keep end spots is offered only with one.
+ */
+export async function windowMoveOf(
+    db: DbConnection | DbTransaction,
+    window: TrailWindow,
+    marcherIds: readonly number[],
+): Promise<number | null> {
+    const rows = await windowRows(db, window, marcherIds);
     const moves = new Set(rows.map((r) => r.timelineId));
     if (moves.size !== 1) return null;
     const holding = new Set(rows.map((r) => r.marcherId));
     return marcherIds.every((m) => holding.has(m)) ? [...moves][0]! : null;
+}
+
+/**
+ * A member of `line` (tail first) who isn't in the leader's move over exactly `window`: the first
+ * one from the leader back, or the leader when it has none.
+ */
+async function outOfWindowMove(
+    tx: DbTransaction,
+    window: TrailWindow,
+    line: readonly number[],
+): Promise<number> {
+    const rows = await windowRows(tx, window, line);
+    const leader = line[line.length - 1]!;
+    const move = rows.find((r) => r.marcherId === leader)?.timelineId;
+    if (move === undefined) return leader;
+    const holding = new Set(
+        rows.filter((r) => r.timelineId === move).map((r) => r.marcherId),
+    );
+    return [...line].reverse().find((m) => !holding.has(m)) ?? leader;
 }
 
 // ---------------------------------------------------------------------------
@@ -385,6 +416,11 @@ export interface TrailDragInput {
     step: number;
     /** AP-T9: From trail (AP-T8, the default) or Keep end spots (AP-T1) */
     ends: "trail" | "keep";
+    /**
+     * Keep end spots: the move the line follows into, step 4's (the one move every member is in
+     * at the playhead). The one over exactly the window when absent.
+     */
+    keepMove?: number | null;
 }
 
 export interface TrailDragResult extends FollowTrailResult {
@@ -421,7 +457,8 @@ async function planDragInTransaction(
         step,
     );
     if (drawn && !(plan.drawn >= EPS_GEOM)) refuse(trailDragRefusal.tooShort());
-    if (spacing.kind === "even" && !plan.forward)
+    // Keep end spots has no spacing of its own: the members go to the spots they have
+    if (input.ends !== "keep" && spacing.kind === "even" && !plan.forward)
         refuse(
             trailDragRefusal.evenTooWide(
                 Math.floor((plan.evenLimit ?? 0) * 4) / 4,
@@ -471,6 +508,8 @@ export async function trailDragRefusalFor(
     marcherIds: readonly number[],
     leaderId: number,
     ends: "trail" | "keep",
+    /** Keep end spots: the move the line follows into (`TrailDragInput.keepMove`) */
+    keepMove?: number | null,
 ): Promise<TimelineText | null> {
     try {
         await planDragInTransaction(
@@ -488,7 +527,7 @@ export async function trailDragRefusalFor(
         );
         if (
             ends === "keep" &&
-            (await windowMoveOf(tx, window, marcherIds)) === null
+            (keepMove ?? (await windowMoveOf(tx, window, marcherIds))) === null
         )
             refuse(trailDragRefusal.noSpots());
         return null;
@@ -521,7 +560,7 @@ export async function dragTrailInTransaction(
     const { window, points } = input;
     const { line, plan } = await planDragInTransaction(tx, input);
     if (input.ends === "keep") {
-        const move = await windowMoveOf(tx, window, line);
+        const move = input.keepMove ?? (await windowMoveOf(tx, window, line));
         if (move === null) refuse(trailDragRefusal.noSpots());
         const followed = await followTrailInTransaction({
             tx,
@@ -552,7 +591,14 @@ export async function dragTrailInTransaction(
         keepUnchanged: true,
     });
     const move = await windowMoveOf(tx, window, line);
-    if (move === null) refuse(trailDragRefusal.noSpots());
+    // The range writer left someone out of the window's one move (a member who ends where it
+    // starts and is taken out, or a shape's member kept in its own): named, all of it undone
+    if (move === null)
+        refuse(
+            trailDragRefusal.notOneMove(
+                await marcherName(tx, await outOfWindowMove(tx, window, line)),
+            ),
+        );
     const followed = await followTrailInTransaction({
         tx,
         timelineId: move,
