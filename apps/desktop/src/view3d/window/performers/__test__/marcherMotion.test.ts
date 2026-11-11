@@ -11,7 +11,7 @@ import type { Manifest } from "@/view3d/render/step-blend.js";
 import { fakeShowPositions, type Track } from "@/view3d/__test__/fakePositions";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { buildCountClock } from "@/view3d/core/marchers/countClock";
-import { eventRows } from "@/view3d/core/marchers/planner";
+import { eventRows, headingAt } from "@/view3d/core/marchers/planner";
 import {
     bandMovingCounts,
     compileWindowCues,
@@ -638,16 +638,13 @@ describe("the closed position while paused", () => {
         };
     }
 
-    it("stands at attention mid-move, on the dot it was given", () => {
+    it("stands at attention mid-move", () => {
         const { m, writes } = motion();
-        const xz = Float32Array.from([3, -19]);
         m.updateClosed(2.5);
         expect(writes).toHaveLength(1);
         expect(writes[0].clip.row).toBe(rows["attention"]);
         expect(writes[0].clip.row2).toBeNull();
         expect(writes[0].clip.legYaw).toBe(0);
-        // the closed position never moves the body off the drill position
-        expect(Array.from(xz)).toEqual([3, -19]);
     });
 
     it("writes the attention clip once while it stays paused", () => {
@@ -657,13 +654,11 @@ describe("the closed position while paused", () => {
         expect(writes).toHaveLength(1);
     });
 
-    it("turns as the actual step would", () => {
+    it("faces its heading at the dot's own count, not the plan's lead", () => {
         const { m } = motion();
         const closed = new Float32Array(1);
-        const step = new Float32Array(1);
         m.updateClosed(2.5, closed);
-        m.update(2.5, new Float32Array(2), Uint8Array.from([1]), step);
-        expect(closed[0]).toBe(step[0]);
+        expect(closed[0]).toBe(headingAt(plan, 2.5));
     });
 
     it("plays the step again on the next update", () => {
@@ -675,7 +670,7 @@ describe("the closed position while paused", () => {
         expect(writes[1].clip.row).toBe(rows[loop.clip]);
     });
 
-    it("keeps the step when attention isn't baked yet", () => {
+    it("writes no clip when attention isn't baked yet", () => {
         const writes: unknown[] = [];
         const bodies = {
             bake: { rows: {} },

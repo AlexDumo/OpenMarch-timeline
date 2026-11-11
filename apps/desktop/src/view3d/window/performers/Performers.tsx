@@ -611,7 +611,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                     placed,
                     c,
                     cam,
-                    silkMotion?.update(c) ?? null,
+                    silkMotion?.update(c, closed) ?? null,
                 );
                 marcherBodies.compose(state.gl);
                 lod[0] = cam[0];

@@ -392,21 +392,22 @@ export class MarcherMotion {
      * The closed position at show count clock `count`, for a paused show:
      * every marcher stands at attention, feet together, on its dot. The
      * caller fills `xz` with the drill position at `count` itself (not
-     * `STEP_AHEAD` counts later), and it stays there. Headings and the
-     * Horn/Equipment channel are what `update` would show then; only the feet
-     * and where the body stands differ. The next `update` writes every
-     * slot's clip again.
+     * `STEP_AHEAD` counts later), and it stays there. Each marcher faces its
+     * heading at that count, on the dot it stands on; the Horn/Equipment
+     * channel is what `update` would show then. A slot whose attention row
+     * isn't baked yet keeps the clip it last had. The next `update` writes
+     * every slot's clip again.
      */
     updateClosed(count: number, headings?: Float32Array): void {
-        const planCount = count + STEP_AHEAD;
         this.updateHorns(count);
         const rows = this.bodies.bake.rows;
         for (let i = 0; i < this.plans.length; i++) {
             const plan = this.plans[i];
             if (!plan || plan.events.length === 0) continue;
-            if (headings) headings[i] = headingAt(plan, planCount);
+            // the dot's own count: the plan clock runs a count ahead
+            if (headings) headings[i] = headingAt(plan, count);
             const row = rows[this.attention[i]];
-            if (!row) continue; // not baked yet: keep the step
+            if (!row) continue; // not baked yet: keeps its last clip
             if (this.cursor[i] !== CLOSED)
                 this.bodies.setClip(i, {
                     row,
