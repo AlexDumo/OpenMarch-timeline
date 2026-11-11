@@ -109,6 +109,7 @@ export interface UpdateController {
     start(): void;
     /** Looks for an update; resolves with the state once the check ends */
     check(): Promise<UpdateState>;
+    /** Downloads the found update because the person asked: the title bar shows its progress */
     download(): Promise<void>;
     /** Closes the show, quits and installs the downloaded update */
     install(): Promise<void>;
@@ -191,9 +192,12 @@ export function createUpdateController(
 
         check() {
             if (unsupportedReason) return Promise.resolve(state);
-            // Nothing new to find while one downloads or waits to install
-            const { kind } = state.phase;
-            if (kind === "downloading" || kind === "downloaded")
+            // Nothing new to find while one downloads or waits to install. Asking during an
+            // automatic download brings its progress into the title bar.
+            const { phase } = state;
+            if (phase.kind === "downloading" && !phase.requested)
+                set({ ...phase, requested: true });
+            if (phase.kind === "downloading" || phase.kind === "downloaded")
                 return Promise.resolve(state);
             pendingCheck ??= updater
                 .checkForUpdates()
@@ -222,20 +226,7 @@ export function createUpdateController(
                 await controller.check();
                 return;
             }
-            set({
-                kind: "downloading",
-                version: foundVersion,
-                percent: 0,
-                bytesPerSecond: 0,
-                transferred: 0,
-                total: 0,
-            });
-            try {
-                await updater.downloadUpdate();
-            } catch (error) {
-                log.error("Unable to download the update:", error);
-                if (phaseKind() === "downloading") fail(error);
-            }
+            await startDownload(true);
         },
 
         async install() {
@@ -264,10 +255,28 @@ export function createUpdateController(
         setAutomaticDownload(enabled) {
             state = { ...state, automaticDownload: enabled };
             onChange(state);
-            if (enabled && state.phase.kind === "available")
-                void controller.download();
+            if (enabled && state.phase.kind === "available" && canInstallHere())
+                void startDownload(false);
         },
     };
+
+    async function startDownload(requested: boolean) {
+        set({
+            kind: "downloading",
+            version: foundVersion ?? "",
+            requested,
+            percent: 0,
+            bytesPerSecond: 0,
+            transferred: 0,
+            total: 0,
+        });
+        try {
+            await updater.downloadUpdate();
+        } catch (error) {
+            log.error("Unable to download the update:", error);
+            if (phaseKind() === "downloading") fail(error);
+        }
+    }
 
     if (!unsupportedReason) {
         // The controller starts downloads itself, so it can wait for a move to Applications
@@ -282,8 +291,11 @@ export function createUpdateController(
         });
         updater.on("update-available", (info: { version: string }) => {
             foundVersion = info.version;
-            set({ kind: "available", version: info.version });
-            if (state.automaticDownload) void controller.download();
+            // Straight to a quiet download, so "Update available" never flashes in the title
+            // bar on its way to "Update ready"
+            if (state.automaticDownload && canInstallHere())
+                void startDownload(false);
+            else set({ kind: "available", version: info.version });
         });
         updater.on(
             "download-progress",
@@ -296,6 +308,9 @@ export function createUpdateController(
                 set({
                     kind: "downloading",
                     version: foundVersion ?? "",
+                    requested:
+                        state.phase.kind === "downloading" &&
+                        state.phase.requested,
                     percent: progress.percent,
                     bytesPerSecond: progress.bytesPerSecond,
                     transferred: progress.transferred,

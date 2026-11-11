@@ -15,8 +15,9 @@ import {
 
 /**
  * The update pill beside the version in the title bar (fork #404). It shows only when there is
- * something to do or watch: an update to download, one downloading (with its progress), one
- * ready to install, or one that failed. Its popover holds the step to take: Download, Update
+ * something to do or watch: an update to download, a download the person asked for (with its
+ * progress), one ready to install, or one that failed. An automatic download shows only once
+ * it's ready. Its popover holds the step to take: Download, Update
  * now, Move to Applications (macOS, outside Applications), or Try again and Download installer.
  */
 export default function UpdatePill() {
@@ -32,8 +33,11 @@ export default function UpdatePill() {
             kind !== "available" &&
             kind !== "downloading" &&
             kind !== "downloaded");
+    // An automatic download stays out of the way until it's ready (Settings shows it)
     const active =
-        kind === "available" || kind === "downloading" || kind === "downloaded";
+        kind === "available" ||
+        (state.phase.kind === "downloading" && state.phase.requested) ||
+        kind === "downloaded";
     if (!version || (!failed && !active)) return null;
 
     return (

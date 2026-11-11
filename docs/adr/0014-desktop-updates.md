@@ -31,7 +31,8 @@ rollback system, and most of its benefit comes from making updates visible, not 
   action, `checkForUpdates`, also in the app menu through `menu:action`, ADR 0003). "Download
   updates automatically" (Settings › General, on by default; the old `automaticUpdates` key)
   decides whether a found update downloads by itself. A downloaded update always installs on
-  quit.
+  quit. An automatic download stays out of the title bar until it's ready; a download the person
+  asked for (Download, Try again, or Check for updates while one runs) shows its progress there.
 - **Update now** closes the show the way quitting does but keeps it as the file to reopen, then
   calls `quitAndInstall` (silent on Windows, with the app reopened afterwards). The controller
   records the attempt. If the next launch is still on the old version, it reports the failed
@@ -52,7 +53,7 @@ rollback system, and most of its benefit comes from making updates visible, not 
 ## Consequences
 
 - The title bar's update pill replaces the GitHub-API version check. It appears only when there
-  is something to do or watch (available, downloading with a progress bar, ready, failed), and
+  is something to do or watch (available, a download the person asked for with a progress bar, ready, failed), and
   its popover holds the step: Download, Update now, Move to Applications, or Try again and
   Download installer.
 - Release notes come from the release page ("What's new"), not from the app.

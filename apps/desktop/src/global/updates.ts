@@ -42,6 +42,11 @@ export type UpdatePhase =
     | {
           readonly kind: "downloading";
           readonly version: string;
+          /**
+           * The person asked for it (Download, Try again, or Check for updates while it ran).
+           * An automatic download stays out of the title bar until it's ready.
+           */
+          readonly requested: boolean;
           /** 0–100 */
           readonly percent: number;
           readonly bytesPerSecond: number;

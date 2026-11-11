@@ -116,6 +116,50 @@ describe("createUpdateController", () => {
         expect(updater.downloadUpdate).toHaveBeenCalledOnce();
     });
 
+    it("keeps an automatic download quiet: no Update available on the way", async () => {
+        const { controller, updater, states } = setup({
+            automaticDownload: true,
+        });
+        updater.nextCheck = found("0.2.1");
+        await controller.check();
+        expect(states.map((s) => s.phase.kind)).not.toContain("available");
+        updater.emit("download-progress", {
+            percent: 50,
+            bytesPerSecond: 1,
+            transferred: 1,
+            total: 2,
+        });
+        expect(controller.getState().phase).toMatchObject({
+            kind: "downloading",
+            requested: false,
+        });
+    });
+
+    it("shows a download the person asked for, and its progress", async () => {
+        const { controller, updater, phase } = setup();
+        updater.nextCheck = found("0.2.1");
+        await controller.check();
+        await controller.download();
+        updater.emit("download-progress", {
+            percent: 50,
+            bytesPerSecond: 1,
+            transferred: 1,
+            total: 2,
+        });
+        expect(phase()).toMatchObject({ kind: "downloading", requested: true });
+    });
+
+    it("brings an automatic download into view when the person checks for updates", async () => {
+        const { controller, updater, phase } = setup({
+            automaticDownload: true,
+        });
+        updater.nextCheck = found("0.2.1");
+        await controller.check();
+        await controller.check();
+        expect(phase()).toMatchObject({ kind: "downloading", requested: true });
+        expect(updater.checkForUpdates).toHaveBeenCalledOnce();
+    });
+
     it("starts the waiting download when the setting is turned on", async () => {
         const { controller, updater } = setup();
         updater.nextCheck = found("0.2.1");
