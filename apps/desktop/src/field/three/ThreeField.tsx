@@ -303,6 +303,12 @@ function ThreeFieldView() {
         [atlases],
     );
 
+    // The labels as drawn, for the order line to keep clear of
+    const orderLabels = useMemo(
+        () => ({ text: labels, style: labelStyle, atlas: atlases.label }),
+        [labels, labelStyle, atlases],
+    );
+
     const selectedIds = useMemo(
         () => selectedMarchers.map((marcher) => marcher.id),
         [selectedMarchers],
@@ -714,7 +720,12 @@ function ThreeFieldView() {
                     />
                 )}
                 {/* A line's order, and Set order's sweep (pathways step 4g) */}
-                {fieldProperties && <MarcherOrderOverlay marchers={marchers} />}
+                {fieldProperties && (
+                    <MarcherOrderOverlay
+                        marchers={marchers}
+                        labels={orderLabels}
+                    />
+                )}
                 {fieldProperties && (
                     <ShapeEditor stepPx={fieldProperties.pixelsPerStep} />
                 )}

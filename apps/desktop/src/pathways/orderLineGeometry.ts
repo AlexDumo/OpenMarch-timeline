@@ -170,6 +170,39 @@ function boundsOf(leg: OrderLeg): Bounds {
     return bounds;
 }
 
+/** An arc's coarse outline: 4 chords, and how far at most the arc strays from them */
+const COARSE_STEPS = 4;
+const coarseCache = new WeakMap<OrderLeg, { samples: XY[]; slack: number }>();
+
+/**
+ * Whether `p` is surely further than `limit` from an arc, by its coarse outline: a quick answer
+ * before its finer samples are measured (a straight leg has nothing coarser)
+ */
+function surelyFar(p: XY, leg: OrderLeg, limit: number): boolean {
+    if (!leg.control) return false;
+    let coarse = coarseCache.get(leg);
+    if (!coarse) {
+        // A quadratic strays from a chord a share 1/n of it long by |P''| / (8 n²), P'' = 2 (from - 2 control + to)
+        const bend = Math.hypot(
+            leg.from.x - 2 * leg.control.x + leg.to.x,
+            leg.from.y - 2 * leg.control.y + leg.to.y,
+        );
+        coarse = {
+            samples: legSamples(leg, 0, 1, COARSE_STEPS),
+            slack: bend / (4 * COARSE_STEPS * COARSE_STEPS),
+        };
+        coarseCache.set(leg, coarse);
+    }
+    const { samples, slack } = coarse;
+    for (let i = 0; i < samples.length - 1; i++)
+        if (
+            nearestOnSegment(p, samples[i]!, samples[i + 1]!).d - slack <=
+            limit
+        )
+            return false;
+    return true;
+}
+
 /** Whether `p` is further than `tolerance` outside the box round `leg`, so it can't be on it */
 const outside = (p: XY, leg: OrderLeg, tolerance: number) => {
     const b = boundsOf(leg);
@@ -189,12 +222,15 @@ export function overlapsEarlier(
 ): boolean {
     if (earlier.length === 0) return false;
     let hits = 0;
-    for (const t of OVERLAP_SAMPLES) {
+    for (const [i, t] of OVERLAP_SAMPLES.entries()) {
+        // Too few samples left to find enough on the line
+        if (hits + OVERLAP_SAMPLES.length - i < OVERLAP_HITS) return false;
         const p = legPoint(leg, t);
         if (
             earlier.some(
                 (e) =>
                     !outside(p, e, tolerance) &&
+                    !surelyFar(p, e, tolerance) &&
                     distanceToLegInside(p, e) <= tolerance,
             )
         )
@@ -227,13 +263,156 @@ export function bowedLeg(from: XY, to: XY, sagitta: number): OrderLeg {
 }
 
 /**
+ * The marchers a leg mustn't cover: every marcher drawn near the line, its own among them (a leg
+ * skips its own two ends), and how far clear of them it stays
+ */
+export interface OrderObstacles {
+    /** Where each marcher is drawn */
+    readonly at: readonly XY[];
+    /**
+     * How far the line's middle stays from a marcher it passes: the dot and its selection ring,
+     * the gap past them, and half the line's width with its halo
+     */
+    readonly clearance: number;
+    /** How far from its ends a leg is trimmed: a marcher nearest a leg within this of an end isn't crossed */
+    readonly endGap: number;
+}
+
+/** The point `p` on a leg (its samples) nearest `q`, and how far it is */
+function nearestOnLeg(q: XY, leg: OrderLeg): { p: XY; d: number } {
+    const samples = samplesOf(leg);
+    let best = { p: samples[0]!, d: Infinity };
+    for (let i = 0; i < samples.length - 1; i++) {
+        const a = samples[i]!;
+        const b = samples[i + 1]!;
+        const { t, d } = nearestOnSegment(q, a, b);
+        if (d < best.d)
+            best = {
+                p: { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t },
+                d,
+            };
+    }
+    return best;
+}
+
+const samePoint = (a: XY, b: XY) =>
+    Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6;
+
+/**
+ * The marchers (`obstacles`) a leg passes over: within its clearance of the part of it that's
+ * drawn, so its dot and selection ring would be covered. Its own ends never count, nor a marcher
+ * the leg is nearest at a trimmed end (a neighbor beside its end, or one in line past it).
+ */
+export function crossedMarchers(
+    leg: OrderLeg,
+    obstacles: OrderObstacles | undefined,
+    most = Infinity,
+    near?: readonly XY[],
+): XY[] {
+    if (!obstacles) return [];
+    const { clearance, endGap } = obstacles;
+    const crossed: XY[] = [];
+    for (const q of near ?? nearBox(boundsOf(leg), obstacles)) {
+        if (outside(q, leg, clearance) || surelyFar(q, leg, clearance))
+            continue;
+        if (samePoint(q, leg.from) || samePoint(q, leg.to)) continue;
+        const { p, d } = nearestOnLeg(q, leg);
+        if (d >= clearance) continue;
+        const fromEnd = Math.min(
+            Math.hypot(p.x - leg.from.x, p.y - leg.from.y),
+            Math.hypot(p.x - leg.to.x, p.y - leg.to.y),
+        );
+        if (fromEnd > endGap) crossed.push(q);
+        if (crossed.length >= most) break;
+    }
+    return crossed;
+}
+
+/** The marchers in `obstacles` by square cells a clearance across, so a leg looks only near itself */
+interface ObstacleGrid {
+    readonly clearance: number;
+    readonly cell: number;
+    readonly cells: Map<number, XY[]>;
+}
+const gridCache = new WeakMap<readonly XY[], ObstacleGrid>();
+const cellKey = (ix: number, iy: number) => ix * 0x100000 + iy;
+function gridOf({ at, clearance }: OrderObstacles): ObstacleGrid {
+    const cached = gridCache.get(at);
+    if (cached && cached.clearance === clearance) return cached;
+    const cell = Math.max(clearance, 1);
+    const cells = new Map<number, XY[]>();
+    for (const q of at) {
+        const key = cellKey(Math.floor(q.x / cell), Math.floor(q.y / cell));
+        const list = cells.get(key);
+        if (list) list.push(q);
+        else cells.set(key, [q]);
+    }
+    const grid = { clearance, cell, cells };
+    gridCache.set(at, grid);
+    return grid;
+}
+
+/** The marchers in `obstacles` within a clearance of the box `b` (and some a little further) */
+function nearBox(b: Bounds, obstacles: OrderObstacles): XY[] {
+    const { cell, cells } = gridOf(obstacles);
+    const pad = obstacles.clearance;
+    const x0 = Math.floor((b.minX - pad) / cell);
+    const x1 = Math.floor((b.maxX + pad) / cell);
+    const y0 = Math.floor((b.minY - pad) / cell);
+    const y1 = Math.floor((b.maxY + pad) / cell);
+    // A box bigger than the marchers drawn: every marcher, without looking at empty cells
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) > cells.size) return [...obstacles.at];
+    const near: XY[] = [];
+    for (let x = x0; x <= x1; x++)
+        for (let y = y0; y <= y1; y++) {
+            const list = cells.get(cellKey(x, y));
+            if (list) for (const q of list) near.push(q);
+        }
+    return near;
+}
+
+/**
+ * How far a leg must bow to `side` (1: its left, -1: its right) at its middle for its arc to pass
+ * clear of `crossed`: a quadratic's offset `u` along its chord is 4 u (1 - u) of its middle's
+ */
+function bowToClear(
+    from: XY,
+    to: XY,
+    side: number,
+    crossed: readonly XY[],
+    clearance: number,
+): number {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length2 = dx * dx + dy * dy;
+    const length = Math.sqrt(length2) || 1;
+    let need = 0;
+    for (const q of crossed) {
+        const u = Math.min(
+            0.95,
+            Math.max(
+                0.05,
+                ((q.x - from.x) * dx + (q.y - from.y) * dy) / (length2 || 1),
+            ),
+        );
+        // Positive: to the leg's left, the way a positive sagitta bows
+        const left = ((q.x - from.x) * dy - (q.y - from.y) * dx) / length;
+        need = Math.max(need, (side * left + clearance) / (4 * u * (1 - u)));
+    }
+    return need;
+}
+
+/**
  * The legs through `points` in order: straight, except a leg that runs back over earlier ones
- * (within `tolerance`), which bows into a gentle arc. Bowed legs take sides in turn; a side whose
- * arc would still run over the line is swapped for the other, then for a deeper bow.
+ * (within `tolerance`) or over a marcher it doesn't end at (`obstacles`), which bows into a
+ * gentle arc, deep enough to pass clear of the marchers it would cover. Bowed legs take sides in
+ * turn; a side whose arc would still run over the line or a marcher is swapped for the other,
+ * then for a deeper bow.
  */
 export function orderLegs(
     points: readonly XY[],
     tolerance: number,
+    obstacles?: OrderObstacles,
 ): OrderLeg[] {
     const legs: OrderLeg[] = [];
     let bowed = 0;
@@ -241,28 +420,72 @@ export function orderLegs(
         const from = points[i - 1]!;
         const to = points[i]!;
         const straight: OrderLeg = { from, to, control: null };
-        if (!overlapsEarlier(straight, legs, tolerance)) {
+        const crossed = crossedMarchers(straight, obstacles);
+        if (
+            crossed.length === 0 &&
+            !overlapsEarlier(straight, legs, tolerance)
+        ) {
             legs.push(straight);
             continue;
         }
         const length = Math.hypot(to.x - from.x, to.y - from.y);
-        const depth = Math.min(
+        const gentle = Math.min(
             Math.max(BOW * length, 3 * tolerance),
             BOW_FIRST_MAX * length,
         );
+        const depthTo = (side: number) =>
+            Math.max(
+                gentle,
+                obstacles
+                    ? bowToClear(from, to, side, crossed, obstacles.clearance)
+                    : 0,
+            );
         const side = bowed % 2 === 0 ? 1 : -1;
         bowed++;
-        const tries = [side, -side, 2 * side, -2 * side].map((k) =>
+        const tries = [
+            [side, 1],
+            [-side, 1],
+            [side, 2],
+            [-side, 2],
+        ].map(([k, deeper]) =>
             bowedLeg(
                 from,
                 to,
-                Math.sign(k) * Math.min(Math.abs(k) * depth, BOW_MAX * length),
+                k! * Math.min(deeper! * depthTo(k!), BOW_MAX * length),
             ),
         );
-        legs.push(
-            tries.find((leg) => !overlapsEarlier(leg, legs, tolerance)) ??
-                tries[0]!,
-        );
+        // The marchers near any of them, looked up once
+        const near = obstacles
+            ? nearBox(
+                  tries.map(boundsOf).reduce((u, b) => ({
+                      minX: Math.min(u.minX, b.minX),
+                      minY: Math.min(u.minY, b.minY),
+                      maxX: Math.max(u.maxX, b.maxX),
+                      maxY: Math.max(u.maxY, b.maxY),
+                  })),
+                  obstacles,
+              )
+            : [];
+        // The first clear of the line and the marchers; else the one covering least
+        let best = tries[0]!;
+        let bestCost = Infinity;
+        for (const leg of tries) {
+            let cost = overlapsEarlier(leg, legs, tolerance) ? 1 : 0;
+            // Counted only as far as it could still beat the best so far
+            if (cost < bestCost)
+                cost += crossedMarchers(
+                    leg,
+                    obstacles,
+                    bestCost - cost,
+                    near,
+                ).length;
+            if (cost < bestCost) {
+                best = leg;
+                bestCost = cost;
+            }
+            if (cost === 0) break;
+        }
+        legs.push(best);
     }
     return legs;
 }
@@ -309,6 +532,116 @@ export function trimLeg(
     const t0 = tAtDistance(leg, gapFrom, false);
     const t1 = tAtDistance(leg, gapTo, true);
     return t1 - t0 > 1e-6 ? { t0, t1 } : null;
+}
+
+/** A box on screen, such as a marcher's name label */
+export interface Box {
+    readonly minX: number;
+    readonly minY: number;
+    readonly maxX: number;
+    readonly maxY: number;
+}
+
+const inBox = (p: XY, box: Box, pad: number) =>
+    p.x >= box.minX - pad &&
+    p.x <= box.maxX + pad &&
+    p.y >= box.minY - pad &&
+    p.y <= box.maxY + pad;
+
+/** How finely a leg's end is walked to find where it leaves a label */
+const LABEL_STEPS = 64;
+
+/**
+ * Where a leg trimmed to `t` at one end (its start, or its end when `fromEnd`) should stop
+ * instead so it doesn't run into `box` (a name label) in its last `most` px: just clear of the
+ * box, or `t` as it was when it doesn't reach the box there or still runs through it after
+ */
+export function trimClearOf(
+    leg: OrderLeg,
+    t: number,
+    fromEnd: boolean,
+    box: Box,
+    most: number,
+): number {
+    const step = (fromEnd ? -1 : 1) / LABEL_STEPS;
+    let prev = legPoint(leg, t);
+    let walked = 0;
+    let clearAt: number | null = inBox(prev, box, 0) ? null : t;
+    let sawBox = clearAt === null;
+    for (let u = t + step; fromEnd ? u > 0 : u < 1; u += step) {
+        const p = legPoint(leg, u);
+        walked += Math.hypot(p.x - prev.x, p.y - prev.y);
+        prev = p;
+        if (walked > most) break;
+        if (inBox(p, box, 0)) {
+            sawBox = true;
+            clearAt = null;
+        } else if (clearAt === null) clearAt = u;
+    }
+    // Still in the box this far along: it runs through the label, it doesn't just end in it
+    if (!sawBox || clearAt === null || inBox(prev, box, 0)) return t;
+    return clearAt;
+}
+
+/** How many points round the leader's ring are checked against the labels */
+const RING_STEPS = 96;
+
+/**
+ * The leader's ring round `at`, `r` across, as SVG arcs that leave out where it (its stroke
+ * reaching `reach` each side) would cover a box in `boxes` (a name label): null when nothing's
+ * left out, "" when nothing's left
+ */
+export function ringArcs(
+    at: XY,
+    r: number,
+    reach: number,
+    boxes: readonly Box[],
+): string | null {
+    const near = boxes.filter(
+        (b) =>
+            at.x + r + reach >= b.minX &&
+            at.x - r - reach <= b.maxX &&
+            at.y + r + reach >= b.minY &&
+            at.y - r - reach <= b.maxY,
+    );
+    if (near.length === 0) return null;
+    const angle = (i: number) => (2 * Math.PI * i) / RING_STEPS;
+    const pointAt = (i: number): XY => ({
+        x: at.x + r * Math.cos(angle(i)),
+        y: at.y + r * Math.sin(angle(i)),
+    });
+    const covers = Array.from({ length: RING_STEPS }, (_, i) =>
+        near.some((b) => inBox(pointAt(i), b, reach)),
+    );
+    if (!covers.some(Boolean)) return null;
+    // A point next to one that covers a label is left out too: the box's edge lies between them
+    const hidden = covers.map(
+        (c, i) =>
+            c ||
+            covers[(i + 1) % RING_STEPS]! ||
+            covers[(i + RING_STEPS - 1) % RING_STEPS]!,
+    );
+    const first = hidden.indexOf(true);
+    const arcs: string[] = [];
+    let start: number | null = null;
+    for (let k = 1; k <= RING_STEPS; k++) {
+        const i = first + k;
+        const shown = !hidden[i % RING_STEPS];
+        if (shown && start === null) start = i;
+        if (!shown && start !== null) {
+            const end = i - 1;
+            if (end > start) {
+                const a = pointAt(start);
+                const b = pointAt(end);
+                const large = angle(end - start) > Math.PI ? 1 : 0;
+                arcs.push(
+                    `M${a.x},${a.y} A${r},${r} 0 ${large} 1 ${b.x},${b.y}`,
+                );
+            }
+            start = null;
+        }
+    }
+    return arcs.join(" ");
 }
 
 /** A band along `samples`, `a` half-wide at the first and `b` at the last, as SVG polygon points */

@@ -11,7 +11,9 @@
  * (`FieldMarchers`), so it's worked out again only when either changes.
  *
  * It's never wider than a dot and stops short of each marcher, so dots and selection rings show
- * through; a leg that runs back over the line bows to one side (`orderLineGeometry`). It sits
+ * through; a leg that runs back over the line, or over a marcher it doesn't end at, bows to one
+ * side (`orderLineGeometry`). A leg's end stops short of its marcher's name label, and the
+ * leader's ring leaves a gap where it would cross a label. It sits
  * over the selection box and its handles, takes no presses, and hides while the Follow tool or a
  * shape tool is open (they draw their own ends).
  */
@@ -19,6 +21,7 @@ import {
     useEffect,
     useId,
     useMemo,
+    useRef,
     useState,
     useSyncExternalStore,
 } from "react";
@@ -42,6 +45,12 @@ import { useFieldViewStore, type FieldView } from "@/field/three/fieldView";
 import { ordersInForce } from "@/db-functions/rememberedOrder";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { dotSizes, ringReach } from "@/field/three/selectionRing";
+import {
+    labelBoxAt,
+    labelSizeOf,
+    type LabelStyle,
+} from "@/field/three/layers/LabelsLayer";
+import type { GlyphAtlas } from "@/field/three/sdfText";
 import { useShapeToolStore } from "@/shapes/tool/shapeToolStore";
 import {
     Divider,
@@ -64,16 +73,21 @@ import {
     type XY,
 } from "./orderSweep";
 import {
+    ORDER_GAP_PX,
     legSamples,
     legTangent,
     numberSide,
     orderLegs,
     orderLineSizes,
     orderWidthBetween,
+    ringArcs,
     taperAlong,
+    trimClearOf,
     trimLeg,
+    type Box,
     type LabelSide,
     type OrderLineSizes,
+    type OrderObstacles,
 } from "./orderLineGeometry";
 import { usePathPenStore } from "./pathPenStore";
 
@@ -89,6 +103,10 @@ const RING_WIDTH = 2;
 const ARROW_LENGTH = 8;
 const ARROW_HALF = 4.5;
 const ARROW_GAP = 1.5;
+/** How far at most a leg's end is cut back to stop short of its marcher's name label, in gaps */
+const LABEL_TRIM_GAPS = 2;
+/** Labels smaller than this on screen, in CSS px per em, aren't drawn (`labelFadeFrom`) */
+const LABEL_HIDDEN_PX = 4;
 /** Position numbers' size, and their gap from what they sit beside, in screen pixels */
 const NUMBER_PX = 11;
 const NUMBER_GAP = 2;
@@ -169,6 +187,41 @@ function useDrawnAt(
     }, [marchers, ids, where]);
 }
 
+/**
+ * Where every marcher (not an item) is drawn, in field units, as the same array until one of them
+ * moves: the marchers a leg of the line mustn't cover
+ */
+function useEveryoneAt(
+    marchers: FieldMarchers,
+    version: number,
+    enabled: boolean,
+): readonly XY[] {
+    const last = useRef<readonly XY[]>([]);
+    return useMemo(() => {
+        void version;
+        if (!enabled) return (last.current = []);
+        const at: XY[] = [];
+        const { positions, hidden, isItem } = marchers;
+        for (let i = 0; i < marchers.ids.length; i++)
+            if (!hidden[i] && !isItem[i])
+                at.push({ x: positions[i * 2]!, y: positions[i * 2 + 1]! });
+        const before = last.current;
+        const same =
+            before.length === at.length &&
+            before.every((p, i) => p.x === at[i]!.x && p.y === at[i]!.y);
+        return same ? before : (last.current = at);
+    }, [marchers, version, enabled]);
+}
+
+/** The marchers' name labels as the field draws them, for the line to keep clear of */
+export interface OrderLabels {
+    /** Each marcher's label text, by id */
+    readonly text: ReadonlyMap<number, string>;
+    readonly style: LabelStyle;
+    /** The labels' font, to measure them */
+    readonly atlas: GlyphAtlas;
+}
+
 /** One leg of a line as drawn: the points along it, trimmed clear of its marchers */
 interface DrawnPiece {
     readonly samples: readonly XY[];
@@ -187,8 +240,16 @@ interface DrawnNumber {
 interface DrawnLine {
     readonly guessed: boolean;
     readonly pieces: readonly DrawnPiece[];
-    /** The leader's ring: its middle, radius and color */
-    readonly ring: { at: XY; r: number; color: string } | null;
+    /**
+     * The leader's ring: its middle, radius and color, and the arcs drawn of it where it leaves a
+     * gap for a label (null: all of it)
+     */
+    readonly ring: {
+        at: XY;
+        r: number;
+        color: string;
+        arcs: string | null;
+    } | null;
     /** The arrow past the tail, as SVG points, and its color (not while Set order grows it) */
     readonly arrow: { points: string; color: string } | null;
     readonly numbers: readonly DrawnNumber[];
@@ -198,7 +259,9 @@ interface DrawnLine {
  * A line through `points` (leader first) as drawn: the legs, bowed where one runs back over the
  * line, trimmed clear of each marcher (`marchers` of the points are marchers; a last one past them
  * is Set order's pointer, which the line runs right up to), the leader's ring, the tail's arrow,
- * and the position numbers on the side away from the labels when `numbered`
+ * and the position numbers on the side away from the labels when `numbered`. Legs bow round the
+ * marchers in `everyone` they'd cover; a leg's ends and the ring keep clear of the marchers' name
+ * labels (`labelBoxes`, by point; null where there's none).
  */
 function drawLine({
     points,
@@ -209,6 +272,8 @@ function drawLine({
     numbered,
     sizes,
     labelSide,
+    everyone,
+    labelBoxes,
 }: {
     points: readonly XY[];
     marchers: number;
@@ -218,6 +283,8 @@ function drawLine({
     numbered: boolean;
     sizes: OrderLineSizes;
     labelSide: LabelSide;
+    everyone: readonly XY[];
+    labelBoxes: readonly (Box | null)[];
 }): DrawnLine {
     if (points.length === 0)
         return { guessed, pieces: [], ring: null, arrow: null, numbers: [] };
@@ -225,20 +292,53 @@ function drawLine({
     const ringOut = ringR + RING_WIDTH / 2 + HALO;
     const gapAt = (i: number) =>
         i >= marchers ? 0 : i === 0 ? ringOut + 1 : sizes.gap;
-    const legs = orderLegs(points, Math.max(sizes.leader / 2 + 1, 2));
+    const obstacles: OrderObstacles = {
+        at: everyone,
+        clearance: sizes.gap + sizes.leader / 2 + HALO,
+        endGap: sizes.gap,
+    };
+    const legs = orderLegs(
+        points,
+        Math.max(sizes.leader / 2 + 1, 2),
+        obstacles,
+    );
     const pieces = legs.flatMap((leg, i): DrawnPiece[] => {
         const trim = trimLeg(leg, gapAt(i), gapAt(i + 1));
         if (!trim) return [];
+        // Each end stops short of its marcher's label, the line's half width and halo clear of it
         const f0 = fractions[i]!;
         const f1 = fractions[i + 1]!;
+        const most = LABEL_TRIM_GAPS * sizes.gap;
+        const clearOf = (
+            box: Box | null | undefined,
+            f: number,
+        ): Box | null => {
+            if (!box) return null;
+            const pad = orderWidthBetween(f, sizes) / 2 + HALO + 1;
+            return {
+                minX: box.minX - pad,
+                minY: box.minY - pad,
+                maxX: box.maxX + pad,
+                maxY: box.maxY + pad,
+            };
+        };
+        const startBox = clearOf(labelBoxes[i], f0);
+        const endBox = i + 1 < marchers ? clearOf(labelBoxes[i + 1], f1) : null;
+        const t0 = startBox
+            ? trimClearOf(leg, trim.t0, false, startBox, most)
+            : trim.t0;
+        const t1 = endBox
+            ? trimClearOf(leg, trim.t1, true, endBox, most)
+            : trim.t1;
+        if (t1 - t0 <= 1e-6) return [];
         const at = (t: number) => f0 + (f1 - f0) * t;
         return [
             {
-                samples: legSamples(leg, trim.t0, trim.t1),
-                colors: [orderColorAt(at(trim.t0)), orderColorAt(at(trim.t1))],
+                samples: legSamples(leg, t0, t1),
+                colors: [orderColorAt(at(t0)), orderColorAt(at(t1))],
                 widths: [
-                    orderWidthBetween(at(trim.t0), sizes),
-                    orderWidthBetween(at(trim.t1), sizes),
+                    orderWidthBetween(at(t0), sizes),
+                    orderWidthBetween(at(t1), sizes),
                 ],
             },
         ];
@@ -281,7 +381,18 @@ function drawLine({
     return {
         guessed,
         pieces,
-        ring: { at: points[0]!, r: ringR, color: orderColorAt(fractions[0]!) },
+        ring: {
+            at: points[0]!,
+            r: ringR,
+            color: orderColorAt(fractions[0]!),
+            // A gap where it would cover a label, its stroke and halo and a pixel or so clear
+            arcs: ringArcs(
+                points[0]!,
+                ringR,
+                RING_WIDTH / 2 + HALO + ORDER_GAP_PX,
+                labelBoxes.filter((b): b is Box => b !== null),
+            ),
+        },
         arrow,
         numbers,
     };
@@ -289,8 +400,11 @@ function drawLine({
 
 export default function MarcherOrderOverlay({
     marchers,
+    labels,
 }: {
     marchers: FieldMarchers;
+    /** The marchers' name labels as drawn; none: the line doesn't keep clear of them */
+    labels?: OrderLabels;
 }) {
     const setting = useUiSettingsStore(
         (s) => s.uiSettings.marcherOrder ?? "selected",
@@ -384,16 +498,48 @@ export default function MarcherOrderOverlay({
             ),
         [view.zoom],
     );
+    // Everyone the line mustn't cover: the same array until one of them moves
+    const everyoneAt = useEveryoneAt(marchers, version, showing);
     // Worked out on screen but with the pan left out (the field scaled by the
     // zoom, then moved by the pan), so panning only moves what's drawn (the SVG group below) and
     // works nothing out again
     const zoom = view.zoom;
     const drawn = useMemo((): DrawnLine[] => {
         const onScreen = (p: XY): XY => ({ x: p.x * zoom, y: p.y * zoom });
+        const everyone = everyoneAt.map(onScreen);
+        // A marcher's label's ink on screen, when labels are drawn and big enough to read
+        const labelSize = labels ? labelSizeOf(labels.style) : 0;
+        const labelBox = (id: number, p: XY): Box | null => {
+            const text = labels?.text.get(id);
+            if (
+                !labels ||
+                !text ||
+                labels.style.form === "off" ||
+                labelSize * zoom < LABEL_HIDDEN_PX
+            )
+                return null;
+            const box = labelBoxAt(
+                p.x,
+                p.y,
+                labels.atlas.measure(text),
+                labelSize,
+                labels.style.beside,
+                true,
+            );
+            return {
+                minX: (box.x - box.width / 2) * zoom,
+                minY: (box.y - box.height / 2) * zoom,
+                maxX: (box.x + box.width / 2) * zoom,
+                maxY: (box.y + box.height / 2) * zoom,
+            };
+        };
         if (sweep) {
+            const labelBoxes: (Box | null)[] = [];
             const points = sweep.picked.flatMap((id) => {
                 const p = sweep.at.get(id);
-                return p ? [onScreen(p)] : [];
+                if (!p) return [];
+                labelBoxes.push(labelBox(id, p));
+                return [onScreen(p)];
             });
             const marchers = points.length;
             const fractions = points.map((_, i) =>
@@ -414,13 +560,18 @@ export default function MarcherOrderOverlay({
                     numbered: true,
                     sizes,
                     labelSide,
+                    everyone,
+                    labelBoxes,
                 }),
             ];
         }
         return lines.map((line) => {
+            const labelBoxes: (Box | null)[] = [];
             const points = line.order.flatMap((id) => {
                 const p = linesAt.get(id);
-                return p ? [onScreen(p)] : [];
+                if (!p) return [];
+                labelBoxes.push(labelBox(id, p));
+                return [onScreen(p)];
             });
             return drawLine({
                 points,
@@ -433,9 +584,21 @@ export default function MarcherOrderOverlay({
                 numbered: alt,
                 sizes,
                 labelSide,
+                everyone,
+                labelBoxes,
             });
         });
-    }, [sweep, lines, linesAt, zoom, sizes, labelSide, alt]);
+    }, [
+        sweep,
+        lines,
+        linesAt,
+        zoom,
+        sizes,
+        labelSide,
+        alt,
+        everyoneAt,
+        labels,
+    ]);
 
     const prefix = useId().replace(/:/g, "");
     if (!showing) return null;
@@ -565,24 +728,44 @@ function OrderLine({ id, line }: { id: string; line: DrawnLine }) {
                     ))}
                 </>
             )}
-            {/* The leader's ring, outside the dot and its selection ring */}
-            <circle
-                cx={ring.at.x}
-                cy={ring.at.y}
-                r={ring.r}
-                fill="none"
-                stroke={ORDER_HALO_COLOR}
-                strokeWidth={RING_WIDTH + 2 * HALO}
-            />
-            <circle
-                cx={ring.at.x}
-                cy={ring.at.y}
-                r={ring.r}
-                fill="none"
-                stroke={ring.color}
-                strokeWidth={RING_WIDTH}
-                data-testid="marcherOrderLeader"
-            />
+            {/* The leader's ring, outside the dot and its selection ring, with a gap for its label */}
+            {ring.arcs === null ? (
+                <>
+                    <circle
+                        cx={ring.at.x}
+                        cy={ring.at.y}
+                        r={ring.r}
+                        fill="none"
+                        stroke={ORDER_HALO_COLOR}
+                        strokeWidth={RING_WIDTH + 2 * HALO}
+                    />
+                    <circle
+                        cx={ring.at.x}
+                        cy={ring.at.y}
+                        r={ring.r}
+                        fill="none"
+                        stroke={ring.color}
+                        strokeWidth={RING_WIDTH}
+                        data-testid="marcherOrderLeader"
+                    />
+                </>
+            ) : (
+                <>
+                    <path
+                        d={ring.arcs}
+                        fill="none"
+                        stroke={ORDER_HALO_COLOR}
+                        strokeWidth={RING_WIDTH + 2 * HALO}
+                    />
+                    <path
+                        d={ring.arcs}
+                        fill="none"
+                        stroke={ring.color}
+                        strokeWidth={RING_WIDTH}
+                        data-testid="marcherOrderLeader"
+                    />
+                </>
+            )}
             {/* The arrow just past the tail, along the last leg's way there */}
             {arrow && (
                 <polygon
