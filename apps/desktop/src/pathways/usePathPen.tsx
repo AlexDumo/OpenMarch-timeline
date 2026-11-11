@@ -18,7 +18,7 @@ import { useStartFlagLevelsInEffect } from "@/stores/StartFlagKeyStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import type { XY } from "@/shapes/types";
 import { cancelFollowDrawing } from "./followDrag";
-import { openFollowTool } from "./followTool";
+import { isTrailLineAt, openFollowTool } from "./followTool";
 import {
     closeShapeTool,
     useShapeToolStore,
@@ -261,57 +261,64 @@ export function usePathPenActions(): void {
         const beat = useTimelineSelectionStore.getState().playheadBeat;
         const ids = performers.map((m) => m.id);
         // The Follow tool (step 4b): its ends pulse until one is pressed and a trail dragged
-        // out of it. While a group path is drawn for the same marchers, Together | Follow on the
-        // path bar still turns that drawing into a trail into the spots they have (step 4)
+        // out of it. Step 4's Follow still draws a trail when the selection is exactly a
+        // trail's line (drawn again, AP-T1 and AP-T2's "Again"), or while a group path is drawn
+        // for the same marchers (Together | Follow on the path bar keeps its points)
         const now2 = usePathPenStore.getState().session;
-        if (
-            !(
-                now2?.phase === "drawing" &&
-                now2.target.group &&
-                now2.target.routeId === null
-            )
-        ) {
-            void openFollowTool(resolver, ids, drills).then((refusal) => {
-                if (refusal) toast.error(refusal, { id: "path-pen" });
+        const groupDrawing =
+            now2?.phase === "drawing" &&
+            !!now2.target.group &&
+            now2.target.routeId === null;
+        void (async () => {
+            if (!groupDrawing && !(await isTrailLineAt(db, ids, beat))) {
+                const refused = await openFollowTool(
+                    resolver,
+                    ids,
+                    drills,
+                    beat,
+                );
+                if (refused) toast.error(refused, { id: "path-pen" });
                 else if (useShapeToolStore.getState().tool) closeShapeTool();
-            });
-            return;
-        }
-        void findTrailDrawTarget(db, resolver, ids, drills, beat).then(
-            (target) => {
-                if ("kind" in target && target.kind === "refused") {
-                    // Said before drawing starts, so no drawing is lost (AP-T1)
-                    toast.error(translateTimelineText(target.reason), {
-                        id: "path-pen",
-                    });
-                    return;
-                }
-                if ("kind" in target) {
-                    const who = performers.find(
-                        (m) =>
-                            target.kind === "noMove" &&
-                            m.id === target.marcherId,
-                    );
-                    toast.error(
-                        target.kind === "noMove"
-                            ? tolgee.t(
-                                  "pathways.refusals.noMove",
-                                  "{marcher} has no move at the playhead to draw a path on",
-                                  { marcher: who?.drill_number ?? "" },
-                              )
-                            : tolgee.t(
-                                  "pathways.refusals.followTwoMoves",
-                                  "These marchers are in different moves at the playhead: select marchers of one move to follow a trail",
-                              ),
-                        { id: "path-pen" },
-                    );
-                    return;
-                }
-                if (useShapeToolStore.getState().tool) closeShapeTool();
-                if (!switchDrawing(target, `${ids.length}`))
-                    startDrawing(target, `${ids.length}`);
-            },
-        );
+                return;
+            }
+            const target = await findTrailDrawTarget(
+                db,
+                resolver,
+                ids,
+                drills,
+                beat,
+            );
+            if ("kind" in target && target.kind === "refused") {
+                // Said before drawing starts, so no drawing is lost (AP-T1)
+                toast.error(translateTimelineText(target.reason), {
+                    id: "path-pen",
+                });
+                return;
+            }
+            if ("kind" in target) {
+                const who = performers.find(
+                    (m) =>
+                        target.kind === "noMove" && m.id === target.marcherId,
+                );
+                toast.error(
+                    target.kind === "noMove"
+                        ? tolgee.t(
+                              "pathways.refusals.noMove",
+                              "{marcher} has no move at the playhead to draw a path on",
+                              { marcher: who?.drill_number ?? "" },
+                          )
+                        : tolgee.t(
+                              "pathways.refusals.followTwoMoves",
+                              "These marchers are in different moves at the playhead: select marchers of one move to follow a trail",
+                          ),
+                    { id: "path-pen" },
+                );
+                return;
+            }
+            if (useShapeToolStore.getState().tool) closeShapeTool();
+            if (!switchDrawing(target, `${ids.length}`))
+                startDrawing(target, `${ids.length}`);
+        })();
     });
     useActionHandler("reverseTrail", () => void reverseShownTrail(), {
         enabled: trailShown && phase !== "drawing",

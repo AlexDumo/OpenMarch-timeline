@@ -12,6 +12,7 @@ import { performRedo, performUndo } from "@/db-functions/history";
 import { drawRoute, removeRoute } from "@/db-functions/timelineRoutes";
 import { drawGroupRoute } from "@/db-functions/timelineGroupRoutes";
 import { editPathPoints } from "@/db-functions/timelinePathEdits";
+import { followTrail, readTrails } from "@/db-functions/timelineTrails";
 import { isActionEnabled, runAction } from "@/shortcuts/registry";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
@@ -339,5 +340,41 @@ describeDbTests(
         });
     },
 );
+
+describeDbTests("usePathPenActions: Follow (Shift+L)", (it) => {
+    it("on exactly a trail's line draws that trail again (step 4's Again, AP-T1/AP-T2), not the Follow tool's drag", async ({
+        db,
+        wrapper,
+        marchersAndPages: _,
+    }) => {
+        const { timeline, A, select } = await setUp(db, wrapper);
+        const [, m2, m3, m4] = resolver().marcherIds();
+        const line = [m2!, m3!, m4!];
+        const { routeId } = await followTrail({
+            db,
+            timelineId: timeline.id,
+            marcherIds: line,
+            points: [{ at: [A[0] + 20, A[1] + 40] }],
+        });
+        await timelineResolverSettled();
+        expect(
+            (await readTrails(db, timeline.id)).find(
+                (t) => t.routeId === routeId,
+            ),
+        ).toBeDefined();
+        act(() => clearPath());
+        select(line);
+        act(() => void runAction("followTrail"));
+        await waitFor(() => expect(session()?.phase).toBe("drawing"));
+        // The stored trail, drawn again by its route; not the Follow tool's pulsing ends
+        expect(session()!.follow ?? null).toBeNull();
+        expect(session()!.target.routeId).toBe(routeId);
+        expect(
+            session()!
+                .target.trail!.members.map((m) => m.marcherId)
+                .sort(),
+        ).toEqual([...line].sort());
+    });
+});
 
 vi.setConfig({ testTimeout: 30000 });
