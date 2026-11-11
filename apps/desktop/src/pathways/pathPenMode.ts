@@ -50,6 +50,8 @@ import {
     dragPathHandle,
     landCorner,
     legOf,
+    bulgeLegOf,
+    sameShape,
     onLine,
     onPath,
     pathHandleAt,
@@ -70,6 +72,7 @@ import {
     commitAdjustKey,
     commitLaneAdjust,
     commitPoints,
+    commitShape,
     deleteAdjustKey,
     memberNow,
     memberOf,
@@ -478,15 +481,24 @@ class PathPenMode implements FieldMode {
         const profiles = (s.target.group?.members ?? []).flatMap((m) =>
             m.adjust ? [m.adjust] : [],
         );
-        const from =
-            leg >= 0 ? { ...p.base, points: splitLeg(p.base, leg) } : p.base;
+        const arc = bulgeLegOf(p.base, p.key);
+        const from = leg >= 0 ? splitLeg(p.base, leg) : p.base;
+        const next = limitDrag(
+            from,
+            dragPathHandle(p.base, p.key, pointer.field, env),
+            profiles,
+        );
         dragPoints(
-            limitDrag(
-                from,
-                dragPathHandle(p.base, p.key, pointer.field, env),
-                profiles,
-            ),
-            point >= 0 ? point : tangent ? tangent.index : leg,
+            next.points,
+            point >= 0
+                ? point
+                : tangent
+                  ? tangent.index
+                  : arc >= 0
+                    ? // an arc's bulge: no point moves, so none shows as dragged
+                      -1
+                    : leg,
+            arc >= 0 ? (next.toBulge ?? null) : undefined,
         );
     }
 
@@ -620,9 +632,15 @@ class PathPenMode implements FieldMode {
         if (p.moved) {
             // Moved past the slop with nothing dragged (no field yet): nothing to save
             if (s.dragging === null) return;
-            const now = usePathPenStore.getState().session?.points ?? p.before;
-            if (samePoints(now, p.before)) {
-                cancelDrag(p.before);
+            const nowSession = usePathPenStore.getState().session;
+            const now = nowSession?.points ?? p.before;
+            // An arc's bulge handle changes the last leg's bulge without moving a point (AP-T11)
+            const toBulge = {
+                now: nowSession?.toBulge ?? null,
+                before: p.base.toBulge ?? null,
+            };
+            if (samePoints(now, p.before) && toBulge.now === toBulge.before) {
+                cancelDrag(p.before, toBulge.before);
                 return;
             }
             // A midpoint dragged adds its point, which stays unselected; a point dragged keeps
@@ -631,12 +649,15 @@ class PathPenMode implements FieldMode {
             const keep =
                 (point >= 0 && p.key === s.selected) ||
                 tangentOf(p.base, p.key) !== null;
-            // Only a point or a tangent bar's end is a drag that stops short (AP-R11)
+            // A point, a tangent bar's end or an arc's bulge is a drag that stops short (AP-R11)
             void commitPoints(
                 now,
                 p.before,
                 keep ? s.selected : null,
-                point >= 0 || tangentOf(p.base, p.key) !== null,
+                point >= 0 ||
+                    tangentOf(p.base, p.key) !== null ||
+                    bulgeLegOf(p.base, p.key) >= 0,
+                toBulge,
             );
             return;
         }
@@ -652,7 +673,7 @@ class PathPenMode implements FieldMode {
         // A click: a midpoint adds a point there; a point is selected
         const added = clickPathHandle(p.base, p.key);
         if (added) {
-            void commitPoints(added, p.before, null);
+            void commitShape(added, null);
             return;
         }
         if (point >= 0) selectPoint(p.key);
@@ -718,7 +739,8 @@ class PathPenMode implements FieldMode {
         this.endHeld();
         if (p?.lane) setLaneEdit(null);
         if (!p?.moved) return;
-        if (this.session?.phase === "open") cancelDrag(p.before);
+        if (this.session?.phase === "open")
+            cancelDrag(p.before, p.base.toBulge ?? null);
         // A lost press-and-drag while drawing takes back the point it was placing
         else if (this.session?.dragging !== null) {
             cancelDrag(p.before);
@@ -822,19 +844,19 @@ class PathPenMode implements FieldMode {
                     ? PATH_MENU.pick(shape, 1, key, value, env)
                     : null;
                 if (!picked) return null;
-                if (!samePoints(picked.params.points, now.points))
-                    void commitPoints(
-                        picked.params.points,
-                        now.points,
-                        picked.selected,
-                    );
+                if (!sameShape(picked.params, shape))
+                    void commitShape(picked.params, picked.selected);
                 else if (picked.selected !== undefined)
                     selectPoint(picked.selected);
-                // Corner | Smooth and Straight | Curved stay open, showing the change; the
-                // others do one thing and close
-                return ["corner", "smooth", "straight", "curved"].includes(
-                    value,
-                )
+                // Corner | Smooth and Straight | Curved | Arc stay open, showing the change;
+                // the others do one thing and close
+                return [
+                    "corner",
+                    "smooth",
+                    "straight",
+                    "curved",
+                    "arc",
+                ].includes(value)
                     ? { params: picked.params, n: 1 }
                     : null;
             },
@@ -1214,6 +1236,9 @@ export function objectDrawingOf(o: PathObject): FieldModeDrawing | null {
         target: o.target,
         drill: o.drill,
         points: pointsOf(o.target),
+        ...(o.target.toBulge === undefined
+            ? {}
+            : { toBulge: o.target.toBulge }),
         pointer: null,
         selected: null,
         dragging: null,

@@ -171,14 +171,16 @@ describe("handles on a curved path", () => {
             x: q.x + (full.x - q.x) * t,
             y: q.y + (full.y - q.y) * t,
         });
-        expect(dragPathHandle(curved, "t0", at(1.43), env)[0]!.tension).toBe(
-            1.4,
-        );
         expect(
-            dragPathHandle(curved, "t0", at(1.43), fine)[0]!.tension,
+            dragPathHandle(curved, "t0", at(1.43), env).points[0]!.tension,
+        ).toBe(1.4);
+        expect(
+            dragPathHandle(curved, "t0", at(1.43), fine).points[0]!.tension,
         ).toBeCloseTo(1.43, 9);
-        expect(dragPathHandle(curved, "t0", at(5), env)[0]!.tension).toBe(2);
-        const behind = dragPathHandle(curved, "t0", at(-0.5), env)[0]!;
+        expect(
+            dragPathHandle(curved, "t0", at(5), env).points[0]!.tension,
+        ).toBe(2);
+        const behind = dragPathHandle(curved, "t0", at(-0.5), env).points[0]!;
         expect(behind.tension).toBeUndefined();
         expect(behind.id).toBe("a");
     });
@@ -213,26 +215,30 @@ describe("the pen's press-and-drag", () => {
 
 describe("adding and straightening", () => {
     it("a point added on a leg: a corner between corners, else as smooth as the smoother end", () => {
-        expect(splitLeg(curved, 0)[0]!.tension).toBe(1); // A and a smooth point
-        expect(splitLeg(curved, 2)[2]!.tension).toBe(1.5); // a corner and 1.5
+        expect(splitLeg(curved, 0).points[0]!.tension).toBe(1); // A and a smooth point
+        expect(splitLeg(curved, 2).points[2]!.tension).toBe(1.5); // a corner and 1.5
         const corners: PathShape = {
             ...curved,
             points: curved.points.map(({ id, at }) => ({ id, at })),
         };
-        expect(splitLeg(corners, 1)[1]!.tension).toBeUndefined();
+        expect(splitLeg(corners, 1).points[1]!.tension).toBeUndefined();
     });
 
     it("Straight makes a leg's points corners; Curved makes them smooth; no curve between the ends alone", () => {
         expect(legStraight(curved, 1)).toBe(false);
-        const straight = setLegCurved(curved, 1, false);
+        const straight = setLegCurved(curved, 1, false).points;
         expect(straight[0]!.tension).toBeUndefined();
         expect(straight[1]!.tension).toBeUndefined();
         expect(legStraight({ ...curved, points: straight }, 1)).toBe(true);
-        const back = setLegCurved({ ...curved, points: straight }, 1, true);
+        const back = setLegCurved(
+            { ...curved, points: straight },
+            1,
+            true,
+        ).points;
         expect(back[0]!.tension).toBe(1);
         expect(back[1]!.tension).toBe(1);
         // Kept roundness stays
-        expect(setLegCurved(curved, 3, true)[2]!.tension).toBe(1.5);
+        expect(setLegCurved(curved, 3, true).points[2]!.tension).toBe(1.5);
         const bare: PathShape = {
             from: { x: 0, y: 0 },
             to: { x: 9, y: 9 },

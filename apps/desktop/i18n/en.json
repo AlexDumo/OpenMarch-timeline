@@ -2718,7 +2718,9 @@
                 "adjustTooShort": "This path's shared part is too short to adjust; Detach to edit it",
                 "ownPathAdjusted": "{marcher}'s spot has an adjustment, which Own path can't keep. Reset this spot first",
                 "refitNotNeeded": "The path already fits where its marchers stand",
-                "refitNoFounder": "Nobody starts on this path, so it has no ends to re-fit to"
+                "refitNoFounder": "Nobody starts on this path, so it has no ends to re-fit to",
+                "arcTooRound": "An arc can bend at most into a half circle",
+                "smoothBesideArc": "A point at an end of an arc must be a corner"
             },
             "trail": {
                 "tooFew": "Follow is for two or more marchers",
@@ -3798,7 +3800,10 @@
             "addPoint": "Add point here",
             "straight": "Straight",
             "curved": "Curved",
-            "noCurve": "The path runs straight through here"
+            "noCurve": "The path runs straight through here",
+            "arc": "Arc",
+            "besideArc": "A point at an end of an arc stays a corner",
+            "nextToArc": "An arc meets this leg at a corner"
         },
         "errors": {
             "save": "Couldn't save the path",

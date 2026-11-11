@@ -45,6 +45,8 @@ import {
 import {
     curveOf,
     groupLegDistances,
+    besideArc,
+    besideArcReason,
     isSmooth,
     memberWalkOf,
     pathOutline,
@@ -446,6 +448,8 @@ function PathEditorBar({
     const shape = shapeOf(session);
     const picked = drawing ? -1 : pointOf(shape, session.selected);
     const smooth = picked >= 0 && isSmooth(shape, picked);
+    // R-14″: a point at an end of an arc stays a corner, and Smooth says why
+    const cornerOnly = picked >= 0 && !smooth && besideArc(shape, picked);
     // Own path and Rejoin for a group path (step 15): who they act on comes from the selection
     const ownable = usePathPenStore((s) => s.ownable);
     const rejoin = usePathPenStore((s) => s.rejoin);
@@ -640,11 +644,16 @@ function PathEditorBar({
                                     <LineSegmentsIcon size={14} />
                                 </IconButton>
                                 <IconButton
-                                    label={tolgee.t(
-                                        "actions.path.pointSmooth",
-                                        "Smooth point",
-                                    )}
+                                    label={
+                                        cornerOnly
+                                            ? besideArcReason()
+                                            : tolgee.t(
+                                                  "actions.path.pointSmooth",
+                                                  "Smooth point",
+                                              )
+                                    }
                                     action="pathPointSmooth"
+                                    disabled={cornerOnly}
                                     pressed={smooth}
                                     onClick={() => runAction("pathPointSmooth")}
                                     testId="path-point-smooth"

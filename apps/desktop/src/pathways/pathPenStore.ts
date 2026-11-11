@@ -35,9 +35,12 @@ import type { XY } from "@/shapes/types";
 import { SMOOTH } from "@/shapes/line/lineGeometry";
 import type { GroupMember, PathTarget } from "./pathTarget";
 import {
+    besideArc,
+    besideArcReason,
     isSmooth,
     pointKey,
     splitLeg,
+    withoutPoint,
     withTension,
     type PathPoint,
     type PathShape,
@@ -58,6 +61,8 @@ export interface PathSession {
     /** The marcher's drill number, as the drawing banner names it */
     readonly drill: string;
     readonly points: readonly PathPoint[];
+    /** The last leg's bulge (R-14″, step 10a), as the open path has it now; none while drawing */
+    readonly toBulge?: number;
     /**
      * While drawing, where a click now would put the next point, landed as a Line's next point
      * is: the preview's leg goes there
@@ -286,7 +291,12 @@ export const pointsOf = (target: PathTarget): PathPoint[] =>
         id: p.id,
         at: { x: p.at[0], y: p.at[1] },
         ...(p.tension === undefined ? {} : { tension: p.tension }),
+        ...(p.bulge === undefined ? {} : { bulge: p.bulge }),
     }));
+
+/** The session's last-leg bulge for `target` as stored (R-14″) */
+const toBulgeOf = (target: PathTarget): { toBulge?: number } =>
+    target.toBulge === undefined ? {} : { toBulge: target.toBulge };
 
 /** Whether `p` is the route's stored point `i`, in the same place */
 const storedAt = (target: PathTarget, i: number, p: PathPoint | undefined) => {
@@ -313,6 +323,7 @@ export function shapeOf(s: PathSession): PathShape {
         from: target.drawnEnds?.from ?? target.from,
         to: target.drawnEnds?.to ?? target.to,
         points,
+        ...(s.toBulge ? { toBulge: s.toBulge } : {}),
         ends: {
             from:
                 ends && last >= 0 && storedAt(target, 0, points[0])
@@ -412,6 +423,7 @@ export function selectPathObject(target: PathTarget, drill: string): void {
             target,
             drill,
             points: pointsOf(target),
+            ...toBulgeOf(target),
             pointer: null,
             selected: null,
             dragging: null,
@@ -509,6 +521,7 @@ export function showPath(
             target,
             drill,
             points,
+            ...toBulgeOf(target),
             pointer: null,
             selected: kept,
             dragging: null,
@@ -548,6 +561,9 @@ export function closePath(): void {
                 session.phase === "drawing"
                     ? pointsOf(session.target)
                     : session.points,
+            ...(session.phase === "drawing"
+                ? { toBulge: session.target.toBulge }
+                : {}),
             pointer: null,
             selected: null,
             dragging: null,
@@ -664,14 +680,44 @@ export const memberOf = (s: PathSession, marcherId: number) =>
     s.target.group?.members.find((m) => m.marcherId === marcherId);
 
 /** The points as a drag has them, shown live and saved on release ({@link commitPoints}) */
-export function dragPoints(points: readonly PathPoint[], index: number): void {
-    update((s) => ({ ...s, dragging: index, points }));
+/**
+ * `toBulge` as a session edit: a number sets the last leg's bulge, null makes it straight, and
+ * undefined keeps it
+ */
+const withToBulge = (
+    s: PathSession,
+    toBulge: number | null | undefined,
+): PathSession => {
+    if (toBulge === undefined) return s;
+    const { toBulge: _was, ...rest } = s;
+    return toBulge === null || toBulge === 0 ? rest : { ...rest, toBulge };
+};
+
+export function dragPoints(
+    points: readonly PathPoint[],
+    index: number,
+    toBulge?: number | null,
+): void {
+    update((s) => withToBulge({ ...s, dragging: index, points }, toBulge));
 }
 
 /** A drag that was lost puts the points back. */
-export function cancelDrag(before: readonly PathPoint[]): void {
-    update((s) => ({ ...s, dragging: null, points: before }));
+export function cancelDrag(
+    before: readonly PathPoint[],
+    toBulgeBefore?: number | null,
+): void {
+    update((s) =>
+        withToBulge({ ...s, dragging: null, points: before }, toBulgeBefore),
+    );
 }
+
+/** A point as the write path takes it: its id when stored, roundness and arc bulge when it has them */
+const storedInput = (c: PathPoint) => ({
+    ...(c.id === undefined ? {} : { id: c.id }),
+    at: [c.at.x, c.at.y] as [number, number],
+    ...((c.tension ?? 0) > 0 ? { tension: c.tension } : {}),
+    ...(c.bulge ? { bulge: c.bulge } : {}),
+});
 
 /** Writes `points` as the session's path (AP-R1), smooth ones with their roundness. */
 async function save(
@@ -681,11 +727,9 @@ async function save(
     const { session, saving } = usePathPenStore.getState();
     if (!session || saving) return false;
     usePathPenStore.setState({ saving: true });
-    const stored = points.map((c) => ({
-        ...(c.id === undefined ? {} : { id: c.id }),
-        at: [c.at.x, c.at.y] as [number, number],
-        ...((c.tension ?? 0) > 0 ? { tension: c.tension } : {}),
-    }));
+    const stored = points.map(storedInput);
+    // The last leg's bulge goes with a point edit of the open path (R-14″); a drawing has none
+    const toBulge = session.phase === "open" ? (session.toBulge ?? null) : null;
     const { target } = session;
     try {
         if (target.trail && target.routeId !== null)
@@ -695,6 +739,7 @@ async function save(
                 db,
                 routeId: target.routeId,
                 points: stored,
+                toBulge,
             });
         else if (target.trail)
             // Follow: the line gets its trail (AP-T1)
@@ -713,6 +758,7 @@ async function save(
                     routeId: target.routeId,
                     points: stored,
                     drag,
+                    toBulge,
                 }),
             );
         else if (session.byRoute && target.routeId !== null)
@@ -794,29 +840,49 @@ export async function commitPoints(
     before: readonly PathPoint[],
     selected?: string | null,
     drag = false,
+    /** The last leg's bulge now and before (R-14″): a number, null for none, undefined to keep */
+    toBulge?: { now: number | null; before: number | null },
 ): Promise<void> {
     const { session } = usePathPenStore.getState();
     if (!session || session.phase !== "open") return;
-    update((s) => ({
-        ...s,
-        dragging: null,
-        points,
-        ...(selected === undefined ? {} : { selected }),
-    }));
+    update((s) =>
+        withToBulge(
+            {
+                ...s,
+                dragging: null,
+                points,
+                ...(selected === undefined ? {} : { selected }),
+            },
+            toBulge?.now,
+        ),
+    );
     if (await save(points, drag))
         usePathPenStore.setState((state) => ({ saved: state.saved + 1 }));
-    else cancelDrag(before);
+    else cancelDrag(before, toBulge?.before);
+}
+
+/**
+ * The open path becomes `next` (a menu's pick, an arc's bulge): its points and its last leg's
+ * bulge, one undo step (AP-R1, AP-T11)
+ */
+export async function commitShape(
+    next: PathShape,
+    selected?: string | null,
+    drag = false,
+): Promise<void> {
+    const { session } = usePathPenStore.getState();
+    if (!session || session.phase !== "open") return;
+    await commitPoints(next.points, session.points, selected, drag, {
+        now: next.toBulge ?? null,
+        before: session.toBulge ?? null,
+    });
 }
 
 /** A new point in the middle of leg `leg` of the open path, selected (a Line's Add point here) */
 export async function insertPoint(leg: number): Promise<void> {
     const { session } = usePathPenStore.getState();
     if (!session || session.phase !== "open") return;
-    await commitPoints(
-        splitLeg(shapeOf(session), leg),
-        session.points,
-        pointKey(leg),
-    );
+    await commitShape(splitLeg(shapeOf(session), leg), pointKey(leg));
 }
 
 /**
@@ -830,7 +896,8 @@ export async function deletePoint(
 ): Promise<void> {
     const { session } = usePathPenStore.getState();
     if (!session || !session.points[index]) return;
-    const points = session.points.filter((_, i) => i !== index);
+    const shape = withoutPoint(shapeOf(session), index);
+    const { points } = shape;
     if (session.phase === "drawing") {
         update((s) => ({ ...s, selected: null, points }));
         return;
@@ -841,9 +908,8 @@ export async function deletePoint(
     }
     // From the keyboard, the point before it is selected next (the first, when it was the first),
     // so pressing on deletes point after point, and only the last removes the path
-    await commitPoints(
-        points,
-        session.points,
+    await commitShape(
+        shape,
         selectNeighbor ? pointKey(Math.max(0, index - 1)) : null,
     );
 }
@@ -862,6 +928,11 @@ export async function setPointSmooth(
     const shape = shapeOf(session);
     if (isSmooth(shape, index) === smooth) {
         if (smooth) selectPoint(pointKey(index));
+        return;
+    }
+    // R-14″: a point at an end of an arc leg stays a corner; Smooth says why
+    if (smooth && besideArc(shape, index)) {
+        toast.info(besideArcReason());
         return;
     }
     await commitPoints(
