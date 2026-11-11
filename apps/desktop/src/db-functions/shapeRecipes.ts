@@ -112,41 +112,14 @@ export async function saveShapeRecipeInTransaction({
     }
 
     // Out of the other recipes at the beat it's placed at
-    if (marcherIds.length > 0) {
-        const beat = orderMark
-            ? (orderMarkBeat(recipe.params) ??
-              (await placedBeatOf(tx, timelineId)))
-            : await placedBeatOf(tx, timelineId);
-        const shapes = orderMark
-            ? []
-            : await tx
-                  .select({ id: recipes.id })
-                  .from(recipes)
-                  .where(
-                      and(
-                          await movesEndingAtPlacedBeat(tx, timelineId),
-                          notInArray(recipes.id, [id]),
-                          notInArray(recipes.kind, [...ORDER_MARK_KINDS]),
-                      ),
-                  )
-                  .all();
-        const marks =
-            orderMark || !keepOrderMarks
-                ? (await orderMarksAtBeat(tx, beat)).filter((m) => m !== id)
-                : [];
-        const others = [...shapes.map((r) => r.id), ...marks];
-        if (others.length > 0) {
-            await tx
-                .delete(members)
-                .where(
-                    and(
-                        inArray(members.recipe_id, others),
-                        inArray(members.marcher_id, marcherIds),
-                    ),
-                )
-                .run();
-        }
-    }
+    if (marcherIds.length > 0)
+        await takeOutOfOthers(tx, {
+            id,
+            timelineId,
+            recipe,
+            marcherIds,
+            keepOrderMarks,
+        });
 
     if (placed.length > 0) {
         await tx
@@ -165,6 +138,61 @@ export async function saveShapeRecipeInTransaction({
 
     await deleteEmptyRecipes(tx);
     return id;
+}
+
+/**
+ * Takes `marcherIds` out of the other recipes at the beat recipe `id` is placed at
+ * (`saveShapeRecipeInTransaction`)
+ */
+async function takeOutOfOthers(
+    tx: DbTransaction,
+    {
+        id,
+        timelineId,
+        recipe,
+        marcherIds,
+        keepOrderMarks,
+    }: {
+        id: number;
+        timelineId: number | null;
+        recipe: ShapeRecipeRecord;
+        marcherIds: readonly number[];
+        keepOrderMarks: boolean;
+    },
+): Promise<void> {
+    const orderMark = isOrderMarkKind(recipe.kind);
+    const beat = orderMark
+        ? (orderMarkBeat(recipe.params) ?? (await placedBeatOf(tx, timelineId)))
+        : await placedBeatOf(tx, timelineId);
+    const shapes = orderMark
+        ? []
+        : await tx
+              .select({ id: recipes.id })
+              .from(recipes)
+              .where(
+                  and(
+                      await movesEndingAtPlacedBeat(tx, timelineId),
+                      notInArray(recipes.id, [id]),
+                      notInArray(recipes.kind, [...ORDER_MARK_KINDS]),
+                  ),
+              )
+              .all();
+    const marks =
+        orderMark || !keepOrderMarks
+            ? (await orderMarksAtBeat(tx, beat)).filter((m) => m !== id)
+            : [];
+    const others = [...shapes.map((r) => r.id), ...marks];
+    if (others.length > 0) {
+        await tx
+            .delete(members)
+            .where(
+                and(
+                    inArray(members.recipe_id, others),
+                    inArray(members.marcher_id, [...marcherIds]),
+                ),
+            )
+            .run();
+    }
 }
 
 /**
@@ -339,7 +367,7 @@ export async function moveShapeRecipesInTransaction({
             .where(
                 and(
                     inArray(members.recipe_id, theirs),
-                    inArray(members.marcher_id, marcherIds),
+                    inArray(members.marcher_id, [...marcherIds]),
                 ),
             )
             .run();
