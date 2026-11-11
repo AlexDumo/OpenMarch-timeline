@@ -94,7 +94,9 @@ export type FieldTestGesture =
     | "box"
     | "prop"
     /** The path pen drawing a path, or a path's corner dragged (pathways step 1) */
-    | "path";
+    | "path"
+    /** Set order sweeping through a line's marchers (pathways step 4g) */
+    | "order";
 
 /** How the field draws on this machine (the new field only, #205). */
 export type FieldTestQuality = {

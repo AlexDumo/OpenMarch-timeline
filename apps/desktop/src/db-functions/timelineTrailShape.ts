@@ -254,8 +254,34 @@ export function trailShapeOf(plan: TrailDragPlan): TrailShape {
 }
 
 /**
- * The recipe AP-T8 saves beside the spots it writes (DL-11, DL-14): the shape, its members in
- * line order (tail first) each where it was written, in the line's order
+ * `params` run the other way: the points in reverse, each bend moved to the point its segment now
+ * starts at and turned the other way round, so the same path from its other end
+ */
+export function reversedLineParams(params: LineParams): LineParams {
+    const points = params.points;
+    const n = points.length;
+    return {
+        ...params,
+        points: points.map((_, r) => {
+            const { bend: _b, ellipse: _e, ...p } = points[n - 1 - r]!;
+            // The segment from reversed point r to r + 1 was the one from point n - 2 - r
+            const from = points[n - 2 - r];
+            return from?.bend
+                ? {
+                      ...p,
+                      bend: -from.bend,
+                      ...(from.ellipse ? { ellipse: from.ellipse } : {}),
+                  }
+                : p;
+        }),
+    };
+}
+
+/**
+ * The recipe AP-T8 saves beside the spots it writes (DL-11, DL-14): the shape, its members leader
+ * first each where it was written, since a Line's slots run from its first point and a Line's
+ * first slot is read as its leader (step 4g, `rememberedOrder`). `line` is the trail's order, tail
+ * first, and `plan.spots` follow it, so the shape is run from the leader's end.
  */
 export function trailShapeRecipe(
     plan: TrailDragPlan,
@@ -265,23 +291,28 @@ export function trailShapeRecipe(
     recipe: ShapeRecipeRecord;
     members: ShapeRecipeMember[];
 } {
-    const shape = trailShapeOf(plan);
+    const tailFirst = trailShapeOf(plan);
+    const shape = {
+        ...tailFirst,
+        params: reversedLineParams(tailFirst.params),
+    };
     const kind = shape.kind === "arc" ? arcShape : lineShape;
+    const last = line.length - 1;
     return {
         shape,
         recipe: {
             kind: kind.id,
             kindVersion: kind.version,
             params: { ...shape.params, spots: line.length },
-            // A Line's order, from its first point (#528)
+            // A Line's order, from its first point (#528): the leader's
             orderMode: "keep",
             reverse: false,
         },
-        members: line.map((marcherId, q) => ({
-            marcherId,
-            slot: q,
-            x: plan.spots[q]![0],
-            y: plan.spots[q]![1],
+        members: line.map((_, slot) => ({
+            marcherId: line[last - slot]!,
+            slot,
+            x: plan.spots[last - slot]![0],
+            y: plan.spots[last - slot]![1],
         })),
     };
 }

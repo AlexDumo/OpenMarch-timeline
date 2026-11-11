@@ -56,6 +56,8 @@ import {
  *   for the selection on the current page (`holdEntryStates`, through its handler): checked and
  *   unavailable when every selected marcher is already in the state it sets, and with a count,
  *   "Hold from previous page (3 of 5)", when it would change only some of them.
+ * - A line's order (pathways step 4g), with two or more selected: **Set order**, **Reverse order**
+ *   and **Clear order**.
  * - Splitting moves (timeline mode, not Basic): **Split selected marchers into a new move** and
  *   **Split the move at the playhead**. An entry that can't run says why beside it (a split at
  *   a count refused while a line follows a trail), before anyone tries it.
@@ -74,6 +76,8 @@ const GROUPS: readonly (readonly ActionId[])[] = [
         "setSelectedMarchersToNextPage",
     ],
     ["splitSelectedIntoNewMove", "timelineSplitMoveAtPlayhead"],
+    // A line's order (pathways step 4g), shown with two or more selected
+    ["setMarcherOrder", "reverseMarcherOrder", "clearMarcherOrder"],
     [
         "alignHorizontally",
         "alignVertically",
@@ -98,6 +102,13 @@ const HOLDS: ReadonlySet<ActionId> = new Set(["timelineHoldFromPrevious"]);
 const MOVES: ReadonlySet<ActionId> = new Set([
     "splitSelectedIntoNewMove",
     "timelineSplitMoveAtPlayhead",
+]);
+
+/** A line's order (pathways step 4g): only with a line selected, two or more marchers */
+const ORDER: ReadonlySet<ActionId> = new Set([
+    "setMarcherOrder",
+    "reverseMarcherOrder",
+    "clearMarcherOrder",
 ]);
 
 /** The group whose entries can show checked: each keeps room for the check, so the words line up */
@@ -167,7 +178,9 @@ export default function FieldContextMenu({
               ? timelineMode
               : MOVES.has(id)
                 ? timelineMode && hasActionHandler(id)
-                : true;
+                : ORDER.has(id)
+                  ? timelineMode && selectedCount >= 2
+                  : true;
     const enabled = (id: ActionId) =>
         isActionEnabled(id) && (id !== "swapMarchers" || selectedCount === 2);
     const groups = actions

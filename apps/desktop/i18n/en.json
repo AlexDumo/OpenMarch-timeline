@@ -191,7 +191,12 @@
             "followKeywords": "follow leader trail line snake file ftl reverse path",
             "reverse": "Reverse leader",
             "removeTrail": "Remove trail",
-            "followPreview": "Preview the follow walk"
+            "followPreview": "Preview the follow walk",
+            "showOrder": "Show order",
+            "setOrder": "Set order",
+            "reverseOrder": "Reverse order",
+            "clearOrder": "Clear order",
+            "orderKeywords": "order sequence leader tail first last line follow reverse numbers"
         }
     },
     "analyticsOptIn": {
@@ -2818,7 +2823,11 @@
             "shapes": "Shapes",
             "shapesAlways": "Always",
             "shapesOff": "Off",
-            "shapesSelected": "When selected"
+            "shapesSelected": "When selected",
+            "order": "Order",
+            "orderSelected": "While selected",
+            "orderAlways": "Always",
+            "orderOff": "Off"
         },
         "pathsTab": "Paths"
     },
@@ -3857,7 +3866,11 @@
         },
         "toolbar": {
             "path": "Path",
-            "followTip": "Follow: drag a trail out of an end of the selected line, and where the line stops becomes its next spots"
+            "followTip": "Follow: drag a trail out of an end of the selected line, and where the line stops becomes its next spots",
+            "order": "Order",
+            "setOrderTip": "Set order: drag through the selected marchers from the leader to the tail, or click them one by one",
+            "reverseOrderTip": "Reverse order: the tail leads",
+            "clearOrderTip": "Clear order: forget the order set here, and guess it from where the marchers stand"
         },
         "toasts": {
             "removedGroup": "Removed the path for {count, plural, one {# marcher} other {# marchers}}",
@@ -3885,6 +3898,18 @@
         "trail": {
             "leader": "Leader · {marcher}",
             "reverseTip": "Make the other end of the line lead. Everyone keeps their end spot."
+        },
+        "order": {
+            "error": "Error saving the line's order",
+            "noneToReverse": "These marchers have no order to reverse: set one first",
+            "noneToClear": "Nothing to clear: the order of these marchers is already guessed",
+            "refusePlaying": "Stop playback to set the order",
+            "refuseTwo": "Select the marchers of a line (two or more)",
+            "refuseDrawing": "Finish or cancel the path first",
+            "cancel": "Cancel Set order",
+            "done": "Keep this order",
+            "doneButton": "Done",
+            "banner": "Set order: drag through the marchers from the leader, or click them one by one · {picked} of {count}"
         }
     }
 }

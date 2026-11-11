@@ -11,7 +11,15 @@ import { performRedo, performUndo } from "../history";
 import { TimelineWriteError } from "../timelineErrors";
 import { moveMarchersInTarget } from "../timelineMoves";
 import { drawRoute } from "../timelineRoutes";
-import { editTrailPoints, followTrail, reverseTrail } from "../timelineTrails";
+import {
+    editTrailPoints,
+    followTrail,
+    removeTrail,
+    reverseTrail,
+} from "../timelineTrails";
+import { readAllShapeRecipes } from "../shapeRecipes";
+import { setMarcherOrder } from "../marcherOrder";
+import type { LineParams } from "@/shapes/line/lineGeometry";
 import { followPlanOf, type FollowDrag } from "@/pathways/followDrag";
 import { followKeepAt, isTrailLineAt } from "@/pathways/followTool";
 import { storedPoints, type PathSession } from "@/pathways/pathPenStore";
@@ -19,6 +27,7 @@ import { rememberedOrderAt } from "../rememberedOrder";
 import {
     dragTrail,
     followOrderAt,
+    tailFirstOf,
     followSource,
     planTrailDrag,
     trailDragPreview,
@@ -765,10 +774,14 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
         const shuffled = [5, 2, 7, 1, 4, 3, 6];
         const at = shuffled.map((m) => after.positionAt(m, 17) as XY);
         const order = await followOrderAt(db, shuffled, 17, at);
-        const line17 = order!.map((i) => shuffled[i]!);
-        expect(line17).toEqual(line17[0] === 1 ? ids : [...ids].reverse());
-        // Every other marcher keeps the line's order
-        expect(await rememberedOrderAt(db, [7, 1, 5, 3], 17)).toEqual([1, 3, 5, 7]); // prettier-ignore
+        // Remembered, leader (M7) first; tail first as the Follow tool offers it, M7 last (finding 7)
+        expect(order!.leaderFirst).toBe(true);
+        expect(order!.order.map((i) => shuffled[i]!)).toEqual(
+            [...ids].reverse(),
+        );
+        expect(tailFirstOf(order!).map((i) => shuffled[i]!)).toEqual(ids);
+        // Every other marcher keeps the line's order, leader (M7, who walked first) first (step 4g)
+        expect(await rememberedOrderAt(db, [7, 1, 5, 3], 17)).toEqual([7, 5, 3, 1]); // prettier-ignore
 
         // The write reads the same order: M7 and M1 are the ends, M2 isn't
         const next = { start: 17, end: 25 };
@@ -790,9 +803,79 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
         const ids = [3, 1, 2, 4];
         const at = ids.map((m) => starts.get(m)!);
         expect(await rememberedOrderAt(db, ids, 9)).toBeNull();
-        expect(await followOrderAt(db, ids, 9, at)).toEqual(
-            followSource(at)!.order,
+        expect(await followOrderAt(db, ids, 9, at)).toEqual({
+            order: followSource(at)!.order,
+            leaderFirst: false,
+        });
+        expect((await followOrderAt(db, ids, 9, at))!.order.map((i) => ids[i])).toEqual([1, 2, 3, 4]); // prettier-ignore
+    });
+
+    it("step 4g: a dragged-out Line is saved leader first, so removing the trail keeps its order", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { starts, step } = await line(db);
+        const ids = [1, 2, 3, 4];
+        const leader = starts.get(4)!;
+        const corner: XY = [leader[0], leader[1] - 10 * step];
+        const result = await dragTrail({ db, window: WINDOW, marcherIds: ids, leaderId: 4, points: [{ at: corner }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+        expect(await rememberedOrderAt(db, ids, 17)).toEqual([4, 3, 2, 1]);
+        // The Line's slots run leader first, from its first point, which is the leader's spot
+        const recipe = (await readAllShapeRecipes(db)).find(
+            (r) => r.id === result.recipeId,
+        )!;
+        const bySlot = [...recipe.members].sort((a, b) => a.slot - b.slot);
+        expect(bySlot.map((m) => m.marcherId)).toEqual([4, 3, 2, 1]);
+        const r = await resolverOf(db);
+        bySlot.forEach(
+            (m) =>
+            expect(near([m.x, m.y], r.positionAt(m.marcherId, 17) as XY)).toBe(true), // prettier-ignore
         );
-        expect((await followOrderAt(db, ids, 9, at))!.map((i) => ids[i])).toEqual([1, 2, 3, 4]); // prettier-ignore
+        const first = (recipe.params as LineParams).points[0]!;
+        expect(near([first.x, first.y], [bySlot[0]!.x, bySlot[0]!.y])).toBe(true); // prettier-ignore
+
+        // Without the trail, the Line it left holds the same order
+        await removeTrail({ db, routeId: result.routeId });
+        expect(await rememberedOrderAt(db, ids, 17)).toEqual([4, 3, 2, 1]);
+    });
+
+    it("step 4g: a trail edit after an order set by hand is the latest action, so the trail's order holds; undo and redo bring each back", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { starts, step } = await line(db);
+        const ids = [1, 2, 3, 4];
+        const tail = starts.get(1)!;
+        const points = [{ at: [tail[0] - 5 * step, tail[1] + 5 * step] as XY }];
+        // Keep end spots: a trail (not along it) M1 leads
+        const result = await dragTrail({ db, window: WINDOW, marcherIds: ids, leaderId: 1, points, spacing: { kind: "keep" }, step, ends: "keep" }); // prettier-ignore
+        expect(await rememberedOrderAt(db, ids, 17)).toEqual([1, 2, 3, 4]);
+        const byHand = [3, 1, 4, 2];
+        const marks = async () =>
+            (await readAllShapeRecipes(db)).filter((r) => r.kind === "order");
+
+        // Reverse
+        await setMarcherOrder(db, { beat: 17, order: byHand });
+        expect(await rememberedOrderAt(db, ids, 17)).toEqual(byHand);
+        await reverseTrail({ db, routeId: result.routeId });
+        expect(await rememberedOrderAt(db, ids, 17)).toEqual([4, 3, 2, 1]);
+        expect(await marks()).toHaveLength(0);
+        expect((await performUndo(db)).success).toBe(true);
+        expect(await rememberedOrderAt(db, ids, 17)).toEqual(byHand);
+        expect((await performRedo(db)).success).toBe(true);
+        expect(await rememberedOrderAt(db, ids, 17)).toEqual([4, 3, 2, 1]);
+
+        // A point edit, which saves no Line
+        await setMarcherOrder(db, { beat: 17, order: byHand });
+        expect(await rememberedOrderAt(db, ids, 17)).toEqual(byHand);
+        await editTrailPoints({
+            db,
+            routeId: result.routeId,
+            points: [{ at: [tail[0] - 6 * step, tail[1] + 4 * step] }],
+        });
+        expect(await rememberedOrderAt(db, ids, 17)).toEqual([4, 3, 2, 1]);
+        expect(await marks()).toHaveLength(0);
+        expect((await performUndo(db)).success).toBe(true);
+        expect(await rememberedOrderAt(db, ids, 17)).toEqual(byHand);
     });
 });
