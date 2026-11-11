@@ -10,6 +10,11 @@
 import { describe, expect, it } from "vitest";
 import { createOracle } from "../oracle";
 import { createCachedResolver } from "../resolver";
+import {
+    walkedPath,
+    walkedPathPointAt,
+    WALKED_SAMPLE_TOLERANCE,
+} from "../walkedPath";
 import type {
     RouteGeometry,
     RoutePoint,
@@ -441,6 +446,153 @@ describe("ends along the way (spec R-13″, pathways step 4b)", () => {
             const e = res.ftlEntry(1);
             for (let q = 1; q < e.endDist.length; q++)
                 expect(e.endDist[q]!).toBeGreaterThanOrEqual(e.endDist[q - 1]!);
+        }
+    }, 30_000);
+});
+
+describe("ends along the way with an arc leg (R-13″ with R-14″)", () => {
+    // Three marchers at (0,0), (2,0), (4,0); the leader draws one arc leg from (4,0) to (12,0) with
+    // bulge 1/4: apex (8,2), centre (8,−3), radius 5, sweeping clockwise from angle π − atan(3/4)
+    const C: XY = [8, -3];
+    const R5 = 5;
+    const A0 = Math.PI - Math.atan(3 / 4);
+    const ARC = R5 * 2 * (A0 - Math.PI / 2); // r·θ
+    const onCircle = (r: number, a: number): XY => [
+        C[0] + r * Math.cos(a),
+        C[1] + r * Math.sin(a),
+    ];
+    /** The way at distance `d`, worked by hand: the line-up, then the circle */
+    const wayAt = (d: number): XY =>
+        d <= 4 ? [d, 0] : onCircle(R5, A0 - Math.min(d - 4, ARC) / R5);
+    const ARC_TRAIL: RoutePoint[] = [{ id: "p0", at: [12, 0], bulge: 0.25 }];
+
+    it("spots project onto the arc exactly; positions match both oracles at every quarter beat; R-20 draws the arc", () => {
+        // q0 off the arc outside it, q1 inside it under the apex, q2 at the trail's end
+        const a0 = Math.PI / 2 + 0.3;
+        const spots: XY[] = [onCircle(7, a0), [8, 0], [12, 0]];
+        const want = [4 + R5 * (A0 - a0), 4 + R5 * (A0 - Math.PI / 2), 4 + ARC];
+        const db = alongShow(3, ARC_TRAIL, spots);
+        const res = createCachedResolver(clone(db));
+        const oracle = createOracle(clone(db));
+        const ref = refOracle(clone(db));
+        const e = res.ftlEntry(1);
+        expect(e.members).toEqual([1, 2, 3]);
+        e.endDist.forEach((d, q) => expect(d).toBeCloseTo(want[q]!, 9));
+        const straight = [2, 2, 0];
+        const walk = walkedPath(db, res, 1, 0, 16);
+        expect(walk.segments.some((s) => s.kind === "arc")).toBe(true);
+        for (let b = 0; b <= 16; b += 0.25)
+            for (let q = 0; q < 3; q++) {
+                const x = res.positionAt(q + 1, b);
+                expect(Number.isFinite(x[0]) && Number.isFinite(x[1])).toBe(
+                    true,
+                );
+                // along the way from 2q to e_q, then straight to the spot, at one speed
+                const a = want[q]! - 2 * q;
+                const d = ((a + straight[q]!) * b) / 16;
+                const turn = wayAt(want[q]!);
+                const hand: XY =
+                    d <= a
+                        ? wayAt(2 * q + d)
+                        : [
+                              turn[0] +
+                                  ((spots[q]![0] - turn[0]) * (d - a)) /
+                                      straight[q]!,
+                              turn[1] +
+                                  ((spots[q]![1] - turn[1]) * (d - a)) /
+                                      straight[q]!,
+                          ];
+                expect(
+                    near(x, hand, 1e-9),
+                    `M${q + 1}@${b}: ${x} vs ${hand}`,
+                ).toBe(true);
+                expect(near(x, oracle.positionAt(q + 1, b))).toBe(true);
+                expect(near(x, ref.positionAt(q + 1, b))).toBe(true);
+            }
+        for (let q = 0; q < 3; q++) {
+            const path = walkedPath(db, res, q + 1, 0, 16);
+            for (let b = 0; b <= 16; b += 1 / 32) {
+                const at = walkedPathPointAt(path, b)!;
+                const x = res.positionAt(q + 1, b);
+                expect(Math.hypot(at[0] - x[0], at[1] - x[1])).toBeLessThan(
+                    WALKED_SAMPLE_TOLERANCE,
+                );
+            }
+        }
+        // the leader's stretch is the whole arc: R-20 cuts it into arcs on the circle
+        const leader = walkedPath(db, res, 3, 0, 16).segments;
+        const arcs = leader.filter((s) => s.kind === "arc");
+        expect(arcs.length).toBeGreaterThan(0);
+        for (const s of arcs)
+            if (s.kind === "arc") {
+                expect(
+                    Math.hypot(s.center[0] - C[0], s.center[1] - C[1]),
+                ).toBeLessThan(1e-9);
+                expect(s.radius).toBeCloseTo(R5, 9);
+            }
+    });
+
+    it("random along-ways with arc legs (corners beside them, smooth elsewhere, Reverse, spots on and off the way): resolver, oracle, ref and R-20 agree", () => {
+        for (let seed = 1; seed <= 60; seed++) {
+            const R = mulberry32(9000 + seed);
+            const n = 2 + Math.floor(R() * 4);
+            const k = 1 + Math.floor(R() * 4);
+            const arc = Array.from({ length: k }, () => R() < 0.6);
+            const points: RoutePoint[] = Array.from({ length: k }, (_, i) => ({
+                id: `p${i}`,
+                at: [Math.round(R() * 40) - 10, Math.round(R() * 40) - 10],
+                ...(arc[i]
+                    ? {
+                          bulge:
+                              (R() < 0.5 ? -1 : 1) *
+                              (R() < 0.15 ? 0.5 : 0.02 + R() * 0.48),
+                      }
+                    : {}),
+            }));
+            // R-14″: a point beside an arc leg is a corner
+            points.forEach((p, i) => {
+                if (i < k - 1 && !arc[i] && !arc[i + 1] && R() < 0.5)
+                    p.tension = 0.25 + R() * 1.75;
+            });
+            const spots = Array.from(
+                { length: n },
+                (): XY => [
+                    Math.round(R() * 40) - 10,
+                    Math.round(R() * 40) - 10,
+                ],
+            );
+            const db = alongShow(n, points, spots, {
+                params:
+                    R() < 0.4
+                        ? { waypoints: [], ends: "along", reverse: true }
+                        : { waypoints: [], ends: "along" },
+            });
+            const res = createCachedResolver(clone(db));
+            const oracle = createOracle(clone(db));
+            const ref = refOracle(clone(db));
+            for (let m = 1; m <= n; m++) {
+                const path = walkedPath(db, res, m, 0, 16);
+                for (let b = 0; b <= 16; b += 1 / 4) {
+                    const x = res.positionAt(m, b);
+                    const label = `seed ${seed} M${m}@${b}`;
+                    expect(
+                        Number.isFinite(x[0]) && Number.isFinite(x[1]),
+                        label,
+                    ).toBe(true);
+                    expect(
+                        near(x, oracle.positionAt(m, b)),
+                        `${label} oracle`,
+                    ).toBe(true);
+                    expect(near(x, ref.positionAt(m, b)), `${label} ref`).toBe(
+                        true,
+                    );
+                    const at = walkedPathPointAt(path, b)!;
+                    expect(
+                        Math.hypot(at[0] - x[0], at[1] - x[1]),
+                        `${label} R-20`,
+                    ).toBeLessThan(WALKED_SAMPLE_TOLERANCE);
+                }
+            }
         }
     }, 30_000);
 });

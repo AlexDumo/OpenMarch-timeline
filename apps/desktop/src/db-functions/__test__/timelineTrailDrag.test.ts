@@ -427,6 +427,84 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
         ]);
     });
 
+    it("R-14″ on a dragged-out trail: a leg made an arc after (AP-T11) resolves, the spots stay, and the members walk the arc", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { starts, step } = await line(db);
+        const ids = [1, 2, 3, 4, 5, 6];
+        const leader = starts.get(6)!;
+        const corner: XY = [leader[0] + 10 * step, leader[1]];
+        const end: XY = [corner[0], corner[1] - 10 * step];
+        const result = await dragTrail({ db, window: WINDOW, marcherIds: ids, leaderId: 6, points: [{ at: corner }, { at: end }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+        const spots = await spotsOf(db, result.transitionId);
+        // The leg into the end made an arc with the pen's leg menu, as the pen writes it; a last-leg
+        // bulge to `to` has no length on a dragged-out line, so it isn't kept
+        const points = storedPoints([
+            { at: { x: corner[0], y: corner[1] } },
+            { at: { x: end[0], y: end[1] }, bulge: 0.25 },
+        ] as PathSession["points"]);
+        expect(points[1]!.bulge).toBe(0.25);
+        await editTrailPoints({
+            db,
+            routeId: result.routeId,
+            points,
+            toBulge: 0.3,
+        });
+        const route = (await db
+            .select()
+            .from(schema.timeline_routes)
+            .where(eq(schema.timeline_routes.id, result.routeId))
+            .get())!;
+        const geometry = JSON.parse(route.geometry) as {
+            points: { bulge?: number }[];
+            toBulge?: number;
+            to: XY;
+        };
+        expect(geometry.points.map((p) => p.bulge)).toEqual([undefined, 0.25]);
+        expect(geometry.toBulge).toBeUndefined();
+        expect(geometry.to).toEqual(end);
+        expect(await spotsOf(db, result.transitionId)).toEqual(spots);
+        const r = await resolverOf(db);
+        for (let b = 9; b <= 17; b += 0.25)
+            for (const m of ids) {
+                const x = r.positionAt(m, b);
+                expect(
+                    Number.isFinite(x[0]) && Number.isFinite(x[1]),
+                    `M${m}@${b}`,
+                ).toBe(true);
+            }
+        ids.forEach((m, q) => expect(r.positionAt(m, 17)).toEqual(spots[q]));
+        // The arc: chord 10 steps down, bulge 1/4, so radius 6.25 steps, its centre 3.75 steps
+        // left of the chord's middle. The leader walks 10 steps to the corner, then the whole
+        // arc (r·θ) to its spot at the end, at one speed: on the circle once past the corner
+        const radius = 6.25 * step;
+        const center: XY = [corner[0] - 3.75 * step, corner[1] - 5 * step];
+        const arcLen = radius * 4 * Math.atan(0.5);
+        const onArcFrom = 9 + (8 * 10 * step) / (10 * step + arcLen);
+        let onArc = 0;
+        for (let b = 9; b <= 17; b += 0.25) {
+            if (b <= onArcFrom + 1e-9) continue;
+            const x = r.positionAt(6, b);
+            expect(
+                Math.hypot(x[0] - center[0], x[1] - center[1]),
+                `leader@${b}`,
+            ).toBeCloseTo(radius, 6);
+            onArc++;
+        }
+        expect(onArc).toBeGreaterThan(10);
+        // halfway along the arc, the leader is at its apex, 2.5 steps right of the chord
+        const apexAt =
+            9 + (8 * (10 * step + arcLen / 2)) / (10 * step + arcLen);
+        expect(
+            near(
+                r.positionAt(6, apexAt),
+                [corner[0] + 2.5 * step, corner[1] - 5 * step],
+                1e-6,
+            ),
+        ).toBe(true);
+    });
+
     it("QA-DL-7 (AP-T9): Keep end spots writes AP-T1's rows from the same drawing, the grabbed end leading", async ({
         db,
         marchersAndPages: _,
