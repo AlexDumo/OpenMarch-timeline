@@ -72,7 +72,9 @@ function agrees(
  * placed Line or Arc sets it, unless it has holes and agrees with the order in force, which it
  * then carries on. The order in force must hold every one of `ids`, and is returned kept to them
  * (every other marcher of a line gives the 1st, 3rd, 5th…). One of `ids` missing from it while it
- * has exactly one hole is the marcher who left that hole, put back there.
+ * has exactly one hole goes back in that hole only when it's known they left it: the order before
+ * that form held them there, or there was no order before it and they are in no form at all (a
+ * shape saved, in its own move, with the hole they left). Anyone else is a stranger to the line.
  */
 export function rememberedOrder(
     forms: readonly OrderForm[],
@@ -89,13 +91,17 @@ export function rememberedOrder(
         )
         .sort((a, b) => a.endBeat - b.endBeat || TIE[a.kind] - TIE[b.kind]);
     let order: readonly (number | null)[] | null = null;
+    /** The order in force before `order` was set, which may say who left its holes */
+    let before: readonly (number | null)[] | null = null;
     for (const form of relevant) {
         if (form.kind === "clear") {
             order = null;
+            before = null;
             continue;
         }
         const holes = form.order.some((m) => m === null);
         if (holes && order && agrees(order, membersOf(form))) continue;
+        before = order;
         order = form.order;
     }
     if (!order) return null;
@@ -103,10 +109,14 @@ export function rememberedOrder(
     const missing = [...want].filter((m) => !order.includes(m));
     if (missing.length === 0)
         return kept.filter((m): m is number => m !== null);
-    // The one who left the one hole, back where they were
-    if (missing.length === 1 && order.filter((m) => m === null).length === 1)
-        return kept.map((m) => m ?? missing[0]!);
-    return null;
+    if (missing.length !== 1 || order.filter((m) => m === null).length !== 1)
+        return null;
+    // The one who left the one hole, back where they were, if it's known they stood there
+    const back = kept.map((m) => m ?? missing[0]!);
+    const left = before
+        ? agrees(before, back)
+        : !relevant.some((f) => membersOf(f).includes(missing[0]!));
+    return left ? back : null;
 }
 
 /** The kinds of placed shape whose spots run in an order along them: a Line and an Arc */

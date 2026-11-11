@@ -140,10 +140,18 @@ describe("rememberedOrder", () => {
         expect(
             rememberedOrder([line(9, [4, null, null, 3])], [1, 2, 3, 4], 9),
         ).toBeNull();
-        // A copy whose order disagrees isn't a copy: it redefines, and lacks someone
+        // A copy whose order disagrees isn't a copy: it redefines, and who left its hole isn't known
         expect(
             rememberedOrder(
                 [line(9, [4, 1, 2, 3]), line(17, [2, null, 4, 3])],
+                [1, 2, 3, 4],
+                17,
+            ),
+        ).toBeNull();
+        // ...unless the order before it held them there
+        expect(
+            rememberedOrder(
+                [line(9, [2, 1, 4, 3]), line(17, [2, null, 4, 3])],
                 [1, 2, 3, 4],
                 17,
             ),
@@ -182,6 +190,26 @@ const LINE = {
 };
 
 describeDbTests("Remembered order in the show", (it) => {
+    it("QA-DL-25: a marcher who was never in the line doesn't fill its hole", () => {
+        // B (2) dragged off the Line in its own move; E (5) never stood in it, and is in a form of
+        // their own: plainly not the one who left
+        expect(
+            rememberedOrder(
+                [clear(1, [5]), line(9, [1, null, 3, 4])],
+                [1, 3, 4, 5],
+                9,
+            ),
+        ).toBeNull();
+        // E was in another line before this one: not the one who left this hole
+        expect(
+            rememberedOrder(
+                [line(1, [5, 6, 7]), line(9, [1, null, 3, 4])],
+                [1, 3, 4, 5],
+                9,
+            ),
+        ).toBeNull();
+    });
+
     it("QA-DL-25: a Line placed on page 2, one member dragged off by hand: the order holds at page 3", async ({
         db,
         marchersAndPages: _,
