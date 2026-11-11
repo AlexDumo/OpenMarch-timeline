@@ -217,20 +217,26 @@ describe("the live stop-short (AP-R11)", () => {
     it("stops the point where the keys would come closer than a step", () => {
         const out = limitDrag(
             shape,
-            shape.points.map((p, i) =>
-                i === 1 ? { ...p, at: { x: 110, y: 0 } } : p,
-            ),
+            {
+                ...shape,
+                points: shape.points.map((p, i) =>
+                    i === 1 ? { ...p, at: { x: 110, y: 0 } } : p,
+                ),
+            },
             [profile],
-        );
+        ).points;
         expect(out[1]!.at.x - 100).toBeCloseTo(11.25 / 0.2, 2);
     });
 
     it("leaves a drag that keeps them apart, and any drag with no Adjust", () => {
-        const points = shape.points.map((p, i) =>
-            i === 1 ? { ...p, at: { x: 250, y: 30 } } : p,
-        );
-        expect(limitDrag(shape, points, [profile])).toBe(points);
-        expect(limitDrag(shape, points, [])).toBe(points);
+        const next = {
+            ...shape,
+            points: shape.points.map((p, i) =>
+                i === 1 ? { ...p, at: { x: 250, y: 30 } } : p,
+            ),
+        };
+        expect(limitDrag(shape, next, [profile])).toBe(next);
+        expect(limitDrag(shape, next, [])).toBe(next);
     });
 });
 

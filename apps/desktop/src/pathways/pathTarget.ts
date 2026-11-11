@@ -24,6 +24,11 @@ import type { TimelineText } from "@/timeline/timelineText";
  * move at the playhead, from where it starts (`from`) to its end spot (`to`), and the route it
  * walks there now, if any.
  */
+
+/** A route's last-leg bulge as a target carries it (R-14″) */
+const toBulgeOf = (g: { toBulge?: number }): { toBulge?: number } =>
+    g.toBulge === undefined ? {} : { toBulge: g.toBulge };
+
 export interface PathTarget {
     timelineId: number;
     transitionId: number;
@@ -41,6 +46,8 @@ export interface PathTarget {
     points: readonly RoutePoint[];
     /** The ends the route was drawn against (its `from` and `to`, R-14's F and G), or null */
     ends: { from: XY; to: XY } | null;
+    /** The route's last leg's bulge (`toBulge`, R-14″, step 10a); absent for none */
+    toBulge?: number;
     /**
      * A group path (pathways step 15), or null for one marcher's own path. For a group the
      * target's `from` and `to` are the reference line's ends (F and G), `routeId` the group path
@@ -239,6 +246,7 @@ export async function findGroupTarget(
         routeId: group.routeId,
         points: g.points,
         ends: { from: xy(g.from), to: xy(g.to) },
+        ...toBulgeOf(g),
         drawnEnds: drawnEndsOf(members),
         group: { members, outside },
     };
@@ -311,6 +319,7 @@ export async function findGroupDrawTarget(
         to: xy(G),
         routeId: existing?.routeId ?? null,
         points: existing?.geometry.points ?? [],
+        ...(existing ? toBulgeOf(existing.geometry) : {}),
         ends: existing
             ? {
                   from: xy(existing.geometry.from),
@@ -356,6 +365,7 @@ function targetOfTrail(
         to: entrance ?? members[0]!.to,
         routeId: trail.routeId,
         points: trail.geometry.points,
+        ...toBulgeOf(trail.geometry),
         ends: { from: xy(trail.geometry.from), to: xy(trail.geometry.to) },
         group: null,
         trail: {
@@ -548,6 +558,7 @@ export async function findPathTarget(
         to: xy(resolver.positionAt(marcherId, transition.end_beat)),
         routeId: ownRouteId,
         points: route?.geometry.points ?? [],
+        ...(route ? toBulgeOf(route.geometry) : {}),
         ends: route
             ? { from: xy(route.geometry.from), to: xy(route.geometry.to) }
             : null,
@@ -601,6 +612,7 @@ export function targetOfRoute(
             routeId: r.routeId,
             points: g.points,
             ends: { from: xy(g.from), to: xy(g.to) },
+            ...toBulgeOf(g),
             group: null,
             span,
         };
@@ -634,6 +646,7 @@ export function targetOfRoute(
         routeId: first.routeId,
         points: g.points,
         ends: { from: xy(g.from), to: xy(g.to) },
+        ...toBulgeOf(g),
         drawnEnds: drawnEndsOf(members),
         group: { members, outside: [] },
         span,

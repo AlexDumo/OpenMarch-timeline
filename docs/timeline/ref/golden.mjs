@@ -299,5 +299,28 @@ const report = (name, bad) => { bad.length ? fail++ : pass++; console.log(`${bad
   if (!(o.positionAt(3, 4)[1] < 0)) bad.push('the leader is not on the curve');
   report('QA-TR-3', bad); }
 
+// QA-AR-1 (R-14″, plan step 10a): a leg with bulge 1/4 and chord 8 is R-8's arc, centre (4, −3), radius 5, length r·θ
+// exactly (θ = 4·atan(1/2)). One arc leg alone (toBulge) is R-8's arc itself, bit for bit; an arc leg then a straight
+// leg walks at one speed, on the circle until the corner; the oracle and the cached resolver agree bit for bit.
+{ const bad = [], same = (p, q) => p[0] === q[0] && p[1] === q[1], C = [4, -3], R = 5, len = R * 4 * Math.atan(0.5);
+  const one = rt([]); one.transitions[1].points = [[8, 0]]; one.routes[1].geometry = { v: 1, from: [0, 0], to: [8, 0], points: [], toBulge: 0.25 };
+  const arc = { ...rt([]), lanes: undefined, routes: undefined }; arc.transitions[1] = { ...arc.transitions[1], points: [[8, 0]], style: 'arc', params: { bulge: 0.25 } };
+  for (const [a, b] of [[makeOracle(one), makeOracle(arc)], [makeResolver(one), makeResolver(arc)]])
+    for (let t = -1; t <= 9; t += 0.25) if (!same(a.positionAt(1, t), b.positionAt(1, t))) bad.push(`one leg @${t} is not R-8's arc`);
+  const two = rt([]); two.transitions[1].points = [[8, 8]];
+  two.routes[1].geometry = { v: 1, from: [0, 0], to: [8, 8], points: [{ id: 'p0', at: [8, 0], bulge: 0.25 }] };
+  const o = makeOracle(two), r = makeResolver(two), W = routeWalk([0, 0], two.routes[1].geometry.points, [8, 8]);
+  if (Math.abs(W.D[1] - len) > 1e-12) bad.push(`arc length ${W.D[1]}, want r·θ = ${len}`);
+  const corner = (8 * len) / (len + 8);
+  for (let t = 0; t <= 8; t += 0.25) { const p = o.positionAt(1, t), q = r.positionAt(1, t);
+    if (!same(p, q)) bad.push(`@${t} oracle ${p} resolver ${q}`);
+    if (t <= corner && Math.abs(Math.hypot(p[0] - C[0], p[1] - C[1]) - R) > 1e-9) bad.push(`@${t} off the circle`); }
+  const sp = Array.from({ length: 32 }, (_, i) => i).filter((i) => !(i / 4 < corner && (i + 1) / 4 > corner))   // the step across the corner cuts it
+    .map((i) => { const a = o.positionAt(1, i / 4), b = o.positionAt(1, (i + 1) / 4); return Math.hypot(b[0] - a[0], b[1] - a[1]); });
+  if (Math.max(...sp) - Math.min(...sp) > 0.02) bad.push(`uneven speed ${Math.min(...sp)}..${Math.max(...sp)}`);
+  if (!(o.positionAt(1, 1)[1] > 0)) bad.push('a positive bulge bends toward +90° of the chord');
+  bad.length ? fail++ : pass++;
+  console.log(`${bad.length ? 'FAIL' : 'PASS'}  QA-AR-1${bad.length ? '\n   ' + bad.slice(0, 6).join('\n   ') : ''}`); }
+
 console.log(`${pass} of ${pass + fail} golden fixtures pass (oracle and cached resolver)`);
 if (fail) process.exitCode = 1;

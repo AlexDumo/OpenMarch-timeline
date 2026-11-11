@@ -7,6 +7,7 @@
  */
 import {
     EPS_GEOM,
+    ROUTE_ARC_SAMPLES,
     ROUTE_CUBIC_SAMPLES,
     adjustAt,
     arcPoint,
@@ -392,19 +393,22 @@ function sampledPiece(
     };
 }
 
-/** R-8's arc from `A` to `B` with bulge `k`, as pieces over progress [0, 1] (R-20 item 3). */
-function bulgePieces(A: XY, B: XY, k: number): Piece[] {
+/**
+ * R-8's arc from `A` to `B` with bulge `k`, as pieces over progress [pa, pb] (R-20 item 3; an arc
+ * leg of a route, R-14″, is the same arc).
+ */
+function bulgePieces(A: XY, B: XY, k: number, pa = 0, pb = 1): Piece[] {
     const dx = B[0] - A[0];
     const dy = B[1] - A[1];
     const c = Math.hypot(dx, dy);
-    if (c < EPS_GEOM) return [linePiece(0, 1, A, B)];
+    if (c < EPS_GEOM) return [linePiece(pa, pb, A, B)];
     const exact = (p: number) => arcPoint(A, B, k, p);
     if (Math.abs(k) < WALKED_MIN_BULGE)
         // drawn as a line, but cut where the resolver's arc is, so what comes next joins it
         return [
             {
-                pa: 0,
-                pb: 1,
+                pa,
+                pb,
                 cut: (u0, u1) => ({
                     kind: "line",
                     from: exact(u0),
@@ -430,27 +434,52 @@ function bulgePieces(A: XY, B: XY, k: number): Piece[] {
     const py = (A[1] + B[1]) / 2 + ny * s - center[1];
     const dir = ax * py - ay * px >= 0 ? 1 : -1;
     const sweep = dir * 4 * Math.atan(2 * Math.abs(k));
-    return arcPieces(0, 1, center, radius, startAngle, sweep, exact);
+    return arcPieces(pa, pb, center, radius, startAngle, sweep, exact);
+}
+
+/**
+ * The part of R-8's arc from `A` to `B` with bulge `k` between fractions `fa` and `fb` of it: its
+ * ends, and the bulge of that part (the same circle, its half-angle `φ·(fb − fa)`).
+ */
+function subArc(
+    A: XY,
+    B: XY,
+    k: number,
+    fa: number,
+    fb: number,
+): { from: XY; to: XY; k: number } {
+    const phi = 2 * Math.atan(2 * k);
+    return {
+        from: arcPoint(A, B, k, fa),
+        to: arcPoint(A, B, k, fb),
+        k: fa <= 0 && fb >= 1 ? k : Math.tan((phi * (fb - fa)) / 2) / 2,
+    };
 }
 
 /** A group member's leg (R-14 group schedule item 5) over progress `[pa, pb]`. */
-function legPiece(pa: number, pb: number, leg: GroupLeg): Piece {
+function legPieces(pa: number, pb: number, leg: GroupLeg): Piece[] {
     const { path } = leg;
     const piece = path.pieces[0]!;
     const S = path.V[0]!;
     const E = path.V[1]!;
+    if (piece.kind === "arc") return bulgePieces(S, E, piece.k, pa, pb);
     if (leg.length < EPS_GEOM || piece.kind === "line")
-        return linePiece(pa, pb, S, E);
-    return cubicPiece(pa, pb, S, piece.c1, piece.c2, E, piece.e);
+        return [linePiece(pa, pb, S, E)];
+    return [cubicPiece(pa, pb, S, piece.c1, piece.c2, E, piece.e)];
 }
 
 /** A group lane's walk (R-14 group schedule, R-14′ Adjust) as pieces (R-20 items 4 and 5). */
 function groupPieces(walk: GroupMemberWalk): Piece[] {
     const { schedule, A, B, offset, first, last, adjust } = walk;
-    if (!first || !last) return [linePiece(0, 1, A, B)];
+    if (!first || !last) {
+        const only = schedule.W.pieces[0];
+        return only?.kind === "arc"
+            ? bulgePieces(A, B, only.k)
+            : [linePiece(0, 1, A, B)];
+    }
     const { W, uFirst, uLast } = schedule;
     const m = W.V.length - 2;
-    const out: Piece[] = [legPiece(0, uFirst, first)];
+    const out: Piece[] = legPieces(0, uFirst, first);
     const keys = adjust && adjust.xs.length > 0 ? adjust : null;
     for (let j = 1; j < m; j++) {
         const xLo = W.D[j]!;
@@ -488,6 +517,43 @@ function groupPieces(walk: GroupMemberWalk): Piece[] {
                         place(pointAt(xb), db),
                     ),
                 );
+            } else if (piece.kind === "arc") {
+                const len = xHi - xLo;
+                if (da[0] === db[0] && da[1] === db[1]) {
+                    // a moved arc is the same arc (R-14″)
+                    const part = subArc(
+                        W.V[j]!,
+                        W.V[j + 1]!,
+                        piece.k,
+                        (xa - xLo) / len,
+                        (xb - xLo) / len,
+                    );
+                    out.push(
+                        ...bulgePieces(
+                            place(part.from, da),
+                            place(part.to, da),
+                            part.k,
+                            pa,
+                            pb,
+                        ),
+                    );
+                } else
+                    out.push(
+                        sampledPiece(
+                            pa,
+                            pb,
+                            (u) => {
+                                const x = xa + (xb - xa) * u;
+                                return place(pointAt(x), adjustAt(keys!, x));
+                            },
+                            Array.from(
+                                { length: ROUTE_ARC_SAMPLES + 1 },
+                                (_, i) =>
+                                    (xLo + (len * i) / ROUTE_ARC_SAMPLES - xa) /
+                                    (xb - xa),
+                            ),
+                        ),
+                    );
             } else if (da[0] === db[0] && da[1] === db[1]) {
                 out.push(
                     cubicPiece(
@@ -519,27 +585,33 @@ function groupPieces(walk: GroupMemberWalk): Piece[] {
             }
         }
     }
-    out.push(legPiece(uLast, 1, last));
+    out.push(...legPieces(uLast, 1, last));
     return out;
 }
 
-/** A marcher's own path (R-14) as pieces. */
+/** A marcher's own path (R-14; arc legs R-14″) as pieces. */
 function routePieces(path: RoutePath): Piece[] {
     const { V, D, L } = path;
+    const only = V.length === 2 ? path.pieces[0] : undefined;
+    if (only?.kind === "arc") return bulgePieces(V[0]!, V[1]!, only.k);
     if (V.length === 2 || L < EPS_GEOM)
         return [linePiece(0, 1, V[0]!, V[V.length - 1]!)];
-    return path.pieces.map((piece, j) =>
+    return path.pieces.flatMap((piece, j) =>
         piece.kind === "line"
-            ? linePiece(D[j]! / L, D[j + 1]! / L, V[j]!, V[j + 1]!)
-            : cubicPiece(
-                  D[j]! / L,
-                  D[j + 1]! / L,
-                  V[j]!,
-                  piece.c1,
-                  piece.c2,
-                  V[j + 1]!,
-                  piece.e,
-              ),
+            ? [linePiece(D[j]! / L, D[j + 1]! / L, V[j]!, V[j + 1]!)]
+            : piece.kind === "arc"
+              ? bulgePieces(V[j]!, V[j + 1]!, piece.k, D[j]! / L, D[j + 1]! / L)
+              : [
+                    cubicPiece(
+                        D[j]! / L,
+                        D[j + 1]! / L,
+                        V[j]!,
+                        piece.c1,
+                        piece.c2,
+                        V[j + 1]!,
+                        piece.e,
+                    ),
+                ],
     );
 }
 
@@ -808,7 +880,8 @@ export function createWalkedPaths(
                     ),
                 );
             }
-            if (route.points.length === 0) return [linePiece(0, 1, A, B)];
+            if (route.points.length === 0 && !route.toBulge)
+                return [linePiece(0, 1, A, B)];
             return routePieces(routePath(A, route.points, B, route));
         }
         if (t.style === "arc") return bulgePieces(A, B, t.params?.bulge ?? 0);

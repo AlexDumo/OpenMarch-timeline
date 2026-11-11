@@ -115,8 +115,8 @@ const views = {
      * lane on a follow-the-leader transition is its trail lane (E-LN2, I-LN2). Since step 3b an
      * own lane carries no Adjust (E-R4), an Adjust's anchors name points of its route (E-J3, I-J3)
      * and two keys on one straight corner-to-corner stretch are at least a step apart, 126.5625
-     * being `s_min` squared (E-J5, I-J5; I-J4 in full needs `D` on curves, so the write path has
-     * it). Apart from
+     * being `s_min` squared (E-J5, I-J5; I-J4 in full needs `D` on curves and arcs, so the write
+     * path has it; an arc leg, R-14″, is not straight, so it is left out here). Apart from
      * `timeline_commit_violations` for the same reason as `timeline_held_violations`: the write
      * wrapper reads it once the lanes table exists, and a view that names a missing table would
      * break a later table rebuild.
@@ -196,6 +196,7 @@ const views = {
                        AND json_extract(pb.value, '$.id') = json_extract(k1.value, '$.b')
                        AND json_type(pa.value, '$.tension') IS NULL
                        AND json_type(pb.value, '$.tension') IS NULL
+                       AND json_type(pb.value, '$.bulge') IS NULL
                        AND (json_extract(k1.value, '$.f') - json_extract(k2.value, '$.f'))
                            * (json_extract(k1.value, '$.f') - json_extract(k2.value, '$.f'))
                            * ((json_extract(pb.value, '$.at[0]') - json_extract(pa.value, '$.at[0]'))

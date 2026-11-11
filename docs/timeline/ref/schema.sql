@@ -212,6 +212,7 @@ CREATE VIEW commit_violations AS
                       AND json_extract(pa.value,'$.id') = json_extract(k1.value,'$.a')
                       AND json_extract(pb.value,'$.id') = json_extract(k1.value,'$.b')
                       AND json_type(pa.value,'$.tension') IS NULL AND json_type(pb.value,'$.tension') IS NULL
+                      AND json_type(pb.value,'$.bulge') IS NULL            -- R-14″ (step 10a): an arc leg is not straight
                       AND (json_extract(k1.value,'$.f') - json_extract(k2.value,'$.f')) * (json_extract(k1.value,'$.f') - json_extract(k2.value,'$.f'))
                           * ( (json_extract(pb.value,'$.at[0]') - json_extract(pa.value,'$.at[0]')) * (json_extract(pb.value,'$.at[0]') - json_extract(pa.value,'$.at[0]'))
                             + (json_extract(pb.value,'$.at[1]') - json_extract(pa.value,'$.at[1]')) * (json_extract(pb.value,'$.at[1]') - json_extract(pa.value,'$.at[1]')) ) < 126.5625) );
