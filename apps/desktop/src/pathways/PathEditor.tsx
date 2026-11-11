@@ -41,6 +41,7 @@ import {
     EVEN_FIRST,
     EVEN_STEP,
     evenLimitOf,
+    followFootprint,
     followMarchersOf,
     followPlanOf,
     followSpacingOf,
@@ -68,6 +69,8 @@ import {
     type LegWhere,
 } from "./pathEdit";
 
+/** Under a marcher: the field's note there (offset and pill), which the path bar leaves room for */
+const FIELD_NOTE_ROOM_PX = 40;
 /**
  * The Big steps advice for a path (spec v0.9 Appendix I.2, I.5): one steady speed means every leg
  * has the same step size, the path's length (curves included) over the move's counts, tested as
@@ -472,8 +475,15 @@ function PathEditorBar({
         () => pathOutline(shapeOf(session)),
         [session],
     );
+    // The Follow tool's line, its end spots and the pointer stay clear too, with room under each
+    // for the field's note (the hover note, the step readout), so the bar never covers the work
+    const footprint = useMemo(() => followFootprint(session), [session]);
     const place = editorPlacement({
         outline: outline.map((p) => fieldToElement(view, p.x, p.y)),
+        handles: footprint.flatMap((p) => {
+            const e = fieldToElement(view, p.x, p.y);
+            return [e, { x: e.x, y: e.y + FIELD_NOTE_ROOM_PX }];
+        }),
         width: size.width,
         height: size.height,
         fieldWidth: size.fw,

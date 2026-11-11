@@ -415,3 +415,18 @@ export function followHasTrail(s: PathSession): boolean {
         (s.points.length > 0 || s.pointer !== null)
     );
 }
+
+/**
+ * What the path bar keeps clear of while the Follow tool is open (step 4e): the line's starts,
+ * where it ends now (the drawing's plan, so the pointer's leg too) and the pointer. Empty for
+ * any other session.
+ */
+export function followFootprint(s: PathSession): XY[] {
+    const f = s.follow;
+    if (!f || s.phase !== "drawing") return [];
+    const at: XY[] = [...f.starts.values()];
+    const plan = followDrawnPlanOf(s);
+    if (plan) for (const [x, y] of plan.spots) at.push({ x, y });
+    if (s.pointer) at.push(s.pointer);
+    return at;
+}
