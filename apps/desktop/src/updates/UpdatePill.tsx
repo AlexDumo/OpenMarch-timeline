@@ -6,6 +6,7 @@ import { Button } from "@openmarch/ui";
 import { ArrowCircleUpIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import type { UpdateState } from "@/global/updates";
 import { POPOVER_CLASS } from "@/components/ui/popupClasses";
+import { Tip } from "@/components/ui/Tip";
 import {
     megabytes,
     openReleasePage,
@@ -15,10 +16,11 @@ import {
 
 /**
  * The update pill beside the version in the title bar (fork #404). It shows only when there is
- * something to do or watch: an update to download, a download the person asked for (with its
- * progress), one ready to install, or one that failed. An automatic download shows only once
- * it's ready. Its popover holds the step to take: Download, Update
- * now, Move to Applications (macOS, outside Applications), or Try again and Download installer.
+ * something to do or watch: an update to download, one downloading, one ready to install, or one
+ * that failed. A download the person asked for shows its text and progress bar; an automatic
+ * one is only a small progress ring, with the percentage in its tooltip. The popover holds the
+ * step to take: Download, Update now, Move to Applications (macOS, outside Applications), or
+ * Try again and Download installer.
  */
 export default function UpdatePill() {
     const { t } = useTranslate();
@@ -33,47 +35,73 @@ export default function UpdatePill() {
             kind !== "available" &&
             kind !== "downloading" &&
             kind !== "downloaded");
-    // An automatic download stays out of the way until it's ready (Settings shows it)
     const active =
-        kind === "available" ||
-        (state.phase.kind === "downloading" && state.phase.requested) ||
-        kind === "downloaded";
+        kind === "available" || kind === "downloading" || kind === "downloaded";
     if (!version || (!failed && !active)) return null;
+    // An automatic download: a quiet ring, not text
+    const quiet =
+        !failed && state.phase.kind === "downloading" && !state.phase.requested;
+    const percent =
+        state.phase.kind === "downloading"
+            ? Math.floor(state.phase.percent)
+            : 0;
+    const label = t(
+        failed
+            ? "updates.pill.failed"
+            : quiet
+              ? "updates.pill.downloadingQuiet"
+              : kind === "downloaded"
+                ? "updates.pill.ready"
+                : kind === "downloading"
+                  ? "updates.pill.downloading"
+                  : "updates.pill.available",
+        { percent },
+    );
 
-    return (
-        <Popover.Root open={open} onOpenChange={setOpen}>
-            <Popover.Trigger asChild>
-                <button
-                    type="button"
-                    data-testid="update-pill"
-                    data-phase={failed ? "error" : kind}
-                    aria-label={t(
-                        failed
-                            ? "updates.pill.failed"
-                            : kind === "downloaded"
-                              ? "updates.pill.ready"
-                              : "updates.pill.available",
-                    )}
-                    className={clsx(
-                        // Touch: the icon alone, a finger's size, to leave the row for the tabs
-                        "titlebar-button text-sub touch:size-44 touch:justify-center touch:px-0 flex cursor-pointer items-center gap-6 rounded-full px-8 py-2 leading-none outline-hidden duration-150 ease-out focus-visible:ring-2",
-                        failed
-                            ? "text-red focus-visible:ring-red"
-                            : kind === "downloaded"
-                              ? "bg-accent text-text-invert hover:bg-accent/80 focus-visible:ring-accent"
-                              : "text-accent focus-visible:ring-accent hover:bg-text/10",
-                    )}
-                >
-                    {failed ? (
-                        <WarningCircleIcon size={14} />
-                    ) : (
-                        <ArrowCircleUpIcon size={14} />
-                    )}
+    const trigger = (
+        <Popover.Trigger asChild>
+            <button
+                type="button"
+                data-testid="update-pill"
+                data-phase={failed ? "error" : kind}
+                data-quiet={quiet || undefined}
+                aria-label={label}
+                className={clsx(
+                    // Touch: the icon alone, a finger's size, to leave the row for the tabs
+                    "titlebar-button text-sub touch:size-44 touch:justify-center touch:px-0 flex cursor-pointer items-center gap-6 rounded-full py-2 leading-none outline-hidden duration-150 ease-out focus-visible:ring-2",
+                    quiet ? "px-4" : "px-8",
+                    failed
+                        ? "text-red focus-visible:ring-red"
+                        : kind === "downloaded"
+                          ? "bg-accent text-text-invert hover:bg-accent/80 focus-visible:ring-accent"
+                          : "text-accent focus-visible:ring-accent hover:bg-text/10",
+                )}
+            >
+                {failed ? (
+                    <WarningCircleIcon size={14} />
+                ) : quiet ? (
+                    <ProgressRing percent={percent} />
+                ) : (
+                    <ArrowCircleUpIcon size={14} />
+                )}
+                {!quiet && (
                     <span aria-hidden className="touch:hidden">
                         <PillLabel state={state} failed={failed} />
                     </span>
-                </button>
-            </Popover.Trigger>
+                )}
+            </button>
+        </Popover.Trigger>
+    );
+
+    return (
+        <Popover.Root open={open} onOpenChange={setOpen}>
+            {quiet ? (
+                <Tip label={label} side="bottom">
+                    {trigger}
+                </Tip>
+            ) : (
+                trigger
+            )}
             <Popover.Portal>
                 <Popover.Content
                     side="bottom"
@@ -112,6 +140,42 @@ function PillLabel({ state, failed }: { state: UpdateState; failed: boolean }) {
         );
     if (phase.kind === "downloaded") return <T keyName="updates.pill.ready" />;
     return <T keyName="updates.pill.available" />;
+}
+
+/** A download's progress as a small ring, for an automatic download */
+function ProgressRing({ percent }: { percent: number }) {
+    const radius = 5.5;
+    const circumference = 2 * Math.PI * radius;
+    const filled = (Math.min(100, Math.max(0, percent)) / 100) * circumference;
+    return (
+        <svg
+            width={14}
+            height={14}
+            viewBox="0 0 14 14"
+            aria-hidden
+            data-testid="update-progress-ring"
+            className="-rotate-90"
+        >
+            <circle
+                cx={7}
+                cy={7}
+                r={radius}
+                fill="none"
+                strokeWidth={2}
+                className="stroke-text/15"
+            />
+            <circle
+                cx={7}
+                cy={7}
+                r={radius}
+                fill="none"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeDasharray={`${filled} ${circumference}`}
+                className="stroke-accent transition-[stroke-dasharray] duration-300 ease-out"
+            />
+        </svg>
+    );
 }
 
 function ProgressBar({

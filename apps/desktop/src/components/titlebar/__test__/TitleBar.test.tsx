@@ -75,6 +75,26 @@ describe("TitleBar", () => {
         expect(pill).toHaveAttribute("data-phase", "available");
     });
 
+    it("main variant shows an automatic download as a quiet progress ring", async () => {
+        updaterWith({
+            ...availableState,
+            phase: {
+                kind: "downloading",
+                version: "0.2.1",
+                requested: false,
+                percent: 37.4,
+                bytesPerSecond: 1,
+                transferred: 1,
+                total: 2,
+            },
+        });
+        renderBar();
+        const pill = await screen.findByTestId("update-pill");
+        expect(pill).toHaveAttribute("data-quiet", "true");
+        expect(pill).toHaveAccessibleName("Downloading an update: 37%");
+        expect(screen.getByTestId("update-progress-ring")).toBeInTheDocument();
+    });
+
     it("main variant shows nothing while up to date", async () => {
         const updates = updaterWith({
             ...availableState,
