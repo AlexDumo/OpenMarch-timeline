@@ -3559,3 +3559,47 @@ press. Escape cancels the drawing, then leaves the tool.
 
 **Parity.** Shows with no `ends` and no `bulge` resolve bit-identically before and after both
 steps (golden, regression and fuzz suites unchanged, plus the base-vs-branch quarter-beat script).
+
+### L.5 Step 4c: the dragged-out result as a shape; preview marchers
+
+**Change (owner, 2026-11-10, approved follow-ups to step 4b).** What a dragged-out trail writes
+opens in the shape tools as their own shape, and the drawing shows the real marchers where they
+will stand, with a looping preview of the walk.
+
+| ID    | Decision                                                                                                                                                                                                                                                                                                                                                                       |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| DL-11 | AP-T8 (From trail) also saves a **shape recipe** (ADR 0006) for the end spots, in the same transaction (one undo step), in the move the spots are written to. Keep end spots (AP-T9) writes no spots and saves none.                                                                                                                                                         |
+| DL-12 | The recipe's kind: spots on one straight line → **Line** (`line` v2, its two ends); spots on one circle, in order round it → **Arc** (`arc` v2, its two ends, the first bent); anything else (corners, smooth points, the line-up and trail together) → **Curve**, which the shape tools store as a Line (`line` v2) whose points are each Corner or Smooth.                     |
+| DL-13 | A Curve's points are Corner (tension 0) or Smooth (tension above 0), the Line's own rule (#524, #525); a double-click on a point turns it Smooth or a Corner again, as on a Path pen point. Curves saved before keep their params and look: nothing about stored Curves or Lines changes.                                                                                     |
+| DL-14 | **Opening moves nobody.** The recipe records each member where it was written (`x`, `y` = `P(e_q)`, slot = its place in the line, tail first), so Keep spacing's uneven gaps stay. The first change to the shape (or its spacing) lays it out as the shape tool always does (its spacing Fit, evenly along it).                                                              |
+| DL-15 | After an edit of the shape the follow move keeps working: the new spots are absolute (DL-9, AP-T10); members walk the way to their nearest point, then straight (R-13″).                                                                                                                                                                                                   |
+| DL-16 | While a trail is drawn, the line's **real marchers** are drawn full size at their end spots, and their starts as faint ghosts (the shape tool's start ghosts, #417). The trail stays as drawn. What is shown is what is written.                                                                                                                                            |
+| DL-17 | **▶ Preview** on the Follow path bar, off by default: on, the marchers loop the walk along the trail (start, walk, a short pause at the end, again) at the positions R-13″ gives them, over a fixed loop; off, they stand at their end spots. With the system's reduced motion on, Preview is off and can't be turned on.                                                    |
+
+**The Curve's shape (DL-12, DL-13).** The Curve passes through every written spot exactly. It is
+built from the way `P` between the first member's end `e_0` and the leader's `e_{m−1}`: its ends are
+those two spots; the way's vertices between them become its points (the line-up's members'
+starts and the trail's corners as Corners, the trail's smooth points as Smooth with their
+roundness, an arc leg as the bend of the point before it, cut exactly where `e_0` or `e_{m−1}`
+falls inside it). A spot on a straight or arc piece is on the Curve as built. The Line's smooth
+segments are not R-14's cubics (their handles differ), so a spot on a curved piece of the way is
+added as a Smooth point of its own, which the Curve's interpolation passes through exactly; points
+that are not spots are marked to hold no marcher (`marcher: false`), so a later layout spaces
+marchers along the Curve rather than pinning them to where the trail turned.
+
+**The recipe and spacing (DL-14).** The shape tools read a placed shape back while each member
+stands on its recipe spot (within 0.01 field units), and lay a shape out again only when it is
+changed. So the least invasive choice is the recipe recording the spots as placed, with the
+kind's own spacing Fit: no new param, no kind version, no change to how any kind lays out.
+Recorded alternatives, not taken: a kind holding given positions until edited (a new param and
+a new rule in every kind), or mapping Even N to Keep interval N steps (it would re-solve the
+Curve's length on its first edit).
+
+| ID       | Case                                                                                           | Expected                                                                                                                                                       |
+| -------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| QA-DL-10 | QA-DL-1's line, a trail straight on from the leader, Keep spacing                              | One `line` v2 recipe with two points; members on their written spots; the placed shape reads back as a Line; one undo removes spots, transition and recipe |
+| QA-DL-11 | A line on an arc, a trail of one arc leg on the same circle, Keep spacing                      | An `arc` v2 recipe; every spot within 0.01 of its arc                                                                                                          |
+| QA-DL-12 | QA-DL-1 (a corner in the result), and a trail with a smooth point                              | A `line` v2 recipe with Corner and Smooth points; every spot within 1e-6 of its path; points that aren't spots hold no marcher                               |
+| QA-DL-13 | Open the recipe of QA-DL-12 in the shape tools; double-click a point                           | Nobody moves on opening; the point turns Smooth (or Corner); the first change lays the shape out evenly; the follow move still resolves to the new spots   |
+| QA-DL-14 | A Curve saved before step 4c                                                                   | Same params read back, same spots, same outline                                                                                                                |
+| QA-DL-15 | Drawing a trail with points                                                                    | The drawing's marchers stand at exactly the spots written; ghosts at the starts; ▶ Preview at progress `p` shows `trailDragPreview(plan, p)`                   |
