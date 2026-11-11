@@ -805,7 +805,8 @@ const ShapeBody = memo(function ShapeBody({
                     />
                 );
             })}
-            {drawing.spots.map((p, i) => {
+            {/* The real marchers stand on them instead (pathways step 4c) */}
+            {(drawing.marchersAt ? [] : drawing.spots).map((p, i) => {
                 return (
                     // In the marchers' shape, so a spot under a square marcher doesn't read as a
                     // round mark on it

@@ -7,6 +7,7 @@
  */
 import {
     planTrailDrag,
+    trailDragPreview,
     type TrailDragPlan,
     type TrailSpacing,
     type TrailWindow,
@@ -51,6 +52,11 @@ export interface FollowDrag {
     readonly keep: FollowKeep | null;
     /** One step, in field units */
     readonly step: number;
+    /**
+     * ▶ Preview on the path bar (step 4c, DL-17): the marchers loop the walk along the trail.
+     * Off (absent) by default: they stand at their end spots.
+     */
+    readonly preview?: boolean;
 }
 
 /** Even's steps: the finest choice, and the first offered */
@@ -252,3 +258,64 @@ export const evenLimitOf = (plan: TrailDragPlan | null): number | null =>
     plan?.evenLimit == null
         ? null
         : Math.floor(plan.evenLimit / EVEN_STEP + 1e-9) * EVEN_STEP;
+
+/** The path bar's ▶ Preview (step 4c, DL-17): the marchers loop the walk, or stand at their ends */
+export function setFollowPreview(on: boolean): void {
+    updateFollow((s, f) =>
+        !!f.preview === on ? s : { ...s, follow: { ...f, preview: on } },
+    );
+}
+
+/**
+ * ▶ Preview's loop (DL-17), in milliseconds: a moment at the start, the walk, a pause at the end,
+ * then again. A fixed loop rather than the move's counts at its tempo, so a long move still reads
+ * at a glance and a short one isn't a flicker.
+ */
+export const FOLLOW_PREVIEW_LOOP = {
+    hold: 400,
+    walk: 2400,
+    rest: 800,
+} as const;
+
+/** Where in the walk ▶ Preview is `ms` after it started: 0 at the start, 1 at the end spots */
+export function followPreviewProgress(ms: number): number {
+    const { hold, walk, rest } = FOLLOW_PREVIEW_LOOP;
+    const t =
+        ((ms % (hold + walk + rest)) + hold + walk + rest) %
+        (hold + walk + rest);
+    if (t <= hold) return 0;
+    if (t >= hold + walk) return 1;
+    return (t - hold) / walk;
+}
+
+/** The real marchers the Follow drawing shows (step 4c, DL-16, DL-17) */
+export interface FollowMarchers {
+    /** The line, tail first */
+    readonly ids: readonly number[];
+    /** Where each stands once the move ends: the spots written */
+    readonly spots: readonly XY[];
+    /** With ▶ Preview on: where each is at progress `p` of the move (0 to 1), R-13″ */
+    readonly walk?: (p: number) => readonly XY[];
+}
+
+/**
+ * The line's marchers at their end spots while a trail is drawn (DL-16): the spots AP-T8 writes,
+ * with ▶ Preview's walk when it's on. Null before a point is placed, and with Keep end spots,
+ * whose marchers already stand on theirs.
+ */
+export function followMarchersOf(s: PathSession | null): FollowMarchers | null {
+    if (!s) return null;
+    const f = s.follow;
+    if (!f || f.grabbed === null || s.points.length === 0) return null;
+    if (keepsEndSpots(f)) return null;
+    const plan = followPlanOf(s);
+    if (!plan) return null;
+    const ids = trailLine(f);
+    const spots = plan.spots.map(([x, y]) => ({ x, y }));
+    if (!f.preview) return { ids, spots };
+    return {
+        ids,
+        spots,
+        walk: (p) => trailDragPreview(plan, p).map(([x, y]) => ({ x, y })),
+    };
+}

@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import type { FieldPointer } from "@/field/editor/fieldEditor";
 import { setShapeField } from "@/shapes/field/shapeField";
-import { planTrailDrag } from "@/db-functions/timelineTrailDrag";
+import {
+    planTrailDrag,
+    trailDragPreview,
+} from "@/db-functions/timelineTrailDrag";
 import { drawingOf, pathPenMode } from "../pathPenMode";
 import {
     clearPath,
@@ -15,7 +18,11 @@ import {
     cancelFollowDrawing,
     evenLimitOf,
     followHit,
+    followMarchersOf,
     followPlanOf,
+    followPreviewProgress,
+    FOLLOW_PREVIEW_LOOP,
+    setFollowPreview,
     followSpacingOf,
     setFollowEnds,
     setFollowSpacing,
@@ -219,6 +226,59 @@ describe("the Follow tool (pathways step 4b)", () => {
         ).toBeCloseTo(STEP, 6);
         // 10 steps in 8 counts is no Big step for anyone; each walks the same 10 steps
         expect(bigSteps(session(), fieldProperties)).toBeNull();
+    });
+
+    it("step 4c (DL-16, DL-17, QA-DL-15): the real marchers stand at the spots written, their starts as ghosts; ▶ Preview walks them as they will walk", () => {
+        open();
+        const right = starts.get(5)!;
+        // Nothing drawn yet: the marchers stay where the show has them
+        expect(drawingOf(session())!.marchersAt).toBeUndefined();
+        drag(right, { x: right.x + 10 * STEP, y: right.y });
+        pathPenMode.move(at(right.x + 10 * STEP, right.y - 6 * STEP));
+        pathPenMode.press(at(right.x + 10 * STEP, right.y - 6 * STEP), press);
+        pathPenMode.release(at(right.x + 10 * STEP, right.y - 6 * STEP), {
+            double: false,
+            ownFirst: false,
+        });
+        const s = session();
+        const plan = followPlanOf(s)!;
+        const d = drawingOf(s)!;
+        const line = trailLine(s.follow!);
+        expect(d.marchersAt?.ids).toEqual(line);
+        expect(d.marchersAt?.spots).toEqual(
+            plan.spots.map(([x, y]) => ({ x, y })),
+        );
+        expect(d.marchersAt?.walk).toBeUndefined();
+        // Starts as the shape tool's ghosts, in the marchers' own looks
+        expect(d.rings).toEqual(line.map((id) => starts.get(id)));
+        expect(d.ringIds).toEqual(line);
+        // ▶ Preview: R-13″'s positions, as the resolver will have them once written
+        setFollowPreview(true);
+        const walk = drawingOf(session())!.marchersAt!.walk!;
+        for (const p of [0, 0.25, 0.5, 0.75, 1])
+            expect(walk(p)).toEqual(
+                trailDragPreview(followPlanOf(session())!, p).map(([x, y]) => ({ x, y })), // prettier-ignore
+            );
+        expect(drawingOf(session())!.marchersAt!.spots).toEqual(
+            d.marchersAt!.spots,
+        );
+        setFollowPreview(false);
+        expect(drawingOf(session())!.marchersAt!.walk).toBeUndefined();
+        // Keep end spots shows none: the line already stands on its spots there
+        open(KEEP);
+        drag(right, { x: right.x + 10 * STEP, y: right.y });
+        setFollowEnds("keep");
+        expect(followMarchersOf(session())).toBeNull();
+    });
+
+    it("▶ Preview's loop: a moment at the start, the walk, a pause at the end, again", () => {
+        const { hold, walk, rest } = FOLLOW_PREVIEW_LOOP;
+        expect(followPreviewProgress(0)).toBe(0);
+        expect(followPreviewProgress(hold)).toBe(0);
+        expect(followPreviewProgress(hold + walk / 2)).toBeCloseTo(0.5, 9);
+        expect(followPreviewProgress(hold + walk)).toBe(1);
+        expect(followPreviewProgress(hold + walk + rest - 1)).toBe(1);
+        expect(followPreviewProgress(hold + walk + rest + hold + walk / 4)).toBeCloseTo(0.25, 9); // prettier-ignore
     });
 
     it("Ends: Keep end spots only when offered", () => {

@@ -322,6 +322,17 @@ export type FieldModeDrawing = {
     /** The marcher at each of `rings`, whose ghost is drawn in its own color */
     ringIds?: readonly number[];
     /**
+     * The real marchers drawn somewhere else than the show has them, full size (pathways step 4c,
+     * DL-16): the Follow tool's line at its end spots (`spots`, which then aren't drawn as spots),
+     * or, with `walk`, looping the walk (▶ Preview, DL-17: `walk(p)` is where each is at progress
+     * `p` of the move, 0 to 1). `ids` and the points are in the same order.
+     */
+    marchersAt?: {
+        readonly ids: readonly number[];
+        readonly spots: readonly FieldPoint[];
+        readonly walk?: (p: number) => readonly FieldPoint[];
+    };
+    /**
      * Thin, faint lines (pathways step 15): each member's lane of a group path, from its start
      * along its copy of the path to its end spot
      */

@@ -9,6 +9,7 @@ import {
     ArrowsSplitIcon,
     BackspaceIcon,
     FlagPennantIcon,
+    PlayIcon,
     LineSegmentsIcon,
     PathIcon,
     TrashIcon,
@@ -34,11 +35,13 @@ import {
     IconButton,
 } from "@/shapes/editor/EditorBarParts";
 import type { XY } from "@/shapes/types";
+import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { refitNeeded } from "./pathTarget";
 import {
     EVEN_FIRST,
     EVEN_STEP,
     evenLimitOf,
+    followMarchersOf,
     followPlanOf,
     followSpacingOf,
     keepsEndSpots,
@@ -885,8 +888,9 @@ function PathEditorBar({
 
 /**
  * The Follow tool's choices on the path bar (pathways step 4b): Spacing, Keep spacing or Even N
- * steps, Even held to the largest N that keeps everyone walking forward (DL-7, AP-T8); and, when
- * the line already has end spots here, Ends: From trail or Keep end spots (DL-8, AP-T9).
+ * steps, Even held to the largest N that keeps everyone walking forward (DL-7, AP-T8); ▶ Preview,
+ * the line looping its walk (step 4c, DL-17); and, when the line already has end spots here, Ends:
+ * From trail or Keep end spots (DL-8, AP-T9).
  */
 function FollowControls({ session }: { session: PathSession }) {
     const follow = session.follow!;
@@ -897,6 +901,9 @@ function FollowControls({ session }: { session: PathSession }) {
     const even = spacing.kind === "even" ? spacing.steps : null;
     const evenOff = limit !== null && limit < EVEN_STEP;
     const fromTrail = follow.ends === "trail";
+    // ▶ Preview (step 4c, DL-17): once there's a walk to show
+    const canPreview = followMarchersOf(session) !== null;
+    const reducedMotion = prefersReducedMotion();
     const setEven = (steps: number) =>
         setFollowSpacing({
             kind: "even",
@@ -1008,6 +1015,37 @@ function FollowControls({ session }: { session: PathSession }) {
                             </>
                         )}
                     </span>
+                    <Divider />
+                </>
+            )}
+            {fromTrail && (
+                <>
+                    <IconButton
+                        label={
+                            reducedMotion
+                                ? tolgee.t(
+                                      "pathways.editor.previewReduced",
+                                      "Preview is off while your system asks for less motion",
+                                  )
+                                : canPreview
+                                  ? tolgee.t(
+                                        "pathways.editor.previewTip",
+                                        "Preview: the marchers walk the trail from start to end, again and again",
+                                    )
+                                  : tolgee.t(
+                                        "pathways.editor.previewNothing",
+                                        "Preview: place a point first",
+                                    )
+                        }
+                        action="followPreview"
+                        disabled={!canPreview || reducedMotion}
+                        pressed={!!follow.preview && !reducedMotion}
+                        onClick={() => runAction("followPreview")}
+                        testId="follow-preview"
+                    >
+                        <PlayIcon size={14} />
+                        {tolgee.t("pathways.editor.preview", "Preview")}
+                    </IconButton>
                     <Divider />
                 </>
             )}

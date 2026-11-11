@@ -190,7 +190,8 @@
             "follow": "Follow",
             "followKeywords": "follow leader trail line snake file ftl reverse path",
             "reverse": "Reverse leader",
-            "removeTrail": "Remove trail"
+            "removeTrail": "Remove trail",
+            "followPreview": "Preview the follow walk"
         }
     },
     "analyticsOptIn": {
@@ -3811,7 +3812,11 @@
             "endsFromTrail": "From trail",
             "endsFromTrailTip": "From trail: the line stops along the trail, and those become its end spots",
             "endsKeep": "Keep end spots",
-            "endsKeepTip": "Keep end spots: the line follows the trail into the end spots it already has"
+            "endsKeepTip": "Keep end spots: the line follows the trail into the end spots it already has",
+            "preview": "Preview",
+            "previewTip": "Preview: the marchers walk the trail from start to end, again and again",
+            "previewReduced": "Preview is off while your system asks for less motion",
+            "previewNothing": "Preview: place a point first"
         },
         "menu": {
             "pointType": "Corner type",
