@@ -15,6 +15,7 @@ import {
 } from "@/db-functions/shapeRecipes";
 import { boxMembershipEdit } from "@/shapes/placed/boxMembership";
 import {
+    ordersInForce,
     rememberedOrder,
     rememberedOrderAt,
     type OrderForm,
@@ -156,6 +157,96 @@ describe("rememberedOrder", () => {
                 17,
             ),
         ).toEqual([2, 1, 4, 3]);
+    });
+});
+
+const set = (endBeat: number, order: (number | null)[]): OrderForm => ({
+    endBeat,
+    kind: "set",
+    order,
+});
+const unset = (endBeat: number, marcherIds: number[]): OrderForm => ({
+    endBeat,
+    kind: "unset",
+    marcherIds,
+});
+
+describe("rememberedOrder: orders set by hand (step 4g)", () => {
+    it("DL-26: an order set by hand holds like a placed shape, and wins over any form at its beat", () => {
+        const forms = [line(9, [1, 2, 3, 4]), set(9, [4, 2, 3, 1])];
+        expect(rememberedOrder(forms, [1, 2, 3, 4], 9)).toEqual([4, 2, 3, 1]);
+        expect(rememberedOrder(forms, [1, 2, 3, 4], 25)).toEqual([4, 2, 3, 1]);
+        expect(
+            rememberedOrder(
+                [trail(9, [1, 2, 3, 4]), set(9, [4, 2, 3, 1])],
+                [1, 2, 3, 4],
+                9,
+            ),
+        ).toEqual([4, 2, 3, 1]);
+        // A later shape redefines it
+        expect(
+            rememberedOrder(
+                [...forms, line(17, [1, 2, 3, 4])],
+                [1, 2, 3, 4],
+                17,
+            ),
+        ).toEqual([1, 2, 3, 4]);
+    });
+
+    it("DL-29: Clear order ends it, even at the beat of a trail or a shape; a later form sets one again", () => {
+        const forms = [trail(9, [1, 2, 3]), unset(9, [1, 2, 3])];
+        expect(rememberedOrder(forms, [1, 2, 3], 9)).toBeNull();
+        expect(
+            rememberedOrder([...forms, set(17, [2, 1, 3])], [1, 2, 3], 17),
+        ).toEqual([2, 1, 3]);
+        // Cleared for some of the line: the line's order is no longer known for all of them
+        expect(
+            rememberedOrder([set(9, [1, 2, 3]), unset(17, [2])], [1, 2, 3], 17),
+        ).toBeNull();
+        expect(
+            rememberedOrder([set(9, [1, 2, 3]), unset(17, [2])], [1, 3], 17),
+        ).toEqual([1, 3]);
+    });
+
+    it("DL-28: a later copy with a hole carries a reversed order on, either way along it", () => {
+        // A Line, reversed by hand on its page, then copied on a later page with a member gone
+        const forms = [
+            line(9, [1, 2, 3, 4]),
+            set(9, [4, 3, 2, 1]),
+            line(17, [1, null, 3, 4]),
+        ];
+        expect(rememberedOrder(forms, [1, 2, 3, 4], 17)).toEqual([4, 3, 2, 1]);
+    });
+});
+
+describe("ordersInForce (Show order's Always, step 4g)", () => {
+    it("is each line whose order holds, kept to the marchers no later form took", () => {
+        const forms = [
+            trail(9, [1, 2, 3, 4]),
+            set(9, [7, 6, 5]),
+            clear(17, [2]),
+            line(17, [9, 8]),
+        ];
+        expect(ordersInForce(forms, 9)).toEqual([
+            { order: [1, 2, 3, 4], kind: "trail" },
+            { order: [7, 6, 5], kind: "set" },
+        ]);
+        expect(ordersInForce(forms, 17)).toEqual([
+            { order: [1, 3, 4], kind: "trail" },
+            { order: [7, 6, 5], kind: "set" },
+            { order: [9, 8], kind: "line" },
+        ]);
+        // One left of a line is no line
+        expect(ordersInForce([set(9, [1, 2]), unset(17, [1])], 17)).toEqual([]);
+    });
+
+    it("a copy with holes that agrees carries the line on", () => {
+        expect(
+            ordersInForce(
+                [set(9, [4, 3, 2, 1]), line(17, [1, null, 3, 4])],
+                17,
+            ),
+        ).toEqual([{ order: [4, 3, 2, 1], kind: "set" }]);
     });
 });
 

@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import * as schema from "@om-electron/database/migrations/schema";
 import type { DbConnection, DbTransaction } from "./types";
 
@@ -57,6 +57,11 @@ const sameMove = (timelineId: number | null) =>
  * (a selection over several moves); the rest leave the other recipes of every move ending at the
  * beat it's placed at, and recipes left empty are deleted.
  *
+ * An order mark (pathways step 4g, `ORDER_MARK_KINDS`) keeps every member, those standing still in
+ * its move too, and takes them out of the other marks only. `keepOrderMarks` leaves the marks at
+ * its beat alone: a shape's members changed by hand (one dragged off) don't redefine an order set
+ * by hand there.
+ *
  * @returns the recipe's id
  */
 export async function saveShapeRecipeInTransaction({
@@ -65,14 +70,17 @@ export async function saveShapeRecipeInTransaction({
     recipe,
     members: placed,
     replaces,
+    keepOrderMarks = false,
 }: {
     tx: DbTransaction;
     timelineId: number | null;
     recipe: ShapeRecipeRecord;
     members: readonly ShapeRecipeMember[];
     replaces?: number;
+    keepOrderMarks?: boolean;
 }): Promise<number> {
-    const own = timelineId === null ? null : await moveMembers(tx, timelineId);
+    const orderMark = isOrderMarkKind(recipe.kind);
+    const own = orderMark ? null : await moveMembersOf(tx, timelineId);
     if (own) placed = placed.filter((m) => own.has(m.marcherId));
     const marcherIds = placed.map((m) => m.marcherId);
     const values = {
@@ -111,6 +119,7 @@ export async function saveShapeRecipeInTransaction({
                 and(
                     await movesEndingAtPlacedBeat(tx, timelineId),
                     notInArray(recipes.id, [id]),
+                    ...takesFrom(orderMark, keepOrderMarks),
                 ),
             )
             .all();
@@ -150,6 +159,17 @@ export async function saveShapeRecipeInTransaction({
 }
 
 /**
+ * Which other recipes at its beat a save takes its members out of (pathways step 4g): an order
+ * mark only other marks; a shape every recipe, or only shapes with `keepOrderMarks`
+ */
+const takesFrom = (orderMark: boolean, keepOrderMarks: boolean) =>
+    orderMark
+        ? [inArray(recipes.kind, [...ORDER_MARK_KINDS])]
+        : keepOrderMarks
+          ? [notInArray(recipes.kind, [...ORDER_MARK_KINDS])]
+          : [];
+
+/**
  * Whether move `timelineId` holds any of `marcherIds`, so a recipe saved in it keeps someone (the
  * homes hold everyone). A move a shape is only carried onto, its members standing still from an
  * earlier move, holds none of them (#485).
@@ -163,6 +183,10 @@ export async function moveHoldsAnyOf(
     const own = await moveMembers(tx, timelineId);
     return marcherIds.some((id) => own.has(id));
 }
+
+/** The marchers with positions in move `timelineId`, or null for the homes, which hold everyone */
+const moveMembersOf = (tx: DbTransaction, timelineId: number | null) =>
+    timelineId === null ? null : moveMembers(tx, timelineId);
 
 /** The marchers with positions in move `timelineId` */
 async function moveMembers(
@@ -320,8 +344,32 @@ export async function splitShapeRecipesInTransaction({
  */
 export const UNGROUPED_RECIPE_KIND = "ungrouped";
 
-/** Where-clause for the recipes that describe a shape: every kind but an ungrouped mark */
-export const shapeRecipesOnly = () => ne(recipes.kind, UNGROUPED_RECIPE_KIND);
+/**
+ * The kind of a recipe that holds a line's order set by hand (pathways step 4g, DL-26): its members
+ * by slot, the leader first. It stores no shape and moves no one. Saving one takes its marchers out
+ * of the other order marks at its beat only; a shape saved later at that beat takes them out of it.
+ */
+export const ORDER_RECIPE_KIND = "order";
+
+/**
+ * The kind of a recipe that ends its members' order by hand (Clear order, pathways step 4g): as an
+ * ungrouped mark ends it, but leaving the shapes they're in alone
+ */
+export const ORDER_CLEAR_RECIPE_KIND = "orderClear";
+
+/** The order marks: kinds that store no shape, only who is in which order */
+export const ORDER_MARK_KINDS: ReadonlySet<string> = new Set([
+    ORDER_RECIPE_KIND,
+    ORDER_CLEAR_RECIPE_KIND,
+]);
+
+/** Whether a recipe of `kind` is an order mark rather than a shape */
+export const isOrderMarkKind = (kind: string): boolean =>
+    ORDER_MARK_KINDS.has(kind);
+
+/** Where-clause for the recipes that describe a shape: every kind but an ungrouped or order mark */
+export const shapeRecipesOnly = () =>
+    notInArray(recipes.kind, [UNGROUPED_RECIPE_KIND, ...ORDER_MARK_KINDS]);
 
 /**
  * After `marcherIds` are cleared off moves `timelineIds`, takes those no longer in a move out of

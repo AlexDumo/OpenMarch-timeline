@@ -767,8 +767,8 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
         const order = await followOrderAt(db, shuffled, 17, at);
         const line17 = order!.map((i) => shuffled[i]!);
         expect(line17).toEqual(line17[0] === 1 ? ids : [...ids].reverse());
-        // Every other marcher keeps the line's order
-        expect(await rememberedOrderAt(db, [7, 1, 5, 3], 17)).toEqual([1, 3, 5, 7]); // prettier-ignore
+        // Every other marcher keeps the line's order, leader (M7, who walked first) first (step 4g)
+        expect(await rememberedOrderAt(db, [7, 1, 5, 3], 17)).toEqual([7, 5, 3, 1]); // prettier-ignore
 
         // The write reads the same order: M7 and M1 are the ends, M2 isn't
         const next = { start: 17, end: 25 };
