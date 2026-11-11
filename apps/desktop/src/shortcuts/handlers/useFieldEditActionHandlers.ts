@@ -1,10 +1,8 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslate } from "@tolgee/react";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
-import { applyFieldEditsMutationOptions } from "@/hooks/queries";
+import { useApplyFieldEdits } from "@/hooks/useApplyFieldEdits";
 import type { FieldEditRequest, FieldEditResult } from "@/field/edits";
-import { fieldEditIssueMessage } from "@/field/edits/messages";
 import { useActionHandler } from "../useActionHandler";
 import type { ActionArgs } from "../definitions";
 
@@ -12,26 +10,22 @@ import type { ActionArgs } from "../definitions";
  * Field edits (#823) the palette reaches: the ones that need no checkpoint picked. The rest
  * (remove, move, update, settings, templates) are called by name through `applyFieldEdits` until
  * the Edit field mode (#824) gives them a selection.
+ *
+ * None of them changes the field's size or center: a series stops at the outermost lines, and
+ * any edit that would still resize the field is refused (`allowGeometryChange: false`). Refusals,
+ * warnings and failed writes are toasted by `useApplyFieldEdits`.
  */
 export function useFieldEditActionHandlers() {
     const { t } = useTranslate();
     const databaseReady = useDatabaseReady();
-    const queryClient = useQueryClient();
-    const { mutate } = useMutation(applyFieldEditsMutationOptions(queryClient));
+    const applyFieldEdits = useApplyFieldEdits({ allowGeometryChange: false });
 
     const apply = (
         edit: FieldEditRequest,
         done: (result: FieldEditResult) => void,
     ) =>
-        mutate(edit, {
-            onSuccess: (result) => {
-                const issue = result.diff.errors[0];
-                if (issue) {
-                    toast.error(fieldEditIssueMessage(issue, t));
-                    return;
-                }
-                done(result);
-            },
+        void applyFieldEdits(edit).then((result) => {
+            if (result?.diff.ok) done(result);
         });
 
     const addedOne = (axis: "x" | "y") => (result: FieldEditResult) => {

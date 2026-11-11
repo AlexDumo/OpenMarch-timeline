@@ -13,7 +13,6 @@ import { toast } from "sonner";
 import { RgbaColor } from "@uiw/react-color";
 import { T, useTranslate } from "@tolgee/react";
 import {
-    applyFieldEditsMutationOptions,
     fieldPropertiesQueryOptions,
     updateFieldPropertiesMutationOptions,
 } from "@/hooks/queries";
@@ -22,7 +21,7 @@ import type {
     FieldEditRequest,
     FieldEditResult,
 } from "@/field/edits";
-import { fieldEditIssueMessage } from "@/field/edits/messages";
+import { useApplyFieldEdits } from "@/hooks/useApplyFieldEdits";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { GeneralTab } from "./customizer/GeneralTab";
 import { CheckpointsTab } from "./customizer/CheckpointsTab";
@@ -50,17 +49,8 @@ export default function FieldPropertiesCustomizer() {
     const blurOnEnter = useCallback(blurOnEnterFunc, []);
 
     // Checkpoint add, delete and update are field edits (#823): one undo step each, with the
-    // invariants checked in the edit, not here
-    const { mutate: applyFieldEdits } = useMutation(
-        applyFieldEditsMutationOptions(queryClient),
-    );
-    const showRefusal = useCallback(
-        (result: FieldEditResult) => {
-            const issue = result.diff.errors[0];
-            if (issue) toast.error(fieldEditIssueMessage(issue, t));
-        },
-        [t],
-    );
+    // invariants checked in the edit, not here. Refusals, warnings and failures are toasted there
+    const applyFieldEdits = useApplyFieldEdits();
 
     const updateCheckpoint = useCallback(
         ({
@@ -71,7 +61,7 @@ export default function FieldPropertiesCustomizer() {
             oldCheckpoint: Checkpoint;
             newCheckpoint: Checkpoint;
             axis: "x" | "y";
-        }) => {
+        }): Promise<FieldEditResult | undefined> => {
             const ids = [{ axis, id: oldCheckpoint.id }];
             const edits: FieldEditRequest[] = [];
             if (
@@ -107,60 +97,52 @@ export default function FieldPropertiesCustomizer() {
             };
             if (Object.keys(patch).length > 0)
                 edits.push({ edit: "updateCheckpoints", args: { ids, patch } });
-            if (edits.length === 0) return;
-            applyFieldEdits(edits, { onSuccess: showRefusal });
+            if (edits.length === 0) return Promise.resolve(undefined);
+            return applyFieldEdits(edits);
         },
-        [applyFieldEdits, showRefusal],
+        [applyFieldEdits],
     );
 
     const deleteCheckpoint = useCallback(
         (checkpoint: Checkpoint) => {
-            applyFieldEdits(
-                {
-                    edit: "removeCheckpoints",
-                    args: {
-                        ids: [{ axis: checkpoint.axis, id: checkpoint.id }],
-                    },
+            void applyFieldEdits({
+                edit: "removeCheckpoints",
+                args: {
+                    ids: [{ axis: checkpoint.axis, id: checkpoint.id }],
                 },
-                {
-                    onSuccess: (result) => {
-                        if (!result.diff.ok) return showRefusal(result);
-                        toast.success(
-                            t("fieldProperties.checkpoint.deleted", {
-                                axis: checkpoint.axis.toUpperCase(),
-                                steps: checkpoint.stepsFromCenterFront,
-                                name: checkpoint.name,
-                            }),
-                        );
-                    },
-                },
-            );
+            }).then((result) => {
+                if (!result?.diff.ok || result.diff.empty) return;
+                toast.success(
+                    t("fieldProperties.checkpoint.deleted", {
+                        axis: checkpoint.axis.toUpperCase(),
+                        steps: checkpoint.stepsFromCenterFront,
+                        name: checkpoint.name,
+                    }),
+                );
+            });
         },
-        [applyFieldEdits, showRefusal, t],
+        [applyFieldEdits, t],
     );
 
     // B6: a new checkpoint goes halfway into the largest gap nearest the center, named from its
     // position, not on top of the outermost line
     const addCheckpoint = useCallback(
         (axis: "x" | "y") => {
-            applyFieldEdits(
-                { edit: "addCheckpoint", args: { axis } },
-                {
-                    onSuccess: (result) => {
-                        const added = result.diff.checkpoints.added[0];
-                        if (!result.diff.ok || !added)
-                            return showRefusal(result);
-                        toast.success(
-                            t("fieldProperties.checkpoint.created", {
-                                axis: axis.toUpperCase(),
-                                steps: added.stepsFromCenterFront,
-                            }),
-                        );
-                    },
-                },
-            );
+            void applyFieldEdits({
+                edit: "addCheckpoint",
+                args: { axis },
+            }).then((result) => {
+                const added = result?.diff.checkpoints.added[0];
+                if (!result?.diff.ok || !added) return;
+                toast.success(
+                    t("fieldProperties.checkpoint.created", {
+                        axis: axis.toUpperCase(),
+                        steps: added.stepsFromCenterFront,
+                    }),
+                );
+            });
         },
-        [applyFieldEdits, showRefusal, t],
+        [applyFieldEdits, t],
     );
 
     const sorter = (a: Checkpoint, b: Checkpoint) => {
