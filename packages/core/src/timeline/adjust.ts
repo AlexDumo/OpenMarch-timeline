@@ -15,6 +15,7 @@ import {
     groupSchedule,
     placed,
     routePiecePoint,
+    ROUTE_ARC_SAMPLES,
     ROUTE_CUBIC_SAMPLES,
     S_MIN,
     type GroupMemberWalk,
@@ -412,22 +413,29 @@ export function limitRouteEdit(
         a[0] + (b[0] - a[0]) * t,
         a[1] + (b[1] - a[1]) * t,
     ];
-    const at = (t: number): RouteGeometry => ({
-        v: 1,
-        from: lerpXY(old.from, next.from, t),
-        to: lerpXY(old.to, next.to, t),
-        points: next.points.map((p, i) => {
-            const was = old.points[i]!;
-            const tension =
-                (was.tension ?? 0) +
-                ((p.tension ?? 0) - (was.tension ?? 0)) * t;
-            return {
-                id: p.id,
-                at: lerpXY(was.at, p.at, t),
-                ...(tension > 0 ? { tension } : {}),
-            };
-        }),
-    });
+    // A bulge goes along with the rest (R-14″), and is dropped where it passes 0
+    const between = (a: number | undefined, b: number | undefined, t: number) =>
+        (a ?? 0) + ((b ?? 0) - (a ?? 0)) * t;
+    const at = (t: number): RouteGeometry => {
+        const toBulge = between(old.toBulge, next.toBulge, t);
+        return {
+            v: 1,
+            from: lerpXY(old.from, next.from, t),
+            to: lerpXY(old.to, next.to, t),
+            ...(toBulge !== 0 ? { toBulge } : {}),
+            points: next.points.map((p, i) => {
+                const was = old.points[i]!;
+                const tension = between(was.tension, p.tension, t);
+                const bulge = between(was.bulge, p.bulge, t);
+                return {
+                    id: p.id,
+                    at: lerpXY(was.at, p.at, t),
+                    ...(tension > 0 ? { tension } : {}),
+                    ...(bulge !== 0 ? { bulge } : {}),
+                };
+            }),
+        };
+    };
     const fits = (g: RouteGeometry) => {
         const s = scheduleOfGeometry(g);
         return profiles.every(
@@ -477,10 +485,13 @@ export function refitGeometry(
     const { W } = scheduleOfGeometry(old);
     const dF: XY = [from[0] - old.from[0], from[1] - old.from[1]];
     const spread: XY = [to[0] - old.to[0] - dF[0], to[1] - old.to[1] - dF[1]];
+    // Each point keeps its bulge (`...p`) and the last leg its `toBulge` (R-14″: Re-fit keeps a
+    // leg's bulge; a bulge is a ratio, so the arc stretches with its chord)
     return {
         v: 1,
         from: [from[0], from[1]],
         to: [to[0], to[1]],
+        ...(old.toBulge === undefined ? {} : { toBulge: old.toBulge }),
         points: old.points.map((p) => {
             const D = anchorPlace(W, old.points, {
                 a: p.id,
@@ -535,6 +546,10 @@ export function laneSamples(walk: GroupMemberWalk): LaneSample[] {
         if (piece.kind === "cubic")
             for (let i = 1; i < ROUTE_CUBIC_SAMPLES; i++)
                 places.add(start + piece.e[i]!);
+        else if (piece.kind === "arc")
+            // R-14″: an arc's places are even along it (its length is exact)
+            for (let i = 1; i < ROUTE_ARC_SAMPLES; i++)
+                places.add(start + ((end - start) * i) / ROUTE_ARC_SAMPLES);
         for (const x of [...places].sort((p, q) => p - q))
             out.push(point(j, x));
         out.push(atKept(j + 1));

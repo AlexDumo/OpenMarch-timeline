@@ -204,6 +204,11 @@ export interface RoutePoint {
     at: XY;
     /** Roundness in (0, 2], 1 the plain curve (step 2); absent for a corner */
     tension?: number;
+    /**
+     * The leg arriving at this point is R-8's arc with this signed sagitta over chord,
+     * `0 < |bulge| <= 1/2` (R-14″, pathways step 10a); absent for a straight or curved leg
+     */
+    bulge?: number;
 }
 
 /** A route's `geometry` (spec 5.2, I-R1). `from` and `to` are R-14's tangent neighbors F and G. */
@@ -215,6 +220,8 @@ export interface RouteGeometry {
     to: XY;
     /** Inner points in walking order; may be empty */
     points: RoutePoint[];
+    /** The last leg's bulge, the leg arriving at `to` (R-14″, step 10a); absent for none */
+    toBulge?: number;
 }
 
 /** A row of the routes table (spec 5.1, D-19). */

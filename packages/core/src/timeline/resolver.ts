@@ -417,9 +417,13 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                         ...(pt.tension === undefined
                             ? {}
                             : { tension: pt.tension }),
+                        ...(pt.bulge === undefined ? {} : { bulge: pt.bulge }),
                     })),
                     from: r.geometry.from,
                     to: r.geometry.to,
+                    ...(r.geometry.toBulge === undefined
+                        ? {}
+                        : { toBulge: r.geometry.toBulge }),
                 },
                 schedule: null,
             });

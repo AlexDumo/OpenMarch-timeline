@@ -337,7 +337,11 @@ export function makeTrail(
             entrance,
             route,
         );
-        if (W.V.length > 2 && W.L >= EPS_GEOM) {
+        // R-14″: a trail of one arc leg is drawn too
+        if (
+            (W.V.length > 2 || W.pieces[0]!.kind === "arc") &&
+            W.L >= EPS_GEOM
+        ) {
             const lineUp = [...origins];
             const cum = cumOf(lineUp);
             const lineLen = cum[cum.length - 1]!;
@@ -379,17 +383,26 @@ export interface RouteVertex {
     at: XY;
     /** Roundness in (0, 2]; absent or 0 is a corner */
     tension?: number;
+    /**
+     * The bulge of the leg arriving at this point (R-14″, step 10a): signed sagitta over chord,
+     * `0 < |bulge| <= 1/2`, R-8's minor arc. Absent or 0 is a straight (or curved) leg.
+     */
+    bulge?: number;
 }
 
 /** The ends a route was drawn against (spec 5.2 `from`, `to`): R-14's tangent neighbors F and G. */
 export interface RouteEnds {
     from: XY;
     to: XY;
+    /** The bulge of the last leg, the one arriving at `B` (R-14″); absent for none */
+    toBulge?: number;
 }
 
 /** One piece of a route's walked path, from `V[j]` to `V[j+1]` (R-14). */
 export type RoutePiece =
     | { kind: "line" }
+    /** R-14″ (step 10a): R-8's circular minor arc with bulge `k`, its length `r·θ` exactly */
+    | { kind: "arc"; k: number }
     | {
           kind: "cubic";
           c1: XY;
@@ -486,6 +499,23 @@ function measureCubic(p0: XY, c1: XY, c2: XY, p3: XY): number[] {
     return e;
 }
 
+/**
+ * R-14″: the exact length `r·θ` of R-8's arc from `A` to `B` with bulge `k`, written as
+ * `c·|φ| / sin|φ|` (`r = h / sin|φ|`, `θ = 2|φ|`) so nothing far away is formed. A chord under
+ * `EPS_GEOM` or a half-angle under `1e-12` is R-8's straight line, so its length is the chord.
+ */
+export function arcLength(A: XY, B: XY, k: number): number {
+    const c = dist(A, B);
+    if (c < EPS_GEOM) return c;
+    const phi = Math.abs(2 * Math.atan(2 * k));
+    if (phi < 1e-12) return c;
+    return (c * phi) / Math.sin(phi);
+}
+
+/** Whether `k` is a bulge that makes a leg an arc (R-14″): finite and not 0. */
+const isBulge = (k: number | undefined): k is number =>
+    k !== undefined && Number.isFinite(k) && k !== 0;
+
 const innerAt = (q: XY | RouteVertex): XY =>
     Array.isArray(q) ? (q as XY) : (q as RouteVertex).at;
 const innerTension = (q: XY | RouteVertex): number => {
@@ -493,6 +523,8 @@ const innerTension = (q: XY | RouteVertex): number => {
     const t = (q as RouteVertex).tension;
     return t !== undefined && t > 0 ? t : 0;
 };
+const innerBulge = (q: XY | RouteVertex): number | undefined =>
+    Array.isArray(q) ? undefined : (q as RouteVertex).bulge;
 
 /**
  * R-14 cleaning, tangents, pieces and length. `inner` are the route's points (bare corners, or
@@ -554,7 +586,15 @@ export function routePath(
         const P3 = V[j + 1]!;
         const h0 = handles[j];
         const h3 = handles[j + 1];
-        if (!h0 && !h3) {
+        // R-14″: the leg's bulge is its arriving point's, or the route's `toBulge` for the leg into B
+        const k =
+            j + 1 === V.length - 1
+                ? ends?.toBulge
+                : innerBulge(inner[source[j + 1]!]!);
+        if (isBulge(k)) {
+            pieces.push({ kind: "arc", k });
+            total += arcLength(P0, P3, k);
+        } else if (!h0 && !h3) {
             pieces.push({ kind: "line" });
             total += dist(P0, P3);
         } else {
@@ -582,6 +622,8 @@ export function routePiecePoint(path: RoutePath, j: number, x: number): XY {
     const P0 = V[j]!;
     const P3 = V[j + 1]!;
     if (piece.kind === "line") return lerp(P0, P3, x / (D[j + 1]! - D[j]!));
+    if (piece.kind === "arc")
+        return arcPoint(P0, P3, piece.k, x / (D[j + 1]! - D[j]!));
     const { e } = piece;
     const K = ROUTE_CUBIC_SAMPLES;
     // smallest i in 1..K with x < e[i]
@@ -608,6 +650,9 @@ export function routePoint(path: RoutePath, p: number): XY {
     const B = V[V.length - 1]!;
     if (p <= 0) return A;
     if (p >= 1) return B;
+    // R-14″: a one-leg arc is R-8's arc itself, so `(p · L) / L` can't round it off
+    const only = V.length === 2 ? path.pieces[0] : undefined;
+    if (only?.kind === "arc") return arcPoint(A, B, only.k, p);
     if (V.length === 2 || L < EPS_GEOM) return lerp(A, B, p);
     const d = p * L;
     // smallest j with d < D[j+1]; the last piece when rounding finds none
@@ -640,16 +685,22 @@ export function routePointAtDistance(path: RoutePath, d: number): XY {
     return routePiecePoint(path, lo, d - D[lo]!);
 }
 
+/** How many chords an arc piece is drawn and sampled with (R-14″; drawing only, never walked). */
+export const ROUTE_ARC_SAMPLES = 48;
+
 /**
- * Points to draw a route's walked path through: its vertices, and each cubic piece's samples
- * (the polyline R-14 measures it on).
+ * Points to draw a route's walked path through: its vertices, each cubic piece's samples (the
+ * polyline R-14 measures it on) and each arc piece's {@link ROUTE_ARC_SAMPLES} chords.
  */
 export function routePolyline(path: RoutePath): XY[] {
     const out: XY[] = [path.V[0]!];
     path.pieces.forEach((piece, j) => {
         const P0 = path.V[j]!;
         const P3 = path.V[j + 1]!;
-        if (piece.kind === "cubic")
+        if (piece.kind === "arc")
+            for (let i = 1; i < ROUTE_ARC_SAMPLES; i++)
+                out.push(arcPoint(P0, P3, piece.k, i / ROUTE_ARC_SAMPLES));
+        else if (piece.kind === "cubic")
             for (let i = 1; i < ROUTE_CUBIC_SAMPLES; i++)
                 out.push(
                     cubicPoint(
@@ -850,6 +901,22 @@ export function adjustAt(adjust: ResolvedAdjust, x: number): XY {
     return [a[0] + f * (b[0] - a[0]), a[1] + f * (b[1] - a[1])];
 }
 
+/** A leg that is R-8's arc with bulge `k` (R-14″), measured exactly. */
+function arcLegOf(S: XY, E: XY, k: number): GroupLeg {
+    const length = arcLength(S, E, k);
+    return {
+        path: {
+            V: [S, E],
+            D: [0, length],
+            L: length,
+            source: [-1, -1],
+            tension: [0, 0],
+            pieces: [{ kind: "arc", k }],
+        },
+        length,
+    };
+}
+
 function legOf(S: XY, E: XY, c1: XY | null, c2: XY | null): GroupLeg {
     if (!c1 || !c2) {
         const length = dist(S, E);
@@ -937,30 +1004,51 @@ export function groupMemberWalk(
     // loop out to the handle. A leg's path end is smooth exactly when the reference piece touching it is a cubic whose
     // inner-side handle is that point's own (W_1's `in`, W_m's `out`): the reference's chord-rule
     // control sits at F or G, so only the inner handle is read here.
+    // R-14″: an arc leg of the route stays an arc with its bulge on each member's own leg
     const first =
-        W.tension[1]! > 0 && p1.kind === "cubic" && dist(A, W1) >= EPS_GEOM
-            ? legOf(
-                  A,
-                  W1,
-                  [A[0] + (W1[0] - A[0]) / 3, A[1] + (W1[1] - A[1]) / 3],
-                  placeFirst(p1.c2),
-              )
-            : legOf(A, W1, null, null);
+        p1.kind === "arc"
+            ? arcLegOf(A, W1, p1.k)
+            : W.tension[1]! > 0 &&
+                p1.kind === "cubic" &&
+                dist(A, W1) >= EPS_GEOM
+              ? legOf(
+                    A,
+                    W1,
+                    [A[0] + (W1[0] - A[0]) / 3, A[1] + (W1[1] - A[1]) / 3],
+                    placeFirst(p1.c2),
+                )
+              : legOf(A, W1, null, null);
     const last =
-        W.tension[m]! > 0 && pm.kind === "cubic" && dist(Wm, B) >= EPS_GEOM
-            ? legOf(Wm, B, placeLast(pm.c1), [
-                  B[0] + (Wm[0] - B[0]) / 3,
-                  B[1] + (Wm[1] - B[1]) / 3,
-              ])
-            : legOf(Wm, B, null, null);
+        pm.kind === "arc"
+            ? arcLegOf(Wm, B, pm.k)
+            : W.tension[m]! > 0 &&
+                pm.kind === "cubic" &&
+                dist(Wm, B) >= EPS_GEOM
+              ? legOf(Wm, B, placeLast(pm.c1), [
+                    B[0] + (Wm[0] - B[0]) / 3,
+                    B[1] + (Wm[1] - B[1]) / 3,
+                ])
+              : legOf(Wm, B, null, null);
     return { schedule, A, B, offset, first, last, adjust };
 }
 
 function legPoint(leg: GroupLeg, f: number): XY {
     const { path } = leg;
-    if (leg.length < EPS_GEOM || path.pieces[0]!.kind === "line")
+    const piece = path.pieces[0]!;
+    if (piece.kind === "arc")
+        return arcPoint(path.V[0]!, path.V[1]!, piece.k, f);
+    if (leg.length < EPS_GEOM || piece.kind === "line")
         return lerp(path.V[0]!, path.V[1]!, f);
     return routePiecePoint(path, 0, f * leg.length);
+}
+
+/**
+ * A member of a route with no kept point walks R-7's line, or R-8's arc with the route's
+ * `toBulge` when its one leg is an arc (R-14″).
+ */
+function straightOrArc(schedule: GroupSchedule, A: XY, B: XY, p: number): XY {
+    const only = schedule.W.pieces[0];
+    return only?.kind === "arc" ? arcPoint(A, B, only.k, p) : lerp(A, B, p);
 }
 
 /** R-14 group schedule item 6: where the member is at progress `p`. */
@@ -968,7 +1056,7 @@ export function groupPoint(walk: GroupMemberWalk, p: number): XY {
     const { schedule, A, B, offset, first, last, adjust } = walk;
     if (p <= 0) return A;
     if (p >= 1) return B;
-    if (!first || !last) return lerp(A, B, p);
+    if (!first || !last) return straightOrArc(schedule, A, B, p);
     const { uFirst, uLast } = schedule;
     if (p < uFirst) return legPoint(first, p / uFirst);
     if (p <= uLast) {
@@ -978,11 +1066,13 @@ export function groupPoint(walk: GroupMemberWalk, p: number): XY {
     return legPoint(last, (p - uLast) / (1 - uLast));
 }
 
-/** What R-14 reads of a route: its points (with tensions) and the ends it was drawn against. */
+/** What R-14 reads of a route: its points (with tensions and bulges) and the ends it was drawn against. */
 export interface RouteWalk {
     points: readonly RouteVertex[];
     from: XY;
     to: XY;
+    /** The last leg's bulge (R-14″); absent for none */
+    toBulge?: number;
 }
 
 /**
@@ -1033,7 +1123,8 @@ export function walkedPoint(
                 ),
                 p,
             );
-        if (route.points.length === 0) return lerp(A, B, p);
+        if (route.points.length === 0 && !isBulge(route.toBulge))
+            return lerp(A, B, p);
         return routePoint(routePath(A, route.points, B, route), p);
     }
     switch (t.style) {
