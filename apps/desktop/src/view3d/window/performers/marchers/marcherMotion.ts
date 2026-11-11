@@ -279,6 +279,9 @@ export function planShow(
  */
 export const STEP_AHEAD = 1;
 
+/** A slot's cursor while it stands in the closed position (`updateClosed`). */
+const CLOSED = -2;
+
 /** Per-frame state: which event each marcher plays. */
 export class MarcherMotion {
     private readonly cursor: Int32Array;
@@ -291,6 +294,12 @@ export class MarcherMotion {
         private readonly bodies: MarcherBodies,
         /** Per slot; null (or none given) leaves the slot's arms on the Feet. */
         private readonly horns: readonly (HornSlot | null)[] = [],
+        /**
+         * Per slot: the `attention` Feet row for its height class, which
+         * `updateClosed` stands it in. None given leaves `updateClosed`
+         * placing and turning the slots alone.
+         */
+        private readonly attention: readonly string[] = [],
     ) {
         this.cursor = new Int32Array(plans.length).fill(-1);
         this.hornCursor = new Int32Array(plans.length).fill(-1);
@@ -376,6 +385,39 @@ export class MarcherMotion {
             );
             xz[i * 2] = out.x;
             xz[i * 2 + 1] = out.z;
+        }
+    }
+
+    /**
+     * The closed position at show count clock `count`, for a paused show:
+     * every marcher stands at attention, feet together, on its dot. The
+     * caller fills `xz` with the drill position at `count` itself (not
+     * `STEP_AHEAD` counts later), and it stays there. Headings and the
+     * Horn/Equipment channel are what `update` would show then; only the feet
+     * and where the body stands differ. The next `update` writes every
+     * slot's clip again.
+     */
+    updateClosed(count: number, headings?: Float32Array): void {
+        const planCount = count + STEP_AHEAD;
+        this.updateHorns(count);
+        const rows = this.bodies.bake.rows;
+        for (let i = 0; i < this.plans.length; i++) {
+            const plan = this.plans[i];
+            if (!plan || plan.events.length === 0) continue;
+            if (headings) headings[i] = headingAt(plan, planCount);
+            const row = rows[this.attention[i]];
+            if (!row) continue; // not baked yet: keep the step
+            if (this.cursor[i] !== CLOSED)
+                this.bodies.setClip(i, {
+                    row,
+                    row2: null,
+                    weight: 0,
+                    phase: 0,
+                    rate: 1,
+                    legYaw: 0,
+                });
+            // `update` finds the event again and writes its clip
+            this.cursor[i] = CLOSED;
         }
     }
 
