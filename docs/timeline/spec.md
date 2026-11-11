@@ -3534,7 +3534,9 @@ press. Escape cancels the drawing, then leaves the tool.
 - **The projection** is exact on lines; a cubic piece is projected onto its 64 measured chords,
   the distance read from the same table. Ties go to the larger distance by exact comparison. The
   increasing rule is applied first, then `e_q ← max(e_q, startDist[q])`; a member so held walks
-  straight from its start to its spot.
+  straight from its start to its spot. On a curved leg the written spot `P(e_q)` is on the curve
+  while its projection is read on the chords, so it sits within about 0.01 step of the way and
+  its straight leg is nearly, not exactly, zero.
 - **The source fit** is a line (principal axis), the Arc kind's circle fit, or a chain of near
   neighbours (corners or smooth), each within a quarter of the usual spacing; the arc and the
   chain must not skip a marcher or have a step over 2.5 times the usual. The current Line and
@@ -3543,7 +3545,10 @@ press. Escape cancels the drawing, then leaves the tool.
 - **The write** adds the page (when the end flag is past the last page), writes the spots with
   the canvas's range writer (which makes or joins the move over the window, replacing spots),
   then AP-T1 peels the line in trail order. Keep end spots is AP-T1 in the same trail order (the
-  grabbed end leads), not `followOrder`'s.
+  grabbed end leads), not `followOrder`'s, on step 4's target: the one move every member is in at
+  the playhead, offered only when there is one. Even's limit holds only for From trail.
+- **Shift+L** on exactly a trail's line (every member, nobody else) draws that trail again, as
+  step 4's Follow does (AP-T1, AP-T2); any other selection opens the Follow tool's drag.
 - **QA-DL-5** as written (a 2-step trail on a line of 8 at 2 steps) puts seven on the old line;
   the test uses a 6-step trail, which gives five and three.
 - **`walkedPath`** had no trail support (steps 4 and 18 were built side by side); it now draws
