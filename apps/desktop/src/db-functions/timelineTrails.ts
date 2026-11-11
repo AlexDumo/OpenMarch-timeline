@@ -165,6 +165,8 @@ export interface MoveTrail {
     end: number;
     /** Whether the other end leads (R-12′) */
     reverse: boolean;
+    /** Whether the members end along the way (R-13″, step 4b) */
+    along: boolean;
     geometry: RouteGeometry;
     /** The marchers in the line, by slot: the tail first, or the leader first when reversed */
     marcherIds: number[];
@@ -174,6 +176,20 @@ const isReversed = (transition: TransitionDbRow): boolean =>
     transition.path_params !== null &&
     (JSON.parse(transition.path_params) as { reverse?: boolean }).reverse ===
         true;
+
+/** Whether a follow move's members end along the way (R-13″, pathways step 4b) */
+export const isAlong = (transition: TransitionDbRow): boolean =>
+    transition.path_params !== null &&
+    (JSON.parse(transition.path_params) as { ends?: string }).ends === "along";
+
+/** A trail's last drawn point, where a route with its ends along the way runs to (AP-T8) */
+const lastPoint = (
+    points: readonly { at: readonly [number, number] }[],
+    none: XY,
+): XY => {
+    const last = points.at(-1);
+    return last ? [last.at[0], last.at[1]] : none;
+};
 
 /** Every trail of move `timelineId`, or of the show, by transition id. */
 export async function readTrails(
@@ -213,6 +229,7 @@ export async function readTrails(
             start: transition.start_beat,
             end: transition.end_beat,
             reverse: isReversed(transition),
+            along: isAlong(transition),
             geometry: JSON.parse(geometry) as RouteGeometry,
             marcherIds: [...new Set(members.map((m) => m.marcherId))],
         });
@@ -542,11 +559,23 @@ export async function followTrailInTransaction({
     timelineId,
     marcherIds,
     points,
+    line,
+    along = false,
 }: {
     tx: DbTransaction;
     timelineId: number;
     marcherIds: readonly number[];
     points: readonly RoutePointInput[];
+    /**
+     * The line's order, tail first (step 4b: the order along the shape the line stands in, the
+     * grabbed end leading); `followOrder`'s when absent. The same marchers as `marcherIds`.
+     */
+    line?: readonly number[];
+    /**
+     * Step 4b (AP-T8, R-13″): the end spots are on the way, `path_params.ends = "along"`, and
+     * the route runs to its last point (`to`), not to an end spot. A new line only.
+     */
+    along?: boolean;
 }): Promise<FollowTrailResult> {
     const plan = await planFollow(tx, timelineId, marcherIds);
     if (plan.kind === "redraw") {
@@ -564,11 +593,18 @@ export async function followTrailInTransaction({
         };
     }
     const { chosen, starts, ends } = plan;
-    const order = followOrder(starts, ends);
+    const order = line
+        ? line.map((id) => {
+              const i = chosen.findIndex((r) => r.assignment.marcher_id === id);
+              if (i < 0 || line.length !== chosen.length)
+                  refuse("the line's order names other marchers");
+              return i;
+          })
+        : followOrder(starts, ends);
     const leader = order[order.length - 1]!;
     const geometry = trailGeometry(points, null, {
         from: starts[leader]!,
-        to: ends[order[0]!]!,
+        to: along ? lastPoint(points, starts[leader]!) : ends[order[0]!]!,
     });
     const timeline = chosen[0]!.timeline;
 
@@ -591,7 +627,11 @@ export async function followTrailInTransaction({
                 timeline_id: timeline.id,
                 dest_shape_id: null,
                 path_style: FTL,
-                path_params: JSON.stringify({ waypoints: [] }),
+                path_params: JSON.stringify(
+                    along
+                        ? { waypoints: [], ends: "along" }
+                        : { waypoints: [] },
+                ),
                 route_id: route.id,
                 order_mode: "slot",
                 slot_count: order.length,
@@ -673,7 +713,14 @@ export async function editTrailPointsInTransaction({
         from: current.from,
         to: current.to,
     };
-    const geometry = trailGeometry(points, current, ends);
+    // AP-T10: with its ends along the way, the route runs to its own last point (R-13″)
+    const geometry = trailGeometry(
+        points,
+        current,
+        isAlong(transition)
+            ? { from: ends.from, to: lastPoint(points, ends.from) }
+            : ends,
+    );
     await mapDbErrors(() =>
         writeRouteGeometryInTransaction(tx, routeId, geometry),
     );
@@ -715,11 +762,12 @@ export async function reverseTrailInTransaction({
         const updated = (await tx
             .update(T)
             .set({
-                path_params: JSON.stringify(
-                    reverse
-                        ? { waypoints: [], reverse: true }
-                        : { waypoints: [] },
-                ),
+                path_params: JSON.stringify({
+                    waypoints: [],
+                    ...(reverse ? { reverse: true } : {}),
+                    // AP-T10: Reverse keeps the ends along the way
+                    ...(isAlong(transition) ? { ends: "along" } : {}),
+                }),
             })
             .where(eq(T.id, transition.id))
             .returning()
@@ -735,7 +783,10 @@ export async function reverseTrailInTransaction({
             await writeRouteGeometryInTransaction(tx, routeId, {
                 ...current,
                 from: ends.from,
-                to: ends.to,
+                // with its ends along the way the route still runs to its own last point
+                to: isAlong(updated)
+                    ? lastPoint(current.points, ends.from)
+                    : ends.to,
             });
         }
         await markTrailModelInTransaction(tx);

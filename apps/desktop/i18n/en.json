@@ -2729,7 +2729,13 @@
                 "notYet": "{move} follows a drawn trail, which this edit can't keep yet. Remove the trail first",
                 "split": "{move} can't be split at a count while a line follows a trail. Remove the trail first, or split before choosing Follow",
                 "removeTrailFirst": "{move} follows a drawn trail: remove the trail first",
-                "noTrail": "This trail is gone"
+                "noTrail": "This trail is gone",
+                "notFitted": "Select marchers standing in a line, curve or arc to drag out a trail",
+                "notAnEnd": "Drag the trail out of an end of the line",
+                "tooShort": "Draw a longer trail",
+                "evenTooWide": "Even spacing can be at most {limit} steps here, or someone would walk backward",
+                "noSpots": "Keep end spots needs every marcher in one move with spots there",
+                "noWindow": "Move the playhead past the start flag to drag out a trail"
             }
         }
     },
