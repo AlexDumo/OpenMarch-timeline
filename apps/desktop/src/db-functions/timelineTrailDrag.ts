@@ -274,6 +274,8 @@ export function planTrailDrag(
         points: points.map((p) => ({
             at: [p.at[0], p.at[1]],
             ...(p.tension === undefined ? {} : { tension: p.tension }),
+            // R-14″: an arc leg into a point keeps its bulge, so the plan is the way written
+            ...(p.bulge === undefined ? {} : { bulge: p.bulge }),
         })),
     });
     const startDist = starts.map((_, q) => way.cum[q]!);

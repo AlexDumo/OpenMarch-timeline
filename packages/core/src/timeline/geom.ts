@@ -390,11 +390,14 @@ export function makeAlongTrail(
     const lineLen = cum[cum.length - 1]!;
     const last = route?.points[route.points.length - 1];
     if (route && origins.length > 0 && last) {
+        // R-14″: the leg into the last point is an arc by that point's own bulge (the route's
+        // `toBulge` is for a leg to `to`, which here has no length)
+        const { toBulge: _toTo, ...ends } = route;
         const W = routePath(
             lineUp[lineUp.length - 1]!,
             route.points.slice(0, -1),
             last.at,
-            route,
+            last.bulge === undefined ? ends : { ...ends, toBulge: last.bulge },
         );
         if (W.L >= EPS_GEOM) {
             const total = lineLen + W.L;
@@ -419,10 +422,38 @@ export function makeAlongTrail(
 }
 
 /**
+ * R-14″: the fraction `f` (0 ≤ f ≤ 1) of R-8's arc from `A` to `B` with bulge `k` whose point is
+ * nearest `q`. In the chord's frame (from its midpoint, `x` toward `B`, `y` to the +90° side) the
+ * arc's point at `f` is `R·(sin θ, cos θ)` about its centre `(0, −h·cot φ)`, with `θ = φ·(2f − 1)`,
+ * `R = h / sin φ` and `φ = 2·atan(2k)`; `q`'s angle there is `atan2(x·sin φ, y·sin φ + h·cos φ)`
+ * (nothing far away is formed), clamped to the arc's span `[−|φ|, |φ|]`, the nearer end in angle.
+ * A chord under `EPS_GEOM` or a half-angle under `1e-12` is R-8's straight line, projected so.
+ */
+export function nearestOnArc(A: XY, B: XY, k: number, q: XY): number {
+    const dx = B[0] - A[0];
+    const dy = B[1] - A[1];
+    const c = Math.hypot(dx, dy);
+    if (c < EPS_GEOM) return 0;
+    const phi = 2 * Math.atan(2 * k);
+    const ux = dx / c;
+    const uy = dy / c;
+    const rx = q[0] - (A[0] + B[0]) / 2;
+    const ry = q[1] - (A[1] + B[1]) / 2;
+    const x = rx * ux + ry * uy;
+    if (Math.abs(phi) < 1e-12) return clamp01(x / c + 0.5);
+    const y = -rx * uy + ry * ux;
+    const h = c / 2;
+    const sinPhi = Math.sin(phi);
+    const theta = Math.atan2(x * sinPhi, y * sinPhi + h * Math.cos(phi));
+    const span = Math.abs(phi);
+    return (Math.max(-span, Math.min(span, theta)) / phi + 1) / 2;
+}
+
+/**
  * R-13″: the arc length on an along-way `trail` ({@link makeAlongTrail}) of the point of it
- * nearest `p`, ties to the larger distance. Lines are projected exactly; a cubic piece of the
- * drawn part is projected onto the 64 chords R-14 measures it on, its distance read from the
- * same table.
+ * nearest `p`, ties to the larger distance. Lines and arc legs (R-14″, {@link nearestOnArc}) are
+ * projected exactly; a cubic piece of the drawn part is projected onto the 64 chords R-14
+ * measures it on, its distance read from the same table.
  */
 export function nearestAlong(trail: FtlTrail, p: XY): number {
     let best = Infinity;
@@ -460,6 +491,17 @@ export function nearestAlong(trail: FtlTrail, p: XY): number {
             const base = drawn.start + W.D[j]!;
             if (piece.kind === "line") {
                 consider(P0, P3, base, W.D[j + 1]! - W.D[j]!);
+                return;
+            }
+            if (piece.kind === "arc") {
+                // R-14″: projected onto the circle exactly, its length linear in the arc's
+                // fraction (constant angular speed); the ends are candidates too
+                const len = W.D[j + 1]! - W.D[j]!;
+                const f = nearestOnArc(P0, P3, piece.k, p);
+                consider(P0, P0, base, 0);
+                consider(P3, P3, base + len, 0);
+                const at = arcPoint(P0, P3, piece.k, f);
+                consider(at, at, base + f * len, 0);
                 return;
             }
             const K = ROUTE_CUBIC_SAMPLES;

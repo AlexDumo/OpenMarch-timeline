@@ -241,7 +241,8 @@ export function makeAlongWay(origins, route) {
   const pts = route?.points ?? [];
   let W = null;
   if (origins.length && pts.length) {
-    const w = routeWalk(line[line.length - 1], pts.slice(0, -1), pts[pts.length - 1].at, route.from, route.to);
+    // R-14″: the leg into the last point is an arc by that point's own bulge (a leg to `to` has no length here)
+    const w = routeWalk(line[line.length - 1], pts.slice(0, -1), pts[pts.length - 1].at, route.from, route.to, pts[pts.length - 1].bulge);
     if (w.L >= EPS_GEOM) W = w;
   }
   const total = lineLen + (W ? W.L : 0), K = 64;
@@ -254,18 +255,20 @@ export function makeAlongWay(origins, route) {
     while (j < W.V.length - 2 && !(d < W.D[j + 1])) j++;
     const x = d - W.D[j], pc = W.pieces[j];
     if (!pc) return lerp(W.V[j], W.V[j + 1], x / (W.D[j + 1] - W.D[j]));
+    if ('arc' in pc) return arcPoint(W.V[j], W.V[j + 1], pc.arc, x / (W.D[j + 1] - W.D[j]));
     let i = 1;
     while (i <= K && !(x < pc.e[i])) i++;
     if (i > K) return W.V[j + 1];
     return bez(W.V[j], pc.c1, pc.c2, W.V[j + 1], (i - 1 + (x - pc.e[i - 1]) / (pc.e[i] - pc.e[i - 1])) / K);
   };
   const at = (d) => (!W || d < lineLen ? pointAtDist(line, cum, d) : drawn(d - lineLen));
-  // the way's straight pieces to project onto: [a, b, distance at a, length]
-  const segs = [[line[0], line[0], 0, 0]];
+  // the way's straight pieces to project onto: [a, b, distance at a, length]; arc legs are kept whole
+  const segs = [[line[0], line[0], 0, 0]], arcs = [];
   for (let i = 1; i < line.length; i++) segs.push([line[i - 1], line[i], cum[i - 1], cum[i] - cum[i - 1]]);
   if (W) for (let j = 0; j < W.V.length - 1; j++) {
     const P0 = W.V[j], P3 = W.V[j + 1], pc = W.pieces[j], base = lineLen + W.D[j];
     if (!pc) { segs.push([P0, P3, base, W.D[j + 1] - W.D[j]]); continue; }
+    if ('arc' in pc) { arcs.push([P0, P3, pc.arc, base, W.D[j + 1] - W.D[j]]); continue; }
     let prev = P0;
     for (let i = 1; i <= K; i++) { const s = i === K ? P3 : bez(P0, pc.c1, pc.c2, P3, i / K); segs.push([prev, s, base + pc.e[i - 1], pc.e[i] - pc.e[i - 1]]); prev = s; }
   }
@@ -277,9 +280,38 @@ export function makeAlongWay(origins, route) {
       const dd = Math.hypot(a[0] + dx * f - p[0], a[1] + dy * f - p[1]);
       if (dd <= best) { best = dd; d = d0 + f * len; }
     }
+    // R-14″: an arc leg, exactly: p's angle about the circle's centre, held to the arc's span, and the arc's two ends
+    for (const [P0, P3, k, d0, len] of arcs) {
+      const f = nearestArcFraction(P0, P3, k, p);
+      for (const [g, at] of [[0, P0], [1, P3], [f, arcPoint(P0, P3, k, f)]]) {
+        const dd = Math.hypot(at[0] - p[0], at[1] - p[1]);
+        if (dd < best || (dd === best && d0 + g * len > d)) { best = dd; d = d0 + g * len; }
+      }
+    }
     return d;
   };
   return { cum, destOffset: total, at, nearest };
+}
+
+/**
+ * R-14″: the fraction of R-8's arc A→B (bulge k) nearest p, from the centre form: centre c = M + n·(s − r) with
+ * s = k·|AB| toward the +90° side n and r = (h² + s²)/(2s) signed; p's angle about c, measured from the arc's middle
+ * and wrapped to (−π, π], is held to half the sweep. A chord under EPS_GEOM or a straight arc is projected as a line.
+ */
+export function nearestArcFraction(A, B, k, p) {
+  const c = dist(A, B);
+  if (c < EPS_GEOM) return 0;
+  const ux = (B[0] - A[0]) / c, uy = (B[1] - A[1]) / c, M = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
+  if (Math.abs(2 * Math.atan(2 * k)) < 1e-12) return clamp01(((p[0] - A[0]) * ux + (p[1] - A[1]) * uy) / c);
+  const h = c / 2, s = k * c, r = (h * h + s * s) / (2 * s);
+  const C = [M[0] - uy * (s - r), M[1] + ux * (s - r)];
+  const apex = [M[0] - uy * s, M[1] + ux * s];
+  const ang = (q) => Math.atan2(q[1] - C[1], q[0] - C[0]);
+  const wrap = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a <= -Math.PI) a += 2 * Math.PI; return a; };
+  const half = wrap(ang(apex) - ang(A));            // signed half-sweep, A to the apex
+  const dev = wrap(ang(p) - ang(apex));
+  const held = Math.max(-Math.abs(half), Math.min(Math.abs(half), dev));
+  return clamp01(0.5 + held / (2 * half));
 }
 
 /** R-13″: the ends on an along-way: e_q, the turn P(e_q) and the straight leg to the spot. */

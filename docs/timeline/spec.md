@@ -3530,8 +3530,11 @@ press. Escape cancels the drawing, then leaves the tool.
 
 - **`W` with ends along the way** runs from the leader's start through the route's points to its
   last point (`B` = the last point, `to` = that point); with no point, or no length, `P` is the
-  line-up. Waypoints are not read with `"along"`. With a shape, `ends` is not read (R-9′).
-- **The projection** is exact on lines; a cubic piece is projected onto its 64 measured chords,
+  line-up. Waypoints are not read with `"along"`. With a shape, `ends` is not read (R-9′). The
+  leg into the last point is an arc by that point's own `bulge` (R-14″); the route's `toBulge`
+  would be a leg of no length, so a trail edit with `"along"` clears it.
+- **The projection** is exact on lines and on arc legs (R-14″: onto the circle, held to the
+  arc's span, its distance linear in the arc's fraction); a cubic piece is projected onto its 64 measured chords,
   the distance read from the same table. Ties go to the larger distance by exact comparison. The
   increasing rule is applied first, then `e_q ← max(e_q, startDist[q])`; a member so held walks
   straight from its start to its spot. On a curved leg the written spot `P(e_q)` is on the curve

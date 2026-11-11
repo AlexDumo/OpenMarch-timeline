@@ -889,6 +889,20 @@ export function createWalkedPaths(
                 out.push(
                     linePiece(progressOf(lo), progressOf(hi), at(xa), at(xb)),
                 );
+            } else if (piece.kind === "arc") {
+                // R-14″: an arc leg is R-8's arc, walked at constant speed, so its stretch is
+                // the same circle's part, in pieces of at most a quarter turn
+                const len = W.D[j + 1]! - W.D[j]!;
+                const part = subArc(P0, P3, piece.k, xa / len, xb / len);
+                out.push(
+                    ...bulgePieces(
+                        part.from,
+                        part.to,
+                        part.k,
+                        progressOf(lo),
+                        progressOf(hi),
+                    ),
+                );
             } else
                 out.push(
                     cubicPiece(
