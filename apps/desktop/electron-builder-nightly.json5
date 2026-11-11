@@ -19,7 +19,10 @@
     productName: "OpenMarch Nightly",
     // The app's own name at runtime too (Electron reads it from package.json), so its settings
     // and show list live apart from the released app's on Windows and Linux, as on macOS
+    // `name` also names electron-updater's download cache (`<name>-updater`), which would
+    // otherwise be the released app's: each would clear the other's staged update
     extraMetadata: {
+        name: "openmarch-nightly",
         productName: "OpenMarch Nightly",
     },
     // Each build's files have their own names, so a download that starts while the next
@@ -41,8 +44,5 @@
         provider: "generic",
         url: "https://github.com/OpenMarch/OpenMarch/releases/download/v0.0.0-nightly",
         channel: "nightly-${arch}",
-        // Its own download cache: the released app's would otherwise be shared, and each
-        // clears the other's staged update
-        updaterCacheDirName: "openmarch-nightly-updater",
     },
 }

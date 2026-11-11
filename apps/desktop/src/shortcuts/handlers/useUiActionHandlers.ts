@@ -2,8 +2,6 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useStartFlagKeyStore } from "@/stores/StartFlagKeyStore";
 import { useShortcutsDialogStore } from "@/stores/ShortcutsDialogStore";
 import { useActionHandler } from "../useActionHandler";
-import { useTranslate } from "@tolgee/react";
-import { checkForUpdatesAndReport } from "@/updates/checkForUpdates";
 
 export function useUiActionHandlers() {
     // Read when an action runs, so a settings change (such as a timeline zoom save) doesn't
@@ -29,10 +27,6 @@ export function useUiActionHandlers() {
                     : startFlagKey().blurRelease(),
         },
     );
-    const { t } = useTranslate();
-    useActionHandler("checkForUpdates", () => {
-        void checkForUpdatesAndReport(t);
-    });
     useActionHandler("openView3d", () => {
         void window.electron.openView3d();
     });

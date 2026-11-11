@@ -155,9 +155,55 @@ describe("createUpdateController", () => {
         });
         updater.nextCheck = found("0.2.1");
         await controller.check();
-        await controller.check();
+        await controller.check({ manual: true });
         expect(phase()).toMatchObject({ kind: "downloading", requested: true });
         expect(updater.checkForUpdates).toHaveBeenCalledOnce();
+    });
+
+    it("shows the download a person's own check found", async () => {
+        const { controller, updater, phase } = setup({
+            automaticDownload: true,
+        });
+        updater.nextCheck = found("0.2.1");
+        await controller.check({ manual: true });
+        expect(phase()).toMatchObject({ kind: "downloading", requested: true });
+    });
+
+    it("keeps a found update on screen through a background check, even a failed one", async () => {
+        const { controller, updater, states, phase } = setup();
+        updater.nextCheck = found("0.2.1");
+        await controller.check();
+        const before = states.length;
+        updater.nextCheck = new Error("net::ERR_INTERNET_DISCONNECTED");
+        await controller.check();
+        expect(phase()).toEqual({ kind: "available", version: "0.2.1" });
+        expect(states.slice(before).map((s) => s.phase.kind)).not.toContain(
+            "checking",
+        );
+    });
+
+    it("reports a failed check the person asked for", async () => {
+        const { controller, updater, phase } = setup();
+        updater.nextCheck = found("0.2.1");
+        await controller.check();
+        updater.nextCheck = new Error("net::ERR_INTERNET_DISCONNECTED");
+        await controller.check({ manual: true });
+        expect(phase()).toMatchObject({ kind: "error", version: "0.2.1" });
+    });
+
+    it("on macOS, is ready only once Squirrel has the update too", async () => {
+        const native = new EventEmitter();
+        const { controller, updater, phase } = setup({ nativeStaging: native });
+        updater.nextCheck = found("0.2.1");
+        await controller.check();
+        await controller.download();
+        updater.emit("update-downloaded", { version: "0.2.1" });
+        expect(phase().kind).toBe("downloading");
+        await controller.install();
+        expect(updater.quitAndInstall).not.toHaveBeenCalled();
+
+        native.emit("update-downloaded");
+        expect(phase()).toEqual({ kind: "downloaded", version: "0.2.1" });
     });
 
     it("starts the waiting download when the setting is turned on", async () => {

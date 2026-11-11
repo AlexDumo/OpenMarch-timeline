@@ -97,6 +97,14 @@ export interface UpdateControllerOptions {
     prepareToQuit: () => Promise<void>;
     /** Opens the app again on this version, when "Update now" couldn't install */
     relaunch: () => void;
+    /**
+     * macOS: Electron's own updater (Squirrel.Mac). electron-updater says "downloaded" once the
+     * zip is on disk, but Squirrel still fetches and unpacks it after that, and installing has
+     * to wait for it. The update counts as ready only when this says so.
+     */
+    nativeStaging?: {
+        once(event: "update-downloaded", listener: () => void): unknown;
+    };
     log?: Pick<Console, "info" | "error">;
     setTimer?: (callback: () => void, ms: number) => unknown;
     setRepeatingTimer?: (callback: () => void, ms: number) => unknown;
@@ -107,8 +115,12 @@ export interface UpdateController {
     getState(): UpdateState;
     /** Starts the launch check and the hourly checks */
     start(): void;
-    /** Looks for an update; resolves with the state once the check ends */
-    check(): Promise<UpdateState>;
+    /**
+     * Looks for an update; resolves with the state once the check ends. A `manual` check (the
+     * person asked) shows its download in the title bar and reports failures; a background one
+     * keeps an update already found on screen even if the check fails.
+     */
+    check(options?: { manual?: boolean }): Promise<UpdateState>;
     /** Downloads the found update because the person asked: the title bar shows its progress */
     download(): Promise<void>;
     /** Closes the show, quits and installs the downloaded update */
@@ -150,6 +162,13 @@ export function createUpdateController(
     /** The version the current download is about, once a check found one */
     let foundVersion: string | undefined;
     let pendingCheck: Promise<UpdateState> | null = null;
+    /** The check running now: whether someone asked for it, and the phase before it */
+    let currentCheck: { manual: boolean; before: UpdatePhase } | null = null;
+    /** A background check while an update waits for Download: it shouldn't disturb the pill */
+    const quietCheck = () =>
+        currentCheck !== null &&
+        !currentCheck.manual &&
+        currentCheck.before.kind === "available";
     let installing = false;
 
     const set = (phase: UpdatePhase) => {
@@ -179,6 +198,12 @@ export function createUpdateController(
         }
     };
 
+    const checkFailed = (error: unknown) => {
+        // A background check that fails changes nothing about an update already found
+        if (quietCheck() && currentCheck) set(currentCheck.before);
+        else fail(error);
+    };
+
     const controller: UpdateController = {
         getState: () => state,
 
@@ -190,16 +215,20 @@ export function createUpdateController(
             }, UPDATE_CHECK_INTERVAL_MS);
         },
 
-        check() {
+        check({ manual = false } = {}) {
             if (unsupportedReason) return Promise.resolve(state);
             // Nothing new to find while one downloads or waits to install. Asking during an
             // automatic download brings its progress into the title bar.
             const { phase } = state;
-            if (phase.kind === "downloading" && !phase.requested)
+            if (manual && phase.kind === "downloading" && !phase.requested)
                 set({ ...phase, requested: true });
             if (phase.kind === "downloading" || phase.kind === "downloaded")
                 return Promise.resolve(state);
-            pendingCheck ??= updater
+            // Asking while a background check runs makes it the person's check
+            if (currentCheck) currentCheck.manual ||= manual;
+            if (pendingCheck) return pendingCheck;
+            currentCheck = { manual, before: phase };
+            pendingCheck = updater
                 .checkForUpdates()
                 .then(() => {
                     // A check that ends without an event found nothing to do
@@ -208,10 +237,12 @@ export function createUpdateController(
                 })
                 .catch((error: unknown) => {
                     log.error("Unable to check for updates:", error);
-                    if (phaseKind() === "checking") fail(error);
+                    // The error event usually got there first
+                    if (phaseKind() === "checking") checkFailed(error);
                 })
                 .then(() => {
                     pendingCheck = null;
+                    currentCheck = null;
                     return state;
                 });
             return pendingCheck;
@@ -284,7 +315,9 @@ export function createUpdateController(
         // A downloaded update always installs on quit: the person chose it, or chose automatic
         updater.autoInstallOnAppQuit = true;
 
-        updater.on("checking-for-update", () => set({ kind: "checking" }));
+        updater.on("checking-for-update", () => {
+            if (!quietCheck()) set({ kind: "checking" });
+        });
         updater.on("update-not-available", () => {
             foundVersion = undefined;
             set({ kind: "upToDate", checkedAt: now() });
@@ -294,7 +327,7 @@ export function createUpdateController(
             // Straight to a quiet download, so "Update available" never flashes in the title
             // bar on its way to "Update ready"
             if (state.automaticDownload && canInstallHere())
-                void startDownload(false);
+                void startDownload(currentCheck?.manual ?? false);
             else set({ kind: "available", version: info.version });
         });
         updater.on(
@@ -319,11 +352,17 @@ export function createUpdateController(
         );
         updater.on("update-downloaded", (info: { version: string }) => {
             foundVersion = info.version;
-            set({ kind: "downloaded", version: info.version });
+            const ready = () =>
+                set({ kind: "downloaded", version: info.version });
+            // macOS: stays at 100% until Squirrel has it too (`nativeStaging`)
+            if (options.nativeStaging)
+                options.nativeStaging.once("update-downloaded", ready);
+            else ready();
         });
         updater.on("error", (error: unknown) => {
             log.error("Updater error:", error);
-            fail(error);
+            if (currentCheck) checkFailed(error);
+            else fail(error);
         });
 
         // "Update now" last session, and still the old version: the install didn't take.

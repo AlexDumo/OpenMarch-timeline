@@ -34,11 +34,20 @@ rollback system, and most of its benefit comes from making updates visible, not 
   quit. An automatic download shows only as a small progress ring (the percentage in its tooltip); a
   download the person asked for (Download, Try again, or Check for updates while one runs)
   shows its text and a progress bar.
-- **Update now** closes the show the way quitting does but keeps it as the file to reopen, then
+- **Background and asked-for checks differ.** The launch and hourly checks are quiet: while an
+  update waits for Download they don't hide the pill, and if they fail the found update stays.
+  A check the person asks for reports what it found, failures included, and its download shows
+  in the title bar.
+- **macOS staging.** electron-updater reports "downloaded" once the zip is on disk, but
+  Squirrel.Mac still fetches and unpacks it. The update counts as ready only after Electron's own
+  `autoUpdater` reports `update-downloaded`, so Update now never waits on Squirrel.
+- **Update now** hides the window and closes the show the way quitting does but keeps it as the file to reopen, then
   calls `quitAndInstall` (silent on Windows, with the app reopened afterwards). The controller
   records the attempt. If the next launch is still on the old version, it reports the failed
   install and offers the installer. If the app hasn't quit 30 s after `quitAndInstall`, or the
-  install raises an error after the show closed, it relaunches on the same version.
+  install raises an error after the show closed, it relaunches on the same version. It releases the
+  single-instance lock before quitting, because on Linux the new AppImage starts before the old
+  app has finished quitting and would otherwise exit as a second instance.
 - **Where it can't update itself**, it says so and does nothing: development builds, Snap (the
   Snap Store updates it), and Linux installs that aren't an AppImage. On macOS outside
   Applications, where macOS won't let an app replace itself, it still checks but offers
@@ -61,6 +70,9 @@ rollback system, and most of its benefit comes from making updates visible, not 
 - A nightly build's files carry its version in their names, so a download that starts while the
   next nightly uploads still finds its file. The workflow uploads the files, then the feed, then
   deletes the old files.
+- The nightly's package name is `openmarch-nightly` (`extraMetadata.name`): electron-builder
+  names electron-updater's download cache after it, and a shared cache would let the released
+  app and the nightly clear each other's staged update.
 - Nightly version numbers drop the base version's own prerelease (`0.2.0-nightly.YYYYMMDD.run`),
   so they keep sorting in order across beta numbers.
 - Each nightly build is notarized and signed through Azure, which adds minutes to the run and

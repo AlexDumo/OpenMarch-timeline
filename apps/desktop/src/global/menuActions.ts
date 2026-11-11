@@ -51,7 +51,9 @@ export const PLAYBACK_MENU_ACTIONS: readonly MenuAction[] = [
 
 /**
  * "Check for Updates…": in the app menu on macOS, in Help elsewhere. It has no shortcut; the
- * renderer runs it so it can say what the check found.
+ * renderer runs it so it can say what the check found. It works on the launch page too, so the
+ * file handlers (mounted on both screens) listen for it, not the editor's `isMenuAction`
+ * listener.
  */
 export const CHECK_FOR_UPDATES_MENU_ACTION = {
     action: "checkForUpdates",
@@ -69,8 +71,6 @@ export const HELP_MENU_ACTIONS: readonly MenuAction[] = [
 /** Whether `action` is one the menu may send */
 export const isMenuAction = (action: unknown): action is string =>
     typeof action === "string" &&
-    [
-        ...PLAYBACK_MENU_ACTIONS,
-        ...HELP_MENU_ACTIONS,
-        CHECK_FOR_UPDATES_MENU_ACTION,
-    ].some((item) => item.action === action);
+    [...PLAYBACK_MENU_ACTIONS, ...HELP_MENU_ACTIONS].some(
+        (item) => item.action === action,
+    );

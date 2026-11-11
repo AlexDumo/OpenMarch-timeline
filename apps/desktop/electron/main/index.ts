@@ -1,6 +1,14 @@
 /* eslint-disable no-console */
 import { MENU_ACTION_CHANNEL } from "../../src/global/menuActions";
-import { app, BrowserWindow, shell, ipcMain, Menu, dialog } from "electron";
+import {
+    app,
+    autoUpdater as nativeAutoUpdater,
+    BrowserWindow,
+    shell,
+    ipcMain,
+    Menu,
+    dialog,
+} from "electron";
 import Store from "electron-store";
 import * as fs from "fs";
 import { release } from "node:os";
@@ -605,6 +613,7 @@ function startUpdates(): UpdateController {
         saveInstallAttempt: (attempt) =>
             store.set(INSTALL_ATTEMPT_KEY, attempt),
         prepareToQuit: closeShowForRestart,
+        nativeStaging: isMacOS ? nativeAutoUpdater : undefined,
         relaunch: () => {
             app.relaunch();
             app.exit(0);
@@ -622,6 +631,8 @@ function startUpdates(): UpdateController {
  * discarded, as on quit.
  */
 async function closeShowForRestart() {
+    // Out of sight first, as quitting does: nothing typed now could be saved
+    win?.hide();
     const reopen = currentNewShowDraftPath ? "" : DatabaseServices.getDbPath();
     try {
         await closeCurrentFile(true);
@@ -638,7 +649,11 @@ async function closeShowForRestart() {
 }
 
 ipcMain.handle(UPDATE_IPC_CHANNELS.getState, () => updates?.getState() ?? null);
-ipcMain.handle(UPDATE_IPC_CHANNELS.check, () => updates?.check() ?? null);
+// The renderer asks only when the person does (Check for updates)
+ipcMain.handle(
+    UPDATE_IPC_CHANNELS.check,
+    () => updates?.check({ manual: true }) ?? null,
+);
 ipcMain.handle(UPDATE_IPC_CHANNELS.download, () => updates?.download());
 ipcMain.handle(UPDATE_IPC_CHANNELS.install, () => updates?.install());
 ipcMain.handle(UPDATE_IPC_CHANNELS.moveToApplications, async () => {

@@ -7,7 +7,11 @@ import { useSelectedAudioFile } from "@/context/SelectedAudioFileContext";
 import { useAlertModalStore } from "@/stores/AlertModalStore";
 import { requestOpenNewShowDialog } from "@/utilities/openNewShowDialog";
 import { isWebBuild } from "@/utilities/webBuild";
+import { useEffect } from "react";
+import { CHECK_FOR_UPDATES_MENU_ACTION } from "@/global/menuActions";
+import { checkForUpdatesAndReport } from "@/updates/checkForUpdates";
 import { useActionHandler } from "../useActionHandler";
+import { runAction } from "../registry";
 
 // eslint-disable-next-line max-lines-per-function
 export function useFileActionHandlers() {
@@ -21,6 +25,19 @@ export function useFileActionHandlers() {
     const selectedAudioFileContext = useSelectedAudioFile();
     const setSelectedAudioFile =
         selectedAudioFileContext?.setSelectedAudioFile ?? (() => {});
+
+    // Fork #404: here, not with the editor's handlers, so it works on the launch page too
+    useActionHandler("checkForUpdates", () => {
+        void checkForUpdatesAndReport(t);
+    });
+    useEffect(
+        () =>
+            window.electron?.onMenuAction?.((action) => {
+                if (action === CHECK_FOR_UPDATES_MENU_ACTION.action)
+                    runAction("checkForUpdates");
+            }),
+        [],
+    );
 
     useActionHandler("openSettings", () => {
         void window.electron.openSettingsWindow();
