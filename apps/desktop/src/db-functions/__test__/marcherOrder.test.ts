@@ -18,7 +18,8 @@ import { boxesAt } from "@/shapes/placed/placedBox";
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { mergeMoves, splitMarchersIntoNewMove } from "../timelineSplitMoves";
 import { rememberedOrderAt } from "../rememberedOrder";
-import { followOrderAt } from "../timelineTrailDrag";
+import { dragTrail, followOrderAt } from "../timelineTrailDrag";
+import { reverseTrail } from "../timelineTrails";
 import {
     clearMarcherOrder,
     orderMoveAt,
@@ -245,6 +246,190 @@ describeDbTests("A line's order set by hand", (it) => {
         expect(await rememberedOrderAt(db, ids, 33)).toEqual(
             [...ids].reverse(),
         );
+    });
+
+    it("QA-DL-29 with nobody moving on page 3: Clear there keeps page 2's order; so does an order set there", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await inARow(db, ids);
+        const pageMove = (await orderMoveAt(db, PAGE2.end, ids))!;
+        // Standing still on page 3, they're in page 2's move
+        expect(await orderMoveAt(db, 25, ids)).toBe(pageMove);
+        const reversed = [...ids].reverse();
+        const marks = async () =>
+            (await readAllShapeRecipes(db)).filter((r) =>
+                ["order", "orderClear"].includes(r.kind),
+            );
+
+        // Clear on page 3
+        await setMarcherOrder(db, { beat: PAGE2.end, order: ids });
+        await clearMarcherOrder(db, { beat: 25, marcherIds: ids });
+        expect(await rememberedOrderAt(db, ids, PAGE2.end)).toEqual(ids);
+        expect(await rememberedOrderAt(db, ids, 21)).toEqual(ids);
+        expect(await rememberedOrderAt(db, ids, 25)).toBeNull();
+        // Both marks kept, in page 2's move, each at its own beat
+        expect(
+            (await marks()).map((m) => [
+                m.kind,
+                m.timelineId,
+                m.members.length,
+            ]),
+        ).toEqual([
+            ["order", pageMove, 4],
+            ["orderClear", pageMove, 4],
+        ]);
+
+        // An order set on page 3 after: page 2 still keeps its own
+        await setMarcherOrder(db, { beat: 25, order: reversed });
+        expect(await rememberedOrderAt(db, ids, PAGE2.end)).toEqual(ids);
+        expect(await rememberedOrderAt(db, ids, 25)).toEqual(reversed);
+        // ...and it replaced the Clear at its beat (the latest action wins)
+        expect((await marks()).map((m) => m.kind)).toEqual(["order", "order"]);
+
+        // Redefined straight away, without a Clear between
+        expect((await performUndo(db)).success).toBe(true);
+        expect((await performUndo(db)).success).toBe(true);
+        await setMarcherOrder(db, { beat: 25, order: reversed });
+        expect(await rememberedOrderAt(db, ids, PAGE2.end)).toEqual(ids);
+        expect(await rememberedOrderAt(db, ids, 25)).toEqual(reversed);
+        expect(
+            (await marks()).map((m) => m.members.map((x) => x.marcherId)),
+        ).toEqual([ids, reversed]);
+    });
+
+    it("a shape placed again at its move's end leaves an order mark said about a later beat alone", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await inARow(db, ids);
+        const pageMove = (await orderMoveAt(db, PAGE2.end, ids))!;
+        const reversed = [...ids].reverse();
+        await setMarcherOrder(db, { beat: 25, order: reversed });
+        // A box placed again in page 2's move, at beat 17: before the mark, so it stays
+        await transactionWithHistory(db, "placeBox", async (tx) => {
+            await saveShapeRecipeInTransaction({
+                tx,
+                timelineId: pageMove,
+                recipe: {
+                    kind: "box",
+                    kindVersion: 1,
+                    params: {},
+                    orderMode: "keep",
+                    reverse: false,
+                },
+                members: ids.map((marcherId, slot) => ({
+                    marcherId,
+                    slot,
+                    ...SPOTS[slot]!,
+                })),
+            });
+        });
+        expect(await rememberedOrderAt(db, ids, 25)).toEqual(reversed);
+        expect(await rememberedOrderAt(db, ids, PAGE2.end)).toBeNull();
+    });
+
+    it("merging a move fitted to the target's counts keeps its order marks at their own beat", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await inARow(db, ids);
+        const pageMove = (await orderMoveAt(db, PAGE2.end, ids))!;
+        // Half the line in a move of its own on page 3, ending at 23
+        const [a, b] = ids as [number, number];
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", start: 17, end: 23 },
+            moves: [
+                { marcherId: a, x: 100, y: 60 },
+                { marcherId: b, x: 120, y: 60 },
+            ],
+        });
+        await timelineResolverSettled();
+        const short = (await orderMoveAt(db, 23, [a, b]))!;
+        expect(short).not.toBe(pageMove);
+        expect((await readTimelineEndBeats(db, [short])).get(short)).toBe(23);
+        await setMarcherOrder(db, { beat: 23, order: [b, a] });
+        // ...and the rest of page 3 in a move ending at 25, which the short one merges into
+        const [, , c, d] = ids as [number, number, number, number];
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", start: 17, end: 25 },
+            moves: [
+                { marcherId: c, x: 140, y: 60 },
+                { marcherId: d, x: 160, y: 60 },
+            ],
+        });
+        await timelineResolverSettled();
+        const page3 = (await orderMoveAt(db, 25, [c, d]))!;
+        expect(page3).not.toBe(short);
+        await mergeMoves({ db, sourceId: short, targetId: page3 });
+        await timelineResolverSettled();
+        const mark = (await readAllShapeRecipes(db)).find(
+            (r) => r.kind === "order",
+        )!;
+        expect(mark.timelineId).toBe(page3);
+        expect((mark.params as { beat?: number }).beat).toBe(23);
+        expect(await rememberedOrderAt(db, [a, b], 23)).toEqual([b, a]);
+    });
+
+    it("a trail edit on page 2 leaves an order set on page 3 alone, though nobody moves there", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        // In a row at page 2's start flag, and a step forward at its end
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", start: 1, end: PAGE2.start },
+            moves: ids.map((marcherId, slot) => ({
+                marcherId,
+                ...SPOTS[slot]!,
+            })),
+        });
+        await moveMarchersInTarget({
+            db,
+            target: PAGE2,
+            moves: ids.map((marcherId, slot) => ({
+                marcherId,
+                x: SPOTS[slot]!.x,
+                y: SPOTS[slot]!.y + 8,
+            })),
+        });
+        await timelineResolverSettled();
+        const starts = positions(ids, PAGE2.start);
+        // A trail on page 2 (Keep end spots), the first leading
+        const lead = starts[0]!;
+        const trail = await dragTrail({
+            db,
+            window: { start: PAGE2.start, end: PAGE2.end },
+            marcherIds: ids,
+            leaderId: ids[0]!,
+            points: [{ at: [lead[0] - 30, lead[1] + 30] }],
+            spacing: { kind: "keep" },
+            step: 5,
+            ends: "keep",
+        });
+        await timelineResolverSettled();
+        const pageMove = (await orderMoveAt(db, PAGE2.end, ids))!;
+        expect(await orderMoveAt(db, 25, ids)).toBe(pageMove);
+        const page3 = [ids[1]!, ids[3]!, ids[0]!, ids[2]!];
+        await setMarcherOrder(db, { beat: 25, order: page3 });
+        expect(await rememberedOrderAt(db, ids, 25)).toEqual(page3);
+
+        await reverseTrail({ db, routeId: trail.routeId });
+        expect(await rememberedOrderAt(db, ids, PAGE2.end)).toEqual(
+            [...ids].reverse(),
+        );
+        expect(await rememberedOrderAt(db, ids, 25)).toEqual(page3);
+        // An order set on page 2 itself still gives way to the edit
+        await setMarcherOrder(db, { beat: PAGE2.end, order: page3 });
+        await reverseTrail({ db, routeId: trail.routeId });
+        expect(await rememberedOrderAt(db, ids, PAGE2.end)).toEqual(ids);
+        expect(await rememberedOrderAt(db, ids, 25)).toEqual(page3);
     });
 
     it("QA-DL-32: the Follow tool takes a hand-set order over the guess", async ({

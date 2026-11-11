@@ -24,6 +24,8 @@ import { schema } from "@/global/database/db";
 import {
     ORDER_CLEAR_RECIPE_KIND,
     ORDER_RECIPE_KIND,
+    isOrderMarkKind,
+    orderMarkBeat,
     readShapeRecipesOf,
     UNGROUPED_RECIPE_KIND,
 } from "./shapeRecipes";
@@ -34,7 +36,9 @@ import type { DbConnection, DbTransaction } from "./types";
 /** A form stored in the show, as the order rule reads it */
 export type OrderForm =
     | {
-          /** The beat the form is made at: its move's end (0 for homes) */
+          /**
+           * The beat the form is made at: its move's end (0 for homes), or an order mark's own beat
+           */
           readonly endBeat: number;
           /** `set`: an order set by hand (step 4g) */
           readonly kind: "trail" | "line" | "set";
@@ -216,9 +220,13 @@ export async function readOrderForms(
     ]);
     const forms: OrderForm[] = [];
     for (const recipe of recipes) {
-        const endBeat =
+        const moveEnd =
             recipe.timelineId === null ? 0 : endBeats.get(recipe.timelineId);
-        if (endBeat === undefined || recipe.members.length === 0) continue;
+        if (moveEnd === undefined || recipe.members.length === 0) continue;
+        // An order mark is made at its own beat; one saved before marks kept it, at its move's end
+        const endBeat = isOrderMarkKind(recipe.kind)
+            ? (orderMarkBeat(recipe.params) ?? moveEnd)
+            : moveEnd;
         if (recipe.kind === ORDER_CLEAR_RECIPE_KIND) {
             forms.push({
                 endBeat,

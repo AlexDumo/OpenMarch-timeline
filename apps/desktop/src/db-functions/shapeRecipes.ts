@@ -58,9 +58,10 @@ const sameMove = (timelineId: number | null) =>
  * beat it's placed at, and recipes left empty are deleted.
  *
  * An order mark (pathways step 4g, `ORDER_MARK_KINDS`) keeps every member, those standing still in
- * its move too, and takes them out of the other marks only. `keepOrderMarks` leaves the marks at
- * its beat alone: a shape's members changed by hand (one dragged off) don't redefine an order set
- * by hand there.
+ * its move too, and takes them out of the other marks at its own beat (`orderMarkBeat`) only.
+ * A shape takes its members out of the marks whose own beat is the one it's placed at, not of
+ * marks only stored in a move ending there. `keepOrderMarks` leaves the marks at its beat alone: a
+ * shape's members changed by hand (one dragged off) don't redefine an order set by hand there.
  *
  * @returns the recipe's id
  */
@@ -112,26 +113,34 @@ export async function saveShapeRecipeInTransaction({
 
     // Out of the other recipes at the beat it's placed at
     if (marcherIds.length > 0) {
-        const others = await tx
-            .select({ id: recipes.id })
-            .from(recipes)
-            .where(
-                and(
-                    await movesEndingAtPlacedBeat(tx, timelineId),
-                    notInArray(recipes.id, [id]),
-                    ...takesFrom(orderMark, keepOrderMarks),
-                ),
-            )
-            .all();
+        const beat = orderMark
+            ? (orderMarkBeat(recipe.params) ??
+              (await placedBeatOf(tx, timelineId)))
+            : await placedBeatOf(tx, timelineId);
+        const shapes = orderMark
+            ? []
+            : await tx
+                  .select({ id: recipes.id })
+                  .from(recipes)
+                  .where(
+                      and(
+                          await movesEndingAtPlacedBeat(tx, timelineId),
+                          notInArray(recipes.id, [id]),
+                          notInArray(recipes.kind, [...ORDER_MARK_KINDS]),
+                      ),
+                  )
+                  .all();
+        const marks =
+            orderMark || !keepOrderMarks
+                ? (await orderMarksAtBeat(tx, beat)).filter((m) => m !== id)
+                : [];
+        const others = [...shapes.map((r) => r.id), ...marks];
         if (others.length > 0) {
             await tx
                 .delete(members)
                 .where(
                     and(
-                        inArray(
-                            members.recipe_id,
-                            others.map((r) => r.id),
-                        ),
+                        inArray(members.recipe_id, others),
                         inArray(members.marcher_id, marcherIds),
                     ),
                 )
@@ -159,15 +168,61 @@ export async function saveShapeRecipeInTransaction({
 }
 
 /**
- * Which other recipes at its beat a save takes its members out of (pathways step 4g): an order
- * mark only other marks; a shape every recipe, or only shapes with `keepOrderMarks`
+ * The beat an order mark (pathways step 4g) is said about, as stored in its params: the beat it was
+ * set at, which needn't be its move's end (a line standing still on a page is in the move before).
+ * Undefined for a mark saved before marks kept their own beat, which is read at its move's end.
  */
-const takesFrom = (orderMark: boolean, keepOrderMarks: boolean) =>
-    orderMark
-        ? [inArray(recipes.kind, [...ORDER_MARK_KINDS])]
-        : keepOrderMarks
-          ? [notInArray(recipes.kind, [...ORDER_MARK_KINDS])]
-          : [];
+export function orderMarkBeat(params: unknown): number | undefined {
+    const beat = (params as { beat?: unknown } | null)?.beat;
+    return typeof beat === "number" && Number.isFinite(beat) ? beat : undefined;
+}
+
+/** Two beats the same, as stored */
+const sameBeat = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+
+/** The beat a recipe of move `timelineId` is placed at: the move's end (0 for homes) */
+async function placedBeatOf(
+    tx: DbTransaction,
+    timelineId: number | null,
+): Promise<number> {
+    if (timelineId === null) return 0;
+    const t = schema.timelines;
+    const move = await tx
+        .select({ end: t.end_beat })
+        .from(t)
+        .where(eq(t.id, timelineId))
+        .get();
+    return move?.end ?? 0;
+}
+
+/**
+ * The order marks said about `beat`: their own beat (`orderMarkBeat`), or, for a mark without one,
+ * its move's end (0 for homes)
+ */
+async function orderMarksAtBeat(
+    tx: DbTransaction,
+    beat: number,
+): Promise<number[]> {
+    const t = schema.timelines;
+    const rows = await tx
+        .select({
+            id: recipes.id,
+            timelineId: recipes.timeline_id,
+            params: recipes.params,
+            end: t.end_beat,
+        })
+        .from(recipes)
+        .leftJoin(t, eq(t.id, recipes.timeline_id))
+        .where(inArray(recipes.kind, [...ORDER_MARK_KINDS]))
+        .all();
+    return rows
+        .filter((r) => {
+            const own = orderMarkBeat(JSON.parse(r.params) as unknown);
+            const at = own ?? (r.timelineId === null ? 0 : r.end);
+            return at !== null && sameBeat(at, beat);
+        })
+        .map((r) => r.id);
+}
 
 /**
  * Whether move `timelineId` holds any of `marcherIds`, so a recipe saved in it keeps someone (the
@@ -232,7 +287,9 @@ async function movesEndingAtPlacedBeat(
  *
  * Order marks (pathways step 4g) move too, but say nothing about places: the members of `from`'s
  * shapes only leave `to`'s shapes, and `to`'s marks stay as they are, so a merge never ends part
- * of an order set by hand.
+ * of an order set by hand. A mark keeps its own beat (`orderMarkBeat`), so a merge that fits
+ * `from` to `to`'s counts doesn't move it; one from before marks kept their own beat is given
+ * `from`'s end, the beat it was read at.
  */
 export async function moveShapeRecipesInTransaction({
     tx,
@@ -286,6 +343,11 @@ export async function moveShapeRecipesInTransaction({
                 ),
             )
             .run();
+    await keepOrderMarksBeat(
+        tx,
+        moving.filter((r) => isOrderMarkKind(r.kind)).map((r) => r.id),
+        from,
+    );
     await tx
         .update(recipes)
         .set({ timeline_id: to })
@@ -295,10 +357,38 @@ export async function moveShapeRecipesInTransaction({
 }
 
 /**
- * Takes `marcherIds` out of the order marks (pathways step 4g) at the beat move `timelineId` ends
- * at, and deletes marks left with no one: an edit to that move's trail is newer than an order set
- * or cleared by hand there, so the trail's order holds again (the latest action wins). Run inside
- * that edit's transaction, so undo brings the marks back with it.
+ * Writes `from`'s end into the order marks `markIds` that have no beat of their own, before they
+ * leave move `from`, so they stay said about the beat they were read at
+ */
+async function keepOrderMarksBeat(
+    tx: DbTransaction,
+    markIds: readonly number[],
+    from: number,
+): Promise<void> {
+    if (markIds.length === 0) return;
+    const beat = await placedBeatOf(tx, from);
+    for (const mark of await recipesById(tx, markIds)) {
+        if (orderMarkBeat(mark.params) !== undefined) continue;
+        await tx
+            .update(recipes)
+            .set({
+                params: JSON.stringify({
+                    ...(mark.params as object | null),
+                    beat,
+                }),
+            })
+            .where(eq(recipes.id, mark.id))
+            .run();
+    }
+}
+
+/**
+ * Takes `marcherIds` out of the order marks (pathways step 4g) said about the beat move
+ * `timelineId` ends at (their own beat, `orderMarkBeat`), and deletes marks left with no one: an
+ * edit to that move's trail is newer than an order set or cleared by hand there, so the trail's
+ * order holds again (the latest action wins). A mark stored in the move but said about a later
+ * beat (the line stood still there) is left alone. Run inside that edit's transaction, so undo
+ * brings the marks back with it.
  */
 export async function dropOrderMarksInTransaction(
     tx: DbTransaction,
@@ -306,25 +396,16 @@ export async function dropOrderMarksInTransaction(
     marcherIds: readonly number[],
 ): Promise<void> {
     if (marcherIds.length === 0 || !(await hasShapeRecipes(tx))) return;
-    const marks = await tx
-        .select({ id: recipes.id })
-        .from(recipes)
-        .where(
-            and(
-                await movesEndingAtPlacedBeat(tx, timelineId),
-                inArray(recipes.kind, [...ORDER_MARK_KINDS]),
-            ),
-        )
-        .all();
+    const marks = await orderMarksAtBeat(
+        tx,
+        await placedBeatOf(tx, timelineId),
+    );
     if (marks.length === 0) return;
     await tx
         .delete(members)
         .where(
             and(
-                inArray(
-                    members.recipe_id,
-                    marks.map((m) => m.id),
-                ),
+                inArray(members.recipe_id, marks),
                 inArray(members.marcher_id, [...new Set(marcherIds)]),
             ),
         )

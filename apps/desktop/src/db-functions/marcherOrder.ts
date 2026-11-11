@@ -2,8 +2,10 @@
  * A line's order set by hand (pathways step 4g, DL-26..DL-29): Set order, Reverse and Clear order.
  *
  * The order is stored as an **order mark**, a shape recipe of kind `order` (or `orderClear` for
- * Clear) in the move whose end is the displayed beat, so `rememberedOrder` reads it as any other
- * form, by the beat its move ends at. A mark stores no shape and moves no one: placed shapes don't
+ * Clear) in the move its marchers last moved in (`orderMoveAt`), which a split or merge carries it
+ * with. It keeps the beat it was set at in its params, and `rememberedOrder` reads it there, as a
+ * form made at that beat: a line standing still on page 3 is in page 2's move, but an order set on
+ * page 3 never changes what page 2 shows. A mark stores no shape and moves no one: placed shapes don't
  * show it, and it doesn't take its marchers out of the shapes they're in. A shape placed later at
  * its beat takes them out of it (the later form wins), and so does another mark there.
  *
@@ -23,11 +25,18 @@ import type { DbConnection, DbTransaction } from "./types";
 
 type XY = { readonly x: number; readonly y: number };
 
-/** What an order mark stores: its slots (no holes when made) and nothing else */
-const orderRecipe = (kind: string, spots: number): ShapeRecipeRecord => ({
+/**
+ * What an order mark stores: its slots (no holes when made) and the beat it's said about, which
+ * is where it's read (`orderMarkBeat`), whichever move holds it
+ */
+const orderRecipe = (
+    kind: string,
+    spots: number,
+    beat: number,
+): ShapeRecipeRecord => ({
     kind,
     kindVersion: 1,
-    params: { spots },
+    params: { spots, beat },
     orderMode: "keep",
     reverse: false,
 });
@@ -97,7 +106,7 @@ export async function setMarcherOrderInTransaction(
     return await saveShapeRecipeInTransaction({
         tx,
         timelineId: await orderMoveAt(tx, beat, ids),
-        recipe: orderRecipe(ORDER_RECIPE_KIND, ids.length),
+        recipe: orderRecipe(ORDER_RECIPE_KIND, ids.length, beat),
         members: ids.map((marcherId, slot) => ({
             marcherId,
             slot,
@@ -120,7 +129,7 @@ export async function clearMarcherOrderInTransaction(
     return await saveShapeRecipeInTransaction({
         tx,
         timelineId: await orderMoveAt(tx, beat, ids),
-        recipe: orderRecipe(ORDER_CLEAR_RECIPE_KIND, ids.length),
+        recipe: orderRecipe(ORDER_CLEAR_RECIPE_KIND, ids.length, beat),
         members: ids.map((marcherId, slot) => ({
             marcherId,
             slot,
