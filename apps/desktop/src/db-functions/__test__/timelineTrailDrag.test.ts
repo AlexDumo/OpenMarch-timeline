@@ -389,19 +389,25 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
             (Math.hypot(10, 4) * step + 14 * step) / 2,
         );
         expect(near(halfway, leaderHalf, 1e-6)).toBe(true);
-        // Reverse keeps the ends along the way, and every end spot
-        await reverseTrail({ db, routeId: result.routeId });
-        const rev = (await db
+        // Reverse is off for a dragged-out line (owner, 2026-11-10): refused, nothing written
+        const before = (await db
             .select()
             .from(schema.timeline_transitions)
             .where(eq(schema.timeline_transitions.id, result.transitionId))
             .get())!;
-        expect(JSON.parse(rev.path_params!)).toEqual({
+        await expect(
+            reverseTrail({ db, routeId: result.routeId }),
+        ).rejects.toThrow(/reverseAlong|other end/);
+        const after = (await db
+            .select()
+            .from(schema.timeline_transitions)
+            .where(eq(schema.timeline_transitions.id, result.transitionId))
+            .get())!;
+        expect(after.path_params).toBe(before.path_params);
+        expect(JSON.parse(after.path_params!)).toEqual({
             waypoints: [],
-            reverse: true,
             ends: "along",
         });
-        expect((await performUndo(db)).success).toBe(true);
         // One spot moved: only its member changes
         const r0 = await resolverOf(db);
         await moveMarchersInTarget({

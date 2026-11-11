@@ -69,6 +69,22 @@ import {
  * straight moves are (`StepSize`, the field's step-size warning). Null when the steps aren't big,
  * or with the warning off.
  */
+/**
+ * Reverse leader's tooltip, or why it's off: a dragged-out line ends along its trail, so the
+ * other end can't lead (owner, 2026-11-10)
+ */
+function reverseLabel(along: boolean | undefined): string {
+    return along
+        ? tolgee.t(
+              "timeline.refusals.trail.reverseAlong",
+              "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead.",
+          )
+        : tolgee.t(
+              "pathways.trail.reverseTip",
+              "Make the other end of the line lead. Everyone keeps their end spot.",
+          );
+}
+
 export function bigSteps(
     session: PathSession,
     fieldProperties: FieldProperties,
@@ -343,10 +359,8 @@ function TrailLeaderMark({ session }: { session: PathSession }) {
             </span>
             {stored && (
                 <IconButton
-                    label={tolgee.t(
-                        "pathways.trail.reverseTip",
-                        "Make the other end of the line lead. Everyone keeps their end spot.",
-                    )}
+                    label={reverseLabel(trail.along)}
+                    disabled={trail.along}
                     action="reverseTrail"
                     onClick={() => runAction("reverseTrail")}
                     testId="trail-reverse"
@@ -819,10 +833,8 @@ function PathEditorBar({
                     {stored && trail && (
                         <>
                             <IconButton
-                                label={tolgee.t(
-                                    "pathways.trail.reverseTip",
-                                    "Make the other end of the line lead. Everyone keeps their end spot.",
-                                )}
+                                label={reverseLabel(trail.along)}
+                                disabled={trail.along}
                                 action="reverseTrail"
                                 onClick={() => runAction("reverseTrail")}
                                 testId="path-reverse"

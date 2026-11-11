@@ -237,7 +237,7 @@ describe("ends along the way (spec R-13″, pathways step 4b)", () => {
         ).toBe(true);
     });
 
-    it("a spot behind its member's start: it waits on the way and walks straight (e_q ≥ startDist[q]); nobody passes the member ahead", () => {
+    it("a spot behind its member's start: it waits on the way and walks straight (e_q ≥ startDist[q]); turn-offs stay in trail order (passing is allowed once a spot is off the way, owner 2026-11-10)", () => {
         const spots: XY[] = [
             [9, 0],
             [1, 0],

@@ -88,6 +88,8 @@ export const trailRefusal = {
         text.t("timeline.refusals.trail.removeTrailFirst", { move }),
     /** A trail that is gone (deleted, or undone) */
     noTrail: () => text.t("timeline.refusals.trail.noTrail"),
+    /** Owner, 2026-11-10: Reverse is off for a dragged-out line (R-13″) */
+    reverseAlong: () => text.t("timeline.refusals.trail.reverseAlong"),
 };
 
 // ---------------------------------------------------------------------------
@@ -756,6 +758,9 @@ export async function reverseTrailInTransaction({
     routeId: number;
 }): Promise<{ leaderId: number | null; reverse: boolean }> {
     const transition = await trailTransition(tx, routeId);
+    // Owner, 2026-11-10: a dragged-out line ends along its trail, which starts at the old leader's
+    // end; reversed, everyone would walk back through the line. Drag out of the other end instead
+    if (isAlong(transition)) refuse(trailRefusal.reverseAlong());
     const reverse = !isReversed(transition);
     const T = schema.timeline_transitions;
     return await mapDbErrors(async () => {

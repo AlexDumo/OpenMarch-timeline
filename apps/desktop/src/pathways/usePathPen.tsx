@@ -320,8 +320,18 @@ export function usePathPenActions(): void {
                 startDrawing(target, `${ids.length}`);
         })();
     });
+    // Off for a dragged-out line (owner, 2026-11-10): it ends along its trail
+    const trailAlong = usePathPenStore(
+        (s) => s.session?.target.trail?.along === true,
+    );
     useActionHandler("reverseTrail", () => void reverseShownTrail(), {
-        enabled: trailShown && phase !== "drawing",
+        enabled: trailShown && phase !== "drawing" && !trailAlong,
+        disabledReason: trailAlong
+            ? tolgee.t(
+                  "timeline.refusals.trail.reverseAlong",
+                  "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead.",
+              )
+            : undefined,
     });
 
     // The closed path shows by start flag positions' paths level in effect, as the straight paths
