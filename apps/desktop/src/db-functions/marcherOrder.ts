@@ -10,7 +10,7 @@
  * Reusing the recipe tables needs no schema change (v0.1.7 files have none of them; the app's own
  * migrations add them), and an older build skips a kind it doesn't know.
  */
-import { and, desc, eq, inArray, lte } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lte } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import { transactionWithHistory } from "./history";
 import {
@@ -34,8 +34,10 @@ const orderRecipe = (kind: string, spots: number): ShapeRecipeRecord => ({
 
 /**
  * The move an order said about the field at `beat` is made in: the latest move ending at or before
- * `beat` (the one ending at it when the playhead is on a page flag), one that holds any of
- * `marcherIds` first among those ending together. The homes (null) when none ends by then.
+ * `beat` (the one ending at it when the playhead is on a page flag) that holds any of
+ * `marcherIds`, so the mark sits with their positions; the first of those ending together. Only
+ * when no such move holds any of them, the latest move ending by then. The homes (null) when none
+ * ends by then.
  */
 export async function orderMoveAt(
     tx: DbConnection | DbTransaction,
@@ -43,40 +45,33 @@ export async function orderMoveAt(
     marcherIds: readonly number[],
 ): Promise<number | null> {
     const T = schema.timelines;
-    const last = await tx
-        .select({ end: T.end_beat })
-        .from(T)
-        .where(lte(T.end_beat, beat))
-        .orderBy(desc(T.end_beat))
-        .limit(1)
-        .get();
-    if (!last) return null;
-    const moves = (
-        await tx
-            .select({ id: T.id })
-            .from(T)
-            .where(eq(T.end_beat, last.end))
-            .orderBy(T.id)
-            .all()
-    ).map((m) => m.id);
-    if (moves.length > 1 && marcherIds.length > 0) {
+    if (marcherIds.length > 0) {
         const A = schema.timeline_assignments;
         const TR = schema.timeline_transitions;
         const holding = await tx
-            .selectDistinct({ id: TR.timeline_id })
-            .from(A)
-            .innerJoin(TR, eq(TR.id, A.transition_id))
+            .selectDistinct({ id: T.id, end: T.end_beat })
+            .from(T)
+            .innerJoin(TR, eq(TR.timeline_id, T.id))
+            .innerJoin(A, eq(A.transition_id, TR.id))
             .where(
                 and(
-                    inArray(TR.timeline_id, moves),
+                    lte(T.end_beat, beat),
                     inArray(A.marcher_id, [...marcherIds]),
                 ),
             )
-            .all();
-        const first = moves.find((id) => holding.some((h) => h.id === id));
-        if (first !== undefined) return first;
+            .orderBy(desc(T.end_beat), asc(T.id))
+            .limit(1)
+            .get();
+        if (holding) return holding.id;
     }
-    return moves[0]!;
+    const last = await tx
+        .select({ id: T.id })
+        .from(T)
+        .where(lte(T.end_beat, beat))
+        .orderBy(desc(T.end_beat), asc(T.id))
+        .limit(1)
+        .get();
+    return last?.id ?? null;
 }
 
 /**

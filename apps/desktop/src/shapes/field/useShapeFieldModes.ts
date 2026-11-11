@@ -27,7 +27,10 @@ import {
     objectDrawingOf,
     pathPenMode,
 } from "@/pathways/pathPenMode";
-import { useMarcherOrderStore } from "@/pathways/marcherOrderStore";
+import {
+    cancelOrderSweep,
+    useMarcherOrderStore,
+} from "@/pathways/marcherOrderStore";
 import { OrderSweepMode } from "@/pathways/orderSweepMode";
 import { keepOrderSweep } from "@/pathways/marcherOrderCommands";
 import {
@@ -92,6 +95,11 @@ export function useShapeFieldModes(
     useEffect(() => () => previewPlacedBox(null), [live, toolOpen]);
 
     const order = useOrderSweepMode(isPlaying);
+    // A tool opened by its key (O for Circle, P for the pen) while Set order is on closes Set
+    // order, rather than opening hidden behind it
+    useEffect(() => {
+        if (toolOpen || pathOpen) cancelOrderSweep();
+    }, [toolOpen, pathOpen]);
 
     useEffect(() => {
         // The pointer was over the last shape, if any; the next cursor check finds the new one

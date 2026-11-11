@@ -229,6 +229,10 @@ async function movesEndingAtPlacedBeat(
 /**
  * Moves every recipe of move `from` into move `to` (a merge, UI-25), which their marchers' places
  * there follow: those marchers leave `to`'s other recipes, and recipes left empty are deleted.
+ *
+ * Order marks (pathways step 4g) move too, but say nothing about places: the members of `from`'s
+ * shapes only leave `to`'s shapes, and `to`'s marks stay as they are, so a merge never ends part
+ * of an order set by hand.
  */
 export async function moveShapeRecipesInTransaction({
     tx,
@@ -241,24 +245,35 @@ export async function moveShapeRecipesInTransaction({
 }): Promise<void> {
     if (!(await hasShapeRecipes(tx))) return;
     const moving = await tx
-        .select({ id: recipes.id })
+        .select({ id: recipes.id, kind: recipes.kind })
         .from(recipes)
         .where(eq(recipes.timeline_id, from))
         .all();
     if (moving.length === 0) return;
     const movingIds = moving.map((r) => r.id);
-    const marcherIds = (
-        await tx
-            .selectDistinct({ id: members.marcher_id })
-            .from(members)
-            .where(inArray(members.recipe_id, movingIds))
-            .all()
-    ).map((m) => m.id);
+    const movingShapes = moving
+        .filter((r) => !isOrderMarkKind(r.kind))
+        .map((r) => r.id);
+    const marcherIds =
+        movingShapes.length === 0
+            ? []
+            : (
+                  await tx
+                      .selectDistinct({ id: members.marcher_id })
+                      .from(members)
+                      .where(inArray(members.recipe_id, movingShapes))
+                      .all()
+              ).map((m) => m.id);
     const theirs = (
         await tx
             .select({ id: recipes.id })
             .from(recipes)
-            .where(eq(recipes.timeline_id, to))
+            .where(
+                and(
+                    eq(recipes.timeline_id, to),
+                    notInArray(recipes.kind, [...ORDER_MARK_KINDS]),
+                ),
+            )
             .all()
     ).map((r) => r.id);
     if (theirs.length > 0 && marcherIds.length > 0)
@@ -280,9 +295,50 @@ export async function moveShapeRecipesInTransaction({
 }
 
 /**
+ * Takes `marcherIds` out of the order marks (pathways step 4g) at the beat move `timelineId` ends
+ * at, and deletes marks left with no one: an edit to that move's trail is newer than an order set
+ * or cleared by hand there, so the trail's order holds again (the latest action wins). Run inside
+ * that edit's transaction, so undo brings the marks back with it.
+ */
+export async function dropOrderMarksInTransaction(
+    tx: DbTransaction,
+    timelineId: number,
+    marcherIds: readonly number[],
+): Promise<void> {
+    if (marcherIds.length === 0 || !(await hasShapeRecipes(tx))) return;
+    const marks = await tx
+        .select({ id: recipes.id })
+        .from(recipes)
+        .where(
+            and(
+                await movesEndingAtPlacedBeat(tx, timelineId),
+                inArray(recipes.kind, [...ORDER_MARK_KINDS]),
+            ),
+        )
+        .all();
+    if (marks.length === 0) return;
+    await tx
+        .delete(members)
+        .where(
+            and(
+                inArray(
+                    members.recipe_id,
+                    marks.map((m) => m.id),
+                ),
+                inArray(members.marcher_id, [...new Set(marcherIds)]),
+            ),
+        )
+        .run();
+    await deleteEmptyRecipes(tx);
+}
+
+/**
  * Marchers `marcherIds` split off move `from` into move `to` (UI-25): a recipe of `from` they make
  * up the whole of goes with them; from any other they're dropped, since their positions are no
  * longer in its move. Recipes left empty are deleted.
+ *
+ * Order marks (pathways step 4g) stay in `from` whole: a split moves no one, and a mark is read by
+ * its move's end, which the move split off shares, so the order set by hand holds for everyone.
  */
 export async function splitShapeRecipesInTransaction({
     tx,
@@ -307,7 +363,8 @@ export async function splitShapeRecipesInTransaction({
                 .all()
         ).map((r) => r.id),
     );
-    const whole = theirs.filter(
+    const shapes = theirs.filter((r) => !isOrderMarkKind(r.kind));
+    const whole = shapes.filter(
         (r) =>
             r.members.length > 0 &&
             r.members.every((m) => split.has(m.marcherId)),
@@ -323,7 +380,7 @@ export async function splitShapeRecipesInTransaction({
                 ),
             )
             .run();
-    const rest = theirs.filter((r) => !whole.includes(r)).map((r) => r.id);
+    const rest = shapes.filter((r) => !whole.includes(r)).map((r) => r.id);
     if (rest.length > 0)
         await tx
             .delete(members)

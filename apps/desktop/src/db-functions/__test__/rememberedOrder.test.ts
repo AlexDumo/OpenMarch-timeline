@@ -217,6 +217,31 @@ describe("rememberedOrder: orders set by hand (step 4g)", () => {
         ];
         expect(rememberedOrder(forms, [1, 2, 3, 4], 17)).toEqual([4, 3, 2, 1]);
     });
+
+    it("a copy running the other way only carries on an order set by hand: a Line placed reversed after a trail sets its own, holes and all", () => {
+        // A trail, then a Line placed the other way round with a member dragged off it
+        const forms = [trail(16, [1, 2, 3, 4]), line(24, [4, 3, null, 1])];
+        expect(rememberedOrder(forms, [1, 3, 4], 24)).toEqual([4, 3, 1]);
+        expect(ordersInForce(forms, 24)).toEqual([
+            { order: [4, 3, 1], kind: "line" },
+        ]);
+        // The same direction still carries the trail on
+        expect(
+            rememberedOrder(
+                [trail(16, [1, 2, 3, 4]), line(24, [1, null, 3, 4])],
+                [1, 2, 3, 4],
+                24,
+            ),
+        ).toEqual([1, 2, 3, 4]);
+        // Set by hand instead: either way carries it on
+        expect(
+            rememberedOrder(
+                [set(16, [1, 2, 3, 4]), line(24, [4, 3, null, 1])],
+                [1, 3, 4],
+                24,
+            ),
+        ).toEqual([1, 3, 4]);
+    });
 });
 
 describe("ordersInForce (Show order's Always, step 4g)", () => {

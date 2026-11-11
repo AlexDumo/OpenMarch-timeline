@@ -14,7 +14,11 @@ import { performRedo, performUndo } from "../history";
 import { readAllShapeRecipes } from "../shapeRecipes";
 import { moveMarchersInTarget } from "../timelineMoves";
 import { dragTrail, planTrailDrag } from "../timelineTrailDrag";
-import { trailShapeOf, trailShapeRecipe } from "../timelineTrailShape";
+import {
+    reversedLineParams,
+    trailShapeOf,
+    trailShapeRecipe,
+} from "../timelineTrailShape";
 
 keepFixturesInPageMode("its tests convert the show themselves");
 
@@ -276,9 +280,11 @@ describeDbTests("The dragged-out result as a shape (step 4c)", (it) => {
             .get())!;
         expect(recipe.timelineId).toBe(transition.timeline_id);
         expect((recipe.params as LineParams).points).toHaveLength(2);
-        // Each member where it was written, in line order
+        // Each member where it was written, leader first (step 4g: a Line's first slot leads)
         const r = await resolverOf(db);
-        expect(recipe.members.map((m) => m.marcherId)).toEqual(ids);
+        expect(recipe.members.map((m) => m.marcherId)).toEqual(
+            [...ids].reverse(),
+        );
         recipe.members.forEach((m, q) => {
             expect(m.slot).toBe(q);
             expect([m.x, m.y]).toEqual(r.positionAt(m.marcherId, 17));
@@ -378,22 +384,23 @@ describeDbTests("The dragged-out result as a shape (step 4c)", (it) => {
         );
     });
 
-    it("trailShapeRecipe: members in line order, tail first, each at its spot", () => {
+    it("trailShapeRecipe: members leader first, each at its spot, the shape run from the leader's end", () => {
         const plan = planTrailDrag(
             [0, 1, 2].map((i): XY => [i * 10, 0]),
             [{ at: [40, 0] }],
             { kind: "keep" },
             5,
         );
+        // The line tail first: 7, 3, then 9 leading
         const { recipe, members } = trailShapeRecipe(plan, [7, 3, 9]);
         expect(recipe.kind).toBe("line");
         expect((recipe.params as { spots: number }).spots).toBe(3);
         expect(members).toEqual([
             {
-                marcherId: 7,
+                marcherId: 9,
                 slot: 0,
-                x: plan.spots[0]![0],
-                y: plan.spots[0]![1],
+                x: plan.spots[2]![0],
+                y: plan.spots[2]![1],
             },
             {
                 marcherId: 3,
@@ -402,11 +409,50 @@ describeDbTests("The dragged-out result as a shape (step 4c)", (it) => {
                 y: plan.spots[1]![1],
             },
             {
-                marcherId: 9,
+                marcherId: 7,
                 slot: 2,
-                x: plan.spots[2]![0],
-                y: plan.spots[2]![1],
+                x: plan.spots[0]![0],
+                y: plan.spots[0]![1],
             },
         ]);
+        const points = (recipe.params as LineParams).points;
+        expect([points[0]!.x, points[0]!.y]).toEqual(plan.spots[2]);
+        expect([points.at(-1)!.x, points.at(-1)!.y]).toEqual(plan.spots[0]);
+    });
+
+    it("reversedLineParams: the same path from its other end, bends moved and turned round", () => {
+        const params: LineParams = {
+            points: [
+                { x: 0, y: 0, tension: 0, bend: 90 },
+                { x: 10, y: 0, tension: 1 },
+                { x: 20, y: 5, tension: 0, bend: -30 },
+                { x: 30, y: 0, tension: 0 },
+            ],
+            spacing: { mode: "fit" },
+        };
+        const back = reversedLineParams(params);
+        expect(back.points).toEqual([
+            { x: 30, y: 0, tension: 0, bend: 30 },
+            { x: 20, y: 5, tension: 0 },
+            { x: 10, y: 0, tension: 1, bend: -90 },
+            { x: 0, y: 0, tension: 0 },
+        ]);
+        // The same path: each bent segment on the same circle, swept the other way
+        const arcs = (p: LineParams) =>
+            lineSegments(p).flatMap((seg) =>
+                seg.type === "arc"
+                    ? [{ x: seg.center.x, y: seg.center.y, r: seg.r, sweep: seg.sweep }] // prettier-ignore
+                    : [],
+            );
+        const there = arcs(params);
+        const again = arcs(back).reverse();
+        expect(again).toHaveLength(2);
+        again.forEach((a, i) => {
+            expect(a.x).toBeCloseTo(there[i]!.x, 9);
+            expect(a.y).toBeCloseTo(there[i]!.y, 9);
+            expect(a.r).toBeCloseTo(there[i]!.r, 9);
+            expect(a.sweep).toBeCloseTo(-there[i]!.sweep, 9);
+        });
+        expect(reversedLineParams(back)).toEqual(params);
     });
 });

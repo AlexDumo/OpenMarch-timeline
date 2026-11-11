@@ -2,7 +2,8 @@
  * Set order on the field (pathways step 4g, DL-27): while it's on, it takes every edit press. A
  * drag through the selected marchers picks each the pointer passes, in that order, and its release
  * keeps the order; a click picks the marcher under it (within the same reach), and the mode stays
- * on for the next, until every one is picked or Done. Nothing selects, moves or opens a menu.
+ * on for the next, until every one is picked or Done. A drag that passes no one leaves it on too.
+ * Nothing selects, moves or opens a menu.
  *
  * The picks are worked out once a frame from the pointer's moves since the last frame, so a fast
  * drag still passes everyone between, and the line redraws at most once a frame.
@@ -32,6 +33,8 @@ export class OrderSweepMode implements FieldMode {
 
     /** Where the pointer was when picks were last worked out */
     private last: XY | null = null;
+    /** How many were picked when the press went down */
+    private pickedAtPress = 0;
     /** The pointer's moves since then, worked out on the next frame */
     private pending: XY[] = [];
     private frame: number | null = null;
@@ -43,6 +46,8 @@ export class OrderSweepMode implements FieldMode {
     }
 
     press(pointer: FieldPointer): void {
+        this.pickedAtPress =
+            useMarcherOrderStore.getState().sweep?.picked.length ?? 0;
         this.last = pointer.field;
         this.pending = [];
         this.pick(pointer.field, pointer.field);
@@ -71,8 +76,11 @@ export class OrderSweepMode implements FieldMode {
         updateOrderSweep({ pointer: null });
         const sweep = useMarcherOrderStore.getState().sweep;
         if (!sweep) return;
-        // A drag keeps the order at its release; clicks go on until everyone is picked
-        if (click === null || sweep.picked.length === sweep.ids.length)
+        // A drag that picked someone keeps the order at its release; clicks, and a drag that
+        // picked no one, go on until everyone is picked
+        const dragPicked =
+            click === null && sweep.picked.length > this.pickedAtPress;
+        if (dragPicked || sweep.picked.length === sweep.ids.length)
             this.finish();
     }
 

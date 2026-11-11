@@ -3,11 +3,12 @@
  * and Clear order, each a registered action, so the toolbar, the field's menu, the palette and the
  * keys run the same thing. While Set order is on, Enter keeps what's picked and Escape cancels.
  */
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import tolgee from "@/global/singletons/Tolgee";
 import { db } from "@/global/database/db";
 import { rememberedOrderAt } from "@/db-functions/rememberedOrder";
+import { subscribeHistoryChanges } from "@/db-functions/history";
 import { performersOnly } from "@/global/classes/Marcher";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
@@ -84,10 +85,22 @@ export function useMarcherOrderActions(): void {
         disabledReason: refusal || undefined,
     };
 
+    /** Goes up whenever an open Set order would be out of date: an opening read then lands nowhere */
+    const generation = useRef(0);
     // Set order is about one selection at one beat: another, or playing, leaves it
     useEffect(() => {
+        generation.current++;
         cancelOrderSweep();
     }, [key, beat, isPlaying]);
+    // ...and about the show as it was: an edit, undo or redo meanwhile leaves it too
+    useEffect(
+        () =>
+            subscribeHistoryChanges(() => {
+                generation.current++;
+                cancelOrderSweep();
+            }),
+        [],
+    );
     useEffect(() => () => void cancelOrderSweep(), []);
 
     useActionHandler("toggleMarcherOrder", () => {
@@ -106,11 +119,14 @@ export function useMarcherOrderActions(): void {
                 cancelOrderSweep();
                 return;
             }
+            const opened = ++generation.current;
             void (async () => {
                 const at = positionsAt(ids, beat);
                 if (at.size < 2) return;
                 // The order shown now, which the skipped keep
                 const remembered = await rememberedOrderAt(db, ids, beat);
+                // The selection, the beat or the show changed while it read: it's out of date
+                if (opened !== generation.current) return;
                 openOrderSweep({
                     ids,
                     at,

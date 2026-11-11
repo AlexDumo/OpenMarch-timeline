@@ -15,7 +15,8 @@ import {
 } from "@/db-functions/shapeRecipes";
 import { readTimelineEndBeats } from "@/db-functions/timelines";
 import { boxesAt } from "@/shapes/placed/placedBox";
-import { performUndo, transactionWithHistory } from "../history";
+import { performRedo, performUndo, transactionWithHistory } from "../history";
+import { mergeMoves, splitMarchersIntoNewMove } from "../timelineSplitMoves";
 import { rememberedOrderAt } from "../rememberedOrder";
 import { followOrderAt } from "../timelineTrailDrag";
 import {
@@ -261,9 +262,10 @@ describeDbTests("A line's order set by hand", (it) => {
         const order = [ids[1]!, ids[3]!, ids[0]!, ids[2]!];
         await setMarcherOrder(db, { beat: PAGE2.end, order });
         // Its start flag on the page after: the order set there, as indexes into ids
-        expect(await followOrderAt(db, ids, PAGE2.end, starts)).toEqual(
-            order.map((id) => ids.indexOf(id)),
-        );
+        expect(await followOrderAt(db, ids, PAGE2.end, starts)).toEqual({
+            order: order.map((id) => ids.indexOf(id)),
+            leaderFirst: true,
+        });
     });
 
     it("the order is made in the move ending at the displayed beat, or the last one before it", async ({
@@ -280,5 +282,179 @@ describeDbTests("A line's order set by hand", (it) => {
         expect(await orderMoveAt(db, PAGE2.end + 3, ids)).toBe(move);
         // Before any move ends: the homes
         expect(await orderMoveAt(db, 0, ids)).toBeNull();
+    });
+
+    it("redo brings back Set, Reverse and Clear in turn", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await inARow(db, ids);
+        const order = [ids[2]!, ids[0]!, ids[3]!, ids[1]!];
+        const reversed = [...order].reverse();
+        await setMarcherOrder(db, { beat: PAGE2.end, order });
+        await setMarcherOrder(db, {
+            beat: PAGE2.end,
+            order: reversed,
+            operation: "reverseMarcherOrder",
+        });
+        await clearMarcherOrder(db, { beat: PAGE2.end, marcherIds: ids });
+        for (let i = 0; i < 3; i++)
+            expect((await performUndo(db)).success).toBe(true);
+        expect(await rememberedOrderAt(db, ids, PAGE2.end)).toBeNull();
+
+        expect((await performRedo(db)).success).toBe(true);
+        expect(await rememberedOrderAt(db, ids, PAGE2.end)).toEqual(order);
+        expect((await performRedo(db)).success).toBe(true);
+        expect(await rememberedOrderAt(db, ids, PAGE2.end)).toEqual(reversed);
+        expect((await performRedo(db)).success).toBe(true);
+        expect(await rememberedOrderAt(db, ids, PAGE2.end)).toBeNull();
+    });
+
+    it("splitting marchers off into a move of their own, and merging them back, keeps the whole order set by hand", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await inARow(db, ids);
+        // Interleaved, so either half split off breaks it up
+        const order = [ids[3]!, ids[0]!, ids[2]!, ids[1]!];
+        await setMarcherOrder(db, { beat: PAGE2.end, order });
+        const pageMove = (await orderMoveAt(db, PAGE2.end, ids))!;
+        const split = await splitMarchersIntoNewMove({
+            db,
+            timelineId: pageMove,
+            marcherIds: [ids[0]!, ids[1]!],
+        });
+        await timelineResolverSettled();
+        expect(await rememberedOrderAt(db, ids, PAGE2.end)).toEqual(order);
+        const mark = (await readAllShapeRecipes(db)).find(
+            (r) => r.kind === "order",
+        )!;
+        expect(mark.members.map((m) => m.marcherId)).toEqual(order);
+
+        await mergeMoves({
+            db,
+            sourceId: split.timeline.id,
+            targetId: pageMove,
+        });
+        await timelineResolverSettled();
+        expect(await rememberedOrderAt(db, ids, PAGE2.end)).toEqual(order);
+    });
+
+    it("merging a move whose order mark holds some of a line into the move with the rest's mark keeps both", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await inARow(db, ids);
+        const pageMove = (await orderMoveAt(db, PAGE2.end, ids))!;
+        const split = await splitMarchersIntoNewMove({
+            db,
+            timelineId: pageMove,
+            marcherIds: [ids[0]!, ids[1]!],
+        });
+        await timelineResolverSettled();
+        const left = [ids[1]!, ids[0]!];
+        const right = [ids[3]!, ids[2]!];
+        // Each half's order lives in the move that holds it
+        await setMarcherOrder(db, { beat: PAGE2.end, order: left });
+        await setMarcherOrder(db, { beat: PAGE2.end, order: right });
+        expect(await orderMoveAt(db, PAGE2.end, left)).toBe(split.timeline.id);
+        expect(await orderMoveAt(db, PAGE2.end, right)).toBe(pageMove);
+
+        await mergeMoves({
+            db,
+            sourceId: split.timeline.id,
+            targetId: pageMove,
+        });
+        expect(await rememberedOrderAt(db, left, PAGE2.end)).toEqual(left);
+        expect(await rememberedOrderAt(db, right, PAGE2.end)).toEqual(right);
+    });
+
+    it("a Line placed reversed on purpose sets its order, though a member is dragged off it; a copy of an order set by hand either way carries that order on", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await inARow(db, ids);
+        const P3 = { kind: "range", start: 17, end: 25 } as const;
+        await moveMarchersInTarget({
+            db,
+            target: P3,
+            moves: ids.map((marcherId, slot) => ({
+                marcherId,
+                x: SPOTS[slot]!.x,
+                y: SPOTS[slot]!.y + 8,
+            })),
+        });
+        await timelineResolverSettled();
+        const [a, b, c, d] = ids as [number, number, number, number];
+        const place = async (
+            beat: number,
+            bySlot: readonly (number | null)[],
+        ) => {
+            const timelineId = await orderMoveAt(db, beat, ids);
+            await transactionWithHistory(db, "placeLine", async (tx) => {
+                await saveShapeRecipeInTransaction({
+                    tx,
+                    timelineId,
+                    recipe: {
+                        kind: "line",
+                        kindVersion: 2,
+                        params: { ...LINE, spots: bySlot.length },
+                        orderMode: "keep",
+                        reverse: false,
+                    },
+                    members: bySlot.flatMap((marcherId, slot) =>
+                        marcherId === null
+                            ? []
+                            : [{ marcherId, slot, ...SPOTS[slot]! }],
+                    ),
+                });
+            });
+        };
+        // A Line a→d on page 2, then on page 3 one placed d→a with c dragged off it
+        await place(PAGE2.end, [a, b, c, d]);
+        await place(25, [d, c, null, a]);
+        expect(await rememberedOrderAt(db, [a, c, d], 25)).toEqual([d, c, a]);
+
+        // Set by hand a→d on page 2 instead: the same copy carries the order set by hand on
+        await setMarcherOrder(db, { beat: PAGE2.end, order: [a, b, c, d] });
+        expect(await rememberedOrderAt(db, [a, c, d], 25)).toEqual([a, c, d]);
+    });
+
+    it("an order mark lives in the latest move that holds its marchers, or the latest move when none does", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await inARow(db, ids);
+        const pageMove = (await orderMoveAt(db, PAGE2.end, ids))!;
+        // Page 3's move holds someone else only
+        const other = resolver()
+            .marcherIds()
+            .find((m) => !ids.includes(m))!;
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", start: 17, end: 25 },
+            moves: [{ marcherId: other, x: 10, y: 10 }],
+        });
+        await timelineResolverSettled();
+        const page3 = (await orderMoveAt(db, 25, [other]))!;
+        expect(page3).not.toBe(pageMove);
+        expect((await readTimelineEndBeats(db, [page3])).get(page3)).toBe(25);
+        // Their mark at page 3's end sits with their positions, in page 2's move
+        expect(await orderMoveAt(db, 25, ids)).toBe(pageMove);
+        await setMarcherOrder(db, { beat: 25, order: [...ids].reverse() });
+        const mark = (await readAllShapeRecipes(db)).find(
+            (r) => r.kind === "order",
+        )!;
+        expect(mark.timelineId).toBe(pageMove);
+        expect(await rememberedOrderAt(db, ids, 25)).toEqual(
+            [...ids].reverse(),
+        );
+        // Nobody of theirs in any move: the latest move
+        expect(await orderMoveAt(db, 25, [])).toBe(page3);
     });
 });

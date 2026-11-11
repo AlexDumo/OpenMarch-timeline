@@ -78,13 +78,16 @@ const TIE: Record<OrderForm["kind"], number> = {
 };
 
 /**
- * Whether `members` (in order) is `order` kept to just them, either way along it: a copy of the
- * form in force with some members gone, which carries the order on rather than redefining it. Its
- * direction isn't asked, so a copy doesn't turn back an order reversed by hand (step 4g)
+ * Whether `members` (in order) is `order` kept to just them: a copy of the form in force with some
+ * members gone, which carries the order on rather than redefining it. In the same direction only,
+ * unless `eitherWay`: an order set by hand (step 4g) is carried on by a copy running either way, so
+ * a shape's members changed by hand don't turn back an order reversed by hand; any other form
+ * running the other way is a line placed reversed on purpose, which sets its own order.
  */
 function agrees(
     order: readonly (number | null)[],
     members: readonly number[],
+    eitherWay: boolean,
 ): boolean {
     const inOrder = new Set(order);
     if (!members.every((m) => inOrder.has(m))) return false;
@@ -92,9 +95,16 @@ function agrees(
     const kept = order.filter((m): m is number => m !== null && keep.has(m));
     return (
         kept.every((m, i) => m === members[i]) ||
-        kept.every((m, i) => m === members[members.length - 1 - i])
+        (eitherWay &&
+            kept.every((m, i) => m === members[members.length - 1 - i]))
     );
 }
+
+/** Whether `members` (in order) carry on the line `form` sets (`agrees`) */
+const carriesOn = (
+    form: Exclude<OrderForm, { marcherIds: unknown }>,
+    members: readonly number[],
+): boolean => agrees(form.order, members, form.kind === "set");
 
 /** The forms that count at `beat`, oldest first */
 const formsAt = (forms: readonly OrderForm[], beat: number) =>
@@ -125,21 +135,23 @@ export function rememberedOrder(
     const relevant = formsAt(forms, beat).filter((f) =>
         membersOf(f).some((m) => want.has(m)),
     );
-    let order: readonly (number | null)[] | null = null;
-    /** The order in force before `order` was set, which may say who left its holes */
-    let before: readonly (number | null)[] | null = null;
+    type Line = Exclude<OrderForm, { marcherIds: unknown }>;
+    let current: Line | null = null;
+    /** The form in force before `current` was set, which may say who left its holes */
+    let before: Line | null = null;
     for (const form of relevant) {
         if (endsOrder(form)) {
-            order = null;
+            current = null;
             before = null;
             continue;
         }
         const holes = form.order.some((m) => m === null);
-        if (holes && order && agrees(order, membersOf(form))) continue;
-        before = order;
-        order = form.order;
+        if (holes && current && carriesOn(current, membersOf(form))) continue;
+        before = current;
+        current = form;
     }
-    if (!order) return null;
+    if (!current) return null;
+    const order = current.order;
     const kept = order.filter((m) => m === null || want.has(m));
     const missing = [...want].filter((m) => !order.includes(m));
     if (missing.length === 0)
@@ -149,7 +161,7 @@ export function rememberedOrder(
     // The one who left the one hole, back where they were, if it's known they stood there
     const back = kept.map((m) => m ?? missing[0]!);
     const left = before
-        ? agrees(before, back)
+        ? carriesOn(before, back)
         : !relevant.some((f) => membersOf(f).includes(missing[0]!));
     return left ? back : null;
 }
@@ -157,17 +169,11 @@ export function rememberedOrder(
 /** The kinds of placed shape whose spots run in an order along them: a Line and an Arc */
 const LINE_KINDS: ReadonlySet<string> = new Set(["line", "arc"]);
 
-/**
- * The forms that hold any of `marcherIds`: their trails, and the shape recipes and ungrouped marks
- * they are in. A form in a move that's gone is skipped.
- */
-export async function readOrderForms(
+/** The trails any of `want` follow, read in one go for the moves they follow one in */
+async function trailsOf(
     db: DbConnection | DbTransaction,
-    marcherIds: readonly number[],
-): Promise<OrderForm[]> {
-    if (marcherIds.length === 0) return [];
-    const want = new Set(marcherIds);
-    const recipes = await readShapeRecipesOf({ db, marcherIds });
+    want: ReadonlySet<number>,
+): Promise<MoveTrail[]> {
     // Only the moves where any of them follows a trail
     const T = schema.timeline_transitions;
     const A = schema.timeline_assignments;
@@ -182,10 +188,26 @@ export async function readOrderForms(
             ),
         )
         .all();
-    const trails: MoveTrail[] = [];
-    for (const { timelineId } of trailMoves)
-        for (const trail of await readTrails(db, timelineId))
-            if (trail.marcherIds.some((m) => want.has(m))) trails.push(trail);
+    return (
+        await readTrails(
+            db,
+            trailMoves.map((m) => m.timelineId),
+        )
+    ).filter((trail) => trail.marcherIds.some((m) => want.has(m)));
+}
+
+/**
+ * The forms that hold any of `marcherIds`: their trails, and the shape recipes and ungrouped marks
+ * they are in. A form in a move that's gone is skipped.
+ */
+export async function readOrderForms(
+    db: DbConnection | DbTransaction,
+    marcherIds: readonly number[],
+): Promise<OrderForm[]> {
+    if (marcherIds.length === 0) return [];
+    const want = new Set(marcherIds);
+    const recipes = await readShapeRecipesOf({ db, marcherIds });
+    const trails = await trailsOf(db, want);
     const endBeats = await readTimelineEndBeats(db, [
         ...recipes.flatMap((r) =>
             r.timelineId === null ? [] : [r.timelineId],
@@ -282,7 +304,7 @@ export function ordersInForce(
             now !== undefined &&
             !endsOrder(now) &&
             members.every((m) => owner.get(m) === now) &&
-            agrees(now.order, members)
+            carriesOn(now, members)
         )
             continue;
         for (const m of members) owner.set(m, form);

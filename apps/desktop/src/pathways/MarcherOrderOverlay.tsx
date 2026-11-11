@@ -6,8 +6,9 @@
  * no Alt). Set order draws the line it has picked so far, growing behind the pointer, with the bar
  * that says how to go on and keeps or cancels it.
  *
- * The forms are read once per edit (`followOrderForms`); what's drawn follows the marchers drawn
- * (`FieldMarchers`) and the camera, so it's worked out again only when either changes.
+ * The forms are read once per edit (`followOrderForms`), the selection's only unless Always shows
+ * every line; what's drawn follows the camera and where the lines' marchers are drawn
+ * (`FieldMarchers`), so it's worked out again only when either changes.
  */
 import {
     useEffect,
@@ -16,6 +17,7 @@ import {
     useState,
     useSyncExternalStore,
 } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { CheckIcon, XIcon } from "@phosphor-icons/react";
 import { T } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
@@ -29,8 +31,14 @@ import {
 } from "@/stores/TimelineSelectionStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { runAction } from "@/shortcuts/registry";
+import { readShortcutContext } from "@/shortcuts/context";
 import type { FieldMarchers } from "@/field/three/fieldMarchers";
-import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
+import {
+    fieldToElement,
+    useFieldViewStore,
+    type FieldView,
+} from "@/field/three/fieldView";
+import { ordersInForce } from "@/db-functions/rememberedOrder";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import {
     Divider,
@@ -40,8 +48,10 @@ import {
 } from "@/shapes/editor/EditorBarParts";
 import {
     followOrderForms,
-    shownOrders,
+    formsCover,
+    shownOrderOf,
     useMarcherOrderStore,
+    withOwnOrder,
     type ShownOrder,
 } from "./marcherOrderStore";
 import {
@@ -68,7 +78,11 @@ const ARROW_GAP = 3;
 const NUMBER_PX = 11;
 const NUMBER_OFFSET = 9;
 
-/** Whether Alt (Option) is held, for the position numbers; let go when the window loses focus */
+/**
+ * Whether Alt (Option) is held for the position numbers: not while typing in a text field, nor
+ * while a press is held (Alt then changes a drag's snapping, it doesn't ask for numbers); let go
+ * when the window loses focus
+ */
 function useAltHeld(enabled: boolean): boolean {
     const [held, setHeld] = useState(false);
     useEffect(() => {
@@ -76,18 +90,68 @@ function useAltHeld(enabled: boolean): boolean {
             setHeld(false);
             return;
         }
-        const keys = (event: KeyboardEvent) => setHeld(event.altKey);
-        const blur = () => setHeld(false);
+        let alt = false;
+        let pressed = false;
+        const update = () =>
+            setHeld(alt && !pressed && !readShortcutContext().inTextInput);
+        const keys = (event: KeyboardEvent) => {
+            alt = event.altKey;
+            update();
+        };
+        const down = () => {
+            pressed = true;
+            update();
+        };
+        const up = () => {
+            pressed = false;
+            update();
+        };
+        const blur = () => {
+            alt = false;
+            pressed = false;
+            update();
+        };
         window.addEventListener("keydown", keys, true);
         window.addEventListener("keyup", keys, true);
+        window.addEventListener("pointerdown", down, true);
+        window.addEventListener("pointerup", up, true);
+        window.addEventListener("pointercancel", up, true);
         window.addEventListener("blur", blur);
         return () => {
             window.removeEventListener("keydown", keys, true);
             window.removeEventListener("keyup", keys, true);
+            window.removeEventListener("pointerdown", down, true);
+            window.removeEventListener("pointerup", up, true);
+            window.removeEventListener("pointercancel", up, true);
             window.removeEventListener("blur", blur);
         };
     }, [enabled]);
     return held;
+}
+
+/**
+ * Where `ids` are drawn (`FieldMarchers.drawn`), as the same map until one of them moves, so a fill
+ * that moves no one of them (another marcher dragged, a selection change) works nothing out again
+ */
+function useDrawnAt(
+    marchers: FieldMarchers,
+    ids: readonly number[],
+    version: number,
+): ReadonlyMap<number, XY> {
+    const where = useMemo(() => {
+        void version;
+        const at = marchers.drawn(ids);
+        return ids
+            .map((id) => {
+                const p = at.get(id);
+                return p ? `${p.x},${p.y}` : "-";
+            })
+            .join(";");
+    }, [marchers, ids, version]);
+    return useMemo(() => {
+        void where;
+        return marchers.drawn(ids);
+    }, [marchers, ids, where]);
 }
 
 /** A line as drawn: its points on screen, leader first, and how it looks */
@@ -120,32 +184,61 @@ export default function MarcherOrderOverlay({
         [selected],
     );
     const beat = useTimelineSelectionStore(fieldBeat);
+    const always = setting === "always";
     const showing =
         !isPlaying &&
-        (sweep !== null ||
-            (setting !== "off" && (setting === "always" || ids.length >= 2)));
+        (sweep !== null || (setting !== "off" && (always || ids.length >= 2)));
 
-    // The forms, read while anything shows the order
-    useEffect(() => (showing ? followOrderForms() : undefined), [showing]);
+    // The forms, read while anything shows the order: the selection's, or everyone's for Always
+    const key = ids.join(",");
+    useEffect(
+        () => (showing ? followOrderForms(always ? "all" : ids) : undefined),
+        // `key` is `ids`
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [showing, always, key],
+    );
+    const formsScope = useMarcherOrderStore((s) => s.formsScope);
+    // Forms read for another selection say nothing of this one: nothing is drawn until they're in
+    const ready = formsCover(formsScope, always ? "all" : ids);
 
     // Redrawn when what the field draws changes (a fill, a drag) and when the camera moves
     const version = useSyncExternalStore(
         marchers.subscribe,
         () => marchers.version,
     );
-    const view = useFieldViewStore();
+    const view = useFieldViewStore(
+        useShallow(
+            (s): FieldView => ({
+                width: s.width,
+                height: s.height,
+                zoom: s.zoom,
+                panX: s.panX,
+                panY: s.panY,
+            }),
+        ),
+    );
     const alt = useAltHeld(showing);
 
+    // The lines in force (Always) follow the forms and the beat, never a fill
+    const inForce = useMemo(
+        () =>
+            showing && !sweep && always && ready && forms
+                ? ordersInForce(forms, beat)
+                : [],
+        [showing, sweep, always, ready, forms, beat],
+    );
+    // Where the selection stands: the same map until one of them moves
+    const ownAt = useDrawnAt(marchers, ids, version);
     const lines = useMemo((): ShownOrder[] => {
-        void version;
-        if (!showing || sweep) return [];
-        const always = setting === "always";
-        const at = marchers.drawn(always ? marchers.ids : ids);
-        return shownOrders({ forms, selected: ids, beat, at, always });
-    }, [showing, sweep, setting, marchers, ids, beat, forms, version]);
+        if (!showing || sweep || !ready) return [];
+        const own = shownOrderOf(forms, ids, beat, ownAt);
+        return always ? withOwnOrder(inForce, own) : own ? [own] : [];
+    }, [showing, sweep, ready, forms, ids, beat, ownAt, always, inForce]);
 
+    // Where the lines' marchers stand: the same map until one of them moves
+    const lineIds = useMemo(() => lines.flatMap((l) => l.order), [lines]);
+    const linesAt = useDrawnAt(marchers, lineIds, version);
     const drawn = useMemo((): DrawnLine[] => {
-        void version;
         const onScreen = (p: XY) => fieldToElement(view, p.x, p.y);
         if (sweep) {
             const points = sweep.picked.flatMap((id) => {
@@ -161,10 +254,9 @@ export default function MarcherOrderOverlay({
             }
             return [{ points, guessed: false, fractions, ends: false }];
         }
-        const ats = marchers.drawn(lines.flatMap((l) => l.order));
         return lines.map((line) => {
             const points = line.order.flatMap((id) => {
-                const p = ats.get(id);
+                const p = linesAt.get(id);
                 return p ? [onScreen(p)] : [];
             });
             return {
@@ -176,7 +268,7 @@ export default function MarcherOrderOverlay({
                 ends: true,
             };
         });
-    }, [sweep, lines, marchers, view, version]);
+    }, [sweep, lines, linesAt, view]);
 
     // Position numbers: while Alt is held, or always while Set order is on (touch has no Alt)
     const numbers = useMemo((): {

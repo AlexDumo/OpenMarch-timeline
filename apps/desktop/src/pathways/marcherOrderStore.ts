@@ -1,9 +1,10 @@
 /**
  * Showing and setting a line's order (pathways step 4g, DL-26..DL-33), outside React:
  *
- * - `forms`: every order form in the show (`readOrderForms`), read once and again after each
- *   undoable edit, undo and redo, only while something shows the order. What each beat and
- *   selection shows is worked out from them in memory, so the line costs no read per frame.
+ * - `forms`: the order forms Show order needs (`readOrderForms`): those of the selected marchers,
+ *   or every one in the show for Always. Read once and again after each undoable edit, undo and
+ *   redo, only while something shows the order. What each beat shows is worked out from them in
+ *   memory, so the line costs no read per frame.
  * - `sweep`: Set order while it's on: the selected marchers, where they stand at its beat, who has
  *   been picked so far and where the pointer is. Its line redraws on the pointer's frame.
  */
@@ -15,6 +16,7 @@ import {
     readOrderForms,
     rememberedOrder,
     type OrderForm,
+    type OrderInForce,
 } from "@/db-functions/rememberedOrder";
 import { followSource } from "@/db-functions/timelineTrailDrag";
 import { readAllMarcherIds } from "@/db-functions/marcherOrder";
@@ -36,17 +38,29 @@ export interface OrderSweep {
     readonly pointer: XY | null;
 }
 
+/** Whose forms are read: every marcher's (`all`, for Always), or these marchers' */
+export type OrderFormsScope = "all" | readonly number[];
+
+/** A scope as a key: `all`, or the ids ascending, joined */
+export const orderScopeKey = (scope: OrderFormsScope): string =>
+    scope === "all" ? "all" : [...scope].sort((a, b) => a - b).join(",");
+
 interface MarcherOrderState {
-    /** Every order form in the show, or null before the first read */
+    /** The forms of `formsScope`'s marchers, or null before the first read */
     readonly forms: readonly OrderForm[] | null;
+    /** Whose `forms` are (`orderScopeKey`): they hold every form of those marchers */
+    readonly formsScope: string | null;
     readonly sweep: OrderSweep | null;
 }
 
 export const useMarcherOrderStore = create<MarcherOrderState>(() => ({
     forms: null,
+    formsScope: null,
     sweep: null,
 }));
 
+/** Whose forms the next read reads */
+let scope: OrderFormsScope = "all";
 let reading: Promise<void> | null = null;
 let again = false;
 
@@ -56,9 +70,13 @@ export function invalidateOrderForms(): void {
         again = true;
         return;
     }
-    reading = readAllMarcherIds(db)
+    const reads = scope;
+    const key = orderScopeKey(reads);
+    reading = (reads === "all" ? readAllMarcherIds(db) : Promise.resolve(reads))
         .then((ids) => readOrderForms(db, ids))
-        .then((forms) => useMarcherOrderStore.setState({ forms }))
+        .then((forms) =>
+            useMarcherOrderStore.setState({ forms, formsScope: key }),
+        )
         .catch((e: unknown) => console.error("Couldn't read line orders", e))
         .finally(() => {
             reading = null;
@@ -75,13 +93,22 @@ export async function orderFormsRead(): Promise<void> {
 }
 
 /**
- * Keeps the forms read while something shows the order: reads them now, then after every undoable
- * edit, undo and redo. Returns the stop.
+ * Keeps the forms of `whose` read while something shows the order: reads them now, then after
+ * every undoable edit, undo and redo. Returns the stop.
  */
-export function followOrderForms(): () => void {
+export function followOrderForms(whose: OrderFormsScope = "all"): () => void {
+    scope = whose;
     invalidateOrderForms();
     return subscribeHistoryChanges(invalidateOrderForms);
 }
+
+/** Whether forms read for `formsScope` hold every form of the marchers of `want` */
+export const formsCover = (
+    formsScope: string | null,
+    want: OrderFormsScope,
+): boolean =>
+    formsScope !== null &&
+    (formsScope === "all" || formsScope === orderScopeKey(want));
 
 /** A line to draw: its marchers, leader first, and whether the order is only guessed */
 export interface ShownOrder {
@@ -135,9 +162,21 @@ export function shownOrders({
 }): ShownOrder[] {
     const own = shownOrderOf(forms, selected, beat, at);
     if (!always) return own ? [own] : [];
-    const lines: ShownOrder[] = (forms ? ordersInForce(forms, beat) : []).map(
-        (line) => ({ order: line.order, guessed: false }),
-    );
+    return withOwnOrder(forms ? ordersInForce(forms, beat) : [], own);
+}
+
+/**
+ * The lines in force (`ordersInForce`) and the selection's own order, when it isn't one of them
+ * or part of one drawn already
+ */
+export function withOwnOrder(
+    inForce: readonly OrderInForce[],
+    own: ShownOrder | null,
+): ShownOrder[] {
+    const lines: ShownOrder[] = inForce.map((line) => ({
+        order: line.order,
+        guessed: false,
+    }));
     if (own) {
         const key = own.order.join(",");
         if (

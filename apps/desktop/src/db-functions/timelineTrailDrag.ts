@@ -222,18 +222,34 @@ export function followSource(starts: readonly XY[]): FollowSource | null {
  * `ids` and `starts`: the order the show remembers for them (step 4f, DL-21, `rememberedOrder`),
  * or else the one `followSource` guesses from where they stand (`starts`). Null when neither has
  * one. The Follow tool opening and the write both ask this, so they agree on the line's ends.
+ *
+ * `leaderFirst` says which end leads before an end is grabbed: a remembered order runs leader
+ * first; a guessed one has no leader, and the Follow tool offers its last as the leader.
  */
 export async function followOrderAt(
     db: DbConnection | DbTransaction,
     ids: readonly number[],
     beat: number,
     starts: readonly XY[],
-): Promise<number[] | null> {
+): Promise<{ order: number[]; leaderFirst: boolean } | null> {
     const remembered = await rememberedOrderAt(db, ids, beat);
     if (remembered && remembered.length === ids.length)
-        return remembered.map((m) => ids.indexOf(m));
-    return followSource(starts)?.order ?? null;
+        return {
+            order: remembered.map((m) => ids.indexOf(m)),
+            leaderFirst: true,
+        };
+    const guess = followSource(starts)?.order;
+    return guess ? { order: guess, leaderFirst: false } : null;
 }
+
+/** `followOrderAt`'s order as a trail runs it, tail first and its leader last */
+export const tailFirstOf = ({
+    order,
+    leaderFirst,
+}: {
+    order: readonly number[];
+    leaderFirst: boolean;
+}): number[] => (leaderFirst ? [...order].reverse() : [...order]);
 
 /**
  * The trail order (tail first, leader last) for the source `order` grabbed at `grabbed` (an index
@@ -474,7 +490,7 @@ async function planDragInTransaction(
     });
     const along = await followOrderAt(tx, ids, window.start, starts);
     if (!along) refuse(trailDragRefusal.notFitted());
-    const order = trailOrderFrom(along, ids.indexOf(leaderId));
+    const order = trailOrderFrom(along.order, ids.indexOf(leaderId));
     if (!order) refuse(trailDragRefusal.notAnEnd());
     const plan = planTrailDrag(
         order.map((i) => starts[i]!),

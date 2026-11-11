@@ -60,6 +60,7 @@ import {
 import { pointsToStore } from "./timelineGroupRoutes";
 import { memberRows, type MemberRow } from "./timelineMemberRows";
 import { removeAssignmentRowsInTransaction } from "./timelineMembership";
+import { dropOrderMarksInTransaction } from "./shapeRecipes";
 
 type TransitionDbRow = typeof schema.timeline_transitions.$inferSelect;
 
@@ -197,14 +198,18 @@ const lastPoint = (
     return last ? [last.at[0], last.at[1]] : none;
 };
 
-/** Every trail of move `timelineId`, or of the show, by transition id. */
+/**
+ * Every trail of move `timelineId` (or of any of several moves), or of the show, by transition id.
+ * Two reads, however many trails.
+ */
 export async function readTrails(
     db: DbConnection | DbTransaction,
-    timelineId?: number,
+    timelineId?: number | readonly number[],
 ): Promise<MoveTrail[]> {
     const T = schema.timeline_transitions;
     const R = schema.timeline_routes;
     const A = schema.timeline_assignments;
+    if (Array.isArray(timelineId) && timelineId.length === 0) return [];
     const rows = await db
         .select({ transition: T, geometry: R.geometry })
         .from(T)
@@ -215,32 +220,42 @@ export async function readTrails(
                 isNotNull(T.route_id),
                 timelineId === undefined
                     ? undefined
-                    : eq(T.timeline_id, timelineId),
+                    : typeof timelineId === "number"
+                      ? eq(T.timeline_id, timelineId)
+                      : inArray(T.timeline_id, [...timelineId]),
             ),
         )
         .orderBy(asc(T.id))
         .all();
-    const out: MoveTrail[] = [];
-    for (const { transition, geometry } of rows) {
-        const members = await db
-            .select({ marcherId: A.marcher_id })
-            .from(A)
-            .where(eq(A.transition_id, transition.id))
-            .orderBy(asc(A.slot_index), asc(A.marcher_id))
-            .all();
-        out.push({
-            timelineId: transition.timeline_id,
-            transitionId: transition.id,
-            routeId: transition.route_id!,
-            start: transition.start_beat,
-            end: transition.end_beat,
-            reverse: isReversed(transition),
-            along: isAlong(transition),
-            geometry: JSON.parse(geometry) as RouteGeometry,
-            marcherIds: [...new Set(members.map((m) => m.marcherId))],
-        });
+    if (rows.length === 0) return [];
+    const members = await db
+        .select({ transitionId: A.transition_id, marcherId: A.marcher_id })
+        .from(A)
+        .where(
+            inArray(
+                A.transition_id,
+                rows.map((r) => r.transition.id),
+            ),
+        )
+        .orderBy(asc(A.slot_index), asc(A.marcher_id))
+        .all();
+    const lines = new Map<number, number[]>();
+    for (const m of members) {
+        const line = lines.get(m.transitionId) ?? [];
+        line.push(m.marcherId);
+        lines.set(m.transitionId, line);
     }
-    return out;
+    return rows.map(({ transition, geometry }) => ({
+        timelineId: transition.timeline_id,
+        transitionId: transition.id,
+        routeId: transition.route_id!,
+        start: transition.start_beat,
+        end: transition.end_beat,
+        reverse: isReversed(transition),
+        along: isAlong(transition),
+        geometry: JSON.parse(geometry) as RouteGeometry,
+        marcherIds: [...new Set(lines.get(transition.id) ?? [])],
+    }));
 }
 
 /** The follow-the-leader transition that carries trail `routeId`, or a refusal. */
@@ -256,6 +271,28 @@ async function trailTransition(
         .get();
     if (!transition) refuse(trailRefusal.noTrail());
     return transition;
+}
+
+/**
+ * A trail of `transition` was made or edited (pathways step 4g): the order marks its members have
+ * at its move's end go, so the trail's order holds over an order set by hand before it (the latest
+ * action wins), in the same undo step
+ */
+async function trailEditedInTransaction(
+    tx: DbTransaction,
+    transition: Pick<TransitionDbRow, "id" | "timeline_id">,
+): Promise<void> {
+    const A = schema.timeline_assignments;
+    const line = await tx
+        .selectDistinct({ id: A.marcher_id })
+        .from(A)
+        .where(eq(A.transition_id, transition.id))
+        .all();
+    await dropOrderMarksInTransaction(
+        tx,
+        transition.timeline_id,
+        line.map((m) => m.id),
+    );
 }
 
 /**
@@ -669,6 +706,7 @@ export async function followTrailInTransaction({
             })),
         });
         await markTrailModelInTransaction(tx);
+        await trailEditedInTransaction(tx, transition);
         const line = order.map((i) => chosen[i]!.assignment.marcher_id);
         return {
             routeId: route.id,
@@ -737,6 +775,7 @@ export async function editTrailPointsInTransaction({
     await mapDbErrors(() =>
         writeRouteGeometryInTransaction(tx, routeId, geometry),
     );
+    await trailEditedInTransaction(tx, transition);
 }
 
 /** AP-T2 as one undoable edit. */
@@ -807,6 +846,7 @@ export async function reverseTrailInTransaction({
             });
         }
         await markTrailModelInTransaction(tx);
+        await trailEditedInTransaction(tx, transition);
         const resolver = createResolver(
             (await readTimelineTables(tx)).snapshot,
         );
