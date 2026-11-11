@@ -51,6 +51,18 @@
             "undo": "Undo",
             "undoFailed": "The undo couldn't be applied, so nothing changed."
         },
+        "field": {
+            "addXCheckpoint": "Add X checkpoint on both sides",
+            "addXCheckpointSeries": "Add X checkpoints every few steps",
+            "addYCheckpoint": "Add Y checkpoint",
+            "addYCheckpointSeries": "Add Y checkpoints every few steps",
+            "checkpointKeywords": "field line lines grid yard hash reference",
+            "params": {
+                "every": "Steps between checkpoints",
+                "toBack": "Back to how many steps behind the front",
+                "toSide": "Out to how many steps from the center"
+            }
+        },
         "file": {
             "closeFile": "Close file",
             "exportCoordinateSheets": "Export coordinate sheets…",
@@ -1632,7 +1644,8 @@
         "repairDotsFile.reopenFailed": "The repaired file was saved at {path} but couldn't be opened (status {status}).",
         "utilityUpdateFailed": "Failed to update utility settings",
         "shortcuts.conflictWith": "<keys></keys> is already used by {actions}.",
-        "shortcuts.recordingHint": "Press keys… (<keys></keys> to cancel)"
+        "shortcuts.recordingHint": "Press keys… (<keys></keys> to cancel)",
+        "shortcuts.category.field": "Field"
     },
     "shapes": {
         "box": {
@@ -3338,7 +3351,8 @@
             "select": "Selection",
             "shape": "Shapes",
             "timeline": "Timeline",
-            "ui": "View"
+            "ui": "View",
+            "field": "Field"
         }
     },
     "shortcut": {
@@ -3799,5 +3813,22 @@
         "label": "Workspace",
         "editor": "Editor",
         "preview": "Preview"
+    },
+    "fieldEdits": {
+        "issues": {
+            "asymmetricX": "The left and rightmost X-checkpoints are no longer the same distance from the center",
+            "centerLocked": "The center line stays at the center while both sides are edited together",
+            "duplicatePosition": "There is already an {axis}-checkpoint there",
+            "invalid": "That field change isn't valid",
+            "invalidStepSize": "The step size must be more than 0",
+            "mirrorIgnored": "Only X-checkpoints are mirrored",
+            "noGap": "There's no gap between two {axis}-checkpoints to add one in. Give its position instead.",
+            "notFound": "That checkpoint no longer exists",
+            "skippedExisting": "Skipped spots that already have a checkpoint",
+            "tooMany": "That would add too many checkpoints. Use a larger spacing.",
+            "yInFront": "Y-checkpoints can't be in front of the front of the field. Use 0 or a negative number of steps."
+        },
+        "nothingAdded": "Every spot already has a checkpoint",
+        "seriesAdded": "{count, plural, one {# {axis}-checkpoint added} other {# {axis}-checkpoints added}}"
     }
 }
