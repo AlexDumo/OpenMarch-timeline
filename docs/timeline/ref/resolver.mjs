@@ -3,7 +3,7 @@
 //
 // The resolver keeps its own row index, updated only from batch row images (§10.2). It reads marchers,
 // shapes and transitions by id from the host's post-commit mirror (`db`).
-import { lerp, clamp01, destPath, paramT, destinationsOf, arcPoint, flatten, makeTrail, makeRouteTrail, ftlDest, routeWalk, groupWalk } from './geom.mjs';
+import { lerp, clamp01, destPath, paramT, destinationsOf, arcPoint, flatten, makeTrail, makeRouteTrail, makeAlongWay, alongWayEnds, alongWayAt, ftlDest, routeWalk, groupWalk } from './geom.mjs';
 
 export function makeResolver(db, { rules = 'v0.2+' } = {}) {
   const T = (id) => db.transitions[id];
@@ -104,6 +104,7 @@ export function makeResolver(db, { rules = 'v0.2+' } = {}) {
       const e = entry(t.id), q = e.qOf.get(s.m), p = clamp01((b - t.start) / (t.end - t.start));   // q in O(1)
       if (p <= 0) return origin(s);                                    // endpoints exact (§8.10)
       if (p >= 1) return e.target.get(s.m);
+      if (e.ends) return alongWayAt(e.trail, e.startDist[q], e.endDist[q], e.ends.turn[q], e.ends.straight[q], e.target.get(s.m), p);   // R-13″
       return e.trail.at(e.startDist[q] + (e.endDist[q] - e.startDist[q]) * p);
     }
     const p = clamp01((b - s.start) / (t.end - s.start));
@@ -142,11 +143,14 @@ export function makeResolver(db, { rules = 'v0.2+' } = {}) {
     const tr = t.route == null ? null : db.routes?.[t.route]?.geometry;    // R-9′ (step 4): the trail route, read from the host mirror on use
     const n = t.slots, m = members.length, pts = dests.get(tid);
     const dest = ftlDest(paths.get(tid), pts, n, sign < 0), path = dest.walked;    // R-13′, R-12′ (step 4)
-    const trail = tr ? makeRouteTrail(os, tr, path) : makeTrail(os, t.params?.waypoints ?? [], path);
+    const along = t.dest == null && t.params?.ends === 'along';                      // R-13″ (step 4b): ends along the way
+    const trail = along ? makeAlongWay(os, tr) : tr ? makeRouteTrail(os, tr, path) : makeTrail(os, t.params?.waypoints ?? [], path);
     const pointOf = keyed.map(([, sp], q) => dest.member(q, m, sp.row.slot));      // R-9's sample, or the row's own slot (R-13′)
-    const e = { members, source, trail, qOf: new Map(members.map((mm, q) => [mm, q])),
-      startDist: os.map((_, q) => trail.cum[q]),
-      endDist: os.map((_, q) => trail.destOffset + dest.along(pointOf[q])),
+    const startDist = os.map((_, q) => trail.cum[q]);
+    const ends = along ? alongWayEnds(trail, pointOf.map((j) => pts[j]), startDist) : null;
+    const e = { members, source, trail, qOf: new Map(members.map((mm, q) => [mm, q])), ends,
+      startDist,
+      endDist: ends ? ends.endDist : os.map((_, q) => trail.destOffset + dest.along(pointOf[q])),
       target: new Map(members.map((mm, q) => [mm, pts[pointOf[q]]])) };
     rowsOfTransition(tid).filter((r) => !e.target.has(r.marcher))                  // per-transition index, no full scan
       .sort((a, b) => a.slot - b.slot || a.marcher - b.marcher)

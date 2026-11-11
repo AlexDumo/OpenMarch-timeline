@@ -369,6 +369,160 @@ export function makeTrail(
     };
 }
 
+/**
+ * R-13″ (pathways step 4b): the **way** `P` of a follow-the-leader transition whose ends are
+ * along it (`path_params.ends = "along"`, no shape). It is the line-up through the member origins
+ * (tail first), then the drawn part `W`: R-14's walk from the leader's origin through the trail
+ * route's points but the last, to the last (the route's `from` and `to` as tangent neighbours).
+ * There is no destination path: `destOffset` is the way's whole length and `at` stops at its end.
+ * With no route, or no length drawn, `P` is the line-up.
+ */
+export function makeAlongTrail(
+    origins: readonly XY[],
+    route?: RouteWalk | null,
+): FtlTrail {
+    const lineUp: XY[] = origins.length ? [...origins] : [[0, 0]];
+    const cum = cumOf(lineUp);
+    const lineLen = cum[cum.length - 1]!;
+    const last = route?.points[route.points.length - 1];
+    if (route && origins.length > 0 && last) {
+        const W = routePath(
+            lineUp[lineUp.length - 1]!,
+            route.points.slice(0, -1),
+            last.at,
+            route,
+        );
+        if (W.L >= EPS_GEOM) {
+            const total = lineLen + W.L;
+            return {
+                cum,
+                lineUp,
+                destOffset: total,
+                drawn: { start: lineLen, path: W },
+                at: (d) =>
+                    d < lineLen
+                        ? pointAtDistance(lineUp, cum, d)
+                        : routePointAtDistance(W, d - lineLen),
+            };
+        }
+    }
+    return {
+        cum,
+        lineUp,
+        destOffset: lineLen,
+        at: (d) => pointAtDistance(lineUp, cum, d),
+    };
+}
+
+/**
+ * R-13″: the arc length on an along-way `trail` ({@link makeAlongTrail}) of the point of it
+ * nearest `p`, ties to the larger distance. Lines are projected exactly; a cubic piece of the
+ * drawn part is projected onto the 64 chords R-14 measures it on, its distance read from the
+ * same table.
+ */
+export function nearestAlong(trail: FtlTrail, p: XY): number {
+    let best = Infinity;
+    let at = 0;
+    const consider = (a: XY, b: XY, d0: number, len: number) => {
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const l2 = dx * dx + dy * dy;
+        const f =
+            l2 > 0
+                ? clamp01(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)
+                : 0;
+        const dd = Math.hypot(a[0] + dx * f - p[0], a[1] + dy * f - p[1]);
+        if (dd <= best) {
+            best = dd;
+            at = d0 + f * len;
+        }
+    };
+    const lineUp = trail.lineUp ?? [trail.at(0)];
+    const { cum } = trail;
+    consider(lineUp[0]!, lineUp[0]!, 0, 0);
+    for (let i = 1; i < lineUp.length; i++)
+        consider(
+            lineUp[i - 1]!,
+            lineUp[i]!,
+            cum[i - 1]!,
+            cum[i]! - cum[i - 1]!,
+        );
+    const drawn = trail.drawn;
+    if (drawn) {
+        const W = drawn.path;
+        W.pieces.forEach((piece, j) => {
+            const P0 = W.V[j]!;
+            const P3 = W.V[j + 1]!;
+            const base = drawn.start + W.D[j]!;
+            if (piece.kind === "line") {
+                consider(P0, P3, base, W.D[j + 1]! - W.D[j]!);
+                return;
+            }
+            const K = ROUTE_CUBIC_SAMPLES;
+            let prev = P0;
+            for (let i = 1; i <= K; i++) {
+                const s =
+                    i === K
+                        ? P3
+                        : cubicPoint(P0, piece.c1, piece.c2, P3, i / K);
+                consider(
+                    prev,
+                    s,
+                    base + piece.e[i - 1]!,
+                    piece.e[i]! - piece.e[i - 1]!,
+                );
+                prev = s;
+            }
+        });
+    }
+    return at;
+}
+
+/**
+ * R-13″: each member's end on an along-way: `e_q`, its spot's projection onto the way, made
+ * strictly increasing in trail order (`e_q ≥ e_{q−1} + ε_geom`, P-5), then never behind its own
+ * start (`e_q ≥ startDist[q]`: a member whose spot is behind it waits on the way). `turn[q]` is
+ * `P(e_q)` and `straight[q]` the straight leg from there to the spot.
+ */
+export function alongEnds(
+    trail: FtlTrail,
+    spots: readonly XY[],
+    startDist: readonly number[],
+): { endDist: number[]; turn: XY[]; straight: number[] } {
+    const e: number[] = [];
+    spots.forEach((p, q) => {
+        const d = nearestAlong(trail, p);
+        e.push(q > 0 ? Math.max(d, e[q - 1]! + EPS_GEOM) : d);
+    });
+    const endDist = e.map((d, q) => Math.max(d, startDist[q]!));
+    const turn = endDist.map((d) => trail.at(d));
+    return {
+        endDist,
+        turn,
+        straight: turn.map((t, q) => dist(t, spots[q]!)),
+    };
+}
+
+/**
+ * R-13″: where a founding member of an along-way is at progress `p` (0 < p < 1). It walks the
+ * way from `start` to `end`, then straight from `turn` to `spot`, at one steady speed over the
+ * whole of it.
+ */
+export function alongPoint(
+    trail: FtlTrail,
+    start: number,
+    end: number,
+    turn: XY,
+    straight: number,
+    spot: XY,
+    p: number,
+): XY {
+    const a = end - start;
+    const d = (a + straight) * p;
+    if (d < a || !(straight > 0)) return trail.at(start + Math.min(d, a));
+    return lerp(turn, spot, (d - a) / straight);
+}
+
 /** Samples a cubic route piece is measured on (R-14, the Line's count). */
 export const ROUTE_CUBIC_SAMPLES = 64;
 

@@ -17,6 +17,8 @@ import {
     groupMemberWalk,
     groupSchedule,
     lerp,
+    makeAlongTrail,
+    makeTrail,
     placed,
     resolveAdjust,
     routePath,
@@ -599,15 +601,28 @@ interface FtlOrder {
     targets: Map<number, XY>;
 }
 
-/** R-9's trail as drawable legs: the polyline before the destination path, then the path. */
+/**
+ * A follow-the-leader trail as drawable legs (R-9, R-9′, R-12′, R-13′, R-13″): the polyline
+ * before the drawn part or the destination (`pre`), the drawn part, then the destination path as
+ * walked (reversed for R-12′). An along-way (R-13″) has no destination.
+ */
 interface FtlTrail {
     pre: XY[];
     cum: number[];
     destOffset: number;
-    /** The destination path's corners and their cumulative lengths; null for a circle */
-    corners: XY[] | null;
-    cornerCum: number[] | null;
-    shape: ShapeRow;
+    /** R-9′: the trail route's drawn part and the distance it starts at */
+    drawn: { start: number; path: RoutePath } | null;
+    /** The destination as walked: a polyline, a circle's arc, or none (R-13″) */
+    dest:
+        | { kind: "polyline"; corners: XY[]; cum: number[] }
+        | {
+              kind: "circle";
+              center: XY;
+              radius: number;
+              startAngle: number;
+              dir: number;
+          }
+        | null;
 }
 
 /**
@@ -694,79 +709,183 @@ export function createWalkedPaths(
     const trailOf = (t: TransitionRow, entry: FtlEntryInfo): FtlTrail => {
         let trail = trails.get(t.id);
         if (trail) return trail;
+        const reverse = t.params?.reverse === true;
+        const along = t.dest == null && t.params?.ends === "along";
         const shape = t.dest == null ? undefined : host.shapes[t.dest];
-        if (!shape)
+        if (t.dest != null && !shape)
             throw new Error(
                 `follow-the-leader transition ${t.id} has no destination path`,
             );
-        const corners = destCorners(shape);
-        const pathStart: XY = corners
-            ? corners[0]!
-            : shape.kind === "circle"
-              ? onCircle(
-                    shape.geometry.center,
-                    shape.geometry.radius,
-                    shape.geometry.start_angle,
-                )
-              : [0, 0];
-        // R-9's trail: the members' origins (tail first), the waypoints, then the destination
-        // path. A founding span's origin is where the resolver has its marcher as the move starts.
-        const pre: XY[] = [
-            ...entry.members.map((id) => resolver.positionAt(id, t.start)),
-            ...(t.params?.waypoints ?? []),
-            pathStart,
-        ];
+        // the destination as walked (R-13, R-13′), entered from its far end when reversed (R-12′)
+        let dest: FtlTrail["dest"] = null;
+        let L = 0;
+        if (!along) {
+            const corners = shape ? destCorners(shape) : spotsOf(t);
+            if (corners) {
+                const line = corners.length ? [...corners] : [[0, 0] as XY];
+                if (reverse) line.reverse();
+                const cum = cumOf(line);
+                L = cum[cum.length - 1]!;
+                dest = { kind: "polyline", corners: line, cum };
+            } else if (shape?.kind === "circle") {
+                const g = shape.geometry;
+                const dir = g.clockwise ? -1 : 1;
+                L = 2 * Math.PI * g.radius;
+                dest = reverse
+                    ? {
+                          kind: "circle",
+                          center: g.center,
+                          radius: g.radius,
+                          startAngle: g.start_angle + dir * (L / g.radius),
+                          dir: -dir,
+                      }
+                    : {
+                          kind: "circle",
+                          center: g.center,
+                          radius: g.radius,
+                          startAngle: g.start_angle,
+                          dir,
+                      };
+            }
+        }
+        const entrance: XY =
+            dest?.kind === "polyline"
+                ? dest.corners[0]!
+                : dest?.kind === "circle"
+                  ? onCircle(dest.center, dest.radius, dest.startAngle)
+                  : [0, 0];
+        // A founding span's origin is where the resolver has its marcher as the move starts
+        const origins = entry.members.map((id) =>
+            resolver.positionAt(id, t.start),
+        );
+        const route =
+            t.route == null ? null : (host.routes?.[t.route]?.geometry ?? null);
+        // the resolver's own trail (R-9, R-9′, R-13″), for the drawn part and where it starts
+        const made = along
+            ? makeAlongTrail(origins, route)
+            : makeTrail(
+                  origins,
+                  t.params?.waypoints ?? [],
+                  { closed: false, L, at: () => entrance },
+                  route,
+              );
+        const pre: XY[] =
+            made.drawn || along
+                ? origins.length
+                    ? origins
+                    : [[0, 0]]
+                : [
+                      ...origins,
+                      ...(route && origins.length
+                          ? []
+                          : (t.params?.waypoints ?? [])),
+                      entrance,
+                  ];
         const cum = cumOf(pre);
         trail = {
             pre,
             cum,
-            destOffset: cum[cum.length - 1]!,
-            corners,
-            cornerCum: corners ? cumOf(corners) : null,
-            shape,
+            destOffset: made.destOffset,
+            drawn: made.drawn ?? null,
+            dest,
         };
         trails.set(t.id, trail);
         return trail;
     };
 
-    /** A founding follow-the-leader span (R-10): the marcher's stretch of the trail. */
+    /** The stretch `[d0, d1]` of a trail's drawn part, mapped by `progressOf`. */
+    function drawnPieces(
+        drawn: { start: number; path: RoutePath },
+        d0: number,
+        d1: number,
+        progressOf: (d: number) => number,
+    ): Piece[] {
+        const { start, path: W } = drawn;
+        const out: Piece[] = [];
+        W.pieces.forEach((piece, j) => {
+            const lo = Math.max(d0, start + W.D[j]!);
+            const hi = Math.min(d1, start + W.D[j + 1]!);
+            if (hi <= lo) return;
+            const xa = lo - start - W.D[j]!;
+            const xb = hi - start - W.D[j]!;
+            const P0 = W.V[j]!;
+            const P3 = W.V[j + 1]!;
+            if (piece.kind === "line") {
+                const len = W.D[j + 1]! - W.D[j]!;
+                const at = (x: number): XY =>
+                    x <= 0 ? P0 : x >= len ? P3 : lerp(P0, P3, x / len);
+                out.push(
+                    linePiece(progressOf(lo), progressOf(hi), at(xa), at(xb)),
+                );
+            } else
+                out.push(
+                    cubicPiece(
+                        progressOf(lo),
+                        progressOf(hi),
+                        P0,
+                        piece.c1,
+                        piece.c2,
+                        P3,
+                        piece.e,
+                        xa,
+                        xb,
+                    ),
+                );
+        });
+        return out;
+    }
+
+    /** A founding follow-the-leader span (R-10, R-13″): the marcher's stretch of the trail. */
     function ftlPieces(t: TransitionRow, order: FtlOrder, q: number): Piece[] {
         const { entry } = order;
         const d0 = entry.startDist[q]!;
         const d1 = entry.endDist[q]!;
-        if (!(d1 - d0 >= EPS_GEOM)) return [];
-        const { pre, cum, destOffset, corners, cornerCum, shape } = trailOf(
-            t,
-            entry,
-        );
-        const progressOf = (d: number) => (d - d0) / (d1 - d0);
+        // R-13″: the way to its end, then straight to its spot, at one speed
+        const straight = entry.along?.straight[q] ?? 0;
+        const total = d1 - d0 + straight;
+        if (!(total >= EPS_GEOM)) return [];
+        const trail = trailOf(t, entry);
+        const { pre, cum, destOffset, drawn, dest } = trail;
+        const progressOf = (d: number) => (d - d0) / total;
+        const preEnd = drawn ? drawn.start : destOffset;
         const out = polylinePieces(
             pre,
             cum,
             d0,
-            Math.min(d1, destOffset),
+            Math.min(d1, preEnd),
             progressOf,
         );
-        if (d1 <= destOffset) return out;
+        if (drawn && d1 > drawn.start)
+            out.push(
+                ...drawnPieces(drawn, d0, Math.min(d1, destOffset), progressOf),
+            );
+        if (entry.along) {
+            if (straight > 0) {
+                const target = order.targets.get(entry.members[q]!)!;
+                out.push(
+                    linePiece(progressOf(d1), 1, entry.along.turn[q]!, target),
+                );
+            }
+            return out;
+        }
+        if (d1 <= destOffset || !dest) return out;
         const s0 = Math.max(0, d0 - destOffset);
         const s1 = d1 - destOffset;
-        if (corners) {
+        if (dest.kind === "polyline") {
             out.push(
-                ...polylinePieces(corners, cornerCum!, s0, s1, (s) =>
+                ...polylinePieces(dest.corners, dest.cum, s0, s1, (s) =>
                     progressOf(s + destOffset),
                 ),
             );
-        } else if (shape.kind === "circle") {
-            const g = shape.geometry;
-            const dir = g.clockwise ? -1 : 1;
+        } else {
             out.push(
                 ...arcPieces(
                     progressOf(s0 + destOffset),
                     1,
-                    g.center,
-                    g.radius,
-                    g.start_angle + dir * (s0 / g.radius),
-                    dir * ((s1 - s0) / g.radius),
+                    dest.center,
+                    dest.radius,
+                    dest.startAngle + dest.dir * (s0 / dest.radius),
+                    dest.dir * ((s1 - s0) / dest.radius),
                 ),
             );
         }
