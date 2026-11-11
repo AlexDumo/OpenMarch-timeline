@@ -78,6 +78,7 @@ import { useShapeEditorStore } from "@/shapes/frame/shapeEditorStore";
 import FavoritesRing from "@/shapes/tool/FavoritesRing";
 import DockedCommandBar from "@/shortcuts/palette/DockedCommandBar";
 import { useShapeFocus } from "@/shapes/field/useShapeFocus";
+import { useFollowFocus } from "@/pathways/useFollowFocus";
 import { useFieldItemWrites } from "@/field/fieldItemWrites";
 import {
     snapToRounding,
@@ -330,7 +331,7 @@ function ThreeFieldView() {
         shapeOf,
     });
     const { dimming, following } = timeline;
-    useShapeFocus(dimming);
+    useShapeFocus(dimming, useFollowFocus());
     const root = useRef<HTMLDivElement>(null);
 
     // The field test API and the editor read the latest of these, not the render they came from

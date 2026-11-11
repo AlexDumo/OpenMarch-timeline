@@ -358,6 +358,12 @@ export type FieldModeDrawing = {
         pulse?: boolean;
     }[];
     /**
+     * The Follow tool's grab cue (pathways step 4d): on each end of the line, chevrons pointing
+     * out along `dir` (a unit vector, the line's own way at that end) that slide outward and fade
+     * on a loop, until an end is grabbed
+     */
+    pullArrows?: readonly { at: FieldPoint; dir: FieldPoint }[];
+    /**
      * Spots the shape leaves empty on purpose, drawn as dashed rings: an odd-count outline's gap
      * (#390), which a click on another spot between corners moves
      */

@@ -3874,7 +3874,8 @@
             "offGroup": "Not on the group path",
             "leader": "Leads the line",
             "follower": "Follows the leader",
-            "dragEnd": "Drag a trail out of this end"
+            "dragEnd": "Drag a trail out of this end",
+            "grabEnd": "Drag from an end of the line"
         },
         "lanes": {
             "hover": "Spot {spot} · {marcher}",

@@ -902,7 +902,8 @@ function FollowControls({ session }: { session: PathSession }) {
     const evenOff = limit !== null && limit < EVEN_STEP;
     const fromTrail = follow.ends === "trail";
     // ▶ Preview (step 4c, DL-17): once there's a walk to show
-    const canPreview = followMarchersOf(session) !== null;
+    const canPreview =
+        session.points.length > 0 && followMarchersOf(session) !== null;
     const reducedMotion = prefersReducedMotion();
     const setEven = (steps: number) =>
         setFollowSpacing({

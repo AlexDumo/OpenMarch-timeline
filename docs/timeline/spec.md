@@ -3604,3 +3604,19 @@ Curve's length on its first edit).
 | QA-DL-13 | Open the recipe of QA-DL-12 in the shape tools; double-click a point                           | Nobody moves on opening; the point turns Smooth (or Corner); the first change lays the shape out evenly; the follow move still resolves to the new spots   |
 | QA-DL-14 | A Curve saved before step 4c                                                                   | Same params read back, same spots, same outline                                                                                                                |
 | QA-DL-15 | Drawing a trail with points                                                                    | The drawing's marchers stand at exactly the spots written; ghosts at the starts; ▶ Preview at progress `p` shows `trailDragPreview(plan, p)`                   |
+
+### L.6 Step 4d: grab cue, a quieter field, the line live while drawing
+
+**Owner, 2026-11-11:** muting and the live line approved; the grab cue is option B, "pull arrows", for a lab test.
+
+| ID    | Decision |
+| ----- | -------- |
+| DL-18 | While the Follow tool is open, everyone outside the line fades as the shape tool fades them and can't be picked. Before a trail is drawn the line is drawn **once, at the start flag**: its real marchers stand there inside the rings, rather than at the playhead with the rings elsewhere. With Keep end spots they stand on the spots they have, their starts as ghosts. |
+| DL-19 | **Grab cue:** on each end, a ring and three chevrons that slide outward and fade on a loop (about 1.1 s), pointing along the line's own way at that end (from the marcher next to it to the end). Middle marchers get none; pointing at one shows "Drag from an end of the line". Gone once an end is grabbed. With the system's reduced motion on, the chevrons stand still. |
+| DL-20 | While drawing (the first press-and-drag included), the pointer's landed spot counts as one more point for what is **shown**: the marchers' end spots, the end-spot line and ▶ Preview's walk. What **finishes** is what's placed. The shown plan is worked out at most once a frame. |
+
+| QA         | Setup                                                    | Expected                                                                                                     |
+| ---------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| QA-DL-16   | Open the Follow tool on a line                           | Everyone else faded; the line's marchers at the start flag; arrows on the two ends only, pointing outward     |
+| QA-DL-17   | Grab an end and move without clicking                    | The marchers and end spots follow the pointer; nothing is placed; the plan written still has the placed points |
+| QA-DL-18   | Close the tool                                           | Nobody faded; the marchers back where the show has them                                                      |
