@@ -34,10 +34,17 @@ import type AudioFile from "../../src/global/classes/AudioFile";
 import { init, captureException } from "@sentry/electron/main";
 
 import {
-    applyAutomaticUpdatesSetting,
     automaticUpdatesAreEnabled,
-    startAutomaticUpdates,
+    createUpdateController,
+    getAutoUpdater,
+    type InstallAttempt,
+    type UpdateController,
+    updateUnsupportedReason,
 } from "./update";
+import {
+    UPDATE_IPC_CHANNELS,
+    type UpdateState,
+} from "../../src/global/updates";
 import { repairDatabase } from "../database/repair";
 import {
     NEEDS_CONVERSION_STATUS,
@@ -127,19 +134,10 @@ ipcMain.on("settings:set", (event, settings) => {
     if (Object.prototype.hasOwnProperty.call(settings, "editorMode"))
         showApplicationMenu();
 
-    if (Object.prototype.hasOwnProperty.call(settings, "automaticUpdates")) {
-        const enabled = automaticUpdatesAreEnabled(settings.automaticUpdates);
-        if (app.isPackaged && !process.env.SNAP) {
-            // Applies immediately so opting out also cancels an already-staged install.
-            applyAutomaticUpdatesSetting(enabled);
-            if (enabled) {
-                void startAutomaticUpdates({
-                    isPackaged: true,
-                    automaticUpdatesEnabled: true,
-                });
-            }
-        }
-    }
+    if (Object.prototype.hasOwnProperty.call(settings, "automaticUpdates"))
+        updates?.setAutomaticDownload(
+            automaticUpdatesAreEnabled(settings.automaticUpdates),
+        );
 });
 
 ipcMain.handle("settings:get", (_, key) => {
@@ -572,13 +570,89 @@ void app.whenReady().then(async () => {
     // i18n-ignore: the product name and a file path, the same in every language
     await createWindow("OpenMarch - " + store.get("databasePath"));
 
-    void startAutomaticUpdates({
-        isPackaged: app.isPackaged,
-        automaticUpdatesEnabled: automaticUpdatesAreEnabled(
+    updates = startUpdates();
+});
+
+/** Set once the app is ready (fork #404): the updater the title bar and Settings drive */
+let updates: UpdateController | null = null;
+const INSTALL_ATTEMPT_KEY = "updateInstallAttempt";
+
+function startUpdates(): UpdateController {
+    const broadcast = (state: UpdateState) => {
+        for (const window of BrowserWindow.getAllWindows())
+            window.webContents.send(UPDATE_IPC_CHANNELS.state, state);
+    };
+    const controller = createUpdateController({
+        updater: getAutoUpdater(),
+        currentVersion: app.getVersion(),
+        unsupportedReason: updateUnsupportedReason({
+            isPackaged: app.isPackaged,
+            platform: process.platform,
+            env: process.env,
+        }),
+        needsMoveToApplications: () => isMacOS && !app.isInApplicationsFolder(),
+        automaticDownload: automaticUpdatesAreEnabled(
             store.get("automaticUpdates"),
         ),
-        isSnap: Boolean(process.env.SNAP),
+        onChange: broadcast,
+        takeInstallAttempt: () => {
+            const attempt = store.get(INSTALL_ATTEMPT_KEY) as
+                | InstallAttempt
+                | undefined;
+            store.delete(INSTALL_ATTEMPT_KEY);
+            return attempt ?? null;
+        },
+        saveInstallAttempt: (attempt) =>
+            store.set(INSTALL_ATTEMPT_KEY, attempt),
+        prepareToQuit: closeShowForRestart,
+        relaunch: () => {
+            app.relaunch();
+            app.exit(0);
+        },
     });
+    // The window asked before the updater existed: tell it now
+    broadcast(controller.getState());
+    controller.start();
+    return controller;
+}
+
+/**
+ * Before a restart for an update or a move to Applications: close the show the way quitting
+ * does, but keep it as the file to open on the next launch. A new show that was never saved is
+ * discarded, as on quit.
+ */
+async function closeShowForRestart() {
+    const reopen = currentNewShowDraftPath ? "" : DatabaseServices.getDbPath();
+    try {
+        await closeCurrentFile(true);
+    } catch (error) {
+        console.error("Error closing file before restarting:", error);
+    }
+    if (reopen) store.set("databasePath", reopen);
+    // The windows close without asking again
+    isQuitting = true;
+}
+
+ipcMain.handle(UPDATE_IPC_CHANNELS.getState, () => updates?.getState() ?? null);
+ipcMain.handle(UPDATE_IPC_CHANNELS.check, () => updates?.check() ?? null);
+ipcMain.handle(UPDATE_IPC_CHANNELS.download, () => updates?.download());
+ipcMain.handle(UPDATE_IPC_CHANNELS.install, () => updates?.install());
+ipcMain.handle(UPDATE_IPC_CHANNELS.moveToApplications, async () => {
+    if (!isMacOS || app.isInApplicationsFolder()) return false;
+    await closeShowForRestart();
+    let moved = false;
+    try {
+        // Quits and opens the moved copy when it works
+        moved = app.moveToApplicationsFolder();
+    } catch (error) {
+        console.error("Unable to move OpenMarch to Applications:", error);
+    }
+    // The show is closed: open this copy again with it
+    if (!moved) {
+        app.relaunch();
+        app.exit(0);
+    }
+    return moved;
 });
 
 function initGetters() {
