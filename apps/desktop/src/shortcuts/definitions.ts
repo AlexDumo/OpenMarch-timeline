@@ -1032,6 +1032,35 @@ const STATIC_ACTIONS = {
         scope: "fieldEdit",
         defaultBindings: ["Shift+Tab"],
     },
+    // The keyboard's way out of the field (where Tab walks lines) to the bar and the inspector
+    fieldEditNextPane: {
+        labelKey: "actions.field.nextPane",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: ["F6"],
+        allowInInputs: true,
+    },
+    fieldEditPreviousPane: {
+        labelKey: "actions.field.previousPane",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: ["Shift+F6"],
+        allowInInputs: true,
+    },
+    fieldEditImportImage: {
+        labelKey: "actions.field.importImage",
+        keywordsKey: "actions.field.imageKeywords",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: [],
+    },
+    fieldEditRemoveImage: {
+        labelKey: "actions.field.removeImage",
+        keywordsKey: "actions.field.imageKeywords",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: [],
+    },
     fieldEditSelectAllLines: {
         labelKey: "actions.field.selectAllLines",
         category: "field",

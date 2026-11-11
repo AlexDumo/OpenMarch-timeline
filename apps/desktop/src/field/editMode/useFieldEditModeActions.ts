@@ -29,24 +29,74 @@ import {
     toggleLinesEdit,
 } from "./lineCommands";
 import type { FieldEditResult } from "@/field/edits";
+import { focusFieldEditPane } from "./fieldEditPanes";
+import { useFieldImageActions } from "./useFieldImageActions";
 
 /**
- * Whether a key press belongs to the field rather than a control: Enter and Tab on a focused
- * button or field in the inspector are that control's, not the mode's. Anything that isn't a
- * key press (a menu entry, a button, the palette) is the field's.
+ * What owns its own keys when it has focus: a menu (the line menu), a dialog (the line popover,
+ * the template sheet) and form controls (switches, inputs, sliders, selects, segmented
+ * switches). A key pressed there is the control's, never the mode's.
  */
-export function keyIsForField(): boolean {
+const OWNS_KEYS = [
+    "[role=menu]",
+    "[role=menuitem]",
+    "[role=dialog]",
+    "[role=alertdialog]",
+    "input",
+    "textarea",
+    "select",
+    "[contenteditable]:not([contenteditable=false])",
+    "[role=switch]",
+    "[role=checkbox]",
+    "[role=radio]",
+    "[role=radiogroup]",
+    "[role=slider]",
+    "[role=spinbutton]",
+    "[role=combobox]",
+    "[role=tab]",
+    // A listbox, but not the inspector's list of lines: its rows stand for lines
+    "[role=listbox]:not([data-field-line-list])",
+].join(", ");
+
+/** The element a key press being handled now went to, or null for anything else */
+function keyTarget(): HTMLElement | null {
     // The event being handled right now, when there is one (deprecated, but the one way to
     // tell a key's run from a click's inside `enabled`)
     const current = (window as { event?: Event }).event;
-    if (!(current instanceof KeyboardEvent)) return true;
+    if (!(current instanceof KeyboardEvent)) return null;
     const active = document.activeElement;
-    if (!active || active === document.body) return true;
-    if (!(active instanceof HTMLElement)) return true;
+    if (!(active instanceof HTMLElement) || active === document.body)
+        return null;
+    return active;
+}
+
+/**
+ * Whether Tab or Enter belongs to the field rather than a control: on a focused button, field
+ * or row in the bar or the inspector they're that control's (Tab moves on, Enter presses it),
+ * and in the line menu and popover they're theirs. Anything that isn't a key press (a menu
+ * entry, a button, the palette) is the field's.
+ */
+export function keyIsForField(): boolean {
+    const active = keyTarget();
+    if (!active) return true;
+    if (active.closest(OWNS_KEYS)) return false;
     return (
         active.closest("[data-field-edit-overlay]") !== null ||
-        active.closest("[data-testid='threeField']") !== null
+        active.closest("[data-testid='threeField']") !== null ||
+        // Enter on a row of the inspector's list edits its line
+        active.closest("[data-field-line-list] [role=option]") !== null
     );
+}
+
+/**
+ * Whether a single key (Delete, H, R, M, X, Y, the arrows, ⌘A) acts on the lines: anywhere but
+ * in the line menu, the line popover, a dialog or a form control, whose keys are their own (an
+ * arrow moves a slider, H in the popover is typed or ignored). A focused button keeps none of
+ * these, so after clicking Hide/Show in the bar, H still hides.
+ */
+export function keyIsForLines(): boolean {
+    const active = keyTarget();
+    return !active || active.closest(OWNS_KEYS) === null;
 }
 
 /** Selects the lines an add made, so the next key (Enter, H, Delete) acts on them */
@@ -61,6 +111,12 @@ export function selectAdded(result: FieldEditResult | null) {
 export function useFieldEditModeEntry() {
     const databaseReady = useDatabaseReady();
     const { setSelectedMarchers } = useSelectedMarchers() ?? {};
+    // The mode belongs to the show that's open: a show opening starts outside it, and closing
+    // the show (or switching to another) leaves it, with nothing picked, open or dragged
+    useEffect(() => {
+        fieldEditMode.exit();
+        return () => fieldEditMode.exit();
+    }, []);
     // Preview edits nothing: switching to it leaves the mode
     const preview = useIsPreviewMode();
     useEffect(() => {
@@ -102,6 +158,7 @@ export function useFieldEditModeActions() {
     const now = () =>
         fp ? existingSelection(fp, fieldEditMode.get().selection) : [];
     const mirrorNow = () => fieldEditMode.get().mirror;
+    useFieldImageActions(fp);
 
     // Done (the bar, the palette) leaves at once; Escape first closes the menu or popover, then
     // drops the pick, then leaves
@@ -122,8 +179,14 @@ export function useFieldEditModeActions() {
             label: t(
                 mirror ? "actions.field.mirrorOff" : "actions.field.mirrorOn",
             ),
+            enabled: keyIsForLines,
         },
     );
+
+    // F6 and Shift+F6: the keyboard's way between the field (where Tab walks lines), the bar and
+    // the inspector
+    useActionHandler("fieldEditNextPane", () => focusFieldEditPane(1));
+    useActionHandler("fieldEditPreviousPane", () => focusFieldEditPane(-1));
 
     const addAt = (axis: "x" | "y") => {
         if (!fp) return;
@@ -139,10 +202,10 @@ export function useFieldEditModeActions() {
         void apply(addLineEdit(axis, steps, mirrorNow())).then(selectAdded);
     };
     useActionHandler("fieldEditAddXLine", () => addAt("x"), {
-        enabled: !!fp,
+        enabled: () => !!fp && keyIsForLines(),
     });
     useActionHandler("fieldEditAddYLine", () => addAt("y"), {
-        enabled: !!fp,
+        enabled: () => !!fp && keyIsForLines(),
     });
 
     useActionHandler(
@@ -165,7 +228,7 @@ export function useFieldEditModeActions() {
                 if (result?.diff.ok) fieldEditMode.select([]);
             });
         },
-        { enabled: hasSelection },
+        { enabled: () => hasSelection && keyIsForLines() },
     );
 
     useActionHandler(
@@ -175,7 +238,7 @@ export function useFieldEditModeActions() {
                 fp && toggleLinesEdit(fp, now(), "visible", mirrorNow());
             if (edit) void apply(edit);
         },
-        { enabled: hasSelection },
+        { enabled: () => hasSelection && keyIsForLines() },
     );
     useActionHandler(
         "fieldEditToggleReference",
@@ -184,7 +247,7 @@ export function useFieldEditModeActions() {
                 fp && toggleLinesEdit(fp, now(), "useAsReference", mirrorNow());
             if (edit) void apply(edit);
         },
-        { enabled: hasSelection },
+        { enabled: () => hasSelection && keyIsForLines() },
     );
 
     useActionHandler(
@@ -203,7 +266,9 @@ export function useFieldEditModeActions() {
         enabled: !!fp,
     });
     // ⌘A / Ctrl+A selects lines here: marchers can't be picked in the mode
-    useActionHandler("selectAllMarchers", selectEvery, { enabled: !!fp });
+    useActionHandler("selectAllMarchers", selectEvery, {
+        enabled: () => !!fp && keyIsForLines(),
+    });
     useActionHandler(
         "fieldEditSelectAllXLines",
         () => fp && fieldEditMode.select(selectAll(fp, "x")),
@@ -247,6 +312,6 @@ export function useFieldEditModeActions() {
             const edit = nudgeLinesEdit(fp, now(), axis, by, mirrorNow());
             if (edit) void apply(edit);
         },
-        { enabled: hasSelection },
+        { enabled: () => hasSelection && keyIsForLines() },
     );
 }

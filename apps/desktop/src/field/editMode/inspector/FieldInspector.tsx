@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
     DEFAULT_FIELD_THEME,
     FieldProperties,
@@ -7,9 +7,9 @@ import {
 } from "@openmarch/core";
 import { useTolgee, useTranslate } from "@tolgee/react";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
 import {
     Button,
+    getButtonClassName,
     Select,
     SelectContent,
     SelectGroup,
@@ -21,13 +21,8 @@ import { InspectorCollapsible } from "@/components/inspector/InspectorCollapsibl
 import ColorPicker from "@/components/ui/ColorPicker";
 import { fieldLengthText } from "@/components/field/customizer/fieldSizeText";
 import { shapeIcons, shapeOptions } from "@/components/field/customizer/utils";
-import {
-    deleteFieldPropertiesImage,
-    updateFieldPropertiesImage,
-} from "@/global/classes/FieldProperties";
-import { fieldPropertiesKeys } from "@/hooks/queries/useFieldProperties";
 import { useFieldImage } from "@/view3d/window/useFieldImage";
-import { touchSafeAccept } from "@/utilities/fileAccept";
+import ActionButton from "@/shortcuts/ActionButton";
 import type { FieldSettingsPatch } from "@/field/edits";
 import { useApplyFieldEdits, useFieldProperties } from "../useApplyFieldEdits";
 import { fieldSizeSteps } from "../lines";
@@ -55,6 +50,9 @@ export default function FieldInspector() {
         <div
             className="rounded-6 border-stroke bg-fg-1 flex h-full w-xs min-w-0 flex-col border p-12"
             data-testid="field-inspector"
+            data-field-edit-pane="inspector"
+            role="region"
+            aria-label={t("fieldEditMode.inspector.title")}
         >
             <p className="text-body text-text/60">
                 {t("fieldEditMode.inspector.title")}
@@ -456,12 +454,8 @@ function MarkingsSection({ fp }: { fp: FieldProperties }) {
 function ImageSection({ fp }: { fp: FieldProperties }) {
     const { t } = useTranslate();
     const set = useSettings();
-    const queryClient = useQueryClient();
     const { image } = useFieldImage();
-    const input = useRef<HTMLInputElement>(null);
     const [opacity, setOpacity] = useState<number | null>(null);
-    const refresh = () =>
-        queryClient.invalidateQueries({ queryKey: fieldPropertiesKeys.all });
     const ratio = (w: number, h: number) =>
         h > 0 ? String(Number((w / h).toFixed(2))) : "–";
     return (
@@ -523,50 +517,22 @@ function ImageSection({ fp }: { fp: FieldProperties }) {
                 />
             </label>
             <div className="flex flex-wrap gap-8">
-                <Button
-                    size="compact"
-                    variant="secondary"
-                    onClick={() => input.current?.click()}
+                <ActionButton
+                    action="fieldEditImportImage"
+                    data-testid="field-image-import"
+                    className={`${getButtonClassName({ variant: "secondary", size: "compact" })} text-body`}
                 >
                     {t("fieldProperties.buttons.importImage")}
-                </Button>
+                </ActionButton>
                 {image && (
-                    <Button
-                        size="compact"
-                        variant="secondary"
-                        className="text-red"
+                    <ActionButton
+                        action="fieldEditRemoveImage"
                         data-testid="field-image-remove"
-                        onClick={async () => {
-                            await deleteFieldPropertiesImage();
-                            await refresh();
-                        }}
+                        className={`${getButtonClassName({ variant: "secondary", size: "compact" })} text-body text-red`}
                     >
                         {t("fieldEditMode.image.remove")}
-                    </Button>
+                    </ActionButton>
                 )}
-                <input
-                    ref={input}
-                    type="file"
-                    className="hidden"
-                    accept={touchSafeAccept("image/*")}
-                    onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        e.target.value = "";
-                        if (!file) return;
-                        await updateFieldPropertiesImage(
-                            new Uint8Array(await file.arrayBuffer()),
-                        );
-                        await refresh();
-                        if (
-                            !fp.showFieldImage ||
-                            fp.backgroundImageOpacity === 0
-                        )
-                            set({
-                                showFieldImage: true,
-                                backgroundImageOpacity: 1,
-                            });
-                    }}
-                />
             </div>
             <p
                 className="text-sub text-text/60"

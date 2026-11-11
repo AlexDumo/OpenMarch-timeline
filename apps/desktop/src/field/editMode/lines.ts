@@ -124,45 +124,6 @@ export function fieldScreenRect(
     };
 }
 
-/** How near a press (element px) has to be to a line to take it */
-export const LINE_HIT_PX = 6;
-
-/**
- * The line a press at `point` (element px) takes: the nearest within `tolerance` px, X lines
- * along the field's depth and Y lines along its width (with the same tolerance past each end).
- * A tie goes to the selected line, so a press can always grab what's selected.
- */
-export function hitTestLine(
-    fp: FieldProperties,
-    view: Pick<FieldView, "zoom" | "panX" | "panY">,
-    point: { x: number; y: number },
-    {
-        tolerance = LINE_HIT_PX,
-        prefer = [],
-    }: { tolerance?: number; prefer?: readonly FieldLineRef[] } = {},
-): Checkpoint | null {
-    const rect = fieldScreenRect(fp, view);
-    let best: { checkpoint: Checkpoint; distance: number } | null = null;
-    for (const checkpoint of allLines(fp)) {
-        const along = checkpoint.axis === "x" ? point.y : point.x;
-        const [from, to] =
-            checkpoint.axis === "x"
-                ? [rect.top, rect.bottom]
-                : [rect.left, rect.right];
-        if (along < from - tolerance || along > to + tolerance) continue;
-        const across = checkpoint.axis === "x" ? point.x : point.y;
-        const distance = Math.abs(across - lineScreen(fp, view, checkpoint));
-        if (distance > tolerance) continue;
-        const preferred = prefer.some((ref) =>
-            sameLine(ref, toRef(checkpoint)),
-        );
-        const score = distance - (preferred ? 0.5 : 0);
-        if (!best || score < best.distance)
-            best = { checkpoint, distance: score };
-    }
-    return best?.checkpoint ?? null;
-}
-
 /**
  * The lines a box (element px, any corner order) takes: a line is taken when it runs through the
  * box, so a thin box across the field between the hashes takes the yard lines and no hash.
@@ -212,6 +173,14 @@ export function dragSteps(
 
 /** How thick each ruler is, in element px. The X ruler runs along the top, the Y ruler down the left. */
 export const RULER_PX = 22;
+/** The rulers in the touch layout: a finger's width, so the tabs and the strip can be hit */
+export const TOUCH_RULER_PX = 44;
+
+/** How thick the rulers are in the current layout: desktop keeps its density, touch gets 44 px */
+export const rulerPx = (touch: boolean) => (touch ? TOUCH_RULER_PX : RULER_PX);
+
+/** Half the width of the strip a press takes a line in, in element px (44 px wide with a finger) */
+export const linePadPx = (touch: boolean) => (touch ? 22 : 5);
 
 /** Whether an element point is over an axis's ruler: where a drag deletes, or starts a new line */
 export function overRuler(
@@ -220,6 +189,23 @@ export function overRuler(
     ruler = RULER_PX,
 ): boolean {
     return axis === "x" ? point.y <= ruler : point.x <= ruler;
+}
+
+/**
+ * Whether a line drag at `point` is over its ruler, where letting go deletes it. A drag that
+ * starts on a ruler tab is already over the ruler, and sliding the tab along its ruler moves the
+ * line: it only counts once the drag has left the ruler and come back. `armed` is whether it
+ * has left (start with `!fromTab`); the result's `armed` is the value to keep for the next move.
+ */
+export function dragOverRuler(
+    axis: FieldAxis,
+    point: { x: number; y: number },
+    armed: boolean,
+    ruler = RULER_PX,
+): { over: boolean; armed: boolean } {
+    const inRuler = overRuler(axis, point, ruler);
+    const nowArmed = armed || !inRuler;
+    return { over: nowArmed && inRuler, armed: nowArmed };
 }
 
 /** The name a line goes by in readouts and lists: "S1 45", "50", "FH" */

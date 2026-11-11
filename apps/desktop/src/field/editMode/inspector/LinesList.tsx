@@ -91,6 +91,16 @@ export function lineRows(
 }
 
 /**
+ * Whether the outermost X lines are different distances from the center. The field is drawn
+ * centered between them (B8), so the 50 then isn't where the lines say it is.
+ */
+export function xLinesAsymmetric(fp: Pick<FieldProperties, "xCheckpoints">) {
+    if (fp.xCheckpoints.length === 0) return false;
+    const xs = fp.xCheckpoints.map((c) => c.stepsFromCenterFront);
+    return Math.abs(Math.min(0, ...xs) + Math.max(0, ...xs)) > 1e-6;
+}
+
+/**
  * The inspector's list of lines (#824), linked to the field: one row per line (a mirrored pair is
  * one row), a + in each gap that adds a line halfway, and the same pick and hover as the field
  * (a row lights its line, a line lights its row). Each row's eye and target hide or show the line
@@ -150,6 +160,7 @@ export function LinesList({ fp }: { fp: FieldProperties }) {
             <div
                 className="flex flex-col"
                 role="listbox"
+                data-field-line-list
                 aria-multiselectable
                 aria-label={t(
                     axis === "x"
@@ -313,6 +324,15 @@ export function LinesList({ fp }: { fp: FieldProperties }) {
                     {fp.xCheckpoints.length}
                 </span>
             </div>
+            {xLinesAsymmetric(fp) && (
+                <p
+                    role="status"
+                    data-testid="field-lines-asymmetric"
+                    className="rounded-6 border-red/40 bg-red/10 text-red text-sub border px-8 py-6"
+                >
+                    {t("fieldEditMode.list.asymmetric")}
+                </p>
+            )}
             {axisList("x")}
             <div className="flex items-center justify-between gap-8">
                 <p className="text-body font-medium">

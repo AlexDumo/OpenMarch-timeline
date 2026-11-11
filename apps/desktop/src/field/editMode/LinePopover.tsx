@@ -30,14 +30,20 @@ import { moveLineEdit } from "./lineCommands";
 import { useApplyFieldEdits } from "./useApplyFieldEdits";
 import { useDraft } from "./useDraft";
 import { Numpad } from "./Numpad";
+import { keepKeysInside, returnFocusToField } from "./keepKeysInside";
 
 const POPOVER_WIDTH = 320;
 
 /**
  * A line's exact values (#824): double-click or Enter on a line (a tap on a picked line with a
  * finger). Position (typed as steps, `+4`, `47.5yd` or `85.33/2`), names, yard number, visible and
- * reference. Enter or Done saves the position and names as one undo step; the switches save at
- * once, like H and R. With Mirror on, the twin gets the same (side names swapped).
+ * reference. Everything in it is a draft until Enter or Done, which saves it all as one undo step;
+ * Escape or the close button leaves the line as it was. (H and R on the field, and the menu, the
+ * bar and the list's row buttons, change visible and reference at once.) With Mirror on, the twin
+ * gets the same (side names swapped).
+ *
+ * Keys pressed in it are its own (Tab moves between its controls, Enter saves, Space flips a
+ * switch): they don't reach the field's shortcuts.
  */
 export function LinePopover({
     fp,
@@ -64,7 +70,16 @@ export function LinePopover({
     const [shortName, setShortName] = useDraft(checkpoint?.terseName ?? "");
     const [name, setName] = useDraft(checkpoint?.name ?? "");
     const [label, setLabel] = useDraft(checkpoint?.fieldLabel ?? "");
+    const [visible, setVisible] = useDraft(checkpoint?.visible ?? true);
+    const [reference, setReference] = useDraft(
+        checkpoint?.useAsReference ?? false,
+    );
     const positionInput = useRef<HTMLInputElement>(null);
+    const form = useRef<HTMLFormElement>(null);
+    const close = () => {
+        returnFocusToField(form.current);
+        fieldEditMode.edit(null);
+    };
     useEffect(() => {
         positionInput.current?.focus();
         positionInput.current?.select();
@@ -93,24 +108,22 @@ export function LinePopover({
             patch.shortName = shortName.trim();
         if (isX && label.trim() !== (checkpoint.fieldLabel ?? ""))
             patch.fieldLabel = label.trim() === "" ? null : label.trim();
+        if (visible !== checkpoint.visible) patch.visible = visible;
+        if (reference !== checkpoint.useAsReference)
+            patch.useAsReference = reference;
         if (Object.keys(patch).length > 0)
             edits.push({
                 edit: "updateCheckpoints",
                 args: { ids: [line], patch, mirror: mirror && isX },
             });
         if (edits.length === 0) {
-            fieldEditMode.edit(null);
+            close();
             return;
         }
         void apply(edits).then((result) => {
-            if (result?.diff.ok) fieldEditMode.edit(null);
+            if (result?.diff.ok) close();
         });
     };
-    const toggle = (key: "visible" | "useAsReference", on: boolean) =>
-        void apply({
-            edit: "updateCheckpoints",
-            args: { ids: [line], patch: { [key]: on }, mirror: mirror && isX },
-        });
 
     // Beside the line: right of an X line, below a Y line, kept on screen
     const rect = fieldScreenRect(fp, view);
@@ -148,6 +161,7 @@ export function LinePopover({
 
     return (
         <form
+            ref={form}
             role="dialog"
             aria-label={lineLabel(fp, checkpoint)}
             data-testid="field-line-popover"
@@ -163,9 +177,9 @@ export function LinePopover({
             onKeyDown={(e) => {
                 if (e.key === "Escape") {
                     e.preventDefault();
-                    e.stopPropagation();
-                    fieldEditMode.edit(null);
+                    close();
                 }
+                keepKeysInside(e);
             }}
             onSubmit={(e) => {
                 e.preventDefault();
@@ -183,7 +197,7 @@ export function LinePopover({
                     type="button"
                     aria-label={t("fieldEditMode.popover.close")}
                     className="hover:text-red"
-                    onClick={() => fieldEditMode.edit(null)}
+                    onClick={close}
                 >
                     <XIcon size={16} />
                 </button>
@@ -277,21 +291,19 @@ export function LinePopover({
             <div className="flex flex-wrap items-center gap-16">
                 <label className="text-body flex items-center gap-8">
                     <Switch
-                        checked={checkpoint.visible}
-                        onCheckedChange={(on) => toggle("visible", on)}
+                        checked={visible}
+                        onCheckedChange={setVisible}
                         data-testid="field-line-visible"
                     />
                     {t("fieldEditMode.popover.visible")}
-                    <Shortcut action="fieldEditToggleVisible" />
                 </label>
                 <label className="text-body flex items-center gap-8">
                     <Switch
-                        checked={checkpoint.useAsReference}
-                        onCheckedChange={(on) => toggle("useAsReference", on)}
+                        checked={reference}
+                        onCheckedChange={setReference}
                         data-testid="field-line-reference"
                     />
                     {t("fieldEditMode.popover.reference")}
-                    <Shortcut action="fieldEditToggleReference" />
                 </label>
             </div>
             {mirror && twin && (
@@ -307,7 +319,7 @@ export function LinePopover({
                     type="button"
                     className={`${getButtonClassName({ variant: "secondary", size: "compact" })} text-red text-body`}
                     onClick={() => {
-                        fieldEditMode.edit(null);
+                        close();
                         fieldEditMode.select([line]);
                         runAction("fieldEditDeleteLines");
                     }}

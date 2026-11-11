@@ -8,17 +8,20 @@ import { isToggleOn } from "@/stores/TouchModifierStore";
 import {
     DRAG_SNAP_STEPS,
     FINE_DRAG_SNAP_STEPS,
-    RULER_PX,
+    dragOverRuler,
     dragSteps,
     fieldScreenRect,
     fieldToSteps,
+    findLine,
     lineKey,
     lineLabel,
     lineReadout,
     lineScreen,
     linesInBox,
     linesOn,
+    linePadPx,
     overRuler,
+    rulerPx,
     sameLine,
     screenToField,
     stepsToField,
@@ -30,6 +33,7 @@ import {
     clickLine,
     existingSelection,
     isSelected,
+    selectionForEdit,
     selectionWithTwins,
 } from "./lineSelection";
 import {
@@ -66,6 +70,11 @@ type Press =
           dragging: boolean;
           /** The lines a drag moves */
           moving: FieldLineRef[];
+          /**
+           * Whether letting go over the ruler deletes: from the field at once; from a ruler tab
+           * only once the drag has left the ruler (sliding a tab along it moves the line)
+           */
+          armed: boolean;
       }
     | {
           kind: "ruler";
@@ -110,10 +119,17 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
     const menu = useFieldEditModeStore((s) => s.menu);
     const selectMany = useFieldEditModeStore((s) => s.selectMany);
     const selection = existingSelection(fp, storedSelection);
-    // An undo can take a picked line away: forget it
+    // An undo can take a picked line away: forget it, and close its popover or menu
     useEffect(() => {
         if (selection !== storedSelection) fieldEditMode.select(selection);
     }, [selection, storedSelection]);
+    const editingGone = editing !== null && !findLine(fp, editing);
+    const menuGone = menu !== null && !findLine(fp, menu.line);
+    useEffect(() => {
+        if (editingGone) fieldEditMode.edit(null);
+        if (menuGone) fieldEditMode.openMenu(null);
+    }, [editingGone, menuGone]);
+    const ruler = rulerPx(isTouch);
 
     const root = useRef<HTMLDivElement>(null);
     const press = useRef<Press | null>(null);
@@ -147,21 +163,30 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
         press.current = null;
         clearLongPress();
         setBox(null);
+        setPointerAt(null);
         fieldEditMode.setDrag(null);
     }, []);
-    // Escape lets go of a drag without changing anything
+    // Escape during a press lets go of it without changing anything, whether or not it has
+    // started to drag; it doesn't also leave the mode (or drop the pick) while the button is held
     useEffect(() => {
-        if (!drag && !box) return;
         const onKey = (event: KeyboardEvent) => {
-            if (event.key !== "Escape") return;
+            if (event.key !== "Escape" || !press.current) return;
             event.preventDefault();
             event.stopPropagation();
             cancel();
         };
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
-    }, [drag, box, cancel]);
+    }, [cancel]);
     useEffect(() => cancel, [cancel]);
+    // A press on the field takes the keyboard there, so Tab walks lines rather than the
+    // inspector's controls (F6 moves between the field, the bar and the inspector)
+    const focusField = () => root.current?.focus({ preventScroll: true });
+    // Entering the mode gives the field the keyboard, wherever it was entered from (the
+    // sidebar's button, the palette)
+    useEffect(() => {
+        root.current?.focus({ preventScroll: true });
+    }, []);
 
     const rect = fieldScreenRect(fp, view);
     const highlighted = useMemo(
@@ -176,9 +201,14 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
 
     /* -------------------------------------------------------------- presses on a line */
 
-    const onLineDown = (event: React.PointerEvent, line: Checkpoint) => {
+    const onLineDown = (
+        event: React.PointerEvent,
+        line: Checkpoint,
+        fromTab = false,
+    ) => {
         if (event.button !== 0 || press.current) return;
         event.stopPropagation();
+        focusField();
         (event.currentTarget as Element).setPointerCapture?.(event.pointerId);
         const ref = toRef(line);
         const additive = event.shiftKey || selectMany;
@@ -202,6 +232,7 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                 isSelected(current, ref) && sameAxis.length > 1
                     ? [ref, ...sameAxis.filter((r) => !sameLine(r, ref))]
                     : [ref],
+            armed: !fromTab,
         };
         if (event.pointerType !== "mouse") {
             const at = local(event);
@@ -217,6 +248,7 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
     const onRulerDown = (event: React.PointerEvent, axis: "x" | "y") => {
         if (event.button !== 0 || press.current) return;
         event.stopPropagation();
+        focusField();
         (event.currentTarget as Element).setPointerCapture?.(event.pointerId);
         press.current = {
             kind: "ruler",
@@ -230,6 +262,7 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
     const onSurfaceDown = (event: React.PointerEvent) => {
         // A finger on the open field pans it (navigation); a mouse or pen draws a box
         if (event.button !== 0 || press.current) return;
+        focusField();
         (event.currentTarget as Element).setPointerCapture?.(event.pointerId);
         const at = local(event);
         press.current = {
@@ -287,11 +320,17 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
             axis === "x" ? at.x : at.y,
             snapFor(event),
         );
+        let over: boolean;
+        if (p.kind === "line") {
+            const drop = dragOverRuler(axis, at, p.armed, ruler);
+            p.armed = drop.armed;
+            over = drop.over;
+        } else over = overRuler(axis, at, ruler);
         const next: FieldEditDrag = {
             kind: p.kind === "ruler" ? "add" : "move",
             axis,
             steps,
-            overRuler: overRuler(axis, at),
+            overRuler: over,
             lines: p.kind === "line" ? p.moving : [],
         };
         fieldEditMode.setDrag(next);
@@ -367,15 +406,18 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
     const dragged = new Set((drag?.lines ?? []).map(lineKey));
     const ghost = drag && !drag.overRuler ? ghostLines(fp, drag, mirror) : [];
     const stepPx = fp.pixelsPerStep * view.zoom;
-    const touchPad = isTouch ? 10 : 5;
+    const touchPad = linePadPx(isTouch);
 
     return (
         <div
             ref={root}
             data-field-edit-overlay
+            data-field-edit-pane="field"
             data-testid="field-edit-overlay"
+            tabIndex={-1}
+            aria-label={t("fieldEditMode.fieldPane")}
             className={clsx(
-                "absolute inset-0 z-30 touch-none select-none",
+                "focus-visible:outline-accent absolute inset-0 z-30 touch-none outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2",
                 drag?.overRuler && "cursor-not-allowed",
             )}
             onPointerMove={onMove}
@@ -474,21 +516,21 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                         ? {
                               left: at - touchPad,
                               width: touchPad * 2,
-                              top: Math.max(rect.top, RULER_PX),
+                              top: Math.max(rect.top, ruler),
                               height: Math.max(
                                   0,
                                   Math.min(rect.bottom, height) -
-                                      Math.max(rect.top, RULER_PX),
+                                      Math.max(rect.top, ruler),
                               ),
                           }
                         : {
                               top: at - touchPad,
                               height: touchPad * 2,
-                              left: Math.max(rect.left, RULER_PX),
+                              left: Math.max(rect.left, ruler),
                               width: Math.max(
                                   0,
                                   Math.min(rect.right, width) -
-                                      Math.max(rect.left, RULER_PX),
+                                      Math.max(rect.left, ruler),
                               ),
                           };
                 return (
@@ -530,6 +572,8 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                 view={view}
                 length={width}
                 stepPx={stepPx}
+                thickness={ruler}
+                touch={isTouch}
                 highlighted={highlighted}
                 hover={hover}
                 onRulerDown={onRulerDown}
@@ -552,6 +596,8 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                 view={view}
                 length={height}
                 stepPx={stepPx}
+                thickness={ruler}
+                touch={isTouch}
                 highlighted={highlighted}
                 hover={hover}
                 onRulerDown={onRulerDown}
@@ -571,7 +617,7 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
             {/* The corner where the rulers meet */}
             <div
                 className="bg-fg-1 border-stroke absolute top-0 left-0 z-10 border-r border-b"
-                style={{ width: RULER_PX, height: RULER_PX }}
+                style={{ width: ruler, height: ruler }}
             />
 
             {drag && pointerAt && (
@@ -616,7 +662,14 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                 </div>
             )}
 
-            {menu && <LineMenu fp={fp} line={menu.line} at={menu.at} />}
+            {menu && (
+                <LineMenu
+                    fp={fp}
+                    line={menu.line}
+                    at={menu.at}
+                    bounds={{ width, height }}
+                />
+            )}
             {editing && (
                 <LinePopover
                     key={lineKey(editing)}
@@ -641,7 +694,7 @@ function fieldToScreenAxis(
 }
 
 /** Where a drag would put its lines (and with mirror, their twins) */
-function ghostLines(
+export function ghostLines(
     fp: FieldProperties,
     drag: FieldEditDrag,
     mirror: boolean,
@@ -655,8 +708,9 @@ function ghostLines(
             { axis: drag.axis, steps: drag.steps, twin: false },
             ...mirrored(drag.steps),
         ];
-    // The pressed line (listed first) goes to `steps`; the others move as far
-    const lines = drag.lines.flatMap(
+    // The pressed line (listed first) goes to `steps`; the others move as far. With mirror on,
+    // one of each picked pair: the other is drawn as its twin
+    const lines = selectionForEdit(fp, drag.lines, mirror).flatMap(
         (ref) =>
             (ref.axis === "x" ? fp.xCheckpoints : fp.yCheckpoints).find(
                 (c) => c.id === ref.id,
@@ -682,6 +736,8 @@ function Ruler({
     view,
     length,
     stepPx,
+    thickness,
+    touch,
     highlighted,
     hover,
     onRulerDown,
@@ -695,10 +751,17 @@ function Ruler({
     view: { zoom: number; panX: number; panY: number };
     length: number;
     stepPx: number;
+    /** How thick the ruler is, in px: 22, or 44 in the touch layout */
+    thickness: number;
+    touch: boolean;
     highlighted: ReadonlySet<string>;
     hover: FieldLineRef | null;
     onRulerDown: (event: React.PointerEvent, axis: "x" | "y") => void;
-    onLineDown: (event: React.PointerEvent, line: Checkpoint) => void;
+    onLineDown: (
+        event: React.PointerEvent,
+        line: Checkpoint,
+        fromTab: boolean,
+    ) => void;
     onLineDoubleClick: (ref: FieldLineRef) => void;
     onRulerDoubleClick: (axis: "x" | "y", pixel: number) => void;
     title: string;
@@ -719,15 +782,27 @@ function Ruler({
     const lines = linesOn(fp, axis);
     const positions = lines.map((c) => lineScreen(fp, view, c));
     // Room for a name between neighbors? Else a slim tab
-    const roomy = (i: number) => {
-        const gap = Math.min(
-            i > 0 ? positions[i]! - positions[i - 1]! : Infinity,
-            i < positions.length - 1
-                ? positions[i + 1]! - positions[i]!
-                : Infinity,
+    const gapAt = (i: number) =>
+        Math.abs(
+            Math.min(
+                i > 0 ? positions[i]! - positions[i - 1]! : Infinity,
+                i < positions.length - 1
+                    ? positions[i + 1]! - positions[i]!
+                    : Infinity,
+            ),
         );
-        return Math.abs(gap) >= (horizontal ? 30 : 18);
-    };
+    const roomy = (i: number) => gapAt(i) >= (horizontal ? 30 : 18);
+    // Along the ruler: a name's width, or slim; with a finger, as wide as the gap allows, up to 44
+    const tabLength = (i: number, named: boolean) =>
+        touch
+            ? Math.max(6, Math.min(44, gapAt(i) - 2))
+            : horizontal
+              ? named
+                  ? 28
+                  : 6
+              : named
+                ? 16
+                : 6;
     const local = (event: React.MouseEvent) => {
         const rect = (
             event.currentTarget as HTMLElement
@@ -747,7 +822,7 @@ function Ruler({
                     ? "top-0 right-0 left-0 border-b"
                     : "top-0 bottom-0 left-0 border-r",
             )}
-            style={horizontal ? { height: RULER_PX } : { width: RULER_PX }}
+            style={horizontal ? { height: thickness } : { width: thickness }}
             onPointerDown={(e) => onRulerDown(e, axis)}
             onDoubleClick={(e) => {
                 if (e.target === e.currentTarget)
@@ -765,8 +840,8 @@ function Ruler({
                             key={tick.at}
                             x1={tick.at}
                             x2={tick.at}
-                            y1={RULER_PX - size}
-                            y2={RULER_PX}
+                            y1={thickness - size}
+                            y2={thickness}
                             className="stroke-text-subtitle"
                             strokeWidth={1}
                         />
@@ -775,8 +850,8 @@ function Ruler({
                             key={tick.at}
                             y1={tick.at}
                             y2={tick.at}
-                            x1={RULER_PX - size}
-                            x2={RULER_PX}
+                            x1={thickness - size}
+                            x2={thickness}
                             className="stroke-text-subtitle"
                             strokeWidth={1}
                         />
@@ -791,6 +866,7 @@ function Ruler({
                 const lit = highlighted.has(key);
                 const hovered = hover && sameLine(hover, ref);
                 const named = roomy(i);
+                const along = tabLength(i, named);
                 return (
                     <div
                         key={key}
@@ -813,19 +889,19 @@ function Ruler({
                         style={
                             horizontal
                                 ? {
-                                      left: at - (named ? 14 : 3),
-                                      width: named ? 28 : 6,
+                                      left: at - along / 2,
+                                      width: along,
                                       top: 3,
-                                      height: RULER_PX - 6,
+                                      height: thickness - 6,
                                   }
                                 : {
-                                      top: at - (named ? 8 : 3),
-                                      height: named ? 16 : 6,
+                                      top: at - along / 2,
+                                      height: along,
                                       left: 2,
-                                      width: RULER_PX - 4,
+                                      width: thickness - 4,
                                   }
                         }
-                        onPointerDown={(e) => onLineDown(e, c)}
+                        onPointerDown={(e) => onLineDown(e, c, true)}
                         onPointerEnter={() => fieldEditMode.setHover(ref)}
                         onPointerLeave={() => fieldEditMode.setHover(null)}
                         onDoubleClick={(e) => {

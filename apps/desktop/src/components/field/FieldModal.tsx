@@ -1,7 +1,4 @@
-import { useSidebarModalStore } from "@/stores/SidebarModalStore";
-import { XIcon } from "@phosphor-icons/react";
-import FieldProperties from "./FieldPropertiesSettings";
-import { T, useTranslate } from "@tolgee/react";
+import { useTranslate } from "@tolgee/react";
 import clsx from "clsx";
 import ActionButton from "@/shortcuts/ActionButton";
 import { useIsFieldEditMode } from "@/field/editMode/fieldEditModeStore";
@@ -27,33 +24,6 @@ export default function FieldModal() {
         >
             <FieldIcon />
         </ActionButton>
-    );
-}
-
-/** The old side panel's contents (template, import/export, customizer); the mode replaced it */
-export function FieldPropertiesContents() {
-    const { t } = useTranslate();
-    const { toggleOpen } = useSidebarModalStore();
-
-    return (
-        <div className="animate-scale-in text-text flex h-full w-fit flex-col gap-16">
-            <header className="flex items-center justify-between gap-24">
-                <h4 className="text-h4 leading-none">
-                    <T keyName="field.title" />
-                </h4>
-                <div className="flex items-center gap-8">
-                    <button
-                        aria-label={t("sidebar.close")}
-                        onClick={toggleOpen}
-                        className="hover:text-red duration-150 ease-out"
-                    >
-                        <XIcon size={24} />
-                    </button>
-                </div>
-            </header>
-
-            <FieldProperties />
-        </div>
     );
 }
 

@@ -28,7 +28,7 @@ import {
     type FieldTemplateId,
 } from "@/field/edits";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
-import { baseTemplateOf } from "../fieldEditPlans";
+import { baseTemplateOf, changesFromTemplate } from "../fieldEditPlans";
 import { fieldSizeSteps } from "../lines";
 import { useApplyFieldEdits } from "../useApplyFieldEdits";
 
@@ -39,15 +39,22 @@ const idOfName = (name: string): FieldTemplateId | undefined =>
 
 /**
  * The field's template and files (#824): switch to another template through a sheet that says
- * what changes (lines, size) and keeps the look by default (B11), import and export a .fieldots
- * file, and the guide.
+ * what changes (lines, size) and keeps the look by default (B11), reset to the field's own
+ * template through the same sheet (picking it again in the list would change nothing, so it has
+ * its own button), import and export a .fieldots file, and the guide.
  */
 export function TemplateSection({ fp }: { fp: FieldProperties }) {
     const { t } = useTranslate();
     const apply = useApplyFieldEdits();
     const base = baseTemplateOf(fp);
+    const changes = useMemo(
+        () => (base ? changesFromTemplate(fp, base.template) : 0),
+        [fp, base],
+    );
     const [picked, setPicked] = useState<FieldTemplateId | null>(null);
     const [keepLook, setKeepLook] = useState(true);
+    // Back to the template the field is based on, rather than a switch to another
+    const resetting = picked !== null && picked === base?.id;
     const preview = useMemo(
         () =>
             picked
@@ -111,6 +118,23 @@ export function TemplateSection({ fp }: { fp: FieldProperties }) {
                     </SelectContent>
                 </Select>
             </label>
+            {base && (
+                <Button
+                    variant="secondary"
+                    size="compact"
+                    className="w-fit"
+                    data-testid="field-template-reset"
+                    disabled={changes === 0}
+                    onClick={() => {
+                        setKeepLook(true);
+                        setPicked(base.id);
+                    }}
+                >
+                    {t("fieldEditMode.template.reset", {
+                        template: base.template.name,
+                    })}
+                </Button>
+            )}
             <FieldIoButtons />
             <a
                 className="text-sub text-accent w-fit hover:underline"
@@ -129,15 +153,20 @@ export function TemplateSection({ fp }: { fp: FieldProperties }) {
             >
                 <AlertDialogContent>
                     <AlertDialogTitle>
-                        {t("fieldEditMode.template.title", {
-                            template: picked
-                                ? (
-                                      FieldPropertiesTemplates[
-                                          picked
-                                      ] as FieldProperties
-                                  ).name
-                                : "",
-                        })}
+                        {t(
+                            resetting
+                                ? "fieldEditMode.template.resetTitle"
+                                : "fieldEditMode.template.title",
+                            {
+                                template: picked
+                                    ? (
+                                          FieldPropertiesTemplates[
+                                              picked
+                                          ] as FieldProperties
+                                      ).name
+                                    : "",
+                            },
+                        )}
                     </AlertDialogTitle>
                     <AlertDialogDescription className="flex flex-col gap-8">
                         {diff && (
@@ -209,7 +238,11 @@ export function TemplateSection({ fp }: { fp: FieldProperties }) {
                                         });
                                 }}
                             >
-                                {t("fieldEditMode.template.apply")}
+                                {t(
+                                    resetting
+                                        ? "fieldEditMode.template.resetApply"
+                                        : "fieldEditMode.template.apply",
+                                )}
                             </Button>
                         </AlertDialogAction>
                     </div>

@@ -8,12 +8,28 @@ import {
     fieldPropertiesQueryOptions,
 } from "@/hooks/queries";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
-import type { FieldEditRequest, FieldEditResult } from "@/field/edits";
+import type {
+    FieldEditIssue,
+    FieldEditRequest,
+    FieldEditResult,
+} from "@/field/edits";
 import { fieldEditIssueMessage } from "@/field/edits/messages";
 
 /**
+ * Warnings worth a toast: what the edit did that you may not have meant (the X lines are no
+ * longer symmetric, a position was skipped because a line is there). "Mirror applies to X lines
+ * only" isn't: the mode passes Mirror with every edit, and Y lines never mirror.
+ */
+export function warningsToShow(
+    warnings: readonly FieldEditIssue[],
+): FieldEditIssue[] {
+    return warnings.filter((issue) => issue.code !== "mirror-ignored");
+}
+
+/**
  * Applies field edits as one undo step (`applyFieldEdits`), and says why in a toast when they're
- * refused. Every change the Edit field mode makes goes through here (#824).
+ * refused, or what to know in one when they made something worth a warning. Every change the
+ * Edit field mode makes goes through here (#824).
  */
 export function useApplyFieldEdits(): (
     edits: FieldEditRequest | readonly FieldEditRequest[],
@@ -30,6 +46,9 @@ export function useApplyFieldEdits(): (
                 const result = await mutateAsync(edits);
                 const issue = result.diff.errors[0];
                 if (issue) toast.error(fieldEditIssueMessage(issue, t));
+                else
+                    for (const warning of warningsToShow(result.diff.warnings))
+                        toast.warning(fieldEditIssueMessage(warning, t));
                 return result;
             } catch (error) {
                 console.error("Field edit failed", error);

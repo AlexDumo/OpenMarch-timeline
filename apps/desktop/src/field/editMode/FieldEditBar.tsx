@@ -16,6 +16,7 @@ import type { ActionId } from "@/shortcuts/definitions";
 import { fieldEditMode, useFieldEditModeStore } from "./fieldEditModeStore";
 import { useFieldProperties } from "./useApplyFieldEdits";
 import { baseTemplateOf, changesFromTemplate } from "./fieldEditPlans";
+import { FieldEditKeysHelp } from "./FieldEditKeysHelp";
 
 const BUTTON = `${getButtonClassName({ variant: "secondary", size: "compact" })} text-body whitespace-nowrap`;
 
@@ -50,6 +51,9 @@ export function FieldEditBar() {
     return (
         <div
             data-testid="field-edit-bar"
+            data-field-edit-pane="bar"
+            role="region"
+            aria-label={t("fieldEditMode.bar.title")}
             className="rounded-6 border-accent/60 bg-fg-1 flex min-h-44 flex-wrap items-center gap-8 border px-12 py-8"
         >
             <div className="text-body flex min-w-0 items-center gap-8">
@@ -153,6 +157,7 @@ export function FieldEditBar() {
                     <ArrowArcRightIcon size={16} />
                 </ActionButton>
                 <View3dButton />
+                <FieldEditKeysHelp />
                 <ActionButton
                     action="fieldEditDone"
                     data-testid="field-edit-done"

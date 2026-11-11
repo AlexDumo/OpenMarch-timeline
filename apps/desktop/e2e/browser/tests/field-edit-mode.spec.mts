@@ -305,3 +305,329 @@ test("the inspector holds the field's settings: a new width moves the outer line
     await expect.poll(() => savedXSteps(show)).toEqual(before);
     await expect(page.getByTestId("field-width")).toHaveValue("160");
 });
+
+/** The saved X checkpoints, with what H and R change */
+async function savedXLines(show: {
+    query: <T>(sql: string) => Promise<T[]>;
+}): Promise<
+    { steps: number; visible: boolean; reference: boolean; name: string }[]
+> {
+    const [row] = await show.query<{ json_data: string }>(
+        "SELECT json_data FROM field_properties",
+    );
+    return (
+        JSON.parse(row!.json_data) as {
+            xCheckpoints: {
+                stepsFromCenterFront: number;
+                visible: boolean;
+                useAsReference: boolean;
+                name: string;
+            }[];
+        }
+    ).xCheckpoints
+        .map((c) => ({
+            steps: c.stepsFromCenterFront,
+            visible: c.visible,
+            reference: c.useAsReference,
+            name: c.name,
+        }))
+        .sort((a, b) => a.steps - b.steps);
+}
+
+const savedX = async (show: Parameters<typeof savedXLines>[0], steps: number) =>
+    (await savedXLines(show)).find((l) => l.steps === steps);
+
+test("slide a line's ruler tab along its ruler: the line moves, and Escape lets go of a drag", async ({
+    show,
+}) => {
+    const { page } = show;
+    await enterFromSidebar(page);
+    const before = await savedXSteps(show);
+
+    // S2 40's tab, two steps toward S2 35 along the top ruler: a move, never a delete
+    const forty = await line(page, "x", 16);
+    const thirtyFive = await line(page, "x", 24);
+    const stepPx = (thirtyFive.tab.x - forty.tab.x) / 8;
+    await dragFrom(
+        page,
+        forty.tab,
+        { x: 2 * stepPx, y: 0 },
+        {
+            steps: 8,
+            beforeRelease: async () => {
+                expect((await editState(page)).drag).toMatchObject({
+                    kind: "move",
+                    steps: 18,
+                    overRuler: false,
+                });
+                await expect(
+                    page.getByTestId("field-edit-readout"),
+                ).not.toContainText("delete");
+            },
+        },
+    );
+    await waitForIdle(page);
+    await expect.poll(() => savedXSteps(show)).toContain(18);
+    expect(await savedXSteps(show)).toContain(-18);
+    expect(await savedXSteps(show)).toHaveLength(before.length);
+
+    // Escape in the middle of a drag: nothing changes, the mode stays on
+    const moved = await line(page, "x", 18);
+    await page.mouse.move(moved.screen.x, moved.screen.y);
+    await page.mouse.down();
+    await page.mouse.move(moved.screen.x + 3 * stepPx, moved.screen.y, {
+        steps: 6,
+    });
+    await expect.poll(async () => (await editState(page)).drag).not.toBeNull();
+    await page.keyboard.press("Escape");
+    await expect.poll(async () => (await editState(page)).drag).toBeNull();
+    await page.mouse.up();
+    await waitForIdle(page);
+    expect(await savedXSteps(show)).toContain(18);
+    expect(await fieldEdit(page)).not.toBeNull();
+
+    // Escape while the button is down but before the drag starts: let go of the press, still
+    // in the mode, and the line stays picked
+    await page.mouse.move(moved.screen.x, moved.screen.y);
+    await page.mouse.down();
+    await page.keyboard.press("Escape");
+    await page.mouse.up();
+    expect(await fieldEdit(page)).not.toBeNull();
+    expect((await line(page, "x", 18)).selected).toBe(true);
+});
+
+test("H, R and the arrows act on the picked line and its twin, each one undo step", async ({
+    show,
+}) => {
+    const { page } = show;
+    await enterFromSidebar(page);
+    const forty = await line(page, "x", 16);
+    await page.mouse.click(forty.screen.x, forty.screen.y);
+    await expect
+        .poll(async () => (await line(page, "x", 16)).selected)
+        .toBe(true);
+
+    await page.keyboard.press("h");
+    await expect
+        .poll(async () => (await savedX(show, 16))?.visible)
+        .toBe(false);
+    expect((await savedX(show, -16))?.visible).toBe(false);
+
+    const reference = (await savedX(show, 16))!.reference;
+    await page.keyboard.press("r");
+    await expect
+        .poll(async () => (await savedX(show, 16))?.reference)
+        .toBe(!reference);
+    expect((await savedX(show, -16))?.reference).toBe(!reference);
+
+    // Right: a step out from the 50 on side 2, and the twin a step out on side 1; Shift: half
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(() => savedXSteps(show)).toContain(17);
+    expect(await savedXSteps(show)).toContain(-17);
+    await page.keyboard.press("Shift+ArrowRight");
+    await expect.poll(() => savedXSteps(show)).toContain(17.5);
+    expect(await savedXSteps(show)).toContain(-17.5);
+
+    // Each key was its own undo step
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => savedXSteps(show)).toContain(17);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => savedXSteps(show)).toContain(16);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect
+        .poll(async () => (await savedX(show, 16))?.reference)
+        .toBe(reference);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(async () => (await savedX(show, 16))?.visible).toBe(true);
+});
+
+test("Tab walks the lines from the field, and F6 takes the keyboard to the bar and the inspector", async ({
+    show,
+}) => {
+    const { page } = show;
+    await enterFromSidebar(page);
+    // Entering from the sidebar's button gives the field the keyboard
+    await expect(page.getByTestId("field-edit-overlay")).toBeFocused();
+    const first = (await editState(page)).lines[0]!;
+    await page.keyboard.press("Tab");
+    await expect
+        .poll(async () =>
+            (await editState(page)).lines
+                .filter((l) => l.selected)
+                .map((l) => l.id),
+        )
+        .toEqual([first.id]);
+
+    await page.keyboard.press("F6");
+    await expect(
+        page.getByTestId("field-edit-bar").locator(":focus"),
+    ).toHaveCount(1);
+    // Tab in the bar is the bar's: the pick stays
+    await page.keyboard.press("Tab");
+    await expect(
+        page.getByTestId("field-edit-bar").locator(":focus"),
+    ).toHaveCount(1);
+    expect(
+        (await editState(page)).lines
+            .filter((l) => l.selected)
+            .map((l) => l.id),
+    ).toEqual([first.id]);
+
+    await page.keyboard.press("F6");
+    await expect(
+        page.getByTestId("field-inspector").locator(":focus"),
+    ).toHaveCount(1);
+    await page.keyboard.press("F6");
+    await expect(page.getByTestId("field-edit-overlay")).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect
+        .poll(
+            async () =>
+                (await editState(page)).lines.filter((l) => l.selected).length,
+        )
+        .toBe(1);
+    expect((await editState(page)).lines.find((l) => l.selected)!.id).not.toBe(
+        first.id,
+    );
+
+    // The bar's help says how
+    await page.getByTestId("field-edit-keys").click();
+    await expect(page.getByTestId("field-edit-keys-help")).toContainText("F6");
+});
+
+test("the list's + adds a mirrored line halfway, and the template sheet keeps the look or resets", async ({
+    show,
+}) => {
+    const { page } = show;
+    await enterFromSidebar(page);
+    const before = await savedXSteps(show);
+
+    // Mirror on: the first gap is between the 50 and the 45s, so the new pair is at ±4
+    const list = page.getByTestId("field-lines-x");
+    await list.getByTestId("field-lines-insert").first().hover();
+    await list.getByTestId("field-lines-insert").first().click();
+    await expect.poll(() => savedXSteps(show)).toContain(4);
+    expect(await savedXSteps(show)).toContain(-4);
+    expect(await savedXSteps(show)).toHaveLength(before.length + 2);
+
+    // Hide the top labels (part of the look), then switch templates keeping the look
+    const inspector = page.getByTestId("field-inspector");
+    await inspector
+        .getByRole("button", { name: "Markings and labels" })
+        .click();
+    await page.getByTestId("field-labels-top").click();
+    await inspector.getByRole("button", { name: "Template and files" }).click();
+    await page.getByTestId("field-template-select").click();
+    await page
+        .getByRole("option", { name: "College football field (no end zones)" })
+        .click();
+    const sheet = page.getByRole("alertdialog");
+    await expect(sheet).toContainText("Switch to College football");
+    await expect(page.getByTestId("field-template-diff")).toBeVisible();
+    await expect(page.getByTestId("field-template-keep-look")).toBeChecked();
+    await page.getByTestId("field-template-apply").click();
+    await expect(page.getByTestId("field-edit-based-on")).toContainText(
+        "College football field (no end zones)",
+    );
+    const saved = async () => {
+        const [row] = await show.query<{ json_data: string }>(
+            "SELECT json_data FROM field_properties",
+        );
+        return JSON.parse(row!.json_data) as {
+            name: string;
+            topLabelsVisible: boolean;
+        };
+    };
+    expect((await saved()).topLabelsVisible).toBe(false);
+    // The template's own lines: the pair at ±4 is gone
+    expect(await savedXSteps(show)).not.toContain(4);
+
+    // Add a line, then reset to the template: back to its lines
+    await list.getByTestId("field-lines-insert").first().click();
+    await expect.poll(() => savedXSteps(show)).toContain(4);
+    await expect(page.getByTestId("field-template-reset")).toContainText(
+        "Reset to College football field (no end zones)",
+    );
+    await page.getByTestId("field-template-reset").click();
+    await expect(sheet).toContainText("Reset to College football");
+    await page.getByTestId("field-template-apply").click();
+    await expect.poll(() => savedXSteps(show)).not.toContain(4);
+    // The kept look (the top labels hidden) is the one change left
+    await expect(page.getByTestId("field-edit-changes")).toContainText(
+        "1 change",
+    );
+    expect((await saved()).topLabelsVisible).toBe(false);
+});
+
+test("reopening the show leaves the mode", async ({ show }) => {
+    const { page } = show;
+    await enterFromSidebar(page);
+    await line(page, "x", 16).then((l) =>
+        page.mouse.click(l.screen.x, l.screen.y),
+    );
+    // A reload is how the app opens a show again; the mode is the open show's, never kept
+    await page.reload();
+    await waitForField(page);
+    await expect(page.getByTestId("field-edit-bar")).toBeHidden();
+    expect(await fieldEdit(page)).toBeNull();
+});
+
+test.describe("touch", () => {
+    test.use({
+        // The touch layout, pinned, as Settings › Touch & Input does
+        initScript: "localStorage.setItem('openmarch:inputMode', 'touch');",
+    });
+
+    /** Touches one point for `holdMs`, as a finger */
+    async function touch(page: Page, at: { x: number; y: number }, holdMs = 0) {
+        const cdp = await page.context().newCDPSession(page);
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ x: at.x, y: at.y, id: 0 }],
+        });
+        if (holdMs > 0) await page.waitForTimeout(holdMs);
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchEnd",
+            touchPoints: [],
+        });
+        await cdp.detach();
+    }
+
+    test("a finger gets 44 px rulers, a long press opens the line's menu, and a tap on a picked line its values", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await enterFromSidebar(page);
+        const state = await editState(page);
+        // The rulers are 44 px thick: their middle is 22 px in
+        const box = (await page
+            .getByTestId("field-edit-overlay")
+            .boundingBox())!;
+        expect(state.rulers.x.from.y - box.y).toBeCloseTo(22, 0);
+        expect(state.rulers.y.from.x - box.x).toBeCloseTo(22, 0);
+
+        const forty = await line(page, "x", 16);
+        await touch(page, forty.screen, 700);
+        const menu = page.getByTestId("field-line-menu");
+        await expect(menu).toBeVisible();
+        await expect
+            .poll(async () => (await editState(page)).menu)
+            .toEqual({
+                axis: "x",
+                id: forty.id,
+            });
+        // Hide from the menu: the line and its twin
+        await menu.getByRole("menuitem", { name: /Hide/ }).click();
+        await expect
+            .poll(async () => (await savedX(show, 16))?.visible)
+            .toBe(false);
+        expect((await savedX(show, -16))?.visible).toBe(false);
+
+        // The line is picked: a tap opens its exact values, with the number pad
+        await touch(page, forty.screen);
+        await expect(page.getByTestId("field-line-popover")).toBeVisible();
+        await expect(
+            page.getByRole("group", { name: "Number pad" }),
+        ).toBeVisible();
+    });
+});

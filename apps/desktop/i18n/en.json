@@ -84,7 +84,12 @@
             "nudgeLeft": "Move lines left",
             "nudgeRight": "Move lines right",
             "nudgeUp": "Move lines back",
-            "nudgeDown": "Move lines forward"
+            "nudgeDown": "Move lines forward",
+            "nextPane": "Go to the next part of Edit field",
+            "previousPane": "Go to the previous part of Edit field",
+            "importImage": "Import field background image…",
+            "removeImage": "Remove field background image",
+            "imageKeywords": "picture photo aerial background image field"
         },
         "file": {
             "closeFile": "Close file",
@@ -554,7 +559,6 @@
             "unavailable.title": "The field can't be drawn",
             "unavailable.web": "This browser has WebGL graphics turned off or blocked. Turn on graphics acceleration (in Chrome or Edge: Settings, System, \"Use graphics acceleration when available\"), restart the browser, then reload this page. Your show is safe."
         },
-        "title": "Field",
         "errors": {
             "noWebGL": "WebGL is not available",
             "contextLost": "The field's WebGL context was lost, so the video can't be drawn. Try the export again.",
@@ -570,41 +574,17 @@
         "applyFieldTypeWarning": "Marchers will not move to the new field type size, they will stay where they are on the canvas. You can always change back the field type.",
         "buttons": {
             "importImage": "Import Image",
-            "newXCheckpoint": "New X-Checkpoint",
-            "newYCheckpoint": "New Y-Checkpoint",
             "resetTheme": "Reset Theme to Default"
         },
         "checkpoint": {
             "created": "{axis}-checkpoint at {steps} steps created",
-            "delete": "Delete",
-            "deleted": "{axis}-checkpoint at {steps} steps deleted - \"{name}\"",
-            "deleteTooltip": "Delete this checkpoint from the field",
-            "fieldLabel": "Field label",
-            "fieldLabelTooltip": "The label to appear on the field (i.e., the yard markers)",
             "minimumRequired": "At least 2 {axis}-checkpoints are required",
-            "name": "Name",
-            "nameTooltip": "Name your checkpoint whatever you want. This is just for you to know what checkpoint you're selecting.",
             "newXCheckpointName": "New X Checkpoint",
-            "newYCheckpointName": "New Y Checkpoint",
-            "shortName": "Short Name",
-            "shortNameTooltip": "The primary name of the checkpoint. (E.g. \"45 Yard Line - Side 1\")",
-            "stepsFromCenter": "Steps from center",
-            "stepsFromFront": "Steps from front",
-            "stepsFromFrontTooltip": "The number of steps away from the front of the field that this checkpoint is. Negative is towards the back.",
-            "useAsReference": "Use as reference",
-            "useAsReferenceTooltip": "If this checkpoint should be used as a reference for coordinates.",
-            "visible": "Visible",
-            "visibleTooltip": "If this checkpoint should be visible on the field",
-            "stepsFromCenterHint": "The number of steps away from the center of the field that this checkpoint is. Negative is toward the left, as the audience sees the field."
+            "newYCheckpointName": "New Y Checkpoint"
         },
-        "customField": "Custom Field",
         "customFieldDocs": "See docs",
         "customFieldName": "Custom",
-        "customization": "Customization",
-        "customize": "Customize",
         "errors": {
-            "invalidColor": "Invalid color",
-            "noPropertiesToLoad": "No field properties to load! This should never happen, please reach out to support",
             "notDefined": "FieldProperties is not defined. This should never happen, please reach out to support.",
             "invalidJson": "Invalid JSON file.\n\nPlease ensure the file contains valid JSON syntax.",
             "invalidFile": "Invalid field properties file.\n\n{details}\n\nPlease ensure the file contains all required fields with correct values.",
@@ -620,24 +600,19 @@
         "fieldType": {
             "label": "Field type"
         },
-        "general": "General",
         "labels": {
             "background": "Background",
             "backgroundImageOpacity": "Background Image Opacity",
-            "backgroundImageRatio": "Background Image Ratio",
             "bottom": "Bottom",
-            "conformingMethod": "Conforming Method",
             "conformMethod": "Conform Method",
             "directorsLeft": "Director's Left",
             "directorsRight": "Director's Right",
             "externalLabels": "External Labels",
             "fieldLabels": "Field Labels",
             "fieldName": "Field Name",
-            "fieldRatio": "Field Ratio",
             "gridLines": "Grid Lines",
             "halfLineXInterval": "Half Line X-Interval",
             "halfLineYInterval": "Half Line Y-Interval",
-            "height": "Height",
             "left": "Left",
             "leftAbbreviation": "Left Abbreviation",
             "marcherFill": "Marcher Fill",
@@ -653,24 +628,11 @@
             "shapes": "Shapes",
             "shapeType": "Shape Type",
             "showBackgroundImage": "Show Background Image",
-            "stepsFromFrontToAwayLabelBottom": "Steps from front to away label bottom",
-            "stepsFromFrontToAwayLabelTop": "Steps from front to away label top",
-            "stepsFromFrontToHomeLabel": "Steps from front to home label bottom",
-            "stepsFromFrontToHomeLabelTop": "Steps from front to home label top",
             "stepSize": "Step Size",
             "stepSizeWarningThreshold": "Step Size Warning Threshold",
             "temporaryPath": "Temporary Path",
             "top": "Top",
-            "useHashes": "Use Hashes",
-            "width": "Width",
-            "widthHeight": "w/h",
-            "noBackgroundImage": "N/A",
             "stepSizeWarningRatio": "Step Size Warning Threshold ({steps} to 5)"
-        },
-        "messages": {
-            "fieldRatio": "{ratio} or {decimal}",
-            "measurementModificationNote": "These values can be modified by adjusting the X and Y coordinates, the step size and the background image",
-            "refreshAfterImporting": "Refresh after importing [Ctrl + R]"
         },
         "options": {
             "fill": "Fill",
@@ -679,40 +641,16 @@
             "metric": "Metric"
         },
         "sections": {
-            "externalLabels": "External Labels",
-            "fieldLabels": "Field Labels",
-            "general": "General",
-            "imageRendering": "Image Rendering",
-            "measurements": "Measurements",
-            "sideDescriptions": "Side Descriptions",
-            "theme": "Theme",
-            "xCheckpoints": "X-Checkpoints",
-            "yCheckpoints": "Y-Checkpoints"
-        },
-        "tabs": {
-            "checkpoints": "Checkpoints",
-            "general": "General",
-            "image": "Image",
-            "theme": "Theme"
-        },
-        "themeSubsections": {
-            "grid": "Grid",
-            "labels": "Labels",
-            "marchers": "Marchers",
-            "pathways": "Pathways"
+            "sideDescriptions": "Side Descriptions"
         },
         "tooltips": {
-            "importImage": "Import an image to display on the field",
             "conformMethod": "Whether to fit the background image inside the field or fill it. The aspect ratio is always maintained",
             "directorsLeft": "E.g. \"Side 1\", \"Audience Left\" or \"Stage Right\"",
             "directorsRight": "E.g. \"Side 2\", \"Audience Right\" or \"Stage Left\"",
-            "fieldName": "The name or title of the field template",
             "halfLineXInterval": "The interval that half lines appear in the UI on the X axis from the center of the field. Leave empty to omit half lines on the X-axis. This is purely cosmetic and does not affect coordinates in any way",
             "halfLineYInterval": "The interval that half lines appear in the UI on the Y axis from the front of the field. Leave empty to omit half lines on the Y-axis. This is purely cosmetic and does not affect coordinates in any way",
             "leftAbbreviation": "E.g. \"S1\", \"AL\" or \"SR\" (short for \"Side 1\", \"Audience Left\" or \"Stage Right\")",
-            "measurementSystem": "The unit of measurement to define the step size in. Can go back and forth",
             "resetTheme": "Reset the theme to the default values",
-            "resetToDefault": "Reset to default",
             "rightAbbreviation": "E.g. \"S2\", \"AR\" or \"SL\" (short for \"Side 2\", \"Audience Right\" or \"Stage Left\")",
             "stepsFromFrontToAwayLabelBottom": "Number of steps from the front sideline to the outside of the away number (closer to the back sideline)",
             "stepsFromFrontToAwayLabelTop": "Number of steps from the front sideline to the inside of the away number (closer to the center of the field)",
@@ -726,15 +664,10 @@
             "inches": "in",
             "centimeters": "cm"
         },
-        "warnings": {
-            "xCheckpointsNotEquidistant": "WARNING - The left and rightmost X-checkpoints are not equidistant from the center. This may cause strange graphical artifacts and should be fixed.",
-            "yCheckpointsNegative": "WARNING - It is highly recommended that all Y-checkpoints' steps be less than zero (i.e. negative numbers). All of the Y-coordinates should be behind the front of the field. Failing to do so may cause graphical errors and unexpected coordinates."
-        },
         "loading": "Loading...",
         "measurements": {
             "feet": "{value} ft",
-            "meters": "{value} m",
-            "steps": "{count, plural, one {# step} other {# steps}}"
+            "meters": "{value} m"
         }
     },
     "fileAccessDialogError": {
@@ -3945,7 +3878,8 @@
             "oneSide": "{side} · {steps}",
             "behind": "{steps} back",
             "insert": "Add a line halfway between {a} and {b}",
-            "drawAsHashes": "Draw as hashes"
+            "drawAsHashes": "Draw as hashes",
+            "asymmetric": "The outermost X lines aren't the same distance from the center, so the field is drawn off-center. Move one of them until both sides match."
         },
         "size": {
             "readout": "{width} × {depth} steps ({widthLength} × {depthLength})",
@@ -3992,7 +3926,16 @@
             "keepLook": "Keep my look (colors, labels, image, side names)",
             "undoNote": "This is one step to undo.",
             "cancel": "Cancel",
-            "apply": "Switch"
+            "apply": "Switch",
+            "reset": "Reset to {template}",
+            "resetTitle": "Reset to {template}?",
+            "resetApply": "Reset"
+        },
+        "fieldPane": "Field lines",
+        "help": {
+            "button": "Keyboard",
+            "title": "Keyboard",
+            "route": "<tab></tab> picks the next line while the field has the keyboard. <pane></pane> moves between the field, this bar and the inspector."
         }
     }
 }

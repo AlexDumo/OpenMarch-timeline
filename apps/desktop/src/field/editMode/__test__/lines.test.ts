@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import type { Checkpoint, FieldProperties } from "@openmarch/core";
+import type { FieldProperties } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { runFieldEdits } from "@/field/edits";
 import {
     dragSteps,
     fieldSizeSteps,
-    hitTestLine,
+    dragOverRuler,
     lineLabel,
     lineReadout,
     lineScreen,
@@ -14,6 +14,8 @@ import {
     linesOn,
     overRuler,
     RULER_PX,
+    rulerPx,
+    TOUCH_RULER_PX,
     stepsToField,
     fieldToSteps,
     toRef,
@@ -80,54 +82,6 @@ describe("positions", () => {
     });
 });
 
-describe("hitTestLine", () => {
-    const at = (c: Checkpoint, offset: number, along = 300) =>
-        c.axis === "x"
-            ? { x: lineScreen(college, view, c) + offset, y: along }
-            : { x: along, y: lineScreen(college, view, c) + offset };
-
-    it("takes the nearest line within a few pixels", () => {
-        const forty = x(college, 16);
-        expect(hitTestLine(college, view, at(forty, 3))?.id).toBe(forty.id);
-        expect(hitTestLine(college, view, at(forty, 9))).toBeNull();
-    });
-
-    it("takes a Y line along the field's width", () => {
-        const hash = y(college, -32);
-        expect(hitTestLine(college, view, at(hash, -2, 500))).toMatchObject({
-            axis: "y",
-            id: hash.id,
-        });
-    });
-
-    it("ignores a press past the end of the line", () => {
-        const forty = x(college, 16);
-        const below = view.panY + college.height * view.zoom + 20;
-        expect(hitTestLine(college, view, at(forty, 0, below))).toBeNull();
-    });
-
-    it("prefers the selected line on a tie", () => {
-        // Two lines one step apart at a zoom where they're closer than the tolerance
-        const close = { zoom: 0.5, panX: 0, panY: 0 };
-        const twoFortyFive = runFieldEdits(college, [
-            { edit: "addCheckpoint", args: { axis: "x", steps: 9 } },
-        ]).next;
-        const a = x(twoFortyFive, 8);
-        const b = x(twoFortyFive, 9);
-        const mid =
-            (lineScreen(twoFortyFive, close, a) +
-                lineScreen(twoFortyFive, close, b)) /
-            2;
-        const hit = hitTestLine(
-            twoFortyFive,
-            close,
-            { x: mid, y: 20 },
-            { prefer: [toRef(b)] },
-        );
-        expect(hit?.id).toBe(b.id);
-    });
-});
-
 describe("linesInBox", () => {
     it("takes the lines that run through the box", () => {
         // A thin box across the field between the hashes, from the S1 5 to the S2 5
@@ -164,6 +118,29 @@ describe("dragSteps", () => {
         expect(overRuler("x", { x: 400, y: RULER_PX - 1 })).toBe(true);
         expect(overRuler("x", { x: 10, y: RULER_PX + 5 })).toBe(false);
         expect(overRuler("y", { x: 10, y: 400 })).toBe(true);
+    });
+
+    it("makes the rulers a finger wide in the touch layout only", () => {
+        expect(rulerPx(false)).toBe(RULER_PX);
+        expect(rulerPx(true)).toBe(TOUCH_RULER_PX);
+        expect(TOUCH_RULER_PX).toBeGreaterThanOrEqual(44);
+    });
+
+    it("lets a tab slide along its ruler: over the ruler only after leaving it", () => {
+        // A tab dragged sideways stays in the strip: a move, never a delete
+        let armed = false;
+        for (const x of [100, 120, 160]) {
+            const r = dragOverRuler("x", { x, y: 10 }, armed);
+            expect(r.over).toBe(false);
+            armed = r.armed;
+        }
+        // Out onto the field, then back in: now letting go deletes
+        armed = dragOverRuler("x", { x: 160, y: 200 }, armed).armed;
+        expect(dragOverRuler("x", { x: 160, y: 10 }, armed).over).toBe(true);
+        // The same for a Y tab, down its ruler
+        expect(dragOverRuler("y", { x: 10, y: 300 }, false).over).toBe(false);
+        // A drag from the field is armed from the start
+        expect(dragOverRuler("y", { x: 10, y: 300 }, true).over).toBe(true);
     });
 });
 

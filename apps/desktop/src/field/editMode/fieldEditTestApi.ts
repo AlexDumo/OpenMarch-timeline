@@ -8,9 +8,10 @@ import {
     lineKey,
     lineLabel,
     lineScreen,
-    RULER_PX,
+    rulerPx,
     toRef,
 } from "./lines";
+import { useInputModeStore } from "@/stores/InputModeStore";
 import {
     existingSelection,
     isSelected,
@@ -34,13 +35,12 @@ export function fieldEditTestState(
         selectionWithTwins(fp, selection, state.mirror).map(lineKey),
     );
     const field = fieldScreenRect(fp, view);
+    const ruler = rulerPx(useInputModeStore.getState().mode === "touch");
     // The middle of the field's part on screen, below and right of the rulers
     const midX =
-        (Math.max(field.left, RULER_PX) + Math.min(field.right, view.width)) /
-        2;
+        (Math.max(field.left, ruler) + Math.min(field.right, view.width)) / 2;
     const midY =
-        (Math.max(field.top, RULER_PX) + Math.min(field.bottom, view.height)) /
-        2;
+        (Math.max(field.top, ruler) + Math.min(field.bottom, view.height)) / 2;
     const point = (x: number, y: number) => ({
         x: rect.left + x,
         y: rect.top + y,
@@ -65,18 +65,18 @@ export function fieldEditTestState(
                 screen: c.axis === "x" ? point(at, midY) : point(midX, at),
                 tab:
                     c.axis === "x"
-                        ? point(at, RULER_PX / 2)
-                        : point(RULER_PX / 2, at),
+                        ? point(at, ruler / 2)
+                        : point(ruler / 2, at),
             };
         }),
         rulers: {
             x: {
-                from: point(RULER_PX, RULER_PX / 2),
-                to: point(view.width, RULER_PX / 2),
+                from: point(ruler, ruler / 2),
+                to: point(view.width, ruler / 2),
             },
             y: {
-                from: point(RULER_PX / 2, RULER_PX),
-                to: point(RULER_PX / 2, view.height),
+                from: point(ruler / 2, ruler),
+                to: point(ruler / 2, view.height),
             },
         },
         drag: state.drag && {
