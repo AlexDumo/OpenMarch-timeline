@@ -89,7 +89,8 @@
             "previousPane": "Go to the previous part of Edit field",
             "importImage": "Import field background image…",
             "removeImage": "Remove field background image",
-            "imageKeywords": "picture photo aerial background image field"
+            "imageKeywords": "picture photo aerial background image field",
+            "halfStep": "half step"
         },
         "file": {
             "closeFile": "Close file",

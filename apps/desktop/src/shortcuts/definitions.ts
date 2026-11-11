@@ -186,9 +186,8 @@ function buildFieldLineNudgeActions(): Record<
                 `fieldEditNudge${dirName}${fine ? "Fine" : ""}` as FieldLineNudgeActionId;
             result[id] = {
                 labelKey: `actions.field.nudge${dirName}`,
-                labelSuffixKey: fine
-                    ? "actions.movement.variants.fine"
-                    : undefined,
+                // Half a step, not the marchers' Fine (¼ step, no snap)
+                labelSuffixKey: fine ? "actions.field.halfStep" : undefined,
                 category: "field",
                 scope: "fieldEdit",
                 defaultBindings: [fine ? `Shift+${dir.arrow}` : dir.arrow],
