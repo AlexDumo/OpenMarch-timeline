@@ -67,12 +67,22 @@ function straight(spots: readonly XY[]): boolean {
  * the first spot to the last through the others, when they lie on one circle in order round it;
  * else undefined
  */
-function arcSweep(spots: readonly XY[]): number | undefined {
+function arcSweep(
+    spots: readonly XY[],
+    /** Points of the way between the first and last spot, which must lie on the circle too */
+    between: readonly XY[] = [],
+): number | undefined {
     if (spots.length < 3) return undefined;
     const circle = fitCircle(spots);
     if (!circle) return undefined;
     const { center, r } = circle;
-    if (spots.some((p) => Math.abs(dist(p, center) - r) > ON_SHAPE))
+    // Any 3 points not on a line lie on a circle, so the way itself is checked as well: a corner
+    // walked by 3 marchers is a Curve, not half a circle (#830 review)
+    if (
+        [...spots, ...between].some(
+            (p) => Math.abs(dist(p, center) - r) > ON_SHAPE,
+        )
+    )
         return undefined;
     let total = 0;
     let sign = 0;
@@ -220,7 +230,12 @@ export function trailShapeOf(plan: TrailDragPlan): TrailShape {
                 spacing: FIT,
             },
         };
-    const sweep = arcSweep(spots);
+    const e0 = plan.ends[0]!;
+    const e1 = plan.ends[plan.ends.length - 1]!;
+    const between = Array.from({ length: 31 }, (_, i) =>
+        xy(plan.way.at(e0 + ((e1 - e0) * (i + 1)) / 32)),
+    );
+    const sweep = arcSweep(spots, between);
     if (sweep !== undefined)
         return {
             kind: "arc",

@@ -140,6 +140,28 @@ describeDbTests("The dragged-out result as a shape (step 4c)", (it) => {
         expect(curve.params.points.map((p) => p.tension)).toEqual(
             curve.params.points.map(() => 0),
         );
+        // Three marchers round a right-angle corner: any 3 points lie on some circle, but the way
+        // doesn't, so it's a Curve with the corner, never half a circle (#830 review)
+        const three = planTrailDrag(
+            [
+                [0, 0],
+                [10, 0],
+                [20, 0],
+            ],
+            [{ at: [40, 0] }, { at: [40, 10] }],
+            { kind: "keep" },
+            5,
+        );
+        expect(three.spots).toEqual([
+            [30, 0],
+            [40, 0],
+            [40, 10],
+        ]);
+        const threeShape = trailShapeOf(three);
+        expect(threeShape.kind).toBe("curve");
+        three.spots.forEach((s) =>
+            expect(offShape(threeShape.params, s)).toBeLessThan(1e-6),
+        );
     });
 
     it("QA-DL-12: smooth points and arc legs in the way; the Curve passes through every spot exactly; points that aren't spots hold no marcher", () => {
