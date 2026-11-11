@@ -221,6 +221,21 @@ export function splitMoveBlocker(
 }
 
 /**
+ * Why ⌘K's (and the field menu's) **Split at playhead** can't run now, or null: the same checks
+ * the action makes when it runs (no single move strictly around the playhead, then
+ * {@link splitMoveBlocker}), so the entry is never shown available when choosing it would only
+ * refuse.
+ */
+export function splitAtPlayheadBlocker(
+    state: Parameters<typeof moveAtPlayhead>[0],
+    isPlaying: boolean,
+): string | null {
+    const target = moveAtPlayhead(state);
+    if (typeof target === "string") return target;
+    return splitMoveBlocker(target, state.playheadBeat, isPlaying);
+}
+
+/**
  * The move ⌘K's **Split at playhead** acts on (UI-27): while a move is isolated, that move, and
  * only with the playhead inside it; else the window's move when the playhead is inside it, else
  * the one move (not a page's) the playhead is strictly inside. With none, or several, the reason
