@@ -19,7 +19,7 @@ import { readTimelineEndBeats } from "@/db-functions/timelines";
 import { boxesAt } from "@/shapes/placed/placedBox";
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { mergeMoves, splitMarchersIntoNewMove } from "../timelineSplitMoves";
-import { createBeats, type NewBeatArgs } from "../beat";
+import { createBeats, deleteBeats, type NewBeatArgs } from "../beat";
 import { deleteTimeline } from "../timelineCommands";
 import { orderMarkPlace } from "../timelineRipple";
 import { rememberedOrderAt } from "../rememberedOrder";
@@ -695,6 +695,40 @@ describeDbTests("A line's order set by hand", (it) => {
         expect((await performRedo(db)).success).toBe(true);
         expect(await rememberedOrderAt(db, ids, 25)).toBeNull();
         expect(await rememberedOrderAt(db, ids, 27)).toEqual(page3);
+    });
+
+    it("marks a beat delete brings onto one beat: the one that was later wins, through undo and redo", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await inARow(db, ids);
+        const reversed = [...ids].reverse();
+        // Clear mid-page 3, then an order set at page 3's end flag
+        await clearMarcherOrder(db, { beat: 24, marcherIds: ids });
+        await setMarcherOrder(db, { beat: 25, order: reversed });
+        expect(await rememberedOrderAt(db, ids, 25)).toEqual(reversed);
+        // The beat at 24 goes: both marks land on 24
+        const beat24 = await db
+            .select({ id: schema.beats.id })
+            .from(schema.beats)
+            .where(eq(schema.beats.position, 24))
+            .get();
+        await deleteBeats({ db, beatIds: new Set([beat24!.id]) });
+        await timelineResolverSettled();
+        expect(await rememberedOrderAt(db, ids, 24)).toEqual(reversed);
+        // One mark left, holding everyone
+        const marks = async () =>
+            (await readAllShapeRecipes(db)).filter((r) =>
+                ["order", "orderClear"].includes(r.kind),
+            );
+        expect((await marks()).map((m) => m.kind)).toEqual(["order"]);
+
+        expect((await performUndo(db)).success).toBe(true);
+        expect(await rememberedOrderAt(db, ids, 24)).toBeNull();
+        expect(await rememberedOrderAt(db, ids, 25)).toEqual(reversed);
+        expect((await performRedo(db)).success).toBe(true);
+        expect(await rememberedOrderAt(db, ids, 24)).toEqual(reversed);
     });
 });
 

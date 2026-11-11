@@ -462,13 +462,18 @@ export async function rippleOrderMarksInTransaction(
         .where(inArray(recipes.kind, [...ORDER_MARK_KINDS]))
         .all();
     const gone: number[] = [];
+    const kept: { id: number; was: number; now: number }[] = [];
     for (const mark of marks) {
         const params = JSON.parse(mark.params) as object | null;
         const beat = orderMarkBeat(params);
         if (beat === undefined) continue;
         const next = place(beat);
-        if (next === null) gone.push(mark.id);
-        else if (!sameBeat(next, beat))
+        if (next === null) {
+            gone.push(mark.id);
+            continue;
+        }
+        kept.push({ id: mark.id, was: beat, now: next });
+        if (!sameBeat(next, beat))
             await tx
                 .update(recipes)
                 .set({ params: JSON.stringify({ ...params, beat: next }) })
@@ -477,6 +482,69 @@ export async function rippleOrderMarksInTransaction(
     }
     if (gone.length > 0)
         await tx.delete(recipes).where(inArray(recipes.id, gone)).run();
+    await settleMarksMetInTransaction(tx, kept);
+}
+
+/**
+ * Marks the ripple brought onto one beat: a marcher stays in the one that was latest before it
+ * (then the newest), as saving a mark takes its marchers out of the others at its beat. Marks
+ * left empty are deleted.
+ */
+async function settleMarksMetInTransaction(
+    tx: DbTransaction,
+    kept: readonly { id: number; was: number; now: number }[],
+): Promise<void> {
+    const met = kept.filter((a) =>
+        kept.some((b) => b.id !== a.id && sameBeat(a.now, b.now)),
+    );
+    if (met.length === 0) return;
+    const rows = await tx
+        .select({ recipe: members.recipe_id, marcher: members.marcher_id })
+        .from(members)
+        .where(
+            inArray(
+                members.recipe_id,
+                met.map((m) => m.id),
+            ),
+        )
+        .all();
+    const latestFirst = [...met].sort((a, b) => b.was - a.was || b.id - a.id);
+    const done = new Set<number>();
+    for (const mark of latestFirst) {
+        if (done.has(mark.id)) continue;
+        const group = latestFirst.filter((m) => sameBeat(m.now, mark.now));
+        const claimed = new Set<number>();
+        for (const m of group) {
+            done.add(m.id);
+            const theirs = rows
+                .filter((r) => r.recipe === m.id)
+                .map((r) => r.marcher);
+            const taken = theirs.filter((id) => claimed.has(id));
+            if (taken.length > 0)
+                await tx
+                    .delete(members)
+                    .where(
+                        and(
+                            eq(members.recipe_id, m.id),
+                            inArray(members.marcher_id, taken),
+                        ),
+                    )
+                    .run();
+            for (const id of theirs) claimed.add(id);
+        }
+    }
+    await tx
+        .delete(recipes)
+        .where(
+            and(
+                inArray(
+                    recipes.id,
+                    met.map((m) => m.id),
+                ),
+                noMembers(),
+            ),
+        )
+        .run();
 }
 
 /**
