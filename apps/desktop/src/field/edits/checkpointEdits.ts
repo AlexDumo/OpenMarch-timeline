@@ -14,13 +14,19 @@ import {
     withCheckpoints,
 } from "./fieldModel";
 import { finishEdit, invalidArgs, isFiniteNumber } from "./finish";
-import { autoCheckpointNames, hasAutoNames } from "./naming";
+import {
+    autoCheckpointNames,
+    autoNamesFor,
+    ENGLISH_CHECKPOINT_NAMER,
+    type CheckpointNamer,
+} from "./naming";
 import type {
     AddCheckpointArgs,
     AddCheckpointSeriesArgs,
     CheckpointRef,
     FieldAxis,
     FieldEditIssue,
+    FieldEditOptions,
     FieldEditResult,
     MoveCheckpointsArgs,
     RemoveCheckpointsArgs,
@@ -33,17 +39,24 @@ export const MAX_SERIES_CHECKPOINTS = 400;
 const isAxis = (axis: unknown): axis is FieldAxis =>
     axis === "x" || axis === "y";
 
-function mirrorIgnored(axis: FieldAxis, mirror?: boolean): FieldEditIssue[] {
-    return mirror && axis === "y"
+/** The warning for `mirror` asked of Y checkpoints, which have no other side */
+function mirrorIgnored(
+    mirror: boolean | undefined,
+    onY: boolean,
+): FieldEditIssue[] {
+    return mirror && onY
         ? [
               {
                   code: "mirror-ignored",
-                  axis,
+                  axis: "y",
                   message: "Mirror applies to X checkpoints only",
               },
           ]
         : [];
 }
+
+const namerOf = (options?: FieldEditOptions): CheckpointNamer =>
+    options?.namer ?? ENGLISH_CHECKPOINT_NAMER;
 
 function occupied(checkpoints: readonly Checkpoint[], steps: number) {
     return checkpoints.some((c) => samePosition(c.stepsFromCenterFront, steps));
@@ -135,9 +148,10 @@ function newCheckpoint(
     axis: FieldAxis,
     id: number,
     steps: number,
+    namer: CheckpointNamer,
     overrides: Partial<Checkpoint> = {},
 ): Checkpoint {
-    const auto = autoCheckpointNames(fp, axis, steps);
+    const auto = autoCheckpointNames(fp, axis, steps, namer);
     const checkpoint: Checkpoint = {
         id,
         axis,
@@ -160,7 +174,7 @@ function nameErrors(
     if (name === undefined) return [];
     if (typeof name !== "string" || name.trim() === "")
         return [invalidArgs(`\`${label}\` can't be empty`)];
-    if (label === "name" && name.length > MAX_CHECKPOINT_NAME_LENGTH)
+    if (label === "name" && name.trim().length > MAX_CHECKPOINT_NAME_LENGTH)
         return [
             invalidArgs(
                 `\`name\` can be at most ${MAX_CHECKPOINT_NAME_LENGTH} characters`,
@@ -176,7 +190,9 @@ function nameErrors(
 export function addCheckpoint(
     fp: FieldProperties,
     args: AddCheckpointArgs,
+    options?: FieldEditOptions,
 ): FieldEditResult {
+    const namer = namerOf(options);
     const edit = "addCheckpoint";
     if (!args || !isAxis(args.axis))
         return finishEdit(edit, fp, null, {
@@ -194,16 +210,31 @@ export function addCheckpoint(
             errors.push(invalidArgs("`steps` must be a number"));
         else steps = snapSteps(args.steps);
     } else if (args.between !== undefined) {
-        const pair = args.between;
-        if (!Array.isArray(pair) || pair.length !== 2)
-            errors.push(invalidArgs("`between` must be two checkpoint ids"));
+        const pair = args.between as unknown;
+        const refs = Array.isArray(pair) ? (pair as unknown[]) : [];
+        const wellFormed =
+            refs.length === 2 &&
+            refs.every((r) => {
+                const ref = r as Partial<CheckpointRef> | null;
+                return !!ref && ref.axis === axis && isFiniteNumber(ref.id);
+            });
+        if (!wellFormed)
+            errors.push(
+                invalidArgs(
+                    `\`between\` must be two { axis: "${axis}", id } checkpoints on the edit's axis`,
+                ),
+            );
         else {
-            const [a, b] = pair.map((id) => existing.find((c) => c.id === id));
+            const ids = (refs as CheckpointRef[]).map((r) => r.id);
+            const [a, b] = ids.map((id) => existing.find((c) => c.id === id));
             if (!a || !b)
                 errors.push({
                     code: "not-found",
                     axis,
-                    message: `No ${axis.toUpperCase()} checkpoint ${pair.join(" or ")}`,
+                    checkpoints: ids
+                        .filter((id) => !existing.some((c) => c.id === id))
+                        .map((id) => ({ axis, id })),
+                    message: `No ${axis.toUpperCase()} checkpoint ${ids.join(" or ")}`,
                 });
             else
                 steps = snapSteps(
@@ -235,9 +266,11 @@ export function addCheckpoint(
             ],
         });
 
+    const name = args.name?.trim();
+    const shortName = args.shortName?.trim();
     const overrides: Partial<Checkpoint> = {
-        ...(args.name !== undefined ? { name: args.name } : {}),
-        ...(args.shortName !== undefined ? { terseName: args.shortName } : {}),
+        ...(name !== undefined ? { name } : {}),
+        ...(shortName !== undefined ? { terseName: shortName } : {}),
         ...(args.fieldLabel !== undefined
             ? { fieldLabel: args.fieldLabel }
             : {}),
@@ -247,41 +280,52 @@ export function addCheckpoint(
             : {}),
     };
     const id = nextCheckpointId(existing);
-    const added = [newCheckpoint(fp, axis, id, steps, overrides)];
-    if (
-        args.mirror &&
-        axis === "x" &&
-        !samePosition(steps, 0) &&
-        !occupied(existing, -steps)
-    ) {
-        const swap = (s: string | undefined) =>
-            s === undefined ? undefined : swapSideNames(s, fp.sideDescriptions);
-        added.push(
-            newCheckpoint(fp, axis, id + 1, -steps, {
-                ...overrides,
-                ...(args.name !== undefined ? { name: swap(args.name) } : {}),
-                ...(args.shortName !== undefined
-                    ? { terseName: swap(args.shortName) }
-                    : {}),
-            }),
-        );
+    const added = [newCheckpoint(fp, axis, id, steps, namer, overrides)];
+    const warnings = mirrorIgnored(args.mirror, axis === "y");
+    if (args.mirror && axis === "x" && !samePosition(steps, 0)) {
+        const twin = snapSteps(-steps);
+        if (occupied(existing, twin))
+            warnings.push({
+                code: "mirror-twin-skipped",
+                axis,
+                message: `Didn't add the twin at ${twin} steps: there is already an X checkpoint there`,
+            });
+        else {
+            const swap = (s: string | undefined) =>
+                s === undefined
+                    ? undefined
+                    : swapSideNames(s, fp.sideDescriptions);
+            added.push(
+                newCheckpoint(fp, axis, id + 1, twin, namer, {
+                    ...overrides,
+                    ...(name !== undefined ? { name: swap(name) } : {}),
+                    ...(shortName !== undefined
+                        ? { terseName: swap(shortName) }
+                        : {}),
+                }),
+            );
+        }
     }
     return finishEdit(
         edit,
         fp,
         withCheckpoints(fp, axis, sortCheckpoints([...existing, ...added])),
-        { warnings: mirrorIgnored(axis, args.mirror) },
+        { warnings },
     );
 }
 
 /**
  * Plain checkpoints every `every` steps from `from` to `to` (both included), named from their
- * positions. Positions that already have a checkpoint are skipped, and said so.
+ * positions, not references unless `useAsReference` says so. Positions that already have a
+ * checkpoint are skipped, and said so. A series never changes the field's size or center: the
+ * positions past the outermost lines on its axis are left out (`outside-field`).
  */
 export function addCheckpointSeries(
     fp: FieldProperties,
     args: AddCheckpointSeriesArgs,
+    options?: FieldEditOptions,
 ): FieldEditResult {
+    const namer = namerOf(options);
     const edit = "addCheckpointSeries";
     const errors: FieldEditIssue[] = [];
     if (!args || !isAxis(args.axis))
@@ -290,6 +334,9 @@ export function addCheckpointSeries(
         errors.push(invalidArgs("`every` must be a number above 0"));
     if (!isFiniteNumber(args?.from) || !isFiniteNumber(args?.to))
         errors.push(invalidArgs("`from` and `to` must be numbers"));
+    for (const key of ["useAsReference", "visible"] as const)
+        if (args?.[key] !== undefined && typeof args[key] !== "boolean")
+            errors.push(invalidArgs(`\`${key}\` must be true or false`));
     if (errors.length > 0) return finishEdit(edit, fp, null, { errors });
 
     const { axis, every, from, to } = args;
@@ -315,15 +362,39 @@ export function addCheckpointSeries(
     const existing = checkpointsOn(fp, axis);
     const placed: Checkpoint[] = [...existing];
     const skipped: number[] = [];
+    const outside: number[] = [];
+    const extent = existing.map((c) => c.stepsFromCenterFront);
+    const min = Math.min(...extent);
+    const max = Math.max(...extent);
+    const inside = (s: number) =>
+        existing.length > 0 &&
+        (s >= min || samePosition(s, min)) &&
+        (s <= max || samePosition(s, max));
+    const overrides: Partial<Checkpoint> = {
+        useAsReference: args.useAsReference ?? false,
+        visible: args.visible ?? true,
+    };
     let id = nextCheckpointId(existing);
     for (const s of positions) {
+        if (!inside(s)) {
+            outside.push(s);
+            continue;
+        }
         if (occupied(placed, s)) {
             if (occupied(existing, s)) skipped.push(s);
             continue;
         }
-        placed.push(newCheckpoint(fp, axis, id++, s));
+        placed.push(newCheckpoint(fp, axis, id++, s, namer, overrides));
     }
-    const warnings: FieldEditIssue[] = [...mirrorIgnored(axis, args.mirror)];
+    const warnings: FieldEditIssue[] = [
+        ...mirrorIgnored(args.mirror, axis === "y"),
+    ];
+    if (outside.length > 0)
+        warnings.push({
+            code: "outside-field",
+            axis,
+            message: `Left out ${outside.length} position${outside.length === 1 ? "" : "s"} past the outermost ${axis.toUpperCase()} checkpoints (${outside.join(", ")}): a series doesn't change the field's size`,
+        });
     if (skipped.length > 0)
         warnings.push({
             code: "skipped-existing",
@@ -342,6 +413,7 @@ export function addCheckpointSeries(
 export function removeCheckpoints(
     fp: FieldProperties,
     args: RemoveCheckpointsArgs,
+    _options?: FieldEditOptions,
 ): FieldEditResult {
     const edit = "removeCheckpoints";
     const { found, errors } = resolveRefs(fp, args?.ids);
@@ -353,11 +425,21 @@ export function removeCheckpoints(
             if (twin) doomed.add(twin);
         }
     const keep = (cs: Checkpoint[]) => cs.filter((c) => !doomed.has(c));
-    return finishEdit(edit, fp, {
-        ...fieldArgs(fp),
-        xCheckpoints: keep(fp.xCheckpoints),
-        yCheckpoints: keep(fp.yCheckpoints),
-    });
+    return finishEdit(
+        edit,
+        fp,
+        {
+            ...fieldArgs(fp),
+            xCheckpoints: keep(fp.xCheckpoints),
+            yCheckpoints: keep(fp.yCheckpoints),
+        },
+        {
+            warnings: mirrorIgnored(
+                args.mirror,
+                found.some((c) => c.axis === "y"),
+            ),
+        },
+    );
 }
 
 /**
@@ -368,7 +450,9 @@ export function removeCheckpoints(
 export function moveCheckpoints(
     fp: FieldProperties,
     args: MoveCheckpointsArgs,
+    options?: FieldEditOptions,
 ): FieldEditResult {
+    const namer = namerOf(options);
     const edit = "moveCheckpoints";
     const { found, errors } = resolveRefs(fp, args?.ids);
     if (errors.length > 0) return finishEdit(edit, fp, null, { errors });
@@ -438,31 +522,80 @@ export function moveCheckpoints(
             ),
         );
     for (const [twin, leader] of followers)
-        target.set(twin, -target.get(leader)!);
+        target.set(twin, snapSteps(-target.get(leader)!, resolution));
+
+    // Refused here rather than as an invariant, to name the spot, and so a line can't join lines
+    // that were already stacked in an old file
+    for (const axis of ["x", "y"] as const) {
+        const cs = checkpointsOn(fp, axis);
+        const final = cs.map((c) => ({
+            c,
+            steps: target.get(c) ?? c.stepsFromCenterFront,
+        }));
+        for (const [c, to] of target) {
+            // A line that stays put (by 0) joins nothing, even where lines were already stacked
+            if (c.axis !== axis || samePosition(to, c.stepsFromCenterFront))
+                continue;
+            const other = final.find(
+                (f) => f.c !== c && samePosition(f.steps, to),
+            );
+            if (other)
+                return finishEdit(edit, fp, null, {
+                    errors: [
+                        {
+                            code: "duplicate-position",
+                            axis,
+                            checkpoints: [
+                                { axis, id: c.id },
+                                { axis, id: other.c.id },
+                            ],
+                            message: `There is already a ${axis.toUpperCase()} checkpoint at ${to} steps`,
+                        },
+                    ],
+                });
+        }
+    }
 
     const followNames = args.followNames ?? true;
     const moveOne = (c: Checkpoint): Checkpoint => {
         const to = target.get(c);
         if (to === undefined) return c;
         const moved: Checkpoint = { ...c, stepsFromCenterFront: to };
-        if (followNames && hasAutoNames(fp, c)) {
-            const auto = autoCheckpointNames(fp, c.axis, to);
+        const was = followNames ? autoNamesFor(fp, c, namer) : undefined;
+        if (was) {
+            const auto = autoCheckpointNames(fp, c.axis, to, namer);
             moved.name = auto.name;
             moved.terseName = auto.terseName;
+            // The yard number follows too, unless it was typed
+            if ((c.fieldLabel || undefined) === was.fieldLabel) {
+                if (auto.fieldLabel) moved.fieldLabel = auto.fieldLabel;
+                else delete moved.fieldLabel;
+            }
         }
         return moved;
     };
-    return finishEdit(edit, fp, {
-        ...fieldArgs(fp),
-        xCheckpoints: sortCheckpoints(fp.xCheckpoints.map(moveOne)),
-        yCheckpoints: sortCheckpoints(fp.yCheckpoints.map(moveOne)),
-    });
+    return finishEdit(
+        edit,
+        fp,
+        {
+            ...fieldArgs(fp),
+            xCheckpoints: sortCheckpoints(fp.xCheckpoints.map(moveOne)),
+            yCheckpoints: sortCheckpoints(fp.yCheckpoints.map(moveOne)),
+        },
+        {
+            warnings: mirrorIgnored(
+                args.mirror,
+                found.some((c) => c.axis === "y"),
+            ),
+        },
+    );
 }
 
 /** Patches names, visibility, reference and field label of many checkpoints in one edit */
 export function updateCheckpoints(
     fp: FieldProperties,
     args: UpdateCheckpointsArgs,
+    _options?: FieldEditOptions,
 ): FieldEditResult {
     const edit = "updateCheckpoints";
     const { found, errors } = resolveRefs(fp, args?.ids);
@@ -505,17 +638,16 @@ export function updateCheckpoints(
         return finishEdit(edit, fp, null, { errors: patchErrors });
 
     const swap = (s: string) => swapSideNames(s, fp.sideDescriptions);
+    const name = patch.name?.trim();
+    const shortName = patch.shortName?.trim();
     const patches = new Map<Checkpoint, (c: Checkpoint) => Checkpoint>();
     const apply =
         (mirrored: boolean) =>
         (c: Checkpoint): Checkpoint => {
             const next: Checkpoint = { ...c };
-            if (patch.name !== undefined)
-                next.name = mirrored ? swap(patch.name) : patch.name;
-            if (patch.shortName !== undefined)
-                next.terseName = mirrored
-                    ? swap(patch.shortName)
-                    : patch.shortName;
+            if (name !== undefined) next.name = mirrored ? swap(name) : name;
+            if (shortName !== undefined)
+                next.terseName = mirrored ? swap(shortName) : shortName;
             if (patch.visible !== undefined) next.visible = patch.visible;
             if (patch.useAsReference !== undefined)
                 next.useAsReference = patch.useAsReference;
@@ -533,9 +665,19 @@ export function updateCheckpoints(
         }
     const patchAll = (cs: Checkpoint[]) =>
         cs.map((c) => patches.get(c)?.(c) ?? c);
-    return finishEdit(edit, fp, {
-        ...fieldArgs(fp),
-        xCheckpoints: patchAll(fp.xCheckpoints),
-        yCheckpoints: patchAll(fp.yCheckpoints),
-    });
+    return finishEdit(
+        edit,
+        fp,
+        {
+            ...fieldArgs(fp),
+            xCheckpoints: patchAll(fp.xCheckpoints),
+            yCheckpoints: patchAll(fp.yCheckpoints),
+        },
+        {
+            warnings: mirrorIgnored(
+                args.mirror,
+                found.some((c) => c.axis === "y"),
+            ),
+        },
+    );
 }

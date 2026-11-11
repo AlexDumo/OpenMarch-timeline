@@ -514,9 +514,7 @@
         },
         "checkpoint": {
             "created": "Nagawa ang linya ng sanggunian {axis} sa {steps} na hakbang",
-            "minimumRequired": "Kailangan ng hindi bababa sa 2 linya ng sanggunian {axis}",
-            "newXCheckpointName": "Bagong linya ng sanggunian X",
-            "newYCheckpointName": "Bagong linya ng sanggunian Y"
+            "minimumRequired": "Kailangan ng hindi bababa sa 2 linya ng sanggunian {axis}"
         },
         "customFieldDocs": "Tingnan ang docs",
         "customFieldName": "Custom",

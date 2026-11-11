@@ -514,9 +514,7 @@
         },
         "checkpoint": {
             "created": "Garis acuan {axis} pada {steps} langkah berhasil dibuat",
-            "minimumRequired": "Diperlukan minimal 2 garis acuan {axis}",
-            "newXCheckpointName": "Garis acuan X baru",
-            "newYCheckpointName": "Garis acuan Y baru"
+            "minimumRequired": "Diperlukan minimal 2 garis acuan {axis}"
         },
         "customFieldDocs": "Lihat dokumentasi",
         "customFieldName": "Kustom",

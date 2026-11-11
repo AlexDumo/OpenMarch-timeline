@@ -4,7 +4,7 @@ import {
     buildField,
     checkFieldInvariants,
     checkpointsOn,
-    issueKey,
+    isExistingIssue,
 } from "./fieldModel";
 import type { FieldEditIssue, FieldEditResult } from "./types";
 
@@ -17,13 +17,12 @@ export function newViolations(
     after: FieldPropertyArgs,
 ): FieldEditIssue[] {
     const beforeIssues = checkFieldInvariants(before);
-    const beforeKeys = new Set(beforeIssues.map(issueKey));
     return checkFieldInvariants(after).flatMap((issue): FieldEditIssue[] => {
         if (issue.code === "min-checkpoints") {
             const axis = issue.axis!;
             return checkpointsOn(after, axis).length <
                 checkpointsOn(before, axis).length ||
-                !beforeKeys.has(issueKey(issue))
+                !isExistingIssue(issue, beforeIssues)
                 ? [issue]
                 : [];
         }
@@ -38,7 +37,7 @@ export function newViolations(
             );
             return fresh.length > 0 ? [{ ...issue, checkpoints: fresh }] : [];
         }
-        return beforeKeys.has(issueKey(issue)) ? [] : [issue];
+        return isExistingIssue(issue, beforeIssues) ? [] : [issue];
     });
 }
 

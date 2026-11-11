@@ -579,9 +579,7 @@
         },
         "checkpoint": {
             "created": "{axis}-checkpoint at {steps} steps created",
-            "minimumRequired": "At least 2 {axis}-checkpoints are required",
-            "newXCheckpointName": "New X Checkpoint",
-            "newYCheckpointName": "New Y Checkpoint"
+            "minimumRequired": "At least 2 {axis}-checkpoints are required"
         },
         "customFieldDocs": "See docs",
         "customFieldName": "Custom",
@@ -3783,10 +3781,27 @@
             "notFound": "That checkpoint no longer exists",
             "skippedExisting": "Skipped spots that already have a checkpoint",
             "tooMany": "That would add too many checkpoints. Use a larger spacing.",
-            "yInFront": "Y-checkpoints can't be in front of the front of the field. Use 0 or a negative number of steps."
+            "yInFront": "Y-checkpoints can't be in front of the front of the field. Use 0 or a negative number of steps.",
+            "mirrorTwinSkipped": "The other side already has a checkpoint there, so only this one was added",
+            "outsideField": "Left out spots past the field's outermost checkpoints, so the field keeps its size",
+            "fieldResized": "The field's size or center changed. Marchers keep their spots, so check them against the lines.",
+            "fieldResizeRefused": "That would change the field's size or center, so nothing changed"
         },
         "nothingAdded": "Every spot already has a checkpoint",
-        "seriesAdded": "{count, plural, one {# {axis}-checkpoint added} other {# {axis}-checkpoints added}}"
+        "seriesAdded": "{count, plural, one {# {axis}-checkpoint added} other {# {axis}-checkpoints added}}",
+        "names": {
+            "yardLine": "{yards} yard line",
+            "endZone": "end zone",
+            "endZoneShort": "EZ",
+            "endZoneLine": "end zone {yards}",
+            "endZoneLineShort": "EZ{yards}",
+            "gridLine": "{line} line",
+            "sideSteps": "{side} {steps} steps from center",
+            "sideStepsShort": "{side} {steps}",
+            "stepsFromFront": "{steps} steps from front",
+            "stepsFromFrontShort": "F{steps}"
+        },
+        "failed": "The field change couldn't be saved, so nothing changed."
     },
     "fieldEditMode": {
         "bar": {

@@ -514,9 +514,7 @@
         },
         "checkpoint": {
             "created": "已创建位于{steps}步处的{axis}参考线",
-            "minimumRequired": "至少需要2条{axis}参考线",
-            "newXCheckpointName": "新X参考线",
-            "newYCheckpointName": "新Y参考线"
+            "minimumRequired": "至少需要2条{axis}参考线"
         },
         "customFieldDocs": "查看文档",
         "customFieldName": "自定义",

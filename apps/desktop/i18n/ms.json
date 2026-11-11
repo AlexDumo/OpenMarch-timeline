@@ -514,9 +514,7 @@
         },
         "checkpoint": {
             "created": "Garisan rujukan {axis} pada {steps} langkah dicipta",
-            "minimumRequired": "Sekurang-kurangnya 2 garisan rujukan {axis} diperlukan",
-            "newXCheckpointName": "Garisan rujukan X baharu",
-            "newYCheckpointName": "Garisan rujukan Y baharu"
+            "minimumRequired": "Sekurang-kurangnya 2 garisan rujukan {axis} diperlukan"
         },
         "customFieldDocs": "Lihat dokumentasi",
         "customFieldName": "Tersuai",

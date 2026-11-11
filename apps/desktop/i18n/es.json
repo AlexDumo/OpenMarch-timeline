@@ -515,9 +515,7 @@
         },
         "checkpoint": {
             "created": "Se creó la línea de referencia {axis} a {steps} pasos",
-            "minimumRequired": "Se requieren al menos 2 líneas de referencia {axis}",
-            "newXCheckpointName": "Nueva línea de referencia X",
-            "newYCheckpointName": "Nueva línea de referencia Y"
+            "minimumRequired": "Se requieren al menos 2 líneas de referencia {axis}"
         },
         "customFieldDocs": "Ver documentación",
         "customFieldName": "Personalizado",

@@ -100,7 +100,10 @@ export function insertBetweenEdit(
         edit: "addCheckpoint",
         args: {
             axis,
-            between,
+            between: [
+                { axis, id: between[0] },
+                { axis, id: between[1] },
+            ],
             ...(axis === "x" && mirror ? { mirror: true } : {}),
         },
     };

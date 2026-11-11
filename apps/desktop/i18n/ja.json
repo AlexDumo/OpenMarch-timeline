@@ -515,9 +515,7 @@
         },
         "checkpoint": {
             "created": "{steps}歩の位置に{axis}基準線を作成しました",
-            "minimumRequired": "{axis}基準線は少なくとも2本必要です",
-            "newXCheckpointName": "新しいX基準線",
-            "newYCheckpointName": "新しいY基準線"
+            "minimumRequired": "{axis}基準線は少なくとも2本必要です"
         },
         "customFieldDocs": "ドキュメントを参照",
         "customFieldName": "カスタム",

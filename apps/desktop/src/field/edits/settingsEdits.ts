@@ -5,6 +5,7 @@ import { finishEdit, invalidArgs, isFiniteNumber } from "./finish";
 import type {
     ApplyTemplateArgs,
     FieldEditIssue,
+    FieldEditOptions,
     FieldEditResult,
     FieldSettingsPatch,
     SetFieldSettingsArgs,
@@ -105,6 +106,7 @@ function nestedErrors(
 export function setFieldSettings(
     fp: FieldProperties,
     args: SetFieldSettingsArgs,
+    _options?: FieldEditOptions,
 ): FieldEditResult {
     const edit = "setFieldSettings";
     const patch = args?.patch as Record<string, unknown> | undefined;
@@ -240,13 +242,15 @@ export const LOOK_KEYS = [
 
 /**
  * Switches to a template, keeping the current look ("look", the default), the current lines
- * ("lines") or nothing ("none", the old Apply Field Type). The diff pairs checkpoints by position
+ * ("lines") or nothing ("none", what the customizer's Apply Field Type does today; a caller
+ * standing in for it passes "none" explicitly). The diff pairs checkpoints by position
  * (template ids restart at 0) and lists in `kept` what of the current field stays where it
  * differs from the template (B11: nothing is wiped silently).
  */
 export function applyTemplate(
     fp: FieldProperties,
     args: ApplyTemplateArgs,
+    _options?: FieldEditOptions,
 ): FieldEditResult {
     const edit = "applyTemplate";
     const keep: TemplateKeep = args?.keep ?? "look";

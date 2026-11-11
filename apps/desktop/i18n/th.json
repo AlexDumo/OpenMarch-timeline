@@ -514,9 +514,7 @@
         },
         "checkpoint": {
             "created": "สร้างเส้นอ้างอิง {axis} ที่ {steps} ก้าวแล้ว",
-            "minimumRequired": "ต้องมีเส้นอ้างอิง {axis} อย่างน้อย 2 เส้น",
-            "newXCheckpointName": "เส้นอ้างอิง X ใหม่",
-            "newYCheckpointName": "เส้นอ้างอิง Y ใหม่"
+            "minimumRequired": "ต้องมีเส้นอ้างอิง {axis} อย่างน้อย 2 เส้น"
         },
         "customFieldDocs": "ดูเอกสาร",
         "customFieldName": "กำหนดเอง",

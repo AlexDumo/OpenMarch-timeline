@@ -23,6 +23,11 @@ covers:
   - action:fieldEditPreviousPane
   - action:fieldEditImportImage
   - action:fieldEditRemoveImage
+  - action:fieldAddXCheckpoint
+  - action:fieldAddYCheckpoint
+  - action:fieldAddXCheckpointSeries
+  - action:fieldAddYCheckpointSeries
+  - i18n:fieldEdits
   - i18n:fieldEditMode
   - i18n:fieldProperties
   - i18n:field.general
@@ -69,6 +74,10 @@ You can also:
 - Double-click a ruler to add a line there.
 
 A new line is named from where it is, such as 37.5 yard line, and on a football field it gets a yard number when it lands on one.
+
+A spot that already has a line, or a Y line in front of the front sideline, isn't taken: a message says why. Positions are rounded to a hundredth of a step.
+
+To add many lines at once, use the command palette (<Kbd action="openCommandPalette" />). <Ui k="actions.field.addXCheckpointSeries" /> and <Ui k="actions.field.addYCheckpointSeries" /> ask how many steps apart, then add lines up to the outermost lines, skipping spots that already have one. They never change the field's size. Their lines are drawn but aren't used as references, so coordinates still count from your main lines; turn on reference for any you want to count from.
 
 ### Pick lines
 

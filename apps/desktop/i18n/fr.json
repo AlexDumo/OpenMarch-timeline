@@ -515,9 +515,7 @@
         },
         "checkpoint": {
             "created": "Repère {axis} à {steps} pas créé",
-            "minimumRequired": "Au moins 2 repères {axis} sont requis",
-            "newXCheckpointName": "Nouveau repère X",
-            "newYCheckpointName": "Nouveau repère Y"
+            "minimumRequired": "Au moins 2 repères {axis} sont requis"
         },
         "customFieldDocs": "Voir la doc",
         "customFieldName": "Personnalisé",
