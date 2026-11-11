@@ -3,11 +3,9 @@ import type { OrderForm } from "@/db-functions/rememberedOrder";
 import {
     ORDER_LEADER_COLOR,
     ORDER_TAIL_COLOR,
-    ORDER_WIDTH,
     SWEEP_MIN_PX,
     orderAfterSweep,
     orderColorAt,
-    orderWidthAt,
     sweepThrough,
     sweepTolerance,
     type XY,
@@ -149,12 +147,6 @@ describe("the order line's look (DL-30)", () => {
         // In grey, light to dark carries the order
         expect(lightness(orderColorAt(0))).toBeGreaterThan(lightness(mid));
         expect(lightness(mid)).toBeGreaterThan(lightness(orderColorAt(1)));
-    });
-
-    it("is thick at the leader and thin at the tail", () => {
-        expect(orderWidthAt(0)).toBe(ORDER_WIDTH.leader);
-        expect(orderWidthAt(1)).toBe(ORDER_WIDTH.tail);
-        expect(orderWidthAt(0.5)).toBeLessThan(ORDER_WIDTH.leader);
     });
 });
 

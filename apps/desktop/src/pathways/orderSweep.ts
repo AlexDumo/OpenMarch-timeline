@@ -1,7 +1,7 @@
 /**
  * Set order's sweep and the order line's look (pathways step 4g, DL-27, DL-30), pure: who a drag
  * through the line picks up and in what order, the order kept when the drag ends, and the color
- * and width of the line at each marcher.
+ * of the line at each marcher (its widths are `orderLineGeometry`'s).
  */
 
 export type XY = { readonly x: number; readonly y: number };
@@ -118,9 +118,6 @@ export const ORDER_TAIL_COLOR = "#B2182B";
 /** The thin dark halo under the line, so it reads on green turf and on a white field */
 export const ORDER_HALO_COLOR = "rgba(15, 23, 42, 0.6)";
 
-/** The line's width at the leader and at the tail, in screen pixels */
-export const ORDER_WIDTH = { leader: 7, tail: 2 } as const;
-
 type Lab = readonly [number, number, number];
 
 const toLinear = (c: number) =>
@@ -176,11 +173,6 @@ export function orderColorAt(t: number): string {
         LEADER_LAB[2] + (TAIL_LAB[2] - LEADER_LAB[2]) * u,
     ]);
 }
-
-/** The line's width `t` of the way from the leader (0) to the tail (1), in screen pixels */
-export const orderWidthAt = (t: number): number =>
-    ORDER_WIDTH.leader +
-    (ORDER_WIDTH.tail - ORDER_WIDTH.leader) * Math.min(1, Math.max(0, t));
 
 /** How far along the line marcher `i` of `count` is, 0 at the leader and 1 at the tail */
 export const orderFraction = (i: number, count: number): number =>
