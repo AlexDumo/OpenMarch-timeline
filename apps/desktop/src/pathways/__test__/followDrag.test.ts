@@ -34,6 +34,7 @@ import {
     trailLine,
     type FollowDrag,
     type FollowKeep,
+    followFootprint,
 } from "../followDrag";
 import { bigSteps, trailDistances } from "../PathEditor";
 import { curveOf } from "../pathEdit";
@@ -532,6 +533,23 @@ describe("the Follow tool, step 4d", () => {
         cancelFollowDrawing();
         vi.advanceTimersToNextFrame();
         expect(session().pointer).toBeNull();
+    });
+
+    it("the path bar keeps clear of the line, where it ends now and the pointer", () => {
+        open();
+        expect(followFootprint(session())).toHaveLength(starts.size);
+        const left = starts.get(1)!;
+        pathPenMode.press(at(left.x, left.y), press);
+        pathPenMode.release(at(left.x, left.y), { double: false, ownFirst: false }); // prettier-ignore
+        const to = { x: left.x - 8 * STEP, y: left.y };
+        act(() => setPointer(to));
+        const footprint = followFootprint(session());
+        expect(footprint).toContainEqual(to);
+        // The starts, an end spot for each member, and the pointer
+        expect(footprint).toHaveLength(2 * starts.size + 1);
+        act(() => clearPath());
+        const after = usePathPenStore.getState().session;
+        expect(after ? followFootprint(after) : []).toEqual([]);
     });
 
     it("a click on an end grabs it; moving and clicking places the first point", () => {

@@ -462,12 +462,14 @@ const MEMBER_RING_WIDTH = 2;
 /** The Follow tool's pull arrows (pathways step 4d), in dot radii, and their loop in seconds */
 const PULL_ARROW = {
     /** From the end's center to the first chevron */
-    first: 3,
+    first: 3.2,
     /** Between chevrons, and how far each slides in one loop */
-    gap: 1.2,
-    /** Half a chevron's height, and its depth */
-    half: 0.7,
+    gap: 2,
+    /** Half a chevron's height, and its depth: about a marcher's dot, so they read at 100% */
+    half: 1.4,
     period: 1.1,
+    /** Heavier than a ring's line: three short strokes carry the whole cue */
+    width: 2.5,
 } as const;
 
 /** How see-through a start ghost is (#417; the owner picked ghosts over rings in the lab) */
@@ -632,7 +634,7 @@ const PullArrows = memo(function PullArrows({
                         transform={`translate(${(first + (still ? k * gap : 0)) * unit} 0)`}
                         fill="none"
                         stroke={OWN_RING}
-                        strokeWidth={MEMBER_RING_WIDTH}
+                        strokeWidth={PULL_ARROW.width}
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         vectorEffect="non-scaling-stroke"
