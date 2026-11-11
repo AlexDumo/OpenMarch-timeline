@@ -61,7 +61,30 @@
                 "every": "Steps between checkpoints",
                 "toBack": "Back to how many steps behind the front",
                 "toSide": "Out to how many steps from the center"
-            }
+            },
+            "editField": "Edit field",
+            "editFieldKeywords": "field lines checkpoints yard hash grid customize size template settings",
+            "done": "Done editing the field",
+            "mirror": "Mirror sides",
+            "mirrorOn": "Turn Mirror sides on",
+            "mirrorOff": "Turn Mirror sides off",
+            "addXLine": "Add X line",
+            "addYLine": "Add Y line",
+            "editLine": "Edit line…",
+            "deleteLines": "Delete lines",
+            "toggleVisible": "Hide or show lines",
+            "toggleReference": "Use lines as reference or not",
+            "nextLine": "Pick the next line",
+            "previousLine": "Pick the previous line",
+            "selectAllLines": "Select all lines",
+            "selectAllXLines": "Select all X lines",
+            "selectAllYLines": "Select all Y lines",
+            "everyOther": "Keep every other line picked",
+            "resetNames": "Name lines from their position",
+            "nudgeLeft": "Move lines left",
+            "nudgeRight": "Move lines right",
+            "nudgeUp": "Move lines back",
+            "nudgeDown": "Move lines forward"
         },
         "file": {
             "closeFile": "Close file",
@@ -3830,5 +3853,146 @@
         },
         "nothingAdded": "Every spot already has a checkpoint",
         "seriesAdded": "{count, plural, one {# {axis}-checkpoint added} other {# {axis}-checkpoints added}}"
+    },
+    "fieldEditMode": {
+        "bar": {
+            "title": "Editing field",
+            "basedOn": "Based on {template}",
+            "custom": "Custom field",
+            "changes": "{count, plural, =0 {No changes} one {# change} other {# changes}}",
+            "addX": "X line",
+            "addY": "Y line",
+            "edit": "Edit…",
+            "hideShow": "Hide/Show",
+            "reference": "Reference",
+            "everyOther": "Every other",
+            "delete": "Delete",
+            "selectMany": "Select many",
+            "mirror": "Mirror sides",
+            "mirrorOnTip": "Mirror sides is on: an edit on one side of the 50 also edits its twin",
+            "mirrorOffTip": "Mirror sides is off: each line is edited on its own",
+            "undo": "Undo",
+            "redo": "Redo",
+            "done": "Done"
+        },
+        "ruler": {
+            "x": "Drag out of this ruler to add an X line",
+            "y": "Drag out of this ruler to add a Y line"
+        },
+        "readout": {
+            "newLine": "New line:",
+            "fromCenter": "{side} · {steps} steps",
+            "center": "On the center",
+            "behindFront": "{steps} steps behind the front",
+            "toLine": "{steps} to {line}",
+            "mirrored": "Its twin on the other side too",
+            "releaseToDelete": "{count, plural, one {Let go to delete this line} other {Let go to delete these # lines}}",
+            "dragOut": "Drag onto the field to add a line"
+        },
+        "xLine": "X line",
+        "yLine": "Y line",
+        "popover": {
+            "close": "Close",
+            "position": "Position",
+            "side": "Side",
+            "stepsFromCenter": "steps from the center",
+            "stepsBehindFront": "steps behind the front",
+            "yardLine": "= {yard} yard line",
+            "typeHint": "type 24, +4 or 85.33/2",
+            "typeHintYards": "type 24, +4, 47.5yd or 85.33/2",
+            "shortName": "Short name",
+            "shortNameHint": "Shown on the field's edges and in coordinates, such as 45 or FH",
+            "name": "Name",
+            "nameHint": "Used in written-out coordinates and to pick the 3D View's venue",
+            "yardNumber": "Yard number",
+            "yardNumberHint": "The number painted on the field at this line, if any",
+            "none": "none",
+            "visible": "Visible",
+            "reference": "Reference",
+            "mirrored": "Mirrored with {twin}: edits apply to both",
+            "delete": "Delete",
+            "done": "Done"
+        },
+        "numberPad": {
+            "label": "Number pad",
+            "back": "Delete last character",
+            "clear": "Clear",
+            "clearShort": "C"
+        },
+        "menu": {
+            "hide": "Hide",
+            "show": "Show",
+            "useAsReference": "Use as reference",
+            "stopReference": "Stop using as reference"
+        },
+        "namesAlreadyAutomatic": "Those lines already have the names their position gives them",
+        "inspector": {
+            "title": "Field",
+            "lines": "Lines",
+            "size": "Size and steps",
+            "template": "Template and files",
+            "names": "Name and sides",
+            "markings": "Markings and labels",
+            "image": "Background image",
+            "colors": "Colors"
+        },
+        "list": {
+            "hint": "Click a line to pick it, Shift-click to add. The field and this list share the pick. + between rows adds a line halfway.",
+            "xHeading": "X · side to side",
+            "yHeading": "Y · front to back",
+            "center": "center",
+            "bothSides": "{left}+{right} · {steps}",
+            "oneSide": "{side} · {steps}",
+            "behind": "{steps} back",
+            "insert": "Add a line halfway between {a} and {b}",
+            "drawAsHashes": "Draw as hashes"
+        },
+        "size": {
+            "readout": "{width} × {depth} steps ({widthLength} × {depthLength})",
+            "width": "Width",
+            "depth": "Depth",
+            "widthHint": "Moves the outermost X lines, keeping the field centered",
+            "depthHint": "Moves the back line",
+            "outerLinesNote": "Width and depth move the outer lines. The lines inside stay where they are.",
+            "steps": "steps",
+            "stepsTo5": "{steps} to 5",
+            "tooSmall": "That's too small: a line inside would end up on or past the new edge. Delete or move it first.",
+            "invalid": "Type a size of more than 0 steps"
+        },
+        "names": {
+            "fieldNameHint": "The 3D View picks its venue from this name"
+        },
+        "markings": {
+            "edgeLabels": "Edge labels",
+            "yardNumbers": "Yard numbers",
+            "yardNumbersHint": "Steps from the front to each edge of the painted numbers. Clear the home numbers to paint none.",
+            "homeBottom": "Home, bottom",
+            "homeTop": "Home, top",
+            "awayTop": "Away, top",
+            "awayBottom": "Away, bottom"
+        },
+        "image": {
+            "remove": "Remove image",
+            "ratios": "Field ratio {field} · image ratio {image}"
+        },
+        "colors": {
+            "field": "Field",
+            "marchers": "Marchers and paths",
+            "shapes": {
+                "circle": "Circle",
+                "square": "Square",
+                "triangle": "Triangle",
+                "x": "X"
+            }
+        },
+        "template": {
+            "title": "Switch to {template}?",
+            "lines": "Lines: {added} added, {removed} removed, {renamed} renamed or changed",
+            "size": "Size: {before} → {after} steps",
+            "keepLook": "Keep my look (colors, labels, image, side names)",
+            "undoNote": "This is one step to undo.",
+            "cancel": "Cancel",
+            "apply": "Switch"
+        }
     }
 }

@@ -1,21 +1,36 @@
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
-import { SidebarModalLauncher } from "@/components/sidebar/SidebarModal";
 import { XIcon } from "@phosphor-icons/react";
 import FieldProperties from "./FieldPropertiesSettings";
 import { T, useTranslate } from "@tolgee/react";
+import clsx from "clsx";
+import ActionButton from "@/shortcuts/ActionButton";
+import { useIsFieldEditMode } from "@/field/editMode/fieldEditModeStore";
 
+/**
+ * The sidebar's Field button: puts the canvas into the Edit field mode (#824), where the field's
+ * lines are edited in place and its settings sit in the inspector. Pressed again, it's Done.
+ */
 export default function FieldModal() {
     const { t } = useTranslate();
+    const editing = useIsFieldEditMode();
     return (
-        <SidebarModalLauncher
-            name={t("sidebar.field")}
-            contents={<FieldPropertiesContents />}
-            newContentId="field"
-            buttonLabel={<FieldIcon />}
-        />
+        <ActionButton
+            action="fieldEditMode"
+            caption={t("sidebar.field")}
+            aria-pressed={editing}
+            id="sidebar-launcher-field"
+            data-testid="sidebar-field"
+            className={clsx(
+                "touch:flex touch:min-h-44 touch:w-full touch:flex-col touch:items-center touch:justify-center touch:gap-2",
+                editing && "text-accent",
+            )}
+        >
+            <FieldIcon />
+        </ActionButton>
     );
 }
 
+/** The old side panel's contents (template, import/export, customizer); the mode replaced it */
 export function FieldPropertiesContents() {
     const { t } = useTranslate();
     const { toggleOpen } = useSidebarModalStore();

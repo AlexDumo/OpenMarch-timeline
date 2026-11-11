@@ -37,6 +37,9 @@ import { useIsPreviewMode } from "./stores/PreviewModeStore";
 import { PreviewModeHost } from "./components/preview/PreviewMode";
 import WorkspaceViewSwitch from "./components/toolbar/WorkspaceViewSwitch";
 import { useEditorModeStore } from "./stores/EditorModeStore";
+import { useIsFieldEditMode } from "./field/editMode/fieldEditModeStore";
+import { FieldEditBar } from "./field/editMode/FieldEditBar";
+import FieldInspector from "./field/editMode/inspector/FieldInspector";
 import ErrorBoundary from "./ErrorBoundary";
 import {
     QueryCache,
@@ -245,6 +248,7 @@ function App() {
     // Tempo mode: the tempo lanes are the only thing in focus; the rest steps back and
     // takes no input until tempo mode is done
     const tempoMode = useTempoModeStore((s) => s.on);
+    const fieldEditing = useIsFieldEditMode();
     const tempoModeClass = clsx(
         "transition-opacity duration-200",
         tempoMode && "pointer-events-none opacity-30 select-none",
@@ -327,7 +331,12 @@ function App() {
                                                                     tempoMode
                                                                 }
                                                             >
-                                                                <Toolbar />
+                                                                {/* The Edit field mode's bar takes the toolbar's place (#824) */}
+                                                                {fieldEditing ? (
+                                                                    <FieldEditBar />
+                                                                ) : (
+                                                                    <Toolbar />
+                                                                )}
                                                             </div>
                                                         )}
                                                         <div
@@ -371,7 +380,11 @@ function App() {
                                                             }
                                                             inert={tempoMode}
                                                         >
-                                                            <Inspector />
+                                                            {fieldEditing ? (
+                                                                <FieldInspector />
+                                                            ) : (
+                                                                <Inspector />
+                                                            )}
                                                         </InspectorDock>
                                                     )}
                                                 </div>

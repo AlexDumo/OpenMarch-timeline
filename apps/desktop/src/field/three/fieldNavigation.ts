@@ -312,12 +312,12 @@ export const isPanPress = (event: PointerEvent) =>
 
 /**
  * Presses on the field's own controls (the isolation bar, badges, buttons in
- * the overlay) are theirs, not navigation.
+ * the overlay, the Edit field mode's rulers) are theirs, not navigation.
  */
 const onControl = (event: Event) =>
     event.target instanceof Element &&
     event.target.closest(
-        "button, a, input, select, textarea, [role='button'], [role='menu'], [role='dialog']",
+        "button, a, input, select, textarea, [role='button'], [role='menu'], [role='dialog'], [data-field-control]",
     ) !== null;
 
 type Local = (clientX: number, clientY: number) => ElementPoint;
