@@ -20,24 +20,55 @@ import ColorPicker from "../../ui/ColorPicker";
 import { StaticFormField } from "../../ui/FormField";
 import { inputClassname, shapeOptions, shapeIcons } from "./utils";
 import { ArrowUUpLeftIcon } from "@phosphor-icons/react";
+import { toast } from "sonner";
+import { isRgbaColor, sameColor } from "./fieldEditorValues";
 
 interface ThemeTabProps {
     currentFieldProperties: FieldProperties;
-    validateIsRgbaColor: (
-        themeProperty: keyof FieldTheme,
-        fieldProperties: FieldProperties,
-    ) => boolean;
 }
 
-export function ThemeTab({
-    currentFieldProperties,
-    validateIsRgbaColor,
-}: ThemeTabProps) {
+/** The theme's single colors (not the marcher colors or the shape type). */
+type ThemeColorKey = {
+    [K in keyof FieldTheme]: FieldTheme[K] extends RgbaColor ? K : never;
+}[keyof FieldTheme];
+
+export function ThemeTab({ currentFieldProperties }: ThemeTabProps) {
     const { t } = useTranslate();
     const queryClient = useQueryClient();
     const { mutate: updateFieldProperties, isPending } = useMutation(
         updateFieldPropertiesMutationOptions(queryClient),
     );
+    const theme = currentFieldProperties.theme;
+
+    /** Saves a picked color, after checking it: nothing when it's invalid or unchanged. */
+    const pickColor = (
+        color: RgbaColor,
+        current: RgbaColor,
+        themeWith: (color: RgbaColor) => FieldTheme,
+    ) => {
+        if (!isRgbaColor(color)) {
+            toast.error(t("fieldProperties.errors.invalidColor"));
+            return;
+        }
+        if (sameColor(color, current)) return;
+        updateFieldProperties(
+            new FieldProperties({
+                ...currentFieldProperties,
+                theme: themeWith(color),
+            }),
+        );
+    };
+    const setColor = (key: ThemeColorKey) => (color: RgbaColor) =>
+        pickColor(color, theme[key], (picked) => ({
+            ...theme,
+            [key]: picked,
+        }));
+    const setMarcherColor =
+        (key: keyof FieldTheme["defaultMarcher"]) => (color: RgbaColor) =>
+            pickColor(color, theme.defaultMarcher[key], (picked) => ({
+                ...theme,
+                defaultMarcher: { ...theme.defaultMarcher, [key]: picked },
+            }));
 
     return (
         <TabContent value="theme" className="flex flex-col gap-32">
@@ -54,23 +85,7 @@ export function ThemeTab({
                     label={t("fieldProperties.labels.background")}
                     initialColor={currentFieldProperties.theme.background}
                     defaultColor={DEFAULT_FIELD_THEME.background as RgbaColor}
-                    onBlur={(color: RgbaColor) => {
-                        if (
-                            validateIsRgbaColor(
-                                "background",
-                                currentFieldProperties,
-                            )
-                        )
-                            updateFieldProperties(
-                                new FieldProperties({
-                                    ...currentFieldProperties,
-                                    theme: {
-                                        ...currentFieldProperties.theme,
-                                        background: color,
-                                    },
-                                }),
-                            );
-                    }}
+                    onBlur={setColor("background")}
                 />
                 <ColorPicker
                     label={t("fieldProperties.labels.primaryLines")}
@@ -78,23 +93,7 @@ export function ThemeTab({
                     defaultColor={
                         DEFAULT_FIELD_THEME.primaryStroke as RgbaColor
                     }
-                    onBlur={(color: RgbaColor) => {
-                        if (
-                            validateIsRgbaColor(
-                                "primaryStroke",
-                                currentFieldProperties,
-                            )
-                        )
-                            updateFieldProperties(
-                                new FieldProperties({
-                                    ...currentFieldProperties,
-                                    theme: {
-                                        ...currentFieldProperties.theme,
-                                        primaryStroke: color,
-                                    },
-                                }),
-                            );
-                    }}
+                    onBlur={setColor("primaryStroke")}
                 />
                 <ColorPicker
                     label={t("fieldProperties.labels.secondaryLines")}
@@ -102,23 +101,7 @@ export function ThemeTab({
                     defaultColor={
                         DEFAULT_FIELD_THEME.secondaryStroke as RgbaColor
                     }
-                    onBlur={(color: RgbaColor) => {
-                        if (
-                            validateIsRgbaColor(
-                                "secondaryStroke",
-                                currentFieldProperties,
-                            )
-                        )
-                            updateFieldProperties(
-                                new FieldProperties({
-                                    ...currentFieldProperties,
-                                    theme: {
-                                        ...currentFieldProperties.theme,
-                                        secondaryStroke: color,
-                                    },
-                                }),
-                            );
-                    }}
+                    onBlur={setColor("secondaryStroke")}
                 />
                 <ColorPicker
                     label={t("fieldProperties.labels.gridLines")}
@@ -126,23 +109,7 @@ export function ThemeTab({
                     defaultColor={
                         DEFAULT_FIELD_THEME.tertiaryStroke as RgbaColor
                     }
-                    onBlur={(color: RgbaColor) => {
-                        if (
-                            validateIsRgbaColor(
-                                "tertiaryStroke",
-                                currentFieldProperties,
-                            )
-                        )
-                            updateFieldProperties(
-                                new FieldProperties({
-                                    ...currentFieldProperties,
-                                    theme: {
-                                        ...currentFieldProperties.theme,
-                                        tertiaryStroke: color,
-                                    },
-                                }),
-                            );
-                    }}
+                    onBlur={setColor("tertiaryStroke")}
                 />
                 <h5 className="text-h5 mb-8">
                     <T keyName="fieldProperties.themeSubsections.labels" />
@@ -151,23 +118,7 @@ export function ThemeTab({
                     label={t("fieldProperties.labels.fieldLabels")}
                     initialColor={currentFieldProperties.theme.fieldLabel}
                     defaultColor={DEFAULT_FIELD_THEME.fieldLabel as RgbaColor}
-                    onBlur={(color: RgbaColor) => {
-                        if (
-                            validateIsRgbaColor(
-                                "fieldLabel",
-                                currentFieldProperties,
-                            )
-                        )
-                            updateFieldProperties(
-                                new FieldProperties({
-                                    ...currentFieldProperties,
-                                    theme: {
-                                        ...currentFieldProperties.theme,
-                                        fieldLabel: color,
-                                    },
-                                }),
-                            );
-                    }}
+                    onBlur={setColor("fieldLabel")}
                 />
                 <ColorPicker
                     label={t("fieldProperties.labels.externalLabels")}
@@ -175,23 +126,7 @@ export function ThemeTab({
                     defaultColor={
                         DEFAULT_FIELD_THEME.externalLabel as RgbaColor
                     }
-                    onBlur={(color: RgbaColor) => {
-                        if (
-                            validateIsRgbaColor(
-                                "externalLabel",
-                                currentFieldProperties,
-                            )
-                        )
-                            updateFieldProperties(
-                                new FieldProperties({
-                                    ...currentFieldProperties,
-                                    theme: {
-                                        ...currentFieldProperties.theme,
-                                        externalLabel: color,
-                                    },
-                                }),
-                            );
-                    }}
+                    onBlur={setColor("externalLabel")}
                 />
                 <h5 className="text-h5 mb-8">
                     <T keyName="fieldProperties.themeSubsections.pathways" />
@@ -200,67 +135,19 @@ export function ThemeTab({
                     label={t("fieldProperties.labels.previousPath")}
                     initialColor={currentFieldProperties.theme.previousPath}
                     defaultColor={DEFAULT_FIELD_THEME.previousPath as RgbaColor}
-                    onBlur={(color: RgbaColor) => {
-                        if (
-                            validateIsRgbaColor(
-                                "previousPath",
-                                currentFieldProperties,
-                            )
-                        )
-                            updateFieldProperties(
-                                new FieldProperties({
-                                    ...currentFieldProperties,
-                                    theme: {
-                                        ...currentFieldProperties.theme,
-                                        previousPath: color,
-                                    },
-                                }),
-                            );
-                    }}
+                    onBlur={setColor("previousPath")}
                 />
                 <ColorPicker
                     label={t("fieldProperties.labels.nextPath")}
                     initialColor={currentFieldProperties.theme.nextPath}
                     defaultColor={DEFAULT_FIELD_THEME.nextPath as RgbaColor}
-                    onBlur={(color: RgbaColor) => {
-                        if (
-                            validateIsRgbaColor(
-                                "nextPath",
-                                currentFieldProperties,
-                            )
-                        )
-                            updateFieldProperties(
-                                new FieldProperties({
-                                    ...currentFieldProperties,
-                                    theme: {
-                                        ...currentFieldProperties.theme,
-                                        nextPath: color,
-                                    },
-                                }),
-                            );
-                    }}
+                    onBlur={setColor("nextPath")}
                 />
                 <ColorPicker
                     label={t("fieldProperties.labels.temporaryPath")}
                     initialColor={currentFieldProperties.theme.tempPath}
                     defaultColor={DEFAULT_FIELD_THEME.tempPath as RgbaColor}
-                    onBlur={(color: RgbaColor) => {
-                        if (
-                            validateIsRgbaColor(
-                                "tempPath",
-                                currentFieldProperties,
-                            )
-                        )
-                            updateFieldProperties(
-                                new FieldProperties({
-                                    ...currentFieldProperties,
-                                    theme: {
-                                        ...currentFieldProperties.theme,
-                                        tempPath: color,
-                                    },
-                                }),
-                            );
-                    }}
+                    onBlur={setColor("tempPath")}
                 />
                 <h5 className="text-h5 mb-8">
                     <T keyName="fieldProperties.themeSubsections.marchers" />
@@ -271,21 +158,7 @@ export function ThemeTab({
                         currentFieldProperties.theme.defaultMarcher.fill
                     }
                     defaultColor={DEFAULT_FIELD_THEME.defaultMarcher.fill}
-                    onBlur={(color: RgbaColor) =>
-                        updateFieldProperties(
-                            new FieldProperties({
-                                ...currentFieldProperties,
-                                theme: {
-                                    ...currentFieldProperties.theme,
-                                    defaultMarcher: {
-                                        ...currentFieldProperties.theme
-                                            .defaultMarcher,
-                                        fill: color,
-                                    },
-                                },
-                            }),
-                        )
-                    }
+                    onBlur={setMarcherColor("fill")}
                 />
                 <ColorPicker
                     label={t("fieldProperties.labels.marcherOutline")}
@@ -293,21 +166,7 @@ export function ThemeTab({
                         currentFieldProperties.theme.defaultMarcher.outline
                     }
                     defaultColor={DEFAULT_FIELD_THEME.defaultMarcher.outline}
-                    onBlur={(color: RgbaColor) =>
-                        updateFieldProperties(
-                            new FieldProperties({
-                                ...currentFieldProperties,
-                                theme: {
-                                    ...currentFieldProperties.theme,
-                                    defaultMarcher: {
-                                        ...currentFieldProperties.theme
-                                            .defaultMarcher,
-                                        outline: color,
-                                    },
-                                },
-                            }),
-                        )
-                    }
+                    onBlur={setMarcherColor("outline")}
                 />
                 <ColorPicker
                     label={t("fieldProperties.labels.marcherText")}
@@ -315,38 +174,13 @@ export function ThemeTab({
                         currentFieldProperties.theme.defaultMarcher.label
                     }
                     defaultColor={DEFAULT_FIELD_THEME.defaultMarcher.label}
-                    onBlur={(color: RgbaColor) =>
-                        updateFieldProperties(
-                            new FieldProperties({
-                                ...currentFieldProperties,
-                                theme: {
-                                    ...currentFieldProperties.theme,
-                                    defaultMarcher: {
-                                        ...currentFieldProperties.theme
-                                            .defaultMarcher,
-                                        label: color,
-                                    },
-                                },
-                            }),
-                        )
-                    }
+                    onBlur={setMarcherColor("label")}
                 />
                 <ColorPicker
                     label={t("fieldProperties.labels.shapes")}
                     initialColor={currentFieldProperties.theme.shape}
                     defaultColor={DEFAULT_FIELD_THEME.shape as RgbaColor}
-                    onBlur={(color: RgbaColor) => {
-                        validateIsRgbaColor("shape", currentFieldProperties);
-                        updateFieldProperties(
-                            new FieldProperties({
-                                ...currentFieldProperties,
-                                theme: {
-                                    ...currentFieldProperties.theme,
-                                    shape: color,
-                                },
-                            }),
-                        );
-                    }}
+                    onBlur={setColor("shape")}
                 />
                 <StaticFormField label={t("fieldProperties.labels.shapeType")}>
                     <div className="flex items-center gap-8">
