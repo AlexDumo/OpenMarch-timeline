@@ -6,7 +6,7 @@
 import type { Resolver } from "@openmarch/core";
 import { db } from "@/global/database/db";
 import {
-    followSource,
+    followOrderAt,
     trailDragRefusalFor,
     trailDragRefusal,
     type TrailWindow,
@@ -103,9 +103,10 @@ export async function openFollowTool(
         const [x, y] = resolver.positionAt(m, window.start);
         return [x, y];
     });
-    const source = followSource(starts);
-    if (!source) return translateTimelineText(trailDragRefusal.notFitted());
-    const order = source.order.map((i) => sorted[i]!);
+    // The order the show remembers for them, or else the one their positions suggest (step 4f)
+    const along = await followOrderAt(db, sorted, window.start, starts);
+    if (!along) return translateTimelineText(trailDragRefusal.notFitted());
+    const order = along.map((i) => sorted[i]!);
     // Said before drawing starts, so no drawing is lost (AP-T8's refusals)
     const refusal = await db.transaction((tx) =>
         trailDragRefusalFor(tx, window, sorted, order.at(-1)!, "trail"),

@@ -3620,3 +3620,28 @@ Curve's length on its first edit).
 | QA-DL-16   | Open the Follow tool on a line                           | Everyone else faded; the line's marchers at the start flag; arrows on the two ends only, pointing outward     |
 | QA-DL-17   | Grab an end and move without clicking                    | The marchers and end spots follow the pointer; nothing is placed; the plan written still has the placed points |
 | QA-DL-18   | Close the tool                                           | Nobody faded; the marchers back where the show has them                                                      |
+
+### L.7 Step 4f: the line's remembered order
+
+**Owner, 2026-11-11:** the Follow tool reads the order the show already recorded instead of
+guessing it from where the marchers stand. Two staggered rows (front G16 G18 G20 G22 G24, back
+G17 G19 G21 G23) left by a zigzag trail were guessed as a U, so the ends to pull were G16 and G18
+instead of G16 and G24. Better guessing was not wanted.
+
+| ID    | Decision |
+| ----- | -------- |
+| DL-21 | **Order belongs to each form.** A form is a follow trail (its members by slot) or a placed Line or Arc (its recipe's members by slot; a Curve is stored as a Line). There is no band-wide order and no glue tool. Any other placed shape (a box, a circle, a group) or an ungrouped mark takes its marchers into something with no line order, so it ends the order they had. |
+| DL-22 | **The rule.** At the follow window's start flag, the forms made at or before it (by the beat their move ends at, homes at 0) that hold any of the selected marchers are read oldest first, and each takes the marchers it holds. The order in force must hold every selected marcher; the line's order is then that order kept to them (every other marcher of a line gives the 1st, 3rd, 5th…), and its first and last are the ends to pull. A later form holding only some of them, or none in force, means **no remembered order**. At one beat a clear comes first, then shapes, then trails: what the marchers walk in has the last word. |
+| DL-23 | **An order holds** like a placed shape until a later form takes the marchers. Moving a marcher by hand doesn't end it: the shape keeps the spot they left as a hole, and a shape with holes that agrees with the order in force (a copy saved on a later page) carries it on. One selected marcher missing from a shape with exactly one hole goes back in that hole only when it's known they left it: the order before that shape held them there, or there was no order before it and they are in no form at all. Anyone else is a stranger to the line, and the order is guessed; two or more gone from one shape in its own move can't be placed, and the order is guessed. |
+| DL-24 | **No remembered order:** the order is guessed from the start positions as before (`followSource`: line, arc, then a chain of near neighbours). Showing the order and setting it by hand come in a later step. |
+| DL-25 | Opening the tool and the write read the same order (`followOrderAt`, both from the database), so the pulsing ends, the drawn plan, the written plan and the refusals agree. A remembered order doesn't need the marchers to stand in a fitted line, so "not a line" is said only when nothing is remembered and the guess fails. No schema change: trails, recipes and their slots are already stored. |
+
+| QA       | Setup                                                                                  | Expected                                                                                                  |
+| -------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| QA-DL-19 | A zigzag trail leaves staggered rows (front four, back three); open Follow on the next page | The ends are the trail's first and last (the guess would give a U's ends); a middle marcher is refused as not an end; the write follows that order |
+| QA-DL-20 | Every other marcher of that line                                                        | The order is the line's, kept to them                                                                     |
+| QA-DL-21 | A Line placed later over the same marchers                                              | Its order wins; before it is made the earlier one holds; a box after it leaves nothing remembered          |
+| QA-DL-22 | A later Line over only some of them (even in the same relative order)                   | No remembered order: the guess                                                                            |
+| QA-DL-23 | An ungrouped mark over any of them                                                      | No remembered order; a shape placed after it sets one again                                               |
+| QA-DL-24 | No trails or shapes over them                                                           | The guess, exactly as before step 4f                                                                      |
+| QA-DL-25 | A placed Line, one member dragged off by hand (its own page, or a later one)            | The order holds, the moved marcher in its old place                                                       |

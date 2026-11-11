@@ -4,8 +4,9 @@
  * one end of it is followed by the line, and where the line stops at the end flag becomes the next
  * page's spots, in one undo step.
  *
- * - `followSource`: the line the marchers stand in, as the shape tool fits it (a line, an arc, or
- *   a curve with corners or smooth), which orders them and names its two ends (DL-4, DL-6).
+ * - `followOrderAt`: the line's order and so its two ends (DL-4, DL-6): the order the show
+ *   remembers (step 4f, DL-21), or else `followSource`, the line the marchers stand in as the
+ *   shape tool fits it (a line, an arc, or a curve with corners or smooth).
  * - `planTrailDrag`: the way, each member's end on it and its spot (AP-T8's Ends), for Keep
  *   spacing or Even N steps, with Even's limit. Pure: the preview and the write both use it, and
  *   it is the resolver's own geometry (R-13″), so the preview is where the marchers will be.
@@ -35,6 +36,7 @@ import { readPageGrid } from "./timelinePageGrid";
 import { addPageFlagInTransaction } from "./pageFlags";
 import { saveShapeRecipeInTransaction } from "./shapeRecipes";
 import { trailShapeRecipe } from "./timelineTrailShape";
+import { rememberedOrderAt } from "./rememberedOrder";
 import {
     followTrailInTransaction,
     lineOrder,
@@ -213,6 +215,24 @@ export function followSource(starts: readonly XY[]): FollowSource | null {
         return { kind: "curve", order };
     }
     return null;
+}
+
+/**
+ * The order of the marchers `ids` along their line at `beat` (the start flag), as indexes into
+ * `ids` and `starts`: the order the show remembers for them (step 4f, DL-21, `rememberedOrder`),
+ * or else the one `followSource` guesses from where they stand (`starts`). Null when neither has
+ * one. The Follow tool opening and the write both ask this, so they agree on the line's ends.
+ */
+export async function followOrderAt(
+    db: DbConnection | DbTransaction,
+    ids: readonly number[],
+    beat: number,
+    starts: readonly XY[],
+): Promise<number[] | null> {
+    const remembered = await rememberedOrderAt(db, ids, beat);
+    if (remembered && remembered.length === ids.length)
+        return remembered.map((m) => ids.indexOf(m));
+    return followSource(starts)?.order ?? null;
 }
 
 /**
@@ -452,9 +472,9 @@ async function planDragInTransaction(
         const [x, y] = resolver.positionAt(m, window.start);
         return [x, y];
     });
-    const source = followSource(starts);
-    if (!source) refuse(trailDragRefusal.notFitted());
-    const order = trailOrderFrom(source.order, ids.indexOf(leaderId));
+    const along = await followOrderAt(tx, ids, window.start, starts);
+    if (!along) refuse(trailDragRefusal.notFitted());
+    const order = trailOrderFrom(along, ids.indexOf(leaderId));
     if (!order) refuse(trailDragRefusal.notAnEnd());
     const plan = planTrailDrag(
         order.map((i) => starts[i]!),
