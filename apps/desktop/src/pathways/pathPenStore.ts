@@ -39,6 +39,7 @@ import type { XY } from "@/shapes/types";
 import { SMOOTH } from "@/shapes/line/lineGeometry";
 import type { GroupMember, PathTarget } from "./pathTarget";
 import { dragTrail } from "@/db-functions/timelineTrailDrag";
+import { invalidatePlacedBoxes } from "@/shapes/placed/placedBoxStore";
 import { followSpacingOf, type FollowDrag } from "./followDrag";
 import {
     besideArc,
@@ -776,7 +777,7 @@ async function save(
                 step: follow.step,
                 ends: follow.ends,
                 keepMove: follow.keep?.timelineId ?? null,
-            });
+            }).then(() => invalidatePlacedBoxes());
         else if (target.trail && target.routeId !== null)
             // Point edits on an open trail, or the trail drawn again (AP-T2): by its route, so a
             // member taken over at the move's start doesn't stop it

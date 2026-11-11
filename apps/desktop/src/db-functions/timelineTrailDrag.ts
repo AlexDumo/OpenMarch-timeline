@@ -33,6 +33,8 @@ import { marcherName, type RoutePointInput } from "./timelineRoutes";
 import { moveMarchersInRangeInTransaction } from "./timelineMoves";
 import { readPageGrid } from "./timelinePageGrid";
 import { addPageFlagInTransaction } from "./pageFlags";
+import { saveShapeRecipeInTransaction } from "./shapeRecipes";
+import { trailShapeRecipe } from "./timelineTrailShape";
 import {
     followTrailInTransaction,
     lineOrder,
@@ -428,6 +430,8 @@ export interface TrailDragInput {
 export interface TrailDragResult extends FollowTrailResult {
     /** The page added at the end flag (the window was past the last page), or null */
     addedPage: { startBeat: number; endBeat: number } | null;
+    /** From trail (step 4c, DL-11): the shape recipe saved for the end spots; absent otherwise */
+    recipeId?: number;
 }
 
 /** AP-T8's reads and refusals, with nothing written. */
@@ -552,6 +556,9 @@ export async function trailDragRefusalFor(
  * leading), with those spots as its placed destinations, a trail route for the drawn points
  * (`from` the leader's start, `to` the last point) and `path_params.ends = "along"`.
  *
+ * Step 4c (DL-11): From trail also saves the end spots as a shape recipe (a Line, an Arc or a
+ * Curve, `trailShapeRecipe`), each member where it was written, in the same transaction.
+ *
  * Keep end spots: AP-T1 onto the spots the members have in the window's move, in the same trail
  * order, the drawn points kept.
  */
@@ -609,7 +616,15 @@ export async function dragTrailInTransaction(
         line,
         along: true,
     });
-    return { ...followed, addedPage };
+    // Step 4c (DL-11): the spots as a shape the shape tools open, each member where it was written
+    const { recipe, members } = trailShapeRecipe(plan, line);
+    const recipeId = await saveShapeRecipeInTransaction({
+        tx,
+        timelineId: move,
+        recipe,
+        members,
+    });
+    return { ...followed, addedPage, recipeId };
 }
 
 /** AP-T8 or AP-T9 as one undoable edit. */
