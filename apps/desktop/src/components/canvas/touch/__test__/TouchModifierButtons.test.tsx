@@ -5,6 +5,7 @@ import {
     render,
     screen,
 } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TolgeeProvider } from "@tolgee/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import tolgee from "@/global/singletons/Tolgee";
@@ -17,6 +18,9 @@ import {
     useTouchModifierStore,
 } from "@/stores/TouchModifierStore";
 import "@/shapes/editor/__test__/pointerEvents";
+import { useAlignmentActionHandlers } from "@/shortcuts/handlers/useAlignmentActionHandlers";
+import { subscribeToActionRuns } from "@/shortcuts/registry";
+import type { ActionId } from "@/shortcuts/definitions";
 import TouchModifierButtons, {
     parseModifierPosition,
     TOUCH_MODIFIER_POSITION_KEY,
@@ -24,7 +28,7 @@ import TouchModifierButtons, {
 
 /**
  * The touch pill over the field: Fine, Equal and From center (held roles), Add (the old Shift)
- * and a magnet for the Snap toggle, each named by what it does, never by a key. Shown only in the
+ * and a magnet that runs the Toggle Snap action, each named by what it does, never by a key. Shown only in the
  * touch layout.
  */
 
@@ -273,10 +277,32 @@ describe.each([
     });
 });
 
+/** The app's alignment handlers, Toggle Snap among them, as `ActionHandlers` mounts them */
+function AlignmentHandlers() {
+    useAlignmentActionHandlers();
+    return null;
+}
+
+/** The pill at a saved spot, with the Toggle Snap action's handler registered */
+function renderPlacedPillWithHandlers() {
+    localStorage.setItem(
+        TOUCH_MODIFIER_POSITION_KEY,
+        JSON.stringify({ left: 40, bottom: 60 }),
+    );
+    return render(
+        <QueryClientProvider client={new QueryClient()}>
+            <TolgeeProvider tolgee={tolgee} fallback="Loading...">
+                <AlignmentHandlers />
+                <TouchModifierButtons />
+            </TolgeeProvider>
+        </QueryClientProvider>,
+    );
+}
+
 describe("the magnet", () => {
     it("a tap turns the Snap toggle off, pressed, and another turns it back on", () => {
         touchMode(true);
-        renderPlacedPill();
+        renderPlacedPillWithHandlers();
         const magnet = screen.getByRole("button", { name: "Snap off" });
         expect(isSnapOn()).toBe(true);
         expect(magnet.getAttribute("aria-pressed")).toBe("false");
@@ -288,9 +314,31 @@ describe("the magnet", () => {
         expect(magnet.getAttribute("aria-pressed")).toBe("false");
     });
 
-    it("shows the Snap toggle turned off elsewhere (Shift+M)", () => {
+    it("runs the Toggle Snap action, as the toolbar's magnet and Shift+M do", () => {
+        touchMode(true);
+        renderPlacedPillWithHandlers();
+        const runs: ActionId[] = [];
+        const stop = subscribeToActionRuns((id) => runs.push(id));
+        try {
+            fireEvent.click(screen.getByRole("button", { name: "Snap off" }));
+        } finally {
+            stop();
+        }
+        expect(runs).toEqual(["toggleSnap"]);
+    });
+
+    it("is disabled while the action can't run, and a press then does nothing", () => {
         touchMode(true);
         renderPlacedPill();
+        const magnet = screen.getByRole("button", { name: "Snap off" });
+        expect(magnet).toHaveProperty("disabled", true);
+        fireEvent.click(magnet);
+        expect(isSnapOn()).toBe(true);
+    });
+
+    it("shows the Snap toggle turned off elsewhere (Shift+M)", () => {
+        touchMode(true);
+        renderPlacedPillWithHandlers();
         act(() => {
             useUiSettingsStore.getState().setSnap(false);
         });
