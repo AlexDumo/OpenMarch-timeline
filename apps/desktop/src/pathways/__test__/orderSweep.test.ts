@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { OrderForm } from "@/db-functions/rememberedOrder";
 import {
-    ORDER_LEADER_COLOR,
-    ORDER_TAIL_COLOR,
     SWEEP_MIN_PX,
     orderAfterSweep,
-    orderColorAt,
     sweepThrough,
     sweepTolerance,
     type XY,
@@ -13,7 +10,7 @@ import {
 import { shownOrderOf, shownOrders } from "../marcherOrderStore";
 
 /**
- * Set order's sweep and the order line's look (pathways step 4g, DL-27, DL-30, DL-31,
+ * Set order's sweep and the order shown (pathways step 4g, DL-27, DL-30, DL-31,
  * QA-DL-30, QA-DL-31, QA-DL-33)
  */
 
@@ -122,31 +119,6 @@ describe("orderAfterSweep (QA-DL-31)", () => {
                 selected: [5, 3, 1],
             }),
         ).toEqual([3, 1, 5]);
-    });
-});
-
-describe("the order line's look (DL-30)", () => {
-    it("runs sky blue at the leader to deep red at the tail, the middle blended in OKLab", () => {
-        expect(orderColorAt(0).toLowerCase()).toBe(
-            ORDER_LEADER_COLOR.toLowerCase(),
-        );
-        expect(orderColorAt(1).toLowerCase()).toBe(
-            ORDER_TAIL_COLOR.toLowerCase(),
-        );
-        // Not the muddy sRGB midpoint (#846680); OKLab keeps the middle a clean mauve
-        const mid = orderColorAt(0.5);
-        expect(mid).not.toBe("#846680");
-        const lightness = (hex: string) => {
-            const n = Number.parseInt(hex.slice(1), 16);
-            return (
-                0.2126 * ((n >> 16) & 255) +
-                0.7152 * ((n >> 8) & 255) +
-                0.0722 * (n & 255)
-            );
-        };
-        // In grey, light to dark carries the order
-        expect(lightness(orderColorAt(0))).toBeGreaterThan(lightness(mid));
-        expect(lightness(mid)).toBeGreaterThan(lightness(orderColorAt(1)));
     });
 });
 

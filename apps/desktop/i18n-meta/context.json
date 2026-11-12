@@ -2969,5 +2969,6 @@
     "toolbar.view.order": "Label of a button on the field display bar (top right of the field) that chooses when a line's order is drawn on the field: a coloured line from the leader (blue) to the tail (red). One short word. A line here is a row of marchers (performers) the designer selected; its order says who comes first (the leader) and who comes last (the tail), which the Follow tool uses to know which end leads along a trail.",
     "toolbar.view.orderSelected": "Option in the line order choice on the field display bar: draw the order of the selected marchers only. Short.",
     "toolbar.view.orderAlways": "Option in the line order choice on the field display bar: draw the order of every line the show remembers, selected or not. Short.",
-    "toolbar.view.orderOff": "Option in the line order choice on the field display bar: never draw a line's order. Short."
+    "toolbar.view.orderOff": "Option in the line order choice on the field display bar: never draw a line's order. Short.",
+    "pathways.order.zoomIn": "Small note under a line of marchers on the field, shown when the numbers saying each marcher's place in the line's order are too crowded to fit at this zoom; only the first and last numbers show. Zooming the field in makes room for all of them."
 }

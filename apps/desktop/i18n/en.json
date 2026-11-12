@@ -3909,7 +3909,8 @@
             "cancel": "Cancel Set order",
             "done": "Keep this order",
             "doneButton": "Done",
-            "banner": "Set order: drag through the marchers from the leader, or click them one by one · {picked} of {count}"
+            "banner": "Set order: drag through the marchers from the leader, or click them one by one · {picked} of {count}",
+            "zoomIn": "Zoom in to read the order"
         }
     }
 }

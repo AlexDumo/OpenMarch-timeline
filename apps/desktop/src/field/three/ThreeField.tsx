@@ -730,6 +730,7 @@ function ThreeFieldView() {
                     <MarcherOrderOverlay
                         marchers={marchers}
                         labels={orderLabels}
+                        theme={fieldProperties.theme}
                     />
                 )}
                 {fieldProperties && (
