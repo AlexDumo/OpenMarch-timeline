@@ -24,6 +24,12 @@ export const PERFORMER_HEIGHT = 1.75;
  */
 export const RING_INNER_RADIUS = 0.34;
 export const RING_OUTER_RADIUS = 0.46;
+/**
+ * Where performers' soles rest: on the field surface, which sits a little
+ * above the kits' ground. At y = 0 their feet sank into the turf and the
+ * field's lines ran over their shoes in close-ups.
+ */
+export const STAND_Y = FIELD_SURFACE_Y;
 /** Just above the field surface, so the ring doesn't z-fight with it. */
 export const RING_Y = FIELD_SURFACE_Y + 0.01;
 /** The accent when the page has no `--color-accent` (dark theme value). */
@@ -165,8 +171,8 @@ function writeTranslation(
 /**
  * Writes the block matrices: a translation to the performer's spot for a
  * placed performer, and a zero matrix (nothing drawn) otherwise. The
- * cylinder geometry has its base at its origin, so blocks stand at y = 0,
- * or at `lift` (m) where a platform raises them.
+ * cylinder geometry has its base at its origin, so blocks stand at `STAND_Y`,
+ * or `lift` (m) above it where a platform raises them.
  */
 export function writePerformerMatrices(
     count: number,
@@ -181,7 +187,7 @@ export function writePerformerMatrices(
                 matrices,
                 i,
                 xz[i * 2],
-                lift?.[i] ?? 0,
+                STAND_Y + (lift?.[i] ?? 0),
                 xz[i * 2 + 1],
             );
         else matrices.fill(0, i * 16, i * 16 + 16);

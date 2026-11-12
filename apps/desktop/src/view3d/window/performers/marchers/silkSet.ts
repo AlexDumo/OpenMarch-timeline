@@ -20,6 +20,7 @@
  */
 import * as THREE from "three";
 import { writeMatrix } from "@/view3d/render/instanced-marchers.js";
+import { STAND_Y } from "../performerData";
 import { COMPOSED_BONE_SHADER, type Composer } from "@/view3d/render/composer";
 import { instrumentModel, type Detail } from "@/view3d/core/instruments";
 import { hold as holdFor } from "@/view3d/core/instruments/holds";
@@ -500,8 +501,8 @@ export class SilkSet {
                     xz[slot * 2 + 1],
                     heading[slot],
                     scale[slot],
+                    STAND_Y + (lift?.[slot] ?? 0),
                 );
-                if (lift) matrices[i * 16 + 13] = lift[slot];
                 for (let c = 0; c < 4; c++)
                     motion.array[i * 4 + c] = this.motion[silk * 4 + c];
                 if (!changed) return;

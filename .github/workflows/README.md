@@ -22,28 +22,14 @@ snapcraft export-login <credentials-filename>
 
 `nightly.yaml` builds unsigned installers for every push to `main` and replaces the rolling `nightly` prerelease. Nightlies use `apps/desktop/electron-builder-nightly.json5`, so they install as "OpenMarch Nightly" next to the released app and never auto-update.
 
-## Public betas (0.2)
+## Public betas
 
-Development happens on the fork (`AlexDumo/OpenMarch-timeline`): issues, pull requests, lab tests and nightlies. Public betas are built by upstream's signed release workflow (`desktop-release.yaml`) from the upstream branch `prerelease/0.2`. That branch only receives fork `main`. Nothing is committed to it directly.
+Betas are built by `desktop-release.yaml` from `v*-beta.N` tags on `prerelease/<major>.<minor>`, which only ever receives fork `main`. `pr-checks.yaml` and `codeql.yaml` also run for pull requests into `prerelease/**`, because the "Branch Protections" ruleset requires their results there.
 
-Upstream's "Branch Protections" ruleset covers `prerelease/*`. It blocks deletion and force-pushes, and needs a pull request with `all-checks-passed` and CodeQL results. That's why `pr-checks.yaml` and `codeql.yaml` also run for pull requests into `prerelease/**`.
+The whole process (version numbers, the sync pull request, landing, tagging, publishing as a pre-release, and what to do when something goes wrong) is in [docs/releases/beta.md](../../docs/releases/beta.md). `scripts/release-beta.sh` lands and tags a beta.
 
-### Cutting a beta
+## User guide media refresh
 
-1. On the fork, bump `apps/desktop/package.json` to the next beta (`0.2.0-beta.2`, …) through a normal pull request into `main`.
-2. Open a pull request on `OpenMarch/OpenMarch` from `AlexDumo:main` (or a fork branch at the commit you want) into `prerelease/0.2`. Wait for every check. This is a public build, so there are no exceptions.
-3. Land it as a fast-forward. Upstream allows only squash merges, and squashing would make every later sync conflict with the previous one. An org admin (who bypasses the ruleset) pushes the pull request's head commit: `git push origin <sha>:refs/heads/prerelease/0.2`. GitHub then marks the pull request as merged.
-4. Tag that commit and push the tag: `git tag v0.2.0-beta.N <sha> && git push origin v0.2.0-beta.N`. `desktop-release.yaml` builds, signs and notarizes the app, and uploads a draft release.
-5. On the draft release, check **Set as a pre-release** (not "Set as the latest release") and publish. Then post the changes in the Discord tester channel.
+`docs-media.yaml` records the user guide's pictures and clips again every Monday, on pushes to `prerelease/**` that touch the app, and by hand (Actions → User guide media refresh → Run workflow, optionally with "all" or a list of shots). It runs only on the fork. It records the shots whose files changed since each was last recorded and the ones the last refresh couldn't finish, except on the first Monday of the month, when it records all of them. Runs on `main` open one pull request (`docs/media-refresh/main`) with the pictures that visibly changed, and issues for the shots that no longer record. Pushes to `prerelease/**`, other branches and runs of chosen shots only report, in the run summary and artifacts. How it decides is in `apps/desktop/scripts/docs-media/refresh.mjs` and `apps/website/AGENTS.md`.
 
-### Why 0.1.7 users don't get the beta
-
-- **Auto-update:** the app's version has a pre-release part (`-beta.N`). The auto-updater only offers pre-releases to apps that are already on a pre-release version, so 0.1.7 installs stay on 0.1.7 and beta installs move to newer betas. Both depend on the version and the pre-release flag.
-- **Web editor:** `web-editor.yaml` skips pre-releases, so editor.openmarch.com stays on the latest full release.
-- **Snap:** the Linux snap goes to the Snap Store's `edge` channel, which is where electron-builder publishes by default. `stable` changes only when someone promotes a build by hand.
-
-A beta installs over a released copy on the same machine, because it uses the same app ID. Nightlies are the exception: they install as "OpenMarch Nightly".
-
-### After the beta
-
-0.2 goes into upstream `main` through its own pull request, fully gated.
+It needs the repository setting "Allow GitHub Actions to create and approve pull requests". Pull requests opened with the workflow's own token don't start the PR checks; add a `DOCS_MEDIA_TOKEN` secret (a fine-grained token with contents, pull requests and issues write) to have them run without a manual push.

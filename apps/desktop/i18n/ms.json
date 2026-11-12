@@ -23,10 +23,6 @@
         "batchEdit": {
             "noNextPage": "Tidak dapat menetapkan koordinat pemain mengikut halaman seterusnya. Tiada halaman seterusnya",
             "noPreviousPage": "Tidak dapat menetapkan koordinat pemain mengikut halaman sebelumnya. Tiada halaman sebelumnya",
-            "setAllToNext": "Salin kedudukan dari halaman seterusnya (semua pemain)",
-            "setAllToNextSuccess": "{count, plural, =1 {Berjaya menetapkan koordinat # pemain pada halaman {currentPage} kepada koordinat halaman seterusnya ({nextPage})} other {Berjaya menetapkan koordinat kesemua # pemain pada halaman {currentPage} kepada koordinat halaman seterusnya ({nextPage})}}",
-            "setSelectedToNext": "Salin kedudukan dari halaman seterusnya (dipilih)",
-            "setSelectedToNextSuccess": "{count, plural, other {Berjaya menetapkan koordinat # pemain pada halaman {currentPage} kepada koordinat halaman seterusnya ({nextPage})}}",
             "setAllToPreviousDone": "{count, plural, =1 {Berjaya menetapkan koordinat # pemain pada halaman {currentPage} kepada koordinat halaman sebelumnya ({previousPage})} other {Berjaya menetapkan koordinat kesemua # pemain pada halaman {currentPage} kepada koordinat halaman sebelumnya ({previousPage})}}",
             "setSelectedToPreviousDone": "{count, plural, other {Berjaya menetapkan koordinat # pemain pada halaman {currentPage} kepada koordinat halaman sebelumnya ({previousPage})}}"
         },
@@ -2579,7 +2575,6 @@
             "placeAllMarchers": "Letakkan semua pemain",
             "placeSelectedMarchers": "Letakkan pemain dipilih",
             "snapToggleCaption": "Lekap",
-            "toNextPagePositions": "...ke kedudukan halaman seterusnya",
             "setMarcherPositionsAriaLabel": "Tetapkan kedudukan pemain"
         },
         "collisions": {
@@ -2658,14 +2653,17 @@
             "floor": "Di lantai",
             "frontRow": "Barisan hadapan",
             "geJudge": "Hakim GE",
+            "judgesTable": "Meja hakim",
             "lowerBowl": "Aras bawah",
             "podium": "Podium",
             "pressBox": "Bilik akhbar",
             "sideline": "Garisan tepi",
             "topDown": "Dari atas",
+            "tunnel": "Terowong",
             "upperDeck": "Aras atas"
         },
         "kit": {
+            "arena": "Arena tertutup",
             "bighs": "Sekolah menengah besar",
             "blank": "Padang sahaja",
             "college": "Stadium kolej",
@@ -2793,6 +2791,12 @@
         },
         "venue": {
             "updateFailed": "Gagal mengemas kini lokasi Paparan 3D"
+        },
+        "board": {
+            "designedBy": "Direka oleh {name}",
+            "forClient": "Untuk {name}",
+            "nowPerforming": "Sedang membuat persembahan",
+            "untitled": "Persembahan tanpa tajuk"
         }
     },
     "web": {
@@ -2948,7 +2952,14 @@
         "unsavedChanges": "Anda mempunyai perubahan yang belum disimpan",
         "close": "Tutup",
         "saved": "Tetapan persembahan disimpan",
-        "updateFailed": "Gagal mengemas kini tetapan ruang kerja"
+        "updateFailed": "Gagal mengemas kini tetapan ruang kerja",
+        "showInfo": {
+            "projectName": "Nama persembahan",
+            "projectNamePlaceholder": "Menggunakan nama fail",
+            "designer": "Pereka",
+            "client": "Klien",
+            "optional": "Pilihan"
+        }
     },
     "canvas": {
         "zoom": {

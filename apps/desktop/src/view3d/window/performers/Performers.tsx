@@ -13,6 +13,9 @@
  *   editor is paused, the store holds the selected page's end, so the blocks
  *   hold that page like the 2D canvas. Nothing is recomputed while the show
  *   time and the inputs stay the same.
+ * - Paused, the om-pose marchers stand in the closed position (at attention,
+ *   feet together, on their dots) unless the viewer chose the actual step
+ *   (`pausedPose.ts`); playing always shows the actual motion.
  *
  * Meshes and buffers are rebuilt only when the marcher set changes.
  */
@@ -39,11 +42,13 @@ import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppearances";
 import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionAppearances";
 import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
+import { brassFinishOf, tubaModelOf } from "@/view3d/core/venueSettings";
 import { cueSectionsOf } from "./cueSections";
 import {
     guardUniformPresetOf,
     uniformPresetOf,
 } from "@/view3d/core/marchers/uniformPresets";
+import { GROUND_LAYER, setGroundLayer } from "@/view3d/core/environment";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { marcherHeading } from "@/view3d/core/marchers/facing";
 import {
@@ -143,6 +148,9 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const { data: venue } = useVenueSettings();
     const uniformPreset = uniformPresetOf(venue?.uniforms);
     const guardUniformPreset = guardUniformPresetOf(venue?.guardUniforms);
+    // the brass line's finish and the tubas' horn, from the same settings
+    const brassFinish = brassFinishOf(venue?.brassFinish);
+    const tuba = tubaModelOf(venue?.tuba);
     // om-pose marchers (ADR 0010 D-7); the cylinders stand in until they load.
     const { data: sectionAppearances } = useQuery(
         allSectionAppearancesQueryOptions(),
@@ -186,11 +194,19 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 undefined,
                 uniformPreset,
                 guardUniformPreset,
+                { finish: brassFinish, tuba },
             ),
             // no Silk cues yet: the silks take the uniform's carry (the
             // section's 2D fill, else the preset's color and pattern)
         }));
-    }, [looksKey, quality, uniformPreset, guardUniformPreset]);
+    }, [
+        looksKey,
+        quality,
+        uniformPreset,
+        guardUniformPreset,
+        brassFinish,
+        tuba,
+    ]);
     const heightClasses = useMemo(
         () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
         [marcherLooks],
@@ -347,15 +363,18 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     useEffect(() => requestDraw(1000));
     const motion = useMemo(
         () =>
-            marcherBodies && showPlans && marcherAssets
+            marcherBodies && showPlans && marcherAssets && marcherLooks
                 ? new MarcherMotion(
                       showPlans.plans,
                       marcherAssets.manifest,
                       marcherBodies,
                       hornSlots ?? [],
+                      marcherLooks.map((l) =>
+                          clipName("attention", l.body.heightClass),
+                      ),
                   )
                 : null,
-        [marcherBodies, showPlans, marcherAssets, hornSlots],
+        [marcherBodies, showPlans, marcherAssets, hornSlots, marcherLooks],
     );
     const silkMotion = useMemo(
         () =>
@@ -394,16 +413,17 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 roughness: 0.6,
                 metalness: 0,
             }),
-            ringMaterial: new MeshBasicMaterial({
-                color: new Color(readAccentColor()),
-                side: DoubleSide,
-                transparent: true,
-                opacity: 0.85,
-                depthWrite: false,
-                polygonOffset: true,
-                polygonOffsetFactor: -2,
-                polygonOffsetUnits: -2,
-            }),
+            // Over the field and the marchers' shadows, at any distance.
+            ringMaterial: setGroundLayer(
+                new MeshBasicMaterial({
+                    color: new Color(readAccentColor()),
+                    side: DoubleSide,
+                    transparent: true,
+                    opacity: 0.85,
+                    depthWrite: false,
+                }),
+                GROUND_LAYER.selection,
+            ),
         };
     }, []);
     useEffect(
@@ -521,6 +541,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
 
     const frameRef = useRef({
         lastMs: Number.NaN,
+        /** Whether the last frame drew the closed position. */
+        closed: false,
         selection: null as View3dSelection | null,
         selected: new Set<number>(),
     });
@@ -542,7 +564,12 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             frame.selection = sync.selection;
             frame.selected = new Set(sync.selection.selectedMarcherIds);
         }
-        const moved = dirtyRef.current || ms !== frame.lastMs;
+        // paused, the marchers close unless the viewer asked for the step
+        const closed =
+            !sync.clock?.playing &&
+            useView3dSceneStore.getState().pausedPose === "closed";
+        const moved =
+            dirtyRef.current || ms !== frame.lastMs || closed !== frame.closed;
         const lod = lodCameraRef.current;
         const cameraMoved = !(
             Math.hypot(cam[0] - lod[0], cam[1] - lod[1], cam[2] - lod[2]) < 0.5
@@ -570,10 +597,13 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         const { bodies, rings, visible, xz, placed, lift } = meshes;
         if (moved) {
             // the marchers run a count ahead of the clock (`STEP_AHEAD`), so
-            // they're placed from the drill a count later
+            // they're placed from the drill a count later; closed, they stand
+            // on the dot at the show time itself
             const c = countAt(clock, ms, countRef.current);
             const placedMs =
-                marcherBodies && motion ? msAtCount(clock, c + STEP_AHEAD) : ms;
+                marcherBodies && motion && !closed
+                    ? msAtCount(clock, c + STEP_AHEAD)
+                    : ms;
             writePerformerPositions(
                 slots,
                 placedMs,
@@ -591,7 +621,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             };
             if (marcherBodies) {
                 countRef.current = c;
-                motion?.update(c, xz, placed, headings);
+                if (closed) motion?.updateClosed(c, headings);
+                else motion?.update(c, xz, placed, headings);
                 // where the bodies are now
                 writePerformerLifts(propsNow, xz, placed, lift);
                 marcherBodies.writeFrame(
@@ -600,7 +631,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                     placed,
                     c,
                     cam,
-                    silkMotion?.update(c) ?? null,
+                    silkMotion?.update(c, closed) ?? null,
                     lift,
                 );
                 marcherBodies.compose(state.gl);
@@ -632,6 +663,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             rings.instanceMatrix.needsUpdate = true;
         rings.count = ringCount;
         frame.lastMs = ms;
+        frame.closed = closed;
         dirtyRef.current = false;
     });
 

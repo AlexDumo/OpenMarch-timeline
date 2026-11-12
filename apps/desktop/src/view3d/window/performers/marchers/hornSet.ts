@@ -10,6 +10,7 @@
  */
 import * as THREE from "three";
 import { writeMatrix } from "@/view3d/render/instanced-marchers.js";
+import { STAND_Y } from "../performerData";
 import { composedGeometry, writeInstance } from "@/view3d/render/composer";
 import { instrumentModel, type Detail } from "@/view3d/core/instruments";
 import { hold as holdFor } from "@/view3d/core/instruments/holds";
@@ -171,8 +172,8 @@ export class HornSet {
                         xz[slot * 2 + 1],
                         heading[slot],
                         scale[slot],
+                        STAND_Y + (lift?.[slot] ?? 0),
                     );
-                    if (lift) matrices[i * 16 + 13] = lift[slot];
                     if (changed) writeInstance(t.mesh, i, slot);
                 });
                 t.mesh.count = list.length;
