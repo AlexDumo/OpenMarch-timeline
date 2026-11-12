@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { test, expect } from "../fixtures.mjs";
-import { readField, waitForIdle } from "../app.mjs";
+import { pinch, readField, touchDrag, waitForIdle } from "../app.mjs";
 import type { Show } from "../fixtures.mjs";
 
 // Navigation on the field (fork #194): wheel, trackpad, pinch, pan drags,
@@ -655,41 +655,12 @@ test("Preview fits the whole field, and leaving it centers the field again", asy
 });
 
 test.describe("touch", () => {
-    /** Touches the field: each step is the fingers down, in field element pixels. */
-    async function touchGesture(
-        page: Page,
-        steps: { x: number; y: number }[][],
-    ) {
-        const cdp = await page.context().newCDPSession(page);
-        const box = await fieldBox(page);
-        const send = (
-            type: "touchStart" | "touchMove" | "touchEnd",
-            points: { x: number; y: number }[],
-        ) =>
-            cdp.send("Input.dispatchTouchEvent", {
-                type,
-                touchPoints: points.map((p, id) => ({
-                    x: box.x + p.x,
-                    y: box.y + p.y,
-                    id,
-                })),
-            });
-        await send("touchStart", steps[0]);
-        for (const points of steps.slice(1)) await send("touchMove", points);
-        await send("touchEnd", []);
-        await cdp.detach();
-    }
-
     test("one finger pans, at the pan sensitivity", async ({ show }) => {
         const { page } = show;
         const before = await openedView(show);
-        const from = await center(page);
-        await touchGesture(
-            page,
-            Array.from({ length: 11 }, (_, i) => [
-                { x: from.x + i * 10, y: from.y + i * 6 },
-            ]),
-        );
+        const { x, y } = await center(page);
+        const from = await inField(page, x, y);
+        await touchDrag(page, from, { x: from.x + 100, y: from.y + 60 });
         // 100 × 60 px of finger, at the default sensitivity of 0.5
         await waitForView(page, (v) => v.pan.x, before.pan.x + 50, 0.01);
         await waitForView(page, (v) => v.pan.y, before.pan.y + 30, 0.01);
@@ -700,14 +671,10 @@ test.describe("touch", () => {
         const before = await openedView(show);
         const mid = await center(page);
         const under = fieldPointAt(before, mid.x, mid.y);
-        const fingers = (spread: number) => [
-            { x: mid.x - spread, y: mid.y },
-            { x: mid.x + spread, y: mid.y },
-        ];
-        await touchGesture(
-            page,
-            Array.from({ length: 11 }, (_, i) => fingers(50 + i * 5)),
-        );
+        await pinch(page, await inField(page, mid.x, mid.y), {
+            from: 50,
+            to: 100,
+        });
         // 0.01 zoom per pixel the fingers spread: 100 px
         await waitForView(page, (v) => v.zoom, before.zoom + 1, 1e-6);
         const drawn = drawnAt(await view(page), under);
