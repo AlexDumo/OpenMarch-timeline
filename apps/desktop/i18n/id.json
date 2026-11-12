@@ -23,10 +23,6 @@
         "batchEdit": {
             "noNextPage": "Tidak dapat menyalin koordinat pemain dari halaman berikutnya. Tidak ada halaman berikutnya",
             "noPreviousPage": "Tidak dapat menyalin koordinat pemain dari halaman sebelumnya. Tidak ada halaman sebelumnya",
-            "setAllToNext": "Salin posisi dari halaman berikutnya (semua pemain)",
-            "setAllToNextSuccess": "{count, plural, other {Berhasil mengatur koordinat # pemain di halaman {currentPage} sesuai koordinat halaman berikutnya ({nextPage})}}",
-            "setSelectedToNext": "Salin posisi dari halaman berikutnya (yang dipilih)",
-            "setSelectedToNextSuccess": "{count, plural, other {Berhasil mengatur koordinat # pemain di halaman {currentPage} sesuai koordinat halaman berikutnya ({nextPage})}}",
             "setAllToPreviousDone": "{count, plural, other {Berhasil mengatur koordinat # pemain di halaman {currentPage} sesuai koordinat halaman sebelumnya ({previousPage})}}",
             "setSelectedToPreviousDone": "{count, plural, other {Berhasil mengatur koordinat # pemain di halaman {currentPage} sesuai koordinat halaman sebelumnya ({previousPage})}}"
         },
@@ -2579,7 +2575,6 @@
             "placeAllMarchers": "Tempatkan semua pemain",
             "placeSelectedMarchers": "Tempatkan pemain terpilih",
             "snapToggleCaption": "Snap",
-            "toNextPagePositions": "...ke posisi halaman berikutnya",
             "setMarcherPositionsAriaLabel": "Atur posisi pemain"
         },
         "collisions": {
@@ -2658,14 +2653,17 @@
             "floor": "Di lantai",
             "frontRow": "Baris depan",
             "geJudge": "Juri GE",
+            "judgesTable": "Meja juri",
             "lowerBowl": "Tribun bawah",
             "podium": "Podium",
             "pressBox": "Ruang pers",
             "sideline": "Pinggir lapangan",
             "topDown": "Dari atas",
+            "tunnel": "Terowongan",
             "upperDeck": "Tribun atas"
         },
         "kit": {
+            "arena": "Arena dalam ruangan",
             "bighs": "SMA besar",
             "blank": "Lapangan saja",
             "college": "Stadion kampus",
@@ -2793,6 +2791,12 @@
         },
         "venue": {
             "updateFailed": "Gagal memperbarui venue Tampilan 3D"
+        },
+        "board": {
+            "designedBy": "Dirancang oleh {name}",
+            "forClient": "Untuk {name}",
+            "nowPerforming": "Sedang tampil",
+            "untitled": "Pertunjukan tanpa judul"
         }
     },
     "web": {
@@ -2948,7 +2952,14 @@
         "unsavedChanges": "Ada perubahan yang belum disimpan",
         "close": "Tutup",
         "saved": "Pengaturan pertunjukan disimpan",
-        "updateFailed": "Gagal memperbarui pengaturan pertunjukan"
+        "updateFailed": "Gagal memperbarui pengaturan pertunjukan",
+        "showInfo": {
+            "projectName": "Nama pertunjukan",
+            "projectNamePlaceholder": "Memakai nama file",
+            "designer": "Desainer",
+            "client": "Klien",
+            "optional": "Opsional"
+        }
     },
     "canvas": {
         "zoom": {
