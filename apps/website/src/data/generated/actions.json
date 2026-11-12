@@ -1374,6 +1374,11 @@
         "category": "timeline",
         "bindings": []
     },
+    "toggleEditorMode": {
+        "label": "Switch between Basic and Expert",
+        "category": "timeline",
+        "bindings": []
+    },
     "timelineGoTo": {
         "label": "Go to a page, measure or rehearsal mark",
         "category": "timeline",
