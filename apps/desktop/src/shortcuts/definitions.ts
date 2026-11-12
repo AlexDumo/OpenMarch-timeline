@@ -428,14 +428,24 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["$mod+H", "Control+H"],
     },
+    // Holds, Expert (#476): the selected marchers are Held from the start flag to the playhead,
+    // their moves inside the window taken out (holds review R8). Unbound
+    timelineHoldOverWindow: {
+        labelKey: "actions.batchEdit.holdOverWindow",
+        labelHoldTerms: true,
+        keywordsKey: "actions.batchEdit.holdKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
     setAllMarchersToNextPage: {
-        labelKey: "actions.batchEdit.setAllToNext",
+        labelKey: "actions.batchEdit.moveAllToNextSpots",
         category: "batchEdit",
         scope: "canvas",
         defaultBindings: ["$mod+Shift+N", "Control+Shift+N"],
     },
     setSelectedMarchersToNextPage: {
-        labelKey: "actions.batchEdit.setSelectedToNext",
+        labelKey: "actions.batchEdit.moveSelectedToNextSpots",
         category: "batchEdit",
         scope: "canvas",
         defaultBindings: ["Shift+N"],
@@ -556,6 +566,16 @@ const STATIC_ACTIONS = {
         category: "ui",
         scope: "global",
         defaultBindings: ["$mod+Comma"],
+    },
+    // Fork #404: looks for a desktop update now and says what it found. Not in the web
+    // editor, which is always the latest version.
+    checkForUpdates: {
+        labelKey: "actions.ui.checkForUpdates",
+        keywordsKey: "actions.ui.checkForUpdatesKeywords",
+        category: "ui",
+        scope: "global",
+        defaultBindings: [],
+        hiddenFromPalette: isWebBuild,
     },
     // Opens the 3D View window, or focuses it (3D View UI-1). Unbound by default.
     openView3d: {

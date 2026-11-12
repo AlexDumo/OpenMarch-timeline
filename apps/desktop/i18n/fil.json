@@ -23,10 +23,6 @@
         "batchEdit": {
             "noNextPage": "Hindi maitakda ang mga coordinate ng mga miyembro ayon sa susunod na pahina. Walang susunod na pahina",
             "noPreviousPage": "Hindi maitakda ang mga coordinate ng mga miyembro ayon sa nakaraang pahina. Walang nakaraang pahina",
-            "setAllToNext": "Kopyahin ang mga posisyon mula sa susunod na pahina (lahat ng miyembro)",
-            "setAllToNextSuccess": "{count, plural, one {Matagumpay na naitakda ang mga coordinate ng # miyembro sa pahina {currentPage} ayon sa mga coordinate ng susunod na pahina ({nextPage})} other {Matagumpay na naitakda ang mga coordinate ng lahat ng # miyembro sa pahina {currentPage} ayon sa mga coordinate ng susunod na pahina ({nextPage})}}",
-            "setSelectedToNext": "Kopyahin ang mga posisyon mula sa susunod na pahina (mga napili)",
-            "setSelectedToNextSuccess": "{count, plural, one {Matagumpay na naitakda ang mga coordinate ng # miyembro sa pahina {currentPage} ayon sa mga coordinate ng susunod na pahina ({nextPage})} other {Matagumpay na naitakda ang mga coordinate ng # miyembro sa pahina {currentPage} ayon sa mga coordinate ng susunod na pahina ({nextPage})}}",
             "setAllToPreviousDone": "{count, plural, one {Matagumpay na naitakda ang mga coordinate ng # miyembro sa pahina {currentPage} ayon sa mga coordinate ng nakaraang pahina ({previousPage})} other {Matagumpay na naitakda ang mga coordinate ng lahat ng # miyembro sa pahina {currentPage} ayon sa mga coordinate ng nakaraang pahina ({previousPage})}}",
             "setSelectedToPreviousDone": "{count, plural, one {Matagumpay na naitakda ang mga coordinate ng # miyembro sa pahina {currentPage} ayon sa mga coordinate ng nakaraang pahina ({previousPage})} other {Matagumpay na naitakda ang mga coordinate ng # miyembro sa pahina {currentPage} ayon sa mga coordinate ng nakaraang pahina ({previousPage})}}"
         },
@@ -1467,7 +1463,6 @@
         "general.appearance": "Hitsura",
         "general.appearance.dark": "Madilim",
         "general.appearance.light": "Maliwanag",
-        "general.automaticUpdates": "Awtomatikong i-download at i-install ang mga update",
         "general.description": "Editor mode, wika at iba pang setting para sa buong app.",
         "general.editorMode": "Editor mode",
         "general.editorMode.basic": "Basic",
@@ -2579,7 +2574,6 @@
             "placeAllMarchers": "Ilagay ang lahat ng miyembro",
             "placeSelectedMarchers": "Ilagay ang mga napiling miyembro",
             "snapToggleCaption": "Snap",
-            "toNextPagePositions": "...sa mga posisyon sa susunod na pahina",
             "setMarcherPositionsAriaLabel": "Itakda ang mga posisyon ng miyembro"
         },
         "collisions": {
@@ -2630,20 +2624,6 @@
             "shapesSelected": "Kapag napili"
         }
     },
-    "versionCheck": {
-        "error": {
-            "fetchFailed": "Nagkaroon ng error habang kinukuha ang bersyon.",
-            "message": "Error: {message}",
-            "noVersion": "Hindi makuha ang pinakabagong bersyon."
-        },
-        "installLinux": "I-install para sa Linux",
-        "installMacArm": "I-install para sa Apple Silicon",
-        "installMacIntel": "I-install para sa Intel Mac",
-        "installWindows": "I-install para sa Windows",
-        "skipVersion": "Laktawan ang bersyong ito",
-        "title": "May bagong bersyon",
-        "trigger": "May bagong bersyon!"
-    },
     "view3d": {
         "autoOpenPrompt": {
             "description": "Mababago mo ito mamaya sa Mga setting › Pangkalahatan.",
@@ -2658,14 +2638,17 @@
             "floor": "Sa sahig",
             "frontRow": "Unang hanay",
             "geJudge": "Hurado ng GE",
+            "judgesTable": "Mesa ng mga hurado",
             "lowerBowl": "Ibabang palapag",
             "podium": "Podium",
             "pressBox": "Press box",
             "sideline": "Sideline",
             "topDown": "Mula sa itaas",
+            "tunnel": "Tunnel",
             "upperDeck": "Itaas na palapag"
         },
         "kit": {
+            "arena": "Indoor arena",
             "bighs": "Malaking high school",
             "blank": "Field lang",
             "college": "Stadium ng kolehiyo",
@@ -2793,6 +2776,12 @@
         },
         "venue": {
             "updateFailed": "Hindi na-update ang venue ng 3D View"
+        },
+        "board": {
+            "designedBy": "Disenyo ni {name}",
+            "forClient": "Para sa {name}",
+            "nowPerforming": "Nagtatanghal ngayon",
+            "untitled": "Palabas na walang pamagat"
         }
     },
     "web": {
@@ -2948,7 +2937,14 @@
         "unsavedChanges": "May mga pagbabago kang hindi pa naka-save",
         "close": "Isara",
         "saved": "Na-save ang mga setting ng palabas",
-        "updateFailed": "Hindi na-update ang mga setting ng workspace"
+        "updateFailed": "Hindi na-update ang mga setting ng workspace",
+        "showInfo": {
+            "projectName": "Pangalan ng palabas",
+            "projectNamePlaceholder": "Gagamitin ang pangalan ng file",
+            "designer": "Designer",
+            "client": "Kliyente",
+            "optional": "Opsyonal"
+        }
     },
     "canvas": {
         "zoom": {

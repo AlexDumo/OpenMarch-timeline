@@ -23,10 +23,6 @@
         "batchEdit": {
             "noNextPage": "Impossible de reprendre les coordonnées des marcheurs de la page suivante : il n'y a pas de page suivante",
             "noPreviousPage": "Impossible de reprendre les coordonnées des marcheurs de la page précédente : il n'y a pas de page précédente",
-            "setAllToNext": "Copier les positions de la page suivante (tous les marcheurs)",
-            "setAllToNextSuccess": "{count, plural, one {# marcheur de la page {currentPage} a repris les coordonnées de la page suivante ({nextPage})} other {Les # marcheurs de la page {currentPage} ont repris les coordonnées de la page suivante ({nextPage})}}",
-            "setSelectedToNext": "Copier les positions de la page suivante (sélection)",
-            "setSelectedToNextSuccess": "{count, plural, one {# marcheur de la page {currentPage} a repris les coordonnées de la page suivante ({nextPage})} other {# marcheurs de la page {currentPage} ont repris les coordonnées de la page suivante ({nextPage})}}",
             "setAllToPreviousDone": "{count, plural, one {# marcheur de la page {currentPage} a repris les coordonnées de la page précédente ({previousPage})} other {Les # marcheurs de la page {currentPage} ont repris les coordonnées de la page précédente ({previousPage})}}",
             "setSelectedToPreviousDone": "{count, plural, one {# marcheur de la page {currentPage} a repris les coordonnées de la page précédente ({previousPage})} other {# marcheurs de la page {currentPage} ont repris les coordonnées de la page précédente ({previousPage})}}"
         },
@@ -1470,7 +1466,6 @@
         "general.appearance": "Apparence",
         "general.appearance.dark": "Sombre",
         "general.appearance.light": "Clair",
-        "general.automaticUpdates": "Télécharger et installer automatiquement les mises à jour",
         "general.description": "Mode d'édition, langue et autres préférences de l'application.",
         "general.editorMode": "Mode d'édition",
         "general.editorMode.basic": "Basique",
@@ -2582,7 +2577,6 @@
             "placeAllMarchers": "Placer tous les marcheurs",
             "placeSelectedMarchers": "Placer les marcheurs sélectionnés",
             "snapToggleCaption": "Magnétisme",
-            "toNextPagePositions": "...aux positions de la page suivante",
             "setMarcherPositionsAriaLabel": "Définir les positions des marcheurs",
             "toPreviousPagePositions": "...aux positions précédentes de la page"
         },
@@ -2634,20 +2628,6 @@
             "shapesSelected": "Si sélectionnée"
         }
     },
-    "versionCheck": {
-        "error": {
-            "fetchFailed": "Une erreur s'est produite lors de la récupération de la version.",
-            "message": "Erreur : {message}",
-            "noVersion": "Impossible d'obtenir la dernière version."
-        },
-        "installLinux": "Installer pour Linux",
-        "installMacArm": "Installer pour Apple Silicon",
-        "installMacIntel": "Installer pour Mac Intel",
-        "installWindows": "Installer pour Windows",
-        "skipVersion": "Ignorer cette version",
-        "title": "Nouvelle version disponible",
-        "trigger": "Nouvelle version disponible !"
-    },
     "view3d": {
         "autoOpenPrompt": {
             "description": "Vous pourrez modifier ce choix plus tard dans Paramètres › Général.",
@@ -2662,14 +2642,17 @@
             "floor": "Au sol",
             "frontRow": "Premier rang",
             "geJudge": "Juge GE",
+            "judgesTable": "Table des juges",
             "lowerBowl": "Tribune basse",
             "podium": "Podium",
             "pressBox": "Tribune de presse",
             "sideline": "Bord de touche",
             "topDown": "Vue de dessus",
+            "tunnel": "Tunnel",
             "upperDeck": "Tribune haute"
         },
         "kit": {
+            "arena": "Aréna couverte",
             "bighs": "Grand lycée",
             "blank": "Terrain seul",
             "college": "Stade universitaire",
@@ -2797,6 +2780,12 @@
         },
         "venue": {
             "updateFailed": "Échec de la mise à jour du lieu de la vue 3D"
+        },
+        "board": {
+            "designedBy": "Conçu par {name}",
+            "forClient": "Pour {name}",
+            "nowPerforming": "En piste",
+            "untitled": "Spectacle sans titre"
         }
     },
     "web": {
@@ -2952,7 +2941,14 @@
         "unsavedChanges": "Vous avez des modifications non enregistrées",
         "close": "Fermer",
         "saved": "Paramètres du spectacle enregistrés",
-        "updateFailed": "Échec de la mise à jour des paramètres de l'espace de travail"
+        "updateFailed": "Échec de la mise à jour des paramètres de l'espace de travail",
+        "showInfo": {
+            "projectName": "Nom du spectacle",
+            "projectNamePlaceholder": "Utilise le nom du fichier",
+            "designer": "Concepteur",
+            "client": "Client",
+            "optional": "Facultatif"
+        }
     },
     "canvas": {
         "zoom": {

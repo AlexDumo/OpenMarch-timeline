@@ -11,16 +11,21 @@
  *   upward arc, or jumps under reduced motion;
  * - tells `useCameraStore().currentPose()` where the view is, for saving
  *   cameras;
- * - orbits on drag (a flung drag coasts to a stop), grab-pans on
- *   right-drag or Shift+drag (the ground point under the pointer stays
- *   under it), and zooms toward the cursor on the wheel (eased) or a pinch;
- *   on a trackpad a two-finger scroll orbits, Shift or Option + scroll pans,
- *   and a pinch zooms; double-click moves the orbit center to the clicked spot;
- *   never below the ground; any of these clears the active camera;
+ * - moves on drag and scroll as the viewer's control scheme says
+ *   (`controlScheme.ts`): orbits (a flung drag coasts to a stop), grab-pans
+ *   (the ground point under the pointer stays under it), zooms toward the
+ *   cursor on the wheel (eased) or a pinch; double-click moves the orbit
+ *   center to the clicked spot; never below the ground; any of these clears
+ *   the active camera;
  * - in pick-a-seat mode, raycasts the kit's `pickTargets`, snaps to the
  *   nearest seat row and flies to a seated eye looking at the focus; Esc
  *   cancels;
- * - clears the crowd within `CROWD_CLEAR_RADIUS` of the camera on arrival.
+ * - clears the crowd within `CROWD_CLEAR_RADIUS` of the camera on arrival;
+ * - while the Director is on (`cinema/directorStore.ts`, key D), puts the
+ *   camera where its shot track says for the show time, on every drawn frame.
+ *   It asks for no frames of its own: playback and scrubs already draw. Any
+ *   of the viewer's moves above turns the Director off first, and the camera
+ *   carries on from where it was.
  *
  * Camera state the overlay reads lives in `cameraStore.ts`.
  */
@@ -39,7 +44,8 @@ import type { CameraSeat, KitResult } from "@/view3d/core/types";
 import { CROWD_CLEAR_RADIUS, useView3dSceneStore } from "../sceneStore";
 import { useCameraStore } from "./cameraStore";
 import { RigController } from "./rigController";
-import { classifyWheel, groundHit, wheelPixels } from "./inputMath";
+import { groundHit, wheelPixels } from "./inputMath";
+import { dragAction, wheelAction } from "./controlScheme";
 import { requestDraw } from "../drawWake";
 import { pickAlong } from "../scenePick";
 import {
@@ -51,6 +57,15 @@ import {
     seatAim,
 } from "./rigMath";
 import { snapToSeatRows } from "./seatSnap";
+import { useTimingObjects } from "@/hooks/useTimingObjects";
+import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
+import { demoTrack } from "../cinema/demoTrack";
+import {
+    directedPose,
+    toggleDirector,
+    useDirectorStore,
+} from "../cinema/directorStore";
+import { useCinemaContext } from "../cinema/subjectPoints";
 
 /** Pointer travel (px) under which a press counts as a click, for picking. */
 const CLICK_SLOP_PX = 6;
@@ -58,6 +73,14 @@ const CLICK_SLOP_PX = 6;
 const INPUT_WAKE_MS = 1500;
 /** Zoom per pinch delta unit (a trackpad pinch reports small deltas). */
 const PINCH_ZOOM = 0.01;
+/** The most one pinch event zooms (log of the ratio); Ctrl + a mouse wheel takes this path with big deltas. */
+const PINCH_MAX_STEP = 0.3;
+/**
+ * Grab pan keeps the ground under the pointer only this close (m, along the
+ * ground). Past it a few pixels cover a huge stretch of ground, so the drag
+ * pans at its ordinary speed instead.
+ */
+const MAX_GRAB_DISTANCE = 250;
 
 function prefersReducedMotion(): boolean {
     return (
@@ -133,6 +156,30 @@ export default function CameraRig() {
 
     const rig = useMemo(() => new RigController(camera), [camera]);
     const shownKitIdRef = useRef<string | null>(null);
+
+    // The Director's view of the show: who is where, and the picture's shape.
+    const aspect = useThree((s) =>
+        s.size.height > 0 ? s.size.width / s.size.height : 1,
+    );
+    const cinema = useCinemaContext(aspect);
+    const cinemaRef = useRef(cinema);
+    cinemaRef.current = cinema;
+    const directing = useDirectorStore((s) => s.directing);
+    const hasTrack = useDirectorStore((s) => s.track.length > 0);
+    const { countGrid } = useTimingObjects();
+
+    // Until shots are stored in the show, the Director plays a demo track.
+    useEffect(() => {
+        if (!directing || hasTrack || countGrid.storedCount === 0) return;
+        useDirectorStore
+            .getState()
+            .setTrack(
+                demoTrack(
+                    countGrid.storedCount,
+                    (count) => countGrid.timeAtBeat(count) * 1000,
+                ),
+            );
+    }, [directing, hasTrack, countGrid]);
 
     const flyToSeat = (seat: CameraSeat) => {
         const aim = seatAim(seat);
@@ -245,10 +292,14 @@ export default function CameraRig() {
 
         const manualMove = () => {
             requestDraw(INPUT_WAKE_MS);
+            // The camera is already where the Director had it, so the move
+            // carries on from there.
+            useDirectorStore.getState().setDirecting(false);
             const store = useCameraStore.getState();
             if (store.activeCameraId !== null) store._setActive(null);
         };
         const focus = () => useView3dSceneStore.getState().focus;
+        const scheme = () => useView3dSceneStore.getState().controlScheme;
 
         /** The ground point under a client position, from the camera's current pose. */
         const groundAt = (
@@ -306,7 +357,19 @@ export default function CameraRig() {
             if (t === null) t = rig.spherical.radius;
             return [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
         };
-        /** The ground point grabbed by a pan drag, or null when the drag started above the horizon. */
+        /** The ground under a client position, if it's near enough to grab. */
+        const nearGroundAt = (
+            clientX: number,
+            clientY: number,
+        ): Vector3Tuple | null => {
+            const hit = groundAt(clientX, clientY);
+            if (!hit) return null;
+            const p = camera.position;
+            return Math.hypot(hit[0] - p.x, hit[2] - p.z) <= MAX_GRAB_DISTANCE
+                ? hit
+                : null;
+        };
+        /** The ground point held by a pan drag, or null while the drag pans at its ordinary speed. */
         let grab: Vector3Tuple | null = null;
         let orbiting = false;
 
@@ -317,8 +380,8 @@ export default function CameraRig() {
             rig.stopMotion();
             orbiting = false;
             grab =
-                e.shiftKey || (e.buttons & 2) !== 0
-                    ? groundAt(e.clientX, e.clientY)
+                dragAction(scheme(), e) === "pan" && !rig.flying
+                    ? nearGroundAt(e.clientX, e.clientY)
                     : null;
             if (pointers.size === 2) {
                 const [a, b] = [...pointers.values()];
@@ -342,13 +405,19 @@ export default function CameraRig() {
                 changed = pinch > 0 && d > 0 && rig.zoomRatio(pinch / d);
                 pinch = d;
                 changed = rig.pan(dx * 0.5, dy * 0.5, focus()) || changed;
-            } else if (e.shiftKey || (e.buttons & 2) !== 0) {
-                const now = grab ? groundAt(e.clientX, e.clientY) : null;
+            } else if (dragAction(scheme(), e) === "pan") {
+                const now = grab ? nearGroundAt(e.clientX, e.clientY) : null;
+                // Once the pointer leaves the ground, finish the press without
+                // a held point, or coming back would snap to it.
+                if (!now) grab = null;
                 changed =
                     grab && now
                         ? rig.grabPan(grab, now, focus())
                         : rig.pan(dx, dy, focus());
             } else {
+                // The orbit moves the ground, so a pan resumed in this press
+                // can't grab the point it held before.
+                grab = null;
                 changed = rig.orbitDrag(dx, dy, performance.now());
                 orbiting = orbiting || changed;
             }
@@ -373,6 +442,7 @@ export default function CameraRig() {
             if (!eye) return;
             store.setPickMode(false);
             store._setActive(null);
+            useDirectorStore.getState().setDirecting(false);
             rig.flyTo(eye, [...current.focus], {
                 nowMs: performance.now(),
                 instant: prefersReducedMotion(),
@@ -387,25 +457,31 @@ export default function CameraRig() {
         };
         const onWheel = (e: WheelEvent) => {
             e.preventDefault();
-            const kind = classifyWheel(
-                e as WheelEvent & { wheelDeltaY?: number },
-            );
+            const action = wheelAction(scheme(), e);
             let changed: boolean;
-            if (kind === "pinch") {
+            if (action === "pinch") {
+                const step = wheelPixels(e.deltaY, e.deltaMode) * PINCH_ZOOM;
                 changed = rig.zoomRatioAt(
-                    Math.exp(e.deltaY * PINCH_ZOOM),
+                    Math.exp(
+                        Math.max(
+                            -PINCH_MAX_STEP,
+                            Math.min(PINCH_MAX_STEP, step),
+                        ),
+                    ),
                     zoomPointAt(e.clientX, e.clientY),
                 );
-            } else if (kind === "trackpad") {
+            } else if (action !== "zoom") {
                 // natural scrolling: moving the fingers right gives a negative
                 // deltaX; orbit and pan as if the fingers dragged the scene
                 const dx = -wheelPixels(e.deltaX, e.deltaMode);
                 const dy = -wheelPixels(e.deltaY, e.deltaMode);
                 changed =
-                    e.shiftKey || e.altKey
+                    action === "pan"
                         ? rig.pan(dx, dy, focus())
                         : rig.orbit(dx, dy);
             } else {
+                // A sideways-only swipe has nothing to zoom by.
+                if (e.deltaY === 0) return;
                 changed = rig.zoomWheelAt(
                     wheelPixels(e.deltaY, e.deltaMode),
                     zoomPointAt(e.clientX, e.clientY),
@@ -442,6 +518,12 @@ export default function CameraRig() {
                 }
                 return;
             }
+            if (e.key === "d" || e.key === "D") {
+                if (e.repeat || e.shiftKey) return;
+                e.preventDefault();
+                toggleDirector();
+                return;
+            }
             const index = cameraIndexForKey(e.key);
             const { cameras } = useView3dSceneStore.getState();
             const seat = index === null ? undefined : cameras[index];
@@ -474,6 +556,15 @@ export default function CameraRig() {
     // hiding) sees this frame's camera.
     useFrame(() => {
         const now = performance.now();
+        const ctx = cinemaRef.current;
+        const pose = ctx
+            ? directedPose(useView3dSyncStore.getState().showMs(), ctx)
+            : null;
+        if (pose) {
+            // Also ends a fly-to or a coast the Director interrupted.
+            rig.jumpTo(pose.position, pose.target, pose.fovDeg);
+            return;
+        }
         rig.update(now);
         if (rig.moving) requestDraw(100);
     }, -1);
@@ -484,6 +575,7 @@ export default function CameraRig() {
             const store = useCameraStore.getState();
             store._setActive(null);
             store.setPickMode(false);
+            useDirectorStore.getState().setDirecting(false);
         },
         [],
     );

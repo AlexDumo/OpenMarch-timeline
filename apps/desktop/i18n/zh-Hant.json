@@ -23,10 +23,6 @@
         "batchEdit": {
             "noNextPage": "無法套用下一頁的隊員座標：沒有下一頁",
             "noPreviousPage": "無法套用上一頁的隊員座標：沒有上一頁",
-            "setAllToNext": "從下一頁複製位置（所有隊員）",
-            "setAllToNextSuccess": "{count, plural, other {已將第 {currentPage} 頁全部 # 位隊員的座標設為下一頁（第 {nextPage} 頁）的座標}}",
-            "setSelectedToNext": "從下一頁複製位置（已選取）",
-            "setSelectedToNextSuccess": "{count, plural, other {已將第 {currentPage} 頁 # 位隊員的座標設為下一頁（第 {nextPage} 頁）的座標}}",
             "setAllToPreviousDone": "{count, plural, other {已將第 {currentPage} 頁全部 # 位隊員的座標設為上一頁（第 {previousPage} 頁）的座標}}",
             "setSelectedToPreviousDone": "{count, plural, other {已將第 {currentPage} 頁 # 位隊員的座標設為上一頁（第 {previousPage} 頁）的座標}}"
         },
@@ -1467,7 +1463,6 @@
         "general.appearance": "外觀",
         "general.appearance.dark": "深色",
         "general.appearance.light": "淺色",
-        "general.automaticUpdates": "自動下載並安裝更新",
         "general.description": "編輯器模式、語言及其他全域偏好設定。",
         "general.editorMode": "編輯器模式",
         "general.editorMode.basic": "基本",
@@ -2579,7 +2574,6 @@
             "placeAllMarchers": "放置所有隊員",
             "placeSelectedMarchers": "放置所選隊員",
             "snapToggleCaption": "貼齊",
-            "toNextPagePositions": "…到下一頁的位置",
             "setMarcherPositionsAriaLabel": "設定隊員位置"
         },
         "collisions": {
@@ -2630,20 +2624,6 @@
             "shapesSelected": "選取時"
         }
     },
-    "versionCheck": {
-        "error": {
-            "fetchFailed": "取得版本時發生錯誤。",
-            "message": "錯誤：{message}",
-            "noVersion": "無法取得最新版本。"
-        },
-        "installLinux": "安裝 Linux 版",
-        "installMacArm": "安裝 Apple Silicon 版",
-        "installMacIntel": "安裝 Intel Mac 版",
-        "installWindows": "安裝 Windows 版",
-        "skipVersion": "略過此版本",
-        "title": "有新版本可用",
-        "trigger": "有新版本！"
-    },
     "view3d": {
         "autoOpenPrompt": {
             "description": "你可以稍後在「設定 › 一般」中變更。",
@@ -2658,14 +2638,17 @@
             "floor": "場內地面",
             "frontRow": "第一排",
             "geJudge": "GE 評審",
+            "judgesTable": "評審席",
             "lowerBowl": "下層看台",
             "podium": "指揮台",
             "pressBox": "記者席",
             "sideline": "邊線",
             "topDown": "俯視",
+            "tunnel": "入場通道",
             "upperDeck": "上層看台"
         },
         "kit": {
+            "arena": "室內競技場",
             "bighs": "大型高中",
             "blank": "僅場地",
             "college": "大學體育場",
@@ -2793,6 +2776,12 @@
         },
         "venue": {
             "updateFailed": "無法更新3D 檢視的場館"
+        },
+        "board": {
+            "designedBy": "設計：{name}",
+            "forClient": "演出單位：{name}",
+            "nowPerforming": "正在表演",
+            "untitled": "未命名表演"
         }
     },
     "web": {
@@ -2948,7 +2937,14 @@
         "unsavedChanges": "你有尚未儲存的變更",
         "close": "關閉",
         "saved": "表演設定已儲存",
-        "updateFailed": "無法更新表演設定"
+        "updateFailed": "無法更新表演設定",
+        "showInfo": {
+            "projectName": "表演名稱",
+            "projectNamePlaceholder": "使用檔案名稱",
+            "designer": "設計者",
+            "client": "客戶",
+            "optional": "選填"
+        }
     },
     "canvas": {
         "zoom": {
