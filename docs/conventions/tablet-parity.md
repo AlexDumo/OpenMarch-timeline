@@ -87,11 +87,19 @@ timeline, it also needs a visible touch path (section 2).
 
 - Unit-test any gesture rule as a pure function with timestamps (see
   `components/canvas/touch/__test__/touchGestures.test.ts`).
-- Browser scenarios send real touch through CDP `Input.dispatchTouchEvent`. The helpers
-  are currently in `e2e/browser/tests/navigation.spec.mts` (`touchGesture`) and
-  `box-tool.spec.mts` (`fingerDrag`, pen drag); assert through `window.fieldTest`.
+- Browser scenarios send real touch and pen input through CDP with the shared helpers in
+  `apps/desktop/e2e/browser/app.mts`: `tap`, `touchDrag`, `longPress`, `twoFingerPan`,
+  `pinch`, `multiFingerTap` (two or three fingers), `penDrag`, and `touchGesture` for any
+  other finger sequence. Points are viewport pixels, and each finger is 48 px wide
+  (`FINGERTIP_WIDTH`), as Safari reports. `emulateTouchScreen` makes the page a touch
+  screen (`(pointer: coarse)`, `(hover: none)`) partway through a scenario. Assert
+  through `window.fieldTest`; `e2e/browser/tests/touch-helpers.spec.mts` shows each
+  helper.
 - Run the existing mouse scenarios for the area unchanged. A touch change that alters
-  mouse behavior is a bug.
+  mouse behavior is a bug. To also run them on a touch screen (`hasTouch`, coarse pointer,
+  so "auto" lays the app out for touch while `page.mouse` still presses as a mouse), use
+  the `browser-touch` project: `pnpm run e2e:browser:touch <spec>`, or
+  `test.use({ touchScreen: true })` in one file.
 - Never claim device support beyond what was tried on real hardware.
 
 ## 6. In the pull request
