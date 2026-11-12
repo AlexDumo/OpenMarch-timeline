@@ -1,4 +1,4 @@
-import { TIGHTNESS_SCALE, smoothedBounds } from "./framing";
+import { MIN_FRAMED_RADIUS, TIGHTNESS_SCALE, smoothedBounds } from "./framing";
 import { applyMove } from "./moves";
 import {
     DEFAULT_FOV_DEG,
@@ -12,8 +12,11 @@ import type { CameraPose, CinemaContext, CinemaShot, Vec3 } from "./types";
 
 /** A shot's camera pose at a show time: its rig aimed at its subject, plus its move. */
 
-/** A close-up on one marcher aims at the chest, this far above the ground (m). */
-export const CLOSE_UP_TARGET_HEIGHT = 1.1;
+/**
+ * A close-up on marchers aims this far above the ground (m): the upper chest,
+ * so the frame runs from the knees to the top of the headgear.
+ */
+export const CLOSE_UP_TARGET_HEIGHT = 1.3;
 /**
  * How far toward the audience the overhead camera sits from straight above
  * the subject (m), so "up" stays defined and the back sideline is at the top
@@ -47,9 +50,16 @@ export function basePose(
 
     const rig = BUILTIN_RIGS[shot.rig.id];
     const bounds = smoothedBounds(shot.subject, ms, ctx);
-    const radius = bounds.radius * TIGHTNESS_SCALE[shot.tightness];
+    const radius = Math.max(
+        MIN_FRAMED_RADIUS,
+        bounds.radius * TIGHTNESS_SCALE[shot.tightness],
+    );
+    // A close-up is about people, not the ground they stand on. Regions and
+    // spots are places on the field, so they stay on the ground.
     const chest =
-        shot.subject.kind === "marcher" && shot.tightness === "closeUp";
+        shot.tightness === "closeUp" &&
+        shot.subject.kind !== "region" &&
+        shot.subject.kind !== "spot";
     const target: Vec3 = [
         bounds.cx,
         chest ? CLOSE_UP_TARGET_HEIGHT : 0,

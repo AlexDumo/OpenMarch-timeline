@@ -235,7 +235,7 @@ describe("TIGHTNESS_SCALE", () => {
     it("gets tighter from wide to close-up", () => {
         expect(TIGHTNESS_SCALE).toEqual({
             wide: 1.6,
-            medium: 1.1,
+            medium: 1,
             tight: 0.75,
             closeUp: 0.45,
         });

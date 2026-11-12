@@ -19,16 +19,22 @@ export const MIN_SUBJECT_RADIUS = 1.5;
 /** The total smoothing window, centered on ms + lead. */
 export const SMOOTH_WINDOW_MS = 1000;
 export const SMOOTH_SAMPLES = 9;
+/**
+ * No shot frames less than this (m), however tight: a marcher with headgear
+ * and a horn is about 2.2 m tall, and a smaller frame cuts the head off.
+ */
+export const MIN_FRAMED_RADIUS = 1.1;
 /** How far ahead along the subject's path the camera looks. */
 export const DEFAULT_LEAD_MS = 250;
 
 /**
- * Tightness → radius multiplier. A close-up on a single marcher also aims at
- * the chest instead of the ground (see `CLOSE_UP_TARGET_HEIGHT`).
+ * Tightness → radius multiplier. A close-up on marchers also aims at the
+ * chest instead of the ground (see `CLOSE_UP_TARGET_HEIGHT`).
  */
 export const TIGHTNESS_SCALE: Record<Tightness, number> = {
     wide: 1.6,
-    medium: 1.1,
+    // 1 is the tightest that still holds every marcher of the subject.
+    medium: 1,
     tight: 0.75,
     closeUp: 0.45,
 };

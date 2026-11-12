@@ -62,8 +62,9 @@ export const BUILTIN_RIGS: Record<BuiltinRigId, RigDef> = {
         kind: "fixed",
         yardLine: 25,
         sideline: "front",
-        backM: 30,
-        heightM: 16,
+        // Behind and above a high school home stand, beside its press box.
+        backM: 40,
+        heightM: 20,
         mirrorBySide: true,
     },
     topDown: { id: "topDown", kind: "overhead", heightM: 70 },
@@ -87,8 +88,10 @@ export const BUILTIN_RIGS: Record<BuiltinRigId, RigDef> = {
         mirrorBySide: false,
     },
     aerial: { id: "aerial", kind: "free", azimuthDeg: 0, elevationDeg: 55 },
-    closeUp: { id: "closeUp", kind: "free", azimuthDeg: 0, elevationDeg: 12 },
-    follow: { id: "follow", kind: "free", azimuthDeg: 0, elevationDeg: 25 },
+    // A little off the front, so a podium on the 50 is not in the way.
+    closeUp: { id: "closeUp", kind: "free", azimuthDeg: 15, elevationDeg: 12 },
+    // Steep enough to clear a press box roof when it follows the whole band.
+    follow: { id: "follow", kind: "free", azimuthDeg: 0, elevationDeg: 35 },
 };
 
 /** World x of a yard line (0 to 100, 50 = center): 8 steps per 5 yards. */

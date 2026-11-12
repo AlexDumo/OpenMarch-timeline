@@ -146,7 +146,7 @@ describe("basePose", () => {
         expect(
             (Math.atan2(offset[1], Math.hypot(offset[0], offset[2])) * 180) /
                 Math.PI,
-        ).toBeCloseTo(25, 6);
+        ).toBeCloseTo(35, 6);
     });
 
     it("frames one marcher's head and torso in a close-up", () => {
@@ -160,19 +160,53 @@ describe("basePose", () => {
             one,
         );
         expect(pose.target[0]).toBeCloseTo(3, 6);
-        expect(pose.target[1]).toBe(1.1);
+        expect(pose.target[1]).toBe(1.3);
         expect(pose.target[2]).toBeCloseTo(-12, 6);
         expect(length(sub(pose.position, [3, 0, -12]))).toBeLessThan(8);
+        // far enough back that the frame runs from the knees to the headgear
+        const range = length(sub(pose.position, pose.target));
+        const halfFrame = range * Math.tan(((pose.fovDeg / 2) * Math.PI) / 180);
+        expect(pose.target[1] + halfFrame).toBeGreaterThan(2.3);
+        expect(pose.target[1] - halfFrame).toBeLessThan(0.6);
         expect(pose.position[1]).toBeGreaterThanOrEqual(0.5);
     });
 
-    it("aims at the ground for a close-up on more than one marcher", () => {
+    it("aims at the chest for a close-up on more than one marcher too", () => {
         const pose = basePose(
             shotOf("closeUp", { tightness: "closeUp" }),
             0,
             ctx,
         );
-        expect(pose.target[1]).toBe(0);
+        expect(pose.target[1]).toBe(1.3);
+    });
+
+    it("aims at the ground for a close-up on a place on the field", () => {
+        const spot = basePose(
+            shotOf("closeUp", {
+                tightness: "closeUp",
+                subject: { kind: "spot", x: 2, z: -9 },
+            }),
+            0,
+            ctx,
+        );
+        expect(spot.target).toEqual([2, 0, -9]);
+        const medium = basePose(shotOf("closeUp"), 0, ctx);
+        expect(medium.target[1]).toBe(0);
+    });
+
+    it("never frames less than a marcher's height, however tight", () => {
+        const one = contextOf([{ x: 3, z: -12 }]);
+        const pose = basePose(
+            shotOf("follow", {
+                subject: { kind: "marcher", marcherId: 4 },
+                tightness: "closeUp",
+            }),
+            0,
+            one,
+        );
+        const range = length(sub(pose.position, pose.target));
+        // 1.5 m × 0.45 would be a 0.675 m frame; the floor is 1.1 m
+        expect(range * Math.sin((20 * Math.PI) / 180)).toBeCloseTo(1.1, 6);
     });
 
     it("returns a pose rig as it is, above the minimum eye height", () => {

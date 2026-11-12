@@ -27,8 +27,8 @@ describe("rigEye", () => {
         expect(side1[0]).toBeCloseTo(-22.86, 2);
         expect(side2[0]).toBeCloseTo(22.86, 2);
         // In front of the front sideline, at the rig's height.
-        expect(side2[2]).toBe(30);
-        expect(side2[1]).toBe(16);
+        expect(side2[2]).toBe(40);
+        expect(side2[1]).toBe(20);
     });
 
     it("puts the end zone rig behind the goal line on the field's center depth", () => {
