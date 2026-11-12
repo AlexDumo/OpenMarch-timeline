@@ -200,6 +200,8 @@ These were judged improvements for everyone:
 
 ## Parity rule
 
+The full guide for new features is [tablet parity](conventions/tablet-parity.md).
+
 Every feature must be reachable in both layouts, even if differently (a toolbar
 button in one, a panel in the other). When adding a control, check:
 
