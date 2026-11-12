@@ -144,6 +144,10 @@
             "unsetHereAndFollowing": "{removeKeyframe}, later pages move back too",
             "unsetHereAndPagesMoveBack": "{count, plural, =1 {{removeKeyframe}, Page {first} moves back too} other {{removeKeyframe}, Pages {first}–{last} move back too}}",
             "unsetHereKeywords": "keyframe diamond unset set defined not defined following remove clear take back coordinate position delete",
+            "toggleEditorMode": "Switch between Basic and Expert",
+            "toggleEditorModeKeywords": "basic expert editor mode simple full timeline pages",
+            "toggleEditorModeToBasic": "Switch to Basic (Expert is on)",
+            "toggleEditorModeToExpert": "Switch to Expert (Basic is on)",
             "splitSelectedIntoNewMove": "Split selected marchers into a new move",
             "mergeMoveIntoPage": "Merge this move into its page"
         },
