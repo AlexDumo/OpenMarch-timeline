@@ -302,3 +302,24 @@ describe("neighborHalfWidths", () => {
         expect(h).toBe(8);
     });
 });
+
+describe("numbers beside another line", () => {
+    it("never sit on a neighboring line's lane: they move to the other side", () => {
+        // B runs one row above U, so B's rail below would land in U's lane
+        const b = row(5, 22, 0);
+        const u = row(5, 22, 14);
+        const { badges } = placeNumbers({
+            points: b,
+            kind: "lane",
+            halfWidth: 6,
+            dotRadius: R,
+            busy: [],
+            dots: [...b, ...u],
+            others: [{ points: u, halfWidth: 6 }],
+        });
+        expect(badges.length).toBeGreaterThan(0);
+        // U's lane reaches up to y = 14 - 6; no badge's box comes down into it
+        for (const badge of badges)
+            expect(badge.at.y + BADGE_HEIGHT / 2).toBeLessThanOrEqual(8);
+    });
+});

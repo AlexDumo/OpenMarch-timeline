@@ -79,6 +79,7 @@ import {
     threadDarts,
     type Box,
     type OrderLaneKind,
+    type OtherLane,
     type PlacedBadge,
 } from "./orderLane";
 import { usePathPenStore } from "./pathPenStore";
@@ -259,7 +260,7 @@ interface DrawnLine {
  * A line through `points` (leader first; the first `marchers` are marchers, a last one past them is
  * Set order's pointer) as drawn: its kind, the tip and darts of a plain lane, and its numbers when
  * `numbered` or when the lane can't tell the order (doubling back, crossing). Numbers keep clear of
- * the tip, the marchers' name labels (`busy`) and every dot (`dots`).
+ * the tip, the marchers' name labels (`busy`), every dot (`dots`) and the other lines' lanes.
  */
 function drawLine({
     points,
@@ -270,6 +271,7 @@ function drawLine({
     dotRadius,
     busy,
     dots,
+    others = [],
 }: {
     points: readonly XY[];
     marchers: number;
@@ -279,6 +281,8 @@ function drawLine({
     dotRadius: number;
     busy: readonly Box[];
     dots: readonly XY[];
+    /** The other lines showing, whose lanes its numbers keep off */
+    others?: readonly OtherLane[];
 }): DrawnLine {
     const own = points.slice(0, marchers);
     const kind = classifyOrder(points, dotRadius);
@@ -298,6 +302,7 @@ function drawLine({
                   dotRadius,
                   busy: tip ? [...busy, tip.box] : busy,
                   dots,
+                  others,
               })
             : { badges: [], crowded: false };
     const xs = points.map((p) => p.x);
@@ -543,6 +548,9 @@ export default function MarcherOrderOverlay({
                 dotRadius,
                 busy,
                 dots: everyone,
+                others: pointsOf.flatMap((points, o) =>
+                    o === l ? [] : [{ points, halfWidth: halfWidths[o]! }],
+                ),
             }),
         );
     }, [

@@ -324,7 +324,9 @@ function badgeSpots({
             ...(every ? [{ x: 0, y: off + H + 2 }] : []),
             { x: side, y: 0 },
             { x: -side, y: 0 },
-            ...(every ? [{ x: 0, y: -off - 9 }] : []),
+            // Above, clear of the dot's name; a plain lane's rail then above the name
+            { x: 0, y: -off - 9 },
+            ...(every ? [] : [{ x: 0, y: -off - H - 14 }]),
         ];
     return [
         { x: side, y: 0 },
@@ -376,6 +378,30 @@ function endsOnly({
     });
 }
 
+/** Another line showing at the same time: a badge of this one never sits on its lane */
+export interface OtherLane {
+    readonly points: readonly XY[];
+    readonly halfWidth: number;
+}
+
+/** Whether a badge in the middle of `at` would sit on any of `lanes` */
+function onLane(at: XY, lanes: readonly OtherLane[]): boolean {
+    const reach = BADGE_HEIGHT / 2 + 1;
+    return lanes.some(({ points, halfWidth }) => {
+        for (let i = 0; i + 1 < points.length; i++)
+            if (
+                distanceToSegment(at, points[i]!, points[i + 1]!) <
+                halfWidth + reach
+            )
+                return true;
+        return (
+            points.length === 1 &&
+            Math.hypot(at.x - points[0]!.x, at.y - points[0]!.y) <
+                halfWidth + reach
+        );
+    });
+}
+
 /** A badge's box round its middle `at`, `pad` clear each side */
 const badgeBox = (at: XY, w: number, pad: number): Box => ({
     minX: at.x - w / 2 - pad,
@@ -383,6 +409,15 @@ const badgeBox = (at: XY, w: number, pad: number): Box => ({
     maxX: at.x + w / 2 + pad,
     maxY: at.y + BADGE_HEIGHT / 2 + pad,
 });
+
+/** Whether an order spreads wider across the screen than up and down it */
+function runsAcross(points: readonly XY[]): boolean {
+    const xs = points.map((p) => p.x);
+    const ys = points.map((p) => p.y);
+    return (
+        Math.max(...xs) - Math.min(...xs) >= Math.max(...ys) - Math.min(...ys)
+    );
+}
 
 /** The shortest leg of an order, on screen */
 function shortestLeg(points: readonly XY[]): number {
@@ -400,7 +435,7 @@ function shortestLeg(points: readonly XY[]): number {
 
 /**
  * The first of `candidates` (offsets from the dot at `p`) where a badge `w` wide touches none of
- * `avoid` and no dot but its own; null when there's none
+ * `avoid`, no dot but its own and no other line's lane; null when there's none
  */
 function freeSpot({
     p,
@@ -409,6 +444,7 @@ function freeSpot({
     avoid,
     dots,
     dotRadius,
+    lanes,
 }: {
     p: XY;
     candidates: readonly XY[];
@@ -416,6 +452,7 @@ function freeSpot({
     avoid: readonly Box[];
     dots: readonly XY[];
     dotRadius: number;
+    lanes: readonly OtherLane[];
 }): { at: XY; box: Box } | null {
     const H = BADGE_HEIGHT;
     for (const c of candidates) {
@@ -428,7 +465,7 @@ function freeSpot({
                     (d.x !== p.x || d.y !== p.y) &&
                     Math.hypot(d.x - at.x, d.y - at.y) < dotRadius + H / 2 + 1,
             );
-        if (!hit) return { at, box };
+        if (!hit && !onLane(at, lanes)) return { at, box };
     }
     return null;
 }
@@ -439,7 +476,7 @@ function freeSpot({
  * doubles back or crosses numbers every marcher: each badge takes the first free spot of a few
  * round its dot, a second row further out among them, and when one finds none, only the leader's
  * and the tail's are kept and `crowded` says so. A badge keeps clear of `busy` (labels, the tip),
- * of the other badges and of every dot in `dots`.
+ * of the other badges, of every dot in `dots` and of the other lines' lanes (`others`).
  */
 export function placeNumbers({
     points,
@@ -448,6 +485,7 @@ export function placeNumbers({
     dotRadius,
     busy,
     dots,
+    others = [],
 }: {
     points: readonly XY[];
     kind: OrderLaneKind;
@@ -455,13 +493,11 @@ export function placeNumbers({
     dotRadius: number;
     busy: readonly Box[];
     dots: readonly XY[];
+    others?: readonly OtherLane[];
 }): PlacedNumbers {
     const n = points.length;
     if (n === 0) return { badges: [], crowded: false };
-    const xs = points.map((p) => p.x);
-    const ys = points.map((p) => p.y);
-    const across =
-        Math.max(...xs) - Math.min(...xs) >= Math.max(...ys) - Math.min(...ys);
+    const across = runsAcross(points);
     const gap = shortestLeg(points);
     const every = kind !== "lane";
     const shown = every
@@ -487,6 +523,7 @@ export function placeNumbers({
             candidates,
             w,
             avoid: [...busy, ...placed],
+            lanes: others,
             dots,
             dotRadius,
         });
