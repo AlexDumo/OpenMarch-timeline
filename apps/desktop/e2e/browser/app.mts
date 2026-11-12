@@ -584,7 +584,8 @@ export async function penDrag(
  * Makes the page a touch screen until the returned stop is called: it reports
  * touch points and matches `(hover: none)` and `(pointer: coarse)`, so the
  * app's "auto" input mode lays itself out for touch. For a whole run, use the
- * `touchScreen` fixture option (the `browser-touch` project) instead.
+ * `touchScreen` fixture option (the `browser-touch` project) instead. After stop,
+ * `(hover: none)` stays for the rest of the page (Chromium); the coarse pointer goes.
  */
 export async function emulateTouchScreen(page: Page) {
     const cdp = await page.context().newCDPSession(page);
@@ -592,6 +593,13 @@ export async function emulateTouchScreen(page: Page) {
         enabled: true,
         maxTouchPoints: 5,
     });
-    // The emulation lasts as long as the session
-    return () => cdp.detach();
+    // Turn it off before letting go: detaching alone leaves the touch screen on.
+    // Chromium still reports `(hover: none)` until the page closes; only the coarse
+    // pointer and touch events go away.
+    return async () => {
+        await cdp.send("Emulation.setTouchEmulationEnabled", {
+            enabled: false,
+        });
+        await cdp.detach();
+    };
 }
