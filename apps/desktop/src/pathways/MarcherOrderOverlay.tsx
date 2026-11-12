@@ -1,23 +1,21 @@
 /**
- * The order line on the field (pathways step 4g, DL-30, DL-31): through a line's marchers in order,
- * thick at the leader and thin at the tail, sky blue to deep red blended in OKLab, over a thin dark
- * halo; a ring round the leader and an arrow just past the tail. A guessed order is drawn dashed
- * and faded. Position numbers show while Alt is held, and always while Set order is on (touch has
- * no Alt). Set order draws the line it has picked so far, growing behind the pointer, with the bar
- * that says how to go on and keeps or cancels it.
+ * A line's order on the field (pathways step 4h, design E "the lane"): a soft neutral lane under
+ * the line's dots, cut away round every dot so dots and selection rings keep their own color, with a
+ * solid tip past the leader (the drawing rules are `orderLane`). An order that runs back over its own
+ * marchers loses the tip and shows its numbers; one whose legs cross thins to a thread with darts and
+ * shows its numbers. A guessed order isn't drawn at rest; while Alt is held it shows hollow and
+ * dashed. Position badges show while Alt is held, and always while Set order is on (touch has no
+ * Alt). Set order draws the lane it has picked so far, growing behind the pointer, with the bar that
+ * says how to go on and keeps or cancels it.
  *
  * The forms are read once per edit (`followOrderForms`), the selection's only unless Always shows
  * every line; what's drawn follows the camera and where the lines' marchers are drawn
- * (`FieldMarchers`), so it's worked out again only when either changes.
- *
- * It's never wider than a dot and stops short of each marcher, so dots and selection rings show
- * through; a leg that runs back over the line, or over a marcher it doesn't end at, bows to one
- * side (`orderLineGeometry`). A leg's end stops short of its marcher's name label, and the
- * leader's ring leaves a gap where it would cross a label. It sits
- * over the selection box and its handles, takes no presses, and hides while the Follow tool or a
- * shape tool is open (they draw their own ends).
+ * (`FieldMarchers`), so it's worked out again only when either changes. It sits over the selection
+ * box and its handles, takes no presses, and hides while the Follow tool or a shape tool is open
+ * (they draw their own ends).
  */
 import {
+    memo,
     useEffect,
     useId,
     useMemo,
@@ -41,6 +39,7 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { runAction } from "@/shortcuts/registry";
 import { readShortcutContext } from "@/shortcuts/context";
 import type { FieldMarchers } from "@/field/three/fieldMarchers";
+import type { FieldTheme } from "@openmarch/core";
 import { useFieldViewStore, type FieldView } from "@/field/three/fieldView";
 import { ordersInForce } from "@/db-functions/rememberedOrder";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
@@ -67,48 +66,64 @@ import {
     withOwnOrder,
     type ShownOrder,
 } from "./marcherOrderStore";
+import type { XY } from "./orderSweep";
 import {
-    ORDER_HALO_COLOR,
-    orderColorAt,
-    orderFraction,
-    type XY,
-} from "./orderSweep";
-import {
-    ORDER_GAP_PX,
-    legSamples,
-    legTangent,
-    numberSide,
-    orderLegs,
-    orderLineSizes,
-    orderWidthBetween,
-    ringArcs,
-    taperAlong,
-    trimClearOf,
-    trimLeg,
+    BADGE_FONT,
+    BADGE_HEIGHT,
+    badgeWidth,
+    classifyOrder,
+    distanceToSegment,
+    laneDarts,
+    laneHalfWidth,
+    laneTip,
+    neighborHalfWidths,
+    placeNumbers,
+    threadDarts,
     type Box,
-    type LabelSide,
-    type OrderLineSizes,
-    type OrderObstacles,
-} from "./orderLineGeometry";
+    type OrderLaneKind,
+    type OtherLane,
+    type PlacedBadge,
+} from "./orderLane";
 import { usePathPenStore } from "./pathPenStore";
 
-/** How much wider than the line its halo is, each side, in screen pixels */
-const HALO = 1;
-/** A guessed order: dashed and faded (DL-31) */
-const GUESS_DASH = "6 5";
-const GUESS_OPACITY = 0.55;
-/** The leader's ring: this far outside the dot's selection ring, this thick */
-const RING_GAP = 1.5;
-const RING_WIDTH = 2;
-/** The tail's arrow: its length and half its width, and its gap from the dot's selection ring */
-const ARROW_LENGTH = 8;
-const ARROW_HALF = 4.5;
-const ARROW_GAP = 1.5;
-/** How far at most a leg's end is cut back to stop short of its marcher's name label, in gaps */
-const LABEL_TRIM_GAPS = 2;
-/** Position numbers' size, and their gap from what they sit beside, in screen pixels */
-const NUMBER_PX = 11;
-const NUMBER_GAP = 2;
+/** The lane's dark ink: the tip, the leader's badge, the darts */
+const LANE_INK = "#1c1f26";
+
+/** The lane's colors on a light or a dark field: neutral only, so red stays marchers and blue selection */
+interface LaneInk {
+    readonly lane: string;
+    readonly thread: string;
+    readonly guess: string;
+    readonly guessTip: string;
+    readonly edge: string;
+    readonly dart: string;
+    readonly threadDart: string;
+    readonly dartOpacity: number;
+}
+
+function laneInk(dark: boolean): LaneInk {
+    return dark
+        ? {
+              lane: "rgba(255,255,255,0.30)",
+              thread: "rgba(255,255,255,0.85)",
+              guess: "rgba(255,255,255,0.9)",
+              guessTip: "rgba(255,255,255,0.15)",
+              edge: "rgba(255,255,255,0.9)",
+              dart: LANE_INK,
+              threadDart: "#fff",
+              dartOpacity: 0.75,
+          }
+        : {
+              lane: "rgba(28,31,38,0.15)",
+              thread: "rgba(28,31,38,0.55)",
+              guess: "rgba(28,31,38,0.6)",
+              guessTip: "#fff",
+              edge: "none",
+              dart: LANE_INK,
+              threadDart: LANE_INK,
+              dartOpacity: 0.5,
+          };
+}
 
 /**
  * Whether Alt (Option) is held for the position numbers: not while typing in a text field, nor
@@ -226,187 +241,117 @@ export interface OrderLabels {
     readonly fadeFrom: number;
 }
 
-/** One leg of a line as drawn: the points along it, trimmed clear of its marchers */
-interface DrawnPiece {
-    readonly samples: readonly XY[];
-    readonly colors: readonly [string, string];
-    readonly widths: readonly [number, number];
-}
-
-/** A position number as drawn: its middle on screen */
-interface DrawnNumber {
-    readonly at: XY;
-    readonly text: string;
-    readonly fraction: number;
-}
-
 /** A line as drawn, on screen, and how it looks */
 interface DrawnLine {
+    readonly kind: OrderLaneKind;
     readonly guessed: boolean;
-    readonly pieces: readonly DrawnPiece[];
-    /**
-     * The leader's ring: its middle, radius and color, and the arcs drawn of it where it leaves a
-     * gap for a label (null: all of it)
-     */
-    readonly ring: {
-        at: XY;
-        r: number;
-        color: string;
-        arcs: string | null;
-    } | null;
-    /** The arrow past the tail, as SVG points, and its color (not while Set order grows it) */
-    readonly arrow: { points: string; color: string } | null;
-    readonly numbers: readonly DrawnNumber[];
+    /** Leader first; Set order's pointer last while it grows the line */
+    readonly points: readonly XY[];
+    readonly halfWidth: number;
+    /** The solid tip past the leader (a plain lane only) */
+    readonly tip: string | null;
+    readonly darts: readonly string[];
+    readonly numbers: readonly PlacedBadge[];
+    /** Some numbers had no room: only the ends show, and the field asks for a closer zoom */
+    readonly crowded: boolean;
+    /** The lane's box, for the closer-zoom note */
+    readonly box: Box;
 }
 
 /**
- * A line through `points` (leader first) as drawn: the legs, bowed where one runs back over the
- * line, trimmed clear of each marcher (`marchers` of the points are marchers; a last one past them
- * is Set order's pointer, which the line runs right up to), the leader's ring, the tail's arrow,
- * and the position numbers on the side away from the labels when `numbered`. Legs bow round the
- * marchers in `everyone` they'd cover; a leg's ends and the ring keep clear of the marchers' name
- * labels (`labelBoxes`, by point; null where there's none).
+ * A line through `points` (leader first; the first `marchers` are marchers, a last one past them is
+ * Set order's pointer) as drawn: its kind, the tip and darts of a plain lane, and its numbers when
+ * `numbered` or when the lane can't tell the order (doubling back, crossing). Numbers keep clear of
+ * the tip, the marchers' name labels (`busy`), every dot (`dots`) and the other lines' lanes.
  */
 function drawLine({
     points,
     marchers,
-    fractions,
     guessed,
-    arrow: withArrow,
     numbered,
-    sizes,
-    labelSide,
-    everyone,
-    labelBoxes,
+    halfWidth,
+    dotRadius,
+    busy,
+    dots,
+    others = [],
 }: {
     points: readonly XY[];
     marchers: number;
-    fractions: readonly number[];
     guessed: boolean;
-    arrow: boolean;
     numbered: boolean;
-    sizes: OrderLineSizes;
-    labelSide: LabelSide;
-    everyone: readonly XY[];
-    labelBoxes: readonly (Box | null)[];
+    halfWidth: number;
+    dotRadius: number;
+    busy: readonly Box[];
+    dots: readonly XY[];
+    /** The other lines showing, whose lanes its numbers keep off */
+    others?: readonly OtherLane[];
 }): DrawnLine {
-    if (points.length === 0)
-        return { guessed, pieces: [], ring: null, arrow: null, numbers: [] };
-    const ringR = sizes.reach + RING_GAP + HALO + RING_WIDTH / 2;
-    const ringOut = ringR + RING_WIDTH / 2 + HALO;
-    const gapAt = (i: number) =>
-        i >= marchers ? 0 : i === 0 ? ringOut + 1 : sizes.gap;
-    const obstacles: OrderObstacles = {
-        at: everyone,
-        clearance: sizes.gap + sizes.leader / 2 + HALO,
-        endGap: sizes.gap,
-    };
-    const legs = orderLegs(
-        points,
-        Math.max(sizes.leader / 2 + 1, 2),
-        obstacles,
-    );
-    const pieces = legs.flatMap((leg, i): DrawnPiece[] => {
-        const trim = trimLeg(leg, gapAt(i), gapAt(i + 1));
-        if (!trim) return [];
-        // Each end stops short of its marcher's label, the line's half width and halo clear of it
-        const f0 = fractions[i]!;
-        const f1 = fractions[i + 1]!;
-        const most = LABEL_TRIM_GAPS * sizes.gap;
-        const clearOf = (
-            box: Box | null | undefined,
-            f: number,
-        ): Box | null => {
-            if (!box) return null;
-            const pad = orderWidthBetween(f, sizes) / 2 + HALO + 1;
-            return {
-                minX: box.minX - pad,
-                minY: box.minY - pad,
-                maxX: box.maxX + pad,
-                maxY: box.maxY + pad,
-            };
-        };
-        const startBox = clearOf(labelBoxes[i], f0);
-        const endBox = i + 1 < marchers ? clearOf(labelBoxes[i + 1], f1) : null;
-        const t0 = startBox
-            ? trimClearOf(leg, trim.t0, false, startBox, most)
-            : trim.t0;
-        const t1 = endBox
-            ? trimClearOf(leg, trim.t1, true, endBox, most)
-            : trim.t1;
-        if (t1 - t0 <= 1e-6) return [];
-        const at = (t: number) => f0 + (f1 - f0) * t;
-        return [
-            {
-                samples: legSamples(leg, t0, t1),
-                colors: [orderColorAt(at(t0)), orderColorAt(at(t1))],
-                widths: [
-                    orderWidthBetween(at(t0), sizes),
-                    orderWidthBetween(at(t1), sizes),
-                ],
-            },
-        ];
-    });
-    const tail = points[marchers - 1];
-    const lastLeg = marchers >= 2 ? legs[marchers - 2] : undefined;
-    const tailWay = lastLeg ? legTangent(lastLeg, 1) : null;
-    const tailColor = orderColorAt(fractions[marchers - 1] ?? 1);
-    const arrow =
-        withArrow && tail && tailWay
-            ? {
-                  points: arrowPast(tail, tailWay, sizes.reach),
-                  color: tailColor,
-              }
-            : null;
-    // Each number off the legs that leave its marcher, the arrow's among them
-    const numbers = numbered
-        ? points.slice(0, marchers).map((at, i): DrawnNumber => {
-              const ways: XY[] = [];
-              const out = legs[i] ? legTangent(legs[i]!, 0) : null;
-              if (out) ways.push(out);
-              const into = legs[i - 1] ? legTangent(legs[i - 1]!, 1) : null;
-              if (into) ways.push({ x: -into.x, y: -into.y });
-              if (arrow && i === marchers - 1 && tailWay) ways.push(tailWay);
-              const side = numberSide(labelSide, ways);
-              const text = `${i + 1}`;
-              // Clear of the ring (leader) or the dot's selection ring, then half the text's size
-              const halfText =
-                  Math.abs(side.x) * (text.length * NUMBER_PX * 0.3) +
-                  Math.abs(side.y) * (NUMBER_PX * 0.5);
-              const off =
-                  (i === 0 ? ringOut : sizes.reach) + NUMBER_GAP + halfText;
-              return {
-                  at: { x: at.x + side.x * off, y: at.y + side.y * off },
-                  text,
-                  fraction: fractions[i]!,
-              };
-          })
-        : [];
+    const own = points.slice(0, marchers);
+    // On the marchers only: Set order's pointer sits on the dot it just picked and crosses earlier
+    // legs on its way to the next, which would make every pick look like a fold or a crossing
+    const kind = classifyOrder(own, dotRadius);
+    const tip = kind === "lane" ? laneTip(points, halfWidth) : null;
+    const darts =
+        kind === "lane"
+            ? laneDarts(points, dotRadius)
+            : kind === "crossed"
+              ? threadDarts(points)
+              : [];
+    const { badges, crowded } =
+        numbered || kind !== "lane"
+            ? placeNumbers({
+                  points: own,
+                  kind,
+                  halfWidth,
+                  dotRadius,
+                  busy: tip ? [...busy, tip.box] : busy,
+                  dots,
+                  others,
+              })
+            : { badges: [], crowded: false };
+    const xs = points.map((p) => p.x);
+    const ys = points.map((p) => p.y);
+    // Room for the tip past the leader, which the dots mask cuts too
+    const pad = halfWidth * 2.2 + 4;
     return {
+        kind,
         guessed,
-        pieces,
-        ring: {
-            at: points[0]!,
-            r: ringR,
-            color: orderColorAt(fractions[0]!),
-            // A gap where it would cover a label, its stroke and halo and a pixel or so clear
-            arcs: ringArcs(
-                points[0]!,
-                ringR,
-                RING_WIDTH / 2 + HALO + ORDER_GAP_PX,
-                labelBoxes.filter((b): b is Box => b !== null),
-            ),
+        points,
+        halfWidth,
+        tip: tip?.points ?? null,
+        darts,
+        numbers: badges,
+        crowded,
+        box: {
+            minX: Math.min(...xs) - pad,
+            minY: Math.min(...ys) - pad,
+            maxX: Math.max(...xs) + pad,
+            maxY: Math.max(...ys) + pad,
         },
-        arrow,
-        numbers,
     };
+}
+
+/** Whether a field color is dark enough that the lane turns light on it */
+function isDarkField({
+    r,
+    g,
+    b,
+}: {
+    r: number;
+    g: number;
+    b: number;
+}): boolean {
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b < 140;
 }
 
 export default function MarcherOrderOverlay({
     marchers,
     labels,
+    theme,
 }: {
     marchers: FieldMarchers;
+    /** The field's colors: on a dark field the lane turns light */
+    theme: FieldTheme;
     /** The marchers' name labels as drawn; none: the line doesn't keep clear of them */
     labels?: OrderLabels;
 }) {
@@ -431,9 +376,6 @@ export default function MarcherOrderOverlay({
         (s) => !!s.session?.follow && s.session.phase !== "closed",
     );
     const shapeOpen = useShapeToolStore((s) => s.tool !== null);
-    const labelSide: LabelSide = useUiSettingsStore((s) =>
-        s.uiSettings.marcherLabelPosition === "beside" ? "beside" : "above",
-    );
     // Set order on has the field, so it shows over either (opening it closes them)
     const showing =
         !isPlaying &&
@@ -493,23 +435,13 @@ export default function MarcherOrderOverlay({
     const lineIds = useMemo(() => lines.flatMap((l) => l.order), [lines]);
     const linesAt = useDrawnAt(marchers, lineIds, version);
     // The dot and its selection ring as the marchers layer draws them, on screen
-    const sizes = useMemo(
-        () =>
-            orderLineSizes(
-                DOT_RADIUS * dotSizes(view.zoom).scale * view.zoom,
-                ringReach(view.zoom) * view.zoom,
-                HALO,
-            ),
-        [view.zoom],
-    );
-    // Everyone the line mustn't cover: the same array until one of them moves
+    const dotRadius = DOT_RADIUS * dotSizes(view.zoom).scale * view.zoom;
+    const reach = ringReach(view.zoom) * view.zoom;
+    // Everyone under a lane, whose dots it's cut away from: the same array until one of them moves
     const everyoneAt = useEveryoneAt(marchers, version, showing);
-    // Worked out on screen but with the pan left out (the field scaled by the
-    // zoom, then moved by the pan), so panning only moves what's drawn (the SVG group below) and
-    // works nothing out again
+    // Worked out on screen but with the pan left out (the field scaled by the zoom, then moved by
+    // the pan), so panning only moves what's drawn (the SVG group below) and works nothing out again
     const zoom = view.zoom;
-    // On screen, the same array until someone moves or the zoom changes, so the overlap checks'
-    // grid (kept per array) is reused through a sweep
     const everyone = useMemo(
         () => everyoneAt.map((p) => ({ x: p.x * zoom, y: p.y * zoom })),
         [everyoneAt, zoom],
@@ -531,9 +463,11 @@ export default function MarcherOrderOverlay({
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [showing, labels, marchers, version],
     );
+    const selectedSet = useMemo(() => new Set(ids), [ids]);
     const drawn = useMemo((): DrawnLine[] => {
         const onScreen = (p: XY): XY => ({ x: p.x * zoom, y: p.y * zoom });
-        // A marcher's label's ink on screen, when labels are drawn and big enough to read
+        // Every drawn label's ink on screen, when labels are drawn and big enough to read: numbers
+        // keep clear of them
         const labelBox = (id: number, p: XY): Box | null => {
             const text = labels?.text.get(id);
             if (
@@ -558,73 +492,107 @@ export default function MarcherOrderOverlay({
                 maxY: (box.y + box.height / 2) * zoom,
             };
         };
+        const busyOf = (
+            order: readonly number[],
+            at: ReadonlyMap<number, XY>,
+        ) =>
+            order.flatMap((id) => {
+                const p = at.get(id);
+                const box = p ? labelBox(id, p) : null;
+                return box ? [box] : [];
+            });
         if (sweep) {
-            const labelBoxes: (Box | null)[] = [];
             const points = sweep.picked.flatMap((id) => {
                 const p = sweep.at.get(id);
-                if (!p) return [];
-                labelBoxes.push(labelBox(id, p));
-                return [onScreen(p)];
+                return p ? [onScreen(p)] : [];
             });
-            const marchers = points.length;
-            const fractions = points.map((_, i) =>
-                orderFraction(i, sweep.ids.length),
-            );
-            if (sweep.pointer && points.length > 0) {
+            const count = points.length;
+            if (sweep.pointer && count > 0)
                 points.push(onScreen(sweep.pointer));
-                fractions.push(fractions.at(-1)!);
-            }
             // Numbers show throughout Set order (touch has no Alt)
             return [
                 drawLine({
                     points,
-                    marchers,
-                    fractions,
+                    marchers: count,
                     guessed: false,
-                    arrow: false,
                     numbered: true,
-                    sizes,
-                    labelSide,
-                    everyone,
-                    labelBoxes,
+                    halfWidth: laneHalfWidth(dotRadius, reach, true),
+                    dotRadius,
+                    busy: busyOf(sweep.ids, sweep.at),
+                    dots: everyone,
                 }),
             ];
         }
-        return lines.map((line) => {
-            const labelBoxes: (Box | null)[] = [];
-            const points = line.order.flatMap((id) => {
+        // A guessed order isn't drawn at rest; Alt shows it, hollow and dashed
+        const shown = lines.filter((line) => !line.guessed || alt);
+        const pointsOf = shown.map((line) =>
+            line.order.flatMap((id) => {
                 const p = linesAt.get(id);
-                if (!p) return [];
-                labelBoxes.push(labelBox(id, p));
-                return [onScreen(p)];
-            });
-            return drawLine({
-                points,
-                marchers: points.length,
-                fractions: points.map((_, i) =>
-                    orderFraction(i, points.length),
+                return p ? [onScreen(p)] : [];
+            }),
+        );
+        // Lanes of neighboring lines narrow so they never touch
+        const halfWidths = neighborHalfWidths(
+            pointsOf,
+            shown.map((line) =>
+                laneHalfWidth(
+                    dotRadius,
+                    reach,
+                    line.order.some((id) => selectedSet.has(id)),
                 ),
+            ),
+            dotRadius,
+        );
+        const busy = busyOf(lineIds, linesAt);
+        return shown.map((line, l) =>
+            drawLine({
+                points: pointsOf[l]!,
+                marchers: pointsOf[l]!.length,
                 guessed: line.guessed,
-                arrow: true,
                 numbered: alt,
-                sizes,
-                labelSide,
-                everyone,
-                labelBoxes,
-            });
-        });
+                halfWidth: halfWidths[l]!,
+                dotRadius,
+                busy,
+                dots: everyone,
+                others: pointsOf.flatMap((points, o) =>
+                    o === l ? [] : [{ points, halfWidth: halfWidths[o]! }],
+                ),
+            }),
+        );
     }, [
         sweep,
         lines,
+        lineIds,
         linesAt,
         zoom,
-        sizes,
-        labelSide,
+        dotRadius,
+        reach,
         alt,
         everyone,
         labels,
         labelSize,
+        selectedSet,
     ]);
+    // The dots the lanes are cut away from: everyone's dot, and a selected marcher's ring too
+    const holes = useMemo(() => {
+        const selectedAt = [
+            ...(sweep ? sweep.ids : ids).flatMap((id) => {
+                const p = (sweep ? sweep.at : linesAt).get(id);
+                return p
+                    ? [{ at: { x: p.x * zoom, y: p.y * zoom }, r: reach }]
+                    : [];
+            }),
+        ];
+        return [
+            ...everyone.map((at) => ({ at, r: dotRadius + 0.5 })),
+            ...selectedAt,
+        ];
+    }, [sweep, ids, linesAt, everyone, zoom, dotRadius, reach]);
+    const fieldBackground = theme.background;
+    const ink = useMemo(
+        () => laneInk(isDarkField(fieldBackground)),
+        [fieldBackground],
+    );
 
     const prefix = useId().replace(/:/g, "");
     if (!showing) return null;
@@ -637,29 +605,31 @@ export default function MarcherOrderOverlay({
                 data-lines={drawn.length}
                 data-guessed={drawn.some((l) => l.guessed) || undefined}
             >
-                <g transform={`translate(${view.panX} ${view.panY})`}>
+                <g
+                    transform={`translate(${view.panX} ${view.panY})`}
+                    fontFamily="Inter, system-ui, Arial, sans-serif"
+                >
                     {drawn.map((line, i) => (
-                        <OrderLine key={i} id={`${prefix}-${i}`} line={line} />
+                        <OrderLine
+                            key={i}
+                            id={`${prefix}-${i}`}
+                            line={line}
+                            ink={ink}
+                            holes={holes}
+                        />
                     ))}
                     {drawn.flatMap((line, l) =>
-                        line.numbers.map((n, i) => (
-                            <text
+                        line.numbers.map((badge, i) => (
+                            <OrderBadge
                                 key={`${l}-${i}`}
-                                x={n.at.x}
-                                y={n.at.y}
-                                textAnchor="middle"
-                                dominantBaseline="central"
-                                fontSize={NUMBER_PX}
-                                fontWeight={700}
-                                fill={orderColorAt(n.fraction)}
-                                stroke={ORDER_HALO_COLOR}
-                                strokeWidth={3}
-                                paintOrder="stroke"
-                                data-testid="marcherOrderNumber"
-                            >
-                                {n.text}
-                            </text>
+                                badge={badge}
+                                guessed={line.guessed}
+                            />
                         )),
+                    )}
+                    {drawn.map(
+                        (line, i) =>
+                            line.crowded && <ZoomNote key={i} box={line.box} />,
                     )}
                 </g>
             </svg>
@@ -673,158 +643,190 @@ export default function MarcherOrderOverlay({
     );
 }
 
-/** A path through `samples`, for a dashed (guessed) leg */
-const pathOf = (samples: readonly XY[]): string =>
-    samples.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+/** A path through `points` */
+const pathOf = (points: readonly XY[]): string =>
+    points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
 
-/** One line: halo under it, the tapered gradient body, the leader's ring and the tail's arrow */
-function OrderLine({ id, line }: { id: string; line: DrawnLine }) {
-    const { pieces, guessed, ring, arrow } = line;
-    if (!ring) return null;
-    return (
-        <g
-            opacity={guessed ? GUESS_OPACITY : 1}
-            data-testid={guessed ? "marcherOrderGuess" : "marcherOrderLine"}
+/**
+ * One line: the soft lane (a thread when its legs cross), with every dot under it cut out so the
+ * dots and their selection rings keep their own color; a guessed order as a hollow dashed outline;
+ * then the tip and the darts
+ */
+const OrderLine = memo(function OrderLine({
+    id,
+    line,
+    ink,
+    holes,
+}: {
+    id: string;
+    line: DrawnLine;
+    ink: LaneInk;
+    /** The dots (and selection rings) the lane is cut away from: their middles and radii */
+    holes: readonly { at: XY; r: number }[];
+}) {
+    const { kind, guessed, points, halfWidth, tip, darts, box } = line;
+    if (points.length < 2) return null;
+    const d = pathOf(points);
+    const width = halfWidth * 2;
+    // Only the dots the lane or its tip reach
+    const reach = halfWidth * 2.2 + 4;
+    const near = holes.filter(
+        ({ at, r }) =>
+            at.x + r >= box.minX &&
+            at.x - r <= box.maxX &&
+            at.y + r >= box.minY &&
+            at.y - r <= box.maxY &&
+            points.some(
+                (p, i) =>
+                    distanceToSegment(at, p, points[i + 1] ?? p) <= reach + r,
+            ),
+    );
+    const mask = (
+        <mask
+            id={`${id}-holes`}
+            maskUnits="userSpaceOnUse"
+            x={box.minX - 4}
+            y={box.minY - 4}
+            width={box.maxX - box.minX + 8}
+            height={box.maxY - box.minY + 8}
         >
-            <defs>
-                {pieces.map(({ samples, colors }, i) => (
-                    <linearGradient
-                        key={i}
-                        id={`${id}-${i}`}
-                        gradientUnits="userSpaceOnUse"
-                        x1={samples[0]!.x}
-                        y1={samples[0]!.y}
-                        x2={samples.at(-1)!.x}
-                        y2={samples.at(-1)!.y}
-                    >
-                        <stop offset="0" stopColor={colors[0]} />
-                        <stop offset="1" stopColor={colors[1]} />
-                    </linearGradient>
-                ))}
-            </defs>
-            {guessed ? (
-                <>
-                    {pieces.map(({ samples, widths }, i) => (
-                        <path
-                            key={`h${i}`}
-                            d={pathOf(samples)}
-                            fill="none"
-                            stroke={ORDER_HALO_COLOR}
-                            strokeWidth={(widths[0] + widths[1]) / 2 + 2 * HALO}
-                            strokeDasharray={GUESS_DASH}
-                        />
-                    ))}
-                    {pieces.map(({ samples, widths }, i) => (
-                        <path
-                            key={i}
-                            d={pathOf(samples)}
-                            fill="none"
-                            stroke={`url(#${id}-${i})`}
-                            strokeWidth={(widths[0] + widths[1]) / 2}
-                            strokeDasharray={GUESS_DASH}
-                        />
-                    ))}
-                </>
-            ) : (
-                <>
-                    {pieces.map(({ samples, widths }, i) => (
-                        <polygon
-                            key={`h${i}`}
-                            points={taperAlong(
-                                samples,
-                                widths[0] / 2 + HALO,
-                                widths[1] / 2 + HALO,
-                            )}
-                            fill={ORDER_HALO_COLOR}
-                            stroke={ORDER_HALO_COLOR}
-                            strokeWidth={0.5}
-                            strokeLinejoin="round"
-                        />
-                    ))}
-                    {pieces.map(({ samples, widths }, i) => (
-                        <polygon
-                            key={i}
-                            points={taperAlong(
-                                samples,
-                                widths[0] / 2,
-                                widths[1] / 2,
-                            )}
-                            fill={`url(#${id}-${i})`}
-                        />
-                    ))}
-                </>
-            )}
-            {/* The leader's ring, outside the dot and its selection ring, with a gap for its label */}
-            {ring.arcs === null ? (
-                <>
-                    <circle
-                        cx={ring.at.x}
-                        cy={ring.at.y}
-                        r={ring.r}
-                        fill="none"
-                        stroke={ORDER_HALO_COLOR}
-                        strokeWidth={RING_WIDTH + 2 * HALO}
-                    />
-                    <circle
-                        cx={ring.at.x}
-                        cy={ring.at.y}
-                        r={ring.r}
-                        fill="none"
-                        stroke={ring.color}
-                        strokeWidth={RING_WIDTH}
-                        data-testid="marcherOrderLeader"
-                    />
-                </>
-            ) : (
-                <>
-                    <path
-                        d={ring.arcs}
-                        fill="none"
-                        stroke={ORDER_HALO_COLOR}
-                        strokeWidth={RING_WIDTH + 2 * HALO}
-                    />
-                    <path
-                        d={ring.arcs}
-                        fill="none"
-                        stroke={ring.color}
-                        strokeWidth={RING_WIDTH}
-                        data-testid="marcherOrderLeader"
-                    />
-                </>
-            )}
-            {/* The arrow just past the tail, along the last leg's way there */}
-            {arrow && (
-                <polygon
-                    points={arrow.points}
-                    fill={arrow.color}
-                    stroke={ORDER_HALO_COLOR}
-                    strokeWidth={HALO}
+            <rect
+                x={box.minX - 4}
+                y={box.minY - 4}
+                width={box.maxX - box.minX + 8}
+                height={box.maxY - box.minY + 8}
+                fill="white"
+            />
+            {guessed && kind !== "crossed" && (
+                <path
+                    d={d}
+                    fill="none"
+                    stroke="black"
+                    strokeWidth={Math.max(width - 2.4, 0)}
+                    strokeLinecap="round"
                     strokeLinejoin="round"
-                    data-testid="marcherOrderTail"
                 />
             )}
+            {near.map(({ at, r }, i) => (
+                <circle key={i} cx={at.x} cy={at.y} r={r} fill="black" />
+            ))}
+        </mask>
+    );
+    return (
+        <g
+            data-testid={guessed ? "marcherOrderGuess" : "marcherOrderLine"}
+            data-kind={kind}
+        >
+            <defs>{mask}</defs>
+            {kind === "crossed" ? (
+                <path
+                    d={d}
+                    fill="none"
+                    stroke={ink.thread}
+                    strokeWidth={1.25}
+                    strokeLinejoin="round"
+                    strokeDasharray={guessed ? "4 3" : undefined}
+                    mask={`url(#${id}-holes)`}
+                />
+            ) : (
+                <path
+                    d={d}
+                    fill="none"
+                    stroke={guessed ? ink.guess : ink.lane}
+                    strokeWidth={width}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray={guessed ? "4 3" : undefined}
+                    mask={`url(#${id}-holes)`}
+                />
+            )}
+            {tip && (
+                <polygon
+                    points={tip}
+                    fill={guessed ? ink.guessTip : LANE_INK}
+                    stroke={guessed ? ink.guess : ink.edge}
+                    strokeWidth={guessed ? 1.2 : 1}
+                    strokeLinejoin="round"
+                    paintOrder="stroke"
+                    mask={`url(#${id}-holes)`}
+                    data-testid="marcherOrderTip"
+                />
+            )}
+            {darts.map((points, i) => (
+                <polygon
+                    key={i}
+                    points={points}
+                    fill={kind === "crossed" ? ink.threadDart : ink.dart}
+                    opacity={kind === "crossed" ? 0.7 : ink.dartOpacity}
+                />
+            ))}
         </g>
     );
-}
+});
 
-/** The tail's arrow, just past the tail's dot and selection ring, pointing on along `way` */
-function arrowPast(tail: XY, way: XY, reach: number): string {
-    const { x: ux, y: uy } = way;
-    const base = {
-        x: tail.x + ux * (reach + ARROW_GAP),
-        y: tail.y + uy * (reach + ARROW_GAP),
-    };
-    const tip = {
-        x: base.x + ux * ARROW_LENGTH,
-        y: base.y + uy * ARROW_LENGTH,
-    };
-    return [
-        [tip.x, tip.y],
-        [base.x - uy * ARROW_HALF, base.y + ux * ARROW_HALF],
-        [base.x + uy * ARROW_HALF, base.y - ux * ARROW_HALF],
-    ]
-        .map(([x, y]) => `${x},${y}`)
-        .join(" ");
+/** A position badge: solid at the leader, rimmed at the tail, quiet between; dashed for a guess */
+const OrderBadge = memo(function OrderBadge({
+    badge,
+    guessed,
+}: {
+    badge: PlacedBadge;
+    guessed: boolean;
+}) {
+    const { at, text, role } = badge;
+    const w = badgeWidth(text);
+    const solid = role === "leader" && !guessed;
+    const strong = role !== "middle";
+    return (
+        <g data-testid="marcherOrderNumber" data-role={role}>
+            <rect
+                x={at.x - w / 2}
+                y={at.y - BADGE_HEIGHT / 2}
+                width={w}
+                height={BADGE_HEIGHT}
+                rx={BADGE_HEIGHT / 2}
+                fill={solid ? LANE_INK : "#fff"}
+                stroke={
+                    solid ? "#fff" : strong ? LANE_INK : "rgba(28,31,38,0.35)"
+                }
+                strokeWidth={solid ? 1 : strong ? 1.4 : 1}
+                strokeDasharray={guessed ? "2.5 2" : undefined}
+            />
+            <text
+                x={at.x}
+                y={at.y + 3.1}
+                textAnchor="middle"
+                fontSize={BADGE_FONT}
+                fontWeight={strong ? 700 : 600}
+                fill={solid ? "#fff" : strong ? LANE_INK : "#3a3f4a"}
+            >
+                {text}
+            </text>
+        </g>
+    );
+});
+
+/** The note under a line whose numbers didn't all fit */
+function ZoomNote({ box }: { box: Box }) {
+    const text = tolgee.t("pathways.order.zoomIn", "Zoom in to read the order");
+    const w = 12 + text.length * 5.6;
+    const x = (box.minX + box.maxX) / 2 - w / 2;
+    const y = box.maxY + 20;
+    return (
+        <g data-testid="marcherOrderZoomNote">
+            <rect
+                x={x}
+                y={y}
+                width={w}
+                height={18}
+                rx={6}
+                fill="#fff"
+                stroke="rgba(0,0,0,0.14)"
+            />
+            <text x={x + 6} y={y + 12.5} fontSize={11} fill="#202020">
+                {text}
+            </text>
+        </g>
+    );
 }
 
 /**
