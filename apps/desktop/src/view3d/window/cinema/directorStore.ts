@@ -6,6 +6,7 @@
  * The viewer always wins: choosing a camera, saving the view, or any drag,
  * scroll or pick turns the Director off, and the camera stays where it was.
  */
+import { webChannel } from "@/utilities/webBuild";
 import { create } from "zustand";
 import {
     cameraAt,
@@ -55,12 +56,12 @@ useCameraStore.subscribe((state, prev) => {
 export const DIRECTOR_STORAGE_KEY = "view3d.director";
 
 /**
- * Whether the Director is offered: in dev builds, or when the
+ * Whether the Director is offered: in dev builds and lab test builds, or when the
  * {@link DIRECTOR_STORAGE_KEY} setting is "1". The flag goes away when the
  * camera track gets its editor.
  */
 export function directorAvailable(): boolean {
-    if (import.meta.env.DEV) return true;
+    if (import.meta.env.DEV || webChannel === "lab") return true;
     try {
         return localStorage.getItem(DIRECTOR_STORAGE_KEY) === "1";
     } catch {
