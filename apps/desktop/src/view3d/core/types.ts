@@ -35,6 +35,23 @@ export interface ShowCredits {
     title: string;
     designer?: string;
     client?: string;
+    /**
+     * The board's words in the app's language, from the window (the core
+     * can't translate). English when absent, as in the gallery and tests.
+     */
+    text?: CreditsText;
+}
+
+/** Translated words on a credits board. */
+export interface CreditsText {
+    /** Above the title, e.g. "Now performing"; the board sets it in capitals. */
+    heading: string;
+    /** The title when the show has no name. */
+    untitled: string;
+    /** The whole designer line, e.g. "Designed by Sam Rivera". */
+    designer?: string;
+    /** The whole client line, e.g. "For Lincoln High School". */
+    client?: string;
 }
 
 /** Small per-show settings stored with the venue (ADR 0010 D-5). */
@@ -111,6 +128,11 @@ export interface KitResult {
      * and recolor it without rebuilding the kit. Defaults to 0.6.
      */
     crowdDensity?: number;
+    /**
+     * Whether the shared land and horizon (fields, woods, a town) surround
+     * the venue at high quality. Defaults to true; the blank venue stays bare.
+     */
+    surroundings?: boolean;
     lightingPresets: LightingPreset[];
     defaultLighting: LightingPreset;
     /** Applies a preset; ignores ones not in `lightingPresets`. */

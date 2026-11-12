@@ -23,10 +23,6 @@
         "batchEdit": {
             "noNextPage": "次のページの座標をメンバーに設定できません。次のページがありません。",
             "noPreviousPage": "前のページの座標をメンバーに設定できません。前のページがありません。",
-            "setAllToNext": "次のページの位置をコピー（全員）",
-            "setAllToNextSuccess": "{count, plural, other {ページ{currentPage}の全メンバー#人の座標を次のページ{nextPage}の座標に設定しました}}",
-            "setSelectedToNext": "次のページの位置をコピー（選択中）",
-            "setSelectedToNextSuccess": "{count, plural, other {ページ{currentPage}のメンバー#人の座標を次のページ{nextPage}の座標に設定しました}}",
             "setAllToPreviousDone": "{count, plural, other {ページ{currentPage}の全メンバー#人の座標を前のページ{previousPage}の座標に設定しました}}",
             "setSelectedToPreviousDone": "{count, plural, other {ページ{currentPage}のメンバー#人の座標を前のページ{previousPage}の座標に設定しました}}"
         },
@@ -2582,7 +2578,6 @@
             "placeAllMarchers": "全メンバーを配置",
             "placeSelectedMarchers": "選択したメンバーを配置",
             "snapToggleCaption": "スナップ",
-            "toNextPagePositions": "...次のページの位置へ",
             "setMarcherPositionsAriaLabel": "メンバーの位置を設定",
             "toPreviousPagePositions": "...前のページ位置へ"
         },
@@ -2662,14 +2657,17 @@
             "floor": "フロア",
             "frontRow": "最前列",
             "geJudge": "GE審査員",
+            "judgesTable": "審査員席",
             "lowerBowl": "下段スタンド",
             "podium": "指揮台",
             "pressBox": "プレスボックス",
             "sideline": "サイドライン",
             "topDown": "真上",
+            "tunnel": "トンネル",
             "upperDeck": "上段スタンド"
         },
         "kit": {
+            "arena": "屋内アリーナ",
             "bighs": "大規模高校",
             "blank": "フィールドのみ",
             "college": "大学スタジアム",
@@ -2797,6 +2795,12 @@
         },
         "venue": {
             "updateFailed": "3Dビューの会場を更新できませんでした"
+        },
+        "board": {
+            "designedBy": "デザイン：{name}",
+            "forClient": "出演：{name}",
+            "nowPerforming": "ただいまの演技",
+            "untitled": "無題のショー"
         }
     },
     "web": {
@@ -2952,7 +2956,14 @@
         "unsavedChanges": "保存されていない変更があります",
         "close": "閉じる",
         "saved": "ショー設定を保存しました",
-        "updateFailed": "ショー設定を更新できませんでした"
+        "updateFailed": "ショー設定を更新できませんでした",
+        "showInfo": {
+            "projectName": "ショー名",
+            "projectNamePlaceholder": "ファイル名を使用",
+            "designer": "デザイナー",
+            "client": "クライアント",
+            "optional": "任意"
+        }
     },
     "canvas": {
         "zoom": {

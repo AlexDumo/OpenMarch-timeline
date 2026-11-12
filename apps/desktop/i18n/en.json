@@ -35,12 +35,13 @@
             "holdKeywords": "hold held defined not defined keep stay set keyframe page state previous",
             "noNextPage": "Cannot set marcher coordinates to next page. There is no next page",
             "noPreviousPage": "Cannot set marcher coordinates to previous page. There is no previous page",
-            "setAllToNext": "Copy positions from next page (all marchers)",
-            "setAllToNextSuccess": "{count, plural, one {Successfully set # marcher's coordinates on page {currentPage} to the coordinates of the next page {nextPage}} other {Successfully set all # marchers' coordinates on page {currentPage} to the coordinates of the next page {nextPage}}}",
-            "setSelectedToNext": "Copy positions from next page (selected)",
-            "setSelectedToNextSuccess": "{count, plural, one {Successfully set # marcher's coordinates on page {currentPage} to the coordinates of the next page {nextPage}} other {Successfully set # marchers' coordinates on page {currentPage} to the coordinates of the next page {nextPage}}}",
+            "moveAllToNextSpots": "Move to next page's spots (all marchers)",
+            "movedAllToNextSpots": "{count, plural, one {Moved # marcher on Page {currentPage} to their spot on Page {nextPage}} other {Moved all # marchers on Page {currentPage} to their spots on Page {nextPage}}}",
+            "moveSelectedToNextSpots": "Move to next page's spots (selected)",
+            "movedSelectedToNextSpots": "{count, plural, one {Moved # marcher on Page {currentPage} to their spot on Page {nextPage}} other {Moved # marchers on Page {currentPage} to their spots on Page {nextPage}}}",
             "setAllToPreviousDone": "{count, plural, one {Successfully set # marcher's coordinates on page {currentPage} to the coordinates of the previous page {previousPage}} other {Successfully set all # marchers' coordinates on page {currentPage} to the coordinates of the previous page {previousPage}}}",
-            "setSelectedToPreviousDone": "{count, plural, one {Successfully set # marcher's coordinates on page {currentPage} to the coordinates of the previous page {previousPage}} other {Successfully set # marchers' coordinates on page {currentPage} to the coordinates of the previous page {previousPage}}}"
+            "setSelectedToPreviousDone": "{count, plural, one {Successfully set # marcher's coordinates on page {currentPage} to the coordinates of the previous page {previousPage}} other {Successfully set # marchers' coordinates on page {currentPage} to the coordinates of the previous page {previousPage}}}",
+            "holdOverWindow": "{holdOverWindow}"
         },
         "edit": {
             "noRedoAvailable": "No action to redo",
@@ -218,12 +219,13 @@
         "signIn": "Sign In",
         "signInAriaLabel": "Sign in",
         "signOut": "Sign Out",
+        "signOutFailed": "Couldn't sign out. Check your internet connection and try again.",
         "userFallback": "User",
         "fullName": "{firstName} {lastName}",
         "api": {
             "requestFailed": "API request failed: {reason}",
             "requestFailedStatus": "API request failed: {status} {statusText}",
-            "tokenRequired": "Authentication token is required"
+            "tokenRequired": "Couldn't confirm your sign-in. Check your connection and try again."
         }
     },
     "colorPicker": {
@@ -420,6 +422,11 @@
         "unsortedSection": "Unsorted",
         "useXYHeaders": "Use X/Y headers",
         "video": "Video",
+        "webMobileUnavailable": {
+            "description": "Uploading to the On the Move app needs your OpenMarch account, and this test build can't sign in. Use the OpenMarch editor at editor.openmarch.com, or the desktop app.",
+            "openEditor": "Open editor.openmarch.com",
+            "title": "Mobile upload isn't available here"
+        },
         "videoAudioTrack": "Audio track: {name}",
         "videoAudioNoData": "Audio file has no data",
         "videoBackground": "Video background",
@@ -764,11 +771,17 @@
             "stepSizeWarning": "Step size exceeds threshold",
             "swapMarchers": "Swap marchers",
             "timeline": {
+                "goToHeldPage": "Go to Page {page}, where this hold starts",
                 "goToPage": "Go to Page {page}, where these marchers last moved",
                 "goToStart": "Go to the start",
+                "heldFromStart": "{held} · since the start",
+                "heldSince": "{held} · since Page {page}",
                 "holdFrom": "Last moved on Page {page}",
                 "holdFromStart": "No moves since the start",
-                "movesOnThisPage": "Moves on this page"
+                "movesOnThisPage": "Moves on this page",
+                "notDefinedFromStart": "{notDefined} · showing the start",
+                "notDefinedShowing": "{notDefined} · showing Page {page}",
+                "heldOfSelected": "{count} of {total} selected {held}"
             },
             "title": "{count} Marchers",
             "titleSingle": "Marcher {drillNumber}",
@@ -1218,12 +1231,28 @@
             "noProduction": "No production found",
             "title": "Mobile app settings"
         },
+        "signInRejected": {
+            "description": "OpenMarch's online service didn't accept your sign-in. Sign out, then sign in again.",
+            "signOut": "Sign out",
+            "title": "Your sign-in wasn't accepted"
+        },
         "signedOut": {
             "createAccountPrompt": "Don't have an account yet? Create one now!",
+            "errors": {
+                "failed": "Signing in didn't work. Try again.",
+                "sessionExpired": "Your sign-in expired. Sign in again to keep uploading.",
+                "unavailable": "Sign-in couldn't load. Check your internet connection and try again."
+            },
             "setupAccount": "Set up your account",
-            "signInPrompt": "Already have an account? Connect it to the desktop app to start taking it On The Move!"
+            "signInPrompt": "Already have an account? Connect it to the desktop app to start taking it On The Move!",
+            "signInPromptWeb": "Already have an account? Sign in to start taking it On The Move!"
         },
-        "title": "Export to Mobile"
+        "title": "Export to Mobile",
+        "unreachable": {
+            "description": "OpenMarch couldn't reach its online service or confirm your sign-in. Check your internet connection and try again.",
+            "retry": "Try again",
+            "title": "Can't reach OpenMarch"
+        }
     },
     "music": {
         "accent": "Accent first beat",
@@ -1563,7 +1592,21 @@
         "tolgeeApiKeyPlaceholder": "Tolgee API Key",
         "tolgeeDevToolsToggle": "Tolgee In-Context Translating",
         "view3d": "3D View",
-        "view3d.description": "How the 3D View draws on this computer. Not saved in the show.",
+        "view3d.controls": "Controls",
+        "view3d.controls.input.drag": "Left-click drag",
+        "view3d.controls.input.pinch": "Pinch",
+        "view3d.controls.input.rightDrag": "Right-click drag",
+        "view3d.controls.input.scroll": "Scroll",
+        "view3d.controls.input.swipe": "Two-finger scroll",
+        "view3d.controls.move.orbit": "Orbit",
+        "view3d.controls.move.pan": "Pan",
+        "view3d.controls.move.zoom": "Zoom",
+        "view3d.controls.orbit": "Orbit",
+        "view3d.controls.orbit.description": "Dragging orbits and scrolling zooms. Drag with the right mouse button or hold Shift to move across the field.",
+        "view3d.controls.map": "Map",
+        "view3d.controls.map.description": "Dragging moves across the field and scrolling zooms. Hold a modifier key or use the right mouse button to orbit.",
+        "view3d.controls.trackpad": "Trackpad",
+        "view3d.controls.trackpad.description": "Scrolling and dragging orbit, and a pinch zooms. The right mouse button pans.",
         "view3d.quality": "Quality",
         "view3d.quality.auto": "Automatic",
         "view3d.quality.auto.description": "Starts on High and switches to Low if the view stutters.",
@@ -1578,6 +1621,7 @@
         "view3d.resolution.fast.description": "Softest, with about half the work. For older computers.",
         "view3d.resolution.sharp": "Sharp",
         "view3d.resolution.sharp.description": "Full detail on high-resolution screens.",
+        "view3d.summary": "How the 3D View draws and moves on this computer. Not saved in the show.",
         "input": "Touch & Input",
         "input.description": "Choose the tablet layout (for fingers and pen) or the desktop layout (for mouse and trackpad).",
         "input.interface": "Layout",
@@ -2160,7 +2204,6 @@
             "followLeaderBlock": "A follow-the-leader transition can't end on a block. Choose a line, curve, circle or box instead.",
             "followLeaderNeedsShape": "A follow-the-leader transition needs a shape to follow.",
             "heldConflict": "{count, plural, =1 {{names} is {held} on {pages}. {clearThisPage} to remove the hold, or drag inside it to move it.} other {{names} are {held} on {pages}. {clearThisPage} to remove the holds, or drag inside them to move them.}}",
-            "heldDropped": "{count, plural, =1 {{names} is no longer {held} on {pages}: it was {heldLower} from the starting spot, and now a move before it ends somewhere else.} other {{names} are no longer {held} on {pages}: they were {heldLower} from the starting spot, and now a move before it ends somewhere else.}}",
             "heldHoldsOverlap": "A marcher can't have two {held} holds over the same counts.",
             "heldPages": "{count, plural, =1 {Page {pages}} other {Pages {pages}}}",
             "legacyConvertedTimeline": "This file was converted to timelines by an earlier development build, which put several page moves in one timeline, so it can't be edited. Convert it again: open its backup (the file saved next to it before the conversion).",
@@ -2181,8 +2224,20 @@
             "transitionSpansTimeline": "A transition must span its whole timeline, starting and ending with it. Change the timeline's range instead, and its transitions move with it.",
             "unknown": "The timeline couldn't make that change."
         },
+        "holdEdge": {
+            "endLabel": "End of {held}. Drag to leave earlier or hold longer",
+            "readoutEnd": "{held} through Page {page}, count {count}",
+            "blocked": {
+                "minimum": "A hold lasts at least one count",
+                "nextMove": "Stops at the next move",
+                "showEnd": "Stops at the end of the show"
+            },
+            "changeError": "Error changing the hold",
+            "splitError": "Error splitting the hold"
+        },
         "heldBar": {
             "detail": "{held} of {total} selected",
+            "shape": "Its shape carries on here",
             "title": "{held} · Page {page}",
             "titleRange": "{held} · Pages {first}–{last}",
             "titleWithDetail": "{title}. {detail}"
@@ -2193,27 +2248,16 @@
             "count": "{count, plural, one {# marcher} other {# marchers}}",
             "crossesFlag": "{names}: a move runs across one of the page's flags",
             "done": "{names} {held} on {page}",
+            "endsWithoutArriving": "{names}: a move ends at {page} without arriving there",
             "expertMoves": "{names}: Expert moves on this page",
             "followLeader": "{names}: follows the leader on this page",
             "held": "{names}: already {held} here",
             "homeShape": "{names}: a shape sets the starting spot. Ungroup it at the start of the show to hold them one by one",
-            "noArrival": "{names}: no move ends where {page} starts",
             "none": "Nobody {held} on {page}",
             "notHeldReasons": "Not {heldLower}: {reasons}",
             "shape": "{names}: in a shape on this page"
         },
         "keep": {
-            "chain": {
-                "ariaLabel": "Page {page}: {label}. {hint}",
-                "notOwn": "{count, plural, one {# marcher has no position of its own here, shown where Page {from} left it} other {# marchers have no position of their own here, shown where Page {from} left them}}",
-                "notOwnEarlier": "{count, plural, one {# marcher has no position of its own here, shown where earlier pages left it} other {# marchers have no position of their own here, shown where earlier pages left them}}",
-                "notOwnHint": "Changes to Page {from} carry onto Page {page}. Click to make {count, plural, =1 {it {definedLower} here, where it's shown} other {them {definedLower} here, where they're shown}}",
-                "notOwnHintEarlier": "Changes to earlier pages carry onto Page {page}. Click to make {count, plural, =1 {it {definedLower} here, where it's shown} other {them {definedLower} here, where they're shown}}",
-                "notOwnMenuHint": "Changes to Page {from} carry onto Page {page}. Right-click the page and choose {defineAsShown} to keep {count, plural, =1 {it} other {them}} here",
-                "notOwnMenuHintEarlier": "Changes to earlier pages carry onto Page {page}. Right-click the page and choose {defineAsShown} to keep {count, plural, =1 {it} other {them}} here",
-                "notOwnNamed": "{count, plural, =1 {{names} has no position of its own here, shown where Page {from} left it} other {{names} have no position of their own here, shown where Page {from} left them}}",
-                "notOwnNamedEarlier": "{count, plural, =1 {{names} has no position of its own here, shown where earlier pages left it} other {{names} have no position of their own here, shown where earlier pages left them}}"
-            },
             "followed": {
                 "hadNoPositions": "{count, plural, =1 {Page {first} had no positions of its own for these marchers, so it changed too} other {Pages {first}–{last} had no positions of their own for these marchers, so they changed too}}",
                 "keepAsBefore": "{count, plural, =1 {Keep Page {first} as before} other {Keep Pages {first}–{last} as before}}",
@@ -2268,7 +2312,8 @@
             "holdFromPreviousNone": "Every selected marcher is already {heldLower} on {page}, or partway through a move",
             "setAsShownNone": "Every selected marcher is already {definedLower} or {heldLower} on {page}, or partway through a move",
             "setAsShownError": "Error setting marchers as shown",
-            "deletePage": "Delete page"
+            "deletePage": "Delete page",
+            "splitHold": "{splitHold}"
         },
         "terms": {
             "clearThisPage": "Clear this page",
@@ -2277,10 +2322,12 @@
             "definedLower": "defined",
             "held": "Held",
             "heldLower": "held",
-            "holdFromPrevious": "Hold from previous page",
+            "holdFromPrevious": "Hold from last keyframe",
             "notDefined": "Not defined",
             "notDefinedLower": "not defined",
-            "removeKeyframe": "Remove keyframe"
+            "removeKeyframe": "Remove keyframe",
+            "holdOverWindow": "Hold from start flag to playhead",
+            "splitHold": "Split hold here"
         },
         "startFlagPositions": {
             "always": "Always",
@@ -2654,6 +2701,9 @@
             "holdFromPrevious": {
                 "wholePage": "{holdFromPrevious} works on a whole page, not {counts}"
             },
+            "holdEdge": {
+                "outside": "The hold can't reach that count: it stops at the marcher's next move, the end of the show, or one count from its other end."
+            },
             "moveTimeline": {
                 "tooEarly": "the timeline starts at beat {start}, so it can't move {count, plural, one {# beat} other {# beats}} earlier",
                 "tooLate": "the timeline can't move past beat {max}"
@@ -2669,6 +2719,25 @@
                 "wholePage": "Keep works on a whole page, not {counts}"
             },
             "tooFarPastEnd": "that is {count, plural, one {# count} other {# counts}} past the end; one edit stores at most {max}"
+        },
+        "expertHolds": {
+            "held": "{names}: already {heldLower} from the start flag to the playhead",
+            "shape": "{names}: in a shape between the start flag and the playhead",
+            "followLeader": "{names}: follows the leader between the start flag and the playhead",
+            "followLeaderOrder": "{names}: shares a curved move with a follow-the-leader order",
+            "arrivalShape": "{names}: the hold would start where a shape ends",
+            "arrivalFollowLeader": "{names}: the hold would start where a follow-the-leader move ends",
+            "homeShape": "{names}: a shape sets the starting spot. Ungroup it at the start of the show to hold them one by one",
+            "endsWithoutArriving": "{names}: the last move before the start flag ends without arriving there",
+            "count": "{count, plural, one {# marcher} other {# marchers}}",
+            "notHeld": "{count, plural, one {# marcher} other {# marchers}} not {heldLower}"
+        },
+        "notDefinedBar": {
+            "title": "{notDefined} · Page {page}",
+            "titleRange": "{notDefined} · Pages {first}–{last}"
+        },
+        "departure": {
+            "title": "Moves again · Page {page}, count {count}"
         }
     },
     "titlebar": {
@@ -2696,7 +2765,7 @@
             "placeSelectedMarchers": "Place selected marchers",
             "clearThisPage": "{clearThisPage}",
             "snapToggleCaption": "Snap",
-            "toNextPagePositions": "...to next page positions",
+            "toNextPageSpots": "...to next page's spots",
             "setMarcherPositionsAriaLabel": "Set marcher positions",
             "toPreviousPagePositions": "...to previous page positions"
         },
@@ -2768,6 +2837,12 @@
             "no": "No",
             "title": "Open the 3D View on launch?",
             "yes": "Yes"
+        },
+        "board": {
+            "designedBy": "Designed by {name}",
+            "forClient": "For {name}",
+            "nowPerforming": "Now performing",
+            "untitled": "Untitled show"
         },
         "camera": {
             "blimp": "Blimp",
@@ -2858,7 +2933,9 @@
             "graphicsHint": "Not saved in the show, so it can differ on each computer.",
             "keysSection": "Keyboard and mouse",
             "uniforms": "Band uniform",
-            "guardUniforms": "Guard uniform"
+            "guardUniforms": "Guard uniform",
+            "brassFinish": "Brass finish",
+            "tuba": "Tubas"
         },
         "keys": {
             "playPause": "Play or pause",
@@ -2869,11 +2946,23 @@
             "crowd": "Show or hide the crowd",
             "escape": "Cancel a seat pick, close settings, leave fullscreen",
             "orbit": "Orbit",
+            "orbitOrRight": "Orbit, or drag with the right mouse button",
+            "panPlain": "Pan",
+            "zoomOrPinch": "Zoom, or pinch on a trackpad",
             "pan": "Pan, or drag with the right mouse button",
-            "zoom": "Zoom"
+            "zoom": "Zoom",
+            "pausedPose": "Paused: show the actual step or the closed position"
         },
         "keyNames": {
             "pair": "<first></first> / <second></second>"
+        },
+        "brassFinish": {
+            "brass": "Lacquer",
+            "silver": "Silver"
+        },
+        "tuba": {
+            "contra": "Marching tuba",
+            "sousaphone": "Sousaphone"
         },
         "uniformPreset": {
             "fade": "Ultraviolet Fade",
@@ -2914,6 +3003,10 @@
         },
         "venue": {
             "updateFailed": "Failed to update the 3D View venue"
+        },
+        "pausedPose": {
+            "label": "Show the actual step when paused",
+            "tooltip": "Show marchers mid-step when paused, as they are at that moment. Off: they stand closed on their dots"
         }
     },
     "web": {
