@@ -44,6 +44,32 @@ function setting(shot: CinemaShot, name: string): number {
 const sign = (direction: number) => (direction < 0 ? -1 : 1);
 
 /**
+ * The eye turned around the target by `turn` radians about the vertical axis
+ * and raised by `lift` radians of elevation. A turn keeps the eye's height and
+ * a lift keeps its distance to the target.
+ */
+function aroundTarget(pose: CameraPose, turn: number, lift: number): Vec3 {
+    const [x, y, z] = pose.position;
+    const [tx, ty, tz] = pose.target;
+    const reach = Math.hypot(x - tx, z - tz);
+    const azimuth = Math.atan2(x - tx, z - tz) + turn;
+    if (lift === 0)
+        return [
+            tx + reach * Math.sin(azimuth),
+            y,
+            tz + reach * Math.cos(azimuth),
+        ];
+    const range = Math.hypot(reach, y - ty);
+    const elevation = Math.atan2(y - ty, reach) + lift;
+    const flat = range * Math.cos(elevation);
+    return [
+        tx + flat * Math.sin(azimuth),
+        ty + range * Math.sin(elevation),
+        tz + flat * Math.cos(azimuth),
+    ];
+}
+
+/**
  * Applies the shot's move at progress p in [0, 1], eased with
  * {@link easeInOutCubic}. Drift ignores p and runs on `msInShot`, so it is
  * continuous for as long as the shot lasts. The target never moves.
@@ -85,34 +111,23 @@ export function applyMove(
                 z,
             ];
             break;
-        case "orbit": {
-            const turn =
+        case "orbit":
+            position = aroundTarget(
+                pose,
                 sign(setting(shot, "direction")) *
-                setting(shot, "degrees") *
-                DEG *
-                e;
-            const reach = Math.hypot(x - tx, z - tz);
-            const azimuth = Math.atan2(x - tx, z - tz) + turn;
-            position = [
-                tx + reach * Math.sin(azimuth),
-                y,
-                tz + reach * Math.cos(azimuth),
-            ];
+                    setting(shot, "degrees") *
+                    DEG *
+                    e,
+                0,
+            );
             break;
-        }
         case "craneOver": {
-            const reach = Math.hypot(x - tx, z - tz);
-            const range = Math.hypot(reach, y - ty);
-            const azimuth = Math.atan2(x - tx, z - tz);
-            const from = Math.atan2(y - ty, reach);
-            const elevation =
-                from + (setting(shot, "endElevationDeg") * DEG - from) * e;
-            const flat = range * Math.cos(elevation);
-            position = [
-                tx + flat * Math.sin(azimuth),
-                ty + range * Math.sin(elevation),
-                tz + flat * Math.cos(azimuth),
-            ];
+            const from = Math.atan2(y - ty, Math.hypot(x - tx, z - tz));
+            position = aroundTarget(
+                pose,
+                0,
+                (setting(shot, "endElevationDeg") * DEG - from) * e,
+            );
             break;
         }
         case "drift": {
