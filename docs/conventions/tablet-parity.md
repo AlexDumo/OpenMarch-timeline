@@ -30,8 +30,10 @@ palette on a tablet, so every action has at least one touch path from day one.
 
 - Good example: the Move pad (`components/inspector/marcher/MovePad.tsx`) runs the same
   nudge actions as the arrow keys.
-- Bad example: the touch pill's Snap button calls `setSnap()` instead of
-  `runAction("toggleSnap")`.
+- Good example: the touch pill's Snap button
+  (`components/canvas/touch/TouchModifierButtons.tsx`) runs `runAction("toggleSnap")`,
+  the same action as the toolbar's magnet and Shift+M, and is disabled while that action
+  can't run.
 
 The palette is the floor, not the goal. If an action is frequent on the field or the
 timeline, it also needs a visible touch path (section 2).
