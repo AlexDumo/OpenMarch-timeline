@@ -257,7 +257,7 @@ export function enterFieldEditView() {
 
 /**
  * The Edit field mode ended: glide back to the view from before it, or to the usual fit when
- * the pane or the field's size changed meanwhile.
+ * the field's size changed meanwhile.
  */
 export function leaveFieldEditView() {
     const before = beforeFieldEdit;
@@ -265,10 +265,10 @@ export function leaveFieldEditView() {
     // Switching to Preview ends the mode: Preview's own glide takes the view
     if (isPreviewMode()) return;
     const { field, width, height } = view();
+    // The pane's size changes with the bar the mode swaps in: the glide keeps the zoom and the
+    // top-left as a resize does. Only a field of another size goes back to the fit
     const unchanged =
         before !== null &&
-        before.view.width === width &&
-        before.view.height === height &&
         before.field.width === field.width &&
         before.field.height === field.height;
     if (!unchanged) return glideToFit();
