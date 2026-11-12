@@ -257,7 +257,9 @@
                 "width": 1.2
             },
             "triangles": 120
-        }
+        },
+        "standAtM": [0.0, 0.0],
+        "standTopM": 0.426
     },
     "conductor-podium-tall": {
         "high": {
@@ -283,7 +285,9 @@
                 "width": 1.2
             },
             "triangles": 312
-        }
+        },
+        "standAtM": [0.0, 0.0],
+        "standTopM": 1.506
     },
     "congas": {
         "high": {
@@ -707,6 +711,314 @@
             "triangles": 724
         }
     },
+    "podium-rolling-6ft": {
+        "high": {
+            "artworkSlots": {},
+            "bottom": -0.0053,
+            "bytes": 56904,
+            "parts": 4,
+            "sizeM": {
+                "depth": 1.223,
+                "height": 2.8,
+                "width": 2.772
+            },
+            "triangles": 1484
+        },
+        "low": {
+            "artworkSlots": {},
+            "bottom": -0.0053,
+            "bytes": 36612,
+            "parts": 4,
+            "sizeM": {
+                "depth": 1.223,
+                "height": 2.8,
+                "width": 2.772
+            },
+            "triangles": 788
+        },
+        "standAtM": [0.0, 0.0],
+        "standTopM": 1.8288
+    },
+    "podium-rolling-6ft-black": {
+        "high": {
+            "artworkSlots": {},
+            "bottom": -0.0053,
+            "bytes": 56924,
+            "parts": 4,
+            "sizeM": {
+                "depth": 1.223,
+                "height": 2.8,
+                "width": 2.772
+            },
+            "triangles": 1484
+        },
+        "low": {
+            "artworkSlots": {},
+            "bottom": -0.0053,
+            "bytes": 36632,
+            "parts": 4,
+            "sizeM": {
+                "depth": 1.223,
+                "height": 2.8,
+                "width": 2.772
+            },
+            "triangles": 788
+        },
+        "standAtM": [0.0, 0.0],
+        "standTopM": 1.8288
+    },
+    "podium-stand-2ft": {
+        "high": {
+            "artworkSlots": {},
+            "bottom": 0.0,
+            "bytes": 11864,
+            "parts": 3,
+            "sizeM": {
+                "depth": 0.76,
+                "height": 0.61,
+                "width": 0.76
+            },
+            "triangles": 168
+        },
+        "low": {
+            "artworkSlots": {},
+            "bottom": 0.0,
+            "bytes": 11864,
+            "parts": 3,
+            "sizeM": {
+                "depth": 0.76,
+                "height": 0.61,
+                "width": 0.76
+            },
+            "triangles": 168
+        },
+        "standAtM": [0.0, 0.0],
+        "standTopM": 0.6096
+    },
+    "podium-stand-2ft-black": {
+        "high": {
+            "artworkSlots": {},
+            "bottom": 0.0,
+            "bytes": 11888,
+            "parts": 3,
+            "sizeM": {
+                "depth": 0.76,
+                "height": 0.61,
+                "width": 0.76
+            },
+            "triangles": 168
+        },
+        "low": {
+            "artworkSlots": {},
+            "bottom": 0.0,
+            "bytes": 11888,
+            "parts": 3,
+            "sizeM": {
+                "depth": 0.76,
+                "height": 0.61,
+                "width": 0.76
+            },
+            "triangles": 168
+        },
+        "standAtM": [0.0, 0.0],
+        "standTopM": 0.6096
+    },
+    "podium-tower-4ft": {
+        "high": {
+            "artworkSlots": {},
+            "bottom": -0.0067,
+            "bytes": 32272,
+            "parts": 3,
+            "sizeM": {
+                "depth": 1.345,
+                "height": 2.192,
+                "width": 1.156
+            },
+            "triangles": 724
+        },
+        "low": {
+            "artworkSlots": {},
+            "bottom": -0.0067,
+            "bytes": 20820,
+            "parts": 3,
+            "sizeM": {
+                "depth": 1.345,
+                "height": 2.192,
+                "width": 1.156
+            },
+            "triangles": 384
+        },
+        "standAtM": [0.0, 0.0],
+        "standTopM": 1.2192
+    },
+    "podium-tower-4ft-black": {
+        "high": {
+            "artworkSlots": {},
+            "bottom": -0.0067,
+            "bytes": 32296,
+            "parts": 3,
+            "sizeM": {
+                "depth": 1.345,
+                "height": 2.192,
+                "width": 1.156
+            },
+            "triangles": 724
+        },
+        "low": {
+            "artworkSlots": {},
+            "bottom": -0.0067,
+            "bytes": 20844,
+            "parts": 3,
+            "sizeM": {
+                "depth": 1.345,
+                "height": 2.192,
+                "width": 1.156
+            },
+            "triangles": 384
+        },
+        "standAtM": [0.0, 0.0],
+        "standTopM": 1.2192
+    },
+    "podium-tower-5ft": {
+        "high": {
+            "artworkSlots": {},
+            "bottom": -0.0067,
+            "bytes": 35932,
+            "parts": 3,
+            "sizeM": {
+                "depth": 1.458,
+                "height": 2.497,
+                "width": 1.187
+            },
+            "triangles": 784
+        },
+        "low": {
+            "artworkSlots": {},
+            "bottom": -0.0067,
+            "bytes": 24480,
+            "parts": 3,
+            "sizeM": {
+                "depth": 1.458,
+                "height": 2.497,
+                "width": 1.187
+            },
+            "triangles": 444
+        },
+        "standAtM": [0.0, 0.0],
+        "standTopM": 1.524
+    },
+    "podium-tower-5ft-black": {
+        "high": {
+            "artworkSlots": {},
+            "bottom": -0.0067,
+            "bytes": 35952,
+            "parts": 3,
+            "sizeM": {
+                "depth": 1.458,
+                "height": 2.497,
+                "width": 1.187
+            },
+            "triangles": 784
+        },
+        "low": {
+            "artworkSlots": {},
+            "bottom": -0.0067,
+            "bytes": 24500,
+            "parts": 3,
+            "sizeM": {
+                "depth": 1.458,
+                "height": 2.497,
+                "width": 1.187
+            },
+            "triangles": 444
+        },
+        "standAtM": [0.0, 0.0],
+        "standTopM": 1.524
+    },
+    "podium-tower-6ft": {
+        "high": {
+            "artworkSlots": {},
+            "bottom": -0.0067,
+            "bytes": 39388,
+            "parts": 3,
+            "sizeM": {
+                "depth": 1.57,
+                "height": 2.802,
+                "width": 1.217
+            },
+            "triangles": 880
+        },
+        "low": {
+            "artworkSlots": {},
+            "bottom": -0.0067,
+            "bytes": 27984,
+            "parts": 3,
+            "sizeM": {
+                "depth": 1.57,
+                "height": 2.802,
+                "width": 1.217
+            },
+            "triangles": 516
+        },
+        "standAtM": [0.0, 0.0],
+        "standTopM": 1.8288
+    },
+    "podium-tower-6ft-black": {
+        "high": {
+            "artworkSlots": {},
+            "bottom": -0.0067,
+            "bytes": 39412,
+            "parts": 3,
+            "sizeM": {
+                "depth": 1.57,
+                "height": 2.802,
+                "width": 1.217
+            },
+            "triangles": 880
+        },
+        "low": {
+            "artworkSlots": {},
+            "bottom": -0.0067,
+            "bytes": 28008,
+            "parts": 3,
+            "sizeM": {
+                "depth": 1.57,
+                "height": 2.802,
+                "width": 1.217
+            },
+            "triangles": 516
+        },
+        "standAtM": [0.0, 0.0],
+        "standTopM": 1.8288
+    },
+    "scaffold-tower": {
+        "high": {
+            "artworkSlots": {},
+            "bottom": 0.0,
+            "bytes": 58844,
+            "parts": 4,
+            "sizeM": {
+                "depth": 2.334,
+                "height": 2.969,
+                "width": 1.654
+            },
+            "triangles": 1712
+        },
+        "low": {
+            "artworkSlots": {},
+            "bottom": 0.0087,
+            "bytes": 33416,
+            "parts": 4,
+            "sizeM": {
+                "depth": 2.334,
+                "height": 2.96,
+                "width": 1.654
+            },
+            "triangles": 800
+        },
+        "standAtM": [0.0, 0.0],
+        "standTopM": 2.0
+    },
     "speaker-square": {
         "high": {
             "artworkSlots": {
@@ -796,6 +1108,34 @@
             },
             "triangles": 528
         }
+    },
+    "stepladder-6ft": {
+        "high": {
+            "artworkSlots": {},
+            "bottom": 0.0,
+            "bytes": 27260,
+            "parts": 2,
+            "sizeM": {
+                "depth": 0.97,
+                "height": 1.829,
+                "width": 0.61
+            },
+            "triangles": 504
+        },
+        "low": {
+            "artworkSlots": {},
+            "bottom": 0.0,
+            "bytes": 16100,
+            "parts": 2,
+            "sizeM": {
+                "depth": 0.97,
+                "height": 1.829,
+                "width": 0.61
+            },
+            "triangles": 276
+        },
+        "standAtM": [0.0, 0.2],
+        "standTopM": 1.2192
     },
     "synth-61": {
         "high": {
