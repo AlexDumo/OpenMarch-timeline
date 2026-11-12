@@ -1,5 +1,5 @@
 /**
- * Set order's sweep (pathways step 4g, DL-27, DL-30), pure: who a drag through the line picks up and
+ * Set order's sweep (pathways step 4g, DL-27), pure: who a drag through the line picks up and
  * in what order, and the order kept when the drag ends. How an order is drawn is `orderLane`.
  */
 

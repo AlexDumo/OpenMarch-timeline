@@ -317,9 +317,28 @@ describe("numbers beside another line", () => {
             dots: [...b, ...u],
             others: [{ points: u, halfWidth: 6 }],
         });
-        expect(badges.length).toBeGreaterThan(0);
+        expect(badges).toHaveLength(5);
         // U's lane reaches up to y = 14 - 6; no badge's box comes down into it
         for (const badge of badges)
             expect(badge.at.y + BADGE_HEIGHT / 2).toBeLessThanOrEqual(8);
+        // The middle ones move above the line (the ends may sit beside it)
+        for (const badge of badges.filter((b) => b.role === "middle"))
+            expect(badge.at.y).toBeLessThan(0);
+    });
+});
+
+describe("a stacked pair", () => {
+    it("doesn't thin the numbers of the whole lane", () => {
+        const points = [...row(8, 30), { x: 210, y: 0.5 }];
+        const { badges } = placeNumbers({
+            points,
+            kind: "lane",
+            halfWidth: 8,
+            dotRadius: R,
+            busy: [],
+            dots: points,
+        });
+        // All but the one stacked on the 8th are numbered
+        expect(badges.length).toBeGreaterThanOrEqual(8);
     });
 });

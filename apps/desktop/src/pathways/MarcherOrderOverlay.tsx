@@ -15,6 +15,7 @@
  * (they draw their own ends).
  */
 import {
+    memo,
     useEffect,
     useId,
     useMemo,
@@ -71,6 +72,7 @@ import {
     BADGE_HEIGHT,
     badgeWidth,
     classifyOrder,
+    distanceToSegment,
     laneDarts,
     laneHalfWidth,
     laneTip,
@@ -285,7 +287,9 @@ function drawLine({
     others?: readonly OtherLane[];
 }): DrawnLine {
     const own = points.slice(0, marchers);
-    const kind = classifyOrder(points, dotRadius);
+    // On the marchers only: Set order's pointer sits on the dot it just picked and crosses earlier
+    // legs on its way to the next, which would make every pick look like a fold or a crossing
+    const kind = classifyOrder(own, dotRadius);
     const tip = kind === "lane" ? laneTip(points, halfWidth) : null;
     const darts =
         kind === "lane"
@@ -307,6 +311,8 @@ function drawLine({
             : { badges: [], crowded: false };
     const xs = points.map((p) => p.x);
     const ys = points.map((p) => p.y);
+    // Room for the tip past the leader, which the dots mask cuts too
+    const pad = halfWidth * 2.2 + 4;
     return {
         kind,
         guessed,
@@ -317,10 +323,10 @@ function drawLine({
         numbers: badges,
         crowded,
         box: {
-            minX: Math.min(...xs) - halfWidth,
-            minY: Math.min(...ys) - halfWidth,
-            maxX: Math.max(...xs) + halfWidth,
-            maxY: Math.max(...ys) + halfWidth,
+            minX: Math.min(...xs) - pad,
+            minY: Math.min(...ys) - pad,
+            maxX: Math.max(...xs) + pad,
+            maxY: Math.max(...ys) + pad,
         },
     };
 }
@@ -646,7 +652,7 @@ const pathOf = (points: readonly XY[]): string =>
  * dots and their selection rings keep their own color; a guessed order as a hollow dashed outline;
  * then the tip and the darts
  */
-function OrderLine({
+const OrderLine = memo(function OrderLine({
     id,
     line,
     ink,
@@ -662,12 +668,18 @@ function OrderLine({
     if (points.length < 2) return null;
     const d = pathOf(points);
     const width = halfWidth * 2;
-    const inBox = holes.filter(
+    // Only the dots the lane or its tip reach
+    const reach = halfWidth * 2.2 + 4;
+    const near = holes.filter(
         ({ at, r }) =>
             at.x + r >= box.minX &&
             at.x - r <= box.maxX &&
             at.y + r >= box.minY &&
-            at.y - r <= box.maxY,
+            at.y - r <= box.maxY &&
+            points.some(
+                (p, i) =>
+                    distanceToSegment(at, p, points[i + 1] ?? p) <= reach + r,
+            ),
     );
     const mask = (
         <mask
@@ -685,7 +697,7 @@ function OrderLine({
                 height={box.maxY - box.minY + 8}
                 fill="white"
             />
-            {guessed && (
+            {guessed && kind !== "crossed" && (
                 <path
                     d={d}
                     fill="none"
@@ -695,7 +707,7 @@ function OrderLine({
                     strokeLinejoin="round"
                 />
             )}
-            {inBox.map(({ at, r }, i) => (
+            {near.map(({ at, r }, i) => (
                 <circle key={i} cx={at.x} cy={at.y} r={r} fill="black" />
             ))}
         </mask>
@@ -736,6 +748,7 @@ function OrderLine({
                     strokeWidth={guessed ? 1.2 : 1}
                     strokeLinejoin="round"
                     paintOrder="stroke"
+                    mask={`url(#${id}-holes)`}
                     data-testid="marcherOrderTip"
                 />
             )}
@@ -749,10 +762,10 @@ function OrderLine({
             ))}
         </g>
     );
-}
+});
 
 /** A position badge: solid at the leader, rimmed at the tail, quiet between; dashed for a guess */
-function OrderBadge({
+const OrderBadge = memo(function OrderBadge({
     badge,
     guessed,
 }: {
@@ -790,7 +803,7 @@ function OrderBadge({
             </text>
         </g>
     );
-}
+});
 
 /** The note under a line whose numbers didn't all fit */
 function ZoomNote({ box }: { box: Box }) {

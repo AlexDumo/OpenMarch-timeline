@@ -419,18 +419,13 @@ function runsAcross(points: readonly XY[]): boolean {
     );
 }
 
-/** The shortest leg of an order, on screen */
-function shortestLeg(points: readonly XY[]): number {
-    let gap = Infinity;
-    for (let i = 0; i + 1 < points.length; i++)
-        gap = Math.min(
-            gap,
-            Math.hypot(
-                points[i + 1]!.x - points[i]!.x,
-                points[i + 1]!.y - points[i]!.y,
-            ),
-        );
-    return gap;
+/** An order's typical (median) leg, on screen: one stacked pair doesn't thin the whole lane */
+function typicalLeg(points: readonly XY[]): number {
+    const legs = points
+        .slice(1)
+        .map((p, i) => Math.hypot(p.x - points[i]!.x, p.y - points[i]!.y))
+        .sort((a, b) => a - b);
+    return legs.length === 0 ? Infinity : legs[Math.floor(legs.length / 2)]!;
 }
 
 /**
@@ -498,7 +493,7 @@ export function placeNumbers({
     const n = points.length;
     if (n === 0) return { badges: [], crowded: false };
     const across = runsAcross(points);
-    const gap = shortestLeg(points);
+    const gap = typicalLeg(points);
     const every = kind !== "lane";
     const shown = every
         ? Array.from({ length: n }, (_, k) => k)
