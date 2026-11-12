@@ -532,7 +532,9 @@ export function placeNumbers({
                 crowded = true;
                 continue;
             }
-            // A plain lane's badge always shows, on its rail
+            // A plain lane's tip already says which way it runs: a middle number with nowhere
+            // to go is left out rather than drawn over another; the ends always show, on the rail
+            if (k !== 0 && k !== n - 1) continue;
             const at = { x: p.x + candidates[0]!.x, y: p.y + candidates[0]!.y };
             best = { at, box: badgeBox(at, w, 0) };
         }
