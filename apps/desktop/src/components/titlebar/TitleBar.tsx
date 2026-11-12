@@ -7,7 +7,7 @@ import {
 } from "@phosphor-icons/react";
 import BugReport from "./BugReport";
 import { SealWarningIcon } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { version as currentVersion } from "../../../package.json";
 import {
     AlertDialog,
@@ -30,6 +30,31 @@ import { isWebBuild, webChannel } from "@/utilities/webBuild";
 import WebFileMenu from "./WebFileMenu";
 import WebSaveStatus from "../web/WebSaveStatus";
 import { useWebWelcomeStore } from "@/stores/WebWelcomeStore";
+
+/**
+ * Registers `element` as the toolbar tabs slot and reports whether anything is
+ * rendered into it, so the bar can keep showing the show's path until then.
+ */
+function useToolbarTabsSlotRef() {
+    const [element, setElement] = useState<HTMLElement | null>(null);
+    const [filled, setFilled] = useState(false);
+    const ref = useCallback((node: HTMLElement | null) => {
+        setElement(node);
+        setToolbarTabsSlot(node);
+    }, []);
+    useEffect(() => {
+        if (!element) {
+            setFilled(false);
+            return;
+        }
+        const update = () => setFilled(element.childNodes.length > 0);
+        update();
+        const observer = new MutationObserver(update);
+        observer.observe(element, { childList: true });
+        return () => observer.disconnect();
+    }, [element]);
+    return { ref, filled };
+}
 
 /** Page zoom changes the viewport's CSS size, so it always fires a resize. */
 function usePageZoomFactor() {
@@ -120,7 +145,10 @@ function EditorTitleBar({
     const isTouch = useIsTouchMode();
     // Touch mode in the editor: the toolbar's tabs take the middle of this row (one row of chrome)
     const tabsInTitleBar = isTouch && variant === "main" && !!showControls;
-    const showFilePath = variant === "main" && !tabsInTitleBar;
+    const toolbarTabsSlot = useToolbarTabsSlotRef();
+    // The path gives way only to tabs actually rendered into the slot
+    const showFilePath =
+        variant === "main" && !(tabsInTitleBar && toolbarTabsSlot.filled);
     // In a browser there are no traffic lights, native menu or window buttons.
     const isMacOS = window.electron.isMacOS && !isWebBuild;
     const showWindowControls = !isMacOS && !isWebBuild;
@@ -243,11 +271,24 @@ function EditorTitleBar({
                     </div>
                 </div>
                 {tabsInTitleBar ? (
-                    <div
-                        ref={setToolbarTabsSlot}
-                        className="titlebar-button flex min-w-0 items-center"
-                        data-testid="titlebar-toolbar-tabs"
-                    />
+                    <div className="flex min-w-0 items-center justify-center">
+                        <div
+                            ref={toolbarTabsSlot.ref}
+                            className={clsx(
+                                "titlebar-button flex min-w-0 items-center",
+                                toolbarTabsSlot.filled && "flex-1",
+                            )}
+                            data-testid="titlebar-toolbar-tabs"
+                        />
+                        {showFilePath && (
+                            <p
+                                className="text-sub min-w-0 truncate text-center"
+                                data-testid="titlebar-file-path"
+                            >
+                                {displayDbPath}
+                            </p>
+                        )}
+                    </div>
                 ) : (
                     <p className="text-sub truncate text-center">
                         {showFilePath ? displayDbPath : null}
