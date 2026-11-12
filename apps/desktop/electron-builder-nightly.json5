@@ -34,8 +34,10 @@
     win: {
         artifactName: "OpenMarch-Nightly-${version}-windows-${arch}.${ext}",
     },
+    // The AppImage keeps one name: an update replaces it in place, where a versioned name would
+    // make electron-updater rename the file each time and break launchers that point at it
     linux: {
-        artifactName: "OpenMarch-Nightly-${version}-linux-${arch}.${ext}",
+        artifactName: "OpenMarch-Nightly-linux-${arch}.${ext}",
         executableName: "openmarch-nightly",
     },
     // One object, not a list: a list would merge with the release's GitHub feed. The tag is

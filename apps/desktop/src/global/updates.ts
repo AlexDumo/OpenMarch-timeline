@@ -30,7 +30,9 @@ export type UpdateUnsupportedReason =
     /** The Snap Store updates it */
     | "snap"
     /** A Linux install that isn't an AppImage (only AppImages can replace themselves) */
-    | "linuxPackage";
+    | "linuxPackage"
+    /** Built without an update feed (a fork's unsigned nightly): testers download each one */
+    | "noFeed";
 
 export type UpdatePhase =
     | { readonly kind: "unsupported"; readonly reason: UpdateUnsupportedReason }

@@ -213,7 +213,8 @@ jobs:
           fi
           OLD=$(gh release view "$TAG" --json assets --jq '.assets[].name')
 
-          # This build's files first, then the feed that points at them, then the old files
+          # This build's files first, then the feed that points at them, then the old files.
+          # (The Linux AppImage keeps one name, so it's replaced in place.)
           gh release upload "$TAG" $FILES --clobber
           if [ -n "$FEED" ]; then gh release upload "$TAG" $FEED --clobber; fi
           gh release edit "$TAG" --title "Nightly ${VERSION}" --notes-file notes.md \

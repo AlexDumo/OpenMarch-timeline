@@ -49,14 +49,18 @@ export function updateUnsupportedReason({
     isPackaged,
     platform,
     env,
+    hasFeed,
 }: {
     isPackaged: boolean;
     platform: NodeJS.Platform;
     env: Record<string, string | undefined>;
+    /** The build has an update feed (`resources/app-update.yml`) */
+    hasFeed: boolean;
 }): UpdateUnsupportedReason | null {
     if (!isPackaged) return "development";
     if (env.SNAP) return "snap";
     if (platform === "linux" && !env.APPIMAGE) return "linuxPackage";
+    if (!hasFeed) return "noFeed";
     return null;
 }
 
@@ -79,6 +83,8 @@ export interface UpdaterLike {
     checkForUpdates(): Promise<unknown>;
     downloadUpdate(): Promise<unknown>;
     quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void;
+    /** electron-updater keeps this true once an install went through, false if it failed */
+    quitAndInstallCalled?: boolean;
 }
 
 export interface UpdateControllerOptions {
@@ -105,6 +111,12 @@ export interface UpdateControllerOptions {
     nativeStaging?: {
         once(event: "update-downloaded", listener: () => void): unknown;
     };
+    /**
+     * Linux: opens the new AppImage after this app exits. electron-updater would start it right
+     * away, while this one still holds the profile's storage, so the controller installs without
+     * starting it and calls this instead.
+     */
+    relaunchAfterInstall?: () => void;
     log?: Pick<Console, "info" | "error">;
     setTimer?: (callback: () => void, ms: number) => unknown;
     setRepeatingTimer?: (callback: () => void, ms: number) => unknown;
@@ -266,12 +278,16 @@ export function createUpdateController(
             installing = true;
             const to = state.phase.version;
             options.saveInstallAttempt({ from: currentVersion, to });
-            await options.prepareToQuit();
-            log.info(`Installing OpenMarch ${to} and restarting`);
+            const relaunchAfter = options.relaunchAfterInstall;
             try {
+                await options.prepareToQuit();
+                log.info(`Installing OpenMarch ${to} and restarting`);
                 // Windows: install without the installer's pages, then open the app again.
-                // macOS and Linux ignore both arguments and always reopen.
-                updater.quitAndInstall(true, true);
+                // macOS reopens by itself. Linux opens the new AppImage only after this app
+                // exits (`relaunchAfterInstall`).
+                updater.quitAndInstall(true, !relaunchAfter);
+                if (relaunchAfter && updater.quitAndInstallCalled !== false)
+                    relaunchAfter();
             } catch (error) {
                 fail(error);
                 return;
@@ -292,6 +308,8 @@ export function createUpdateController(
     };
 
     async function startDownload(requested: boolean) {
+        // A check still running mustn't treat this download's errors as its own quiet failure
+        if (currentCheck) currentCheck.manual = true;
         set({
             kind: "downloading",
             version: foundVersion ?? "",
@@ -324,6 +342,9 @@ export function createUpdateController(
         });
         updater.on("update-available", (info: { version: string }) => {
             foundVersion = info.version;
+            // A check that ends while its update already downloads changes nothing
+            const { kind } = state.phase;
+            if (kind === "downloading" || kind === "downloaded") return;
             // Straight to a quiet download, so "Update available" never flashes in the title
             // bar on its way to "Update ready"
             if (state.automaticDownload && canInstallHere())

@@ -2867,7 +2867,8 @@
         "unsupported": {
             "development": "Updates are off in development builds.",
             "snap": "The Snap Store keeps this copy of OpenMarch up to date.",
-            "linuxPackage": "This copy of OpenMarch can't update itself. Download new versions from openmarch.com."
+            "linuxPackage": "This copy of OpenMarch can't update itself. Download new versions from openmarch.com.",
+            "noFeed": "This build of OpenMarch doesn't update itself. Download each new build by hand."
         }
     },
     "view3d": {

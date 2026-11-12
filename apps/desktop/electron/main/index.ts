@@ -585,7 +585,18 @@ void app.whenReady().then(async () => {
 let updates: UpdateController | null = null;
 const INSTALL_ATTEMPT_KEY = "updateInstallAttempt";
 
+/** Set once the app starts quitting, for whatever reason */
+let appIsQuitting = false;
+app.on("before-quit", () => {
+    appIsQuitting = true;
+});
+/** Linux: where the update put the new AppImage, if it named it differently */
+let installedAppImage: string | undefined;
+
 function startUpdates(): UpdateController {
+    getAutoUpdater().on("appimage-filename-updated", (path: string) => {
+        installedAppImage = path;
+    });
     const broadcast = (state: UpdateState) => {
         for (const window of BrowserWindow.getAllWindows())
             window.webContents.send(UPDATE_IPC_CHANNELS.state, state);
@@ -597,6 +608,9 @@ function startUpdates(): UpdateController {
             isPackaged: app.isPackaged,
             platform: process.platform,
             env: process.env,
+            hasFeed:
+                app.isPackaged &&
+                fs.existsSync(join(process.resourcesPath, "app-update.yml")),
         }),
         needsMoveToApplications: () => isMacOS && !app.isInApplicationsFolder(),
         automaticDownload: automaticUpdatesAreEnabled(
@@ -614,7 +628,18 @@ function startUpdates(): UpdateController {
             store.set(INSTALL_ATTEMPT_KEY, attempt),
         prepareToQuit: closeShowForRestart,
         nativeStaging: isMacOS ? nativeAutoUpdater : undefined,
+        relaunchAfterInstall:
+            process.platform === "linux"
+                ? () =>
+                      app.relaunch({
+                          execPath: installedAppImage ?? process.env.APPIMAGE,
+                          args: [],
+                      })
+                : undefined,
         relaunch: () => {
+            // Quitting already, just slowly (a conversion worker stopping): the installer
+            // reopens the app, so don't open a second one
+            if (appIsQuitting) return;
             app.relaunch();
             app.exit(0);
         },
@@ -642,10 +667,6 @@ async function closeShowForRestart() {
     if (reopen) store.set("databasePath", reopen);
     // The windows close without asking again
     isQuitting = true;
-    // The new copy can start before this one finishes quitting (Linux starts the new AppImage
-    // straight away, and quitting waits for a conversion worker to stop). Holding the lock,
-    // this copy would make it exit as a second instance, and the app wouldn't come back.
-    app.releaseSingleInstanceLock();
 }
 
 ipcMain.handle(UPDATE_IPC_CHANNELS.getState, () => updates?.getState() ?? null);

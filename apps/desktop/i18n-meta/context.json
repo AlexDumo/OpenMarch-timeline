@@ -2545,6 +2545,7 @@
     "updates.toast.upToDate": "Notification after 'Check for updates' found nothing newer. {version} is the installed version number.",
     "updates.unsupported.development": "Status line under 'Updates' in Settings > General, and a notification, in a copy of OpenMarch run by a developer from its source code, which can't update itself.",
     "updates.unsupported.linuxPackage": "Status line under 'Updates' in Settings > General, and a notification, on Linux when OpenMarch was installed in a way that can't replace itself. 'openmarch.com' is the website address; keep it as is.",
+    "updates.unsupported.noFeed": "Status line under 'Updates' in Settings > General, and a notification, in a test build of OpenMarch that was made without automatic updates (for example a nightly built outside the official project). Testers download every new build themselves.",
     "updates.unsupported.snap": "Status line under 'Updates' in Settings > General, and a notification, on Linux when OpenMarch was installed from the Snap Store, which installs its updates. 'Snap Store' is a product name.",
     "view3d.autoOpenPrompt.description": "Second line of the 3D View's \"open on launch\" question card. Settings › General is the app settings section where the answer can be changed later.",
     "view3d.autoOpenPrompt.no": "Button answering no to the 3D View's \"open on launch\" question: the 3D View won't open by itself (it stays open for now).",

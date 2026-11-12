@@ -40,6 +40,7 @@ class FakeUpdater extends EventEmitter {
     });
     downloadUpdate = vi.fn(async () => []);
     quitAndInstall = vi.fn();
+    quitAndInstallCalled?: boolean;
 }
 
 const silentLog = { info: () => {}, error: () => {} };
@@ -313,6 +314,67 @@ describe("createUpdateController", () => {
         expect(updater.quitAndInstall).toHaveBeenCalledOnce();
     });
 
+    it("on Linux, installs without starting the new copy, then opens it after this one exits", async () => {
+        const relaunchAfterInstall = vi.fn();
+        const { controller, updater } = setup({ relaunchAfterInstall });
+        updater.quitAndInstall.mockImplementation(() => {
+            updater.quitAndInstallCalled = true;
+        });
+        updater.emit("update-downloaded", { version: "0.2.1" });
+        await controller.install();
+        expect(updater.quitAndInstall).toHaveBeenCalledWith(true, false);
+        expect(relaunchAfterInstall).toHaveBeenCalledOnce();
+    });
+
+    it("on Linux, doesn't open a new copy when the install didn't go through", async () => {
+        const relaunchAfterInstall = vi.fn();
+        const { controller, updater } = setup({ relaunchAfterInstall });
+        updater.quitAndInstall.mockImplementation(() => {
+            updater.quitAndInstallCalled = false;
+        });
+        updater.emit("update-downloaded", { version: "0.2.1" });
+        await controller.install();
+        expect(relaunchAfterInstall).not.toHaveBeenCalled();
+    });
+
+    it("opens the app again when closing the show for the install fails", async () => {
+        const { controller, updater, options } = setup({
+            prepareToQuit: async () => {
+                throw new Error("disk full");
+            },
+        });
+        updater.emit("update-downloaded", { version: "0.2.1" });
+        await controller.install();
+        expect(updater.quitAndInstall).not.toHaveBeenCalled();
+        expect(options.relaunch).toHaveBeenCalledOnce();
+        expect(controller.getState().phase.kind).toBe("error");
+    });
+
+    it("keeps a download going when a background check finds the same update", async () => {
+        const { controller, updater, phase } = setup();
+        updater.nextCheck = found("0.2.1");
+        await controller.check();
+        await controller.download();
+        updater.emit("update-available", { version: "0.2.1" });
+        expect(phase().kind).toBe("downloading");
+    });
+
+    it("reports a download that fails while a background check runs", async () => {
+        const { controller, updater, phase } = setup();
+        updater.nextCheck = found("0.2.1");
+        await controller.check();
+        let finishCheck = () => {};
+        updater.checkForUpdates.mockImplementationOnce(
+            () => new Promise((resolve) => (finishCheck = () => resolve(null))),
+        );
+        const check = controller.check();
+        updater.downloadUpdate.mockRejectedValueOnce(new Error("404"));
+        await controller.download();
+        finishCheck();
+        await check;
+        expect(phase()).toMatchObject({ kind: "error", message: "404" });
+    });
+
     it("opens the app again when Update now doesn't quit", async () => {
         const { controller, updater, timers, options } = setup();
         updater.emit("update-downloaded", { version: "0.2.1" });
@@ -369,7 +431,12 @@ describe("createUpdateController", () => {
 });
 
 describe("updateUnsupportedReason", () => {
-    const packaged = { isPackaged: true, platform: "darwin" as const, env: {} };
+    const packaged = {
+        isPackaged: true,
+        platform: "darwin" as const,
+        env: {},
+        hasFeed: true,
+    };
     it("updates packaged macOS and Windows builds and AppImages", () => {
         expect(updateUnsupportedReason(packaged)).toBeNull();
         expect(
@@ -382,6 +449,11 @@ describe("updateUnsupportedReason", () => {
                 env: { APPIMAGE: "/home/a/OpenMarch.AppImage" },
             }),
         ).toBeNull();
+    });
+    it("leaves a build with no update feed alone", () => {
+        expect(updateUnsupportedReason({ ...packaged, hasFeed: false })).toBe(
+            "noFeed",
+        );
     });
     it("leaves development, Snap and other Linux installs alone", () => {
         expect(

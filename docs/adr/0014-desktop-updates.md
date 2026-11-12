@@ -45,11 +45,13 @@ rollback system, and most of its benefit comes from making updates visible, not 
   calls `quitAndInstall` (silent on Windows, with the app reopened afterwards). The controller
   records the attempt. If the next launch is still on the old version, it reports the failed
   install and offers the installer. If the app hasn't quit 30 s after `quitAndInstall`, or the
-  install raises an error after the show closed, it relaunches on the same version. It releases the
-  single-instance lock before quitting, because on Linux the new AppImage starts before the old
-  app has finished quitting and would otherwise exit as a second instance.
+  install raises an error after the show closed, it relaunches on the same version. On Linux it installs the AppImage without
+  starting it and has Electron open it after this app exits: electron-updater would start it at
+  once, while this app still holds the profile's storage. If the app is still quitting when the
+  timeout runs, it leaves the restart to the installer.
 - **Where it can't update itself**, it says so and does nothing: development builds, Snap (the
-  Snap Store updates it), and Linux installs that aren't an AppImage. On macOS outside
+  Snap Store updates it), Linux installs that aren't an AppImage, and builds with no update feed
+  (a fork's unsigned nightlies). On macOS outside
   Applications, where macOS won't let an app replace itself, it still checks but offers
   "Move to Applications" instead of downloading.
 - **Feeds.** Releases and betas use the GitHub provider, as before (`latest-${arch}`).
@@ -67,7 +69,9 @@ rollback system, and most of its benefit comes from making updates visible, not 
   its popover holds the step: Download, Update now, Move to Applications, or Try again and
   Download installer.
 - Release notes come from the release page ("What's new"), not from the app.
-- A nightly build's files carry its version in their names, so a download that starts while the
+- A nightly build's files carry its version in their names (except the Linux AppImage, which
+  keeps one name so an update replaces it in place instead of renaming the file launchers point
+  at), so a download that starts while the
   next nightly uploads still finds its file. The workflow uploads the files, then the feed, then
   deletes the old files.
 - The nightly's package name is `openmarch-nightly` (`extraMetadata.name`): electron-builder
