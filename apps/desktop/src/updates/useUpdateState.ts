@@ -13,9 +13,13 @@ export function useUpdateState(): UpdateState | null {
         if (!updates) return;
         let live = true;
         const unsubscribe = updates.onState(setState);
-        void updates.getState().then((initial) => {
-            if (live && initial) setState((current) => current ?? initial);
-        });
+        // No answer (no updater behind the preload, as in the browser test host) is no state
+        updates
+            .getState()
+            .then((initial) => {
+                if (live && initial) setState((current) => current ?? initial);
+            })
+            .catch(() => {});
         return () => {
             live = false;
             unsubscribe();
