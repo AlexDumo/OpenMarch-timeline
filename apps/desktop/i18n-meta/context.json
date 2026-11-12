@@ -2874,5 +2874,8 @@
     "workspaceSettings.performer.holdWhileBandMoves.label": "Label in the Show settings, Performer defaults: what a marcher who stays in place does on counts when other marchers are moving.",
     "workspaceSettings.performer.holdWhileBandMoves.markTime": "Option for 'Holding while others move' in the Show settings: the marcher steps in place in time with the music. Marching band term.",
     "workspaceSettings.performer.holdWhileBandMoves.highMarkTime": "Option for 'Holding while others move' in the Show settings: the marcher steps in place, lifting the knees high. Marching band term.",
-    "workspaceSettings.performer.holdWhileBandMoves.stand": "Option for 'Holding while others move' in the Show settings: the marcher stands still."
+    "workspaceSettings.performer.holdWhileBandMoves.stand": "Option for 'Holding while others move' in the Show settings: the marcher stands still.",
+    "workspaceSettings.performer.percussionTravel.label": "Label in the Show settings, Performer defaults: how drummers (percussion) move when they travel sideways or on a diagonal. Followed by 'Crab step' or 'Slide'.",
+    "workspaceSettings.performer.percussionTravel.crab": "Option for 'Drums travel sideways' in the Show settings: drummers keep their hips facing the front and cross one foot over the other, so the drum stays square. Marching percussion term.",
+    "workspaceSettings.performer.percussionTravel.slide": "Option for 'Drums travel sideways' in the Show settings: drummers turn their legs and slide like the wind players, with the upper body facing the front. Marching band term."
 }

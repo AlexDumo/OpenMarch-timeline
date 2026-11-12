@@ -66,6 +66,7 @@ export interface ShowPlans {
         ids: readonly number[];
         cues: CompiledCues | null;
         dotMode: DotMode | readonly DotMode[] | null;
+        crabs: readonly boolean[] | null;
         directionChange: DirectionChange | readonly DirectionChange[] | null;
     };
 }
@@ -215,6 +216,8 @@ export function planShow(
     previous: ShowPlans | null = null,
     /** What the dot marks, for the show or per count; null is foot on the dot. */
     dotMode: DotMode | readonly DotMode[] | null = null,
+    /** Per marcher: travels in a crab step (`core/marchers/crab.ts`). */
+    crabs: readonly boolean[] | null = null,
     /** How direction changes go, for the show or per count; null is the default. */
     directionChange: DirectionChange | readonly DirectionChange[] | null = null,
 ): ShowPlans {
@@ -241,6 +244,7 @@ export function planShow(
             reuseAll &&
             j !== undefined &&
             prev!.heightClasses[j] === h &&
+            (prev!.crabs?.[j] ?? false) === (crabs?.[i] ?? false) &&
             sameArray(prev!.positions[j], positions) &&
             previous!.plans[j]
         )
@@ -264,6 +268,7 @@ export function planShow(
             feet: fromCues?.feet,
             dotMode: dotMode ?? undefined,
             directionChange: directionChange ?? undefined,
+            crab: crabs?.[i] ?? false,
             positions,
             bpm: clock.bpm,
         });
@@ -279,6 +284,7 @@ export function planShow(
             ids,
             cues,
             dotMode,
+            crabs,
             directionChange,
         },
     };
@@ -336,7 +342,7 @@ export class MarcherMotion {
         const row2 = clip2 ? (rows[clip2] ?? null) : null;
         let weight = e.weight;
         let legYaw = e.legYaw;
-        if (e.kind === "crossfade") {
+        if (e.kind === "crossfade" || e.handoff) {
             // the fade's progress, 0 before its window and 1 after
             const u = Math.min(
                 Math.max(
@@ -384,7 +390,8 @@ export class MarcherMotion {
             const index = eventIndexAt(plan, planCount, this.cursor[i]);
             if (
                 index !== this.cursor[i] ||
-                plan.events[index].kind === "crossfade"
+                plan.events[index].kind === "crossfade" ||
+                plan.events[index].handoff
             ) {
                 this.apply(i, plan, index, planCount);
                 this.cursor[i] = index;
