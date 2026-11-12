@@ -98,7 +98,9 @@ import { attachFieldPointerInput } from "./fieldPointerInput";
 import { cameraBounds, useFieldViewStore } from "./fieldView";
 import {
     attachFieldNavigation,
+    enterFieldEditView,
     fitAfterResize,
+    leaveFieldEditView,
     glideToFitAfterResize,
     resetView,
     settleView,
@@ -557,6 +559,7 @@ function ThreeFieldView() {
     // keeps the view
     const opened = useRef(false);
     usePreviewFit(preview, ready, settled);
+    useFieldEditFit(fieldEditing, ready);
 
     return (
         <div
@@ -786,6 +789,20 @@ function useFieldItems(
             ),
         [itemRows, showPropNames, propNameOverrides],
     );
+}
+
+/**
+ * The Edit field mode (#824) holds the field still, fitted inside its rulers: entering it glides
+ * there, and leaving it glides back to the view from before.
+ */
+function useFieldEditFit(fieldEditing: boolean, ready: boolean) {
+    const entered = useRef(false);
+    useEffect(() => {
+        if (!ready || fieldEditing === entered.current) return;
+        entered.current = fieldEditing;
+        if (fieldEditing) enterFieldEditView();
+        else leaveFieldEditView();
+    }, [fieldEditing, ready]);
 }
 
 /** How long to wait for Preview's layout to settle. */

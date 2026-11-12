@@ -1,8 +1,12 @@
 import { isPreviewMode } from "@/stores/PreviewModeStore";
+import { useInputModeStore } from "@/stores/InputModeStore";
+import { fieldEditMode } from "@/field/editMode/fieldEditModeStore";
+import { rulerPx } from "@/field/editMode/lines";
 import {
     centerAtBase,
     clampPan,
     clampZoom,
+    fieldEditFit,
     previewFit,
     isPanButton,
     panBy,
@@ -31,8 +35,15 @@ const view = () => useFieldViewStore.getState();
 /** The user has moved the view since it was last centered. */
 let navigated = false;
 
+/**
+ * The Edit field mode (#824) holds the field still, fitted inside its rulers: wheel, pan drags,
+ * pinches and app actions that move the view do nothing while it's on.
+ */
+const viewLocked = () => fieldEditMode.isActive();
+
 /** Moves the view to `next` for the user. */
 function navigate(next: FieldView) {
+    if (viewLocked()) return;
     // The user's own navigation stops a glide where it is
     stopGlide();
     navigated = true;
@@ -61,6 +72,10 @@ export function setView(next: FieldView) {
 function fittedView(): FieldView | null {
     const { width, height, field } = view();
     if (width <= 0 || height <= 0) return null;
+    if (viewLocked()) {
+        const touch = useInputModeStore.getState().mode === "touch";
+        return fieldEditFit(width, height, field, rulerPx(touch));
+    }
     if (isPreviewMode())
         return previewFit(
             { width, height, zoom: 1, panX: 0, panY: 0 },
@@ -224,6 +239,46 @@ export function glideTo(next: FieldView): number | null {
     return id;
 }
 
+/** The view before the Edit field mode began, to go back to when it ends */
+let beforeFieldEdit: {
+    view: FieldView;
+    field: { width: number; height: number };
+} | null = null;
+
+/**
+ * The Edit field mode (#824) began: remember the view and glide to the mode's fit, which then
+ * holds until the mode ends.
+ */
+export function enterFieldEditView() {
+    const { width, height, zoom, panX, panY, field } = view();
+    beforeFieldEdit = { view: { width, height, zoom, panX, panY }, field };
+    glideToFit();
+}
+
+/**
+ * The Edit field mode ended: glide back to the view from before it, or to the usual fit when
+ * the pane or the field's size changed meanwhile.
+ */
+export function leaveFieldEditView() {
+    const before = beforeFieldEdit;
+    beforeFieldEdit = null;
+    // Switching to Preview ends the mode: Preview's own glide takes the view
+    if (isPreviewMode()) return;
+    const { field, width, height } = view();
+    const unchanged =
+        before !== null &&
+        before.view.width === width &&
+        before.view.height === height &&
+        before.field.width === field.width &&
+        before.field.height === field.height;
+    if (!unchanged) return glideToFit();
+    // 100% in the zoom controls is the usual fit again
+    useFieldViewStore.setState({
+        baseZoom: centerAtBase(width, height, field).zoom,
+    });
+    glideTo(before.view);
+}
+
 /** Whether the glide `glideTo` returned is still under way */
 export const isGliding = (id: number | null) => id !== null && gliding === id;
 
@@ -268,7 +323,7 @@ export function fitAfterResize(settled: boolean) {
         clearTimeout(pendingGlide);
         pendingGlide = null;
         glideToFit();
-    } else if (isPreviewMode()) {
+    } else if (isPreviewMode() || viewLocked()) {
         if (gliding === null) resetView();
     } else if (!settled) {
         settleView();
@@ -387,6 +442,7 @@ function listenForWheel(
     const onWheel = (event: WheelEvent) => {
         if (onControl(event)) return;
         event.preventDefault();
+        if (viewLocked()) return;
         const current = view();
         if (current.width <= 0) return;
         const next = wheel(
@@ -413,6 +469,7 @@ function listenForPanDrags(surface: HTMLElement) {
             event.pointerType !== "touch" &&
             event.button === 0 &&
             isPreviewMode();
+        if (viewLocked()) return;
         if (!(isPanPress(event) || previewDrag) || onControl(event)) return;
         event.preventDefault();
         if (pan) return;

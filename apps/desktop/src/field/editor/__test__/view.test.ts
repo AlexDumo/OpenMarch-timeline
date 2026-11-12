@@ -4,6 +4,7 @@ import {
     baseZoom,
     centerAtBase,
     clampPan,
+    fieldEditFit,
     previewFit,
     isPanButton,
     MAX_ZOOM,
@@ -265,5 +266,28 @@ describe("isPanButton", () => {
         expect(isPanButton(press(0, true), false)).toBe(false);
         expect(isPanButton(press(0, true), true)).toBe(true);
         expect(isPanButton(press(0), true)).toBe(false);
+    });
+});
+
+describe("fieldEditFit (#824)", () => {
+    it("fits the whole field inside the rulers, centered in the room they leave", () => {
+        const fit = fieldEditFit(1000, 600, field, 22);
+        const left = fit.panX;
+        const top = fit.panY;
+        const right = fit.panX + field.width * fit.zoom;
+        const bottom = fit.panY + field.height * fit.zoom;
+        expect(left).toBeGreaterThanOrEqual(22);
+        expect(top).toBeGreaterThanOrEqual(22);
+        expect(right).toBeLessThanOrEqual(1000);
+        expect(bottom).toBeLessThanOrEqual(600);
+        // Centered in the room right of and below the rulers
+        expect(left - 22).toBeCloseTo(1000 - right);
+        expect(top - 22).toBeCloseTo(600 - bottom);
+    });
+
+    it("makes room for the touch layout's thicker rulers", () => {
+        expect(fieldEditFit(1000, 600, field, 44).zoom).toBeLessThan(
+            fieldEditFit(1000, 600, field, 22).zoom,
+        );
     });
 });

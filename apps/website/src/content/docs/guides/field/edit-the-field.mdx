@@ -43,7 +43,7 @@ import { Steps, Aside } from "@astrojs/starlight/components";
 
 The field is the surface you write for: its size, its step size, the lines that marchers' coordinates are measured from, and how it looks. Every show has one. Start from the template closest to where you perform, then change what's different about your field or floor.
 
-You edit the field on the field itself. Select <Ui k="sidebar.field" /> in the sidebar, or press <Kbd action="fieldEditMode" />. The toolbar becomes the <Ui k="fieldEditMode.bar.title" /> bar, rulers appear along the top and left of the field, the marchers fade and can't be picked, and the inspector holds the field's settings. Select <Ui k="fieldEditMode.bar.done" /> or press <Kbd action="fieldEditDone" /> when you're finished. You can also choose <Ui k="actions.field.editField" /> from the field's right-click menu or the command palette.
+You edit the field on the field itself. Select <Ui k="sidebar.field" /> in the sidebar, or press <Kbd action="fieldEditMode" />. The toolbar becomes the <Ui k="fieldEditMode.bar.title" /> bar, rulers appear along the top and left of the field, the marchers fade and can't be picked, and the inspector holds the field's settings. The whole field is fitted inside the rulers and holds still: you can't pan or zoom until you're done, and the sidebar and the timeline fade and can't be used. When you finish, the view goes back to where it was. Select <Ui k="fieldEditMode.bar.done" /> or press <Kbd action="fieldEditDone" /> when you're finished. You can also choose <Ui k="actions.field.editField" /> from the field's right-click menu or the command palette.
 
 <Media
   id="field-edit-mode"
@@ -215,4 +215,4 @@ A few display choices aren't part of the field, and apply to every show. Open se
 
 - [Step size warnings](/guides/field/step-size-warnings/): what the red paths mean and how to set the limit.
 - [Show settings](/guides/field/show-settings/): page and measure numbering and the show's defaults.
-- [Move around the field](/guides/workspace/move-around-the-field/): pan, zoom and fit, which work in this mode too.
+- [Move around the field](/guides/workspace/move-around-the-field/): pan, zoom and fit, outside this mode.
