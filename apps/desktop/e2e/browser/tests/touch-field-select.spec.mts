@@ -218,14 +218,10 @@ test("one finger inside a multi-selection's box moves the whole selection", asyn
         y: inside.y + by.y * scale,
     });
 
-    await expectSaved(show, 1, {
-        x: onGrid(503, grid.centerFront.x, grid),
-        y: onGrid(304 + by.y, grid.centerFront.y, grid),
-    });
-    await expectSaved(show, 3, {
-        x: onGrid(703, grid.centerFront.x, grid),
-        y: onGrid(284 + by.y, grid.centerFront.y, grid),
-    });
+    // A group moves in whole rounding steps and keeps its offsets: marchers
+    // off the grid stay off it (docs/field/implementation-plan.md, Snapping)
+    await expectSaved(show, 1, { x: 503, y: 304 + by.y });
+    await expectSaved(show, 3, { x: 703, y: 284 + by.y });
     await expectSaved(show, 2, { x: 603, y: 354 });
 });
 
