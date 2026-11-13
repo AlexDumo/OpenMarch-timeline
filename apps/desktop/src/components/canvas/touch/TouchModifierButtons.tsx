@@ -236,6 +236,22 @@ function useTogglePress(toggle: TouchToggle, onExplain: () => void) {
     };
 }
 
+/** The zoom controls' box in `parent`'s pixels, so the pill doesn't cover them */
+function zoomControlsIn(parent: HTMLElement): Rect[] {
+    const zoom = document.querySelector<HTMLElement>("[data-zoom-controls]");
+    if (!zoom) return [];
+    const at = parent.getBoundingClientRect();
+    const box = zoom.getBoundingClientRect();
+    return [
+        {
+            left: box.left - at.left,
+            top: box.top - at.top,
+            width: box.width,
+            height: box.height,
+        },
+    ];
+}
+
 /** The field drawing and the marchers, in the field element's pixels */
 function fieldLayout(marchers: FieldMarchers | null): {
     field: Rect | null;
@@ -361,6 +377,7 @@ export default function TouchModifierButtons({
                 { width: pill.offsetWidth, height: pill.offsetHeight },
                 field,
                 dots,
+                zoomControlsIn(parent),
             ),
         );
     }, [marchers]);
