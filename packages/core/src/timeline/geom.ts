@@ -14,6 +14,7 @@ import type {
     Diagnostic,
     FlatSpan,
     FtlTrail,
+    RouteTiming,
     ShapeRow,
     SpanKind,
     TransitionRow,
@@ -984,6 +985,150 @@ function placeOfIndex(W: RoutePath, index: number): number {
 }
 
 /**
+ * R-15 with pins (spec Appendix M, pathways step 5): the knots of a route's clock on `path` (the
+ * reference walk `W` for a group lane, the own path for an own lane). `us` are beats into the move
+ * and `xs` places on `path`, from `(0, 0)` to `(c, L)`. `active` is false when no pin survives T-6,
+ * and the walk is then the one without timing, bit for bit. `dropped` counts T-6's drops (`D-PIN`).
+ */
+export interface RouteClock {
+    us: number[];
+    xs: number[];
+    c: number;
+    L: number;
+    active: boolean;
+    dropped: number;
+}
+
+/**
+ * R-15 (pins) and T-6: the clock of a route with `timing` on `path` over a move of `c` beats.
+ * A pin whose `at` isn't finite or isn't in `(0, c)`, or whose id isn't in `points`, is dropped;
+ * then, in route order (ties in stored order), so is a pin whose `at` isn't strictly greater than
+ * the last kept knot's, or whose place is smaller. Null when the route has no pin stored.
+ */
+export function routeClock(
+    path: RoutePath,
+    points: readonly IdentifiedPoint[],
+    timing: RouteTiming | null | undefined,
+    c: number,
+): RouteClock | null {
+    const pins = Array.isArray(timing?.pins) ? timing.pins : null;
+    if (!pins || pins.length === 0) return null;
+    const candidates: { at: number; x: number; i: number; s: number }[] = [];
+    pins.forEach((pin, s) => {
+        const at = (pin as { at?: unknown } | null)?.at;
+        if (typeof at !== "number" || !Number.isFinite(at)) return;
+        if (!(at > 0 && at < c)) return;
+        const id = (pin as { point?: unknown }).point;
+        const i =
+            typeof id === "string" ? points.findIndex((p) => p.id === id) : -1;
+        if (i < 0) return;
+        candidates.push({ at, x: placeOfIndex(path, i), i, s });
+    });
+    candidates.sort((a, b) => a.i - b.i || a.s - b.s);
+    const us = [0];
+    const xs = [0];
+    for (const k of candidates) {
+        if (k.at > us[us.length - 1]! && k.x >= xs[xs.length - 1]!) {
+            us.push(k.at);
+            xs.push(k.x);
+        }
+    }
+    us.push(c);
+    xs.push(path.L);
+    const kept = us.length - 2;
+    return {
+        us,
+        xs,
+        c,
+        L: path.L,
+        active: kept > 0,
+        dropped: pins.length - kept,
+    };
+}
+
+/**
+ * R-15: the place `x(u)` at `u` beats into the move: a knot's place exactly at its beat, else
+ * `x_i + (u − u_i) · (x_{i+1} − x_i) / (u_{i+1} − u_i)`; 0 at or before the start, `L` at or after
+ * the end.
+ */
+export function clockPlace(clock: RouteClock, u: number): number {
+    const { us, xs } = clock;
+    if (u <= 0) return 0;
+    if (u >= clock.c) return clock.L;
+    let i = 0;
+    while (u >= us[i + 1]!) i++;
+    if (u === us[i]) return xs[i]!;
+    return (
+        xs[i]! + ((u - us[i]!) * (xs[i + 1]! - xs[i]!)) / (us[i + 1]! - us[i]!)
+    );
+}
+
+/**
+ * The beats into the move at which the clock first reaches place `x` (the inverse of
+ * {@link clockPlace}, for the app's hints): the earliest beat of a stop.
+ */
+export function clockBeatAt(clock: RouteClock, x: number): number {
+    const { us, xs } = clock;
+    if (x <= 0) return 0;
+    if (x >= clock.L) return clock.c;
+    let i = 0;
+    while (i + 1 < xs.length - 1 && x > xs[i + 1]!) i++;
+    const dx = xs[i + 1]! - xs[i]!;
+    if (dx <= 0) return us[i]!;
+    return us[i]! + ((x - xs[i]!) * (us[i + 1]! - us[i]!)) / dx;
+}
+
+/** The place of stored point `index` on `path` (R-14 "represented"), as the clock's knots read it */
+export const placeOfPoint = (path: RoutePath, index: number): number =>
+    placeOfIndex(path, index);
+
+/**
+ * M-COUNTS (spec Appendix M): whole counts `1 ≤ n_1 < … < n_n ≤ c − 1` for the ideal counts `ys`
+ * (in order) that minimize `Σ |y_i − n_i|`, the lexicographically earliest among equal sums. Two
+ * places that round to one count trade: one takes the next count over. Null with more places
+ * than counts between the ends.
+ */
+export function placeOnCounts(
+    ys: readonly number[],
+    c: number,
+): number[] | null {
+    const n = ys.length;
+    const K = Math.floor(c) - 1;
+    if (n === 0) return [];
+    if (n > K) return null;
+    // suf[i][j]: least cost of items i.. with item i on count j + 1 and later ones after it
+    const suf: number[][] = Array.from({ length: n }, () =>
+        new Array<number>(K).fill(Infinity),
+    );
+    for (let i = n - 1; i >= 0; i--) {
+        let bestAfter = Infinity;
+        for (let j = K - 1; j >= 0; j--) {
+            const room = K - 1 - j >= n - 1 - i;
+            const rest = i === n - 1 ? 0 : bestAfter;
+            if (room && rest < Infinity)
+                suf[i]![j] = Math.abs(ys[i]! - (j + 1)) + rest;
+            if (i < n - 1) bestAfter = Math.min(bestAfter, suf[i + 1]![j]!);
+        }
+    }
+    const out: number[] = [];
+    let target = Math.min(...suf[0]!);
+    let from = 0;
+    for (let i = 0; i < n; i++) {
+        let pick = -1;
+        for (let j = from; j < K; j++)
+            if (Math.abs(suf[i]![j]! - target) <= 1e-9 * (1 + target)) {
+                pick = j;
+                break;
+            }
+        if (pick < 0) return null;
+        out.push(pick + 1);
+        target -= Math.abs(ys[i]! - (pick + 1));
+        from = pick + 1;
+    }
+    return out;
+}
+
+/**
  * R-14′ item 4: the place of `anchor` on the reference walk `W` of a route with stored `points`.
  * An id not in the route reads as `from` for `a` and `to` for `b` (T-1); reversed ends are
  * evaluated as written (T-2). `bad` says either happened (`D-ANCHOR`).
@@ -1287,6 +1432,61 @@ export interface LaneWalk {
     schedule?: GroupSchedule;
     /** The lane's Adjust on `schedule`, cached per lane (J.7); null or absent for none */
     adjust?: ResolvedAdjust | null;
+    /** The route's pins (pathways step 5, R-15); absent or null for none */
+    timing?: RouteTiming | null;
+    /** The move's length `c` in beats, which the pins' clock spans; needed with `timing` */
+    c?: number;
+    /** A group lane's clock on `schedule.W`, cached per route (J.7); computed here when absent */
+    clock?: RouteClock | null;
+}
+
+/**
+ * R-14′ with pins (Appendix M): a group member at place `x` on the reference walk, `m ≥ 1`. The
+ * first leg before `D_1`, the placed (and adjusted) walk on the shared part, the last leg after
+ * `D_m`. The caller handles the ends.
+ */
+export function groupPointAtPlace(walk: GroupMemberWalk, x: number): XY {
+    const { schedule, offset, first, last, adjust } = walk;
+    const { W } = schedule;
+    const m = W.V.length - 2;
+    const D1 = W.D[1]!;
+    const Dm = W.D[m]!;
+    if (x < D1) return legPoint(first!, x / D1);
+    if (x <= Dm) {
+        const q = placed(routePointAtDistance(W, x), offset);
+        return adjust ? placed(q, adjustAt(adjust, x)) : q;
+    }
+    return legPoint(last!, (x - Dm) / (W.L - Dm));
+}
+
+/** A path with no kept inner point at `q` of the way: R-7's line, or its one arc leg (R-14″) */
+function lineOrArc(path: RoutePath, A: XY, B: XY, q: number): XY {
+    const only = path.pieces[0];
+    return only?.kind === "arc" ? arcPoint(A, B, only.k, q) : lerp(A, B, q);
+}
+
+/**
+ * R-14′ with pins: where a founding laned span is at `u` beats into the move, given the active
+ * clock (`clock.active`). `own` is the own path from `A` to `B`, or null for a group lane.
+ */
+function pinnedPoint(
+    clock: RouteClock,
+    u: number,
+    A: XY,
+    B: XY,
+    own: RoutePath | null,
+    group: GroupMemberWalk | null,
+): XY {
+    if (u <= 0) return A;
+    if (u >= clock.c) return B;
+    const x = clockPlace(clock, u);
+    const path = own ?? group!.schedule.W;
+    if (path.V.length === 2) {
+        const q = path.L < EPS_GEOM ? u / clock.c : x / path.L;
+        return lineOrArc(path, A, B, q);
+    }
+    if (own) return routePointAtDistance(own, x);
+    return groupPointAtPlace(group!, x);
 }
 
 /**
@@ -1300,6 +1500,8 @@ export interface LaneWalk {
  * @param lane the slot's lane, if it has one
  * @param founding whether the span is founding (R-3); a lane's join or resume walks straight
  *   until the entry rule (plan step 12)
+ * @param u beats into the move (`b − T.start`), which a route's pins time the walk by (R-15,
+ *   Appendix M); without it, or with no pin left, the walk is by `p` as before, bit for bit
  */
 export function walkedPoint(
     t: Pick<TransitionRow, "style" | "params">,
@@ -1308,22 +1510,44 @@ export function walkedPoint(
     p: number,
     lane: LaneWalk | undefined,
     founding: boolean,
+    u: number = NaN,
 ): XY {
     if (lane) {
         if (!founding) return lerp(A, B, p); // joins and resumes walk straight (step 15)
         const { route, offset } = lane;
-        if (offset)
+        const pinned = !!lane.timing && lane.c !== undefined && !isNaN(u);
+        if (offset) {
             // a group lane walks the group schedule, placed by its offset and Adjust (R-14′)
-            return groupPoint(
-                groupMemberWalk(
-                    lane.schedule ?? groupSchedule(route),
-                    A,
-                    B,
-                    offset,
-                    lane.adjust ?? null,
-                ),
-                p,
+            const schedule = lane.schedule ?? groupSchedule(route);
+            const walk = groupMemberWalk(
+                schedule,
+                A,
+                B,
+                offset,
+                lane.adjust ?? null,
             );
+            if (pinned) {
+                // pins (Appendix M): the group clock on W, shared by every lane of the route
+                const clock =
+                    lane.clock !== undefined
+                        ? lane.clock
+                        : routeClock(
+                              schedule.W,
+                              route.points,
+                              lane.timing,
+                              lane.c!,
+                          );
+                if (clock?.active)
+                    return pinnedPoint(clock, u, A, B, null, walk);
+            }
+            return groupPoint(walk, p);
+        }
+        if (pinned) {
+            // an own lane's clock is measured on its own path from A (Appendix M)
+            const own = routePath(A, route.points, B, route);
+            const clock = routeClock(own, route.points, lane.timing, lane.c!);
+            if (clock?.active) return pinnedPoint(clock, u, A, B, own, null);
+        }
         if (route.points.length === 0 && !isBulge(route.toBulge))
             return lerp(A, B, p);
         return routePoint(routePath(A, route.points, B, route), p);

@@ -58,7 +58,8 @@ export type DiagnosticCode =
     | "D-ORDER-FALLBACK"
     | "D-ANCHOR"
     | "D-ADJUST-CLAMP"
-    | "D-ADJUST-TIE";
+    | "D-ADJUST-TIE"
+    | "D-PIN";
 
 export interface Diagnostic {
     code: DiagnosticCode;
@@ -236,9 +237,26 @@ export interface RouteGeometry {
     toBulge?: number;
 }
 
+/**
+ * A pin (spec J.2, Appendix M, pathways step 5): whoever walks the route is on point `point` at
+ * `at` beats into the move. The app writes whole counts in `[1, c − 1]` (I-P2).
+ */
+export interface RoutePin {
+    point: string;
+    at: number;
+}
+
+/** A route's `timing` (spec J.2, K1): its pins, in route order. Absent or null for none. */
+export interface RouteTiming {
+    v: 1;
+    pins?: RoutePin[];
+}
+
 /** A row of the routes table (spec 5.1, D-19). */
 export interface RouteRow {
     geometry: RouteGeometry;
+    /** Its pins (pathways step 5, R-15); absent or null for none */
+    timing?: RouteTiming | null;
 }
 
 export interface TransitionRow {

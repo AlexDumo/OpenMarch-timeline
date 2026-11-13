@@ -22,8 +22,11 @@ import {
     makeTrail,
     placed,
     resolveAdjust,
+    routeClock,
+    clockBeatAt,
     routePath,
     routePiecePoint,
+    type RouteClock,
     type GroupLeg,
     type GroupMemberWalk,
     type GroupSchedule,
@@ -160,6 +163,41 @@ interface Piece {
     pa: number;
     pb: number;
     cut(u0: number, u1: number): Shape;
+}
+
+/**
+ * R-20 with pins (Appendix M): a laned span's pieces, built over the progress `p` it has with no
+ * timing (where the place is `p · L`), re-timed by the route's clock. Each piece is split at every
+ * knot's place, so the clock is linear along it, and its progress range is mapped through the
+ * clock; standing at a stop draws nothing.
+ */
+function timedPieces(pieces: readonly Piece[], clock: RouteClock): Piece[] {
+    const { L, c } = clock;
+    if (!clock.active || !(L > 0)) return [...pieces];
+    const cuts = clock.xs.slice(1, -1).map((x) => x / L);
+    const retime = (p: number) => clockBeatAt(clock, p * L) / c;
+    const out: Piece[] = [];
+    for (const piece of pieces) {
+        const inside = cuts.filter((q) => q > piece.pa && q < piece.pb);
+        const bounds = [piece.pa, ...inside, piece.pb];
+        const width = piece.pb - piece.pa;
+        for (let i = 0; i + 1 < bounds.length; i++) {
+            const f0 = width > 0 ? (bounds[i]! - piece.pa) / width : 0;
+            const f1 = width > 0 ? (bounds[i + 1]! - piece.pa) / width : 1;
+            const pa = retime(bounds[i]!);
+            const pb = retime(bounds[i + 1]!);
+            out.push({
+                pa,
+                pb,
+                cut: (u0, u1) =>
+                    piece.cut(
+                        u0 <= 0 ? f0 : f0 + u0 * (f1 - f0),
+                        u1 >= 1 ? f1 : f0 + u1 * (f1 - f0),
+                    ),
+            });
+        }
+    }
+    return out;
 }
 
 const linePiece = (pa: number, pb: number, A: XY, B: XY): Piece => ({
@@ -1001,9 +1039,12 @@ export function createWalkedPaths(
                     `lane on ${t.id}:${lane.slot} has no route ${lane.route} (I-D3)`,
                 );
             const route: RouteWalk = geometry;
+            // pins (Appendix M): the same pieces, re-timed by the route's clock
+            const timing = host.routes?.[lane.route]?.timing;
+            const c = t.end - t.start;
             if (lane.offset) {
                 const schedule = scheduleOf(lane.route, route);
-                return groupPieces(
+                const pieces = groupPieces(
                     groupMemberWalk(
                         schedule,
                         A,
@@ -1012,10 +1053,19 @@ export function createWalkedPaths(
                         adjustOf(lane, schedule, route),
                     ),
                 );
+                const clock = timing
+                    ? routeClock(schedule.W, route.points, timing, c)
+                    : null;
+                return clock?.active ? timedPieces(pieces, clock) : pieces;
             }
+            const own = routePath(A, route.points, B, route);
+            const clock = timing
+                ? routeClock(own, route.points, timing, c)
+                : null;
             if (route.points.length === 0 && !route.toBulge)
                 return [linePiece(0, 1, A, B)];
-            return routePieces(routePath(A, route.points, B, route));
+            const pieces = routePieces(own);
+            return clock?.active ? timedPieces(pieces, clock) : pieces;
         }
         if (t.style === "arc") return bulgePieces(A, B, t.params?.bulge ?? 0);
         return [linePiece(0, 1, A, B)];

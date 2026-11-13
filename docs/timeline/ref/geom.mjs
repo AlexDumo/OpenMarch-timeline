@@ -165,7 +165,12 @@ export function routeWalk(A, pts, B, F = A, G = B, toBulge = undefined) {
       if (p >= 1) return B;
       if (V.length === 2 && pieces[0]) return arcPoint(A, B, pieces[0].arc, p);   // one arc leg is R-8's arc itself
       if (V.length === 2 || L < EPS_GEOM) return lerp(A, B, p);   // [A, B] is R-7, bit for bit (QA-RT-2)
-      const d = p * L;
+      return this.atX(p * L);
+    },
+    // walk_x (R-14′): R-14's Evaluation entered at a distance; V[0] before it, the last vertex past it
+    atX(d) {
+      if (d <= 0) return V[0];
+      if (d >= L) return V[V.length - 1];
       let j = 0;
       while (j < V.length - 2 && !(d < D[j + 1])) j++;
       const x = d - D[j], pc = pieces[j];
@@ -421,5 +426,55 @@ export function groupWalk(A, pts, B, F, G, o, adjust = null, toBulge = undefined
       if (p <= uLast) return placedAt(W.at(p), p * W.L);
       return last.at((p - uLast) / (1 - uLast));
     },
+    // pins (Appendix M): the member where the reference walk is at place x (the caller handles the ends)
+    atX(x) {
+      if (x < W.D[1]) return first.at(x / W.D[1]);
+      if (x <= W.D[m]) return placedAt(W.atX(x), x);
+      return last.at((x - W.D[m]) / (W.L - W.D[m]));
+    },
   };
+}
+
+// R-15 with pins (Appendix M, plan step 5): the clock's knots [u, x] on the walk `R` (W for a group lane,
+// the own path for an own lane), or null when no pin survives T-6 (then the walk is item 9's, bit for bit).
+// A pin's place is D of the last kept vertex whose stored index is at or before its point's, else 0.
+export function pinKnots(R, pts, timing, c) {
+  const pins = timing && Array.isArray(timing.pins) ? timing.pins : [];
+  if (pins.length === 0) return null;
+  const placeOf = (i) => { for (let k = R.V.length - 2; k >= 1; k--) if (R.src[k] <= i) return R.D[k]; return 0; };
+  const ok = [];
+  pins.forEach((pin, s) => {
+    const at = pin ? pin.at : undefined, i = pin ? pts.findIndex((q) => q.id === pin.point) : -1;
+    if (i >= 0 && typeof at === 'number' && Number.isFinite(at) && at > 0 && at < c) ok.push({ at, i, s });
+  });
+  ok.sort((a, b) => a.i - b.i || a.s - b.s);
+  const K = [[0, 0]];
+  for (const { at, i } of ok) { const x = placeOf(i), last = K[K.length - 1]; if (at > last[0] && x >= last[1]) K.push([at, x]); }
+  if (K.length === 1) return null;
+  K.push([c, R.L]);
+  return K;
+}
+
+// x(u): a knot's own place at its beat, else linear between the knots around u
+export function knotPlace(K, u) {
+  const end = K[K.length - 1];
+  if (u <= 0) return 0;
+  if (u >= end[0]) return end[1];
+  let i = K.length - 2;
+  while (K[i][0] > u) i--;
+  if (K[i][0] === u) return K[i][1];
+  return K[i][1] + ((u - K[i][0]) * (K[i + 1][1] - K[i][1])) / (K[i + 1][0] - K[i][0]);
+}
+
+// A founding laned span at progress p, u beats into a move of c beats (R-14′; pins by R-15, Appendix M)
+export function laneWalkAt(o, dst, g, lane, timing, p, u, c) {
+  const walk = lane.offset ? groupWalk(o, g.points, dst, g.from, g.to, lane.offset, lane.adjust ?? null, g.toBulge) : routeWalk(o, g.points, dst, g.from, g.to, g.toBulge);
+  const R = lane.offset ? walk.W : walk;
+  const K = pinKnots(R, g.points, timing, c);
+  if (!K) return walk.at(p);
+  if (u <= 0) return o;
+  if (u >= c) return dst;
+  const x = knotPlace(K, u);
+  if (R.V.length === 2) { const q = R.L < EPS_GEOM ? u / c : x / R.L; return R.pieces[0] ? arcPoint(o, dst, R.pieces[0].arc, q) : lerp(o, dst, q); }
+  return walk.atX(x);
 }
