@@ -226,7 +226,10 @@ test("on a narrow screen the tabs get shorter, and all four fit beside the 3D Vi
         titleBarTabs(page).getByTestId("workspace-view-switch"),
     ).toBeVisible();
     // Alignment shows as "Align", and keeps its name; the chevron gives its room to the tabs
-    await expect(tab(page, "Alignment")).toHaveText("Align");
+    const alignmentLabel = (text: string) =>
+        tab(page, "Alignment").getByText(text, { exact: true });
+    await expect(alignmentLabel("Align")).toBeVisible();
+    await expect(alignmentLabel("Alignment")).toBeHidden();
     await expect(page.getByTestId("toolbar-panel-toggle")).toBeHidden();
     // Every tab is on screen whole: nothing to scroll
     expect(await tabRowOverflows(page)).toBe(false);
@@ -253,7 +256,8 @@ test("on a narrow screen the tabs get shorter, and all four fit beside the 3D Vi
 
     // Wide again, the full tabs and the chevron are back
     await page.setViewportSize({ width: 1600, height: 1000 });
-    await expect(tab(page, "Alignment")).toHaveText("Alignment");
+    await expect(alignmentLabel("Alignment")).toBeVisible();
+    await expect(alignmentLabel("Align")).toBeHidden();
     await expect(page.getByTestId("toolbar-panel-toggle")).toBeVisible();
 });
 
