@@ -19,6 +19,7 @@ import {
     groupSchedule,
     lerp,
     makeAlongTrail,
+    makeLoop,
     makeTrail,
     placed,
     resolveAdjust,
@@ -778,6 +779,64 @@ export function createWalkedPaths(
         }
         return order;
     };
+    /** R-13‴: a closed outline a follow move goes round, read once per transition */
+    const loops = new Map<number, RoutePath | null>();
+    const loopOf = (t: TransitionRow): RoutePath | null => {
+        if (loops.has(t.id)) return loops.get(t.id)!;
+        const route =
+            t.route == null ? null : (host.routes?.[t.route]?.geometry ?? null);
+        const loop = makeLoop(route);
+        loops.set(t.id, loop);
+        return loop;
+    };
+    /**
+     * R-13‴ (pathways step 10): a member going round a closed outline: straight onto it, round
+     * it from its start to its end (past the seam and round again as often as it goes), then
+     * straight to its spot, at one speed. With no outline, straight to its spot.
+     */
+    function aroundPieces(
+        t: TransitionRow,
+        order: FtlOrder,
+        q: number,
+        around: NonNullable<FtlEntryInfo["around"]>,
+    ): Piece[] {
+        const { entry } = order;
+        const origin = resolver.positionAt(entry.members[q]!, t.start);
+        const target = order.targets.get(entry.members[q]!)!;
+        const loop = loopOf(t);
+        if (!loop)
+            return dist(origin, target) >= EPS_GEOM
+                ? [linePiece(0, 1, origin, target)]
+                : [];
+        const d0 = entry.startDist[q]!;
+        const d1 = entry.endDist[q]!;
+        const inS = around.inStraight[q]!;
+        const outS = around.straight[q]!;
+        const total = inS + (d1 - d0) + outS;
+        if (!(total >= EPS_GEOM)) return [];
+        const out: Piece[] = [];
+        if (inS > 0)
+            out.push(linePiece(0, inS / total, origin, around.enter[q]!));
+        const progressOf = (d: number) => (inS + d - d0) / total;
+        const L = loop.L;
+        for (let k = Math.floor(d0 / L); k * L < d1; k++) {
+            const lo = Math.max(d0, k * L);
+            const hi = Math.min(d1, (k + 1) * L);
+            if (hi > lo)
+                out.push(
+                    ...drawnPieces(
+                        { start: k * L, path: loop },
+                        lo,
+                        hi,
+                        progressOf,
+                    ),
+                );
+        }
+        if (outS > 0)
+            out.push(linePiece(progressOf(d1), 1, around.turn[q]!, target));
+        return out;
+    }
+
     const trailOf = (t: TransitionRow, entry: FtlEntryInfo): FtlTrail => {
         let trail = trails.get(t.id);
         if (trail) return trail;
@@ -924,6 +983,7 @@ export function createWalkedPaths(
     /** A founding follow-the-leader span (R-10, R-13″): the marcher's stretch of the trail. */
     function ftlPieces(t: TransitionRow, order: FtlOrder, q: number): Piece[] {
         const { entry } = order;
+        if (entry.around) return aroundPieces(t, order, q, entry.around);
         const d0 = entry.startDist[q]!;
         const d1 = entry.endDist[q]!;
         // R-13″: the way to its end, then straight to its spot, at one speed

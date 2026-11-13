@@ -97,6 +97,12 @@ export interface TrailTarget {
      * (owner, 2026-11-10: drag the trail out of the other end instead)
      */
     along?: boolean;
+    /**
+     * Whether the line goes round a closed outline (R-13‴, step 10): the target's `from`, `points`,
+     * `to` and `toBulge` are then the outline in walking order, drawn closed; it isn't opened for
+     * point edits (AP-T15), and Reverse goes the other way round (AP-T14)
+     */
+    around?: boolean;
 }
 
 /** A member of a group path: where it starts and ends, and its lane's offset from the reference */
@@ -360,14 +366,16 @@ function targetOfTrail(
         to: xy(ends.get(m) ?? resolver.positionAt(m, trail.end)),
     }));
     const leader = members.at(-1)!;
+    // Round an outline (step 10): the outline itself, from its seam round and back
+    const seam = trail.around ? xy(trail.geometry.from) : null;
     return {
         timelineId: trail.timelineId,
         transitionId: trail.transitionId,
         marcherId: leader.marcherId,
         start: trail.start,
         end: trail.end,
-        from: leader.from,
-        to: entrance ?? members[0]!.to,
+        from: seam ?? leader.from,
+        to: seam ?? entrance ?? members[0]!.to,
         routeId: trail.routeId,
         points: trail.geometry.points,
         ...toBulgeOf(trail.geometry),
@@ -378,6 +386,7 @@ function targetOfTrail(
             leaderId: leader.marcherId,
             reverse: trail.reverse,
             along: trail.along,
+            ...(trail.around ? { around: true } : {}),
         },
     };
 }

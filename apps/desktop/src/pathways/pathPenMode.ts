@@ -32,6 +32,13 @@ import type { ToolEnv } from "@/shapes/tool/toolKind";
 import type { XY } from "@/shapes/types";
 import { refitNeeded, type PathTarget } from "./pathTarget";
 import {
+    aroundArrows,
+    aroundLine,
+    aroundOutline,
+    aroundPlanOf,
+    goingRound,
+} from "./followAround";
+import {
     followEnds,
     followHit,
     followDrawnPlanOf,
@@ -425,6 +432,8 @@ class PathPenMode implements FieldMode {
         // The Follow tool, its ends pulsing: a press on an end grabs it and drags out the first
         // leg; a marcher in the middle of the line, or the empty field, takes no press (DL-4)
         if (s.phase === "drawing" && s.follow && s.follow.grabbed === null) {
+            // Going round (step 10): nothing on the field to press; the bar holds its choices
+            if (goingRound(s.follow)) return;
             const env = envOf();
             const hit = env
                 ? followHit(s.follow, pointer.field, env.hitRadius)
@@ -873,6 +882,7 @@ class PathPenMode implements FieldMode {
         if (s.phase === "drawing") {
             // The Follow tool's ends pulse: the hand over an end, nothing elsewhere (DL-4)
             if (s.follow && s.follow.grabbed === null) {
+                if (goingRound(s.follow)) return "default";
                 const env = envOf();
                 const hit = env
                     ? followHit(s.follow, pointer.field, env.hitRadius)
@@ -1069,7 +1079,9 @@ export function drawingOf(
     if (session === last.session) return last.drawing;
     const drawing = session
         ? session.follow
-            ? followDrawing(session)
+            ? goingRound(session.follow)
+                ? aroundDrawing(session)
+                : followDrawing(session)
             : buildDrawing(session)
         : null;
     last = { session, drawing };
@@ -1166,6 +1178,43 @@ function followDrawing(session: PathSession): FieldModeDrawing {
         ...(tipText && moving ? { tip: { at: moving, text: tipText } } : {}),
         ...grabEndTip(follow),
         ...realMarchers(session, starts, line, keep ? spots : null),
+    };
+}
+
+/**
+ * Going round (step 10, DO-7): the outline drawn closed, arrows round it the way the line goes
+ * (one at the leader's start), a ring on every member (the leader's its own), and the real
+ * marchers where they stop round it, or walking round with ▶ Preview, their starts as ghosts.
+ */
+function aroundDrawing(session: PathSession): FieldModeDrawing {
+    const follow = session.follow!;
+    const plan = aroundPlanOf(follow);
+    const line = plan ? aroundLine(follow, plan) : [...follow.order];
+    const leaderId = line.at(-1);
+    const starts = line.map((id) => follow.starts.get(id)!);
+    const leaderLabel = tolgee.t("pathways.rings.leader", "Leads the line");
+    const followerLabel = tolgee.t(
+        "pathways.rings.follower",
+        "Follows the leader",
+    );
+    return {
+        outline: aroundOutline(follow),
+        openOutline: false,
+        pathLine: "edited",
+        stage: "drawing",
+        spots: plan ? plan.spots.map(([x, y]) => ({ x, y })) : [],
+        walks: [],
+        handles: [],
+        addHandles: [],
+        selectedHandles: [],
+        memberRings: line.map((id) => ({
+            at: follow.starts.get(id)!,
+            marcherId: id,
+            kind: id === leaderId ? "own" : "group",
+            label: id === leaderId ? leaderLabel : followerLabel,
+        })),
+        pullArrows: aroundArrows(follow),
+        ...realMarchers(session, starts, line, null),
     };
 }
 

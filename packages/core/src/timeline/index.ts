@@ -58,6 +58,12 @@ export {
     groupPoint,
     makeAlongTrail,
     alongEnds,
+    makeLoop,
+    loopPoint,
+    nearestOnLoop,
+    loopSnap,
+    aroundEnds,
+    aroundPoint,
     alongPoint,
     placed,
     adjustAt,
@@ -78,6 +84,7 @@ export type {
     GroupMemberWalk,
     GroupLeg,
     ResolvedAdjust,
+    AroundEnds,
 } from "./geom";
 export {
     adjustRefusal,
@@ -117,6 +124,7 @@ export {
     MAX_ROUTE_OFFSET,
     COORD_BOUND,
     MAX_ABS_BULGE,
+    MAX_LAPS,
 } from "./validate";
 export type {
     ValidationResult,

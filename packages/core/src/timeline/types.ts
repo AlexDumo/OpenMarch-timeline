@@ -48,6 +48,20 @@ export interface FtlEntryInfo {
      * target over the last `straight[q]` of its walk.
      */
     along?: { turn: XY[]; straight: number[] };
+    /**
+     * R-13‴ (pathways step 10): set when the members go round a closed outline. `startDist[q]`
+     * and `endDist[q]` are then distances round the outline as walked (the end past the start,
+     * whole times round included); the member walks straight from its origin to `enter[q]` over
+     * the first `inStraight[q]` of its walk, round the outline, then straight from `turn[q]` to
+     * its target over the last `straight[q]`. `length` is the outline's length once round.
+     */
+    around?: {
+        enter: XY[];
+        inStraight: number[];
+        turn: XY[];
+        straight: number[];
+        length: number;
+    };
 }
 
 export type DiagnosticCode =
@@ -205,8 +219,17 @@ export interface PathParams {
      * Follow-the-leader with no shape only (R-13″, pathways step 4b): `"along"` ends each member
      * on the way (line-up, then the trail's drawn part) at its spot's projection, then straight
      * to the spot. Absent for R-13′.
+     *
+     * `"around"` (R-13‴, pathways step 10): the trail route is a closed outline and each member
+     * goes round it, from where it stands on it to its spot's place on it, the way the outline
+     * runs.
      */
-    ends?: "along";
+    ends?: "along" | "around";
+    /**
+     * With `ends: "around"` only (R-13‴): whole times round the outline added to each member's
+     * walk, a whole number of at least 1. Absent for none.
+     */
+    laps?: number;
 }
 
 /** One inner point of a route (spec 5.2, v0.9): a corner, or smooth with a tension (step 2). */
@@ -234,6 +257,12 @@ export interface RouteGeometry {
     points: RoutePoint[];
     /** The last leg's bulge, the leg arriving at `to` (R-14″, step 10a); absent for none */
     toBulge?: number;
+    /**
+     * A closed outline (R-13‴, pathways step 10): the walk runs from `from` through the points
+     * and back to `to`, which is the same point as `from`; `toBulge` is then the closing leg's.
+     * Its points are corners or arc legs. Absent for an open route.
+     */
+    closed?: true;
 }
 
 /** A row of the routes table (spec 5.1, D-19). */
@@ -361,4 +390,10 @@ export interface FtlTrail {
      * member origins, tail first). `destOffset` is then the way's whole length.
      */
     lineUp?: XY[];
+    /**
+     * R-13‴ (pathways step 10): round a closed outline, the outline as walked once round (R-14's
+     * walk from the route's `from` back to it). `at(d)` is then the outline at `d` modulo its
+     * length, so a walk may pass the seam and go round more than once.
+     */
+    loop?: import("./geom").RoutePath;
 }

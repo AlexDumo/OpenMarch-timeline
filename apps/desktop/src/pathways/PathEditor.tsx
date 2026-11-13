@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { T } from "@tolgee/react";
 import {
+    ArrowClockwiseIcon,
     ArrowCounterClockwiseIcon,
     ArrowsLeftRightIcon,
     ArrowsMergeIcon,
@@ -50,6 +51,13 @@ import {
     setFollowSpacing,
 } from "./followDrag";
 import {
+    aroundPlanOf,
+    goingRound,
+    roundMaxOf,
+    setGoRound,
+    setRoundAmount,
+} from "./followAround";
+import {
     memberNow,
     memberOf,
     shapeOf,
@@ -81,7 +89,12 @@ const FIELD_NOTE_ROOM_PX = 40;
  * Reverse leader's tooltip, or why it's off: a dragged-out line ends along its trail, so the
  * other end can't lead (owner, 2026-11-10)
  */
-function reverseLabel(along: boolean | undefined): string {
+function reverseLabel(along: boolean | undefined, around?: boolean): string {
+    if (around)
+        return tolgee.t(
+            "pathways.trail.reverseAroundTip",
+            "Go the other way around the outline, as far. The one at the back leads.",
+        );
     return along
         ? tolgee.t(
               "timeline.refusals.trail.reverseAlong",
@@ -162,9 +175,15 @@ function trailBigSteps(
         session.follow && !keepsEndSpots(session.follow)
             ? followPlanOf(session)
             : null;
-    const distances = plan
-        ? plan.ends.map((e, q) => e - plan.startDist[q]!)
-        : trailDistances(trail.members, curveOf(shapeOf(session)).L);
+    // Going round (step 10): everyone goes the same distance round the outline
+    const round = goingRound(session.follow)
+        ? aroundPlanOf(session.follow)
+        : null;
+    const distances = round
+        ? round.distances
+        : plan
+          ? plan.ends.map((e, q) => e - plan.startDist[q]!)
+          : trailDistances(trail.members, curveOf(shapeOf(session)).L);
     const threshold = fieldProperties.stepSizeWarningThresholdInches;
     let worst: { size: StepSize; drill: string } | null = null;
     trail.members.forEach((m, q) => {
@@ -319,11 +338,13 @@ export function PathEditor({
     return (
         <>
             {session.phase === "drawing" && <PathPenBanner session={session} />}
-            {session.target.trail && session.follow?.grabbed !== null && (
-                <RichTips>
-                    <TrailLeaderMark session={session} />
-                </RichTips>
-            )}
+            {session.target.trail &&
+                (session.follow?.grabbed !== null ||
+                    goingRound(session.follow)) && (
+                    <RichTips>
+                        <TrailLeaderMark session={session} />
+                    </RichTips>
+                )}
             <RichTips>
                 <PathEditorBar
                     session={session}
@@ -367,7 +388,7 @@ function TrailLeaderMark({ session }: { session: PathSession }) {
             </span>
             {stored && (
                 <IconButton
-                    label={reverseLabel(trail.along)}
+                    label={reverseLabel(trail.along, trail.around)}
                     disabled={trail.along}
                     action="reverseTrail"
                     onClick={() => runAction("reverseTrail")}
@@ -391,7 +412,26 @@ function PathPenBanner({ session }: { session: PathSession }) {
             data-testid="path-pen-banner"
         >
             {/* With the key unbound, only the right-click is said */}
-            {session.follow && session.follow.grabbed === null ? (
+            {goingRound(session.follow) ? (
+                <T
+                    keyName="pathways.banner.goRound"
+                    defaultValue="Go around: {count} marchers follow {marcher} around the {shape} · <enter></enter> to finish · <esc></esc> to leave"
+                    params={{
+                        count: session.follow!.ids.length,
+                        marcher:
+                            session.target.trail?.members.at(-1)?.drill ?? "",
+                        shape:
+                            session.follow!.around!.outline.kind === "circle"
+                                ? tolgee.t("pathways.banner.circle", "circle")
+                                : tolgee.t(
+                                      "pathways.banner.boxOutline",
+                                      "box outline",
+                                  ),
+                        enter: () => <Shortcut action="applyShape" />,
+                        esc,
+                    }}
+                />
+            ) : session.follow && session.follow.grabbed === null ? (
                 <T
                     keyName="pathways.banner.followGrab"
                     defaultValue="Follow: drag a trail out of either end of the line · <esc></esc> to leave"
@@ -638,22 +678,34 @@ function PathEditorBar({
                             <Divider />
                         </>
                     )}
+                    {session.follow?.around?.canDrag &&
+                        session.follow.grabbed === null && (
+                            <FollowModeChoice session={session} />
+                        )}
+                    {goingRound(session.follow) && (
+                        <GoRoundControls session={session} />
+                    )}
                     {session.follow && session.follow.grabbed !== null && (
                         <FollowControls session={session} />
                     )}
                     <span className="flex items-center gap-2">
-                        <IconButton
-                            label={tolgee.t(
-                                "pathways.editor.removeLastPoint",
-                                "Remove last point",
-                            )}
-                            action="shapeRemoveLastPoint"
-                            disabled={session.points.length === 0}
-                            onClick={() => runAction("shapeRemoveLastPoint")}
-                            testId="path-remove-last"
-                        >
-                            <BackspaceIcon size={14} />
-                        </IconButton>
+                        {/* Going around draws nothing, so there's no point to take back */}
+                        {!goingRound(session.follow) && (
+                            <IconButton
+                                label={tolgee.t(
+                                    "pathways.editor.removeLastPoint",
+                                    "Remove last point",
+                                )}
+                                action="shapeRemoveLastPoint"
+                                disabled={session.points.length === 0}
+                                onClick={() =>
+                                    runAction("shapeRemoveLastPoint")
+                                }
+                                testId="path-remove-last"
+                            >
+                                <BackspaceIcon size={14} />
+                            </IconButton>
+                        )}
                         <IconButton
                             label={tolgee.t("pathways.editor.cancel", "Cancel")}
                             action="cancelAlignmentUpdates"
@@ -855,7 +907,7 @@ function PathEditorBar({
                     {stored && trail && (
                         <>
                             <IconButton
-                                label={reverseLabel(trail.along)}
+                                label={reverseLabel(trail.along, trail.around)}
                                 disabled={trail.along}
                                 action="reverseTrail"
                                 onClick={() => runAction("reverseTrail")}
@@ -893,6 +945,254 @@ function PathEditorBar({
                 </>
             )}
         </div>
+    );
+}
+
+/**
+ * The Follow tool on a circle or box outline (step 10, DO-1): Go round, or drag a trail out of
+ * the line instead. Each a registered command (`followGoRound` switches).
+ */
+function FollowModeChoice({ session }: { session: PathSession }) {
+    const on = goingRound(session.follow);
+    return (
+        <>
+            <span
+                className="flex items-center gap-2"
+                role="group"
+                aria-label={tolgee.t(
+                    "pathways.editor.followMode",
+                    "How the line follows",
+                )}
+                data-testid="follow-mode"
+            >
+                <IconButton
+                    label={tolgee.t(
+                        "pathways.editor.goRoundTip",
+                        "Go around: everyone follows the one ahead around the outline they stand on",
+                    )}
+                    action="followGoRound"
+                    pressed={on}
+                    onClick={() => setGoRound(true)}
+                    testId="follow-go-round"
+                >
+                    <ArrowClockwiseIcon size={14} />
+                    {tolgee.t("actions.path.goRound", "Go around")}
+                </IconButton>
+                <IconButton
+                    label={tolgee.t(
+                        "pathways.editor.dragOutTip",
+                        "Drag out: drag a trail out of an end of the line, and the line follows it",
+                    )}
+                    action="followGoRound"
+                    pressed={!on}
+                    onClick={() => setGoRound(false)}
+                    testId="follow-drag-out"
+                >
+                    <PathIcon size={14} />
+                    {tolgee.t("pathways.editor.dragOut", "Drag out")}
+                </IconButton>
+            </span>
+            <Divider />
+        </>
+    );
+}
+
+/**
+ * Go around's choices on the path bar (step 10, DO-3 to DO-5): how far (a number of the outline's
+ * spots or of steps; − and +, Spots and Steps are commands; the field can be cleared while typing,
+ * and goes no further than Finish allows), which way around (Reverse leader turns it), ▶ Preview,
+ * a readout from a whole time around, and a note when marchers stand off the outline and step
+ * onto it first.
+ */
+function GoRoundControls({ session }: { session: PathSession }) {
+    const follow = session.follow!;
+    const around = follow.around!;
+    const plan = aroundPlanOf(follow);
+    const max = roundMaxOf(follow);
+    const reducedMotion = prefersReducedMotion();
+    const turns = plan?.turns ?? 0;
+    const clockwise = !around.reversed;
+    // What's typed, kept while it isn't a number yet (an empty field), applied once it is
+    const [typed, setTyped] = useState<string | null>(null);
+    return (
+        <>
+            <span
+                className="flex items-center gap-2"
+                role="group"
+                aria-label={tolgee.t(
+                    "pathways.editor.roundHowFar",
+                    "How far around",
+                )}
+                data-testid="follow-round"
+            >
+                <IconButton
+                    label={tolgee.t(
+                        "actions.path.roundLess",
+                        "Go around less far",
+                    )}
+                    action="followRoundLess"
+                    disabled={around.amount <= 1}
+                    onClick={() => runAction("followRoundLess")}
+                    testId="follow-round-less"
+                >
+                    −
+                </IconButton>
+                <input
+                    className="rounded-6 border-stroke bg-fg-2 text-sub text-text w-[3.5em] border px-4 py-2 text-center"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={max}
+                    value={typed ?? String(around.amount)}
+                    aria-label={tolgee.t(
+                        "pathways.editor.roundAmount",
+                        "How many spots or steps around",
+                    )}
+                    onChange={(e) => {
+                        const n = Number(e.target.value);
+                        if (
+                            e.target.value !== "" &&
+                            Number.isFinite(n) &&
+                            n >= 1
+                        ) {
+                            setTyped(null);
+                            setRoundAmount(n);
+                        } else setTyped(e.target.value);
+                    }}
+                    onBlur={() => setTyped(null)}
+                    // Enter keeps what's typed and leaves the field, so it finishes as the bar's
+                    // Enter does; Escape only leaves the field (it doesn't leave the tool)
+                    onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                            e.preventDefault();
+                            setTyped(null);
+                        }
+                        if (e.key === "Enter" || e.key === "Escape")
+                            e.currentTarget.blur();
+                    }}
+                    data-testid="follow-round-amount"
+                />
+                <IconButton
+                    label={tolgee.t(
+                        "actions.path.roundMore",
+                        "Go around farther",
+                    )}
+                    action="followRoundMore"
+                    disabled={around.amount >= max}
+                    onClick={() => runAction("followRoundMore")}
+                    testId="follow-round-more"
+                >
+                    +
+                </IconButton>
+                <IconButton
+                    label={tolgee.t(
+                        "pathways.editor.roundSpotsTip",
+                        "Spots: each marcher moves on this many places around the outline",
+                    )}
+                    action="followRoundSpots"
+                    pressed={around.unit === "spots"}
+                    onClick={() => runAction("followRoundSpots")}
+                    testId="follow-round-spots"
+                >
+                    {tolgee.t("pathways.editor.roundSpots", "spots")}
+                </IconButton>
+                <IconButton
+                    label={tolgee.t(
+                        "pathways.editor.roundStepsTip",
+                        "Steps: each marcher goes this many steps around the outline, ending between spots if it must",
+                    )}
+                    action="followRoundSteps"
+                    pressed={around.unit === "steps"}
+                    onClick={() => runAction("followRoundSteps")}
+                    testId="follow-round-steps"
+                >
+                    {tolgee.t("pathways.editor.roundSteps", "steps")}
+                </IconButton>
+                {turns >= 1 - 1e-9 && (
+                    <span
+                        className="text-text-subtitle"
+                        data-testid="follow-round-turns"
+                    >
+                        {tolgee.t(
+                            "pathways.editor.roundTurns",
+                            "{turns} × around",
+                            { turns: Math.round(turns * 100) / 100 },
+                        )}
+                    </span>
+                )}
+            </span>
+            <Divider />
+            <IconButton
+                label={
+                    clockwise
+                        ? tolgee.t(
+                              "pathways.editor.roundClockwiseTip",
+                              "Going clockwise around. Reverse leader goes the other way around",
+                          )
+                        : tolgee.t(
+                              "pathways.editor.roundCounterTip",
+                              "Going counterclockwise around. Reverse leader goes the other way around",
+                          )
+                }
+                action="reverseTrail"
+                onClick={() => runAction("reverseTrail")}
+                testId="follow-round-way"
+            >
+                {clockwise ? (
+                    <ArrowClockwiseIcon size={14} />
+                ) : (
+                    <ArrowCounterClockwiseIcon size={14} />
+                )}
+                {clockwise
+                    ? tolgee.t(
+                          "pathways.editor.roundClockwise",
+                          "Clockwise around",
+                      )
+                    : tolgee.t(
+                          "pathways.editor.roundCounter",
+                          "Counterclockwise around",
+                      )}
+            </IconButton>
+            <Divider />
+            <IconButton
+                label={
+                    reducedMotion
+                        ? tolgee.t(
+                              "pathways.editor.previewReduced",
+                              "Preview is off while your system asks for less motion",
+                          )
+                        : tolgee.t(
+                              "pathways.editor.previewRoundTip",
+                              "Preview: the marchers go around from start to end, again and again",
+                          )
+                }
+                action="followPreview"
+                disabled={reducedMotion}
+                pressed={!!follow.preview && !reducedMotion}
+                onClick={() => runAction("followPreview")}
+                testId="follow-preview"
+            >
+                <PlayIcon size={14} />
+                {tolgee.t("pathways.editor.preview", "Preview")}
+            </IconButton>
+            <Divider />
+            {plan && plan.offOutline > 0 && (
+                <>
+                    <span
+                        className="text-yellow flex items-center gap-4 px-4"
+                        data-testid="follow-round-off"
+                    >
+                        <WarningIcon size={14} weight="bold" aria-hidden />
+                        {tolgee.t(
+                            "pathways.editor.roundOffOutline",
+                            "{count, plural, one {# marcher stands off the outline and steps onto it first} other {# marchers stand off the outline and step onto it first}}",
+                            { count: plan.offOutline },
+                        )}
+                    </span>
+                    <Divider />
+                </>
+            )}
+        </>
     );
 }
 

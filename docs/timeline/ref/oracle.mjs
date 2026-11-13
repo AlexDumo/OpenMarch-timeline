@@ -2,7 +2,7 @@
 // db shape: { marchers:[{id,home:[x,y]}], shapes:{id:{kind,geometry}},
 //             transitions:{id:{id,start,end,dest,slots,style,order,params}},
 //             assignments:[{id,marcher,transition,slot,start,end,layer}] }
-import { lerp, clamp01, destPath, paramT, destinationsOf, arcPoint, flatten, makeTrail, makeRouteTrail, makeAlongWay, alongWayEnds, alongWayAt, ftlDest, routeWalk, groupWalk } from './geom.mjs';
+import { lerp, clamp01, destPath, paramT, destinationsOf, arcPoint, flatten, makeTrail, makeRouteTrail, makeAlongWay, alongWayEnds, alongWayAt, makeAroundWay, aroundWayEnds, aroundWayAt, ftlDest, routeWalk, groupWalk } from './geom.mjs';
 
 export function makeOracle(db) {
   const T = (id) => db.transitions[id];
@@ -28,6 +28,7 @@ export function makeOracle(db) {
       const e = ftlEntry(t.id), q = e.members.indexOf(sp.m), p = clamp01((b - t.start) / (t.end - t.start));
       if (p <= 0) return origin(sp);                                                   // endpoints exact (§8.10)
       if (p >= 1) return e.target.get(sp.m);
+      if (e.around) return e.around.way ? aroundWayAt(e.around.way, e.origins[q], e.around, q, e.target.get(sp.m), p) : lerp(e.origins[q], e.target.get(sp.m), p);   // R-13‴
       if (e.ends) return alongWayAt(e.trail, e.startDist[q], e.endDist[q], e.ends.turn[q], e.ends.straight[q], e.target.get(sp.m), p);   // R-13″
       return e.trail.at(e.startDist[q] + (e.endDist[q] - e.startDist[q]) * p);
     }
@@ -70,6 +71,18 @@ export function makeOracle(db) {
     const dest = ftlDest(t.dest == null ? null : destPath(db.shapes[t.dest]), pts, n, sign < 0);   // R-13′, R-12′ (step 4)
     const path = dest.walked, wps = t.params?.waypoints ?? [];
     const tr = t.route == null ? null : db.routes?.[t.route]?.geometry;                 // R-9′ (step 4): a trail route's drawn part; waypoints not read (T-15)
+    if (t.dest == null && t.params?.ends === 'around') {                                // R-13‴ (step 10): round a closed outline
+      const pointOf = keyed.map(([, sp], q) => dest.member(q, m, sp.row.slot));
+      const spots = pointOf.map((j) => pts[j]);
+      const way = makeAroundWay(tr);
+      const ends = way ? aroundWayEnds(way, origins, spots, t.params?.laps ?? 0) : null;   // no outline: straight to the spot (T-17)
+      const target = new Map(members.map((mm, q) => [mm, spots[q]]));
+      db.assignments.filter((r) => r.transition === tid && !target.has(r.marcher))
+        .sort((a, b) => a.slot - b.slot || a.marcher - b.marcher)
+        .forEach((r, k) => target.set(r.marcher, pts[dest.other(k, m, r.slot)]));
+      return { members, source, origins, startDist: ends ? ends.startDist : origins.map(() => 0), endDist: ends ? ends.endDist : origins.map(() => 0),
+        target, around: { way, ...(ends ?? {}) } };
+    }
     const along = t.dest == null && t.params?.ends === 'along';                         // R-13″ (step 4b): ends along the way
     const trail = along ? makeAlongWay(origins, tr) : tr ? makeRouteTrail(origins, tr, path) : makeTrail(origins, wps, path);
     const startDist = origins.map((_, q) => trail.cum[q]);
