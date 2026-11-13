@@ -172,4 +172,29 @@ describe("keys while the panel is open", () => {
         pressY();
         expect(lockX).toHaveBeenCalledTimes(1);
     });
+
+    it("Ctrl+A doesn't pick the marchers while the panel is open (sims)", () => {
+        const selectMarchers = vi.fn();
+        offs.push(
+            registerActionHandler("selectAllMarchers", {
+                run: selectMarchers,
+                isEnabled: () => true,
+            }),
+        );
+        render(
+            <Providers>
+                <ShortcutDispatcher />
+                <PanelKeys />
+            </Providers>,
+        );
+        act(() => fieldEditMode.enter());
+        act(() => {
+            fireEvent.keyDown(document.body, {
+                key: "a",
+                code: "KeyA",
+                ctrlKey: true,
+            });
+        });
+        expect(selectMarchers).not.toHaveBeenCalled();
+    });
 });

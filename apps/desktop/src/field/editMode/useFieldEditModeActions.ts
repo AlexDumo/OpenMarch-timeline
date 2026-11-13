@@ -225,6 +225,18 @@ export function useFieldPanelActions() {
 
     useFieldEditDiscard();
 
+    // ⌘A / Ctrl+A: never the marchers while the panel is open (they can't be picked); the lines
+    // while Edit lines is on, and nothing otherwise. Here rather than in the line keys, so it's
+    // on top of the drill's own handler from the moment the panel opens
+    useActionHandler(
+        "selectAllMarchers",
+        () => fp && fieldEditMode.select(selectAll(fp)),
+        {
+            enabled: () =>
+                !!fp && fieldEditMode.isEditingLines() && keyIsForLines(),
+        },
+    );
+
     // F6 and Shift+F6: the keyboard's way between the field (where Tab walks lines) and
     // the Field panel
     useActionHandler("fieldEditNextPane", () => focusFieldEditPane(1));
@@ -339,10 +351,6 @@ export function useFieldLineActions() {
     const selectEvery = () => fp && fieldEditMode.select(selectAll(fp));
     useActionHandler("fieldEditSelectAllLines", selectEvery, {
         enabled: !!fp,
-    });
-    // ⌘A / Ctrl+A selects lines here: marchers can't be picked in the mode
-    useActionHandler("selectAllMarchers", selectEvery, {
-        enabled: () => !!fp && keyIsForLines(),
     });
     useActionHandler(
         "fieldEditSelectAllXLines",

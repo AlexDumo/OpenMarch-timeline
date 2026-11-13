@@ -3815,7 +3815,7 @@
             "discardTip": "Put the field back as it was when you opened this panel. Undo brings the changes back.",
             "discarded": "Field changes discarded. Undo brings them back.",
             "custom": "Custom field",
-            "changes": "{count, plural, =0 {No changes} one {# change} other {# changes}}",
+            "changes": "{count, plural, =0 {No changes from the template} one {# change from the template} other {# changes from the template}}",
             "addX": "X line",
             "addY": "Y line",
             "edit": "Edit…",
