@@ -203,20 +203,30 @@ test("a finger taps a line's points: Undo point takes one back, Finish ends it, 
     expect(Math.abs(end.x - b.x)).toBeLessThan(15);
     expect(Math.abs(end.y - b.y)).toBeLessThan(15);
 
-    // A finger 15 px off the right end still takes it (a mouse reaches 10)
+    // A finger 15 px off the right end still takes it (a mouse reaches 10).
+    // The point goes to the finger, as it goes to the mouse pointer: it ends
+    // where the finger lifts (on half steps), not 15 px short of it
     const grid = await fieldGrid(show);
     const scale = await canvasScale(page);
     const by = 4 * grid.pixelsPerStep * scale;
+    const halfStep = 0.5 * grid.pixelsPerStep * scale;
     const from = { x: end.x + 15, y: end.y };
-    await touchDrag(page, from, { x: from.x + by, y: from.y }, { steps: 12 });
+    const to = { x: from.x + by, y: from.y };
+    await touchDrag(page, from, to, { steps: 12 });
     await expect
         .poll(async () => {
             const now = (await shapeOverlay(page))!.handles.reduce((p, q) =>
                 q.x > p.x ? q : p,
             );
-            return Math.abs(now.x - (end.x + by)) < 0.5 * by;
+            return Math.abs(now.x - to.x) <= halfStep + 1;
         })
         .toBe(true);
+    // Moved, not panned: the start point stays where it was
+    const start = (await shapeOverlay(page))!.handles.reduce((p, q) =>
+        q.x < p.x ? q : p,
+    );
+    const a0 = drawn.handles.reduce((p, q) => (q.x < p.x ? q : p));
+    expect(Math.abs(start.x - a0.x)).toBeLessThan(1);
 
     // Discard: nothing placed
     await tapOn(page, page.getByTestId("shape-editor-discard"));
