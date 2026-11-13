@@ -95,6 +95,7 @@ const at = (
     field: { x, y },
     screen: { x: x * ZOOM, y: y * ZOOM },
     button: 0,
+    kind: "mouse",
     shift: false,
     alt: false,
     ctrl: false,
@@ -301,6 +302,86 @@ describe("FieldEditor click vs drag", () => {
         expect(editor.activeGesture()).toBeNull();
         editor.pointerUp(at(100, 100));
         expect(editor.activeGesture()).toBeNull();
+    });
+});
+
+describe("FieldEditor thresholds by pointer kind (tablet 0.1)", () => {
+    // At zoom 2, 1 field unit is 2 screen px
+    const pen = { kind: "pen" } as const;
+    const touch = { kind: "touch" } as const;
+
+    it("starts a mouse move at 4 screen px, as always", () => {
+        const { editor } = setup();
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(102, 100));
+        expect(editor.activeGesture()).toBe("move");
+    });
+
+    it("keeps a pen press under 6 screen px a click", () => {
+        const { editor, state } = setup();
+        editor.pointerDown(at(100, 100, pen));
+        editor.pointerMove(at(102.5, 100, pen));
+        expect(editor.activeGesture()).toBeNull();
+        editor.pointerUp(at(102.5, 100, pen));
+        expect(state.selected).toEqual([1]);
+        expect(state.drops).toEqual([]);
+    });
+
+    it("keeps a finger press under 12 screen px from moving anything, and moves at 12", () => {
+        const { editor, state } = setup();
+        editor.pointerDown(at(100, 100, touch));
+        editor.pointerMove(at(105.5, 100, touch));
+        expect(editor.activeGesture()).toBeNull();
+        editor.pointerMove(at(106, 100, touch));
+        expect(editor.activeGesture()).toBe("move");
+        editor.pointerUp(at(106, 100, touch));
+        expect(state.drops.map((d) => d.positions)).toEqual([
+            [{ id: 1, x: 106, y: 100 }],
+        ]);
+    });
+
+    it("lands a finger on a marcher 22 screen px away, where a mouse misses", () => {
+        // 9 field units is 18 screen px below marcher 1
+        const mouse = setup({ selected: [2] });
+        click(mouse.editor, 100, 109);
+        expect(mouse.state.selected).toEqual([]);
+
+        const finger = setup({ selected: [2] });
+        click(finger.editor, 100, 109, touch);
+        expect(finger.state.selected).toEqual([1]);
+        // 11 field units is 22 screen px; just past it misses
+        const past = setup({ selected: [2] });
+        click(past.editor, 100, 111.5, touch);
+        expect(past.state.selected).toEqual([]);
+    });
+
+    it("grabs a selection box handle within a finger's reach, where a mouse draws a marquee", () => {
+        // The box around 1 to 4 has its right-hand middle handle at (410, 100);
+        // (418, 100) is 16 screen px to its right
+        const mouse = setup({ selected: [1, 2, 3, 4] });
+        mouse.editor.pointerDown(at(418, 100));
+        mouse.editor.pointerMove(at(485, 130));
+        expect(mouse.editor.activeGesture()).toBe("marquee");
+
+        const finger = setup({ selected: [1, 2, 3, 4] });
+        finger.editor.pointerDown(at(418, 100, touch));
+        finger.editor.pointerMove(at(485, 130, touch));
+        expect(finger.editor.activeGesture()).toBe("scale");
+    });
+
+    it("counts a second tap 20 screen px from the first as a double-tap, where a mouse's is too far", () => {
+        // A double-click-and-drag on empty field draws a lasso (rules table: Lasso)
+        const mouse = setup();
+        click(mouse.editor, 150, 50);
+        mouse.editor.pointerDown(at(160, 50));
+        mouse.editor.pointerMove(at(260, 50));
+        expect(mouse.editor.activeGesture()).toBe("marquee");
+
+        const finger = setup();
+        click(finger.editor, 150, 50, touch);
+        finger.editor.pointerDown(at(160, 50, touch));
+        finger.editor.pointerMove(at(260, 50, touch));
+        expect(finger.editor.activeGesture()).toBe("lasso");
     });
 });
 

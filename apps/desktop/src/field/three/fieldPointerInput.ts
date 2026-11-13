@@ -1,6 +1,7 @@
 import { LONG_PRESS_MS } from "@openmarch/ui";
 import type { FieldEditor, FieldPointer } from "@/field/editor/fieldEditor";
 import { isMacPlatform } from "@/shortcuts/platform";
+import { pointerKindOf } from "@/field/editor/pointerThresholds";
 import { elementToField, useFieldViewStore } from "./fieldView";
 
 /**
@@ -30,6 +31,7 @@ export function attachFieldPointerInput(
             field,
             screen,
             button: event.button,
+            kind: pointerKindOf(event.pointerType),
             shift: event.shiftKey,
             alt: event.altKey,
             ctrl: event.ctrlKey,

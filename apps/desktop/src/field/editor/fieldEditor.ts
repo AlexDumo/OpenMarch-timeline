@@ -26,6 +26,7 @@ import {
 } from "./groupTransform";
 import { fieldKeys, type FieldKeys } from "./fieldKeys";
 import { hitRadius, marcherAt, type DrawnMarchers } from "./hitTest";
+import { thresholdsFor, type PointerKind } from "./pointerThresholds";
 import {
     ItemResizeGesture,
     ItemRotateGesture,
@@ -73,6 +74,11 @@ export type FieldPointer = {
     screen: FieldPoint;
     /** The button that changed (`PointerEvent.button`): 0 is the primary button. */
     button: number;
+    /**
+     * What made the press (`PointerEvent.pointerType`). Slops, hit radii and handle reach
+     * depend on it (`pointerThresholds.ts`); a mouse's are the field's usual ones.
+     */
+    kind: PointerKind;
     shift: boolean;
     alt: boolean;
     ctrl: boolean;
@@ -211,10 +217,11 @@ export type FieldOnScreen = {
 };
 
 /**
- * A press that moves less than this far, in screen pixels, is a click: it
- * never moves anything. There's no time limit (rules table: Click vs drag).
+ * A mouse press that moves less than this far, in screen pixels, is a click:
+ * it never moves anything. There's no time limit (rules table: Click vs
+ * drag). Other pointers have their own (`thresholdsFor(kind).moveThreshold`).
  */
-export const CLICK_SLOP = 4;
+export const CLICK_SLOP = thresholdsFor("mouse").clickSlop;
 
 /** How long a drop may take to save before the editor logs that it hasn't settled. */
 const DROP_SETTLE_WARNING_MS = 30_000;
@@ -224,7 +231,8 @@ const DROP_SETTLE_WARNING_MS = 30_000;
  * field is its double-click: dragged, it draws a lasso (rules table: Lasso).
  */
 export const DOUBLE_CLICK_MS = 500;
-export const DOUBLE_CLICK_SLOP = 8;
+/** The mouse's; other pointers have their own (`thresholdsFor(kind).doubleClickSlop`). */
+export const DOUBLE_CLICK_SLOP = thresholdsFor("mouse").doubleClickSlop;
 
 /**
  * A gesture the editor runs once a press becomes a drag: marquee, lasso
@@ -593,8 +601,7 @@ export class FieldEditor {
         }
         const modePress: FieldModePress = {
             reachesInside: () =>
-                this.reachInside(pointer, this.marcherAt(pointer.field)) !==
-                null,
+                this.reachInside(pointer, this.marcherAt(pointer)) !== null,
             isMac: this.options.isMac ?? false,
         };
         if (this.mode?.claims(pointer, modePress)) {
@@ -616,8 +623,8 @@ export class FieldEditor {
         }
         // A press on the field saves a rotation typed in the inspector first
         this.endRotation();
-        const handle = this.handleAt(pointer.field);
-        const hit = handle ? null : this.marcherAt(pointer.field);
+        const handle = this.handleAt(pointer);
+        const hit = handle ? null : this.marcherAt(pointer);
         this.press = {
             start: pointer,
             hit,
@@ -654,11 +661,11 @@ export class FieldEditor {
                 this.setHover(modeCursor);
                 return;
             }
-            const handle = this.handleAt(pointer.field);
+            const handle = this.handleAt(pointer);
             this.setHover(
                 handle
                     ? handleCursor(handle)
-                    : this.marcherAt(pointer.field) === null
+                    : this.marcherAt(pointer) === null
                       ? "default"
                       : "pointer",
             );
@@ -893,7 +900,7 @@ export class FieldEditor {
                     Math.hypot(
                         pointer.screen.x - last.screen.x,
                         pointer.screen.y - last.screen.y,
-                    ) <= DOUBLE_CLICK_SLOP
+                    ) <= thresholdsFor(pointer.kind).doubleClickSlop
                 );
             },
         });
@@ -1105,12 +1112,17 @@ export class FieldEditor {
         return { box, pad: this.ports.selectionBoxPadding?.() ?? 0, angle: 0 };
     }
 
-    /** The handle of the selection box at `point`, or null. */
-    private handleAt(point: FieldPoint): HandleId | null {
+    /** The handle of the selection box `pointer` is on, within its kind's reach, or null. */
+    private handleAt(pointer: FieldPointer): HandleId | null {
         const frame = this.selectionFrame();
         if (!frame) return null;
         const zoom = this.ports.zoom();
-        return handleAt(handlePoints(frame, zoom), point, zoom);
+        return handleAt(
+            handlePoints(frame, zoom),
+            pointer.field,
+            zoom,
+            thresholdsFor(pointer.kind).handleReach,
+        );
     }
 
     /**
@@ -1201,7 +1213,7 @@ export class FieldEditor {
             Math.hypot(
                 pointer.screen.x - last.screen.x,
                 pointer.screen.y - last.screen.y,
-            ) <= DOUBLE_CLICK_SLOP
+            ) <= thresholdsFor(pointer.kind).doubleClickSlop
         );
     }
 
@@ -1420,9 +1432,7 @@ export class FieldEditor {
      */
     private openMenu(pointer: FieldPointer) {
         this.ports.takePress?.();
-        const hit = this.handleAt(pointer.field)
-            ? null
-            : this.marcherAt(pointer.field);
+        const hit = this.handleAt(pointer) ? null : this.marcherAt(pointer);
         if (hit !== null && !this.ports.selection.get().includes(hit))
             this.write([hit]);
         this.ports.openMenu?.(pointer);
@@ -1465,13 +1475,13 @@ export class FieldEditor {
      * pressed. Every press, drag, menu and hover finds performers here, so
      * hidden ones (#558) are passed over in this one place.
      */
-    private marcherAt(point: FieldPoint) {
+    private marcherAt({ field: point, kind }: FieldPointer) {
         const isItem = this.ports.isItem ?? (() => false);
         const hidden = this.ports.marcherHidden ?? (() => false);
         const performer = marcherAt(
             this.ports.marchers(),
             point,
-            hitRadius(this.ports.zoom()),
+            hitRadius(this.ports.zoom(), kind),
             (id) => !isItem(id) && !hidden(id) && this.ports.canSelect(id),
         );
         if (performer !== null) return performer;
@@ -1519,11 +1529,12 @@ const withPositions = (
     return merged;
 };
 
-const isPastSlop = (start: FieldPointer, pointer: FieldPointer) =>
+/** Whether a press from `start` has become a drag: past its kind's move threshold. */
+export const isPastSlop = (start: FieldPointer, pointer: FieldPointer) =>
     Math.hypot(
         pointer.screen.x - start.screen.x,
         pointer.screen.y - start.screen.y,
-    ) >= CLICK_SLOP;
+    ) >= thresholdsFor(start.kind).moveThreshold;
 
 /** The same ids, in any order. */
 const sameIds = (a: readonly number[], b: readonly number[]) => {
