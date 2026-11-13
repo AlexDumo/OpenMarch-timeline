@@ -23,6 +23,13 @@ import {
     followMarchersOf,
     setFollowPreview,
 } from "./followDrag";
+import {
+    flipRoundWay,
+    goingRound,
+    ROUND_MAX,
+    setGoRound,
+    stepRoundAmount,
+} from "./followAround";
 import { isTrailLineAt, openFollowTool } from "./followTool";
 import {
     closeShapeTool,
@@ -66,6 +73,7 @@ import {
     removeLastPoint,
     removePath,
     reverseShownTrail,
+    aroundPointsReason,
     switchDrawing,
     selectPoint,
     setPathHidden,
@@ -141,6 +149,11 @@ export function usePathPenActions(): void {
             if (useShapeToolStore.getState().tool) closeShapeTool();
             againFor.current = now.object ? "" : selectionKey;
             startDrawing(now.target, now.drill, now.object, true);
+            return;
+        }
+        // A line going round an outline (step 10, AP-T15): nothing to draw again
+        if (now?.target.trail?.around && now.phase !== "drawing") {
+            toast.error(aroundPointsReason(), { id: "path-pen" });
             return;
         }
         // The line's trail shown (pathways step 4): P draws the trail again, as Follow does
@@ -233,9 +246,11 @@ export function usePathPenActions(): void {
     useActionHandler("followTrail", () => {
         const now = usePathPenStore.getState().session;
         if (now?.phase === "drawing" && now.target.trail) return;
-        // The line's trail shown: drawn again, whoever of the line is selected
+        // The line's trail shown: drawn again, whoever of the line is selected. A line going
+        // round an outline (step 10) opens Go round again instead, below
         if (
             now?.target.trail &&
+            !now.target.trail.around &&
             now.target.routeId !== null &&
             now.phase !== "drawing" &&
             !isPlaying
@@ -333,8 +348,38 @@ export function usePathPenActions(): void {
     // and the system allows motion
     const canPreview = usePathPenStore(
         (s) =>
-            !!s.session?.points.length && followMarchersOf(s.session) !== null,
+            (!!s.session?.points.length || goingRound(s.session?.follow)) &&
+            followMarchersOf(s.session) !== null,
     );
+    // Go round (step 10): the Follow tool on a circle or box outline
+    const round = usePathPenStore((s) => goingRound(s.session?.follow));
+    const roundOffered = usePathPenStore(
+        (s) =>
+            !!s.session?.follow?.around?.canDrag &&
+            s.session.follow.grabbed === null,
+    );
+    const roundAmount = usePathPenStore(
+        (s) => s.session?.follow?.around?.amount ?? 0,
+    );
+    useActionHandler(
+        "followGoRound",
+        () => {
+            const a = usePathPenStore.getState().session?.follow?.around;
+            if (a) setGoRound(!a.on);
+        },
+        {
+            enabled: roundOffered,
+            label: round
+                ? tolgee.t("actions.path.dragOut", "Drag a trail out instead")
+                : undefined,
+        },
+    );
+    useActionHandler("followRoundMore", () => stepRoundAmount(1), {
+        enabled: round && roundAmount < ROUND_MAX,
+    });
+    useActionHandler("followRoundLess", () => stepRoundAmount(-1), {
+        enabled: round && roundAmount > 1,
+    });
     useActionHandler(
         "followPreview",
         () => {
@@ -343,15 +388,20 @@ export function usePathPenActions(): void {
         },
         { enabled: canPreview && !prefersReducedMotion() },
     );
-    useActionHandler("reverseTrail", () => void reverseShownTrail(), {
-        enabled: trailShown && phase !== "drawing" && !trailAlong,
-        disabledReason: trailAlong
-            ? tolgee.t(
-                  "timeline.refusals.trail.reverseAlong",
-                  "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead.",
-              )
-            : undefined,
-    });
+    useActionHandler(
+        "reverseTrail",
+        () => (round ? flipRoundWay() : void reverseShownTrail()),
+        {
+            enabled:
+                round || (trailShown && phase !== "drawing" && !trailAlong),
+            disabledReason: trailAlong
+                ? tolgee.t(
+                      "timeline.refusals.trail.reverseAlong",
+                      "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead.",
+                  )
+                : undefined,
+        },
+    );
 
     // The closed path shows by start flag positions' paths level in effect, as the straight paths
     // do: the setting, and N held or tapped (owner, 2026-11-04). The marcher is selected, so

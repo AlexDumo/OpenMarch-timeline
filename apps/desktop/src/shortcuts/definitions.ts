@@ -873,6 +873,31 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         ignoreRepeat: true,
     },
+    // Pathways step 10 (Appendix L.11): in the Follow tool on a circle or box outline, Go round
+    // (or Drag out) and how far round. No keys: the path bar's buttons and the palette. Reverse
+    // leader (Alt+L) turns the way round while going round
+    followGoRound: {
+        labelKey: "actions.path.goRound",
+        keywordsKey: "actions.path.goRoundKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    followRoundMore: {
+        labelKey: "actions.path.roundMore",
+        keywordsKey: "actions.path.goRoundKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    followRoundLess: {
+        labelKey: "actions.path.roundLess",
+        keywordsKey: "actions.path.goRoundKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+    },
     reverseTrail: {
         labelKey: "actions.path.reverse",
         keywordsKey: "actions.path.followKeywords",

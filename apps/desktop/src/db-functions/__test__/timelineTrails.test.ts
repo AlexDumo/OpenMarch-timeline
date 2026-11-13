@@ -338,6 +338,8 @@ describeDbTests("Follow a drawn trail (AP-T1 to AP-T6)", (it) => {
                 end: 17,
                 reverse: false,
                 along: false,
+                around: false,
+                laps: 0,
                 geometry,
                 marcherIds: result.marcherIds,
             },

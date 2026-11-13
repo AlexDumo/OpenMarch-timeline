@@ -11,6 +11,9 @@ import type { PathStyle, ShapeKind } from "./types";
 
 /** Every authored point lies in [-COORD_BOUND, COORD_BOUND]^2 (I-S1, I-T2, I-D2, I-N2). */
 export const COORD_BOUND = 1e6;
+/** Most whole times round a closed outline a follow move may add (R-13‴): keeps ends bounded. */
+export const MAX_LAPS = 100;
+
 /** Largest legal arc |bulge| (minor arcs only, D-15). */
 export const MAX_ABS_BULGE = 0.5;
 const TWO_PI = 2 * Math.PI;
@@ -319,13 +322,32 @@ export function validatePathParams(
                 break;
             }
             // `reverse` (R-12′, pathways step 4): true, or absent
-            // `ends` (R-13″, pathways step 4b): "along", or absent
-            noExtraKeys(params, ["waypoints", "reverse", "ends"], push);
+            // `ends` (R-13″, pathways step 4b; R-13‴, step 10): "along", "around", or absent
+            // `laps` (R-13‴): a whole number of at least 1, only with "around"
+            noExtraKeys(params, ["waypoints", "reverse", "ends", "laps"], push);
             pointList(params.waypoints, "waypoints", push);
             if (params.reverse !== undefined && params.reverse !== true)
                 push("reverse", "reverse must be true or absent");
-            if (params.ends !== undefined && params.ends !== "along")
-                push("ends", 'ends must be "along" or absent');
+            if (
+                params.ends !== undefined &&
+                params.ends !== "along" &&
+                params.ends !== "around"
+            )
+                push("ends", 'ends must be "along", "around" or absent');
+            if (params.laps !== undefined) {
+                if (params.ends !== "around")
+                    push("laps", 'laps is only read with ends "around"');
+                else if (
+                    typeof params.laps !== "number" ||
+                    !Number.isInteger(params.laps) ||
+                    params.laps < 1 ||
+                    params.laps > MAX_LAPS
+                )
+                    push(
+                        "laps",
+                        `laps must be a whole number from 1 to ${MAX_LAPS}`,
+                    );
+            }
             break;
         }
         default:
@@ -468,7 +490,16 @@ export function validateRouteGeometry(geometry: unknown): ValidationResult {
         push("", "route geometry must be an object {v, from, to, points}");
         return result();
     }
-    noExtraKeys(geometry, ["v", "from", "to", "points", "toBulge"], push);
+    noExtraKeys(
+        geometry,
+        ["v", "from", "to", "points", "toBulge", "closed"],
+        push,
+    );
+    // R-13‴ (pathways step 10): a closed outline returns to where it starts, and its points are
+    // corners or arc legs
+    const closed = geometry.closed;
+    if (closed !== undefined && closed !== true)
+        push("closed", "closed must be true or absent");
     const bulgeMessage = (where: string) =>
         `${where} must be a number other than 0, at most ${MAX_ROUTE_BULGE} either way`;
     if ("toBulge" in geometry && !isRouteBulge(geometry.toBulge))
@@ -525,6 +556,25 @@ export function validateRouteGeometry(geometry: unknown): ValidationResult {
         else ids.add(id);
         pointOf(pt.at, `${path}.at`, push);
     });
+    if (closed === true) {
+        const { from, to } = geometry as { from?: unknown; to?: unknown };
+        if (
+            !Array.isArray(from) ||
+            !Array.isArray(to) ||
+            from[0] !== to[0] ||
+            from[1] !== to[1]
+        )
+            push("to", "a closed route's to must be its from");
+        if (geometry.points.length === 0)
+            push("points", "a closed route needs at least one point");
+        geometry.points.forEach((pt: unknown, i: number) => {
+            if (isRecord(pt) && "tension" in pt)
+                push(
+                    `points[${i}].tension`,
+                    `points[${i}] is on a closed route, so it must be a corner or an arc leg`,
+                );
+        });
+    }
     // R-14″: a point at either end of an arc leg is a corner
     const points = geometry.points.filter(isRecord) as {
         tension?: number;

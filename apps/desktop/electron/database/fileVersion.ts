@@ -36,6 +36,13 @@
  *   them would walk the leg straight, or refuse the route, so a file is written as 14 when a route
  *   first gets a bulge. A file without one stays at the version it had, and the number is not
  *   lowered when the last arc goes.
+ * - 15 and 16 are taken by pathways steps 5 and the step after it (open pull requests); this build
+ *   doesn't write them.
+ * - 17: outlines (pathways step 10, spec Appendix L.11, R-13‴): a follow-the-leader move goes round
+ *   a closed outline (`path_params.ends = "around"`, a route with `closed: true`, `laps`). A build
+ *   that doesn't know it would walk the outline as an open trail into the spots, so a file is
+ *   written as 17 with its first move round an outline. A file without one stays at the version
+ *   it had, and the number is not lowered when the last one goes.
  */
 import type { DatabaseSync } from "node:sqlite";
 import { recoverParkedFloorInTransaction } from "./parkedFloor";
@@ -61,10 +68,13 @@ export const TRAIL_MODEL_USER_VERSION = 13;
 /** Version of a file with an arc leg on a route (pathways step 10a, spec Appendix L). */
 export const ARC_MODEL_USER_VERSION = 14;
 
+/** Version of a file with a move round a closed outline (pathways step 10, spec Appendix L.11). */
+export const OUTLINE_MODEL_USER_VERSION = 17;
+
 /** Oldest version this build opens. Older files must go through 0.0.10 first. */
 export const MIN_SUPPORTED_USER_VERSION = PAGE_MODEL_USER_VERSION;
 /** Newest version this build opens. Anything higher was written by a newer release. */
-export const MAX_SUPPORTED_USER_VERSION = ARC_MODEL_USER_VERSION;
+export const MAX_SUPPORTED_USER_VERSION = OUTLINE_MODEL_USER_VERSION;
 /** Version written into a brand-new file: a new show is a timeline show. */
 export const NEW_FILE_USER_VERSION = TIMELINE_MODEL_USER_VERSION;
 

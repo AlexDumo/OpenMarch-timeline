@@ -95,6 +95,8 @@ export const trailRefusal = {
     noTrail: () => text.t("timeline.refusals.trail.noTrail"),
     /** Owner, 2026-11-10: Reverse is off for a dragged-out line (R-13″) */
     reverseAlong: () => text.t("timeline.refusals.trail.reverseAlong"),
+    /** AP-T15: a move round an outline has no points to edit (step 10) */
+    aroundPoints: () => text.t("timeline.refusals.trail.aroundPoints"),
 };
 
 // ---------------------------------------------------------------------------
@@ -174,6 +176,10 @@ export interface MoveTrail {
     reverse: boolean;
     /** Whether the members end along the way (R-13″, step 4b) */
     along: boolean;
+    /** Whether the members go round a closed outline (R-13‴, step 10) */
+    around: boolean;
+    /** Round an outline, the whole times round added (R-13‴ `laps`); 0 otherwise */
+    laps: number;
     geometry: RouteGeometry;
     /** The marchers in the line, by slot: the tail first, or the leader first when reversed */
     marcherIds: number[];
@@ -188,6 +194,17 @@ const isReversed = (transition: TransitionDbRow): boolean =>
 export const isAlong = (transition: TransitionDbRow): boolean =>
     transition.path_params !== null &&
     (JSON.parse(transition.path_params) as { ends?: string }).ends === "along";
+
+/** Whether a follow move goes round a closed outline (R-13‴, pathways step 10) */
+export const isAround = (transition: TransitionDbRow): boolean =>
+    transition.path_params !== null &&
+    (JSON.parse(transition.path_params) as { ends?: string }).ends === "around";
+
+/** The whole times round a move round an outline adds (R-13‴ `laps`), 0 for none */
+const lapsOf = (transition: TransitionDbRow): number =>
+    transition.path_params === null
+        ? 0
+        : ((JSON.parse(transition.path_params) as { laps?: number }).laps ?? 0);
 
 /** A trail's last drawn point, where a route with its ends along the way runs to (AP-T8) */
 const lastPoint = (
@@ -253,6 +270,8 @@ export async function readTrails(
         end: transition.end_beat,
         reverse: isReversed(transition),
         along: isAlong(transition),
+        around: isAround(transition),
+        laps: lapsOf(transition),
         geometry: JSON.parse(geometry) as RouteGeometry,
         marcherIds: [...new Set(lines.get(transition.id) ?? [])],
     }));
@@ -606,6 +625,7 @@ export async function followTrailInTransaction({
     points,
     line,
     along = false,
+    around,
 }: {
     tx: DbTransaction;
     timelineId: number;
@@ -621,6 +641,11 @@ export async function followTrailInTransaction({
      * the route runs to its last point (`to`), not to an end spot. A new line only.
      */
     along?: boolean;
+    /**
+     * Step 10 (AP-T13, R-13‴): the members go round this closed outline (in walking order), `laps`
+     * times round more, onto `spots` (by `line`), `path_params.ends = "around"`. A new line only.
+     */
+    around?: { geometry: RouteGeometry; laps: number; spots: readonly XY[] };
 }): Promise<FollowTrailResult> {
     const plan = await planFollow(tx, timelineId, marcherIds);
     if (plan.kind === "redraw") {
@@ -647,10 +672,17 @@ export async function followTrailInTransaction({
           })
         : followOrder(starts, ends);
     const leader = order[order.length - 1]!;
-    const geometry = trailGeometry(points, null, {
-        from: starts[leader]!,
-        to: along ? lastPoint(points, starts[leader]!) : ends[order[0]!]!,
-    });
+    if (around) {
+        assertValid(validateRouteGeometry(around.geometry), "route");
+        // the spots go round the outline as planned, by the line's order
+        order.forEach((i, q) => (ends[i] = around.spots[q]!));
+    }
+    const geometry =
+        around?.geometry ??
+        trailGeometry(points, null, {
+            from: starts[leader]!,
+            to: along ? lastPoint(points, starts[leader]!) : ends[order[0]!]!,
+        });
     const timeline = chosen[0]!.timeline;
 
     return await mapDbErrors(async () => {
@@ -674,9 +706,15 @@ export async function followTrailInTransaction({
                 dest_shape_id: null,
                 path_style: FTL,
                 path_params: JSON.stringify(
-                    along
-                        ? { waypoints: [], ends: "along" }
-                        : { waypoints: [] },
+                    around
+                        ? {
+                              waypoints: [],
+                              ends: "around",
+                              ...(around.laps > 0 ? { laps: around.laps } : {}),
+                          }
+                        : along
+                          ? { waypoints: [], ends: "along" }
+                          : { waypoints: [] },
                 ),
                 route_id: route.id,
                 order_mode: "slot",
@@ -759,6 +797,9 @@ export async function editTrailPointsInTransaction({
         .get();
     if (!row) refuse(trailRefusal.noTrail());
     const current = JSON.parse(row.geometry) as RouteGeometry;
+    // AP-T15: a move round an outline goes round the shape the line stands on; its points aren't
+    // edited (Reverse goes the other way round, Follow again changes how far)
+    if (isAround(transition)) refuse(trailRefusal.aroundPoints());
     const ends = (await trailEnds(tx, transition)) ?? {
         from: current.from,
         to: current.to,
@@ -809,6 +850,14 @@ export async function reverseTrailInTransaction({
     routeId: number;
 }): Promise<{ leaderId: number | null; reverse: boolean }> {
     const transition = await trailTransition(tx, routeId);
+    // AP-T14: round an outline, the other way round, each member as far as it went
+    if (isAround(transition)) {
+        const { reverseAroundInTransaction } =
+            await import("./timelineTrailAround");
+        const out = await reverseAroundInTransaction(tx, transition.id);
+        await trailEditedInTransaction(tx, transition);
+        return out;
+    }
     // Owner, 2026-11-10: a dragged-out line ends along its trail, which starts at the old leader's
     // end; reversed, everyone would walk back through the line. Drag out of the other end instead
     if (isAlong(transition)) refuse(trailRefusal.reverseAlong());

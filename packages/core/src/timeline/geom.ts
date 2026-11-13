@@ -569,6 +569,168 @@ export function alongPoint(
     return lerp(turn, spot, (d - a) / straight);
 }
 
+/**
+ * R-13‴ (pathways step 10): a closed outline as walked once round, R-14's walk from the route's
+ * `from` through its points back to `to` (the same point), the closing leg an arc by `toBulge`.
+ * Null when the route isn't closed, or is shorter than `ε_geom` once round.
+ */
+export function makeLoop(
+    route: RouteWalk | null | undefined,
+): RoutePath | null {
+    if (!route?.closed || route.points.length === 0) return null;
+    const W = routePath(route.from, route.points, route.to, route);
+    return W.L >= EPS_GEOM ? W : null;
+}
+
+/** The point at distance `d` round `loop`, any number of times round (`d` modulo its length). */
+export function loopPoint(loop: RoutePath, d: number): XY {
+    const L = loop.L;
+    const x = d - Math.floor(d / L) * L;
+    return routePointAtDistance(loop, x >= L ? 0 : x);
+}
+
+/**
+ * R-13‴: the distance round `loop` (0 ≤ d < its length) of the point of it nearest `p`, ties to
+ * the smaller distance. Lines and arc legs are projected exactly (`nearestOnArc`); a cubic piece
+ * (never stored on a closed route, but total) onto its 64 measured chords.
+ */
+export function nearestOnLoop(loop: RoutePath, p: XY): number {
+    let best = Infinity;
+    let at = 0;
+    const consider = (a: XY, b: XY, d0: number, len: number) => {
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const l2 = dx * dx + dy * dy;
+        const f =
+            l2 > 0
+                ? clamp01(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)
+                : 0;
+        const dd = Math.hypot(a[0] + dx * f - p[0], a[1] + dy * f - p[1]);
+        if (dd < best) {
+            best = dd;
+            at = d0 + f * len;
+        }
+    };
+    loop.pieces.forEach((piece, j) => {
+        const P0 = loop.V[j]!;
+        const P3 = loop.V[j + 1]!;
+        const base = loop.D[j]!;
+        const len = loop.D[j + 1]! - base;
+        if (piece.kind === "line") consider(P0, P3, base, len);
+        else if (piece.kind === "arc") {
+            const f = nearestOnArc(P0, P3, piece.k, p);
+            consider(P0, P0, base, 0);
+            const q = arcPoint(P0, P3, piece.k, f);
+            consider(q, q, base + f * len, 0);
+            consider(P3, P3, base + len, 0);
+        } else {
+            let prev = P0;
+            for (let i = 1; i <= ROUTE_CUBIC_SAMPLES; i++) {
+                const s =
+                    i === ROUTE_CUBIC_SAMPLES
+                        ? P3
+                        : cubicPoint(
+                              P0,
+                              piece.c1,
+                              piece.c2,
+                              P3,
+                              i / ROUTE_CUBIC_SAMPLES,
+                          );
+                consider(
+                    prev,
+                    s,
+                    base + piece.e[i - 1]!,
+                    piece.e[i]! - piece.e[i - 1]!,
+                );
+                prev = s;
+            }
+        }
+    });
+    return at >= loop.L ? 0 : at;
+}
+
+/**
+ * R-13‴: how close to a whole time round counts as one, so a spot written a whole number of
+ * times round (or rounding a hair short of it) is that many times round, never one more.
+ */
+export const loopSnap = (L: number): number => EPS_GEOM * Math.max(1, L);
+
+/** R-13‴: each member's walk round an outline, worked out once per transition. */
+export interface AroundEnds {
+    /** Where each member starts round the outline (its origin's projection), 0 ≤ d < L */
+    startDist: number[];
+    /** Where it stops round the outline: past its start by its spot's place, plus `laps` times round */
+    endDist: number[];
+    /** Its origin's projection, which it walks straight to first */
+    enter: XY[];
+    inStraight: number[];
+    /** Where it leaves the outline, `loop(endDist)`, and its straight leg from there to its spot */
+    turn: XY[];
+    straight: number[];
+}
+
+/**
+ * R-13‴: the ends of members going round `loop` from `origins` to `spots` (trail order), each
+ * `laps` times round more. A member starts at its origin's projection `s` and ends at
+ * `s + ((u − s) mod L) + laps·L`, `u` its spot's projection; a forward distance within
+ * `loopSnap(L)` of a whole time round is none (the spot is where it started).
+ */
+export function aroundEnds(
+    loop: RoutePath,
+    origins: readonly XY[],
+    spots: readonly XY[],
+    laps: number,
+): AroundEnds {
+    const L = loop.L;
+    const snap = loopSnap(L);
+    const startDist = origins.map((o) => nearestOnLoop(loop, o));
+    const enter = startDist.map((d) => loopPoint(loop, d));
+    const endDist = spots.map((p, q) => {
+        const s = startDist[q]!;
+        const u = nearestOnLoop(loop, p);
+        let a = u - s;
+        if (a < 0) a += L;
+        if (a > L - snap) a = 0;
+        return s + a + laps * L;
+    });
+    const turn = endDist.map((d) => loopPoint(loop, d));
+    return {
+        startDist,
+        endDist,
+        enter,
+        inStraight: origins.map((o, q) => dist(o, enter[q]!)),
+        turn,
+        straight: turn.map((t, q) => dist(t, spots[q]!)),
+    };
+}
+
+/**
+ * R-13‴: where a founding member going round an outline is at progress `p` (0 < p < 1): straight
+ * from its origin onto the outline, round it from `start` to `end`, then straight from `turn` to
+ * its spot, at one steady speed over the whole of it.
+ */
+export function aroundPoint(
+    loop: RoutePath,
+    origin: XY,
+    enter: XY,
+    inStraight: number,
+    start: number,
+    end: number,
+    turn: XY,
+    straight: number,
+    spot: XY,
+    p: number,
+): XY {
+    const a = end - start;
+    const d = (inStraight + a + straight) * p;
+    if (inStraight > 0 && d < inStraight)
+        return lerp(origin, enter, d / inStraight);
+    const x = d - (inStraight > 0 ? inStraight : 0);
+    if (x < a || !(straight > 0))
+        return loopPoint(loop, start + Math.min(x, a));
+    return lerp(turn, spot, (x - a) / straight);
+}
+
 /** Samples a cubic route piece is measured on (R-14, the Line's count). */
 export const ROUTE_CUBIC_SAMPLES = 64;
 
@@ -1274,6 +1436,8 @@ export interface RouteWalk {
     to: XY;
     /** The last leg's bulge (R-14″); absent for none */
     toBulge?: number;
+    /** A closed outline (R-13‴, pathways step 10): `to` is `from`, and the walk returns there */
+    closed?: boolean;
 }
 
 /**

@@ -41,6 +41,8 @@ import type { GroupMember, PathTarget } from "./pathTarget";
 import { dragTrail } from "@/db-functions/timelineTrailDrag";
 import { invalidatePlacedBoxes } from "@/shapes/placed/placedBoxStore";
 import { followSpacingOf, type FollowDrag } from "./followDrag";
+import { goRound } from "@/db-functions/timelineTrailAround";
+import { aroundLine, aroundPlanOf, goingRound } from "./followAround";
 import {
     besideArc,
     besideArcReason,
@@ -563,6 +565,11 @@ export function showPath(
 export function openPath(): boolean {
     const { session } = usePathPenStore.getState();
     if (!session || session.phase === "drawing") return false;
+    // A line going round an outline (step 10, AP-T15): the outline has no points to edit
+    if (session.target.trail?.around) {
+        toast.error(aroundPointsReason(), { id: "path-pen" });
+        return false;
+    }
     if (session.phase === "closed")
         usePathPenStore.setState({
             session: { ...session, phase: "open", selected: null },
@@ -850,6 +857,45 @@ async function save(
     }
 }
 
+/** Why a line going round an outline isn't opened for point edits (AP-T15) */
+export const aroundPointsReason = (): string =>
+    tolgee.t(
+        "timeline.refusals.trail.aroundPoints",
+        "This line goes round the outline it stands on, which has no points to edit. Use Reverse leader to go the other way round, or Follow again to change how far",
+    );
+
+/** Go round as the Follow tool's bar says (AP-T13): one undo step; false when it's refused */
+async function saveAround(follow: FollowDrag): Promise<boolean> {
+    const { saving } = usePathPenStore.getState();
+    const plan = aroundPlanOf(follow);
+    const around = follow.around;
+    if (saving || !plan || !around) return false;
+    usePathPenStore.setState({ saving: true });
+    try {
+        await goRound({
+            db,
+            window: follow.window,
+            marcherIds: follow.ids,
+            // the leader the drawing shows, so the write is what's shown
+            leaderId: aroundLine(follow, plan).at(-1) ?? null,
+            reversed: around.reversed,
+            amount: around.amount,
+            unit: around.unit,
+            step: follow.step,
+        });
+        invalidatePlacedBoxes();
+        return true;
+    } catch (error) {
+        toastTimelineError(
+            error,
+            tolgee.t("pathways.errors.goRound", "Couldn't go round"),
+        );
+        return false;
+    } finally {
+        usePathPenStore.setState({ saving: false });
+    }
+}
+
 /**
  * Enter, a double-click or a click on the last point: the path drawn so far becomes the marcher's
  * (AP-R1). With no point placed it's the same as Escape, as a Line with too few points is. The
@@ -858,6 +904,15 @@ async function save(
 export async function finishDrawing(): Promise<void> {
     const { session } = usePathPenStore.getState();
     if (!session || session.phase !== "drawing") return;
+    // Going round (step 10, AP-T13): nothing is drawn; the line goes round as the bar says
+    if (session.follow && goingRound(session.follow)) {
+        if (await saveAround(session.follow))
+            usePathPenStore.setState((state) => ({
+                session: null,
+                saved: state.saved + 1,
+            }));
+        return;
+    }
     if (session.points.length === 0) {
         closePath();
         return;

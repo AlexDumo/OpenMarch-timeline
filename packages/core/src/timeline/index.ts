@@ -58,6 +58,12 @@ export {
     groupPoint,
     makeAlongTrail,
     alongEnds,
+    makeLoop,
+    loopPoint,
+    nearestOnLoop,
+    loopSnap,
+    aroundEnds,
+    aroundPoint,
     alongPoint,
     placed,
     adjustAt,
@@ -117,6 +123,7 @@ export {
     MAX_ROUTE_OFFSET,
     COORD_BOUND,
     MAX_ABS_BULGE,
+    MAX_LAPS,
 } from "./validate";
 export type {
     ValidationResult,
