@@ -105,6 +105,10 @@
             "toggleMetronome": "Toggle metronome",
             "toggleLoop": "Loop on / off"
         },
+        "prop": {
+            "finishDrawing": "Prop: Finish drawing",
+            "removeLastPoint": "Prop: Remove the last corner while drawing"
+        },
         "select": {
             "selectAll": "Select all"
         },
@@ -132,7 +136,8 @@
             "enterBox": "Select only this marcher",
             "centerPivot": "Shape: Move the pivot back to the center",
             "centerPivotKeywords": "pivot center centre reset turn flip around",
-            "arc": "Shape: Arc"
+            "arc": "Shape: Arc",
+            "discard": "Shape: Discard"
         },
         "swap": {
             "mustSelectTwo": "Can only swap when 2 marchers are selected.",
@@ -1390,9 +1395,13 @@
                 "arc": "Click both ends of the arc, then click to set its curve.",
                 "circle": "Drag from the center to set the radius.",
                 "drag": "Drag on the field to draw the prop. It is on the field from the playhead's count.",
-                "polygon": "Click each corner, then double-click to finish."
+                "polygon": "Click each corner, then double-click to finish.",
+                "polygonTouch": "Tap each corner, then tap Finish.",
+                "arcTouch": "Tap both ends of the arc, then tap to set its curve."
             },
-            "title": "Draw a prop"
+            "title": "Draw a prop",
+            "finish": "Finish",
+            "undoPoint": "Undo point"
         },
         "edit": "Edit prop",
         "editTitle": "Edit Prop",
@@ -1814,7 +1823,13 @@
                 "label": "Who goes where"
             },
             "drawHintFor": "Drag on the field to draw {shape, select, block {a box} circle {a circle} line {a line} curve {a curve} arc {an arc} other {a shape}} · <keys></keys> to cancel",
-            "drawPointsHintFor": "Drag on the field to draw {shape, select, line {a line} curve {a curve} arc {an arc} other {a shape}}, or click point after point · <keys></keys> to cancel"
+            "drawPointsHintFor": "Drag on the field to draw {shape, select, line {a line} curve {a curve} arc {an arc} other {a shape}}, or click point after point · <keys></keys> to cancel",
+            "finish": "Finish",
+            "undoPoint": "Undo point",
+            "discard": "Discard",
+            "drawHintTouchFor": "Drag on the field to draw {shape, select, block {a box} circle {a circle} line {a line} curve {a curve} arc {an arc} other {a shape}}",
+            "drawPointsHintTouchFor": "Drag on the field to draw {shape, select, line {a line} curve {a curve} arc {an arc} other {a shape}}, or tap point after point",
+            "pointsHintTouch": "Tap to add points · Double-tap or Finish to end"
         },
         "placed": {
             "label": "{name} · {count, plural, one {{interval} step} other {{interval} steps}}",

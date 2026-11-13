@@ -34,6 +34,8 @@ import type { ActionId } from "@/shortcuts/definitions";
 import type { OrderChoice } from "../assign";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { RichTips, Tip } from "@/components/ui/Tip";
+import ActionButton from "@/shortcuts/ActionButton";
+import { useIsTouchMode } from "@/stores/InputModeStore";
 import {
     ActionFace,
     RecalculateFace,
@@ -187,14 +189,21 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
     const hidden = useShapeHidden();
     const tool = useToolEditTarget();
     const placed = usePlacedEditTarget();
+    const touch = useIsTouchMode();
     if (hidden) return <ShapeAwayChip />;
     if (armed || clicking)
         return (
             <div
-                className="rounded-6 border-stroke bg-bg-1 bg-modal text-body text-text shadow-modal pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 border px-12 py-6"
+                className={clsx(
+                    "rounded-6 border-stroke bg-bg-1 bg-modal text-body text-text shadow-modal pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 border px-12 py-6",
+                    // The touch layout's buttons for what Enter, Backspace and Escape do
+                    touch && "flex items-center gap-12 py-4 pr-4",
+                )}
                 data-testid="shape-tool-hint"
             >
-                {clicking ? (
+                {touch ? (
+                    <TouchDrawHint armed={armed} clicking={clicking} />
+                ) : clicking ? (
                     <RemovePointHint />
                 ) : armed!.clickPoints ? (
                     <T
@@ -213,6 +222,7 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
                         }}
                     />
                 )}
+                {touch && <DrawButtons clicking={clicking} />}
             </div>
         );
     const target = toolOpen ? tool : placed;
@@ -254,6 +264,82 @@ function RemovePointHint() {
                 esc,
             }}
         />
+    );
+}
+
+/**
+ * The touch layout's hint while a shape tool is armed or a line's points are tapped: what a
+ * finger does, without the keys and right-click the desktop hint names
+ */
+function TouchDrawHint({
+    armed,
+    clicking,
+}: {
+    armed: AnyToolKind | null;
+    clicking: boolean;
+}) {
+    if (clicking)
+        return (
+            <span>
+                {tolgee.t(
+                    "shapes.edit.pointsHintTouch",
+                    "Tap to add points · Double-tap or Finish to end",
+                )}
+            </span>
+        );
+    return armed?.clickPoints ? (
+        <T
+            keyName="shapes.edit.drawPointsHintTouchFor"
+            params={{ shape: toolId(armed) }}
+        />
+    ) : (
+        <T
+            keyName="shapes.edit.drawHintTouchFor"
+            params={{ shape: armed ? toolId(armed) : "other" }}
+        />
+    );
+}
+
+/**
+ * Finish, Undo point and Discard in the touch layout (tablet 1.4), where there's no Enter,
+ * Backspace or Escape: the same actions the keys run. Finish and Undo point only while a line's
+ * points are tapped.
+ */
+function DrawButtons({ clicking }: { clicking: boolean }) {
+    const button = (variant: "primary" | "secondary") =>
+        // text-body after twMerge, which drops it (docs/conventions/ui-styling.md)
+        `${getButtonClassName({ variant, size: "compact" })} text-body`;
+    return (
+        <span className="pointer-events-auto flex items-center gap-6">
+            {clicking && (
+                <ActionButton
+                    action="shapeRemoveLastPoint"
+                    className={button("secondary")}
+                    onPointerDown={keepFocus}
+                    data-testid="shape-tool-undo-point"
+                >
+                    {tolgee.t("shapes.edit.undoPoint", "Undo point")}
+                </ActionButton>
+            )}
+            <ActionButton
+                action="shapeDiscard"
+                className={button("secondary")}
+                onPointerDown={keepFocus}
+                data-testid="shape-tool-discard"
+            >
+                {tolgee.t("shapes.edit.discard", "Discard")}
+            </ActionButton>
+            {clicking && (
+                <ActionButton
+                    action="applyShape"
+                    className={button("primary")}
+                    onPointerDown={keepFocus}
+                    data-testid="shape-tool-finish"
+                >
+                    {tolgee.t("shapes.edit.finish", "Finish")}
+                </ActionButton>
+            )}
+        </span>
     );
 }
 
@@ -1185,6 +1271,8 @@ const EndControls = memo(function EndControls({
     live: ShapeEditTarget;
     canPlace: boolean;
 }) {
+    // No Escape on a tablet: the open shape's way out, beside Place (tablet 1.4)
+    const touch = useIsTouchMode();
     return (
         <>
             <span className="flex items-center gap-2">
@@ -1198,6 +1286,19 @@ const EndControls = memo(function EndControls({
             {canPlace && (
                 <>
                     <Divider />
+                    {touch && (
+                        <ActionButton
+                            action="shapeDiscard"
+                            className={`${getButtonClassName({
+                                variant: "secondary",
+                                size: "compact",
+                            })} text-body`}
+                            onPointerDown={keepFocus}
+                            data-testid="shape-editor-discard"
+                        >
+                            {tolgee.t("shapes.edit.discard", "Discard")}
+                        </ActionButton>
+                    )}
                     <button
                         type="button"
                         // text-body after twMerge, which drops it (docs/conventions/ui-styling.md)
@@ -1367,6 +1468,7 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         // The knob stands a fixed distance off the shape on screen, so it's found at this zoom
         const { knob } = frameControls(kind, params, spots, {
             hitRadius: HANDLE_REACH_PX / (view.zoom || 1),
+            stemUnit: HANDLE_REACH_PX / (view.zoom || 1),
         });
         return editorPlacement({
             outline: outline.map((p) => fieldToElement(view, p.x, p.y)),

@@ -701,6 +701,32 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
         hiddenFromPalette: true,
     },
+    // The open shape thrown away, placing nothing (tablet 1.4): the touch layout's Discard, as
+    // Escape is with a keyboard. While clicking a line's points, those points; mid-drag, the drag.
+    // No key of its own: Escape already does it (shapes/tool/ShapeToolKeys)
+    shapeDiscard: {
+        labelKey: "actions.shape.discard",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    // Drawing a polygon prop (C2.1): finished now, as its double-click does, and its last corner
+    // taken back (tablet 1.4, the drawing card's Finish and Undo point). No keys: the mouse
+    // double-clicks (field/fieldPropTool)
+    propFinishDrawing: {
+        labelKey: "actions.prop.finishDrawing",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    propRemoveLastPoint: {
+        labelKey: "actions.prop.removeLastPoint",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
     // The floating editor's turn and Recalculate (#429), for the open or selected shape only. While
     // one is shown, Alt+F and Alt+Shift+F (flipHorizontal/flipVertical) flip the shape instead of
     // the marchers (shapes/editor/ShapeEditorBar)

@@ -29,8 +29,10 @@ const AREA: Record<Exclude<FieldDragAction, "pan">, AreaKind> = {
 /**
  * What a single finger's press does: edit what it lands on, or, on empty
  * field, what the drag mode says (move the view in Auto and Pan, draw a box
- * or lasso in Box and Lasso). With a tool or field mode on, an empty-field
- * finger keeps moving the view: those presses are the tool's.
+ * or lasso in Box and Lasso). With the prop tool on, or a field mode that
+ * claims the press (the open shape tool claims them all), the finger edits:
+ * it draws (tablet 1.4). With a mode on that doesn't claim it, an
+ * empty-field finger keeps moving the view.
  */
 export function fingerRole(
     editor: Editor,
