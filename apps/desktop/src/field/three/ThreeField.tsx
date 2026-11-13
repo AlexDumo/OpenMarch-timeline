@@ -94,6 +94,7 @@ import TouchModifierButtons from "@/components/canvas/touch/TouchModifierButtons
 import FieldContextMenu, { useFieldMenu } from "./FieldContextMenu";
 import { attachFieldPointerInput } from "./fieldPointerInput";
 import { attachFieldGestures } from "./fieldGestures";
+import { fingerRole, holdDragArea, penDrag } from "./fieldDragModes";
 import { runFieldHistory } from "./fieldHistory";
 import { cameraBounds, useFieldViewStore } from "./fieldView";
 import {
@@ -541,15 +542,16 @@ function ThreeFieldView() {
         );
     }, []);
     // Fingers and the pen's palm rule (tablet plan 1.1): one finger on a
-    // marcher or the selection selects and moves it (1.2), elsewhere it pans;
-    // two pan and pinch, a long press asks the editor for a menu. Preview
+    // marcher or the selection selects and moves it (1.2), elsewhere it does
+    // what the pill's drag mode says (1.3: pans in Auto, or draws a box or
+    // lasso); two pan and pinch, a long press asks the editor for a menu. Preview
     // edits nothing, so there fingers only navigate
     useEffect(() => {
         if (!root.current) return;
         return attachFieldGestures(root.current, () => element.current, {
             editor: () => (isPreviewMode() ? null : editor),
-            singleFinger: (press) =>
-                editor.fingerEdits(press) ? "edit" : "navigate",
+            singleFinger: (press) => fingerRole(editor, press),
+            holdDrag: (press) => holdDragArea(editor, press),
             tap: (pointer) => {
                 if (!isPreviewMode()) editor.fingerTap(pointer);
             },
@@ -914,7 +916,12 @@ function EditorInput({
     const preview = useIsPreviewMode();
 
     useEffect(
-        () => (preview ? undefined : attachFieldPointerInput(canvas, editor)),
+        () =>
+            preview
+                ? undefined
+                : attachFieldPointerInput(canvas, editor, {
+                      penDrag: (press) => penDrag(editor, press),
+                  }),
         [canvas, editor, preview],
     );
     // A drag moves marchers outside the playhead's fills: draw them

@@ -11,6 +11,9 @@ covers:
   - action:selectAllMarchers
   - action:cancelAlignmentUpdates
   - i18n:toolbar.select
+  - i18n:touch.dragMode
+  - apps/desktop/src/components/canvas/touch/fieldDragMode.ts
+  - apps/desktop/src/field/three/fieldDragModes.ts
 sidebar:
   order: 2
 ---
@@ -90,7 +93,18 @@ Marchers placed on a box are selected together: clicking one of them selects the
 
 On a touch screen, tap a marcher to select only it. Your tap doesn't have to land exactly on the dot: the nearest marcher within about a fingertip's width is picked. Tap empty field to clear the selection. To add marchers to the selection, tap <Ui k="touch.modifiers.add" /> on the buttons over the field to keep it on, then tap each marcher.
 
-A finger dragged on empty field moves the view rather than drawing a box. To draw a box, use a pen, which works like a mouse, or the <Ui k="inspector.shape.selectTab" /> tab: there, a switch beside <Ui k="toolbar.select.selectByText" /> chooses whether a tapped group replaces the selection or adds to it.
+What a drag on empty field does depends on the drag mode, the first button over the field (<Ui k="touch.dragMode.prefix" plain /> followed by the mode's name). Tap it to choose:
+
+- <Ui k="touch.dragMode.auto" />, the starting mode: one finger moves the view, and a pen such as Apple Pencil draws a box. To draw a box with a finger, press and hold on empty field for half a second, then drag.
+- <Ui k="touch.dragMode.box" />: one finger, or the pen, draws a box. Use two fingers to move the view.
+- <Ui k="touch.dragMode.lasso" />: one finger, or the pen, draws around the marchers to select. Use two fingers to move the view.
+- <Ui k="touch.dragMode.pan" />: one finger, or the pen, moves the view.
+
+In every mode, a drag that starts on a marcher, or inside the frame around the selection, moves the marchers. The mode is kept on this device, not in the show file.
+
+To take marchers out of the selection, tap <Ui k="touch.modifiers.subtract" /> to keep it on, then draw a box or lasso around them, as <Kbd keys="Alt" gesture="drag" /> does with a mouse. <Ui k="touch.modifiers.add" /> and <Ui k="touch.modifiers.subtract" /> don't stay on together: turning one on turns the other off.
+
+The <Ui k="inspector.shape.selectTab" /> tab selects whole groups: there, a switch beside <Ui k="toolbar.select.selectByText" /> chooses whether a tapped group replaces the selection or adds to it.
 
 ## Related
 

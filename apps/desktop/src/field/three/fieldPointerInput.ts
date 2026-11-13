@@ -1,7 +1,20 @@
 import type { FieldEditor, FieldPointer } from "@/field/editor/fieldEditor";
+import { thresholdsFor } from "@/field/editor/pointerThresholds";
+import { panBy } from "@/field/editor/view";
 import { isMacPlatform } from "@/shortcuts/platform";
-import { fieldPointerAt } from "./fieldView";
+import { fieldPointerAt, useFieldViewStore } from "./fieldView";
 import { fieldGesturesOwn } from "./fieldGestures";
+import { setView } from "./fieldNavigation";
+
+export type FieldPointerInputOptions = {
+    /**
+     * What a pen's press does (the pill's drag mode, tablet 1.3): null sends
+     * it to the editor as a mouse press, `"lasso"` too but a drag from empty
+     * field draws a lasso, and `"pan"` moves the view (a pen tap there is
+     * still a click). Default: every press is the editor's.
+     */
+    penDrag?: (press: FieldPointer) => "pan" | "lasso" | null;
+};
 
 /**
  * Reports the pointer on the new field's canvas to the editor: positions on
@@ -15,27 +28,39 @@ import { fieldGesturesOwn } from "./fieldGestures";
 export function attachFieldPointerInput(
     element: HTMLElement,
     editor: FieldEditor,
+    options: FieldPointerInputOptions = {},
 ): () => void {
     const pointer = (event: PointerEvent): FieldPointer =>
         fieldPointerAt(element, event);
 
     /** The pointer the editor's press captured; other captures (navigation's) aren't its to cancel. */
     let captured: number | null = null;
+    const penPan = attachPenPan(element, editor);
     const down = (event: PointerEvent) => {
         if (fieldGesturesOwn(event)) return;
-        if (!editor.pointerDown(pointer(event))) return;
+        let press = pointer(event);
+        if (event.pointerType === "pen" && event.button === 0) {
+            const drag = options.penDrag?.(press) ?? null;
+            if (drag === "pan") {
+                penPan.start(event, press);
+                return;
+            }
+            if (drag === "lasso") press = { ...press, area: "lasso" };
+        }
+        if (!editor.pointerDown(press)) return;
         captured = event.pointerId;
         element.setPointerCapture(event.pointerId);
     };
     const move = (event: PointerEvent) => {
-        if (fieldGesturesOwn(event)) return;
+        if (fieldGesturesOwn(event) || penPan.move(event)) return;
         editor.pointerMove(pointer(event));
     };
     const up = (event: PointerEvent) => {
-        if (fieldGesturesOwn(event)) return;
+        if (fieldGesturesOwn(event) || penPan.end(event)) return;
         editor.pointerUp(pointer(event));
     };
     const cancel = (event: PointerEvent) => {
+        penPan.cancel(event);
         if (event.pointerId !== captured) return;
         captured = null;
         editor.pointerCancel();
@@ -68,6 +93,66 @@ export function attachFieldPointerInput(
         unsubscribe();
         editor.pointerCancel();
         element.style.cursor = "";
+    };
+}
+
+/**
+ * A pen press that moves the view (the pill's Pan mode, tablet 1.3): it pans
+ * one to one once it leaves the pen's click slop, catching up at once, and a
+ * press that never left it is a click on empty field, as a tap there is.
+ */
+function attachPenPan(element: HTMLElement, editor: FieldEditor) {
+    let pan: {
+        id: number;
+        press: FieldPointer;
+        x: number;
+        y: number;
+        moved: boolean;
+    } | null = null;
+    const end = (panning: boolean) => {
+        pan = null;
+        if (panning) useFieldViewStore.setState({ panning: false });
+    };
+    return {
+        start(event: PointerEvent, press: FieldPointer) {
+            pan = {
+                id: event.pointerId,
+                press,
+                x: event.clientX,
+                y: event.clientY,
+                moved: false,
+            };
+            element.setPointerCapture(event.pointerId);
+        },
+        /** Whether the move was the pan's */
+        move(event: PointerEvent): boolean {
+            if (pan?.id !== event.pointerId) return false;
+            const dx = event.clientX - pan.x;
+            const dy = event.clientY - pan.y;
+            if (!pan.moved) {
+                if (Math.hypot(dx, dy) < thresholdsFor("pen").moveThreshold)
+                    return true;
+                pan.moved = true;
+                useFieldViewStore.setState({ panning: true });
+            }
+            pan.x = event.clientX;
+            pan.y = event.clientY;
+            const { width, height, zoom, panX, panY } =
+                useFieldViewStore.getState();
+            setView(panBy({ width, height, zoom, panX, panY }, dx, dy));
+            return true;
+        },
+        /** Whether the release was the pan's */
+        end(event: PointerEvent): boolean {
+            if (pan?.id !== event.pointerId) return false;
+            const { press, moved } = pan;
+            end(moved);
+            if (!moved) editor.fingerTap(press);
+            return true;
+        },
+        cancel(event: PointerEvent) {
+            if (pan?.id === event.pointerId) end(pan.moved);
+        },
     };
 }
 

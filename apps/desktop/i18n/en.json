@@ -3320,6 +3320,19 @@
         }
     },
     "touch": {
+        "dragMode": {
+            "auto": "Auto",
+            "autoDescribe": "{device, select, pencil {One finger moves the view. Apple Pencil, or press and hold then drag, draws a box.} other {One finger moves the view. A pen, or press and hold then drag, draws a box.}}",
+            "box": "Box",
+            "boxDescribe": "{device, select, pencil {One finger or Apple Pencil draws a box to select. Two fingers move the view.} other {One finger or a pen draws a box to select. Two fingers move the view.}}",
+            "button": "Drag on empty field: {label}. {describe} Tap to change",
+            "lasso": "Lasso",
+            "lassoDescribe": "{device, select, pencil {One finger or Apple Pencil draws around marchers to select them. Two fingers move the view.} other {One finger or a pen draws around marchers to select them. Two fingers move the view.}}",
+            "menu": "Drag on empty field",
+            "pan": "Pan",
+            "panDescribe": "{device, select, pencil {One finger or Apple Pencil moves the view.} other {One finger or a pen moves the view.}}",
+            "prefix": "Drag:"
+        },
         "modifiers": {
             "add": "Add",
             "addHint": "Add: hold, or tap to keep on. Tapping marchers adds them to the selection",
@@ -3328,11 +3341,13 @@
             "explain": {
                 "add": "Tap marchers to add or remove them.",
                 "constrain": "Equal spacings, one axis when moving, flips proportional scaling.",
+                "dragMode": "What one finger or the pen does on empty field: move the view, or draw a box or lasso.",
                 "fine": "Marchers move slowly, off the grid. Shapes leave the half steps but still catch lines. Turns go by whole degrees.",
                 "fromCenter": "Boxes draw and resize from their center.",
                 "grip": "Drag to move.",
                 "help": "Gestures.",
-                "snap": "Turns Snap to steps and lines on or off."
+                "snap": "Turns Snap to steps and lines on or off.",
+                "subtract": "A box or lasso takes marchers out of the selection."
             },
             "fine": "Fine",
             "fineHint": "Fine: hold, or tap to keep on. Marchers move slowly, off the grid; shapes leave the half steps; turns go by whole degrees",
@@ -3343,11 +3358,14 @@
             "help": "What these buttons do",
             "helpList": {
                 "add": "<b>Add</b> taps add to the selection · <b>Snap off</b> moves freely",
+                "dragMode": "<b>Drag</b> chooses what one finger does on empty field: move the view, or draw a box or lasso",
                 "fine": "<b>Fine</b> exact drags and turns · <b>Equal</b> equal spacings",
                 "fromCenter": "<b>From center</b> boxes grow from the middle",
                 "toggles": "<b>Tap</b> a button to keep it on, or <b>hold</b> it while you drag"
             },
-            "noSnap": "Snap off"
+            "noSnap": "Snap off",
+            "subtract": "Subtract",
+            "subtractHint": "Subtract: hold, or tap to keep on. A box or lasso takes the marchers it covers out of the selection"
         },
         "redone": "Redone",
         "undone": "Undone"

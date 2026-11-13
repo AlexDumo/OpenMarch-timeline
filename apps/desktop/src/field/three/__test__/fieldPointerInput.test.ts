@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { FieldEditor, type FieldEditorPorts } from "@/field/editor/fieldEditor";
 import type { FieldPoint } from "@/field/editor/view";
-import { attachFieldPointerInput } from "../fieldPointerInput";
+import {
+    attachFieldPointerInput,
+    type FieldPointerInputOptions,
+} from "../fieldPointerInput";
 import { useFieldViewStore } from "../fieldView";
 
 /**
@@ -10,8 +13,15 @@ import { useFieldViewStore } from "../fieldView";
  * that press, and nothing the drag drew stays. A real editor over two
  * marchers; the view is 1 CSS px per field unit from the element's corner.
  */
-function setup() {
-    useFieldViewStore.setState({ zoom: 1, panX: 0, panY: 0 });
+function setup(options?: FieldPointerInputOptions) {
+    useFieldViewStore.setState({
+        width: 800,
+        height: 600,
+        zoom: 1,
+        panX: 0,
+        panY: 0,
+        field: { width: 1e6, height: 1e6 },
+    });
     const state = {
         selected: [] as readonly number[],
         shown: null as ReadonlyMap<number, FieldPoint> | null,
@@ -54,7 +64,7 @@ function setup() {
     const root = document.createElement("div");
     root.append(element);
     document.body.append(root);
-    const detach = attachFieldPointerInput(element, editor);
+    const detach = attachFieldPointerInput(element, editor, options);
     const fire = (
         type: string,
         {
@@ -191,5 +201,56 @@ describe("attachFieldPointerInput, right presses that start off the field (#315 
         // Over: later right-button moves from elsewhere aren't the field's
         fire("pointermove", { x: 50, y: 50, buttons: 2, target: root });
         expect(moves).toEqual([{ x: 420, y: 520 }]);
+    });
+});
+
+describe("attachFieldPointerInput, the pen and the drag modes (tablet 1.3)", () => {
+    const pen = { pointerType: "pen" } as const;
+
+    it("pans with a pen press the mode says pans, one to one once past the pen's slop", () => {
+        const { state, captures, fire } = setup({ penDrag: () => "pan" });
+        fire("pointerdown", { x: 400, y: 300, buttons: 1, ...pen });
+        expect(captures.has(1)).toBe(true);
+        fire("pointermove", { x: 403, y: 300, buttons: 1, ...pen });
+        expect(useFieldViewStore.getState().panX).toBe(0);
+        fire("pointermove", { x: 440, y: 310, buttons: 1, ...pen });
+        expect(useFieldViewStore.getState()).toMatchObject({
+            panX: 40,
+            panY: 10,
+        });
+        fire("pointerup", { x: 440, y: 310, ...pen });
+        expect(useFieldViewStore.getState().panning).toBe(false);
+        expect(state.selected).toEqual([]);
+    });
+
+    it("clicks with a pen press there that never left its slop: the selection clears, as a tap's", () => {
+        const { state, fire } = setup({ penDrag: () => "pan" });
+        state.selected = [1];
+        fire("pointerdown", { x: 400, y: 300, buttons: 1, ...pen });
+        fire("pointerup", { x: 402, y: 300, ...pen });
+        expect(state.selected).toEqual([]);
+        expect(useFieldViewStore.getState().panX).toBe(0);
+    });
+
+    it("draws a lasso with a pen press the mode says lassos", () => {
+        const { editor, fire } = setup({ penDrag: () => "lasso" });
+        fire("pointerdown", { x: 300, y: 300, buttons: 1, ...pen });
+        fire("pointermove", { x: 340, y: 300, buttons: 1, ...pen });
+        expect(editor.activeGesture()).toBe("lasso");
+    });
+
+    it("asks only about a pen's primary press: a mouse's press never changes", () => {
+        const asked: string[] = [];
+        const { editor, fire } = setup({
+            penDrag: (press) => {
+                asked.push(press.kind);
+                return "pan";
+            },
+        });
+        fire("pointerdown", { x: 300, y: 300, buttons: 1 });
+        fire("pointermove", { x: 340, y: 300, buttons: 1 });
+        expect(asked).toEqual([]);
+        expect(editor.activeGesture()).toBe("marquee");
+        expect(useFieldViewStore.getState().panX).toBe(0);
     });
 });
