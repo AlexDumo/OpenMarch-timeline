@@ -1,4 +1,8 @@
-import type { FieldEditor, FieldPointer } from "@/field/editor/fieldEditor";
+import type {
+    AreaKind,
+    FieldEditor,
+    FieldPointer,
+} from "@/field/editor/fieldEditor";
 import {
     touchNavigation,
     type ElementPoint,
@@ -27,9 +31,10 @@ import { fieldPointerAt, useFieldViewStore } from "./fieldView";
  * - A single finger's press does what {@link FieldGestureOptions.singleFinger}
  *   says: `"edit"` hands it to the editor (`pointerDown`/`Move`/`Up`, and
  *   `pointerCancel` when a second finger lands), `"navigate"` moves the view
- *   once it leaves the tap slop. Today one finger always navigates (decision 1
- *   is deferred); later tickets choose per press (on a marcher, a tool armed,
- *   the drag mode on the pill).
+ *   once it leaves the tap slop, and `"marquee"` or `"lasso"` hands it to the
+ *   editor to draw that from empty field (the pill's drag mode, tablet 1.3).
+ * - A navigating finger held still, then dragged, may draw a box instead
+ *   ({@link FieldGestureOptions.holdDrag}).
  * - Two or more fingers pan and pinch the view. The field point under the
  *   fingers stays under them, one to one.
  * - A finger held still and then lifted without moving asks the editor for
@@ -55,10 +60,10 @@ export type FieldGestureEditor = Pick<
 
 /**
  * What a single finger's press does, decided as it goes down: edit through
- * the editor (it may still decline the press, which then navigates), or move
- * the view.
+ * the editor (it may still decline the press, which then navigates), draw a
+ * marquee or lasso through it from empty field, or move the view.
  */
-export type SingleFingerRole = "edit" | "navigate";
+export type SingleFingerRole = "edit" | "navigate" | AreaKind;
 
 export type FieldGestureOptions = {
     /** The editor presses go to; null where nothing is edited (Preview). */
@@ -68,6 +73,12 @@ export type FieldGestureOptions = {
      * navigates, as on the field before the tablet port.
      */
     singleFinger?: (press: FieldPointer) => SingleFingerRole;
+    /**
+     * A navigating finger was held still on `press` (a long press armed), then
+     * dragged: what it draws from there instead of moving the view, or null
+     * to keep moving the view. Default: it keeps moving the view.
+     */
+    holdDrag?: (press: FieldPointer) => AreaKind | null;
     /** A navigating finger tapped (lifted within the tap slop) at `pointer`. */
     tap?: (pointer: FieldPointer) => void;
     /** A two-finger tap (undo) or three-finger tap (redo). */
@@ -129,8 +140,12 @@ const INPUT_TYPES: Record<string, "down" | "move" | "up" | "cancel"> = {
  */
 export class FieldGestures {
     private state: GestureState = initialGestureState();
-    /** The single finger's press, and what it does */
-    private single: { id: number; role: SingleFingerRole } | null = null;
+    /** The single finger's press, what it does, and where it went down */
+    private single: {
+        id: number;
+        role: "edit" | "navigate";
+        down: FieldGestureEvent;
+    } | null = null;
     /** The view and finger geometry when the navigation (re)started */
     private navigation: { view: FieldView; from: TouchGeometry } | null = null;
     private cancelTimer: (() => void) | null = null;
@@ -213,13 +228,21 @@ export class FieldGestures {
             case "singleStart": {
                 if (!event) break;
                 const press = this.env.pointer(event);
-                let role: SingleFingerRole =
+                const chosen: SingleFingerRole =
                     editor && this.env.singleFinger
                         ? this.env.singleFinger(press)
                         : "navigate";
-                if (role === "edit" && !editor?.pointerDown(press))
-                    role = "navigate";
-                this.single = { id: effect.id, role };
+                const edits =
+                    chosen !== "navigate" &&
+                    (editor?.pointerDown(
+                        chosen === "edit" ? press : { ...press, area: chosen },
+                    ) ??
+                        false);
+                this.single = {
+                    id: effect.id,
+                    role: edits ? "edit" : "navigate",
+                    down: event,
+                };
                 break;
             }
             case "singleDragged":
@@ -257,9 +280,12 @@ export class FieldGestures {
                     editor.pointerUp(at);
                 break;
             }
-            // Armed, the press carries on: a move after it is a drag or a pan
-            case "longPressArmed":
+            // Armed, the press carries on: a move after it is a drag or a pan,
+            // or, for a finger that would pan, a box (`holdDrag`)
             case "longPressMoved":
+                this.holdDragged(effect.id);
+                break;
+            case "longPressArmed":
             case "longPressCancelled":
                 break;
             case "navigationStart":
@@ -289,6 +315,22 @@ export class FieldGestures {
                 this.env.history?.(effect.type);
                 break;
         }
+    }
+
+    /**
+     * A navigating finger moved after holding still: from empty field it may
+     * draw a box from where it went down ({@link FieldGestureOptions.holdDrag})
+     * instead of moving the view. The move that got here goes on to the
+     * editor (`step`), and so does the rest of the press.
+     */
+    private holdDragged(id: number) {
+        const single = this.single;
+        const editor = this.env.editor();
+        if (single?.id !== id || single.role !== "navigate" || !editor) return;
+        const start = this.env.pointer(single.down);
+        const area = this.env.holdDrag?.(start) ?? null;
+        if (area && editor.pointerDown({ ...start, area }))
+            single.role = "edit";
     }
 
     /**

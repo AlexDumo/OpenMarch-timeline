@@ -83,7 +83,16 @@ export type FieldPointer = {
     alt: boolean;
     ctrl: boolean;
     meta: boolean;
+    /**
+     * What a drag of this press draws if it starts on empty field, as the
+     * pill's drag mode chose for a finger or pen (tablet 1.3). Unset (a mouse,
+     * always): a marquee, or a lasso after a double-click.
+     */
+    area?: AreaKind;
 };
+
+/** What a drag from empty field draws: a marquee (box) or a lasso. */
+export type AreaKind = "marquee" | "lasso";
 
 /** What the editor reads from, and writes to, the rest of the app. */
 export type FieldEditorPorts = {
@@ -205,7 +214,8 @@ export type FieldEditorOptions = {
      * The touch pill's toggles (`onScreenToggles` in `TouchModifierStore`): its held roles count
      * as held keys for every drag, a toggle changed mid-drag re-runs it as a key does, and the
      * press rule never blocks them. `add` is the add press choice at every press, as Shift is: a
-     * click, a press-drag and a marquee or lasso add to the selection.
+     * click, a press-drag and a marquee or lasso add to the selection. `subtract` is Alt's: a
+     * marquee or lasso takes what it covers out of the selection (add wins when both are on).
      */
     onScreen?: FieldOnScreen;
 };
@@ -215,6 +225,7 @@ export type FieldOnScreen = {
     roles(): ReadonlySet<HeldRole>;
     subscribe(changed: () => void): () => void;
     add(): boolean;
+    subtract?(): boolean;
 };
 
 /**
@@ -257,6 +268,10 @@ export type FieldPress = {
     double: boolean;
     /** The pill's Add was on at the press: the add choice, as Shift is. */
     add?: boolean;
+    /** The pill's Subtract was on at the press: the subtract choice, as Alt is. */
+    subtract?: boolean;
+    /** What a drag from empty field draws, when a drag mode chose it ({@link FieldPointer.area}). */
+    area?: AreaKind;
 };
 
 /**
@@ -642,6 +657,8 @@ export class FieldEditor {
             handle,
             double: !handle && this.isDoubleClick(pointer, hit),
             add: this.options.onScreen?.add() ?? false,
+            subtract: this.options.onScreen?.subtract?.() ?? false,
+            area: pointer.area,
         };
         return true;
     }
@@ -835,10 +852,26 @@ export class FieldEditor {
         if (this.handleAt(pointer) || this.marcherAt(pointer) !== null)
             return true;
         return (
-            !(this.options.onScreen?.add() ?? false) &&
+            !this.onScreenAreaChoice() &&
             !this.modeOwnsSelectionBox() &&
             this.insideSelectionBox(this.ports.selection.get(), pointer.field)
         );
+    }
+
+    /**
+     * Whether a finger or pen press at `pointer` is on empty field, where the
+     * pill's drag mode decides what its drag does (tablet 1.3): no tool or
+     * field mode is on, and the press lands on nothing a drag would move
+     * ({@link fingerEdits}).
+     */
+    pressOnEmptyField(pointer: FieldPointer): boolean {
+        return !this.propTool && !this.mode && !this.fingerEdits(pointer);
+    }
+
+    /** The pill's Add or Subtract is on: a press inside the selection box draws an area, as Shift or Alt does */
+    private onScreenAreaChoice(): boolean {
+        const screen = this.options.onScreen;
+        return (screen?.add() ?? false) || (screen?.subtract?.() ?? false);
     }
 
     /**
@@ -1266,15 +1299,24 @@ export class FieldEditor {
     private startArea(press: FieldPress): FieldGesture {
         const start = this.areaStart(press);
         const isMac = this.options.isMac ?? false;
-        this.area = press.double
-            ? startLasso(this.areaPorts, start, isMac)
-            : startMarquee(this.areaPorts, start, isMac);
+        this.area =
+            press.double || press.area === "lasso"
+                ? startLasso(this.areaPorts, start, isMac)
+                : startMarquee(this.areaPorts, start, isMac);
         return this.area;
     }
 
-    /** The keys an area from `press` starts with: the pill's Add adds, as Shift at the press does. */
+    /**
+     * The keys an area from `press` starts with: the pill's Add adds, as Shift
+     * at the press does, and its Subtract subtracts, as Alt does.
+     */
     private areaStart(press: FieldPress): FieldPointer {
-        return press.add ? { ...press.start, shift: true } : press.start;
+        if (!press.add && !press.subtract) return press.start;
+        return {
+            ...press.start,
+            shift: press.start.shift || press.add === true,
+            alt: press.start.alt || press.subtract === true,
+        };
     }
 
     /** Whether a press on `hit` (null: empty field) is the second of a double-click. */
@@ -1533,8 +1575,10 @@ export class FieldEditor {
         const keeps =
             shift ||
             (press.hit === null &&
-                areaChoice(press.start, this.options.isMac ?? false) ===
-                    "subtract");
+                areaChoice(
+                    this.areaStart(press),
+                    this.options.isMac ?? false,
+                ) === "subtract");
         this.write(
             chosen ??
                 selectionAfterClick(

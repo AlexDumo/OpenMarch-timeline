@@ -21,6 +21,7 @@ import "@/shapes/editor/__test__/pointerEvents";
 import { useAlignmentActionHandlers } from "@/shortcuts/handlers/useAlignmentActionHandlers";
 import { subscribeToActionRuns } from "@/shortcuts/registry";
 import type { ActionId } from "@/shortcuts/definitions";
+import { FIELD_DRAG_MODE_KEY, useFieldDragModeStore } from "../fieldDragMode";
 import TouchModifierButtons, {
     parseModifierPosition,
     TOUCH_MODIFIER_POSITION_KEY,
@@ -76,6 +77,7 @@ afterEach(() => {
     useInputModeStore.getState().setPreference("auto");
     localStorage.removeItem(TOUCH_MODIFIER_POSITION_KEY);
     useUiSettingsStore.getState().setSnap(true);
+    useFieldDragModeStore.getState().setMode("auto");
 });
 
 describe("the pill", () => {
@@ -91,7 +93,14 @@ describe("the pill", () => {
         touchMode(true);
         renderPill();
         const pill = screen.getByTestId("touch-modifier-buttons");
-        for (const name of ["Fine", "Equal", "From center", "Add"])
+        for (const name of [
+            "Fine",
+            "Equal",
+            "From center",
+            "Add",
+            "Subtract",
+            "Drag:",
+        ])
             expect(pill.textContent).toContain(name);
         const labels = [...pill.querySelectorAll("[aria-label]")]
             .map((el) => el.getAttribute("aria-label"))
@@ -219,6 +228,7 @@ describe.each([
     ["constrain", "Equal", "Equal spacings"],
     ["fromCenter", "From center", "from their center"],
     ["add", "Add", "adds them to the selection"],
+    ["subtract", "Subtract", "out of the selection"],
 ] as const)("%s, for assistive tech", (toggle, name, hint) => {
     const pressed = () =>
         screen.getByRole("button", { name }).getAttribute("aria-pressed");
@@ -397,5 +407,76 @@ describe("where it sits", () => {
         expect(parseModifierPosition('{"left":12}')).toBeNull();
         expect(parseModifierPosition('{"left":"12","bottom":30}')).toBeNull();
         expect(parseModifierPosition('{"left":null,"bottom":30}')).toBeNull();
+    });
+});
+
+describe("Subtract", () => {
+    it("a tap latches it, which the field reads as Alt's subtract, and lets go of Add", () => {
+        touchMode(true);
+        renderPill();
+        tap(button("add"));
+        tap(button("subtract"));
+        expect(button("subtract").getAttribute("aria-pressed")).toBe("true");
+        expect(button("add").getAttribute("aria-pressed")).toBe("false");
+        expect(isShiftHeld()).toBe(false);
+        expect(onScreenRoles().size).toBe(0);
+    });
+});
+
+describe("the drag mode menu (tablet 1.3)", () => {
+    it("says the mode on the button, Auto to start with", () => {
+        touchMode(true);
+        renderPlacedPill();
+        const mode = screen.getByTestId("field-drag-mode");
+        expect(mode.textContent).toContain("Auto");
+        expect(mode.getAttribute("aria-label")).toContain(
+            "One finger moves the view",
+        );
+        expect(mode.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("opens a menu of the four modes, the current one checked", () => {
+        touchMode(true);
+        renderPlacedPill();
+        fireEvent.click(screen.getByTestId("field-drag-mode"));
+        const menu = screen.getByRole("menu", { name: "Drag on empty field" });
+        const entries = [
+            ...menu.querySelectorAll("[role='menuitemradio']"),
+        ] as HTMLElement[];
+        expect(entries.map((e) => e.textContent?.split(/One|\s/)[0])).toEqual([
+            "Auto",
+            "Box",
+            "Lasso",
+            "Pan",
+        ]);
+        expect(entries.map((e) => e.getAttribute("aria-checked"))).toEqual([
+            "true",
+            "false",
+            "false",
+            "false",
+        ]);
+        expect(menu.textContent).toContain("Two fingers move the view");
+    });
+
+    it("picking a mode keeps it on this device, shows it, and closes the menu", () => {
+        touchMode(true);
+        renderPlacedPill();
+        fireEvent.click(screen.getByTestId("field-drag-mode"));
+        fireEvent.click(screen.getByTestId("field-drag-mode-box"));
+        expect(useFieldDragModeStore.getState().mode).toBe("box");
+        expect(localStorage.getItem(FIELD_DRAG_MODE_KEY)).toBe("box");
+        expect(screen.queryByRole("menu")).toBeNull();
+        expect(screen.getByTestId("field-drag-mode").textContent).toContain(
+            "Box",
+        );
+    });
+
+    it("closes on a press elsewhere, which does nothing more, changing nothing", () => {
+        touchMode(true);
+        renderPlacedPill();
+        fireEvent.click(screen.getByTestId("field-drag-mode"));
+        fireEvent.pointerDown(document.body, { pointerId: 9 });
+        expect(screen.queryByRole("menu")).toBeNull();
+        expect(useFieldDragModeStore.getState().mode).toBe("auto");
     });
 });

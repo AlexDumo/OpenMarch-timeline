@@ -19,11 +19,13 @@ import {
 function setup({
     editor = true,
     singleFinger,
+    holdDrag,
     claims = true,
     menuOpens = false,
 }: {
     editor?: boolean;
     singleFinger?: (press: FieldPointer) => SingleFingerRole;
+    holdDrag?: FieldGestureOptions["holdDrag"];
     claims?: boolean;
     /** What the editor's `longPress` answers: whether a menu opened */
     menuOpens?: boolean;
@@ -39,7 +41,9 @@ function setup({
     const calls: string[] = [];
     const ed = {
         pointerDown: vi.fn((p: FieldPointer) => {
-            calls.push(`down ${p.screen.x},${p.screen.y}`);
+            calls.push(
+                `down ${p.screen.x},${p.screen.y}${p.area ? ` ${p.area}` : ""}`,
+            );
             return claims;
         }),
         pointerMove: vi.fn((p: FieldPointer) => {
@@ -62,6 +66,7 @@ function setup({
     const options: FieldGestureOptions = {
         editor: () => (editor ? ed : null),
         singleFinger,
+        holdDrag,
         history,
         tap,
     };
@@ -264,6 +269,120 @@ describe("a finger that edits", () => {
         s.finger("up", 1, 340, 320, 64);
         s.finger("up", 2, 400, 320, 64);
         expect(s.calls).toHaveLength(3);
+    });
+});
+
+describe("a finger that draws an area (drag modes, tablet 1.3)", () => {
+    it("hands the press to the editor with what to draw: a marquee or a lasso", () => {
+        for (const area of ["marquee", "lasso"] as const) {
+            const s = setup({ singleFinger: () => area });
+            drag(s, 1, { x: 110, y: 120 }, 40, 0, 0, 2);
+            expect(s.calls).toEqual([
+                `down 100,100 ${area}`,
+                "move 120,100",
+                "move 140,100",
+                "up 140,100",
+            ]);
+            expect(s.views).toEqual([]);
+        }
+    });
+
+    it("navigates when the editor declines it", () => {
+        const s = setup({ singleFinger: () => "marquee", claims: false });
+        drag(s, 1, { x: 300, y: 300 }, 40, 0);
+        expect(s.calls).toEqual(["down 290,280 marquee"]);
+        expect(s.view().panX).toBe(40);
+    });
+
+    it("is cancelled by a second finger, which navigates (finger selects, two fingers move the view)", () => {
+        const s = setup({ singleFinger: () => "marquee" });
+        s.finger("down", 1, 300, 300, 0);
+        s.finger("move", 1, 340, 300, 16);
+        s.finger("down", 2, 400, 300, 32);
+        s.finger("move", 1, 340, 320, 48);
+        s.finger("move", 2, 400, 320, 48);
+        expect(s.calls).toEqual([
+            "down 290,280 marquee",
+            "move 330,280",
+            "cancel",
+        ]);
+        expect(s.view()).toMatchObject({ panX: 0, panY: 20 });
+    });
+});
+
+describe("a finger that draws an area, held still (Box and Lasso with #870's long press)", () => {
+    it("held and lifted without moving: the editor's long press (the field's menu), no click", () => {
+        const s = setup({ singleFinger: () => "marquee", menuOpens: true });
+        s.finger("down", 1, 300, 300, 0);
+        s.fireTimers();
+        s.finger("up", 1, 302, 300, 700);
+        expect(s.calls).toEqual(["down 290,280 marquee", "longPress 292,280"]);
+    });
+
+    it("held, then dragged: the area carries on, and no menu is asked for", () => {
+        const s = setup({ singleFinger: () => "lasso", menuOpens: true });
+        s.finger("down", 1, 300, 300, 0);
+        s.fireTimers();
+        s.finger("move", 1, 340, 300, 700);
+        s.finger("up", 1, 340, 300, 716);
+        expect(s.calls).toEqual([
+            "down 290,280 lasso",
+            "move 330,280",
+            "up 330,280",
+        ]);
+        expect(s.views).toEqual([]);
+    });
+});
+
+describe("a navigating finger held, then dragged (Auto's hold then drag)", () => {
+    it("draws what holdDrag says from where it went down, instead of panning", () => {
+        const holdDrag = vi.fn(() => "marquee" as const);
+        const s = setup({ holdDrag });
+        s.finger("down", 1, 300, 300, 0);
+        s.fireTimers();
+        s.finger("move", 1, 320, 300, 700);
+        s.finger("move", 1, 360, 310, 716);
+        s.finger("up", 1, 360, 310, 732);
+        expect(holdDrag.mock.calls[0][0].screen).toEqual({ x: 290, y: 280 });
+        // Holding only arms the long press: no menu, and the drag draws a box
+        expect(s.calls).toEqual([
+            "down 290,280 marquee",
+            "move 310,280",
+            "move 350,290",
+            "up 350,290",
+        ]);
+        expect(s.views).toEqual([]);
+    });
+
+    it("pans on when holdDrag says no, or the editor declines", () => {
+        for (const s of [
+            setup({ holdDrag: () => null }),
+            setup({ holdDrag: () => "marquee", claims: false }),
+        ]) {
+            s.finger("down", 1, 300, 300, 0);
+            s.fireTimers();
+            s.finger("move", 1, 340, 300, 700);
+            expect(s.view().panX).toBe(40);
+        }
+    });
+
+    it("held and lifted without moving: asks for the menu, never holdDrag (#870's rule)", () => {
+        const holdDrag = vi.fn(() => "marquee" as const);
+        const s = setup({ holdDrag, menuOpens: true });
+        s.finger("down", 1, 300, 300, 0);
+        s.fireTimers();
+        s.finger("up", 1, 303, 301, 700);
+        expect(holdDrag).not.toHaveBeenCalled();
+        expect(s.calls).toEqual(["longPress 293,281"]);
+        expect(s.views).toEqual([]);
+    });
+
+    it("pans, as ever, when the finger moved before the hold", () => {
+        const holdDrag = vi.fn(() => "marquee" as const);
+        const s = setup({ holdDrag });
+        drag(s, 1, { x: 300, y: 300 }, 40, 0);
+        expect(holdDrag).not.toHaveBeenCalled();
+        expect(s.view().panX).toBe(40);
     });
 });
 
