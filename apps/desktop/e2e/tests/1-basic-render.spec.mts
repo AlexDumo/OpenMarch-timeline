@@ -122,11 +122,7 @@ test("Field panel sections are visible", async ({ electronApp }) => {
     await expect(page.getByTestId("field-lines-axis")).toBeVisible();
     await expect(page.getByTestId("field-edit-lines")).toBeVisible();
     await page.getByTestId("field-tab-appearance").click();
-    for (const inside of [
-        "Yard numbers",
-        "Show Background Image",
-        "Marchers and paths",
-    ])
+    for (const inside of ["Yard numbers", "Marchers and paths"])
         await expect(inspector.getByText(inside)).toBeVisible();
     await expect(
         inspector.getByRole("button", { name: "Import Image" }),

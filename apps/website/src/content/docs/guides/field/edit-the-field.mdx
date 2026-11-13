@@ -104,15 +104,15 @@ To use a field in another show, select <Ui k="field.general.exportField" /> and 
 
 ## Lines
 
-The lines are the field's checkpoints: X lines run across the field, such as yard lines, and Y lines run from side to side, such as hashes and sidelines. A marcher's coordinate reads like "2 steps outside the 35, 4 steps behind the front hash".
+The lines are the field's checkpoints. X lines, such as yard lines, mark where you are from side to side; Y lines, such as hashes and sidelines, mark where you are from front to back. A marcher's coordinate reads like "2 steps outside the 35, 4 steps behind the front hash".
 
 The <Ui k="fieldEditMode.panel.tabs.lines" /> tab lists them, one way at a time: choose <Ui k="fieldEditMode.lines.xTab" values={{ count: 21 }} /> or <Ui k="fieldEditMode.lines.yTab" values={{ count: 5 }} /> above the list. A hidden line shows a crossed-out eye.
 
-To change lines, select <Ui k="fieldEditMode.lines.edit" />, or click a line in the list. The button turns to <Ui k="fieldEditMode.lines.editing" />, rulers appear along the top and left of the field, the marchers fade, and a note over the field says what to do. Select the button again, press <Kbd keys="Escape" /> with nothing picked, or switch tabs to stop. It's also in the command palette, as <Ui k="actions.field.editLines" />.
+To change lines, select <Ui k="fieldEditMode.lines.edit" />. Until you do, the list only shows the lines. The button turns to <Ui k="fieldEditMode.lines.editing" />, rulers appear along the top and left of the field, the marchers fade, and a note over the field says what to do. Select the button again, press <Kbd keys="Escape" /> with nothing picked, or switch tabs to stop. While a line is picked, <Kbd keys="Escape" /> drops the pick first, and the note says so. While a line is picked, the note says <Kbd keys="Escape" /> drops the pick first. It's also in the command palette, as <Ui k="actions.field.editLines" />.
 
 <Media
   id="field-edit-mode"
-  alt="The window with Edit lines on: the Lines tab with Editing lines and Mirror sides pressed, the picked 45 yard line's Edit, Hide, Reference and Delete, the list of side-to-side lines, rulers along the top and left of the field, faded marchers, and the note over the field."
+  alt="The window with Edit lines on: the Lines tab with Editing lines and Mirror sides pressed, the picked 40 yard line's Edit, Hide, Reference and Delete, the list of side-to-side lines, rulers along the top and left of the field with both 40s marked, faded marchers, and the note over the field saying Escape drops the pick."
 />
 
 <Ui k="fieldEditMode.panel.mirror" /> is on when you start: a change to an X line on one side of the 50 makes the same change to its twin on the other side. Turn it off with its button next to <Ui k="fieldEditMode.lines.editing" />, or press <Kbd action="fieldEditMirror" />, to change one side only.
@@ -213,7 +213,7 @@ Put a picture under the field, such as a floor tarp design or a photo of your fi
 
 </Steps>
 
-Importing an image also turns <Ui k="fieldProperties.labels.showBackgroundImage" /> on, in the same step to undo. Turn it off to hide the image, or select <Ui k="fieldEditMode.image.remove" /> to take it out of the show. Both are in the command palette too, as <Ui k="actions.field.importImage" /> and <Ui k="actions.field.removeImage" />. The field's and the image's width-to-height ratios are shown, to help you line them up.
+Importing an image also turns <Ui k="fieldProperties.labels.showBackgroundImage" /> on, in the same step to undo; that switch and the image's other settings show once the field has an image. Turn it off to hide the image, or select <Ui k="fieldEditMode.image.remove" /> to take it out of the show. Both are in the command palette too, as <Ui k="actions.field.importImage" /> and <Ui k="actions.field.removeImage" />. The field's and the image's width-to-height ratios are shown, to help you line them up.
 
 ### Colors
 

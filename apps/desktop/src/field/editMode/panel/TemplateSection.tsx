@@ -98,7 +98,7 @@ export function TemplateSection({ fp }: { fp: FieldProperties }) {
                     }}
                 >
                     <SelectTriggerButton
-                        className="h-26 w-[20rem] px-8"
+                        className="h-26 w-[21rem] px-8"
                         label={
                             base?.template.name ??
                             t("fieldProperties.customFieldName")

@@ -3957,14 +3957,15 @@
         "lines": {
             "edit": "Edit lines",
             "editing": "Editing lines",
-            "offHint": "Turn on Edit lines to pick, drag and add lines on the field, or click a line below.",
+            "offHint": "Turn on Edit lines to pick, drag and add lines on the field.",
             "onHint": "Click a line on the field or in the list to pick it. Shift-click picks more. Drag out of a ruler to add one.",
             "pickedMany": "{count} lines picked",
             "more": "More",
             "axis": "Which lines",
             "xTab": "Side to side · {count}",
             "yTab": "Front to back · {count}",
-            "canvasHint": "Click a line to pick it · Drag out of a ruler to add one · <keys></keys> to stop editing lines"
+            "canvasHint": "Click a line to pick it · Drag out of a ruler to add one · <keys></keys> to stop editing lines",
+            "canvasHintPicked": "Drag the picked lines to move them · <keys></keys> to drop the pick"
         }
     }
 }

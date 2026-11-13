@@ -13,6 +13,8 @@ import {
     useFieldEditModeEntry,
     useFieldPanelActions,
 } from "../useFieldEditModeActions";
+import { CommitInput, parseNumber } from "../panel/settingsInputs";
+import { LinesTab } from "../panel/LinesTab";
 
 /**
  * The Field panel and Edit lines (#824): the panel opens on Setup with line editing off, Edit
@@ -196,5 +198,73 @@ describe("keys while the panel is open", () => {
             });
         });
         expect(selectMarchers).not.toHaveBeenCalled();
+    });
+
+    it("Escape in a setting's field drops the typing, saves nothing and keeps the panel open (roast)", () => {
+        const onCommit = vi.fn();
+        render(
+            <Providers>
+                <ShortcutDispatcher />
+                <PanelKeys />
+                <CommitInput
+                    label="Step size"
+                    stored="22.5"
+                    current={22.5}
+                    parse={(text) => parseNumber(text, { min: 0 })}
+                    onCommit={onCommit}
+                    testId="step"
+                />
+            </Providers>,
+        );
+        act(() => fieldEditMode.enter());
+        const input =
+            document.querySelector<HTMLInputElement>("[data-testid=step]")!;
+        input.focus();
+        fireEvent.change(input, { target: { value: "30" } });
+        act(() => {
+            fireEvent.keyDown(input, { key: "Escape" });
+        });
+        expect(onCommit).not.toHaveBeenCalled();
+        expect(input.value).toBe("22.5");
+        expect(fieldEditMode.isActive()).toBe(true);
+    });
+});
+
+describe("the Lines tab", () => {
+    it("lets the axis switch change lists while a line is picked (roast)", () => {
+        const view = render(
+            <Providers>
+                <LinesTab fp={college} />
+            </Providers>,
+        );
+        act(() => {
+            fieldEditMode.enter({ lines: true });
+            fieldEditMode.select([toRef(forty)]);
+        });
+        expect(view.queryByTestId("field-lines-x")).not.toBeNull();
+        act(() => {
+            fireEvent.mouseDown(view.getByTestId("field-lines-axis-y"));
+            fireEvent.click(view.getByTestId("field-lines-axis-y"));
+        });
+        expect(view.queryByTestId("field-lines-y")).not.toBeNull();
+        expect(view.queryByTestId("field-lines-x")).toBeNull();
+    });
+
+    it("reads its rows only while Edit lines is off: a click picks nothing", () => {
+        const view = render(
+            <Providers>
+                <LinesTab fp={college} />
+            </Providers>,
+        );
+        act(() => fieldEditMode.enter());
+        act(() => {
+            fireEvent.click(
+                view.container.querySelector("[data-field-line-row]")!,
+            );
+        });
+        expect(fieldEditMode.get()).toMatchObject({
+            lines: false,
+            selection: [],
+        });
     });
 });

@@ -390,67 +390,79 @@ function ImageSection({ fp }: { fp: FieldProperties }) {
         h > 0 ? String(Number((w / h).toFixed(2))) : "–";
     return (
         <>
-            <SwitchRow
-                label={t("fieldProperties.labels.showBackgroundImage")}
-                checked={fp.showFieldImage}
-                onChange={(on) => set({ showFieldImage: on })}
-                testId="field-image-show"
-            />
-            <Row
-                label={t("fieldProperties.labels.conformMethod")}
-                title={t("fieldProperties.tooltips.conformMethod")}
-            >
-                <Select
-                    value={fp.imageFillOrFit}
-                    onValueChange={(value) =>
-                        set({ imageFillOrFit: value as "fill" | "fit" })
-                    }
-                >
-                    <SelectTriggerButton
-                        className={SELECT}
-                        label={t("fieldProperties.labels.conformMethod")}
+            {/* Showing, fitting and fading an image only mean something once there is one */}
+            {image && (
+                <>
+                    <SwitchRow
+                        label={t("fieldProperties.labels.showBackgroundImage")}
+                        checked={fp.showFieldImage}
+                        onChange={(on) => set({ showFieldImage: on })}
+                        testId="field-image-show"
                     />
-                    <SelectContent>
-                        <SelectGroup>
-                            <SelectItem value="fit">
-                                {t("fieldProperties.options.fit")}
-                            </SelectItem>
-                            <SelectItem value="fill">
-                                {t("fieldProperties.options.fill")}
-                            </SelectItem>
-                        </SelectGroup>
-                    </SelectContent>
-                </Select>
-            </Row>
-            <Row
-                label={
-                    <>
-                        {t("fieldProperties.labels.backgroundImageOpacity")}{" "}
-                        <span className="text-text-subtitle tabular-nums">
-                            {Math.round(
-                                (opacity ?? fp.backgroundImageOpacity) * 100,
+                    <Row
+                        label={t("fieldProperties.labels.conformMethod")}
+                        title={t("fieldProperties.tooltips.conformMethod")}
+                    >
+                        <Select
+                            value={fp.imageFillOrFit}
+                            onValueChange={(value) =>
+                                set({ imageFillOrFit: value as "fill" | "fit" })
+                            }
+                        >
+                            <SelectTriggerButton
+                                className={SELECT}
+                                label={t(
+                                    "fieldProperties.labels.conformMethod",
+                                )}
+                            />
+                            <SelectContent>
+                                <SelectGroup>
+                                    <SelectItem value="fit">
+                                        {t("fieldProperties.options.fit")}
+                                    </SelectItem>
+                                    <SelectItem value="fill">
+                                        {t("fieldProperties.options.fill")}
+                                    </SelectItem>
+                                </SelectGroup>
+                            </SelectContent>
+                        </Select>
+                    </Row>
+                    <Row
+                        label={
+                            <>
+                                {t(
+                                    "fieldProperties.labels.backgroundImageOpacity",
+                                )}{" "}
+                                <span className="text-text-subtitle tabular-nums">
+                                    {Math.round(
+                                        (opacity ?? fp.backgroundImageOpacity) *
+                                            100,
+                                    )}
+                                    %
+                                </span>
+                            </>
+                        }
+                    >
+                        <Slider
+                            aria-label={t(
+                                "fieldProperties.labels.backgroundImageOpacity",
                             )}
-                            %
-                        </span>
-                    </>
-                }
-            >
-                <Slider
-                    aria-label={t(
-                        "fieldProperties.labels.backgroundImageOpacity",
-                    )}
-                    className="w-[10rem]"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={[(opacity ?? fp.backgroundImageOpacity) * 100]}
-                    onValueChange={([v]) => setOpacity((v ?? 0) / 100)}
-                    onValueCommit={([v]) => {
-                        setOpacity(null);
-                        set({ backgroundImageOpacity: (v ?? 0) / 100 });
-                    }}
-                />
-            </Row>
+                            className="w-[10rem]"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={[
+                                (opacity ?? fp.backgroundImageOpacity) * 100,
+                            ]}
+                            onValueChange={([v]) => setOpacity((v ?? 0) / 100)}
+                            onValueCommit={([v]) => {
+                                setOpacity(null);
+                                set({ backgroundImageOpacity: (v ?? 0) / 100 });
+                            }}
+                        />
+                    </Row>
+                </>
+            )}
             <div className="flex flex-wrap gap-8 px-12">
                 <ActionButton
                     action="fieldEditImportImage"
@@ -469,14 +481,18 @@ function ImageSection({ fp }: { fp: FieldProperties }) {
                     </ActionButton>
                 )}
             </div>
-            <span data-testid="field-image-ratio">
-                <Hint>
-                    {t("fieldEditMode.image.ratios", {
-                        field: ratio(fp.width, fp.height),
-                        image: image ? ratio(image.width, image.height) : "–",
-                    })}
-                </Hint>
-            </span>
+            {image && (
+                <span data-testid="field-image-ratio">
+                    <Hint>
+                        {t("fieldEditMode.image.ratios", {
+                            field: ratio(fp.width, fp.height),
+                            image: image
+                                ? ratio(image.width, image.height)
+                                : "–",
+                        })}
+                    </Hint>
+                </span>
+            )}
         </>
     );
 }

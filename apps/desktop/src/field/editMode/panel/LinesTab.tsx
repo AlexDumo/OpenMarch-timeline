@@ -88,10 +88,13 @@ export function LinesTab({ fp }: { fp: FieldProperties }) {
             steps,
         });
     };
-    // A line picked on the field shows its own axis' list
+    // A line picked on the field shows its own axis' list, once, when the pick changes: the
+    // switch still works after (roast)
+    const lastAxis = last?.axis;
+    const lastId = last?.id;
     useEffect(() => {
-        if (last && last.axis !== axis) setAxis(last.axis);
-    }, [last, axis]);
+        if (lastAxis) setAxis(lastAxis);
+    }, [lastAxis, lastId]);
 
     return (
         <div className="flex flex-col gap-12">

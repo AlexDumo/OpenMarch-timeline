@@ -99,8 +99,7 @@ export function xLinesAsymmetric(fp: Pick<FieldProperties, "xCheckpoints">) {
 /**
  * The Field panel's list of lines on one axis (#824), linked to the field, one line per row like
  * the Marchers list (a mirrored pair is one row). While Edit lines is off the rows only say what
- * each line is (an eye-slash for a hidden one, a target for a reference); clicking one turns Edit
- * lines on with that line picked. While it's on the rows share the field's pick and hover, each
+ * each line is (an eye-slash for a hidden one), and clicking one does nothing. While it's on the rows share the field's pick and hover, each
  * row's eye and target hide or show its line and make it a reference or not (H and R on the
  * pick), and a + in each gap adds a line halfway.
  */
@@ -149,13 +148,10 @@ export function LinesList({
                               : sides.terseRight,
                       steps: row.distance,
                   });
+    // With Edit lines off a row is only read: clicking it changes nothing (sims: a click that
+    // turned the mode on surprised people, and made others afraid to touch the list)
     const pick = (row: LineRow, additive: boolean) => {
-        // A row clicked with Edit lines off starts it, with that line picked
-        if (!editing) {
-            fieldEditMode.setLines(true);
-            fieldEditMode.select([toRef(row.lead)]);
-            return;
-        }
+        if (!editing) return;
         fieldEditMode.select(clickLine(selection, toRef(row.lead), additive));
     };
     const toggle = (row: LineRow, key: "visible" | "useAsReference") => {
@@ -202,7 +198,9 @@ export function LinesList({
                                     ? "border-stroke bg-fg-2"
                                     : hovered
                                       ? "bg-text/5 border-transparent"
-                                      : "hover:bg-text/5 border-transparent",
+                                      : editing
+                                        ? "hover:bg-text/5 border-transparent"
+                                        : "border-transparent",
                                 !row.lead.visible && "text-text-subtitle",
                             )}
                             onClick={(e) =>
@@ -213,8 +211,7 @@ export function LinesList({
                                 )
                             }
                             onDoubleClick={() => {
-                                if (!editing) fieldEditMode.setLines(true);
-                                fieldEditMode.edit(ref);
+                                if (editing) fieldEditMode.edit(ref);
                             }}
                             onPointerEnter={() =>
                                 editing && fieldEditMode.setHover(ref)

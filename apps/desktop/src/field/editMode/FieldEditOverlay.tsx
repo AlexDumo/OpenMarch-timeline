@@ -120,6 +120,7 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
     const menu = useFieldEditModeStore((s) => s.menu);
     const selectMany = useFieldEditModeStore((s) => s.selectMany);
     const selection = existingSelection(fp, storedSelection);
+    const hasPick = selection.length > 0;
     // An undo can take a picked line away: forget it, and close its popover or menu
     useEffect(() => {
         if (selection !== storedSelection) fieldEditMode.select(selection);
@@ -456,6 +457,7 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                             y1={y1}
                             x2={x2}
                             y2={y2}
+                            // A hovered line is faint accent, so it never reads as picked (roast)
                             className={clsx(
                                 lit || hovered
                                     ? "stroke-accent"
@@ -466,7 +468,9 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                             strokeDasharray={
                                 c.visible ? undefined : lit ? "6 4" : "3 5"
                             }
-                            opacity={!c.visible && !lit && !hovered ? 0.7 : 1}
+                            opacity={
+                                lit ? 1 : hovered ? 0.4 : !c.visible ? 0.7 : 1
+                            }
                         />
                     );
                 })}
@@ -670,7 +674,11 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                     className="rounded-6 border-stroke bg-modal text-body text-text shadow-modal pointer-events-none absolute bottom-12 left-1/2 z-20 -translate-x-1/2 border px-12 py-6 whitespace-nowrap"
                 >
                     <T
-                        keyName="fieldEditMode.lines.canvasHint"
+                        keyName={
+                            hasPick
+                                ? "fieldEditMode.lines.canvasHintPicked"
+                                : "fieldEditMode.lines.canvasHint"
+                        }
                         params={{
                             keys: () => <Shortcut binding="Escape" />,
                         }}

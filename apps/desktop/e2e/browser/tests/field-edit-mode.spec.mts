@@ -118,27 +118,18 @@ test("the panel opens on Setup with the field shown, and Edit lines is a mode on
         "false",
     );
 
-    // A row clicked with Edit lines off starts it, with that line picked
+    // With Edit lines off a row is only read: a click picks nothing and starts nothing
     await page
-        .getByTestId("field-lines-x")
-        .locator("[data-field-line-row='x:" + (await line0(page)) + "']")
-        .click();
-    await expect(page.getByTestId("field-edit-lines")).toHaveAttribute(
-        "aria-pressed",
-        "true",
-    );
-    await expect(page.getByTestId("field-edit-picked")).toBeVisible();
-});
-
-/** The id of the first row in the X list (the 50) */
-async function line0(page: Page) {
-    const key = await page
         .getByTestId("field-lines-x")
         .locator("[data-field-line-row]")
         .first()
-        .getAttribute("data-field-line-row");
-    return key!.split(":")[1];
-}
+        .click();
+    await expect(page.getByTestId("field-edit-lines")).toHaveAttribute(
+        "aria-pressed",
+        "false",
+    );
+    await expect(page.getByTestId("field-edit-picked")).toHaveCount(0);
+});
 
 test("enter the mode, drag a mirrored line out of the ruler, undo, and leave with Escape", async ({
     show,
@@ -364,7 +355,7 @@ test("the Field panel's tabs hold the field's settings, each change one undo ste
         ["setup", "Step size"],
         ["setup", "Side Descriptions"],
         ["appearance", "Yard numbers"],
-        ["appearance", "Show Background Image"],
+        ["appearance", "Import Image"],
         ["appearance", "Marchers and paths"],
     ] as const) {
         await page.getByTestId(`field-tab-${tab}`).click();

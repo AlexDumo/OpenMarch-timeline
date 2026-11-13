@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { Input, Switch } from "@openmarch/ui";
 import clsx from "clsx";
 import { useDraft } from "../useDraft";
@@ -42,7 +42,14 @@ export function CommitInput<T>({
 }) {
     const [draft, setDraft] = useDraft(stored);
     const parsed = parse(draft);
+    // Escape drops the typing: the blur that follows must not save it (roast)
+    const cancelled = useRef(false);
     const commit = () => {
+        if (cancelled.current) {
+            cancelled.current = false;
+            setDraft(stored);
+            return;
+        }
         if (parsed === null || Object.is(parsed.value, current)) {
             setDraft(stored);
             return;
@@ -71,6 +78,10 @@ export function CommitInput<T>({
                         onKeyDown={(e) => {
                             if (e.key === "Enter") e.currentTarget.blur();
                             if (e.key === "Escape") {
+                                // The field's, not the panel's: it doesn't also step back
+                                e.preventDefault();
+                                e.stopPropagation();
+                                cancelled.current = true;
                                 setDraft(stored);
                                 e.currentTarget.blur();
                             }

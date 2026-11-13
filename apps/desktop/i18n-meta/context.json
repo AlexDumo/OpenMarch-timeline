@@ -2986,5 +2986,6 @@
     "fieldEditMode.size.extent": "Field panel (sidebar, edits the football field's lines and settings). Read-only width or depth of the field: steps, then the real length (e.g. \"160 steps · 100 yd\").",
     "fieldEditMode.template.basedOn": "Field panel (sidebar, edits the football field's lines and settings). Label of the row with the template the field is based on.",
     "fieldEditMode.template.resetShort": "Field panel (sidebar, edits the football field's lines and settings). Button that puts the field back to its template (asks first).",
-    "fieldEditMode.lines.canvasHint": "Field panel. Hint shown over the field while Edit lines is on. <keys></keys> becomes the Escape key's chip. Keep the three parts short."
+    "fieldEditMode.lines.canvasHint": "Field panel. Hint shown over the field while Edit lines is on. <keys></keys> becomes the Escape key's chip. Keep the three parts short.",
+    "fieldEditMode.lines.canvasHintPicked": "Field panel. Hint over the field while Edit lines is on and a line is picked. <keys></keys> becomes the Escape key's chip."
 }
