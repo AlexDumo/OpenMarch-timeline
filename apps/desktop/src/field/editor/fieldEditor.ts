@@ -20,6 +20,7 @@ import {
     handleAt,
     handleCursor,
     handlePoints,
+    wideHandleWins,
     rotatePositions,
     type HandleId,
     type SelectionFrame,
@@ -625,11 +626,7 @@ export class FieldEditor {
             this.ignoredButton = pointer.button;
             return true;
         }
-        const modePress: FieldModePress = {
-            reachesInside: () =>
-                this.reachInside(pointer, this.marcherAt(pointer)) !== null,
-            isMac: this.options.isMac ?? false,
-        };
+        const modePress = this.modePressFor(pointer);
         if (this.mode?.claims(pointer, modePress)) {
             const last = this.lastClick;
             this.press = null;
@@ -844,11 +841,13 @@ export class FieldEditor {
      * multi-selection's box (unless the pill's Add makes that press a marquee,
      * as Shift does). Anywhere else the finger moves the view.
      *
-     * Not while the prop tool or a field mode is on: their presses are
-     * theirs, and touch reaches them later (tablet 1.4).
+     * While the prop tool is on, every finger draws, and while a field mode
+     * is on, every press it claims is its own (tablet 1.4): the open shape
+     * tool claims them all, so one finger draws and two move the view.
      */
     fingerEdits(pointer: FieldPointer): boolean {
-        if (this.propTool || this.mode) return false;
+        if (this.propTool) return true;
+        if (this.mode?.claims(pointer, this.modePressFor(pointer))) return true;
         if (this.handleAt(pointer) || this.marcherAt(pointer) !== null)
             return true;
         return (
@@ -877,13 +876,23 @@ export class FieldEditor {
     /**
      * A finger tapped where it moves the view (empty field, tablet 1.2): a
      * click there, so it clears the selection as a click does (the pill's Add
-     * keeps it, as Shift does). Nothing while the prop tool or a field mode
-     * is on, as {@link fingerEdits}.
+     * keeps it, as Shift does). A field mode on sees it as it sees a click
+     * there. Nothing while the prop tool is on: its fingers draw
+     * ({@link fingerEdits}).
      */
     fingerTap(pointer: FieldPointer): void {
-        if (this.propTool || this.mode || !this.menuFree()) return;
+        if (this.propTool || !this.menuFree()) return;
         if (!this.pointerDown(pointer)) return;
         this.pointerUp(pointer);
+    }
+
+    /** What the editor tells a mode of a press at `pointer` */
+    private modePressFor(pointer: FieldPointer): FieldModePress {
+        return {
+            reachesInside: () =>
+                this.reachInside(pointer, this.marcherAt(pointer)) !== null,
+            isMac: this.options.isMac ?? false,
+        };
     }
 
     /** No press, drag or prop tool that a menu would cut into */
@@ -905,6 +914,9 @@ export class FieldEditor {
     /** The pointer was lost (capture lost, the window lost focus): nothing is clicked or dropped. */
     pointerCancel(): void {
         // The last click stays: the renderer also cancels after every release
+        // A press the prop tool was drawing with is dropped (a second finger
+        // landed to move the view): the corners already down stay
+        this.propTool?.cancel();
         if (this.modePress) {
             this.modePress = null;
             this.mode?.cancel();
@@ -1024,6 +1036,23 @@ export class FieldEditor {
     /** The prop tool's Outline being drawn, or null when it's off. */
     propToolShape(): PropToolShape | null {
         return this.propTool?.shape() ?? null;
+    }
+
+    /**
+     * Finishes the polygon the prop tool is drawing, as a double-click does
+     * (its Finish button, tablet 1.4). Returns whether it could: three
+     * corners or more, and no press held.
+     */
+    finishPropTool(): boolean {
+        return this.propTool?.finishNow() ?? false;
+    }
+
+    /**
+     * Takes back the last corner the prop tool's clicks put down (its Undo
+     * point button, tablet 1.4). Returns whether there was one.
+     */
+    removeLastPropPoint(): boolean {
+        return this.propTool?.removeLastPoint() ?? false;
     }
 
     /** What the mode draws over the field, or null with no mode or nothing drawn. */
@@ -1226,17 +1255,43 @@ export class FieldEditor {
         return { box, pad: this.ports.selectionBoxPadding?.() ?? 0, angle: 0 };
     }
 
-    /** The handle of the selection box `pointer` is on, within its kind's reach, or null. */
+    /**
+     * The handle of the selection box `pointer` is on, within its kind's reach, or null. A pen's
+     * or finger's wider reach gives way to a move where the press is on a marcher or inside the
+     * box ({@link wideHandleWins}, tablet 1.4); a mouse's is the handle as drawn, and wins there.
+     */
     private handleAt(pointer: FieldPointer): HandleId | null {
         const frame = this.selectionFrame();
         if (!frame) return null;
         const zoom = this.ports.zoom();
-        return handleAt(
-            handlePoints(frame, zoom),
+        const handles = handlePoints(frame, zoom);
+        const handle = handleAt(
+            handles,
             pointer.field,
             zoom,
             thresholdsFor(pointer.kind).handleReach,
         );
+        if (handle === null || pointer.kind === "mouse") return handle;
+        const hit = this.marcherAt(pointer);
+        const [onMarcher] =
+            hit !== null && !(this.ports.isItem?.(hit) ?? false)
+                ? this.drawnPositions([hit])
+                : [];
+        return wideHandleWins({
+            frame,
+            handle,
+            handles,
+            at: pointer.field,
+            zoom,
+            marcherDistance: onMarcher
+                ? Math.hypot(
+                      onMarcher.x - pointer.field.x,
+                      onMarcher.y - pointer.field.y,
+                  )
+                : Infinity,
+        })
+            ? handle
+            : null;
     }
 
     /**

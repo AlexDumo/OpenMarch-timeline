@@ -113,6 +113,58 @@ export function handleAt(
     return found;
 }
 
+/**
+ * Whether a pen or finger press within a handle's reach takes it, or moves the selection instead
+ * (tablet 1.4). A pen's or finger's reach is wider than the handle drawn, so on a narrow selection
+ * (two marchers in a row) it would cover nearly all of it, and a finger meant to move the
+ * selection would scale it. So the handle wins only when:
+ *
+ * - no marcher the press lands on is nearer than the handle (`marcherDistance`, field units;
+ *   Infinity when it lands on none), and
+ * - the press is outside the box drawn, or on the handle as drawn (its {@link HANDLE_SIZE}
+ *   square). Inside the box, the reach beyond the drawn handle is the move's.
+ *
+ * The rotate handle is outside the box, so only the first rule applies to it. A mouse keeps its
+ * own rule: within the drawn square, the handle always wins.
+ */
+export function wideHandleWins({
+    frame,
+    handle,
+    handles,
+    at,
+    zoom,
+    marcherDistance,
+}: {
+    frame: SelectionFrame;
+    handle: HandleId;
+    handles: Record<HandleId, FieldPoint>;
+    at: FieldPoint;
+    zoom: number;
+    marcherDistance: number;
+}): boolean {
+    const point = handles[handle];
+    const dx = Math.abs(at.x - point.x);
+    const dy = Math.abs(at.y - point.y);
+    if (marcherDistance < Math.hypot(dx, dy)) return false;
+    const drawn = HANDLE_SIZE / 2 / zoom;
+    if (dx <= drawn && dy <= drawn) return true;
+    return !insideFrame(frame, at);
+}
+
+/** Whether `point` is inside the selection box as drawn: around its marchers, `pad` out, turned. */
+export function insideFrame(
+    { box, pad, angle }: SelectionFrame,
+    point: FieldPoint,
+): boolean {
+    const local = rotatePoint(point, centerOf(box), -angle);
+    return (
+        local.x >= box.left - pad &&
+        local.x <= box.right + pad &&
+        local.y >= box.top - pad &&
+        local.y <= box.bottom + pad
+    );
+}
+
 /** The cursor over a handle: a resize arrow along its axis, a crosshair to rotate. */
 export function handleCursor(handle: HandleId) {
     switch (handle) {

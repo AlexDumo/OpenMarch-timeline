@@ -9,13 +9,15 @@ import { useLastLayoutStore } from "./lastLayout";
 import type { Roles } from "@/input/modifierRoles";
 import type { NudgeArgs } from "@/shortcuts/definitions";
 import { isSnapOn } from "@/stores/UiSettingsStore";
-import { thresholdsFor } from "@/field/editor/pointerThresholds";
+import {
+    thresholdsFor,
+    type PointerKind,
+} from "@/field/editor/pointerThresholds";
 
 /**
- * How far from a handle a press still takes it, in screen pixels: a mouse's
- * (`pointerThresholds.ts`). The knob's stem is drawn this many lengths long
- * too, so a pen's or finger's longer reach waits for the two to be separated
- * (tablet plan 1.4).
+ * How far from a handle a mouse press still takes it, in screen pixels (`pointerThresholds.ts`).
+ * The knob's stem is drawn this many lengths long whatever presses (`ToolEnv.stemUnit`); a pen or
+ * finger reaches further (`ToolEnv.hitRadius` for its kind).
  */
 export const HANDLE_REACH_PX = thresholdsFor("mouse").shapeHandleReach;
 
@@ -53,7 +55,8 @@ export const NO_ROLES: Roles = {
  * docs/timeline/research/shapes/modifier-roles.md). `snapOn` is the Snap toggle, read from the
  * settings when the env is made unless given, so a change mid-drag applies on the next move. A
  * dragged pivot snaps to every marcher drawn, and to `spots` (an open shape's, where its marchers
- * will stand).
+ * will stand). `kind` is what presses: a pen or finger reaches handles from further away (tablet
+ * 1.4); a mouse when absent.
  */
 export function toolEnvFor(
     field: ShapeField,
@@ -61,7 +64,12 @@ export function toolEnvFor(
     {
         snapOn = isSnapOn(),
         spots,
-    }: { snapOn?: boolean; spots?: () => readonly XY[] } = {},
+        kind = "mouse",
+    }: {
+        snapOn?: boolean;
+        spots?: () => readonly XY[];
+        kind?: PointerKind;
+    } = {},
 ): ToolEnv {
     const { fieldProperties } = field;
     const editor = useShapeEditorStore.getState();
@@ -84,7 +92,8 @@ export function toolEnvFor(
             });
             return { x: r.xPixels, y: r.yPixels };
         },
-        hitRadius: HANDLE_REACH_PX / (field.zoom() || 1),
+        hitRadius: thresholdsFor(kind).shapeHandleReach / (field.zoom() || 1),
+        stemUnit: HANDLE_REACH_PX / (field.zoom() || 1),
         zoom: field.zoom() || 1,
         fieldLines: fieldLinesOf(fieldProperties),
         pullRadius: EDGE_PULL_PX / (field.zoom() || 1),

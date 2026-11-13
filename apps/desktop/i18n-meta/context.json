@@ -104,6 +104,9 @@
     "actions.shape.quarterTurn": "Name of an action in the command palette and shortcut settings. Rotates the open or selected shape by a quarter turn (90 degrees) clockwise. \"Shape:\" is a prefix that groups shape actions together; keep a similar prefix and the colon.",
     "actions.shape.recalculate": "Name of an action in the command palette and shortcut settings. Works out again which marcher stands at which spot of the shape (for example after the shape was changed). \"Shape:\" is a prefix that groups shape actions together; keep a similar prefix and the colon.",
     "actions.shape.removeLastPoint": "Name of a shape action in the command palette and shortcut settings. Text: \"Shape: Remove the last point while drawing\".",
+    "actions.shape.discard": "Name of a shape action in the command palette and shortcut settings. Throws away the shape being drawn on the field without moving any marchers (what Escape does). Text: \"Shape: Discard\".",
+    "actions.prop.finishDrawing": "Name of an action in the command palette and shortcut settings. While drawing a prop (a stage piece or other object) on the field as a polygon, corner by corner, this finishes the outline and makes the prop.",
+    "actions.prop.removeLastPoint": "Name of an action in the command palette and shortcut settings. While drawing a prop's outline on the field corner by corner, this takes back the last corner placed.",
     "actions.shape.ring": "Name of an action in shortcut settings. The favorites ring is a circular menu of the user's favorite shapes: holding the key opens it so the user can aim at a shape and let go to pick it, while a quick tap opens it and keeps it open.",
     "actions.shape.shrink": "Name of an action in the command palette and shortcut settings. Makes the open or selected shape smaller without changing its proportions (its width-to-height ratio). \"Shape:\" is a prefix that groups shape actions together; keep a similar prefix and the colon.",
     "actions.shape.ungroup": "Name of the Ungroup action in the command palette and shortcut settings. Ungroup turns a placed shape (a box of marchers) back into plain marchers: they stay where they are and stop moving as one shape from that page on.",
@@ -1184,6 +1187,8 @@
     "props.delete": "Tooltip and screen-reader label of the red trash button on a prop's row in the Props panel. Deletes that prop; the user can undo it. A prop is a piece of equipment or scenery on the field (for example a floor, a platform or an obstacle).",
     "props.depth": "Label of the number field for a prop's depth, its size front to back, measured in meters. Shown when editing a prop's outline.",
     "props.draw.cancel": "Button on the hint card shown while drawing a prop on the field. Stops drawing without making a prop.",
+    "props.draw.finish": "Button on the hint card shown on a tablet while drawing a prop's outline corner by corner. Finishes the outline and makes the prop.",
+    "props.draw.undoPoint": "Button on the hint card shown on a tablet while drawing a prop's outline corner by corner. Takes back the last corner tapped.",
     "props.draw.instructions.arc": "Instruction on the card shown while drawing a prop with the Arc outline. The two ends are clicked first, then a third click sets how much the arc bends.",
     "props.draw.instructions.circle": "Instruction on the card shown while drawing a prop with the Circle outline. The user presses at the center and drags outward to set the radius.",
     "props.draw.instructions.drag": "Instruction on the card shown while drawing a prop with the Rectangle or Freehand outline. The playhead is the current position in the show's timeline; the prop appears on the field from that count (beat) onward.",
@@ -2918,5 +2923,13 @@
     "touch.modifiers.subtractHint": "Tooltip of the Subtract toggle on the tablet modifier bar. \"Hold\" means keep a finger on the button while another finger or the Apple Pencil works; \"tap to keep on\" latches it on until tapped again. Marchers are the dots on the field; a box or lasso is the selection area drawn by dragging.",
     "touch.modifiers.explain.subtract": "Explanation shown when the Subtract toggle on the tablet modifier bar is pressed and held. Marchers are the dots on the field; a box or lasso is the selection area drawn by dragging.",
     "touch.modifiers.explain.dragMode": "Explanation shown when the drag mode button on the tablet modifier bar is pressed and held: it chooses what a one-finger or pen drag does on an empty part of the field.",
-    "touch.modifiers.helpList.dragMode": "One line in the tablet modifier bar's help list. <b>…</b> marks the button's name (\"Drag\", as on the button) in bold; keep the tags. Explains the drag mode button: it chooses whether one finger on empty field moves the view or draws a selection box or lasso."
+    "touch.modifiers.helpList.dragMode": "One line in the tablet modifier bar's help list. <b>…</b> marks the button's name (\"Drag\", as on the button) in bold; keep the tags. Explains the drag mode button: it chooses whether one finger on empty field moves the view or draws a selection box or lasso.",
+    "props.draw.instructions.arcTouch": "Instructions on the hint card shown on a tablet while drawing a prop's outline as an arc: tap its two ends, then tap once more to set how far it bends.",
+    "props.draw.instructions.polygonTouch": "Instructions on the hint card shown on a tablet while drawing a prop's outline as a polygon. \"Finish\" is the name of the button on the same card; keep it the same as that button's text.",
+    "shapes.edit.discard": "Button shown on a tablet while a shape (box, circle, line) is being drawn or edited on the field before the marchers are placed on it. Throws the shape away; no marcher moves.",
+    "shapes.edit.drawHintTouchFor": "Hint shown on a tablet at the top of the field when a shape tool is chosen and nothing is drawn yet. {shape} picks the kind of shape; keep each choice's wording short.",
+    "shapes.edit.drawPointsHintTouchFor": "Hint shown on a tablet at the top of the field when a line-like shape tool is chosen and nothing is drawn yet: drag to draw it, or tap one point after another. {shape} picks the kind of shape.",
+    "shapes.edit.finish": "Button shown on a tablet while drawing a line on the field point by point. Finishes the line with the points tapped so far.",
+    "shapes.edit.pointsHintTouch": "Hint shown on a tablet while drawing a line point by point. \"Finish\" is the name of the button next to it; keep it the same as that button's text.",
+    "shapes.edit.undoPoint": "Button shown on a tablet while drawing a line on the field point by point. Takes back the last point tapped."
 }

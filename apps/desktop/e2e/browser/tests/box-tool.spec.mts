@@ -12,6 +12,7 @@ import {
     selectPage,
     setUiSettings,
     touchDrag,
+    twoFingerPan,
     waitForField,
     waitForIdle,
 } from "../app.mjs";
@@ -5897,7 +5898,7 @@ test("change: an Apple Pencil draws the box, stretches it by a handle and moves 
     expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
 });
 
-test("change: a finger on the field with the box tool armed pans, and draws no box", async ({
+test("change: a finger on the field with the box tool armed draws the box, and two fingers pan (tablet 1.4)", async ({
     show,
 }) => {
     const { page } = show;
@@ -5910,14 +5911,25 @@ test("change: a finger on the field with the box tool armed pans, and draws no b
     const pan = async () => (await readField(page)).viewport.pan;
     const before = await pan();
 
+    // One finger draws, as the mouse does, and the view stays put
     await touchDrag(
         page,
         await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
         await toScreen(page, { x: cf.x - 5 * S, y: cf.y - 19 * S }),
     );
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    const drawn = (await shapeOverlay(page))!.outline;
+    expect(drawn).not.toBeNull();
+    expect(await pan()).toEqual(before);
+
+    // Two fingers move the view, and leave the box as drawn
+    await twoFingerPan(
+        page,
+        await toScreen(page, { x: cf.x + 10 * S, y: cf.y - 10 * S }),
+        { x: 80, y: 40 },
+    );
     await expect.poll(async () => (await pan()).x).not.toBe(before.x);
-    expect((await shapeOverlay(page))!.outline).toBeNull();
-    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+    expect((await shapeOverlay(page))!.outline).toEqual(drawn);
 });
 
 test("change: on a screen that can't hover, the open box's controls and its floating editor stay solid with the pointer away", async ({
