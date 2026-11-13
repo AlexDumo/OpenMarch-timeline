@@ -3911,6 +3911,17 @@
             "doneButton": "Done",
             "banner": "Set order: drag through the marchers from the leader, or click them one by one · {picked} of {count}",
             "zoomIn": "Zoom in to read the order"
+        },
+        "corners": {
+            "chipLabel": "Turning counts {range} at this corner. Show who turns when.",
+            "chipOffLabel": "Turning counts {range} at this corner, some between counts. Show who turns when.",
+            "listTitle": "Turns at this corner",
+            "leader": "Leader",
+            "onCount": "count {count}",
+            "betweenCounts": "{count} · between {before} and {after}",
+            "stopBefore": "{count, plural, one {# stops before turning here} other {# stop before turning here}}",
+            "offCountShort": "Turns between counts",
+            "offCountTip": "{turns, plural, one {# turn falls} other {# turns fall}} between counts, at {corners, plural, one {# corner} other {# corners}}. Each marcher reaches a corner at its own steady speed. Move the corner, change the spacing or the move's counts to put every turn on a count. Click a corner's count to see who turns when."
         }
     }
 }

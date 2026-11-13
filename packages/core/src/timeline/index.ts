@@ -150,3 +150,19 @@ export type {
 export function createTimelineOracleForTesting(host: TimelineSnapshot): Oracle {
     return createOracle(host);
 }
+
+export {
+    trailCornerCounts,
+    wayCorners,
+    cornerCounts,
+    isOnCount,
+    CORNER_MIN_TURN,
+    ON_COUNT_TOLERANCE,
+} from "./trailCorners";
+export type {
+    WayWalk,
+    WayCorner,
+    CornerTurn,
+    CornerCount,
+    TrailEnds,
+} from "./trailCorners";

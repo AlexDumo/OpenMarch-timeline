@@ -37,6 +37,8 @@ import {
 import type { XY } from "@/shapes/types";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { refitNeeded } from "./pathTarget";
+import { TrailCornerCounts } from "./TrailCornerCounts";
+import { offCountTally, trailCornersOf } from "./trailCorners";
 import {
     EVEN_FIRST,
     EVEN_STEP,
@@ -314,6 +316,7 @@ export function PathEditor({
         return session.target.trail && (!hidden || session.object) ? (
             <RichTips>
                 <TrailLeaderMark session={session} />
+                <TrailCornerCounts session={session} />
             </RichTips>
         ) : null;
     return (
@@ -324,6 +327,7 @@ export function PathEditor({
                     <TrailLeaderMark session={session} />
                 </RichTips>
             )}
+            {session.target.trail && <TrailCornerCounts session={session} />}
             <RichTips>
                 <PathEditorBar
                     session={session}
@@ -490,6 +494,8 @@ function PathEditorBar({
         fieldHeight: size.fh,
     });
     const big = bigSteps(session, fieldProperties);
+    // Step 6 (TC-7): a trail's turns that fall between counts
+    const offCount = offCountTally(trailCornersOf(session));
     const drawing = session.phase === "drawing";
     const stored = session.target.routeId !== null;
     // The open path's selected point: Corner | Smooth for it, as its menu has (step 2)
@@ -592,7 +598,27 @@ function PathEditorBar({
                     </span>
                 </Tip>
             )}
-            {big && controls && <Divider />}
+            {offCount.turns > 0 && (
+                <Tip
+                    label={tolgee.t(
+                        "pathways.corners.offCountTip",
+                        "{turns, plural, one {# turn falls} other {# turns fall}} between counts, at {corners, plural, one {# corner} other {# corners}}. Each marcher reaches a corner at its own steady speed. Move the corner, change the spacing or the move's counts to put every turn on a count. Click a corner's count to see who turns when.",
+                        { turns: offCount.turns, corners: offCount.corners },
+                    )}
+                >
+                    <span
+                        className="text-yellow flex items-center gap-4 px-4"
+                        data-testid="path-off-count"
+                    >
+                        <WarningIcon size={14} weight="bold" aria-hidden />
+                        {tolgee.t(
+                            "pathways.corners.offCountShort",
+                            "Turns between counts",
+                        )}
+                    </span>
+                </Tip>
+            )}
+            {(big || offCount.turns > 0) && controls && <Divider />}
             {drawing ? (
                 <>
                     {kindChoice && (

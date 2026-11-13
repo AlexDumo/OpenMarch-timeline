@@ -3682,3 +3682,72 @@ data-visualization tools (light to dark carries the order in grey too).
 | QA-DL-39 | Nobody moves on page 3: an order set on page 2, then Clear on page 3; or instead an order 4→1 set on page 3 | Page 2 keeps its order each time; page 3 guesses, or shows 4→1                                            |
 | QA-DL-40 | A trail on page 2 and an order set on page 3 where nobody moves; the trail reversed     | Page 2 shows the trail's order; page 3 keeps the order set there                                            |
 | QA-DL-41 | A shape tool open, or a path open, then Shift+O; a path being drawn, then Shift+O        | The tool closes (undo brings the shape back) and Set order opens; while drawing it's unavailable, with its reason |
+
+### L.9 Step 6: corner counts for block letters
+
+**Change (plan step 6, ticket #648; built 2026-11-13 on the owner's standing brief, decisions
+below for the owner to confirm).** The owner asked for follow the leader "with block letters with
+a clear count at each corner". In follow the leader every marcher passes a corner at its own
+count, the leader first. So for each corner of a trail the field shows **which count each marcher
+turns on**, and warns when one turns **between counts**.
+
+**O-1 settled as the draft model proposed (§4.5).** A turning count on a trail is **derived, not
+pinned**: it comes from where the corner is, where each member starts and ends, and the move's
+counts. There are no time pins on a trail. To put a turn on a count, the designer moves the
+corner, changes the spacing, or changes the move's length, and watches the count update.
+
+Precedents: Blender's motion paths (frame numbers drawn at a path's keyed points), a map app's
+turn-by-turn list (each turn with when it comes), and a DAW's quantize grid (a note off the grid
+is flagged, not moved).
+
+| ID   | Rule |
+| ---- | ---- |
+| TC-1 | **A corner** is a place where the way the line walks turns by **20° or more**: a bend in the line-up (at a member's start), the leader's start where the line-up meets the drawn part, a drawn Corner point, an end of an arc leg (measured along the arc's own tangent), the entrance into the end line, and a bend in the end line. A Smooth point has no corner (the curve's direction doesn't jump there), and neither does a bend under 20°. The way is the resolver's own (R-9′, R-13′, R-13″): the line-up through the members' starts, the drawn part, then the end line through the slots' destinations (none when the ends are along the way). |
+| TC-2 | **A member turns at a corner** when it passes it: it reaches the corner more than a twentieth of a count (TC-4's tolerance) after its move starts and before it stops walking the way. A member that starts on the corner (the leader at its own start), stops on it, or reaches it within that twentieth of its start or stop doesn't turn there: a hand-drawn trail rarely puts a marcher's end exactly on a corner, and a turn on the move's last instant isn't one anyone marches. A member that joins or resumes partway (R-11) walks straight and turns at no corner of the trail. |
+| TC-3 | **The turning count** of member `q` at a corner at distance `c` on the way is `x = (c − startDist[q]) / (endDist[q] − startDist[q] + straight[q]) · N`, where `N` is the move's counts and `straight[q]` is R-13″'s straight leg to its spot (0 otherwise). It is counted from the move's start (its first flag is count 0), as Big steps counts a group path's legs. This is R-10's steady speed read backward, so the resolver has the member exactly at the corner at beat `start + x`. |
+| TC-4 | **On a count.** A count is shown to a tenth (`7.5`). A turn is on a count when it rounds to a whole count at that precision (`abs(x − round(x)) < 0.05`, about an inch at an 8-to-5 step); otherwise the member turns between counts `floor(x)` and `ceil(x)`. |
+| TC-5 | **The count chip.** Each corner that a member turns at gets a chip on the field, just outside the turn. It shows the first and last turning counts (`6–20`), or the one count when one member turns there. When any member turns between counts there, the chip has the warning color and icon. Chips show whenever the trail shows: its line selected (the trail shown closed, with the leader's mark), open, being drawn, or being dragged out of a line (step 4b, live with the pointer as DL-20 shows the end spots), with Ends From trail or Keep end spots. They hide while the trail is hidden (playback, or the Paths level turning it off), as the leader's mark does. |
+| TC-6 | **The corner's list.** A click or tap on a chip opens a list of every member who turns there, leader first, each with its name and count (`M4 · 6`). A turn between counts shows in the warning color as `7.5 · between 7 and 8`. Members who stop before the corner, or on it, are counted at the bottom ("3 stop before turning here"). A click elsewhere, Escape, or the chip again closes it. Chips are buttons, so Tab reaches them and Enter or Space opens the list. |
+| TC-7 | **The path bar's warning.** When a member turns between counts at any corner, the trail's path bar shows **Turns between counts** in the warning color, beside Big steps. Its tip says how many marchers and corners, and what puts a turn on a count. |
+| TC-8 | **Nothing is stored.** Counts are read, not written: no migration, no file version, no undo step. Every edit changes them only through what it already changes. Resizing the move scales `N`; a page-flag drag changes `N` the same way; a trail point edit, Reverse, an end-spot edit, split by marchers and merge change the way or who walks it. v0.1.7 files open unchanged. |
+
+**On the field.** A chip is the shape editor's small surface (`rounded-6`, `text-sub`), a step or
+so outside the corner along the line that halves the turn, so it never covers the corner's point
+handle or a dot on it. The list is a popover (`POPOVER_CLASS`) anchored to the chip.
+
+**Not in this step:** pins on a trail, and a "Put corners on counts" for trails. Pins are step
+5's, for drawn paths. Moving a trail's corner onto a count for the designer would also move it for
+every other member, so it needs its own design. Also left out: counts printed in a dot book (O-16),
+corners inside a shape's own path (a trail into a stored shape, which the app never writes), a turn
+for a member's straight leg to its spot off the way (R-13″), and corner counts for a group path or
+a single marcher's path. Those paths have no follow order, and their counts are step 5's pins.
+
+| QA       | Setup | Expected |
+| -------- | ----- | -------- |
+| QA-TC-1  | QA-TR-1: M1, M2, M3 at (0,0), (4,0), (8,0) over 16 counts, trail corners (14,0) and (14,10), into the line (20,10)–(20,22) | Corners at (14,0), (14,10) and the entrance (20,10); none at the leader's start (no turn). Counts at (14,0): M3 2.8, M2 5, M1 7.5; at (14,10): M3 7.5, M2 10, M1 12.8; at the entrance: M3 10.4, M2 13, and M1 stops there (no turn). Every one is the beat at which the resolver has that marcher on the corner |
+| QA-TC-2  | Four marchers 2 apart from (0,0), M4 leading, a trail up 8 to (6,8) then right 8 to (14,8), ends along the way, Keep spacing, 16 counts | Corners at the leader's start (6,0): M3 2, M2 4, M1 6; and at (6,8): M4 8, M3 10, M2 12, M1 14. Every turn on a count: no warning |
+| QA-TC-3  | QA-TC-2 over 12 counts | (6,8): M4 6, M3 7.5, M2 9, M1 10.5: M3 and M1 between counts, so the corner warns |
+| QA-TC-4  | A smooth point; a corner bending 15°; one bending 20° | No corner; no corner; a corner |
+| QA-TC-5  | A straight leg into an arc leg (bulge 1/2), then a straight leg on | A corner at each end of the arc, each turning 90° by the arc's tangent |
+| QA-TC-6  | Random trails (corners, smooth points, arc legs; ends along the way or into an end line; reversed or not) | At every listed turn, the resolver's position at `start + x` is the corner within `10⁻⁶`; counts increase from the leader back |
+| QA-TC-7  | A stored trail selected; open; drawn; dragged out with the pointer moving | Chips at the corners with the counts of TC-3; a tap opens the list, Escape closes it; nothing is written (the undo stack is unchanged) |
+| QA-TC-8  | QA-TC-3's warning | The chip in the warning color; its list shows `7.5 · between 7 and 8` for M3; the path bar shows Turns between counts |
+
+**Built (step 6, 2026-11-13).** Settled in the build, for the owner to confirm:
+
+- **The rules are core's** (`trailCornerCounts`, `wayCorners`, `cornerCounts` in
+  `packages/core/src/timeline/trailCorners.ts`). They build the way with the resolver's own
+  `makeTrail` and `makeAlongTrail`, so a listed count is the beat at which the resolver has that
+  marcher on the corner (QA-TC-6 checks it on 300 random trails). The resolver itself is
+  unchanged.
+- **The app reads the trail as drawn now**, so the chips follow a point drag before it's saved,
+  and the pointer while a trail is dragged out. A stored trail into end spots reads the whole end
+  line, vacant slots included (`TrailTarget.endLine`), as R-13′ does. A trail nobody founds shows
+  no chips.
+- **Start and stop tolerance (TC-2).** The first lab run showed a marcher "turning" on count 8 of
+  8: a hand-drawn trail rarely ends a marcher exactly on a corner. Within a twentieth of a count of
+  its start or stop now counts as starting or stopping there.
+- **Chips follow the trail's own visibility.** A closed trail is hidden when start flag
+  positions' paths are off (and after a drag-out the end shape opens in the shape tools, which
+  hides it too), so its chips are hidden with it; tapping **N** shows them. Whether a selected
+  line's chips should show even then is an owner question.

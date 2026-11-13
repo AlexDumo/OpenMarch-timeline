@@ -97,6 +97,18 @@ export interface TrailTarget {
      * (owner, 2026-11-10: drag the trail out of the other end instead)
      */
     along?: boolean;
+    /**
+     * The end line every slot's destination makes, in the order the line enters it (slot order,
+     * or reversed with R-12′), vacant slots included (R-13′): what corner counts read for a trail
+     * that isn't along the way (step 6, TC-1). Absent while a new trail is drawn: then it is the
+     * members' end spots, tail first.
+     */
+    endLine?: readonly XY[];
+    /**
+     * Nobody founds the move (each taken over at its start): the line is shown by its slots, so
+     * it can be reversed or removed, but nobody walks the trail, so no corner counts (TC-2)
+     */
+    unfounded?: boolean;
 }
 
 /** A member of a group path: where it starts and ends, and its lane's offset from the reference */
@@ -340,8 +352,9 @@ function targetOfTrail(
     trail: MoveTrail,
     resolver: Pick<Resolver, "explain" | "positionAt" | "ftlEntry">,
     drills: ReadonlyMap<number, string>,
-    entrance: XY | null,
+    endLine: readonly XY[],
 ): PathTarget | null {
+    const entrance = endLine[0] ?? null;
     const entry = resolver.ftlEntry(trail.transitionId);
     // With nobody founding the move (each taken over at its start) the trail still shows, by
     // its line's slots, so it can be reversed or removed
@@ -378,15 +391,17 @@ function targetOfTrail(
             leaderId: leader.marcherId,
             reverse: trail.reverse,
             along: trail.along,
+            endLine,
+            ...(entry.members.length === 0 ? { unfounded: true } : {}),
         },
     };
 }
 
-/** The end spot a trail's line is entered at: its first slot's, or its last when reversed */
-async function trailEntrance(
-    db: DbConnection,
-    trail: MoveTrail,
-): Promise<XY | null> {
+/**
+ * A trail's end line: every slot's destination in the order the line enters it, the first slot's
+ * first, or the last's when reversed (R-13′). Its first is the end spot the line is entered at.
+ */
+async function trailEndLine(db: DbConnection, trail: MoveTrail): Promise<XY[]> {
     const D = schema.timeline_slot_destinations;
     const spots = await db
         .select()
@@ -394,8 +409,8 @@ async function trailEntrance(
         .where(eq(D.transition_id, trail.transitionId))
         .orderBy(D.slot_index)
         .all();
-    const spot = trail.reverse ? spots.at(-1) : spots[0];
-    return spot ? { x: spot.x, y: spot.y } : null;
+    const line = spots.map((spot) => ({ x: spot.x, y: spot.y }));
+    return trail.reverse ? line.reverse() : line;
 }
 
 /**
@@ -420,7 +435,7 @@ export async function findTrailTarget(
         trail,
         resolver,
         drills,
-        await trailEntrance(db, trail),
+        await trailEndLine(db, trail),
     );
 }
 
@@ -440,7 +455,7 @@ export async function findTrailRouteTarget(
         trail,
         resolver,
         drills,
-        await trailEntrance(db, trail),
+        await trailEndLine(db, trail),
     );
 }
 
@@ -477,7 +492,7 @@ export async function findTrailDrawTarget(
             existing,
             resolver,
             drills,
-            await trailEntrance(db, existing),
+            await trailEndLine(db, existing),
         );
         if (target) return target;
     }
