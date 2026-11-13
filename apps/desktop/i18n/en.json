@@ -86,8 +86,8 @@
             "nudgeRight": "Move lines right",
             "nudgeUp": "Move lines back",
             "nudgeDown": "Move lines forward",
-            "nextPane": "Go to the next part of Edit field",
-            "previousPane": "Go to the previous part of Edit field",
+            "nextPane": "Go between the field and the Field panel",
+            "previousPane": "Go between the Field panel and the field",
             "importImage": "Import field background image…",
             "removeImage": "Remove field background image",
             "imageKeywords": "picture photo aerial background image field",
@@ -3952,7 +3952,7 @@
         "help": {
             "button": "Keyboard",
             "title": "Keyboard",
-            "route": "<tab></tab> picks the next line while the field has the keyboard. <pane></pane> moves between the field, this bar and the inspector."
+            "route": "<tab></tab> picks the next line while the field has the keyboard. <pane></pane> moves between the field and the Field panel."
         },
         "lines": {
             "edit": "Edit lines",
