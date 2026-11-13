@@ -1,3 +1,4 @@
+import { thresholdsFor } from "@/field/editor/pointerThresholds";
 import {
     initialGestureState,
     stepGesture,
@@ -173,6 +174,16 @@ const INPUT_TYPES: Record<string, "down" | "move" | "up" | "cancel"> = {
     pointercancel: "cancel",
 };
 
+/**
+ * How far a press on a timeline control (a clip, page box, flag, grip, edge) moves before it drags:
+ * the control's own mouse threshold, or at least a finger's move threshold, so a tap that wobbles
+ * stays a tap. Mouse and pen keep `mouseSlop`.
+ */
+export const fingerDragSlop = (pointerType: string, mouseSlop: number) =>
+    pointerType === "touch"
+        ? Math.max(mouseSlop, thresholdsFor("touch").moveThreshold)
+        : mouseSlop;
+
 /** Finger presses are the adapter's; mouse and pen presses never are. */
 export const timelineGesturesOwn = (event: Pick<PointerEvent, "pointerType">) =>
     event.pointerType === "touch";
@@ -228,6 +239,40 @@ export class TimelineGestures {
     /** Whether a gesture is under way. */
     get active(): boolean {
         return this.state.mode !== "idle";
+    }
+
+    /**
+     * The fingers whose events are the adapter's alone: a panning finger, and every finger of a
+     * navigation (the first one too, once a second finger took it from its control). The
+     * viewport holds their pointer capture, so their release always comes back here.
+     */
+    owned(): number[] {
+        if (this.state.mode === "gesture")
+            return this.state.pointers.map((p) => p.id);
+        return this.single?.pans ? [this.single.id] : [];
+    }
+
+    /** Whether the adapter is still following finger `id`. */
+    tracks(id: number): boolean {
+        return this.state.pointers.some((p) => p.id === id);
+    }
+
+    /**
+     * Finger `id` lifted somewhere the adapter never heard it (its capture was lost, or the
+     * element holding it went): forget it as a cancel, so it can't hold a gesture open.
+     */
+    drop(id: number, timeStamp: number): void {
+        const pointer = this.state.pointers.find((p) => p.id === id);
+        if (!pointer) return;
+        this.handle({
+            type: "pointercancel",
+            pointerId: id,
+            pointerType: "touch",
+            clientX: pointer.current.x,
+            clientY: pointer.current.y,
+            timeStamp,
+            target: null,
+        });
     }
 
     /** Stops: drops anything under way. */
@@ -340,19 +385,26 @@ const POINTER_TYPES = [
     "pointerup",
     "pointercancel",
 ] as const;
+const CAPTURE_TYPES = ["gotpointercapture", "lostpointercapture"] as const;
+const RELEASE_TYPES = ["pointerup", "pointercancel"] as const;
 
 /**
  * Puts the gesture adapter on `viewport`, the timeline's scroller, before the timeline's own
  * handlers see any event (capture phase). The finger events the adapter keeps don't reach them.
  * Also makes the viewport `touch-action: none`, so the browser never scrolls it itself (which
- * would cancel the press). Returns the detach.
+ * would cancel the press). The fingers the adapter keeps are captured by the viewport, and a
+ * window-wide fallback forgets a finger whose release never reached it, so a lost finger can't
+ * leave a gesture open. Returns the detach.
  */
+// eslint-disable-next-line max-lines-per-function
 export function attachTimelineGestures(
     viewport: HTMLElement,
     env: Omit<TimelineGestureEnv, "cancelPress" | "local">,
 ): () => void {
     /** Set while the adapter sends its own cancel, which it mustn't step on */
     let cancelling = false;
+    /** The element holding each finger's pointer capture, inside the timeline */
+    const captured = new Map<number, Element>();
     const gestures = new TimelineGestures({
         ...env,
         local: (clientX, clientY) => {
@@ -360,20 +412,17 @@ export function attachTimelineGestures(
             return { x: clientX - rect.left, y: clientY - rect.top };
         },
         cancelPress: (down) => {
-            const target = down.target;
-            if (!(target instanceof Element) || !target.isConnected) return;
+            // The element it went down on, or, if that went, the one holding its capture
+            const pressed =
+                down.target instanceof Element && down.target.isConnected
+                    ? down.target
+                    : captured.get(down.pointerId);
+            const target = pressed?.isConnected ? pressed : null;
+            if (!target) return;
             cancelling = true;
             try {
                 // Each drag on the timeline puts back what it moved on a cancel
-                target.dispatchEvent(
-                    new PointerEvent("pointercancel", {
-                        bubbles: true,
-                        pointerId: down.pointerId,
-                        pointerType: "touch",
-                        clientX: down.clientX,
-                        clientY: down.clientY,
-                    }),
-                );
+                target.dispatchEvent(fingerCancel(down));
             } finally {
                 cancelling = false;
             }
@@ -390,9 +439,45 @@ export function attachTimelineGestures(
     const onPointer = (event: PointerEvent) => {
         if (cancelling) return;
         if (gestures.handle(event)) event.stopPropagation();
+        // The fingers the adapter keeps are held by the viewport, so their moves and release
+        // come here wherever they go: off the pane, or after the control they were on went
+        for (const id of gestures.owned()) {
+            if (viewport.hasPointerCapture?.(id)) continue;
+            try {
+                viewport.setPointerCapture?.(id);
+            } catch {
+                // Already lifted: the window's fallback below forgets it
+            }
+        }
+    };
+    const onCapture = (event: PointerEvent) => {
+        if (!timelineGesturesOwn(event) || !(event.target instanceof Element))
+            return;
+        if (event.type === "gotpointercapture")
+            captured.set(event.pointerId, event.target);
+        else if (captured.get(event.pointerId) === event.target)
+            captured.delete(event.pointerId);
+    };
+    // A finger lifted where the viewport never heard it (its capture lost, or the element holding
+    // it gone): once the release has gone everywhere, a finger still followed is forgotten
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    const onWindowRelease = (event: PointerEvent) => {
+        if (!timelineGesturesOwn(event) || !gestures.tracks(event.pointerId))
+            return;
+        const { pointerId, timeStamp } = event;
+        const timer = setTimeout(() => {
+            timers.delete(timer);
+            captured.delete(pointerId);
+            gestures.drop(pointerId, timeStamp);
+        }, 0);
+        timers.add(timer);
     };
     for (const type of POINTER_TYPES)
         viewport.addEventListener(type, onPointer, { capture: true });
+    for (const type of CAPTURE_TYPES)
+        viewport.addEventListener(type, onCapture, { capture: true });
+    for (const type of RELEASE_TYPES)
+        window.addEventListener(type, onWindowRelease, { capture: true });
     const { style } = viewport;
     const before = {
         touchAction: style.touchAction,
@@ -403,10 +488,37 @@ export function attachTimelineGestures(
     return () => {
         for (const type of POINTER_TYPES)
             viewport.removeEventListener(type, onPointer, { capture: true });
+        for (const type of CAPTURE_TYPES)
+            viewport.removeEventListener(type, onCapture, { capture: true });
+        for (const type of RELEASE_TYPES)
+            window.removeEventListener(type, onWindowRelease, {
+                capture: true,
+            });
+        for (const timer of timers) clearTimeout(timer);
+        captured.clear();
         style.touchAction = before.touchAction;
         style.setProperty("-webkit-touch-callout", before.callout);
         gestures.dispose();
     };
+}
+
+/** The `pointercancel` the adapter sends a finger's press (a `MouseEvent` where there's no `PointerEvent`) */
+function fingerCancel(down: TimelineGestureEvent): Event {
+    const init = {
+        bubbles: true,
+        pointerId: down.pointerId,
+        pointerType: "touch",
+        clientX: down.clientX,
+        clientY: down.clientY,
+    };
+    if (typeof PointerEvent === "function")
+        return new PointerEvent("pointercancel", init);
+    const event = new MouseEvent("pointercancel", init);
+    Object.defineProperties(event, {
+        pointerId: { value: down.pointerId },
+        pointerType: { value: "touch" },
+    });
+    return event;
 }
 
 function ancestorsUpTo(element: Element, stop: Element): Element[] {

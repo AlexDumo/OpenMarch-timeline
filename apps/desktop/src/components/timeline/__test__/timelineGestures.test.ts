@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+    attachTimelineGestures,
+    fingerDragSlop,
     TimelineGestures,
     timelineNavigation,
     timelineTouchRegion,
@@ -106,6 +108,13 @@ describe("timelineDragSlop", () => {
         expect(timelineDragSlop("mouse")).toBe(TIMELINE_RANGE_DRAG_PX);
         expect(timelineDragSlop("pen")).toBe(TIMELINE_RANGE_DRAG_PX);
         expect(timelineDragSlop("touch")).toBe(12);
+    });
+
+    it("never narrows a control's own threshold for a finger", () => {
+        expect(fingerDragSlop("touch", 4)).toBe(12);
+        expect(fingerDragSlop("touch", 20)).toBe(20);
+        expect(fingerDragSlop("mouse", 6)).toBe(6);
+        expect(fingerDragSlop("pen", 6)).toBe(6);
     });
 });
 
@@ -254,5 +263,153 @@ describe("TimelineGestures", () => {
         send("pointerdown", 1, 100, 100);
         expect(send("pointercancel", 1, 100, 100)).toBe(false);
         expect(env.cancelPress).not.toHaveBeenCalled();
+    });
+});
+
+describe("a finger the adapter never hears lift", () => {
+    it("holds the gesture open until it's dropped, then lets the next press through", () => {
+        const { gestures, send, env } = setup(() => "control");
+        send("pointerdown", 1, 100, 100);
+        send("pointerdown", 2, 200, 100);
+        expect(env.cancelPress).toHaveBeenCalledTimes(1);
+        send("pointerup", 2, 200, 100);
+        // Finger 1 lifted off the pane: its release never came. A new press is swallowed
+        expect(gestures.tracks(1)).toBe(true);
+        expect(send("pointerdown", 3, 100, 100)).toBe(true);
+        send("pointerup", 3, 100, 100);
+        // Forgotten, the next press goes to its control again
+        gestures.drop(1, 1_000);
+        expect(gestures.tracks(1)).toBe(false);
+        expect(gestures.active).toBe(false);
+        expect(send("pointerdown", 4, 100, 100)).toBe(false);
+        expect(env.cancelPress).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the fingers it owns: a panning one, then every navigating one", () => {
+        const { gestures, send } = setup((x) => (x < 150 ? "control" : "body"));
+        send("pointerdown", 1, 100, 100);
+        // A control's finger is the control's
+        expect(gestures.owned()).toEqual([]);
+        send("pointerdown", 2, 200, 100);
+        // Taken from its control by the second finger, it's the adapter's too
+        expect(gestures.owned()).toEqual([1, 2]);
+        send("pointerup", 1, 100, 100);
+        send("pointerup", 2, 200, 100);
+        send("pointerdown", 3, 200, 100);
+        expect(gestures.owned()).toEqual([3]);
+    });
+
+    it("drops nothing it isn't following", () => {
+        const { gestures, navigate, env } = setup(() => "body");
+        gestures.drop(7, 0);
+        expect(navigate).not.toHaveBeenCalled();
+        expect(env.tap).not.toHaveBeenCalled();
+    });
+});
+
+/** A finger's pointer event in jsdom, which has no `PointerEvent` */
+function fingerEvent(
+    type: string,
+    pointerId: number,
+    clientX: number,
+    clientY = 100,
+    pointerType = "touch",
+) {
+    const event = new MouseEvent(type, { bubbles: true, clientX, clientY });
+    Object.defineProperties(event, {
+        pointerId: { value: pointerId },
+        pointerType: { value: pointerType },
+    });
+    return event;
+}
+
+describe("attachTimelineGestures", () => {
+    afterEach(() => {
+        vi.useRealTimers();
+        document.body.replaceChildren();
+    });
+
+    /** A viewport holding a control and bare track space, with pointer capture stubbed */
+    function mount() {
+        const viewport = document.createElement("div");
+        const control = document.createElement("button");
+        control.setAttribute("data-timeline-interactive", "true");
+        const bare = document.createElement("div");
+        viewport.append(control, bare);
+        document.body.append(viewport);
+        const held = new Set<number>();
+        const capture = vi.fn((id: number) => void held.add(id));
+        Object.assign(viewport, {
+            setPointerCapture: capture,
+            hasPointerCapture: (id: number) => held.has(id),
+        });
+        // What reaches the timeline's own handlers, past the adapter
+        const reached: string[] = [];
+        document.body.addEventListener("pointerdown", (event) =>
+            reached.push(`down ${(event as PointerEvent).pointerId}`),
+        );
+        const cancelled: Element[] = [];
+        document.body.addEventListener("pointercancel", (event) => {
+            if (event.target instanceof Element) cancelled.push(event.target);
+        });
+        const detach = attachTimelineGestures(viewport, {
+            region: (event) => (event.target === control ? "control" : "body"),
+            view: () => ({ scrollLeft: 0, scrollTop: 0, pixelsPerBeat: 10 }),
+            navigate: () => {},
+            leadingInset: () => 0,
+        });
+        return { viewport, control, bare, capture, reached, cancelled, detach };
+    }
+
+    it("captures a panning finger, and the first finger once a second takes it", () => {
+        const { control, bare, capture, reached, detach } = mount();
+        bare.dispatchEvent(fingerEvent("pointerdown", 1, 50));
+        expect(capture).toHaveBeenCalledWith(1);
+        // Kept from the timeline's own handlers
+        expect(reached).toEqual([]);
+        bare.dispatchEvent(fingerEvent("pointerup", 1, 50));
+        capture.mockClear();
+        control.dispatchEvent(fingerEvent("pointerdown", 2, 50));
+        expect(capture).not.toHaveBeenCalled();
+        expect(reached).toEqual(["down 2"]);
+        bare.dispatchEvent(fingerEvent("pointerdown", 3, 150));
+        expect(capture.mock.calls.map(([id]) => id).sort()).toEqual([2, 3]);
+        detach();
+    });
+
+    it("never takes a mouse's press", () => {
+        const { bare, capture, reached, detach } = mount();
+        bare.dispatchEvent(fingerEvent("pointerdown", 1, 50, 100, "mouse"));
+        expect(capture).not.toHaveBeenCalled();
+        expect(reached).toEqual(["down 1"]);
+        detach();
+    });
+
+    it("forgets a finger that lifted outside the timeline", () => {
+        vi.useFakeTimers();
+        const { control, bare, reached, detach } = mount();
+        control.dispatchEvent(fingerEvent("pointerdown", 1, 50));
+        bare.dispatchEvent(fingerEvent("pointerdown", 2, 150));
+        bare.dispatchEvent(fingerEvent("pointerup", 2, 150));
+        // Finger 1 lifts over the field: the viewport never hears it
+        document.body.dispatchEvent(fingerEvent("pointerup", 1, 900));
+        vi.runAllTimers();
+        reached.length = 0;
+        control.dispatchEvent(fingerEvent("pointerdown", 3, 50));
+        expect(reached).toEqual(["down 3"]);
+        detach();
+    });
+
+    it("cancels on the element holding the capture when the pressed one went", () => {
+        const { viewport, control, bare, cancelled, detach } = mount();
+        const holder = document.createElement("div");
+        viewport.append(holder);
+        control.dispatchEvent(fingerEvent("pointerdown", 1, 50));
+        holder.dispatchEvent(fingerEvent("gotpointercapture", 1, 50));
+        // The control re-renders away mid-drag
+        control.remove();
+        bare.dispatchEvent(fingerEvent("pointerdown", 2, 150));
+        expect(cancelled).toEqual([holder]);
+        detach();
     });
 });

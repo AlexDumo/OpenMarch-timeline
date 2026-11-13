@@ -1,3 +1,4 @@
+import { fingerDragSlop } from "./timelineGestures";
 import clsx from "clsx";
 import tolgee from "@/global/singletons/Tolgee";
 import {
@@ -394,6 +395,8 @@ export function useClipEdgeResize({
         pointerId: number;
         edge: Edge;
         startClientX: number;
+        /** How far it moves before it drags: further for a finger (`fingerDragSlop`) */
+        slop: number;
         /**
          * The range the drag started from, as drawn, and its edge's beat; set once it moves. A drag
          * started during a drop's wait starts from the drop, not from the range it replaces
@@ -506,6 +509,7 @@ export function useClipEdgeResize({
                 pointerId: event.pointerId,
                 edge,
                 startClientX: event.clientX,
+                slop: fingerDragSlop(event.pointerType, RESIZE_DRAG_PX),
                 base: null as TimelineBeatRange | null,
                 startBeat: 0,
                 moved: false,
@@ -544,7 +548,7 @@ export function useClipEdgeResize({
             if (!drag || drag.pointerId !== event.pointerId) return;
             if (
                 !drag.moved &&
-                Math.abs(event.clientX - drag.startClientX) < RESIZE_DRAG_PX
+                Math.abs(event.clientX - drag.startClientX) < drag.slop
             )
                 return;
             if (!drag.moved) {

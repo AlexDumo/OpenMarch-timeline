@@ -6,7 +6,9 @@ import {
     FINGERTIP_WIDTH,
     drawnMarchers,
     pinch,
+    tap,
     touchDrag,
+    touchGesture,
     twoFingerPan,
     waitForField,
 } from "../app.mjs";
@@ -14,9 +16,11 @@ import { goToPage, pageBox } from "../timeline.mjs";
 
 // Fingers on the timeline (tablet plan 3.1, fork #884): the ruler and the page
 // row scrub with one finger; on the track body one finger on a clip moves it
-// and on empty space pans; two fingers pan and pinch anywhere; a second finger
-// cancels a drag and puts back what it was dragging. A mouse presses as it
-// always has (the last test, and every timeline scenario).
+// and on empty space pans (a tap seeks); two fingers pan and pinch anywhere; a
+// second finger cancels a drag and puts back what it was dragging, and over
+// playback it never jumps playback. A finger that lifts off the timeline
+// doesn't leave a gesture open. A wobbly tap still selects. A mouse presses as
+// it always has (the last test, and every timeline scenario).
 
 const desktop = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -48,7 +52,7 @@ const playheadAt = (page: Page) =>
 const scroll = (page: Page) =>
     viewport(page).evaluate((el) => ({
         left: el.scrollLeft,
-        top: el.scrollTop,
+        max: el.scrollWidth - el.clientWidth,
         width: el.scrollWidth,
     }));
 
@@ -57,46 +61,105 @@ const centerOf = async (locator: Locator): Promise<Point> => {
     return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 };
 
-/** Zooms the timeline in with the mouse (Ctrl+wheel), so it can scroll sideways. */
-async function zoomIn(page: Page) {
-    const at = await centerOf(viewport(page));
-    await page.mouse.move(at.x, at.y);
-    await page.keyboard.down("Control");
-    for (let i = 0; i < 6; i++) await page.mouse.wheel(0, -200);
-    await page.keyboard.up("Control");
-    await expect
-        .poll(async () =>
-            viewport(page).evaluate(
-                (el) => el.scrollWidth > el.clientWidth * 2,
-            ),
-        )
-        .toBe(true);
-}
+/** The clock's time while playing, in seconds (`playback.spec.mts` reads it the same way) */
+const clockSeconds = (page: Page) =>
+    page.evaluate(() => {
+        const clock = [...document.querySelectorAll("span.font-mono")]
+            .map((span) => span.textContent ?? "")
+            .find((text) => /^\d\d:\d\d\.\d{3}$/.test(text));
+        const [minutes, seconds] = (clock ?? "NaN:NaN").split(":");
+        return Number(minutes) * 60 + Number(seconds);
+    });
 
-/**
- * A point on bare track space: below the pinned ruler and page row, above the
- * scrollbar, and away from the playhead's line.
- */
-async function bareTrack(page: Page): Promise<Point> {
+/** The space under the pinned ruler and page row, and above the scrollbar */
+async function trackBody(page: Page) {
     const view = (await viewport(page).boundingBox())!;
     const header = (await page
         .getByTestId("timeline-pinned-header")
         .boundingBox())!;
-    const bottom = view.y + view.height - 18;
-    const top = header.y + header.height;
-    expect(bottom - top, "the track body is on screen").toBeGreaterThan(16);
+    return { top: header.y + header.height, bottom: view.y + view.height - 18 };
+}
+
+/**
+ * Makes the timeline pane taller with its splitter, from the keyboard, so the
+ * track body under the ruler is on screen in the harness's window.
+ */
+async function tallerTimeline(page: Page) {
+    const splitter = page.getByTestId("timeline-splitter");
+    await splitter.focus();
+    for (let i = 0; i < 6; i++) await splitter.press("Shift+ArrowUp");
+    await expect
+        .poll(async () => {
+            const { top, bottom } = await trackBody(page);
+            return bottom - top;
+        }, "the track body is on screen")
+        .toBeGreaterThan(80);
+    await splitter.blur();
+}
+
+/**
+ * Zooms the timeline in with the mouse (Ctrl+wheel) until it can scroll
+ * sideways, then brings the beat-53 page box back into view.
+ */
+async function zoomIn(page: Page) {
+    const at = await centerOf(viewport(page));
+    await page.mouse.move(at.x, at.y);
+    await page.keyboard.down("Control");
+    for (let i = 0; i < 3; i++) await page.mouse.wheel(0, -100);
+    await page.keyboard.up("Control");
+    await expect
+        .poll(async () =>
+            viewport(page).evaluate(
+                (el) => el.scrollWidth > el.clientWidth * 1.5,
+            ),
+        )
+        .toBe(true);
+    await pageBox(page, PAGE_START).scrollIntoViewIfNeeded();
+}
+
+/** A pan of 200 px the way the timeline has room to scroll: content left (later) or right */
+async function roomyPan(page: Page) {
+    const { left, max } = await scroll(page);
+    expect(max, "the timeline scrolls sideways").toBeGreaterThan(250);
+    return max - left > 250 ? -200 : 200;
+}
+
+/**
+ * A point on bare track space: in the track body, away from the playhead's
+ * line, and clear of any clip.
+ */
+async function bareTrack(page: Page): Promise<Point> {
+    const view = (await viewport(page).boundingBox())!;
+    const { top, bottom } = await trackBody(page);
+    expect(bottom - top, "the track body is on screen").toBeGreaterThan(40);
     const playhead = await centerOf(page.getByTestId("timeline-playhead"));
     const x =
         Math.abs(playhead.x - (view.x + view.width / 3)) > 80
             ? view.x + view.width / 3
             : view.x + (view.width * 2) / 3;
-    return { x, y: (top + bottom) / 2 };
+    // Near the bottom: clip rows stack from the top of the body
+    return { x, y: bottom - 12 };
 }
 
 /**
- * Touches the screen through CDP in phases, so the test can look in between:
- * `start` puts the fingers down, each `move` moves them (a new finger in a
- * later step lands then), and `end` lifts them all.
+ * A point on the bare ruler: the measure row under the page boxes, in the
+ * middle of the beat-53 page box's span.
+ */
+async function bareRuler(page: Page): Promise<Point> {
+    const box = (await pageBox(page, PAGE_START).boundingBox())!;
+    const header = (await page
+        .getByTestId("timeline-pinned-header")
+        .boundingBox())!;
+    const y = (box.y + box.height + header.y + header.height) / 2;
+    expect(header.y + header.height - (box.y + box.height)).toBeGreaterThan(8);
+    return { x: box.x + box.width / 2, y };
+}
+
+/**
+ * Touches the screen through CDP in phases, so the test can look in between.
+ * `to` puts the fingers at `points` (finger `i` is the same finger every time;
+ * one past the fingers down lands, and a finger left out lifts), and `end`
+ * lifts them all.
  */
 async function fingers(page: Page) {
     const cdp: CDPSession = await page.context().newCDPSession(page);
@@ -117,10 +180,13 @@ async function fingers(page: Page) {
         });
     let down = 0;
     return {
-        /** Moves the fingers to `points`; a finger past the ones down lands */
         async to(...points: Point[]) {
             await send(
-                points.length > down ? "touchStart" : "touchMove",
+                points.length > down
+                    ? "touchStart"
+                    : points.length < down
+                      ? "touchEnd"
+                      : "touchMove",
                 points,
             );
             down = points.length;
@@ -147,21 +213,37 @@ const moveStarts = async (query: Show["query"]) =>
         ).map((r) => [r.id, r.start]),
     );
 
-/** Splits one of the beat-53 move's marchers into a new move, which has a clip; returns it */
+/**
+ * Splits one marcher of the beat-53 move into a new move, which has a clip
+ * (as `split-merge-moves.spec.mts` does); returns the clip.
+ */
 async function splitIntoClip(show: Show): Promise<Locator> {
     const { page, query } = show;
     const before = await moveStarts(query);
+    // The beat-53 move's marchers: stored by beat id, one more than the view beat
+    const members = (
+        await query<{ marcher: number }>(
+            `SELECT a.marcher_id AS marcher
+               FROM timelines l
+               JOIN timeline_transitions t ON t.timeline_id = l.id
+               JOIN timeline_assignments a ON a.transition_id = t.id
+              WHERE l.id = (SELECT id FROM timelines WHERE start_beat = ? ORDER BY id LIMIT 1)`,
+            PAGE_START + 1,
+        )
+    ).map((r) => r.marcher);
+    expect(members.length).toBeGreaterThan(1);
     const marcher = (await drawnMarchers(page)).find(
-        (m) => m.onScreen && !m.dimmed,
-    )!;
-    await page.mouse.click(marcher.screen.x, marcher.screen.y);
+        (m) => members.includes(m.id) && m.onScreen,
+    );
+    expect(marcher, "a member of the move is on screen").toBeTruthy();
+    await page.mouse.click(marcher!.screen.x, marcher!.screen.y);
     await expect
         .poll(() => page.evaluate(() => window.fieldTest!.selection()))
-        .toEqual([marcher.id]);
+        .toEqual([marcher!.id]);
     await expect(async () => {
         await pageBox(page, PAGE_START).click({ button: "right" });
         await page
-            .getByRole("menuitem", { name: /^Split 1 selected into new move/ })
+            .getByRole("menuitem", { name: "Split 1 selected into new move" })
             .click({ timeout: 1000 });
     }).toPass();
     await expect
@@ -180,8 +262,17 @@ async function splitIntoClip(show: Show): Promise<Locator> {
     return clip;
 }
 
+/** A finger's tap that wobbles `by` px before it lifts: still a tap for a finger */
+const wobblyTap = (page: Page, at: Point, by: number) =>
+    touchGesture(page, [
+        [at],
+        [{ x: at.x + by / 2, y: at.y }],
+        [{ x: at.x + by, y: at.y }],
+    ]);
+
 test.beforeEach(async ({ show }) => {
     await waitForField(show.page);
+    await tallerTimeline(show.page);
     await goToPage(show.page, PAGE_START);
 });
 
@@ -191,14 +282,25 @@ test("one finger on bare track space pans the timeline and leaves the playhead",
     const { page } = show;
     await zoomIn(page);
     const before = await playheadAt(page);
+    const dx = await roomyPan(page);
     const from = await bareTrack(page);
     const start = await scroll(page);
-    // Pan towards the end of the show, which is wider than the view
-    await touchDrag(page, from, { x: from.x - 200, y: from.y });
+    await touchDrag(page, from, { x: from.x + dx, y: from.y });
     await expect
-        .poll(async () => (await scroll(page)).left - start.left)
+        .poll(async () => Math.abs((await scroll(page)).left - start.left))
         .toBeGreaterThan(150);
     expect(await playheadAt(page)).toBe(before);
+});
+
+test("a finger's tap on bare track space moves the playhead there, as a click does", async ({
+    show,
+}) => {
+    const { page } = show;
+    const before = await playheadAt(page);
+    const start = await scroll(page);
+    await tap(page, await bareTrack(page));
+    await expect.poll(() => playheadAt(page)).not.toBe(before);
+    expect((await scroll(page)).left).toBe(start.left);
 });
 
 test("one finger along the page row scrubs the playhead", async ({ show }) => {
@@ -218,11 +320,12 @@ test("two fingers pan anywhere, the page row too, without scrubbing", async ({
     const { page } = show;
     await zoomIn(page);
     const before = await playheadAt(page);
+    const dx = await roomyPan(page);
     const start = await scroll(page);
     const box = await centerOf(pageBox(page, PAGE_START));
-    await twoFingerPan(page, box, { x: -200, y: 0 });
+    await twoFingerPan(page, box, { x: dx, y: 0 });
     await expect
-        .poll(async () => (await scroll(page)).left - start.left)
+        .poll(async () => Math.abs((await scroll(page)).left - start.left))
         .toBeGreaterThan(150);
     expect(await playheadAt(page)).toBe(before);
 });
@@ -239,7 +342,7 @@ test("two fingers pinch the timeline's zoom", async ({ show }) => {
     expect(await playheadAt(page)).toBe(before);
 });
 
-test("a second finger cancels a finger's scrub and puts the playhead back", async ({
+test("a second finger cancels a finger's scrub on the page row and puts the playhead back", async ({
     show,
 }) => {
     const { page } = show;
@@ -262,6 +365,78 @@ test("a second finger cancels a finger's scrub and puts the playhead back", asyn
     await expect.poll(() => playheadAt(page)).toBe(before);
 });
 
+test("a second finger cancels a finger's scrub on the bare ruler and puts the playhead back", async ({
+    show,
+}) => {
+    const { page } = show;
+    const before = await playheadAt(page);
+    const at = await bareRuler(page);
+    const touch = await fingers(page);
+    await touch.to(at);
+    await touch.drag(at, -120);
+    await expect.poll(() => playheadAt(page)).not.toBe(before);
+    await touch.to({ x: at.x - 120, y: at.y }, { x: at.x + 40, y: at.y + 40 });
+    await touch.to({ x: at.x - 110, y: at.y }, { x: at.x + 50, y: at.y + 40 });
+    await touch.end();
+    await expect.poll(() => playheadAt(page)).toBe(before);
+});
+
+test("two fingers on the bare ruler over playback don't jump playback", async ({
+    show,
+}) => {
+    const { page } = show;
+    const view = (await viewport(page).boundingBox())!;
+    const ruler = await bareRuler(page);
+    // Far before the page playing: a jump there would take the clock back
+    const at = { x: view.x + 80, y: ruler.y };
+    // Space plays from the timeline (a focused page box would take it as a click)
+    await viewport(page).focus();
+    await page.keyboard.press("Space");
+    await expect.poll(() => clockSeconds(page)).toBeGreaterThan(1);
+    const playing = await clockSeconds(page);
+    await twoFingerPan(page, at, { x: 30, y: 0 }, { steps: 4 });
+    // Playback goes on from where it was: forward, and never back to the touched count
+    await expect.poll(() => clockSeconds(page)).toBeGreaterThan(playing);
+    await page.keyboard.press("Space");
+});
+
+test("a finger that lifts off the timeline leaves no gesture behind", async ({
+    show,
+}) => {
+    const { page } = show;
+    const box = await centerOf(pageBox(page, PAGE_START));
+    const field = await centerOf(page.getByTestId("fieldCanvas").first());
+    const touch = await fingers(page);
+    await touch.to(box);
+    await touch.drag(box, 60);
+    // A second finger lands and lifts again, then the first slides onto the field and lifts there
+    await touch.to(
+        { x: box.x + 60, y: box.y },
+        { x: box.x + 200, y: box.y + 30 },
+    );
+    await touch.to({ x: box.x + 60, y: box.y });
+    await touch.to({ x: box.x + 60, y: (box.y + field.y) / 2 });
+    await touch.to(field);
+    await touch.end();
+    // A new finger along the page row scrubs again: nothing swallowed it
+    const before = await playheadAt(page);
+    const again = await centerOf(pageBox(page, PAGE_START));
+    await touchDrag(page, again, { x: again.x - 150, y: again.y });
+    await expect.poll(() => playheadAt(page)).not.toBe(before);
+});
+
+test("a wobbly tap still selects a page box", async ({ show }) => {
+    const { page } = show;
+    const box = page
+        .locator(
+            `[data-timeline-range-page]:not([data-timeline-range-start="${PAGE_START}"])`,
+        )
+        .nth(2);
+    await expect(box).toHaveAttribute("aria-pressed", "false");
+    await wobblyTap(page, await centerOf(box), 9);
+    await expect(box).toHaveAttribute("aria-pressed", "true");
+});
+
 test("one finger on a clip moves it", async ({ show }) => {
     const { page, query } = show;
     const clip = await splitIntoClip(show);
@@ -275,6 +450,20 @@ test("one finger on a clip moves it", async ({ show }) => {
         .toBeGreaterThan(before);
     // The finger moved the clip, not the playhead
     expect(await playheadAt(page)).toBe(playhead);
+});
+
+test("a wobbly tap still selects a clip, and moves nothing", async ({
+    show,
+}) => {
+    const { page, query } = show;
+    const clip = await splitIntoClip(show);
+    // Something else selected first
+    await goToPage(page, PAGE_START);
+    await expect(clip).toHaveAttribute("data-selected", "false");
+    const before = await moveStarts(query);
+    await wobblyTap(page, await centerOf(clip), 9);
+    await expect(clip).toHaveAttribute("data-selected", "true");
+    expect(await moveStarts(query)).toEqual(before);
 });
 
 test("a second finger cancels a clip's move and puts it back, with nothing saved", async ({

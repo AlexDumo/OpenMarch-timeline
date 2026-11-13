@@ -453,7 +453,12 @@ const useTimelineGestures = ({
                 const surface = viewport.querySelector(
                     '[data-testid="timeline-pointer-surface"]',
                 );
-                if (surface) latest.current.seekAt(surface, clientX);
+                if (!surface) return;
+                // Only where a click would seek: off the surface (left of beat 0, or past its
+                // end) a click does nothing
+                const { left, right } = surface.getBoundingClientRect();
+                if (clientX < left || clientX > right) return;
+                latest.current.seekAt(surface, clientX);
             },
         });
     }, [viewportRef]);
