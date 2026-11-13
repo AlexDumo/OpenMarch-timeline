@@ -1167,6 +1167,21 @@
             }
         ]
     },
+    "shapeDiscard": {
+        "label": "Shape: Discard",
+        "category": "shape",
+        "bindings": []
+    },
+    "propFinishDrawing": {
+        "label": "Prop: Finish drawing",
+        "category": "edit",
+        "bindings": []
+    },
+    "propRemoveLastPoint": {
+        "label": "Prop: Remove the last corner while drawing",
+        "category": "edit",
+        "bindings": []
+    },
     "shapeQuarterTurn": {
         "label": "Shape: Turn 90° clockwise",
         "category": "shape",
