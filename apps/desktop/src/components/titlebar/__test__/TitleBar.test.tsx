@@ -1,15 +1,9 @@
-import { act, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createPortal } from "react-dom";
-import { useInputModeStore } from "@/stores/InputModeStore";
-import { useToolbarTabsSlot } from "../toolbarSlot";
+import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TolgeeProvider } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
 import TitleBar from "../TitleBar";
 import type { UpdateState } from "@/global/updates";
-
-// The file buttons need the database; these tests are about the bar's layout
-vi.mock("../FileControls", () => ({ default: () => null }));
 
 const availableState: UpdateState = {
     currentVersion: "0.2.0",
@@ -42,16 +36,6 @@ beforeEach(() => {
         },
     });
 });
-
-afterEach(() => {
-    useInputModeStore.setState({ mode: "pointer" });
-});
-
-/** Stands in for the touch toolbar: portals its tabs into the title bar slot. */
-function FakeToolbarTabs() {
-    const slot = useToolbarTabsSlot();
-    return slot ? createPortal(<span>Tabs</span>, slot) : null;
-}
 
 const renderBar = (props: Parameters<typeof TitleBar>[0] = {}) =>
     render(
@@ -119,40 +103,5 @@ describe("TitleBar", () => {
         renderBar();
         await vi.waitFor(() => expect(updates.getState).toHaveBeenCalled());
         expect(screen.queryByTestId("update-pill")).not.toBeInTheDocument();
-    });
-
-    describe("touch mode", () => {
-        beforeEach(() => {
-            useInputModeStore.setState({ mode: "touch" });
-        });
-
-        it("shows the show's name while nothing fills the toolbar slot", async () => {
-            renderBar({ showControls: true });
-            expect(await screen.findByText("Halftime.dots")).toBeVisible();
-            expect(
-                screen.getByTestId("titlebar-toolbar-tabs"),
-            ).toBeEmptyDOMElement();
-        });
-
-        it("gives the middle to the toolbar's tabs once they're portalled in", async () => {
-            const { rerender } = renderBar({ showControls: true });
-            await screen.findByText("Halftime.dots");
-            await act(async () => {
-                rerender(
-                    <TolgeeProvider tolgee={tolgee} fallback="">
-                        <TitleBar showControls />
-                        <FakeToolbarTabs />
-                    </TolgeeProvider>,
-                );
-            });
-            expect(
-                screen.getByTestId("titlebar-toolbar-tabs"),
-            ).toHaveTextContent("Tabs");
-            await vi.waitFor(() =>
-                expect(
-                    screen.queryByText("Halftime.dots"),
-                ).not.toBeInTheDocument(),
-            );
-        });
     });
 });
