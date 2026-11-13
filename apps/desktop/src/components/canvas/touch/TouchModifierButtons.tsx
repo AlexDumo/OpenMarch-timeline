@@ -4,6 +4,7 @@ import {
     useLayoutEffect,
     useRef,
     useState,
+    useSyncExternalStore,
 } from "react";
 import clsx from "clsx";
 import {
@@ -22,6 +23,11 @@ import type { FieldMarchers } from "@/field/three/fieldMarchers";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
 import { useIsTouchMode } from "@/stores/InputModeStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import {
+    isActionEnabled,
+    runAction,
+    subscribeToActionHandlers,
+} from "@/shortcuts/registry";
 import {
     useTouchModifierStore,
     type TouchToggle,
@@ -288,7 +294,10 @@ export default function TouchModifierButtons({
     const latched = useTouchModifierStore((s) => s.latched);
     const clear = useTouchModifierStore((s) => s.clear);
     const snapOff = useUiSettingsStore((s) => !s.uiSettings.snap);
-    const setSnap = useUiSettingsStore((s) => s.setSnap);
+    // The magnet runs the toolbar's Toggle Snap action: same handler, enabled state and run listeners
+    const snapRunnable = useSyncExternalStore(subscribeToActionHandlers, () =>
+        isActionEnabled("toggleSnap"),
+    );
     const [saved, setSaved] = useState<Position | null>(() =>
         parseModifierPosition(readStorage(TOUCH_MODIFIER_POSITION_KEY)),
     );
@@ -558,10 +567,14 @@ export default function TouchModifierButtons({
                     aria-label={t("touch.modifiers.noSnap")}
                     title={t(EXPLAIN.snap)}
                     aria-pressed={snapOff}
-                    className={segment(snapOff)}
+                    disabled={!snapRunnable}
+                    className={clsx(
+                        segment(snapOff),
+                        "disabled:pointer-events-none disabled:opacity-50",
+                    )}
                     data-testid="touch-snap"
                     {...snapLongPress}
-                    onClick={() => setSnap()}
+                    onClick={() => runAction("toggleSnap")}
                 >
                     <MagnetIcon
                         size={16}

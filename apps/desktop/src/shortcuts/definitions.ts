@@ -821,6 +821,16 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
     },
 
+    // Tablet 0.6 (#846): Basic or Expert from the palette, as Settings › Timeline switches it. No
+    // key: none is free that reads as this, and switching is rare
+    toggleEditorMode: {
+        labelKey: "actions.timeline.toggleEditorMode",
+        keywordsKey: "actions.timeline.toggleEditorModeKeywords",
+        category: "timeline",
+        scope: "global",
+        defaultBindings: [],
+    },
+
     // Opens the transport's go-to box: type a page, a measure ("m23") or a rehearsal mark
     timelineGoTo: {
         labelKey: "actions.timeline.goTo",

@@ -3,12 +3,15 @@ import { test, expect, type Show } from "../fixtures.mjs";
 import {
     clickMarcher,
     drawnMarchers,
+    emulateTouchScreen,
     openSettings,
     expectCanvasMatchesShow,
     goTo,
+    penDrag,
     readField,
     selectPage,
     setUiSettings,
+    touchDrag,
     waitForField,
     waitForIdle,
 } from "../app.mjs";
@@ -5854,51 +5857,6 @@ test("change: a click on a placed circle's member selects it whole, its handle c
 // Tablets (#1060 tablet layout, merged from main): an Apple Pencil edits the field as a mouse
 // does, fingers only navigate it, and on a screen that can't hover the shape never calms down
 
-/** Drags a pen (an Apple Pencil) from `from` to `to`, in viewport pixels, through Chromium's input. */
-async function penDrag(page: Page, from: Point, to: Point, steps = 12) {
-    const cdp = await page.context().newCDPSession(page);
-    const send = (
-        type: "mousePressed" | "mouseMoved" | "mouseReleased",
-        p: Point,
-    ) =>
-        cdp.send("Input.dispatchMouseEvent", {
-            type,
-            x: p.x,
-            y: p.y,
-            button: "left",
-            buttons: type === "mouseReleased" ? 0 : 1,
-            clickCount: type === "mouseMoved" ? 0 : 1,
-            pointerType: "pen",
-        });
-    await send("mouseMoved", from);
-    await send("mousePressed", from);
-    for (let i = 1; i <= steps; i++)
-        await send("mouseMoved", {
-            x: from.x + ((to.x - from.x) * i) / steps,
-            y: from.y + ((to.y - from.y) * i) / steps,
-        });
-    await send("mouseReleased", to);
-    await cdp.detach();
-}
-
-/** Drags one finger from `from` to `to`, in viewport pixels. */
-async function fingerDrag(page: Page, from: Point, to: Point, steps = 10) {
-    const cdp = await page.context().newCDPSession(page);
-    const send = (type: "touchStart" | "touchMove" | "touchEnd", p?: Point) =>
-        cdp.send("Input.dispatchTouchEvent", {
-            type,
-            touchPoints: p ? [{ x: p.x, y: p.y, id: 0 }] : [],
-        });
-    await send("touchStart", from);
-    for (let i = 1; i <= steps; i++)
-        await send("touchMove", {
-            x: from.x + ((to.x - from.x) * i) / steps,
-            y: from.y + ((to.y - from.y) * i) / steps,
-        });
-    await send("touchEnd");
-    await cdp.detach();
-}
-
 test("change: an Apple Pencil draws the box, stretches it by a handle and moves it, as a mouse does", async ({
     show,
 }) => {
@@ -5952,7 +5910,7 @@ test("change: a finger on the field with the box tool armed pans, and draws no b
     const pan = async () => (await readField(page)).viewport.pan;
     const before = await pan();
 
-    await fingerDrag(
+    await touchDrag(
         page,
         await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
         await toScreen(page, { x: cf.x - 5 * S, y: cf.y - 19 * S }),
@@ -5966,12 +5924,8 @@ test("change: on a screen that can't hover, the open box's controls and its floa
     show,
 }) => {
     const { page } = show;
-    const cdp = await page.context().newCDPSession(page);
     // A touch screen: (hover: none)
-    await cdp.send("Emulation.setTouchEmulationEnabled", {
-        enabled: true,
-        maxTouchPoints: 5,
-    });
+    const stopTouch = await emulateTouchScreen(page);
     expect(
         await page.evaluate(() => matchMedia("(hover: hover)").matches),
     ).toBe(false);
@@ -5990,7 +5944,7 @@ test("change: on a screen that can't hover, the open box's controls and its floa
             .evaluate((el) => getComputedStyle(el).opacity),
     ).toBe("1");
     expect(await editorOpacity(page)).toBe(1);
-    await cdp.detach();
+    await stopTouch();
 });
 
 // The field's menu (#315, from main) and the shapes: it acts on the selection, so it stays shut
