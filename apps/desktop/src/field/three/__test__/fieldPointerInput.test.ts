@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { GESTURE_TIMING } from "@/components/canvas/touch/touchGestures";
 import { FieldEditor, type FieldEditorPorts } from "@/field/editor/fieldEditor";
 import type { FieldPoint } from "@/field/editor/view";
 import {
@@ -252,5 +253,96 @@ describe("attachFieldPointerInput, the pen and the drag modes (tablet 1.3)", () 
         expect(asked).toEqual([]);
         expect(editor.activeGesture()).toBe("marquee");
         expect(useFieldViewStore.getState().panX).toBe(0);
+    });
+});
+
+describe("attachFieldPointerInput, a pen held still (tablet 1.5)", () => {
+    beforeEach(() => {
+        vi.useFakeTimers({ toFake: ["performance"] });
+    });
+    afterEach(() => vi.useRealTimers());
+    /** Past the long press time */
+    const hold = () => vi.advanceTimersByTime(GESTURE_TIMING.longPressMs + 50);
+    const pen = { pointerType: "pen" };
+
+    it("held, then lifted without moving: selects the marcher under it and opens the field's menu, and the lift does nothing more", () => {
+        const { editor, state, fire } = setup();
+        fire("pointerdown", { x: 100, y: 100, buttons: 1, ...pen });
+        fire("pointermove", { x: 103, y: 101, buttons: 1, ...pen });
+        hold();
+        // Armed only: the press is still the editor's
+        expect(state.menus).toBe(0);
+        fire("pointerup", { x: 103, y: 101, ...pen });
+        expect(state.menus).toBe(1);
+        expect(state.selected).toEqual([1]);
+        expect(editor.activeGesture()).toBeNull();
+        expect(state.shown).toBeNull();
+        expect(state.drops).toBe(0);
+        // The next pen press is a press like any other
+        fire("pointerdown", { x: 200, y: 100, ...pen });
+        fire("pointerup", { x: 200, y: 100, ...pen });
+        expect(state.selected).toEqual([2]);
+        expect(state.menus).toBe(1);
+    });
+
+    it("held, then moved on: drags the marcher, and no menu opens", () => {
+        const { editor, state, fire } = setup();
+        fire("pointerdown", { x: 100, y: 100, buttons: 1, ...pen });
+        hold();
+        fire("pointermove", { x: 100, y: 130, buttons: 1, ...pen });
+        expect(editor.activeGesture()).toBe("move");
+        fire("pointerup", { x: 100, y: 130, ...pen });
+        expect(state.menus).toBe(0);
+        expect(state.drops).toBe(1);
+    });
+
+    it("opens no menu for a quick pen tap, nor for a mouse held still", () => {
+        const { state, fire } = setup();
+        fire("pointerdown", { x: 100, y: 100, ...pen });
+        fire("pointerup", { x: 100, y: 100, ...pen });
+        fire("pointerdown", { x: 200, y: 100, buttons: 1 });
+        hold();
+        fire("pointerup", { x: 200, y: 100 });
+        expect(state.menus).toBe(0);
+        expect(state.selected).toEqual([2]);
+    });
+});
+
+describe("attachFieldPointerInput, a pen held still in Pan (tablet 1.3 with 1.5)", () => {
+    beforeEach(() => {
+        vi.useFakeTimers({ toFake: ["performance"] });
+    });
+    afterEach(() => vi.useRealTimers());
+    const hold = () => vi.advanceTimersByTime(GESTURE_TIMING.longPressMs + 50);
+    const pen = { pointerType: "pen" } as const;
+
+    it("held on empty field and lifted unmoved: opens the field's menu, and doesn't click (the selection stays)", () => {
+        const { state, fire } = setup({ penDrag: () => "pan" });
+        state.selected = [1];
+        fire("pointerdown", { x: 400, y: 300, buttons: 1, ...pen });
+        hold();
+        fire("pointerup", { x: 402, y: 300, ...pen });
+        expect(state.menus).toBe(1);
+        expect(state.selected).toEqual([1]);
+        expect(useFieldViewStore.getState().panX).toBe(0);
+    });
+
+    it("held, then moved on: pans, and no menu opens", () => {
+        const { state, fire } = setup({ penDrag: () => "pan" });
+        fire("pointerdown", { x: 400, y: 300, buttons: 1, ...pen });
+        hold();
+        fire("pointermove", { x: 407, y: 300, buttons: 1, ...pen });
+        fire("pointerup", { x: 407, y: 300, ...pen });
+        expect(useFieldViewStore.getState().panX).toBe(7);
+        expect(state.menus).toBe(0);
+    });
+
+    it("held in Lasso and lifted unmoved: opens the menu, draws nothing", () => {
+        const { editor, state, fire } = setup({ penDrag: () => "lasso" });
+        fire("pointerdown", { x: 400, y: 300, buttons: 1, ...pen });
+        hold();
+        fire("pointerup", { x: 401, y: 300, ...pen });
+        expect(state.menus).toBe(1);
+        expect(editor.activeGesture()).toBeNull();
     });
 });

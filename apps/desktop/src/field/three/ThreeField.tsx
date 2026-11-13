@@ -373,7 +373,9 @@ function ThreeFieldView() {
     };
     // #315: where a right-click opens the field's menu (`useFieldMenu`, below
     // the editor), and whether it's open: a press that closes it does nothing more
-    const openMenuAt = useRef((_at: { x: number; y: number }) => {});
+    const openMenuAt = useRef(
+        (_at: { x: number; y: number }, _marcher: number | null) => {},
+    );
     const menuShown = useRef(false);
 
     const editor = useMemo(
@@ -445,7 +447,7 @@ function ThreeFieldView() {
                         snapToRounding(point, latest.current.fieldProperties),
                     propDrawn: (outline) => latest.current.propDrawn(outline),
                     // #315: a right-click opens the field's menu there
-                    openMenu: (at) => openMenuAt.current(at.screen),
+                    openMenu: (at, hit) => openMenuAt.current(at.screen, hit),
                 },
                 {
                     isMac: isMacPlatform(),
@@ -734,6 +736,7 @@ function ThreeFieldView() {
                 <HandleMenu />
                 <FieldContextMenu
                     at={menu.at}
+                    marcher={menu.marcher}
                     onClose={menu.close}
                     selectedCount={selectedIds.length}
                     timelineMode={timelineMode}

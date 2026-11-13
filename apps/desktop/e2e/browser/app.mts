@@ -581,6 +581,37 @@ export async function penDrag(
 }
 
 /**
+ * Presses a pen (an Apple Pencil) at `at`, holds it for `ms`, moving to each
+ * of `wander` in turn first, and lifts it where it ended.
+ */
+export async function penHold(
+    page: Page,
+    at: Point,
+    { ms = 700, wander = [] }: { ms?: number; wander?: Point[] } = {},
+) {
+    await withCdp(page, async (cdp) => {
+        const send = (
+            type: "mousePressed" | "mouseMoved" | "mouseReleased",
+            p: Point,
+        ) =>
+            cdp.send("Input.dispatchMouseEvent", {
+                type,
+                x: p.x,
+                y: p.y,
+                button: "left",
+                buttons: type === "mouseReleased" ? 0 : 1,
+                clickCount: type === "mouseMoved" ? 0 : 1,
+                pointerType: "pen",
+            });
+        await send("mouseMoved", at);
+        await send("mousePressed", at);
+        for (const p of wander) await send("mouseMoved", p);
+        await page.waitForTimeout(ms);
+        await send("mouseReleased", wander.at(-1) ?? at);
+    });
+}
+
+/**
  * Makes the page a touch screen until the returned stop is called: it reports
  * touch points and matches `(hover: none)` and `(pointer: coarse)`, so the
  * app's "auto" input mode lays itself out for touch. For a whole run, use the

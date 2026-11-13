@@ -5,7 +5,9 @@ import {
     canvasScale,
     drawnMarchers,
     expectCanvasMatchesShow,
+    longPress,
     penDrag,
+    penHold,
     readField,
     selectedDrillNumbers,
     tap,
@@ -22,7 +24,9 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 // dragged, draws a box. Box and Lasso ("finger selects", decision 1): one
 // finger draws a box or a lasso, two fingers move the view. Pan: finger and
 // pen move the view. The pill's Subtract takes what a box covers out of the
-// selection, as Alt does with a mouse.
+// selection, as Alt does with a mouse. In every mode, a finger or pen held
+// still on empty field and lifted without moving opens the field's menu
+// (tablet 1.5); held, then dragged, it draws (or, in Pan, moves the view).
 
 // Four trumpets on the home page, all in view, none on the grid.
 const PAGE_0: SeedPosition[] = [
@@ -128,6 +132,8 @@ async function holdThenDrag(page: Page, from: Point, to: Point, ms = 800) {
     }
 }
 
+const fieldMenu = (page: Page) => page.getByTestId("field-menu");
+
 const pan = async (page: Page) => (await readField(page)).viewport.pan;
 
 const saved = (show: Show) => savedPositions(show, 0);
@@ -157,6 +163,18 @@ test.describe("Auto, the default", () => {
         await expect
             .poll(() => selectedDrillNumbers(page))
             .toEqual(["T2", "T3"]);
+        expect(await pan(page)).toEqual(before);
+    });
+
+    test("a finger held still on empty field, then lifted, opens the field's menu and draws nothing", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const before = await pan(page);
+        const { from } = await aroundT2T3(page);
+        await longPress(page, from);
+        await expect(fieldMenu(page)).toBeVisible();
+        expect(await selectedDrillNumbers(page)).toEqual([]);
         expect(await pan(page)).toEqual(before);
     });
 
@@ -246,6 +264,24 @@ test.describe("finger selects (Box and Lasso)", () => {
     });
 });
 
+test("Box: a finger held still on empty field, then lifted, opens the field's menu; held, then dragged, draws the box", async ({
+    show,
+}) => {
+    const { page } = show;
+    await chooseDragMode(page, "box");
+    const { from, to } = await aroundT2T3(page);
+    await longPress(page, from);
+    await expect(fieldMenu(page)).toBeVisible();
+    expect(await selectedDrillNumbers(page)).toEqual([]);
+    // Escape closes it
+    await page.keyboard.press("Escape");
+    await expect(fieldMenu(page)).toBeHidden();
+
+    await holdThenDrag(page, from, to);
+    await expect.poll(() => selectedDrillNumbers(page)).toEqual(["T2", "T3"]);
+    await expect(fieldMenu(page)).toBeHidden();
+});
+
 test("Pan: the pen moves the view instead of drawing a box", async ({
     show,
 }) => {
@@ -256,6 +292,18 @@ test("Pan: the pen moves the view instead of drawing a box", async ({
     await penDrag(page, from, to);
     await expect.poll(() => pan(page)).not.toEqual(before);
     expect(await selectedDrillNumbers(page)).toEqual([]);
+});
+
+test("Pan: the pen held still on empty field, then lifted, opens the field's menu", async ({
+    show,
+}) => {
+    const { page } = show;
+    await chooseDragMode(page, "pan");
+    const before = await pan(page);
+    const { from } = await aroundT2T3(page);
+    await penHold(page, from);
+    await expect(fieldMenu(page)).toBeVisible();
+    expect(await pan(page)).toEqual(before);
 });
 
 test("Subtract on the pill: a box takes what it covers out of the selection", async ({

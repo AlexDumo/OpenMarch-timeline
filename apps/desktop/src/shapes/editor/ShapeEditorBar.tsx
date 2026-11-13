@@ -60,7 +60,12 @@ import {
     useFieldViewStore,
     type FieldView,
 } from "@/field/three/fieldView";
-import { DEGREE, rotationDegrees, type Pivot } from "../frame/frame";
+import {
+    DEFAULT_PIVOT,
+    DEGREE,
+    rotationDegrees,
+    type Pivot,
+} from "../frame/frame";
 import { pivotOf, withPivot } from "../frame/pivot";
 import {
     flipShape,
@@ -327,6 +332,15 @@ function ShapeEditorBar({
     useActionHandler("shapeQuarterTurn", () => turnQuarter(live), {
         ignoreRepeat: true,
     });
+    // A double-click on the pivot, as the pivot menu's entry (tablet 1.5): back to the center
+    useActionHandler(
+        "shapeCenterPivot",
+        () => pickPivotOf(live, DEFAULT_PIVOT),
+        {
+            enabled: pivotOf(params) !== DEFAULT_PIVOT,
+            ignoreRepeat: true,
+        },
+    );
     // Expand and Shrink keeping the proportions (#489), one step a press
     const canShrink =
         env !== null && scaledOnce(target, params, -1, env) !== null;
@@ -658,6 +672,12 @@ const updateWith = (
     const env = envFor();
     if (env) target.update((now) => change(now, env));
 };
+
+/** The pivot picked, as the pivot menu picks it */
+const pickPivotOf = (target: ShapeEditTarget, pivot: Pivot) =>
+    target.pickPivot
+        ? target.pickPivot(pivot)
+        : updateWith(target, (now) => withPivot(now, pivot));
 
 const turnQuarter = (target: ShapeEditTarget) =>
     updateWith(target, (now, env) =>
@@ -1051,11 +1071,7 @@ const TurnControls = memo(function TurnControls({
             <PivotMenu
                 pivot={pivot}
                 rotation={rotation}
-                onPick={(key) =>
-                    target.pickPivot
-                        ? target.pickPivot(key)
-                        : updateWith(target, (now) => withPivot(now, key))
-                }
+                onPick={(key) => pickPivotOf(target, key)}
                 testId="shape-editor-pivot"
             />
             <IconButton

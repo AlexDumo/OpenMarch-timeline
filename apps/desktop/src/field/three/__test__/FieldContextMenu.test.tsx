@@ -36,11 +36,13 @@ function open({
     selectedCount = 1,
     timelineMode = true,
     onClose = vi.fn(),
+    marcher = null as number | null,
 } = {}) {
     render(
         <TolgeeProvider tolgee={tolgee} fallback="Loading...">
             <FieldContextMenu
                 at={{ x: 120, y: 80 }}
+                marcher={marcher}
                 onClose={onClose}
                 selectedCount={selectedCount}
                 timelineMode={timelineMode}
@@ -267,6 +269,22 @@ describe("FieldContextMenu", () => {
         open({ timelineMode: false });
         expect(item("timelineHoldFromPrevious")).toBeNull();
         expect(item("setSelectedMarchersToPreviousPage")).not.toBeNull();
+    });
+
+    it("offers Select only this marcher only when opened on a marcher of a box selected whole, and runs it there (tablet 1.5)", () => {
+        const run = handle("shapeEnterBox");
+        open();
+        expect(item("shapeEnterBox")).toBeNull();
+        cleanup();
+        open({ marcher: 7 });
+        fireEvent.click(item("shapeEnterBox")!);
+        expect(run).toHaveBeenCalledWith({ marcherId: 7 });
+    });
+
+    it("leaves Select only this marcher out while no box is selected whole", () => {
+        handle("shapeEnterBox", { enabled: false });
+        open({ marcher: 7 });
+        expect(item("shapeEnterBox")).toBeNull();
     });
 
     it("offers Swap only with two marchers selected", () => {

@@ -782,6 +782,28 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // Select one marcher of the placed box selected whole, going inside the box: what a
+    // double-click on a member does, as a field menu entry for a tablet (tablet 1.5). The field's
+    // menu passes the marcher pressed (`args.marcherId`); it needs one, so it isn't in the palette
+    shapeEnterBox: {
+        labelKey: "actions.shape.enterBox",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        hiddenFromPalette: true,
+    },
+
+    // The open shape's pivot back to the center: what a double-click on the pivot does, as an
+    // entry in the floating editor's pivot menu for a tablet (tablet 1.5)
+    shapeCenterPivot: {
+        labelKey: "actions.shape.centerPivot",
+        keywordsKey: "actions.shape.centerPivotKeywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+
     // Cursor mode
     cancelAlignmentUpdates: {
         labelKey: "actions.alignment.cancelUpdates",

@@ -1312,6 +1312,16 @@
             }
         ]
     },
+    "shapeEnterBox": {
+        "label": "Select only this marcher",
+        "category": "shape",
+        "bindings": []
+    },
+    "shapeCenterPivot": {
+        "label": "Shape: Move the pivot back to the center",
+        "category": "shape",
+        "bindings": []
+    },
     "cancelAlignmentUpdates": {
         "label": "Cancel or deselect",
         "category": "cursor",

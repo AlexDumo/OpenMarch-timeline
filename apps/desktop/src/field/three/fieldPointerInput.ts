@@ -2,6 +2,7 @@ import type { FieldEditor, FieldPointer } from "@/field/editor/fieldEditor";
 import { thresholdsFor } from "@/field/editor/pointerThresholds";
 import { panBy } from "@/field/editor/view";
 import { isMacPlatform } from "@/shortcuts/platform";
+import { GESTURE_TIMING } from "@/components/canvas/touch/touchGestures";
 import { fieldPointerAt, useFieldViewStore } from "./fieldView";
 import { fieldGesturesOwn } from "./fieldGestures";
 import { setView } from "./fieldNavigation";
@@ -24,7 +25,12 @@ export type FieldPointerInputOptions = {
  * Mouse and pen presses come straight here. Finger presses are the field's
  * gesture adapter's (`fieldGestures.ts`): it decides whether a finger edits,
  * navigates or opens a menu, and tells the editor itself. Returns the detach.
+ *
+ * A pen has no right button (an Apple Pencil has no barrel button), so a pen
+ * held still and lifted opens the menus a right-click would (tablet 1.5): see
+ * {@link watchPenHold}. A mouse never long-presses.
  */
+// eslint-disable-next-line max-lines-per-function
 export function attachFieldPointerInput(
     element: HTMLElement,
     editor: FieldEditor,
@@ -36,30 +42,46 @@ export function attachFieldPointerInput(
     /** The pointer the editor's press captured; other captures (navigation's) aren't its to cancel. */
     let captured: number | null = null;
     const penPan = attachPenPan(element, editor);
+    const penHold = watchPenHold(editor, pointer);
     const down = (event: PointerEvent) => {
         if (fieldGesturesOwn(event)) return;
-        let press = pointer(event);
-        if (event.pointerType === "pen" && event.button === 0) {
-            const drag = options.penDrag?.(press) ?? null;
-            if (drag === "pan") {
-                penPan.start(event, press);
-                return;
-            }
-            if (drag === "lasso") press = { ...press, area: "lasso" };
+        const press = pointer(event);
+        const drag =
+            event.pointerType === "pen" && event.button === 0
+                ? (options.penDrag?.(press) ?? null)
+                : null;
+        if (drag === "pan") {
+            penPan.start(event, press);
+            // Held and lifted unmoved, it opens the menus, as anywhere
+            return penHold.down(event);
         }
-        if (!editor.pointerDown(press)) return;
+        if (!editor.pointerDown(drag ? { ...press, area: drag } : press))
+            return;
         captured = event.pointerId;
         element.setPointerCapture(event.pointerId);
+        penHold.down(event);
     };
     const move = (event: PointerEvent) => {
-        if (fieldGesturesOwn(event) || penPan.move(event)) return;
+        if (fieldGesturesOwn(event)) return;
+        penHold.move(event);
+        if (penPan.move(event)) {
+            if (penPan.panning(event.pointerId)) penHold.cancel(event);
+            return;
+        }
         editor.pointerMove(pointer(event));
     };
     const up = (event: PointerEvent) => {
-        if (fieldGesturesOwn(event) || penPan.end(event)) return;
+        if (fieldGesturesOwn(event)) return;
+        // Held still and lifted unmoved, the menus opened (Pan too): no click
+        if (penHold.up(event)) {
+            penPan.cancel(event);
+            return;
+        }
+        if (penPan.end(event)) return;
         editor.pointerUp(pointer(event));
     };
     const cancel = (event: PointerEvent) => {
+        penHold.cancel(event);
         penPan.cancel(event);
         if (event.pointerId !== captured) return;
         captured = null;
@@ -90,6 +112,7 @@ export function attachFieldPointerInput(
         element.removeEventListener("lostpointercapture", cancel);
         element.removeEventListener("pointerleave", leave);
         detachRight();
+        penHold.stop();
         unsubscribe();
         editor.pointerCancel();
         element.style.cursor = "";
@@ -99,7 +122,8 @@ export function attachFieldPointerInput(
 /**
  * A pen press that moves the view (the pill's Pan mode, tablet 1.3): it pans
  * one to one once it leaves the pen's click slop, catching up at once, and a
- * press that never left it is a click on empty field, as a tap there is.
+ * press that never left it is a click on empty field, as a tap there is (or,
+ * held still for the long press time, the menus: {@link watchPenHold}).
  */
 function attachPenPan(element: HTMLElement, editor: FieldEditor) {
     let pan: {
@@ -150,8 +174,74 @@ function attachPenPan(element: HTMLElement, editor: FieldEditor) {
             if (!moved) editor.fingerTap(press);
             return true;
         },
+        /** Whether pointer `id`'s pan has left the click slop and moves the view */
+        panning(id: number): boolean {
+            return pan?.id === id && pan.moved;
+        },
         cancel(event: PointerEvent) {
             if (pan?.id === event.pointerId) end(pan.moved);
+        },
+    };
+}
+
+/**
+ * A pen's long press (tablet 1.5), by the same rule as a finger's
+ * (`touchGestures.ts`, `GESTURE_TIMING`): a pen press the editor took that
+ * stays within the long press slop arms once it has been down for the long
+ * press time, and lifting it then, without having moved past the slop, asks
+ * the editor for the menus a right-click there opens (`FieldEditor.longPress`).
+ * The editor's press stays alive while armed: a pen that moves on after the
+ * hold drags as usual. When a menu opens, the editor has given up its press
+ * and the lift is nobody's; with no menu, the lift is an ordinary release.
+ * Mouse presses are never timed.
+ *
+ * Decided from times read at the press and the lift, so moves handled late
+ * can't make a moving pen look held.
+ */
+export function watchPenHold(
+    editor: Pick<FieldEditor, "longPress">,
+    pointer: (event: PointerEvent) => FieldPointer,
+    now: () => number = () => performance.now(),
+) {
+    let held: { id: number; x: number; y: number; at: number } | null = null;
+    const past = (event: PointerEvent, from: { x: number; y: number }) =>
+        Math.hypot(event.clientX - from.x, event.clientY - from.y) >
+        GESTURE_TIMING.longPressSlopPx;
+    return {
+        /** A press the editor took */
+        down(event: PointerEvent) {
+            held =
+                event.pointerType === "pen" && event.button === 0
+                    ? {
+                          id: event.pointerId,
+                          x: event.clientX,
+                          y: event.clientY,
+                          at: now(),
+                      }
+                    : null;
+        },
+        /** A move: past the slop, the press is a drag and never a long press */
+        move(event: PointerEvent) {
+            if (event.pointerId === held?.id && past(event, held)) held = null;
+        },
+        /** A lift; true when a long press opened a menu, so the lift is no one's */
+        up(event: PointerEvent): boolean {
+            if (event.pointerId !== held?.id) return false;
+            const press = held;
+            held = null;
+            if (
+                past(event, press) ||
+                now() - press.at < GESTURE_TIMING.longPressMs
+            )
+                return false;
+            return editor.longPress(pointer(event));
+        },
+        /** The pointer was lost: no long press */
+        cancel(event: PointerEvent) {
+            if (event.pointerId === held?.id) held = null;
+        },
+        stop() {
+            held = null;
         },
     };
 }
