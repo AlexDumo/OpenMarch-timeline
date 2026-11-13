@@ -14,6 +14,7 @@ import Store from "electron-store";
 import { getOrmConnection } from "../../database/database.services";
 import { measureRangeString as _measureRangeString } from "../../../src/global/classes/Page.utils";
 import logoSvgRaw from "@/assets/open-march-logo.svg?raw";
+import { buildSheetDocumentHtml } from "../../../src/components/exporting/sheetDocument";
 
 const store = new Store();
 
@@ -69,119 +70,6 @@ const footerHtml = () => `
     </div>
 </div>
 `;
-
-function chunkArray<T>(array: T[], size: number): T[][] {
-    const result = [];
-    for (let i = 0; i < array.length; i += size) {
-        result.push(array.slice(i, i + size));
-    }
-    return result;
-}
-
-const printStyles = (quarterPages: boolean) => `
-  @media print {
-    .marcher-sheet {
-      page-break-before: auto;
-      min-height: 10in;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .marcher-sheet:not(:last-child) {
-      page-break-after: always;
-    }
-    ${
-        quarterPages
-            ? `
-      .grid-container {
-        display: grid;
-        grid-template-columns: 50% 50%;
-        grid-template-rows: 50% 50%;
-        height: 10in;
-        width: 7.5in;
-      }
-      .grid-container:not(:last-child) {
-        page-break-after: always;
-      }
-      .grid-item {
-        box-sizing: border-box;
-        padding: 0.1in;
-        border: 1px solid #333;
-      }
-      .marcher-sheet {
-        page-break-before: auto;
-        page-break-after: auto;
-        min-height: auto;
-        padding: 0.5rem;
-      }
-    `
-            : ""
-    }
-
-    /* Allow tables to break across pages but keep headers */
-    table {
-      page-break-inside: auto;
-    }
-
-    /* Ensure table headers repeat on each page */
-    thead {
-      display: table-header-group;
-    }
-
-    /* Ensure performer header repeats on each page */
-    .sheetHeader {
-      display: table-header-group;
-      page-break-inside: avoid;
-      page-break-after: avoid;
-    }
-
-    /* Keep coordinate rows whole across page breaks */
-    tbody tr {
-      page-break-inside: avoid;
-    }
-  }
-
-  @page {
-    margin: 0.5in;
-  }
-
-  body {
-    margin: 0;
-    padding: 0;
-    font-family: Arial, sans-serif;
-  }
-`;
-
-/**
- * Wrap rendered coordinate sheets in a printable HTML document. In quarter
- * page mode, sheets are arranged into 2x2 grids; otherwise each sheet starts
- * on its own page and may flow onto more (the print styles keep the table
- * headers repeating and rows unbroken).
- */
-function buildSheetDocumentHtml(
-    sheets: string[],
-    quarterPages: boolean,
-): string {
-    const combinedHtml = quarterPages
-        ? chunkArray(sheets, 4)
-              .map(
-                  (chunk) => `<div class="grid-container">
-                      ${chunk.map((sheet) => `<div class="grid-item">${sheet}</div>`).join("")}
-                  </div>`,
-              )
-              .join("")
-        : sheets
-              .map((sheet) => `<div class="marcher-sheet">${sheet}</div>`)
-              .join("");
-
-    return `<html>
-      <head>
-        <meta charset="UTF-8" />
-        <title>PDF Export</title>
-        <style>${printStyles(quarterPages)}</style>
-      </head>
-      <body>${combinedHtml}</body>
-    </html>`;
-}
 
 /**
  * Render an HTML document to a PDF buffer in a hidden window with the
