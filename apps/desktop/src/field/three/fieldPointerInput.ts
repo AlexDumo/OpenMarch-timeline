@@ -1,58 +1,38 @@
-import { LONG_PRESS_MS } from "@openmarch/ui";
 import type { FieldEditor, FieldPointer } from "@/field/editor/fieldEditor";
 import { isMacPlatform } from "@/shortcuts/platform";
-import { pointerKindOf } from "@/field/editor/pointerThresholds";
-import { elementToField, useFieldViewStore } from "./fieldView";
+import { fieldPointerAt } from "./fieldView";
+import { fieldGesturesOwn } from "./fieldGestures";
 
 /**
  * Reports the pointer on the new field's canvas to the editor: positions on
  * the field and on screen, the button and the modifiers, nothing else (ADR
  * 0005 D-2). The editor decides what they do. Shows the editor's cursor.
  *
- * Touch is navigation's (#194): touch editing is out of scope, but a long
- * press asks the editor for a menu (#569). Returns the detach.
+ * Mouse and pen presses come straight here. Finger presses are the field's
+ * gesture adapter's (`fieldGestures.ts`): it decides whether a finger edits,
+ * navigates or opens a menu, and tells the editor itself. Returns the detach.
  */
 export function attachFieldPointerInput(
     element: HTMLElement,
     editor: FieldEditor,
 ): () => void {
-    const pointer = (event: PointerEvent): FieldPointer => {
-        const rect = element.getBoundingClientRect();
-        const screen = {
-            x: event.clientX - rect.left,
-            y: event.clientY - rect.top,
-        };
-        const field = elementToField(
-            useFieldViewStore.getState(),
-            screen.x,
-            screen.y,
-        );
-        return {
-            field,
-            screen,
-            button: event.button,
-            kind: pointerKindOf(event.pointerType),
-            shift: event.shiftKey,
-            alt: event.altKey,
-            ctrl: event.ctrlKey,
-            meta: event.metaKey,
-        };
-    };
+    const pointer = (event: PointerEvent): FieldPointer =>
+        fieldPointerAt(element, event);
 
     /** The pointer the editor's press captured; other captures (navigation's) aren't its to cancel. */
     let captured: number | null = null;
     const down = (event: PointerEvent) => {
-        if (event.pointerType === "touch") return;
+        if (fieldGesturesOwn(event)) return;
         if (!editor.pointerDown(pointer(event))) return;
         captured = event.pointerId;
         element.setPointerCapture(event.pointerId);
     };
     const move = (event: PointerEvent) => {
-        if (event.pointerType === "touch") return;
+        if (fieldGesturesOwn(event)) return;
         editor.pointerMove(pointer(event));
     };
     const up = (event: PointerEvent) => {
-        if (event.pointerType === "touch") return;
+        if (fieldGesturesOwn(event)) return;
         editor.pointerUp(pointer(event));
     };
     const cancel = (event: PointerEvent) => {
@@ -75,7 +55,6 @@ export function attachFieldPointerInput(
     element.addEventListener("lostpointercapture", cancel);
     element.addEventListener("pointerleave", leave);
     const detachRight = listenForCapturedRightPresses(element, editor, pointer);
-    const detachLong = listenForLongPresses(element, editor, pointer);
     const unsubscribe = editor.subscribe(showCursor);
     showCursor();
     return () => {
@@ -86,7 +65,6 @@ export function attachFieldPointerInput(
         element.removeEventListener("lostpointercapture", cancel);
         element.removeEventListener("pointerleave", leave);
         detachRight();
-        detachLong();
         unsubscribe();
         editor.pointerCancel();
         element.style.cursor = "";
@@ -111,7 +89,7 @@ function listenForCapturedRightPresses(
     let pressed: number | null = null;
     let button = 2;
     const down = (event: PointerEvent) => {
-        if (event.pointerType === "touch") return;
+        if (fieldGesturesOwn(event)) return;
         const macCtrl = event.button === 0 && event.ctrlKey && isMacPlatform();
         if (event.button !== 2 && !macCtrl) return;
         pressed = event.pointerId;
@@ -142,69 +120,5 @@ function listenForCapturedRightPresses(
         document.removeEventListener("pointermove", move, true);
         document.removeEventListener("pointerup", up, true);
         document.removeEventListener("pointercancel", cancel, true);
-    };
-}
-
-/** How far a finger may wander (CSS px) and still be a long press */
-const LONG_PRESS_SLOP = 10;
-
-/**
- * A finger held still on the field for a moment asks the editor for a menu
- * (`longPress`: a Line's point menu, #569). A move past the slop, a second
- * finger or the release first is navigation's as before. Navigation captures
- * touches, so their moves and release are heard on the document. Returns the
- * detach.
- */
-function listenForLongPresses(
-    element: HTMLElement,
-    editor: FieldEditor,
-    pointer: (event: PointerEvent) => FieldPointer,
-): () => void {
-    let held: {
-        id: number;
-        x: number;
-        y: number;
-        timer: ReturnType<typeof setTimeout>;
-    } | null = null;
-    const stop = () => {
-        if (held) clearTimeout(held.timer);
-        held = null;
-    };
-    const down = (event: PointerEvent) => {
-        if (event.pointerType !== "touch") return;
-        // A second finger pinches
-        if (held) return stop();
-        const at = pointer(event);
-        held = {
-            id: event.pointerId,
-            x: event.clientX,
-            y: event.clientY,
-            timer: setTimeout(() => {
-                held = null;
-                editor.longPress(at);
-            }, LONG_PRESS_MS),
-        };
-    };
-    const move = (event: PointerEvent) => {
-        if (event.pointerId !== held?.id) return;
-        const moved = Math.hypot(
-            event.clientX - held.x,
-            event.clientY - held.y,
-        );
-        if (moved > LONG_PRESS_SLOP) stop();
-    };
-    const end = (event: PointerEvent) => {
-        if (event.pointerId === held?.id) stop();
-    };
-    element.addEventListener("pointerdown", down);
-    document.addEventListener("pointermove", move, true);
-    document.addEventListener("pointerup", end, true);
-    document.addEventListener("pointercancel", end, true);
-    return () => {
-        stop();
-        element.removeEventListener("pointerdown", down);
-        document.removeEventListener("pointermove", move, true);
-        document.removeEventListener("pointerup", end, true);
-        document.removeEventListener("pointercancel", end, true);
     };
 }

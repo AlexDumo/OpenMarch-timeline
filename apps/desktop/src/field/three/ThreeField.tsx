@@ -18,7 +18,7 @@ import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { LABEL_SIZE_SCALE, useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { useIsPreviewMode } from "@/stores/PreviewModeStore";
+import { isPreviewMode, useIsPreviewMode } from "@/stores/PreviewModeStore";
 import { onScreenToggles } from "@/stores/TouchModifierStore";
 import {
     allItemsQueryOptions,
@@ -93,6 +93,7 @@ import FieldOverlay from "./FieldOverlay";
 import TouchModifierButtons from "@/components/canvas/touch/TouchModifierButtons";
 import FieldContextMenu, { useFieldMenu } from "./FieldContextMenu";
 import { attachFieldPointerInput } from "./fieldPointerInput";
+import { attachFieldGestures } from "./fieldGestures";
 import { cameraBounds, useFieldViewStore } from "./fieldView";
 import {
     attachFieldNavigation,
@@ -538,6 +539,15 @@ function ThreeFieldView() {
             () => useUiSettingsStore.getState().uiSettings.mouseSettings,
         );
     }, []);
+    // Fingers and the pen's palm rule (tablet plan 1.1): one finger pans, two
+    // pan and pinch, a long press asks the editor for a menu. Preview edits
+    // nothing, so there fingers only navigate
+    useEffect(() => {
+        if (!root.current) return;
+        return attachFieldGestures(root.current, () => element.current, {
+            editor: () => (isPreviewMode() ? null : editor),
+        });
+    }, [editor]);
     // The view opens once the field and a page are loaded. Latched: a page
     // briefly unselected mustn't reset the view
     const [ready, setReady] = useState(false);

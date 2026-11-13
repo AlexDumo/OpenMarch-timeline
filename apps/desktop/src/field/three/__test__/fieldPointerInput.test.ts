@@ -121,6 +121,16 @@ describe("attachFieldPointerInput, the pointer's kind (tablet 0.1)", () => {
         expect(state.selected).toEqual([1]);
     });
 
+    it("leaves finger presses to the gesture adapter: the editor hears none", () => {
+        const { fire, state, captures } = setup();
+        fire("pointerdown", { x: 100, y: 100, pointerType: "touch" });
+        fire("pointermove", { x: 160, y: 100, pointerType: "touch" });
+        fire("pointerup", { x: 160, y: 100, pointerType: "touch" });
+        expect(captures.size).toBe(0);
+        expect(state.selected).toEqual([]);
+        expect(state.shown).toBeNull();
+    });
+
     it("tells the editor a mouse press is a mouse's", () => {
         const { state, fire } = setup();
         fire("pointerdown", { x: 107, y: 100 });
