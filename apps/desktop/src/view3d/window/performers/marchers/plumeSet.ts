@@ -20,6 +20,7 @@ import * as THREE from "three";
 import { writeMatrix } from "@/view3d/render/instanced-marchers.js";
 import { COMPOSED_BONE_SHADER, type Composer } from "@/view3d/render/composer";
 import { PART } from "@/view3d/core/marchers/looks";
+import { STAND_Y } from "../performerData";
 import {
     plumeGeometryData,
     type PlumeTier,
@@ -308,12 +309,17 @@ export class PlumeSet {
         return this.slots.length > 0 ? 1 : 0;
     }
 
-    /** Places each plume with its slot: collapsed (not drawn) when the slot isn't placed. */
+    /**
+     * Places each plume with its slot: collapsed (not drawn) when the slot isn't
+     * placed. `lift` raises each slot (m), as for the bodies, where a platform
+     * holds the performer up.
+     */
     writeFrame(
         xz: Float32Array,
         heading: Float32Array,
         placed: Uint8Array,
         scale: Float32Array,
+        lift: Float32Array | null = null,
     ): void {
         const array = this.mesh.instanceMatrix.array as Float32Array;
         this.slots.forEach((slot, i) =>
@@ -324,6 +330,7 @@ export class PlumeSet {
                 xz[slot * 2 + 1],
                 heading[slot],
                 placed[slot] ? scale[slot] : 0,
+                STAND_Y + (lift?.[slot] ?? 0),
             ),
         );
         this.mesh.instanceMatrix.needsUpdate = true;
