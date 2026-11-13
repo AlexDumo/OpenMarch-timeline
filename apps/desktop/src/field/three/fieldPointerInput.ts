@@ -1,5 +1,6 @@
 import type { FieldEditor, FieldPointer } from "@/field/editor/fieldEditor";
 import { isMacPlatform } from "@/shortcuts/platform";
+import { GESTURE_TIMING } from "@/components/canvas/touch/touchGestures";
 import { fieldPointerAt } from "./fieldView";
 import { fieldGesturesOwn } from "./fieldGestures";
 
@@ -11,6 +12,10 @@ import { fieldGesturesOwn } from "./fieldGestures";
  * Mouse and pen presses come straight here. Finger presses are the field's
  * gesture adapter's (`fieldGestures.ts`): it decides whether a finger edits,
  * navigates or opens a menu, and tells the editor itself. Returns the detach.
+ *
+ * A pen has no right button (an Apple Pencil has no barrel button), so a pen
+ * held still and lifted opens the menus a right-click would (tablet 1.5): see
+ * {@link watchPenHold}. A mouse never long-presses.
  */
 export function attachFieldPointerInput(
     element: HTMLElement,
@@ -21,21 +26,25 @@ export function attachFieldPointerInput(
 
     /** The pointer the editor's press captured; other captures (navigation's) aren't its to cancel. */
     let captured: number | null = null;
+    const penHold = watchPenHold(editor, pointer);
     const down = (event: PointerEvent) => {
         if (fieldGesturesOwn(event)) return;
         if (!editor.pointerDown(pointer(event))) return;
         captured = event.pointerId;
         element.setPointerCapture(event.pointerId);
+        penHold.down(event);
     };
     const move = (event: PointerEvent) => {
         if (fieldGesturesOwn(event)) return;
+        penHold.move(event);
         editor.pointerMove(pointer(event));
     };
     const up = (event: PointerEvent) => {
-        if (fieldGesturesOwn(event)) return;
+        if (fieldGesturesOwn(event) || penHold.up(event)) return;
         editor.pointerUp(pointer(event));
     };
     const cancel = (event: PointerEvent) => {
+        penHold.cancel(event);
         if (event.pointerId !== captured) return;
         captured = null;
         editor.pointerCancel();
@@ -65,9 +74,72 @@ export function attachFieldPointerInput(
         element.removeEventListener("lostpointercapture", cancel);
         element.removeEventListener("pointerleave", leave);
         detachRight();
+        penHold.stop();
         unsubscribe();
         editor.pointerCancel();
         element.style.cursor = "";
+    };
+}
+
+/**
+ * A pen's long press (tablet 1.5), by the same rule as a finger's
+ * (`touchGestures.ts`, `GESTURE_TIMING`): a pen press the editor took that
+ * stays within the long press slop arms once it has been down for the long
+ * press time, and lifting it then, without having moved past the slop, asks
+ * the editor for the menus a right-click there opens (`FieldEditor.longPress`).
+ * The editor's press stays alive while armed: a pen that moves on after the
+ * hold drags as usual. When a menu opens, the editor has given up its press
+ * and the lift is nobody's; with no menu, the lift is an ordinary release.
+ * Mouse presses are never timed.
+ *
+ * Decided from times read at the press and the lift, so moves handled late
+ * can't make a moving pen look held.
+ */
+export function watchPenHold(
+    editor: Pick<FieldEditor, "longPress">,
+    pointer: (event: PointerEvent) => FieldPointer,
+    now: () => number = () => performance.now(),
+) {
+    let held: { id: number; x: number; y: number; at: number } | null = null;
+    const past = (event: PointerEvent, from: { x: number; y: number }) =>
+        Math.hypot(event.clientX - from.x, event.clientY - from.y) >
+        GESTURE_TIMING.longPressSlopPx;
+    return {
+        /** A press the editor took */
+        down(event: PointerEvent) {
+            held =
+                event.pointerType === "pen" && event.button === 0
+                    ? {
+                          id: event.pointerId,
+                          x: event.clientX,
+                          y: event.clientY,
+                          at: now(),
+                      }
+                    : null;
+        },
+        /** A move: past the slop, the press is a drag and never a long press */
+        move(event: PointerEvent) {
+            if (event.pointerId === held?.id && past(event, held)) held = null;
+        },
+        /** A lift; true when a long press opened a menu, so the lift is no one's */
+        up(event: PointerEvent): boolean {
+            if (event.pointerId !== held?.id) return false;
+            const press = held;
+            held = null;
+            if (
+                past(event, press) ||
+                now() - press.at < GESTURE_TIMING.longPressMs
+            )
+                return false;
+            return editor.longPress(pointer(event));
+        },
+        /** The pointer was lost: no long press */
+        cancel(event: PointerEvent) {
+            if (event.pointerId === held?.id) held = null;
+        },
+        stop() {
+            held = null;
+        },
     };
 }
 

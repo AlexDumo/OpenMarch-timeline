@@ -34,7 +34,7 @@ import {
 } from "./toolMachine";
 import { updateTool, useShapeToolStore } from "./shapeToolStore";
 import { ShapeGlide } from "./spotGlide";
-import { openHandleMenu } from "../field/handleMenu";
+import { handleMenuSections, openHandleMenu } from "../field/handleMenu";
 import { groupDrawing } from "../field/groupDrawing";
 import { stepDrawing } from "../field/stepDrawing";
 import type { GroupMenuState } from "../field/shapePointer";
@@ -500,6 +500,21 @@ export const shapeToolMode: FieldMode = {
                 const after = useShapeToolStore.getState().tool;
                 return after ? { params: after.params, n: after.spots } : null;
             },
+        );
+    },
+    // A pen held still on a handle with a menu (a Line's point, tablet 1.5): the press gives way
+    // to the menu, as a right-click there opens it. Any other press is kept: cancelling one while
+    // clicking a line's points would drop the whole line
+    longPress() {
+        const tool = useShapeToolStore.getState().tool;
+        const g = tool?.gesture;
+        return (
+            tool !== null &&
+            tool !== undefined &&
+            tool.params !== null &&
+            g?.type === "handle" &&
+            handleMenuSections(tool.kind, tool.params, tool.spots, g.key) !==
+                null
         );
     },
     cursorAt(pointer) {

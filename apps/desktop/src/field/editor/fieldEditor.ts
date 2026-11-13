@@ -176,9 +176,10 @@ export type FieldEditorPorts = {
     /**
      * A right-click (a right press released under the click slop, with no
      * open shape) asks for the field's menu here (#315), after selecting the
-     * marcher clicked if it wasn't selected.
+     * marcher clicked if it wasn't selected. `hit` is the marcher under it, or null (tablet 1.5:
+     * the menu's "Go inside box" goes in at that marcher).
      */
-    openMenu?(at: FieldPointer): void;
+    openMenu?(at: FieldPointer, hit: number | null): void;
 };
 
 export type DropResult = "saved" | "refused";
@@ -480,6 +481,13 @@ export interface FieldMode {
      * for the field's rules. Absent: always the field's.
      */
     openMenu?(pointer: FieldPointer): boolean;
+    /**
+     * One of its presses held still for a long press (a pen or finger that has no right button,
+     * tablet 1.5): true to give the press up for the menus a right-click there opens (the editor
+     * then cancels it and asks {@link openMenu}), false to keep it. Absent: the press is kept, so
+     * a mode only gives up presses it knows are safe to cancel.
+     */
+    longPress?(pointer: FieldPointer): boolean;
     /** What `activeGesture` reports while one of its presses is held, and while it's on when `always`. */
     readonly gesture: { kind: FieldTestGesture; always: boolean };
 }
@@ -776,11 +784,40 @@ export class FieldEditor {
     }
 
     /**
-     * A long press on touch at `pointer` (#569): a mode's menu, as a right-click opens it. Touch
-     * is otherwise navigation's, so the field's own menu doesn't open this way.
+     * A long press by a finger or pen, lifted at `pointer` (tablet 1.5; a pen and a finger have
+     * no right button; held still past the long press time and released without moving): the
+     * menus a right-click there opens, a mode's first, then the field's (#569, #315), selecting
+     * the marcher under it if it isn't selected. Returns whether it took over; when it didn't,
+     * a press it holds is left for the caller to release (a slow tap).
+     *
+     * A press the editor holds that hasn't become a drag (a finger or pen on a marcher) is given
+     * up first, so nothing is left pressed under the menu; a mode's press only when the mode says
+     * it can be ({@link FieldMode.longPress}). Nothing during a drag or while the prop tool draws:
+     * then the press carries on.
      */
-    longPress(pointer: FieldPointer): void {
-        if (this.menuFree()) this.mode?.openMenu?.(pointer);
+    longPress(pointer: FieldPointer): boolean {
+        if (this.gesture || this.propTool || this.ignoredButton !== null)
+            return false;
+        if (this.modePress) {
+            if (
+                this.modePress.dragged ||
+                isPastSlop(this.modePress.start, pointer) ||
+                !this.mode?.longPress?.(pointer)
+            )
+                return false;
+            this.modePress = null;
+            this.mode.cancel();
+            this.emit();
+        } else if (this.press) {
+            if (isPastSlop(this.press.start, pointer)) return false;
+            // Given up, it's no click: nor half of a double-click
+            this.press = null;
+            this.lastClick = null;
+        }
+        if (this.mode?.openMenu?.(pointer)) return true;
+        if (this.blocksFieldMenu()) return false;
+        this.openMenu(pointer);
+        return true;
     }
 
     /**
@@ -1479,7 +1516,7 @@ export class FieldEditor {
         const hit = this.handleAt(pointer) ? null : this.marcherAt(pointer);
         if (hit !== null && !this.ports.selection.get().includes(hit))
             this.write([hit]);
-        this.ports.openMenu?.(pointer);
+        this.ports.openMenu?.(pointer, hit);
     }
 
     private click(press: FieldPress, shift: boolean) {

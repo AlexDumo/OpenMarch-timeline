@@ -40,6 +40,8 @@ import {
  *
  * - **Group** or **Ungroup**, first, each shown only while it's available: Group with two or
  *   more marchers selected that aren't one placed shape (#603), Ungroup with one selected whole.
+ *   With one selected whole and the menu opened on one of its marchers, **Select only this
+ *   marcher** goes inside it there, as a double-click on that marcher does (tablet 1.5).
  * - The commands that set the selection's state on the current page (holds):
  *   **Hold from last keyframe** (timeline mode only), **Hold from start flag to playhead** while
  *   it's available (Expert with a window, #476), then **Clear this page**. Each says what it
@@ -59,7 +61,7 @@ const STATE_GROUP: readonly ActionId[] = [
 ];
 
 const GROUPS: readonly (readonly ActionId[])[] = [
-    ["shapeGroup", "shapeUngroup"],
+    ["shapeGroup", "shapeUngroup", "shapeEnterBox"],
     STATE_GROUP,
     [
         "alignHorizontally",
@@ -82,8 +84,12 @@ const HOLDS: ReadonlySet<ActionId> = new Set(["timelineHoldFromPrevious"]);
 const WHILE_AVAILABLE: ReadonlySet<ActionId> = new Set([
     "shapeGroup",
     "shapeUngroup",
+    "shapeEnterBox",
     "timelineHoldOverWindow",
 ]);
+
+/** Entries about the marcher the menu was opened on: shown only when it was opened on one */
+const ON_A_MARCHER: ReadonlySet<ActionId> = new Set(["shapeEnterBox"]);
 
 /** The entries that can show checked: each keeps room for the check, so the words line up */
 const CHECKABLE: ReadonlySet<ActionId> = new Set(STATE_GROUP);
@@ -103,12 +109,15 @@ const closedSnapshot = () => "";
 
 export default function FieldContextMenu({
     at,
+    marcher = null,
     onClose,
     selectedCount,
     timelineMode,
 }: {
     /** Where it opens, in CSS pixels in the field's element; null while closed. */
     at: { x: number; y: number } | null;
+    /** The marcher it was opened on (a right-click or long press on one), or null. */
+    marcher?: number | null;
     onClose: () => void;
     selectedCount: number;
     /** Whether the show's timeline is loaded (the holds need it). */
@@ -136,11 +145,13 @@ export default function FieldContextMenu({
     if (!at) return null;
 
     const shown = (id: ActionId) =>
-        WHILE_AVAILABLE.has(id)
-            ? isActionEnabled(id)
-            : HOLDS.has(id)
-              ? timelineMode
-              : true;
+        ON_A_MARCHER.has(id) && marcher === null
+            ? false
+            : WHILE_AVAILABLE.has(id)
+              ? isActionEnabled(id)
+              : HOLDS.has(id)
+                ? timelineMode
+                : true;
     const enabled = (id: ActionId) =>
         isActionEnabled(id) && (id !== "swapMarchers" || selectedCount === 2);
     const groups = GROUPS.map((group) => group.filter(shown)).filter(
@@ -216,7 +227,15 @@ export default function FieldContextMenu({
                                         key={id}
                                         data-testid={`field-menu-${id}`}
                                         disabled={!enabled(id)}
-                                        onSelect={() => runAction(id)}
+                                        onSelect={() =>
+                                            runAction(
+                                                id,
+                                                ON_A_MARCHER.has(id) &&
+                                                    marcher !== null
+                                                    ? { marcherId: marcher }
+                                                    : undefined,
+                                            )
+                                        }
                                         onFocus={() => previewAction(id, true)}
                                         onBlur={() => previewAction(id, false)}
                                         className={MENU_ITEM_CLASS}
@@ -240,11 +259,13 @@ export default function FieldContextMenu({
 }
 
 type MenuPoint = { x: number; y: number };
+/** Where the menu is open, and the marcher it was opened on (null for none, or from the keyboard) */
+type OpenFieldMenu = { at: MenuPoint; marcher: number | null };
 
 /**
  * Where the field's menu is open, in CSS pixels in the field's element, and
- * how it opens: at a right-click (the editor's `openMenu` port, with
- * `openAt`), or from the keyboard (the `openFieldMenu` action: the
+ * how it opens: at a right-click or a long press (the editor's `openMenu`
+ * port, with `openAt`, and the marcher under it), or from the keyboard (the `openFieldMenu` action: the
  * context-menu key or Shift+F10, while the field has focus and a selection) at
  * the middle of the selected marchers drawn.
  */
@@ -257,9 +278,13 @@ export function useFieldMenu({
     editor: FieldEditor;
     hasSelection: boolean;
 }) {
-    const [at, setAt] = useState<MenuPoint | null>(null);
-    const openAt = useCallback((point: MenuPoint) => setAt(point), []);
-    const close = useCallback(() => setAt(null), []);
+    const [open, setOpen] = useState<OpenFieldMenu | null>(null);
+    const openAt = useCallback(
+        (point: MenuPoint, marcher: number | null = null) =>
+            setOpen({ at: point, marcher }),
+        [],
+    );
+    const close = useCallback(() => setOpen(null), []);
     useActionHandler(
         "openFieldMenu",
         () => {
@@ -267,15 +292,21 @@ export function useFieldMenu({
             if (editor.blocksFieldMenu()) return;
             const center = selectedCenter(marchers);
             const view = useFieldViewStore.getState();
-            setAt(
-                center
+            setOpen({
+                at: center
                     ? fieldToElement(view, center.x, center.y)
                     : { x: view.width / 2, y: view.height / 2 },
-            );
+                marcher: null,
+            });
         },
         { enabled: hasSelection },
     );
-    return { at, openAt, close };
+    return {
+        at: open?.at ?? null,
+        marcher: open?.marcher ?? null,
+        openAt,
+        close,
+    };
 }
 
 /** The middle of the selected marchers drawn (hidden ones aren't), in field units; null with none. */

@@ -382,6 +382,15 @@ export class LiveBoxMode implements FieldMode {
         if (!out.changed && out.enter) this.enterAt(pointer);
     }
 
+    /**
+     * A press held still for a long press (a pen, tablet 1.5) gives way to the menus a right-click
+     * there opens: a handle's, else the field's for the box's marchers. Cancelled, it saves
+     * nothing.
+     */
+    longPress(): boolean {
+        return true;
+    }
+
     /** A right-click on a handle with a menu (a Line's point or segment, #569) opens it */
     openMenu(pointer: FieldPointer): boolean {
         const field = currentShapeField();
